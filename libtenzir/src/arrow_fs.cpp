@@ -124,7 +124,7 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
         pending_.push_back(TrackedFile{
           .path = file.path(),
           .mtime = to_option_time(file.mtime()),
-          .file = nullptr,
+          .istream = nullptr,
         });
       }
       scan_complete_ = true;
@@ -145,10 +145,10 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
       auto slot = find_slot_by_job(open.job_id);
       TENZIR_ASSERT(slot);
       auto& file_state = *processing_[*slot];
-      if (not open.file.ok()) {
+      if (not open.istream.ok()) {
         diagnostic::error("failed to open `{}`", file_state.path)
           .primary(base_args_.url)
-          .note(open.file.status().ToStringWithoutContextLines())
+          .note(open.istream.status().ToStringWithoutContextLines())
           .compose([&](auto x) {
             return is_globbing() ? std::move(x).severity(severity::warning)
                                  : std::move(x);
@@ -158,7 +158,7 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
         start_job_in_slot(*slot, ctx);
         co_return;
       }
-      file_state.file = open.file.MoveValueUnsafe();
+      file_state.istream = open.istream.MoveValueUnsafe();
       auto pipe = base_args_.pipe.inner;
       auto env = substitute_ctx::env_t{
         {
@@ -177,15 +177,17 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
       }
       co_await ctx.spawn_sub<chunk_ptr>(open.job_id, std::move(pipe));
       // Queue the first read.
-      enqueue_task(
-        ctx,
-        [job_id = open.job_id, file = file_state.file,
-         offset = file_state.offset] -> Task<AwaitResult> {
-          co_return ReadProgress{
-            job_id,
-            co_await arrow_future_to_task(file->ReadAsync(offset, read_size)),
-          };
-        });
+      enqueue_task(ctx,
+                   [job_id = open.job_id,
+                    istream = file_state.istream] -> Task<AwaitResult> {
+                     auto read = co_await spawn_blocking([=] {
+                       return istream->Read(read_size);
+                     });
+                     co_return ReadProgress{
+                       job_id,
+                       std::move(read),
+                     };
+                   });
     },
     [this, &ctx](ReadProgress& read) -> Task<void> {
       // The subpipeline can be torn down while a read is in-flight.
@@ -227,15 +229,17 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
         co_await pipe.close();
         co_return;
       }
-      enqueue_task(
-        ctx,
-        [job_id = read.job_id, file = file_state.file,
-         offset = file_state.offset] -> Task<AwaitResult> {
-          co_return ReadProgress{
-            job_id,
-            co_await arrow_future_to_task(file->ReadAsync(offset, read_size)),
-          };
-        });
+      enqueue_task(ctx,
+                   [job_id = read.job_id,
+                    istream = file_state.istream] -> Task<AwaitResult> {
+                     auto read = co_await spawn_blocking([=] {
+                       return istream->Read(read_size);
+                     });
+                     co_return ReadProgress{
+                       job_id,
+                       std::move(read),
+                     };
+                   });
     },
     [this, &ctx](SubFinished& sub) -> Task<void> {
       auto slot = find_slot_by_job(sub.job_id);
@@ -397,7 +401,7 @@ auto FromArrowFsOperator::restore(OpCtx& ctx) -> Task<void> {
           pending_.push_back(TrackedFile{
             .path = state.path,
             .mtime = file_mtime,
-            .file = nullptr,
+            .istream = nullptr,
           });
         }
         slot.reset();
@@ -405,13 +409,26 @@ auto FromArrowFsOperator::restore(OpCtx& ctx) -> Task<void> {
       }
     }
     // Reopen file.
-    auto open_future = fs_->OpenInputFileAsync(state.path);
+    auto open_future = fs_->OpenInputStreamAsync(state.path);
     auto open_result = co_await arrow_future_to_task(std::move(open_future));
     if (not open_result.ok()) {
+      diagnostic::warning("failed to open stream for `{}`: {}", state.path,
+                          open_result.status().ToStringWithoutContextLines())
+        .primary(base_args_.url)
+        .emit(ctx);
       slot.reset();
       continue;
     }
-    state.file = open_result.MoveValueUnsafe();
+    state.istream = open_result.MoveValueUnsafe();
+    // PERF: Downloads skipped bytes.
+    if (auto advance = state.istream->Advance(state.offset); not advance.ok()) {
+      diagnostic::warning("failed to advance restored stream for `{}`: {}",
+                          state.path, advance.ToStringWithoutContextLines())
+        .primary(base_args_.url)
+        .emit(ctx);
+      slot.reset();
+      continue;
+    }
     previous_.emplace(file_info);
   }
   // Restore pending files
@@ -549,7 +566,7 @@ auto FromArrowFsOperator::start_job_in_slot(size_t slot, OpCtx& ctx) -> void {
                [this, job_id = processing_[slot]->job_id,
                 path = processing_[slot]->path] mutable -> Task<AwaitResult> {
                  auto result = co_await arrow_future_to_task(
-                   fs_->OpenInputFileAsync(path));
+                   fs_->OpenInputStreamAsync(path));
                  co_return FileOpen{job_id, std::move(result)};
                });
 }

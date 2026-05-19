@@ -132,7 +132,7 @@ struct TrackedFile {
   Option<time> mtime;
   int64_t offset = 0;
   uint64_t job_id = 0;
-  std::shared_ptr<arrow::io::RandomAccessFile> file;
+  std::shared_ptr<arrow::io::InputStream> istream;
 
   friend auto inspect(auto& f, TrackedFile& x) -> bool {
     return f.object(x).fields(f.field("path", x.path),
@@ -150,7 +150,7 @@ struct ScanComplete {
 /// Result of opening a file for reading in a processing slot.
 struct FileOpen {
   uint64_t job_id;
-  arrow::Result<std::shared_ptr<arrow::io::RandomAccessFile>> file;
+  arrow::Result<std::shared_ptr<arrow::io::InputStream>> istream;
 };
 
 /// Result of reading a chunk from an active file.
