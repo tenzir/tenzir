@@ -241,8 +241,9 @@ public:
         TENZIR_ASSERT(field);
         touched_fields.push_back(std::move(*field));
       }
+      auto touched = ast::ExprRefs{.field_paths = std::move(touched_fields)};
       auto [f_upstream, f_self]
-        = ir::split_filter_by_dependents(std::move(filter), touched_fields);
+        = ir::split_filter_by_dependents(std::move(filter), touched);
       return {
         // invariant order
         .order = order,

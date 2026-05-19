@@ -1,0 +1,8 @@
+// A filter after each that does not reference $this gets pushed into the
+// subpipeline via from_downstream.
+export
+each {
+  from $this
+}
+where x > 1
+discard

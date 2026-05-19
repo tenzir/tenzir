@@ -600,8 +600,9 @@ public:
       auto touched_fields = std::vector<ast::field_path>{};
       touched_fields.push_back(
         ctx.get(result).value_or(default_result_field()));
+      auto touched = ast::ExprRefs{.field_paths = std::move(touched_fields)};
       auto [f_upstream, f_self]
-        = ir::split_filter_by_dependents(std::move(filter), touched_fields);
+        = ir::split_filter_by_dependents(std::move(filter), touched);
       return {
         .order = order,
         .filter_upstream = std::move(f_upstream),

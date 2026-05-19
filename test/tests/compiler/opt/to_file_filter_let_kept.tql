@@ -1,0 +1,10 @@
+// A filter inside the subpipeline referencing a let binding declared in that
+// subpipeline must not be pushed upstream of `to_file`. The let binding `$x`
+// is scoped to the subpipeline, so moving the filter outside would leave an
+// unbound variable.
+export
+to_file "/dev/null" {
+  let $x = this.n
+  where $x > 1
+  write_json
+}

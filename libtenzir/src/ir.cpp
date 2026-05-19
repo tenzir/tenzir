@@ -28,11 +28,16 @@
 namespace tenzir {
 
 auto ir::split_filter_by_dependents(ir::optimize_filter filter,
-                                    std::span<const ast::field_path> fields)
+                                    const ast::ExprRefs& touched)
   -> ir::split_filter_result {
   auto result = ir::split_filter_result{};
+  if (touched.let_ids.empty() and touched.field_paths.empty()) {
+    result.independent = std::move(filter);
+    return result;
+  }
   for (auto& expr : filter) {
-    if (references_any_field_path(expr, fields)) {
+    auto refs = ast::collect_refs(expr);
+    if (not refs or refs->overlaps(touched)) {
       result.dependent.push_back(std::move(expr));
     } else {
       result.independent.push_back(std::move(expr));
@@ -247,9 +252,11 @@ auto touched_fields_for_set(const std::vector<ast::assignment>& assignments)
 auto ir::SetIr::optimize(ir::optimize_filter filter,
                          event_order order) && -> ir::optimize_result {
   order_ = weaker_event_order(order_, order);
-  auto touched = touched_fields_for_set(assignments_);
-  auto split = touched
-                 ? ir::split_filter_by_dependents(std::move(filter), *touched)
+  auto touched_paths = touched_fields_for_set(assignments_);
+  auto split = touched_paths
+                 ? ir::split_filter_by_dependents(
+                     std::move(filter),
+                     ast::ExprRefs{.field_paths = std::move(*touched_paths)})
                  : ir::split_filter_result{{}, std::move(filter)};
   auto [filter_upstream, filter_self] = std::move(split);
   auto ops = std::vector<Box<ir::Operator>>{};

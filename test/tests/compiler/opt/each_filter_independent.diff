@@ -1,0 +1,104 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 110..116
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `each` @ 117..121
+         ],
+         ref: std::each/op
+       },
+       desc: "each",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ],
+       pipeline: {
+         pipeline: {
+           lets: [
+             
+           ],
+           operators: [
+             from_ir {
+               events: [
+                 dollar_var `$this` -> 1 @ 131..136
+               ],
+               self: 126..130
++            },
++            where_ir {
++              self: 0..0,
++              predicate: binary_expr {
++                left: root_field {
++                  id: `x` @ 145..146,
++                  has_question_mark: false
++                },
++                op: "gt" @ 147..148,
++                right: constant int64 1 @ 149..150
++              }
+             }
+           ]
+         } @ 122..138,
+         let_ids: {
+           "0": 1
+         }
+-      }
+-    },
+-    where_ir {
+-      self: 139..144,
+-      predicate: binary_expr {
+-        left: root_field {
+-          id: `x` @ 145..146,
+-          has_question_mark: false
+-        },
+-        op: "gt" @ 147..148,
+-        right: constant int64 1 @ 149..150
+       }
+     },
+     GenericIr {
+       op: {
+         path: [
+           `discard` @ 151..158
+         ],
+         ref: std::discard/op
+       },
+       desc: "discard",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }

@@ -19,6 +19,7 @@
 #include <caf/binary_serializer.hpp>
 #include <caf/detail/type_list.hpp>
 
+#include <algorithm>
 #include <type_traits>
 #include <unordered_set>
 #include <vector>
@@ -201,7 +202,7 @@ auto selector::try_from(ast::expression expr) -> std::optional<selector> {
 
 namespace {
 
-class field_path_extractor final : public ast::visitor<field_path_extractor> {
+class ref_collector final : public ast::visitor<ref_collector> {
 public:
   template <class T>
   void visit(const T& x) {
@@ -215,7 +216,7 @@ public:
                               ast::index_expr, ast::this_>
   {
     if (auto path = ast::field_path::try_from(x)) {
-      paths_.push_back(std::move(*path));
+      refs_.field_paths.push_back(std::move(*path));
       return;
     }
     ambiguous_ = true;
@@ -223,16 +224,23 @@ public:
     enter(const_cast<T&>(x));
   }
 
+  void visit(const ast::dollar_var& x) {
+    if (x.let
+        and std::ranges::find(refs_.let_ids, x.let) == refs_.let_ids.end()) {
+      refs_.let_ids.push_back(x.let);
+    }
+  }
+
   auto ambiguous() const -> bool {
     return ambiguous_;
   }
 
-  auto result() && -> std::vector<ast::field_path> {
-    return std::move(paths_);
+  auto result() && -> ast::ExprRefs {
+    return std::move(refs_);
   }
 
 private:
-  std::vector<ast::field_path> paths_;
+  ast::ExprRefs refs_;
   bool ambiguous_ = false;
 };
 
@@ -255,28 +263,28 @@ auto field_paths_overlap(const field_path& lhs, const field_path& rhs) -> bool {
 
 } // namespace
 
-auto referenced_field_paths(const expression& expr) -> std::vector<field_path> {
-  auto visitor = field_path_extractor{};
-  visitor.visit(expr);
-  return std::move(visitor).result();
+auto ExprRefs::overlaps(const ExprRefs& other) const -> bool {
+  // field paths
+  for (const auto& lhs : field_paths) {
+    for (const auto& rhs : other.field_paths) {
+      if (field_paths_overlap(lhs, rhs)) {
+        return true;
+      }
+    }
+  }
+  // let ids
+  return std::ranges::any_of(let_ids, [&other](auto& lhs) {
+    return std::ranges::contains(other.let_ids, lhs);
+  });
 }
 
-auto references_any_field_path(const expression& expr,
-                               std::span<const field_path> paths) -> bool {
-  if (paths.empty()) {
-    return false;
-  }
-  auto visitor = field_path_extractor{};
+auto collect_refs(const expression& expr) -> Option<ExprRefs> {
+  auto visitor = ref_collector{};
   visitor.visit(expr);
   if (visitor.ambiguous()) {
-    return true;
+    return None{};
   }
-  auto references = std::move(visitor).result();
-  return std::ranges::any_of(references, [&](const auto& reference) {
-    return std::ranges::any_of(paths, [&](const auto& path) {
-      return field_paths_overlap(reference, path);
-    });
-  });
+  return std::move(visitor).result();
 }
 
 auto expression::get_location() const -> location {

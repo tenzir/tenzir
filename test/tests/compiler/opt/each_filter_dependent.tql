@@ -1,0 +1,8 @@
+// A filter inside the subpipeline referencing $this stays in the subpipeline
+// and is not pushed upstream.
+export
+each {
+  from {x: $this.n}
+  where $this.n > 1
+  discard
+}
