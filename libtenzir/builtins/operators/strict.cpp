@@ -265,7 +265,7 @@ struct strict : public virtual operator_plugin2<strict_operator>,
           };
         });
     });
-    return d.invariant_filter();
+    return d.without_optimize();
   }
 };
 
