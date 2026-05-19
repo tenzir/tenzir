@@ -181,7 +181,7 @@ public:
         return failure::promise();
       }
     });
-    return d.invariant_filter();
+    return d.without_optimize();
   }
 };
 
