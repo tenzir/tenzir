@@ -9,6 +9,7 @@
 #include "tenzir/detail/prometheus_metric_shaper.hpp"
 
 #include "tenzir/data.hpp"
+#include "tenzir/plugin/metrics.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/view3.hpp"
@@ -36,11 +37,17 @@ auto shape_rows(table_slice input) -> std::vector<record> {
 } // namespace
 
 TEST("prometheus metric shaper flattens flat cpu metrics") {
-  auto b = series_builder{};
+  auto b = series_builder{type{
+    "tenzir.metrics.cpu",
+    record_type{
+      {"timestamp", metrics::prometheus_ignore(time_type{})},
+      {"loadavg_1m", metrics::prometheus_gauge(double_type{})},
+    },
+  }};
   auto row = b.record();
   row.field("timestamp", test_timestamp());
   row.field("loadavg_1m", 0.5);
-  auto rows = shape_rows(b.finish_assert_one_slice("tenzir.metrics.cpu"));
+  auto rows = shape_rows(b.finish_assert_one_slice());
   REQUIRE_EQUAL(rows.size(), size_t{1});
   CHECK_EQUAL(get<std::string>(rows[0], "metric"), "tenzir_cpu_loadavg_1m");
   CHECK_EQUAL(get<double>(rows[0], "value"), 0.5);
@@ -51,7 +58,18 @@ TEST("prometheus metric shaper flattens flat cpu metrics") {
 }
 
 TEST("prometheus metric shaper flattens nested memory metrics") {
-  auto b = series_builder{};
+  auto b = series_builder{type{
+    "tenzir.metrics.memory",
+    record_type{
+      {"timestamp", metrics::prometheus_ignore(time_type{})},
+      {"process", record_type{{"current_bytes", metrics::prometheus_gauge(
+                                                  uint64_type{}, "bytes")}}},
+      {"arrow",
+       record_type{
+         {"bytes", record_type{{"cumulative", metrics::prometheus_counter(
+                                                int64_type{}, "bytes")}}}}},
+    },
+  }};
   auto row = b.record();
   row.field("timestamp", test_timestamp());
   auto process = row.field("process").record();
@@ -59,7 +77,7 @@ TEST("prometheus metric shaper flattens nested memory metrics") {
   auto arrow = row.field("arrow").record();
   auto bytes = arrow.field("bytes").record();
   bytes.field("cumulative", int64_t{1000});
-  auto rows = shape_rows(b.finish_assert_one_slice("tenzir.metrics.memory"));
+  auto rows = shape_rows(b.finish_assert_one_slice());
   REQUIRE_EQUAL(rows.size(), size_t{2});
   CHECK_EQUAL(get<std::string>(rows[0], "metric"),
               "tenzir_memory_process_current_bytes");
@@ -74,7 +92,18 @@ TEST("prometheus metric shaper flattens nested memory metrics") {
 }
 
 TEST("prometheus metric shaper converts durations to seconds") {
-  auto b = series_builder{};
+  auto b = series_builder{type{
+    "tenzir.metrics.api",
+    record_type{
+      {"timestamp", metrics::prometheus_ignore(time_type{})},
+      {"request_id", string_type{}},
+      {"method", metrics::prometheus_label(string_type{})},
+      {"path", metrics::prometheus_label(string_type{})},
+      {"params", record_type{{"limit", uint64_type{}}}},
+      {"status_code", metrics::prometheus_label(uint64_type{})},
+      {"response_time", metrics::prometheus_gauge(duration_type{}, "seconds")},
+    },
+  }};
   auto row = b.record();
   row.field("timestamp", test_timestamp());
   row.field("request_id", "abc123");
@@ -85,7 +114,7 @@ TEST("prometheus metric shaper converts durations to seconds") {
   row.field("status_code", uint64_t{200});
   row.field("response_time", std::chrono::duration_cast<duration>(
                                std::chrono::milliseconds{1500}));
-  auto rows = shape_rows(b.finish_assert_one_slice("tenzir.metrics.api"));
+  auto rows = shape_rows(b.finish_assert_one_slice());
   REQUIRE_EQUAL(rows.size(), size_t{1});
   CHECK_EQUAL(get<std::string>(rows[0], "metric"),
               "tenzir_api_response_time_seconds");
@@ -99,7 +128,18 @@ TEST("prometheus metric shaper converts durations to seconds") {
 }
 
 TEST("prometheus metric shaper flattens lists of records with labels") {
-  auto b = series_builder{};
+  auto b = series_builder{type{
+    "tenzir.metrics.caf",
+    record_type{
+      {"timestamp", metrics::prometheus_ignore(time_type{})},
+      {"system",
+       record_type{{"running_actors_by_name",
+                    list_type{record_type{
+                      {"name", metrics::prometheus_label(string_type{})},
+                      {"count", metrics::prometheus_gauge(int64_type{})},
+                    }}}}},
+    },
+  }};
   auto row = b.record();
   row.field("timestamp", test_timestamp());
   auto actors
@@ -110,7 +150,7 @@ TEST("prometheus metric shaper flattens lists of records with labels") {
   auto actor1 = actors.record();
   actor1.field("name", "index");
   actor1.field("count", int64_t{3});
-  auto rows = shape_rows(b.finish_assert_one_slice("tenzir.metrics.caf"));
+  auto rows = shape_rows(b.finish_assert_one_slice());
   REQUIRE_EQUAL(rows.size(), size_t{2});
   CHECK_EQUAL(get<std::string>(rows[0], "metric"),
               "tenzir_caf_system_running_actors_by_name_count");
@@ -123,7 +163,17 @@ TEST("prometheus metric shaper flattens lists of records with labels") {
 }
 
 TEST("prometheus metric shaper skips null and non-numeric fields") {
-  auto b = series_builder{};
+  auto b = series_builder{type{
+    "tenzir.metrics.custom",
+    record_type{
+      {"timestamp", metrics::prometheus_ignore(time_type{})},
+      {"name", string_type{}},
+      {"null_value", null_type{}},
+      {"message", string_type{}},
+      {"flag", bool_type{}},
+      {"count", metrics::prometheus_gauge(uint64_type{})},
+    },
+  }};
   auto row = b.record();
   row.field("timestamp", test_timestamp());
   row.field("name", "custom");
@@ -131,7 +181,7 @@ TEST("prometheus metric shaper skips null and non-numeric fields") {
   row.field("message", "skip");
   row.field("flag", true);
   row.field("count", uint64_t{7});
-  auto rows = shape_rows(b.finish_assert_one_slice("tenzir.metrics.custom"));
+  auto rows = shape_rows(b.finish_assert_one_slice());
   REQUIRE_EQUAL(rows.size(), size_t{1});
   CHECK_EQUAL(get<std::string>(rows[0], "metric"), "tenzir_custom_count");
   CHECK_EQUAL(get<double>(rows[0], "value"), 7.0);
@@ -139,7 +189,15 @@ TEST("prometheus metric shaper skips null and non-numeric fields") {
 }
 
 TEST("prometheus metric shaper drops schema ids and aggregates") {
-  auto b = series_builder{};
+  auto b = series_builder{type{
+    "tenzir.metrics.ingest",
+    record_type{
+      {"timestamp", metrics::prometheus_ignore(time_type{})},
+      {"schema", metrics::prometheus_label(string_type{})},
+      {"schema_id", string_type{}},
+      {"events", metrics::prometheus_gauge(uint64_type{})},
+    },
+  }};
   auto row0 = b.record();
   row0.field("timestamp", test_timestamp());
   row0.field("schema", "suricata.alert");
@@ -150,7 +208,7 @@ TEST("prometheus metric shaper drops schema ids and aggregates") {
   row1.field("schema", "suricata.alert");
   row1.field("schema_id", "bbbbbbbbbbbbbbbb");
   row1.field("events", uint64_t{3});
-  auto rows = shape_rows(b.finish_assert_one_slice("tenzir.metrics.ingest"));
+  auto rows = shape_rows(b.finish_assert_one_slice());
   REQUIRE_EQUAL(rows.size(), size_t{1});
   CHECK_EQUAL(get<std::string>(rows[0], "metric"), "tenzir_ingest_events");
   CHECK_EQUAL(get<double>(rows[0], "value"), 5.0);
@@ -160,7 +218,19 @@ TEST("prometheus metric shaper drops schema ids and aggregates") {
 }
 
 TEST("prometheus metric shaper skips operator metadata") {
-  auto b = series_builder{};
+  auto b = series_builder{type{
+    "tenzir.metrics.import",
+    record_type{
+      {"timestamp", metrics::prometheus_ignore(time_type{})},
+      {"pipeline_id", metrics::prometheus_label(string_type{})},
+      {"operator_id", metrics::prometheus_label(uint64_type{})},
+      {"run", uint64_type{}},
+      {"hidden", bool_type{}},
+      {"schema", metrics::prometheus_label(string_type{})},
+      {"schema_id", string_type{}},
+      {"events", metrics::prometheus_gauge(uint64_type{})},
+    },
+  }};
   auto row = b.record();
   row.field("timestamp", test_timestamp());
   row.field("pipeline_id", "pipeline-1");
@@ -170,7 +240,7 @@ TEST("prometheus metric shaper skips operator metadata") {
   row.field("schema", "suricata.alert");
   row.field("schema_id", "aaaaaaaaaaaaaaaa");
   row.field("events", uint64_t{2});
-  auto rows = shape_rows(b.finish_assert_one_slice("tenzir.metrics.import"));
+  auto rows = shape_rows(b.finish_assert_one_slice());
   REQUIRE_EQUAL(rows.size(), size_t{1});
   CHECK_EQUAL(get<std::string>(rows[0], "metric"), "tenzir_import_events");
   auto& labels = get<record>(rows[0], "labels");

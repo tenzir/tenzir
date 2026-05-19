@@ -348,45 +348,49 @@ public:
   }
 
   auto metric_layout() const -> record_type override {
+    auto const* seconds = "seconds";
     return record_type{
       {"system",
        record_type{
-         {"running_actors", int64_type{}},
+         {"running_actors", metrics::prometheus_gauge(int64_type{})},
          {
            "running_actors_by_name",
            list_type{record_type{
-             {"name", string_type{}},
-             {"count", int64_type{}},
+             {"name", metrics::prometheus_label(string_type{})},
+             {"count", metrics::prometheus_gauge(int64_type{})},
            }},
          },
          {"all_messages",
           record_type{
-            {"processed", int64_type{}},
-            {"rejected", int64_type{}},
+            {"processed", metrics::prometheus_gauge(int64_type{})},
+            {"rejected", metrics::prometheus_gauge(int64_type{})},
           }},
          {
            "messages_by_actor",
            list_type{record_type{
-             {"name", string_type{}},
-             {"processed", int64_type{}},
-             {"rejected", int64_type{}},
+             {"name", metrics::prometheus_label(string_type{})},
+             {"processed", metrics::prometheus_gauge(int64_type{})},
+             {"rejected", metrics::prometheus_gauge(int64_type{})},
            }},
          },
        }},
       {"middleman",
        record_type{
-         {"inbound_messages_size", int64_type{}},
-         {"outbound_messages_size", int64_type{}},
-         {"serialization_time", duration_type{}},
-         {"deserialization_time", duration_type{}},
+         {"inbound_messages_size", metrics::prometheus_gauge(int64_type{})},
+         {"outbound_messages_size", metrics::prometheus_gauge(int64_type{})},
+         {"serialization_time",
+          metrics::prometheus_gauge(duration_type{}, seconds)},
+         {"deserialization_time",
+          metrics::prometheus_gauge(duration_type{}, seconds)},
        }},
       {"actors",
        list_type{
          record_type{
-           {"name", string_type{}},
-           {"processing_time", duration_type{}},
-           {"mailbox_time", duration_type{}},
-           {"mailbox_size", int64_type{}},
+           {"name", metrics::prometheus_label(string_type{})},
+           {"processing_time",
+            metrics::prometheus_gauge(duration_type{}, seconds)},
+           {"mailbox_time", metrics::prometheus_gauge(duration_type{}, seconds)},
+           {"mailbox_size", metrics::prometheus_gauge(int64_type{})},
            // TODO: caf.actor.stream.* metrics are dysfunctional in CAF v1.0.2:
            // the metric families are set up, but no values are ever registered.
            // Additionally, it is not clear whether the `name` label is

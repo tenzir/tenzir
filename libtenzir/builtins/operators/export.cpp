@@ -32,6 +32,7 @@
 #include <tenzir/passive_partition.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/plugin/metrics.hpp>
 #include <tenzir/query_context.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/filter.hpp>
@@ -49,6 +50,8 @@
 #include <caf/timespan.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <folly/coro/Sleep.h>
+
+#include <unordered_map>
 
 namespace tenzir::plugins::export_ {
 
@@ -73,13 +76,33 @@ struct ExportArgs {
   std::string shape = "raw";
 };
 
-auto parse_metrics_shape(std::string_view shape) -> metrics_shape {
-  return from_string<metrics_shape>(shape).value_or(metrics_shape::raw);
+auto uses_prometheus_shape(ExportArgs const& args) -> bool {
+  return args.special_filter == export_special_filter::metrics
+         and from_string<metrics_shape>(args.shape).value_or(metrics_shape::raw)
+               == metrics_shape::prometheus;
 }
 
-auto uses_prometheus_shape(const ExportArgs& args) -> bool {
-  return args.special_filter == export_special_filter::metrics
-         and parse_metrics_shape(args.shape) == metrics_shape::prometheus;
+using prometheus_shaper_map
+  = std::unordered_map<std::string, detail::prometheus_metric_shaper>;
+
+auto make_prometheus_shapers() -> prometheus_shaper_map {
+  auto result = prometheus_shaper_map{};
+  for (auto const* plugin : plugins::get<tenzir::metrics_plugin>()) {
+    auto const layout = plugin->metric_layout();
+    auto layout_with_timestamp = layout.transform({{
+      offset{0},
+      record_type::insert_before(
+        {{"timestamp", metrics::prometheus_ignore(time_type{})}}),
+    }});
+    TENZIR_ASSERT(layout_with_timestamp);
+    auto schema_name = fmt::format("tenzir.metrics.{}", plugin->name());
+    result.emplace(schema_name, detail::prometheus_metric_shaper{type{
+                                  schema_name,
+                                  *layout_with_timestamp,
+                                  {{"internal", ""}},
+                                }});
+  }
+  return result;
 }
 
 auto add_remainder(Option<ast::expression>& remainder, ast::expression expr)
@@ -118,6 +141,9 @@ public:
       },
       MetricsDirection::read, MetricsVisibility::internal_,
       MetricsUnit::events);
+    if (uses_prometheus_shape(args_)) {
+      prometheus_shapers_ = make_prometheus_shapers();
+    }
     auto node = co_await fetch_node(ctx.actor_system(), ctx.dh());
     if (not node) {
       co_return;
@@ -213,7 +239,12 @@ public:
       co_return;
     }
     if (uses_prometheus_shape(args_)) {
-      for (auto&& output : detail::shape_metrics_for_prometheus(*expected)) {
+      auto shaper
+        = prometheus_shapers_.find(std::string{expected->schema().name()});
+      if (shaper == prometheus_shapers_.end()) {
+        co_return;
+      }
+      for (auto&& output : shaper->second.shape(*expected)) {
         if (remainder_) {
           output = filter2(output, *remainder_, ctx, false);
         }
@@ -258,6 +289,7 @@ private:
   export_bridge_actor bridge_;
   std::shared_ptr<UnboundedQueue<diagnostic>> diag_queue_;
   Option<ast::expression> remainder_ = None{};
+  prometheus_shaper_map prometheus_shapers_ = {};
   MetricsCounter read_events_counter_;
   bool done_ = false;
 };

@@ -9,7 +9,9 @@
 #include "tenzir/detail/prometheus_metric_shaper.hpp"
 
 #include "tenzir/detail/overload.hpp"
+#include "tenzir/detail/string.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/plugin/metrics.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/time.hpp"
@@ -18,10 +20,7 @@
 
 #include <fmt/format.h>
 
-#include <array>
-#include <cctype>
-#include <initializer_list>
-#include <ranges>
+#include <chrono>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -32,15 +31,24 @@ namespace {
 
 using namespace std::string_view_literals;
 
+enum class prometheus_role {
+  none,
+  ignore,
+  label,
+  metric,
+};
+
 struct metric_descriptor {
-  std::string_view type = "gauge";
-  std::string_view unit = "";
+  std::string type = "gauge";
+  std::string unit = "";
   bool suffix_seconds = false;
 };
 
 struct label {
   std::string key;
   std::string value;
+
+  auto operator==(label const&) const -> bool = default;
 };
 
 using labels = std::vector<label>;
@@ -50,12 +58,12 @@ struct metric_sample {
   double value = {};
   Option<time> timestamp = None{};
   labels metric_labels;
-  std::string_view type = "gauge";
-  std::string_view unit = "";
+  std::string type = "gauge";
+  std::string unit = "";
 };
 
-auto prometheus_schema() -> const type& {
-  static const auto result = type{
+auto prometheus_schema() -> type const& {
+  static auto const result = type{
     "tenzir.metrics.prometheus",
     record_type{
       {"metric", string_type{}},
@@ -78,14 +86,6 @@ auto metric_source(std::string_view schema) -> std::string_view {
   return schema;
 }
 
-auto is_metric_name_char(unsigned char c) -> bool {
-  return std::isalnum(c) or c == '_' or c == ':';
-}
-
-auto is_label_name_char(unsigned char c) -> bool {
-  return std::isalnum(c) or c == '_';
-}
-
 template <class Predicate>
 auto sanitize_identifier(std::string_view input, Predicate is_valid,
                          bool allow_colon) -> std::string {
@@ -93,8 +93,8 @@ auto sanitize_identifier(std::string_view input, Predicate is_valid,
   result.reserve(input.size());
   auto last_was_underscore = false;
   for (auto c : input) {
-    const auto uc = static_cast<unsigned char>(c);
-    const auto next = is_valid(uc) and (allow_colon or c != ':') ? c : '_';
+    auto const uc = static_cast<unsigned char>(c);
+    auto const next = is_valid(uc) and (allow_colon or c != ':') ? c : '_';
     if (next == '_' and last_was_underscore) {
       continue;
     }
@@ -107,128 +107,41 @@ auto sanitize_identifier(std::string_view input, Predicate is_valid,
   if (result.empty()) {
     return "_";
   }
-  const auto first = static_cast<unsigned char>(result.front());
-  if (std::isdigit(first) or (not allow_colon and result.front() == ':')) {
+  auto const first = static_cast<unsigned char>(result.front());
+  if (ascii_isdigit(first) or (not allow_colon and result.front() == ':')) {
     result.insert(result.begin(), '_');
   }
   return result;
 }
 
-auto sanitize_metric_name(std::string_view input) -> std::string {
-  return sanitize_identifier(input, is_metric_name_char, true);
+auto prometheus_role_of(type const& field_type) -> prometheus_role {
+  auto const role = field_type.attribute(metrics::prometheus_role_attribute);
+  if (not role) {
+    return prometheus_role::none;
+  }
+  if (*role == "ignore") {
+    return prometheus_role::ignore;
+  }
+  if (*role == "label") {
+    return prometheus_role::label;
+  }
+  if (*role == "metric") {
+    return prometheus_role::metric;
+  }
+  return prometheus_role::none;
 }
 
-auto sanitize_label_name(std::string_view input) -> std::string {
-  return sanitize_identifier(input, is_label_name_char, false);
-}
-
-template <size_t Size>
-auto contains(const std::array<std::string_view, Size>& values,
-              std::string_view value) -> bool {
-  return std::ranges::find(values, value) != values.end();
-}
-
-auto path_equals(const std::vector<std::string>& path,
-                 std::initializer_list<std::string_view> expected) -> bool {
-  if (path.size() != expected.size()) {
-    return false;
+auto descriptor_of(type const& field_type) -> metric_descriptor {
+  auto result = metric_descriptor{};
+  if (auto prometheus_type
+      = field_type.attribute(metrics::prometheus_type_attribute)) {
+    result.type = *prometheus_type;
   }
-  auto expected_it = expected.begin();
-  for (const auto& segment : path) {
-    if (segment != *expected_it) {
-      return false;
-    }
-    ++expected_it;
+  if (auto unit = field_type.attribute(metrics::prometheus_unit_attribute)) {
+    result.unit = *unit;
+    result.suffix_seconds = *unit == "seconds";
   }
-  return true;
-}
-
-auto is_schema_metric_source(std::string_view source) -> bool {
-  static constexpr auto sources = std::array{
-    "export"sv, "import"sv, "ingest"sv, "publish"sv, "subscribe"sv,
-  };
-  return contains(sources, source);
-}
-
-auto is_operator_scoped_metric_source(std::string_view source) -> bool {
-  static constexpr auto sources = std::array{
-    "buffer"sv,           "enrich"sv,  "export"sv,
-    "import"sv,           "lookup"sv,  "operator"sv,
-    "operator_profile"sv, "publish"sv, "subscribe"sv,
-    "subscribe_buffer"sv, "tcp"sv,     "throttle"sv,
-  };
-  return contains(sources, source);
-}
-
-auto is_label_field(std::string_view source,
-                    const std::vector<std::string>& path,
-                    std::string_view field) -> bool {
-  if (not path.empty()) {
-    if (source == "caf") {
-      return field == "name"
-             and (path_equals(path, {"system", "running_actors_by_name"})
-                  or path_equals(path, {"system", "messages_by_actor"})
-                  or path_equals(path, {"actors"}));
-    }
-    if (source == "memory") {
-      return field == "name" and path_equals(path, {"actor"});
-    }
-    return false;
-  }
-  if (source == "api") {
-    static constexpr auto labels = std::array{
-      "method"sv,
-      "path"sv,
-      "status_code"sv,
-    };
-    return contains(labels, field);
-  }
-  if (source == "actor") {
-    return field == "name";
-  }
-  if (source == "disk") {
-    return field == "path";
-  }
-  if (source == "operator_buffers" or source == "pipeline") {
-    return field == "pipeline_id";
-  }
-  if (is_operator_scoped_metric_source(source)
-      and (field == "pipeline_id" or field == "operator_id")) {
-    return true;
-  }
-  if (is_schema_metric_source(source) and field == "schema") {
-    return true;
-  }
-  return false;
-}
-
-auto is_metadata_field(std::string_view source,
-                       const std::vector<std::string>& path,
-                       std::string_view field) -> bool {
-  if (field == "timestamp" or field == "schema_id"
-      or is_label_field(source, path, field)) {
-    return true;
-  }
-  if (not path.empty()) {
-    return false;
-  }
-  if (source == "actor") {
-    return field == "id";
-  }
-  if (source == "api") {
-    return field == "request_id" or field == "params";
-  }
-  if (is_operator_scoped_metric_source(source)) {
-    static constexpr auto fields = std::array{
-      "run"sv,  "hidden"sv,   "source"sv, "transformation"sv,
-      "sink"sv, "internal"sv,
-    };
-    return contains(fields, field);
-  }
-  if (source == "tcp") {
-    return field == "handle";
-  }
-  return false;
+  return result;
 }
 
 auto stringify_label_value(data_view3 value) -> Option<std::string> {
@@ -274,7 +187,12 @@ auto stringify_label_value(data_view3 value) -> Option<std::string> {
 
 auto add_label(labels& result, std::string_view key, std::string value)
   -> void {
-  auto sanitized = sanitize_label_name(key);
+  auto sanitized = sanitize_identifier(
+    key,
+    [](unsigned char c) {
+      return ascii_isalnum(c) or c == '_';
+    },
+    false);
   for (auto& item : result) {
     if (item.key == sanitized) {
       item.value = std::move(value);
@@ -287,12 +205,13 @@ auto add_label(labels& result, std::string_view key, std::string value)
   });
 }
 
-auto collect_labels(std::string_view source,
-                    const std::vector<std::string>& path, view3<record> record,
-                    const labels& inherited) -> labels {
+auto collect_labels(record_type const& schema, view3<record> record,
+                    labels const& inherited) -> labels {
   auto result = inherited;
   for (auto [key, value] : record) {
-    if (not is_label_field(source, path, key)) {
+    auto field_type = schema.field(key);
+    if (not field_type
+        or prometheus_role_of(*field_type) != prometheus_role::label) {
       continue;
     }
     if (auto label_value = stringify_label_value(value)) {
@@ -302,72 +221,23 @@ auto collect_labels(std::string_view source,
   return result;
 }
 
-auto has_bytes_unit(std::string_view source,
-                    const std::vector<std::string>& path) -> bool {
-  for (const auto& segment : path) {
-    if (segment.find("bytes") != std::string::npos) {
-      return true;
-    }
-    if (source == "process"
-        and (segment == "current_memory_usage" or segment == "peak_memory_usage"
-             or segment == "swap_space_usage")) {
-      return true;
-    }
-  }
-  return false;
-}
-
-auto is_allocator_cumulative_counter(std::string_view source,
-                                     const std::vector<std::string>& path)
-  -> bool {
-  if (source != "memory" or path.empty() or path.back() != "cumulative") {
-    return false;
-  }
-  return std::ranges::find(path, "bytes") != path.end()
-         or std::ranges::find(path, "allocations") != path.end();
-}
-
-auto describe_metric(std::string_view source,
-                     const std::vector<std::string>& path, bool is_duration)
-  -> metric_descriptor {
-  auto result = metric_descriptor{};
-  if (is_duration) {
-    result.unit = "seconds";
-    result.suffix_seconds = true;
-  } else if (has_bytes_unit(source, path)) {
-    result.unit = "bytes";
-  }
-  if (is_allocator_cumulative_counter(source, path)) {
-    result.type = "counter";
-  }
-  return result;
-}
-
 auto make_metric_name(std::string_view source,
-                      const std::vector<std::string>& path,
-                      metric_descriptor descriptor) -> std::string {
-  auto raw = fmt::format("tenzir_{}_{}", source, fmt::join(path, "_"));
-  auto result = sanitize_metric_name(raw);
+                      std::vector<std::string> const& path,
+                      metric_descriptor const& descriptor) -> std::string {
+  auto raw = fmt::format("tenzir_{}_{}", source, join(path, "_"));
+  auto result = sanitize_identifier(
+    raw,
+    [](unsigned char c) {
+      return ascii_isalnum(c) or c == '_' or c == ':';
+    },
+    true);
   if (descriptor.suffix_seconds and not result.ends_with("_seconds")) {
     result += "_seconds";
   }
   return result;
 }
 
-auto same_labels(const labels& lhs, const labels& rhs) -> bool {
-  if (lhs.size() != rhs.size()) {
-    return false;
-  }
-  for (auto index = size_t{0}; index < lhs.size(); ++index) {
-    if (lhs[index].key != rhs[index].key
-        or lhs[index].value != rhs[index].value) {
-      return false;
-    }
-  }
-  return true;
-}
-
-auto same_series(const metric_sample& lhs, const metric_sample& rhs) -> bool {
+auto same_series(metric_sample const& lhs, metric_sample const& rhs) -> bool {
   if (lhs.metric != rhs.metric or lhs.type != rhs.type or lhs.unit != rhs.unit
       or static_cast<bool>(lhs.timestamp) != static_cast<bool>(rhs.timestamp)) {
     return false;
@@ -375,21 +245,21 @@ auto same_series(const metric_sample& lhs, const metric_sample& rhs) -> bool {
   if (lhs.timestamp and *lhs.timestamp != *rhs.timestamp) {
     return false;
   }
-  return same_labels(lhs.metric_labels, rhs.metric_labels);
+  return lhs.metric_labels == rhs.metric_labels;
 }
 
 auto add_metric_sample(std::vector<metric_sample>& samples,
                        std::string_view source,
-                       const std::vector<std::string>& path, double value,
-                       Option<time> timestamp, const labels& metric_labels,
+                       std::vector<std::string> const& path, double value,
+                       Option<time> timestamp, labels const& metric_labels,
                        metric_descriptor descriptor) -> void {
   auto sample = metric_sample{
     .metric = make_metric_name(source, path, descriptor),
     .value = value,
     .timestamp = timestamp,
     .metric_labels = metric_labels,
-    .type = descriptor.type,
-    .unit = descriptor.unit,
+    .type = std::move(descriptor.type),
+    .unit = std::move(descriptor.unit),
   };
   for (auto& existing : samples) {
     if (same_series(existing, sample)) {
@@ -400,7 +270,7 @@ auto add_metric_sample(std::vector<metric_sample>& samples,
   samples.push_back(std::move(sample));
 }
 
-auto append_metric(series_builder& builder, const metric_sample& sample)
+auto append_metric(series_builder& builder, metric_sample const& sample)
   -> void {
   auto metric = builder.record();
   metric.field("metric", sample.metric);
@@ -411,7 +281,7 @@ auto append_metric(series_builder& builder, const metric_sample& sample)
     metric.field("timestamp", caf::none);
   }
   auto labels_record = metric.field("labels").record();
-  for (const auto& [key, label_value] : sample.metric_labels) {
+  for (auto const& [key, label_value] : sample.metric_labels) {
     labels_record.field(key, label_value);
   }
   metric.field("type", sample.type);
@@ -420,63 +290,91 @@ auto append_metric(series_builder& builder, const metric_sample& sample)
 
 auto flatten_value(std::vector<metric_sample>& samples, std::string_view source,
                    std::vector<std::string>& path, data_view3 value,
-                   Option<time> timestamp, const labels& labels) -> void;
+                   type const& field_type, Option<time> timestamp,
+                   labels const& labels) -> void;
 
 auto flatten_record(std::vector<metric_sample>& samples,
                     std::string_view source, std::vector<std::string>& path,
-                    view3<record> record, Option<time> timestamp,
-                    const labels& inherited) -> void {
-  auto scoped_labels = collect_labels(source, path, record, inherited);
+                    view3<record> record, record_type const& schema,
+                    Option<time> timestamp, labels const& inherited) -> void {
+  auto scoped_labels = collect_labels(schema, record, inherited);
   for (auto [key, value] : record) {
-    if (is_metadata_field(source, path, key)) {
+    auto field_type = schema.field(key);
+    if (not field_type) {
+      continue;
+    }
+    auto const role = prometheus_role_of(*field_type);
+    if (role == prometheus_role::ignore or role == prometheus_role::label) {
       continue;
     }
     path.push_back(std::string{key});
-    flatten_value(samples, source, path, value, timestamp, scoped_labels);
+    flatten_value(samples, source, path, value, *field_type, timestamp,
+                  scoped_labels);
     path.pop_back();
   }
 }
 
 auto flatten_list(std::vector<metric_sample>& samples, std::string_view source,
                   std::vector<std::string>& path, view3<list> list,
-                  Option<time> timestamp, const labels& labels) -> void {
+                  list_type const& schema, Option<time> timestamp,
+                  labels const& labels) -> void {
+  auto const value_type = schema.value_type();
+  auto const* record_schema = try_as<record_type>(&value_type);
+  if (not record_schema) {
+    return;
+  }
   for (auto item : list) {
-    if (const auto* item_record = try_as<view3<record>>(item)) {
-      flatten_record(samples, source, path, *item_record, timestamp, labels);
+    if (auto const* item_record = try_as<view3<record>>(item)) {
+      flatten_record(samples, source, path, *item_record, *record_schema,
+                     timestamp, labels);
     }
   }
 }
 
 auto flatten_value(std::vector<metric_sample>& samples, std::string_view source,
                    std::vector<std::string>& path, data_view3 value,
-                   Option<time> timestamp, const labels& labels) -> void {
+                   type const& field_type, Option<time> timestamp,
+                   labels const& labels) -> void {
+  if (prometheus_role_of(field_type) == prometheus_role::ignore) {
+    return;
+  }
+  if (auto const* record_schema = try_as<record_type>(&field_type)) {
+    if (auto const* record_value = try_as<view3<record>>(value)) {
+      flatten_record(samples, source, path, *record_value, *record_schema,
+                     timestamp, labels);
+    }
+    return;
+  }
+  if (auto const* list_schema = try_as<list_type>(&field_type)) {
+    if (auto const* list_value = try_as<view3<list>>(value)) {
+      flatten_list(samples, source, path, *list_value, *list_schema, timestamp,
+                   labels);
+    }
+    return;
+  }
+  if (prometheus_role_of(field_type) != prometheus_role::metric) {
+    return;
+  }
+  auto descriptor = descriptor_of(field_type);
   match(
     value, [&](caf::none_t) {},
     [&](int64_t value) {
       add_metric_sample(samples, source, path, static_cast<double>(value),
-                        timestamp, labels,
-                        describe_metric(source, path, false));
+                        timestamp, labels, descriptor);
     },
     [&](uint64_t value) {
       add_metric_sample(samples, source, path, static_cast<double>(value),
-                        timestamp, labels,
-                        describe_metric(source, path, false));
+                        timestamp, labels, descriptor);
     },
     [&](double value) {
       add_metric_sample(samples, source, path, value, timestamp, labels,
-                        describe_metric(source, path, false));
+                        descriptor);
     },
     [&](duration value) {
       add_metric_sample(
         samples, source, path,
         std::chrono::duration_cast<double_seconds>(value).count(), timestamp,
-        labels, describe_metric(source, path, true));
-    },
-    [&](view3<record> value) {
-      flatten_record(samples, source, path, value, timestamp, labels);
-    },
-    [&](view3<list> value) {
-      flatten_list(samples, source, path, value, timestamp, labels);
+        labels, descriptor);
     },
     [](auto) {});
 }
@@ -496,19 +394,33 @@ auto find_timestamp(view3<record> record) -> Option<time> {
 
 } // namespace
 
-auto shape_metrics_for_prometheus(const table_slice& input)
+prometheus_metric_shaper::prometheus_metric_shaper(type schema)
+  : schema_{std::move(schema)} {
+}
+
+auto prometheus_metric_shaper::shape(table_slice const& input) const
   -> std::vector<table_slice> {
   auto samples = std::vector<metric_sample>{};
   auto path = std::vector<std::string>{};
-  const auto source = metric_source(input.schema().name());
+  auto const source = metric_source(schema_.name());
+  auto const* schema = try_as<record_type>(&schema_);
+  if (not schema) {
+    return {};
+  }
   for (auto row : input.values()) {
-    flatten_record(samples, source, path, row, find_timestamp(row), {});
+    flatten_record(samples, source, path, row, *schema, find_timestamp(row),
+                   {});
   }
   auto builder = series_builder{prometheus_schema()};
-  for (const auto& sample : samples) {
+  for (auto const& sample : samples) {
     append_metric(builder, sample);
   }
   return builder.finish_as_table_slice();
+}
+
+auto shape_metrics_for_prometheus(table_slice const& input)
+  -> std::vector<table_slice> {
+  return prometheus_metric_shaper{input.schema()}.shape(input);
 }
 
 } // namespace tenzir::detail

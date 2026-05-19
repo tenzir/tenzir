@@ -1,7 +1,6 @@
 {
-  metric: "tenzir_operator_profile_events_out",
+  metric: "tenzir_cpu_loadavg_1m",
   has_value: true,
-  pipeline_id: "00000000-0000-0000-0000-000000000001",
   type: "gauge",
   unit: "",
 }
