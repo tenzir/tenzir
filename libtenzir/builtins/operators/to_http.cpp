@@ -471,6 +471,10 @@ private:
         .emit(dh);
       co_await folly::coro::sleep(delay);
     }
+    // Close the receiver so any sender blocked in process_sub unblocks.
+    if (body_rx) {
+      body_rx->close();
+    }
     std::ignore = response_->send(std::move(response));
   }
 
