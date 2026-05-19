@@ -63,7 +63,7 @@ public:
   explicit table_slice(chunk_ptr&& chunk, enum verify verify,
                        const std::shared_ptr<arrow::RecordBatch>& batch
                        = nullptr,
-                       type schema = {}) noexcept;
+                       std::optional<type> schema = std::nullopt) noexcept;
 
   /// Construct a table slice from a flattened table slice embedded in a chunk,
   /// and shares the chunk's lifetime.
@@ -79,12 +79,12 @@ public:
 
   /// Construct an Arrow-encoded table slice from an existing record batch.
   /// @param record_batch The record batch containing the table slice data.
-  /// @param Tenzir type for the provided record batch.
+  /// @param schema Tenzir type for the provided record batch.
   /// @param serialize Whether to store IPC format as a backing.
   /// @pre `record_batch` must be a RecordBatch that can be represented by
   ///      Tenzir's type system.
   explicit table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
-                       type schema = {},
+                       std::optional<type> schema = std::nullopt,
                        enum serialize serialize = serialize::no);
 
   struct creation_error {
@@ -96,9 +96,9 @@ public:
   /// @param record_batch The record batch containing the table slice data.
   /// @param Tenzir type for the provided record batch.
   /// @param serialize Whether to store IPC format as a backing.
-  static auto
-  try_from(const std::shared_ptr<arrow::RecordBatch>& record_batch,
-           type schema = {}, enum serialize serialize = serialize::no)
+  static auto try_from(const std::shared_ptr<arrow::RecordBatch>& record_batch,
+                       std::optional<type> schema = std::nullopt,
+                       enum serialize serialize = serialize::no)
     -> std::expected<table_slice, creation_error>;
 
   /// Copy-construct a table slice.
