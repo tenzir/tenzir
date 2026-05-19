@@ -19,6 +19,7 @@
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/defaults.hpp>
+#include <tenzir/detail/heterogeneous_string_hash.hpp>
 #include <tenzir/detail/prometheus_metric_shaper.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -51,8 +52,6 @@
 #include <caf/typed_event_based_actor.hpp>
 #include <folly/coro/Sleep.h>
 
-#include <unordered_map>
-
 namespace tenzir::plugins::export_ {
 
 TENZIR_ENUM(export_special_filter, none, diagnostics, metrics);
@@ -83,7 +82,7 @@ auto uses_prometheus_shape(ExportArgs const& args) -> bool {
 }
 
 using prometheus_shaper_map
-  = std::unordered_map<std::string, detail::prometheus_metric_shaper>;
+  = detail::heterogeneous_string_hashmap<detail::prometheus_metric_shaper>;
 
 auto make_prometheus_shapers() -> prometheus_shaper_map {
   auto result = prometheus_shaper_map{};
@@ -125,7 +124,9 @@ auto add_remainder(Option<ast::expression>& remainder, ast::expression expr)
 
 class Export final : public Operator<void, table_slice> {
 public:
-  explicit Export(ExportArgs args) : args_{std::move(args)} {
+  explicit Export(ExportArgs args)
+    : args_{std::move(args)},
+      uses_prometheus_shape_{uses_prometheus_shape(args_)} {
   }
 
   Export(const Export&) = delete;
@@ -141,7 +142,7 @@ public:
       },
       MetricsDirection::read, MetricsVisibility::internal_,
       MetricsUnit::events);
-    if (uses_prometheus_shape(args_)) {
+    if (uses_prometheus_shape_) {
       prometheus_shapers_ = make_prometheus_shapers();
     }
     auto node = co_await fetch_node(ctx.actor_system(), ctx.dh());
@@ -157,7 +158,7 @@ public:
         data{args_.internal},
       },
     });
-    if (uses_prometheus_shape(args_)) {
+    if (uses_prometheus_shape_) {
       for (const auto& filter : args_.filter) {
         add_remainder(remainder_, filter);
       }
@@ -238,10 +239,17 @@ public:
       done_ = true;
       co_return;
     }
-    if (uses_prometheus_shape(args_)) {
-      auto shaper
-        = prometheus_shapers_.find(std::string{expected->schema().name()});
+    if (uses_prometheus_shape_) {
+      auto shaper = prometheus_shapers_.find(expected->schema().name());
       if (shaper == prometheus_shapers_.end()) {
+        if (warned_unsupported_prometheus_schemas_
+              .insert(std::string{expected->schema().name()})
+              .second) {
+          diagnostic::warning("omitting metrics with unsupported Prometheus "
+                              "shape schema `{}`",
+                              expected->schema().name())
+            .emit(ctx);
+        }
         co_return;
       }
       for (auto&& output : shaper->second.shape(*expected)) {
@@ -286,10 +294,12 @@ public:
 
 private:
   ExportArgs args_;
+  bool uses_prometheus_shape_ = false;
   export_bridge_actor bridge_;
   std::shared_ptr<UnboundedQueue<diagnostic>> diag_queue_;
   Option<ast::expression> remainder_ = None{};
   prometheus_shaper_map prometheus_shapers_ = {};
+  detail::heterogeneous_string_hashset warned_unsupported_prometheus_schemas_;
   MetricsCounter read_events_counter_;
   bool done_ = false;
 };

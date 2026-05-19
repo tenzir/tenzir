@@ -162,6 +162,70 @@ TEST("prometheus metric shaper flattens lists of records with labels") {
               "index");
 }
 
+TEST("prometheus metric shaper repeats timestamps for list values") {
+  auto b = series_builder{type{
+    "tenzir.metrics.caf",
+    record_type{
+      {"timestamp", metrics::prometheus_ignore(time_type{})},
+      {"system",
+       record_type{{"running_actors_by_name",
+                    list_type{record_type{
+                      {"name", metrics::prometheus_label(string_type{})},
+                      {"count", metrics::prometheus_gauge(int64_type{})},
+                    }}}}},
+    },
+  }};
+  auto row0 = b.record();
+  row0.field("timestamp", test_timestamp());
+  auto actors0
+    = row0.field("system").record().field("running_actors_by_name").list();
+  auto actor0 = actors0.record();
+  actor0.field("name", "scheduler");
+  actor0.field("count", int64_t{2});
+  auto row1 = b.record();
+  row1.field("timestamp", test_timestamp() + duration{1});
+  auto actors1
+    = row1.field("system").record().field("running_actors_by_name").list();
+  auto actor1 = actors1.record();
+  actor1.field("name", "index");
+  actor1.field("count", int64_t{3});
+  auto actor2 = actors1.record();
+  actor2.field("name", "store");
+  actor2.field("count", int64_t{4});
+  auto rows = shape_rows(b.finish_assert_one_slice());
+  REQUIRE_EQUAL(rows.size(), size_t{3});
+  CHECK_EQUAL(get<time>(rows[0], "timestamp"), test_timestamp());
+  CHECK_EQUAL(get<time>(rows[1], "timestamp"), test_timestamp() + duration{1});
+  CHECK_EQUAL(get<time>(rows[2], "timestamp"), test_timestamp() + duration{1});
+  CHECK_EQUAL(get<std::string>(get<record>(rows[2], "labels"), "name"),
+              "store");
+}
+
+TEST("prometheus metric shaper ignores unannotated leaves") {
+  auto b = series_builder{type{
+    "tenzir.metrics.custom",
+    record_type{
+      {"timestamp", metrics::prometheus_ignore(time_type{})},
+      {"outer",
+       record_type{
+         {"ignored", uint64_type{}},
+         {"inner",
+          record_type{{"count", metrics::prometheus_gauge(uint64_type{})}}},
+       }},
+    },
+  }};
+  auto row = b.record();
+  row.field("timestamp", test_timestamp());
+  auto outer = row.field("outer").record();
+  outer.field("ignored", uint64_t{13});
+  outer.field("inner").record().field("count", uint64_t{7});
+  auto rows = shape_rows(b.finish_assert_one_slice());
+  REQUIRE_EQUAL(rows.size(), size_t{1});
+  CHECK_EQUAL(get<std::string>(rows[0], "metric"),
+              "tenzir_custom_outer_inner_count");
+  CHECK_EQUAL(get<double>(rows[0], "value"), 7.0);
+}
+
 TEST("prometheus metric shaper skips null and non-numeric fields") {
   auto b = series_builder{type{
     "tenzir.metrics.custom",
