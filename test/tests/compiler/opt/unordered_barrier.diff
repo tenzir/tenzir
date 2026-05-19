@@ -17,53 +17,40 @@
        filter: [
          
        ],
--      order: "ordered",
 +      order: "unordered",
-       named_args: [
-         
-       ]
-     },
-     UnorderedIr {
-       pipeline: {
-         lets: [
-           
-         ],
-         operators: [
-           GenericIr {
-             op: {
-               path: [
-                 `head` @ 21..25
-               ],
-               ref: std::head/op
-             },
-             desc: "head",
-             args: [
-               
-             ],
-             filter: [
-               
-             ],
--            order: "ordered",
-+            order: "unordered",
-             named_args: [
-               
-             ]
-           },
-           where_ir {
--            self: 28..33,
-+            self: 0..0,
-             predicate: binary_expr {
-               left: root_field {
-                 id: `foo` @ 34..37,
-                 has_question_mark: false
-               },
-               op: "eq" @ 38..40,
-               right: constant int64 42 @ 41..43
-             }
-           }
-         ]
-       },
-       loc: 7..16
++      named_args: [
++        
++      ]
++    },
++    GenericIr {
++      op: {
++        path: [
++          `head` @ 21..25
++        ],
++        ref: std::head/op
++      },
++      desc: "head",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "unordered",
++      named_args: [
++        
++      ]
++    },
++    where_ir {
++      self: 0..0,
++      predicate: binary_expr {
++        left: root_field {
++          id: `foo` @ 34..37,
++          has_question_mark: false
++        },
++        op: "eq" @ 38..40,
++        right: constant int64 42 @ 41..43
++      }
 +    },
 +    GenericIr {
 +      op: {
@@ -79,10 +66,50 @@
 +      filter: [
 +        
 +      ],
-+      order: "ordered",
-+      named_args: [
-+        
-+      ]
+       order: "ordered",
+       named_args: [
+         
+       ]
+-    },
+-    UnorderedIr {
+-      pipeline: {
+-        lets: [
+-          
+-        ],
+-        operators: [
+-          GenericIr {
+-            op: {
+-              path: [
+-                `head` @ 21..25
+-              ],
+-              ref: std::head/op
+-            },
+-            desc: "head",
+-            args: [
+-              
+-            ],
+-            filter: [
+-              
+-            ],
+-            order: "ordered",
+-            named_args: [
+-              
+-            ]
+-          },
+-          where_ir {
+-            self: 28..33,
+-            predicate: binary_expr {
+-              left: root_field {
+-                id: `foo` @ 34..37,
+-                has_question_mark: false
+-              },
+-              op: "eq" @ 38..40,
+-              right: constant int64 42 @ 41..43
+-            }
+-          }
+-        ]
+-      },
+-      loc: 7..16
      }
    ]
  }
