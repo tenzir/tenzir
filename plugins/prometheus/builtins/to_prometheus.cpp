@@ -60,7 +60,7 @@ constexpr auto v2_samples_written_header
   = "X-Prometheus-Remote-Write-Samples-Written";
 constexpr auto max_uncompressed_bytes_default = uint64_t{4 * 1024 * 1024};
 
-using Headers = std::vector<std::pair<std::string, std::string>>;
+using Headers = std::vector<http::Header>;
 
 struct ToPrometheusArgs {
   located<secret> url;
@@ -155,14 +155,6 @@ struct Series {
   Metadata metadata;
 };
 
-auto lower_ascii(std::string_view input) -> std::string {
-  auto result = std::string{input};
-  std::ranges::transform(result, result.begin(), [](unsigned char c) {
-    return static_cast<char>(detail::ascii_tolower(c));
-  });
-  return result;
-}
-
 auto is_reserved_header(std::string_view name) -> bool {
   constexpr auto reserved = std::array{
     "content-encoding"sv,
@@ -218,7 +210,7 @@ auto sanitize_label_name(std::string name) -> std::string {
   return name;
 }
 
-auto valid_metric_name(std::string_view name) -> bool {
+auto valid_legacy_metric_name(std::string_view name) -> bool {
   if (name.empty()) {
     return false;
   }
@@ -231,7 +223,7 @@ auto valid_metric_name(std::string_view name) -> bool {
   });
 }
 
-auto valid_label_name(std::string_view name) -> bool {
+auto valid_legacy_label_name(std::string_view name) -> bool {
   if (name.empty()) {
     return false;
   }
@@ -245,7 +237,7 @@ auto valid_label_name(std::string_view name) -> bool {
 }
 
 auto to_metric_type(std::string_view type) -> MetricType {
-  auto normalized = lower_ascii(type);
+  auto normalized = detail::ascii_tolower(type);
   if (normalized == "counter") {
     return MetricType::counter;
   }
@@ -373,17 +365,6 @@ auto now_ms() -> int64_t {
     .count();
 }
 
-auto response_header(HttpResponse const& response, std::string_view name)
-  -> std::optional<std::string_view> {
-  auto result = std::ranges::find_if(response.headers, [name](auto const& x) {
-    return detail::ascii_icase_equal(x.first, name);
-  });
-  if (result == response.headers.end()) {
-    return {};
-  }
-  return result->second;
-}
-
 auto parse_u64(std::string_view value) -> std::optional<uint64_t> {
   auto result = uint64_t{};
   auto const* begin = value.data();
@@ -398,7 +379,7 @@ auto parse_u64(std::string_view value) -> std::optional<uint64_t> {
 auto check_v2_written_samples(HttpResponse const& response,
                               uint64_t expected_samples, OpCtx& ctx,
                               location loc) -> bool {
-  auto header = response_header(response, v2_samples_written_header);
+  auto header = http::find(response.headers, v2_samples_written_header);
   auto written_samples
     = header ? parse_u64(*header) : std::optional<uint64_t>{0};
   if (not written_samples) {
@@ -457,10 +438,10 @@ auto serialize_v1(std::vector<Series> series) -> std::string {
     TENZIR_ASSERT(metric_name != entry.labels.end());
     auto family = entry.metadata.family.empty() ? metric_name->second
                                                 : entry.metadata.family;
-    if (metadata_seen.insert(family).second
-        and (entry.metadata.type != MetricType::unknown
-             or not entry.metadata.help.empty()
-             or not entry.metadata.unit.empty())) {
+    auto has_metadata = entry.metadata.type != MetricType::unknown
+                        or not entry.metadata.help.empty()
+                        or not entry.metadata.unit.empty();
+    if (has_metadata and metadata_seen.insert(family).second) {
       auto* metadata = request.add_metadata();
       metadata->set_type(v1_metric_type(entry.metadata.type));
       metadata->set_metric_family_name(family);
@@ -501,6 +482,12 @@ auto serialize_v2(std::vector<Series> series) -> std::string {
     request.add_symbols(std::move(symbol));
   }
   return request.SerializeAsString();
+}
+
+auto sort_samples(std::vector<Series>& series) -> void {
+  for (auto& entry : series) {
+    std::ranges::sort(entry.samples, {}, &Sample::timestamp_ms);
+  }
 }
 
 auto snappy_compress(std::string body, diagnostic_handler& dh, location loc)
@@ -696,7 +683,7 @@ private:
     if (args_.sanitize_names) {
       *name = sanitize_metric_name(std::move(*name));
     }
-    if (not valid_metric_name(*name)) {
+    if (protocol_ == Protocol::v1 and not valid_legacy_metric_name(*name)) {
       diagnostic::warning("invalid Prometheus metric name `{}`, skipping event",
                           *name)
         .primary(args_.name)
@@ -741,7 +728,8 @@ private:
         if (args_.sanitize_names) {
           final_name = sanitize_label_name(std::move(final_name));
         }
-        if (not valid_label_name(final_name)) {
+        if (protocol_ == Protocol::v1
+            and not valid_legacy_label_name(final_name)) {
           diagnostic::warning(
             "invalid Prometheus label name `{}`, skipping event", final_name)
             .primary(args_.labels)
@@ -783,7 +771,7 @@ private:
         .emit(ctx);
       return {};
     }
-    if (not start_timestamps.is_null(row)) {
+    if (protocol_ == Protocol::v2 and not start_timestamps.is_null(row)) {
       if (auto start_timestamp
           = to_timestamp_ms(start_timestamps.view3_at(row))) {
         result.sample.start_timestamp_ms = *start_timestamp;
@@ -844,13 +832,10 @@ private:
                                      : serialize_v2(std::move(series));
   }
 
-  auto can_split(std::vector<Series> const& series) -> bool {
-    return series.size() > 1
-           or (series.size() == 1 and series.front().samples.size() > 1);
-  }
-
   auto split_series(std::vector<Series>& series) -> std::vector<Series> {
-    TENZIR_ASSERT(can_split(series));
+    TENZIR_ASSERT(
+      series.size() > 1
+      or (series.size() == 1 and series.front().samples.size() > 1));
     if (series.size() > 1) {
       auto result = std::vector<Series>{};
       auto half = series.size() / 2;
@@ -891,9 +876,10 @@ private:
     for (auto const& entry : series) {
       sample_count += entry.samples.size();
     }
+    sort_samples(series);
     auto uncompressed = serialize(series);
     if (uncompressed.size() > args_.max_uncompressed_bytes.inner) {
-      if (not can_split(series)) {
+      if (series.size() == 1 and series.front().samples.size() == 1) {
         diagnostic::error(
           "Prometheus remote write request with a single sample exceeds "
           "`max_uncompressed_bytes`")
@@ -911,17 +897,15 @@ private:
     if (not compressed) {
       co_return;
     }
-    auto headers = std::map<std::string, std::string>{};
-    for (auto const& [name, value] : headers_) {
-      headers[name] = value;
-    }
-    headers["Content-Type"]
-      = protocol_ == Protocol::v1 ? v1_content_type : v2_content_type;
-    headers["Content-Encoding"] = "snappy";
-    headers["Content-Length"] = fmt::to_string(compressed->size());
-    headers["User-Agent"] = fmt::format("Tenzir/{}", version::version);
-    headers["X-Prometheus-Remote-Write-Version"]
-      = protocol_ == Protocol::v1 ? "0.1.0" : "2.0.0";
+    auto headers = headers_;
+    http::set(headers, "Content-Type",
+              protocol_ == Protocol::v1 ? v1_content_type : v2_content_type);
+    http::set(headers, "Content-Encoding", "snappy");
+    http::set(headers, "Content-Length", fmt::to_string(compressed->size()));
+    http::set(headers, "User-Agent",
+              fmt::format("Tenzir/{}", version::version));
+    http::set(headers, "X-Prometheus-Remote-Write-Version",
+              protocol_ == Protocol::v1 ? "0.1.0" : "2.0.0");
     auto compressed_size = compressed->size();
     auto result
       = co_await (*pool_)->post(std::move(*compressed), std::move(headers));

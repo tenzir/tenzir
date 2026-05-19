@@ -5,7 +5,7 @@ fixtures: [prometheus_remote_write]
 assertions:
   fixtures:
     prometheus_remote_write:
-      after: 03_capture.py
+      after: 07_capture.py
       requests:
         - content_type: application/x-protobuf
           metadata:
@@ -38,4 +38,66 @@ assertions:
                   timestamp: 1778839201000
                   value: 0.5
           version: 2.0.0
+        - content_type: application/x-protobuf
+          metadata:
+            - family: mixed_metric
+              help: Mixed metadata
+              type: 2
+              unit: widgets
+          timeseries:
+            - labels:
+                __name__: mixed_metric
+                series: empty-metadata
+              samples:
+                - timestamp: 1778839202000
+                  value: 1.0
+            - labels:
+                __name__: mixed_metric
+                series: with-metadata
+              samples:
+                - timestamp: 1778839203000
+                  value: 2.0
+          version: 0.1.0
+        - content_type: application/x-protobuf
+          metadata: []
+          timeseries:
+            - labels:
+                __name__: v1_start_timestamp_ignored
+              samples:
+                - timestamp: 1778839204000
+                  value: 3.0
+          version: 0.1.0
+        - content_type: application/x-protobuf;proto=io.prometheus.write.v2.Request
+          symbols: ["", __name__, service.latency, service.name, checkout]
+          timeseries:
+            - labels:
+                __name__: service.latency
+                service.name: checkout
+              metadata: {}
+              samples:
+                - timestamp: 1778839205000
+                  value: 4.0
+          version: 2.0.0
+        - content_type: application/x-protobuf
+          metadata: []
+          timeseries:
+            - labels:
+                __name__: split_order_metric
+              samples:
+                - timestamp: 1778839206000
+                  value: 1.0
+                - timestamp: 1778839207000
+                  value: 2.0
+          version: 0.1.0
+        - content_type: application/x-protobuf
+          metadata: []
+          timeseries:
+            - labels:
+                __name__: split_order_metric
+              samples:
+                - timestamp: 1778839208000
+                  value: 3.0
+                - timestamp: 1778839209000
+                  value: 4.0
+          version: 0.1.0
 timeout: 60

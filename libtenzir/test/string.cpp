@@ -14,6 +14,9 @@ using namespace tenzir;
 using namespace detail;
 
 TEST("ASCII case-insensitive equality") {
+  CHECK_EQUAL(ascii_tolower(""), "");
+  CHECK_EQUAL(ascii_tolower("TenZir-123_[]"), "tenzir-123_[]");
+  CHECK_EQUAL(ascii_tolower("ÄBC"), "Äbc");
   CHECK(ascii_icase_equal("", ""));
   CHECK(ascii_icase_equal("tenzir", "TENZIR"));
   CHECK(ascii_icase_equal("Kafka-123_[]", "kAfKa-123_[]"));

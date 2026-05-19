@@ -8,9 +8,11 @@
 
 #pragma once
 
+#include <algorithm>
 #include <functional>
 #include <iterator>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -47,6 +49,15 @@ constexpr inline std::string_view ascii_whitespace = " \t\r\n\f\v";
 [[nodiscard]] inline constexpr auto ascii_isalnum(unsigned char c) noexcept
   -> bool {
   return ascii_isalpha(c) or ascii_isdigit(c);
+}
+
+/// Returns a copy of `input` with ASCII bytes folded to lowercase.
+[[nodiscard]] inline auto ascii_tolower(std::string_view input) -> std::string {
+  auto result = std::string{input};
+  std::ranges::transform(result, result.begin(), [](unsigned char c) {
+    return static_cast<char>(ascii_tolower(c));
+  });
+  return result;
 }
 
 /// Compares two strings case-insensitively for ASCII letters.

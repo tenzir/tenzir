@@ -1,0 +1,23 @@
+from {
+  metric: "mixed_metric",
+  value: 1,
+  timestamp: 2026-05-15T10:00:02Z,
+  labels: {
+    series: "empty-metadata",
+  },
+  family: "mixed_metric",
+}, {
+  metric: "mixed_metric",
+  value: 2,
+  timestamp: 2026-05-15T10:00:03Z,
+  labels: {
+    series: "with-metadata",
+  },
+  type: "gauge",
+  help: "Mixed metadata",
+  unit: "widgets",
+  family: "mixed_metric",
+}
+to_prometheus env("PROMETHEUS_REMOTE_WRITE_URL"),
+              flush_interval=10s,
+              max_samples_per_request=100

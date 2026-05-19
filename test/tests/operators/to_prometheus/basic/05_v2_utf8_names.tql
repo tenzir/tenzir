@@ -1,0 +1,12 @@
+from {
+  metric: "service.latency",
+  value: 4,
+  timestamp: 2026-05-15T10:00:05Z,
+  labels: {
+    "service.name": "checkout",
+  },
+}
+to_prometheus env("PROMETHEUS_REMOTE_WRITE_URL"),
+              protobuf_message="io.prometheus.write.v2.Request",
+              sanitize_names=false,
+              flush_interval=10s

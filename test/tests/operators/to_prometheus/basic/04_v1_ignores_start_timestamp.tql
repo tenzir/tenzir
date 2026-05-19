@@ -1,0 +1,8 @@
+from {
+  metric: "v1_start_timestamp_ignored",
+  value: 3,
+  timestamp: 2026-05-15T10:00:04Z,
+  start_timestamp: "not-a-v1-field",
+}
+to_prometheus env("PROMETHEUS_REMOTE_WRITE_URL"),
+              flush_interval=10s
