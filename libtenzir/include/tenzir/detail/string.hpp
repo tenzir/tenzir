@@ -31,6 +31,24 @@ constexpr inline std::string_view ascii_whitespace = " \t\r\n\f\v";
   return c;
 }
 
+/// Checks whether an ASCII byte is a decimal digit.
+[[nodiscard]] inline constexpr auto ascii_isdigit(unsigned char c) noexcept
+  -> bool {
+  return c >= '0' and c <= '9';
+}
+
+/// Checks whether an ASCII byte is an alphabetic character.
+[[nodiscard]] inline constexpr auto ascii_isalpha(unsigned char c) noexcept
+  -> bool {
+  return (c >= 'A' and c <= 'Z') or (c >= 'a' and c <= 'z');
+}
+
+/// Checks whether an ASCII byte is alphanumeric.
+[[nodiscard]] inline constexpr auto ascii_isalnum(unsigned char c) noexcept
+  -> bool {
+  return ascii_isalpha(c) or ascii_isdigit(c);
+}
+
 /// Compares two strings case-insensitively for ASCII letters.
 [[nodiscard]] inline constexpr auto
 ascii_icase_equal(std::string_view lhs, std::string_view rhs) noexcept -> bool {

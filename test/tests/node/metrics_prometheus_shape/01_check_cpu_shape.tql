@@ -1,0 +1,10 @@
+every 1s {
+  metrics "cpu", shape="prometheus"
+  where metric == "tenzir_cpu_loadavg_1m"
+}
+head 1
+select \
+  metric,
+  has_value=(value >= 0.0),
+  type,
+  unit

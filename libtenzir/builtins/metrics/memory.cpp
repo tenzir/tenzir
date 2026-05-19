@@ -626,71 +626,83 @@ public:
   }
 
   auto metric_layout() const -> record_type override {
-    const auto stats = record_type{
-      {"current", int64_type{}},
-      {"peak", int64_type{}},
-      {"cumulative", int64_type{}},
+    auto stats = [](std::string_view unit) {
+      return record_type{
+        {"current", metrics::prometheus_gauge(int64_type{}, unit)},
+        {"peak", metrics::prometheus_gauge(int64_type{}, unit)},
+        {"cumulative", metrics::prometheus_counter(int64_type{}, unit)},
+      };
     };
-    const auto bytes_and_allocations = record_type{
-      {"bytes", stats},
-      {"allocations", stats},
+    auto const bytes_and_allocations = record_type{
+      {"bytes", stats("bytes")},
+      {"allocations", stats("")},
     };
-    const auto actor_stats = list_type{record_type{
-      {"name", string_type{}},
+    auto const actor_stats = list_type{record_type{
+      {"name", metrics::prometheus_label(string_type{})},
       {"arrow", bytes_and_allocations},
       {"cpp", bytes_and_allocations},
       {"c", bytes_and_allocations},
     }};
-    const auto table_slice_stats = record_type{
-      {"serialized_bytes", int64_type{}},
-      {"non_serialized_bytes", int64_type{}},
-      {"batch_count", int64_type{}},
-      {"event_count", int64_type{}},
+    auto const table_slice_stats = record_type{
+      {"serialized_bytes", metrics::prometheus_gauge(int64_type{}, "bytes")},
+      {"non_serialized_bytes",
+       metrics::prometheus_gauge(int64_type{}, "bytes")},
+      {"batch_count", metrics::prometheus_gauge(int64_type{})},
+      {"event_count", metrics::prometheus_gauge(int64_type{})},
     };
-    const auto bytes_and_count = record_type{
-      {"bytes", int64_type{}},
-      {"count", int64_type{}},
+    auto const bytes_and_count = record_type{
+      {"bytes", metrics::prometheus_gauge(int64_type{}, "bytes")},
+      {"count", metrics::prometheus_gauge(int64_type{})},
     };
-    const auto procfs_status = record_type{
-      {"vm_rss_bytes", uint64_type{}},   {"vm_data_bytes", uint64_type{}},
-      {"vm_swap_bytes", uint64_type{}},  {"rss_anon_bytes", uint64_type{}},
-      {"file_rss_bytes", uint64_type{}}, {"rss_shmem_bytes", uint64_type{}},
+    auto const procfs_status = record_type{
+      {"vm_rss_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"vm_data_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"vm_swap_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"rss_anon_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"file_rss_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"rss_shmem_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
     };
-    const auto procfs_smaps = record_type{
-      {"rss_bytes", uint64_type{}},
-      {"pss_bytes", uint64_type{}},
-      {"private_clean_bytes", uint64_type{}},
-      {"private_dirty_bytes", uint64_type{}},
-      {"anonymous_rss_bytes", uint64_type{}},
-      {"swap_bytes", uint64_type{}},
-      {"hugetlb_bytes", uint64_type{}},
+    auto const procfs_smaps = record_type{
+      {"rss_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"pss_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"private_clean_bytes",
+       metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"private_dirty_bytes",
+       metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"anonymous_rss_bytes",
+       metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"swap_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"hugetlb_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
     };
-    const auto procfs_heap = record_type{
-      {"break_bytes", uint64_type{}},
+    auto const procfs_heap = record_type{
+      {"break_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
     };
-    const auto procfs = record_type{
+    auto const procfs = record_type{
       {"status", procfs_status},
       {"smaps", procfs_smaps},
       {"heap", procfs_heap},
     };
-    const auto malloc_stats = record_type{
-      {"arena_bytes", uint64_type{}},    {"uordblks_bytes", uint64_type{}},
-      {"fordblks_bytes", uint64_type{}}, {"keepcost_bytes", uint64_type{}},
-      {"hblkhd_bytes", uint64_type{}},   {"ordblks_count", uint64_type{}},
-      {"smblks_count", uint64_type{}},
+    auto const malloc_stats = record_type{
+      {"arena_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"uordblks_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"fordblks_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"keepcost_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"hblkhd_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"ordblks_count", metrics::prometheus_gauge(uint64_type{})},
+      {"smblks_count", metrics::prometheus_gauge(uint64_type{})},
     };
     return record_type{{
       {"system",
        record_type{
-         {"total_bytes", uint64_type{}},
-         {"free_bytes", uint64_type{}},
-         {"used_bytes", uint64_type{}},
+         {"total_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+         {"free_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+         {"used_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
        }},
       {"process",
        record_type{
-         {"peak_bytes", uint64_type{}},
-         {"current_bytes", uint64_type{}},
-         {"swap_bytes", uint64_type{}},
+         {"peak_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+         {"current_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+         {"swap_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
        }},
       {"procfs", procfs},
       {"arrow", bytes_and_allocations},

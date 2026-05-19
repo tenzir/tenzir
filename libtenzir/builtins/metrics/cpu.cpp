@@ -50,9 +50,9 @@ public:
 
   auto metric_layout() const -> record_type override {
     return record_type{{
-      {"loadavg_1m", double_type{}},
-      {"loadavg_5m", double_type{}},
-      {"loadavg_15m", double_type{}},
+      {"loadavg_1m", metrics::prometheus_gauge(double_type{})},
+      {"loadavg_5m", metrics::prometheus_gauge(double_type{})},
+      {"loadavg_15m", metrics::prometheus_gauge(double_type{})},
     }};
   }
 };

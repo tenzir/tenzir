@@ -1,0 +1,6 @@
+{
+  metric: "tenzir_cpu_loadavg_1m",
+  has_value: true,
+  type: "gauge",
+  unit: "",
+}

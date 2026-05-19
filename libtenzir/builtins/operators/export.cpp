@@ -19,6 +19,8 @@
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/defaults.hpp>
+#include <tenzir/detail/heterogeneous_string_hash.hpp>
+#include <tenzir/detail/prometheus_metric_shaper.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
@@ -31,6 +33,7 @@
 #include <tenzir/passive_partition.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/plugin/metrics.hpp>
 #include <tenzir/query_context.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/filter.hpp>
@@ -52,6 +55,7 @@
 namespace tenzir::plugins::export_ {
 
 TENZIR_ENUM(export_special_filter, none, diagnostics, metrics);
+TENZIR_ENUM(metrics_shape, raw, prometheus);
 
 namespace {
 
@@ -67,11 +71,62 @@ struct ExportArgs {
   export_special_filter special_filter;
   /// A metric name to use in the `metrics` version
   Option<std::string> metrics_name;
+  /// The output shape for the `metrics` version.
+  std::string shape = "raw";
 };
+
+auto uses_prometheus_shape(ExportArgs const& args) -> bool {
+  return args.special_filter == export_special_filter::metrics
+         and from_string<metrics_shape>(args.shape).value_or(metrics_shape::raw)
+               == metrics_shape::prometheus;
+}
+
+using prometheus_shaper_map
+  = detail::heterogeneous_string_hashmap<detail::prometheus_metric_shaper>;
+
+auto make_prometheus_shapers() -> prometheus_shaper_map {
+  auto result = prometheus_shaper_map{};
+  for (auto const* plugin : plugins::get<tenzir::metrics_plugin>()) {
+    auto const layout = plugin->metric_layout();
+    auto layout_with_timestamp = layout.transform({{
+      offset{0},
+      record_type::insert_before(
+        {{"timestamp", metrics::prometheus_ignore(time_type{})}}),
+    }});
+    TENZIR_ASSERT(layout_with_timestamp);
+    auto schema_name = fmt::format("tenzir.metrics.{}", plugin->name());
+    result.emplace(schema_name, detail::prometheus_metric_shaper{type{
+                                  schema_name,
+                                  *layout_with_timestamp,
+                                  {{"internal", ""}},
+                                }});
+  }
+  return result;
+}
+
+auto add_remainder(Option<ast::expression>& remainder, ast::expression expr)
+  -> void {
+  if (is_true_literal(expr)) {
+    return;
+  }
+  if (not remainder) {
+    remainder = std::move(expr);
+    return;
+  }
+  remainder = ast::expression{
+    ast::binary_expr{
+      std::move(*remainder),
+      {ast::binary_op::and_, location::unknown},
+      std::move(expr),
+    },
+  };
+}
 
 class Export final : public Operator<void, table_slice> {
 public:
-  explicit Export(ExportArgs args) : args_{std::move(args)} {
+  explicit Export(ExportArgs args)
+    : args_{std::move(args)},
+      uses_prometheus_shape_{uses_prometheus_shape(args_)} {
   }
 
   Export(const Export&) = delete;
@@ -87,6 +142,9 @@ public:
       },
       MetricsDirection::read, MetricsVisibility::internal_,
       MetricsUnit::events);
+    if (uses_prometheus_shape_) {
+      prometheus_shapers_ = make_prometheus_shapers();
+    }
     auto node = co_await fetch_node(ctx.actor_system(), ctx.dh());
     if (not node) {
       co_return;
@@ -100,23 +158,17 @@ public:
         data{args_.internal},
       },
     });
-    for (const auto& filter : args_.filter) {
-      auto [legacy, remainder] = split_legacy_expression(filter);
-      if (legacy != trivially_true_expression()) {
-        legacy_clauses.push_back(std::move(legacy));
+    if (uses_prometheus_shape_) {
+      for (const auto& filter : args_.filter) {
+        add_remainder(remainder_, filter);
       }
-      if (not is_true_literal(remainder)) {
-        if (not remainder_) {
-          remainder_ = std::move(remainder);
-        } else {
-          remainder_ = ast::expression{
-            ast::binary_expr{
-              std::move(*remainder_),
-              {ast::binary_op::and_, location::unknown},
-              std::move(remainder),
-            },
-          };
+    } else {
+      for (const auto& filter : args_.filter) {
+        auto [legacy, remainder] = split_legacy_expression(filter);
+        if (legacy != trivially_true_expression()) {
+          legacy_clauses.push_back(std::move(legacy));
         }
+        add_remainder(remainder_, std::move(remainder));
       }
     }
     switch (args_.special_filter) {
@@ -187,6 +239,31 @@ public:
       done_ = true;
       co_return;
     }
+    if (uses_prometheus_shape_) {
+      auto shaper = prometheus_shapers_.find(expected->schema().name());
+      if (shaper == prometheus_shapers_.end()) {
+        if (warned_unsupported_prometheus_schemas_
+              .insert(std::string{expected->schema().name()})
+              .second) {
+          diagnostic::warning("omitting metrics with unsupported Prometheus "
+                              "shape schema `{}`",
+                              expected->schema().name())
+            .emit(ctx);
+        }
+        co_return;
+      }
+      for (auto&& output : shaper->second.shape(*expected)) {
+        if (remainder_) {
+          output = filter2(output, *remainder_, ctx, false);
+        }
+        if (output.rows() > 0) {
+          auto const rows = output.rows();
+          co_await push(std::move(output));
+          read_events_counter_.add(rows);
+        }
+      }
+      co_return;
+    }
     if (not remainder_) {
       auto const rows = expected->rows();
       co_await push(std::move(*expected));
@@ -217,9 +294,12 @@ public:
 
 private:
   ExportArgs args_;
+  bool uses_prometheus_shape_ = false;
   export_bridge_actor bridge_;
   std::shared_ptr<UnboundedQueue<diagnostic>> diag_queue_;
-  std::optional<ast::expression> remainder_ = std::nullopt;
+  Option<ast::expression> remainder_ = None{};
+  prometheus_shaper_map prometheus_shapers_ = {};
+  detail::heterogeneous_string_hashset warned_unsupported_prometheus_schemas_;
   MetricsCounter read_events_counter_;
   bool done_ = false;
 };
@@ -535,6 +615,8 @@ public:
     auto name = d.positional("name", &ExportArgs::metrics_name);
     d.named("live", &ExportArgs::live);
     d.named("retro", &ExportArgs::retro);
+    auto shape
+      = d.named_optional("shape", &ExportArgs::shape, "raw|prometheus");
     auto parallel = d.named_optional("parallel", &ExportArgs::parallel);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto value = ctx.get(parallel); value and value == 0) {
@@ -545,6 +627,12 @@ public:
       if (auto value = ctx.get(name); value and value == "operator") {
         diagnostic::error("operator metrics have been removed")
           .primary(ctx.get_location(name).value())
+          .emit(ctx);
+      }
+      if (auto value = ctx.get(shape);
+          value and not from_string<metrics_shape>(*value)) {
+        diagnostic::error("shape must be 'raw' or 'prometheus'")
+          .primary(ctx.get_location(shape).value())
           .emit(ctx);
       }
       return {};
