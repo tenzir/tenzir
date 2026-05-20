@@ -238,6 +238,9 @@ auto valid_legacy_label_name(std::string_view name) -> bool {
 
 auto to_metric_type(std::string_view type) -> MetricType {
   auto normalized = detail::ascii_tolower(type);
+  if (normalized == "unknown") {
+    return MetricType::unknown;
+  }
   if (normalized == "counter") {
     return MetricType::counter;
   }
@@ -260,6 +263,38 @@ auto to_metric_type(std::string_view type) -> MetricType {
     return MetricType::stateset;
   }
   return MetricType::unknown;
+}
+
+auto parse_metric_type(std::string_view type) -> std::optional<MetricType> {
+  auto normalized = detail::ascii_tolower(type);
+  if (normalized == "unknown") {
+    return MetricType::unknown;
+  }
+  auto result = to_metric_type(normalized);
+  if (result == MetricType::unknown) {
+    return {};
+  }
+  return result;
+}
+
+auto has_metadata(Metadata const& metadata) -> bool {
+  return metadata.type != MetricType::unknown or not metadata.help.empty()
+         or not metadata.unit.empty();
+}
+
+auto merge_metadata(Metadata& target, Metadata source) -> void {
+  if (target.family.empty()) {
+    target.family = std::move(source.family);
+  }
+  if (target.type == MetricType::unknown) {
+    target.type = source.type;
+  }
+  if (target.help.empty()) {
+    target.help = std::move(source.help);
+  }
+  if (target.unit.empty()) {
+    target.unit = std::move(source.unit);
+  }
 }
 
 auto v1_metric_type(MetricType type)
@@ -376,7 +411,7 @@ auto parse_u64(std::string_view value) -> std::optional<uint64_t> {
   return result;
 }
 
-auto check_v2_written_samples(HttpResponse const& response,
+auto check_v2_written_samples(http::Response const& response,
                               uint64_t expected_samples, OpCtx& ctx,
                               location loc) -> bool {
   auto header = http::find(response.headers, v2_samples_written_header);
@@ -438,10 +473,7 @@ auto serialize_v1(std::vector<Series> series) -> std::string {
     TENZIR_ASSERT(metric_name != entry.labels.end());
     auto family = entry.metadata.family.empty() ? metric_name->second
                                                 : entry.metadata.family;
-    auto has_metadata = entry.metadata.type != MetricType::unknown
-                        or not entry.metadata.help.empty()
-                        or not entry.metadata.unit.empty();
-    if (has_metadata and metadata_seen.insert(family).second) {
+    if (has_metadata(entry.metadata) and metadata_seen.insert(family).second) {
       auto* metadata = request.add_metadata();
       metadata->set_type(v1_metric_type(entry.metadata.type));
       metadata->set_metric_family_name(family);
@@ -471,12 +503,20 @@ auto serialize_v2(std::vector<Series> series) -> std::string {
         out->set_start_timestamp(sample.start_timestamp_ms);
       }
     }
-    auto* metadata = ts->mutable_metadata();
-    metadata->set_type(v2_metric_type(entry.metadata.type));
-    metadata->set_help_ref(
-      add_symbol(symbols, symbol_refs, entry.metadata.help));
-    metadata->set_unit_ref(
-      add_symbol(symbols, symbol_refs, entry.metadata.unit));
+    if (has_metadata(entry.metadata)) {
+      auto* metadata = ts->mutable_metadata();
+      if (entry.metadata.type != MetricType::unknown) {
+        metadata->set_type(v2_metric_type(entry.metadata.type));
+      }
+      if (not entry.metadata.help.empty()) {
+        metadata->set_help_ref(
+          add_symbol(symbols, symbol_refs, entry.metadata.help));
+      }
+      if (not entry.metadata.unit.empty()) {
+        metadata->set_unit_ref(
+          add_symbol(symbols, symbol_refs, entry.metadata.unit));
+      }
+    }
   }
   for (auto& symbol : symbols) {
     request.add_symbols(std::move(symbol));
@@ -728,6 +768,13 @@ private:
         if (args_.sanitize_names) {
           final_name = sanitize_label_name(std::move(final_name));
         }
+        if (final_name.empty()) {
+          diagnostic::warning("Prometheus label name must not be empty, "
+                              "skipping event")
+            .primary(args_.labels)
+            .emit(ctx);
+          return {};
+        }
         if (protocol_ == Protocol::v1
             and not valid_legacy_label_name(final_name)) {
           diagnostic::warning(
@@ -745,8 +792,8 @@ private:
         }
         auto value_string
           = to_string_value(label_value, args_.labels, ctx.dh()).value_or("");
-        if (protocol_ == Protocol::v2 and value_string.empty()) {
-          diagnostic::warning("Remote Write v2 label `{}` has an empty value, "
+        if (value_string.empty()) {
+          diagnostic::warning("Prometheus label `{}` has an empty value, "
                               "skipping event",
                               final_name)
             .primary(args_.labels)
@@ -790,8 +837,18 @@ private:
     if (not types.is_null(row)) {
       auto type_text
         = to_string_value(types.view3_at(row), args_.type, ctx.dh());
-      result.metadata.type
-        = type_text ? to_metric_type(*type_text) : MetricType::unknown;
+      if (type_text) {
+        auto type = parse_metric_type(*type_text);
+        if (protocol_ == Protocol::v2 and not type) {
+          diagnostic::warning("invalid Prometheus metric type `{}`, skipping "
+                              "event",
+                              *type_text)
+            .primary(args_.type)
+            .emit(ctx);
+          return {};
+        }
+        result.metadata.type = type.value_or(MetricType::unknown);
+      }
     }
     if (not helps.is_null(row)) {
       result.metadata.help
@@ -811,6 +868,8 @@ private:
     if (series.labels.empty()) {
       series.labels = std::move(sample.labels);
       series.metadata = std::move(sample.metadata);
+    } else {
+      merge_metadata(series.metadata, std::move(sample.metadata));
     }
     series.samples.push_back(sample.sample);
     ++pending_sample_count_;

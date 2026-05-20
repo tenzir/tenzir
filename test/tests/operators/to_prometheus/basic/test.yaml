@@ -5,7 +5,7 @@ fixtures: [prometheus_remote_write]
 assertions:
   fixtures:
     prometheus_remote_write:
-      after: 07_capture.py
+      after: 10_capture.py
       requests:
         - content_type: application/x-protobuf
           metadata:
@@ -17,7 +17,7 @@ assertions:
             - labels:
                 __name__: http_requests_total
                 method: GET
-                path: ""
+                path: /
                 status: "200"
               samples:
                 - timestamp: 1778839200000
@@ -100,4 +100,40 @@ assertions:
                 - timestamp: 1778839209000
                   value: 4.0
           version: 0.1.0
+        - content_type: application/x-protobuf
+          metadata: []
+          timeseries:
+            - labels:
+                __name__: valid_after_invalid_labels
+                status: ok
+              samples:
+                - timestamp: 1778839212000
+                  value: 7.0
+          version: 0.1.0
+        - content_type: application/x-protobuf;proto=io.prometheus.write.v2.Request
+          symbols: ["", __name__, v2_metadata_merge, instance, a, Merged metadata, items]
+          timeseries:
+            - labels:
+                __name__: v2_metadata_merge
+                instance: a
+              metadata:
+                help: Merged metadata
+                type: 2
+                unit: items
+              samples:
+                - timestamp: 1778839213000
+                  value: 8.0
+                - timestamp: 1778839214000
+                  value: 9.0
+          version: 2.0.0
+        - content_type: application/x-protobuf;proto=io.prometheus.write.v2.Request
+          symbols: ["", __name__, v2_valid_after_invalid_type]
+          timeseries:
+            - labels:
+                __name__: v2_valid_after_invalid_type
+              metadata: {}
+              samples:
+                - timestamp: 1778839216000
+                  value: 11.0
+          version: 2.0.0
 timeout: 60

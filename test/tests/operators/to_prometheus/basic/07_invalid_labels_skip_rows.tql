@@ -1,0 +1,25 @@
+from {
+  metric: "invalid_empty_label_name",
+  value: 5,
+  timestamp: 2026-05-15T10:00:10Z,
+  labels: {
+    "": "value",
+  },
+}, {
+  metric: "invalid_empty_label_value",
+  value: 6,
+  timestamp: 2026-05-15T10:00:11Z,
+  labels: {
+    status: "",
+  },
+}, {
+  metric: "valid_after_invalid_labels",
+  value: 7,
+  timestamp: 2026-05-15T10:00:12Z,
+  labels: {
+    status: "ok",
+  },
+}
+to_prometheus env("PROMETHEUS_REMOTE_WRITE_URL"),
+              flush_interval=10s,
+              max_samples_per_request=100

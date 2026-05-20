@@ -1,0 +1,3 @@
+warning: Prometheus label name must not be empty, skipping event
+
+warning: Prometheus label `status` has an empty value, skipping event

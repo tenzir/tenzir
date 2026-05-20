@@ -1,0 +1,1 @@
+warning: invalid Prometheus metric type `guage`, skipping event
