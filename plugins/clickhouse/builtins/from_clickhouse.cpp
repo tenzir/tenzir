@@ -9,12 +9,14 @@
 #include "clickhouse/arguments.hpp"
 #include "clickhouse/block_to_table_slice.hpp"
 #include "clickhouse/easy_client.hpp"
+#include "clickhouse/filter_to_where_clause.hpp"
 #include "tenzir/arc.hpp"
 #include "tenzir/async.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/tql2/filter.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 #include <clickhouse/client.h>
@@ -41,11 +43,13 @@ struct FromClickhouseArgs {
   Option<located<std::string>> sql;
   Option<located<data>> tls;
   location operator_location;
+  ir::optimize_filter filter;
 };
 
 struct QueryPlan {
   std::string query;
   std::string schema_name;
+  ir::optimize_filter local_filter;
 };
 
 struct SliceMessage {
@@ -92,7 +96,7 @@ struct RuntimeState {
     return stop_requested.load(std::memory_order::acquire);
   }
 
-  auto request_graceful_stop() -> void {
+  auto request_cancellation() -> void {
     stop_requested.store(true, std::memory_order_release);
     while (queue.try_dequeue()) {
       // Drop buffered slices; downstream has already declared it needs no more.
@@ -109,10 +113,10 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     auto plan = make_query_plan(args_);
+    local_filter_ = std::move(plan.local_filter);
     auto ssl_opts = args_.tls ? tls_options{*args_.tls} : tls_options{};
     auto ssl = ssl_opts.resolve(ctx.actor_system().config(), ctx.dh());
     if (not ssl) {
-      done_ = true;
       co_return;
     }
     tls_enabled_ = ssl->tls.inner;
@@ -161,7 +165,7 @@ public:
     // Helper task to shutdown our query on cancellation.
     ctx.spawn_task([runtime = runtime_]() mutable -> Task<void> {
       if (not co_await catch_cancellation(wait_forever())) {
-        runtime->request_graceful_stop();
+        runtime->request_cancellation();
       }
     });
     // The actual query task.
@@ -184,7 +188,7 @@ public:
     co_return co_await runtime_->queue.dequeue();
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx&)
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     auto message = std::move(result).as<Message>();
     co_await co_match(
@@ -192,6 +196,12 @@ public:
       [&](SliceMessage x) -> Task<void> {
         if (runtime_->stop_requested.load(std::memory_order_acquire)) {
           co_return;
+        }
+        for (auto const& expr : local_filter_) {
+          x.slice = filter2(x.slice, expr, ctx, false);
+          if (x.slice.rows() == 0) {
+            co_return;
+          }
         }
         co_await push(std::move(x.slice));
       },
@@ -203,7 +213,7 @@ public:
 
   auto stop(OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    runtime_->request_graceful_stop();
+    runtime_->request_cancellation();
     co_return;
   }
 
@@ -238,13 +248,16 @@ private:
       return QueryPlan{
         .query = args.sql->inner,
         .schema_name = "clickhouse.query",
+        .local_filter = args.filter,
       };
     }
     TENZIR_ASSERT(args.table);
     auto qualified = std::string{args.table->inner};
+    auto where = filter_to_where_clause(args.filter);
     return QueryPlan{
-      .query = fmt::format("SELECT * FROM {}", qualified),
+      .query = fmt::format("SELECT * FROM {}{}", qualified, where.sql),
       .schema_name = make_schema_name_from_table(args.table->inner),
+      .local_filter = std::move(where.residual_filter),
     };
   }
 
@@ -297,6 +310,7 @@ private:
 
   FromClickhouseArgs args_;
   mutable Arc<RuntimeState> runtime_ = Arc<RuntimeState>{std::in_place};
+  ir::optimize_filter local_filter_;
   bool tls_enabled_ = false;
   bool saw_done_msg_ = false;
 };
@@ -361,7 +375,7 @@ public:
       }
       return {};
     });
-    return d.without_optimize();
+    return d.optimize_filter(&FromClickhouseArgs::filter);
   }
 };
 
