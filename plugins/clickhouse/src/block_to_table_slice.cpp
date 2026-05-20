@@ -619,25 +619,33 @@ struct series_matcher {
   }
 
   auto append(::clickhouse::ColumnTuple const& values) -> void {
-    auto tuple = values.GetType().template As<::clickhouse::TupleType>();
+    const auto* const tuple
+      = values.GetType().template As<::clickhouse::TupleType>();
     auto names = tuple_field_names(*tuple);
     if (values.TupleSize() != names.size()) {
       null_entire_column_with_warning("unexpected tuple size");
       return;
     }
-    auto record = field.record();
-    for (auto i = size_t{0}; i < names.size(); ++i) {
-      auto child
-        = make(path.field(names[i]), dh, record.field(names[i]), values.At(i));
-      if (child) {
-        child->build();
-      } else {
-        diagnostic::warning("malformed ClickHouse values in `{}`: unsupported "
-                            "nested ClickHouse type `{}`",
-                            path.field(names[i]),
-                            values.At(i)->Type()->GetName())
-          .emit(dh);
-        record.field(names[i]).null();
+    for (auto row = size_t{0}; row < column.original->Size(); ++row) {
+      if (row_is_null(row)) {
+        field.null();
+        continue;
+      }
+      auto record = field.record();
+      for (auto i = size_t{0}; i < names.size(); ++i) {
+        auto child_column = values.At(i)->Slice(row, 1);
+        auto child = make(path.field(names[i]), dh, record.field(names[i]),
+                          child_column);
+        if (child) {
+          child->build();
+        } else {
+          diagnostic::warning(
+            "malformed ClickHouse values in `{}`: unsupported nested "
+            "ClickHouse type `{}`",
+            path.field(names[i]), values.At(i)->Type()->GetName())
+            .emit(dh);
+          record.field(names[i]).null();
+        }
       }
     }
   }
@@ -931,8 +939,7 @@ auto build_series(::clickhouse::ColumnRef const& column, value_path path,
 auto block_to_table_slice(::clickhouse::Block const& block,
                           std::string_view schema_name, diagnostic_handler& dh)
   -> Option<table_slice> {
-  if (block.GetColumnCount() == 0) {
-    emit_empty_block_warning(schema_name, dh);
+  if (block.GetColumnCount() == 0 or block.GetRowCount() == 0) {
     return None{};
   }
   auto arrays = std::vector<std::shared_ptr<arrow::Array>>{};
