@@ -1,0 +1,13 @@
+from {x: null}, {x: -1}, {x: 1}
+match x {
+  null => {
+    y = "missing"
+  }
+  -1 => {
+    y = "negative"
+  }
+  _ => {
+    y = "other"
+  }
+}
+sort y

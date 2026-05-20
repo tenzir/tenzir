@@ -1,0 +1,11 @@
+from {x: 1}, {x: 2}, {x: 3}
+match x {
+  1 => {
+    discard
+  }
+  2 => {
+    y = "two"
+  }
+  _ => {}
+}
+sort x

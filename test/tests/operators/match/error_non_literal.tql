@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+from {action: "accept"}
+match action {
+  other => {
+    verdict = "dynamic"
+  }
+  _ => {}
+}

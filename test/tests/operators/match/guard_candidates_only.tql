@@ -1,0 +1,10 @@
+from {kind: "a", x: 1}, {kind: "b", x: null}
+match kind {
+  "a" if x > 0 => {
+    result = "matched"
+  }
+  _ => {
+    result = "fallback"
+  }
+}
+sort kind

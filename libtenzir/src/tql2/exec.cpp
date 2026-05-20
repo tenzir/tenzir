@@ -398,6 +398,10 @@ public:
                           std::move(original));
   }
 
+  void visit(ast::match_stmt& x) {
+    visit(x.expr);
+  }
+
   void visit(ast::invocation& x) {
     if (x.op.ref.resolved() and x.op.ref.segments().size() == 1
         and x.op.ref.segments()[0] == "load_balance") {
