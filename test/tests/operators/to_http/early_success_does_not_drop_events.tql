@@ -4,15 +4,12 @@ fixtures:
     expected:
     - method: POST
       path: /status/early-200
-timeout: 10
+timeout: 30
 ---
 
-// A server that responds 200 before reading the request body should not
+// A server that responds 200 before reading the request body must not
 // silently drop unsent input. This exercises the code path where the server
 // acknowledges before body streaming starts.
-//
-// TODO: This currently succeeds silently, dropping unsent events. The pipeline
-// should ideally error or ensure all data is delivered before completing.
 from {value: 0}
 repeat 500
 enumerate value

@@ -483,16 +483,24 @@ private:
             std::move(request_result).unwrap_err());
         }
         auto http_response = http::to_http_response(resp);
-        if (http::is_retryable_http_status(http_response.status_code)
-            and not source.body_started()) {
-          if (auto retry_rx = source.take_receiver_for_retry()) {
-            body_rx = std::move(retry_rx);
+        if (not source.body_started()) {
+          if (http::is_retryable_http_status(http_response.status_code)) {
+            if (auto retry_rx = source.take_receiver_for_retry()) {
+              body_rx = std::move(retry_rx);
+            }
+            throw retryable_http_response{
+              http_response.status_code,
+              http::parse_retry_after(
+                resp.headers->getHeaders().getSingleOrEmpty("Retry-After")),
+            };
           }
-          throw retryable_http_response{
-            http_response.status_code,
-            http::parse_retry_after(
-              resp.headers->getHeaders().getSingleOrEmpty("Retry-After")),
-          };
+          // The server responded before reading the request body.
+          // Treat this as an error to prevent silent data loss.
+          co_yield folly::coro::co_error(
+            folly::make_exception_wrapper<std::runtime_error>(fmt::format(
+              "server responded with HTTP {} before reading the request "
+              "body",
+              http_response.status_code)));
         }
         co_return http_response;
       })));
