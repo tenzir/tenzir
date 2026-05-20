@@ -64,6 +64,7 @@ public:
                  .note("expected {}",
                        std::string_view{BITZ_MAGIC.data(), BITZ_MAGIC.size()}),
                ctx.dh());
+          co_return;
         }
         state_ = State::header;
       }
@@ -384,6 +385,7 @@ public:
               .note("expected {}",
                     std::string_view{BITZ_MAGIC.data(), BITZ_MAGIC.size()})
               .emit(ctrl.diagnostics());
+            co_return;
           }
           auto header = byte_reader(sizeof(uint64_t));
           while (not header) {
@@ -540,6 +542,10 @@ public:
     -> failure_or<operator_ptr> override {
     TENZIR_UNUSED(inv, ctx);
     return check(pipeline::internal_parse_as_operator("read bitz"));
+  }
+
+  auto read_properties() const -> read_properties_t override {
+    return {.extensions = {"bitz"}};
   }
 };
 

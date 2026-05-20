@@ -60,6 +60,17 @@
              
            ],
            operators: [
++            where_ir {
++              self: 0..0,
++              predicate: binary_expr {
++                left: root_field {
++                  id: `b` @ 53..54,
++                  has_question_mark: false
++                },
++                op: "eq" @ 55..57,
++                right: constant int64 2 @ 58..59
++              }
++            },
              GenericIr {
                op: {
                  path: [
@@ -91,17 +102,6 @@
                named_args: [
                  
                ]
-+            },
-+            where_ir {
-+              self: 0..0,
-+              predicate: binary_expr {
-+                left: root_field {
-+                  id: `b` @ 53..54,
-+                  has_question_mark: false
-+                },
-+                op: "eq" @ 55..57,
-+                right: constant int64 2 @ 58..59
-+              }
              }
            ]
          }

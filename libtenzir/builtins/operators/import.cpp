@@ -44,7 +44,15 @@ public:
         "operator",
         "import",
       },
-      MetricsDirection::write, MetricsVisibility::internal_);
+      MetricsDirection::write, MetricsVisibility::internal_,
+      MetricsUnit::bytes);
+    write_events_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "import",
+      },
+      MetricsDirection::write, MetricsVisibility::internal_,
+      MetricsUnit::events);
     auto node = co_await fetch_node(ctx.actor_system(), ctx.dh());
     if (not node) {
       co_return;
@@ -93,6 +101,7 @@ public:
       co_return;
     }
     write_bytes_counter_.add(input.approx_bytes());
+    write_events_counter_.add(input.rows());
     auto* diagnostics = &ctx.dh();
     inflight_.push_back(
       ctx.spawn_task([importer = importer_, slice = std::move(input),
@@ -132,6 +141,7 @@ private:
 
   importer_actor importer_;
   MetricsCounter write_bytes_counter_ = {};
+  MetricsCounter write_events_counter_ = {};
   std::deque<AsyncHandle<void>> inflight_ = {};
 };
 
@@ -264,7 +274,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ImportArgs, Import>{};
-    return d.invariant_order();
+    return d.invariant_order_filter();
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {

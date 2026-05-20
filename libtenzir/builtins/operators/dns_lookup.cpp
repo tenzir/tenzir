@@ -593,9 +593,21 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<DnsLookupArgs, DnsLookup>{};
     d.positional("field", &DnsLookupArgs::field, "string|ip");
-    d.named_optional("result", &DnsLookupArgs::result);
+    auto result = d.named_optional("result", &DnsLookupArgs::result);
     d.operator_location(&DnsLookupArgs::operator_location);
-    return d.invariant_order();
+    return d.optimize([=](DescribeCtx& ctx, event_order order,
+                          ir::optimize_filter filter) -> Optimization {
+      auto touched_fields = std::vector<ast::field_path>{};
+      touched_fields.push_back(
+        ctx.get(result).value_or(default_result_field()));
+      auto [f_upstream, f_self]
+        = ir::split_filter_by_dependents(std::move(filter), touched_fields);
+      return {
+        .order = order,
+        .filter_upstream = std::move(f_upstream),
+        .filter_self = std::move(f_self),
+      };
+    });
   }
 };
 

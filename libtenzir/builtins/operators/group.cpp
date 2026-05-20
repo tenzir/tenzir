@@ -169,7 +169,8 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<GroupArgs>{};
     d.positional("over", &GroupArgs::over, "expr");
-    auto pipe = d.pipeline(&GroupArgs::pipe, {{"group", &GroupArgs::let}});
+    auto pipe = d.pipeline(&GroupArgs::pipe, SubOptimize::from_downstream,
+                           {{"group", &GroupArgs::let}});
     d.spawner([pipe]<class Input>(DescribeCtx& ctx)
                 -> failure_or<Option<SpawnWith<GroupArgs, Input>>> {
       if constexpr (std::same_as<Input, table_slice>) {

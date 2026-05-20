@@ -1,0 +1,4 @@
+from {x: 1}
+@name = "foo"
+where @name == "foo"
+discard

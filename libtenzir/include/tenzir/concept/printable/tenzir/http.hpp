@@ -20,10 +20,10 @@
 namespace tenzir {
 
 struct http_header_printer : printer_base<http_header_printer> {
-  using attribute = http::header;
+  using attribute = http::Header;
 
   template <class Iterator>
-  bool print(Iterator& out, const http::header& hdr) const {
+  bool print(Iterator& out, const http::Header& hdr) const {
     using namespace printers;
     auto p = str << ": " << str;
     return p(out, hdr.name, hdr.value);
@@ -31,15 +31,15 @@ struct http_header_printer : printer_base<http_header_printer> {
 };
 
 template <>
-struct printer_registry<http::header> {
+struct printer_registry<http::Header> {
   using type = http_header_printer;
 };
 
-struct http_response_printer : printer_base<http::response> {
-  using attribute = http::response;
+struct http_response_printer : printer_base<http::Response> {
+  using attribute = http::Response;
 
   template <class Iterator>
-  bool print(Iterator& out, const http::response& res) const {
+  bool print(Iterator& out, const http::Response& res) const {
     using namespace printers;
     auto version = real_printer<double, 1>{};
     auto p = str                             // proto
@@ -55,7 +55,7 @@ struct http_response_printer : printer_base<http::response> {
 };
 
 template <>
-struct printer_registry<http::response> {
+struct printer_registry<http::Response> {
   using type = http_response_printer;
 };
 

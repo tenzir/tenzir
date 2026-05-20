@@ -58,10 +58,10 @@ public:
 
   auto metric_layout() const -> record_type override {
     return record_type{{
-      {"path", string_type{}},
-      {"total_bytes", uint64_type{}},
-      {"used_bytes", uint64_type{}},
-      {"free_bytes", uint64_type{}},
+      {"path", metrics::prometheus_label(string_type{})},
+      {"total_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"used_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"free_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
     }};
   }
 

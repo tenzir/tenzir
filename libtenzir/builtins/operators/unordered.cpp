@@ -9,6 +9,7 @@
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/panic.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -49,26 +50,27 @@ public:
   }
 
   auto optimize(ir::optimize_filter filter,
-                event_order /*order*/) && -> ir::optimize_result override {
-    auto opt = std::move(pipeline_).optimize(std::move(filter),
-                                             event_order::unordered);
-    // Wrap each replacement operator in its own single-operator UnorderedIr
-    // so that subsequent optimization passes still force unordered.
-    for (auto& op : opt.replacement.operators) {
-      auto inner = ir::pipeline{};
-      inner.operators.push_back(std::move(op));
-      op = UnorderedIr{std::move(inner), loc_};
+                event_order /* order */) && -> ir::optimize_result override {
+    // Optimize each sub-operator individually, always passing unordered.
+    auto replacement = ir::pipeline{std::move(pipeline_.lets), {}};
+    for (auto& op : std::ranges::reverse_view(pipeline_.operators)) {
+      auto opt
+        = std::move(*op).optimize(std::move(filter), event_order::unordered);
+      filter = std::move(opt.filter);
+      replacement.operators.insert(
+        replacement.operators.begin(),
+        std::move_iterator{opt.replacement.operators.begin()},
+        std::move_iterator{opt.replacement.operators.end()});
     }
-    return opt;
+    return {
+      std::move(filter),
+      event_order::unordered,
+      replacement,
+    };
   }
 
-  auto spawn(element_type_tag input) && -> AnyOperator override {
-    TENZIR_ASSERT(pipeline_.operators.size() == 1);
-    return std::move(*pipeline_.operators[0]).spawn(input);
-  }
-
-  auto move() && -> Box<ir::Operator> override {
-    return UnorderedIr{std::move(*this)};
+  auto spawn(element_type_tag) && -> AnyOperator override {
+    panic("Cannot spawn unordered. It should have been optimized away.");
   }
 
   friend auto inspect(auto& f, UnorderedIr& x) -> bool {

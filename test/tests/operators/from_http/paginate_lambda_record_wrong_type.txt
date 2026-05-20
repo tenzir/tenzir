@@ -1,0 +1,22 @@
+{
+  page: 1,
+  method: "GET",
+  path: "/paginate/record-bad/type",
+  body: null,
+  headers: {
+    x_secret: null,
+    x_override: null,
+    x_delete: null,
+    x_added: null,
+  },
+  next: {
+    url: 42,
+  },
+}
+warning: `paginate` request field `url` must be `string`
+ --> tests/operators/from_http/paginate_lambda_record_wrong_type.tql:6:13
+  |
+6 |   paginate=(x => x.next),
+  |             ~~~~~~~~~~~ 
+  |
+  = note: stopping pagination

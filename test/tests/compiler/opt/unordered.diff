@@ -15,6 +15,7 @@
          
        ],
        filter: [
+-        
 +        binary_expr {
 +          left: root_field {
 +            id: `foo` @ 27..30,
@@ -23,27 +24,9 @@
 +          op: "eq" @ 31..33,
 +          right: constant int64 42 @ 34..36
 +        }
-+      ],
-+      order: "unordered",
-+      named_args: [
-+        
-+      ]
-+    },
-+    GenericIr {
-+      op: {
-+        path: [
-+          `to_stdout` @ 0..0
-+        ],
-+        ref: std::to_stdout/op
-+      },
-+      desc: "to_stdout",
-+      args: [
-+        
-+      ],
-+      filter: [
-         
        ],
-       order: "ordered",
+-      order: "ordered",
++      order: "unordered",
        named_args: [
          
        ]
@@ -68,6 +51,25 @@
 -        ]
 -      },
 -      loc: 7..16
+     },
+     GenericIr {
+       op: {
+         path: [
+           `to_stdout` @ 39..48
+         ],
+         ref: std::to_stdout/op
+       },
+       desc: "to_stdout",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
      }
    ]
  }

@@ -32,6 +32,14 @@ tenzir:
     # pipeline activity in the Tenzir Platform.
     #metrics: 7d
 
+    # How long to keep legacy operator metrics for. Set to 0s to avoid storing
+    # these heavy metrics while still making live metrics available.
+    #operator-metrics: 0s
+
+    # How long to keep operator profile metrics for. Set to 0s to avoid storing
+    # these heavy metrics while still making live metrics available.
+    #operator-profile-metrics: 1d
+
     # How long to keep diagnostics for. Set to 0s to disable diagnostics
     # retention entirely.
     # WARNING: A low retention period may negatively impact the usability of

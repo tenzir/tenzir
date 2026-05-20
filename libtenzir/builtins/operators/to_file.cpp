@@ -17,7 +17,9 @@
 namespace tenzir::plugins::to_file {
 namespace {
 
-struct ToFileArgs : ToArrowFsArgs {};
+struct ToFileArgs : ToArrowFsArgs {
+  Option<location> append;
+};
 
 class ToFileOperator final : public ToArrowFsOperator {
 public:
@@ -27,6 +29,10 @@ public:
   }
 
 protected:
+  auto append() const -> Option<location> override {
+    return args_.append;
+  }
+
   auto resolve_url(OpCtx& ctx) -> Task<failure_or<std::string>> override {
     auto resolved = std::string{};
     auto requests = std::vector<secret_request>{
@@ -76,7 +82,8 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ToFileArgs, ToFileOperator>{};
     ToArrowFsArgs::describe_to(d);
-    return d.invariant_order();
+    d.named("append", &ToFileArgs::append);
+    return d.invariant_order_filter();
   }
 };
 

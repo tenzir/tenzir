@@ -6,13 +6,33 @@
      GenericIr {
        op: {
          path: [
-           `from_tcp` @ 0..8
+           `export` @ 40..46
          ],
-         ref: std::from_tcp/op
+         ref: std::export/op
        },
-       desc: "tql2.from_tcp",
+       desc: "export",
        args: [
-         located "127.0.0.1:8000" @ 9..25
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `fork` @ 47..51
+         ],
+         ref: std::fork/op
+       },
+       desc: "tql2.fork",
+       args: [
+         
        ],
        filter: [
          
@@ -31,11 +51,11 @@
              GenericIr {
                op: {
                  path: [
-                   `read_ndjson` @ 30..41
+                   `discard` @ 54..61
                  ],
-                 ref: std::read_ndjson/op
+                 ref: std::discard/op
                },
-               desc: "read_ndjson",
+               desc: "discard",
                args: [
                  
                ],
@@ -48,38 +68,28 @@
                ]
              }
            ]
-         } @ 26..43,
+         } @ 52..63,
          let_ids: {
-           "0": 1
+           
          }
+       }
+     },
+     where_ir {
+-      self: 64..69,
++      self: 0..0,
+       predicate: binary_expr {
+         left: root_field {
+           id: `x` @ 70..71,
+           has_question_mark: false
+         },
+         op: "gt" @ 72..73,
+         right: constant int64 1 @ 74..75
        }
      },
      GenericIr {
        op: {
          path: [
--          `sort` @ 44..48
--        ],
--        ref: std::sort/op
--      },
--      desc: "tql2.sort",
--      args: [
--        expression root_field {
--          id: `x` @ 49..50,
--          has_question_mark: false
--        }
--      ],
--      filter: [
--        
--      ],
--      order: "ordered",
--      named_args: [
--        
--      ]
--    },
--    GenericIr {
--      op: {
--        path: [
-           `discard` @ 51..58
+           `discard` @ 76..83
          ],
          ref: std::discard/op
        },

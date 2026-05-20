@@ -2022,7 +2022,9 @@ private:
         emit_mysql_error(std::move(*slice_result).unwrap_err(), ctx);
         co_return false;
       }
-      co_await push(std::move(*slice_result).unwrap());
+      auto slice = std::move(*slice_result).unwrap();
+      events_read_counter_.add(slice.rows());
+      co_await push(std::move(slice));
     }
     co_return true;
   }
@@ -2141,7 +2143,12 @@ public:
     auto const tls_enabled = config.ssl_context != nullptr;
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_mysql"},
-                         MetricsDirection::read, MetricsVisibility::external_);
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_mysql"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::events);
     // Connect asynchronously.
     auto result = co_await async_client::make(evb, std::move(config),
                                               bytes_read_counter_);
@@ -2216,7 +2223,9 @@ public:
         emit_mysql_error(std::move(*slice_result).unwrap_err(), ctx);
         break;
       }
-      co_await push(std::move(*slice_result).unwrap());
+      auto slice = std::move(*slice_result).unwrap();
+      events_read_counter_.add(slice.rows());
+      co_await push(std::move(slice));
     }
     done_ = true;
     co_await close_client(ctx);
@@ -2255,6 +2264,7 @@ private:
   Box<async_client> client_;
   bool has_client_ = false;
   MetricsCounter bytes_read_counter_;
+  MetricsCounter events_read_counter_;
   std::string query_;
   std::string schema_name_;
   std::string table_name_;

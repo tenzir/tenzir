@@ -43,7 +43,7 @@ namespace tenzir {
 /// Common arguments for Arrow filesystem-based operators.
 struct FromArrowFsArgs {
   located<secret> url;
-  Option<location> watch;
+  Option<located<duration>> watch;
   Option<location> remove;
   Option<ast::lambda_expr> rename;
   Option<duration> max_age;
@@ -57,14 +57,16 @@ struct FromArrowFsArgs {
              and std::invocable<F, DescribeCtx&>
   static auto describe_to(Describer<Args, Impls...>& d, F extra = {}) -> void {
     d.template positional<located<secret>>("url", &FromArrowFsArgs::url);
-    d.named("watch", &FromArrowFsArgs::watch);
+    auto watch_arg
+      = d.template named<located<duration>>("watch", &FromArrowFsArgs::watch);
     auto remove_arg = d.named("remove", &FromArrowFsArgs::remove);
     auto rename_arg
       = d.template named<ast::lambda_expr>("rename", &FromArrowFsArgs::rename);
     auto max_age_arg
       = d.template named<duration>("max_age", &FromArrowFsArgs::max_age);
-    auto pipe_arg = d.pipeline(&FromArrowFsArgs::pipe,
-                               {{"file", &FromArrowFsArgs::file_info}});
+    auto pipe_arg
+      = d.pipeline(&FromArrowFsArgs::pipe, SubOptimize::from_downstream,
+                   {{"file", &FromArrowFsArgs::file_info}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       auto remove_loc = ctx.get_location(remove_arg);
       auto rename_loc = ctx.get_location(rename_arg);
@@ -73,6 +75,13 @@ struct FromArrowFsArgs {
           .primary(*remove_loc)
           .primary(*rename_loc)
           .emit(ctx);
+      }
+      if (auto watch = ctx.get(watch_arg)) {
+        if (watch->inner <= duration::zero()) {
+          diagnostic::error("`watch` must be a positive duration")
+            .primary(watch->source)
+            .emit(ctx);
+        }
       }
       if (auto max_age = ctx.get(max_age_arg)) {
         if (*max_age <= duration::zero()) {
@@ -124,7 +133,7 @@ struct TrackedFile {
   Option<time> mtime;
   int64_t offset = 0;
   uint64_t job_id = 0;
-  std::shared_ptr<arrow::io::RandomAccessFile> file;
+  std::shared_ptr<arrow::io::InputStream> istream;
 
   friend auto inspect(auto& f, TrackedFile& x) -> bool {
     return f.object(x).fields(f.field("path", x.path),
@@ -142,7 +151,7 @@ struct ScanComplete {
 /// Result of opening a file for reading in a processing slot.
 struct FileOpen {
   uint64_t job_id;
-  arrow::Result<std::shared_ptr<arrow::io::RandomAccessFile>> file;
+  arrow::Result<std::shared_ptr<arrow::io::InputStream>> istream;
 };
 
 /// Result of reading a chunk from an active file.
@@ -232,6 +241,8 @@ public:
   auto await_task(diagnostic_handler& dh) const -> Task<Any> final;
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> final;
+  auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
+                   OpCtx& ctx) -> Task<void> final;
   auto finish_sub(SubKeyView key, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> final;
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -262,7 +273,6 @@ protected:
   }
 
 private:
-  static constexpr auto watch_pause = std::chrono::seconds{10};
   static constexpr size_t max_jobs = 10;
   static constexpr size_t read_size = 10uz * 1024 * 1024;
 
@@ -301,6 +311,7 @@ private:
     max_jobs + 1,
   };
   MetricsCounter bytes_read_counter_;
+  MetricsCounter events_read_counter_;
 };
 
 /// Common arguments for Arrow filesystem-based sink operators.
@@ -324,7 +335,8 @@ struct ToArrowFsArgs {
       = d.template named_optional<duration>("timeout", &ToArrowFsArgs::timeout);
     auto partition_arg = d.template named<ast::expression>(
       "partition_by", &ToArrowFsArgs::partition_by, "list<field>");
-    auto pipe_arg = d.pipeline(&ToArrowFsArgs::pipe);
+    auto pipe_arg
+      = d.pipeline(&ToArrowFsArgs::pipe, SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto max_size = ctx.get(max_size_arg)) {
         if (*max_size == 0) {
@@ -460,6 +472,18 @@ protected:
   virtual auto setup_args(ToArrowFsArgs& args, OpCtx& ctx)
     -> Task<failure_or<void>>;
 
+  /// Whether the operator should open output streams in append mode rather
+  /// than truncating. The returned `Option<location>` carries the source
+  /// location of the user-facing `append` argument so diagnostics can point
+  /// at it. Only derived operators that target filesystems with efficient
+  /// append support (currently local FS and Azure Blob) should override
+  /// this; Arrow's S3 and GCS backends reject `OpenAppendStream` with
+  /// `NotImplemented`. With a `{uuid}` placeholder in the path the flag is
+  /// effectively a no-op, since every rotation produces a fresh filename.
+  virtual auto append() const -> Option<location> {
+    return {};
+  }
+
   auto filesystem() const -> FileSystemPtr const& {
     return fs_;
   }
@@ -540,6 +564,7 @@ private:
 
   bool finalized_ = false;
   MetricsCounter bytes_written_counter_;
+  MetricsCounter events_written_counter_;
 };
 
 } // namespace tenzir

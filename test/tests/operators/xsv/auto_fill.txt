@@ -1,0 +1,18 @@
+{
+  a: 1,
+  b: 2,
+  c: 3,
+  d: 4,
+}
+{
+  a: 5,
+  b: 6,
+  c: null,
+  d: null,
+}
+{
+  a: 7,
+  b: null,
+  c: null,
+  d: null,
+}

@@ -238,7 +238,7 @@ struct strict : public virtual operator_plugin2<strict_operator>,
 
   auto describe() const -> Description override {
     auto d = Describer<StrictArgs>{};
-    auto pipe = d.pipeline(&StrictArgs::pipe);
+    auto pipe = d.pipeline(&StrictArgs::pipe, SubOptimize::from_downstream);
     d.spawner([pipe]<class Input>(DescribeCtx& ctx)
                 -> failure_or<Option<SpawnWith<StrictArgs, Input>>> {
       TRY(auto p, ctx.get(pipe));

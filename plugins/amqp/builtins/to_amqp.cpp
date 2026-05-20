@@ -173,10 +173,15 @@ public:
     }};
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_amqp"},
-                         MetricsDirection::write, MetricsVisibility::external_);
-    worker_handle_
-      = ctx.spawn_task(publish_loop(engine_, engine_mutex_, queue_, args_,
-                                    channel_, dh, bytes_write_counter_));
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_amqp"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::events);
+    worker_handle_ = ctx.spawn_task(
+      publish_loop(engine_, engine_mutex_, queue_, args_, channel_, dh,
+                   bytes_write_counter_, events_write_counter_));
     if (hb_interval > std::chrono::seconds{0}) {
       ctx.spawn_task(heartbeat_loop(engine_, engine_mutex_, hb_interval,
                                     args_.url.source, dh));
@@ -221,7 +226,8 @@ private:
                            std::shared_ptr<std::mutex> engine_mutex,
                            std::shared_ptr<MessageQueue> queue, ToAmqpArgs args,
                            uint16_t channel, diagnostic_handler& dh,
-                           MetricsCounter bytes_write_counter) -> Task<void> {
+                           MetricsCounter bytes_write_counter,
+                           MetricsCounter events_write_counter) -> Task<void> {
     auto opts = amqp_engine::publish_options{
       .channel = channel,
       .exchange = args.exchange ? std::string_view{args.exchange->inner}
@@ -265,6 +271,7 @@ private:
           if (not bytes.empty()) {
             bytes_write_counter.add(bytes.size());
           }
+          events_write_counter.add(1);
         }
       };
       if (auto strings = item->template as<string_type>()) {
@@ -319,6 +326,7 @@ private:
   Option<json_printer2> printer_;
   bool is_default_printer_ = false;
   MetricsCounter bytes_write_counter_;
+  MetricsCounter events_write_counter_;
 };
 
 class to_amqp_plugin final : public virtual OperatorPlugin {

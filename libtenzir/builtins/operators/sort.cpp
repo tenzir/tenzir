@@ -770,10 +770,13 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<SortArgs, Sort>{};
     d.optional_variadic("expr", &SortArgs::exprs, "any");
-    return d.optimize([](DescribeCtx&, event_order order) -> Optimization {
+    return d.optimize([](DescribeCtx&, event_order order,
+                         ir::optimize_filter filter) -> Optimization {
       return {
+        // invariant to order and filters
         .order = event_order::unordered,
-        .propagate_filter = true,
+        .filter_upstream = std::move(filter),
+        // drop if downstream does not care about order
         .drop = order == event_order::unordered,
       };
     });

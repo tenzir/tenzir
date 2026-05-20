@@ -350,7 +350,7 @@ auto fetch_web_identity_token(const resolved_web_identity& web_identity)
     const auto& te = *web_identity.token_endpoint;
     TENZIR_VERBOSE("fetching web identity token from endpoint");
     auto xfer = transfer{};
-    auto req = http::request{};
+    auto req = http::Request{};
     req.uri = te.url;
     req.method = "GET";
     // Add custom headers.

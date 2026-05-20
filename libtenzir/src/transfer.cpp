@@ -20,7 +20,7 @@ namespace tenzir {
 transfer::transfer(transfer_options opts) : options{std::move(opts)} {
 }
 
-auto transfer::prepare(http::request req) -> caf::error {
+auto transfer::prepare(http::Request req) -> caf::error {
   TENZIR_DEBUG("preparing HTTP request");
   if (auto err = reset(); err.valid()) {
     return err;

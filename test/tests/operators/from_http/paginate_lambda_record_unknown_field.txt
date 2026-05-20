@@ -1,0 +1,23 @@
+{
+  page: 1,
+  method: "GET",
+  path: "/paginate/record-bad/unknown",
+  body: null,
+  headers: {
+    x_secret: null,
+    x_override: null,
+    x_delete: null,
+    x_added: null,
+  },
+  next: {
+    url: "/paginate/record/2",
+    unexpected: "field",
+  },
+}
+warning: unknown field `unexpected` in `paginate` request record
+ --> tests/operators/from_http/paginate_lambda_record_unknown_field.tql:6:13
+  |
+6 |   paginate=(x => x.next),
+  |             ~~~~~~~~~~~ 
+  |
+  = note: stopping pagination

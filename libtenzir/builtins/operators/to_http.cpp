@@ -42,7 +42,7 @@ namespace {
 
 constexpr auto default_parallel = 1;
 
-using Headers = std::vector<std::pair<std::string, std::string>>;
+using Headers = std::vector<http::Header>;
 
 struct ToHttpArgs {
   located<secret> url;
@@ -88,7 +88,15 @@ public:
         "operator",
         "to_http",
       },
-      MetricsDirection::write, MetricsVisibility::external_);
+      MetricsDirection::write, MetricsVisibility::external_,
+      MetricsUnit::bytes);
+    events_write_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "to_http",
+      },
+      MetricsDirection::write, MetricsVisibility::external_,
+      MetricsUnit::events);
     // setup url, headers & tls
     if (auto result = co_await resolve_secrets(ctx, args_, url_, headers_);
         result.is_error()) {
@@ -135,11 +143,14 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
+    auto const rows = input.rows();
     auto& pipeline = as<SubHandle<table_slice>>(*sub);
     if (auto result = co_await pipeline.push(std::move(input));
         result.is_err()) {
       co_await begin_draining(ctx);
+      co_return;
     }
+    events_write_counter_.add(rows);
   }
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
@@ -312,6 +323,7 @@ private:
   Option<Box<HttpPool>> http_pool_;
   mutable Arc<Oneshot<std::string>> error_signal_{std::in_place};
   MetricsCounter bytes_write_counter_;
+  MetricsCounter events_write_counter_;
 };
 
 class ToHttpPlugin final : public OperatorPlugin {
@@ -334,7 +346,8 @@ public:
       = d.named("max_retry_count", &ToHttpArgs::max_retry_count);
     auto retry_delay_arg = d.named("retry_delay", &ToHttpArgs::retry_delay);
     auto parallel_arg = d.named("parallel", &ToHttpArgs::parallel);
-    auto printer_arg = d.pipeline(&ToHttpArgs::printer);
+    auto printer_arg
+      = d.pipeline(&ToHttpArgs::printer, SubOptimize::from_downstream);
     d.operator_location(&ToHttpArgs::operator_location);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       tls_validator(ctx);
@@ -415,7 +428,7 @@ public:
       }
       return {};
     });
-    return d.invariant_order();
+    return d.invariant_order_filter();
   }
 };
 

@@ -1,0 +1,4 @@
+suite: metrics-prometheus-shape
+runner: tenzir
+fixtures: [node]
+timeout: 60

@@ -1,0 +1,6 @@
+error: received HTTP error status 404
+ --> tests/operators/from_http/error_infer_skips_http_error.tql:7:1
+  |
+7 | from_http env("HTTP_FIXTURE_INFER_HTTP_ERROR_URL"), tls=false
+  | ^^^^^^^^^ 
+  |

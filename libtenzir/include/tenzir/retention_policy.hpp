@@ -49,6 +49,8 @@ struct retention_policy {
     try_parse(result.diagnostics_period, "tenzir.retention.diagnostics");
     try_parse(result.operator_metrics_period,
               "tenzir.retention.operator-metrics");
+    try_parse(result.operator_profile_metrics_period,
+              "tenzir.retention.operator-profile-metrics");
     if (failed) {
       return failure::promise();
     }
@@ -76,6 +78,9 @@ struct retention_policy {
     if (schema.name() == "tenzir.metrics.operator") {
       return operator_metrics_period > duration::zero();
     }
+    if (schema.name() == "tenzir.metrics.operator_profile") {
+      return operator_profile_metrics_period > duration::zero();
+    }
     if (schema.name().starts_with("tenzir.metrics.")) {
       return metrics_period > duration::zero();
     }
@@ -87,12 +92,15 @@ struct retention_policy {
       .pretty_name("tenzir.retention_policy")
       .fields(f.field("metrics_period", x.metrics_period),
               f.field("diagnostics_period", x.diagnostics_period),
-              f.field("operator_metrics_period", x.operator_metrics_period));
+              f.field("operator_metrics_period", x.operator_metrics_period),
+              f.field("operator_profile_metrics_period",
+                      x.operator_profile_metrics_period));
   }
 
   duration metrics_period = days{16};
   duration diagnostics_period = days{30};
   duration operator_metrics_period = duration::zero();
+  duration operator_profile_metrics_period = days{1};
 };
 
 } // namespace tenzir

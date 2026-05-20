@@ -1,4 +1,4 @@
-Tenzir v6.0.0-rc.4 continues the rollout of the rewritten execution engine that unlocks faster, more capable, and more scalable pipelines. This release candidate includes breaking changes; use the migration guide at https://docs.tenzir.com/guides/tenzir-v6-migration when testing your workloads.
+Tenzir v6.0.0-rc.5 continues the rollout of the rewritten execution engine that unlocks faster, more capable, and more scalable pipelines. This release candidate includes breaking changes; use the migration guide at https://docs.tenzir.com/guides/tenzir-v6-migration when testing your workloads.
 
 ## 💥 Breaking changes
 
@@ -162,6 +162,24 @@ Update test suites that reference `from_gcs` in `requires.operators` accordingly
 
 ## 🚀 Features
 
+### `from_http` infers response parsers
+
+The `from_http` operator now accepts requests without an explicit parser subpipeline when Tenzir can infer the response format from the `Content-Type` header or URL extension:
+
+```tql
+from_http "https://example.com/events.json"
+```
+
+Explicit parser subpipelines continue to take precedence over inferred formats.
+
+*By @mavam and @codex.*
+
+### Add `auto_fill` option to `read_csv`, `read_tsv`, `read_ssv`, and `read_xsv`
+
+The `read_csv`, `read_tsv`, `read_ssv`, and `read_xsv` operators now accept an `auto_fill=true` option. When set, the parser silently fills missing trailing columns with `null` instead of emitting a warning, which is useful when working with feeds that legitimately omit optional trailing fields.
+
+*By @jachris and @claude.*
+
 ### Dedicated TCP source and sink operators
 
 Tenzir now has dedicated TCP source and sink operators that match the same client/server split as the HTTP operators:
@@ -203,6 +221,20 @@ dns_lookup host
 If Tenzir cannot initialize DNS resolution at all, the operator now emits an error and stops instead of writing `null` results for every event. Individual failed or timed-out lookups still produce `null`, as before.
 
 *By @mavam in #6034.*
+
+### Event throughput metrics for the new executor
+
+Pipeline metrics now report event throughput alongside byte throughput for pipelines running on the new executor:
+
+```tql
+metrics "pipeline"
+summarize ingress_events=sum(ingress.events), ingress_bytes=sum(ingress.bytes), egress_events=sum(egress.events), pipeline_id
+sort -egress_events
+```
+
+This makes node metrics distinguish the amount of data transferred from the number of events processed.
+
+*By @mavam and @codex.*
 
 ### from_amqp queue arguments
 
@@ -256,6 +288,14 @@ to_splunk "https://localhost:8088",
 `raw` and `event` are mutually exclusive; `fields` is not supported with `raw`.
 
 *By @mavam in #6074.*
+
+### HEC queue selection in `to_splunk`
+
+The neo `to_splunk` implementation now accepts `queue="indexing"` and `queue="typing"` for selecting the Splunk HEC processing queue. The default `indexing` path keeps Splunk's regular HEC behavior, while `typing` sends the Splunk `parsingQueue` hint in HEC event envelopes for receivers that support this non-standard HEC metadata.
+
+The default is `queue="indexing"`. The `typing` queue is rejected with `raw=...`, because Splunk's raw HEC endpoint sends raw requests to the indexer queue.
+
+*By @mavam and @codex.*
 
 ### High-level filesystem and object store writers
 
@@ -363,6 +403,34 @@ from_file "/var/log/large.json", mmap=true {
 Defaults to `false`.
 
 *By @raxyte in #6036.*
+
+### Microsoft Graph source operator
+
+Tenzir now includes a Microsoft Graph source operator for reads from Microsoft Graph `v1.0` and `beta` collections with app-only Microsoft Entra authentication and OData pagination.
+
+For example, you can read Entra ID sign-in logs with client credentials and push down OData query options:
+
+```tql
+from_microsoft_graph "auditLogs/signIns",
+  auth={
+    tenant_id: "contoso.onmicrosoft.com",
+    client_id: "00000000-0000-0000-0000-000000000000",
+    client_secret: secret("ms-graph-client-secret"),
+  },
+  odata={
+    filter: "createdDateTime ge 2026-04-24T00:00:00Z",
+    select: ["id", "createdDateTime", "userPrincipalName", "status"],
+    top: 1000,
+  }
+```
+
+The operator emits each object from the response `value` array as a separate event and follows `@odata.nextLink` until the collection is exhausted.
+
+The operator can also use Microsoft Graph delta queries with `delta=true`, storing the returned `@odata.deltaLink` in memory and polling it with a configurable `poll_interval`. OData query options apply to the initial delta request only, subject to Microsoft Graph's resource-specific support, and subsequent polls use the opaque delta link exactly as Microsoft Graph returned it.
+
+It also retries throttled and transient Microsoft Graph requests, respecting `Retry-After` when present.
+
+*By @mavam and @codex in #6165, #6179, and #6182.*
 
 ### MySQL source operator
 
@@ -495,6 +563,23 @@ Use `each` for per-event jobs such as a lookup, an export, or a sink whose sourc
 
 *By @jachris in #5981.*
 
+### Raw byte output with write_all
+
+The new `write_all` operator concatenates one selected `string` or `blob` field into raw bytes:
+
+```tql
+from_file "/tmp/report.pdf" {
+  read_all binary=true
+}
+to_file "/tmp/report-copy.pdf" {
+  write_all data
+}
+```
+
+Use it to copy binary payloads, reconstruct byte streams after event processing, or write string fields without separators or escaping.
+
+*By @mavam and @codex.*
+
 ### Read from standard input with `from_stdin`
 
 The new `from_stdin` operator reads bytes from standard input through a parsing subpipeline:
@@ -508,6 +593,45 @@ from_stdin {
 This is useful when piping data into the `tenzir` executable as part of a shell script or command chain.
 
 *By @raxyte in #5731.*
+
+### Repeat string function
+
+The new `repeat` function repeats a string a given number of times:
+
+```tql
+message = "na".repeat(8)
+```
+
+```tql
+{
+  message: "nananananananana",
+}
+```
+
+*By @mavam and @codex in #6181.*
+
+### Request records for `from_http` pagination
+
+The `from_http` operator now supports returning request records from `paginate` lambdas. This lets APIs keep pagination state in the next request body or headers instead of only in the next URL:
+
+```tql
+from_http "https://opensearch.example.com/logs/_search",
+  method="post",
+  body={size: 500, query: {match_all: {}}},
+  paginate=(x => {
+    body: {
+      size: 500,
+      query: {match_all: {}},
+      search_after: x.hits.hits[-1].sort,
+    },
+  } if x.hits.hits != []) {
+  read_json
+}
+```
+
+Returned request records can patch `url`, `method`, `headers`, and `body`. Missing fields inherit from the current request, and `body: null` clears the body.
+
+*By @mavam and @codex.*
 
 ### Send events to webhooks with `to_http`
 

@@ -1,0 +1,4 @@
+from {domain: "tenzir.com"}
+set resolved = domain
+where domain == "tenzir.com"
+where resolved != null

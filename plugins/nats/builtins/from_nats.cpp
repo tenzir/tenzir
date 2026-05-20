@@ -421,7 +421,12 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     read_bytes_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_nats"},
-                         MetricsDirection::read, MetricsVisibility::external_);
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    read_events_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_nats"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::events);
     auto resolved
       = co_await resolve_connection_config(ctx, args_.url, args_.auth);
     if (not resolved) {
@@ -629,6 +634,7 @@ public:
         auto const rows = detail::narrow_cast<size_t>(slice.rows());
         TENZIR_ASSERT(message_index + rows <= accepted.size());
         co_await push(std::move(slice));
+        read_events_counter_.add(rows);
         mark_delivered(
           std::span<nats_msg_ptr>{accepted.data() + message_index, rows});
         for (auto i = size_t{0}; i < rows; ++i) {
@@ -951,6 +957,7 @@ private:
   nats_subscription_ptr subscription_;
   std::vector<nats_msg_ptr> pending_acks_;
   MetricsCounter read_bytes_counter_;
+  MetricsCounter read_events_counter_;
   uint64_t received_ = 0;
   bool needs_shutdown_flush_ = false;
   bool done_ = false;

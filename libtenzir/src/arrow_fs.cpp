@@ -92,7 +92,12 @@ auto FromArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
   root_path_ = extract_root_path(glob_, fs->path);
   bytes_read_counter_
     = ctx.make_counter(MetricsLabel{"operator", "from_arrow_fs"},
-                       MetricsDirection::read, MetricsVisibility::external_);
+                       MetricsDirection::read, MetricsVisibility::external_,
+                       MetricsUnit::bytes);
+  events_read_counter_
+    = ctx.make_counter(MetricsLabel{"operator", "from_arrow_fs"},
+                       MetricsDirection::read, MetricsVisibility::external_,
+                       MetricsUnit::events);
   co_await restore(ctx);
   auto ndh = null_diagnostic_handler{};
   co_await cleanup_files(ndh);
@@ -119,12 +124,12 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
         pending_.push_back(TrackedFile{
           .path = file.path(),
           .mtime = to_option_time(file.mtime()),
-          .file = nullptr,
+          .istream = nullptr,
         });
       }
       scan_complete_ = true;
       // NOTE: `previous_` can grow without bounds if neither `rename` nor
-      // `remove` are used with `watch=true`.
+      // `remove` are used with `watch`.
       std::swap(previous_, current_);
       current_.clear();
       while (not pending_.empty()) {
@@ -140,10 +145,10 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
       auto slot = find_slot_by_job(open.job_id);
       TENZIR_ASSERT(slot);
       auto& file_state = *processing_[*slot];
-      if (not open.file.ok()) {
+      if (not open.istream.ok()) {
         diagnostic::error("failed to open `{}`", file_state.path)
           .primary(base_args_.url)
-          .note(open.file.status().ToStringWithoutContextLines())
+          .note(open.istream.status().ToStringWithoutContextLines())
           .compose([&](auto x) {
             return is_globbing() ? std::move(x).severity(severity::warning)
                                  : std::move(x);
@@ -153,7 +158,7 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
         start_job_in_slot(*slot, ctx);
         co_return;
       }
-      file_state.file = open.file.MoveValueUnsafe();
+      file_state.istream = open.istream.MoveValueUnsafe();
       auto pipe = base_args_.pipe.inner;
       auto env = substitute_ctx::env_t{
         {
@@ -172,15 +177,17 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
       }
       co_await ctx.spawn_sub<chunk_ptr>(open.job_id, std::move(pipe));
       // Queue the first read.
-      enqueue_task(
-        ctx,
-        [job_id = open.job_id, file = file_state.file,
-         offset = file_state.offset] -> Task<AwaitResult> {
-          co_return ReadProgress{
-            job_id,
-            co_await arrow_future_to_task(file->ReadAsync(offset, read_size)),
-          };
-        });
+      enqueue_task(ctx,
+                   [job_id = open.job_id,
+                    istream = file_state.istream] -> Task<AwaitResult> {
+                     auto read = co_await spawn_blocking([=] {
+                       return istream->Read(read_size);
+                     });
+                     co_return ReadProgress{
+                       job_id,
+                       std::move(read),
+                     };
+                   });
     },
     [this, &ctx](ReadProgress& read) -> Task<void> {
       // The subpipeline can be torn down while a read is in-flight.
@@ -222,15 +229,17 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
         co_await pipe.close();
         co_return;
       }
-      enqueue_task(
-        ctx,
-        [job_id = read.job_id, file = file_state.file,
-         offset = file_state.offset] -> Task<AwaitResult> {
-          co_return ReadProgress{
-            job_id,
-            co_await arrow_future_to_task(file->ReadAsync(offset, read_size)),
-          };
-        });
+      enqueue_task(ctx,
+                   [job_id = read.job_id,
+                    istream = file_state.istream] -> Task<AwaitResult> {
+                     auto read = co_await spawn_blocking([=] {
+                       return istream->Read(read_size);
+                     });
+                     co_return ReadProgress{
+                       job_id,
+                       std::move(read),
+                     };
+                   });
     },
     [this, &ctx](SubFinished& sub) -> Task<void> {
       auto slot = find_slot_by_job(sub.job_id);
@@ -244,6 +253,15 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
         co_await cleanup_file(std::move(path), ctx.dh());
       }
     });
+}
+
+auto FromArrowFsOperator::process_sub(SubKeyView key, table_slice slice,
+                                      Push<table_slice>& push, OpCtx& ctx)
+  -> Task<void> {
+  TENZIR_UNUSED(key, ctx);
+  auto const rows = slice.rows();
+  co_await push(std::move(slice));
+  events_read_counter_.add(rows);
 }
 
 auto FromArrowFsOperator::finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
@@ -383,7 +401,7 @@ auto FromArrowFsOperator::restore(OpCtx& ctx) -> Task<void> {
           pending_.push_back(TrackedFile{
             .path = state.path,
             .mtime = file_mtime,
-            .file = nullptr,
+            .istream = nullptr,
           });
         }
         slot.reset();
@@ -391,13 +409,26 @@ auto FromArrowFsOperator::restore(OpCtx& ctx) -> Task<void> {
       }
     }
     // Reopen file.
-    auto open_future = fs_->OpenInputFileAsync(state.path);
+    auto open_future = fs_->OpenInputStreamAsync(state.path);
     auto open_result = co_await arrow_future_to_task(std::move(open_future));
     if (not open_result.ok()) {
+      diagnostic::warning("failed to open stream for `{}`: {}", state.path,
+                          open_result.status().ToStringWithoutContextLines())
+        .primary(base_args_.url)
+        .emit(ctx);
       slot.reset();
       continue;
     }
-    state.file = open_result.MoveValueUnsafe();
+    state.istream = open_result.MoveValueUnsafe();
+    // PERF: Downloads skipped bytes.
+    if (auto advance = state.istream->Advance(state.offset); not advance.ok()) {
+      diagnostic::warning("failed to advance restored stream for `{}`: {}",
+                          state.path, advance.ToStringWithoutContextLines())
+        .primary(base_args_.url)
+        .emit(ctx);
+      slot.reset();
+      continue;
+    }
     previous_.emplace(file_info);
   }
   // Restore pending files
@@ -482,8 +513,11 @@ auto FromArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
                   continue;
                 }
                 // Clean up existing directory markers when `remove=true`.
-                // Directory markers are 0-sized objects with keys ending in '/'.
-                if (base_args_.remove and file.IsDirectory()) {
+                // Directory markers are 0-sized objects with keys ending in '/'
+                // that some object stores create. Real directories on local
+                // filesystems are not markers and must not be deleted.
+                if (base_args_.remove and file.IsDirectory()
+                    and fs_->type_name() != "local") {
                   co_await remove_file(file.path() + '/', dh);
                 }
               }
@@ -511,9 +545,10 @@ auto FromArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
         co_return;
       }
       auto elapsed = std::chrono::steady_clock::now() - start;
-      if (elapsed < watch_pause) {
+      auto interval = base_args_.watch->inner;
+      if (elapsed < interval) {
         auto dur = std::chrono::duration_cast<folly::HighResDuration>(
-          watch_pause - elapsed);
+          interval - elapsed);
         co_await folly::coro::sleep(dur);
       }
     }
@@ -531,7 +566,7 @@ auto FromArrowFsOperator::start_job_in_slot(size_t slot, OpCtx& ctx) -> void {
                [this, job_id = processing_[slot]->job_id,
                 path = processing_[slot]->path] mutable -> Task<AwaitResult> {
                  auto result = co_await arrow_future_to_task(
-                   fs_->OpenInputFileAsync(path));
+                   fs_->OpenInputStreamAsync(path));
                  co_return FileOpen{job_id, std::move(result)};
                });
 }
@@ -596,10 +631,16 @@ auto ToArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
   // `set_path` finalises `has_uuid()` based on the actual path portion and
   // emits any `{uuid}`-placement diagnostics.
   // TODO: Consider using separate types here to differentiate.
-  template_.set_path(std::move(fs->path), base_args_.url.source, ctx.dh());
+  template_.set_path(std::move(fs->path), base_args_.url.source, append(),
+                     ctx.dh());
   bytes_written_counter_
     = ctx.make_counter(MetricsLabel{"operator", "to_arrow_fs"},
-                       MetricsDirection::write, MetricsVisibility::external_);
+                       MetricsDirection::write, MetricsVisibility::external_,
+                       MetricsUnit::bytes);
+  events_written_counter_
+    = ctx.make_counter(MetricsLabel{"operator", "to_arrow_fs"},
+                       MetricsDirection::write, MetricsVisibility::external_,
+                       MetricsUnit::events);
 }
 
 auto ToArrowFsOperator::preprocess(table_slice input, OpCtx&)
@@ -690,6 +731,7 @@ auto ToArrowFsOperator::process(table_slice input, OpCtx& ctx) -> Task<void> {
       co_return;
     }
     auto slice = filter(input, arrow::BooleanArray{rows, bitmap});
+    auto const slice_rows = slice.rows();
     // `push` runs without the guard. If it suspends on a full input
     // channel and we still hold the guard, `process_sub` on the draining
     // side cannot acquire the guard to look up the partition, and
@@ -702,6 +744,7 @@ auto ToArrowFsOperator::process(table_slice input, OpCtx& ctx) -> Task<void> {
         .emit(ctx.dh());
       co_return;
     }
+    events_written_counter_.add(slice_rows);
   }
 }
 
@@ -866,7 +909,10 @@ auto ToArrowFsOperator::open_stream(Partition& part,
       co_return failure::promise();
     }
   }
-  auto result = co_await spawn_blocking([fs = fs_, path] {
+  auto result = co_await spawn_blocking([fs = fs_, path, append = append()] {
+    if (append) {
+      return fs->OpenAppendStream(path);
+    }
     return fs->OpenOutputStream(path);
   });
   if (not result.ok()) {

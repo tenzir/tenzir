@@ -57,10 +57,13 @@ public:
 
   auto metric_layout() const -> record_type override {
     return record_type{{
-      {"swap_space_usage", uint64_type{}},
-      {"open_fds", uint64_type{}},
-      {"current_memory_usage", uint64_type{}},
-      {"peak_memory_usage", uint64_type{}},
+      {"swap_space_usage", metrics::prometheus_gauge(uint64_type{}, "bytes")},
+      {"open_fds", metrics::prometheus_gauge(uint64_type{})},
+      {
+        "current_memory_usage",
+        metrics::prometheus_gauge(uint64_type{}, "bytes"),
+      },
+      {"peak_memory_usage", metrics::prometheus_gauge(uint64_type{}, "bytes")},
     }};
   }
 };

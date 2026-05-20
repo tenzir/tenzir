@@ -642,7 +642,8 @@ public:
     auto tls_validator
       = tls_options{{.tls_default = false, .is_server = true}}.add_to_describer(
         d, &ServeHttpArgs::tls);
-    auto printer_pipeline = d.pipeline(&ServeHttpArgs::printer);
+    auto printer_pipeline
+      = d.pipeline(&ServeHttpArgs::printer, SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       tls_validator(ctx);
       if (auto endpoint = ctx.get(endpoint_arg)) {
@@ -675,7 +676,7 @@ public:
       }
       return {};
     });
-    return d.invariant_order();
+    return d.invariant_order_filter();
   }
 };
 

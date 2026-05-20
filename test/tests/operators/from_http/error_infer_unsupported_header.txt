@@ -1,0 +1,7 @@
+error: unsupported Content-Type `application/octet-stream`
+ --> tests/operators/from_http/error_infer_unsupported_header.tql:7:1
+  |
+7 | from_http env("HTTP_FIXTURE_INFER_UNSUPPORTED_HEADER_URL"), tls=false
+  | ^^^^^^^^^ 
+  |
+  = hint: pass an explicit parser pipeline

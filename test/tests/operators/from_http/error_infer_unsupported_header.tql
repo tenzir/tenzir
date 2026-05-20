@@ -1,0 +1,7 @@
+---
+error: true
+fixtures: [http]
+timeout: 60
+---
+
+from_http env("HTTP_FIXTURE_INFER_UNSUPPORTED_HEADER_URL"), tls=false

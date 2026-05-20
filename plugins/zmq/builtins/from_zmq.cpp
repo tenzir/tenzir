@@ -90,13 +90,21 @@ public:
     if constexpr (Mode == transport::ConnectionMode::connect) {
       bytes_read_counter_
         = ctx.make_counter(MetricsLabel{"operator", "from_zmq"},
-                           MetricsDirection::read,
-                           MetricsVisibility::external_);
+                           MetricsDirection::read, MetricsVisibility::external_,
+                           MetricsUnit::bytes);
+      events_read_counter_
+        = ctx.make_counter(MetricsLabel{"operator", "from_zmq"},
+                           MetricsDirection::read, MetricsVisibility::external_,
+                           MetricsUnit::events);
     } else {
       bytes_read_counter_
         = ctx.make_counter(MetricsLabel{"operator", "accept_zmq"},
-                           MetricsDirection::read,
-                           MetricsVisibility::external_);
+                           MetricsDirection::read, MetricsVisibility::external_,
+                           MetricsUnit::bytes);
+      events_read_counter_
+        = ctx.make_counter(MetricsLabel{"operator", "accept_zmq"},
+                           MetricsDirection::read, MetricsVisibility::external_,
+                           MetricsUnit::events);
     }
     endpoint_ = transport::normalize_endpoint(args_.endpoint.inner);
     if (args_.prefix) {
@@ -214,7 +222,9 @@ public:
 
   auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
                    OpCtx&) -> Task<void> override {
+    auto const rows = slice.rows();
     co_await push(std::move(slice));
+    events_read_counter_.add(rows);
   }
 
   auto finish_sub(SubKeyView, Push<table_slice>&, OpCtx&)
@@ -295,6 +305,7 @@ private:
   size_t active_parsers_ = 0;
   uint64_t next_sub_id_ = 0;
   MetricsCounter bytes_read_counter_;
+  MetricsCounter events_read_counter_;
 };
 
 template <transport::ConnectionMode Mode>
@@ -312,7 +323,8 @@ public:
     auto endpoint_arg = d.positional("endpoint", &SourceArgs::endpoint);
     auto prefix_arg = d.named("prefix", &SourceArgs::prefix, "string");
     auto keep_prefix_arg = d.named("keep_prefix", &SourceArgs::keep_prefix);
-    auto parser_arg = d.pipeline(&SourceArgs::parser);
+    auto parser_arg
+      = d.pipeline(&SourceArgs::parser, SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TENZIR_UNUSED(keep_prefix_arg);
       TRY(auto endpoint, ctx.get(endpoint_arg));

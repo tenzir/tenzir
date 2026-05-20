@@ -207,7 +207,12 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_google_cloud_pubsub"},
-                         MetricsDirection::write, MetricsVisibility::external_);
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_write_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "to_google_cloud_pubsub"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::events);
     auto topic = pubsub::Topic(args_.project_id.inner, args_.topic_id.inner);
     publisher_.emplace(pubsub::MakePublisherConnection(std::move(topic)));
     co_return;
@@ -275,6 +280,7 @@ private:
     if (bytes > 0) {
       bytes_write_counter_.add(bytes);
     }
+    events_write_counter_.add(1);
   }
 
   auto drain_inflight(diagnostic_handler& dh) -> Task<void> {
@@ -293,6 +299,7 @@ private:
   Option<pubsub::Publisher> publisher_;
   std::deque<InflightPublish> inflight_;
   MetricsCounter bytes_write_counter_;
+  MetricsCounter events_write_counter_;
 };
 
 } // namespace

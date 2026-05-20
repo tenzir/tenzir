@@ -1,5 +1,9 @@
 ---
 error: true
+fixtures: [http]
+timeout: 60
 ---
 
-from_http "http://example.com", paginate=(x => x.next)
+from_http env("HTTP_FIXTURE_INFER_UNKNOWN_EXTENSION_URL"),
+          paginate=(x => x.next),
+          tls=false

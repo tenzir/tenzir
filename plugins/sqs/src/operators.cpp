@@ -52,15 +52,31 @@ auto make_async_sqs_queue(const Args& args, OpCtx& ctx)
   if (queue_name.inner.starts_with("sqs://")) {
     queue_name.inner.erase(0, 6);
   }
-  // Resolve the effective region: explicit `aws_region` wins, then the region
-  // from resolved AWS IAM credentials, then the AWS SDK's default resolution
-  // (AWS_REGION / AWS_DEFAULT_REGION env vars, the configured profile in
-  // `~/.aws/config`, and finally the SDK default of "us-east-1"). When a full
-  // queue URL is supplied for a non-default region, `aws_region` must be set
-  // explicitly so SigV4 signing matches the queue's region.
+  // Reject anything that isn't either a valid AWS SQS queue name or an HTTP(S)
+  // queue URL — this catches malformed inputs like `sqs://https://...` that
+  // would otherwise silently break region detection and SigV4 signing.
+  if (not is_sqs_queue_url(queue_name.inner)
+      and not is_valid_sqs_queue_name(queue_name.inner)) {
+    diagnostic::error("invalid SQS queue `{}`", args.queue.inner)
+      .primary(args.queue.source)
+      .hint("expected a queue name, `sqs://<name>`, or a full queue URL")
+      .throw_();
+  }
+  // Resolve the effective region in priority order:
+  //   1. Explicit `aws_region` (user override).
+  //   2. Region parsed from a full queue URL (e.g. the `us-west-2` in
+  //      `https://sqs.us-west-2.amazonaws.com/...`) — keeps SigV4 signing
+  //      aligned with the queue's region without forcing the user to set
+  //      `aws_region` redundantly.
+  //   3. Region from resolved AWS IAM credentials.
+  //   4. AWS SDK default resolution (AWS_REGION / AWS_DEFAULT_REGION env vars,
+  //      the configured profile in `~/.aws/config`, and finally the SDK
+  //      default of "us-east-1").
   auto region = std::string{};
   if (args.aws_region) {
     region = args.aws_region->inner;
+  } else if (auto url_region = region_from_sqs_url(queue_name.inner)) {
+    region = std::move(*url_region);
   } else if (resolved_creds and not resolved_creds->region.empty()) {
     region = resolved_creds->region;
   } else {
@@ -125,7 +141,12 @@ auto FromSqs::start(OpCtx& ctx) -> Task<void> {
   queue_ = co_await make_async_sqs_queue(args_, ctx);
   bytes_read_counter_
     = ctx.make_counter(MetricsLabel{"operator", "from_sqs"},
-                       MetricsDirection::read, MetricsVisibility::external_);
+                       MetricsDirection::read, MetricsVisibility::external_,
+                       MetricsUnit::bytes);
+  events_read_counter_
+    = ctx.make_counter(MetricsLabel{"operator", "from_sqs"},
+                       MetricsDirection::read, MetricsVisibility::external_,
+                       MetricsUnit::events);
 }
 
 auto FromSqs::await_task(diagnostic_handler& dh) const -> Task<Any> {
@@ -241,7 +262,9 @@ auto FromSqs::process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     build_event(msb, message);
   }
   for (auto&& slice : msb.finalize_as_table_slice()) {
+    auto const rows = slice.rows();
     co_await push(std::move(slice));
+    events_read_counter_.add(rows);
   }
   if (args_.keep_messages) {
     co_return;
@@ -263,7 +286,12 @@ auto ToSqs::start(OpCtx& ctx) -> Task<void> {
   queue_ = co_await make_async_sqs_queue(args_, ctx);
   bytes_write_counter_
     = ctx.make_counter(MetricsLabel{"operator", "to_sqs"},
-                       MetricsDirection::write, MetricsVisibility::external_);
+                       MetricsDirection::write, MetricsVisibility::external_,
+                       MetricsUnit::bytes);
+  events_write_counter_
+    = ctx.make_counter(MetricsLabel{"operator", "to_sqs"},
+                       MetricsDirection::write, MetricsVisibility::external_,
+                       MetricsUnit::events);
 }
 
 auto ToSqs::process(table_slice input, OpCtx& ctx) -> Task<void> {
@@ -286,6 +314,7 @@ auto ToSqs::process(table_slice input, OpCtx& ctx) -> Task<void> {
         if (not bytes.empty()) {
           bytes_write_counter_.add(bytes.size());
         }
+        events_write_counter_.add(1);
       }
     };
     if (auto strings = messages.template as<string_type>()) {

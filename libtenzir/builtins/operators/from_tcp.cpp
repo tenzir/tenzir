@@ -168,6 +168,10 @@ public:
                            port_);
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
+    events_read_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "from_tcp"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::events);
     co_return;
   }
 
@@ -227,7 +231,8 @@ public:
         auto bytes_read_counter = ctx.make_counter(
           MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
                                     fmt::to_string(peer_ip))},
-          MetricsDirection::read, MetricsVisibility::external_);
+          MetricsDirection::read, MetricsVisibility::external_,
+          MetricsUnit::bytes);
         auto conn_id = next_conn_id_++;
         auto pipeline_copy = args_.user_pipeline.inner;
         auto env = substitute_ctx::env_t{};
@@ -280,6 +285,13 @@ public:
           }
         }
       });
+  }
+
+  auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
+                   OpCtx&) -> Task<void> override {
+    auto const rows = slice.rows();
+    co_await push(std::move(slice));
+    events_read_counter_.add(rows);
   }
 
   auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
@@ -357,6 +369,7 @@ private:
                                            message_queue_capacity};
   Option<Connection> current_connection_;
   Option<uint64_t> current_conn_id_;
+  MetricsCounter events_read_counter_;
   uint64_t next_conn_id_{0};
   bool startup_failed_ = false;
 };
@@ -371,8 +384,9 @@ public:
     auto d = Describer<FromTcpArgs, FromTcpConnector>{};
     auto endpoint_arg = d.positional("endpoint", &FromTcpArgs::endpoint);
     auto tls_arg = d.named("tls", &FromTcpArgs::tls);
-    auto pipeline_arg = d.pipeline(&FromTcpArgs::user_pipeline,
-                                   {{"peer", &FromTcpArgs::peer_info}});
+    auto pipeline_arg
+      = d.pipeline(&FromTcpArgs::user_pipeline, SubOptimize::from_downstream,
+                   {{"peer", &FromTcpArgs::peer_info}});
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto ep_str, ctx.get(endpoint_arg));
       auto ep = to<Endpoint>(ep_str.inner);

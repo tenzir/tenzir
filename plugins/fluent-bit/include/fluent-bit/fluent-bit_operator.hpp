@@ -1115,7 +1115,14 @@ public:
         "operator",
         "from_fluent_bit",
       },
-      MetricsDirection::read, MetricsVisibility::external_);
+      MetricsDirection::read, MetricsVisibility::external_, MetricsUnit::bytes);
+    read_events_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "from_fluent_bit",
+      },
+      MetricsDirection::read, MetricsVisibility::external_,
+      MetricsUnit::events);
     builder_.emplace(args_.builder_options, ctx.dh());
     auto [sender, receiver]
       = channel<FluentBitSourceTaskResult>(source_channel_capacity);
@@ -1184,8 +1191,11 @@ public:
       [&](FluentBitSourceMessage& message) -> Task<void> {
         if (is<FluentBitSourceDone>(message)) {
           for (auto& slice : builder_->finalize_as_table_slice()) {
-            read_bytes_counter_.add(slice.approx_bytes());
+            auto const bytes = slice.approx_bytes();
+            auto const rows = slice.rows();
             co_await push(std::move(slice));
+            read_bytes_counter_.add(bytes);
+            read_events_counter_.add(rows);
           }
           source_exhausted_ = true;
           co_return;
@@ -1196,12 +1206,14 @@ public:
         co_await pusher_.push(builder_->yield_ready_as_table_slice(), push,
                               [this](table_slice const& slice) {
                                 read_bytes_counter_.add(slice.approx_bytes());
+                                read_events_counter_.add(slice.rows());
                               });
       },
       [&](FluentBitSourceTimeout&) -> Task<void> {
         co_await pusher_.push(builder_->yield_ready_as_table_slice(), push,
                               [this](table_slice const& slice) {
                                 read_bytes_counter_.add(slice.approx_bytes());
+                                read_events_counter_.add(slice.rows());
                               });
       });
   }
@@ -1211,8 +1223,11 @@ public:
     TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(builder_);
     for (auto& slice : builder_->finalize_as_table_slice()) {
-      read_bytes_counter_.add(slice.approx_bytes());
+      auto const bytes = slice.approx_bytes();
+      auto const rows = slice.rows();
       co_await push(std::move(slice));
+      read_bytes_counter_.add(bytes);
+      read_events_counter_.add(rows);
     }
   }
 
@@ -1235,6 +1250,7 @@ private:
   SourceBridgeLifetime bridge_lifetime_;
   Arc<Atomic<bool>> stop_requested_{std::in_place, false};
   MetricsCounter read_bytes_counter_;
+  MetricsCounter read_events_counter_;
   bool source_exhausted_ = false;
 };
 
@@ -1249,7 +1265,15 @@ public:
         "operator",
         "to_fluent_bit",
       },
-      MetricsDirection::write, MetricsVisibility::external_);
+      MetricsDirection::write, MetricsVisibility::external_,
+      MetricsUnit::bytes);
+    write_events_counter_ = ctx.make_counter(
+      MetricsLabel{
+        "operator",
+        "to_fluent_bit",
+      },
+      MetricsDirection::write, MetricsVisibility::external_,
+      MetricsUnit::events);
     auto operator_args = make_operator_args(args_, ctx);
     if (not operator_args) {
       done_ = true;
@@ -1279,6 +1303,7 @@ public:
     auto array = check(to_record_batch(resolved_slice)->ToStructArray());
     auto failed = false;
     auto bytes = uint64_t{0};
+    auto events = uint64_t{0};
     auto printer = json_printer2{json_printer_options{
       .style = no_style(),
       .oneline = true,
@@ -1296,6 +1321,7 @@ public:
         failed = true;
       } else {
         bytes += message.size();
+        ++events;
       }
     }
     if (failed) {
@@ -1303,6 +1329,7 @@ public:
         .emit(ctx.dh());
     }
     write_bytes_counter_.add(bytes);
+    write_events_counter_.add(events);
   }
 
   auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
@@ -1332,6 +1359,7 @@ private:
   property_map plugin_args_;
   std::unique_ptr<engine> engine_;
   MetricsCounter write_bytes_counter_;
+  MetricsCounter write_events_counter_;
   bool done_ = false;
 };
 

@@ -136,6 +136,7 @@ struct xsv_parser_options {
   std::string null_value = {};
   std::string quotes = "\"\'";
   bool auto_expand = {};
+  bool auto_fill = {};
   bool allow_comments = {};
   std::optional<std::vector<std::string>> header = {};
   multi_series_builder::options builder_options = {};
@@ -145,7 +146,7 @@ struct xsv_parser_options {
       f.field("name", x.name), f.field("field_separator", x.field_separator),
       f.field("list_separator", x.list_separator),
       f.field("null_value", x.null_value), f.field("quotes", x.quotes),
-      f.field("auto_expand", x.auto_expand),
+      f.field("auto_expand", x.auto_expand), f.field("auto_fill", x.auto_fill),
       f.field("allow_comments", x.allow_comments), f.field("header", x.header),
       f.field("builder_options", x.builder_options));
   }
@@ -269,6 +270,7 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
     parser.add("--allow-comments", allow_comments_);
     parser.add("--header", header_string_, "<header>");
     parser.add("--auto-expand", auto_expand_);
+    parser.add("--auto-fill", auto_fill_);
     multi_series_builder_argument_parser::add_policy_to_parser(parser);
     multi_series_builder_argument_parser::add_settings_to_parser(parser, true,
                                                                  false);
@@ -298,6 +300,7 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
     parser.named("quotes", quotes_);
     parser.named("comments", allow_comments_);
     parser.named("auto_expand", auto_expand_);
+    parser.named("auto_fill", auto_fill_);
     multi_series_builder_argument_parser::add_policy_to_parser(parser);
     multi_series_builder_argument_parser::add_settings_to_parser(
       parser, true, add_merge_option);
@@ -377,6 +380,7 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
       .null_value = null_value_->inner,
       .quotes = quotes_->inner,
       .auto_expand = auto_expand_,
+      .auto_fill = auto_fill_,
       .allow_comments = allow_comments_,
       .header = header,
       .builder_options = std::move(opts),
@@ -412,6 +416,7 @@ protected:
   std::optional<located<std::string>> quotes_
     = located{xsv_parser_options{}.quotes, location::unknown};
   bool auto_expand_{};
+  bool auto_fill_{};
   mode mode_ = mode::all_required;
 };
 
@@ -432,6 +437,7 @@ struct ReadXsvArgs {
   // Optional parsing knobs.
   located<std::string> quotes = {"\"'", location::unknown};
   bool auto_expand = false;
+  bool auto_fill = false;
   bool allow_comments = false;
   Option<ast::expression> header;
   // multi_series_builder policy (from docs).
@@ -467,6 +473,7 @@ auto add_read_xsv_args(Describer<ReadXsvArgs, Impls...>& d)
   -> ReadXsvCommonHandles {
   auto quotes_arg = d.named_optional("quotes", &ReadXsvArgs::quotes);
   d.named("auto_expand", &ReadXsvArgs::auto_expand);
+  d.named("auto_fill", &ReadXsvArgs::auto_fill);
   d.named("comments", &ReadXsvArgs::allow_comments);
   auto header_arg
     = d.named("header", &ReadXsvArgs::header, "list<string>|string");
@@ -691,11 +698,15 @@ auto parse_line(std::string_view line, std::vector<std::string>& fields,
   for (field_idx = 0; true; ++field_idx) {
     if (line.empty()) {
       if (field_idx < original_field_count) {
-        diagnostic::warning("{} parser found too few values in a line",
-                            args.name)
-          .note("line {} has {} values, but should have {} values",
-                line_counter, field_idx, original_field_count)
-          .emit(dh);
+        if (not args.auto_fill) {
+          diagnostic::warning("{} parser found too few values in a line",
+                              args.name)
+            .note("line {} has {} values, but should have {} values",
+                  line_counter, field_idx, original_field_count)
+            .hint("use `auto_fill=true` to silently fill missing values with "
+                  "`null`")
+            .emit(dh);
+        }
         builder.unflattened_field(fields[field_idx]).null();
         continue;
       } else {
@@ -994,6 +1005,7 @@ public:
       .null_value = args_.null_value.inner,
       .quotes = args_.quotes.inner,
       .auto_expand = args_.auto_expand,
+      .auto_fill = args_.auto_fill,
       .allow_comments = args_.allow_comments,
       .header = {},
       .builder_options = std::move(msb_opts),
