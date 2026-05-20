@@ -1,0 +1,90 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 113..119
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `load_balance` @ 120..132
+         ],
+         ref: std::load_balance/op
+       },
+       desc: "load_balance",
+       args: [
+         located [
+           string "a",
+           string "b"
+         ] @ 133..138
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ],
+       pipeline: {
+         pipeline: {
+           lets: [
+             
+           ],
+           operators: [
+             where_ir {
+-              self: 143..148,
++              self: 0..0,
+               predicate: binary_expr {
+                 left: dollar_var `$over` -> 2 @ 149..154,
+                 op: "eq" @ 155..157,
+                 right: constant string "a" @ 158..161
+               }
+             },
+             GenericIr {
+               op: {
+                 path: [
+                   `discard` @ 164..171
+                 ],
+                 ref: std::discard/op
+               },
+               desc: "discard",
+               args: [
+                 
+               ],
+               filter: [
+                 
+               ],
+               order: "ordered",
+               named_args: [
+                 
+               ]
+             }
+           ]
+         } @ 139..173,
+         let_ids: {
+           "0": 2
+         }
+       }
+     }
+   ]
+ }

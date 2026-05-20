@@ -15,6 +15,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/let_id.hpp"
 #include "tenzir/location.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/tql2/entity_path.hpp"
 #include "tenzir/variant.hpp"
 
@@ -298,13 +299,19 @@ private:
   std::vector<segment> path_;
 };
 
-/// Returns all field paths referenced by an expression.
-auto referenced_field_paths(const expression& expr) -> std::vector<field_path>;
+/// A set of references (field paths and let bindings) found in an expression.
+struct ExprRefs {
+  std::vector<field_path> field_paths = {};
+  std::vector<let_id> let_ids = {};
 
-/// Returns whether an expression may reference any of the given field paths.
-/// This is conservative and returns true for ambiguous field accesses.
-auto references_any_field_path(const expression& expr,
-                               std::span<const field_path> paths) -> bool;
+  /// Returns `true` if any reference in `*this` overlaps with `other`.
+  /// Field-path overlap uses prefix matching; let-id overlap is exact.
+  auto overlaps(const ExprRefs& other) const -> bool;
+};
+
+/// Collect all references (field paths and let bindings) from an expression.
+/// Returns `None` when the expression contains ambiguous field accesses.
+auto collect_refs(const expression& expr) -> Option<ExprRefs>;
 
 /// A selector is something that can be assigned.
 ///

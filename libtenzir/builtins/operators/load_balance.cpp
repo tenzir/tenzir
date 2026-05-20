@@ -8,6 +8,7 @@
 
 #include "tenzir/async.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/ir.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
@@ -555,7 +556,17 @@ public:
       }
       return {};
     });
-    return d.unordered();
+    return d.optimize([](DescribeCtx& ctx, event_order,
+                         ir::optimize_filter filter) -> Optimization {
+      auto touched = ast::ExprRefs{.let_ids = ctx.pipeline_let_ids()};
+      auto [independent, dependent]
+        = ir::split_filter_by_dependents(std::move(filter), touched);
+      return {
+        .order = event_order::unordered,
+        .filter_upstream = std::move(independent),
+        .filter_self = std::move(dependent),
+      };
+    });
   }
 };
 

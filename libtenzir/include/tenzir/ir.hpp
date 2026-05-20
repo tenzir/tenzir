@@ -173,10 +173,12 @@ struct split_filter_result {
   ir::optimize_filter dependent;
 };
 
-/// Splits a filter chain by dependency on a set of fields.
-/// Returns independent and dependent filters.
+/// Splits a filter chain into independent and dependent parts.
+/// A filter expression is dependent if its references overlap with `touched`.
+/// If refs of a filter cannot be determined (ambiguous), it is conservatively
+/// placed into the dependent set.
 auto split_filter_by_dependents(ir::optimize_filter filter,
-                                std::span<const ast::field_path> fields)
+                                const ast::ExprRefs& touched)
   -> split_filter_result;
 
 class SetIr final : public Operator {

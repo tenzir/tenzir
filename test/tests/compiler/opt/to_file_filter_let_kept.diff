@@ -1,0 +1,99 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 254..260
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `to_file` @ 261..268
+         ],
+         ref: std::to_file/op
+       },
+       desc: "tql2.to_file",
+       args: [
+         located {
+           buffer: {
+             chunk: chunk(size=56),
+             table-offset: 12
+           }
+         } @ 269..280
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ],
+       pipeline: {
+         pipeline: {
+           lets: [
+             {
+               ident: `$x` @ 289..291,
+               expr: field_access {
+                 left: this_ 294..298,
+                 dot: 298..299,
+                 has_question_mark: false,
+                 name: `n` @ 299..300
+               },
+               id: 1
+             }
+           ],
+           operators: [
+             where_ir {
+-              self: 303..308,
++              self: 0..0,
+               predicate: binary_expr {
+                 left: dollar_var `$x` -> 1 @ 309..311,
+                 op: "gt" @ 312..313,
+                 right: constant int64 1 @ 314..315
+               }
+             },
+             GenericIr {
+               op: {
+                 path: [
+                   `write_json` @ 318..328
+                 ],
+                 ref: std::write_json/op
+               },
+               desc: "tql2.write_json",
+               args: [
+                 
+               ],
+               filter: [
+                 
+               ],
+               order: "ordered",
+               named_args: [
+                 
+               ]
+             }
+           ]
+         } @ 281..330,
+         let_ids: {
+           
+         }
+       }
+     }
+   ]
+ }

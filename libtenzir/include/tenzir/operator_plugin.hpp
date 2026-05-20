@@ -499,6 +499,22 @@ public:
     return operator_location_;
   }
 
+  /// Returns the let_ids bound by the pipeline's let bindings, in declaration
+  /// order. Empty if there is no pipeline or no let bindings.
+  auto pipeline_let_ids() const -> std::vector<let_id> {
+    if (not pipeline_ or not desc_->pipeline) {
+      return {};
+    }
+    auto result = std::vector<let_id>{};
+    for (const auto& [_, id] : pipeline_->let_ids) {
+      result.push_back(id);
+    }
+    for (const auto& let : pipeline_->pipeline.inner.lets) {
+      result.push_back(let.id);
+    }
+    return result;
+  }
+
   explicit(false) operator diagnostic_handler&() {
     return *dh_;
   }
@@ -1005,22 +1021,30 @@ public:
   /// Filter from downstream will be pushed upstream.
   /// Upstream is required to produce ordered events.
   auto invariant_filter() -> Description {
-    return optimize([](DescribeCtx&, event_order,
+    return optimize([](DescribeCtx& ctx, event_order,
                        ir::optimize_filter filter) -> Optimization {
+      auto touched = ast::ExprRefs{.let_ids = ctx.pipeline_let_ids()};
+      auto [independent, dependent]
+        = ir::split_filter_by_dependents(std::move(filter), touched);
       return {
         .order = event_order::ordered,
-        .filter_upstream = std::move(filter),
+        .filter_upstream = std::move(independent),
+        .filter_self = std::move(dependent),
       };
     });
   }
 
   /// Declares that the operator is invariant to ordering and filtering.
   auto invariant_order_filter() -> Description {
-    return optimize([](DescribeCtx&, event_order order,
+    return optimize([](DescribeCtx& ctx, event_order order,
                        ir::optimize_filter filter) -> Optimization {
+      auto touched = ast::ExprRefs{.let_ids = ctx.pipeline_let_ids()};
+      auto [independent, dependent]
+        = ir::split_filter_by_dependents(std::move(filter), touched);
       return {
         .order = order,
-        .filter_upstream = std::move(filter),
+        .filter_upstream = std::move(independent),
+        .filter_self = std::move(dependent),
       };
     });
   }

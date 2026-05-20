@@ -1,0 +1,99 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ 282..288
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `load_balance` @ 289..301
+         ],
+         ref: std::load_balance/op
+       },
+       desc: "load_balance",
+       args: [
+         located [
+           string "a",
+           string "b"
+         ] @ 302..307
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ],
+       pipeline: {
+         pipeline: {
+           lets: [
+             {
+               ident: `$x` @ 316..318,
+               expr: field_access {
+                 left: this_ 321..325,
+                 dot: 325..326,
+                 has_question_mark: false,
+                 name: `n` @ 326..327
+               },
+               id: 3
+             }
+           ],
+           operators: [
+             where_ir {
+-              self: 330..335,
++              self: 0..0,
+               predicate: binary_expr {
+                 left: dollar_var `$x` -> 3 @ 336..338,
+                 op: "gt" @ 339..340,
+                 right: constant int64 1 @ 341..342
+               }
+             },
+             GenericIr {
+               op: {
+                 path: [
+                   `discard` @ 345..352
+                 ],
+                 ref: std::discard/op
+               },
+               desc: "discard",
+               args: [
+                 
+               ],
+               filter: [
+                 
+               ],
+               order: "ordered",
+               named_args: [
+                 
+               ]
+             }
+           ]
+         } @ 308..354,
+         let_ids: {
+           "0": 2
+         }
+       }
+     }
+   ]
+ }

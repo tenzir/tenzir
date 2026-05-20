@@ -1,0 +1,8 @@
+// A filter inside the subpipeline that does not reference $over should be
+// pushed upstream.
+let $over = ["a", "b"]
+export
+load_balance $over {
+  where x > 1
+  discard
+}

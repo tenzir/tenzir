@@ -1,0 +1,11 @@
+// A filter inside the subpipeline referencing a let binding declared in that
+// subpipeline must not be pushed upstream of `load_balance`. The let binding
+// `$x` is scoped to the subpipeline, so moving the filter outside would leave
+// an unbound variable.
+let $over = ["a", "b"]
+export
+load_balance $over {
+  let $x = this.n
+  where $x > 1
+  discard
+}
