@@ -1,0 +1,16 @@
+---
+assertions:
+  fixtures:
+    cloudwatch:
+      hlc:
+        ok_request_count: 4
+        max_message_length_less_than: 1048550
+---
+
+from {message: "x".repeat(1048550)}
+to_amazon_cloudwatch "ignored",
+  stream="ignored",
+  method="hlc",
+  payload=message,
+  token=secret("tenzir-test-token", _literal=true),
+  endpoint=env("CLOUDWATCH_HLC_ENDPOINT")

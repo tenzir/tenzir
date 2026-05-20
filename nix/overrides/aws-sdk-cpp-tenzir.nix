@@ -19,6 +19,7 @@
       "cognito-identity"
       "config"
       "identity-management"
+      "logs"
       "s3"
       "sts"
       "transfer"

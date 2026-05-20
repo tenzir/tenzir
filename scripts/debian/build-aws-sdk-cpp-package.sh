@@ -29,7 +29,7 @@ git clone --depth 1 --shallow-submodules --recurse-submodules --branch "${AWS_SD
   https://github.com/aws/aws-sdk-cpp.git "${SOURCE_TREE}"
 cd "${SOURCE_TREE}"
 cmake -B build \
-  -DBUILD_ONLY="sqs;cognito-identity;config;identity-management;s3;sts;transfer" \
+  -DBUILD_ONLY="sqs;cognito-identity;config;identity-management;logs;s3;sts;transfer" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} \
   -DCPP_STANDARD=17 \

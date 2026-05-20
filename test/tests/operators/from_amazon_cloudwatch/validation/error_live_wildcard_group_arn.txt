@@ -1,0 +1,6 @@
+error: `mode="live"` requires log group ARNs without wildcard suffixes
+ --> tests/operators/from_amazon_cloudwatch/validation/error_live_wildcard_group_arn.tql:5:24
+  |
+5 | from_amazon_cloudwatch "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/api:*"
+  |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |

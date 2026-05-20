@@ -1,0 +1,23 @@
+---
+assertions:
+  fixtures:
+    cloudwatch:
+      hlc:
+        ok_request_count: 4
+        messages:
+          - pre-epoch
+          - hlc-split-1
+          - hlc-split-2
+          - hlc-split-3
+---
+
+from {message: "hlc-split-1"},
+     {message: "hlc-split-2"},
+     {message: "hlc-split-3"}
+to_amazon_cloudwatch "ignored",
+  stream="ignored",
+  method="hlc",
+  payload=message,
+  token=secret("tenzir-test-token", _literal=true),
+  endpoint=env("CLOUDWATCH_HLC_ENDPOINT"),
+  batch_size=1

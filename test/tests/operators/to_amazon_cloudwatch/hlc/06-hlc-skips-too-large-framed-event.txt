@@ -1,0 +1,7 @@
+warning: CloudWatch log event exceeds maximum payload size
+  --> tests/operators/to_amazon_cloudwatch/hlc/06-hlc-skips-too-large-framed-event.tql:14:11
+   |
+14 |   payload=message,
+   |           ~~~~~~~ 
+   |
+   = note: event is skipped

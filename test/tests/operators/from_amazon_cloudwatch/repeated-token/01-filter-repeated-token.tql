@@ -1,0 +1,9 @@
+from_amazon_cloudwatch "/tenzir/repeated-token",
+  mode="search",
+  count=100,
+  aws_iam={
+    access_key_id: "test",
+    secret_access_key: "test",
+    region: "us-east-1",
+  }
+this = message.parse_json()

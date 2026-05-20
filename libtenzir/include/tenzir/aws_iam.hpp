@@ -24,6 +24,7 @@ namespace tenzir {
 
 class OpCtx;
 
+// TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Resolved token endpoint configuration.
 struct resolved_token_endpoint {
   std::string url;
@@ -33,12 +34,14 @@ struct resolved_token_endpoint {
   std::optional<std::string> path;
 };
 
+// TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Resolved web identity token configuration.
 struct resolved_web_identity {
   std::optional<resolved_token_endpoint> token_endpoint;
   std::string token_file;
   std::string token;
 };
+// TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Resolved AWS credentials for use with AWS SDK clients.
 struct resolved_aws_credentials {
   std::string region;
@@ -52,6 +55,7 @@ struct resolved_aws_credentials {
   std::optional<resolved_web_identity> web_identity;
 };
 
+// TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Token endpoint configuration for fetching OIDC tokens via HTTP.
 struct token_endpoint_options {
   /// HTTP endpoint URL to fetch the token from.
@@ -79,6 +83,7 @@ struct token_endpoint_options {
     -> failure_or<token_endpoint_options>;
 };
 
+// TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Web identity token configuration for OIDC-based authentication.
 ///
 /// Supports fetching OIDC tokens from:
@@ -112,6 +117,7 @@ struct web_identity_options {
     -> failure_or<web_identity_options>;
 };
 
+// TODO: Move to the shared Amazon module as `tenzir::amazon::AwsIamOptions`.
 /// AWS IAM authentication options.
 ///
 /// This struct provides common AWS authentication configuration that can be
@@ -179,6 +185,7 @@ struct aws_iam_options {
   }
 };
 
+// TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Describes whether `aws_region` is mandatory for a configured IAM block.
 /// Kafka MSK IAM auth needs an explicit region because SigV4 token signing
 /// includes the region in the signing scope.
@@ -187,12 +194,14 @@ enum class AwsIamRegionRequirement {
   required_with_iam,
 };
 
+// TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Holds parsed IAM options, credential slots, and pending secret requests.
 struct ResolvedAwsIamAuth {
   std::optional<aws_iam_options> options;
   std::optional<resolved_aws_credentials> credentials;
 };
 
+// TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Resolves already-parsed AWS IAM options into runtime auth state.
 ///
 /// This function:

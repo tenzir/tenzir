@@ -11,6 +11,7 @@
 #include "tenzir/curl.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/http_pool.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/view3.hpp"
 
@@ -357,7 +358,7 @@ auto make_header_secret_requests(Option<located<data>> const& headers,
   return result;
 }
 
-auto find_header(std::span<http::Header const> headers, std::string_view name)
+auto find(std::span<http::Header const> headers, std::string_view name)
   -> Option<std::string> {
   for (auto const& [header_name, value] : headers) {
     if (detail::ascii_icase_equal(header_name, name)) {
@@ -367,16 +368,15 @@ auto find_header(std::span<http::Header const> headers, std::string_view name)
   return None{};
 }
 
-auto erase_header(std::vector<http::Header>& headers, std::string_view name)
-  -> void {
+auto erase(std::vector<http::Header>& headers, std::string_view name) -> void {
   std::erase_if(headers, [&](auto const& kv) {
     return detail::ascii_icase_equal(kv.name, name);
   });
 }
 
-auto set_header(std::vector<http::Header>& headers, std::string name,
-                std::string value) -> void {
-  erase_header(headers, name);
+auto set(std::vector<http::Header>& headers, std::string name,
+         std::string value) -> void {
+  http::erase(headers, name);
   headers.push_back({std::move(name), std::move(value)});
 }
 
@@ -587,6 +587,14 @@ auto compress_request_body(std::string body, std::string_view encoding,
     .body = std::move(compressed),
     .content_encoding = std::move(normalized_encoding),
   };
+}
+
+auto add_request_body_headers(std::vector<Header>& headers,
+                              EncodedRequestBody const& body) -> void {
+  http::set(headers, "Content-Length", fmt::to_string(body.body.size()));
+  if (body.content_encoding) {
+    http::set(headers, "Content-Encoding", *body.content_encoding);
+  }
 }
 
 auto add_request_body_headers(std::map<std::string, std::string>& headers,

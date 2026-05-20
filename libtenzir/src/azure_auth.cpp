@@ -230,6 +230,14 @@ AzureTokenProvider::AzureTokenProvider(ResolvedAzureAuth auth, location loc)
   : auth_{std::move(auth)}, loc_{loc} {
 }
 
+auto AzureTokenProvider::authorize(std::vector<http::Header>& headers,
+                                   OpCtx& ctx, HttpPoolConfig const& config)
+  -> Task<failure_or<void>> {
+  CO_TRY(auto token, co_await this->token(ctx, config));
+  http::set(headers, "Authorization", fmt::format("Bearer {}", token));
+  co_return {};
+}
+
 auto AzureTokenProvider::authorize(std::map<std::string, std::string>& headers,
                                    OpCtx& ctx, HttpPoolConfig const& config)
   -> Task<failure_or<void>> {
@@ -268,7 +276,7 @@ auto AzureTokenProvider::refresh(OpCtx& ctx, HttpPoolConfig const& config)
     {"grant_type", "client_credentials"},
     {"scope", auth_.scope},
   });
-  auto headers = std::map<std::string, std::string>{
+  auto headers = std::vector<http::Header>{
     {"Content-Type", "application/x-www-form-urlencoded"},
     {"Content-Length", fmt::to_string(body.size())},
   };

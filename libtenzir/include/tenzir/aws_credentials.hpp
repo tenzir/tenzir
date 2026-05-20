@@ -19,6 +19,7 @@
 
 namespace tenzir {
 
+// TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Holds temporary credentials from STS AssumeRole or profile loading.
 struct sts_credentials {
   std::string access_key_id;
@@ -26,6 +27,7 @@ struct sts_credentials {
   std::string session_token;
 };
 
+// TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Calls STS AssumeRole using base credentials and returns temporary
 /// credentials.
 auto assume_role_with_credentials(const resolved_aws_credentials& base_creds,
@@ -35,10 +37,12 @@ auto assume_role_with_credentials(const resolved_aws_credentials& base_creds,
                                   const std::optional<std::string>& region)
   -> caf::expected<sts_credentials>;
 
+// TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Loads credentials from an AWS CLI profile, including SSO-backed profiles.
 auto load_profile_credentials(const std::string& profile)
   -> caf::expected<sts_credentials>;
 
+// TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Creates the default AWS credential provider chain with bounded IMDS latency.
 ///
 /// The returned chain keeps IMDS enabled but constrains metadata lookups to a
@@ -46,6 +50,7 @@ auto load_profile_credentials(const std::string& profile)
 auto make_default_aws_credentials_provider_chain()
   -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider>;
 
+// TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Fetches a web identity token from the configured source.
 ///
 /// Supports three token sources:
@@ -58,6 +63,7 @@ auto make_default_aws_credentials_provider_chain()
 auto fetch_web_identity_token(const resolved_web_identity& web_identity)
   -> caf::expected<std::string>;
 
+// TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Creates an AWS credentials provider based on the resolved credentials.
 ///
 /// This function implements the common credential resolution logic:

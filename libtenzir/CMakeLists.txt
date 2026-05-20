@@ -498,7 +498,7 @@ dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
 # Link against AWS SDK (for direct S3 deletion without Arrow directory markers).
 if (ARROW_S3)
-  target_link_libraries(libtenzir PRIVATE ${AWSSDK_LINK_LIBRARIES})
+  target_link_libraries(libtenzir PUBLIC ${AWSSDK_LINK_LIBRARIES})
 endif ()
 
 # Link against Azure SDK (for direct Azure blob deletion without directory markers).

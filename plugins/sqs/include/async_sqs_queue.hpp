@@ -8,13 +8,12 @@
 
 #pragma once
 
+#include <tenzir/amazon.hpp>
 #include <tenzir/aws_credentials.hpp>
 #include <tenzir/diagnostics.hpp>
-#include <tenzir/http_pool.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/option.hpp>
 
-#include <aws/core/auth/signer/AWSAuthV4Signer.h>
 #include <aws/sqs/model/Message.h>
 #include <folly/executors/IOExecutor.h>
 
@@ -75,11 +74,8 @@ public:
 private:
   located<std::string> name_;
   std::string region_;
-  std::string endpoint_url_;
   Aws::String url_;
-  std::shared_ptr<Aws::Auth::AWSCredentialsProvider> credentials_;
-  std::unique_ptr<Aws::Client::AWSAuthV4Signer> signer_;
-  Box<HttpPool> pool_;
+  Box<amazon::SignedHttpClient> client_;
 };
 
 } // namespace tenzir::plugins::sqs

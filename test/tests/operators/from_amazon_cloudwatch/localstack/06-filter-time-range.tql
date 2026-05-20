@@ -1,0 +1,8 @@
+from_amazon_cloudwatch env("LOCALSTACK_CLOUDWATCH_LOG_GROUP"),
+  mode="search",
+  stream=[env("LOCALSTACK_CLOUDWATCH_LOG_STREAM_FILTER")],
+  start=from_epoch(int(env("LOCALSTACK_CLOUDWATCH_FILTER_START_MS")) * 1ms),
+  end=from_epoch(int(env("LOCALSTACK_CLOUDWATCH_FILTER_END_MS")) * 1ms),
+  aws_region="us-east-1"
+this = message.parse_json()
+select id

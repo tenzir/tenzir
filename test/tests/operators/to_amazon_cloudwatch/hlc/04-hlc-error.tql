@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+from {message: "hlc-error"}
+to_amazon_cloudwatch "ignored",
+  stream="ignored",
+  method="hlc",
+  payload=message,
+  token=secret("tenzir-test-token", _literal=true),
+  endpoint=env("CLOUDWATCH_HLC_ERROR_ENDPOINT")

@@ -1,0 +1,8 @@
+suite:
+  name: cloudwatch-hlc
+  mode: sequential
+fixtures: [cloudwatch]
+timeout: 120
+skip:
+  on:
+    - fixture-unavailable

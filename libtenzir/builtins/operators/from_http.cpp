@@ -195,7 +195,7 @@ auto serialize_body(data const& value,
 
 auto add_default_content_type(std::vector<http::Header>& headers,
                               Option<std::string> content_type) -> void {
-  if (content_type and not http::find_header(headers, "content-type")) {
+  if (content_type and not http::find(headers, "content-type")) {
     headers.emplace_back("Content-Type", content_type.unwrap());
   }
 }
@@ -221,7 +221,7 @@ auto make_request_config(FromHttpArgs const& args,
     body = std::move(serialized->body);
     add_default_content_type(headers, std::move(serialized->content_type));
   }
-  if (not http::find_header(headers, "accept")) {
+  if (not http::find(headers, "accept")) {
     headers.emplace_back("Accept", "application/json, */*;q=0.5");
   }
   return RequestConfig{
@@ -235,7 +235,7 @@ auto make_request_config(FromHttpArgs const& args,
 // Always uses GET with the same headers as the original but no body.
 auto make_paginated_request_config(std::vector<http::Header> headers)
   -> RequestConfig {
-  if (not http::find_header(headers, "accept")) {
+  if (not http::find(headers, "accept")) {
     headers.emplace_back("Accept", "application/json, */*;q=0.5");
   }
   return RequestConfig{
@@ -496,9 +496,9 @@ auto next_request_from_record(record const& patch,
     }
     for (auto const& [name, value] : *headers) {
       if (is<caf::none_t>(value)) {
-        http::erase_header(request.headers, name);
+        http::erase(request.headers, name);
       } else if (auto const* str = try_as<std::string>(&value)) {
-        http::set_header(request.headers, name, *str);
+        http::set(request.headers, name, *str);
       } else {
         emit_paginate_record_warning("`paginate` request header values must be "
                                      "`string` or `null`",
@@ -903,7 +903,7 @@ public:
       [&](ResponseHeader hdr) -> Task<void> {
         auto headers = std::move(hdr.headers);
         auto content_encoding = Option<std::string>{};
-        if (auto value = http::find_header(headers, "content-encoding")) {
+        if (auto value = http::find(headers, "content-encoding")) {
           auto trimmed = std::string{detail::trim(*value)};
           if (not trimmed.empty()) {
             content_encoding = std::move(trimmed);
@@ -1157,7 +1157,7 @@ private:
       }
     } else {
       auto const* plugin = static_cast<const operator_factory_plugin*>(nullptr);
-      if (auto value = http::find_header(response_->headers, "content-type");
+      if (auto value = http::find(response_->headers, "content-type");
           value and not detail::trim(*value).empty()) {
         auto content_type = std::string{detail::trim(*value)};
         plugin = read_plugin_for_content_type(content_type);

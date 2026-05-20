@@ -1,0 +1,12 @@
+from_amazon_cloudwatch env("LOCALSTACK_CLOUDWATCH_LOG_GROUP"),
+  mode="replay",
+  stream=env("LOCALSTACK_CLOUDWATCH_LOG_STREAM_GET"),
+  count=2,
+  from_start=true,
+  aws_iam={
+    access_key_id: "test",
+    secret_access_key: "test",
+    region: "us-east-1",
+  }
+this = message.parse_json()
+sort id

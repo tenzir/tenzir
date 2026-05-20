@@ -60,10 +60,7 @@ public:
         auto magic = consume(BITZ_MAGIC.size());
         if (std::memcmp(magic.data(), BITZ_MAGIC.data(), BITZ_MAGIC.size())
             != 0) {
-          emit(diagnostic::error("unexpected BITZ magic")
-                 .note("expected {}",
-                       std::string_view{BITZ_MAGIC.data(), BITZ_MAGIC.size()}),
-               ctx.dh());
+          state_ = State::invalid_magic;
           co_return;
         }
         state_ = State::header;
@@ -120,8 +117,19 @@ public:
                .note("expected {}", message_length_),
              ctx.dh());
         break;
+      case State::invalid_magic:
+        emit(diagnostic::error("unexpected BITZ magic")
+               .note("expected {}",
+                     std::string_view{BITZ_MAGIC.data(), BITZ_MAGIC.size()}),
+             ctx.dh());
+        break;
     }
     co_return FinalizeBehavior::done;
+  }
+
+  auto state() -> OperatorState override {
+    return state_ == State::invalid_magic ? OperatorState::done
+                                          : OperatorState::normal;
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -134,7 +142,7 @@ public:
   }
 
 private:
-  enum class State : uint8_t { magic, header, message };
+  enum class State : uint8_t { magic, header, message, invalid_magic };
 
   auto emit(diagnostic_builder diag, diagnostic_handler& dh) const -> void {
     if (args_.operator_location) {

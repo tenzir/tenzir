@@ -11,6 +11,7 @@
 #include "tenzir/async/task.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/http.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/result.hpp"
@@ -83,6 +84,10 @@ auto resolve_azure_auth(AzureAuthOptions options, std::string default_scope,
 class AzureTokenProvider {
 public:
   AzureTokenProvider(ResolvedAzureAuth auth, location loc);
+
+  /// Adds an `Authorization: Bearer ...` header, refreshing the token if needed.
+  auto authorize(std::vector<http::Header>& headers, OpCtx& ctx,
+                 HttpPoolConfig const& config) -> Task<failure_or<void>>;
 
   /// Adds an `Authorization: Bearer ...` header, refreshing the token if needed.
   auto authorize(std::map<std::string, std::string>& headers, OpCtx& ctx,

@@ -8,6 +8,7 @@
 
 #include "operators.hpp"
 
+#include <tenzir/amazon.hpp>
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/aws_iam.hpp>
 #include <tenzir/detail/narrow.hpp>
@@ -17,7 +18,6 @@
 #include <tenzir/variant.hpp>
 
 #include <arrow/array/array_binary.h>
-#include <aws/core/client/ClientConfiguration.h>
 #include <aws/core/utils/Outcome.h>
 #include <aws/sqs/model/Message.h>
 #include <aws/sqs/model/MessageSystemAttributeName.h>
@@ -69,19 +69,11 @@ auto make_async_sqs_queue(const Args& args, OpCtx& ctx)
   //      aligned with the queue's region without forcing the user to set
   //      `aws_region` redundantly.
   //   3. Region from resolved AWS IAM credentials.
-  //   4. AWS SDK default resolution (AWS_REGION / AWS_DEFAULT_REGION env vars,
-  //      the configured profile in `~/.aws/config`, and finally the SDK
-  //      default of "us-east-1").
-  auto region = std::string{};
-  if (args.aws_region) {
-    region = args.aws_region->inner;
-  } else if (auto url_region = region_from_sqs_url(queue_name.inner)) {
-    region = std::move(*url_region);
-  } else if (resolved_creds and not resolved_creds->region.empty()) {
-    region = resolved_creds->region;
-  } else {
-    region = Aws::Client::ClientConfiguration{}.region;
-  }
+  //   4. Environment variables or the AWS SDK default.
+  auto region_hint = args.aws_region
+                       ? Option<std::string>{args.aws_region->inner}
+                       : region_from_sqs_url(queue_name.inner);
+  auto region = amazon::resolve_region(std::move(region_hint), resolved_creds);
   auto poll_time = default_poll_time;
   if constexpr (requires { args.poll_time; }) {
     if (args.poll_time) {
