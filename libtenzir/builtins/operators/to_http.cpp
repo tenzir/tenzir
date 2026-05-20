@@ -56,6 +56,17 @@ namespace {
 
 using Headers = std::vector<http::Header>;
 
+/// Strip platform-specific errno details from exception messages so that
+/// diagnostic output is stable across operating systems.
+auto scrub_errno(std::string msg) -> std::string {
+  // Matches ", errno = 111 (Connection refused)" and similar.
+  static constexpr auto prefix = std::string_view{", errno = "};
+  if (auto pos = msg.find(prefix); pos != std::string::npos) {
+    msg.erase(pos);
+  }
+  return msg;
+}
+
 struct ToHttpArgs {
   located<secret> url;
   Option<located<std::string>> method;
@@ -401,7 +412,7 @@ private:
         break;
       }
       auto error = std::move(attempt_result).unwrap_err();
-      auto error_message = error.what().toStdString();
+      auto error_message = scrub_errno(error.what().toStdString());
       auto retry = get_retry_info(error);
       // Once the receiver has been moved into the streaming source,
       // the body cannot be replayed and retries are impossible.
