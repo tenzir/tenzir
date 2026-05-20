@@ -65,6 +65,8 @@ auto http_headers(Aws::Http::HeaderValueCollection const& headers)
 auto to_aws_json_result(http::Response response)
   -> Aws::AmazonWebServiceResult<Aws::Utils::Json::JsonValue>;
 
+auto extract_aws_error_code(std::string const& body) -> std::string;
+
 auto extract_aws_error_message(std::string const& body) -> std::string;
 
 struct SignedHttpClientConfig {
@@ -92,9 +94,23 @@ public:
                             operation);
   }
 
+  template <class Request>
+  auto raw_api_call(std::string_view operation, Request& request)
+    -> Task<Result<http::Response, std::string>> {
+    auto payload = request.SerializePayload();
+    auto body = std::string{payload.c_str(), payload.size()};
+    co_return co_await raw_post("/", std::move(body), request.GetHeaders(),
+                                operation);
+  }
+
   auto
   post(std::string path, std::string body,
        Aws::Http::HeaderValueCollection headers, std::string_view operation)
+    -> Task<Result<http::Response, std::string>>;
+
+  auto
+  raw_post(std::string path, std::string body,
+           Aws::Http::HeaderValueCollection headers, std::string_view operation)
     -> Task<Result<http::Response, std::string>>;
 
   auto post(std::string path, std::string body,

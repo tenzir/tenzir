@@ -8,13 +8,12 @@
 
 #pragma once
 
+#include <tenzir/amazon.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/tql2/ast.hpp>
-
-#include <aws/kinesis/KinesisClient.h>
 
 #include <cstddef>
 #include <memory>
@@ -51,11 +50,11 @@ struct ToAmazonKinesisArgs {
 
 auto default_message_expression() -> ast::expression;
 
-auto make_kinesis_client(const Option<located<std::string>>& aws_region,
-                         const Option<located<record>>& aws_iam,
-                         const Option<located<std::string>>& endpoint,
-                         OpCtx& ctx)
-  -> Task<std::shared_ptr<Aws::Kinesis::KinesisClient>>;
+auto make_kinesis_http_client(Option<located<std::string>> const& aws_region,
+                              Option<located<record>> const& aws_iam,
+                              Option<located<std::string>> const& endpoint,
+                              OpCtx& ctx)
+  -> Task<std::shared_ptr<amazon::SignedHttpClient>>;
 
 class FromAmazonKinesis final : public Operator<void, table_slice> {
 public:
@@ -77,6 +76,7 @@ private:
     std::string iterator;
     std::string next_sequence_number;
     Option<time> latest_start_time;
+    bool trim_horizon_start = false;
     bool closed = false;
     bool idle = false;
 
@@ -86,12 +86,13 @@ private:
         f.field("iterator", x.iterator),
         f.field("next_sequence_number", x.next_sequence_number),
         f.field("latest_start_time", x.latest_start_time),
+        f.field("trim_horizon_start", x.trim_horizon_start),
         f.field("closed", x.closed), f.field("idle", x.idle));
     }
   };
 
   FromAmazonKinesisArgs args_;
-  std::shared_ptr<Aws::Kinesis::KinesisClient> client_;
+  std::shared_ptr<amazon::SignedHttpClient> client_;
   std::vector<ShardState> shards_;
   size_t next_shard_ = 0;
   uint64_t emitted_ = 0;
@@ -100,6 +101,7 @@ private:
   duration poll_idle_ = std::chrono::seconds{1};
   bool done_ = false;
   MetricsCounter bytes_read_counter_;
+  MetricsCounter events_read_counter_;
 };
 
 class ToAmazonKinesis final : public Operator<table_slice, void> {
@@ -115,20 +117,25 @@ public:
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override;
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override;
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override;
+  auto prepare_snapshot(OpCtx& ctx) -> Task<void> override;
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override;
+  auto state() -> OperatorState override;
 
 private:
   auto flush_if_timed_out(OpCtx& ctx) -> Task<void>;
   auto flush(OpCtx& ctx) -> Task<void>;
+  auto fail_if_unsent(OpCtx& ctx) -> void;
 
   ToAmazonKinesisArgs args_;
-  std::shared_ptr<Aws::Kinesis::KinesisClient> client_;
+  std::shared_ptr<amazon::SignedHttpClient> client_;
   std::vector<PendingRecord> batch_;
   size_t batch_size_ = 500;
   duration batch_timeout_ = std::chrono::seconds{1};
   Option<std::chrono::steady_clock::time_point> batch_started_ = None{};
   uint64_t parallel_ = 1;
+  bool failed_ = false;
   MetricsCounter bytes_write_counter_;
+  MetricsCounter events_write_counter_;
 };
 
 } // namespace tenzir::plugins::amazon_kinesis
