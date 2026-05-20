@@ -20,6 +20,7 @@
 
 #include <array>
 #include <atomic>
+#include <future>
 #include <memory>
 #include <set>
 #include <thread>
@@ -265,6 +266,39 @@ TEST("channel try_recv reports closed repeatedly after close") {
         check(second.is_err());
         check_eq(std::move(second).unwrap_err(), TryRecvError::closed);
       }());
+  }());
+}
+
+TEST("channel send can be cancelled while waiting for capacity") {
+  auto [sender, receiver] = channel<int>(1);
+  folly::coro::blockingWait(sender.send(1));
+  auto cancel = folly::CancellationSource{};
+  auto started = std::promise<void>{};
+  auto started_future = started.get_future();
+  auto cancelled = std::atomic<bool>{false};
+  auto worker = std::thread{[&] {
+    try {
+      folly::coro::blockingWait(folly::coro::co_withCancellation(
+        cancel.getToken(), [&]() -> Task<void> {
+          started.set_value();
+          co_await sender.send(2);
+        }()));
+    } catch (folly::OperationCancelled const&) {
+      cancelled.store(true, std::memory_order_release);
+    }
+  }};
+  check_eq(started_future.wait_for(std::chrono::seconds{1}),
+           std::future_status::ready);
+  cancel.requestCancellation();
+  worker.join();
+  check(cancelled.load(std::memory_order_acquire));
+  folly::coro::blockingWait([&]() -> Task<void> {
+    auto first = co_await receiver.recv();
+    require(first.is_some());
+    check_eq(*first, 1);
+    auto next = co_await receiver.try_recv();
+    check(next.is_err());
+    check_eq(std::move(next).unwrap_err(), TryRecvError::empty);
   }());
 }
 

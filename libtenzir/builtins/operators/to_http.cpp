@@ -101,12 +101,7 @@ public:
     : msg_{std::move(msg)}, body_rx_{std::move(body_rx)} {
   }
 
-  ~StreamingHTTPSource() override {
-    // Close the receiver to unblock any waiting sender.
-    if (body_rx_) {
-      body_rx_->close();
-    }
-  }
+  ~StreamingHTTPSource() override = default;
 
   auto readHeaderEvent()
     -> folly::coro::Task<proxygen::coro::HTTPHeaderEvent> override {
@@ -428,10 +423,6 @@ private:
         .primary(args_.operator_location)
         .emit(dh);
       co_await folly::coro::sleep(delay);
-    }
-    // Close the receiver so any sender blocked in process_sub unblocks.
-    if (body_rx) {
-      body_rx->close();
     }
     std::ignore = response_->send(std::move(response));
   }

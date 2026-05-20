@@ -11,6 +11,8 @@ timeout: 60
 from {
   value: 13,
 }
+repeat 500
+enumerate value
 to_http env("HTTP_FIXTURE_RETRY_503_URL"), max_retry_count=0 {
   write_ndjson
 }

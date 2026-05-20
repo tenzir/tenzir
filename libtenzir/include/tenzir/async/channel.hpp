@@ -41,8 +41,7 @@ struct Channel {
   Semaphore capacity;
   /// Number of ready-to-dequeue items, plus a sticky wakeup permit after close.
   Semaphore ready;
-  /// Whether the channel is closed (by the last sender being destroyed, or
-  /// by the receiver calling `close()`).
+  /// Whether the channel is closed because the last sender got destroyed.
   Atomic<bool> closed{false};
 
   auto is_closed() const -> bool {
@@ -56,9 +55,8 @@ struct SenderCore {
   }
 
   ~SenderCore() {
-    if (channel->closed.exchange(true, std::memory_order_release)) {
-      return; // Already closed by the receiver.
-    }
+    auto was_closed = channel->closed.exchange(true, std::memory_order_release);
+    TENZIR_ASSERT(not was_closed);
     // Receivers that observe closure without dequeuing an item return this
     // permit to wake the next blocked receiver and leave one sticky wakeup for
     // future `recv()` calls.
@@ -85,13 +83,8 @@ public:
   }
 
   /// Sends a value to the channel, waiting for capacity.
-  /// Silently discards the value if the channel has been closed.
   auto send(T x) -> Task<void> {
     co_await core_->channel->capacity.consume();
-    if (core_->channel->is_closed()) {
-      core_->channel->capacity.add_permit();
-      co_return;
-    }
     do_send(std::move(x));
   }
 
@@ -119,23 +112,11 @@ private:
 /// might thus eventually block. The outer system needs to be designed such that
 /// a dropped receiver eventually leads to cancellation of the sender. This is
 /// not an oversight, but a conscious choice.
-///
-/// Call `close()` to explicitly close the channel from the receiver side,
-/// which unblocks any sender waiting for capacity.
 template <class T>
 class Receiver {
 public:
   explicit Receiver(Arc<detail::Channel<T>> shared)
     : shared_{std::move(shared)} {
-  }
-
-  /// Explicitly closes the channel from the receiver side.
-  /// Any sender blocked in `send()` will be unblocked and discard its value.
-  void close() {
-    if (shared_->closed.exchange(true, std::memory_order_acq_rel)) {
-      return; // Already closed.
-    }
-    shared_->capacity.add_permit();
   }
 
   /// Returns `None` if channel is closed.
