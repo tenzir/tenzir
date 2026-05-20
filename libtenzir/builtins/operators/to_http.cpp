@@ -46,6 +46,10 @@
 #include <utility>
 #include <vector>
 
+namespace tenzir::http {
+auto to_http_response(proxygen::coro::HTTPClient::Response& resp) -> Response;
+} // namespace tenzir::http
+
 namespace tenzir::plugins::to_http {
 
 namespace {
@@ -159,21 +163,6 @@ private:
   bool body_started_ = false;
 };
 
-auto to_http_response(proxygen::coro::HTTPClient::Response& resp)
-  -> HttpResponse {
-  auto result = HttpResponse{};
-  TENZIR_ASSERT_ALWAYS(resp.headers);
-  result.status_code = resp.headers->getStatusCode();
-  resp.headers->getHeaders().forEach(
-    [&](std::string const& name, std::string const& value) {
-      result.headers[name] = value;
-    });
-  if (not resp.body.empty()) {
-    result.body = resp.body.move()->to<std::string>();
-  }
-  return result;
-}
-
 struct retryable_http_response : std::runtime_error {
   retryable_http_response(uint16_t status_code,
                           Option<std::chrono::seconds> retry_after)
@@ -253,7 +242,7 @@ public:
     }
     auto tls_enabled = *tls_result;
     if (tls_enabled) {
-      ensure_http_default_ca_paths();
+      http::ensure_default_ca_paths();
     }
     auto ssl_context = std::shared_ptr<folly::SSLContext>{};
     if (tls_enabled) {
@@ -321,38 +310,7 @@ public:
       start_request_task(ctx);
     }
     bytes_write_counter_.add(chunk->size());
-<<<<<<< HEAD
-    auto permit = co_await request_slots_.acquire();
-    if (error_signal_->has_sent()) {
-      co_return;
-    }
-    auto* dh = &ctx.dh();
-    ctx.spawn_task([this, permit = std::move(permit), chunk = std::move(chunk),
-                    dh]() mutable -> Task<void> {
-      auto method = get_method();
-      auto headers = headers_;
-      auto body = std::string{reinterpret_cast<char const*>(chunk->data()),
-                              chunk->size()};
-      auto response = co_await (*http_pool_)
-                        ->request(method, std::move(body), std::move(headers));
-      if (response.is_err()) {
-        auto error = fmt::format("HTTP request to `{}` failed: {}", url_,
-                                 std::move(response).unwrap_err());
-        std::ignore = error_signal_->send(std::move(error));
-      } else {
-        auto http_response = std::move(response).unwrap();
-        if (not http_response.is_status_success()) {
-          diagnostic::error("HTTP request returned status {}",
-                            http_response.status_code)
-            .primary(args_.operator_location)
-            .emit(*dh);
-        }
-      }
-      permit.release();
-    });
-=======
     co_await body_tx_->send(std::move(chunk));
->>>>>>> d2d320fd33a (Stream to_http body from sub-pipeline)
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -360,7 +318,7 @@ public:
   }
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    auto response = std::move(result).as<HttpResponse>();
+    auto response = std::move(result).as<http::Response>();
     if (response.status_code != 0 and not response.is_status_success()) {
       diagnostic::error("HTTP request returned status {}", response.status_code)
         .primary(args_.operator_location)
@@ -384,7 +342,7 @@ public:
         co_await body_tx_->send(chunk_ptr{});
       }
     } else {
-      std::ignore = response_->send(HttpResponse{});
+      std::ignore = response_->send(http::Response{});
     }
   }
 
@@ -439,7 +397,7 @@ private:
     -> Task<void> {
     auto max_retries = get_max_retry_count();
     auto attempt = uint32_t{0};
-    auto response = HttpResponse{};
+    auto response = http::Response{};
     auto body_rx = Option<Receiver<chunk_ptr>>{std::move(body_rx_val)};
     while (true) {
       auto attempt_result = co_await try_single_request(body_rx);
@@ -482,10 +440,10 @@ private:
   /// streaming source (leaving it empty). On connection failure before
   /// the source is created, `body_rx` remains valid for a retry.
   auto try_single_request(Option<Receiver<chunk_ptr>>& body_rx)
-    -> Task<Result<HttpResponse, folly::exception_wrapper>> {
+    -> Task<Result<http::Response, folly::exception_wrapper>> {
     auto attempt_res = co_await async_try(folly::coro::co_withExecutor(
       folly::Executor::KeepAlive<>{evb_},
-      folly::coro::co_invoke([this, &body_rx]() -> Task<HttpResponse> {
+      folly::coro::co_invoke([this, &body_rx]() -> Task<http::Response> {
         // Connect a one-shot session.
         auto addr = folly::SocketAddress{parsed_url_.getHost(),
                                          parsed_url_.getPort(), true};
@@ -533,7 +491,7 @@ private:
           co_yield folly::coro::co_error(
             std::move(request_result).unwrap_err());
         }
-        auto http_response = to_http_response(resp);
+        auto http_response = http::to_http_response(resp);
         if (http::is_retryable_http_status(http_response.status_code)
             and not source.body_started()) {
           if (auto retry_rx = source.take_receiver_for_retry()) {
@@ -609,7 +567,7 @@ private:
   proxygen::coro::HTTPCoroConnector::ConnectionParams conn_params_;
   Option<Sender<chunk_ptr>> body_tx_;
   Option<Receiver<chunk_ptr>> body_rx_;
-  mutable Arc<Oneshot<HttpResponse>> response_{std::in_place};
+  mutable Arc<Oneshot<http::Response>> response_{std::in_place};
   bool request_started_ = false;
   Lifecycle lifecycle_ = Lifecycle::running;
   MetricsCounter bytes_write_counter_;
@@ -635,13 +593,8 @@ public:
     auto max_retry_count_arg
       = d.named("max_retry_count", &ToHttpArgs::max_retry_count);
     auto retry_delay_arg = d.named("retry_delay", &ToHttpArgs::retry_delay);
-<<<<<<< HEAD
-    auto parallel_arg = d.named("parallel", &ToHttpArgs::parallel);
     auto printer_arg
       = d.pipeline(&ToHttpArgs::printer, SubOptimize::from_downstream);
-=======
-    auto printer_arg = d.pipeline(&ToHttpArgs::printer);
->>>>>>> d2d320fd33a (Stream to_http body from sub-pipeline)
     d.operator_location(&ToHttpArgs::operator_location);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       tls_validator(ctx);

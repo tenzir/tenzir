@@ -24,35 +24,14 @@
 #include <proxygen/lib/utils/URL.h>
 
 #include <algorithm>
-#include <charconv>
 #include <chrono>
-#include <filesystem>
-#include <mutex>
 #include <stdexcept>
-#include <system_error>
+
+namespace tenzir::http {
+auto to_http_response(proxygen::coro::HTTPClient::Response& resp) -> Response;
+} // namespace tenzir::http
 
 namespace tenzir {
-
-auto ensure_http_default_ca_paths() -> void {
-  static std::once_flag flag;
-  std::call_once(flag, [] {
-    auto ca_paths = std::vector<std::string>{};
-    for (auto const* path : {
-           "/etc/ssl/certs/ca-certificates.crt",
-           "/etc/pki/tls/cert.pem",
-           "/etc/ssl/cert.pem",
-         }) {
-      if (std::filesystem::exists(path)) {
-        ca_paths.emplace_back(path);
-      }
-    }
-    // If none is found, maybe we should warn here,
-    // but only if node config tls and operator args were not set.
-    if (not ca_paths.empty()) {
-      proxygen::coro::HTTPClient::setDefaultCAPaths(std::move(ca_paths));
-    }
-  });
-}
 
 namespace {
 
@@ -63,31 +42,6 @@ auto to_header_vector(std::map<std::string, std::string> headers)
   for (auto& [name, value] : headers) {
     result.push_back({std::move(name), std::move(value)});
   }
-  return result;
-}
-
-auto to_http_response(proxygen::coro::HTTPClient::Response& resp)
-  -> HttpResponse {
-  auto result = HttpResponse{};
-  TENZIR_ASSERT_ALWAYS(resp.headers);
-  result.status_code = resp.headers->getStatusCode();
-  resp.headers->getHeaders().forEach(
-    [&](std::string const& name, std::string const& value) {
-      result.headers.push_back({name, value});
-    });
-  if (not resp.body.empty()) {
-    result.body = resp.body.move()->to<std::string>();
-  }
-  return result;
-}
-
-auto to_http_response(proxygen::HTTPMessage const& headers) -> HttpResponse {
-  auto result = HttpResponse{};
-  result.status_code = headers.getStatusCode();
-  headers.getHeaders().forEach(
-    [&](std::string const& name, std::string const& value) {
-      result.headers.push_back({name, value});
-    });
   return result;
 }
 
@@ -123,7 +77,7 @@ auto make_request_source(proxygen::URL const& host_url, std::string path,
 
 template <class F>
 auto retry_request(HttpPoolConfig const& config, F&& f)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   auto attempt = uint32_t{0};
   while (true) {
     auto retry_after = Option<std::chrono::seconds>{};
@@ -140,7 +94,7 @@ auto retry_request(HttpPoolConfig const& config, F&& f)
       if (attempt >= config.max_retry_count
           or not http::is_retryable_http_status(status)) {
         // not retryable
-        co_return to_http_response(resp);
+        co_return http::to_http_response(resp);
       }
       // retryable HTTP status
       retry_reason = fmt::format("HTTP error {}", status);
@@ -218,7 +172,7 @@ HttpPool::HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                   ? proxygen::coro::HTTPClient::SecureTransportImpl::TLS
                   : proxygen::coro::HTTPClient::SecureTransportImpl::NONE;
   if (impl_->config.tls) {
-    ensure_http_default_ca_paths();
+    http::ensure_default_ca_paths();
   }
   auto conn_params
     = proxygen::coro::HTTPClient::getConnParams(secure, impl_->url.getHost());
@@ -249,21 +203,21 @@ auto HttpPool::operator=(HttpPool&&) noexcept -> HttpPool& = default;
 
 auto HttpPool::request(proxygen::HTTPMethod method, std::string body,
                        std::vector<http::Header> headers)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   co_return co_await request(method, None{}, std::move(body),
                              std::move(headers));
 }
 
 auto HttpPool::request(proxygen::HTTPMethod method, std::string body,
                        std::map<std::string, std::string> headers)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   co_return co_await request(method, std::move(body),
                              to_header_vector(std::move(headers)));
 }
 
 auto HttpPool::request(proxygen::HTTPMethod method, Option<std::string> path,
                        std::string body, std::vector<http::Header> headers)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   auto make_headers =
     [headers
      = std::move(headers)]() -> Result<std::vector<http::Header>, std::string> {
@@ -276,14 +230,14 @@ auto HttpPool::request(proxygen::HTTPMethod method, Option<std::string> path,
 auto HttpPool::request(proxygen::HTTPMethod method, Option<std::string> path,
                        std::string body,
                        std::map<std::string, std::string> headers)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   co_return co_await request(method, std::move(path), std::move(body),
                              to_header_vector(std::move(headers)));
 }
 
 auto HttpPool::request(proxygen::HTTPMethod method, Option<std::string> path,
                        std::string body, HttpHeaderFactory make_headers)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   auto p = path.unwrap_or_else([&]() {
     return impl_->url.makeRelativeURL();
   });
@@ -291,7 +245,7 @@ auto HttpPool::request(proxygen::HTTPMethod method, Option<std::string> path,
     impl_->evb,
     [](std::shared_ptr<Impl> impl, proxygen::HTTPMethod method,
        std::string path, std::string body, HttpHeaderFactory make_headers)
-      -> Task<Result<HttpResponse, std::string>> {
+      -> Task<Result<http::Response, std::string>> {
       co_return co_await retry_request(
         impl->config, [&]() -> Task<proxygen::coro::HTTPClient::Response> {
           auto headers = make_headers();
@@ -314,47 +268,47 @@ auto HttpPool::request(proxygen::HTTPMethod method, Option<std::string> path,
 }
 
 auto HttpPool::post(std::string body, std::vector<http::Header> headers)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   co_return co_await request(proxygen::HTTPMethod::POST, std::move(body),
                              std::move(headers));
 }
 
 auto HttpPool::post(std::string body,
                     std::map<std::string, std::string> headers)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   co_return co_await post(std::move(body),
                           to_header_vector(std::move(headers)));
 }
 
 auto HttpPool::post(std::string path, std::string body,
                     std::vector<http::Header> headers)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   co_return co_await request(proxygen::HTTPMethod::POST, std::move(path),
                              std::move(body), std::move(headers));
 }
 
 auto HttpPool::post(std::string path, std::string body,
                     std::map<std::string, std::string> headers)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   co_return co_await post(std::move(path), std::move(body),
                           to_header_vector(std::move(headers)));
 }
 
 auto HttpPool::post(std::string path, std::string body,
                     HttpHeaderFactory make_headers)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   co_return co_await request(proxygen::HTTPMethod::POST, std::move(path),
                              std::move(body), std::move(make_headers));
 }
 
 auto HttpPool::get(std::string path, std::vector<http::Header> headers)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   co_return co_await request(proxygen::HTTPMethod::GET, std::move(path), "",
                              std::move(headers));
 }
 
 auto HttpPool::get(std::string path, std::map<std::string, std::string> headers)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   co_return co_await get(std::move(path), to_header_vector(std::move(headers)));
 }
 
@@ -362,7 +316,7 @@ auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
                               std::string body,
                               std::vector<http::Header> headers,
                               HttpStreamCallbacks callbacks)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   auto make_headers =
     [headers
      = std::move(headers)]() -> Result<std::vector<http::Header>, std::string> {
@@ -376,20 +330,20 @@ auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
 auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
                               std::string body, HttpHeaderFactory make_headers,
                               HttpStreamCallbacks callbacks)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   auto stream_result = co_await async_try(co_withExecutor(
     impl_->evb,
     [](std::shared_ptr<Impl> impl, proxygen::HTTPMethod method,
        std::string path, std::string body, HttpHeaderFactory make_headers,
        HttpStreamCallbacks callbacks)
-      -> Task<Result<HttpResponse, std::string>> {
+      -> Task<Result<http::Response, std::string>> {
       auto attempt = uint32_t{0};
       while (true) {
         auto body_started = false;
         auto retry_after = Option<std::chrono::seconds>{};
         auto retry_reason = std::string{};
         auto retryable_status = false;
-        auto result = co_await async_try([&]() -> Task<HttpResponse> {
+        auto result = co_await async_try([&]() -> Task<http::Response> {
           auto headers = make_headers();
           if (headers.is_err()) {
             throw std::runtime_error{std::move(headers).unwrap_err()};
@@ -399,7 +353,7 @@ auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
           TENZIR_ASSERT_ALWAYS(sr.session);
           auto* source = make_request_source(impl->url, path, method,
                                              request_headers, body);
-          auto response = HttpResponse{};
+          auto response = http::Response{};
           auto reader = proxygen::coro::HTTPSourceReader{};
           auto error_code = Option<proxygen::coro::HTTPErrorCode>{};
           auto error_message = std::string{};
@@ -409,7 +363,7 @@ auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
               if (not is_final) {
                 return proxygen::coro::HTTPSourceReader::Continue;
               }
-              response = to_http_response(*headers);
+              response = http::to_http_response(*headers);
               auto const status = response.status_code;
               retryable_status = attempt < impl->config.max_retry_count
                                  and http::is_retryable_http_status(status);
@@ -491,7 +445,7 @@ auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
 auto HttpPool::stream_post(std::string path, std::string body,
                            std::vector<http::Header> headers,
                            HttpStreamCallbacks callbacks)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   co_return co_await stream_request(proxygen::HTTPMethod::POST, std::move(path),
                                     std::move(body), std::move(headers),
                                     std::move(callbacks));
@@ -500,7 +454,7 @@ auto HttpPool::stream_post(std::string path, std::string body,
 auto HttpPool::stream_post(std::string path, std::string body,
                            HttpHeaderFactory make_headers,
                            HttpStreamCallbacks callbacks)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   co_return co_await stream_request(proxygen::HTTPMethod::POST, std::move(path),
                                     std::move(body), std::move(make_headers),
                                     std::move(callbacks));
@@ -512,20 +466,20 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
                   std::string url, Option<std::string> body,
                   std::vector<http::Header> headers,
                   std::chrono::milliseconds timeout)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   co_return co_await co_withExecutor(
     evb,
     [](folly::EventBase* evb, proxygen::HTTPMethod method, std::string url,
        Option<std::string> body, std::vector<http::Header> headers,
        std::chrono::milliseconds timeout)
-      -> Task<Result<HttpResponse, std::string>> {
-      auto result = co_await async_try([&]() -> Task<HttpResponse> {
+      -> Task<Result<http::Response, std::string>> {
+      auto result = co_await async_try([&]() -> Task<http::Response> {
         auto url_parsed = proxygen::URL{url};
         if (not url_parsed.isValid() or not url_parsed.hasHost()) {
           throw std::runtime_error(fmt::format("invalid url: {}", url));
         }
         if (url_parsed.isSecure()) {
-          ensure_http_default_ca_paths();
+          http::ensure_default_ca_paths();
         }
         auto* session = co_await proxygen::coro::HTTPClient::getHTTPSession(
           evb, url_parsed.getHost(), url_parsed.getPort(),
@@ -547,7 +501,7 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
         co_await proxygen::coro::HTTPClient::request(
           session, std::move(*reservation), source,
           proxygen::coro::HTTPClient::makeDefaultReader(resp), timeout);
-        co_return to_http_response(resp);
+        co_return http::to_http_response(resp);
       }());
       if (result.is_err()) {
         co_return Err{std::move(result).unwrap_err().what().toStdString()};
@@ -562,7 +516,7 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
 auto http_post(folly::EventBase* evb, std::string url, std::string body,
                std::vector<http::Header> headers,
                std::chrono::milliseconds timeout)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   return http_request(evb, proxygen::HTTPMethod::POST, std::move(url),
                       std::move(body), std::move(headers), timeout);
 }
@@ -570,7 +524,7 @@ auto http_post(folly::EventBase* evb, std::string url, std::string body,
 auto http_post(folly::EventBase* evb, std::string url, std::string body,
                std::map<std::string, std::string> headers,
                std::chrono::milliseconds timeout)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   return http_post(evb, std::move(url), std::move(body),
                    to_header_vector(std::move(headers)), timeout);
 }
@@ -578,7 +532,7 @@ auto http_post(folly::EventBase* evb, std::string url, std::string body,
 auto http_get(folly::EventBase* evb, std::string url,
               std::vector<http::Header> headers,
               std::chrono::milliseconds timeout)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   return http_request(evb, proxygen::HTTPMethod::GET, std::move(url), None{},
                       std::move(headers), timeout);
 }
@@ -586,7 +540,7 @@ auto http_get(folly::EventBase* evb, std::string url,
 auto http_get(folly::EventBase* evb, std::string url,
               std::map<std::string, std::string> headers,
               std::chrono::milliseconds timeout)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   return http_get(evb, std::move(url), to_header_vector(std::move(headers)),
                   timeout);
 }

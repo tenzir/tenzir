@@ -28,12 +28,14 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <utility>
 #include <vector>
 
-namespace proxygen::coro {
+namespace proxygen {
+class HTTPMessage;
+namespace coro {
 enum class HTTPErrorCode : uint16_t;
-} // namespace proxygen::coro
+} // namespace coro
+} // namespace proxygen
 
 namespace tenzir {
 
@@ -83,9 +85,22 @@ struct Header {
   std::string value;
 };
 
-} // namespace tenzir::http
+/// Result of a completed HTTP request.
+///
+/// Transport failures are represented by the surrounding `Result`; this type is
+/// used when an HTTP response was received, including non-2xx status codes.
+struct Response {
+  uint16_t status_code = 0;
+  std::vector<Header> headers;
+  std::string body;
 
-namespace tenzir::http {
+  auto is_status_success() const -> bool {
+    return status_code >= 200 and status_code < 300;
+  }
+};
+
+/// Ensures default CA certificate paths are configured for proxygen.
+auto ensure_default_ca_paths() -> void;
 
 /// Prepends `http://` or `https://` to a URL that has no explicit scheme.
 auto add_default_url_scheme(std::string& url, bool tls_enabled) -> void;
@@ -160,12 +175,6 @@ struct Message {
 struct Request : Message {
   std::string method;
   std::string uri;
-};
-
-/// A parsed HTTP response message.
-struct Response : Message {
-  uint32_t status_code;
-  std::string status_text;
 };
 
 /// One HTTPie-inspired request item.
@@ -299,6 +308,9 @@ struct OdataPage {
 /// on emitted objects are omitted while nested annotations are preserved.
 auto extract_odata_page(table_slice const& slice, location paginate_loc,
                         diagnostic_handler& dh) -> failure_or<OdataPage>;
+
+/// Converts proxygen HTTP response into a `Response`.
+auto to_http_response(proxygen::HTTPMessage const& headers) -> Response;
 
 } // namespace tenzir::http
 

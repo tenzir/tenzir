@@ -140,7 +140,7 @@ auto http_headers(Aws::Http::HeaderValueCollection const& headers)
   return result;
 }
 
-auto to_aws_json_result(HttpResponse response)
+auto to_aws_json_result(http::Response response)
   -> Aws::AmazonWebServiceResult<Aws::Utils::Json::JsonValue> {
   auto json_body = Aws::Utils::Json::JsonValue{
     Aws::String{response.body.c_str(), response.body.size()}};
@@ -196,9 +196,9 @@ SignedHttpClient::SignedHttpClient(SignedHttpClientConfig config)
                          std::move(pool_config));
 }
 
-auto aws_response(Result<HttpResponse, std::string> response,
+auto aws_response(Result<http::Response, std::string> response,
                   std::string_view operation)
-  -> Result<HttpResponse, std::string> {
+  -> Result<http::Response, std::string> {
   if (response.is_err()) {
     return Err{fmt::format("{} request failed: {}", operation,
                            std::move(response).unwrap_err())};
@@ -215,7 +215,7 @@ auto aws_response(Result<HttpResponse, std::string> response,
 auto SignedHttpClient::post(std::string path, std::string body,
                             Aws::Http::HeaderValueCollection headers,
                             std::string_view operation)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   auto pool_path = request_path(path);
   auto make_headers
     = [this, path = std::move(path), body = body, headers = std::move(headers),
@@ -231,7 +231,7 @@ auto SignedHttpClient::post(std::string path, std::string body,
 auto SignedHttpClient::post(std::string path, std::string body,
                             std::vector<http::Header> headers,
                             std::string_view operation)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   co_return co_await post(std::move(path), std::move(body),
                           aws_headers(headers), operation);
 }
@@ -239,7 +239,7 @@ auto SignedHttpClient::post(std::string path, std::string body,
 auto SignedHttpClient::post_unsigned(std::string path, std::string body,
                                      std::vector<http::Header> headers,
                                      std::string_view operation)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   auto response = co_await pool_->post(request_path(std::move(path)),
                                        std::move(body), std::move(headers));
   co_return aws_response(std::move(response), operation);
@@ -249,7 +249,7 @@ auto SignedHttpClient::stream_post(std::string path, std::string body,
                                    Aws::Http::HeaderValueCollection headers,
                                    HttpStreamCallbacks callbacks,
                                    std::string_view operation)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   auto pool_path = request_path(path);
   auto make_headers
     = [this, path = std::move(path), body = body, headers = std::move(headers),

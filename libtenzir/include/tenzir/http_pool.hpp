@@ -21,7 +21,6 @@
 #include <functional>
 #include <map>
 #include <memory>
-#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -32,7 +31,6 @@ class IOExecutor;
 class SSLContext;
 } // namespace folly
 
-// namespace proxygen::coro
 namespace proxygen {
 enum class HTTPMethod;
 } // namespace proxygen
@@ -64,20 +62,6 @@ struct HttpPoolConfig {
   std::function<void(std::string_view message)> on_retry;
 };
 
-/// Result of a completed HTTP request.
-///
-/// Transport failures are represented by the surrounding `Result`; this type is
-/// used when an HTTP response was received, including non-2xx status codes.
-struct HttpResponse {
-  uint16_t status_code = 0;
-  std::vector<http::Header> headers;
-  std::string body;
-
-  auto is_status_success() const -> bool {
-    return status_code >= 200 and status_code < 300;
-  }
-};
-
 /// Callbacks for streaming an HTTP response body.
 ///
 /// `stream_request` calls `on_headers` once after final response headers arrive
@@ -87,7 +71,7 @@ struct HttpResponse {
 /// error. Empty callbacks are allowed and simply skip the corresponding event.
 struct HttpStreamCallbacks {
   /// Called once final response headers arrive, before the first body chunk.
-  std::function<void(HttpResponse const& response)> on_headers;
+  std::function<void(http::Response const& response)> on_headers;
   /// Called for every response body chunk.
   std::function<Task<bool>(std::string chunk)> on_body;
 };
@@ -95,7 +79,6 @@ struct HttpStreamCallbacks {
 /// Registers well-known system CA bundle paths for Proxygen HTTPS clients.
 ///
 /// Safe to call multiple times; initialization is performed once process-wide.
-auto ensure_http_default_ca_paths() -> void;
 
 /// Coroutine-friendly HTTP connection pool backed by proxygen.
 ///
@@ -121,81 +104,81 @@ public:
   /// When None, it falls back to path of the pool URL.
   auto request(proxygen::HTTPMethod method, Option<std::string> path,
                std::string body, std::vector<http::Header> headers)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
   /// Request through the session pool to a path.
   auto request(proxygen::HTTPMethod method, Option<std::string> path,
                std::string body, std::map<std::string, std::string> headers)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
   /// Request through the session pool to a path.
   auto request(proxygen::HTTPMethod method, Option<std::string> path,
                std::string body, HttpHeaderFactory make_headers)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
   /// Request through the session pool to a path.
   auto request(proxygen::HTTPMethod method, std::string body,
                std::vector<http::Header> headers)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
   /// Request through the session pool to a path.
   auto request(proxygen::HTTPMethod method, std::string body,
                std::map<std::string, std::string> headers)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
   /// POST through the session pool.
   auto post(std::string body, std::vector<http::Header> headers)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
   /// POST through the session pool.
   auto post(std::string body, std::map<std::string, std::string> headers)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
   /// POST through the session pool to a path.
   auto
   post(std::string path, std::string body, std::vector<http::Header> headers)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
   /// POST through the session pool to a path.
   auto post(std::string path, std::string body,
             std::map<std::string, std::string> headers)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
   /// POST through the session pool to a path.
   auto post(std::string path, std::string body, HttpHeaderFactory make_headers)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
   /// GET through the session pool to a path.
   auto get(std::string path, std::vector<http::Header> headers)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
   /// GET through the session pool to a path.
   auto get(std::string path, std::map<std::string, std::string> headers)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
   /// Request through the session pool while streaming response body chunks.
   auto stream_request(proxygen::HTTPMethod method, std::string path,
                       std::string body, std::vector<http::Header> headers,
                       HttpStreamCallbacks callbacks)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
   /// Request through the session pool while streaming response body chunks.
   auto stream_request(proxygen::HTTPMethod method, std::string path,
                       std::string body, HttpHeaderFactory make_headers,
                       HttpStreamCallbacks callbacks)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
   /// POST through the session pool while streaming response body chunks.
   auto
   stream_post(std::string path, std::string body,
               std::vector<http::Header> headers, HttpStreamCallbacks callbacks)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
   /// POST through the session pool while streaming response body chunks.
   auto
   stream_post(std::string path, std::string body,
               HttpHeaderFactory make_headers, HttpStreamCallbacks callbacks)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
 private:
   explicit HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
@@ -211,24 +194,24 @@ private:
 auto http_post(folly::EventBase* evb, std::string url, std::string body,
                std::vector<http::Header> headers,
                std::chrono::milliseconds timeout = std::chrono::seconds{90})
-  -> Task<Result<HttpResponse, std::string>>;
+  -> Task<Result<http::Response, std::string>>;
 
 /// One-shot HTTP POST without a connection pool.
 auto http_post(folly::EventBase* evb, std::string url, std::string body,
                std::map<std::string, std::string> headers,
                std::chrono::milliseconds timeout = std::chrono::seconds{90})
-  -> Task<Result<HttpResponse, std::string>>;
+  -> Task<Result<http::Response, std::string>>;
 
 /// One-shot HTTP GET without a connection pool.
 auto http_get(folly::EventBase* evb, std::string url,
               std::vector<http::Header> headers,
               std::chrono::milliseconds timeout = std::chrono::seconds{90})
-  -> Task<Result<HttpResponse, std::string>>;
+  -> Task<Result<http::Response, std::string>>;
 
 /// One-shot HTTP GET without a connection pool.
 auto http_get(folly::EventBase* evb, std::string url,
               std::map<std::string, std::string> headers,
               std::chrono::milliseconds timeout = std::chrono::seconds{90})
-  -> Task<Result<HttpResponse, std::string>>;
+  -> Task<Result<http::Response, std::string>>;
 
 } // namespace tenzir

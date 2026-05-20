@@ -883,7 +883,7 @@ public:
     // prepare fetch config
     fetch_config_ = make_fetch_config(args_);
     // ensure system CA paths are registered
-    ensure_http_default_ca_paths();
+    http::ensure_default_ca_paths();
     pagination_.current_request = make_request_config(args_, resolved_headers_);
     co_await start_fetch(ctx, pagination_.current_request);
   }

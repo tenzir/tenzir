@@ -35,28 +35,4 @@ struct printer_registry<http::Header> {
   using type = http_header_printer;
 };
 
-struct http_response_printer : printer_base<http::Response> {
-  using attribute = http::Response;
-
-  template <class Iterator>
-  bool print(Iterator& out, const http::Response& res) const {
-    using namespace printers;
-    auto version = real_printer<double, 1>{};
-    auto p = str                             // proto
-             << '/' << version << ' ' << u32 // status code
-             << ' ' << str                   // status text
-             << "\r\n"
-             << ~(http_header_printer{} % "\r\n") << "\r\n\r\n"
-             << str // body
-      ;
-    return p(out, res.protocol, res.version, res.status_code, res.status_text,
-             res.headers, res.body);
-  }
-};
-
-template <>
-struct printer_registry<http::Response> {
-  using type = http_response_printer;
-};
-
 } // namespace tenzir
