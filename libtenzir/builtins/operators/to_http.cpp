@@ -31,7 +31,6 @@
 #include <exception>
 #include <iterator>
 #include <limits>
-#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -168,10 +167,7 @@ public:
     ctx.spawn_task([this, permit = std::move(permit), chunk = std::move(chunk),
                     dh]() mutable -> Task<void> {
       auto method = get_method();
-      auto headers = std::map<std::string, std::string>{};
-      for (auto const& [name, value] : headers_) {
-        headers[name] = value;
-      }
+      auto headers = headers_;
       auto body = std::string{reinterpret_cast<char const*>(chunk->data()),
                               chunk->size()};
       auto response = co_await (*http_pool_)

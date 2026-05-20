@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from [{}]
+to_amazon_cloudwatch "group", stream="bad:stream"

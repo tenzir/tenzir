@@ -1,0 +1,6 @@
+error: parallel must be less than 4294967295
+ --> tests/operators/to_amazon_cloudwatch/validation/error_parallel_overflow.tql:9:12
+  |
+9 |   parallel=4294967295
+  |            ^^^^^^^^^^ 
+  |

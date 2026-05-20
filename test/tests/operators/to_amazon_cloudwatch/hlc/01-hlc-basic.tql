@@ -1,0 +1,26 @@
+---
+assertions:
+  fixtures:
+    cloudwatch:
+      hlc:
+        request_count: 1
+        ok_request_count: 1
+        authorization: Bearer tenzir-test-token
+        path: /logs/services/collector/event
+        log_group: ignored
+        log_stream: ignored
+        messages:
+          - pre-epoch
+        times:
+          - -0.001
+---
+
+from {timestamp: time("1969-12-31T23:59:59.999"), message: "pre-epoch"}
+to_amazon_cloudwatch "ignored",
+  stream="ignored",
+  method="hlc",
+  payload=message,
+  timestamp=timestamp,
+  token=secret("tenzir-test-token", _literal=true),
+  endpoint=env("CLOUDWATCH_HLC_ENDPOINT"),
+  batch_size=2

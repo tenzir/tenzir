@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+from {message: "will-not-send"}
+to_amazon_cloudwatch "ignored",
+  stream="ignored",
+  payload=message,
+  parallel=4294967295

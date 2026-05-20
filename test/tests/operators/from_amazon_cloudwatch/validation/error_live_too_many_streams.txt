@@ -1,0 +1,6 @@
+error: `mode="live"` accepts at most 100 streams
+ --> tests/operators/from_amazon_cloudwatch/validation/error_live_too_many_streams.tql:6:10
+  |
+6 |   stream=[
+  |          ^ 
+  |

@@ -28,8 +28,6 @@
 #include <boost/url/url.hpp>
 #include <fmt/core.h>
 
-#include <map>
-
 namespace tenzir::plugins::opensearch2 {
 namespace {
 
@@ -293,11 +291,11 @@ public:
     }
     if (args_.user or args_.passwd) {
       auto token = detail::base64::encode(fmt::format("{}:{}", user, password));
-      headers_["Authorization"] = fmt::format("Basic {}", token);
+      http::set(headers_, "Authorization", fmt::format("Basic {}", token));
     }
-    headers_["Content-Type"] = "application/json";
+    http::set(headers_, "Content-Type", "application/json");
     if (args_.compress) {
-      headers_["Content-Encoding"] = "gzip";
+      http::set(headers_, "Content-Encoding", "gzip");
     }
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_opensearch"},
@@ -443,7 +441,7 @@ private:
       co_return;
     }
     auto headers = headers_;
-    headers["Content-Length"] = fmt::to_string(body.size());
+    http::set(headers, "Content-Length", fmt::to_string(body.size()));
     auto result
       = co_await (*pool_)->post(std::string{body}, std::move(headers));
     if (result.is_err()) {
@@ -488,7 +486,7 @@ private:
   json_builder builder_;
   Option<Box<HttpPool>> pool_ = None{};
   std::string url_;
-  std::map<std::string, std::string> headers_;
+  std::vector<http::Header> headers_;
   MetricsCounter bytes_write_counter_;
   MetricsCounter events_write_counter_;
   mutable Option<std::chrono::steady_clock::time_point> next_timeout_;

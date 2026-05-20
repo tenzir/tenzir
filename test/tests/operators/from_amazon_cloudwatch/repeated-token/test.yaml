@@ -1,0 +1,7 @@
+suite: cloudwatch-repeated-token
+fixtures: [cloudwatch_repeat_token]
+assertions:
+  fixtures:
+    cloudwatch_repeat_token:
+      request_count: 2
+timeout: 30

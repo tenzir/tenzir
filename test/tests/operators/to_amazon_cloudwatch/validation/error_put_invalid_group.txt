@@ -1,0 +1,7 @@
+error: invalid CloudWatch log group name
+ --> tests/operators/to_amazon_cloudwatch/validation/error_put_invalid_group.tql:6:22
+  |
+6 | to_amazon_cloudwatch "bad:group", stream="stream"
+  |                      ^^^^^^^^^^^ 
+  |
+  = hint: log group names may only contain `.`, `-`, `_`, `/`, `#`, letters, and digits

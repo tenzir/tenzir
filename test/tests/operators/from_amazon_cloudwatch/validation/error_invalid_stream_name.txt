@@ -1,0 +1,7 @@
+error: invalid CloudWatch log stream name
+ --> tests/operators/from_amazon_cloudwatch/validation/error_invalid_stream_name.tql:5:96
+  |
+5 | from_amazon_cloudwatch "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/api", stream="bad:stream"
+  |                                                                                                ^^^^^^^^^^^^ 
+  |
+  = hint: log stream names must not contain `:` or `*`

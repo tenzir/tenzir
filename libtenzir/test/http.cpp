@@ -165,10 +165,11 @@ TEST("compress request body") {
   auto encoded = http::compress_request_body("hello"s, " GZip ", dh);
   CHECK(encoded.content_encoding);
   CHECK_EQUAL(*encoded.content_encoding, "gzip");
-  auto headers = std::map<std::string, std::string>{};
+  auto headers = std::vector<http::Header>{};
   http::add_request_body_headers(headers, encoded);
-  CHECK_EQUAL(headers["Content-Encoding"], "gzip");
-  CHECK_EQUAL(headers["Content-Length"], fmt::to_string(encoded.body.size()));
+  CHECK_EQUAL(*http::find(headers, "Content-Encoding"), "gzip");
+  CHECK_EQUAL(*http::find(headers, "Content-Length"),
+              fmt::to_string(encoded.body.size()));
   auto decompressor = http::make_decompressor("gzip", dh);
   REQUIRE(decompressor);
   auto input = std::span{

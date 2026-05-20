@@ -1,0 +1,6 @@
+error: failed to initialize CloudWatch HTTP client: invalid url: invalid-url
+ --> tests/operators/to_amazon_cloudwatch/validation/error_put_invalid_endpoint.tql:9:12
+  |
+9 |   endpoint="invalid-url"
+  |            ^^^^^^^^^^^^^ 
+  |

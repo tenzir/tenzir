@@ -1,0 +1,6 @@
+error: StartLiveTail returned HTTP 501
+ --> tests/operators/from_amazon_cloudwatch/localstack/05-live-tail-unsupported.tql:5:1
+  |
+5 | from_amazon_cloudwatch env("LOCALSTACK_CLOUDWATCH_LOG_GROUP_ARN"),
+  | ^^^^^^^^^^^^^^^^^^^^^^ 
+  |

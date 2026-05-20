@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+from_amazon_cloudwatch "group", mode="search", stream_prefix="bad:*"

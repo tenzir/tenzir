@@ -1,0 +1,7 @@
+error: invalid CloudWatch log stream name
+ --> tests/operators/from_amazon_cloudwatch/validation/error_invalid_stream_prefix.tql:5:62
+  |
+5 | from_amazon_cloudwatch "group", mode="search", stream_prefix="bad:*"
+  |                                                              ^^^^^^^ 
+  |
+  = hint: log stream names must not contain `:` or `*`
