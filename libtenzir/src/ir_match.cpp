@@ -108,13 +108,8 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> {
     for (auto i = size_t{0}; i < args_.arms.size(); ++i) {
-      if (not args_.arms[i].pipeline.operators.empty()
-          and ctx.get_sub(static_cast<int64_t>(i)).is_some()) {
-        co_return;
-      }
-    }
-    for (auto i = size_t{0}; i < args_.arms.size(); ++i) {
-      if (args_.arms[i].pipeline.operators.empty()) {
+      if (args_.arms[i].pipeline.operators.empty()
+          or ctx.get_sub(static_cast<int64_t>(i)).is_some()) {
         continue;
       }
       co_await ctx.spawn_sub<table_slice>(static_cast<int64_t>(i),
@@ -137,14 +132,10 @@ public:
           if (matched[row]) {
             continue;
           }
-          auto matches = arm.wildcard;
-          for (auto const& pattern : arm.patterns) {
-            if (matches_pattern(value, pattern)) {
-              matches = true;
-              break;
-            }
-          }
-          if (matches) {
+          if (arm.wildcard
+              or std::ranges::any_of(arm.patterns, [&](auto const& pattern) {
+                   return matches_pattern(value, pattern);
+                 })) {
             candidate_rows.push_back(row);
           }
         }
@@ -217,7 +208,8 @@ public:
       arm_closed_[arm_index]
         = (co_await handle.push(std::move(filtered))).is_err();
     }
-    if (not has_wildcard() and passthrough_unmatched_) {
+    if (passthrough_unmatched_
+        and not std::ranges::any_of(args_.arms, &MatchArgs::Arm::wildcard)) {
       auto unmatched = std::vector<bool>(matched.size(), false);
       for (auto row = size_t{0}; row < matched.size(); ++row) {
         unmatched[row] = not matched[row];
@@ -232,7 +224,8 @@ public:
   auto state() -> OperatorState {
     // Without a wildcard, transform matches pass unmatched rows through even
     // after all explicit arms have closed, so upstream must continue.
-    if (passthrough_unmatched_ and not has_wildcard()) {
+    if (passthrough_unmatched_
+        and not std::ranges::any_of(args_.arms, &MatchArgs::Arm::wildcard)) {
       return OperatorState::normal;
     }
     if (std::ranges::all_of(arm_closed_, std::identity{})) {
@@ -242,10 +235,6 @@ public:
   }
 
 private:
-  auto has_wildcard() const -> bool {
-    return std::ranges::any_of(args_.arms, &MatchArgs::Arm::wildcard);
-  }
-
   MatchArgs args_;
   bool passthrough_unmatched_ = false;
   std::vector<bool> arm_closed_ = std::vector<bool>(args_.arms.size(), false);
@@ -468,20 +457,20 @@ auto lower_match_pattern(ast::match_pattern const& pattern,
 }
 
 auto matches_pattern(data_view3 value, MatchPattern const& pattern) -> bool {
-  if (std::holds_alternative<MatchPattern::Wildcard>(pattern.kind)) {
-    return true;
-  }
-  if (auto constant = std::get_if<MatchPattern::Constant>(&pattern.kind)) {
-    return partial_order(value, constant->value)
-           == std::partial_ordering::equivalent;
-  }
-  if (auto range = std::get_if<MatchPattern::Range>(&pattern.kind)) {
-    auto lower = partial_order(value, range->lower);
-    auto upper = partial_order(value, range->upper);
-    return lower == std::partial_ordering::greater
-           and upper == std::partial_ordering::less;
-  }
-  TENZIR_UNREACHABLE();
+  return pattern.kind.match(
+    [](MatchPattern::Wildcard const&) {
+      return true;
+    },
+    [&](MatchPattern::Constant const& constant) {
+      return partial_order(value, constant.value)
+             == std::partial_ordering::equivalent;
+    },
+    [&](MatchPattern::Range const& range) {
+      auto lower = partial_order(value, range.lower);
+      auto upper = partial_order(value, range.upper);
+      return lower == std::partial_ordering::greater
+             and upper == std::partial_ordering::less;
+    });
 }
 
 class MatchIr final : public ir::Operator {
