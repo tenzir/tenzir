@@ -139,12 +139,13 @@ auto transformer_record::create_null_column(size_t n) const
     return nullptr;
   }
   auto columns = std::vector<ColumnRef>(transformations.size());
-  for (const auto& [_, t] : transformations) {
+  for (const auto& [i, kvp] : detail::enumerate(transformations)) {
+    const auto& [_, t] = kvp;
     auto c = t->create_null_column(n);
     if (not c) {
       return nullptr;
     }
-    columns.push_back(std::move(c));
+    columns[i] = std::move(c);
   }
   return std::make_shared<ColumnTuple>(std::move(columns));
 }
@@ -204,6 +205,19 @@ auto transformer_record::create_column(
       path.pop_back();
       return nullptr;
     }
+  }
+  for (const auto& [i, kvp] : detail::enumerate(transformations)) {
+    const auto& [k, t] = kvp;
+    if (found_column[i]) {
+      continue;
+    }
+    path.push_back(k);
+    auto this_column = t->create_null_column(array.length() - dropcount);
+    path.pop_back();
+    if (not this_column) {
+      return nullptr;
+    }
+    columns[i] = std::move(this_column);
   }
   return std::make_shared<ColumnTuple>(std::move(columns));
 }
@@ -891,7 +905,8 @@ auto plain_clickhouse_tuple_elements(path_type& path, const record_type& record,
     } else {
       first = false;
     }
-    fmt::format_to(std::back_inserter(res), "{} {}", k, nested);
+    fmt::format_to(std::back_inserter(res), "{} {}",
+                   quote_identifier_component(k), nested);
   }
   res += ")";
   return res;
