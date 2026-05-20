@@ -71,7 +71,33 @@ struct RuntimeState {
   }
 
   MessageQueue queue;
+  Option<type> first_schema;
   Atomic<bool> stop_requested = false;
+
+  auto produce_data(table_slice slice) -> void {
+    auto msg = SliceMessage{std::move(slice)};
+    while (not stop_requested.load(std::memory_order_acquire)) {
+      if (queue.try_enqueue(msg)) {
+        return;
+      }
+      std::this_thread::sleep_for(message_queue_backoff);
+    }
+  }
+
+  auto produce_end_of_data() -> Task<void> {
+    co_await queue.enqueue(DoneMessage{});
+  }
+
+  auto should_cancel() const -> bool {
+    return stop_requested.load(std::memory_order::acquire);
+  }
+
+  auto request_graceful_stop() -> void {
+    stop_requested.store(true, std::memory_order_release);
+    while (queue.try_dequeue()) {
+      // Drop buffered slices; downstream has already declared it needs no more.
+    }
+  }
 };
 
 class FromClickhouse final : public Operator<void, table_slice> {
@@ -132,6 +158,13 @@ public:
         client_args.port = located<uint64_t>{default_port, location::unknown};
       }
     }
+    // Helper task to shutdown our query on cancellation.
+    ctx.spawn_task([runtime = runtime_]() mutable -> Task<void> {
+      if (not co_await catch_cancellation(wait_forever())) {
+        runtime->request_graceful_stop();
+      }
+    });
+    // The actual query task.
     auto options = client_args.make_options();
     ctx.spawn_task([this, options = std::move(options), plan = std::move(plan),
                     &dh = ctx.dh(),
@@ -157,23 +190,25 @@ public:
     co_await co_match(
       std::move(message),
       [&](SliceMessage x) -> Task<void> {
+        if (runtime_->stop_requested.load(std::memory_order_acquire)) {
+          co_return;
+        }
         co_await push(std::move(x.slice));
-        co_return;
       },
       [&](DoneMessage) -> Task<void> {
-        done_ = true;
+        saw_done_msg_ = true;
         co_return;
       });
-    co_return;
   }
 
-  auto stop(OpCtx&) -> Task<void> override {
-    runtime_->stop_requested.store(true, std::memory_order_release);
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    runtime_->request_graceful_stop();
     co_return;
   }
 
   auto state() -> OperatorState override {
-    return done_ ? OperatorState::done : OperatorState::normal;
+    return saw_done_msg_ ? OperatorState::done : OperatorState::normal;
   }
 
 private:
@@ -213,37 +248,19 @@ private:
     };
   }
 
-  static auto enqueue_message(RuntimeState& runtime, Message message)
-    -> Task<bool> {
-    while (not runtime.stop_requested.load(std::memory_order_acquire)) {
-      if (runtime.queue.try_enqueue(std::move(message))) {
-        co_return true;
-      }
-      co_await sleep_for(message_queue_backoff);
-    }
-    co_return false;
-  }
-
   auto run_query(::clickhouse::ClientOptions options, QueryPlan plan,
                  diagnostic_handler& dh) -> Task<void> {
-    auto emitted_terminal_diagnostic = false;
     try {
       auto client = ::clickhouse::Client{std::move(options)};
       auto first_schema = Option<type>{};
       auto query = ::clickhouse::Query{plan.query};
       query.OnDataCancelable([&](::clickhouse::Block const& block) {
-        if (runtime_->stop_requested.load(std::memory_order_acquire)) {
+        if (runtime_->should_cancel()) {
           return false;
-        }
-        if (block.GetColumnCount() == 0) {
-          return not runtime_->stop_requested.load(std::memory_order_acquire);
-        }
-        if (block.GetRowCount() == 0) {
-          return not runtime_->stop_requested.load(std::memory_order_acquire);
         }
         auto slice = block_to_table_slice(block, plan.schema_name, dh);
         if (not slice) {
-          return not runtime_->stop_requested.load(std::memory_order_acquire);
+          return not runtime_->should_cancel();
         }
         if (not first_schema) {
           first_schema = slice->schema();
@@ -253,43 +270,35 @@ private:
             .hint("continuing to emit data with the new schema")
             .emit(dh);
         }
-        if (not folly::coro::blockingWait(enqueue_message(
-              *runtime_, Message{SliceMessage{.slice = std::move(*slice)}}))) {
-          return false;
-        }
-        return not runtime_->stop_requested.load(std::memory_order_acquire);
+        runtime_->produce_data(std::move(*slice));
+        return not runtime_->should_cancel();
       });
       client.Select(query);
-      if (runtime_->stop_requested.load(std::memory_order_acquire)) {
-        co_return;
-      }
-      co_await enqueue_message(*runtime_, Message{DoneMessage{}});
     } catch (const panic_exception&) {
       throw;
     } catch (const ::clickhouse::ServerError& e) {
-      add_tls_client_diagnostic_hints(
-        diagnostic::error("ClickHouse error {}: {}", e.GetCode(), e.what()),
-        tls_enabled_, "ClickHouse", clickhouse_plaintext_port,
-        clickhouse_tls_port)
-        .emit(dh);
-      emitted_terminal_diagnostic = true;
+      if (not runtime_->stop_requested.load(std::memory_order_acquire)) {
+        add_tls_client_diagnostic_hints(
+          diagnostic::error("ClickHouse error {}: {}", e.GetCode(), e.what()),
+          tls_enabled_, "ClickHouse", clickhouse_plaintext_port,
+          clickhouse_tls_port)
+          .emit(dh);
+      }
     } catch (const std::exception& e) {
-      add_tls_client_diagnostic_hints(
-        diagnostic::error("ClickHouse error: {}", e.what()), tls_enabled_,
-        "ClickHouse", clickhouse_plaintext_port, clickhouse_tls_port)
-        .emit(dh);
-      emitted_terminal_diagnostic = true;
+      if (not runtime_->stop_requested.load(std::memory_order_acquire)) {
+        add_tls_client_diagnostic_hints(
+          diagnostic::error("ClickHouse error: {}", e.what()), tls_enabled_,
+          "ClickHouse", clickhouse_plaintext_port, clickhouse_tls_port)
+          .emit(dh);
+      }
     }
-    if (emitted_terminal_diagnostic) {
-      co_return;
-    }
-    co_return;
+    co_await runtime_->produce_end_of_data();
   }
 
   FromClickhouseArgs args_;
   mutable Arc<RuntimeState> runtime_ = Arc<RuntimeState>{std::in_place};
   bool tls_enabled_ = false;
-  bool done_ = false;
+  bool saw_done_msg_ = false;
 };
 
 class Plugin final : public virtual OperatorPlugin {
