@@ -28,6 +28,12 @@ def _read_varint(buf: bytes, pos: int) -> tuple[int, int]:
         shift += 7
 
 
+def _decode_int64(value: int) -> int:
+    if value >= 1 << 63:
+        return value - (1 << 64)
+    return value
+
+
 def _snappy_decompress(buf: bytes) -> bytes:
     expected_size, pos = _read_varint(buf, 0)
     out = bytearray()
@@ -107,9 +113,9 @@ def _parse_sample(buf: bytes) -> dict[str, object]:
         if number == 1 and wire_type == 1:
             sample["value"] = struct.unpack("<d", field)[0]
         elif number == 2:
-            sample["timestamp"] = field
+            sample["timestamp"] = _decode_int64(field)
         elif number == 3:
-            sample["start_timestamp"] = field
+            sample["start_timestamp"] = _decode_int64(field)
     return sample
 
 

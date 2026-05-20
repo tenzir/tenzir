@@ -144,4 +144,16 @@ assertions:
                   - timestamp: 1778839216000
                     value: 11.0
             version: 2.0.0
+        10_negative_timestamp.tql:
+          - content_type: application/x-protobuf;proto=io.prometheus.write.v2.Request
+            symbols: ["", __name__, v2_negative_timestamp]
+            timeseries:
+              - labels:
+                  __name__: v2_negative_timestamp
+                metadata: {}
+                samples:
+                  - start_timestamp: -2000
+                    timestamp: -1000
+                    value: 12.0
+            version: 2.0.0
 timeout: 60

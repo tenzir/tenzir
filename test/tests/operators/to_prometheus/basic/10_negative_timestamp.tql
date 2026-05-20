@@ -1,0 +1,10 @@
+from {
+  metric: "v2_negative_timestamp",
+  value: 12,
+  timestamp: 1969-12-31T23:59:59Z,
+  start_timestamp: 1969-12-31T23:59:58Z,
+}
+to_prometheus env("PROMETHEUS_REMOTE_WRITE_URL"),
+              protobuf_message="io.prometheus.write.v2.Request",
+              flush_interval=10s,
+              max_samples_per_request=100
