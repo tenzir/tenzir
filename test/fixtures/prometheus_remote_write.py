@@ -205,8 +205,7 @@ class Capture:
 
 @dataclass(frozen=True)
 class PrometheusRemoteWriteAssertions:
-    requests: list[dict[str, object]] = field(default_factory=list)
-    after: str | None = None
+    requests: dict[str, list[dict[str, object]]] = field(default_factory=dict)
 
 
 def _make_handler(capture: Capture):
@@ -271,17 +270,17 @@ def run() -> FixtureHandle:
     def assert_test(
         *, test: Path, assertions: PrometheusRemoteWriteAssertions, **_: Any
     ) -> None:
-        if assertions.after is not None and test.name != assertions.after:
-            return
-        if not assertions.requests:
+        expected = assertions.requests.get(test.name)
+        if expected is None:
             return
         observed = [json.loads(line) for line in capture.path.read_text().splitlines()]
-        if observed != assertions.requests:
-            expected = json.dumps(assertions.requests, indent=2, sort_keys=True)
+        capture.path.write_text("")
+        if observed != expected:
+            expected_json = json.dumps(expected, indent=2, sort_keys=True)
             actual = json.dumps(observed, indent=2, sort_keys=True)
             raise AssertionError(
                 "Prometheus remote write capture mismatch\n"
-                f"expected:\n{expected}\nactual:\n{actual}"
+                f"expected:\n{expected_json}\nactual:\n{actual}"
             )
 
     return FixtureHandle(

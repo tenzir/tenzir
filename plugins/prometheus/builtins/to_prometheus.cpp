@@ -236,7 +236,7 @@ auto valid_legacy_label_name(std::string_view name) -> bool {
   });
 }
 
-auto to_metric_type(std::string_view type) -> MetricType {
+auto parse_metric_type(std::string_view type) -> std::optional<MetricType> {
   auto normalized = detail::ascii_tolower(type);
   if (normalized == "unknown") {
     return MetricType::unknown;
@@ -262,19 +262,7 @@ auto to_metric_type(std::string_view type) -> MetricType {
   if (normalized == "stateset" or normalized == "state_set") {
     return MetricType::stateset;
   }
-  return MetricType::unknown;
-}
-
-auto parse_metric_type(std::string_view type) -> std::optional<MetricType> {
-  auto normalized = detail::ascii_tolower(type);
-  if (normalized == "unknown") {
-    return MetricType::unknown;
-  }
-  auto result = to_metric_type(normalized);
-  if (result == MetricType::unknown) {
-    return {};
-  }
-  return result;
+  return {};
 }
 
 auto has_metadata(Metadata const& metadata) -> bool {
@@ -454,7 +442,6 @@ auto serialize_v1(std::vector<Series> series) -> std::string {
   auto request = ::prometheus::WriteRequest{};
   auto metadata_seen = std::set<std::string>{};
   for (auto& entry : series) {
-    std::ranges::sort(entry.samples, {}, &Sample::timestamp_ms);
     auto* ts = request.add_timeseries();
     for (auto const& [name, value] : entry.labels) {
       auto* label = ts->add_labels();
@@ -489,7 +476,6 @@ auto serialize_v2(std::vector<Series> series) -> std::string {
   auto symbols = std::vector<std::string>{""};
   auto symbol_refs = std::unordered_map<std::string, uint32_t>{{"", 0}};
   for (auto& entry : series) {
-    std::ranges::sort(entry.samples, {}, &Sample::timestamp_ms);
     auto* ts = request.add_timeseries();
     for (auto const& [name, value] : entry.labels) {
       ts->add_labels_refs(add_symbol(symbols, symbol_refs, name));
@@ -694,9 +680,16 @@ public:
   }
 
 private:
+  using Labels = std::vector<std::pair<std::string, std::string>>;
+
   struct PendingSample {
-    std::vector<std::pair<std::string, std::string>> labels;
+    Labels labels;
     Sample sample;
+    Metadata metadata;
+  };
+
+  struct PendingSeries {
+    std::vector<Sample> samples;
     Metadata metadata;
   };
 
@@ -865,8 +858,7 @@ private:
 
   auto add_sample(PendingSample sample) -> void {
     auto& series = pending_[sample.labels];
-    if (series.labels.empty()) {
-      series.labels = std::move(sample.labels);
+    if (series.samples.empty()) {
       series.metadata = std::move(sample.metadata);
     } else {
       merge_metadata(series.metadata, std::move(sample.metadata));
@@ -878,8 +870,12 @@ private:
   auto take_pending() -> std::vector<Series> {
     auto result = std::vector<Series>{};
     result.reserve(pending_.size());
-    for (auto& [_, series] : pending_) {
-      result.push_back(std::move(series));
+    for (auto& [labels, series] : pending_) {
+      result.push_back({
+        .labels = labels,
+        .samples = std::move(series.samples),
+        .metadata = std::move(series.metadata),
+      });
     }
     pending_.clear();
     pending_sample_count_ = 0;
@@ -1028,7 +1024,7 @@ private:
   std::string url_;
   Headers headers_;
   Option<Box<HttpPool>> pool_;
-  std::map<std::vector<std::pair<std::string, std::string>>, Series> pending_;
+  std::map<Labels, PendingSeries> pending_;
   uint64_t pending_sample_count_ = 0;
   bool done_ = false;
   MetricsCounter bytes_write_counter_;
@@ -1157,7 +1153,7 @@ public:
       }
       return {};
     });
-    return d.invariant_order();
+    return d.without_optimize();
   }
 };
 
