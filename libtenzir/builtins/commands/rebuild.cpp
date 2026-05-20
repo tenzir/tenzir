@@ -25,8 +25,11 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/query_context.hpp>
 #include <tenzir/read_query.hpp>
+#include <tenzir/session.hpp>
 #include <tenzir/status.hpp>
 #include <tenzir/table_slice.hpp>
+#include <tenzir/tql2/ast.hpp>
+#include <tenzir/tql2/parser.hpp>
 #include <tenzir/uuid.hpp>
 
 #include <arrow/table.h>
@@ -409,8 +412,10 @@ struct rebuilder_state {
     }
     // Ask the index to rebuild the partitions we selected.
     auto rp = self->make_response_promise<void>();
-    auto rebatch
-      = pipeline::internal_parse(fmt::format("batch {}", desired_batch_size));
+    auto dh = null_diagnostic_handler{};
+    auto provider = session_provider::make(dh);
+    auto rebatch = parse_pipeline_with_bad_diagnostics(
+      fmt::format("batch {}", desired_batch_size), provider.as_session());
     TENZIR_ASSERT(rebatch);
     // We sort the selected partitions from old to new so the rebuild transform
     // sees the batches (and events) in the order they arrived. This prevents

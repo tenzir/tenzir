@@ -49,6 +49,7 @@
 #include "tenzir/shutdown.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/table_slice.hpp"
+#include "tenzir/tql2/ast.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/actor_registry.hpp>
@@ -1512,7 +1513,7 @@ index(index_actor::stateful_pointer<index_state> self,
       }
       return rp;
     },
-    [self](atom::apply, pipeline pipe,
+    [self](atom::apply, ast::pipeline pipe,
            std::vector<partition_info> selected_partitions,
            keep_original_partition keep,
            std::string origin) -> caf::result<std::vector<partition_info>> {

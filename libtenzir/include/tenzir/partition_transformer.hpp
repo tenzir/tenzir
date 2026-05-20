@@ -12,7 +12,7 @@
 
 #include "tenzir/active_partition.hpp"
 #include "tenzir/actors.hpp"
-#include "tenzir/pipeline.hpp"
+#include "tenzir/tql2/ast.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -65,8 +65,8 @@ struct partition_transformer_state {
   /// Actor handle of the filesystem actor.
   filesystem_actor fs = {};
 
-  /// The transform to be applied to the data.
-  pipeline transform = {};
+  /// The TQL2 AST of the transform to apply to the data.
+  ast::pipeline transform = {};
 
   /// Collector for the received table slices.
   std::vector<table_slice> input = {};
@@ -143,12 +143,15 @@ struct partition_transformer_state {
 };
 
 /// Spawns a PARTITION TRANSFORMER actor with the given parameters.
-/// This actor
+///
+/// The actor collects table slices from a query stream, applies the given
+/// `table_slice -> table_slice` AST pipeline via the new coroutine executor,
+/// and writes the resulting slices into one or more new partitions.
 auto partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>,
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
-  pipeline transform, std::string partition_path_template,
+  ast::pipeline transform, std::string partition_path_template,
   std::string synopsis_path_template, std::string origin = "rebuild")
   -> partition_transformer_actor::behavior_type;
 

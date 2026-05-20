@@ -89,4 +89,16 @@ auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
               DiagHandler& dh, Profiler profiler, bool is_hidden)
   -> Task<failure_or<void>>;
 
+/// Run a `table_slice -> table_slice` chain over a fixed input vector.
+///
+/// Feeds the input slices into the head of the chain, runs the new
+/// coroutine executor, and returns the slices produced by the tail. Used by
+/// partition transformations (compaction, rebuild) that need to apply a
+/// pipeline to a pre-collected batch of events.
+auto run_transform(std::vector<table_slice> input,
+                   OperatorChain<table_slice, table_slice> chain,
+                   caf::actor_system& sys, DiagHandler& dh, Profiler profiler,
+                   bool is_hidden)
+  -> Task<failure_or<std::vector<table_slice>>>;
+
 } // namespace tenzir

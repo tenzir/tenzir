@@ -2075,6 +2075,101 @@ auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
                               false, is_hidden);
 }
 
+auto run_transform(std::vector<table_slice> input,
+                   OperatorChain<table_slice, table_slice> chain,
+                   caf::actor_system& sys, DiagHandler& dh, Profiler profiler,
+                   bool is_hidden)
+  -> Task<failure_or<std::vector<table_slice>>> {
+  auto exec_ctx = TestExecCtx{profiler, /*has_terminal=*/false, is_hidden};
+  auto num_ops = chain.size();
+  TENZIR_ASSERT(num_ops > 0);
+  auto id = PipeId{fmt::to_string(uuid::random())};
+  auto [push_input, pull_input]
+    = exec_ctx.make_channel<table_slice>(ChannelId::first(id.op(0)));
+  auto [push_output, pull_output]
+    = exec_ctx.make_channel<table_slice>(ChannelId::last(id.op(num_ops - 1)));
+  // A bounded transform has no outside controller, so we keep only the
+  // receiver. The matching sender dies with the temporary tuple at the end of
+  // this statement, which closes the channel; the chain's
+  // `from_control_.recv()` then resolves with `None` instead of pinning the
+  // chain's `JoinSet` open forever.
+  auto from_ctl_recv = std::get<1>(channel<FromControl>(16));
+  auto [to_ctl_send, to_ctl_recv] = channel<ToControl>(16);
+  auto output_slices = std::vector<table_slice>{};
+  // Feeder cancellation. The chain's receiver may be dropped before the feeder
+  // pushes all input (for example, a `head N` operator inside the transform
+  // emits `no_more_input` after seeing N events). Because dropping a receiver
+  // does not close the channel (see `Receiver` in `channel.hpp`), the feeder
+  // would otherwise block on `push_input` once the buffer fills. We forward
+  // that signal here to cancel the feeder.
+  auto feed_cancel = folly::CancellationSource{};
+  co_await async_scope([&](AsyncScope& scope) -> Task<void> {
+    scope.spawn(run_profiler(profiler, exec_ctx, num_ops));
+    // Chain runner.
+    scope.spawn(folly::coro::co_invoke(
+      [chain = std::move(chain), pull_input = std::move(pull_input),
+       push_output = std::move(push_output),
+       from_ctl_recv = std::move(from_ctl_recv),
+       to_ctl_send = std::move(to_ctl_send), id, &exec_ctx, &sys,
+       &dh]() mutable -> Task<void> {
+        co_await run_chain(std::move(chain), std::move(pull_input),
+                           std::move(push_output), std::move(from_ctl_recv),
+                           std::move(to_ctl_send), id, exec_ctx, sys, dh);
+      }));
+    // Feeder. Drops `push_input` on exit, closing the input channel. Honors
+    // `feed_cancel` so we exit promptly if the chain stops reading upstream.
+    scope.spawn(folly::coro::co_invoke(
+      [input_slices = std::move(input), push_input = std::move(push_input),
+       token = feed_cancel.getToken()]() mutable -> Task<void> {
+        co_await folly::coro::co_withCancellation(
+          token, folly::coro::co_invoke([&]() mutable -> Task<void> {
+            for (auto& slice : input_slices) {
+              if (slice.rows() == 0) {
+                continue;
+              }
+              co_await push_input(OperatorMsg<table_slice>{std::move(slice)});
+            }
+            co_await push_input(OperatorMsg<table_slice>{Signal{EndOfData{}}});
+          }));
+      }));
+    // Drain control messages and react to `no_more_input` by cancelling the
+    // feeder. Other control signals (e.g., shutdown readiness, checkpoint
+    // bookkeeping) are not actionable for a bounded one-shot transform.
+    scope.spawn(folly::coro::co_invoke([to_ctl_recv = std::move(to_ctl_recv),
+                                        &feed_cancel]() mutable -> Task<void> {
+      while (auto msg = co_await to_ctl_recv.recv()) {
+        if (*msg == ToControl::no_more_input) {
+          feed_cancel.requestCancellation();
+        }
+      }
+    }));
+    // Output drainer.
+    while (auto msg = co_await pull_output()) {
+      co_await co_match(
+        std::move(*msg),
+        [&](table_slice slice) -> Task<void> {
+          if (slice.rows() > 0) {
+            output_slices.push_back(std::move(slice));
+          }
+          co_return;
+        },
+        [&](Signal signal) -> Task<void> {
+          co_await co_match(
+            signal,
+            [&](EndOfData) -> Task<void> {
+              co_return;
+            },
+            [&](Checkpoint) -> Task<void> {
+              co_return;
+            });
+        });
+    }
+    scope.cancel();
+  });
+  CO_TRY(dh.failure());
+  co_return output_slices;
+}
+
 namespace {
 
 /// Wraps a legacy `diagnostic_handler` into a `DiagHandler`.

@@ -210,12 +210,12 @@ using index_actor = typed_actor_fwd<
   auto(atom::erase, uuid)->caf::result<atom::done>,
   // Erases the given set of partitions from the INDEX.
   auto(atom::erase, std::vector<uuid>)->caf::result<atom::done>,
-  // Applies the given pipelineation to the partition.
+  // Applies the given pipeline (TQL2 AST) to the partition.
   // When keep_original_partition is yes: merges the transformed partitions
   // with the original ones and returns the new partition infos. When
   // keep_original_partition is no: does an in-place pipeline keeping the old
   // ids, and makes new partitions preserving them.
-  auto(atom::apply, pipeline, std::vector<tenzir::partition_info>,
+  auto(atom::apply, ast::pipeline, std::vector<tenzir::partition_info>,
        keep_original_partition, std::string)
     ->caf::result<std::vector<partition_info>>,
   // Decomissions all active partitions, effectively flushing them to disk.
