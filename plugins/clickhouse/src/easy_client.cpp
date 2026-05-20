@@ -143,16 +143,15 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
   -> failure_or<transformer_record*> {
   TENZIR_ASSERT(args_.primary);
   auto primary_found = false;
+  const auto primary_name
+    = table_name_quoting.is_quoted(args_.primary->inner)
+        ? unquote_identifier_component(args_.primary->inner)
+        : args_.primary->inner;
   auto path = path_type{};
   /// TODO: This should really be merged with the transformer itself. Its an
   /// (almost) duplicate of `make_record_functions_from_clickhouse`
   for (auto [k, t] : schema.fields()) {
-    if (not validate_identifier(k)) {
-      emit_invalid_identifier<true>("column name", k, args_.operator_location,
-                                    dh_);
-      return failure::promise();
-    }
-    const auto is_primary = k == args_.primary->inner;
+    const auto is_primary = k == primary_name;
     path.push_back(k);
     TRY(auto clickhouse_typename,
         type_to_clickhouse_typename(path, t, not is_primary, dh_));
@@ -170,7 +169,7 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
   }
   constexpr static std::string_view engine = "MergeTree";
   TRY(auto clickhouse_columns,
-      plain_clickhouse_tuple_elements(path, schema, dh_, args_.primary->inner));
+      plain_clickhouse_tuple_elements(path, schema, dh_, primary_name));
   const auto creation_modifier
     = args_.mode.inner == mode::create_append ? "IF NOT EXISTS" : "";
   auto query_text
@@ -179,7 +178,7 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
                   " ENGINE = {}"
                   " ORDER BY {}",
                   creation_modifier, table_name, clickhouse_columns, engine,
-                  args_.primary->inner);
+                  quote_identifier_component(primary_name));
   auto query = Query{query_text};
   // Auto-generated CREATE TABLE queries for wide schemas can exceed the
   // server's default max_query_size (256 KiB). Remove the limit for this
