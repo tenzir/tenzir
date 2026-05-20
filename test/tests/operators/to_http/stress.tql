@@ -1,0 +1,15 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /options/body
+timeout: 120
+---
+
+from {value: 0}
+repeat 5000
+enumerate value
+to_http env("HTTP_FIXTURE_BODY_URL") {
+  write_ndjson
+}

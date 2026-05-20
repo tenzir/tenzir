@@ -17,6 +17,7 @@ Usage overview:
   - **HTTP_FIXTURE_STATUS_403_URL** - Always replies 403 with ``{"error":"forbidden"}``.
   - **HTTP_FIXTURE_RETRY_429_AFTER_URL** - Replies 429 with ``Retry-After: 1``, then 200 after waiting long enough.
   - **HTTP_FIXTURE_RETRY_503_URL** - Replies 503 twice, then 200.
+  - **HTTP_FIXTURE_EARLY_503_URL** - Replies 503 immediately without reading the whole request body.
   - **HTTP_FIXTURE_RETRY_503_BACKOFF_URL** - Replies 503 twice, then 200 only if retries follow the configured backoff.
   - **HTTP_FIXTURE_RETRY_EXHAUSTED_503_URL** - Always replies 503 with ``{"error":"service-unavailable"}``.
   - **HTTP_FIXTURE_GZIP_EMPTY_URL** - Replies with an empty gzip-encoded body.
@@ -57,6 +58,7 @@ _GZIP_EMPTY = "/content-encoding/gzip-empty"
 _GZIP_JSON = "/content-encoding/gzip-json"
 _RETRY_429_AFTER = "/status/retry-429-after"
 _RETRY_503 = "/status/retry-503"
+_EARLY_503 = "/status/early-503"
 _RETRY_503_BACKOFF = "/status/retry-503-backoff"
 _RETRY_EXHAUSTED_503 = "/status/retry-exhausted-503"
 _STATUS_400 = "/status/bad-request"
@@ -368,6 +370,15 @@ def _make_handler(
             self._handle_request(b"")
 
         def do_POST(self) -> None:  # noqa: N802
+            path = urlsplit(self.path).path
+            if path == _EARLY_503:
+                self._validate_request(path, b"")
+                self._reply(
+                    b'{"error":"service-unavailable"}\n',
+                    status=HTTPStatus.SERVICE_UNAVAILABLE,
+                )
+                time.sleep(2)
+                return
             body = self._read_body() or b"{}"
             self._handle_request(body)
 
@@ -429,6 +440,7 @@ def run() -> Iterator[dict[str, str]]:
             "HTTP_FIXTURE_STATUS_403_URL": f"{base_url}{_STATUS_403}",
             "HTTP_FIXTURE_RETRY_429_AFTER_URL": f"{base_url}{_RETRY_429_AFTER}",
             "HTTP_FIXTURE_RETRY_503_URL": f"{base_url}{_RETRY_503}",
+            "HTTP_FIXTURE_EARLY_503_URL": f"{base_url}{_EARLY_503}",
             "HTTP_FIXTURE_RETRY_503_BACKOFF_URL": f"{base_url}{_RETRY_503_BACKOFF}",
             "HTTP_FIXTURE_RETRY_EXHAUSTED_503_URL": f"{base_url}{_RETRY_EXHAUSTED_503}",
             "HTTP_FIXTURE_GZIP_EMPTY_URL": f"{base_url}{_GZIP_EMPTY}",

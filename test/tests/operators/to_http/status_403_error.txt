@@ -1,5 +1,5 @@
 error: HTTP request returned status 403
-  --> tests/operators/to_http/options/status_403_error.tql:14:1
+  --> tests/operators/to_http/status_403_error.tql:14:1
    |
 14 | to_http env("HTTP_FIXTURE_STATUS_403_URL"), max_retry_count=2, retry_delay=1ms {
    | ^^^^^^^ 
