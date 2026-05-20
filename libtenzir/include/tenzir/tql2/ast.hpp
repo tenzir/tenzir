@@ -697,11 +697,6 @@ auto substitute_named_expressions(
   const std::unordered_map<std::string, ast::expression>& replacements,
   diagnostic_handler& dh) -> failure_or<ast::pipeline>;
 
-auto substitute_named_expressions(
-  expression expr,
-  const std::unordered_map<std::string, ast::expression>& replacements,
-  diagnostic_handler& dh) -> failure_or<ast::expression>;
-
 struct let_stmt {
   let_stmt() = default;
 
