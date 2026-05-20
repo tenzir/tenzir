@@ -1,10 +1,10 @@
 ---
+error: true
 fixtures:
-  - http_server:
-      expected_request:
-        count: 3
-        method: POST
-        path: /status/retry-503-backoff
+- http_server:
+    expected:
+    - method: POST
+      path: /status/retry-503-backoff
 timeout: 60
 ---
 

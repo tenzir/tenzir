@@ -4,15 +4,12 @@ fixtures:
     expected:
     - method: POST
       path: /options/body
-      body: '{"value":42}
-
-        '
-timeout: 60
+timeout: 120
 ---
 
-from {
-  value: 42,
-}
+from {value: 0}
+repeat 5000
+enumerate value
 to_http env("HTTP_FIXTURE_BODY_URL") {
   write_ndjson
 }

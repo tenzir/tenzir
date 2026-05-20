@@ -1,10 +1,10 @@
 ---
 fixtures:
-  - http_server:
-      expected_request:
-        count: 3
-        method: GET
-        path: /status/retry-503
+- http_server:
+    expected:
+    - count: 3
+      method: GET
+      path: /status/retry-503
 timeout: 60
 ---
 

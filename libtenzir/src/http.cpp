@@ -9,6 +9,7 @@
 #include "tenzir/http.hpp"
 
 #include "tenzir/curl.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/http_pool.hpp"
@@ -19,6 +20,7 @@
 #include <boost/url/url.hpp>
 #include <folly/portability/Time.h>
 #include <proxygen/lib/http/coro/HTTPError.h>
+#include <proxygen/lib/http/coro/client/HTTPClient.h>
 
 #include <algorithm>
 #include <cctype>
@@ -26,6 +28,8 @@
 #include <chrono>
 #include <cstdint>
 #include <ctime>
+#include <filesystem>
+#include <mutex>
 #include <string_view>
 
 namespace tenzir::http {
@@ -831,6 +835,49 @@ auto extract_odata_page(table_slice const& slice, location paginate_loc,
   }
   result.events = builder.finish_as_table_slice();
   return result;
+}
+
+auto to_http_response(proxygen::coro::HTTPClient::Response& resp) -> Response {
+  auto result = Response{};
+  TENZIR_ASSERT_ALWAYS(resp.headers);
+  result.status_code = resp.headers->getStatusCode();
+  resp.headers->getHeaders().forEach(
+    [&](std::string const& name, std::string const& value) {
+      result.headers.push_back({name, value});
+    });
+  if (not resp.body.empty()) {
+    result.body = resp.body.move()->to<std::string>();
+  }
+  return result;
+}
+
+auto to_http_response(proxygen::HTTPMessage const& headers) -> Response {
+  auto result = Response{};
+  result.status_code = headers.getStatusCode();
+  headers.getHeaders().forEach(
+    [&](std::string const& name, std::string const& value) {
+      result.headers.push_back({name, value});
+    });
+  return result;
+}
+
+auto ensure_default_ca_paths() -> void {
+  static std::once_flag flag;
+  std::call_once(flag, [] {
+    auto ca_paths = std::vector<std::string>{};
+    for (auto const* path : {
+           "/etc/ssl/certs/ca-certificates.crt",
+           "/etc/pki/tls/cert.pem",
+           "/etc/ssl/cert.pem",
+         }) {
+      if (std::filesystem::exists(path)) {
+        ca_paths.emplace_back(path);
+      }
+    }
+    if (not ca_paths.empty()) {
+      proxygen::coro::HTTPClient::setDefaultCAPaths(std::move(ca_paths));
+    }
+  });
 }
 
 } // namespace tenzir::http

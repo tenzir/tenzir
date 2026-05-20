@@ -62,7 +62,7 @@ auto aws_headers(std::vector<http::Header> const& headers)
 auto http_headers(Aws::Http::HeaderValueCollection const& headers)
   -> std::vector<http::Header>;
 
-auto to_aws_json_result(HttpResponse response)
+auto to_aws_json_result(http::Response response)
   -> Aws::AmazonWebServiceResult<Aws::Utils::Json::JsonValue>;
 
 auto extract_aws_error_message(std::string const& body) -> std::string;
@@ -85,7 +85,7 @@ public:
 
   template <class Request>
   auto api_call(std::string_view operation, Request& request)
-    -> Task<Result<HttpResponse, std::string>> {
+    -> Task<Result<http::Response, std::string>> {
     auto payload = request.SerializePayload();
     auto body = std::string{payload.c_str(), payload.size()};
     co_return co_await post("/", std::move(body), request.GetHeaders(),
@@ -95,21 +95,21 @@ public:
   auto
   post(std::string path, std::string body,
        Aws::Http::HeaderValueCollection headers, std::string_view operation)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
   auto post(std::string path, std::string body,
             std::vector<http::Header> headers, std::string_view operation)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
   auto
   post_unsigned(std::string path, std::string body,
                 std::vector<http::Header> headers, std::string_view operation)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
   auto stream_post(std::string path, std::string body,
                    Aws::Http::HeaderValueCollection headers,
                    HttpStreamCallbacks callbacks, std::string_view operation)
-    -> Task<Result<HttpResponse, std::string>>;
+    -> Task<Result<http::Response, std::string>>;
 
 private:
   auto request_path(std::string path) const -> std::string;

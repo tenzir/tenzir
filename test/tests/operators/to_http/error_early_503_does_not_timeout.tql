@@ -1,0 +1,16 @@
+---
+error: true
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /status/early-503
+timeout: 10
+---
+
+from {value: 0}
+repeat 500
+enumerate value
+to_http env("HTTP_FIXTURE_EARLY_503_URL"), max_retry_count=0 {
+  write_ndjson
+}

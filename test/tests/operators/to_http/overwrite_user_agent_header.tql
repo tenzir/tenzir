@@ -1,0 +1,16 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /
+      header_name: User-Agent
+      header_value: Test
+timeout: 60
+---
+
+version
+select foo="bar"
+to_http env("HTTP_FIXTURE_URL"), headers={"User-Agent": "Test"} {
+  write_json
+}

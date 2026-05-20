@@ -1,0 +1,18 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /status/early-200
+timeout: 30
+---
+
+// A server that responds 200 before reading the request body must not
+// silently drop unsent input. This exercises the code path where the server
+// acknowledges before body streaming starts.
+from {value: 0}
+repeat 500
+enumerate value
+to_http env("HTTP_FIXTURE_EARLY_200_URL"), max_retry_count=0 {
+  write_ndjson
+}

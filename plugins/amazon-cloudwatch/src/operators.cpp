@@ -758,7 +758,7 @@ auto send_put_batch(amazon::SignedHttpClient& client,
 auto post_ingest(amazon::SignedHttpClient& client, Option<std::string> token,
                  std::string path, std::string body,
                  std::vector<http::Header> headers, std::string_view operation)
-  -> Task<Result<HttpResponse, std::string>> {
+  -> Task<Result<http::Response, std::string>> {
   if (token) {
     http::set(headers, "authorization", fmt::format("Bearer {}", *token));
     co_return co_await client.post_unsigned(std::move(path), std::move(body),
@@ -978,7 +978,7 @@ auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
                 });
               request.SetEventStreamHandler(handler);
               auto callbacks = HttpStreamCallbacks{};
-              callbacks.on_headers = [&](HttpResponse const& response) {
+              callbacks.on_headers = [&](http::Response const& response) {
                 if (not response.is_status_success()) {
                   pending_error = fmt::format("StartLiveTail returned HTTP {}",
                                               response.status_code);

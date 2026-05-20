@@ -158,7 +158,7 @@ TEST("header conversion") {
 }
 
 TEST("SDK result conversion") {
-  auto response = HttpResponse{
+  auto response = http::Response{
     .status_code = 202,
     .headers = {{"x-amzn-requestid", "abc"}},
     .body = R"({"message":"ok"})",

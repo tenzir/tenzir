@@ -1,11 +1,12 @@
 ---
-fixtures: [http_paginate]
+error: true
+timeout: 60
 ---
 
 from {
   value: 42,
 }
-to_http env("HTTP_FIXTURE_RETRY_FLAKY_URL"),
+to_http "http://127.0.0.1:9/retry-connection-error",
         method="GET",
         max_retry_count=2,
         retry_delay=1s,

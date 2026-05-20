@@ -1,17 +1,18 @@
 ---
 error: true
 fixtures:
-  - http_server:
-      expected_request:
-        count: 1
-        method: POST
-        path: /status/retry-503
+- http_server:
+    expected:
+    - method: POST
+      path: /status/retry-503
 timeout: 60
 ---
 
 from {
   value: 13,
 }
+repeat 500
+enumerate value
 to_http env("HTTP_FIXTURE_RETRY_503_URL"), max_retry_count=0 {
   write_ndjson
 }

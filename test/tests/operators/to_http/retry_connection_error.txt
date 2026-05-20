@@ -1,0 +1,20 @@
+warning: connection error (folly::AsyncSocketException: AsyncSocketException: connect failed, type = Socket not open), attempt 1/3, retrying after 1s
+ --> tests/operators/to_http/retry_connection_error.tql:9:1
+  |
+9 | to_http "http://127.0.0.1:9/retry-connection-error",
+  | ~~~~~~~ 
+  |
+
+warning: connection error (folly::AsyncSocketException: AsyncSocketException: connect failed, type = Socket not open), attempt 2/3, retrying after 2s
+ --> tests/operators/to_http/retry_connection_error.tql:9:1
+  |
+9 | to_http "http://127.0.0.1:9/retry-connection-error",
+  | ~~~~~~~ 
+  |
+
+error: HTTP request to `http://127.0.0.1:9/retry-connection-error` failed: folly::AsyncSocketException: AsyncSocketException: connect failed, type = Socket not open
+ --> tests/operators/to_http/retry_connection_error.tql:9:1
+  |
+9 | to_http "http://127.0.0.1:9/retry-connection-error",
+  | ^^^^^^^ 
+  |
