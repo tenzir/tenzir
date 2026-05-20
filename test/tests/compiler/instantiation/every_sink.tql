@@ -1,0 +1,6 @@
+// Source-style `every` with a sink-terminated subpipeline. Compiling
+// instantiates `Every<void, void>`.
+every 1s {
+  from {x: 1}
+  discard
+}

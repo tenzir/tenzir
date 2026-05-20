@@ -28,27 +28,23 @@ struct EveryArgs {
 };
 
 template <class Input>
-class EveryBase : public Operator<Input, table_slice> {
-public:
-  explicit EveryBase(EveryArgs args) : args_{std::move(args)} {
+struct EveryImpl {
+  explicit EveryImpl(EveryArgs args) : args_{std::move(args)} {
   }
 
-  auto start(OpCtx& ctx) -> Task<void> override {
+  auto start_impl(OpCtx& ctx) -> Task<void> {
     if (next_ == 0) {
       co_await spawn_new(ctx);
     }
   }
 
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
-    TENZIR_UNUSED(dh);
+  auto await_task_impl() const -> Task<Any> {
     auto next = last_started_ + args_.interval;
     co_await sleep_until(next);
     co_return {};
   }
 
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    TENZIR_UNUSED(result, push);
+  auto process_task_impl(OpCtx& ctx) -> Task<void> {
     if (sleep_done_) {
       co_return;
     }
@@ -66,26 +62,37 @@ public:
     co_await maybe_respawn(ctx);
   }
 
-  auto finish_sub(SubKeyView key, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    TENZIR_UNUSED(key, push);
+  auto finish_sub_impl(OpCtx& ctx) -> Task<void> {
     sub_finished_ = true;
     co_await maybe_respawn(ctx);
   }
 
   // TODO: Clean this up with the upcoming subpipelines PR.
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
-    -> Task<FinalizeBehavior> override {
-    TENZIR_UNUSED(push, ctx);
+  auto finalize_impl() -> FinalizeBehavior {
     done_ = true;
-    co_return FinalizeBehavior::done;
+    return FinalizeBehavior::done;
   }
 
-  auto snapshot(Serde& s) -> void override {
+  auto process_input_impl(table_slice input, OpCtx& ctx) -> Task<void>
+    requires(std::same_as<Input, table_slice>)
+  {
+    TENZIR_ASSERT(next_ > 0);
+    // TODO: This can drop events at the boundary between closing the old
+    // sub-pipeline and spawning the new one.
+    auto sub = ctx.get_sub(int64_t{next_ - 1});
+    if (not sub) {
+      TENZIR_WARN("every: dropping {} rows; sub-pipeline not available",
+                  input.rows());
+      co_return;
+    }
+    auto& pipe = as<SubHandle<table_slice>>(*sub);
+    std::ignore = co_await pipe.push(std::move(input));
+  }
+
+  auto snapshot_impl(Serde& s) -> void {
     s("next", next_);
   }
 
-protected:
   auto spawn_new(OpCtx& ctx) -> Task<void> {
     last_started_ = steady_clock::now();
     sleep_done_ = false;
@@ -100,11 +107,6 @@ protected:
     }
   }
 
-  auto next() const {
-    return next_;
-  }
-
-private:
   EveryArgs args_;
   steady_clock::time_point last_started_ = steady_clock::time_point::min();
   int64_t next_ = 0;
@@ -113,35 +115,164 @@ private:
   bool done_ = false;
 };
 
-template <class Input>
+template <class Input, class Output>
 class Every;
 
 template <>
-class Every<table_slice> final : public EveryBase<table_slice> {
+class Every<void, table_slice> final : public Operator<void, table_slice>,
+                                       private EveryImpl<void> {
 public:
-  using EveryBase::EveryBase;
+  using EveryImpl::EveryImpl;
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+  auto start(OpCtx& ctx) -> Task<void> override {
+    return start_impl(ctx);
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    return await_task_impl();
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_UNUSED(push);
-    TENZIR_ASSERT(this->next() > 0);
-    // TODO: This can drop events at the boundary between closing the old
-    // sub-pipeline and spawning the new one.
-    auto sub = ctx.get_sub(int64_t{this->next() - 1});
-    if (not sub) {
-      TENZIR_WARN("every: dropping {} rows; sub-pipeline not available",
-                  input.rows());
-      co_return;
-    }
-    auto& pipe = as<SubHandle<table_slice>>(*sub);
-    std::ignore = co_await pipe.push(std::move(input));
+    TENZIR_UNUSED(result, push);
+    return process_task_impl(ctx);
+  }
+
+  auto finish_sub(SubKeyView key, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(key, push);
+    return finish_sub_impl(ctx);
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(push, ctx);
+    co_return finalize_impl();
+  }
+
+  auto snapshot(Serde& s) -> void override {
+    snapshot_impl(s);
   }
 };
 
 template <>
-class Every<void> final : public EveryBase<void> {
+class Every<table_slice, table_slice> final
+  : public Operator<table_slice, table_slice>,
+    private EveryImpl<table_slice> {
 public:
-  using EveryBase<void>::EveryBase;
+  using EveryImpl::EveryImpl;
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    return start_impl(ctx);
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    return await_task_impl();
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    return process_input_impl(std::move(input), ctx);
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(result, push);
+    return process_task_impl(ctx);
+  }
+
+  auto finish_sub(SubKeyView key, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(key, push);
+    return finish_sub_impl(ctx);
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(push, ctx);
+    co_return finalize_impl();
+  }
+
+  auto snapshot(Serde& s) -> void override {
+    snapshot_impl(s);
+  }
+};
+
+template <>
+class Every<void, void> final : public Operator<void, void>,
+                                private EveryImpl<void> {
+public:
+  using EveryImpl::EveryImpl;
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    return start_impl(ctx);
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    return await_task_impl();
+  }
+
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(result);
+    return process_task_impl(ctx);
+  }
+
+  auto finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(key);
+    return finish_sub_impl(ctx);
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(ctx);
+    co_return finalize_impl();
+  }
+
+  auto snapshot(Serde& s) -> void override {
+    snapshot_impl(s);
+  }
+};
+
+template <>
+class Every<table_slice, void> final : public Operator<table_slice, void>,
+                                       private EveryImpl<table_slice> {
+public:
+  using EveryImpl::EveryImpl;
+
+  auto start(OpCtx& ctx) -> Task<void> override {
+    return start_impl(ctx);
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    return await_task_impl();
+  }
+
+  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
+    return process_input_impl(std::move(input), ctx);
+  }
+
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(result);
+    return process_task_impl(ctx);
+  }
+
+  auto finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(key);
+    return finish_sub_impl(ctx);
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(ctx);
+    co_return finalize_impl();
+  }
+
+  auto snapshot(Serde& s) -> void override {
+    snapshot_impl(s);
+  }
 };
 
 class plugin final : public virtual OperatorPlugin {
@@ -151,7 +282,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<EveryArgs, Every<void>, Every<table_slice>>{};
+    auto d = Describer<EveryArgs>{};
     auto interval = d.positional("interval", &EveryArgs::interval);
     auto pipe = d.pipeline(&EveryArgs::pipe, SubOptimize::from_downstream);
     d.validate([interval](DescribeCtx& ctx) -> Empty {
@@ -169,16 +300,32 @@ public:
       } else {
         TRY(auto p, ctx.get(pipe));
         TRY(auto output, p.inner.infer_type(tag_v<Input>, ctx));
-        if (output and *output != tag_v<table_slice>) {
-          diagnostic::error("subpipeline must produce events")
-            .primary(p.source)
-            .emit(ctx);
-          return failure::promise();
+        if (not output) {
+          // Output type not yet determined; default to events.
+          return [](EveryArgs args) {
+            return Every<Input, table_slice>{std::move(args)};
+          };
         }
-        return std::function<Box<Operator<Input, table_slice>>(EveryArgs)>{
-          [](EveryArgs args) {
-            return Every<Input>{std::move(args)};
-          }};
+        return match(
+          *output,
+          [](tag<table_slice>)
+            -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
+            return [](EveryArgs args) {
+              return Every<Input, table_slice>{std::move(args)};
+            };
+          },
+          [](tag<void>) -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
+            return [](EveryArgs args) {
+              return Every<Input, void>{std::move(args)};
+            };
+          },
+          [&](
+            tag<chunk_ptr>) -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
+            diagnostic::error("subpipeline must not produce bytes")
+              .primary(p.source)
+              .emit(ctx);
+            return failure::promise();
+          });
       }
     });
     return d.invariant_filter();
