@@ -1184,7 +1184,7 @@ auto ToCloudWatch::start(OpCtx& ctx) -> Task<void> {
     co_return;
   }
   request_slots_ = Semaphore{detail::narrow<size_t>(parallel_)};
-  send_queue_ = Arc<folly::coro::BoundedQueue<ToCloudWatchMessage>>{
+  send_queue_ = Arc<folly::coro::BoundedQueue<ToCloudWatchSendReport>>{
     std::in_place,
     detail::narrow<uint32_t>(parallel_ + 1),
   };
@@ -1305,38 +1305,31 @@ auto ToCloudWatch::flush(OpCtx& ctx) -> Task<void> {
   TENZIR_ASSERT(send_queue_);
   auto events = std::exchange(batch_, {});
   next_timeout_ = None{};
-  auto permit = co_await [&]() -> Task<SemaphorePermit> {
-    auto handle_message = [&](ToCloudWatchMessage message) {
-      if (auto* report = try_as<ToCloudWatchSendReport>(&message)) {
-        handle_send_report(std::move(*report), ctx);
-      }
-    };
-    while (true) {
-      if (auto permit = request_slots_.try_acquire()) {
-        co_return std::move(*permit);
-      }
-      if (auto message = (*send_queue_)->try_dequeue()) {
-        handle_message(std::move(*message));
-        continue;
-      }
-      auto [permit, message] = co_await folly::coro::collectAnyNoDiscard(
-        request_slots_.acquire(), (*send_queue_)->dequeue());
-      if (message.hasValue()) {
-        handle_message(std::move(message).value());
-      }
-      if (permit.hasValue()) {
-        co_return std::move(permit).value();
-      }
+  drain_send_reports(ctx);
+  auto permit = Option<SemaphorePermit>{};
+  while (not permit) {
+    permit = request_slots_.try_acquire();
+    if (permit) {
+      break;
     }
-  }();
+    auto report = co_await (*send_queue_)->dequeue();
+    handle_send_report(std::move(report), ctx);
+  }
+  if (done_) {
+    batch_ = std::move(events);
+    co_return;
+  }
   auto args = args_;
   auto client = client_;
   auto method = method_;
   auto queue = *send_queue_;
+  auto report_ready = report_ready_;
   auto token = args_.token ? Option<std::string>{token_} : None{};
+  ++pending_reports_;
   ctx.spawn_task([client = std::move(client), args = std::move(args), method,
                   token = std::move(token), events = std::move(events),
                   queue = std::move(queue),
+                  report_ready = std::move(report_ready),
                   permit = std::move(permit)]() mutable -> Task<void> {
     auto report = ToCloudWatchSendReport{};
     try {
@@ -1351,37 +1344,39 @@ auto ToCloudWatch::flush(OpCtx& ctx) -> Task<void> {
       report.diagnostics.push_back(cloudwatch_error(
         fmt::format("CloudWatch request failed: {}", e.what())));
     }
-    co_await queue->enqueue(ToCloudWatchMessage{std::move(report)});
-    permit.release();
+    permit->release();
+    co_await queue->enqueue(std::move(report));
+    report_ready->notify_one();
   });
 }
 
 auto ToCloudWatch::await_task(diagnostic_handler& dh) const -> Task<Any> {
   TENZIR_UNUSED(dh);
-  TENZIR_ASSERT(send_queue_);
   while (true) {
     if (not next_timeout_) {
-      auto [ready, message] = co_await folly::coro::collectAnyNoDiscard(
-        buffer_ready_->wait(), (*send_queue_)->dequeue());
-      if (message.hasValue()) {
-        co_return std::move(message).value();
+      auto [ready, report] = co_await folly::coro::collectAnyNoDiscard(
+        buffer_ready_->wait(), report_ready_->wait());
+      if (report.hasValue()) {
+        co_return ToCloudWatchTask{ToCloudWatchReportReady{}};
       }
       if (ready.hasValue()) {
         continue;
       }
+      co_return Any{};
     }
     if (not next_timeout_) {
       continue;
     }
     auto const deadline = *next_timeout_;
-    auto [timeout, message] = co_await folly::coro::collectAnyNoDiscard(
-      sleep_until(deadline), (*send_queue_)->dequeue());
-    if (message.hasValue()) {
-      co_return std::move(message).value();
+    auto [timeout, report] = co_await folly::coro::collectAnyNoDiscard(
+      sleep_until(deadline), report_ready_->wait());
+    if (report.hasValue()) {
+      co_return ToCloudWatchTask{ToCloudWatchReportReady{}};
     }
     if (timeout.hasValue()) {
-      co_return ToCloudWatchMessage{ToCloudWatchFlushTimeout{}};
+      co_return ToCloudWatchTask{ToCloudWatchFlushTimeout{}};
     }
+    co_return Any{};
   }
 }
 
@@ -1407,6 +1402,8 @@ auto ToCloudWatch::handle_send_report(ToCloudWatchSendReport report, OpCtx& ctx)
   }
   bytes_write_counter_.add(report.bytes);
   events_write_counter_.add(report.events);
+  TENZIR_ASSERT(pending_reports_ > 0);
+  --pending_reports_;
   done_ = done_ or report.failed;
 }
 
@@ -1414,17 +1411,18 @@ auto ToCloudWatch::drain_send_reports(OpCtx& ctx) -> void {
   if (not send_queue_) {
     return;
   }
-  while (auto message = (*send_queue_)->try_dequeue()) {
-    if (auto* report = try_as<ToCloudWatchSendReport>(&*message)) {
-      handle_send_report(std::move(*report), ctx);
-    }
+  while (auto report = (*send_queue_)->try_dequeue()) {
+    handle_send_report(std::move(*report), ctx);
   }
 }
 
 auto ToCloudWatch::process_task(Any result, OpCtx& ctx) -> Task<void> {
-  auto message = std::move(result).as<ToCloudWatchMessage>();
-  if (auto* report = try_as<ToCloudWatchSendReport>(&message)) {
-    handle_send_report(std::move(*report), ctx);
+  auto* message = result.try_as<ToCloudWatchTask>();
+  if (not message) {
+    co_return;
+  }
+  if (try_as<ToCloudWatchReportReady>(message)) {
+    drain_send_reports(ctx);
     co_return;
   }
   if (not next_timeout_) {
@@ -1438,35 +1436,9 @@ auto ToCloudWatch::process_task(Any result, OpCtx& ctx) -> Task<void> {
 
 auto ToCloudWatch::wait_for_requests(OpCtx& ctx) -> Task<void> {
   TENZIR_ASSERT(send_queue_);
-  auto permits = std::vector<SemaphorePermit>{};
-  permits.reserve(detail::narrow<size_t>(parallel_));
-  auto handle_message = [&](ToCloudWatchMessage message) {
-    if (auto* report = try_as<ToCloudWatchSendReport>(&message)) {
-      handle_send_report(std::move(*report), ctx);
-    }
-  };
-  while (permits.size() < parallel_) {
-    while (auto permit = request_slots_.try_acquire()) {
-      permits.push_back(std::move(*permit));
-      if (permits.size() == parallel_) {
-        break;
-      }
-    }
-    if (permits.size() == parallel_) {
-      break;
-    }
-    if (auto message = (*send_queue_)->try_dequeue()) {
-      handle_message(std::move(*message));
-      continue;
-    }
-    auto [permit, message] = co_await folly::coro::collectAnyNoDiscard(
-      request_slots_.acquire(), (*send_queue_)->dequeue());
-    if (message.hasValue()) {
-      handle_message(std::move(message).value());
-    }
-    if (permit.hasValue()) {
-      permits.push_back(std::move(permit).value());
-    }
+  while (pending_reports_ > 0) {
+    auto report = co_await (*send_queue_)->dequeue();
+    handle_send_report(std::move(report), ctx);
   }
   drain_send_reports(ctx);
   co_return;

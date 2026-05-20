@@ -117,9 +117,10 @@ struct ToCloudWatchSendReport {
 };
 
 struct ToCloudWatchFlushTimeout {};
+struct ToCloudWatchReportReady {};
 
-using ToCloudWatchMessage
-  = variant<ToCloudWatchFlushTimeout, ToCloudWatchSendReport>;
+using ToCloudWatchTask
+  = variant<ToCloudWatchFlushTimeout, ToCloudWatchReportReady>;
 
 auto default_to_amazon_cloudwatch_message_expression() -> ast::expression;
 
@@ -182,9 +183,11 @@ private:
   duration batch_timeout_ = std::chrono::seconds{1};
   mutable Option<std::chrono::steady_clock::time_point> next_timeout_;
   mutable Box<Notify> buffer_ready_{std::in_place};
-  mutable Option<Arc<folly::coro::BoundedQueue<ToCloudWatchMessage>>>
+  mutable Arc<Notify> report_ready_{std::in_place};
+  mutable Option<Arc<folly::coro::BoundedQueue<ToCloudWatchSendReport>>>
     send_queue_;
   uint64_t parallel_ = 1;
+  uint64_t pending_reports_ = 0;
   Semaphore request_slots_{1};
   MetricsCounter bytes_write_counter_;
   MetricsCounter events_write_counter_;
