@@ -30,6 +30,7 @@
 #include <folly/SocketAddress.h>
 #include <folly/coro/Sleep.h>
 #include <folly/io/IOBuf.h>
+#include <folly/io/IOBufQueue.h>
 #include <folly/io/async/AsyncSocketException.h>
 #include <proxygen/lib/http/HTTPMethod.h>
 #include <proxygen/lib/http/coro/HTTPFixedSource.h>
@@ -76,6 +77,7 @@ struct ToHttpArgs {
   Option<located<duration>> connection_timeout;
   Option<located<uint64_t>> max_retry_count;
   Option<located<duration>> retry_delay;
+  Option<located<bool>> buffer_all;
   located<ir::pipeline> printer;
   location operator_location;
 };
@@ -279,9 +281,12 @@ public:
     }
     // Create the body channel. The request task starts lazily on the first
     // emitted body chunk so empty invocations do not send empty HTTP requests.
-    auto [tx, rx] = channel<chunk_ptr>(body_channel_capacity);
-    body_tx_.emplace(std::move(tx));
-    body_rx_.emplace(std::move(rx));
+    // In buffer_all mode, chunks are accumulated in memory instead.
+    if (not is_buffer_all()) {
+      auto [tx, rx] = channel<chunk_ptr>(body_channel_capacity);
+      body_tx_.emplace(std::move(tx));
+      body_rx_.emplace(std::move(rx));
+    }
     // Spawn writer sub-pipeline.
     auto pipeline = args_.printer.inner;
     co_await ctx.spawn_sub<table_slice>(sub_key(), std::move(pipeline));
@@ -308,8 +313,16 @@ public:
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> override {
-    if (not chunk or chunk->size() == 0 or lifecycle_ == Lifecycle::done
-        or not body_tx_) {
+    if (not chunk or chunk->size() == 0 or lifecycle_ == Lifecycle::done) {
+      co_return;
+    }
+    if (is_buffer_all()) {
+      bytes_write_counter_.add(chunk->size());
+      buffered_body_.append(
+        folly::IOBuf::copyBuffer(chunk->data(), chunk->size()));
+      co_return;
+    }
+    if (not body_tx_) {
       co_return;
     }
     if (not request_started_) {
@@ -341,6 +354,14 @@ public:
   }
 
   auto finish_sub(SubKeyView, OpCtx& ctx) -> Task<void> override {
+    if (is_buffer_all()) {
+      if (buffered_body_.empty()) {
+        std::ignore = response_->send(http::Response{});
+      } else {
+        start_buffered_request_task(ctx);
+      }
+      co_return;
+    }
     TENZIR_UNUSED(ctx);
     if (request_started_) {
       // Send a null chunk as end-of-body sentinel.
@@ -375,6 +396,10 @@ private:
     done,
   };
 
+  auto is_buffer_all() const -> bool {
+    return args_.buffer_all and args_.buffer_all->inner;
+  }
+
   auto start_request_task(OpCtx& ctx) -> void {
     TENZIR_ASSERT(body_rx_);
     request_started_ = true;
@@ -383,6 +408,15 @@ private:
       co_await run_request(*dh, std::move(body_rx));
     });
     body_rx_.reset();
+  }
+
+  auto start_buffered_request_task(OpCtx& ctx) -> void {
+    request_started_ = true;
+    auto body = buffered_body_.move();
+    ctx.spawn_task(
+      [this, dh = &ctx.dh(), body = std::move(body)]() mutable -> Task<void> {
+        co_await run_buffered_request(*dh, std::move(body));
+      });
   }
 
   auto begin_draining(OpCtx& ctx) -> Task<void> {
@@ -465,8 +499,6 @@ private:
         auto msg = std::make_unique<proxygen::HTTPMessage>();
         msg->setURL(parsed_url_.makeRelativeURL());
         msg->setMethod(get_method());
-        msg->setHTTPVersion(1, 1);
-        msg->setWantsKeepalive(true);
         msg->setSecure(parsed_url_.isSecure());
         for (auto const& [name, value] : headers_) {
           msg->getHeaders().add(name, value);
@@ -515,6 +547,102 @@ private:
         }
         co_return http_response;
       })));
+    if (attempt_res.is_err()) {
+      co_return Err{std::move(attempt_res).unwrap_err()};
+    }
+    co_return std::move(attempt_res).unwrap();
+  }
+
+  auto run_buffered_request(diagnostic_handler& dh,
+                            std::unique_ptr<folly::IOBuf> body) -> Task<void> {
+    auto max_retries = get_max_retry_count();
+    auto attempt = uint32_t{0};
+    auto response = http::Response{};
+    while (true) {
+      auto attempt_result = co_await try_single_buffered_request(body->clone());
+      if (attempt_result.is_ok()) {
+        response = std::move(attempt_result).unwrap();
+        break;
+      }
+      auto error = std::move(attempt_result).unwrap_err();
+      auto error_message = scrub_errno(error.what().toStdString());
+      auto retry = get_retry_info(error);
+      if (not retry or attempt >= max_retries) {
+        diagnostic::error("HTTP request to `{}` failed: {}", url_,
+                          error_message)
+          .primary(args_.operator_location)
+          .emit(dh);
+        break;
+      }
+      auto delay = http::retry_delay_for_attempt(get_retry_delay(), attempt,
+                                                 retry->retry_after);
+      ++attempt;
+      auto delay_secs = std::chrono::duration_cast<std::chrono::seconds>(delay);
+      diagnostic::warning("{} ({}), attempt {}/{}, retrying after {}s",
+                          retry->reason, error_message, attempt,
+                          max_retries + 1u, delay_secs.count())
+        .primary(args_.operator_location)
+        .emit(dh);
+      co_await folly::coro::sleep(delay);
+    }
+    std::ignore = response_->send(std::move(response));
+  }
+
+  auto try_single_buffered_request(std::unique_ptr<folly::IOBuf> body)
+    -> Task<Result<http::Response, folly::exception_wrapper>> {
+    auto attempt_res = co_await async_try(folly::coro::co_withExecutor(
+      folly::Executor::KeepAlive<>{evb_},
+      folly::coro::co_invoke(
+        [this, body = std::move(body)]() mutable -> Task<http::Response> {
+          auto addr = folly::SocketAddress{parsed_url_.getHost(),
+                                           parsed_url_.getPort(), true};
+          auto* session = co_await proxygen::coro::HTTPCoroConnector::connect(
+            evb_, addr, get_connection_timeout(), conn_params_);
+          auto holder = session->acquireKeepAlive();
+          SCOPE_EXIT {
+            if (auto* s = holder.get()) {
+              s->initiateDrain();
+            }
+          };
+          auto reservation = session->reserveRequest();
+          if (reservation.hasException()) {
+            co_yield folly::coro::co_error(std::move(reservation.exception()));
+          }
+          // Build the request message. HTTPFixedSource sets Content-Length
+          // automatically from the provided body.
+          auto msg = std::make_unique<proxygen::HTTPMessage>();
+          msg->setURL(parsed_url_.makeRelativeURL());
+          msg->setMethod(get_method());
+          msg->setSecure(parsed_url_.isSecure());
+          for (auto const& [name, value] : headers_) {
+            msg->getHeaders().add(name, value);
+          }
+          if (not msg->getHeaders().exists(proxygen::HTTP_HEADER_HOST)) {
+            msg->getHeaders().add(proxygen::HTTP_HEADER_HOST,
+                                  parsed_url_.getHostAndPortOmitDefault());
+          }
+          auto source
+            = proxygen::coro::HTTPFixedSource{std::move(msg), std::move(body)};
+          auto resp = proxygen::coro::HTTPClient::Response{};
+          auto request_result
+            = co_await async_try(proxygen::coro::HTTPClient::request(
+              session, std::move(*reservation), &source,
+              proxygen::coro::HTTPClient::makeDefaultReader(resp),
+              get_timeout()));
+          if (request_result.is_err()) {
+            co_yield folly::coro::co_error(
+              std::move(request_result).unwrap_err());
+          }
+          auto http_response = http::to_http_response(resp);
+          if (http::is_retryable_http_status(http_response.status_code)) {
+            throw retryable_http_response{
+              http_response.status_code,
+              http::parse_retry_after(
+                resp.headers->getHeaders().getSingleOrEmpty("Retry-After")),
+            };
+          }
+          co_return http_response;
+        })));
     if (attempt_res.is_err()) {
       co_return Err{std::move(attempt_res).unwrap_err()};
     }
@@ -577,6 +705,7 @@ private:
   proxygen::coro::HTTPCoroConnector::ConnectionParams conn_params_;
   Option<Sender<chunk_ptr>> body_tx_;
   Option<Receiver<chunk_ptr>> body_rx_;
+  folly::IOBufQueue buffered_body_{folly::IOBufQueue::cacheChainLength()};
   mutable Arc<Oneshot<http::Response>> response_{std::in_place};
   bool request_started_ = false;
   Lifecycle lifecycle_ = Lifecycle::running;
@@ -603,6 +732,7 @@ public:
     auto max_retry_count_arg
       = d.named("max_retry_count", &ToHttpArgs::max_retry_count);
     auto retry_delay_arg = d.named("retry_delay", &ToHttpArgs::retry_delay);
+    d.named("buffer_all", &ToHttpArgs::buffer_all);
     auto printer_arg
       = d.pipeline(&ToHttpArgs::printer, SubOptimize::from_downstream);
     d.operator_location(&ToHttpArgs::operator_location);
