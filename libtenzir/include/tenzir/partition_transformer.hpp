@@ -77,6 +77,12 @@ struct partition_transformer_state {
   /// Cached transform error, if the transform returns one.
   caf::error transform_error = {};
 
+  /// The partitions selected as input for the transform.
+  std::vector<partition_info> input_partitions = {};
+
+  /// The next input partition to load.
+  size_t next_input_partition = 0;
+
   /// The maximum number of events per partition. (not really necessary, but
   /// required by the partition synopsis)
   size_t partition_capacity = 0ull;
@@ -116,8 +122,9 @@ struct partition_transformer_state {
   /// Options for creating new value indices.
   caf::settings index_opts = {};
 
-  // Two format strings that can be formatted with a `tenzir::uuid`
-  // as the single parameter. They give the
+  // Format strings that can be formatted with a `tenzir::uuid` as the single
+  // parameter for input partitions and transformed output files.
+  std::string input_partition_path_template;
   std::string partition_path_template;
   std::string synopsis_path_template;
 
@@ -148,8 +155,10 @@ auto partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>,
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
-  pipeline transform, std::string partition_path_template,
-  std::string synopsis_path_template, std::string origin = "rebuild")
+  std::vector<partition_info> input_partitions, pipeline transform,
+  std::string input_partition_path_template,
+  std::string partition_path_template, std::string synopsis_path_template,
+  std::string origin = "rebuild")
   -> partition_transformer_actor::behavior_type;
 
 } // namespace tenzir

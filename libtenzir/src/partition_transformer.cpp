@@ -11,6 +11,7 @@
 #include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/fbs/utils.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/passive_partition.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/pipeline_executor.hpp"
@@ -86,6 +87,98 @@ void quit_or_stall(
     finished->promise.deliver(std::move(finished->result));
     self->quit();
   }
+}
+
+void fail_input_load(
+  partition_transformer_actor::stateful_pointer<partition_transformer_state>
+    self,
+  caf::error error) {
+  self->state().stream_error = std::move(error);
+  store_or_fulfill(self, partition_transformer_state::stream_data{});
+}
+
+void load_next_input_partition(
+  partition_transformer_actor::stateful_pointer<partition_transformer_state>
+    self) {
+  if (self->state().next_input_partition
+      >= self->state().input_partitions.size()) {
+    self->mail(atom::done_v).send(static_cast<partition_transformer_actor>(self));
+    return;
+  }
+  const auto partition
+    = self->state().input_partitions[self->state().next_input_partition];
+  const auto filename = fmt::format(
+    TENZIR_FMT_RUNTIME(self->state().input_partition_path_template),
+    partition.uuid);
+  auto partition_path = std::filesystem::path{filename};
+  self->mail(atom::mmap_v, partition_path)
+    .request(self->state().fs, caf::infinite)
+    .then(
+      [self, partition](chunk_ptr& chunk) mutable {
+        auto partition_state = passive_partition_state{};
+        if (auto err = partition_state.initialize_from_chunk(chunk);
+            err.valid()) {
+          fail_input_load(
+            self, diagnostic::error(std::move(err))
+                    .note("failed to load partition {}", partition.uuid)
+                    .to_error());
+          return;
+        }
+        if (partition_state.id != partition.uuid) {
+          fail_input_load(
+            self, caf::make_error(ec::format_error,
+                                  "unexpected ID for passive partition: "
+                                  "expected {}, got {}",
+                                  partition.uuid, partition_state.id));
+          return;
+        }
+        auto const* plugin
+          = plugins::find<store_actor_plugin>(partition_state.store_id);
+        if (not plugin) {
+          fail_input_load(self,
+                          caf::make_error(ec::format_error,
+                                          "encountered unhandled store backend "
+                                          "'{}' for partition {}",
+                                          partition_state.store_id,
+                                          partition.uuid));
+          return;
+        }
+        auto store
+          = plugin->make_store(self->state().fs, partition_state.store_header);
+        if (not store) {
+          fail_input_load(self, std::move(store.error()));
+          return;
+        }
+        static const auto match_everything
+          = tenzir::predicate{meta_extractor{meta_extractor::schema},
+                              relational_operator::ni, data{""}};
+        auto query_context = query_context::make_extract(
+          "partition-transformer",
+          static_cast<partition_transformer_actor>(self), match_everything);
+        query_context.id = uuid::random();
+        self->mail(atom::query_v, std::move(query_context))
+          .request(*store, caf::infinite)
+          .then(
+            [self, store = *store](uint64_t) mutable {
+              self->send_exit(store, caf::exit_reason::normal);
+              ++self->state().next_input_partition;
+              load_next_input_partition(self);
+            },
+            [self, store = *store, partition](caf::error& error) mutable {
+              self->send_exit(store, caf::exit_reason::normal);
+              fail_input_load(
+                self, diagnostic::error(std::move(error))
+                        .note("failed to query partition {}", partition.uuid)
+                        .to_error());
+            });
+      },
+      [self, partition_path, partition](caf::error& error) mutable {
+        fail_input_load(
+          self, diagnostic::error(std::move(error))
+                  .note("failed to mmap partition {} at {}", partition.uuid,
+                        partition_path)
+                  .to_error());
+      });
 }
 
 class fixed_source final : public crtp_operator<fixed_source> {
@@ -323,10 +416,13 @@ auto partition_transformer(
     self,
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
-  pipeline transform, std::string partition_path_template,
+  std::vector<partition_info> input_partitions, pipeline transform,
+  std::string input_partition_path_template, std::string partition_path_template,
   std::string synopsis_path_template, std::string origin)
   -> partition_transformer_actor::behavior_type {
   self->state().synopsis_opts = synopsis_opts;
+  self->state().input_partition_path_template
+    = std::move(input_partition_path_template);
   self->state().partition_path_template = std::move(partition_path_template);
   self->state().synopsis_path_template = std::move(synopsis_path_template);
   // For historic reasons, the `tenzir.max-partition-size` is stored as the
@@ -336,10 +432,17 @@ auto partition_transformer(
   self->state().index_opts = index_opts;
   self->state().fs = std::move(fs);
   self->state().catalog = std::move(catalog);
+  self->state().input_partitions = std::move(input_partitions);
   self->state().transform = std::move(transform);
   self->state().store_id = std::move(store_id);
   self->state().origin = std::move(origin);
+  self->mail(atom::internal_v, atom::load_v)
+    .send(static_cast<partition_transformer_actor>(self));
   return {
+    [self](atom::internal, atom::load) -> caf::result<void> {
+      load_next_input_partition(self);
+      return {};
+    },
     [self](tenzir::table_slice& slice) {
       // Adjust the import time range iff necessary.
       const auto old_import_time = slice.import_time();
