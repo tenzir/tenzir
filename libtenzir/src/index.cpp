@@ -231,7 +231,7 @@ caf::error extract_partition_synopsis(
 
 caf::expected<flatbuffers::Offset<fbs::Index>>
 pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
-  TENZIR_DEBUG("index persists {} uuids of definitely persisted and {}"
+  TENZIR_DEBUG("index persists {} uuids of known persisted and {}"
                "uuids of maybe persisted partitions",
                state.persisted_partitions.size(), state.unpersisted.size());
   std::vector<flatbuffers::Offset<fbs::LegacyUUID>> partition_offsets;
@@ -304,13 +304,6 @@ filesystem_actor& partition_factory::filesystem() {
 
 partition_actor partition_factory::operator()(const uuid& id) const {
   // Load partition from disk.
-  if (state_.persisted_partitions.find(id)
-      == state_.persisted_partitions.end()) {
-    TENZIR_WARN("{} did not find partition {} in it's internal state, but "
-                "tries "
-                "to load it regardless",
-                *state_.self, id);
-  }
   const auto path = state_.partition_path(id);
   TENZIR_TRACE("{} loads partition {} for path {}", *state_.self, id, path);
   materializations_++;
@@ -1021,8 +1014,8 @@ auto index_state::schedule_lookups() -> size_t {
       // We need to first check whether the ID is the active partition or one
       // of our unpersisted ones. Only then can we dispatch to our LRU cache.
       partition_actor part;
-      tenzir::type partition_type{};
-      for (const auto& [type, active_partition] : active_partitions) {
+      for (const auto& active_partition_entry : active_partitions) {
+        const auto& active_partition = active_partition_entry.second;
         if (active_partition.actor != nullptr
             and active_partition.id == partition_id) {
           part = active_partition.actor;
@@ -1032,8 +1025,7 @@ auto index_state::schedule_lookups() -> size_t {
       if (not part) {
         if (auto it = unpersisted.find(partition_id); it != unpersisted.end()) {
           part = it->second.actor;
-        } else if (auto it = persisted_partitions.find(partition_id);
-                   it != persisted_partitions.end()) {
+        } else {
           part = inmem_partitions.get_or_load(partition_id);
         }
       }
@@ -1523,14 +1515,6 @@ index(index_actor::stateful_pointer<index_state> self,
       TENZIR_DEBUG("{} applies a pipeline to partitions {}", *self,
                    selected_partitions);
       TENZIR_ASSERT(self->state().store_actor_plugin);
-      std::erase_if(selected_partitions, [&](const auto& entry) {
-        if (self->state().persisted_partitions.contains(entry.uuid)) {
-          return false;
-        }
-        TENZIR_WARN("{} skips unknown partition {} for pipeline {:?}", *self,
-                    entry.uuid, pipe);
-        return true;
-      });
       auto corrected_partitions = catalog_lookup_result{};
       for (const auto& partition : selected_partitions) {
         if (self->state()

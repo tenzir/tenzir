@@ -252,7 +252,8 @@ struct index_state {
   /// old entries when the size exceeds `max_inmem_partitions`.
   detail::lru_cache<uuid, partition_actor, partition_factory> inmem_partitions;
 
-  /// The set of partitions that exist on disk.
+  /// A best-effort cache of partitions that the index has persisted itself.
+  /// The catalog is the source of truth for persisted partition visibility.
   std::unordered_set<uuid> persisted_partitions = {};
 
   /// The maximum number of events that a partition can hold.
