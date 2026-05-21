@@ -1,0 +1,17 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /options/header
+      header_name: Content-Length
+      header_value: "13"
+timeout: 60
+---
+
+from {
+  value: 42,
+}
+to_http env("HTTP_FIXTURE_HEADER_URL"), buffer_all=true {
+  write_ndjson
+}
