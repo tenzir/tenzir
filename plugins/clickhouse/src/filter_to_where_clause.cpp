@@ -156,12 +156,12 @@ auto filter_to_where_clause(ir::optimize_filter const& filter)
   }
   if (clauses.empty()) {
     return {
-      .sql = {},
+      .predicate = {},
       .residual_filter = std::move(residual_filter),
     };
   }
   return {
-    .sql = fmt::format(" WHERE {}", fmt::join(clauses, " AND ")),
+    .predicate = fmt::to_string(fmt::join(clauses, " AND ")),
     .residual_filter = std::move(residual_filter),
   };
 }

@@ -10,6 +10,7 @@
 #include "clickhouse/block_to_table_slice.hpp"
 #include "clickhouse/easy_client.hpp"
 #include "clickhouse/filter_to_where_clause.hpp"
+#include "clickhouse/sql_predicate_pushdown.hpp"
 #include "tenzir/arc.hpp"
 #include "tenzir/async.hpp"
 #include "tenzir/atomic.hpp"
@@ -245,6 +246,17 @@ private:
   static auto make_query_plan(FromClickhouseArgs const& args) -> QueryPlan {
     TENZIR_ASSERT(args.sql or args.table);
     if (args.sql) {
+      auto where = filter_to_where_clause(args.filter);
+      if (not where.predicate.empty()) {
+        if (auto query
+            = pushdown_predicate_into_sql(args.sql->inner, where.predicate)) {
+          return QueryPlan{
+            .query = std::move(*query),
+            .schema_name = "clickhouse.query",
+            .local_filter = std::move(where.residual_filter),
+          };
+        }
+      }
       return QueryPlan{
         .query = args.sql->inner,
         .schema_name = "clickhouse.query",
@@ -255,7 +267,10 @@ private:
     auto qualified = std::string{args.table->inner};
     auto where = filter_to_where_clause(args.filter);
     return QueryPlan{
-      .query = fmt::format("SELECT * FROM {}{}", qualified, where.sql),
+      .query = where.predicate.empty()
+                 ? fmt::format("SELECT * FROM {}", qualified)
+                 : fmt::format("SELECT * FROM {} WHERE {}", qualified,
+                               where.predicate),
       .schema_name = make_schema_name_from_table(args.table->inner),
       .local_filter = std::move(where.residual_filter),
     };

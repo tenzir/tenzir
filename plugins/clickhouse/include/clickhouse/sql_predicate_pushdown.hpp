@@ -8,18 +8,15 @@
 
 #pragma once
 
-#include "tenzir/ir.hpp"
+#include "tenzir/option.hpp"
 
 #include <string>
+#include <string_view>
 
 namespace tenzir::plugins::clickhouse {
 
-struct FilterToWhereClauseResult {
-  std::string predicate;
-  ir::optimize_filter residual_filter;
-};
-
-auto filter_to_where_clause(ir::optimize_filter const& filter)
-  -> FilterToWhereClauseResult;
+auto pushdown_predicate_into_sql(std::string_view sql,
+                                 std::string_view predicate)
+  -> Option<std::string>;
 
 } // namespace tenzir::plugins::clickhouse
