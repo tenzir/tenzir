@@ -863,6 +863,12 @@ private:
     }
     add_from_sub_recv(it);
     add_to_control_recv(it);
+    // If we already received a graceful stop signal, forward it to the new
+    // subpipeline immediately so that nested sources also learn about the
+    // shutdown and don't keep producing new work indefinitely.
+    if (stop_requested_ and it->second.from_control_sender) {
+      co_await it->second.from_control_sender->send(GracefulStop{});
+    }
     // TODO: Where do we put this?
     TENZIR_ASSERT(operator_scope_);
     operator_scope_->spawn([this, key = std::move(sub_key),
@@ -1367,6 +1373,27 @@ private:
         LOGV("got post commit in {}", op_name());
         co_await base_op().post_commit(*this);
       },
+      [&](GracefulStop) -> Task<void> {
+        if (phase_ != Phase::running or stop_requested_) {
+          co_return;
+        }
+        stop_requested_ = true;
+        LOGE("got graceful stop in {}", op_name());
+        // Tell the operator to stop() producing new work and finish any
+        // in-flight work. It should eventually reach finalize() naturally,
+        // either by returning OperatorState::done from state() or by exhausting
+        // their await_task() loop.
+        co_await base_op().stop(*this);
+
+        // Propagate into all subpipelines so that nested sources (e.g.,
+        // `subscribe` inside `every 10s { ... }`) also learn about the
+        // graceful shutdown.
+        for (auto& [_, sub] : subpipelines_) {
+          if (sub.from_control_sender) {
+            co_await sub.from_control_sender->send(GracefulStop{});
+          }
+        }
+      },
       [&](HardStop) -> Task<void> {
         if (phase_ == Phase::stopping_forced or phase_ == Phase::stopped) {
           co_return;
@@ -1597,6 +1624,9 @@ private:
   bool got_end_of_data_{false};
   /// Tracks the shutdown sequencing of the operator.
   Phase phase_{Phase::running};
+  /// Whether we have received a `GracefulStop` signal. We remember this so we
+  /// can forward it to subpipelines spawned after the signal arrived.
+  bool stop_requested_{false};
   // TODO: Expose this as an atomic for metrics?
   size_t ticks_{0};
 };
@@ -1751,6 +1781,13 @@ private:
               for (auto& ctrl : op_controls_) {
                 if (ctrl.sender) {
                   co_await ctrl.sender->send(PostCommit{});
+                }
+              }
+            },
+            [&](GracefulStop) -> Task<void> {
+              for (auto& ctrl : op_controls_) {
+                if (ctrl.sender) {
+                  co_await ctrl.sender->send(GracefulStop{});
                 }
               }
             },
@@ -1970,19 +2007,25 @@ auto new_pipe_id() -> PipeId {
 
 } // namespace
 
+struct GracefulStopRequested {};
+
 auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
-                  caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
+                  caf::actor_system& sys, DiagHandler& dh,
+                  Notify* graceful_stop) -> Task<void> {
   auto id = new_pipe_id();
   auto [push_input, pull_input]
     = exec_ctx.make_channel<void>(ChannelId::first(id.op(0)));
   auto [push_output, pull_output]
     = exec_ctx.make_channel<void>(ChannelId::last(id.op(pipeline.size() - 1)));
   auto result = co_await async_try([&]() -> Task<void> {
-    auto [from_control_sender, from_control_receiver]
+    auto [from_control_sender_raw, from_control_receiver]
       = channel<FromControl>(16);
+    auto from_control_sender
+      = Option<Sender<FromControl>>{std::move(from_control_sender_raw)};
     auto [to_control_sender, to_control_receiver] = channel<ToControl>(16);
-    auto driver = JoinSet<
-      variant<Terminated, Option<ToControl>, Option<OperatorMsg<void>>>>{};
+    auto driver
+      = JoinSet<variant<Terminated, GracefulStopRequested, Option<ToControl>,
+                        Option<OperatorMsg<void>>>>{};
     LOGV("creating pipeline queue scope");
     co_await driver.activate([&] -> Task<void> {
       driver.add([&] -> Task<Terminated> {
@@ -1994,6 +2037,12 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
       });
       driver.add(pull_output());
       driver.add(to_control_receiver.recv());
+      if (graceful_stop) {
+        driver.add([graceful_stop] -> Task<GracefulStopRequested> {
+          co_await graceful_stop->wait();
+          co_return GracefulStopRequested{};
+        });
+      }
 #if 0
       // TODO: We just have this right now to simulate checkpointing.
       queue.scope().spawn([&] -> Task<std::monostate> {
@@ -2009,9 +2058,20 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
         co_await co_match(
           std::move(*next),
           [&](Terminated) -> Task<void> {
-            // TODO: The pipeline terminated?
             LOGI("run_pipeline got info that chain terminated");
+            from_control_sender = None{};
+            // If the pipeline terminated without graceful stop,
+            // the Notify would block the driver forever, never completing.
+            if (graceful_stop) {
+              graceful_stop->notify_one();
+            }
             co_return;
+          },
+          [&](GracefulStopRequested) -> Task<void> {
+            LOGI("run_pipeline got graceful stop request");
+            if (from_control_sender) {
+              co_await from_control_sender->send(GracefulStop{});
+            }
           },
           [&](Option<ToControl> to_control) -> Task<void> {
             if (not to_control) {
@@ -2026,7 +2086,7 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
                 {
                   // FIXME: We should not leave this dangling.
                   auto _input = std::move(push_input);
-                  auto _control = std::move(from_control_sender);
+                  from_control_sender = None{};
                 }
                 break;
               case ToControl::checkpoint_begin:

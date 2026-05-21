@@ -457,12 +457,6 @@ public:
                                             : FinalizeBehavior::continue_;
   }
 
-  auto stop(OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(ctx);
-    co_await force_stop();
-    co_return;
-  }
-
   auto state() -> OperatorState override {
     cleanup_closed_clients();
     maybe_finish_draining();

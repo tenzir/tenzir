@@ -219,19 +219,6 @@ public:
     co_await finish_upload_task();
   }
 
-  auto stop(OpCtx& ctx) -> Task<void> override {
-    if (lifecycle_ == Lifecycle::done) {
-      co_return;
-    }
-    lifecycle_ = Lifecycle::done;
-    co_await request_upload_abort(true);
-    if (auto sub = ctx.get_sub(caf::none)) {
-      auto& printer = as<SubHandle<table_slice>>(*sub);
-      co_await printer.close();
-    }
-    co_return;
-  }
-
   auto state() -> OperatorState override {
     return lifecycle_ == Lifecycle::done ? OperatorState::done
                                          : OperatorState::normal;
