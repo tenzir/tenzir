@@ -26,6 +26,7 @@
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/result.hpp>
 #include <tenzir/secret_resolution.hpp>
+#include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
@@ -204,7 +205,8 @@ auto add_default_content_type(std::vector<http::Header>& headers,
 // Resolves method, serializes the body (records become JSON, blobs are sent
 // verbatim), and assembles request headers.
 auto make_request_config(FromHttpArgs const& args,
-                         std::vector<http::Header> headers) -> RequestConfig {
+                         std::vector<http::Header> headers,
+                         Option<data> const& resolved_body) -> RequestConfig {
   // Resolve HTTP method (validated at describe time).
   // Default to POST when a body is present, GET otherwise.
   auto method_str = args.method ? args.method->inner
@@ -215,8 +217,8 @@ auto make_request_config(FromHttpArgs const& args,
   // Serialize the optional body. Records become JSON; blobs and strings are
   // sent verbatim.
   auto body = std::vector<std::byte>{};
-  if (args.body) {
-    auto serialized = serialize_body(args.body->inner, args.encode);
+  if (resolved_body) {
+    auto serialized = serialize_body(*resolved_body, args.encode);
     TENZIR_ASSERT(serialized);
     body = std::move(serialized->body);
     add_default_content_type(headers, std::move(serialized->content_type));
@@ -247,7 +249,8 @@ auto make_paginated_request_config(std::vector<http::Header> headers)
 
 auto resolve_http_secrets(OpCtx& ctx, FromHttpArgs const& args,
                           std::string& resolved_url,
-                          std::vector<http::Header>& resolved_headers)
+                          std::vector<http::Header>& resolved_headers,
+                          Option<data>& resolved_body)
   -> Task<failure_or<bool>> {
   resolved_url.clear();
   auto requests = std::vector<secret_request>{};
@@ -258,6 +261,14 @@ auto resolve_http_secrets(OpCtx& ctx, FromHttpArgs const& args,
   requests.insert(requests.end(),
                   std::make_move_iterator(header_requests.begin()),
                   std::make_move_iterator(header_requests.end()));
+  if (args.body) {
+    resolved_body = args.body->inner;
+    auto body_requests
+      = make_secret_request(*resolved_body, args.body->source, ctx.dh());
+    requests.insert(requests.end(),
+                    std::make_move_iterator(body_requests.begin()),
+                    std::make_move_iterator(body_requests.end()));
+  }
   if (auto result = co_await ctx.resolve_secrets(std::move(requests));
       result.is_error()) {
     co_return failure::promise();
@@ -873,8 +884,9 @@ public:
     pagination_.spec = std::move(*paginate);
     // resolve secrets
     std::string resolved_url;
+    auto resolved_body = Option<data>{};
     auto secret_resolution = co_await resolve_http_secrets(
-      ctx, args_, resolved_url, resolved_headers_);
+      ctx, args_, resolved_url, resolved_headers_, resolved_body);
     if (secret_resolution.is_error()) {
       lifecycle_ = Lifecycle::done;
       co_return;
@@ -884,7 +896,8 @@ public:
     fetch_config_ = make_fetch_config(args_);
     // ensure system CA paths are registered
     http::ensure_default_ca_paths();
-    pagination_.current_request = make_request_config(args_, resolved_headers_);
+    pagination_.current_request
+      = make_request_config(args_, resolved_headers_, resolved_body);
     co_await start_fetch(ctx, pagination_.current_request);
   }
 

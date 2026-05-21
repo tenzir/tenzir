@@ -50,13 +50,6 @@ auto arrow_uri_callback(std::string prefix, arrow::util::Uri& uri,
 
 } // namespace
 
-auto make_uri_request(secret s, location loc, std::string prefix,
-                      arrow::util::Uri& uri, diagnostic_handler& dh)
-  -> secret_request {
-  return secret_request{s, loc,
-                        arrow_uri_callback(std::move(prefix), uri, dh, loc)};
-}
-
 auto make_uri_request(const located<secret>& s, std::string prefix,
                       arrow::util::Uri& uri, diagnostic_handler& dh)
   -> secret_request {

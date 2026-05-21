@@ -8,7 +8,6 @@
 
 #pragma once
 #include "tenzir/aliases.hpp"
-#include "tenzir/concepts.hpp"
 #include "tenzir/operator_control_plane.hpp"
 
 #include <arrow/util/uri.h>
