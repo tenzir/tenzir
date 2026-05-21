@@ -64,6 +64,52 @@ auto make_uri_request(const located<secret>& s, std::string prefix,
                                               s.source)};
 }
 
+namespace {
+
+auto visit_secret_values(
+  std::string key, data& value,
+  std::function<void(std::string, data&)> const& on_secret) -> void {
+  if (auto* s = try_as<secret>(value)) {
+    TENZIR_UNUSED(s);
+    on_secret(std::move(key), value);
+    return;
+  }
+  if (auto* r = try_as<record>(value)) {
+    for (auto& [k, v] : *r) {
+      visit_secret_values(key + "." + k, v, on_secret);
+    }
+    return;
+  }
+  if (auto* l = try_as<list>(value)) {
+    for (size_t i = 0; i < l->size(); ++i) {
+      visit_secret_values(key + "[" + std::to_string(i) + "]", l->operator[](i),
+                          on_secret);
+    }
+  }
+}
+
+} // namespace
+
+auto make_secret_request(data& value, location loc, diagnostic_handler& dh)
+  -> std::vector<secret_request> {
+  auto requests = std::vector<secret_request>{};
+  visit_secret_values("", value, [&](std::string, data& target) {
+    requests.emplace_back(as<secret>(target), loc,
+                          [&target, loc,
+                           &dh](resolved_secret_value v) -> failure_or<void> {
+                            TRY(auto str, v.utf8_view("value", loc, dh));
+                            target = std::string{str};
+                            return {};
+                          });
+  });
+  return requests;
+}
+
+auto make_secret_request(located<data>& value, diagnostic_handler& dh)
+  -> std::vector<secret_request> {
+  return make_secret_request(value.inner, value.source, dh);
+}
+
 auto resolve_secrets_must_yield(
   operator_control_plane& ctrl, std::vector<secret_request_combined> requests,
   operator_control_plane::final_callback_t final_callback)
@@ -76,30 +122,15 @@ auto resolve_secrets_must_yield(
       continue;
     }
     auto& record_request = as<secret_request_record>(req);
-    const auto handle_value
-      = [&record_request, &translated_requests](
-          this const auto& self, std::string key, tenzir::data& value) -> void {
-      if (auto* s = try_as<secret>(value)) {
+    for (auto& [k, v] : record_request.value) {
+      visit_secret_values(k, v, [&](std::string key, data& target) {
         translated_requests.emplace_back(
-          std::move(*s), record_request.location,
+          std::move(as<secret>(target)), record_request.location,
           [cb = record_request.callback,
-           key](resolved_secret_value v) -> failure_or<void> {
+           key = std::move(key)](resolved_secret_value v) -> failure_or<void> {
             return cb(key, std::move(v));
           });
-      }
-      if (auto* r = try_as<record>(value)) {
-        for (auto& [k, v] : *r) {
-          self(key + "." + k, v);
-        }
-      }
-      if (auto* l = try_as<list>(value)) {
-        for (size_t i = 0; i < l->size(); ++i) {
-          self(key + "[" + std::to_string(i) + "]", l->operator[](i));
-        }
-      }
-    };
-    for (auto& [k, v] : record_request.value) {
-      handle_value(k, v);
+      });
     }
   }
   return ctrl.resolve_secrets_must_yield(std::move(translated_requests),
