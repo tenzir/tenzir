@@ -11,11 +11,12 @@
 #include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/fbs/utils.hpp"
 #include "tenzir/logger.hpp"
-#include "tenzir/passive_partition.hpp"
 #include "tenzir/partition_synopsis.hpp"
+#include "tenzir/passive_partition.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/pipeline_executor.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/store.hpp"
 
 #include <caf/actor_from_state.hpp>
 #include <caf/event_based_actor.hpp>
@@ -89,111 +90,42 @@ void quit_or_stall(
   }
 }
 
-void fail_input_load(
-  partition_transformer_actor::stateful_pointer<partition_transformer_state>
-    self,
-  caf::error error) {
-  self->state().stream_error = std::move(error);
-  store_or_fulfill(self, partition_transformer_state::stream_data{});
-}
+struct partition_source_state {
+  caf::error error = {};
+  tenzir::time min_import_time = tenzir::time::max();
+  tenzir::time max_import_time = tenzir::time::min();
+};
 
-void load_next_input_partition(
-  partition_transformer_actor::stateful_pointer<partition_transformer_state>
-    self) {
-  if (self->state().next_input_partition
-      >= self->state().input_partitions.size()) {
-    self->mail(atom::done_v).send(static_cast<partition_transformer_actor>(self));
-    return;
-  }
-  const auto partition
-    = self->state().input_partitions[self->state().next_input_partition];
-  const auto filename = fmt::format(
-    TENZIR_FMT_RUNTIME(self->state().input_partition_path_template),
-    partition.uuid);
-  auto partition_path = std::filesystem::path{filename};
-  self->mail(atom::mmap_v, partition_path)
-    .request(self->state().fs, caf::infinite)
-    .then(
-      [self, partition](chunk_ptr& chunk) mutable {
-        auto partition_state = passive_partition_state{};
-        if (auto err = partition_state.initialize_from_chunk(chunk);
-            err.valid()) {
-          fail_input_load(
-            self, diagnostic::error(std::move(err))
-                    .note("failed to load partition {}", partition.uuid)
-                    .to_error());
-          return;
-        }
-        if (partition_state.id != partition.uuid) {
-          fail_input_load(
-            self, caf::make_error(ec::format_error,
-                                  "unexpected ID for passive partition: "
-                                  "expected {}, got {}",
-                                  partition.uuid, partition_state.id));
-          return;
-        }
-        auto const* plugin
-          = plugins::find<store_actor_plugin>(partition_state.store_id);
-        if (not plugin) {
-          fail_input_load(self,
-                          caf::make_error(ec::format_error,
-                                          "encountered unhandled store backend "
-                                          "'{}' for partition {}",
-                                          partition_state.store_id,
-                                          partition.uuid));
-          return;
-        }
-        auto store
-          = plugin->make_store(self->state().fs, partition_state.store_header);
-        if (not store) {
-          fail_input_load(self, std::move(store.error()));
-          return;
-        }
-        static const auto match_everything
-          = tenzir::predicate{meta_extractor{meta_extractor::schema},
-                              relational_operator::ni, data{""}};
-        auto query_context = query_context::make_extract(
-          "partition-transformer",
-          static_cast<partition_transformer_actor>(self), match_everything);
-        query_context.id = uuid::random();
-        self->mail(atom::query_v, std::move(query_context))
-          .request(*store, caf::infinite)
-          .then(
-            [self, store = *store](uint64_t) mutable {
-              self->send_exit(store, caf::exit_reason::normal);
-              ++self->state().next_input_partition;
-              load_next_input_partition(self);
-            },
-            [self, store = *store, partition](caf::error& error) mutable {
-              self->send_exit(store, caf::exit_reason::normal);
-              fail_input_load(
-                self, diagnostic::error(std::move(error))
-                        .note("failed to query partition {}", partition.uuid)
-                        .to_error());
-            });
-      },
-      [self, partition_path, partition](caf::error& error) mutable {
-        fail_input_load(
-          self, diagnostic::error(std::move(error))
-                  .note("failed to mmap partition {} at {}", partition.uuid,
-                        partition_path)
-                  .to_error());
-      });
-}
-
-class fixed_source final : public crtp_operator<fixed_source> {
+class partition_source final : public crtp_operator<partition_source> {
 public:
-  explicit fixed_source(std::vector<table_slice> slices)
-    : slices_{std::move(slices)} {
+  partition_source(std::vector<partition_info> partitions,
+                   std::string partition_path_template,
+                   std::filesystem::path archive_dir,
+                   std::shared_ptr<partition_source_state> state)
+    : partitions_{std::move(partitions)},
+      partition_path_template_{std::move(partition_path_template)},
+      archive_dir_{std::move(archive_dir)},
+      state_{std::move(state)} {
+    TENZIR_ASSERT(state_);
   }
 
   auto name() const -> std::string override {
-    return "<fixed_source>";
+    return "<partition_source>";
   }
 
   auto operator()() const -> generator<table_slice> {
-    for (const auto& slice : slices_) {
-      co_yield slice;
+    for (const auto& partition : partitions_) {
+      for (auto&& slice : load_partition(partition)) {
+        const auto import_time = slice.import_time();
+        state_->min_import_time
+          = std::min(state_->min_import_time, import_time);
+        state_->max_import_time
+          = std::max(state_->max_import_time, import_time);
+        co_yield std::move(slice);
+      }
+      if (state_->error.valid()) {
+        co_return;
+      }
     }
   }
 
@@ -204,7 +136,87 @@ public:
   }
 
 private:
-  std::vector<table_slice> slices_;
+  void fail(caf::error error) const {
+    state_->error = std::move(error);
+  }
+
+  auto load_partition(const partition_info& partition) const
+    -> generator<table_slice> {
+    const auto filename = fmt::format(
+      TENZIR_FMT_RUNTIME(partition_path_template_), partition.uuid);
+    auto partition_path = std::filesystem::path{filename};
+    auto partition_chunk = chunk::mmap(partition_path);
+    if (not partition_chunk) {
+      fail(diagnostic::error(partition_chunk.error())
+             .note("failed to mmap partition {} at {}", partition.uuid,
+                   partition_path)
+             .to_error());
+      co_return;
+    }
+    auto partition_state = passive_partition_state{};
+    if (auto err = partition_state.initialize_from_chunk(*partition_chunk);
+        err.valid()) {
+      fail(diagnostic::error(std::move(err))
+             .note("failed to load partition {}", partition.uuid)
+             .to_error());
+      co_return;
+    }
+    if (partition_state.id != partition.uuid) {
+      fail(caf::make_error(ec::format_error,
+                           "unexpected ID for passive partition: "
+                           "expected {}, got {}",
+                           partition.uuid, partition_state.id));
+      co_return;
+    }
+    auto const* plugin = plugins::find<store_plugin>(partition_state.store_id);
+    if (not plugin) {
+      fail(caf::make_error(ec::format_error,
+                           "encountered unhandled store backend "
+                           "'{}' for partition {}",
+                           partition_state.store_id, partition.uuid));
+      co_return;
+    }
+    if (partition_state.store_header.size() != uuid::num_bytes) {
+      fail(caf::make_error(ec::format_error,
+                           "unexpected store header size for "
+                           "partition {}: expected {}, got {}",
+                           partition.uuid, uuid::num_bytes,
+                           partition_state.store_header.size()));
+      co_return;
+    }
+    auto store = plugin->make_passive_store();
+    if (not store) {
+      fail(std::move(store.error()));
+      co_return;
+    }
+    const auto store_uuid
+      = uuid{partition_state.store_header.subspan<0, uuid::num_bytes>()};
+    auto store_path
+      = archive_dir_
+        / fmt::format("{}.{}", store_uuid, partition_state.store_id);
+    auto store_chunk = chunk::mmap(store_path);
+    if (not store_chunk) {
+      fail(diagnostic::error(store_chunk.error())
+             .note("failed to mmap store for partition {} at {}",
+                   partition.uuid, store_path)
+             .to_error());
+      co_return;
+    }
+    if (auto err = (*store)->load(std::move(*store_chunk)); err.valid()) {
+      fail(diagnostic::error(std::move(err))
+             .note("failed to load store for partition {}", partition.uuid)
+             .to_error());
+      co_return;
+    }
+    for (auto&& slice : (*store)->slices()) {
+      co_yield std::move(slice);
+    }
+  }
+
+  std::vector<partition_info> partitions_;
+  std::string partition_path_template_;
+  std::filesystem::path archive_dir_;
+  std::shared_ptr<partition_source_state> state_;
 };
 
 class collecting_sink final : public crtp_operator<collecting_sink> {
@@ -417,9 +429,9 @@ auto partition_transformer(
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
   std::vector<partition_info> input_partitions, pipeline transform,
-  std::string input_partition_path_template, std::string partition_path_template,
-  std::string synopsis_path_template, std::string origin)
-  -> partition_transformer_actor::behavior_type {
+  std::string input_partition_path_template,
+  std::string partition_path_template, std::string synopsis_path_template,
+  std::string origin) -> partition_transformer_actor::behavior_type {
   self->state().synopsis_opts = synopsis_opts;
   self->state().input_partition_path_template
     = std::move(input_partition_path_template);
@@ -440,17 +452,14 @@ auto partition_transformer(
     .send(static_cast<partition_transformer_actor>(self));
   return {
     [self](atom::internal, atom::load) -> caf::result<void> {
-      load_next_input_partition(self);
+      self->mail(atom::done_v)
+        .send(static_cast<partition_transformer_actor>(self));
       return {};
     },
-    [self](tenzir::table_slice& slice) {
-      // Adjust the import time range iff necessary.
-      const auto old_import_time = slice.import_time();
-      self->state().min_import_time
-        = std::min(self->state().min_import_time, old_import_time);
-      self->state().max_import_time
-        = std::max(self->state().max_import_time, old_import_time);
-      self->state().input.push_back(std::move(slice));
+    [](tenzir::table_slice&) -> caf::result<void> {
+      return caf::make_error(ec::logic_error,
+                             "partition transformer no longer accepts "
+                             "externally pushed table slices");
     },
     [self](atom::done) -> caf::result<void> {
       // We copy the pipeline because we will modify it.
@@ -459,8 +468,21 @@ auto partition_transformer(
       if (not open) {
         return open.error();
       }
-      pipe.prepend(
-        std::make_unique<fixed_source>(std::move(self->state().input)));
+      auto db_dir = std::filesystem::path{caf::get_or(
+        content(self->state().fs->home_system().config()),
+        "tenzir.state-directory", defaults::state_directory.data())};
+      std::error_code err{};
+      auto archive_dir = std::filesystem::absolute(db_dir, err) / "archive";
+      if (err) {
+        return caf::make_error(ec::filesystem_error,
+                               "failed to resolve state directory {}: {}",
+                               db_dir, err.message());
+      }
+      auto source_state = std::make_shared<partition_source_state>();
+      pipe.prepend(std::make_unique<partition_source>(
+        self->state().input_partitions,
+        self->state().input_partition_path_template, std::move(archive_dir),
+        source_state));
       auto output = std::make_shared<std::vector<table_slice>>();
       pipe.append(std::make_unique<collecting_sink>(output));
       auto closed = pipe.check_type<void, void>();
@@ -479,12 +501,18 @@ auto partition_transformer(
                       diagnostics_receiver, metrics_receiver, node_actor{},
                       false, false, std::string{});
       // Monitor the executor to detect when it finishes and process results.
-      self->monitor(executor, [self, output, executor](const caf::error& err) {
+      self->monitor(executor, [self, source_state, output,
+                               executor](const caf::error& err) {
         if (err.valid() and err != caf::exit_reason::normal) {
           TENZIR_ERROR("{} pipeline executor failed: {}", *self, err);
           self->state().transform_error = err;
         } else {
           TENZIR_DEBUG("{} pipeline executor completed successfully", *self);
+        }
+        if (source_state->error.valid()) {
+          self->state().stream_error = std::move(source_state->error);
+          store_or_fulfill(self, partition_transformer_state::stream_data{});
+          return;
         }
         // Process the collected output slices.
         for (auto& slice : *output) {
@@ -498,10 +526,10 @@ auto partition_transformer(
           }
           auto* unshared_synopsis = partition_data.synopsis.unshared_ptr();
           if (slice.import_time() == time{}) {
-            slice.import_time(self->state().min_import_time);
+            slice.import_time(source_state->min_import_time);
           }
-          unshared_synopsis->min_import_time = self->state().min_import_time;
-          unshared_synopsis->max_import_time = self->state().max_import_time;
+          unshared_synopsis->min_import_time = source_state->min_import_time;
+          unshared_synopsis->max_import_time = source_state->max_import_time;
           partition_data.events += slice.rows();
           self->state().events += slice.rows();
           self->state().partition_buildup[partition_data.id].slices.push_back(

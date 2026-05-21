@@ -68,9 +68,6 @@ struct partition_transformer_state {
   /// The transform to be applied to the data.
   pipeline transform = {};
 
-  /// Collector for the received table slices.
-  std::vector<table_slice> input = {};
-
   /// Cached stream error, if the stream terminated abnormally.
   caf::error stream_error = {};
 
@@ -80,21 +77,12 @@ struct partition_transformer_state {
   /// The partitions selected as input for the transform.
   std::vector<partition_info> input_partitions = {};
 
-  /// The next input partition to load.
-  size_t next_input_partition = 0;
-
   /// The maximum number of events per partition. (not really necessary, but
   /// required by the partition synopsis)
   size_t partition_capacity = 0ull;
 
   /// Total number of rows in all transformed `slices`.
   size_t events = 0ull;
-
-  /// Oldest import timestamp of the input data.
-  tenzir::time min_import_time = tenzir::time::max();
-
-  /// Newest import timestamp of the input data.
-  tenzir::time max_import_time = tenzir::time::min();
 
   /// The data of the newly created partition(s).
   std::multimap<type, active_partition_state::serialization_data> data = {};
@@ -158,7 +146,6 @@ auto partition_transformer(
   std::vector<partition_info> input_partitions, pipeline transform,
   std::string input_partition_path_template,
   std::string partition_path_template, std::string synopsis_path_template,
-  std::string origin = "rebuild")
-  -> partition_transformer_actor::behavior_type;
+  std::string origin = "rebuild") -> partition_transformer_actor::behavior_type;
 
 } // namespace tenzir

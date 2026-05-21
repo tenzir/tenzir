@@ -264,7 +264,7 @@ using filesystem_actor = typed_actor_fwd<
 
 /// The interface of a PARTITION TRANSFORMER actor.
 using partition_transformer_actor = typed_actor_fwd<
-  // INTERNAL: Load the next selected input partition.
+  // INTERNAL: Start the transform pipeline.
   auto(atom::internal, atom::load)->caf::result<void>,
   // Persist the transformed partitions and return the generated
   // partition synopses.
