@@ -8,7 +8,6 @@
 
 #pragma once
 #include "tenzir/aliases.hpp"
-#include "tenzir/concepts.hpp"
 #include "tenzir/operator_control_plane.hpp"
 
 #include <arrow/util/uri.h>
@@ -19,8 +18,6 @@
 /// the resolution utility for records
 
 namespace tenzir {
-
-class data;
 
 /// The callback will be invoked with the initial `key`, the resolved `value`
 /// and an additional out-parameter to signal failure, if so desired.
