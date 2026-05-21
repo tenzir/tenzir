@@ -156,4 +156,23 @@ assertions:
                     timestamp: -1000
                     value: 12.0
             version: 2.0.0
+        11_timer_flushes_before_finalize.tql:
+          - content_type: application/x-protobuf
+            metadata: []
+            timeseries:
+              - labels:
+                  __name__: timer_flush_metric
+                samples:
+                  - timestamp: 1778839217000
+                    value: 13.0
+            version: 0.1.0
+          - content_type: application/x-protobuf
+            metadata: []
+            timeseries:
+              - labels:
+                  __name__: timer_flush_metric
+                samples:
+                  - timestamp: 1778839217000
+                    value: 13.0
+            version: 0.1.0
 timeout: 60

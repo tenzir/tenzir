@@ -9,7 +9,7 @@
 #include "io/prometheus/write/v2/types.pb.h"
 #include "prometheus/remote.pb.h"
 
-#include <tenzir/async/notify.hpp>
+#include <tenzir/arc.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -26,10 +26,11 @@
 #include <tenzir/version.hpp>
 
 #include <arrow/util/compression.h>
+#include <folly/coro/BoundedQueue.h>
+#include <folly/coro/UnboundedQueue.h>
 
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <charconv>
 #include <chrono>
 #include <cmath>
@@ -172,11 +173,11 @@ auto sanitize_metric_name(std::string name) -> std::string {
   if (name.empty()) {
     return name;
   }
-  const auto first_ok = [](unsigned char c) {
-    return std::isalpha(c) or c == '_' or c == ':';
+  auto const first_ok = [](unsigned char c) {
+    return detail::ascii_isalpha(c) or c == '_' or c == ':';
   };
-  const auto rest_ok = [](unsigned char c) {
-    return std::isalnum(c) or c == '_' or c == ':';
+  auto const rest_ok = [](unsigned char c) {
+    return detail::ascii_isalnum(c) or c == '_' or c == ':';
   };
   if (not first_ok(static_cast<unsigned char>(name.front()))) {
     name.front() = '_';
@@ -193,11 +194,11 @@ auto sanitize_label_name(std::string name) -> std::string {
   if (name.empty()) {
     return name;
   }
-  const auto first_ok = [](unsigned char c) {
-    return std::isalpha(c) or c == '_';
+  auto const first_ok = [](unsigned char c) {
+    return detail::ascii_isalpha(c) or c == '_';
   };
-  const auto rest_ok = [](unsigned char c) {
-    return std::isalnum(c) or c == '_';
+  auto const rest_ok = [](unsigned char c) {
+    return detail::ascii_isalnum(c) or c == '_';
   };
   if (not first_ok(static_cast<unsigned char>(name.front()))) {
     name.front() = '_';
@@ -214,12 +215,12 @@ auto valid_legacy_metric_name(std::string_view name) -> bool {
   if (name.empty()) {
     return false;
   }
-  const auto first = static_cast<unsigned char>(name.front());
-  if (not(std::isalpha(first) or first == '_' or first == ':')) {
+  auto const first = static_cast<unsigned char>(name.front());
+  if (not(detail::ascii_isalpha(first) or first == '_' or first == ':')) {
     return false;
   }
   return std::ranges::all_of(name | std::views::drop(1), [](unsigned char c) {
-    return std::isalnum(c) or c == '_' or c == ':';
+    return detail::ascii_isalnum(c) or c == '_' or c == ':';
   });
 }
 
@@ -227,16 +228,16 @@ auto valid_legacy_label_name(std::string_view name) -> bool {
   if (name.empty()) {
     return false;
   }
-  const auto first = static_cast<unsigned char>(name.front());
-  if (not(std::isalpha(first) or first == '_')) {
+  auto const first = static_cast<unsigned char>(name.front());
+  if (not(detail::ascii_isalpha(first) or first == '_')) {
     return false;
   }
   return std::ranges::all_of(name | std::views::drop(1), [](unsigned char c) {
-    return std::isalnum(c) or c == '_';
+    return detail::ascii_isalnum(c) or c == '_';
   });
 }
 
-auto parse_metric_type(std::string_view type) -> std::optional<MetricType> {
+auto parse_metric_type(std::string_view type) -> Option<MetricType> {
   auto normalized = detail::ascii_tolower(type);
   if (normalized == "unknown") {
     return MetricType::unknown;
@@ -333,7 +334,7 @@ auto v2_metric_type(MetricType type)
 }
 
 auto to_string_value(data_view3 value, location loc, diagnostic_handler& dh)
-  -> std::optional<std::string> {
+  -> Option<std::string> {
   if (auto* str = try_as<std::string_view>(&value)) {
     return std::string{*str};
   }
@@ -341,43 +342,43 @@ auto to_string_value(data_view3 value, location loc, diagnostic_handler& dh)
 }
 
 auto to_string_value(data_view3 value, ast::expression const& expr,
-                     diagnostic_handler& dh) -> std::optional<std::string> {
+                     diagnostic_handler& dh) -> Option<std::string> {
   return to_string_value(value, expr.get_location(), dh);
 }
 
-auto to_double(data_view3 value) -> std::optional<double> {
+auto to_double(data_view3 value) -> Option<double> {
   return value.match(
-    [](double x) -> std::optional<double> {
+    [](double x) -> Option<double> {
       return x;
     },
-    [](int64_t x) -> std::optional<double> {
+    [](int64_t x) -> Option<double> {
       return static_cast<double>(x);
     },
-    [](uint64_t x) -> std::optional<double> {
+    [](uint64_t x) -> Option<double> {
       return static_cast<double>(x);
     },
-    [](auto const&) -> std::optional<double> {
+    [](auto const&) -> Option<double> {
       return {};
     });
 }
 
-auto to_timestamp_ms(data_view3 value) -> std::optional<int64_t> {
+auto to_timestamp_ms(data_view3 value) -> Option<int64_t> {
   return value.match(
-    [](time x) -> std::optional<int64_t> {
+    [](time x) -> Option<int64_t> {
       return std::chrono::duration_cast<std::chrono::milliseconds>(
                x.time_since_epoch())
         .count();
     },
-    [](int64_t x) -> std::optional<int64_t> {
+    [](int64_t x) -> Option<int64_t> {
       return x;
     },
-    [](uint64_t x) -> std::optional<int64_t> {
+    [](uint64_t x) -> Option<int64_t> {
       if (x > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
         return {};
       }
       return static_cast<int64_t>(x);
     },
-    [](auto const&) -> std::optional<int64_t> {
+    [](auto const&) -> Option<int64_t> {
       return {};
     });
 }
@@ -388,7 +389,7 @@ auto now_ms() -> int64_t {
     .count();
 }
 
-auto parse_u64(std::string_view value) -> std::optional<uint64_t> {
+auto parse_u64(std::string_view value) -> Option<uint64_t> {
   auto result = uint64_t{};
   auto const* begin = value.data();
   auto const* end = value.data() + value.size();
@@ -403,8 +404,7 @@ auto check_v2_written_samples(http::Response const& response,
                               uint64_t expected_samples, OpCtx& ctx,
                               location loc) -> bool {
   auto header = http::find(response.headers, v2_samples_written_header);
-  auto written_samples
-    = header ? parse_u64(*header) : std::optional<uint64_t>{0};
+  auto written_samples = header ? parse_u64(*header) : Option<uint64_t>{0};
   if (not written_samples) {
     diagnostic::error("HTTP response returned invalid `{}` header",
                       v2_samples_written_header)
@@ -517,7 +517,7 @@ auto sort_samples(std::vector<Series>& series) -> void {
 }
 
 auto snappy_compress(std::string body, diagnostic_handler& dh, location loc)
-  -> std::optional<std::string> {
+  -> Option<std::string> {
   auto codec_result = arrow::util::Codec::Create(
     arrow::Compression::type::SNAPPY,
     arrow::util::Codec::UseDefaultCompressionLevel());
@@ -584,6 +584,18 @@ public:
     if (args_.protobuf_message.inner == v2_protobuf_message) {
       protocol_ = Protocol::v2;
     }
+    ctx.spawn_task([frontier_queue = flush_frontier_queue_,
+                    tick_queue = flush_tick_queue_]() mutable -> Task<void> {
+      auto deadline = co_await frontier_queue->dequeue();
+      while (true) {
+        while (auto next_deadline = frontier_queue->try_dequeue()) {
+          deadline = *next_deadline;
+        }
+        co_await sleep_until(deadline);
+        co_await tick_queue->enqueue(TimerTick{deadline});
+        deadline = co_await frontier_queue->dequeue();
+      }
+    });
     if (auto result = co_await resolve_secrets(ctx, args_, url_, headers_);
         result.is_error()) {
       done_ = true;
@@ -638,27 +650,21 @@ public:
       add_sample(std::move(*sample));
       if (pending_sample_count_ >= args_.max_samples_per_request.inner) {
         co_await send_request(ctx);
+        next_flush_ = None{};
       } else if (next_flush_.is_none()) {
-        next_flush_
-          = std::chrono::steady_clock::now() + args_.flush_interval.inner;
-        flush_ready_->notify_one();
+        arm_flush_timer();
       }
     }
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    if (not next_flush_) {
-      co_await flush_ready_->wait();
-    }
-    if (next_flush_) {
-      co_await sleep_until(*next_flush_);
-    }
-    co_return {};
+    co_return co_await flush_tick_queue_->dequeue();
   }
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(result);
-    if (next_flush_ and std::chrono::steady_clock::now() >= *next_flush_) {
+    auto* tick = result.try_as<TimerTick>();
+    TENZIR_ASSERT(tick);
+    if (next_flush_ and tick->deadline >= *next_flush_) {
       co_await send_request(ctx);
       next_flush_ = None{};
     }
@@ -693,13 +699,21 @@ private:
     Metadata metadata;
   };
 
+  struct TimerTick {
+    std::chrono::steady_clock::time_point deadline;
+  };
+
+  using FlushFrontierQueue
+    = folly::coro::UnboundedQueue<std::chrono::steady_clock::time_point>;
+  using FlushTickQueue = folly::coro::BoundedQueue<TimerTick>;
+
   auto make_sample(int64_t row, multi_series const& names,
                    multi_series const& values, multi_series const& timestamps,
                    multi_series const& labels, multi_series const& types,
                    multi_series const& helps, multi_series const& units,
                    multi_series const& families,
                    multi_series const& start_timestamps, OpCtx& ctx)
-    -> std::optional<PendingSample> {
+    -> Option<PendingSample> {
     if (names.is_null(row)) {
       diagnostic::warning("metric name is `null`, skipping event")
         .primary(args_.name)
@@ -784,7 +798,7 @@ private:
           return {};
         }
         auto value_string
-          = to_string_value(label_value, args_.labels, ctx.dh()).value_or("");
+          = to_string_value(label_value, args_.labels, ctx.dh()).unwrap_or("");
         if (value_string.empty()) {
           diagnostic::warning("Prometheus label `{}` has an empty value, "
                               "skipping event",
@@ -826,7 +840,7 @@ private:
       = families.is_null(row)
           ? *name
           : to_string_value(families.view3_at(row), args_.family, ctx.dh())
-              .value_or(*name);
+              .unwrap_or(*name);
     if (not types.is_null(row)) {
       auto type_text
         = to_string_value(types.view3_at(row), args_.type, ctx.dh());
@@ -840,18 +854,18 @@ private:
             .emit(ctx);
           return {};
         }
-        result.metadata.type = type.value_or(MetricType::unknown);
+        result.metadata.type = type.unwrap_or(MetricType::unknown);
       }
     }
     if (not helps.is_null(row)) {
       result.metadata.help
         = to_string_value(helps.view3_at(row), args_.help, ctx.dh())
-            .value_or("");
+            .unwrap_or("");
     }
     if (not units.is_null(row)) {
       result.metadata.unit
         = to_string_value(units.view3_at(row), args_.unit, ctx.dh())
-            .value_or("");
+            .unwrap_or("");
     }
     return result;
   }
@@ -914,6 +928,11 @@ private:
                         entry.samples.end());
     result.push_back(std::move(split));
     return result;
+  }
+
+  auto arm_flush_timer() -> void {
+    next_flush_ = std::chrono::steady_clock::now() + args_.flush_interval.inner;
+    flush_frontier_queue_->enqueue(*next_flush_);
   }
 
   auto send_request(OpCtx& ctx) -> Task<void> {
@@ -1029,8 +1048,9 @@ private:
   bool done_ = false;
   MetricsCounter bytes_write_counter_;
   MetricsCounter events_write_counter_;
-  mutable Option<std::chrono::steady_clock::time_point> next_flush_;
-  mutable Box<Notify> flush_ready_{std::in_place};
+  Option<std::chrono::steady_clock::time_point> next_flush_;
+  Arc<FlushFrontierQueue> flush_frontier_queue_{std::in_place};
+  mutable Arc<FlushTickQueue> flush_tick_queue_{std::in_place, 1};
 };
 
 class ToPrometheusPlugin final : public OperatorPlugin {
