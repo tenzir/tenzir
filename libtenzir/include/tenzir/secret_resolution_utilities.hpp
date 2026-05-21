@@ -49,16 +49,6 @@ auto make_secret_request(const located<record>& r,
                          record_secret_request_callback callback)
   -> secret_request_combined;
 
-/// Creates secret requests for every secret nested inside `value` and writes
-/// resolved UTF-8 string values back into the nested data tree in place.
-auto make_secret_request(data& value, location loc, diagnostic_handler& dh)
-  -> std::vector<secret_request>;
-
-/// Creates secret requests for every secret nested inside `value` and writes
-/// resolved UTF-8 string values back into the nested data tree in place.
-auto make_secret_request(located<data>& value, diagnostic_handler& dh)
-  -> std::vector<secret_request>;
-
 /// Creates a secret request that will set `uri`. The secret URI is validated
 /// as utf8 and potentially prepended with `prefix`.
 /// @relates operator_control_plane::resolve_secrets_must_yield

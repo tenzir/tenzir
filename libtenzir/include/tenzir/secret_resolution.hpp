@@ -177,6 +177,16 @@ auto make_secret_request(std::string name, const located<secret>& s,
                          std::string& out, diagnostic_handler& dh)
   -> secret_request;
 
+/// Creates secret requests for every secret nested inside `value` and writes
+/// resolved UTF-8 string values back into the nested data tree in place.
+auto make_secret_request(data& value, location loc, diagnostic_handler& dh)
+  -> std::vector<secret_request>;
+
+/// Creates secret requests for every secret nested inside `value` and writes
+/// resolved UTF-8 string values back into the nested data tree in place.
+auto make_secret_request(located<data>& value, diagnostic_handler& dh)
+  -> std::vector<secret_request>;
+
 struct located_resolved_secret {
   location loc;
   ecc::cleansing_blob value;

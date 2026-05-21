@@ -180,6 +180,50 @@ auto make_secret_request(std::string name, const located<secret>& s,
 
 namespace {
 
+auto visit_secret_values(data& value,
+                         std::function<void(data&)> const& on_secret) -> void {
+  if (auto* s = try_as<secret>(value)) {
+    TENZIR_UNUSED(s);
+    on_secret(value);
+    return;
+  }
+  if (auto* r = try_as<record>(value)) {
+    for (auto& [k, v] : *r) {
+      visit_secret_values(v, on_secret);
+    }
+    return;
+  }
+  if (auto* l = try_as<list>(value)) {
+    for (size_t i = 0; i < l->size(); ++i) {
+      visit_secret_values(l->operator[](i), on_secret);
+    }
+  }
+}
+
+} // namespace
+
+auto make_secret_request(data& value, location loc, diagnostic_handler& dh)
+  -> std::vector<secret_request> {
+  auto requests = std::vector<secret_request>{};
+  visit_secret_values(value, [&](data& target) {
+    requests.emplace_back(as<secret>(target), loc,
+                          [&target, loc,
+                           &dh](resolved_secret_value v) -> failure_or<void> {
+                            TRY(auto str, v.utf8_view("value", loc, dh));
+                            target = std::string{str};
+                            return {};
+                          });
+  });
+  return requests;
+}
+
+auto make_secret_request(located<data>& value, diagnostic_handler& dh)
+  -> std::vector<secret_request> {
+  return make_secret_request(value.inner, value.source, dh);
+}
+
+namespace {
+
 auto apply_transformation(ecc::cleansing_blob blob,
                           fbs::data::SecretTransformations operation,
                           diagnostic_handler& dh, location loc)
