@@ -173,14 +173,6 @@ public:
     return OperatorState::normal;
   }
 
-  auto stop(OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(ctx);
-    phase_ = Phase::finished;
-    remaining_repetitions_ = 0;
-    next_index_ = 0;
-    co_return;
-  }
-
   auto snapshot(Serde& serde) -> void override {
     serde("buffer", buffer_);
     serde("phase", phase_);
