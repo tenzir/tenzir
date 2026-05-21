@@ -2075,11 +2075,10 @@ auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
                               false, is_hidden);
 }
 
-auto run_transform(std::vector<table_slice> input,
-                   OperatorChain<table_slice, table_slice> chain,
+auto run_transform(OperatorChain<table_slice, table_slice> chain,
                    caf::actor_system& sys, DiagHandler& dh, Profiler profiler,
-                   bool is_hidden)
-  -> Task<failure_or<std::vector<table_slice>>> {
+                   bool is_hidden, TransformFeeder feed_input,
+                   TransformDrainer drain_output) -> Task<failure_or<void>> {
   auto exec_ctx = TestExecCtx{profiler, /*has_terminal=*/false, is_hidden};
   auto num_ops = chain.size();
   TENZIR_ASSERT(num_ops > 0);
@@ -2095,7 +2094,6 @@ auto run_transform(std::vector<table_slice> input,
   // chain's `JoinSet` open forever.
   auto from_ctl_recv = std::get<1>(channel<FromControl>(16));
   auto [to_ctl_send, to_ctl_recv] = channel<ToControl>(16);
-  auto output_slices = std::vector<table_slice>{};
   // Feeder cancellation. The chain's receiver may be dropped before the feeder
   // pushes all input (for example, a `head N` operator inside the transform
   // emits `no_more_input` after seeing N events). Because dropping a receiver
@@ -2119,17 +2117,11 @@ auto run_transform(std::vector<table_slice> input,
     // Feeder. Drops `push_input` on exit, closing the input channel. Honors
     // `feed_cancel` so we exit promptly if the chain stops reading upstream.
     scope.spawn(folly::coro::co_invoke(
-      [input_slices = std::move(input), push_input = std::move(push_input),
+      [&feed_input, push_input = std::move(push_input),
        token = feed_cancel.getToken()]() mutable -> Task<void> {
         co_await folly::coro::co_withCancellation(
           token, folly::coro::co_invoke([&]() mutable -> Task<void> {
-            for (auto& slice : input_slices) {
-              if (slice.rows() == 0) {
-                continue;
-              }
-              co_await push_input(OperatorMsg<table_slice>{std::move(slice)});
-            }
-            co_await push_input(OperatorMsg<table_slice>{Signal{EndOfData{}}});
+            co_await feed_input(*push_input);
           }));
       }));
     // Drain control messages and react to `no_more_input` by cancelling the
@@ -2143,7 +2135,32 @@ auto run_transform(std::vector<table_slice> input,
         }
       }
     }));
-    // Output drainer.
+    co_await drain_output(*pull_output);
+    scope.cancel();
+  });
+  co_return dh.failure();
+}
+
+auto run_transform(std::vector<table_slice> input,
+                   OperatorChain<table_slice, table_slice> chain,
+                   caf::actor_system& sys, DiagHandler& dh, Profiler profiler,
+                   bool is_hidden)
+  -> Task<failure_or<std::vector<table_slice>>> {
+  auto output_slices = std::vector<table_slice>{};
+  auto feed_input
+    = [input_slices = std::move(input)](
+        Push<OperatorMsg<table_slice>>& push_input) mutable -> Task<void> {
+    for (auto& slice : input_slices) {
+      if (slice.rows() == 0) {
+        continue;
+      }
+      co_await push_input(OperatorMsg<table_slice>{std::move(slice)});
+    }
+    co_await push_input(OperatorMsg<table_slice>{Signal{EndOfData{}}});
+  };
+  auto drain_output
+    = [&output_slices](
+        Pull<OperatorMsg<table_slice>>& pull_output) mutable -> Task<void> {
     while (auto msg = co_await pull_output()) {
       co_await co_match(
         std::move(*msg),
@@ -2164,9 +2181,10 @@ auto run_transform(std::vector<table_slice> input,
             });
         });
     }
-    scope.cancel();
-  });
-  CO_TRY(dh.failure());
+  };
+  CO_TRY(co_await run_transform(std::move(chain), sys, dh, std::move(profiler),
+                                is_hidden, std::move(feed_input),
+                                std::move(drain_output)));
   co_return output_slices;
 }
 

@@ -9,8 +9,10 @@
 #include "tenzir/partition_transformer.hpp"
 
 #include "tenzir/async/executor.hpp"
+#include "tenzir/async/future_util.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/base_ctx.hpp"
+#include "tenzir/co_match.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/fbs/utils.hpp"
@@ -27,8 +29,12 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/make_copy_on_write.hpp>
 #include <flatbuffers/flatbuffers.h>
+#include <folly/Unit.h>
 #include <folly/coro/Invoke.h>
 #include <folly/executors/GlobalExecutor.h>
+#include <folly/futures/Future.h>
+
+#include <memory>
 
 namespace tenzir {
 
@@ -330,29 +336,29 @@ auto partition_transformer(
       self->state().input.push_back(std::move(slice));
     },
     [self](atom::done) -> caf::result<void> {
-      auto process_slices = [self](std::vector<table_slice> slices) {
-        for (auto& slice : slices) {
-          auto& partition_data = self->state().create_or_get_partition(slice);
-          if (not partition_data.synopsis) {
-            partition_data.id = tenzir::uuid::random();
-            partition_data.store_id = self->state().store_id;
-            partition_data.events = 0ull;
-            partition_data.synopsis
-              = caf::make_copy_on_write<partition_synopsis>();
-          }
-          auto* unshared_synopsis = partition_data.synopsis.unshared_ptr();
-          if (slice.import_time() == time{}) {
-            slice.import_time(self->state().min_import_time);
-          }
-          unshared_synopsis->min_import_time
-            = std::min(unshared_synopsis->min_import_time, slice.import_time());
-          unshared_synopsis->max_import_time
-            = std::max(unshared_synopsis->max_import_time, slice.import_time());
-          partition_data.events += slice.rows();
-          self->state().events += slice.rows();
-          self->state().partition_buildup[partition_data.id].slices.push_back(
-            std::move(slice));
+      auto process_slice = [self](table_slice slice) {
+        auto& partition_data = self->state().create_or_get_partition(slice);
+        if (not partition_data.synopsis) {
+          partition_data.id = tenzir::uuid::random();
+          partition_data.store_id = self->state().store_id;
+          partition_data.events = 0ull;
+          partition_data.synopsis
+            = caf::make_copy_on_write<partition_synopsis>();
         }
+        auto* unshared_synopsis = partition_data.synopsis.unshared_ptr();
+        if (slice.import_time() == time{}) {
+          slice.import_time(self->state().min_import_time);
+        }
+        unshared_synopsis->min_import_time
+          = std::min(unshared_synopsis->min_import_time, slice.import_time());
+        unshared_synopsis->max_import_time
+          = std::max(unshared_synopsis->max_import_time, slice.import_time());
+        partition_data.events += slice.rows();
+        self->state().events += slice.rows();
+        self->state().partition_buildup[partition_data.id].slices.push_back(
+          std::move(slice));
+      };
+      auto finish_transform = [self]() {
         auto stream_data = partition_transformer_state::stream_data{
           .partition_chunks
           = std::vector<std::tuple<tenzir::uuid, tenzir::type, chunk_ptr>>{},
@@ -419,66 +425,112 @@ auto partition_transformer(
       auto input = std::exchange(self->state().input, {});
       auto ast = std::move(self->state().transform);
       // We deliver `rp` immediately and signal real completion later via the
-      // store-builder monitors set up in `process_slices`.
+      // store-builder monitors set up in `finish_transform`.
       auto rp = self->make_response_promise<void>();
       auto weak = caf::weak_actor_ptr{self->ctrl(), caf::add_ref};
       auto& sys = self->system();
       folly::coro::co_withExecutor(
         folly::getGlobalCPUExecutor(),
-        folly::coro::co_invoke(
-          [ast = std::move(ast), input = std::move(input), &sys]() mutable
-            -> folly::coro::Task<failure_or<std::vector<table_slice>>> {
-            // Compaction and rebuild have no user-facing diagnostic sink, so
-            // we log to the server log. The handler is owned by this
-            // coroutine frame so its address is stable across awaits and it
-            // outlives every operator inside `run_transform` that references
-            // it.
-            auto dh = TransformerDiagHandler{};
-            CO_TRY(auto chain,
-                   compile_table_slice_transform(std::move(ast), dh));
-            CO_TRY(auto slices,
-                   co_await run_transform(std::move(input), std::move(chain),
-                                          sys, dh, NoProfiler{},
-                                          /*is_hidden=*/true));
-            co_return std::move(slices);
-          }))
-        .start(
-          [self, weak = std::move(weak),
-           process_slices = std::move(process_slices)](
-            folly::Try<failure_or<std::vector<table_slice>>>&& result) mutable {
-            auto strong = weak.lock();
-            if (not strong) {
-              return;
-            }
-            // We're on the folly executor thread here. All mutations of actor
-            // state must happen inside the `schedule_fn` body, which runs on
-            // the actor's thread.
-            auto error = caf::error{};
-            auto slices = std::vector<table_slice>{};
-            if (result.hasException()) {
-              error = caf::make_error(ec::logic_error,
-                                      fmt::format("partition transform: {}",
-                                                  result.exception().what()));
-            } else if (result.value().is_error()) {
-              error = caf::make_error(ec::logic_error,
-                                      "partition transform: pipeline failed; "
-                                      "see server log for diagnostics");
-            } else {
-              slices = std::move(result.value()).unwrap();
-            }
-            self->schedule_fn([self, process_slices = std::move(process_slices),
-                               slices = std::move(slices),
-                               error = std::move(error)]() mutable {
-              if (error) {
-                TENZIR_ERROR("{} pipeline executor failed: {}", *self, error);
-                self->state().transform_error = std::move(error);
-              } else {
-                TENZIR_DEBUG("{} pipeline executor completed successfully",
-                             *self);
+        folly::coro::co_invoke([ast = std::move(ast), input = std::move(input),
+                                &sys, weak, self, process_slice]() mutable
+                                 -> folly::coro::Task<failure_or<void>> {
+          // Compaction and rebuild have no user-facing diagnostic sink, so
+          // we log to the server log. The handler is owned by this
+          // coroutine frame so its address is stable across awaits and it
+          // outlives every operator inside `run_transform` that references
+          // it.
+          auto dh = TransformerDiagHandler{};
+          CO_TRY(auto chain, compile_table_slice_transform(std::move(ast), dh));
+          auto feed_input =
+            [input_slices = std::move(input)](
+              Push<OperatorMsg<table_slice>>& push_input) mutable -> Task<void> {
+            for (auto& slice : input_slices) {
+              if (slice.rows() == 0) {
+                continue;
               }
-              process_slices(std::move(slices));
-            });
+              co_await push_input(OperatorMsg<table_slice>{std::move(slice)});
+            }
+            co_await push_input(OperatorMsg<table_slice>{Signal{EndOfData{}}});
+          };
+          auto drain_output
+            = [self, weak, process_slice](
+                Pull<OperatorMsg<table_slice>>& pull_output) mutable
+            -> Task<void> {
+            while (auto msg = co_await pull_output()) {
+              co_await co_match(
+                std::move(*msg),
+                [&](table_slice slice) -> Task<void> {
+                  if (slice.rows() == 0) {
+                    co_return;
+                  }
+                  auto [promise, future]
+                    = folly::makePromiseContract<folly::Unit>();
+                  auto promise_ptr
+                    = std::make_shared<folly::Promise<folly::Unit>>(
+                      std::move(promise));
+                  auto strong = weak.lock();
+                  if (not strong) {
+                    promise_ptr->setValue(folly::unit);
+                  } else {
+                    self->schedule_fn(
+                      [process_slice, slice = std::move(slice),
+                       promise = std::move(promise_ptr)]() mutable {
+                        process_slice(std::move(slice));
+                        promise->setValue(folly::unit);
+                      });
+                  }
+                  co_await to_task_interrupt_on_cancel(std::move(future));
+                },
+                [&](Signal signal) -> Task<void> {
+                  co_await co_match(
+                    signal,
+                    [&](EndOfData) -> Task<void> {
+                      co_return;
+                    },
+                    [&](Checkpoint) -> Task<void> {
+                      co_return;
+                    });
+                });
+            }
+          };
+          CO_TRY(co_await run_transform(
+            std::move(chain), sys, dh, NoProfiler{}, /*is_hidden=*/true,
+            std::move(feed_input), std::move(drain_output)));
+          co_return {};
+        }))
+        .start([self, weak = std::move(weak),
+                finish_transform = std::move(finish_transform)](
+                 folly::Try<failure_or<void>>&& result) mutable {
+          auto strong = weak.lock();
+          if (not strong) {
+            return;
+          }
+          // We're on the folly executor thread here. All mutations of actor
+          // state must happen inside the `schedule_fn` body, which runs on
+          // the actor's thread.
+          auto error = caf::error{};
+          if (result.hasException()) {
+            error = caf::make_error(ec::logic_error,
+                                    fmt::format("partition transform: {}",
+                                                result.exception().what()));
+          } else if (result.value().is_error()) {
+            error = caf::make_error(ec::logic_error,
+                                    "partition transform: pipeline failed; "
+                                    "see server log for diagnostics");
+          }
+          self->schedule_fn([self,
+                             finish_transform = std::move(finish_transform),
+                             error = std::move(error)]() mutable {
+            if (error) {
+              TENZIR_ERROR("{} pipeline executor failed: {}", *self, error);
+              self->state().transform_error = std::move(error);
+            } else {
+              TENZIR_DEBUG("{} pipeline executor completed successfully",
+                           *self);
+            }
+            finish_transform();
           });
+        });
       rp.deliver();
       return rp;
     },
