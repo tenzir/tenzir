@@ -282,6 +282,12 @@ private:
       auto client = ::clickhouse::Client{std::move(options)};
       auto first_schema = Option<type>{};
       auto query = ::clickhouse::Query{plan.query};
+      query.SetSetting("max_block_size",
+                       {std::to_string(defaults::import::table_slice_size),
+                        ::clickhouse::QuerySettingsField::IMPORTANT});
+      // Without this, MergeTree's byte-based cap overrides max_block_size on wide tables.
+      query.SetSetting("preferred_block_size_bytes",
+                       {"0", ::clickhouse::QuerySettingsField::IMPORTANT});
       query.OnDataCancelable([&](::clickhouse::Block const& block) {
         if (runtime_->should_cancel()) {
           return false;
