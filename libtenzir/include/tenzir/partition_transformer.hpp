@@ -68,14 +68,14 @@ struct partition_transformer_state {
   /// The TQL2 AST of the transform to apply to the data.
   ast::pipeline transform = {};
 
-  /// Collector for the received table slices.
-  std::vector<table_slice> input = {};
-
   /// Cached stream error, if the stream terminated abnormally.
   caf::error stream_error = {};
 
   /// Cached transform error, if the transform returns one.
   caf::error transform_error = {};
+
+  /// The partitions selected as input for the transform.
+  std::vector<partition_info> input_partitions = {};
 
   /// The maximum number of events per partition. (not really necessary, but
   /// required by the partition synopsis)
@@ -116,8 +116,9 @@ struct partition_transformer_state {
   /// Options for creating new value indices.
   caf::settings index_opts = {};
 
-  // Two format strings that can be formatted with a `tenzir::uuid`
-  // as the single parameter. They give the
+  // Format strings that can be formatted with a `tenzir::uuid` as the single
+  // parameter for input partitions and transformed output files.
+  std::string input_partition_path_template;
   std::string partition_path_template;
   std::string synopsis_path_template;
 
@@ -144,15 +145,16 @@ struct partition_transformer_state {
 
 /// Spawns a PARTITION TRANSFORMER actor with the given parameters.
 ///
-/// The actor collects table slices from a query stream, applies the given
-/// `table_slice -> table_slice` AST pipeline via the new coroutine executor,
-/// and writes the resulting slices into one or more new partitions.
+/// The actor loads the selected partitions, applies the given `table_slice ->
+/// table_slice` AST pipeline via the new coroutine executor, and writes the
+/// resulting slices into one or more new partitions.
 auto partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>,
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
-  ast::pipeline transform, std::string partition_path_template,
-  std::string synopsis_path_template, std::string origin = "rebuild")
-  -> partition_transformer_actor::behavior_type;
+  std::vector<partition_info> input_partitions, ast::pipeline transform,
+  std::string input_partition_path_template,
+  std::string partition_path_template, std::string synopsis_path_template,
+  std::string origin = "rebuild") -> partition_transformer_actor::behavior_type;
 
 } // namespace tenzir

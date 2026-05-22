@@ -19,8 +19,10 @@
 #include "tenzir/ir.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/partition_synopsis.hpp"
+#include "tenzir/passive_partition.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/store.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/exec.hpp"
 #include "tenzir/try.hpp"
@@ -34,6 +36,7 @@
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/futures/Future.h>
 
+#include <filesystem>
 #include <memory>
 
 namespace tenzir {
@@ -127,6 +130,129 @@ public:
 
 private:
   Atomic<bool> failed_ = false;
+};
+
+struct partition_source_state {
+  caf::error error = {};
+  tenzir::time min_import_time = tenzir::time::max();
+  tenzir::time max_import_time = tenzir::time::min();
+};
+
+class partition_loader {
+public:
+  partition_loader(std::vector<partition_info> partitions,
+                   std::string partition_path_template,
+                   std::filesystem::path archive_dir,
+                   std::shared_ptr<partition_source_state> state)
+    : partitions_{std::move(partitions)},
+      partition_path_template_{std::move(partition_path_template)},
+      archive_dir_{std::move(archive_dir)},
+      state_{std::move(state)} {
+    TENZIR_ASSERT(state_);
+  }
+
+  auto feed(Push<OperatorMsg<table_slice>>& push_input) const -> Task<void> {
+    for (const auto& partition : partitions_) {
+      for (auto&& slice : load_partition(partition)) {
+        const auto import_time = slice.import_time();
+        state_->min_import_time
+          = std::min(state_->min_import_time, import_time);
+        state_->max_import_time
+          = std::max(state_->max_import_time, import_time);
+        if (slice.rows() == 0) {
+          continue;
+        }
+        co_await push_input(OperatorMsg<table_slice>{std::move(slice)});
+      }
+      if (state_->error.valid()) {
+        co_return;
+      }
+    }
+    co_await push_input(OperatorMsg<table_slice>{Signal{EndOfData{}}});
+  }
+
+private:
+  void fail(caf::error error) const {
+    state_->error = std::move(error);
+  }
+
+  auto load_partition(const partition_info& partition) const
+    -> generator<table_slice> {
+    const auto filename = fmt::format(
+      TENZIR_FMT_RUNTIME(partition_path_template_), partition.uuid);
+    auto partition_path = std::filesystem::path{filename};
+    auto partition_chunk = chunk::mmap(partition_path);
+    if (not partition_chunk) {
+      fail(diagnostic::error(partition_chunk.error())
+             .note("failed to mmap partition {} at {}", partition.uuid,
+                   partition_path)
+             .to_error());
+      co_return;
+    }
+    auto partition_state = passive_partition_state{};
+    if (auto err = partition_state.initialize_from_chunk(*partition_chunk);
+        err.valid()) {
+      fail(diagnostic::error(std::move(err))
+             .note("failed to load partition {}", partition.uuid)
+             .to_error());
+      co_return;
+    }
+    if (partition_state.id != partition.uuid) {
+      fail(caf::make_error(ec::format_error,
+                           "unexpected ID for passive partition: "
+                           "expected {}, got {}",
+                           partition.uuid, partition_state.id));
+      co_return;
+    }
+    auto const* plugin = plugins::find<store_plugin>(partition_state.store_id);
+    if (not plugin) {
+      fail(caf::make_error(ec::format_error,
+                           "encountered unhandled store backend "
+                           "'{}' for partition {}",
+                           partition_state.store_id, partition.uuid));
+      co_return;
+    }
+    if (partition_state.store_header.size() != uuid::num_bytes) {
+      fail(caf::make_error(ec::format_error,
+                           "unexpected store header size for "
+                           "partition {}: expected {}, got {}",
+                           partition.uuid, uuid::num_bytes,
+                           partition_state.store_header.size()));
+      co_return;
+    }
+    auto store = plugin->make_passive_store();
+    if (not store) {
+      fail(std::move(store.error()));
+      co_return;
+    }
+    const auto store_uuid
+      = uuid{partition_state.store_header.subspan<0, uuid::num_bytes>()};
+    auto store_path
+      = archive_dir_
+        / fmt::format("{}.{}", store_uuid, partition_state.store_id);
+    auto store_chunk = chunk::mmap(store_path);
+    if (not store_chunk) {
+      fail(diagnostic::error(store_chunk.error())
+             .note("failed to mmap store for partition {} at {}",
+                   partition.uuid, store_path)
+             .to_error());
+      co_return;
+    }
+    if (auto err = (*store)->load(std::move(*store_chunk)); err.valid()) {
+      fail(diagnostic::error(std::move(err))
+             .note("failed to load store for partition {}", partition.uuid)
+             .to_error());
+      co_return;
+    }
+    for (auto&& slice : (*store)->slices()) {
+      co_yield std::move(slice);
+    }
+  }
+
+  std::vector<partition_info> partitions_;
+  std::string partition_path_template_;
+  std::filesystem::path archive_dir_;
+  std::shared_ptr<partition_source_state> state_;
 };
 
 /// Compile an AST `table_slice -> table_slice` pipeline to a closed operator
@@ -309,10 +435,13 @@ auto partition_transformer(
     self,
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
-  ast::pipeline transform, std::string partition_path_template,
-  std::string synopsis_path_template, std::string origin)
-  -> partition_transformer_actor::behavior_type {
+  std::vector<partition_info> input_partitions, ast::pipeline transform,
+  std::string input_partition_path_template,
+  std::string partition_path_template, std::string synopsis_path_template,
+  std::string origin) -> partition_transformer_actor::behavior_type {
   self->state().synopsis_opts = synopsis_opts;
+  self->state().input_partition_path_template
+    = std::move(input_partition_path_template);
   self->state().partition_path_template = std::move(partition_path_template);
   self->state().synopsis_path_template = std::move(synopsis_path_template);
   // For historic reasons, the `tenzir.max-partition-size` is stored as the
@@ -322,18 +451,16 @@ auto partition_transformer(
   self->state().index_opts = index_opts;
   self->state().fs = std::move(fs);
   self->state().catalog = std::move(catalog);
+  self->state().input_partitions = std::move(input_partitions);
   self->state().transform = std::move(transform);
   self->state().store_id = std::move(store_id);
   self->state().origin = std::move(origin);
+  self->mail(atom::done_v).send(static_cast<partition_transformer_actor>(self));
   return {
-    [self](tenzir::table_slice& slice) {
-      // Adjust the import time range iff necessary.
-      const auto old_import_time = slice.import_time();
-      self->state().min_import_time
-        = std::min(self->state().min_import_time, old_import_time);
-      self->state().max_import_time
-        = std::max(self->state().max_import_time, old_import_time);
-      self->state().input.push_back(std::move(slice));
+    [](tenzir::table_slice&) -> caf::result<void> {
+      return caf::make_error(ec::logic_error,
+                             "partition transformer no longer accepts "
+                             "externally pushed table slices");
     },
     [self](atom::done) -> caf::result<void> {
       auto process_slice = [self](table_slice slice) {
@@ -420,85 +547,104 @@ auto partition_transformer(
         self->mail(atom::internal_v, atom::resume_v, atom::done_v)
           .send(static_cast<partition_transformer_actor>(self));
       };
-      // Move input and AST out so the actor's state is empty when the run
-      // begins; they live inside the coroutine until it finishes.
-      auto input = std::exchange(self->state().input, {});
+      auto db_dir = std::filesystem::path{caf::get_or(
+        content(self->state().fs->home_system().config()),
+        "tenzir.state-directory", defaults::state_directory.data())};
+      std::error_code err{};
+      auto archive_dir = std::filesystem::absolute(db_dir, err) / "archive";
+      if (err) {
+        return caf::make_error(ec::filesystem_error,
+                               "failed to resolve state directory {}: {}",
+                               db_dir, err.message());
+      }
+      // Move input metadata and AST out so the actor's state is empty when the
+      // run begins; they live inside the coroutine until it finishes.
+      auto input_partitions = std::exchange(self->state().input_partitions, {});
+      auto input_partition_path_template
+        = std::move(self->state().input_partition_path_template);
       auto ast = std::move(self->state().transform);
       // We deliver `rp` immediately and signal real completion later via the
       // store-builder monitors set up in `finish_transform`.
       auto rp = self->make_response_promise<void>();
       auto weak = caf::weak_actor_ptr{self->ctrl(), caf::add_ref};
       auto& sys = self->system();
+      auto source_state = std::make_shared<partition_source_state>();
       folly::coro::co_withExecutor(
         folly::getGlobalCPUExecutor(),
-        folly::coro::co_invoke([ast = std::move(ast), input = std::move(input),
-                                &sys, weak, self, process_slice]() mutable
-                                 -> folly::coro::Task<failure_or<void>> {
-          // Compaction and rebuild have no user-facing diagnostic sink, so
-          // we log to the server log. The handler is owned by this
-          // coroutine frame so its address is stable across awaits and it
-          // outlives every operator inside `run_transform` that references
-          // it.
-          auto dh = TransformerDiagHandler{};
-          CO_TRY(auto chain, compile_table_slice_transform(std::move(ast), dh));
-          auto feed_input =
-            [input_slices = std::move(input)](
-              Push<OperatorMsg<table_slice>>& push_input) mutable -> Task<void> {
-            for (auto& slice : input_slices) {
-              if (slice.rows() == 0) {
-                continue;
-              }
-              co_await push_input(OperatorMsg<table_slice>{std::move(slice)});
-            }
-            co_await push_input(OperatorMsg<table_slice>{Signal{EndOfData{}}});
-          };
-          auto drain_output
-            = [self, weak, process_slice](
-                Pull<OperatorMsg<table_slice>>& pull_output) mutable
-            -> Task<void> {
-            while (auto msg = co_await pull_output()) {
-              co_await co_match(
-                std::move(*msg),
-                [&](table_slice slice) -> Task<void> {
-                  if (slice.rows() == 0) {
-                    co_return;
-                  }
-                  auto [promise, future]
-                    = folly::makePromiseContract<folly::Unit>();
-                  auto promise_ptr
-                    = std::make_shared<folly::Promise<folly::Unit>>(
-                      std::move(promise));
-                  auto strong = weak.lock();
-                  if (not strong) {
-                    promise_ptr->setValue(folly::unit);
-                  } else {
-                    self->schedule_fn(
-                      [process_slice, slice = std::move(slice),
-                       promise = std::move(promise_ptr)]() mutable {
-                        process_slice(std::move(slice));
-                        promise->setValue(folly::unit);
+        folly::coro::co_invoke(
+          [ast = std::move(ast), input_partitions = std::move(input_partitions),
+           input_partition_path_template
+           = std::move(input_partition_path_template),
+           archive_dir = std::move(archive_dir), &sys, weak, self,
+           process_slice,
+           source_state]() mutable -> folly::coro::Task<failure_or<void>> {
+            // Compaction and rebuild have no user-facing diagnostic sink, so
+            // we log to the server log. The handler is owned by this
+            // coroutine frame so its address is stable across awaits and it
+            // outlives every operator inside `run_transform` that references
+            // it.
+            auto dh = TransformerDiagHandler{};
+            CO_TRY(auto chain,
+                   compile_table_slice_transform(std::move(ast), dh));
+            auto loader = partition_loader{
+              std::move(input_partitions),
+              std::move(input_partition_path_template),
+              std::move(archive_dir),
+              source_state,
+            };
+            auto feed_input
+              = [loader = std::move(loader)](
+                  Push<OperatorMsg<table_slice>>& push_input) mutable
+              -> Task<void> {
+              co_await loader.feed(push_input);
+            };
+            auto drain_output
+              = [self, weak, process_slice](
+                  Pull<OperatorMsg<table_slice>>& pull_output) mutable
+              -> Task<void> {
+              while (auto msg = co_await pull_output()) {
+                co_await co_match(
+                  std::move(*msg),
+                  [&](table_slice slice) -> Task<void> {
+                    if (slice.rows() == 0) {
+                      co_return;
+                    }
+                    auto [promise, future]
+                      = folly::makePromiseContract<folly::Unit>();
+                    auto promise_ptr
+                      = std::make_shared<folly::Promise<folly::Unit>>(
+                        std::move(promise));
+                    auto strong = weak.lock();
+                    if (not strong) {
+                      promise_ptr->setValue(folly::unit);
+                    } else {
+                      self->schedule_fn(
+                        [process_slice, slice = std::move(slice),
+                         promise = std::move(promise_ptr)]() mutable {
+                          process_slice(std::move(slice));
+                          promise->setValue(folly::unit);
+                        });
+                    }
+                    co_await to_task_interrupt_on_cancel(std::move(future));
+                  },
+                  [&](Signal signal) -> Task<void> {
+                    co_await co_match(
+                      signal,
+                      [&](EndOfData) -> Task<void> {
+                        co_return;
+                      },
+                      [&](Checkpoint) -> Task<void> {
+                        co_return;
                       });
-                  }
-                  co_await to_task_interrupt_on_cancel(std::move(future));
-                },
-                [&](Signal signal) -> Task<void> {
-                  co_await co_match(
-                    signal,
-                    [&](EndOfData) -> Task<void> {
-                      co_return;
-                    },
-                    [&](Checkpoint) -> Task<void> {
-                      co_return;
-                    });
-                });
-            }
-          };
-          CO_TRY(co_await run_transform(
-            std::move(chain), sys, dh, NoProfiler{}, /*is_hidden=*/true,
-            std::move(feed_input), std::move(drain_output)));
-          co_return {};
-        }))
-        .start([self, weak = std::move(weak),
+                  });
+              }
+            };
+            CO_TRY(co_await run_transform(
+              std::move(chain), sys, dh, NoProfiler{}, /*is_hidden=*/true,
+              std::move(feed_input), std::move(drain_output)));
+            co_return {};
+          }))
+        .start([self, weak = std::move(weak), source_state,
                 finish_transform = std::move(finish_transform)](
                  folly::Try<failure_or<void>>&& result) mutable {
           auto strong = weak.lock();
@@ -520,14 +666,21 @@ auto partition_transformer(
           }
           self->schedule_fn([self,
                              finish_transform = std::move(finish_transform),
-                             error = std::move(error)]() mutable {
+                             source_state, error = std::move(error)]() mutable {
             if (error) {
               TENZIR_ERROR("{} pipeline executor failed: {}", *self, error);
               self->state().transform_error = std::move(error);
+            } else if (source_state->error.valid()) {
+              self->state().stream_error = std::move(source_state->error);
+              store_or_fulfill(self,
+                               partition_transformer_state::stream_data{});
+              return;
             } else {
               TENZIR_DEBUG("{} pipeline executor completed successfully",
                            *self);
             }
+            self->state().min_import_time = source_state->min_import_time;
+            self->state().max_import_time = source_state->max_import_time;
             finish_transform();
           });
         });
@@ -542,6 +695,9 @@ auto partition_transformer(
         auto& buildup = self->state().partition_buildup.at(data.id);
         auto offset = id{0};
         for (auto& slice : buildup.slices) {
+          if (slice.import_time() == time{}) {
+            slice.import_time(self->state().min_import_time);
+          }
           slice.offset(offset);
           offset += slice.rows();
           self->mail(slice).send(data.builder);

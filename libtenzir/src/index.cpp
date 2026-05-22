@@ -343,6 +343,10 @@ std::filesystem::path index_state::partition_path(const uuid& id) const {
   return dir / fmt::format("{:l}", id);
 }
 
+std::string index_state::partition_path_template() const {
+  return (dir / "{:l}").string();
+}
+
 std::filesystem::path
 index_state::transformer_partition_path(const uuid& id) const {
   return markersdir / fmt::format("{:l}", id);
@@ -1517,13 +1521,14 @@ index(index_actor::stateful_pointer<index_state> self,
            std::vector<partition_info> selected_partitions,
            keep_original_partition keep,
            std::string origin) -> caf::result<std::vector<partition_info>> {
-      const auto current_sender = self->current_sender();
       if (selected_partitions.empty()) {
         return caf::make_error(ec::invalid_argument, "no partitions given");
       }
       TENZIR_DEBUG("{} applies a pipeline to partitions {}", *self,
                    selected_partitions);
       TENZIR_ASSERT(self->state().store_actor_plugin);
+      auto input_partitions = std::vector<partition_info>{};
+      input_partitions.reserve(selected_partitions.size());
       std::erase_if(selected_partitions, [&](const auto& entry) {
         if (self->state().persisted_partitions.contains(entry.uuid)) {
           return false;
@@ -1539,6 +1544,7 @@ index(index_actor::stateful_pointer<index_state> self,
               .second) {
           corrected_partitions.candidate_infos[partition.schema]
             .partition_infos.emplace_back(partition);
+          input_partitions.emplace_back(partition);
         } else {
           // Getting overlapping partitions triggers a warning, and we
           // silently ignore the partition at the cost of the transformation
@@ -1555,6 +1561,8 @@ index(index_actor::stateful_pointer<index_state> self,
         return std::vector<partition_info>{};
       }
       auto store_id = std::string{self->state().store_actor_plugin->name()};
+      auto input_partition_path_template
+        = self->state().partition_path_template();
       auto partition_path_template
         = self->state().transformer_partition_path_template();
       auto partition_synopsis_path_template
@@ -1563,7 +1571,9 @@ index(index_actor::stateful_pointer<index_state> self,
       partition_transformer_actor partition_transfomer = self->spawn(
         partition_transformer, store_id, self->state().synopsis_opts,
         self->state().index_opts, self->state().catalog,
-        self->state().filesystem, pipe, std::move(partition_path_template),
+        self->state().filesystem, std::move(input_partitions), pipe,
+        std::move(input_partition_path_template),
+        std::move(partition_path_template),
         std::move(partition_synopsis_path_template), std::move(origin));
       /// Monitor the actor to remove it from the collection of active
       /// transformers.
@@ -1580,38 +1590,7 @@ index(index_actor::stateful_pointer<index_state> self,
         std::move(partition_transformer_addr),
         std::move(partition_completion_disposable));
       TENZIR_ASSERT(inserted);
-      // match_everything == '"" in #schema'
-      static const auto match_everything
-        = tenzir::predicate{meta_extractor{meta_extractor::schema},
-                            relational_operator::ni, data{""}};
-      auto query_context = query_context::make_extract(
-        fmt::format("{:?}", pipe), partition_transfomer, match_everything);
-      auto transform_id = self->state().pending_queries.create_query_id();
-      query_context.id = transform_id;
-      // We set the query priority for partition transforms to zero so they
-      // always get less priority than queries.
-      query_context.priority = 0;
-      TENZIR_TRACE("{} emplaces {} for pipeline {:?}", *self, query_context,
-                   pipe);
-      auto query_contexts = query_state::type_query_context_map{};
-      for (const auto& [type, _] : corrected_partitions.candidate_infos) {
-        query_contexts[type] = query_context;
-      }
-      auto input_size
-        = detail::narrow_cast<uint32_t>(corrected_partitions.size());
-      auto err = self->state().pending_queries.insert(
-        query_state{.query_contexts_per_type = query_contexts,
-                    .client = caf::actor_cast<receiver_actor<atom::done>>(
-                      partition_transfomer),
-                    .candidate_partitions = input_size,
-                    .requested_partitions = input_size},
-        catalog_lookup_result{corrected_partitions});
-      TENZIR_ASSERT(err == caf::none);
-      const auto num_scheduled = self->state().schedule_lookups();
-      TENZIR_DEBUG("{} scheduled {} partitions following a request to "
-                   "transform partitions",
-                   *self, num_scheduled);
-      auto marker_path = self->state().marker_path(transform_id);
+      auto marker_path = self->state().marker_path(uuid::random());
       auto rp = self->make_response_promise<std::vector<partition_info>>();
       auto deliver =
         [self, rp, corrected_partitions, marker_path](
