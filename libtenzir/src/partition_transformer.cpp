@@ -8,18 +8,27 @@
 
 #include "tenzir/partition_transformer.hpp"
 
+#include "tenzir/async/executor.hpp"
+#include "tenzir/atomic.hpp"
+#include "tenzir/base_ctx.hpp"
+#include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/fbs/utils.hpp"
+#include "tenzir/ir.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/partition_synopsis.hpp"
-#include "tenzir/pipeline.hpp"
-#include "tenzir/pipeline_executor.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/session.hpp"
+#include "tenzir/substitute_ctx.hpp"
+#include "tenzir/tql2/exec.hpp"
+#include "tenzir/try.hpp"
 
 #include <caf/actor_from_state.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/make_copy_on_write.hpp>
 #include <flatbuffers/flatbuffers.h>
+#include <folly/coro/Invoke.h>
+#include <folly/executors/GlobalExecutor.h>
 
 namespace tenzir {
 
@@ -88,99 +97,70 @@ void quit_or_stall(
   }
 }
 
-class fixed_source final : public crtp_operator<fixed_source> {
+/// A `DiagHandler` for the partition transformer that just logs whatever the
+/// pipeline emits. Diagnostics from compaction/rebuild pipelines have nowhere
+/// to surface as user-visible output, but we still want them in the server
+/// log so operators can be debugged.
+class TransformerDiagHandler final : public DiagHandler {
 public:
-  explicit fixed_source(std::vector<table_slice> slices)
-    : slices_{std::move(slices)} {
-  }
-
-  auto name() const -> std::string override {
-    return "<fixed_source>";
-  }
-
-  auto operator()() const -> generator<table_slice> {
-    for (const auto& slice : slices_) {
-      co_yield slice;
+  void emit(diagnostic diag) override {
+    if (diag.severity == severity::error) {
+      failed_.store(true, std::memory_order_relaxed);
+      TENZIR_ERROR("transformer diagnostic: {:?}", diag);
+      return;
     }
+    TENZIR_WARN("transformer diagnostic: {:?}", diag);
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    (void)filter, (void)order;
-    return do_not_optimize(*this);
+  auto failure() -> failure_or<void> override {
+    if (failed_.load(std::memory_order_relaxed)) {
+      return failure::promise();
+    }
+    return {};
   }
 
 private:
-  std::vector<table_slice> slices_;
+  Atomic<bool> failed_ = false;
 };
 
-class collecting_sink final : public crtp_operator<collecting_sink> {
-public:
-  explicit collecting_sink(std::shared_ptr<std::vector<table_slice>> result)
-    : result_{std::move(result)} {
-    TENZIR_ASSERT(result_);
+/// Compile an AST `table_slice -> table_slice` pipeline to a closed operator
+/// chain. Emits diagnostics via `dh` for any failure.
+auto compile_table_slice_transform(ast::pipeline ast, diagnostic_handler& dh)
+  -> failure_or<OperatorChain<table_slice, table_slice>> {
+  auto provider = session_provider::make(dh);
+  auto ctx = provider.as_session();
+  auto b_ctx = base_ctx{ctx.dh(), ctx.reg()};
+  auto c_ctx = compile_ctx::make_root(b_ctx);
+  TRY(auto ir, std::move(ast).compile(c_ctx));
+  auto sub_ctx = substitute_ctx{c_ctx, nullptr};
+  TRY(ir.substitute(sub_ctx, true));
+  TRY(auto output, ir.infer_type(tag_v<table_slice>, dh));
+  if (not output) {
+    diagnostic::error("partition transform: pipeline output type is unknown")
+      .emit(dh);
+    return failure::promise();
   }
-
-  auto name() const -> std::string override {
-    return "<collecting_sink>";
+  if (not output->is<table_slice>()) {
+    diagnostic::error("partition transform: pipeline must produce events, "
+                      "got {}",
+                      *output)
+      .emit(dh);
+    return failure::promise();
   }
-
-  auto operator()(generator<table_slice> input) const
-    -> generator<std::monostate> {
-    for (auto&& slice : input) {
-      if (slice.rows() > 0) {
-        result_->push_back(std::move(slice));
-      }
-      co_yield {};
-    }
+  auto spawned = std::move(ir).spawn(tag_v<table_slice>);
+  if (ctx.has_failure()) {
+    return failure::promise();
   }
-
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    (void)filter, (void)order;
-    return do_not_optimize(*this);
+  auto chain
+    = OperatorChain<table_slice, table_slice>::try_from(std::move(spawned));
+  if (not chain) {
+    diagnostic::error("partition transform: pipeline could not be wired as "
+                      "table_slice -> table_slice")
+      .emit(dh);
+    return failure::promise();
   }
-
-private:
-  std::shared_ptr<std::vector<table_slice>> result_;
-};
-
-struct transformer_diagnostics_receiver_state {
-  [[maybe_unused]] static constexpr auto name
-    = "transformer-diagnostics-receiver";
-
-  auto make_behavior() -> receiver_actor<diagnostic>::behavior_type {
-    return {
-      [](diagnostic diag) -> caf::result<void> {
-        if (diag.severity == severity::error) {
-          TENZIR_ERROR("transformer diagnostic: {:?}", diag);
-        } else {
-          TENZIR_WARN("transformer diagnostic: {:?}", diag);
-        }
-        return {};
-      },
-    };
-  }
-};
-
-struct transformer_metrics_receiver_state {
-  [[maybe_unused]] static constexpr auto name = "transformer-metrics-receiver";
-
-  // We just ignore all metrics for the partition transformer.
-  auto make_behavior() -> metrics_receiver_actor::behavior_type {
-    return {
-      [](uint64_t, uuid, type) -> caf::result<void> {
-        return {};
-      },
-      [](uint64_t, uuid, record) -> caf::result<void> {
-        return {};
-      },
-      [](operator_metric) -> caf::result<void> {
-        return {};
-      },
-    };
-  }
-};
+  return std::move(chain).unwrap();
+}
 
 } // namespace
 
@@ -323,7 +303,7 @@ auto partition_transformer(
     self,
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
-  pipeline transform, std::string partition_path_template,
+  ast::pipeline transform, std::string partition_path_template,
   std::string synopsis_path_template, std::string origin)
   -> partition_transformer_actor::behavior_type {
   self->state().synopsis_opts = synopsis_opts;
@@ -350,41 +330,8 @@ auto partition_transformer(
       self->state().input.push_back(std::move(slice));
     },
     [self](atom::done) -> caf::result<void> {
-      // We copy the pipeline because we will modify it.
-      auto pipe = self->state().transform;
-      auto open = pipe.check_type<table_slice, table_slice>();
-      if (not open) {
-        return open.error();
-      }
-      pipe.prepend(
-        std::make_unique<fixed_source>(std::move(self->state().input)));
-      auto output = std::make_shared<std::vector<table_slice>>();
-      pipe.append(std::make_unique<collecting_sink>(output));
-      auto closed = pipe.check_type<void, void>();
-      if (not closed) {
-        return caf::make_error(ec::logic_error, "internal error: {}",
-                               closed.error());
-      }
-      // Spawn diagnostics and metrics receivers.
-      auto diagnostics_receiver = self->spawn(
-        caf::actor_from_state<transformer_diagnostics_receiver_state>);
-      auto metrics_receiver = self->spawn(
-        caf::actor_from_state<transformer_metrics_receiver_state>);
-      // Spawn the pipeline executor actor.
-      auto executor
-        = self->spawn(pipeline_executor, std::move(pipe), std::string{},
-                      diagnostics_receiver, metrics_receiver, node_actor{},
-                      false, false, std::string{});
-      // Monitor the executor to detect when it finishes and process results.
-      self->monitor(executor, [self, output, executor](const caf::error& err) {
-        if (err.valid() and err != caf::exit_reason::normal) {
-          TENZIR_ERROR("{} pipeline executor failed: {}", *self, err);
-          self->state().transform_error = err;
-        } else {
-          TENZIR_DEBUG("{} pipeline executor completed successfully", *self);
-        }
-        // Process the collected output slices.
-        for (auto& slice : *output) {
+      auto process_slices = [self](std::vector<table_slice> slices) {
+        for (auto& slice : slices) {
           auto& partition_data = self->state().create_or_get_partition(slice);
           if (not partition_data.synopsis) {
             partition_data.id = tenzir::uuid::random();
@@ -464,21 +411,73 @@ auto partition_transformer(
         TENZIR_DEBUG("{} received all table slices", *self);
         self->mail(atom::internal_v, atom::resume_v, atom::done_v)
           .send(static_cast<partition_transformer_actor>(self));
-      });
-      // Start the executor and return immediately.
+      };
+      // Move input and AST out so the actor's state is empty when the run
+      // begins; they live inside the coroutine until it finishes.
+      auto input = std::exchange(self->state().input, {});
+      auto ast = std::move(self->state().transform);
+      // We deliver `rp` immediately and signal real completion later via the
+      // store-builder monitors set up in `process_slices`.
       auto rp = self->make_response_promise<void>();
-      self->mail(atom::start_v)
-        .request(executor, caf::infinite)
-        .then(
-          [rp]() mutable {
-            rp.deliver();
-          },
-          [self, rp](const caf::error& err) mutable {
-            TENZIR_ERROR("{} failed to start pipeline executor: {}", *self,
-                         err);
-            self->state().transform_error = err;
-            rp.deliver();
+      auto weak = caf::weak_actor_ptr{self->ctrl(), caf::add_ref};
+      auto& sys = self->system();
+      folly::coro::co_withExecutor(
+        folly::getGlobalCPUExecutor(),
+        folly::coro::co_invoke(
+          [ast = std::move(ast), input = std::move(input), &sys]() mutable
+            -> folly::coro::Task<failure_or<std::vector<table_slice>>> {
+            // Compaction and rebuild have no user-facing diagnostic sink, so
+            // we log to the server log. The handler is owned by this
+            // coroutine frame so its address is stable across awaits and it
+            // outlives every operator inside `run_transform` that references
+            // it.
+            auto dh = TransformerDiagHandler{};
+            CO_TRY(auto chain,
+                   compile_table_slice_transform(std::move(ast), dh));
+            CO_TRY(auto slices,
+                   co_await run_transform(std::move(input), std::move(chain),
+                                          sys, dh, NoProfiler{},
+                                          /*is_hidden=*/true));
+            co_return std::move(slices);
+          }))
+        .start(
+          [self, weak = std::move(weak),
+           process_slices = std::move(process_slices)](
+            folly::Try<failure_or<std::vector<table_slice>>>&& result) mutable {
+            auto strong = weak.lock();
+            if (not strong) {
+              return;
+            }
+            // We're on the folly executor thread here. All mutations of actor
+            // state must happen inside the `schedule_fn` body, which runs on
+            // the actor's thread.
+            auto error = caf::error{};
+            auto slices = std::vector<table_slice>{};
+            if (result.hasException()) {
+              error = caf::make_error(ec::logic_error,
+                                      fmt::format("partition transform: {}",
+                                                  result.exception().what()));
+            } else if (result.value().is_error()) {
+              error = caf::make_error(ec::logic_error,
+                                      "partition transform: pipeline failed; "
+                                      "see server log for diagnostics");
+            } else {
+              slices = std::move(result.value()).unwrap();
+            }
+            self->schedule_fn([self, process_slices = std::move(process_slices),
+                               slices = std::move(slices),
+                               error = std::move(error)]() mutable {
+              if (error) {
+                TENZIR_ERROR("{} pipeline executor failed: {}", *self, error);
+                self->state().transform_error = std::move(error);
+              } else {
+                TENZIR_DEBUG("{} pipeline executor completed successfully",
+                             *self);
+              }
+              process_slices(std::move(slices));
+            });
           });
+      rp.deliver();
       return rp;
     },
     [self](atom::internal, atom::resume, atom::done) {
