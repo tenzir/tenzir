@@ -1,4 +1,4 @@
-Tenzir v6.0.0-rc.5 continues the rollout of the rewritten execution engine that unlocks faster, more capable, and more scalable pipelines. This release candidate includes breaking changes; use the migration guide at https://docs.tenzir.com/guides/tenzir-v6-migration when testing your workloads.
+Tenzir v6.0.0-rc.6 continues the rollout of the rewritten execution engine that unlocks faster, more capable, and more scalable pipelines. This release candidate includes breaking changes; use the migration guide at https://docs.tenzir.com/guides/tenzir-v6-migration when testing your workloads.
 
 ## 💥 Breaking changes
 
@@ -179,6 +179,25 @@ Explicit parser subpipelines continue to take precedence over inferred formats.
 The `read_csv`, `read_tsv`, `read_ssv`, and `read_xsv` operators now accept an `auto_fill=true` option. When set, the parser silently fills missing trailing columns with `null` instead of emitting a warning, which is useful when working with feeds that legitimately omit optional trailing fields.
 
 *By @jachris and @claude.*
+
+### CloudWatch Logs operators
+
+Tenzir now supports reading from and writing to CloudWatch Logs with the new `from_amazon_cloudwatch` and `to_amazon_cloudwatch` operators. The source can subscribe to live streams with `mode="live"`, search historical log groups with `mode="search"`, or replay one stream with `mode="replay"`.
+
+```tql
+from_amazon_cloudwatch "/aws/lambda/api", mode="search", filter="ERROR"
+```
+
+The default sink can send events with `PutLogEvents`, including configurable batching, timestamp handling, parallel requests, and AWS IAM authentication via `aws_iam`. The sink can also write to the CloudWatch HTTP ingestion endpoints by setting `method` to `json`, `ndjson`, or `hlc`, with either SigV4 or bearer-token authentication.
+
+```tql
+to_amazon_cloudwatch "/tenzir/events",
+  stream="default",
+  payload=message,
+  timestamp=ts
+```
+
+*By @mavam and @codex in #6180.*
 
 ### Dedicated TCP source and sink operators
 
@@ -563,6 +582,12 @@ Use `each` for per-event jobs such as a lookup, an export, or a sink whose sourc
 
 *By @jachris in #5981.*
 
+### Prometheus shape for `metrics`
+
+The `metrics` operator now accepts `shape="prometheus"` to emit metrics from metrics plugins as canonical `{metric, value, timestamp, labels, type, unit}` records. The default remains `shape="raw"`, which preserves the existing `tenzir.metrics.*` schemas.
+
+*By @mavam and @codex in #6190.*
+
 ### Raw byte output with write_all
 
 The new `write_all` operator concatenates one selected `string` or `blob` field into raw bytes:
@@ -690,6 +715,22 @@ Use `anonymize` to share representative event traces without leaking the underly
 
 *By @IyeOnline.*
 
+### TQL match statements
+
+TQL now supports statement-level `match` blocks for branching on patterns:
+
+```tql
+match action {
+  "accept" | "allow" => { verdict = "allowed" }
+  "deny" | "drop" => { verdict = "blocked" }
+  _ => { verdict = "unknown" }
+}
+```
+
+Patterns can be constants, exclusive ranges, alternatives separated by `|`, or the final wildcard `_`. Every `match` must include an unguarded final wildcard arm, so Tenzir can prove at compile time that all possible values are covered. This provides a concise alternative to long `else if` chains when routing events by field value.
+
+*By @mavam and @codex.*
+
 ### Uncompressed Feather output
 
 The `write_feather` operator now supports `compression_type="uncompressed"` to disable compression entirely. Previously, only `zstd` and `lz4` were accepted:
@@ -726,13 +767,39 @@ The `chart_bar` and `chart_pie` operators now preserve the incoming row order fo
 
 *By @mavam.*
 
+### Region derivation and endpoint logging for SQS
+
+The `from_sqs` and `to_sqs` operators now derive the AWS region from a queue URL when `aws_region` is not set, so passing a full URL such as `https://sqs.us-west-2.amazonaws.com/123456789012/my-queue` works without having to specify the region again:
+
+```tql
+from_sqs "https://sqs.us-west-2.amazonaws.com/123456789012/my-queue"
+```
+
+Previously, this would fall back to the SDK default region and fail with a SigV4 signature mismatch. Explicit `aws_region`, resolved IAM credentials, and the SDK default still apply in that order when the URL has no region (for example VPC endpoints, LocalStack, or an `AWS_ENDPOINT_URL` override).
+
+SQS API errors and HTTP failures now also include the endpoint URL in their log lines and diagnostic notes, which makes it easier to tell which queue produced an error when multiple SQS pipelines run side by side.
+
+*By @lava in #6168.*
+
 ## 🐞 Bug fixes
+
+### Compaction resolves package UDOs at startup
+
+The `compaction` plugin no longer fails to start with `module <package> not found` when a rule's `pipeline` references an operator defined by an installed package. Previously, depending on the order in which the node's components were initialized, the compactor's eager rule-pipeline parse could run before the package manager had published its operator modules to the global registry.
+
+*By @raxyte in #6210.*
 
 ### Faster drop_null_fields on heterogeneous data
 
 The `drop_null_fields` operator is now much faster on heterogeneous input with many changing null patterns.
 
 *By @jachris, @mavam, and @codex in #5963.*
+
+### Reduce disk I/O of time-based compaction
+
+Time-based compaction rules no longer cause the node to reprocess data that has already been compacted in a previous run.
+
+*By @lava.*
 
 ### SentinelOne Data Lake sink support in the new executor
 
