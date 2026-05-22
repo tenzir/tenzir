@@ -6,6 +6,11 @@ description: >-
 tags:
   operators: match
   baseline: if
+inputs:
+  main:
+    path: empty.ndjson
+    source:
+      num_events: 5000000
 env:
   TENZIR_CONSOLE_FORMAT: none
 runtime:
