@@ -145,6 +145,9 @@ struct index_state {
   /// Maps partitions to their expected location on the file system.
   [[nodiscard]] std::filesystem::path partition_path(const uuid& id) const;
 
+  /// The directory that contains passive partition stores.
+  [[nodiscard]] std::filesystem::path archive_dir() const;
+
   /// Returns a format string that can be formatted with a partition id to get
   /// the input location of that partition for the partition transformer.
   [[nodiscard]] std::string partition_path_template() const;

@@ -11,7 +11,6 @@
 #include "tenzir/async/executor.hpp"
 #include "tenzir/async/future_util.hpp"
 #include "tenzir/atomic.hpp"
-#include "tenzir/base_ctx.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/fanout_counter.hpp"
@@ -165,6 +164,7 @@ public:
         co_await push_input(OperatorMsg<table_slice>{std::move(slice)});
       }
       if (state_->error.valid()) {
+        co_await push_input(OperatorMsg<table_slice>{Signal{EndOfData{}}});
         co_return;
       }
     }
@@ -436,12 +436,13 @@ auto partition_transformer(
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
   std::vector<partition_info> input_partitions, ast::pipeline transform,
-  std::string input_partition_path_template,
+  std::string input_partition_path_template, std::filesystem::path archive_dir,
   std::string partition_path_template, std::string synopsis_path_template,
   std::string origin) -> partition_transformer_actor::behavior_type {
   self->state().synopsis_opts = synopsis_opts;
   self->state().input_partition_path_template
     = std::move(input_partition_path_template);
+  self->state().archive_dir = std::move(archive_dir);
   self->state().partition_path_template = std::move(partition_path_template);
   self->state().synopsis_path_template = std::move(synopsis_path_template);
   // For historic reasons, the `tenzir.max-partition-size` is stored as the
@@ -547,21 +548,12 @@ auto partition_transformer(
         self->mail(atom::internal_v, atom::resume_v, atom::done_v)
           .send(static_cast<partition_transformer_actor>(self));
       };
-      auto db_dir = std::filesystem::path{caf::get_or(
-        content(self->state().fs->home_system().config()),
-        "tenzir.state-directory", defaults::state_directory.data())};
-      std::error_code err{};
-      auto archive_dir = std::filesystem::absolute(db_dir, err) / "archive";
-      if (err) {
-        return caf::make_error(ec::filesystem_error,
-                               "failed to resolve state directory {}: {}",
-                               db_dir, err.message());
-      }
       // Move input metadata and AST out so the actor's state is empty when the
       // run begins; they live inside the coroutine until it finishes.
       auto input_partitions = std::exchange(self->state().input_partitions, {});
       auto input_partition_path_template
         = std::move(self->state().input_partition_path_template);
+      auto archive_dir = std::move(self->state().archive_dir);
       auto ast = std::move(self->state().transform);
       // We deliver `rp` immediately and signal real completion later via the
       // store-builder monitors set up in `finish_transform`.

@@ -343,6 +343,10 @@ std::filesystem::path index_state::partition_path(const uuid& id) const {
   return dir / fmt::format("{:l}", id);
 }
 
+std::filesystem::path index_state::archive_dir() const {
+  return dir / ".." / "archive";
+}
+
 std::string index_state::partition_path_template() const {
   return (dir / "{:l}").string();
 }
@@ -1563,6 +1567,7 @@ index(index_actor::stateful_pointer<index_state> self,
       auto store_id = std::string{self->state().store_actor_plugin->name()};
       auto input_partition_path_template
         = self->state().partition_path_template();
+      auto archive_dir = self->state().archive_dir();
       auto partition_path_template
         = self->state().transformer_partition_path_template();
       auto partition_synopsis_path_template
@@ -1572,7 +1577,7 @@ index(index_actor::stateful_pointer<index_state> self,
         partition_transformer, store_id, self->state().synopsis_opts,
         self->state().index_opts, self->state().catalog,
         self->state().filesystem, std::move(input_partitions), pipe,
-        std::move(input_partition_path_template),
+        std::move(input_partition_path_template), std::move(archive_dir),
         std::move(partition_path_template),
         std::move(partition_synopsis_path_template), std::move(origin));
       /// Monitor the actor to remove it from the collection of active

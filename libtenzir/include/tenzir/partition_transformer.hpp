@@ -16,6 +16,7 @@
 
 #include <caf/typed_event_based_actor.hpp>
 
+#include <filesystem>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -119,6 +120,7 @@ struct partition_transformer_state {
   // Format strings that can be formatted with a `tenzir::uuid` as the single
   // parameter for input partitions and transformed output files.
   std::string input_partition_path_template;
+  std::filesystem::path archive_dir;
   std::string partition_path_template;
   std::string synopsis_path_template;
 
@@ -153,7 +155,7 @@ auto partition_transformer(
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
   std::vector<partition_info> input_partitions, ast::pipeline transform,
-  std::string input_partition_path_template,
+  std::string input_partition_path_template, std::filesystem::path archive_dir,
   std::string partition_path_template, std::string synopsis_path_template,
   std::string origin = "rebuild") -> partition_transformer_actor::behavior_type;
 
