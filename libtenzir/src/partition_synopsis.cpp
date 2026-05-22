@@ -21,6 +21,7 @@ partition_synopsis::partition_synopsis(partition_synopsis&& that) noexcept {
   min_import_time = std::exchange(that.min_import_time, time::max());
   max_import_time = std::exchange(that.max_import_time, time::min());
   version = std::exchange(that.version, version::current_partition_version);
+  approx_bytes = std::exchange(that.approx_bytes, uint64_t{0});
   schema = std::exchange(that.schema, {});
   type_synopses_ = std::exchange(that.type_synopses_, {});
   field_synopses_ = std::exchange(that.field_synopses_, {});
@@ -34,6 +35,7 @@ partition_synopsis::operator=(partition_synopsis&& that) noexcept {
     min_import_time = std::exchange(that.min_import_time, time::max());
     max_import_time = std::exchange(that.max_import_time, time::min());
     version = std::exchange(that.version, version::current_partition_version);
+    approx_bytes = std::exchange(that.approx_bytes, uint64_t{0});
     schema = std::exchange(that.schema, {});
     type_synopses_ = std::exchange(that.type_synopses_, {});
     field_synopses_ = std::exchange(that.field_synopses_, {});
@@ -118,6 +120,7 @@ void partition_synopsis::add(const table_slice& slice,
     schema = slice.schema();
   }
   TENZIR_ASSERT_EXPENSIVE(schema == slice.schema());
+  approx_bytes += slice.approx_bytes();
   auto each = as<record_type>(schema).leaves();
   auto leaf_it = each.begin();
   caf::settings synopsis_opts;
@@ -199,6 +202,7 @@ partition_synopsis* partition_synopsis::copy() const {
   result->min_import_time = min_import_time;
   result->max_import_time = max_import_time;
   result->version = version;
+  result->approx_bytes = approx_bytes;
   result->schema = schema;
   result->memusage_ = memusage_.load();
   result->type_synopses_.reserve(type_synopses_.size());
@@ -254,6 +258,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
   ps_builder.add_import_time_range(&import_time_range);
   ps_builder.add_version(x.version);
   ps_builder.add_schema(schema_vector);
+  ps_builder.add_approx_bytes(x.approx_bytes);
   return ps_builder.Finish();
 }
 
@@ -309,6 +314,7 @@ caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
     ps.max_import_time = time{};
   }
   ps.version = x.version();
+  ps.approx_bytes = x.approx_bytes();
   if (const auto* schema = x.schema()) {
     ps.schema = type{chunk::copy(as_bytes(*schema))};
   }

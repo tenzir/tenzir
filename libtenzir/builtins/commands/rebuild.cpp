@@ -42,6 +42,11 @@
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
 
+#include <filesystem>
+#include <fstream>
+#include <optional>
+#include <unordered_map>
+
 namespace tenzir::plugins::rebuild {
 
 namespace {
@@ -90,6 +95,64 @@ namespace {
 /// The threshold at which to consider a partition undersized, relative to the
 /// configured 'tenzir.max-partition-size'.
 inline constexpr auto undersized_threshold = 0.8;
+
+auto read_memory_value(const std::filesystem::path& path)
+  -> std::optional<uint64_t> {
+  auto file = std::ifstream{path};
+  auto value = std::string{};
+  file >> value;
+  if (value.empty() or value == "max") {
+    return std::nullopt;
+  }
+  try {
+    return std::stoull(value);
+  } catch (const std::exception&) {
+    return std::nullopt;
+  }
+}
+
+auto available_memory() -> std::optional<uint64_t> {
+  auto current = read_memory_value("/sys/fs/cgroup/memory.current");
+  auto max = read_memory_value("/sys/fs/cgroup/memory.max");
+  if (current and max and *current < *max) {
+    return *max - *current;
+  }
+  auto meminfo = std::ifstream{"/proc/meminfo"};
+  auto key = std::string{};
+  auto value = uint64_t{};
+  auto unit = std::string{};
+  while (meminfo >> key >> value >> unit) {
+    if (key == "MemAvailable:") {
+      return value * uint64_t{1024};
+    }
+  }
+  return std::nullopt;
+}
+
+auto rebuild_byte_budget() -> uint64_t {
+  auto available = available_memory();
+  if (not available) {
+    return std::numeric_limits<uint64_t>::max();
+  }
+  return std::max(*available / 2, uint64_t{1});
+}
+
+auto saturating_multiply(uint64_t lhs, uint64_t rhs) -> uint64_t {
+  if (lhs == 0 or rhs == 0) {
+    return 0;
+  }
+  if (lhs > std::numeric_limits<uint64_t>::max() / rhs) {
+    return std::numeric_limits<uint64_t>::max();
+  }
+  return lhs * rhs;
+}
+
+auto saturating_add(uint64_t lhs, uint64_t rhs) -> uint64_t {
+  if (lhs > std::numeric_limits<uint64_t>::max() - rhs) {
+    return std::numeric_limits<uint64_t>::max();
+  }
+  return lhs + rhs;
+}
 
 /// Statistics for an ongoing rebuild. Numbers are partitions.
 struct statistics {
@@ -145,6 +208,10 @@ struct rebuilder_state {
   std::optional<struct run> run = {};
   bool stopping = false;
 
+  /// Runtime byte estimates for legacy partitions that do not have persisted
+  /// `approx_bytes` metadata yet.
+  std::unordered_map<type, uint64_t> approx_bytes_per_event = {};
+
   /// Shows the status of a currently ongoing rebuild.
   auto status(status_verbosity) -> record {
     if (not run) {
@@ -171,6 +238,28 @@ struct rebuilder_state {
          {"automatic", run->options.automatic},
        }},
     };
+  }
+
+  void learn_size_estimate(const partition_info& partition) {
+    if (partition.events == 0 or partition.approx_bytes == 0) {
+      return;
+    }
+    approx_bytes_per_event[partition.schema]
+      = std::max<uint64_t>(partition.approx_bytes / partition.events, 1);
+  }
+
+  auto estimate_approx_bytes(const partition_info& partition,
+                             uint64_t unknown_partition_bytes) const
+    -> uint64_t {
+    if (partition.approx_bytes > 0 or partition.events == 0) {
+      return partition.approx_bytes;
+    }
+    if (auto it = approx_bytes_per_event.find(partition.schema);
+        it != approx_bytes_per_event.end()) {
+      return saturating_multiply(
+        it->second, detail::narrow_cast<uint64_t>(partition.events));
+    }
+    return unknown_partition_bytes;
   }
 
   /// Start a new rebuild.
@@ -255,6 +344,10 @@ struct rebuilder_state {
         [this, finish](catalog_lookup_result& lookup_result) mutable {
           TENZIR_ASSERT(run->statistics.num_total == 0);
           for (auto& [type, result] : lookup_result.candidate_infos) {
+            std::erase_if(result.partition_infos,
+                          [](const partition_info& partition) {
+                            return partition.events == 0;
+                          });
             if (not run->options.all) {
               std::erase_if(
                 result.partition_infos, [&](const partition_info& partition) {
@@ -269,6 +362,9 @@ struct rebuilder_state {
                   }
                   return true;
                 });
+            }
+            for (const auto& partition : result.partition_infos) {
+              learn_size_estimate(partition);
             }
             if (run->options.max_partitions < result.partition_infos.size()) {
               std::stable_sort(result.partition_infos.begin(),
@@ -365,6 +461,9 @@ struct rebuilder_state {
     }
     auto current_run_partitions = std::vector<partition_info>{};
     auto current_run_events = size_t{0};
+    auto current_run_bytes = uint64_t{0};
+    auto current_run_is_full = false;
+    auto current_run_budget = rebuild_byte_budget();
     // Take the first partition and collect as many of the same
     // type as possible to create new paritions. The approach used may
     // collects too many partitions if there is no exact match, but that is
@@ -377,13 +476,27 @@ struct rebuilder_state {
       run->remaining_partitions.begin(), run->remaining_partitions.end(),
       [&](const partition_info& partition) {
         if (schema == partition.schema
-            and current_run_events < max_partition_size) {
+            and current_run_events < max_partition_size
+            and not current_run_is_full) {
+          const auto partition_bytes
+            = estimate_approx_bytes(partition, current_run_budget);
+          if (not current_run_partitions.empty()
+              and saturating_add(current_run_bytes, partition_bytes)
+                    > current_run_budget) {
+            current_run_is_full = true;
+            return false;
+          }
+          current_run_bytes
+            = saturating_add(current_run_bytes, partition_bytes);
           current_run_events += partition.events;
           current_run_partitions.push_back(partition);
           TENZIR_TRACE("{} selects partition {} (v{}, {}) with "
-                       "{} events (total: {})",
+                       "{} events and {} estimated bytes (total: {} events, "
+                       "{} estimated bytes, budget: {})",
                        *self, partition.uuid, partition.version,
-                       partition.schema, partition.events, current_run_events);
+                       partition.schema, partition.events, partition_bytes,
+                       current_run_events, current_run_bytes,
+                       current_run_budget);
           return true;
         }
         return false;
@@ -447,6 +560,9 @@ struct rebuilder_state {
           }
           TENZIR_DEBUG("{} rebuilt {} into {} partitions", *self,
                        num_partitions, result.size());
+          for (const auto& partition : result) {
+            learn_size_estimate(partition);
+          }
           // If the number of events in the resulting partitions does not
           // match the number of events in the partitions that went in we ran
           // into a conflict with other partition transformations on an

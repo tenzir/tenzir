@@ -230,6 +230,10 @@ private:
     auto store_path
       = archive_dir_
         / fmt::format("{}.{}", store_uuid, partition_state.store_id);
+    if (store_path.extension() == ".feather") {
+      TENZIR_INFO("{} loads feather store for partition {} from {}",
+                  "partition-transformer", partition.uuid, store_path);
+    }
     auto store_chunk = chunk::mmap(store_path);
     if (not store_chunk) {
       fail(diagnostic::error(store_chunk.error())
