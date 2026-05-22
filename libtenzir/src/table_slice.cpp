@@ -535,6 +535,20 @@ state([[maybe_unused]] Slice&& encoded, State&& state) noexcept {
   return std::forward<State>(state).arrow_v2;
 }
 
+auto create_schema_if_not_exist(std::shared_ptr<arrow::RecordBatch> const& batch,
+                                std::optional<type> schema) -> type {
+  if (schema) {
+    TENZIR_ASSERT(is<record_type>(*schema));
+    return std::move(*schema);
+  }
+  if (not batch) {
+    /// TODO: This may cause downstream bugs, but I dont fully understand the
+    /// flatbuffer/serialized view storeage.
+    return type{};
+  }
+  return type::from_arrow(*batch->schema());
+}
+
 } // namespace
 
 // -- constructors, destructors, and assignment operators ----------------------
@@ -545,11 +559,11 @@ table_slice::table_slice() noexcept {
 
 table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
                          const std::shared_ptr<arrow::RecordBatch>& batch,
-                         type schema) noexcept
+                         std::optional<type> schema) noexcept
   : chunk_{verified_or_none(std::move(chunk), verify)} {
   increment_instances();
   TENZIR_ASSERT(not chunk_ or chunk_->unique());
-  TENZIR_ASSERT(not schema or is<record_type>(schema));
+  auto valid_schema = create_schema_if_not_exist(batch, std::move(schema));
   if (chunk_) {
     auto f = detail::overload{
       []() noexcept {
@@ -559,7 +573,7 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
         auto& state_ptr = state(encoded, state_);
         auto state = std::make_unique<
           std::decay_t<arrow_table_slice<tenzir::fbs::table_slice::arrow::v2>>>(
-          encoded, chunk_, batch, std::move(schema));
+          encoded, chunk_, batch, std::move(valid_schema));
         state_ptr = state.get();
         const auto bytes = as_bytes(chunk_);
         // We create a second chunk with an intentionally decoupled reference
@@ -591,26 +605,29 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
 }
 
 table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
-                         type schema, enum serialize serialize) {
+                         std::optional<type> schema, enum serialize serialize) {
   increment_instances();
   TENZIR_ASSERT_EXPENSIVE(verify_record_batch(*record_batch));
-  TENZIR_ASSERT(not schema or is<record_type>(schema));
+  auto valid_schema
+    = create_schema_if_not_exist(record_batch, std::move(schema));
   auto builder = flatbuffers::FlatBufferBuilder{};
-  *this
-    = create_table_slice(record_batch, builder, std::move(schema), serialize);
+  *this = create_table_slice(record_batch, builder, std::move(valid_schema),
+                             serialize);
 }
 
 auto table_slice::try_from(
-  const std::shared_ptr<arrow::RecordBatch>& record_batch, type schema,
-  enum serialize serialize) -> std::expected<table_slice, creation_error> {
-  TENZIR_ASSERT(not schema or is<record_type>(schema));
+  const std::shared_ptr<arrow::RecordBatch>& record_batch,
+  std::optional<type> schema, enum serialize serialize)
+  -> std::expected<table_slice, creation_error> {
   auto converted_batch = upgrade_record_batch(record_batch);
   auto valid = verify_record_batch(*converted_batch);
   if (not valid) {
     return std::unexpected(valid.error());
   }
+  auto valid_schema
+    = create_schema_if_not_exist(record_batch, std::move(schema));
   auto builder = flatbuffers::FlatBufferBuilder{};
-  return create_table_slice(converted_batch, builder, std::move(schema),
+  return create_table_slice(converted_batch, builder, std::move(valid_schema),
                             serialize);
 }
 
