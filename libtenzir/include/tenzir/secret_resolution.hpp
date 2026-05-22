@@ -11,6 +11,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/ecc.hpp"
 #include "tenzir/location.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/secret.hpp"
 
 #include <arrow/type_fwd.h>
@@ -189,7 +190,7 @@ auto make_secret_request(located<data>& value, diagnostic_handler& dh)
 
 struct located_resolved_secret {
   location loc;
-  ecc::cleansing_blob value;
+  Option<ecc::cleansing_blob> value;
 
   located_resolved_secret(location loc) : loc{loc} {
   }
