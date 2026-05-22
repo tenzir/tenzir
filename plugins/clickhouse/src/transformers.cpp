@@ -13,6 +13,7 @@
 #include "tenzir/view3.hpp"
 
 #include <clickhouse/columns/array.h>
+#include <clickhouse/columns/bool.h>
 #include <clickhouse/columns/date.h>
 #include <clickhouse/columns/ip6.h>
 #include <clickhouse/columns/nullable.h>
@@ -333,7 +334,7 @@ struct tenzir_to_clickhouse_trait;
     }                                                                          \
   }
 
-X(bool_type, ColumnUInt8, "UInt8");
+X(bool_type, ColumnBool, "Bool");
 X(int64_type, ColumnInt64, "Int64");
 X(uint64_type, ColumnUInt64, "UInt64");
 X(double_type, ColumnFloat64, "Float64");
