@@ -45,7 +45,9 @@
 #include <filesystem>
 #include <fstream>
 #include <optional>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace tenzir::plugins::rebuild {
 
@@ -95,6 +97,17 @@ namespace {
 /// The threshold at which to consider a partition undersized, relative to the
 /// configured 'tenzir.max-partition-size'.
 inline constexpr auto undersized_threshold = 0.8;
+inline constexpr auto max_partitions_per_rebuild_batch = size_t{16};
+
+struct memory_available {
+  uint64_t bytes = 0;
+  std::string source = {};
+};
+
+struct memory_budget {
+  uint64_t bytes = 0;
+  memory_available available = {};
+};
 
 auto read_memory_value(const std::filesystem::path& path)
   -> std::optional<uint64_t> {
@@ -111,30 +124,119 @@ auto read_memory_value(const std::filesystem::path& path)
   }
 }
 
-auto available_memory() -> std::optional<uint64_t> {
-  auto current = read_memory_value("/sys/fs/cgroup/memory.current");
-  auto max = read_memory_value("/sys/fs/cgroup/memory.max");
-  if (current and max and *current < *max) {
-    return *max - *current;
+auto read_cgroup_memory_available(const std::filesystem::path& dir,
+                                  std::string source)
+  -> std::optional<memory_available> {
+  auto current = read_memory_value(dir / "memory.current");
+  auto max = read_memory_value(dir / "memory.max");
+  if (not current or not max) {
+    current = read_memory_value(dir / "memory.usage_in_bytes");
+    max = read_memory_value(dir / "memory.limit_in_bytes");
   }
+  if (not current or not max or *current >= *max) {
+    return std::nullopt;
+  }
+  static constexpr auto unlimited_cgroup_limit = uint64_t{1} << 60;
+  if (*max >= unlimited_cgroup_limit) {
+    return std::nullopt;
+  }
+  return memory_available{
+    .bytes = *max - *current,
+    .source = std::move(source),
+  };
+}
+
+auto relative_cgroup_path(std::string_view raw) -> std::filesystem::path {
+  while (raw.starts_with('/')) {
+    raw.remove_prefix(1);
+  }
+  return std::filesystem::path{std::string{raw}};
+}
+
+auto cgroup_memory_available() -> std::optional<memory_available> {
+  auto cgroups = std::ifstream{"/proc/self/cgroup"};
+  auto line = std::string{};
+  while (std::getline(cgroups, line)) {
+    const auto first = line.find(':');
+    if (first == std::string::npos) {
+      continue;
+    }
+    const auto second = line.find(':', first + 1);
+    if (second == std::string::npos) {
+      continue;
+    }
+    const auto controllers
+      = std::string_view{line}.substr(first + 1, second - first - 1);
+    const auto path
+      = relative_cgroup_path(std::string_view{line}.substr(second + 1));
+    if (controllers.empty()) {
+      if (auto result = read_cgroup_memory_available(
+            std::filesystem::path{"/sys/fs/cgroup"} / path, "cgroup-v2")) {
+        return result;
+      }
+    } else if (controllers.find("memory") != std::string_view::npos) {
+      if (auto result = read_cgroup_memory_available(
+            std::filesystem::path{"/sys/fs/cgroup/memory"} / path,
+            "cgroup-v1")) {
+        return result;
+      }
+      if (auto result = read_cgroup_memory_available(
+            std::filesystem::path{"/sys/fs/cgroup"} / path, "cgroup-v1")) {
+        return result;
+      }
+    }
+  }
+  return read_cgroup_memory_available("/sys/fs/cgroup", "cgroup");
+}
+
+auto system_memory_available() -> std::optional<memory_available> {
   auto meminfo = std::ifstream{"/proc/meminfo"};
   auto key = std::string{};
   auto value = uint64_t{};
   auto unit = std::string{};
   while (meminfo >> key >> value >> unit) {
     if (key == "MemAvailable:") {
-      return value * uint64_t{1024};
+      return memory_available{
+        .bytes = value * uint64_t{1024},
+        .source = "/proc/meminfo",
+      };
     }
   }
   return std::nullopt;
 }
 
-auto rebuild_byte_budget() -> uint64_t {
-  auto available = available_memory();
-  if (not available) {
-    return std::numeric_limits<uint64_t>::max();
+auto available_memory() -> std::optional<memory_available> {
+  auto cgroup = cgroup_memory_available();
+  auto system = system_memory_available();
+  if (cgroup and system and system->bytes < cgroup->bytes) {
+    return system;
   }
-  return std::max(*available / 2, uint64_t{1});
+  if (cgroup) {
+    return cgroup;
+  }
+  return system;
+}
+
+auto rebuild_byte_budget() -> memory_budget {
+  auto available = available_memory().value_or(memory_available{
+    .bytes = uint64_t{512} * 1024 * 1024,
+    .source = "fallback",
+  });
+  return {
+    // The transformer currently holds decoded output slices before persisting
+    // the new Feather store, and the store writer builds additional Arrow
+    // structures during persist. Admit substantially less than the apparent
+    // free memory to leave room for those copies and unrelated node activity.
+    .bytes = std::max(available.bytes / 4, uint64_t{1}),
+    .available = std::move(available),
+  };
+}
+
+auto format_bytes(uint64_t bytes) -> std::string {
+  if (bytes == std::numeric_limits<uint64_t>::max()) {
+    return "unlimited";
+  }
+  return fmt::format("{} bytes", bytes);
 }
 
 auto saturating_multiply(uint64_t lhs, uint64_t rhs) -> uint64_t {
@@ -477,12 +579,13 @@ struct rebuilder_state {
       [&](const partition_info& partition) {
         if (schema == partition.schema
             and current_run_events < max_partition_size
+            and current_run_partitions.size() < max_partitions_per_rebuild_batch
             and not current_run_is_full) {
           const auto partition_bytes
-            = estimate_approx_bytes(partition, current_run_budget);
+            = estimate_approx_bytes(partition, current_run_budget.bytes);
           if (not current_run_partitions.empty()
               and saturating_add(current_run_bytes, partition_bytes)
-                    > current_run_budget) {
+                    > current_run_budget.bytes) {
             current_run_is_full = true;
             return false;
           }
@@ -496,13 +599,20 @@ struct rebuilder_state {
                        *self, partition.uuid, partition.version,
                        partition.schema, partition.events, partition_bytes,
                        current_run_events, current_run_bytes,
-                       current_run_budget);
+                       current_run_budget.bytes);
           return true;
         }
         return false;
       });
     run->remaining_partitions.erase(first_removed,
                                     run->remaining_partitions.end());
+    TENZIR_INFO("{} selected {} partition(s) for rebuild of schema {} with {} "
+                "estimated decoded bytes (budget: {}, available: {} from {})",
+                *self, current_run_partitions.size(), schema,
+                format_bytes(current_run_bytes),
+                format_bytes(current_run_budget.bytes),
+                format_bytes(current_run_budget.available.bytes),
+                current_run_budget.available.source);
     run->statistics.num_rebuilding += current_run_partitions.size();
     // If we have just a single partition then we shouldn't rebuild if our
     // intent was to merge undersized partitions, unless the partition is
