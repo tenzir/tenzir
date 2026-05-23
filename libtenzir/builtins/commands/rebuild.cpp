@@ -97,7 +97,6 @@ namespace {
 /// The threshold at which to consider a partition undersized, relative to the
 /// configured 'tenzir.max-partition-size'.
 inline constexpr auto undersized_threshold = 0.8;
-inline constexpr auto max_partitions_per_rebuild_batch = size_t{16};
 
 struct memory_available {
   uint64_t bytes = 0;
@@ -579,7 +578,6 @@ struct rebuilder_state {
       [&](const partition_info& partition) {
         if (schema == partition.schema
             and current_run_events < max_partition_size
-            and current_run_partitions.size() < max_partitions_per_rebuild_batch
             and not current_run_is_full) {
           const auto partition_bytes
             = estimate_approx_bytes(partition, current_run_budget.bytes);
