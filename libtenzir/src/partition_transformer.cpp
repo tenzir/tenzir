@@ -303,14 +303,14 @@ public:
       if (memory_budget_ and not state_->loaded_partitions.empty()) {
         if (auto used = live_budget_used(*memory_budget_);
             used and used->first >= memory_budget_->bytes) {
-          TENZIR_INFO("{} stops loading transform input before partition {} "
-                      "after {} partition(s); live memory budget is full "
-                      "({} bytes used, {} bytes budget, {} bytes available, "
-                      "source: {})",
-                      "partition-transformer", partition.uuid,
-                      state_->loaded_partitions.size(), used->first,
-                      memory_budget_->bytes, used->second,
-                      memory_budget_->source);
+          TENZIR_VERBOSE("{} stops loading transform input before partition {} "
+                         "after {} partition(s); live memory budget is full "
+                         "({} bytes used, {} bytes budget, {} bytes available, "
+                         "source: {})",
+                         "partition-transformer", partition.uuid,
+                         state_->loaded_partitions.size(), used->first,
+                         memory_budget_->bytes, used->second,
+                         memory_budget_->source);
           break;
         }
       }
