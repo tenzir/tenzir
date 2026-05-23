@@ -604,13 +604,6 @@ struct rebuilder_state {
       });
     run->remaining_partitions.erase(first_removed,
                                     run->remaining_partitions.end());
-    TENZIR_INFO("{} selected {} partition(s) for rebuild of schema {} with {} "
-                "estimated decoded bytes (budget: {}, available: {} from {})",
-                *self, current_run_partitions.size(), schema,
-                format_bytes(current_run_bytes),
-                format_bytes(current_run_budget.bytes),
-                format_bytes(current_run_budget.available.bytes),
-                current_run_budget.available.source);
     run->statistics.num_rebuilding += current_run_partitions.size();
     // If we have just a single partition then we shouldn't rebuild if our
     // intent was to merge undersized partitions, unless the partition is
