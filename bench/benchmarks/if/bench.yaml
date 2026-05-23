@@ -1,14 +1,14 @@
 ---
 name: if
 description: >-
-  jaja
+  Measure synthetic if/else dispatch over repeated boolean events.
 tags:
   operators: if
-input:
-  path: cloudwatch/route53.ndjson
-  source: https://datasets.tenzir.tools/CloudWatch/route53.ndjson
-  events: 25860
-  measure: true
+inputs:
+  main:
+    path: empty.ndjson
+    source:
+      num_events: 200000
 env:
   TENZIR_CONSOLE_FORMAT: none
 runtime:
