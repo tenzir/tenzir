@@ -29,7 +29,7 @@ namespace tenzir {
 struct partition_transformer_state {
   static constexpr const char* name = "partition-transformer";
 
-  using result_type = std::vector<partition_synopsis_pair>;
+  using result_type = partition_transform_result;
   using promise_type = caf::typed_response_promise<result_type>;
   using partition_tuple = std::tuple<tenzir::uuid, tenzir::type, chunk_ptr>;
   using synopsis_tuple = std::tuple<tenzir::uuid, chunk_ptr>;
@@ -77,6 +77,9 @@ struct partition_transformer_state {
 
   /// The partitions selected as input for the transform.
   std::vector<partition_info> input_partitions = {};
+
+  /// The input partitions that the transformer actually consumed.
+  std::vector<partition_info> transformed_input_partitions = {};
 
   /// The maximum number of events per partition. (not really necessary, but
   /// required by the partition synopsis)

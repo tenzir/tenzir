@@ -196,4 +196,17 @@ struct partition_synopsis_pair {
   }
 };
 
+struct partition_transform_result {
+  std::vector<partition_info> input_partitions;
+  std::vector<partition_synopsis_pair> output_partitions;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, partition_transform_result& x) {
+    return f.object(x)
+      .pretty_name("tenzir.partition-transform-result")
+      .fields(f.field("input-partitions", x.input_partitions),
+              f.field("output-partitions", x.output_partitions));
+  }
+};
+
 } // namespace tenzir

@@ -266,7 +266,7 @@ using filesystem_actor = typed_actor_fwd<
 using partition_transformer_actor = typed_actor_fwd<
   // Persist the transformed partitions and return the generated
   // partition synopses.
-  auto(atom::persist)->caf::result<std::vector<partition_synopsis_pair>>,
+  auto(atom::persist)->caf::result<partition_transform_result>,
   // INTERNAL: Continuation handler for `atom::done`.
   auto(atom::internal, atom::resume, atom::done)->caf::result<void>>
   // extract_query_context API
@@ -496,6 +496,7 @@ CAF_END_TYPE_ID_BLOCK(tenzir_actors)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<tenzir_uuid_synopsis_map>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::partition_synopsis_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::partition_synopsis_pair)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::partition_transform_result)
 #undef tenzir_uuid_synopsis_map
 
 #undef TENZIR_ADD_TYPE_ID

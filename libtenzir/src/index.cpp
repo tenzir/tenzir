@@ -1639,15 +1639,13 @@ index(index_actor::stateful_pointer<index_state> self,
         .then(
           [self, deliver, corrected_partitions, keep, marker_path, rp,
            partition_transfomer](
-            std::vector<partition_synopsis_pair>& apsv) mutable {
+            partition_transform_result& transform_result) mutable {
             std::vector<uuid> old_partition_ids;
-            old_partition_ids.reserve(corrected_partitions.size());
-            for (const auto& [_, candidate_info] :
-                 corrected_partitions.candidate_infos) {
-              for (const auto& partition : candidate_info.partition_infos) {
-                old_partition_ids.emplace_back(partition.uuid);
-              }
+            old_partition_ids.reserve(transform_result.input_partitions.size());
+            for (const auto& partition : transform_result.input_partitions) {
+              old_partition_ids.emplace_back(partition.uuid);
             }
+            auto apsv = std::move(transform_result.output_partitions);
             std::vector<uuid> new_partition_ids;
             new_partition_ids.reserve(apsv.size());
             for (auto const& [uuid, _] : apsv) {
