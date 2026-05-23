@@ -614,16 +614,19 @@ struct rebuilder_state {
               == version::current_partition_version
         and current_run_partitions[0].events <= max_partition_size;
     if (skip_rebuild) {
-      TENZIR_DEBUG("{} skips rebuilding of undersized partition {} because no "
-                   "other partition of schema {} exists",
-                   *self, current_run_partitions[0].uuid,
-                   current_run_partitions[0].schema);
       run->statistics.num_rebuilding -= 1;
       run->statistics.num_total -= 1;
       // Pick up new work until we run out of remainig partitions.
       return self->mail(atom::internal_v, atom::rebuild_v)
         .delegate(static_cast<rebuilder_actor>(self));
     }
+    TENZIR_VERBOSE(
+      "{} selected {} partition(s) for rebuild of schema {} with {} "
+      "estimated decoded bytes (budget: {}, available: {} from {})",
+      *self, current_run_partitions.size(), schema,
+      format_bytes(current_run_bytes), format_bytes(current_run_budget.bytes),
+      format_bytes(current_run_budget.available.bytes),
+      current_run_budget.available.source);
     // Ask the index to rebuild the partitions we selected.
     auto rp = self->make_response_promise<void>();
     auto dh = null_diagnostic_handler{};
