@@ -316,9 +316,12 @@ private:
 
 /// Common arguments for Arrow filesystem-based sink operators.
 struct ToArrowFsArgs {
+  static constexpr uint64_t default_max_size = uint64_t{100} * 1024 * 1024;
+  static constexpr duration default_timeout = std::chrono::minutes{5};
+
   located<secret> url;
-  uint64_t max_size = uint64_t{100} * 1024 * 1024;
-  duration timeout = std::chrono::minutes{5};
+  Option<located<uint64_t>> max_size;
+  Option<located<duration>> timeout;
   located<ir::pipeline> pipe;
   Option<ast::expression> partition_by;
 
@@ -329,26 +332,26 @@ struct ToArrowFsArgs {
              and std::invocable<F, DescribeCtx&>
   static auto describe_to(Describer<Args, Impls...>& d, F extra = {}) -> void {
     d.template positional<located<secret>>("url", &ToArrowFsArgs::url);
-    auto max_size_arg = d.template named_optional<uint64_t>(
+    auto max_size_arg = d.template named<located<uint64_t>>(
       "max_size", &ToArrowFsArgs::max_size);
     auto timeout_arg
-      = d.template named_optional<duration>("timeout", &ToArrowFsArgs::timeout);
+      = d.template named<located<duration>>("timeout", &ToArrowFsArgs::timeout);
     auto partition_arg = d.template named<ast::expression>(
       "partition_by", &ToArrowFsArgs::partition_by, "list<field>");
     auto pipe_arg
       = d.pipeline(&ToArrowFsArgs::pipe, SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto max_size = ctx.get(max_size_arg)) {
-        if (*max_size == 0) {
+        if (max_size->inner == 0) {
           diagnostic::error("`max_size` must be a positive number")
-            .primary(*ctx.get_location(max_size_arg))
+            .primary(max_size->source)
             .emit(ctx);
         }
       }
       if (auto timeout = ctx.get(timeout_arg)) {
-        if (*timeout <= duration::zero()) {
+        if (timeout->inner <= duration::zero()) {
           diagnostic::error("`timeout` must be a positive duration")
-            .primary(*ctx.get_location(timeout_arg))
+            .primary(timeout->source)
             .emit(ctx);
         }
       }

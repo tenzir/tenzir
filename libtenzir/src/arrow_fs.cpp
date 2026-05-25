@@ -633,6 +633,22 @@ auto ToArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
   // TODO: Consider using separate types here to differentiate.
   template_.set_path(std::move(fs->path), base_args_.url.source, append(),
                      ctx.dh());
+  if (not template_.has_uuid()) {
+    if (base_args_.max_size) {
+      diagnostic::warning("`max_size` has no effect without a `{{uuid}}` "
+                          "placeholder in the URL")
+        .primary(base_args_.max_size->source)
+        .note("rotation requires `{{uuid}}` to produce unique filenames")
+        .emit(ctx.dh());
+    }
+    if (base_args_.timeout) {
+      diagnostic::warning("`timeout` has no effect without a `{{uuid}}` "
+                          "placeholder in the URL")
+        .primary(base_args_.timeout->source)
+        .note("rotation requires `{{uuid}}` to produce unique filenames")
+        .emit(ctx.dh());
+    }
+  }
   bytes_written_counter_
     = ctx.make_counter(MetricsLabel{"operator", "to_arrow_fs"},
                        MetricsDirection::write, MetricsVisibility::external_,
@@ -715,7 +731,9 @@ auto ToArrowFsOperator::process(table_slice input, OpCtx& ctx) -> Task<void> {
                 co_await folly::coro::co_current_cancellation_token,
                 cancel_token);
               co_await folly::coro::co_withCancellation(
-                token, sleep_for(base_args_.timeout));
+                token,
+                sleep_for(base_args_.timeout ? base_args_.timeout->inner
+                                             : ToArrowFsArgs::default_timeout));
               co_await rotate(sk);
             });
         }
@@ -788,7 +806,9 @@ auto ToArrowFsOperator::process_sub(SubKeyView key, chunk_ptr chunk, OpCtx& ctx)
   bytes_written_counter_.add(chunk->size());
   part->stream_bytes += chunk->size();
   const auto can_rotate = template_.has_uuid() and not part->is_rotating;
-  const auto over_max_size = part->stream_bytes >= base_args_.max_size;
+  const auto max_size = base_args_.max_size ? base_args_.max_size->inner
+                                            : ToArrowFsArgs::default_max_size;
+  const auto over_max_size = part->stream_bytes >= max_size;
   if (can_rotate and over_max_size) {
     co_await rotate(sk);
   }
