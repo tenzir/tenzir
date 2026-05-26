@@ -5,3 +5,4 @@ from_microsoft_sql table="dbo.users",
                    password=env("MSSQL_PASSWORD"),
                    database=env("MSSQL_DATABASE"),
                    tls={skip_peer_verification: true}
+| sort id

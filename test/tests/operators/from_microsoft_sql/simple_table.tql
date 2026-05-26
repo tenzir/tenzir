@@ -4,3 +4,4 @@ from_microsoft_sql table="dbo.users",
                    user=env("MSSQL_USER"),
                    password=env("MSSQL_PASSWORD"),
                    database=env("MSSQL_DATABASE")
+| sort id
