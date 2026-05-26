@@ -25,7 +25,6 @@ let
       pkgsBuildBuild,
       pkgsBuildHost,
       makeBinaryWrapper,
-      isReleaseBuild ? false,
       ...
     }:
     let
@@ -251,16 +250,10 @@ let
           ++ extraCmakeFlags;
 
           # TODO: Omit this for "tagged release" builds.
-          preConfigure =
-            if isReleaseBuild then
-              ''
-                cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=")
-              ''
-            else
-              ''
-                version_build_metadata=$(basename $out | cut -d'-' -f 1)
-                cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
-              '';
+          preConfigure = ''
+            version_build_metadata=$(basename $out | cut -d'-' -f 1)
+            cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
+          '';
 
           hardeningDisable =
             lib.optionals isStatic [

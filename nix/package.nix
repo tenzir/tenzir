@@ -1,5 +1,4 @@
 {
-  isReleaseBuild,
   nix2container,
   lib,
   pkgs,
@@ -101,7 +100,6 @@ rec {
           tenzir-source
           tenzirPythonPkgs
           toImageFn
-          isReleaseBuild
           ;
         stdenv = tenzirCcacheStdenv;
         caf = linkPkgs.caf.override {

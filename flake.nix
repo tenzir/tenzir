@@ -10,7 +10,6 @@
   };
 
   inputs = {
-    isReleaseBuild.url = "github:boolean-option/false";
     nixpkgs.url = "github:tobim/nixpkgs/c138dec5080350510dbe6da937ec4a90bb2cda57";
     flake-compat.url = "github:edolstra/flake-compat";
     flake-compat.flake = false;
@@ -71,12 +70,10 @@
         };
         package = pkgs.callPackages ./nix/package.nix {
           nix2container = inputs.nix2container.packages.${system};
-          isReleaseBuild = inputs.isReleaseBuild.value;
           inherit tenzirPythonPkgs;
         };
         package-clang = pkgs.callPackages ./nix/package.nix {
           nix2container = inputs.nix2container.packages.${system};
-          isReleaseBuild = inputs.isReleaseBuild.value;
           inherit tenzirPythonPkgs;
           forceClang = true;
         };

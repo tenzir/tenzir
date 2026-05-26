@@ -131,21 +131,6 @@
         "type": "github"
       }
     },
-    "isReleaseBuild": {
-      "locked": {
-        "lastModified": 1657739266,
-        "narHash": "sha256-vLy8GQr0noEcoA+jX24FgUVBA/poV36zDWAUChN3hIY=",
-        "owner": "boolean-option",
-        "repo": "false",
-        "rev": "d06b4794a134686c70a1325df88a6e6768c6b212",
-        "type": "github"
-      },
-      "original": {
-        "owner": "boolean-option",
-        "repo": "false",
-        "type": "github"
-      }
-    },
     "nix2container": {
       "inputs": {
         "nixpkgs": [
@@ -247,7 +232,6 @@
       "inputs": {
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
-        "isReleaseBuild": "isReleaseBuild",
         "nix2container": "nix2container",
         "nixpkgs": "nixpkgs",
         "pyproject-build-systems": "pyproject-build-systems",
