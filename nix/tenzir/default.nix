@@ -142,7 +142,7 @@ let
       };
 
       deps = callPackage ../dependencies.nix {
-         inherit stdenv;
+        inherit stdenv;
       };
 
     in
@@ -165,10 +165,10 @@ let
 
           outputs = [ "out" ] ++ (if isStatic then [ "package" ] else [ "dev" ]);
 
-          nativeBuildInputs = deps.nativeBuildInputs;
-          propagatedNativeBuildInputs = deps.propagatedNativeBuildInputs;
-          buildInputs = deps.buildInputs;
-          propagatedBuildInputs = deps.propagatedBuildInputs;
+          inherit (deps) nativeBuildInputs;
+          inherit (deps) propagatedNativeBuildInputs;
+          inherit (deps) buildInputs;
+          inherit (deps) propagatedBuildInputs;
 
           env = {
             POETRY_VIRTUALENVS_IN_PROJECT = 1;

@@ -69,7 +69,8 @@ in
     grpc
     makeBinaryWrapper
     uv
-  ] ++ lib.optionals stdenv.isLinux [
+  ]
+  ++ lib.optionals stdenv.isLinux [
     dpkg
     rpm
   ];

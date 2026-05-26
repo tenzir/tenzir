@@ -4,14 +4,13 @@
 let
   lock = builtins.fromJSON (builtins.readFile ./flake.lock);
 
-  nixpkgsSrc = builtins.fetchTree lock.nodes.nixpkgs.locked;
+  nixpkgsSrc = fetchTree lock.nodes.nixpkgs.locked;
   overlay = import ./nix/overlay.nix;
 
   pkgs = import nixpkgsSrc {
     inherit system;
     overlays = [ overlay ];
   };
-
 
   deps = pkgs.callPackage ./nix/dependencies.nix { };
   test-deps = pkgs.callPackage ./nix/test-dependencies.nix { };
