@@ -1,0 +1,2 @@
+let $l = {a: 3}
+from $l

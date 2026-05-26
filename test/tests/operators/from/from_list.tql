@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from [
+  {tenant: "acme", msg: "a"},
+  {tenant: "globex", msg: "b"},
+]

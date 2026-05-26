@@ -123,7 +123,10 @@ public:
       co_await assert_cancelled();
     }
     auto cast = std::move(result).unwrap().as<record_type>();
-    TENZIR_ASSERT(cast);
+    if (not cast) {
+      diagnostic::error("expected `record`").primary(events_[next_]).emit(ctx);
+      co_return;
+    }
     auto schema = tenzir::type{"tenzir.from", cast->type};
     auto slice = table_slice{
       record_batch_from_struct_array(schema.to_arrow_schema(), *cast->array),
