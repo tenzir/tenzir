@@ -79,48 +79,8 @@ rec {
     fileset = tenzir-tree;
   };
 
-  tenzir-test = pkgs.python3Packages.buildPythonPackage rec {
-    pname = "tenzir-test";
-    version = "1.8.4";
-    pyproject = true;
-
-    src = pkgs.fetchFromGitHub {
-      owner = "tenzir";
-      repo = "test";
-      tag = "v${version}";
-      hash = "sha256-YXsJZagUeloS+LcyimefORZ5/7wnZ5fWrT2JKCjpN5w=";
-    };
-
-    build-system = with pkgs.python3Packages; [ hatchling ];
-
-    dependencies = with pkgs.python3Packages; [
-      click
-      pyyaml
-    ];
-  };
-
-  tenzir-integration-test-deps = [
-    pkgs.curl
-    pkgs.jq
-    pkgs.lsof
-    pkgs.perl
-    pkgs.procps
-    pkgs.socat
-    # toybox provides a portable `rev`, but it also comes with a `cp` that does
-    # not provide all the flags that are used in stdenv phases. We just add it
-    # to the PATH in the checkPhase directly as a workaround.
-    #toybox
-    pkgs.yara
-    pkgs.uv
-    pkgs.parallel
-    pkgs.openssl
-    (pkgs.python3.withPackages (ps: [
-      ps.trustme
-      ps.pymysql
-      ps.pyzmq
-    ]))
-    tenzir-test
-  ];
+  test-deps = pkgs.callPackage ./test-dependencies.nix { };
+  inherit (test-deps) tenzir-integration-test-deps;
 
   toImageFn = import ./tenzir/image.nix nix2container;
 

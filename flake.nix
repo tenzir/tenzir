@@ -100,13 +100,13 @@
           // {
             default = self.packages.${system}.tenzir-static;
             format = pkgs.callPackage ./nix/format.nix { inherit treefmtEval; };
+            # Run with `nix run .#generate-sbom`, output is written to tenzir.spdx.json.
             generate-sbom = pkgs.callPackage ./nix/generate-sbom.nix {
               package = self.packages.${system}.tenzir-de-static;
             };
           };
         legacyPackages = pkgs;
-        # Run with `nix run .#generate-sbom`, output is written to tenzir.spdx.json.
-        devShells.default = import ./shell.nix { inherit pkgs package; };
+        devShells.default = import ./shell.nix { inherit system; };
         formatter = self.packages.${system}.format;
         checks = {
           # Disabled until the custom Style Check workflow is aligned.

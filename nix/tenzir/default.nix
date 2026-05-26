@@ -8,61 +8,11 @@ let
       callPackage,
       tenzir-source,
       tenzirPythonPkgs,
-      cmake,
-      ninja,
-      pkg-config,
-      boost,
       caf,
-      curl,
       cacert,
-      libpcap,
-      arrow-cpp,
-      arrow-adbc-cpp,
-      aws-sdk-cpp-tenzir,
-      azure-sdk-for-cpp,
-      libbacktrace,
-      clickhouse-cpp,
-      empty-libgcc_eh,
-      flatbuffers,
-      fluent-bit,
-      protobuf,
-      google-cloud-cpp-tenzir,
-      nlohmann_json,
-      crc32c,
-      grpc,
-      spdlog,
-      simdjson,
-      robin-map,
-      libunwind,
-      xxHash,
-      rabbitmq-c,
-      libnats-c,
-      yaml-cpp,
-      yara,
-      jansson,
-      rdkafka,
-      cyrus_sasl,
-      reproc,
-      cppzmq,
-      libmaxminddb,
-      jemalloc-tenzir,
-      mimalloc-tenzir,
       iconv,
-      re2,
-      dpkg,
       lz4,
       zstd,
-      rpm,
-      restinio,
-      llhttp,
-      pfs,
-      c-ares,
-      folly,
-      proxygen,
-      double-conversion,
-      libevent,
-      liburing,
-      snappy,
       expat,
       # Defaults to null because it is omitted for the developer edition build.
       tenzir-plugins-source ? null,
@@ -108,19 +58,16 @@ let
       ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [
         "plugins/yara"
       ];
+
+      pythonDeps = import ../python-dependencies.nix;
       py3 =
         let
           p = if stdenv.buildPlatform.canExecute stdenv.hostPlatform then pkgsBuildBuild.python3 else python3;
         in
         p.withPackages (
-          ps: with ps; [
-            aiohttp
-            setuptools
-            dynaconf
-            pandas
-            pyarrow
-            python-box
-            pip
+          pythonDeps.combine [
+            pythonDeps.build
+            pythonDeps.runtime
           ]
         );
 
@@ -195,6 +142,10 @@ let
         inherit isStatic;
       };
 
+      deps = callPackage ../dependencies.nix {
+         inherit stdenv;
+      };
+
     in
     stdenv.mkDerivation (
       finalAttrs:
@@ -215,85 +166,10 @@ let
 
           outputs = [ "out" ] ++ (if isStatic then [ "package" ] else [ "dev" ]);
 
-          nativeBuildInputs = [
-            cmake
-            ninja
-            protobuf
-            grpc
-            makeBinaryWrapper
-            uv
-          ]
-          ++ lib.optionals stdenv.isLinux [
-            dpkg
-            rpm
-          ];
-          propagatedNativeBuildInputs = [ pkg-config ];
-          buildInputs = [
-            aws-sdk-cpp-tenzir
-            azure-sdk-for-cpp.storage-blobs
-            libbacktrace
-            clickhouse-cpp
-            fluent-bit
-            libpcap
-            libunwind
-            libnats-c
-            rabbitmq-c
-            rdkafka
-            cyrus_sasl
-            cppzmq
-            restinio
-            (restinio.override {
-              with_boost_asio = true;
-            })
-            llhttp
-            c-ares
-            expat
-          ]
-          ++ lib.optionals stdenv.isLinux [
-            pfs
-          ]
-          ++ lib.optionals (stdenv.cc.isClang && isStatic) [
-            empty-libgcc_eh
-          ]
-          ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [
-            yara
-            jansson
-          ];
-          propagatedBuildInputs = [
-            arrow-cpp
-            boost
-            caf
-            curl
-            flatbuffers
-            folly
-            proxygen
-            double-conversion
-            libevent
-            snappy
-            google-cloud-cpp-tenzir
-            nlohmann_json
-            crc32c
-            grpc
-            libmaxminddb
-            jemalloc-tenzir
-            mimalloc-tenzir
-            protobuf
-            re2
-            reproc
-            robin-map
-            simdjson
-            spdlog
-            c-ares
-            expat
-            yaml-cpp
-            xxHash
-          ]
-          ++ lib.optionals (stdenv.isLinux && !(isStatic && stdenv.hostPlatform.isMusl)) [
-            liburing
-          ]
-          ++ lib.optionals (!isStatic) [
-            arrow-adbc-cpp
-          ];
+          nativeBuildInputs = deps.nativeBuildInputs;
+          propagatedNativeBuildInputs = deps.propagatedNativeBuildInputs;
+          buildInputs = deps.buildInputs;
+          propagatedBuildInputs = deps.propagatedBuildInputs;
 
           env = {
             POETRY_VIRTUALENVS_IN_PROJECT = 1;

@@ -20,13 +20,9 @@ stdenvNoCC.mkDerivation {
   nativeCheckInputs = tenzir-integration-test-deps;
   checkPhase =
     let
-      py3 = pkgsBuildBuild.python3.withPackages (ps: [
-        ps.datetime
-        ps.pyarrow
-        ps.pyzmq
-        ps.python-box
-        ps.trustme
-      ]);
+      pythonDeps = import ../python-dependencies.nix;
+      py3 = pkgsBuildBuild.python3.withPackages pythonDeps.integration;
+
       template = path: ''
         if [ -d "${path}/test/tests" ]; then
           echo "running ${path} integration tests"
