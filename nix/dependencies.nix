@@ -27,7 +27,7 @@
   simdjson,
   robin-map,
   libunwind,
-  xxHash,
+  xxhash,
   rabbitmq-c,
   libnats-c,
   yaml-cpp,
@@ -130,7 +130,7 @@ in
     c-ares
     expat
     yaml-cpp
-    xxHash
+    xxhash
   ]
   ++ lib.optionals (stdenv.isLinux && !(isStatic && stdenv.hostPlatform.isMusl)) [
     liburing
