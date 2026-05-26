@@ -11,10 +11,13 @@
 #include <tenzir/aws_iam.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
+#include <tenzir/proxy_settings.hpp>
 #include <tenzir/secret_resolution.hpp>
 
 #include <arrow/filesystem/s3fs.h>
 #include <arrow/util/uri.h>
+
+#include <string_view>
 
 namespace tenzir::plugins::s3 {
 namespace {
@@ -24,6 +27,7 @@ constexpr auto default_request_timeout = 30.0;
 struct ToS3Args : ToArrowFsArgs {
   bool anonymous = false;
   Option<located<record>> aws_iam;
+  location operator_location = location::unknown;
 };
 
 class ToS3Operator final : public ToArrowFsOperator {
@@ -100,6 +104,43 @@ protected:
         }
       }
     }
+    auto proxy_key = opts.scheme == "http"
+                       ? std::string_view{"tenzir.http-proxy"}
+                       : std::string_view{"tenzir.https-proxy"};
+    auto const& ps = get_proxy_settings();
+    auto proxy = opts.scheme == "http" ? ps.http_proxy : ps.https_proxy;
+    // For normal `s3://bucket/...` URLs the URI host is the bucket name, not
+    // the actual S3 endpoint. When `endpoint_override` is set, it is the real
+    // connect target and can be matched against `tenzir.no-proxy`.
+    if (not opts.endpoint_override.empty()) {
+      auto endpoint = opts.endpoint_override;
+      if (endpoint.find("://") == std::string::npos) {
+        endpoint = opts.scheme + "://" + endpoint;
+      }
+      auto endpoint_uri = arrow::util::Uri{};
+      if (auto status = endpoint_uri.Parse(endpoint);
+          status.ok() and not endpoint_uri.host().empty()) {
+        if (auto target_proxy
+            = proxy_for_target(opts.scheme, endpoint_uri.host())) {
+          proxy = *target_proxy;
+        } else {
+          proxy.reset();
+        }
+      }
+    }
+    if (proxy) {
+      auto proxy_opts = arrow::fs::S3ProxyOptions::FromUri(proxy->url);
+      if (not proxy_opts.ok()) {
+        diagnostic::warning("`{}` is not usable for S3; "
+                            "running this operator without a proxy",
+                            proxy_key)
+          .primary(args_.operator_location)
+          .note("{}", proxy_opts.status().ToStringWithoutContextLines())
+          .emit(dh);
+      } else {
+        opts.proxy_options = proxy_opts.MoveValueUnsafe();
+      }
+    }
     auto fs_result = arrow::fs::S3FileSystem::Make(opts);
     if (not fs_result.ok()) {
       diagnostic::error("failed to create S3 filesystem")
@@ -125,6 +166,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ToS3Args, ToS3Operator>{};
+    d.operator_location(&ToS3Args::operator_location);
     auto anon = d.named("anonymous", &ToS3Args::anonymous);
     auto aws_iam_arg = d.named("aws_iam", &ToS3Args::aws_iam);
     ToArrowFsArgs::describe_to(d, [=](DescribeCtx& ctx) {

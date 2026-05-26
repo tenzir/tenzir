@@ -45,5 +45,5 @@
 	shallow = true
 [submodule "libtenzir/aux/facebook/proxygen"]
 	path = libtenzir/aux/facebook/proxygen
-	url = https://github.com/facebook/proxygen.git
+	url = https://github.com/tenzir/proxygen
 	shallow = true

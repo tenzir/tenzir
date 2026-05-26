@@ -12,10 +12,28 @@
 #include "tenzir/config.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/diagnostics.hpp"
-
-#include <string_view>
+#include "tenzir/proxy_settings.hpp"
 
 namespace tenzir {
+
+namespace {
+
+/// Applies the process-wide proxy configuration to a libcurl handle.
+/// `initialize_proxy_settings` mirrors scheme-specific proxies into
+/// `HTTP_PROXY` / `HTTPS_PROXY`; leaving `CURLOPT_PROXY` unset lets libcurl
+/// pick the right proxy again after redirects. `CURLOPT_NOPROXY` gets Tenzir's
+/// effective bypass list, including the implicit loopback entries.
+auto apply_proxy_options(curl::easy& easy) -> caf::error {
+  auto const& ps = get_proxy_settings();
+  auto no_proxy = effective_no_proxy(ps);
+  if (auto err = to_error(easy.set(CURLOPT_NOPROXY, no_proxy.c_str()));
+      err.valid()) {
+    return err;
+  }
+  return {};
+}
+
+} // namespace
 
 transfer::transfer(transfer_options opts, TlsConfig tls_cfg)
   : options{std::move(opts)}, tls{std::move(tls_cfg)} {
@@ -35,6 +53,9 @@ auto transfer::prepare(http::Request req) -> caf::error {
   }
   // Ensure to follow HTTP redirects.
   if (auto err = to_error(easy.set(CURLOPT_FOLLOWLOCATION, 1)); err.valid()) {
+    return err;
+  }
+  if (auto err = apply_proxy_options(easy); err.valid()) {
     return err;
   }
   TRY(tls.apply_to(easy, req.uri));
@@ -115,6 +136,9 @@ auto transfer::prepare(http::Request req) -> caf::error {
 auto transfer::prepare(std::string url) -> caf::error {
   TENZIR_DEBUG("setting URL: {}", url);
   if (auto err = reset(); err.valid()) {
+    return err;
+  }
+  if (auto err = apply_proxy_options(easy_); err.valid()) {
     return err;
   }
   return to_error(easy_.set(CURLOPT_URL, url.c_str()));
