@@ -16,6 +16,7 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
+#include <tenzir/http_proxy_connect.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
@@ -483,11 +484,13 @@ private:
     auto attempt_res = co_await async_try(folly::coro::co_withExecutor(
       folly::Executor::KeepAlive<>{evb_},
       folly::coro::co_invoke([this, &body_rx]() -> Task<http::Response> {
-        // Connect a one-shot session.
-        auto addr = folly::SocketAddress{parsed_url_.getHost(),
-                                         parsed_url_.getPort(), true};
-        auto* session = co_await proxygen::coro::HTTPCoroConnector::connect(
-          evb_, addr, get_connection_timeout(), conn_params_);
+        // Connect a one-shot session. Routes through the configured
+        // HTTP proxy when one applies; otherwise behaves as a direct
+        // connect.
+        auto* session = co_await connect_session_via_proxy_if_configured(
+          evb_, parsed_url_.getHost(), parsed_url_.getPort(), conn_params_,
+          proxygen::coro::HTTPCoroConnector::defaultSessionParams(),
+          get_connection_timeout());
         auto holder = session->acquireKeepAlive();
         SCOPE_EXIT {
           if (auto* s = holder.get()) {
@@ -597,10 +600,11 @@ private:
       folly::Executor::KeepAlive<>{evb_},
       folly::coro::co_invoke(
         [this, body = std::move(body)]() mutable -> Task<http::Response> {
-          auto addr = folly::SocketAddress{parsed_url_.getHost(),
-                                           parsed_url_.getPort(), true};
-          auto* session = co_await proxygen::coro::HTTPCoroConnector::connect(
-            evb_, addr, get_connection_timeout(), conn_params_);
+          // Routes through the configured HTTP proxy when applicable.
+          auto* session = co_await connect_session_via_proxy_if_configured(
+            evb_, parsed_url_.getHost(), parsed_url_.getPort(), conn_params_,
+            proxygen::coro::HTTPCoroConnector::defaultSessionParams(),
+            get_connection_timeout());
           auto holder = session->acquireKeepAlive();
           SCOPE_EXIT {
             if (auto* s = holder.get()) {

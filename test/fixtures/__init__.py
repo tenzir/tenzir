@@ -16,6 +16,7 @@ from . import gcs  # noqa: F401
 from . import google_cloud_logging  # noqa: F401
 from . import google_secops  # noqa: F401
 from . import http  # noqa: F401
+from . import http_connect_proxy  # noqa: F401
 from . import kafka  # noqa: F401
 from . import local_files  # noqa: F401
 from . import localstack  # noqa: F401
@@ -54,6 +55,7 @@ __all__ = [
     "google_cloud_logging",
     "google_secops",
     "http",
+    "http_connect_proxy",
     "http_request",
     "http_paginate",
     "http_server",

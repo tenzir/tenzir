@@ -25,6 +25,7 @@ except ImportError:
 
 _HOST = "127.0.0.1"
 _COMMON_NAME = "localhost"
+_PROXY_TARGET_NAME = "platform-proxy-connect.test"
 _WS_MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
@@ -36,7 +37,7 @@ class PlatformWsOptions:
 
 def _generate_mtls_material(temp_dir: Path) -> dict[str, Path]:
     ca = trustme.CA()
-    server_cert = ca.issue_cert(_COMMON_NAME)
+    server_cert = ca.issue_cert(_COMMON_NAME, _PROXY_TARGET_NAME)
     client_cert = ca.issue_cert("tenzir-client")
     ca_cert_path = temp_dir / "ca-cert.pem"
     server_cert_path = temp_dir / "server-cert.pem"
@@ -160,7 +161,8 @@ def platform_ws() -> Iterator[dict[str, str]]:
         raise FixtureUnavailable("trustme package not installed")
     port = find_free_port()
     proxy_port = find_free_port() if opts.proxy else None
-    endpoint = f"wss://{_COMMON_NAME}:{port}/production"
+    endpoint_host = _PROXY_TARGET_NAME if opts.proxy else _COMMON_NAME
+    endpoint = f"wss://{endpoint_host}:{port}/production"
     stop_event = threading.Event()
     temp_dir = Path(tempfile.mkdtemp(prefix="platform-ws-"))
     result_file = temp_dir / "result.txt"
@@ -231,7 +233,7 @@ def platform_ws() -> Iterator[dict[str, str]]:
                     with client:
                         headers = _read_plain_http_headers(client)
                         target = _parse_connect_target(headers)
-                        if target != (_COMMON_NAME, port):
+                        if target != (endpoint_host, port):
                             proxy_result_file.write_text(
                                 f"unexpected-connect-target: {target}\n",
                                 encoding="utf-8",

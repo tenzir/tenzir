@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "google_cloud_pubsub/proxy_options.hpp"
+
 #include <tenzir/async.hpp>
 #include <tenzir/concepts.hpp>
 #include <tenzir/detail/scope_guard.hpp>
@@ -60,7 +62,8 @@ public:
     -> generator<std::monostate> {
     co_yield {};
     auto topic = pubsub::Topic(args_.project_id.inner, args_.topic_id.inner);
-    auto connection = pubsub::MakePublisherConnection(std::move(topic));
+    auto connection = pubsub::MakePublisherConnection(std::move(topic),
+                                                      google::cloud::Options{});
     auto publisher = pubsub::Publisher(std::move(connection));
     auto& dh = ctrl.diagnostics();
     constexpr auto timeout = std::chrono::seconds{30};
@@ -214,7 +217,8 @@ public:
                          MetricsDirection::write, MetricsVisibility::external_,
                          MetricsUnit::events);
     auto topic = pubsub::Topic(args_.project_id.inner, args_.topic_id.inner);
-    publisher_.emplace(pubsub::MakePublisherConnection(std::move(topic)));
+    publisher_.emplace(pubsub::MakePublisherConnection(
+      std::move(topic), with_proxy_options(google::cloud::Options{})));
     co_return;
   }
 

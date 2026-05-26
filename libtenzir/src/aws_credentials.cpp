@@ -15,12 +15,14 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/proxy_settings.hpp>
 #include <tenzir/transfer.hpp>
 #include <tenzir/try_simdjson.hpp>
 
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 #include <aws/core/auth/SSOCredentialsProvider.h>
+#include <aws/core/utils/Array.h>
 #include <aws/identity-management/auth/STSAssumeRoleCredentialsProvider.h>
 #include <aws/sts/STSClient.h>
 #include <aws/sts/model/AssumeRoleRequest.h>
@@ -62,7 +64,45 @@ auto make_sts_client_config(const std::optional<std::string>& region)
   if (region) {
     config.region = *region;
   }
+  // `allowSystemProxy` lets the AWS SDK read HTTP_PROXY/HTTPS_PROXY from
+  // the environment; the env-var mirror in `initialize_proxy_settings`
+  // makes this work even when the user only configured the proxy via
+  // YAML. We also populate the explicit fields below — they take
+  // precedence and ensure the SDK uses our resolved proxy verbatim
+  // instead of re-discovering it.
   config.allowSystemProxy = true;
+  if (auto const& ps = get_proxy_settings(); ps.http_proxy) {
+    TENZIR_ASSERT(ps.proxy_host and ps.proxy_port and ps.proxy_scheme);
+    config.proxyScheme = *ps.proxy_scheme == "https" ? Aws::Http::Scheme::HTTPS
+                                                     : Aws::Http::Scheme::HTTP;
+    config.proxyHost = *ps.proxy_host;
+    config.proxyPort = *ps.proxy_port;
+    if (ps.proxy_username) {
+      config.proxyUserName = *ps.proxy_username;
+    }
+    if (ps.proxy_password) {
+      config.proxyPassword = *ps.proxy_password;
+    }
+    // `nonProxyHosts` is an `Aws::Utils::Array<Aws::String>` of host suffix
+    // entries. Feed it the same effective bypass list as the env mirror so
+    // loopback stays direct even when the user did not configure no-proxy.
+    auto entries = std::vector<Aws::String>{};
+    auto no_proxy = effective_no_proxy(ps);
+    for (auto part : std::views::split(no_proxy, ',')) {
+      auto entry
+        = std::string{detail::trim(std::string_view{part.begin(), part.end()})};
+      if (not entry.empty()) {
+        entries.emplace_back(std::move(entry));
+      }
+    }
+    if (not entries.empty()) {
+      auto arr = Aws::Utils::Array<Aws::String>{entries.size()};
+      for (auto i = size_t{0}; i < entries.size(); ++i) {
+        arr[i] = std::move(entries[i]);
+      }
+      config.nonProxyHosts = std::move(arr);
+    }
+  }
   // STS-specific endpoint takes precedence.
   if (endpoint_url_sts) {
     config.endpointOverride = *endpoint_url_sts;

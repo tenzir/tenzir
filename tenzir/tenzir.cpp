@@ -20,6 +20,7 @@
 #include "tenzir/module.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/proxy_settings.hpp"
 #include "tenzir/scope_linked.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/signal_reflector.hpp"
@@ -171,6 +172,16 @@ auto main(int argc, char** argv) -> int try {
   // From here on, options from the command line can be used.
   detail::merge_settings(invocation->options, cfg.content,
                          policy::merge_lists::yes);
+  // Resolve proxy configuration while the program is still
+  // single-threaded — this is the only point we call setenv, so the
+  // libcurl-backed cloud SDKs (Arrow GCS, Arrow Azure, Snowflake
+  // ADBC, the platform WebSocket client) inherit the same proxy as
+  // every explicitly-plumbed chokepoint, without the user needing to
+  // touch env vars.
+  if (auto err = initialize_proxy_settings(cfg.content)) {
+    fmt::print(stderr, "failed to initialise proxy settings: {}\n", err);
+    return EXIT_FAILURE;
+  }
   // Create log context as soon as we know the correct configuration.
   auto log_context = create_log_context(is_server, *invocation, cfg.content);
   if (not log_context) {

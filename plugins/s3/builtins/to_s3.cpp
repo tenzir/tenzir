@@ -11,6 +11,7 @@
 #include <tenzir/aws_iam.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
+#include <tenzir/proxy_settings.hpp>
 #include <tenzir/secret_resolution.hpp>
 
 #include <arrow/filesystem/s3fs.h>
@@ -24,6 +25,7 @@ constexpr auto default_request_timeout = 30.0;
 struct ToS3Args : ToArrowFsArgs {
   bool anonymous = false;
   Option<located<record>> aws_iam;
+  location operator_location = location::unknown;
 };
 
 class ToS3Operator final : public ToArrowFsOperator {
@@ -100,6 +102,22 @@ protected:
         }
       }
     }
+    // Apply the configured HTTP proxy unconditionally — `uri.host()`
+    // for an `s3://bucket/...` URL is the bucket name, not the actual
+    // S3 endpoint, so a `tenzir.no-proxy` host-match wouldn't reflect
+    // user intent.
+    if (auto const& ps = get_proxy_settings(); ps.http_proxy) {
+      auto proxy_opts = arrow::fs::S3ProxyOptions::FromUri(*ps.http_proxy);
+      if (not proxy_opts.ok()) {
+        diagnostic::warning("`tenzir.http-proxy` is not usable for S3; "
+                            "running this operator without a proxy")
+          .primary(args_.operator_location)
+          .note("{}", proxy_opts.status().ToStringWithoutContextLines())
+          .emit(dh);
+      } else {
+        opts.proxy_options = proxy_opts.MoveValueUnsafe();
+      }
+    }
     auto fs_result = arrow::fs::S3FileSystem::Make(opts);
     if (not fs_result.ok()) {
       diagnostic::error("failed to create S3 filesystem")
@@ -125,6 +143,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ToS3Args, ToS3Operator>{};
+    d.operator_location(&ToS3Args::operator_location);
     auto anon = d.named("anonymous", &ToS3Args::anonymous);
     auto aws_iam_arg = d.named("aws_iam", &ToS3Args::aws_iam);
     ToArrowFsArgs::describe_to(d, [=](DescribeCtx& ctx) {

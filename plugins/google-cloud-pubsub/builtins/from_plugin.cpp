@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "google_cloud_pubsub/proxy_options.hpp"
 #include "tenzir/multi_series_builder.hpp"
 
 #include <tenzir/async.hpp>
@@ -277,7 +278,8 @@ public:
     // Detect whether the subscription has message ordering enabled.
     auto ordering_enabled = [&]() -> bool {
       auto admin_client = pubsub::SubscriptionAdminClient(
-        pubsub::MakeSubscriptionAdminConnection());
+        pubsub::MakeSubscriptionAdminConnection(
+          with_proxy_options(google::cloud::Options{})));
       auto sub_info = admin_client.GetSubscription(subscription);
       if (not sub_info.ok()) {
         return false;
@@ -288,7 +290,8 @@ public:
 
     auto connection = pubsub::MakeSubscriberConnection(
       std::move(subscription),
-      google::cloud::Options{}.set<pubsub::MaxConcurrencyOption>(1));
+      with_proxy_options(
+        google::cloud::Options{}.set<pubsub::MaxConcurrencyOption>(1)));
     auto subscriber = pubsub::Subscriber(std::move(connection));
 
     auto shared = shared_;

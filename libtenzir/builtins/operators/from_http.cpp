@@ -20,6 +20,7 @@
 #include <tenzir/format_utils.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
+#include <tenzir/http_proxy_connect.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
@@ -722,15 +723,14 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
         co_await folly::coro::retryWhen(
           [&]() -> Task<void> {
             emitted_messages = false;
-            // Resolve DNS and establish the TCP connection.
-            auto addresses
-              = co_await proxygen::coro::CoroDNSResolver::resolveHost(
-                evb, host, config.connection_timeout);
-            auto server_addr = std::move(addresses.primary);
-            server_addr.setPort(url.getPort());
-            auto* session = co_await proxygen::coro::HTTPCoroConnector::connect(
-              evb, server_addr, config.connection_timeout, conn_params,
-              sess_params);
+            // Establish the TCP connection, routing through the
+            // configured HTTP proxy when one applies to this host.
+            // When no proxy is configured the helper resolves DNS and
+            // calls `HTTPCoroConnector::connect` directly, identical
+            // to the original behaviour.
+            auto* session = co_await connect_session_via_proxy_if_configured(
+              evb, host, url.getPort(), conn_params, sess_params,
+              config.connection_timeout);
             auto holder = session->acquireKeepAlive();
             SCOPE_EXIT {
               if (auto* s = holder.get()) {
