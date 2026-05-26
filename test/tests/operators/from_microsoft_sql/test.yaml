@@ -1,0 +1,12 @@
+# We're using a suite not because the tests require sequential processing, but
+# to minimize the container startup overhead that we want to pay only once.
+suite: from-microsoft-sql
+fixtures: [microsoft_sql]
+requires:
+  operators:
+    - from_microsoft_sql
+timeout: 240
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

@@ -1,0 +1,3 @@
+error: `live=true` requires `table`
+
+error: `live=true` does not support custom queries

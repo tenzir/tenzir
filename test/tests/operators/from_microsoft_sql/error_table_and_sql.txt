@@ -1,0 +1,1 @@
+error: `table` and custom queries are mutually exclusive

@@ -1,0 +1,21 @@
+{
+  id: 1,
+  name: "Alice",
+  email: "alice@example.com",
+  age: 30,
+  is_active: true,
+}
+{
+  id: 2,
+  name: "Bob",
+  email: "bob@example.com",
+  age: 25,
+  is_active: true,
+}
+{
+  id: 3,
+  name: "Charlie",
+  email: null,
+  age: 35,
+  is_active: false,
+}

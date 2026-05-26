@@ -20,6 +20,7 @@ from . import kafka  # noqa: F401
 from . import local_files  # noqa: F401
 from . import localstack  # noqa: F401
 from . import microsoft_graph  # noqa: F401
+from . import microsoft_sql  # noqa: F401
 from . import mysql  # noqa: F401
 from . import nats  # noqa: F401
 from . import s3  # noqa: F401
@@ -59,6 +60,7 @@ __all__ = [
     "local_files",
     "localstack",
     "microsoft_graph",
+    "microsoft_sql",
     "mock_s3",
     "mysql",
     "nats",
