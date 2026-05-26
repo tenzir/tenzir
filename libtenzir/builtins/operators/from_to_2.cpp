@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/ast.hpp"
+
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -185,6 +187,12 @@ public:
     if (input.is_not<void>()) {
       diagnostic::error("expected void, got {}", input).primary(self_).emit(dh);
       return failure::promise();
+    }
+    for (const auto& event : events_) {
+      if (not try_as<ast::record>(event)) {
+        diagnostic::error("expected `record`").primary(event).emit(dh);
+        return failure::promise();
+      }
     }
     return tag_v<table_slice>;
   }
