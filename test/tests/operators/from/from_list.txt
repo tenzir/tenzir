@@ -1,0 +1,6 @@
+error: expected `record`
+ --> tests/operators/from/from_list.tql:5:6
+  |
+5 | from [
+  |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |
