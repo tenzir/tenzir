@@ -279,7 +279,7 @@ auto resolve_http_secrets(OpCtx& ctx, FromHttpArgs const& args,
   }
   CO_TRY(auto tls_enabled, http::normalize_url_and_tls(
                              args.tls, resolved_url, args.url.source, ctx,
-                             std::addressof(ctx.actor_system().config())));
+                             ctx.actor_system().config()));
   co_return tls_enabled;
 }
 
@@ -1128,8 +1128,8 @@ private:
     if (parsed_url.isSecure() and not fetch_config_.tls_context) {
       auto tls_opts
         = tls_options::from_optional(args_.tls, {.is_server = false});
-      auto result = tls_opts.make_folly_ssl_context(
-        ctx, std::addressof(ctx.actor_system().config()), true);
+      tls_opts.apply_config(ctx.actor_system().config());
+      auto result = tls_opts.make_folly_ssl_context(ctx, true);
       if (result.is_success()) {
         fetch_config_.tls_context = std::move(*result);
       } else {

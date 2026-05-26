@@ -512,7 +512,7 @@ private:
 
   auto make_config(OpCtx& ctx) const
     -> Task<Option<proxygen::coro::HTTPServer::Config>> {
-    auto const* cfg = std::addressof(ctx.actor_system().config());
+    auto const& cfg = ctx.actor_system().config();
     auto resolved_endpoint = std::string{};
     auto requests = std::vector<secret_request>{};
     requests.emplace_back(make_secret_request("endpoint", args_.endpoint,
@@ -555,8 +555,9 @@ private:
     if (tls_enabled) {
       auto tls_opts = tls_options::from_optional(
         args_.tls, {.tls_default = false, .is_server = true});
+      tls_opts.apply_config(cfg);
       auto tls_config = http_server::make_ssl_context_config(
-        tls_opts, args_.endpoint.source, ctx, cfg);
+        tls_opts, args_.endpoint.source, ctx);
       if (not tls_config) {
         co_return None{};
       }

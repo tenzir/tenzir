@@ -27,9 +27,12 @@
 
 namespace tenzir::http_server {
 
+/// Builds a wangle SSL context config from the resolved TLS options.
+///
+/// Precondition: `tls_opts.apply_config()` has been called if a node config
+/// is available, so the cached members already reflect the effective values.
 auto make_ssl_context_config(tls_options const& tls_opts, location primary,
-                             diagnostic_handler& dh,
-                             const caf::actor_system_config* cfg)
+                             diagnostic_handler& dh)
   -> failure_or<wangle::SSLContextConfig>;
 
 template <class T>
@@ -59,7 +62,7 @@ auto parse_endpoint(std::string_view endpoint, location loc,
   -> Option<server_endpoint>;
 
 auto is_tls_enabled(Option<located<data>> const& tls,
-                    const caf::actor_system_config* cfg = nullptr) -> bool;
+                    const caf::actor_system_config& cfg) -> bool;
 
 auto make_response(uint16_t status, const std::string& content_type,
                    std::string body) -> proxygen::coro::HTTPSourceHolder;

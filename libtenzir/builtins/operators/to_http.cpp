@@ -243,7 +243,7 @@ public:
     }
     auto tls_result = http::normalize_url_and_tls(
       args_.tls, url_, args_.url.source, ctx.dh(),
-      std::addressof(ctx.actor_system().config()));
+      ctx.actor_system().config());
     if (tls_result.is_error()) {
       lifecycle_ = Lifecycle::done;
       co_return;
@@ -256,8 +256,8 @@ public:
     if (tls_enabled) {
       auto tls_opts
         = tls_options::from_optional(args_.tls, {.is_server = false});
-      auto ssl_result = tls_opts.make_folly_ssl_context(
-        ctx.dh(), std::addressof(ctx.actor_system().config()), true);
+      tls_opts.apply_config(ctx.actor_system().config());
+      auto ssl_result = tls_opts.make_folly_ssl_context(ctx.dh(), true);
       if (ssl_result.is_error()) {
         lifecycle_ = Lifecycle::done;
         co_return;

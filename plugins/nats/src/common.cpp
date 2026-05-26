@@ -13,6 +13,7 @@
 #include <tenzir/secret_resolution.hpp>
 #include <tenzir/try.hpp>
 
+#include <caf/actor_system_config.hpp>
 #include <caf/error.hpp>
 #include <fmt/ranges.h>
 
@@ -310,9 +311,12 @@ auto apply_auth(natsOptions* options, auth_config const& auth,
   return {};
 }
 
+// Precondition: the caller has already merged the node config into `tls`
+// via `tls_options::apply_config()` so that all getters return the
+// effective values.
 auto apply_tls(natsOptions* options, tls_options const& tls,
                diagnostic_handler& dh) -> failure_or<void> {
-  auto enabled = tls.get_tls(nullptr);
+  auto enabled = tls.get_tls();
   TRY(check(
     natsOptions_SetSecure(options, enabled.inner),
     diagnostic::error("failed to configure NATS TLS").primary(enabled.source),
@@ -320,15 +324,15 @@ auto apply_tls(natsOptions* options, tls_options const& tls,
   if (not enabled.inner) {
     return {};
   }
-  if (auto cacert = tls.get_cacert(nullptr)) {
+  if (auto cacert = tls.get_cacert()) {
     TRY(check(natsOptions_LoadCATrustedCertificates(options,
                                                     cacert->inner.c_str()),
               diagnostic::error("failed to load NATS TLS CA certificate")
                 .primary(cacert->source),
               dh));
   }
-  auto certfile = tls.get_certfile(nullptr);
-  auto keyfile = tls.get_keyfile(nullptr);
+  auto certfile = tls.get_certfile();
+  auto keyfile = tls.get_keyfile();
   if (certfile or keyfile) {
     if (not certfile) {
       diagnostic::error("`tls.certfile` is required when `tls.keyfile` is set")
@@ -345,18 +349,18 @@ auto apply_tls(natsOptions* options, tls_options const& tls,
                 .primary(certfile->source),
               dh));
   }
-  if (auto ciphers = tls.get_tls_ciphers(nullptr)) {
+  if (auto ciphers = tls.get_tls_ciphers()) {
     TRY(check(natsOptions_SetCiphers(options, ciphers->inner.c_str()),
               diagnostic::error("failed to configure NATS TLS ciphers")
                 .primary(ciphers->source),
               dh));
   }
-  auto skip = tls.get_skip_peer_verification(nullptr);
+  auto skip = tls.get_skip_peer_verification();
   TRY(check(natsOptions_SkipServerVerification(options, skip.inner),
             diagnostic::error("failed to configure NATS TLS verification")
               .primary(skip.source),
             dh));
-  if (auto min_version = tls.get_tls_min_version(nullptr)) {
+  if (auto min_version = tls.get_tls_min_version()) {
     diagnostic::warning("`tls.min_version` is not supported by nats.c")
       .primary(min_version->source)
       .note("the option is ignored for NATS connections")
@@ -368,7 +372,8 @@ auto apply_tls(natsOptions* options, tls_options const& tls,
 auto make_nats_options(connection_config const& config,
                        Option<located<data>> const& tls_arg,
                        location url_location, diagnostic_handler& dh,
-                       folly::EventBase& event_base)
+                       folly::EventBase& event_base,
+                       const caf::actor_system_config& cfg)
   -> failure_or<nats_options_ptr> {
   auto* raw_options = static_cast<natsOptions*>(nullptr);
   TRY(check(
@@ -382,9 +387,12 @@ auto make_nats_options(connection_config const& config,
                   .tls_default = tls_enabled_from_url(config.url),
                   .is_server = false,
                 }};
+  // Merge `tenzir.tls.*` node config defaults into `tls` so that the
+  // getter lookups inside `apply_tls()` and the URL normalization below see
+  // the effective values.
+  tls.apply_config(cfg);
   TRY(apply_tls(options.get(), tls, dh));
-  auto const normalized_url
-    = normalize_url(config.url, tls.get_tls(nullptr).inner);
+  auto const normalized_url = normalize_url(config.url, tls.get_tls().inner);
   TRY(check(
     natsOptions_SetURL(options.get(), normalized_url.c_str()),
     diagnostic::error("failed to configure NATS URL").primary(url_location),

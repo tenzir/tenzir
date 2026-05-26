@@ -84,7 +84,7 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    tls.update_from_config(std::addressof(ctx.actor_system().config()));
+    tls.apply_config(ctx.actor_system().config());
     session_.emplace(CurlSession::make(ctx.io_executor()));
     auto& easy = session_->easy();
     if (not curl::try_set(easy, CURLOPT_DEFAULT_PROTOCOL, "ftp")) {
@@ -111,7 +111,7 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    if (auto err = tls.apply_to(easy, resolved_url_, nullptr); err.valid()) {
+    if (auto err = tls.apply_to(easy, resolved_url_); err.valid()) {
       diagnostic::error("failed to configure FTP download")
         .primary(args_.url.source)
         .note("{}", err)

@@ -582,12 +582,12 @@ struct connection_manager_state {
     connection->metrics_receiver = metrics_receiver;
     connection->operator_id = operator_id;
     connection->emit_metrics(self);
-    if (args.ssl.get_tls(nullptr).inner) {
+    if (args.ssl.get_tls().inner) {
       TENZIR_ASSERT(not connection->ssl_ctx);
       connection->ssl_ctx.emplace(boost::asio::ssl::context::tls_server);
       auto ec = boost::system::error_code{};
 
-      if (auto x = args.ssl.get_tls_min_version(nullptr)) {
+      if (auto x = args.ssl.get_tls_min_version()) {
         auto min_version = parse_openssl_tls_version(x->inner);
         if (min_version) {
           auto* native_ctx = connection->ssl_ctx->native_handle();
@@ -600,7 +600,7 @@ struct connection_manager_state {
         }
       }
       // Apply cipher list from config
-      if (auto x = args.ssl.get_tls_ciphers(nullptr)) {
+      if (auto x = args.ssl.get_tls_ciphers()) {
         if (not x->inner.empty()) {
           auto* native_ctx = connection->ssl_ctx->native_handle();
           if (SSL_CTX_set_cipher_list(native_ctx, x->inner.c_str()) == 0) {
@@ -611,7 +611,7 @@ struct connection_manager_state {
           }
         }
       }
-      if (auto certfile = args.ssl.get_certfile(nullptr)) {
+      if (auto certfile = args.ssl.get_certfile()) {
         if (connection->ssl_ctx->use_certificate_chain_file(certfile->inner,
                                                             ec)) {
           TENZIR_DEBUG("failed to load certificate chain file on handle `{}`: "
@@ -625,7 +625,7 @@ struct connection_manager_state {
         }
       }
 
-      if (auto keyfile = args.ssl.get_keyfile(nullptr)) {
+      if (auto keyfile = args.ssl.get_keyfile()) {
         if (connection->ssl_ctx->use_private_key_file(
               keyfile->inner, boost::asio::ssl::context::pem, ec)) {
           TENZIR_DEBUG("failed to load private key file on handle `{}`: {}",
@@ -639,7 +639,7 @@ struct connection_manager_state {
       }
       if (not args.connect) {
         // Server mode: check if client certificate authentication is enabled
-        if (args.ssl.get_tls_require_client_cert(nullptr).inner) {
+        if (args.ssl.get_tls_require_client_cert().inner) {
           // mTLS: Require client certificates
           if (connection->ssl_ctx->set_verify_mode(
                 boost::asio::ssl::verify_peer
@@ -651,12 +651,12 @@ struct connection_manager_state {
                          connection->socket->native_handle(), ec.message());
             diagnostic::warning("{}", ec.message())
               .note("failed to enable client certificate verification")
-              .primary(args.ssl.get_tls_require_client_cert(nullptr))
+              .primary(args.ssl.get_tls_require_client_cert())
               .emit(diagnostics);
             return;
           }
           // Load CA for validating client certificates
-          auto tls_client_ca = args.ssl.get_tls_client_ca(nullptr);
+          auto tls_client_ca = args.ssl.get_tls_client_ca();
           if (tls_client_ca) {
             if (connection->ssl_ctx->load_verify_file(tls_client_ca->inner,
                                                       ec)) {
@@ -679,7 +679,7 @@ struct connection_manager_state {
           }
         }
       } else if (args.connect
-                 and args.ssl.get_skip_peer_verification(nullptr).inner) {
+                 and args.ssl.get_skip_peer_verification().inner) {
         if (connection->ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
                                                  ec)) {
           TENZIR_DEBUG("failed to disable peer certificate verification on "
@@ -687,7 +687,7 @@ struct connection_manager_state {
                        connection->socket->native_handle(), ec.message());
           diagnostic::warning("{}", ec.message())
             .note("failed to disable peer certificate verification")
-            .primary(args.ssl.get_skip_peer_verification(nullptr))
+            .primary(args.ssl.get_skip_peer_verification())
             .emit(diagnostics);
           return;
         }
@@ -701,11 +701,11 @@ struct connection_manager_state {
                        connection->socket->native_handle(), ec.message());
           diagnostic::warning("{}", ec.message())
             .note("failed to enable peer certificate verification")
-            .primary(args.ssl.get_tls(nullptr))
+            .primary(args.ssl.get_tls())
             .emit(diagnostics);
           return;
         }
-        auto cacert = args.ssl.get_cacert(nullptr);
+        auto cacert = args.ssl.get_cacert();
         if (cacert) {
           if (connection->ssl_ctx->load_verify_file(cacert->inner, ec)) {
             TENZIR_DEBUG("failed to load cacert file on handle `{}`: {}",
@@ -728,7 +728,7 @@ struct connection_manager_state {
                      connection->socket->native_handle(), ec.message());
         diagnostic::warning("{}", ec.message())
           .note("failed to perform TLS handshake")
-          .primary(args.ssl.get_tls(nullptr))
+          .primary(args.ssl.get_tls())
           .emit(diagnostics);
         return;
       }
@@ -985,7 +985,7 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const -> generator<Elements> {
     auto args = args_;
-    args.ssl.update_from_config(ctrl);
+    args.ssl.apply_config(ctrl);
     const auto connection_manager_actor
       = scope_linked{ctrl.self().spawn<caf::linked>(
         make_connection_manager<Elements>, std::string{ctrl.definition()}, args,

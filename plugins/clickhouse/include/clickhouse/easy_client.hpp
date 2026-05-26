@@ -45,8 +45,9 @@ public:
     std::optional<located<std::string>> primary = std::nullopt;
     location operator_location;
 
-    auto make_options(const caf::actor_system_config& cfg) const
-      -> ::clickhouse::ClientOptions {
+    // Precondition: `ssl.apply_config()` was called on this `arguments`'s
+    // `ssl` before invoking, so node-config defaults are visible.
+    auto make_options() const -> ::clickhouse::ClientOptions {
       auto opts
         = ::clickhouse::ClientOptions()
             .SetEndpoints({::clickhouse::Endpoint{
@@ -54,19 +55,18 @@ public:
             .SetUser(std::string{user})
             .SetPassword(std::string{password})
             .SetDefaultDatabase("");
-      if (ssl.get_tls(&cfg).inner) {
+      if (ssl.get_tls().inner) {
         auto tls_opts = ::clickhouse::ClientOptions::SSLOptions{};
-        tls_opts.SetSkipVerification(
-          ssl.get_skip_peer_verification(&cfg).inner);
+        tls_opts.SetSkipVerification(ssl.get_skip_peer_verification().inner);
         auto commands = std::vector<
           ::clickhouse::ClientOptions::SSLOptions::CommandAndValue>{};
-        if (auto x = ssl.get_cacert(&cfg)) {
+        if (auto x = ssl.get_cacert()) {
           commands.emplace_back("ChainCAFile", x->inner);
         }
-        if (auto x = ssl.get_certfile(&cfg)) {
+        if (auto x = ssl.get_certfile()) {
           commands.emplace_back("Certificate", x->inner);
         }
-        if (auto x = ssl.get_keyfile(&cfg)) {
+        if (auto x = ssl.get_keyfile()) {
           commands.emplace_back("PrivateKey", x->inner);
         }
         tls_opts.SetConfiguration(commands);
@@ -80,9 +80,8 @@ private:
   struct ctor_token {};
 
 public:
-  explicit easy_client(arguments args, const caf::actor_system_config& cfg,
-                       diagnostic_handler& dh, ctor_token)
-    : client_{args.make_options(cfg)},
+  explicit easy_client(arguments args, diagnostic_handler& dh, ctor_token)
+    : client_{args.make_options()},
       args_{std::move(args)},
       dh_{dh, [loc = args_.operator_location](diagnostic diag) -> diagnostic {
             if (not has_location(diag)) {

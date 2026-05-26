@@ -97,11 +97,15 @@ public:
   auto validate(std::string_view url, location url_loc,
                 diagnostic_handler&) const -> failure_or<void>;
 
-  /// Applies the options to a `curl::easy` object, potentially getting
-  /// `tenzir.cacert` as a `cacert_fallbacl` if none is set explicitly.
-  auto apply_to(curl::easy& easy, std::string_view url,
-                operator_control_plane* ctrl) const -> caf::error;
+  /// Applies the options to a `curl::easy` object.
+  ///
+  /// Precondition: if a node config is available, `apply_config()` has been
+  /// called on this `tls_options` first so that the cached members reflect
+  /// the effective values.
+  auto apply_to(curl::easy& easy, std::string_view url) const -> caf::error;
 
+  /// Precondition: `apply_config()` has been called on this `tls_options` if a
+  /// node config is available.
   auto make_caf_context(operator_control_plane& ctrl,
                         std::optional<caf::uri> uri = std::nullopt) const
     -> caf::expected<caf::net::ssl::context>;
@@ -110,109 +114,56 @@ public:
   /// Returns nullptr if TLS is disabled and not required by the caller,
   /// a configured context on success, or failure on error
   /// (diagnostics emitted via dh).
-  auto make_folly_ssl_context(diagnostic_handler& dh,
-                              const caf::actor_system_config* cfg,
-                              bool tls_required = false) const
+  ///
+  /// Precondition: `apply_config()` has been called on this `tls_options` if a
+  /// node config is available.
+  auto make_folly_ssl_context(diagnostic_handler& dh, bool tls_required
+                                                      = false) const
     -> failure_or<std::shared_ptr<folly::SSLContext>>;
 
-  /// Updates values in *this using the config.
-  auto update_from_config(operator_control_plane& ctrl) -> void;
-  auto update_from_config(const caf::actor_system_config* cfg) -> void;
+  /// Merges `tenzir.tls.*` (and legacy `tenzir.cacert`) node-config defaults
+  /// into `*this`. After this call, every getter returns the effective value.
+  /// Safe to call more than once; later calls do not overwrite values that
+  /// were already set on the operator.
+  ///
+  /// Call this once where a config first becomes available -- typically at
+  /// the top of the operator's `start()` or `operator()`. Parse-time
+  /// validation, where no config exists yet, simply skips this call: the
+  /// getters then return only operator-level values.
+  auto apply_config(const caf::actor_system_config& cfg) -> void;
+  auto apply_config(operator_control_plane& ctrl) -> void;
 
-  /// Updates a URL using the `tls` option
-  [[nodiscard]] auto
-  update_url(std::string_view url, operator_control_plane* ctrl) const
-    -> std::string;
+  /// Updates a URL using the `tls` option.
+  ///
+  /// Precondition: `apply_config()` has been called on this `tls_options` if a
+  /// node config is available.
+  [[nodiscard]] auto update_url(std::string_view url) const -> std::string;
 
-  /// Get the value of the TLS option, or the config setting
-  auto get_tls(operator_control_plane* ctrl) const -> located<bool>;
-  auto get_tls(const caf::actor_system_config* cfg) const -> located<bool>;
-  auto get_tls(std::nullptr_t) const -> located<bool> {
-    return get_tls(static_cast<const caf::actor_system_config*>(nullptr));
-  }
+  // -- getters ---------------------------------------------------------------
+  //
+  // The getters return the effective value, considering (in order):
+  //   1. The `tls` record entry on the operator.
+  //   2. The legacy top-level option (e.g. `cacert=...`), if any.
+  //   3. Node-config defaults previously merged in via `apply_config()`.
+  //
+  // At parse/describe time, callers simply skip step 3 by not calling
+  // `apply_config()`; the getter then sees only operator-level values, which
+  // is exactly what parse-time validation needs.
+  //
+  // At runtime, call `apply_config()` once -- typically at the top of the
+  // operator's `start()` or `operator()` -- so that all later getter calls
+  // see node-config defaults.
 
-  auto get_skip_peer_verification(operator_control_plane* ctrl) const
-    -> located<bool>;
-  auto get_skip_peer_verification(const caf::actor_system_config* cfg) const
-    -> located<bool>;
-  auto get_skip_peer_verification(std::nullptr_t) const -> located<bool> {
-    return get_skip_peer_verification(
-      static_cast<const caf::actor_system_config*>(nullptr));
-  }
-
-  auto get_cacert(operator_control_plane* ctrl) const
-    -> std::optional<located<std::string>>;
-  auto get_cacert(const caf::actor_system_config* cfg) const
-    -> std::optional<located<std::string>>;
-  auto get_cacert(std::nullptr_t) const -> std::optional<located<std::string>> {
-    return get_cacert(static_cast<const caf::actor_system_config*>(nullptr));
-  }
-
-  auto get_certfile(operator_control_plane* ctrl) const
-    -> std::optional<located<std::string>>;
-  auto get_certfile(const caf::actor_system_config* cfg) const
-    -> std::optional<located<std::string>>;
-  auto get_certfile(std::nullptr_t) const
-    -> std::optional<located<std::string>> {
-    return get_certfile(static_cast<const caf::actor_system_config*>(nullptr));
-  }
-
-  auto get_keyfile(operator_control_plane* ctrl) const
-    -> std::optional<located<std::string>>;
-  auto get_keyfile(const caf::actor_system_config* cfg) const
-    -> std::optional<located<std::string>>;
-  auto get_keyfile(std::nullptr_t) const
-    -> std::optional<located<std::string>> {
-    return get_keyfile(static_cast<const caf::actor_system_config*>(nullptr));
-  }
-
-  auto get_password(operator_control_plane* ctrl) const
-    -> std::optional<located<std::string>>;
-  auto get_password(const caf::actor_system_config* cfg) const
-    -> std::optional<located<std::string>>;
-  auto get_password(std::nullptr_t) const
-    -> std::optional<located<std::string>> {
-    return get_password(static_cast<const caf::actor_system_config*>(nullptr));
-  }
-
-  auto get_tls_min_version(operator_control_plane* ctrl) const
-    -> std::optional<located<std::string>>;
-  auto get_tls_min_version(const caf::actor_system_config* cfg) const
-    -> std::optional<located<std::string>>;
-  auto get_tls_min_version(std::nullptr_t) const
-    -> std::optional<located<std::string>> {
-    return get_tls_min_version(
-      static_cast<const caf::actor_system_config*>(nullptr));
-  }
-
-  auto get_tls_ciphers(operator_control_plane* ctrl) const
-    -> std::optional<located<std::string>>;
-  auto get_tls_ciphers(const caf::actor_system_config* cfg) const
-    -> std::optional<located<std::string>>;
-  auto get_tls_ciphers(std::nullptr_t) const
-    -> std::optional<located<std::string>> {
-    return get_tls_ciphers(
-      static_cast<const caf::actor_system_config*>(nullptr));
-  }
-
-  auto get_tls_client_ca(operator_control_plane* ctrl) const
-    -> std::optional<located<std::string>>;
-  auto get_tls_client_ca(const caf::actor_system_config* cfg) const
-    -> std::optional<located<std::string>>;
-  auto get_tls_client_ca(std::nullptr_t) const
-    -> std::optional<located<std::string>> {
-    return get_tls_client_ca(
-      static_cast<const caf::actor_system_config*>(nullptr));
-  }
-
-  auto get_tls_require_client_cert(operator_control_plane* ctrl) const
-    -> located<bool>;
-  auto get_tls_require_client_cert(const caf::actor_system_config* cfg) const
-    -> located<bool>;
-  auto get_tls_require_client_cert(std::nullptr_t) const -> located<bool> {
-    return get_tls_require_client_cert(
-      static_cast<const caf::actor_system_config*>(nullptr));
-  }
+  auto get_tls() const -> located<bool>;
+  auto get_skip_peer_verification() const -> located<bool>;
+  auto get_cacert() const -> std::optional<located<std::string>>;
+  auto get_certfile() const -> std::optional<located<std::string>>;
+  auto get_keyfile() const -> std::optional<located<std::string>>;
+  auto get_password() const -> std::optional<located<std::string>>;
+  auto get_tls_min_version() const -> std::optional<located<std::string>>;
+  auto get_tls_ciphers() const -> std::optional<located<std::string>>;
+  auto get_tls_client_ca() const -> std::optional<located<std::string>>;
+  auto get_tls_require_client_cert() const -> located<bool>;
 
 private:
   auto get_record_bool(std::string_view key) const

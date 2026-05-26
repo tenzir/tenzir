@@ -102,9 +102,11 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    if (is_tls_enabled(ctx)) {
-      auto context = tls_->make_folly_ssl_context(
-        ctx, std::addressof(ctx.actor_system().config()));
+    if (tls_) {
+      tls_->apply_config(ctx.actor_system().config());
+    }
+    if (is_tls_enabled()) {
+      auto context = tls_->make_folly_ssl_context(ctx);
       if (not context) {
         finish();
         co_return;
@@ -242,7 +244,7 @@ private:
             .note("gave up after {} {}", max_retry_count,
                   max_retry_count == 1 ? "retry" : "retries")
             .hint("ensure a TCP server is listening on this endpoint");
-      add_tls_client_diagnostic_hints(std::move(diag), is_tls_enabled(ctx))
+      add_tls_client_diagnostic_hints(std::move(diag), is_tls_enabled())
         .emit(ctx.dh());
       finish();
     };
@@ -255,7 +257,7 @@ private:
             .primary(args_.endpoint.source)
             .hint("ensure a TCP server is listening on this endpoint");
       ctx.dh().emit(
-        add_tls_client_diagnostic_hints(std::move(diag), is_tls_enabled(ctx))
+        add_tls_client_diagnostic_hints(std::move(diag), is_tls_enabled())
           .done());
     };
     auto connect = [this]() -> Task<folly::coro::Transport> {
@@ -331,9 +333,9 @@ private:
     close_current_transport();
   }
 
-  auto is_tls_enabled(OpCtx& ctx) -> bool {
-    auto const* cfg = std::addressof(ctx.actor_system().config());
-    return tls_ and tls_->get_tls(cfg).inner;
+  auto is_tls_enabled() -> bool {
+    // Precondition: `tls_->apply_config()` was called from `start()`.
+    return tls_ and tls_->get_tls().inner;
   }
 
   ToTcpArgs args_;

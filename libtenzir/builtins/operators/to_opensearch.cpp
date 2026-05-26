@@ -325,6 +325,8 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     auto& dh = ctrl.diagnostics();
+    auto ssl = args_.ssl;
+    ssl.apply_config(ctrl);
     auto url = resolved_secret_value{};
     auto user = resolved_secret_value{};
     auto password = resolved_secret_value{};
@@ -359,7 +361,7 @@ public:
         final_url = fmt::to_string(u);
       }
     }
-    if (not args_.ssl.validate(final_url, args_.url.source, dh)) {
+    if (not ssl.validate(final_url, args_.url.source, dh)) {
       co_return;
     }
     auto req = curl::easy{};
@@ -381,7 +383,7 @@ public:
     if (args_.compress) {
       req.set_http_header("Content-Encoding", "gzip");
     }
-    if (auto e = args_.ssl.apply_to(req, final_url, &ctrl); e.valid()) {
+    if (auto e = ssl.apply_to(req, final_url); e.valid()) {
       diagnostic::error(e).emit(dh);
       co_return;
     }

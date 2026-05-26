@@ -169,9 +169,11 @@ public:
   auto operator=(AcceptTcpListener&&) noexcept -> AcceptTcpListener& = default;
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto const* cfg = std::addressof(ctx.actor_system().config());
-    if (tls_ and tls_->get_tls(cfg).inner) {
-      auto context = tls_->make_folly_ssl_context(ctx, cfg);
+    if (tls_) {
+      tls_->apply_config(ctx.actor_system().config());
+    }
+    if (tls_ and tls_->get_tls().inner) {
+      auto context = tls_->make_folly_ssl_context(ctx);
       if (not context) {
         request_abort();
         co_return;
@@ -808,7 +810,7 @@ public:
         if (auto valid = tls_opts.validate(ctx); not valid) {
           return {};
         }
-        tls_enabled = tls_opts.get_tls(nullptr).inner;
+        tls_enabled = tls_opts.get_tls().inner;
       }
       if (auto max_connections = ctx.get(max_connections_arg);
           max_connections) {

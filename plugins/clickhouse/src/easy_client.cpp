@@ -23,7 +23,8 @@ namespace tenzir::plugins::clickhouse {
 
 auto easy_client::make(arguments args, const caf::actor_system_config& cfg,
                        diagnostic_handler& dh) -> std::shared_ptr<easy_client> {
-  return std::make_shared<easy_client>(std::move(args), cfg, dh, ctor_token{});
+  args.ssl.apply_config(cfg);
+  return std::make_shared<easy_client>(std::move(args), dh, ctor_token{});
 }
 
 auto easy_client::remote_check_exists(std::string_view object_kind,

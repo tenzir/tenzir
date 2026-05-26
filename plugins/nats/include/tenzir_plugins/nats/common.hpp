@@ -16,6 +16,7 @@
 #include <tenzir/secret.hpp>
 #include <tenzir/tls_options.hpp>
 
+#include <caf/fwd.hpp>
 #include <folly/io/async/EventBase.h>
 #include <nats/nats.h>
 
@@ -133,7 +134,8 @@ auto apply_tls(natsOptions* options, tls_options const& tls,
 auto make_nats_options(connection_config const& config,
                        Option<located<data>> const& tls_arg,
                        location url_location, diagnostic_handler& dh,
-                       folly::EventBase& event_base)
+                       folly::EventBase& event_base,
+                       const caf::actor_system_config& cfg)
   -> failure_or<nats_options_ptr>;
 
 auto configure_folly_event_loop(natsOptions* options,

@@ -118,7 +118,7 @@ auto is_tls_enabled(Option<located<data>> const& tls,
 /// effective TLS mode. Diagnostics are emitted for invalid combinations.
 auto normalize_url_and_tls(Option<located<data>> const& tls, std::string& url,
                            location url_loc, diagnostic_handler& dh,
-                           const caf::actor_system_config* cfg = nullptr,
+                           const caf::actor_system_config& cfg,
                            tls_options::options options = {.is_server = false})
   -> failure_or<bool>;
 
@@ -129,7 +129,7 @@ auto normalize_url_and_tls(Option<located<data>> const& tls, std::string& url,
 auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
                            location url_loc, diagnostic_handler& dh,
                            std::chrono::milliseconds request_timeout,
-                           const caf::actor_system_config* cfg = nullptr,
+                           const caf::actor_system_config& cfg,
                            tls_options::options options = {.is_server = false})
   -> failure_or<HttpPoolConfig>;
 

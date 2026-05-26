@@ -164,29 +164,29 @@ private:
     }
 
     // Store connection parameters for retry attempts
-    auto cacert = args_.ssl.get_cacert(nullptr)
+    auto cacert = args_.ssl.get_cacert()
                     .value_or(located{std::string{}, location::unknown})
                     .inner;
-    auto certfile = args_.ssl.get_certfile(nullptr)
+    auto certfile = args_.ssl.get_certfile()
                       .value_or(located{std::string{}, location::unknown})
                       .inner;
-    auto keyfile = args_.ssl.get_keyfile(nullptr)
+    auto keyfile = args_.ssl.get_keyfile()
                      .value_or(located{std::string{}, location::unknown})
                      .inner;
     auto tls_min_version
-      = args_.ssl.get_tls_min_version(nullptr)
+      = args_.ssl.get_tls_min_version()
           .value_or(located{std::string{}, location::unknown})
           .inner;
-    auto tls_ciphers = args_.ssl.get_tls_ciphers(nullptr)
+    auto tls_ciphers = args_.ssl.get_tls_ciphers()
                          .value_or(located{std::string{}, location::unknown})
                          .inner;
     connect_params_ = {
-      .tls = args_.ssl.get_tls(nullptr).inner,
+      .tls = args_.ssl.get_tls().inner,
       .cacert = std::move(cacert),
       .certfile = std::move(certfile),
       .keyfile = std::move(keyfile),
       .skip_peer_verification
-      = args_.ssl.get_skip_peer_verification(nullptr).inner,
+      = args_.ssl.get_skip_peer_verification().inner,
       .hostname = args_.hostname,
       .service = args_.service,
       .tls_min_version = std::move(tls_min_version),
@@ -520,21 +520,21 @@ public:
             return;
           }
           socket_.emplace(std::move(peer));
-          auto cacert = args_.ssl.get_cacert(nullptr)
+          auto cacert = args_.ssl.get_cacert()
                           .value_or(located{std::string{}, location::unknown})
                           .inner;
-          auto certfile = args_.ssl.get_certfile(nullptr)
+          auto certfile = args_.ssl.get_certfile()
                             .value_or(located{std::string{}, location::unknown})
                             .inner;
-          auto keyfile = args_.ssl.get_keyfile(nullptr)
+          auto keyfile = args_.ssl.get_keyfile()
                            .value_or(located{std::string{}, location::unknown})
                            .inner;
           auto tls_min_version
-            = args_.ssl.get_tls_min_version(nullptr)
+            = args_.ssl.get_tls_min_version()
                 .value_or(located{std::string{}, location::unknown})
                 .inner;
           auto tls_ciphers
-            = args_.ssl.get_tls_ciphers(nullptr)
+            = args_.ssl.get_tls_ciphers()
                 .value_or(located{std::string{}, location::unknown})
                 .inner;
           if (not certfile.empty()) {
@@ -690,13 +690,13 @@ public:
   operator()(generator<chunk_ptr> bytes, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     auto args = args_;
-    args.ssl.update_from_config(ctrl);
-    if (args.ssl.get_tls(nullptr).inner and args_.listen) {
+    args.ssl.apply_config(ctrl);
+    if (args.ssl.get_tls().inner and args_.listen) {
       // Verify that the files actually exist and are readable.
       // Ideally we'd also like to verify that the files contain valid
       // key material, but there's no straightforward API for this in
       // OpenSSL.
-      auto keyfile_name = args.ssl.get_keyfile(nullptr);
+      auto keyfile_name = args.ssl.get_keyfile();
       if (not keyfile_name) {
         diagnostic::error("no keyfile configured, but TLS enabled")
           .emit(ctrl.diagnostics());
@@ -710,7 +710,7 @@ public:
         co_return;
       }
       std::fclose(keyfile);
-      auto certfile_name = args.ssl.get_keyfile(nullptr);
+      auto certfile_name = args.ssl.get_keyfile();
       if (not certfile_name) {
         diagnostic::error("no certfile configured, but TLS enabled")
           .emit(ctrl.diagnostics());

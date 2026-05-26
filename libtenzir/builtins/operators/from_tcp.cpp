@@ -136,10 +136,12 @@ public:
   auto operator=(FromTcpConnector&&) noexcept -> FromTcpConnector& = default;
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto const* cfg = std::addressof(ctx.actor_system().config());
-    tls_enabled_ = tls_ and tls_->get_tls(cfg).inner;
+    if (tls_) {
+      tls_->apply_config(ctx.actor_system().config());
+    }
+    tls_enabled_ = tls_ and tls_->get_tls().inner;
     if (tls_enabled_) {
-      auto context = tls_->make_folly_ssl_context(ctx, cfg);
+      auto context = tls_->make_folly_ssl_context(ctx);
       if (not context) {
         startup_failed_ = true;
         co_return;
