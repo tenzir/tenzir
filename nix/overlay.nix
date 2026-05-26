@@ -74,7 +74,6 @@ in
   jemalloc-tenzir = callFunction ./overrides/jemalloc.nix { inherit (prevPkgs) jemalloc; };
   mimalloc-tenzir = callFunction ./overrides/mimalloc.nix { inherit (prevPkgs) mimalloc; };
   musl = callFunction ./overrides/musl.nix { inherit (prevPkgs) musl; };
-  mold-unwrapped = callFunction ./overrides/mold.nix { inherit (prevPkgs) mold-unwrapped; };
   mvfst = callFunction ./overrides/mvfst.nix { inherit (prevPkgs) mvfst; };
   ngtcp2 = callFunction ./overrides/ngtcp2.nix { inherit (prevPkgs) ngtcp2; };
   protobufc = callFunction ./overrides/protobufc.nix { inherit (prevPkgs) protobufc; };

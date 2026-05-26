@@ -10,7 +10,7 @@
   };
 
   inputs = {
-    nixpkgs.url = "github:tobim/nixpkgs/c138dec5080350510dbe6da937ec4a90bb2cda57";
+    nixpkgs.url = "github:tobim/nixpkgs/0eba1cb3a7898e24864434399bcd07ffec1b8221";
     flake-compat.url = "github:edolstra/flake-compat";
     flake-compat.flake = false;
     flake-utils.url = "github:numtide/flake-utils";
