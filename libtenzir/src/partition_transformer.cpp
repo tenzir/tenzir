@@ -80,12 +80,18 @@ auto read_cgroup_memory_available(const std::filesystem::path& dir,
     current = read_memory_value(dir / "memory.usage_in_bytes");
     max = read_memory_value(dir / "memory.limit_in_bytes");
   }
-  if (not current or not max or *current >= *max) {
+  if (not current or not max) {
     return std::nullopt;
   }
   static constexpr auto unlimited_cgroup_limit = uint64_t{1} << 60;
   if (*max >= unlimited_cgroup_limit) {
     return std::nullopt;
+  }
+  if (*current >= *max) {
+    return memory_available{
+      .bytes = 0,
+      .source = std::move(source),
+    };
   }
   return memory_available{
     .bytes = *max - *current,
@@ -171,7 +177,7 @@ auto make_memory_budget() -> std::optional<memory_budget> {
   }
   return memory_budget{
     .initial_available = available->bytes,
-    .bytes = std::max(available->bytes / 4, uint64_t{1}),
+    .bytes = available->bytes / 4,
     .source = std::move(available->source),
   };
 }
@@ -282,6 +288,7 @@ struct partition_source_state {
   tenzir::time min_import_time = tenzir::time::max();
   tenzir::time max_import_time = tenzir::time::min();
   std::vector<partition_info> loaded_partitions = {};
+  bool input_complete = true;
 };
 
 class partition_loader {
@@ -300,9 +307,21 @@ public:
 
   auto feed(Push<OperatorMsg<table_slice>>& push_input) const -> Task<void> {
     for (const auto& partition : partitions_) {
-      if (memory_budget_ and not state_->loaded_partitions.empty()) {
+      if (memory_budget_) {
         if (auto used = live_budget_used(*memory_budget_);
             used and used->first >= memory_budget_->bytes) {
+          if (state_->loaded_partitions.empty()) {
+            fail(caf::make_error(ec::out_of_memory,
+                                 "partition transform memory budget is "
+                                 "exhausted before loading partition {} "
+                                 "({} bytes used, {} bytes budget, {} bytes "
+                                 "available, source: {})",
+                                 partition.uuid, used->first,
+                                 memory_budget_->bytes, used->second,
+                                 memory_budget_->source));
+            co_await push_input(OperatorMsg<table_slice>{Signal{EndOfData{}}});
+            co_return;
+          }
           TENZIR_VERBOSE("{} stops loading transform input before partition {} "
                          "after {} partition(s); live memory budget is full "
                          "({} bytes used, {} bytes budget, {} bytes available, "
@@ -311,6 +330,7 @@ public:
                          state_->loaded_partitions.size(), used->first,
                          memory_budget_->bytes, used->second,
                          memory_budget_->source);
+          state_->input_complete = false;
           break;
         }
       }
@@ -523,6 +543,7 @@ void partition_transformer_state::fulfill(
     promise.deliver(partition_transform_result{
       .input_partitions = self->state().transformed_input_partitions,
       .output_partitions = {},
+      .input_complete = self->state().input_complete,
     });
     self->quit();
     return;
@@ -570,6 +591,7 @@ void partition_transformer_state::fulfill(
                           .input_partitions
                           = self->state().transformed_input_partitions,
                           .output_partitions = std::move(result),
+                          .input_complete = self->state().input_complete,
                         },
                       });
       },
@@ -837,6 +859,9 @@ auto partition_transformer(
             if (error) {
               TENZIR_ERROR("{} pipeline executor failed: {}", *self, error);
               self->state().transform_error = std::move(error);
+              store_or_fulfill(self,
+                               partition_transformer_state::stream_data{});
+              return;
             } else if (source_state->error.valid()) {
               self->state().stream_error = std::move(source_state->error);
               store_or_fulfill(self,
@@ -850,6 +875,7 @@ auto partition_transformer(
             self->state().max_import_time = source_state->max_import_time;
             self->state().transformed_input_partitions
               = std::move(source_state->loaded_partitions);
+            self->state().input_complete = source_state->input_complete;
             finish_transform();
           });
         });

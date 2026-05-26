@@ -217,7 +217,7 @@ using index_actor = typed_actor_fwd<
   // ids, and makes new partitions preserving them.
   auto(atom::apply, ast::pipeline, std::vector<tenzir::partition_info>,
        keep_original_partition, std::string)
-    ->caf::result<std::vector<partition_info>>,
+    ->caf::result<partition_transform_apply_result>,
   // Decomissions all active partitions, effectively flushing them to disk.
   auto(atom::flush)->caf::result<void>,
   // Returns all events from active and unpersisted partitions.

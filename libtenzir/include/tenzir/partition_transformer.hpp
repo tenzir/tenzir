@@ -81,6 +81,9 @@ struct partition_transformer_state {
   /// The input partitions that the transformer actually consumed.
   std::vector<partition_info> transformed_input_partitions = {};
 
+  /// Whether the transformer consumed every selected input partition.
+  bool input_complete = true;
+
   /// The maximum number of events per partition. (not really necessary, but
   /// required by the partition synopsis)
   size_t partition_capacity = 0ull;
