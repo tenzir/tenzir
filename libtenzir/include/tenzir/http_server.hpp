@@ -27,11 +27,8 @@
 
 namespace tenzir::http_server {
 
-/// Builds a wangle SSL context config from the resolved TLS options.
-///
-/// Precondition: `tls_opts.apply_config()` has been called if a node config
-/// is available, so the cached members already reflect the effective values.
-auto make_ssl_context_config(tls_options const& tls_opts, location primary,
+/// Builds a wangle SSL context config from a resolved TLS configuration.
+auto make_ssl_context_config(TlsConfig const& tls, location primary,
                              diagnostic_handler& dh)
   -> failure_or<wangle::SSLContextConfig>;
 

@@ -555,9 +555,12 @@ private:
     if (tls_enabled) {
       auto tls_opts = tls_options::from_optional(
         args_.tls, {.tls_default = false, .is_server = true});
-      tls_opts.apply_config(cfg);
+      auto tls = tls_opts.resolve(cfg, ctx);
+      if (not tls) {
+        co_return None{};
+      }
       auto tls_config = http_server::make_ssl_context_config(
-        tls_opts, args_.endpoint.source, ctx);
+        *tls, args_.endpoint.source, ctx);
       if (not tls_config) {
         co_return None{};
       }
