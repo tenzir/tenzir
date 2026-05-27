@@ -100,7 +100,11 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    tls.update_from_config(std::addressof(ctx.actor_system().config()));
+    auto resolved_tls = tls.resolve(ctx.actor_system().config(), ctx);
+    if (not resolved_tls) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
     session_.emplace(CurlSession::make(ctx.io_executor()));
     auto& easy = session_->easy();
     if (not curl::try_set(easy, CURLOPT_DEFAULT_PROTOCOL, "ftp")) {
@@ -127,7 +131,7 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    if (auto err = tls.apply_to(easy, resolved_url_, nullptr); err.valid()) {
+    if (auto err = resolved_tls->apply_to(easy, resolved_url_); err.valid()) {
       diagnostic::error("failed to configure FTP upload")
         .primary(args_.url.source)
         .note("{}", err)

@@ -349,7 +349,7 @@ auto fetch_web_identity_token(const resolved_web_identity& web_identity)
   if (web_identity.token_endpoint) {
     const auto& te = *web_identity.token_endpoint;
     TENZIR_VERBOSE("fetching web identity token from endpoint");
-    auto xfer = transfer{};
+    auto xfer = transfer{{}, TlsConfig::defaults()};
     auto req = http::Request{};
     req.uri = te.url;
     req.method = "GET";

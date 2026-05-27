@@ -48,7 +48,10 @@ struct transfer_options {
 class transfer {
 public:
   /// Constructs a transfer.
-  explicit transfer(transfer_options opts = {});
+  ///
+  /// The `TlsConfig` carries the resolved TLS settings; the caller must have
+  /// obtained it via `opts.ssl.resolve(...)`.
+  transfer(transfer_options opts, TlsConfig tls);
 
   /// Prepares a transfer with an HTTP request.
   /// @note resets the transfer.
@@ -75,6 +78,7 @@ public:
   auto handle() -> curl::easy&;
 
   transfer_options options;
+  TlsConfig tls;
 
 private:
   curl::easy easy_;

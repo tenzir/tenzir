@@ -1228,12 +1228,22 @@ struct from_http_args {
 
   auto make_ssl_context(operator_control_plane& ctrl) const
     -> caf::expected<ssl::context> {
-    return ssl.make_caf_context(ctrl, std::nullopt);
+    auto tls = ssl.resolve(ctrl);
+    if (not tls) {
+      return caf::make_error(ec::invalid_configuration,
+                             "failed to resolve TLS configuration");
+    }
+    return tls->make_caf_context(ctrl, std::nullopt);
   }
 
   auto make_ssl_context(caf::uri uri, operator_control_plane& ctrl) const
     -> caf::expected<ssl::context> {
-    return ssl.make_caf_context(ctrl, std::move(uri));
+    auto tls = ssl.resolve(ctrl);
+    if (not tls) {
+      return caf::make_error(ec::invalid_configuration,
+                             "failed to resolve TLS configuration");
+    }
+    return tls->make_caf_context(ctrl, std::move(uri));
   }
 
   friend auto inspect(auto& f, from_http_args& x) -> bool {
@@ -1493,7 +1503,12 @@ public:
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
     co_yield {};
-    const auto tls_enabled = args_.ssl.get_tls(&ctrl).inner;
+    auto ssl_opts = args_.ssl;
+    auto ssl = ssl_opts.resolve(ctrl);
+    if (not ssl) {
+      co_return;
+    }
+    const auto tls_enabled = ssl->tls.inner;
     auto& dh = ctrl.diagnostics();
     auto awaiting = uint64_t{};
     auto slices = std::vector<table_slice>{};
@@ -2057,7 +2072,12 @@ struct http_args {
 
   auto make_ssl_context(caf::uri uri, operator_control_plane& ctrl) const
     -> caf::expected<ssl::context> {
-    return ssl.make_caf_context(ctrl, std::move(uri));
+    auto tls = ssl.resolve(ctrl);
+    if (not tls) {
+      return caf::make_error(ec::invalid_configuration,
+                             "failed to resolve TLS configuration");
+    }
+    return tls->make_caf_context(ctrl, std::move(uri));
   }
 
   friend auto inspect(auto& f, http_args& x) -> bool {
@@ -2090,7 +2110,12 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     co_yield {};
-    const auto tls_enabled = args_.ssl.get_tls(&ctrl).inner;
+    auto ssl_opts = args_.ssl;
+    auto ssl = ssl_opts.resolve(ctrl);
+    if (not ssl) {
+      co_return;
+    }
+    const auto tls_enabled = ssl->tls.inner;
     auto& dh = ctrl.diagnostics();
     auto tdh = transforming_diagnostic_handler{
       dh,

@@ -92,8 +92,11 @@ public:
                                                 *transfer_opts.authzid, dh));
     }
     co_yield ctrl.resolve_secrets_must_yield(std::move(requests));
-    transfer_opts.ssl.update_from_config(ctrl);
-    auto tx = transfer{transfer_opts};
+    auto tls = transfer_opts.ssl.resolve(ctrl);
+    if (not tls) {
+      co_return;
+    }
+    auto tx = transfer{transfer_opts, std::move(*tls)};
     if (auto err = tx.prepare(std::move(args_.endpoint)); err.valid()) {
       diagnostic::error("failed to prepare SMTP server request")
         .note("{}", err)

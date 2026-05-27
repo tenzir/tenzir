@@ -253,7 +253,11 @@ public:
     auto stream = std::optional<caf::typed_stream<std::vector<table_slice>>>{};
     auto [ptr, launch] = ctrl.self().system().spawn_inactive();
 
-    auto context = args_.tls.make_caf_context(ctrl);
+    auto tls = args_.tls.resolve(ctrl);
+    if (not tls) {
+      co_return;
+    }
+    auto context = tls->make_caf_context(ctrl);
     auto server
       = http::with(ctrl.self().system())
           .context(std::move(context))

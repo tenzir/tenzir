@@ -439,7 +439,7 @@ public:
     auto options
       = make_nats_options(*resolved, args_.tls,
                           args_.url ? args_.url->source : location::unknown,
-                          ctx.dh(), *evb);
+                          ctx.dh(), *evb, ctx.actor_system().config());
     if (not options) {
       done_ = true;
       co_return;

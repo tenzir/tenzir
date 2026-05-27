@@ -13,6 +13,7 @@
 #include <tenzir/secret_resolution.hpp>
 #include <tenzir/try.hpp>
 
+#include <caf/actor_system_config.hpp>
 #include <caf/error.hpp>
 #include <fmt/ranges.h>
 
@@ -310,53 +311,50 @@ auto apply_auth(natsOptions* options, auth_config const& auth,
   return {};
 }
 
-auto apply_tls(natsOptions* options, tls_options const& tls,
+auto apply_tls(natsOptions* options, TlsConfig const& tls,
                diagnostic_handler& dh) -> failure_or<void> {
-  auto enabled = tls.get_tls(nullptr);
   TRY(check(
-    natsOptions_SetSecure(options, enabled.inner),
-    diagnostic::error("failed to configure NATS TLS").primary(enabled.source),
+    natsOptions_SetSecure(options, tls.tls.inner),
+    diagnostic::error("failed to configure NATS TLS").primary(tls.tls.source),
     dh));
-  if (not enabled.inner) {
+  if (not tls.tls.inner) {
     return {};
   }
-  if (auto cacert = tls.get_cacert(nullptr)) {
+  if (auto& cacert = tls.cacert) {
     TRY(check(natsOptions_LoadCATrustedCertificates(options,
                                                     cacert->inner.c_str()),
               diagnostic::error("failed to load NATS TLS CA certificate")
                 .primary(cacert->source),
               dh));
   }
-  auto certfile = tls.get_certfile(nullptr);
-  auto keyfile = tls.get_keyfile(nullptr);
-  if (certfile or keyfile) {
-    if (not certfile) {
+  if (tls.certfile or tls.keyfile) {
+    if (not tls.certfile) {
       diagnostic::error("`tls.certfile` is required when `tls.keyfile` is set")
-        .primary(keyfile->source)
+        .primary(tls.keyfile->source)
         .hint("set both `tls.certfile` and `tls.keyfile`")
         .emit(dh);
       return failure::promise();
     }
     auto const* key
-      = keyfile ? keyfile->inner.c_str() : certfile->inner.c_str();
-    TRY(check(natsOptions_LoadCertificatesChain(options,
-                                                certfile->inner.c_str(), key),
+      = tls.keyfile ? tls.keyfile->inner.c_str() : tls.certfile->inner.c_str();
+    TRY(check(natsOptions_LoadCertificatesChain(
+                options, tls.certfile->inner.c_str(), key),
               diagnostic::error("failed to load NATS TLS client certificate")
-                .primary(certfile->source),
+                .primary(tls.certfile->source),
               dh));
   }
-  if (auto ciphers = tls.get_tls_ciphers(nullptr)) {
+  if (auto& ciphers = tls.tls_ciphers) {
     TRY(check(natsOptions_SetCiphers(options, ciphers->inner.c_str()),
               diagnostic::error("failed to configure NATS TLS ciphers")
                 .primary(ciphers->source),
               dh));
   }
-  auto skip = tls.get_skip_peer_verification(nullptr);
-  TRY(check(natsOptions_SkipServerVerification(options, skip.inner),
+  TRY(check(natsOptions_SkipServerVerification(
+              options, tls.skip_peer_verification.inner),
             diagnostic::error("failed to configure NATS TLS verification")
-              .primary(skip.source),
+              .primary(tls.skip_peer_verification.source),
             dh));
-  if (auto min_version = tls.get_tls_min_version(nullptr)) {
+  if (auto& min_version = tls.tls_min_version) {
     diagnostic::warning("`tls.min_version` is not supported by nats.c")
       .primary(min_version->source)
       .note("the option is ignored for NATS connections")
@@ -368,7 +366,8 @@ auto apply_tls(natsOptions* options, tls_options const& tls,
 auto make_nats_options(connection_config const& config,
                        Option<located<data>> const& tls_arg,
                        location url_location, diagnostic_handler& dh,
-                       folly::EventBase& event_base)
+                       folly::EventBase& event_base,
+                       const caf::actor_system_config& cfg)
   -> failure_or<nats_options_ptr> {
   auto* raw_options = static_cast<natsOptions*>(nullptr);
   TRY(check(
@@ -376,15 +375,15 @@ auto make_nats_options(connection_config const& config,
     diagnostic::error("failed to create NATS options").primary(url_location),
     dh));
   auto options = nats_options_ptr{raw_options};
-  auto tls
+  auto tls_opts
     = tls_arg ? tls_options{*tls_arg, {.tls_default = true, .is_server = false}}
               : tls_options{tls_options::options{
                   .tls_default = tls_enabled_from_url(config.url),
                   .is_server = false,
                 }};
+  TRY(auto tls, tls_opts.resolve(cfg, dh));
   TRY(apply_tls(options.get(), tls, dh));
-  auto const normalized_url
-    = normalize_url(config.url, tls.get_tls(nullptr).inner);
+  auto const normalized_url = normalize_url(config.url, tls.tls.inner);
   TRY(check(
     natsOptions_SetURL(options.get(), normalized_url.c_str()),
     diagnostic::error("failed to configure NATS URL").primary(url_location),

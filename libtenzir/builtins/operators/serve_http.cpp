@@ -574,7 +574,7 @@ private:
     if (not parsed) {
       co_return None{};
     }
-    auto const* cfg = std::addressof(ctx.actor_system().config());
+    auto const& cfg = ctx.actor_system().config();
     auto tls_enabled = http_server::is_tls_enabled(args_.tls, cfg);
     if (parsed->scheme_tls) {
       if (*parsed->scheme_tls and not tls_enabled) {
@@ -604,8 +604,12 @@ private:
     if (tls_enabled) {
       auto tls_opts = tls_options::from_optional(
         args_.tls, {.tls_default = false, .is_server = true});
+      auto tls = tls_opts.resolve(cfg, ctx.dh());
+      if (not tls) {
+        co_return None{};
+      }
       auto tls_config = http_server::make_ssl_context_config(
-        tls_opts, args_.endpoint.source, ctx.dh(), cfg);
+        *tls, args_.endpoint.source, ctx.dh());
       if (not tls_config) {
         co_return None{};
       }

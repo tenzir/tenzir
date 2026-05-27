@@ -102,14 +102,21 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    if (is_tls_enabled(ctx)) {
-      auto context = tls_->make_folly_ssl_context(
-        ctx, std::addressof(ctx.actor_system().config()));
-      if (not context) {
+    if (tls_) {
+      auto resolved = tls_->resolve(ctx.actor_system().config(), ctx);
+      if (not resolved) {
         finish();
         co_return;
       }
-      tls_context_ = std::move(*context);
+      tls_enabled_ = resolved->tls.inner;
+      if (tls_enabled_) {
+        auto context = resolved->make_folly_ssl_context(ctx);
+        if (not context) {
+          finish();
+          co_return;
+        }
+        tls_context_ = std::move(*context);
+      }
     }
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
@@ -242,7 +249,7 @@ private:
             .note("gave up after {} {}", max_retry_count,
                   max_retry_count == 1 ? "retry" : "retries")
             .hint("ensure a TCP server is listening on this endpoint");
-      add_tls_client_diagnostic_hints(std::move(diag), is_tls_enabled(ctx))
+      add_tls_client_diagnostic_hints(std::move(diag), is_tls_enabled())
         .emit(ctx.dh());
       finish();
     };
@@ -255,7 +262,7 @@ private:
             .primary(args_.endpoint.source)
             .hint("ensure a TCP server is listening on this endpoint");
       ctx.dh().emit(
-        add_tls_client_diagnostic_hints(std::move(diag), is_tls_enabled(ctx))
+        add_tls_client_diagnostic_hints(std::move(diag), is_tls_enabled())
           .done());
     };
     auto connect = [this]() -> Task<folly::coro::Transport> {
@@ -331,9 +338,8 @@ private:
     close_current_transport();
   }
 
-  auto is_tls_enabled(OpCtx& ctx) -> bool {
-    auto const* cfg = std::addressof(ctx.actor_system().config());
-    return tls_ and tls_->get_tls(cfg).inner;
+  auto is_tls_enabled() const -> bool {
+    return tls_enabled_;
   }
 
   ToTcpArgs args_;
@@ -341,6 +347,7 @@ private:
   folly::SocketAddress address_;
   std::string host_;
   Option<tls_options> tls_;
+  bool tls_enabled_ = false;
   std::shared_ptr<folly::SSLContext> tls_context_;
   folly::EventBase* evb_ = nullptr;
   mutable Box<MessageQueue> message_queue_{
