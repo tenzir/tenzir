@@ -79,7 +79,6 @@ in
   protobufc = callFunction ./overrides/protobufc.nix { inherit (prevPkgs) protobufc; };
   rabbitmq-c = callFunction ./overrides/rabbitmq-c.nix { inherit (prevPkgs) rabbitmq-c; };
   restinio = callFunction ./overrides/restinio.nix { inherit (prevPkgs) restinio; };
-  spdlog = callFunction ./overrides/spdlog.nix { inherit (prevPkgs) spdlog; };
   thrift = callFunction ./overrides/thrift.nix { inherit (prevPkgs) thrift; };
   wangle = callFunction ./overrides/wangle.nix { inherit (prevPkgs) wangle; };
   yara = callFunction ./overrides/yara.nix { inherit (prevPkgs) yara; };
