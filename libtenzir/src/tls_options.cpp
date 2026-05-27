@@ -112,6 +112,14 @@ constexpr auto inner(const std::optional<located<T>>& x) -> std::optional<T> {
   });
 };
 
+template <typename T>
+constexpr auto inner(const Option<located<T>>& x) -> std::optional<T> {
+  if (not x) {
+    return std::nullopt;
+  }
+  return x->inner;
+}
+
 } // namespace
 
 auto add_tls_client_diagnostic_hints(diagnostic_builder diag, bool tls_enabled,
@@ -862,6 +870,308 @@ auto tls_options::make_folly_ssl_context(diagnostic_handler& dh,
     }
   }
   return ctx;
+}
+
+// -- TlsConfig ---------------------------------------------------------------
+//
+// The four runtime methods below mirror the corresponding `tls_options`
+// methods. They are intentional copies for now -- once all call sites have
+// migrated, the `tls_options` versions will be deleted (Step 4 of the plan).
+
+auto TlsConfig::update_url(std::string_view url) const -> std::string {
+  auto url_copy = std::string{url};
+  if (not uses_curl_http) {
+    return url_copy;
+  }
+  if (not tls.inner) {
+    return url_copy;
+  }
+  // If the URL says http, and the TLS option was not defaulted.
+  if (url.starts_with("http://") and tls.source != location::unknown) {
+    url_copy.insert(4, "s");
+  }
+  return url_copy;
+}
+
+auto TlsConfig::apply_to(curl::easy& easy, std::string_view url) const
+  -> caf::error {
+  auto used_url = update_url(url);
+  check(easy.set(CURLOPT_URL, used_url));
+  if (tls.inner) {
+    check(easy.set(CURLOPT_DEFAULT_PROTOCOL, "https"));
+  }
+  if (auto& x = cacert) {
+    if (auto ec = easy.set(CURLOPT_CAINFO, x->inner);
+        ec != curl::easy::code::ok) {
+      return diagnostic::error("failed to set `cacert`: {}", to_string(ec))
+        .primary(*x)
+        .to_error();
+    }
+  }
+  if (auto& x = certfile) {
+    if (auto ec = easy.set(CURLOPT_SSLCERT, x->inner);
+        ec != curl::easy::code::ok) {
+      return diagnostic::error("failed to set `certfile`: {}", to_string(ec))
+        .primary(*x)
+        .to_error();
+    }
+  }
+  if (auto& x = keyfile) {
+    if (auto ec = easy.set(CURLOPT_SSLKEY, x->inner);
+        ec != curl::easy::code::ok) {
+      return diagnostic::error("failed to set `keyfile`: {}", to_string(ec))
+        .primary(*x)
+        .to_error();
+    }
+  }
+  if (auto& x = password) {
+    if (auto ec = easy.set(CURLOPT_SSLKEYPASSWD, x->inner);
+        ec != curl::easy::code::ok) {
+      return diagnostic::error("failed to set `password`: {}", to_string(ec))
+        .primary(*x)
+        .to_error();
+    }
+  }
+  check(
+    easy.set(CURLOPT_USE_SSL, tls.inner ? CURLUSESSL_ALL : CURLUSESSL_NONE));
+  check(easy.set(CURLOPT_SSL_VERIFYPEER, skip_peer_verification.inner ? 0 : 1));
+  check(easy.set(CURLOPT_SSL_VERIFYHOST, skip_peer_verification.inner ? 0 : 1));
+  if (auto& x = tls_min_version) {
+    auto curl_version = parse_curl_tls_version(x->inner);
+    if (curl_version) {
+      check(easy.set(CURLOPT_SSLVERSION, *curl_version));
+    } else {
+      return diagnostic::error(curl_version.error()).primary(*x).to_error();
+    }
+  }
+  if (auto& x = tls_ciphers) {
+    check(easy.set(CURLOPT_SSL_CIPHER_LIST, x->inner));
+  }
+  return {};
+}
+
+auto TlsConfig::make_caf_context(operator_control_plane& ctrl,
+                                 std::optional<caf::uri> uri) const
+  -> caf::expected<caf::net::ssl::context> {
+  using namespace caf::net;
+  auto& dh = ctrl.diagnostics();
+  const auto tls_enabled = tls.inner or (uri and uri->scheme() == "https");
+  auto min_version = ssl::tls::any;
+  if (auto& min = tls_min_version) {
+    if (not min->inner.empty()) {
+      if (auto parsed = parse_caf_tls_version(min->inner)) {
+        min_version = *parsed;
+      } else {
+        diagnostic::error(parsed.error()).primary(*min).emit(dh);
+        return caf::make_error(ec::invalid_configuration,
+                               "invalid TLS minimum version");
+      }
+    }
+  }
+  auto ctx = ssl::context::enable(tls_enabled)
+               .and_then(ssl::emplace_context(min_version))
+               .and_then(
+                 ssl::use_private_key_file_if(inner(keyfile), ssl::format::pem))
+               .and_then(ssl::use_certificate_file_if(inner(certfile),
+                                                      ssl::format::pem))
+               .and_then(ssl::use_password_if(inner(password)));
+  if (uri) {
+    ctx = std::move(ctx).and_then(ssl::use_sni_hostname(std::move(*uri)));
+  }
+  if (not ctx) {
+    return ctx;
+  }
+  auto& concrete = *ctx;
+  const auto require_cert = tls_require_client_cert.inner;
+  const auto skip_verify = skip_peer_verification.inner;
+  auto verify_mode = ssl::verify::none;
+  if (not skip_verify or require_cert) {
+    verify_mode |= ssl::verify::peer;
+    if (require_cert) {
+      verify_mode |= ssl::verify::fail_if_no_peer_cert;
+    }
+  }
+  concrete.verify_mode(verify_mode);
+  if (verify_mode != ssl::verify::none) {
+    auto load_ca = [&](const located<std::string>& ca) -> caf::expected<void> {
+      if (concrete.load_verify_file(ca.inner)) {
+        return {};
+      }
+      diagnostic::error("failed to load TLS CA certificate")
+        .primary(ca)
+        .emit(dh);
+      return caf::make_error(ec::invalid_configuration,
+                             "failed to load TLS CA certificate");
+    };
+    if (require_cert) {
+      if (auto& client_ca = tls_client_ca) {
+        if (auto res = load_ca(*client_ca); not res) {
+          return caf::make_error(ec::invalid_configuration,
+                                 "failed to configure TLS client CA");
+        }
+      }
+    }
+    if (auto& ca = cacert) {
+      if (auto res = load_ca(*ca); not res) {
+        return caf::make_error(ec::invalid_configuration,
+                               "failed to configure TLS CA");
+      }
+    } else if (not concrete.enable_default_verify_paths()) {
+      return caf::make_error(ec::invalid_configuration,
+                             "failed to enable default verify paths");
+    }
+  }
+  if (auto& ciphers = tls_ciphers) {
+    auto cipher_loc = ciphers->source;
+    if (cipher_loc == tls_arg_source) {
+      // `located<data>` for `tls={...}` only carries the whole record span.
+      // Clamp to a tiny span to avoid misleading multi-line highlights.
+      cipher_loc = cipher_loc.subloc(0, 1);
+    }
+    if (auto* native = static_cast<SSL_CTX*>(concrete.native_handle())) {
+      if (SSL_CTX_set_cipher_list(native, ciphers->inner.c_str()) != 1) {
+        diagnostic::error("invalid TLS cipher list")
+          .primary(cipher_loc, "`tls.ciphers`")
+          .emit(dh);
+        return caf::make_error(ec::invalid_configuration,
+                               "invalid TLS cipher list");
+      }
+    }
+  }
+  return ctx;
+}
+
+auto TlsConfig::make_folly_ssl_context(diagnostic_handler& dh,
+                                       bool tls_required) const
+  -> failure_or<std::shared_ptr<folly::SSLContext>> {
+  if (not tls.inner and not tls_required) {
+    return nullptr;
+  }
+  auto ctx = std::make_shared<folly::SSLContext>(folly::SSLContext::TLSv1_2);
+  auto skip_verify = skip_peer_verification.inner;
+  auto require_cert = tls_require_client_cert.inner;
+  // Apply minimum TLS version.
+  if (auto& min = tls_min_version) {
+    if (not min->inner.empty()) {
+      auto parsed = parse_openssl_tls_version(min->inner);
+      if (not parsed) {
+        diagnostic::error(parsed.error()).primary(*min).emit(dh);
+        return failure::promise();
+      }
+      SSL_CTX_set_min_proto_version(ctx->getSSLCtx(), *parsed);
+    }
+  }
+  auto should_verify_peer = not skip_verify or require_cert;
+  // Load CA certificate only when peer verification is enabled.
+  if (should_verify_peer and cacert) {
+    TRY(auto path, resolve_regular_file(*cacert, "cacert", dh));
+    try {
+      ctx->loadTrustedCertificates(path.c_str());
+    } catch (std::exception const& ex) {
+      diagnostic::error("failed to load CA certificate: {}", ex.what())
+        .primary(*cacert)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  // Load certificate chain.
+  if (certfile) {
+    TRY(auto path, resolve_regular_file(*certfile, "certfile", dh));
+    try {
+      ctx->loadCertificate(path.c_str());
+    } catch (std::exception const& ex) {
+      diagnostic::error("failed to load client certificate: {}", ex.what())
+        .primary(*certfile)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  // Load private key. If `keyfile` is omitted, try reading it from `certfile`.
+  if (auto& private_key_file = keyfile ? keyfile : certfile) {
+    const auto* key_name = keyfile ? "keyfile" : "certfile";
+    TRY(auto path, resolve_regular_file(*private_key_file, key_name, dh));
+    try {
+      ctx->loadPrivateKey(path.c_str());
+    } catch (std::exception const& ex) {
+      if (not keyfile and certfile) {
+        diagnostic::error("failed to load client private key: {}", ex.what())
+          .primary(*private_key_file)
+          .hint("set `tls.keyfile` or include a private key in `tls.certfile`")
+          .emit(dh);
+      } else {
+        diagnostic::error("failed to load client private key: {}", ex.what())
+          .primary(*private_key_file)
+          .emit(dh);
+      }
+      return failure::promise();
+    }
+  }
+  if (auto& ciphers = tls_ciphers) {
+    auto cipher_loc = ciphers->source;
+    if (cipher_loc == tls_arg_source) {
+      // See note in `make_caf_context`.
+      cipher_loc = cipher_loc.subloc(0, 1);
+    }
+    if (SSL_CTX_set_cipher_list(ctx->getSSLCtx(), ciphers->inner.c_str())
+        != 1) {
+      diagnostic::error("invalid TLS cipher list")
+        .primary(cipher_loc, "`tls.ciphers`")
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  // Set verification mode.
+  if (skip_verify) {
+    ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::NO_VERIFY);
+  } else {
+    ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::VERIFY);
+    if (not cacert
+        and SSL_CTX_set_default_verify_paths(ctx->getSSLCtx()) != 1) {
+      diagnostic::error("failed to enable default verify paths").emit(dh);
+      return failure::promise();
+    }
+  }
+  return ctx;
+}
+
+// -- tls_options::resolve ----------------------------------------------------
+
+auto tls_options::resolve(const caf::actor_system_config& cfg,
+                          diagnostic_handler& dh) const
+  -> failure_or<TlsConfig> {
+  TRY(validate(dh));
+  // Work on a copy so resolve() is `const` on the operator's stored options.
+  auto merged = *this;
+  merged.apply_config(cfg);
+  auto to_option =
+    [](std::optional<located<std::string>> x) -> Option<located<std::string>> {
+    if (x) {
+      return Option<located<std::string>>{std::move(*x)};
+    }
+    return None{};
+  };
+  // `TlsConfig` has a private default constructor; we are a friend, so we
+  // can construct one here. Designated initializers would require it to be
+  // an aggregate, which would defeat the gating.
+  auto out = TlsConfig{};
+  out.tls = merged.get_tls();
+  out.skip_peer_verification = merged.get_skip_peer_verification();
+  out.cacert = to_option(merged.get_cacert());
+  out.certfile = to_option(merged.get_certfile());
+  out.keyfile = to_option(merged.get_keyfile());
+  out.password = to_option(merged.get_password());
+  out.tls_min_version = to_option(merged.get_tls_min_version());
+  out.tls_ciphers = to_option(merged.get_tls_ciphers());
+  out.tls_client_ca = to_option(merged.get_tls_client_ca());
+  out.tls_require_client_cert = merged.get_tls_require_client_cert();
+  out.uses_curl_http = uses_curl_http_;
+  out.tls_arg_source = tls_ ? tls_->source : location::unknown;
+  return out;
+}
+
+auto tls_options::resolve(operator_control_plane& ctrl) const
+  -> failure_or<TlsConfig> {
+  return resolve(ctrl.self().system().config(), ctrl.diagnostics());
 }
 
 } // namespace tenzir

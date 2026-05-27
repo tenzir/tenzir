@@ -12,6 +12,7 @@
 #include "tenzir/curl.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/operator_plugin.hpp"
+#include "tenzir/option.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
@@ -41,6 +42,66 @@ auto add_tls_client_diagnostic_hints(diagnostic_builder diag, bool tls_enabled,
                                      = std::nullopt,
                                      std::optional<uint64_t> tls_port
                                      = std::nullopt) -> diagnostic_builder;
+
+class tls_options;
+
+/// Resolved, validated, ready-to-use TLS settings.
+///
+/// The only way to obtain a `TlsConfig` is via `tls_options::resolve()`, which
+/// gates construction on both `validate()` passing and a node config being
+/// available. As a result, holding a `TlsConfig` is a type-level guarantee
+/// that all TLS settings are in their final, effective form -- there is no
+/// "did you call apply_config?" question to ask.
+///
+/// All runtime TLS operations live as member functions here. The parse-time
+/// API (input collection, validation, describer integration) stays on
+/// `tls_options`.
+struct TlsConfig {
+  located<bool> tls;
+  located<bool> skip_peer_verification;
+  Option<located<std::string>> cacert;
+  Option<located<std::string>> certfile;
+  Option<located<std::string>> keyfile;
+  Option<located<std::string>> password;
+  Option<located<std::string>> tls_min_version;
+  Option<located<std::string>> tls_ciphers;
+  Option<located<std::string>> tls_client_ca;
+  located<bool> tls_require_client_cert;
+
+  /// Whether the originating `tls_options` was constructed with
+  /// `options::uses_curl_http`. Controls scheme rewriting in `update_url`.
+  bool uses_curl_http = false;
+
+  /// Source location of the originating `tls=...` argument, if any. Used to
+  /// clamp cipher-list diagnostic spans so a multi-line record literal does
+  /// not highlight unrelated code. `location::unknown` if no `tls` argument
+  /// was provided.
+  location tls_arg_source = location::unknown;
+
+  /// Applies the resolved options to a `curl::easy` object.
+  auto apply_to(curl::easy& easy, std::string_view url) const -> caf::error;
+
+  /// Updates a URL using the `tls` option (e.g. rewriting `http://` to
+  /// `https://` when TLS is on and the option was explicit).
+  [[nodiscard]] auto update_url(std::string_view url) const -> std::string;
+
+  /// Creates a CAF SSL context from the resolved options.
+  auto make_caf_context(operator_control_plane& ctrl,
+                        std::optional<caf::uri> uri = std::nullopt) const
+    -> caf::expected<caf::net::ssl::context>;
+
+  /// Creates a folly SSL context from the resolved options.
+  /// Returns nullptr if TLS is disabled and not required by the caller,
+  /// a configured context on success, or failure on error
+  /// (diagnostics emitted via dh).
+  auto make_folly_ssl_context(diagnostic_handler& dh, bool tls_required
+                                                      = false) const
+    -> failure_or<std::shared_ptr<folly::SSLContext>>;
+
+private:
+  TlsConfig() = default;
+  friend class tls_options;
+};
 
 class tls_options {
 public:
@@ -130,8 +191,23 @@ public:
   /// the top of the operator's `start()` or `operator()`. Parse-time
   /// validation, where no config exists yet, simply skips this call: the
   /// getters then return only operator-level values.
+  ///
+  /// NOTE: This is being phased out in favor of `resolve()`, which returns a
+  /// `TlsConfig` and makes the resolved state a type-level guarantee.
   auto apply_config(const caf::actor_system_config& cfg) -> void;
   auto apply_config(operator_control_plane& ctrl) -> void;
+
+  /// Validates these options, merges in node-config defaults, and returns a
+  /// resolved `TlsConfig` ready for runtime use. Diagnostics are emitted via
+  /// `dh` on validation failure.
+  ///
+  /// This is the only path to obtain a `TlsConfig`. Runtime code should call
+  /// `resolve()` exactly once -- typically at the top of the operator's
+  /// `start()` or `operator()` -- and then use the returned `TlsConfig` for
+  /// all subsequent TLS operations.
+  auto resolve(const caf::actor_system_config& cfg,
+               diagnostic_handler& dh) const -> failure_or<TlsConfig>;
+  auto resolve(operator_control_plane& ctrl) const -> failure_or<TlsConfig>;
 
   /// Updates a URL using the `tls` option.
   ///
