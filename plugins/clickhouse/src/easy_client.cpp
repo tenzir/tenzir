@@ -21,9 +21,8 @@ using namespace clickhouse;
 
 namespace tenzir::plugins::clickhouse {
 
-auto easy_client::make(arguments args, const caf::actor_system_config& cfg,
-                       diagnostic_handler& dh) -> std::shared_ptr<easy_client> {
-  args.ssl.apply_config(cfg);
+auto easy_client::make(arguments args, diagnostic_handler& dh)
+  -> std::shared_ptr<easy_client> {
   return std::make_shared<easy_client>(std::move(args), dh, ctor_token{});
 }
 

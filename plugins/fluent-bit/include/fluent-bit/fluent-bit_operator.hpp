@@ -232,10 +232,7 @@ inline auto to_flb_time(const msgpack_object& object) -> std::optional<time> {
 
 namespace {
 
-// Precondition: the caller has already merged node-config defaults into
-// `ssl` via `tls_options::apply_config()`. Within this helper we read only
-// the cached effective values from the operator.
-auto tls_to_fluentbit(const tls_options& ssl, record& properties,
+auto tls_to_fluentbit(const TlsConfig& ssl, record& properties,
                       diagnostic_handler& dh) -> failure_or<void> {
   const auto set = [&](std::string key, std::string tenzir_option_name,
                        std::string value, location loc) -> failure_or<void> {
@@ -252,18 +249,18 @@ auto tls_to_fluentbit(const tls_options& ssl, record& properties,
     }
     return {};
   };
-  auto tls = ssl.get_tls();
-  TRY(set("tls", "tls", tls.inner ? "On" : "Off", tls.source));
-  if (auto x = ssl.get_skip_peer_verification(); x.inner) {
-    TRY(set("tls.verify", "skip_peer_verification", "Off", x.source));
+  TRY(set("tls", "tls", ssl.tls.inner ? "On" : "Off", ssl.tls.source));
+  if (ssl.skip_peer_verification.inner) {
+    TRY(set("tls.verify", "skip_peer_verification", "Off",
+            ssl.skip_peer_verification.source));
   }
-  if (auto x = ssl.get_cacert()) {
+  if (auto& x = ssl.cacert) {
     TRY(set("tls.ca_file", "cacert", x->inner, x->source));
   }
-  if (auto x = ssl.get_certfile()) {
+  if (auto& x = ssl.certfile) {
     TRY(set("tls.crt_file", "certfile", x->inner, x->source));
   }
-  if (auto x = ssl.get_keyfile()) {
+  if (auto& x = ssl.keyfile) {
     TRY(set("tls.key_file", "keyfile", x->inner, x->source));
   }
   return {};
@@ -825,8 +822,11 @@ public:
   {
     co_yield {};
     auto args = operator_args_;
-    args.ssl.apply_config(ctrl);
-    if (not tls_to_fluentbit(args.ssl, args.args.inner, ctrl.diagnostics())) {
+    auto ssl = args.ssl.resolve(ctrl);
+    if (not ssl) {
+      co_return;
+    }
+    if (not tls_to_fluentbit(*ssl, args.args.inner, ctrl.diagnostics())) {
       co_return;
     }
     auto requests = std::vector<secret_request>{};
@@ -878,8 +878,11 @@ public:
   {
     co_yield {};
     auto args = operator_args_;
-    args.ssl.apply_config(ctrl);
-    if (not tls_to_fluentbit(args.ssl, args.args.inner, ctrl.diagnostics())) {
+    auto ssl = args.ssl.resolve(ctrl);
+    if (not ssl) {
+      co_return;
+    }
+    if (not tls_to_fluentbit(*ssl, args.args.inner, ctrl.diagnostics())) {
       co_return;
     }
     auto requests = std::vector<secret_request>{};
@@ -1012,8 +1015,8 @@ auto make_operator_args(FluentBitArgs args, OpCtx& ctx)
                         : tls_options{tls_options::options{
                             .tls_default = false,
                           }};
-  result.ssl.apply_config(ctx.actor_system().config());
-  TRY(tls_to_fluentbit(result.ssl, result.args.inner, ctx.dh()));
+  TRY(auto resolved, result.ssl.resolve(ctx.actor_system().config(), ctx.dh()));
+  TRY(tls_to_fluentbit(resolved, result.args.inner, ctx.dh()));
   return result;
 }
 

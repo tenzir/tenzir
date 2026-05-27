@@ -39,14 +39,13 @@ public:
     located<uint64_t> port = {9000, operator_location};
     std::string user;
     std::string password;
-    tls_options ssl;
+    // Set by the caller via `tls_options::resolve()` before invoking.
+    Option<TlsConfig> ssl;
     ast::expression table = {};
     located<enum mode> mode = located{mode::create_append, operator_location};
     std::optional<located<std::string>> primary = std::nullopt;
     location operator_location;
 
-    // Precondition: `ssl.apply_config()` was called on this `arguments`'s
-    // `ssl` before invoking, so node-config defaults are visible.
     auto make_options() const -> ::clickhouse::ClientOptions {
       auto opts
         = ::clickhouse::ClientOptions()
@@ -55,18 +54,19 @@ public:
             .SetUser(std::string{user})
             .SetPassword(std::string{password})
             .SetDefaultDatabase("");
-      if (ssl.get_tls().inner) {
+      TENZIR_ASSERT(ssl);
+      if (ssl->tls.inner) {
         auto tls_opts = ::clickhouse::ClientOptions::SSLOptions{};
-        tls_opts.SetSkipVerification(ssl.get_skip_peer_verification().inner);
+        tls_opts.SetSkipVerification(ssl->skip_peer_verification.inner);
         auto commands = std::vector<
           ::clickhouse::ClientOptions::SSLOptions::CommandAndValue>{};
-        if (auto x = ssl.get_cacert()) {
+        if (auto& x = ssl->cacert) {
           commands.emplace_back("ChainCAFile", x->inner);
         }
-        if (auto x = ssl.get_certfile()) {
+        if (auto& x = ssl->certfile) {
           commands.emplace_back("Certificate", x->inner);
         }
-        if (auto x = ssl.get_keyfile()) {
+        if (auto& x = ssl->keyfile) {
           commands.emplace_back("PrivateKey", x->inner);
         }
         tls_opts.SetConfiguration(commands);
@@ -91,8 +91,9 @@ public:
           }} {
   }
 
-  static auto make(arguments args, const caf::actor_system_config& cfg,
-                   diagnostic_handler& dh) -> std::shared_ptr<easy_client>;
+  // Precondition: `args.ssl` has been populated via `tls_options::resolve()`.
+  static auto make(arguments args, diagnostic_handler& dh)
+    -> std::shared_ptr<easy_client>;
 
   auto dh() -> diagnostic_handler& {
     return dh_;

@@ -128,7 +128,7 @@ auto apply_auth(natsOptions* options, auth_config const& auth,
                 location auth_location, diagnostic_handler& dh)
   -> failure_or<void>;
 
-auto apply_tls(natsOptions* options, tls_options const& tls,
+auto apply_tls(natsOptions* options, TlsConfig const& tls,
                diagnostic_handler& dh) -> failure_or<void>;
 
 auto make_nats_options(connection_config const& config,

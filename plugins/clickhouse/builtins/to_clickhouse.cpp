@@ -87,9 +87,12 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> try {
     auto& dh = ctrl.diagnostics();
-    auto ssl = args_.ssl;
-    ssl.apply_config(ctrl);
-    auto const tls_enabled = ssl.get_tls().inner;
+    auto ssl_opts = args_.ssl;
+    auto ssl_result = ssl_opts.resolve(ctrl);
+    if (not ssl_result) {
+      co_return;
+    }
+    auto const tls_enabled = ssl_result->tls.inner;
     auto const default_port
       = tls_enabled ? clickhouse_tls_port : clickhouse_plaintext_port;
     auto args = easy_client::arguments{
@@ -98,7 +101,7 @@ public:
                          : located<uint64_t>{default_port, location::unknown},
       .user = "",
       .password = "",
-      .ssl = ssl,
+      .ssl = std::move(*ssl_result),
       .table = args_.table,
       .mode = args_.mode,
       .primary = args_.primary,
@@ -113,8 +116,7 @@ public:
       make_secret_request("password", args_.password, args.password, dh),
     });
     co_yield std::move(x);
-    auto client = easy_client::make(args, ctrl.self().system().config(),
-                                    ctrl.diagnostics());
+    auto client = easy_client::make(args, ctrl.diagnostics());
     if (not client) {
       co_return;
     }
@@ -149,12 +151,14 @@ public:
   } catch (const panic_exception& e) {
     throw;
   } catch (const ::clickhouse::OpenSSLError& e) {
-    // Re-apply config to a fresh copy; the original `ssl` from `operator()`
-    // is out of scope by the time the catch handler runs.
-    auto ssl = args_.ssl;
-    ssl.apply_config(ctrl);
+    // The original `ssl` from `operator()` is out of scope by the time the
+    // catch handler runs; resolve a fresh `TlsConfig` here just for the
+    // diagnostic-hint TLS-enabled flag.
+    auto ssl_opts = args_.ssl;
+    auto resolved = ssl_opts.resolve(ctrl);
+    auto tls_enabled = resolved and resolved->tls.inner;
     clickhouse_openssl_error_diagnostic(e.what(), args_.operator_location,
-                                        ssl.get_tls().inner)
+                                        tls_enabled)
       .emit(ctrl.diagnostics());
     co_return;
   } catch (const std::exception& e) {
@@ -215,9 +219,13 @@ public:
       primary = {args_.primary->path().front().id.name,
                  args_.primary->get_location()};
     }
-    auto ssl = tls_options::from_optional(args_.tls);
-    ssl.apply_config(ctx.actor_system().config());
-    auto const tls_enabled = ssl.get_tls().inner;
+    auto ssl_opts = tls_options::from_optional(args_.tls);
+    auto ssl = ssl_opts.resolve(ctx.actor_system().config(), dh);
+    if (not ssl) {
+      state_->done.store(true, std::memory_order_release);
+      co_return;
+    }
+    auto const tls_enabled = ssl->tls.inner;
     auto const default_port
       = tls_enabled ? clickhouse_tls_port : clickhouse_plaintext_port;
     auto client_args = easy_client::arguments{
@@ -226,7 +234,7 @@ public:
                          : located<uint64_t>{default_port, location::unknown},
       .user = "",     // resolved as secret below.
       .password = "", // resolved as secret below.
-      .ssl = std::move(ssl),
+      .ssl = std::move(*ssl),
       .table = args_.table,
       .mode = {*mode_val, args_.mode.source},
       .primary = std::move(primary),
@@ -254,8 +262,7 @@ public:
     for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
       auto client = std::shared_ptr<easy_client>{};
       try {
-        client
-          = easy_client::make(client_args, ctx.actor_system().config(), dh);
+        client = easy_client::make(client_args, dh);
       } catch (const panic_exception&) {
         throw;
       } catch (const ::clickhouse::OpenSSLError& e) {
