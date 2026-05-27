@@ -277,9 +277,9 @@ auto resolve_http_secrets(OpCtx& ctx, FromHttpArgs const& args,
     diagnostic::error("`url` must not be empty").primary(args.url).emit(ctx);
     co_return failure::promise();
   }
-  CO_TRY(auto tls_enabled, http::normalize_url_and_tls(
-                             args.tls, resolved_url, args.url.source, ctx,
-                             ctx.actor_system().config()));
+  CO_TRY(auto tls_enabled,
+         http::normalize_url_and_tls(args.tls, resolved_url, args.url.source,
+                                     ctx, ctx.actor_system().config()));
   co_return tls_enabled;
 }
 
@@ -1128,8 +1128,12 @@ private:
     if (parsed_url.isSecure() and not fetch_config_.tls_context) {
       auto tls_opts
         = tls_options::from_optional(args_.tls, {.is_server = false});
-      tls_opts.apply_config(ctx.actor_system().config());
-      auto result = tls_opts.make_folly_ssl_context(ctx, true);
+      auto tls = tls_opts.resolve(ctx.actor_system().config(), ctx);
+      if (tls.is_error()) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+      auto result = tls->make_folly_ssl_context(ctx, true);
       if (result.is_success()) {
         fetch_config_.tls_context = std::move(*result);
       } else {
