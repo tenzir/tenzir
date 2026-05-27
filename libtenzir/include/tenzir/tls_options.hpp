@@ -164,45 +164,6 @@ public:
   auto validate(std::string_view url, location url_loc,
                 diagnostic_handler&) const -> failure_or<void>;
 
-  /// Applies the options to a `curl::easy` object.
-  ///
-  /// Precondition: if a node config is available, `apply_config()` has been
-  /// called on this `tls_options` first so that the cached members reflect
-  /// the effective values.
-  auto apply_to(curl::easy& easy, std::string_view url) const -> caf::error;
-
-  /// Precondition: `apply_config()` has been called on this `tls_options` if a
-  /// node config is available.
-  auto make_caf_context(operator_control_plane& ctrl,
-                        std::optional<caf::uri> uri = std::nullopt) const
-    -> caf::expected<caf::net::ssl::context>;
-
-  /// Creates a folly SSL context from the TLS options.
-  /// Returns nullptr if TLS is disabled and not required by the caller,
-  /// a configured context on success, or failure on error
-  /// (diagnostics emitted via dh).
-  ///
-  /// Precondition: `apply_config()` has been called on this `tls_options` if a
-  /// node config is available.
-  auto make_folly_ssl_context(diagnostic_handler& dh, bool tls_required
-                                                      = false) const
-    -> failure_or<std::shared_ptr<folly::SSLContext>>;
-
-  /// Merges `tenzir.tls.*` (and legacy `tenzir.cacert`) node-config defaults
-  /// into `*this`. After this call, every getter returns the effective value.
-  /// Safe to call more than once; later calls do not overwrite values that
-  /// were already set on the operator.
-  ///
-  /// Call this once where a config first becomes available -- typically at
-  /// the top of the operator's `start()` or `operator()`. Parse-time
-  /// validation, where no config exists yet, simply skips this call: the
-  /// getters then return only operator-level values.
-  ///
-  /// NOTE: This is being phased out in favor of `resolve()`, which returns a
-  /// `TlsConfig` and makes the resolved state a type-level guarantee.
-  auto apply_config(const caf::actor_system_config& cfg) -> void;
-  auto apply_config(operator_control_plane& ctrl) -> void;
-
   /// Validates these options, merges in node-config defaults, and returns a
   /// resolved `TlsConfig` ready for runtime use. Diagnostics are emitted via
   /// `dh` on validation failure.
@@ -223,26 +184,14 @@ public:
                const caf::actor_system_config& cfg,
                diagnostic_handler& dh) const -> failure_or<TlsConfig>;
 
-  /// Updates a URL using the `tls` option.
-  ///
-  /// Precondition: `apply_config()` has been called on this `tls_options` if a
-  /// node config is available.
-  [[nodiscard]] auto update_url(std::string_view url) const -> std::string;
-
   // -- getters ---------------------------------------------------------------
   //
-  // The getters return the effective value, considering (in order):
-  //   1. The `tls` record entry on the operator.
-  //   2. The legacy top-level option (e.g. `cacert=...`), if any.
-  //   3. Node-config defaults previously merged in via `apply_config()`.
-  //
-  // At parse/describe time, callers simply skip step 3 by not calling
-  // `apply_config()`; the getter then sees only operator-level values, which
-  // is exactly what parse-time validation needs.
-  //
-  // At runtime, call `apply_config()` once -- typically at the top of the
-  // operator's `start()` or `operator()` -- so that all later getter calls
-  // see node-config defaults.
+  // These getters return what is currently set on the operator (the `tls`
+  // record entry, or the legacy top-level options). They do NOT consult the
+  // node config -- that is `resolve()`'s job. The getters are intended for
+  // parse-time validation (inside `validate()` and describer validators);
+  // runtime code should obtain a `TlsConfig` via `resolve()` and read from
+  // its fields instead.
 
   auto get_tls() const -> located<bool>;
   auto get_skip_peer_verification() const -> located<bool>;
@@ -261,6 +210,12 @@ private:
   auto get_record_string(std::string_view key) const
     -> std::optional<located<std::string>>;
   auto validate_tls_record(diagnostic_handler& dh) const -> failure_or<void>;
+
+  // Merges `tenzir.tls.*` (and legacy `tenzir.cacert`) node-config defaults
+  // into the cached members. Used internally by `resolve()`; not exposed
+  // publicly because the only safe way to consume resolved settings is via
+  // a `TlsConfig`.
+  auto apply_config(const caf::actor_system_config& cfg) -> void;
 
   bool uses_curl_http_ = false;
   bool is_server_ = false;

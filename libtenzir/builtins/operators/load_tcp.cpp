@@ -930,7 +930,7 @@ auto make_connection_manager(
   self->state().node = node;
   self->state().pipeline_id = std::move(pipeline_id);
   if (auto resolved = self->state().args.ssl.resolve(self->system().config(),
-                                                    self->state().diagnostics);
+                                                     self->state().diagnostics);
       resolved) {
     self->state().tls = std::move(*resolved);
   } else {

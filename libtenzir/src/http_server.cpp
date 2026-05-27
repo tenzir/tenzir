@@ -149,13 +149,14 @@ auto parse_endpoint(std::string_view endpoint, location loc,
 }
 
 auto is_tls_enabled(Option<located<data>> const& tls,
-                    const caf::actor_system_config& cfg) -> bool {
+                    const caf::actor_system_config& /*cfg*/) -> bool {
   if (not tls) {
     return false;
   }
+  // The TLS arg is explicitly set, so consulting node config would not
+  // change the result; reading the explicit value is enough.
   auto tls_opts = tls_options::from_optional(tls, {.tls_default = false,
                                                    .is_server = true});
-  tls_opts.apply_config(cfg);
   return tls_opts.get_tls().inner;
 }
 

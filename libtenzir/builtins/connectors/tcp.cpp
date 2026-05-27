@@ -724,11 +724,9 @@ public:
       },
     });
     // Query TLS config from node configuration
-    auto tcp_bridge
-      = ctrl.self().spawn<caf::linked>(caf::actor_from_state<class tcp_bridge>,
-                                       std::move(tcp_metrics),
-                                       ctrl.shared_diagnostics(), args,
-                                       std::move(tls));
+    auto tcp_bridge = ctrl.self().spawn<caf::linked>(
+      caf::actor_from_state<class tcp_bridge>, std::move(tcp_metrics),
+      ctrl.shared_diagnostics(), args, std::move(tls));
     if (not args_.listen) {
       ctrl.self()
         .mail(atom::connect_v)
