@@ -196,6 +196,7 @@ GO
 DROP TABLE IF EXISTS dbo.types;
 DROP TABLE IF EXISTS dbo.full_types;
 DROP TABLE IF EXISTS dbo.large_values;
+DROP TABLE IF EXISTS dbo.many_rows;
 DROP TABLE IF EXISTS dbo.users;
 GO
 CREATE TABLE dbo.users (
@@ -281,6 +282,17 @@ CREATE TABLE dbo.large_values (
 );
 INSERT INTO dbo.large_values VALUES
   (1, REPLICATE(CAST('x' AS VARCHAR(MAX)), 5000));
+CREATE TABLE dbo.many_rows (
+  id INT NOT NULL PRIMARY KEY
+);
+WITH numbers AS (
+  SELECT 1 AS id
+  UNION ALL
+  SELECT id + 1 FROM numbers WHERE id < 10001
+)
+INSERT INTO dbo.many_rows
+SELECT id FROM numbers
+OPTION (MAXRECURSION 0);
 """
     logger.info("Creating Microsoft SQL Server test data")
     _exec_microsoft_sql(
