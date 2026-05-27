@@ -10,6 +10,7 @@
 
 #include "tenzir/async/executor.hpp"
 #include "tenzir/async/future_util.hpp"
+#include "tenzir/async/mail.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/compile_ctx.hpp"
@@ -19,7 +20,9 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/passive_partition.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/query_context.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/store.hpp"
 #include "tenzir/substitute_ctx.hpp"
@@ -194,6 +197,17 @@ auto live_budget_used(const memory_budget& budget)
   return std::pair{used, current->bytes};
 }
 
+auto collect_table_slices(caf::event_based_actor*,
+                          std::shared_ptr<std::vector<table_slice>> slices)
+  -> caf::behavior {
+  return {
+    [slices = std::move(slices)](table_slice slice) -> caf::result<void> {
+      slices->push_back(std::move(slice));
+      return {};
+    },
+  };
+}
+
 void store_or_fulfill(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
@@ -287,6 +301,7 @@ struct partition_source_state {
   caf::error error = {};
   tenzir::time min_import_time = tenzir::time::max();
   tenzir::time max_import_time = tenzir::time::min();
+  std::vector<partition_info> selected_partitions = {};
   std::vector<partition_info> loaded_partitions = {};
   bool input_complete = true;
 };
@@ -296,13 +311,16 @@ public:
   partition_loader(std::vector<partition_info> partitions,
                    std::string partition_path_template,
                    std::filesystem::path archive_dir,
+                   filesystem_actor filesystem,
                    std::shared_ptr<partition_source_state> state)
     : partitions_{std::move(partitions)},
       partition_path_template_{std::move(partition_path_template)},
       archive_dir_{std::move(archive_dir)},
+      filesystem_{std::move(filesystem)},
       memory_budget_{make_memory_budget()},
       state_{std::move(state)} {
     TENZIR_ASSERT(state_);
+    state_->selected_partitions = partitions_;
   }
 
   auto feed(Push<OperatorMsg<table_slice>>& push_input) const -> Task<void> {
@@ -334,7 +352,13 @@ public:
           break;
         }
       }
-      for (auto&& slice : load_partition(partition)) {
+      auto maybe_slices = co_await load_partition(partition);
+      if (not maybe_slices) {
+        fail(std::move(maybe_slices.error()));
+        co_await push_input(OperatorMsg<table_slice>{Signal{EndOfData{}}});
+        co_return;
+      }
+      for (auto&& slice : *maybe_slices) {
         const auto import_time = slice.import_time();
         state_->min_import_time
           = std::min(state_->min_import_time, import_time);
@@ -360,85 +384,104 @@ private:
   }
 
   auto load_partition(const partition_info& partition) const
-    -> generator<table_slice> {
+    -> Task<caf::expected<std::vector<table_slice>>> {
     const auto filename = fmt::format(
       TENZIR_FMT_RUNTIME(partition_path_template_), partition.uuid);
     auto partition_path = std::filesystem::path{filename};
     auto partition_chunk = chunk::mmap(partition_path);
     if (not partition_chunk) {
-      fail(diagnostic::error(partition_chunk.error())
-             .note("failed to mmap partition {} at {}", partition.uuid,
-                   partition_path)
-             .to_error());
-      co_return;
+      co_return diagnostic::error(partition_chunk.error())
+        .note("failed to mmap partition {} at {}", partition.uuid,
+              partition_path)
+        .to_error();
     }
     auto partition_state = passive_partition_state{};
     if (auto err = partition_state.initialize_from_chunk(*partition_chunk);
         err.valid()) {
-      fail(diagnostic::error(std::move(err))
-             .note("failed to load partition {}", partition.uuid)
-             .to_error());
-      co_return;
+      co_return diagnostic::error(std::move(err))
+        .note("failed to load partition {}", partition.uuid)
+        .to_error();
     }
     if (partition_state.id != partition.uuid) {
-      fail(caf::make_error(ec::format_error,
-                           "unexpected ID for passive partition: "
-                           "expected {}, got {}",
-                           partition.uuid, partition_state.id));
-      co_return;
+      co_return caf::make_error(ec::format_error,
+                                "unexpected ID for passive partition: "
+                                "expected {}, got {}",
+                                partition.uuid, partition_state.id);
     }
-    auto const* plugin = plugins::find<store_plugin>(partition_state.store_id);
+    if (auto const* plugin
+        = plugins::find<store_plugin>(partition_state.store_id)) {
+      if (partition_state.store_header.size() != uuid::num_bytes) {
+        co_return caf::make_error(ec::format_error,
+                                  "unexpected store header size for "
+                                  "partition {}: expected {}, got {}",
+                                  partition.uuid, uuid::num_bytes,
+                                  partition_state.store_header.size());
+      }
+      auto store = plugin->make_passive_store();
+      if (not store) {
+        co_return std::move(store.error());
+      }
+      const auto store_uuid
+        = uuid{partition_state.store_header.subspan<0, uuid::num_bytes>()};
+      auto store_path
+        = archive_dir_
+          / fmt::format("{}.{}", store_uuid, partition_state.store_id);
+      if (store_path.extension() == ".feather") {
+        TENZIR_DEBUG("{} loads feather store for partition {} from {}",
+                     "partition-transformer", partition.uuid, store_path);
+      }
+      auto store_chunk = chunk::mmap(store_path);
+      if (not store_chunk) {
+        co_return diagnostic::error(store_chunk.error())
+          .note("failed to mmap store for partition {} at {}", partition.uuid,
+                store_path)
+          .to_error();
+      }
+      if (auto err = (*store)->load(std::move(*store_chunk)); err.valid()) {
+        co_return diagnostic::error(std::move(err))
+          .note("failed to load store for partition {}", partition.uuid)
+          .to_error();
+      }
+      auto result = std::vector<table_slice>{};
+      for (auto&& slice : (*store)->slices()) {
+        result.push_back(std::move(slice));
+      }
+      co_return result;
+    }
+    auto const* plugin
+      = plugins::find<store_actor_plugin>(partition_state.store_id);
     if (not plugin) {
-      fail(caf::make_error(ec::format_error,
-                           "encountered unhandled store backend "
-                           "'{}' for partition {}",
-                           partition_state.store_id, partition.uuid));
-      co_return;
+      co_return caf::make_error(ec::format_error,
+                                "encountered unhandled store backend "
+                                "'{}' for partition {}",
+                                partition_state.store_id, partition.uuid);
     }
-    if (partition_state.store_header.size() != uuid::num_bytes) {
-      fail(caf::make_error(ec::format_error,
-                           "unexpected store header size for "
-                           "partition {}: expected {}, got {}",
-                           partition.uuid, uuid::num_bytes,
-                           partition_state.store_header.size()));
-      co_return;
-    }
-    auto store = plugin->make_passive_store();
+    auto store = plugin->make_store(filesystem_, partition_state.store_header);
     if (not store) {
-      fail(std::move(store.error()));
-      co_return;
+      co_return std::move(store.error());
     }
-    const auto store_uuid
-      = uuid{partition_state.store_header.subspan<0, uuid::num_bytes>()};
-    auto store_path
-      = archive_dir_
-        / fmt::format("{}.{}", store_uuid, partition_state.store_id);
-    if (store_path.extension() == ".feather") {
-      TENZIR_DEBUG("{} loads feather store for partition {} from {}",
-                   "partition-transformer", partition.uuid, store_path);
+    auto result = std::make_shared<std::vector<table_slice>>();
+    auto collector
+      = filesystem_->home_system().spawn(collect_table_slices, result);
+    auto query = query_context::make_extract(
+      "partition-transformer",
+      caf::actor_cast<receiver_actor<table_slice>>(collector),
+      trivially_true_expression());
+    query.id = uuid::random();
+    auto num_hits
+      = co_await async_mail(atom::query_v, std::move(query)).request(*store);
+    caf::anon_send_exit(collector, caf::exit_reason::user_shutdown);
+    caf::anon_send_exit(*store, caf::exit_reason::user_shutdown);
+    if (not num_hits) {
+      co_return std::move(num_hits.error());
     }
-    auto store_chunk = chunk::mmap(store_path);
-    if (not store_chunk) {
-      fail(diagnostic::error(store_chunk.error())
-             .note("failed to mmap store for partition {} at {}",
-                   partition.uuid, store_path)
-             .to_error());
-      co_return;
-    }
-    if (auto err = (*store)->load(std::move(*store_chunk)); err.valid()) {
-      fail(diagnostic::error(std::move(err))
-             .note("failed to load store for partition {}", partition.uuid)
-             .to_error());
-      co_return;
-    }
-    for (auto&& slice : (*store)->slices()) {
-      co_yield std::move(slice);
-    }
+    co_return std::move(*result);
   }
 
   std::vector<partition_info> partitions_;
   std::string partition_path_template_;
   std::filesystem::path archive_dir_;
+  filesystem_actor filesystem_;
   std::optional<memory_budget> memory_budget_;
   std::shared_ptr<partition_source_state> state_;
 };
@@ -779,6 +822,7 @@ auto partition_transformer(
               std::move(input_partitions),
               std::move(input_partition_path_template),
               std::move(archive_dir),
+              self->state().fs,
               source_state,
             };
             auto feed_input
@@ -874,7 +918,9 @@ auto partition_transformer(
             self->state().min_import_time = source_state->min_import_time;
             self->state().max_import_time = source_state->max_import_time;
             self->state().transformed_input_partitions
-              = std::move(source_state->loaded_partitions);
+              = source_state->input_complete
+                  ? std::move(source_state->selected_partitions)
+                  : std::move(source_state->loaded_partitions);
             self->state().input_complete = source_state->input_complete;
             finish_transform();
           });

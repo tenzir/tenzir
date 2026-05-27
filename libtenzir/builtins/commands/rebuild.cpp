@@ -556,11 +556,11 @@ struct rebuilder_state {
     auto current_run_is_full = false;
     auto current_run_budget = rebuild_byte_budget();
     if (current_run_budget.bytes == 0) {
-      TENZIR_VERBOSE("{} skips rebuild work because no memory budget is "
-                     "available (available: {} from {})",
-                     *self, format_bytes(current_run_budget.available.bytes),
-                     current_run_budget.available.source);
-      return {};
+      return caf::make_error(ec::out_of_memory,
+                             "rebuild has no memory budget available "
+                             "({} available from {})",
+                             format_bytes(current_run_budget.available.bytes),
+                             current_run_budget.available.source);
     }
     // Take the first partition and collect as many of the same
     // type as possible to create new paritions. The approach used may
