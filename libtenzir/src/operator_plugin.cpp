@@ -17,7 +17,9 @@
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
 
+#include <algorithm>
 #include <map>
+#include <ranges>
 
 namespace tenzir::_::operator_plugin {
 
@@ -81,8 +83,21 @@ private:
 
 namespace {
 
+auto is_hidden_argument(std::string_view name) -> bool {
+  return name.starts_with('_');
+}
+
+auto is_hidden_argument(const Named& named) -> bool {
+  return std::ranges::all_of(named.names, [](const auto& name) {
+    return is_hidden_argument(name);
+  });
+}
+
 auto display_names(const Named& named) -> std::string {
-  return fmt::format("{}", fmt::join(named.names, "|"));
+  auto names = named.names | std::views::filter([](const auto& name) {
+                 return not is_hidden_argument(name);
+               });
+  return fmt::format("{}", fmt::join(names, "|"));
 }
 
 auto primary_name(const Named& named) -> std::string_view {
@@ -95,6 +110,8 @@ auto setter_to_type_string(const AnySetter& setter) -> std::string {
     setter,
     []<class T>(const Setter<located<T>>&) -> std::string {
       if constexpr (std::same_as<T, std::string>) {
+        return "string";
+      } else if constexpr (std::same_as<T, secret>) {
         return "string";
       } else if constexpr (std::same_as<T, int64_t>
                            or std::same_as<T, uint64_t>) {
@@ -129,6 +146,9 @@ auto get_usage(const Description& desc) -> std::string {
   auto in_brackets = false;
   // Print positional arguments.
   for (auto [idx, positional] : detail::enumerate(desc.positional)) {
+    if (is_hidden_argument(positional.name)) {
+      continue;
+    }
     auto is_optional = desc.first_optional and idx >= *desc.first_optional;
     if (std::exchange(has_previous, true)) {
       result += ", ";
@@ -149,6 +169,9 @@ auto get_usage(const Description& desc) -> std::string {
     if (not named.required) {
       continue;
     }
+    if (is_hidden_argument(named)) {
+      continue;
+    }
     if (in_brackets) {
       result += ']';
       in_brackets = false;
@@ -166,6 +189,9 @@ auto get_usage(const Description& desc) -> std::string {
   // Print optional named arguments.
   for (const auto& named : desc.named) {
     if (named.required) {
+      continue;
+    }
+    if (is_hidden_argument(named)) {
       continue;
     }
     if (std::exchange(has_previous, true)) {
