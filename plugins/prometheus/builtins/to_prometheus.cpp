@@ -10,6 +10,7 @@
 #include "prometheus/remote.pb.h"
 
 #include <tenzir/arc.hpp>
+#include <tenzir/async/notify.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -26,8 +27,6 @@
 #include <tenzir/version.hpp>
 
 #include <arrow/util/compression.h>
-#include <folly/coro/BoundedQueue.h>
-#include <folly/coro/UnboundedQueue.h>
 
 #include <algorithm>
 #include <array>
@@ -440,7 +439,7 @@ auto add_symbol(std::vector<std::string>& symbols,
 
 auto serialize_v1(std::vector<Series> series) -> std::string {
   auto request = ::prometheus::WriteRequest{};
-  auto metadata_seen = std::set<std::string>{};
+  auto metadata_by_family = std::map<std::string, Metadata>{};
   for (auto& entry : series) {
     auto* ts = request.add_timeseries();
     for (auto const& [name, value] : entry.labels) {
@@ -460,13 +459,18 @@ auto serialize_v1(std::vector<Series> series) -> std::string {
     TENZIR_ASSERT(metric_name != entry.labels.end());
     auto family = entry.metadata.family.empty() ? metric_name->second
                                                 : entry.metadata.family;
-    if (has_metadata(entry.metadata) and metadata_seen.insert(family).second) {
-      auto* metadata = request.add_metadata();
-      metadata->set_type(v1_metric_type(entry.metadata.type));
-      metadata->set_metric_family_name(family);
-      metadata->set_help(entry.metadata.help);
-      metadata->set_unit(entry.metadata.unit);
+    if (has_metadata(entry.metadata)) {
+      auto metadata = std::move(entry.metadata);
+      metadata.family = family;
+      merge_metadata(metadata_by_family[family], std::move(metadata));
     }
+  }
+  for (auto& [family, metadata] : metadata_by_family) {
+    auto* out = request.add_metadata();
+    out->set_type(v1_metric_type(metadata.type));
+    out->set_metric_family_name(family);
+    out->set_help(metadata.help);
+    out->set_unit(metadata.unit);
   }
   return request.SerializeAsString();
 }
@@ -489,11 +493,9 @@ auto serialize_v2(std::vector<Series> series) -> std::string {
         out->set_start_timestamp(sample.start_timestamp_ms);
       }
     }
-    if (has_metadata(entry.metadata)) {
+    if (entry.metadata.type != MetricType::unknown) {
       auto* metadata = ts->mutable_metadata();
-      if (entry.metadata.type != MetricType::unknown) {
-        metadata->set_type(v2_metric_type(entry.metadata.type));
-      }
+      metadata->set_type(v2_metric_type(entry.metadata.type));
       if (not entry.metadata.help.empty()) {
         metadata->set_help_ref(
           add_symbol(symbols, symbol_refs, entry.metadata.help));
@@ -584,18 +586,6 @@ public:
     if (args_.protobuf_message.inner == v2_protobuf_message) {
       protocol_ = Protocol::v2;
     }
-    ctx.spawn_task([frontier_queue = flush_frontier_queue_,
-                    tick_queue = flush_tick_queue_]() mutable -> Task<void> {
-      auto deadline = co_await frontier_queue->dequeue();
-      while (true) {
-        while (auto next_deadline = frontier_queue->try_dequeue()) {
-          deadline = *next_deadline;
-        }
-        co_await sleep_until(deadline);
-        co_await tick_queue->enqueue(TimerTick{deadline});
-        deadline = co_await frontier_queue->dequeue();
-      }
-    });
     if (auto result = co_await resolve_secrets(ctx, args_, url_, headers_);
         result.is_error()) {
       done_ = true;
@@ -658,13 +648,18 @@ public:
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    co_return co_await flush_tick_queue_->dequeue();
+    if (not next_flush_) {
+      co_await flush_ready_->wait();
+    }
+    if (next_flush_) {
+      co_await sleep_until(*next_flush_);
+    }
+    co_return {};
   }
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    auto* tick = result.try_as<TimerTick>();
-    TENZIR_ASSERT(tick);
-    if (next_flush_ and tick->deadline >= *next_flush_) {
+    TENZIR_UNUSED(result);
+    if (next_flush_ and std::chrono::steady_clock::now() >= *next_flush_) {
       co_await send_request(ctx);
       next_flush_ = None{};
     }
@@ -698,14 +693,6 @@ private:
     std::vector<Sample> samples;
     Metadata metadata;
   };
-
-  struct TimerTick {
-    std::chrono::steady_clock::time_point deadline;
-  };
-
-  using FlushFrontierQueue
-    = folly::coro::UnboundedQueue<std::chrono::steady_clock::time_point>;
-  using FlushTickQueue = folly::coro::BoundedQueue<TimerTick>;
 
   auto make_sample(int64_t row, multi_series const& names,
                    multi_series const& values, multi_series const& timestamps,
@@ -932,7 +919,7 @@ private:
 
   auto arm_flush_timer() -> void {
     next_flush_ = std::chrono::steady_clock::now() + args_.flush_interval.inner;
-    flush_frontier_queue_->enqueue(*next_flush_);
+    flush_ready_->notify_one();
   }
 
   auto send_request(OpCtx& ctx) -> Task<void> {
@@ -1049,8 +1036,7 @@ private:
   MetricsCounter bytes_write_counter_;
   MetricsCounter events_write_counter_;
   Option<std::chrono::steady_clock::time_point> next_flush_;
-  Arc<FlushFrontierQueue> flush_frontier_queue_{std::in_place};
-  mutable Arc<FlushTickQueue> flush_tick_queue_{std::in_place, 1};
+  mutable Arc<Notify> flush_ready_{std::in_place};
 };
 
 class ToPrometheusPlugin final : public OperatorPlugin {

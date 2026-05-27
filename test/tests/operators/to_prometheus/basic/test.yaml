@@ -175,4 +175,36 @@ assertions:
                   - timestamp: 1778839217000
                     value: 13.0
             version: 0.1.0
+        12_v1_merges_family_metadata.tql:
+          - content_type: application/x-protobuf
+            metadata:
+              - family: v1_family_merge
+                help: Family help
+                type: 2
+                unit: widgets
+            timeseries:
+              - labels:
+                  __name__: v1_family_merge
+                  series: a-partial
+                samples:
+                  - timestamp: 1778839218000
+                    value: 14.0
+              - labels:
+                  __name__: v1_family_merge
+                  series: b-complete
+                samples:
+                  - timestamp: 1778839219000
+                    value: 15.0
+            version: 0.1.0
+        13_v2_metadata_requires_type.tql:
+          - content_type: application/x-protobuf;proto=io.prometheus.write.v2.Request
+            symbols: ["", __name__, v2_metadata_needs_type]
+            timeseries:
+              - labels:
+                  __name__: v2_metadata_needs_type
+                metadata: {}
+                samples:
+                  - timestamp: 1778839220000
+                    value: 16.0
+            version: 2.0.0
 timeout: 60
