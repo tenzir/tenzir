@@ -117,11 +117,12 @@ public:
   [[maybe_unused]] static constexpr auto name = "tcp-bridge";
 
   tcp_bridge(tcp_bridge_actor::pointer self, metric_handler mh,
-             shared_diagnostic_handler dh, saver_args args)
+             shared_diagnostic_handler dh, saver_args args, TlsConfig tls)
     : self_{self},
       metrics_{.metric_handler = std::move(mh)},
       diagnostic_handler_{std::move(dh)},
-      args_{std::move(args)} {
+      args_{std::move(args)},
+      tls_{std::move(tls)} {
     socket_.emplace(*io_ctx_);
     worker_ = std::thread([io_ctx = io_ctx_]() {
       io_ctx->run();
@@ -163,34 +164,22 @@ private:
                                          *self_));
     }
 
-    // Store connection parameters for retry attempts
-    auto cacert = args_.ssl.get_cacert()
-                    .value_or(located{std::string{}, location::unknown})
-                    .inner;
-    auto certfile = args_.ssl.get_certfile()
-                      .value_or(located{std::string{}, location::unknown})
-                      .inner;
-    auto keyfile = args_.ssl.get_keyfile()
-                     .value_or(located{std::string{}, location::unknown})
-                     .inner;
-    auto tls_min_version
-      = args_.ssl.get_tls_min_version()
-          .value_or(located{std::string{}, location::unknown})
-          .inner;
-    auto tls_ciphers = args_.ssl.get_tls_ciphers()
-                         .value_or(located{std::string{}, location::unknown})
-                         .inner;
+    // Store connection parameters for retry attempts. `tls_` was populated
+    // by the constructor.
+    TENZIR_ASSERT(tls_);
+    auto str_or_empty = [](Option<located<std::string>> const& opt) {
+      return opt ? opt->inner : std::string{};
+    };
     connect_params_ = {
-      .tls = args_.ssl.get_tls().inner,
-      .cacert = std::move(cacert),
-      .certfile = std::move(certfile),
-      .keyfile = std::move(keyfile),
-      .skip_peer_verification
-      = args_.ssl.get_skip_peer_verification().inner,
+      .tls = tls_->tls.inner,
+      .cacert = str_or_empty(tls_->cacert),
+      .certfile = str_or_empty(tls_->certfile),
+      .keyfile = str_or_empty(tls_->keyfile),
+      .skip_peer_verification = tls_->skip_peer_verification.inner,
       .hostname = args_.hostname,
       .service = args_.service,
-      .tls_min_version = std::move(tls_min_version),
-      .tls_ciphers = std::move(tls_ciphers),
+      .tls_min_version = str_or_empty(tls_->tls_min_version),
+      .tls_ciphers = str_or_empty(tls_->tls_ciphers),
     };
     current_retry_attempt_ = 0;
     is_connected_ = false;
@@ -520,23 +509,15 @@ public:
             return;
           }
           socket_.emplace(std::move(peer));
-          auto cacert = args_.ssl.get_cacert()
-                          .value_or(located{std::string{}, location::unknown})
-                          .inner;
-          auto certfile = args_.ssl.get_certfile()
-                            .value_or(located{std::string{}, location::unknown})
-                            .inner;
-          auto keyfile = args_.ssl.get_keyfile()
-                           .value_or(located{std::string{}, location::unknown})
-                           .inner;
-          auto tls_min_version
-            = args_.ssl.get_tls_min_version()
-                .value_or(located{std::string{}, location::unknown})
-                .inner;
-          auto tls_ciphers
-            = args_.ssl.get_tls_ciphers()
-                .value_or(located{std::string{}, location::unknown})
-                .inner;
+          TENZIR_ASSERT(tls_);
+          auto str_or_empty = [](Option<located<std::string>> const& opt) {
+            return opt ? opt->inner : std::string{};
+          };
+          auto cacert = str_or_empty(tls_->cacert);
+          auto certfile = str_or_empty(tls_->certfile);
+          auto keyfile = str_or_empty(tls_->keyfile);
+          auto tls_min_version = str_or_empty(tls_->tls_min_version);
+          auto tls_ciphers = str_or_empty(tls_->tls_ciphers);
           if (not certfile.empty()) {
             ssl_ctx_.emplace(boost::asio::ssl::context::tls_server);
 
@@ -677,6 +658,9 @@ public:
   bool stopped = false;
   shared_diagnostic_handler diagnostic_handler_;
   saver_args args_ = {};
+  // Always populated by the constructor; the `Option` is here only because
+  // `TlsConfig` is not default-constructible from outside `tls_options`.
+  Option<TlsConfig> tls_;
 };
 
 class save_tcp_operator final : public crtp_operator<save_tcp_operator> {
@@ -690,13 +674,17 @@ public:
   operator()(generator<chunk_ptr> bytes, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     auto args = args_;
-    args.ssl.apply_config(ctrl);
-    if (args.ssl.get_tls().inner and args_.listen) {
+    auto tls_result = args.ssl.resolve(ctrl);
+    if (not tls_result) {
+      co_return;
+    }
+    auto tls = std::move(*tls_result);
+    if (tls.tls.inner and args_.listen) {
       // Verify that the files actually exist and are readable.
       // Ideally we'd also like to verify that the files contain valid
       // key material, but there's no straightforward API for this in
       // OpenSSL.
-      auto keyfile_name = args.ssl.get_keyfile();
+      auto& keyfile_name = tls.keyfile;
       if (not keyfile_name) {
         diagnostic::error("no keyfile configured, but TLS enabled")
           .emit(ctrl.diagnostics());
@@ -710,7 +698,7 @@ public:
         co_return;
       }
       std::fclose(keyfile);
-      auto certfile_name = args.ssl.get_keyfile();
+      auto& certfile_name = tls.keyfile;
       if (not certfile_name) {
         diagnostic::error("no certfile configured, but TLS enabled")
           .emit(ctrl.diagnostics());
@@ -739,7 +727,8 @@ public:
     auto tcp_bridge
       = ctrl.self().spawn<caf::linked>(caf::actor_from_state<class tcp_bridge>,
                                        std::move(tcp_metrics),
-                                       ctrl.shared_diagnostics(), args);
+                                       ctrl.shared_diagnostics(), args,
+                                       std::move(tls));
     if (not args_.listen) {
       ctrl.self()
         .mail(atom::connect_v)

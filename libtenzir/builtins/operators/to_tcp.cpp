@@ -103,15 +103,20 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     if (tls_) {
-      tls_->apply_config(ctx.actor_system().config());
-    }
-    if (is_tls_enabled()) {
-      auto context = tls_->make_folly_ssl_context(ctx);
-      if (not context) {
+      auto resolved = tls_->resolve(ctx.actor_system().config(), ctx);
+      if (not resolved) {
         finish();
         co_return;
       }
-      tls_context_ = std::move(*context);
+      tls_enabled_ = resolved->tls.inner;
+      if (tls_enabled_) {
+        auto context = resolved->make_folly_ssl_context(ctx);
+        if (not context) {
+          finish();
+          co_return;
+        }
+        tls_context_ = std::move(*context);
+      }
     }
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
@@ -333,9 +338,8 @@ private:
     close_current_transport();
   }
 
-  auto is_tls_enabled() -> bool {
-    // Precondition: `tls_->apply_config()` was called from `start()`.
-    return tls_ and tls_->get_tls().inner;
+  auto is_tls_enabled() const -> bool {
+    return tls_enabled_;
   }
 
   ToTcpArgs args_;
@@ -343,6 +347,7 @@ private:
   folly::SocketAddress address_;
   std::string host_;
   Option<tls_options> tls_;
+  bool tls_enabled_ = false;
   std::shared_ptr<folly::SSLContext> tls_context_;
   folly::EventBase* evb_ = nullptr;
   mutable Box<MessageQueue> message_queue_{

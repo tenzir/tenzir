@@ -326,7 +326,6 @@ public:
     -> generator<std::monostate> {
     auto& dh = ctrl.diagnostics();
     auto ssl = args_.ssl;
-    ssl.apply_config(ctrl);
     auto url = resolved_secret_value{};
     auto user = resolved_secret_value{};
     auto password = resolved_secret_value{};
@@ -361,7 +360,9 @@ public:
         final_url = fmt::to_string(u);
       }
     }
-    if (not ssl.validate(final_url, args_.url.source, dh)) {
+    auto tls = ssl.resolve(final_url, args_.url.source,
+                           ctrl.self().system().config(), dh);
+    if (not tls) {
       co_return;
     }
     auto req = curl::easy{};
@@ -383,7 +384,7 @@ public:
     if (args_.compress) {
       req.set_http_header("Content-Encoding", "gzip");
     }
-    if (auto e = ssl.apply_to(req, final_url); e.valid()) {
+    if (auto e = tls->apply_to(req, final_url); e.valid()) {
       diagnostic::error(e).emit(dh);
       co_return;
     }

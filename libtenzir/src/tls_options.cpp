@@ -1169,9 +1169,55 @@ auto tls_options::resolve(const caf::actor_system_config& cfg,
   return out;
 }
 
+auto tls_options::resolve(std::string_view url, location url_loc,
+                          const caf::actor_system_config& cfg,
+                          diagnostic_handler& dh) const
+  -> failure_or<TlsConfig> {
+  // Same as the (cfg, dh) overload but performs URL/TLS-scheme consistency
+  // checking instead of plain validation. `validate(url, ...)` calls
+  // `validate(dh)` internally, so the deprecation warnings are still emitted
+  // exactly once (allowing callers to use this overload instead of an
+  // explicit `validate(url, ...)` + `resolve(cfg, dh)` pair, which would
+  // emit them twice).
+  TRY(validate(url, url_loc, dh));
+  auto merged = *this;
+  merged.apply_config(cfg);
+  auto to_option =
+    [](std::optional<located<std::string>> x) -> Option<located<std::string>> {
+    if (x) {
+      return Option<located<std::string>>{std::move(*x)};
+    }
+    return None{};
+  };
+  auto out = TlsConfig{};
+  out.tls = merged.get_tls();
+  out.skip_peer_verification = merged.get_skip_peer_verification();
+  out.cacert = to_option(merged.get_cacert());
+  out.certfile = to_option(merged.get_certfile());
+  out.keyfile = to_option(merged.get_keyfile());
+  out.password = to_option(merged.get_password());
+  out.tls_min_version = to_option(merged.get_tls_min_version());
+  out.tls_ciphers = to_option(merged.get_tls_ciphers());
+  out.tls_client_ca = to_option(merged.get_tls_client_ca());
+  out.tls_require_client_cert = merged.get_tls_require_client_cert();
+  out.uses_curl_http = uses_curl_http_;
+  out.tls_arg_source = tls_ ? tls_->source : location::unknown;
+  return out;
+}
+
 auto tls_options::resolve(operator_control_plane& ctrl) const
   -> failure_or<TlsConfig> {
   return resolve(ctrl.self().system().config(), ctrl.diagnostics());
+}
+
+auto TlsConfig::defaults() -> TlsConfig {
+  auto out = TlsConfig{};
+  out.tls = located{true, location::unknown};
+  out.skip_peer_verification = located{false, location::unknown};
+  out.tls_require_client_cert = located{false, location::unknown};
+  out.uses_curl_http = false;
+  out.tls_arg_source = location::unknown;
+  return out;
 }
 
 } // namespace tenzir

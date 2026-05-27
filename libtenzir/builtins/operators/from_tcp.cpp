@@ -137,16 +137,20 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     if (tls_) {
-      tls_->apply_config(ctx.actor_system().config());
-    }
-    tls_enabled_ = tls_ and tls_->get_tls().inner;
-    if (tls_enabled_) {
-      auto context = tls_->make_folly_ssl_context(ctx);
-      if (not context) {
+      auto resolved = tls_->resolve(ctx.actor_system().config(), ctx);
+      if (not resolved) {
         startup_failed_ = true;
         co_return;
       }
-      tls_context_ = std::move(*context);
+      tls_enabled_ = resolved->tls.inner;
+      if (tls_enabled_) {
+        auto context = resolved->make_folly_ssl_context(ctx);
+        if (not context) {
+          startup_failed_ = true;
+          co_return;
+        }
+        tls_context_ = std::move(*context);
+      }
     }
     auto resolved = co_await forward_dns_.resolve(host_);
     auto* addresses = resolved->is_err()

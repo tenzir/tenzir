@@ -186,8 +186,11 @@ public:
     if (not args.transfer_opts.ssl.validate(url, args_.url.source, dh)) {
       co_return;
     }
-    args.transfer_opts.ssl.apply_config(ctrl);
-    auto tx = transfer{args.transfer_opts};
+    auto tls = args.transfer_opts.ssl.resolve(ctrl);
+    if (not tls) {
+      co_return;
+    }
+    auto tx = transfer{args.transfer_opts, std::move(*tls)};
     auto req = make_request(args_, url, items);
     if (not req) {
       diagnostic::error("failed to construct HTTP request")
@@ -298,8 +301,11 @@ public:
     if (not args.transfer_opts.ssl.validate(url, args_.url.source, dh)) {
       co_return;
     }
-    args.transfer_opts.ssl.apply_config(ctrl);
-    auto tx = transfer{args.transfer_opts};
+    auto tls = args.transfer_opts.ssl.resolve(ctrl);
+    if (not tls) {
+      co_return;
+    }
+    auto tx = transfer{args.transfer_opts, std::move(*tls)};
     auto req = make_request(args_, url, items);
     if (not req) {
       diagnostic::error("failed to construct HTTP request")

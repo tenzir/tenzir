@@ -98,6 +98,12 @@ struct TlsConfig {
                                                       = false) const
     -> failure_or<std::shared_ptr<folly::SSLContext>>;
 
+  /// Escape hatch for utility code that does not have access to an
+  /// `actor_system_config` and just needs a `TlsConfig` with default settings
+  /// (TLS enabled, no certificates, system-default verification). Operator
+  /// code should always go through `tls_options::resolve`.
+  static auto defaults() -> TlsConfig;
+
 private:
   TlsConfig() = default;
   friend class tls_options;
@@ -208,6 +214,14 @@ public:
   auto resolve(const caf::actor_system_config& cfg,
                diagnostic_handler& dh) const -> failure_or<TlsConfig>;
   auto resolve(operator_control_plane& ctrl) const -> failure_or<TlsConfig>;
+
+  /// Same as `resolve`, but additionally checks that the URL scheme is
+  /// consistent with the TLS setting (e.g. `https://` requires `tls=true`).
+  /// Use this overload when the URL is only available at runtime (e.g.
+  /// because it contains secrets resolved at runtime).
+  auto resolve(std::string_view url, location url_loc,
+               const caf::actor_system_config& cfg,
+               diagnostic_handler& dh) const -> failure_or<TlsConfig>;
 
   /// Updates a URL using the `tls` option.
   ///

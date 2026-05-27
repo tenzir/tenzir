@@ -170,15 +170,19 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     if (tls_) {
-      tls_->apply_config(ctx.actor_system().config());
-    }
-    if (tls_ and tls_->get_tls().inner) {
-      auto context = tls_->make_folly_ssl_context(ctx);
-      if (not context) {
+      auto resolved = tls_->resolve(ctx.actor_system().config(), ctx);
+      if (not resolved) {
         request_abort();
         co_return;
       }
-      tls_context_ = std::move(*context);
+      if (resolved->tls.inner) {
+        auto context = resolved->make_folly_ssl_context(ctx);
+        if (not context) {
+          request_abort();
+          co_return;
+        }
+        tls_context_ = std::move(*context);
+      }
     }
     if (bind_host_.empty()) {
       address_.setFromLocalPort(bind_port_);
