@@ -698,7 +698,7 @@ public:
         co_return;
       }
       std::fclose(keyfile);
-      auto& certfile_name = tls.keyfile;
+      auto& certfile_name = tls.certfile;
       if (not certfile_name) {
         diagnostic::error("no certfile configured, but TLS enabled")
           .emit(ctrl.diagnostics());
