@@ -125,6 +125,7 @@ jobs:
       head-ref-slug: ${{ steps.configure.outputs.head-ref-slug }}
       base-ref-slug: ${{ steps.configure.outputs.base-ref-slug }}
       tenzir-container-ref: ${{ steps.configure.outputs.tenzir-container-ref }}
+      tenzir-version-suffix: ${{ steps.configure.outputs.tenzir-version-suffix }}
       tenzir-version-build-metadata: ${{ steps.configure.outputs.tenzir-version-build-metadata }}
       run-docker-tenzir: ${{ steps.configure.outputs.run-docker-tenzir }}
       docker-config: ${{ steps.docker.outputs.docker-config }}
@@ -217,21 +218,13 @@ jobs:
           echo "ref-slug=${GITHUB_REF_SLUG}" >> $GITHUB_OUTPUT
           echo "head-ref-slug=${GITHUB_HEAD_REF_SLUG}" >> $GITHUB_OUTPUT
           echo "base-ref-slug=${GITHUB_BASE_REF_SLUG}" >> $GITHUB_OUTPUT
-          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            tenzir_version_build_metadata=""
-            tenzir_docker_version_build_metadata=""
-          else
-            tenzir_version_build_metadata="g${id_sha:0:10}"
-            tenzir_docker_version_build_metadata="${tenzir_version_build_metadata}"
-            # In Pull Requests we replace the normal commit hash based version
-            # suffix with the PR number. That way we get stable arguments to
-            # `docker build`, which is needed for layer caching to work.
-            if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-              tenzir_docker_version_build_metadata="pr${{ github.event.number }}"
-            fi
+          tenzir_version_suffix=""
+          tenzir_version_build_metadata="g${id_sha:0:10}"
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            tenzir_version_suffix="pr${{ github.event.number }}"
           fi
+          echo "tenzir-version-suffix=${tenzir_version_suffix}" >> $GITHUB_OUTPUT
           echo "tenzir-version-build-metadata=${tenzir_version_build_metadata}" >> $GITHUB_OUTPUT
-          echo "tenzir-docker-version-build-metadata=${tenzir_docker_version_build_metadata}" >> $GITHUB_OUTPUT
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             tenzir_container_ref="${GITHUB_HEAD_REF_SLUG}"
           else
@@ -378,10 +371,10 @@ jobs:
             exit 1
           fi
           docker_config="$(jq -c \
-            '."build-version" = $build_version | ."version-build-metadata" = $vs | ."source-tag" = $source | ."tags" = $ARGS.positional' \
+            '."build-version" = $build_version | ."version-suffix" = $vs | ."source-tag" = $source | ."tags" = $ARGS.positional' \
             .github/workflows/docker-config-base.json \
             --arg build_version "${{ steps.configure.outputs.build-version }}" \
-            --arg vs "${{ steps.configure.outputs.tenzir-docker-version-build-metadata }}" \
+            --arg vs "${{ steps.configure.outputs.tenzir-version-suffix }}" \
             --arg source "${source_tag}" \
             --args -- "${tags[@]}")"
           # PRs only publish the community images to GHCR.
@@ -790,6 +783,8 @@ jobs:
       arch: aarch64
       attribute: tenzir-static
       build-version: ${{ needs.configure.outputs.build-version }}
+      version-suffix: ${{ needs.configure.outputs.tenzir-version-suffix }}
+      version-build-metadata: ${{ needs.configure.outputs.tenzir-version-build-metadata }}
     secrets: inherit
 
   tenzir-static-x86_64-linux:
@@ -803,6 +798,8 @@ jobs:
       arch: x86_64
       attribute: tenzir-static
       build-version: ${{ needs.configure.outputs.build-version }}
+      version-suffix: ${{ needs.configure.outputs.tenzir-version-suffix }}
+      version-build-metadata: ${{ needs.configure.outputs.tenzir-version-build-metadata }}
     secrets: inherit
 
   tenzir-static-arm64-darwin:
@@ -816,6 +813,8 @@ jobs:
       arch: arm64
       attribute: tenzir-static
       build-version: ${{ needs.configure.outputs.build-version }}
+      version-suffix: ${{ needs.configure.outputs.tenzir-version-suffix }}
+      version-build-metadata: ${{ needs.configure.outputs.tenzir-version-build-metadata }}
       notarize_macos: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
     secrets: inherit
 
@@ -1003,6 +1002,7 @@ jobs:
             -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
             -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="/" \
             -DTENZIR_PLUGINS:STRING="${{ join(matrix.tenzir.bundled-plugins, ';') }}" \
+            -DTENZIR_VERSION_SUFFIX:STRING="${{ needs.configure.outputs.tenzir-version-suffix }}" \
             -DTENZIR_VERSION_BUILD_METADATA:STRING="${{ needs.configure.outputs.tenzir-version-build-metadata }}" \
             ${{ matrix.tenzir.cmake-extra-flags }}
       - name: Compile All Targets

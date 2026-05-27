@@ -3,6 +3,8 @@
   lib,
   pkgs,
   tenzirPythonPkgs,
+  tenzirVersionSuffix ? "",
+  tenzirVersionBuildMetadata ? null,
   forceClang ? false,
 }:
 rec {
@@ -99,6 +101,8 @@ rec {
         inherit
           tenzir-source
           tenzirPythonPkgs
+          tenzirVersionSuffix
+          tenzirVersionBuildMetadata
           toImageFn
           ;
         stdenv = tenzirCcacheStdenv;

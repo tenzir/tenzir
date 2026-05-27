@@ -19,6 +19,8 @@ let
       extraPlugins ? [ ],
       symlinkJoin,
       extraCmakeFlags ? [ ],
+      tenzirVersionSuffix ? "",
+      tenzirVersionBuildMetadata ? null,
       python3,
       uv,
       uv-bin,
@@ -249,10 +251,20 @@ let
           ]
           ++ extraCmakeFlags;
 
-          # TODO: Omit this for "tagged release" builds.
           preConfigure = ''
-            version_build_metadata=$(basename $out | cut -d'-' -f 1)
-            cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
+            ${
+              if tenzirVersionBuildMetadata == null then
+                ''
+                  version_build_metadata="N$(basename $out | cut -d'-' -f 1)"
+                ''
+              else
+                ''
+                  version_build_metadata=${lib.escapeShellArg tenzirVersionBuildMetadata}
+                ''
+            }
+            version_suffix=${lib.escapeShellArg tenzirVersionSuffix}
+            cmakeFlagsArray+=("-DTENZIR_VERSION_SUFFIX=$version_suffix")
+            cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=$version_build_metadata")
           '';
 
           hardeningDisable =
