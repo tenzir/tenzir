@@ -16,6 +16,7 @@
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/saturating_arithmetic.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/index.hpp>
@@ -244,23 +245,6 @@ auto format_bytes(uint64_t bytes) -> std::string {
   return fmt::format("{} bytes", bytes);
 }
 
-auto saturating_multiply(uint64_t lhs, uint64_t rhs) -> uint64_t {
-  if (lhs == 0 or rhs == 0) {
-    return 0;
-  }
-  if (lhs > std::numeric_limits<uint64_t>::max() / rhs) {
-    return std::numeric_limits<uint64_t>::max();
-  }
-  return lhs * rhs;
-}
-
-auto saturating_add(uint64_t lhs, uint64_t rhs) -> uint64_t {
-  if (lhs > std::numeric_limits<uint64_t>::max() - rhs) {
-    return std::numeric_limits<uint64_t>::max();
-  }
-  return lhs + rhs;
-}
-
 /// Statistics for an ongoing rebuild. Numbers are partitions.
 struct statistics {
   size_t num_total = {};
@@ -363,7 +347,7 @@ struct rebuilder_state {
     }
     if (auto it = approx_bytes_per_event.find(partition.schema);
         it != approx_bytes_per_event.end()) {
-      return saturating_multiply(
+      return detail::saturating_mul(
         it->second, detail::narrow_cast<uint64_t>(partition.events));
     }
     return unknown_partition_bytes;
@@ -595,13 +579,13 @@ struct rebuilder_state {
           const auto partition_bytes
             = estimate_approx_bytes(partition, current_run_budget.bytes);
           if (not current_run_partitions.empty()
-              and saturating_add(current_run_bytes, partition_bytes)
+              and detail::saturating_add(current_run_bytes, partition_bytes)
                     > current_run_budget.bytes) {
             current_run_is_full = true;
             return false;
           }
           current_run_bytes
-            = saturating_add(current_run_bytes, partition_bytes);
+            = detail::saturating_add(current_run_bytes, partition_bytes);
           current_run_events += partition.events;
           current_run_partitions.push_back(partition);
           TENZIR_TRACE("{} selects partition {} (v{}, {}) with "
