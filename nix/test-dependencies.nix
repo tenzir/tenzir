@@ -13,7 +13,7 @@
   openssl,
 }:
 rec {
-  tenzir-test = python3Packages.buildPythonPackage rec {
+  tenzir-test = python3Packages.buildPythonPackage (finalAttrs: {
     pname = "tenzir-test";
     version = "1.10.2";
     pyproject = true;
@@ -21,8 +21,8 @@ rec {
     src = fetchFromGitHub {
       owner = "tenzir";
       repo = "test";
-      tag = "v${version}";
-      hash = "sha256-fdBQZS4nmZ2zdiSZMFcMvYHWzemKxFH9bWbjKQLi4y8=";
+      tag = "v${finalAttrs.version}";
+      hash = "sha256-02W4vP6cAGANzCtIwF9N/r5OKBGz+11yyINC35Nqcwc=";
     };
 
     build-system = with python3Packages; [ hatchling ];
