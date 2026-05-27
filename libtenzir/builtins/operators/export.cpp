@@ -9,6 +9,7 @@
 #include "tenzir/async.hpp"
 #include "tenzir/async/fetch_node.hpp"
 #include "tenzir/async/mail.hpp"
+#include "tenzir/async/metrics.hpp"
 #include "tenzir/connect_to_node.hpp"
 
 #include <tenzir/actors.hpp>
@@ -142,6 +143,23 @@ public:
       },
       MetricsDirection::read, MetricsVisibility::internal_,
       MetricsUnit::events);
+    if (not args_.internal) {
+      // We will always report `queued_events` as 0. In the old executor, these
+      // metrics were emitted by the export bridge itself, which is how it can
+      // report these metrics. In the new executor, we would need to mail the
+      // metrics receiver to the node on spawn, which potentially mails the
+      // actor across a process boundary, introducing shutdown issues.
+      export_metrics_
+        = make_metric_handler(ctx, type{
+                                     "tenzir.metrics.export",
+                                     record_type{
+                                       {"schema", string_type{}},
+                                       {"schema_id", string_type{}},
+                                       {"events", uint64_type{}},
+                                       {"queued_events", uint64_type{}},
+                                     },
+                                   });
+    }
     if (uses_prometheus_shape_) {
       prometheus_shapers_ = make_prometheus_shapers();
     }
@@ -258,23 +276,50 @@ public:
         }
         if (output.rows() > 0) {
           auto const rows = output.rows();
+          auto const schema = output.schema();
           co_await push(std::move(output));
           read_events_counter_.add(rows);
+          if (not args_.internal) {
+            export_metrics_.emit({
+              {"schema", std::string{schema.name()}},
+              {"schema_id", schema.make_fingerprint()},
+              {"events", uint64_t{rows}},
+              {"queued_events", uint64_t{0}},
+            });
+          }
         }
       }
       co_return;
     }
     if (not remainder_) {
       auto const rows = expected->rows();
+      auto const schema = expected->schema();
       co_await push(std::move(*expected));
       read_events_counter_.add(rows);
+      if (not args_.internal) {
+        export_metrics_.emit({
+          {"schema", std::string{schema.name()}},
+          {"schema_id", schema.make_fingerprint()},
+          {"events", uint64_t{rows}},
+          {"queued_events", uint64_t{0}},
+        });
+      }
       co_return;
     }
     auto output = filter2(*expected, *remainder_, ctx, false);
     if (output.rows() > 0) {
       auto const rows = output.rows();
+      auto const schema = output.schema();
       co_await push(std::move(output));
       read_events_counter_.add(rows);
+      if (not args_.internal) {
+        export_metrics_.emit({
+          {"schema", std::string{schema.name()}},
+          {"schema_id", schema.make_fingerprint()},
+          {"events", uint64_t{rows}},
+          {"queued_events", uint64_t{0}},
+        });
+      }
     }
   }
 
@@ -301,6 +346,7 @@ private:
   prometheus_shaper_map prometheus_shapers_ = {};
   detail::heterogeneous_string_hashset warned_unsupported_prometheus_schemas_;
   MetricsCounter read_events_counter_;
+  metric_handler export_metrics_ = {};
   bool done_ = false;
 };
 

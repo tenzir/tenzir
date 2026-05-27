@@ -10,6 +10,7 @@
 #include <tenzir/async.hpp>
 #include <tenzir/async/fetch_node.hpp>
 #include <tenzir/async/mail.hpp>
+#include <tenzir/async/metrics.hpp>
 #include <tenzir/atoms.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -53,6 +54,14 @@ public:
       },
       MetricsDirection::write, MetricsVisibility::internal_,
       MetricsUnit::events);
+    import_metrics_ = make_metric_handler(ctx, {
+                                                 "tenzir.metrics.import",
+                                                 record_type{
+                                                   {"schema", string_type{}},
+                                                   {"schema_id", string_type{}},
+                                                   {"events", uint64_type{}},
+                                                 },
+                                               });
     auto node = co_await fetch_node(ctx.actor_system(), ctx.dh());
     if (not node) {
       co_return;
@@ -102,6 +111,13 @@ public:
     }
     write_bytes_counter_.add(input.approx_bytes());
     write_events_counter_.add(input.rows());
+    if (not input.schema().attribute("internal").has_value()) {
+      import_metrics_.emit({
+        {"schema", std::string{input.schema().name()}},
+        {"schema_id", input.schema().make_fingerprint()},
+        {"events", input.rows()},
+      });
+    }
     auto* diagnostics = &ctx.dh();
     inflight_.push_back(
       ctx.spawn_task([importer = importer_, slice = std::move(input),
@@ -142,6 +158,7 @@ private:
   importer_actor importer_;
   MetricsCounter write_bytes_counter_ = {};
   MetricsCounter write_events_counter_ = {};
+  metric_handler import_metrics_ = {};
   std::deque<AsyncHandle<void>> inflight_ = {};
 };
 
