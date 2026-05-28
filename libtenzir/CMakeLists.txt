@@ -276,6 +276,10 @@ add_library(tenzir::libtenzir ALIAS libtenzir)
 add_library(libtenzir_builtins STATIC ${libtenzir_builtins_sources})
 TenzirTargetEnableTooling(libtenzir_builtins)
 target_compile_definitions(libtenzir_builtins PRIVATE TENZIR_ENABLE_BUILTINS)
+set_property(
+  SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/builtins/functions/sort.cpp"
+  APPEND
+  PROPERTY COMPILE_DEFINITIONS "TENZIR_BUILTIN_DEPENDENCY=sort")
 set_target_properties(libtenzir_builtins PROPERTIES OUTPUT_NAME tenzir_builtins)
 add_library(tenzir::libtenzir_builtins ALIAS libtenzir_builtins)
 
