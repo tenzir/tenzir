@@ -1,0 +1,6 @@
+error: expected `string` or `blob`, but got `int64`
+ --> tests/operators/write_delimited/09_error_unsupported_separator_type.tql:7:25
+  |
+7 |   write_delimited data, 42
+  |                         ^^ 
+  |

@@ -1,0 +1,6 @@
+error: expected exactly one series, but got 2
+ --> tests/operators/write_delimited/11_error_multi_series.tql:8:19
+  |
+8 |   write_delimited this[key], "|"
+  |                   ^^^^^^^^^ 
+  |
