@@ -20,7 +20,6 @@ rec {
   integration =
     ps: with ps; [
       boto3
-      datetime
       pyarrow
       python-box
       pyzmq
