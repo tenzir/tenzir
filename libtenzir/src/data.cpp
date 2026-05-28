@@ -756,6 +756,8 @@ data parse(const simdjson::dom::element& elem, size_t depth = 0) {
       return uint64_t{elem.get_uint64()};
     case simdjson::dom::element_type::INT64:
       return int64_t{elem.get_int64()};
+    case simdjson::dom::element_type::BIGINT:
+      TENZIR_UNREACHABLE();
     case simdjson::dom::element_type::BOOL:
       return bool{elem.get_bool()};
     case simdjson::dom::element_type::STRING: {

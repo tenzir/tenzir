@@ -1,40 +1,38 @@
 {
-  pkgs,
-  package,
+  system ? builtins.currentSystem,
 }:
 let
+  lock = builtins.fromJSON (builtins.readFile ./flake.lock);
+
+  nixpkgsSrc = fetchTree lock.nodes.nixpkgs.locked;
+  overlay = import ./nix/overlay.nix;
+
+  pkgs = import nixpkgsSrc {
+    inherit system;
+    overlays = [ overlay ];
+  };
+
+  deps = pkgs.callPackage ./nix/dependencies.nix { };
+  test-deps = pkgs.callPackage ./nix/test-dependencies.nix { };
+  python-deps = import ./nix/python-dependencies.nix;
+  dev-python = pkgs.python3.withPackages python-deps.dev;
+
   inherit (pkgs) lib;
   inherit (pkgs.stdenv.hostPlatform) isStatic;
-  inherit (package.tenzir-de) unchecked;
   # Build one explicit dependency closure for discovery instead of importing
   # the full package environment into the shell. That keeps CMake and the Nix
   # compiler/linker wrappers from seeing the same include/lib paths multiple
   # times, which previously made configure-time probes very expensive.
   base-deps = lib.unique (
-    (unchecked.buildInputs or [ ])
-    ++ (unchecked.propagatedBuildInputs or [ ])
+    deps.buildInputs
+    ++ deps.propagatedBuildInputs
     ++ [
       pkgs.openssl
       pkgs.arrow-adbc-go
       pkgs.libsodium
     ]
   );
-  dev-python = pkgs.python3.withPackages (
-    ps: with ps; [
-      aiohttp
-      boto3
-      boto3-stubs
-      dynaconf
-      numpy
-      pandas
-      pip
-      pyarrow
-      pymysql
-      pyzmq
-      python-box
-      trustme
-    ]
-  );
+
   clang-shims = [
     (pkgs.writeShellScriptBin "clang" ''exec ${pkgs.clang}/bin/clang "$@"'')
     (pkgs.writeShellScriptBin "clang++" ''exec ${pkgs.clang}/bin/clang++ "$@"'')
@@ -70,8 +68,8 @@ let
     # their executables on PATH; pulling their library/include trees into the
     # shell would reintroduce the duplicated wrapper flags we are avoiding.
     paths = lib.unique (
-      (unchecked.nativeBuildInputs or [ ])
-      ++ (unchecked.propagatedNativeBuildInputs or [ ])
+      (deps.nativeBuildInputs or [ ])
+      ++ (deps.propagatedNativeBuildInputs or [ ])
       ++ [
         pkgs.ccache
         pkgs.clang-tools
@@ -96,7 +94,7 @@ let
         pkgs.socat
         pkgs.openssl
         pkgs.just
-        package.tenzir-test
+        test-deps.tenzir-test
         pkgs.wrangler
         pkgs.yara
       ]

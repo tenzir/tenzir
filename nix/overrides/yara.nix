@@ -1,7 +1,12 @@
 {
+  lib,
   stdenv,
   yara,
 }:
 yara.overrideAttrs (orig: {
-  NIX_CFLAGS_LINK = if stdenv.hostPlatform.isStatic then "-lz" else null;
+  env =
+    (orig.env or { })
+    // lib.optionalAttrs stdenv.hostPlatform.isStatic {
+      NIX_CFLAGS_LINK = "-lz";
+    };
 })

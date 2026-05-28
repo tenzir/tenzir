@@ -20,13 +20,9 @@ stdenvNoCC.mkDerivation {
   nativeCheckInputs = tenzir-integration-test-deps;
   checkPhase =
     let
-      py3 = pkgsBuildBuild.python3.withPackages (ps: [
-        ps.datetime
-        ps.pyarrow
-        ps.pyzmq
-        ps.python-box
-        ps.trustme
-      ]);
+      pythonDeps = import ../python-dependencies.nix;
+      py3 = pkgsBuildBuild.python3.withPackages pythonDeps.integration;
+
       template = path: ''
         if [ -d "${path}/test/tests" ]; then
           echo "running ${path} integration tests"
@@ -51,6 +47,7 @@ stdenvNoCC.mkDerivation {
       export UV_PYTHON=${lib.getExe py3}
       export TENZIR_BINARY=${lib.getBin unchecked}/bin/tenzir
       export TENZIR_NODE_BINARY=${lib.getBin unchecked}/bin/tenzir-node
+      export TENZIR_TEST_DISABLE_INLINE_DEPENDENCY_INSTALL=1
       export TENZIR_ALLOC_STATS=1
       ${lib.optionalString stdenvNoCC.buildPlatform.isx86_64 "export TENZIR_ALLOC_ACTOR_STATS=1"}
       mkdir -p cache data state tmp

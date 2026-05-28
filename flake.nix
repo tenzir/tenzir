@@ -10,8 +10,7 @@
   };
 
   inputs = {
-    isReleaseBuild.url = "github:boolean-option/false";
-    nixpkgs.url = "github:tobim/nixpkgs/c138dec5080350510dbe6da937ec4a90bb2cda57";
+    nixpkgs.url = "github:tobim/nixpkgs/0eba1cb3a7898e24864434399bcd07ffec1b8221";
     flake-compat.url = "github:edolstra/flake-compat";
     flake-compat.flake = false;
     flake-utils.url = "github:numtide/flake-utils";
@@ -69,15 +68,22 @@
         tenzirPythonPkgs = pkgs.callPackage ./python {
           inherit (inputs) uv2nix pyproject-nix pyproject-build-systems;
         };
+        tenzirVersionSuffix = builtins.getEnv "TENZIR_VERSION_SUFFIX";
+        tenzirVersionBuildMetadataFromEnv = builtins.getEnv "TENZIR_VERSION_BUILD_METADATA";
+        tenzirVersionBuildMetadata =
+          if tenzirVersionBuildMetadataFromEnv != "" then
+            tenzirVersionBuildMetadataFromEnv
+          else if self ? rev then
+            "g${builtins.substring 0 10 self.rev}"
+          else
+            null;
         package = pkgs.callPackages ./nix/package.nix {
           nix2container = inputs.nix2container.packages.${system};
-          isReleaseBuild = inputs.isReleaseBuild.value;
-          inherit tenzirPythonPkgs;
+          inherit tenzirPythonPkgs tenzirVersionSuffix tenzirVersionBuildMetadata;
         };
         package-clang = pkgs.callPackages ./nix/package.nix {
           nix2container = inputs.nix2container.packages.${system};
-          isReleaseBuild = inputs.isReleaseBuild.value;
-          inherit tenzirPythonPkgs;
+          inherit tenzirPythonPkgs tenzirVersionSuffix tenzirVersionBuildMetadata;
           forceClang = true;
         };
         treefmtEval = inputs.treefmt-nix.lib.evalModule pkgs ./nix/treefmt.nix;
@@ -100,13 +106,13 @@
           // {
             default = self.packages.${system}.tenzir-static;
             format = pkgs.callPackage ./nix/format.nix { inherit treefmtEval; };
+            # Run with `nix run .#generate-sbom`, output is written to tenzir.spdx.json.
             generate-sbom = pkgs.callPackage ./nix/generate-sbom.nix {
               package = self.packages.${system}.tenzir-de-static;
             };
           };
         legacyPackages = pkgs;
-        # Run with `nix run .#generate-sbom`, output is written to tenzir.spdx.json.
-        devShells.default = import ./shell.nix { inherit pkgs package; };
+        devShells.default = import ./shell.nix { inherit system; };
         formatter = self.packages.${system}.format;
         checks = {
           # Disabled until the custom Style Check workflow is aligned.

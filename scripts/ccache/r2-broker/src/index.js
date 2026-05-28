@@ -99,9 +99,12 @@ async function createTemporaryCredentials(env) {
       body: JSON.stringify(requestBody),
     },
   );
-  const data = await response.json();
+  const data = await readJsonResponse(response, "Cloudflare R2 temporary credentials");
   if (!response.ok || !data.success) {
-    throw httpError(response.status, "could not create R2 temporary credentials");
+    throw httpError(
+      response.status,
+      `could not create R2 temporary credentials${formatCloudflareApiError(data)}`,
+    );
   }
   return data.result;
 }
@@ -157,6 +160,46 @@ function splitCsv(value) {
     .split(",")
     .map((part) => part.trim())
     .filter((part) => part.length > 0);
+}
+
+async function readJsonResponse(response, description) {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw httpError(
+      response.ok ? 502 : response.status,
+      `${description} response is not JSON: ${text.slice(0, 200)}`,
+    );
+  }
+}
+
+function formatCloudflareApiError(data) {
+  const details = [];
+  for (const item of data.errors ?? []) {
+    details.push(formatCloudflareApiMessage(item));
+  }
+  for (const item of data.messages ?? []) {
+    details.push(formatCloudflareApiMessage(item));
+  }
+  if (details.length === 0) {
+    return "";
+  }
+  return `: ${details.join("; ")}`;
+}
+
+function formatCloudflareApiMessage(item) {
+  if (typeof item === "string") {
+    return item;
+  }
+  if (!item || typeof item !== "object") {
+    return JSON.stringify(item);
+  }
+  const message = item.message ?? JSON.stringify(item);
+  if (item.code === undefined || item.code === null) {
+    return message;
+  }
+  return `${item.code}: ${message}`;
 }
 
 function decodeBase64UrlText(value) {

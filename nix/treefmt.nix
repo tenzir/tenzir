@@ -26,7 +26,7 @@
 
   # Markdown
   settings.formatter.markdownlint = {
-    command = pkgs.lib.getExe' pkgs.nodePackages.markdownlint-cli2 "markdownlint-cli2";
+    command = pkgs.lib.getExe pkgs.markdownlint-cli2;
     options = [ "--fix" ];
     includes = [ "*.md" ];
   };

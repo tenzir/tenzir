@@ -8,26 +8,23 @@ find_package(Git QUIET)
 if (NOT DEFINED TENZIR_VERSION_BUILD_METADATA)
   if (Git_FOUND)
     execute_process(
-      COMMAND "${GIT_EXECUTABLE}" describe --abbrev=10 --long --dirty
-              "--match=v[0-9]*"
+      COMMAND "${GIT_EXECUTABLE}" rev-parse --short=10 HEAD
       WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/.."
-      OUTPUT_VARIABLE _git_describe_output
+      OUTPUT_VARIABLE _git_revision_output
       OUTPUT_STRIP_TRAILING_WHITESPACE
-      RESULT_VARIABLE _git_describe_result)
-    if (NOT _git_describe_result EQUAL 0)
+      RESULT_VARIABLE _git_revision_result)
+    if (NOT _git_revision_result EQUAL 0)
       message(
         WARNING
-          "git-describe failed: ${_git_describe_result}; using a generic \"-dev\" version suffix"
+          "git-rev-parse failed: ${_git_revision_result}; using a generic version build metadata"
       )
     else ()
-      string(REGEX MATCH "(g[0-9a-f]+)?(-dirty)?$" _git_describe_suffix
-                   "${_git_describe_output}")
-      if (_git_describe_suffix)
-        set(TENZIR_VERSION_BUILD_METADATA "${_git_describe_suffix}")
+      if (_git_revision_output)
+        set(TENZIR_VERSION_BUILD_METADATA "g${_git_revision_output}")
       endif ()
     endif ()
-    unset(_git_describe_output)
-    unset(_git_describe_result)
+    unset(_git_revision_output)
+    unset(_git_revision_result)
   endif ()
 endif ()
 
@@ -37,6 +34,6 @@ endif ()
 
 string(REGEX REPLACE "([^-]+)-.*" "\\1" TENZIR_VERSION_MMP "${TENZIR_VERSION}")
 set(TENZIR_VERSION_FULL "${TENZIR_VERSION}")
-if (TENZIR_VERSION_BUILD_METADATA)
-  string(APPEND TENZIR_VERSION_FULL "+${TENZIR_VERSION_BUILD_METADATA}")
+if (TENZIR_VERSION_SUFFIX)
+  string(APPEND TENZIR_VERSION_FULL "+${TENZIR_VERSION_SUFFIX}")
 endif ()

@@ -141,7 +141,7 @@ jobs:
           images_file="$(mktemp)"
           benchmark_image_file="$(mktemp)"
           trap 'rm -f "$images_file"' EXIT
-          cmake_version_args="-DTENZIR_VERSION_BUILD_METADATA:STRING=${{ fromJSON(inputs.config).version-build-metadata }}"
+          cmake_version_args="-DTENZIR_VERSION_SUFFIX:STRING=${{ fromJSON(inputs.config).version-suffix }}"
           source_tag='${{ fromJSON(inputs.config).source-tag }}'
           jq -r '.editions[] | .name as $name | .target as $target | ."image-registries"[]? | [ $name, $target, . ] | join(" ")' \
             <<< '${{ inputs.config }}' | while read -r name target registry; do

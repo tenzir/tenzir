@@ -716,6 +716,10 @@ if (DEFINED TENZIR_VERSION_BUILD_METADATA_BACKUP)
       "set(TENZIR_VERSION_BUILD_METADATA \"${TENZIR_VERSION_BUILD_METADATA_BACKUP}\")"
   )
 endif ()
+if (DEFINED TENZIR_VERSION_SUFFIX)
+  set(set_tenzir_version_suffix
+      "set(TENZIR_VERSION_SUFFIX \"${TENZIR_VERSION_SUFFIX}\")")
+endif ()
 
 file(
   WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake"
@@ -723,6 +727,7 @@ file(
   get_filename_component(CMAKE_MODULE_PATH
     \"${CMAKE_CURRENT_SOURCE_DIR}/../cmake\" ABSOLUTE)
   ${set_tenzir_version_build_metadata}
+  ${set_tenzir_version_suffix}
   set(Tenzir_VERSION_MAJOR \"${Tenzir_VERSION_MAJOR}\")
   set(Tenzir_VERSION_MINOR \"${Tenzir_VERSION_MINOR}\")
   set(Tenzir_VERSION_PATCH \"${Tenzir_VERSION_PATCH}\")
@@ -735,6 +740,7 @@ file(
                  \"${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp\")")
 
 unset(set_tenzir_version_build_metadata)
+unset(set_tenzir_version_suffix)
 
 # Re-run the version generation script on every build so git-derived build
 # metadata, including the dirty suffix, stays current. The configure_file() in
