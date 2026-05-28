@@ -285,7 +285,8 @@ private:
       query.SetSetting("max_block_size",
                        {std::to_string(defaults::import::table_slice_size),
                         ::clickhouse::QuerySettingsField::IMPORTANT});
-      // Without this, MergeTree's byte-based cap overrides max_block_size on wide tables.
+      // Without this, MergeTree's byte-based cap overrides max_block_size on
+      // wide tables.
       query.SetSetting("preferred_block_size_bytes",
                        {"0", ::clickhouse::QuerySettingsField::IMPORTANT});
       query.OnDataCancelable([&](::clickhouse::Block const& block) {

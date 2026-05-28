@@ -188,8 +188,7 @@ public:
     auto ssl_opts = args_.ssl;
     auto resolved = ssl_opts.resolve(ctrl);
     auto tls_enabled = resolved and resolved->tls.inner;
-    add_tls_client_diagnostic_hints(std::move(diag),
-                                    tls_enabled, "ClickHouse",
+    add_tls_client_diagnostic_hints(std::move(diag), tls_enabled, "ClickHouse",
                                     clickhouse_plaintext_port,
                                     clickhouse_tls_port)
       .emit(ctrl.diagnostics());
