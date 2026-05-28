@@ -11,6 +11,7 @@
 #include "tenzir/ir.hpp"
 
 #include <string>
+#include <unordered_set>
 
 namespace tenzir::plugins::clickhouse {
 
@@ -19,7 +20,11 @@ struct FilterToWhereClauseResult {
   ir::optimize_filter residual_filter;
 };
 
-auto filter_to_where_clause(ir::optimize_filter const& filter)
+/// Converts a filter into a ClickHouse WHERE clause.
+/// Conjuncts that reference columns not in `known_columns` are moved to
+/// `residual_filter` instead of being pushed to SQL.
+auto filter_to_where_clause(ir::optimize_filter const& filter,
+                            std::unordered_set<std::string> const& known_columns)
   -> FilterToWhereClauseResult;
 
 } // namespace tenzir::plugins::clickhouse

@@ -14,6 +14,7 @@
 #include "tenzir/tql2/ast.hpp"
 
 #include <algorithm>
+#include <unordered_set>
 #include <vector>
 
 namespace tenzir::plugins::clickhouse {
@@ -72,6 +73,29 @@ auto to_clickhouse_identifier(ast::field_path const& path) -> std::string {
 }
 
 auto to_clickhouse_sql(ast::expression const& expr) -> Option<std::string>;
+
+auto references_only_known_fields(ast::expression const& expr,
+                                  std::unordered_set<std::string> const& known)
+  -> bool {
+  if (auto path = ast::field_path::try_from(expr)) {
+    auto parts = std::vector<std::string_view>{};
+    for (auto const& seg : path->path()) {
+      parts.push_back(seg.id.name);
+    }
+    return known.contains(fmt::to_string(fmt::join(parts, ".")));
+  }
+  return expr.match(
+    [&](ast::binary_expr const& binary) {
+      return references_only_known_fields(binary.left, known)
+             and references_only_known_fields(binary.right, known);
+    },
+    [](ast::constant const&) {
+      return true;
+    },
+    [](auto const&) {
+      return false;
+    });
+}
 
 auto to_clickhouse_binary_op(ast::binary_op op) -> Option<std::string_view> {
   switch (op) {
@@ -139,7 +163,8 @@ auto collect_conjuncts(ast::expression const& expr,
 
 } // namespace
 
-auto filter_to_where_clause(ir::optimize_filter const& filter)
+auto filter_to_where_clause(ir::optimize_filter const& filter,
+                            std::unordered_set<std::string> const& known_columns)
   -> FilterToWhereClauseResult {
   auto clauses = std::vector<std::string>{};
   auto residual_filter = ir::optimize_filter{};
@@ -148,7 +173,11 @@ auto filter_to_where_clause(ir::optimize_filter const& filter)
     collect_conjuncts(expr, conjuncts);
     for (auto const* conjunct : conjuncts) {
       if (auto sql = to_clickhouse_sql(*conjunct)) {
-        clauses.push_back(std::move(*sql));
+        if (not references_only_known_fields(*conjunct, known_columns)) {
+          residual_filter.push_back(*conjunct);
+        } else {
+          clauses.push_back(std::move(*sql));
+        }
       } else {
         residual_filter.push_back(*conjunct);
       }
