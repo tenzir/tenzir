@@ -15,6 +15,7 @@
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/read_detection.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/parser.hpp"
@@ -40,38 +41,10 @@ struct ReadAutoArgs {
   location operator_location;
 };
 
-enum class DetectorKind {
-  json_suricata,
-  json_zeek,
-  json_gelf,
-  json_ndjson,
-  json_array,
-  json_object,
-  cef,
-  leef,
-  zeek_tsv,
-  syslog,
-  csv,
-  tsv,
-  ssv,
-  kv,
-  yaml,
-  pcap,
-  feather,
-  bitz,
-  parquet,
-};
-
-template <class Inspector>
-auto inspect(Inspector& f, DetectorKind& x) {
-  return detail::inspect_enum(f, x);
-}
-
 struct Candidate {
-  std::string id;
+  std::string format_name;
   std::string pipeline;
   int64_t priority = 0;
-  std::optional<DetectorKind> detector;
   std::optional<size_t> plugin_candidate;
   bool live = true;
   std::optional<read_detection_result> last;
@@ -81,456 +54,17 @@ template <class Inspector>
 auto inspect(Inspector& f, Candidate& x) {
   return f.object(x)
     .pretty_name("Candidate")
-    .fields(f.field("id", x.id), f.field("pipeline", x.pipeline),
-            f.field("priority", x.priority), f.field("detector", x.detector),
+    .fields(f.field("format_name", x.format_name),
+            f.field("pipeline", x.pipeline), f.field("priority", x.priority),
             f.field("plugin_candidate", x.plugin_candidate),
             f.field("live", x.live));
-}
-
-auto reject(std::string reason = {}) -> read_detection_result {
-  return {.state = detection_state::reject, .reason = std::move(reason)};
-}
-
-auto need_more(std::string reason = {}) -> read_detection_result {
-  return {.state = detection_state::need_more, .reason = std::move(reason)};
-}
-
-auto match(uint64_t confidence, std::string reason = {})
-  -> read_detection_result {
-  return {
-    .state = detection_state::match,
-    .confidence = confidence,
-    .reason = std::move(reason),
-  };
-}
-
-struct json_scan_result {
-  enum class kind {
-    incomplete,
-    invalid,
-    complete,
-  };
-
-  kind state = kind::incomplete;
-  char top_level = '\0';
-  size_t end = 0;
-  char first_array_element = '\0';
-};
-
-auto scan_json_value(std::string_view input) -> json_scan_result {
-  auto bytes = detail::trim_front(input);
-  if (bytes.empty()) {
-    return {};
-  }
-  auto stack = std::vector<char>{};
-  auto in_string = false;
-  auto escaped = false;
-  auto top = bytes.front();
-  auto first_array_element = char{'\0'};
-  if (top != '{' and top != '[') {
-    return {.state = json_scan_result::kind::invalid};
-  }
-  for (auto i = size_t{0}; i < bytes.size(); ++i) {
-    auto ch = bytes[i];
-    if (in_string) {
-      if (escaped) {
-        escaped = false;
-      } else if (ch == '\\') {
-        escaped = true;
-      } else if (ch == '"') {
-        in_string = false;
-      }
-      continue;
-    }
-    if (ch == '"') {
-      in_string = true;
-      continue;
-    }
-    if (top == '[' and stack.size() == 1 and first_array_element == '\0'
-        and not detail::ascii_whitespace.contains(ch) and ch != '[') {
-      if (ch != ',' and ch != ']') {
-        first_array_element = ch;
-      }
-    }
-    if (ch == '{' or ch == '[') {
-      stack.push_back(ch == '{' ? '}' : ']');
-      continue;
-    }
-    if (ch == '}' or ch == ']') {
-      if (stack.empty() or stack.back() != ch) {
-        return {.state = json_scan_result::kind::invalid};
-      }
-      stack.pop_back();
-      if (stack.empty()) {
-        return {
-          .state = json_scan_result::kind::complete,
-          .top_level = top,
-          .end = input.size() - bytes.size() + i + 1,
-          .first_array_element = first_array_element,
-        };
-      }
-    }
-  }
-  return {};
-}
-
-auto detect_json_object(read_detection_input input) -> read_detection_result {
-  auto scan = scan_json_value(input.bytes);
-  if (scan.state == json_scan_result::kind::invalid) {
-    return reject();
-  }
-  if (scan.state == json_scan_result::kind::incomplete) {
-    return input.eof ? reject("incomplete JSON object") : need_more();
-  }
-  if (scan.top_level != '{') {
-    return reject();
-  }
-  auto rest = detail::trim_front(input.bytes.substr(scan.end));
-  if (not rest.empty()) {
-    return reject("trailing bytes after object");
-  }
-  return match(70, "top-level JSON object");
-}
-
-auto detect_json_array(read_detection_input input) -> read_detection_result {
-  auto scan = scan_json_value(input.bytes);
-  if (scan.state == json_scan_result::kind::invalid) {
-    return reject();
-  }
-  if (scan.state == json_scan_result::kind::incomplete) {
-    return input.eof ? reject("incomplete JSON array") : need_more();
-  }
-  if (scan.top_level == '[' and scan.first_array_element == '{') {
-    return match(75, "top-level array of objects");
-  }
-  return reject();
-}
-
-auto complete_json_object_line(std::string_view line) -> bool {
-  auto scan = scan_json_value(line);
-  return scan.state == json_scan_result::kind::complete
-         and scan.top_level == '{'
-         and detail::trim_front(line.substr(scan.end)).empty();
-}
-
-auto detect_ndjson(read_detection_input input) -> read_detection_result {
-  auto lines = detail::split_lines(input.bytes, 3);
-  std::erase_if(lines, [](std::string_view& line) {
-    line = detail::trim_front(line);
-    return line.empty();
-  });
-  if (lines.empty()) {
-    return input.eof ? reject() : need_more();
-  }
-  if (lines.size() >= 2 and complete_json_object_line(lines[0])
-      and complete_json_object_line(lines[1])) {
-    return match(82, "multiple JSON object lines");
-  }
-  auto bytes = detail::trim_front(input.bytes);
-  auto scan = scan_json_value(bytes);
-  if (scan.state == json_scan_result::kind::complete
-      and scan.top_level == '{') {
-    auto rest = detail::trim_front(bytes.substr(scan.end));
-    if (not rest.empty()) {
-      return match(82, "JSON object followed by more input");
-    }
-  }
-  if (input.eof) {
-    return reject();
-  }
-  return need_more();
-}
-
-auto detect_json_field(read_detection_input input, std::string_view field,
-                       uint64_t confidence) -> read_detection_result {
-  auto object = detect_json_object(input);
-  auto ndjson = detect_ndjson(input);
-  if (object.state == detection_state::reject
-      and ndjson.state == detection_state::reject) {
-    return reject();
-  }
-  if (input.bytes.contains(field)) {
-    return match(confidence, fmt::format("contains `{}`", field));
-  }
-  if (object.state == detection_state::need_more
-      or ndjson.state == detection_state::need_more) {
-    return need_more();
-  }
-  return reject();
-}
-
-auto detect_gelf(read_detection_input input) -> read_detection_result {
-  auto object = detect_json_object(input);
-  auto ndjson = detect_ndjson(input);
-  if (object.state == detection_state::reject
-      and ndjson.state == detection_state::reject) {
-    return reject();
-  }
-  auto valid_json_shape = object.state == detection_state::match
-                          or ndjson.state == detection_state::match;
-  if (valid_json_shape and input.bytes.contains("\"version\"")
-      and input.bytes.contains("\"host\"")
-      and input.bytes.contains("\"short_message\"")) {
-    return match(90, "GELF fields");
-  }
-  if (object.state == detection_state::need_more
-      or ndjson.state == detection_state::need_more) {
-    return need_more();
-  }
-  return reject();
-}
-
-auto detect_zeek_tsv(read_detection_input input) -> read_detection_result {
-  auto bytes = detail::trim_front(input.bytes);
-  if (bytes.starts_with("#separator") or bytes.starts_with("#fields")
-      or bytes.starts_with("#types")) {
-    return match(95, "Zeek TSV header");
-  }
-  return bytes.size() < 10 and not input.eof ? need_more() : reject();
-}
-
-auto detect_syslog(read_detection_input input) -> read_detection_result {
-  auto bytes = detail::trim_front(input.bytes);
-  if (bytes.empty()) {
-    return input.eof ? reject() : need_more();
-  }
-  if (bytes.front() == '<') {
-    auto end = bytes.find('>');
-    if (end != std::string_view::npos and end > 1 and end <= 4) {
-      auto pri = bytes.substr(1, end - 1);
-      if (std::ranges::all_of(pri, [](char c) {
-            return c >= '0' and c <= '9';
-          })) {
-        return match(50, "syslog priority prefix");
-      }
-    }
-  }
-  return bytes.size() < 32 and not input.eof ? need_more() : reject();
-}
-
-auto detect_xsv(read_detection_input input, char sep, uint64_t confidence)
-  -> read_detection_result {
-  if (not detail::is_valid_utf8(input.bytes)) {
-    if (not input.eof and detail::is_valid_utf8_prefix(input.bytes)) {
-      return need_more("partial UTF-8 sequence");
-    }
-    return reject();
-  }
-  auto quoting = detail::quoting_escaping_policy{
-    .quotes = "\"'",
-    .backslashes_escape = true,
-    .doubled_quotes_escape = true,
-  };
-  auto count_separators = [&](std::string_view line) {
-    auto count = size_t{0};
-    auto offset = size_t{0};
-    while (offset < line.size()) {
-      auto next = quoting.find_not_in_quotes(line, sep, offset);
-      if (next == std::string_view::npos) {
-        break;
-      }
-      ++count;
-      offset = next + 1;
-    }
-    return count;
-  };
-  auto lines = detail::split_lines(input.bytes, 3);
-  std::erase_if(lines, [](std::string_view& line) {
-    line = detail::trim_front(line);
-    return line.empty();
-  });
-  auto counts = std::vector<size_t>{};
-  for (auto line : lines) {
-    if (line.starts_with("#")) {
-      continue;
-    }
-    counts.push_back(count_separators(line));
-  }
-  if (counts.size() >= 2 and counts[0] > 0
-      and std::ranges::all_of(counts, [&](size_t count) {
-            return count == counts[0];
-          })) {
-    return match(confidence, "stable delimiter counts");
-  }
-  if (input.eof and counts.size() == 1 and counts[0] > 0) {
-    return match(confidence - 5, "single delimited row");
-  }
-  return input.eof ? reject() : need_more();
-}
-
-auto detect_kv(read_detection_input input) -> read_detection_result {
-  auto lines = detail::split_lines(input.bytes, 2);
-  std::erase_if(lines, [](std::string_view& line) {
-    line = detail::trim_front(line);
-    return line.empty();
-  });
-  if (lines.empty()) {
-    return input.eof ? reject() : need_more();
-  }
-  auto has_kv = [](std::string_view line) {
-    auto eq = line.find('=');
-    return eq != std::string_view::npos and eq > 0 and eq + 1 < line.size();
-  };
-  if (std::ranges::all_of(lines, has_kv)) {
-    return match(65, "key-value assignments");
-  }
-  return input.eof ? reject() : need_more();
-}
-
-auto detect_yaml(read_detection_input input) -> read_detection_result {
-  if (not detail::is_valid_utf8(input.bytes)) {
-    if (not input.eof and detail::is_valid_utf8_prefix(input.bytes)) {
-      return need_more("partial UTF-8 sequence");
-    }
-    return reject();
-  }
-  auto bytes = detail::trim_front(input.bytes);
-  if (bytes.empty()) {
-    return input.eof ? reject() : need_more();
-  }
-  if (bytes.front() == '{' or bytes.front() == '[') {
-    return reject("JSON-compatible YAML is left to JSON detectors");
-  }
-  auto lines = detail::split_lines(bytes, 3);
-  std::erase_if(lines, [](std::string_view& line) {
-    line = detail::trim_front(line);
-    return line.empty();
-  });
-  if (std::ranges::any_of(lines, [](std::string_view line) {
-        auto colon = line.find(':');
-        return colon != std::string_view::npos and colon > 0;
-      })) {
-    return match(45, "YAML mapping");
-  }
-  return input.eof ? reject() : need_more();
-}
-
-auto detect_pcap(read_detection_input input) -> read_detection_result;
-
-auto detect(DetectorKind kind, read_detection_input input)
-  -> read_detection_result {
-  switch (kind) {
-    case DetectorKind::json_suricata:
-      return detect_json_field(input, "\"event_type\"", 90);
-    case DetectorKind::json_zeek:
-      return detect_json_field(input, "\"_path\"", 90);
-    case DetectorKind::json_gelf:
-      return detect_gelf(input);
-    case DetectorKind::json_ndjson:
-      return detect_ndjson(input);
-    case DetectorKind::json_array:
-      return detect_json_array(input);
-    case DetectorKind::json_object:
-      return detect_json_object(input);
-    case DetectorKind::cef: {
-      auto bytes = detail::trim_front(input.bytes);
-      if (bytes.size() < std::string_view{"CEF:"}.size()) {
-        return input.eof ? reject() : need_more();
-      }
-      return bytes.starts_with("CEF:") ? match(90) : reject();
-    }
-    case DetectorKind::leef: {
-      auto bytes = detail::trim_front(input.bytes);
-      if (bytes.size() < std::string_view{"LEEF:"}.size()) {
-        return input.eof ? reject() : need_more();
-      }
-      return bytes.starts_with("LEEF:") ? match(90) : reject();
-    }
-    case DetectorKind::zeek_tsv:
-      return detect_zeek_tsv(input);
-    case DetectorKind::syslog:
-      return detect_syslog(input);
-    case DetectorKind::csv:
-      return detect_xsv(input, ',', 60);
-    case DetectorKind::tsv:
-      return detect_xsv(input, '\t', 60);
-    case DetectorKind::ssv:
-      return detect_xsv(input, ' ', 40);
-    case DetectorKind::kv:
-      return detect_kv(input);
-    case DetectorKind::yaml:
-      return detect_yaml(input);
-    case DetectorKind::pcap:
-      return detect_pcap(input);
-    case DetectorKind::feather:
-      if (input.bytes.size() < std::string_view{"ARROW1"}.size()) {
-        return input.eof ? reject() : need_more();
-      }
-      return input.bytes.starts_with("ARROW1") ? match(100) : reject();
-    case DetectorKind::bitz: {
-      constexpr auto magic = std::string_view{"TNZ1"};
-      if (input.bytes.size() < magic.size()) {
-        return input.eof ? reject() : need_more();
-      }
-      return input.bytes.starts_with(magic) ? match(100) : reject();
-    }
-    case DetectorKind::parquet:
-      if (input.bytes.size() < std::string_view{"PAR1"}.size()) {
-        return input.eof ? reject() : need_more();
-      }
-      return input.bytes.starts_with("PAR1") ? match(100) : reject();
-  }
-  TENZIR_UNREACHABLE();
-}
-
-auto detect_pcap(read_detection_input input) -> read_detection_result {
-  constexpr auto magics = std::array{
-    std::string_view{"\xd4\xc3\xb2\xa1", 4},
-    std::string_view{"\xa1\xb2\xc3\xd4", 4},
-    std::string_view{"\x4d\x3c\xb2\xa1", 4},
-    std::string_view{"\xa1\xb2\x3c\x4d", 4},
-    std::string_view{"\x0a\x0d\x0d\x0a", 4},
-  };
-  if (input.bytes.size() < 4) {
-    return input.eof ? reject() : need_more();
-  }
-  return std::ranges::any_of(magics,
-                             [&](std::string_view magic) {
-                               return input.bytes.starts_with(magic);
-                             })
-           ? match(100, "pcap magic")
-           : reject();
-}
-
-auto builtin_candidates() -> std::vector<Candidate> {
-  auto result = std::vector<Candidate>{};
-  auto add = [&](std::string id, std::string pipeline, int64_t priority,
-                 DetectorKind detector) {
-    result.push_back(Candidate{
-      .id = std::move(id),
-      .pipeline = std::move(pipeline),
-      .priority = priority,
-      .detector = detector,
-    });
-  };
-  add("json.suricata", "read_suricata", 30, DetectorKind::json_suricata);
-  add("json.zeek", "read_zeek_json", 30, DetectorKind::json_zeek);
-  add("json.gelf", "read_gelf", 30, DetectorKind::json_gelf);
-  add("json.ndjson", "read_ndjson", 20, DetectorKind::json_ndjson);
-  add("json.array_of_objects", "read_json arrays_of_objects=true", 10,
-      DetectorKind::json_array);
-  add("json.object", "read_json", 0, DetectorKind::json_object);
-  add("cef", "read_cef", 20, DetectorKind::cef);
-  add("leef", "read_leef", 20, DetectorKind::leef);
-  add("zeek.tsv", "read_zeek_tsv", 20, DetectorKind::zeek_tsv);
-  add("syslog", "read_syslog", 0, DetectorKind::syslog);
-  add("xsv.csv", "read_csv", 0, DetectorKind::csv);
-  add("xsv.tsv", "read_tsv", 0, DetectorKind::tsv);
-  add("xsv.ssv", "read_ssv", 0, DetectorKind::ssv);
-  add("kv", "read_kv", 0, DetectorKind::kv);
-  add("yaml", "read_yaml", -10, DetectorKind::yaml);
-  add("pcap", "read_pcap", 50, DetectorKind::pcap);
-  add("feather", "read_feather", 50, DetectorKind::feather);
-  add("bitz", "read_bitz", 50, DetectorKind::bitz);
-  add("parquet", "read_parquet", 50, DetectorKind::parquet);
-  return result;
 }
 
 auto plugin_detection_candidates()
   -> const std::vector<read_detection_candidate>& {
   static const auto result = [] {
     auto result = std::vector<read_detection_candidate>{};
-    for (auto const* plugin : plugins::get<operator_factory_plugin>()) {
+    for (auto const* plugin : plugins::get<ReadOperatorPlugin>()) {
       auto candidates = plugin->read_detection_candidates();
       std::move(candidates.begin(), candidates.end(),
                 std::back_inserter(result));
@@ -546,7 +80,6 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    candidates_ = builtin_candidates();
     auto names = ctx.reg().operator_names();
     auto strip_tql2_prefix = [](std::string_view name) {
       constexpr auto prefix = std::string_view{"tql2."};
@@ -556,21 +89,17 @@ public:
       name = strip_tql2_prefix(name);
       return std::ranges::find(names, name) != names.end();
     };
-    for (auto& candidate : candidates_) {
-      auto name = detail::split_once(candidate.pipeline, " ").first;
-      if (not operator_available(name)) {
-        candidate.live = false;
-      }
-    }
     auto& plugin_candidates = plugin_detection_candidates();
     for (auto index = size_t{0}; index < plugin_candidates.size(); ++index) {
       auto& candidate = plugin_candidates[index];
       candidates_.push_back(Candidate{
-        .id = candidate.id,
+        .format_name = candidate.format_name,
+        .pipeline = candidate.pipeline,
         .priority = candidate.priority,
         .plugin_candidate = index,
-        .live = not candidate.id.empty() and not candidate.operator_name.empty()
-                and candidate.detect
+        .live = not candidate.format_name.empty()
+                and not candidate.operator_name.empty()
+                and not candidate.pipeline.empty() and candidate.detect
                 and operator_available(candidate.operator_name),
       });
     }
@@ -657,17 +186,12 @@ private:
       if (not candidate.live) {
         continue;
       }
-      auto result = std::invoke([&] {
-        if (candidate.detector) {
-          return detect(*candidate.detector, {probe_, input.eof});
-        }
-        if (candidate.plugin_candidate) {
-          auto& plugin_candidate
-            = plugin_detection_candidates()[*candidate.plugin_candidate];
-          return plugin_candidate.detect(
-            read_detection_input{probe_, input.eof});
-        }
-        return reject();
+      TENZIR_ASSERT(candidate.plugin_candidate);
+      auto& plugin_candidate
+        = plugin_detection_candidates()[*candidate.plugin_candidate];
+      auto result = plugin_candidate.detect(read_detection_input{
+        .bytes = probe_,
+        .eof = input.eof,
       });
       candidate.last = result;
       switch (result.state) {
@@ -682,6 +206,16 @@ private:
           break;
       }
     }
+    auto matched_format = [&](std::string_view format) {
+      return std::ranges::any_of(matches, [&](size_t index) {
+        return candidates_[index].format_name == format;
+      });
+    };
+    std::erase_if(matches, [&](size_t index) {
+      auto& plugin_candidate
+        = plugin_detection_candidates()[*candidates_[index].plugin_candidate];
+      return std::ranges::any_of(plugin_candidate.after, matched_format);
+    });
     if (matches.empty()) {
       if (not input.done_probing and any_need_more) {
         return std::nullopt;
@@ -700,7 +234,8 @@ private:
       diagnostic::error("read_auto detection is ambiguous")
         .primary(args_.operator_location)
         .note("candidates `{}` and `{}` both matched",
-              candidates_[matches[0]].id, candidates_[matches[1]].id)
+              candidates_[matches[0]].format_name,
+              candidates_[matches[1]].format_name)
         .emit(ctx);
       return std::nullopt;
     }
@@ -732,10 +267,9 @@ private:
       pipeline = valid_utf8 ? "read_all" : "read_all binary=true";
     }
     candidates_.push_back(Candidate{
-      .id = fmt::format("fallback.{}", args_.fallback),
+      .format_name = fmt::format("fallback.{}", args_.fallback),
       .pipeline = std::move(pipeline),
       .priority = std::numeric_limits<int64_t>::min(),
-      .detector = DetectorKind::json_object,
     });
     return candidates_.size() - 1;
   }
@@ -744,42 +278,20 @@ private:
     selected_ = index;
     auto& candidate = candidates_[index];
     auto root = compile_ctx::make_root(base_ctx{ctx});
-    auto pipe = failure_or<ir::pipeline>{};
-    if (candidate.plugin_candidate) {
-      auto& plugin_candidate
-        = plugin_detection_candidates()[*candidate.plugin_candidate];
-      auto operator_name = std::string_view{plugin_candidate.operator_name};
-      constexpr auto prefix = std::string_view{"tql2."};
-      if (operator_name.starts_with(prefix)) {
-        operator_name.remove_prefix(prefix.size());
-      }
-      auto identifiers = std::vector<ast::identifier>{};
-      for (auto segment : detail::split(operator_name, "::")) {
-        identifiers.emplace_back(segment, location::unknown);
-      }
-      auto ast = ast::pipeline{};
-      ast.body.push_back(ast::invocation{
-        ast::entity{std::move(identifiers)},
-        plugin_candidate.args,
-      });
-      pipe = std::move(ast).compile(root);
-    } else {
-      auto provider = session_provider::make(ctx.dh());
-      auto session = provider.as_session();
-      auto ast
-        = parse_pipeline_with_bad_diagnostics(candidate.pipeline, session);
-      if (not ast) {
-        diagnostic::error("failed to parse read-auto candidate `{}`",
-                          candidate.id)
-          .primary(args_.operator_location)
-          .emit(ctx);
-        co_return;
-      }
-      pipe = std::move(*ast).compile(root);
+    auto provider = session_provider::make(ctx.dh());
+    auto session = provider.as_session();
+    auto ast = parse_pipeline_with_bad_diagnostics(candidate.pipeline, session);
+    if (not ast) {
+      diagnostic::error("failed to parse read-auto candidate `{}`",
+                        candidate.format_name)
+        .primary(args_.operator_location)
+        .emit(ctx);
+      co_return;
     }
+    auto pipe = std::move(*ast).compile(root);
     if (not pipe) {
       diagnostic::error("failed to compile read-auto candidate `{}`",
-                        candidate.id)
+                        candidate.format_name)
         .primary(args_.operator_location)
         .emit(ctx);
       co_return;

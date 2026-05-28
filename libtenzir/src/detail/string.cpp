@@ -13,7 +13,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <limits>
 #include <simdjson.h>
 #include <string_view>
 #include <vector>
@@ -422,10 +421,21 @@ split_lines(std::string_view str, size_t max_lines) {
   if (max_lines == 0) {
     return {};
   }
-  auto result
-    = split(str, "\n",
-            max_lines == std::numeric_limits<size_t>::max() ? max_lines
-                                                            : max_lines - 1);
+  auto result = std::vector<std::string_view>{};
+  auto rest = str;
+  while (result.size() < max_lines) {
+    auto newline = rest.find('\n');
+    if (newline == std::string_view::npos) {
+      result.push_back(rest);
+      break;
+    }
+    result.push_back(rest.substr(0, newline));
+    rest.remove_prefix(newline + 1);
+    if (rest.empty() and result.size() < max_lines) {
+      result.push_back("");
+      break;
+    }
+  }
   for (auto& line : result) {
     if (not line.empty() and line.back() == '\r') {
       line.remove_suffix(1);

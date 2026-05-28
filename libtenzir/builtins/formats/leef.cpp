@@ -27,6 +27,7 @@
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/read_detection.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/to_lines.hpp>
@@ -495,7 +496,7 @@ class leef_plugin final : public virtual parser_plugin<leef_parser> {
 };
 
 class read_leef final : public operator_plugin2<parser_adapter<leef_parser>>,
-                        public virtual OperatorPlugin {
+                        public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_leef";
@@ -526,6 +527,18 @@ public:
     return {
       .extensions = {"leef"},
       .mime_types = {"application/x-leef"},
+    };
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate("leef", "read_leef", "read_leef", 20,
+                                [](read_detection_input input) {
+                                  input.bytes = detail::trim_front(input.bytes);
+                                  return read_detection::magic_prefix(
+                                    input, "LEEF:", 90);
+                                }),
     };
   }
 };

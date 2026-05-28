@@ -20,6 +20,7 @@
 #include "tenzir/multi_series_builder_argument_parser.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/parser_interface.hpp"
+#include "tenzir/read_detection.hpp"
 #include "tenzir/to_lines.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -1437,7 +1438,7 @@ template <detail::string_literal Name, detail::string_literal Sep,
           detail::string_literal... mimes>
 class configured_read_xsv_plugin final
   : public operator_plugin2<parser_adapter<xsv_parser>>,
-    public virtual OperatorPlugin {
+    public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return fmt::format("read_{}", Name);
@@ -1504,6 +1505,19 @@ public:
 
   auto read_properties() const -> read_properties_t override {
     return {.extensions = {std::string{Name}}, .mime_types = {mimes...}};
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate(
+        fmt::format("xsv.{}", Name.str()), name(), name(), 0,
+        [](read_detection_input input) {
+          return read_detection::xsv(
+            input, Sep.str()[0],
+            std::string_view{Name.str()} == "ssv" ? 40 : 60);
+        }),
+    };
   }
 };
 

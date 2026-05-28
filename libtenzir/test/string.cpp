@@ -231,6 +231,25 @@ TEST("splitting") {
   CHECK_EQUAL(s[0], "a");
   CHECK_EQUAL(s[1], "b");
   CHECK_EQUAL(s[2], "");
+  MESSAGE("split lines with maximum line count");
+  str = "a\nb\nc\nd";
+  s = split_lines(str, 3);
+  REQUIRE_EQUAL(s.size(), 3ull);
+  CHECK_EQUAL(s[0], "a");
+  CHECK_EQUAL(s[1], "b");
+  CHECK_EQUAL(s[2], "c");
+  MESSAGE("split lines strips carriage returns");
+  str = "a\r\nb\r\nc";
+  s = split_lines(str, 2);
+  REQUIRE_EQUAL(s.size(), 2ull);
+  CHECK_EQUAL(s[0], "a");
+  CHECK_EQUAL(s[1], "b");
+  MESSAGE("split lines with trailing newline");
+  str = "a\n";
+  s = split_lines(str, 3);
+  REQUIRE_EQUAL(s.size(), 2ull);
+  CHECK_EQUAL(s[0], "a");
+  CHECK_EQUAL(s[1], "");
 }
 
 TEST("escaped splitting") {

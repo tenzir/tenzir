@@ -18,6 +18,7 @@
 #include <tenzir/pcap.hpp>
 #include <tenzir/pcapng.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/read_detection.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
@@ -1102,7 +1103,7 @@ private:
 
 class read_plugin final
   : public virtual operator_plugin2<parser_adapter<pcap_parser>>,
-    public virtual OperatorPlugin {
+    public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_pcap";
@@ -1128,6 +1129,14 @@ public:
     return {
       .extensions = {"pcap"},
       .mime_types = {"application/vnd.tcpdump.pcap"},
+    };
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate("pcap", "read_pcap", "read_pcap", 50,
+                                read_detection::pcap),
     };
   }
 };

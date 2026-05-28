@@ -32,6 +32,7 @@
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/read_detection.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/to_lines.hpp>
@@ -1574,7 +1575,7 @@ private:
 
 class read_json_plugin final
   : public virtual operator_plugin2<parser_adapter<json_parser>>,
-    public virtual OperatorPlugin {
+    public virtual ReadOperatorPlugin {
 public:
   auto describe() const -> Description override {
     auto d = Describer<ReadJsonArgs, ReadJson>{};
@@ -1606,11 +1607,22 @@ public:
       .mime_types = {"application/json"},
     };
   }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate("json.array_of_objects", "read_json",
+                                "read_json arrays_of_objects=true", 10,
+                                read_detection::json_array),
+      read_detection::candidate("json.object", "read_json", "read_json", 0,
+                                read_detection::json_object),
+    };
+  }
 };
 
 class read_ndjson_plugin final
   : public virtual operator_plugin2<parser_adapter<json_parser>>,
-    public virtual OperatorPlugin {
+    public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_ndjson";
@@ -1656,11 +1668,19 @@ public:
       .mime_types = {"application/x-ndjson", "application/ld+json"},
     };
   }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate("json.ndjson", "read_ndjson", "read_ndjson", 20,
+                                read_detection::ndjson),
+    };
+  }
 };
 
 class read_gelf_plugin final
   : public virtual operator_plugin2<parser_adapter<json_parser>>,
-    public virtual OperatorPlugin {
+    public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_gelf";
@@ -1707,13 +1727,21 @@ public:
       .mime_types = {"application/gelf", "application/x-gelf"},
     };
   }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate("json.gelf", "read_gelf", "read_gelf", 30,
+                                read_detection::gelf),
+    };
+  }
 };
 
 template <detail::string_literal Name, detail::string_literal Selector,
           detail::string_literal Prefix, detail::string_literal Separator = "">
 class configured_read_plugin final
   : public virtual operator_plugin2<parser_adapter<json_parser>>,
-    public virtual OperatorPlugin {
+    public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return fmt::format("read_{}", Name);
@@ -1787,6 +1815,29 @@ public:
     }
     if constexpr (std::string_view{Name.str()} == "zeek_json") {
       return {.extensions = {"zeek.json"}};
+    }
+    return {};
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    if constexpr (std::string_view{Name.str()} == "suricata") {
+      return {
+        read_detection::candidate("json.suricata", name(), name(), 30,
+                                  [](read_detection_input input) {
+                                    return read_detection::json_field(
+                                      input, "\"event_type\"", 90);
+                                  }),
+      };
+    }
+    if constexpr (std::string_view{Name.str()} == "zeek_json") {
+      return {
+        read_detection::candidate("json.zeek", name(), name(), 30,
+                                  [](read_detection_input input) {
+                                    return read_detection::json_field(
+                                      input, "\"_path\"", 90);
+                                  }),
+      };
     }
     return {};
   }
