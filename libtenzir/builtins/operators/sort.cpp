@@ -16,6 +16,7 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -25,6 +26,7 @@
 
 #include <arrow/compute/api_vector.h>
 #include <arrow/record_batch.h>
+#include <arrow/util/bitmap_ops.h>
 
 #include <algorithm>
 #include <optional>
@@ -172,7 +174,11 @@ auto sort_list(const series& input, const std::optional<table_slice>& scope,
 auto sort_record(const arrow::StructArray& array)
   -> std::shared_ptr<arrow::StructArray> {
   auto fields = array.struct_type()->fields();
-  auto arrays = array.fields();
+  auto arrays = arrow::ArrayVector{};
+  arrays.reserve(array.num_fields());
+  for (auto i = 0; i < array.num_fields(); ++i) {
+    arrays.push_back(array.field(i));
+  }
   struct kv_pair {
     std::shared_ptr<arrow::Field> key;
     std::shared_ptr<arrow::Array> value;
@@ -195,9 +201,16 @@ auto sort_record(const arrow::StructArray& array)
     fields[i] = std::move(data[i].key);
     arrays[i] = std::move(data[i].value);
   }
-  return std::make_shared<arrow::StructArray>(
-    arrow::struct_(fields), array.length(), std::move(arrays),
-    array.null_bitmap(), array.null_count(), array.offset());
+  auto null_bitmap = array.null_bitmap();
+  if (array.offset() != 0 and array.null_bitmap_data()) {
+    null_bitmap = check(
+      arrow::internal::CopyBitmap(arrow_memory_pool(), array.null_bitmap_data(),
+                                  array.offset(), array.length()));
+  }
+  return std::make_shared<arrow::StructArray>(arrow::struct_(fields),
+                                              array.length(), std::move(arrays),
+                                              std::move(null_bitmap),
+                                              array.null_count(), 0);
 }
 
 auto sort_array_recursive(std::shared_ptr<arrow::Array> array)
@@ -206,13 +219,18 @@ auto sort_array_recursive(std::shared_ptr<arrow::Array> array)
     return sort_record(*record);
   }
   if (auto* list = try_as<arrow::ListArray>(*array)) {
-    auto values = sort_array_recursive(list->values());
-    if (values == list->values()) {
+    const auto value_offset = list->value_offset(0);
+    const auto value_length = list->value_offset(list->length()) - value_offset;
+    auto values = list->values()->Slice(value_offset, value_length);
+    auto sorted_values = sort_array_recursive(values);
+    if (sorted_values == values) {
       return array;
     }
-    return check(arrow::ListArray::FromArrays(
-      *list->offsets(), *values, arrow_memory_pool(), list->null_bitmap(),
-      list->data()->null_count));
+    auto buffers = rebase_list_array_buffers(*list);
+    return std::make_shared<arrow::ListArray>(
+      arrow::list(sorted_values->type()), buffers.length,
+      std::move(buffers.offsets), std::move(sorted_values),
+      std::move(buffers.null_bitmap), buffers.null_count, 0);
   }
   return array;
 }
