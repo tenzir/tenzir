@@ -30,6 +30,7 @@
 #include <fmt/format.h>
 
 #include <chrono>
+#include <cmath>
 #include <string>
 #include <utility>
 #include <vector>
@@ -348,12 +349,23 @@ public:
     d.named("data", &PromptArgs::data, "any");
     d.named_optional("into", &PromptArgs::into);
     d.named("api_key", &PromptArgs::api_key, "string");
-    d.named_optional("temperature", &PromptArgs::temperature);
+    auto temperature
+      = d.named_optional("temperature", &PromptArgs::temperature);
     d.named("max_tokens", &PromptArgs::max_tokens);
     d.named_optional("timeout", &PromptArgs::timeout);
     d.named_optional("concurrency", &PromptArgs::concurrency);
     d.named("tls", &PromptArgs::tls, "record");
     d.operator_location(&PromptArgs::operator_location);
+    d.validate([temperature](DescribeCtx& ctx) -> Empty {
+      TRY(auto value, ctx.get(temperature));
+      if (not std::isfinite(value.inner) or value.inner < 0.0
+          or value.inner > 2.0) {
+        diagnostic::error("`temperature` must be between 0 and 2")
+          .primary(value)
+          .emit(ctx);
+      }
+      return {};
+    });
     return d.without_optimize();
   }
 };

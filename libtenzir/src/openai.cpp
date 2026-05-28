@@ -63,14 +63,15 @@ auto optional_uint64(simdjson::dom::object object, std::string_view field)
 }
 
 auto append_output_text(simdjson::dom::element output_item, std::string& text)
-  -> void {
+  -> bool {
+  auto found = false;
   auto item = simdjson::dom::object{};
   if (output_item.get_object().get(item) != simdjson::SUCCESS) {
-    return;
+    return found;
   }
   auto content = simdjson::dom::array{};
   if (item["content"].get_array().get(content) != simdjson::SUCCESS) {
-    return;
+    return found;
   }
   for (auto part_element : content) {
     auto part = simdjson::dom::object{};
@@ -85,8 +86,10 @@ auto append_output_text(simdjson::dom::element output_item, std::string& text)
     auto part_text = std::string_view{};
     if (part["text"].get_string().get(part_text) == simdjson::SUCCESS) {
       text += part_text;
+      found = true;
     }
   }
+  return found;
 }
 
 } // namespace
@@ -119,6 +122,7 @@ auto make_responses_body(ResponsesRequest const& request)
   body.emplace("model", request.model);
   body.emplace("input", request.input);
   body.emplace("stream", false);
+  body.emplace("store", false);
   body.emplace("temperature", request.temperature);
   if (request.instructions) {
     body.emplace("instructions", *request.instructions);
@@ -154,12 +158,13 @@ auto parse_responses_body(std::string_view body, duration latency)
   result.model = optional_string(object, "model");
   result.status = optional_string(object, "status");
   auto output = simdjson::dom::array{};
+  auto found_output_text = false;
   if (object["output"].get_array().get(output) == simdjson::SUCCESS) {
     for (auto item : output) {
-      append_output_text(item, result.text);
+      found_output_text |= append_output_text(item, result.text);
     }
   }
-  if (result.text.empty()) {
+  if (not found_output_text) {
     return Err{std::string{"response did not contain output text"}};
   }
   auto usage = simdjson::dom::object{};

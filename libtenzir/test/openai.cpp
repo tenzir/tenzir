@@ -35,6 +35,7 @@ TEST("responses request body") {
   CHECK(body.unwrap().contains(R"("model":"test-model")"));
   CHECK(body.unwrap().contains(R"("input":"{\"message\":\"hello\"}")"));
   CHECK(body.unwrap().contains(R"("stream":false)"));
+  CHECK(body.unwrap().contains(R"("store":false)"));
   CHECK(body.unwrap().contains(R"("temperature":0.25)"));
   CHECK(body.unwrap().contains(R"("instructions":"keep it short")"));
   CHECK(body.unwrap().contains(R"("max_output_tokens":42)"));
@@ -79,6 +80,14 @@ TEST("responses body parser") {
   REQUIRE(result.usage->total_tokens);
   CHECK_EQUAL(*result.usage->total_tokens, uint64_t{18});
   CHECK_EQUAL(result.latency, std::chrono::duration_cast<duration>(123ms));
+}
+
+TEST("responses body parser accepts empty output text") {
+  auto parsed = openai::parse_responses_body(
+    R"({"status":"completed","output":[{"content":[{"type":"output_text","text":""}]}]})",
+    duration::zero());
+  REQUIRE(parsed);
+  CHECK_EQUAL(parsed.unwrap().text, "");
 }
 
 TEST("responses body parser rejects missing text") {
