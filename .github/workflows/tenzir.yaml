@@ -1083,6 +1083,8 @@ jobs:
         os: [ubuntu-latest]
     env:
       DEBIAN_FRONTEND: noninteractive
+      TENZIR_VERSION_SUFFIX: ${{ needs.configure.outputs.tenzir-version-suffix }}
+      TENZIR_VERSION_BUILD_METADATA: ${{ needs.configure.outputs.tenzir-version-build-metadata }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - name: Set up Python ${{ matrix.python-version }}
@@ -1142,6 +1144,8 @@ jobs:
         os: ["macos-26", "ubuntu-latest", "ubicloud-standard-4-arm"]
     env:
       DEBIAN_FRONTEND: noninteractive
+      TENZIR_VERSION_SUFFIX: ${{ needs.configure.outputs.tenzir-version-suffix }}
+      TENZIR_VERSION_BUILD_METADATA: ${{ needs.configure.outputs.tenzir-version-build-metadata }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - name: Set up Python ${{ matrix.python-version }}
