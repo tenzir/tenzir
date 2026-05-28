@@ -1,0 +1,18 @@
+{
+  facility: 4,
+  severity: 2,
+  timestamp: "Oct 11 22:14:15",
+  hostname: "host",
+  app_name: "app",
+  process_id: null,
+  content: "msg",
+}
+{
+  facility: 4,
+  severity: 2,
+  timestamp: "Oct 11 22:14:16",
+  hostname: "host",
+  app_name: "app",
+  process_id: null,
+  content: "msg",
+}

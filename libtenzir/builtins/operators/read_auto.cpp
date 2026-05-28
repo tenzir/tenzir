@@ -285,6 +285,24 @@ auto detect_xsv(read_detection_input input, char sep, uint64_t confidence)
     }
     return reject();
   }
+  auto quoting = detail::quoting_escaping_policy{
+    .quotes = "\"'",
+    .backslashes_escape = true,
+    .doubled_quotes_escape = true,
+  };
+  auto count_separators = [&](std::string_view line) {
+    auto count = size_t{0};
+    auto offset = size_t{0};
+    while (offset < line.size()) {
+      auto next = quoting.find_not_in_quotes(line, sep, offset);
+      if (next == std::string_view::npos) {
+        break;
+      }
+      ++count;
+      offset = next + 1;
+    }
+    return count;
+  };
   auto lines = detail::split_lines(input.bytes, 3);
   std::erase_if(lines, [](std::string_view& line) {
     line = detail::trim_front(line);
@@ -295,7 +313,7 @@ auto detect_xsv(read_detection_input input, char sep, uint64_t confidence)
     if (line.starts_with("#")) {
       continue;
     }
-    counts.push_back(static_cast<size_t>(std::ranges::count(line, sep)));
+    counts.push_back(count_separators(line));
   }
   if (counts.size() >= 2 and counts[0] > 0
       and std::ranges::all_of(counts, [&](size_t count) {
@@ -330,6 +348,9 @@ auto detect_kv(read_detection_input input) -> read_detection_result {
 
 auto detect_yaml(read_detection_input input) -> read_detection_result {
   if (not detail::is_valid_utf8(input.bytes)) {
+    if (not input.eof and detail::is_valid_utf8_prefix(input.bytes)) {
+      return need_more("partial UTF-8 sequence");
+    }
     return reject();
   }
   auto bytes = detail::trim_front(input.bytes);
@@ -393,7 +414,7 @@ auto detect(DetectorKind kind, read_detection_input input)
     case DetectorKind::tsv:
       return detect_xsv(input, '\t', 60);
     case DetectorKind::ssv:
-      return detect_xsv(input, ' ', 55);
+      return detect_xsv(input, ' ', 40);
     case DetectorKind::kv:
       return detect_kv(input);
     case DetectorKind::yaml:
@@ -405,11 +426,13 @@ auto detect(DetectorKind kind, read_detection_input input)
         return input.eof ? reject() : need_more();
       }
       return input.bytes.starts_with("ARROW1") ? match(100) : reject();
-    case DetectorKind::bitz:
-      if (input.bytes.size() < std::string_view{"TENZIR-BITZ"}.size()) {
+    case DetectorKind::bitz: {
+      constexpr auto magic = std::string_view{"TNZ1"};
+      if (input.bytes.size() < magic.size()) {
         return input.eof ? reject() : need_more();
       }
-      return input.bytes.starts_with("TENZIR-BITZ") ? match(100) : reject();
+      return input.bytes.starts_with(magic) ? match(100) : reject();
+    }
     case DetectorKind::parquet:
       if (input.bytes.size() < std::string_view{"PAR1"}.size()) {
         return input.eof ? reject() : need_more();
