@@ -438,8 +438,7 @@ auto null_with_warning(warning_state& warnings, builder_ref field,
 
 template <class... Ts>
 auto null_entire_column_with_warning(normalized_column const& column,
-                                     warning_state& warnings,
-                                     builder_ref field,
+                                     warning_state& warnings, builder_ref field,
                                      value_path const& path,
                                      diagnostic_handler& dh,
                                      fmt::format_string<Ts...> str, Ts&&... xs)
@@ -451,10 +450,9 @@ auto null_entire_column_with_warning(normalized_column const& column,
 }
 
 template <class T, class... Ts>
-auto append_or_null(Option<T> value, warning_state& warnings,
-                    builder_ref field, value_path const& path,
-                    diagnostic_handler& dh, fmt::format_string<Ts...> str,
-                    Ts&&... xs) -> void {
+auto append_or_null(Option<T> value, warning_state& warnings, builder_ref field,
+                    value_path const& path, diagnostic_handler& dh,
+                    fmt::format_string<Ts...> str, Ts&&... xs) -> void {
   if (value) {
     field.data(*value);
   } else {
@@ -525,9 +523,9 @@ auto build_tuple_series(normalized_column const& column,
     fields.emplace_back(std::move(names[i]), std::move(child->array));
   }
   auto const& record = as<record_type>(column.output_type);
-  auto array = make_struct_array(detail::narrow<int64_t>(column.original->Size()),
-                                 make_null_bitmap(column), std::move(fields),
-                                 record);
+  auto array
+    = make_struct_array(detail::narrow<int64_t>(column.original->Size()),
+                        make_null_bitmap(column), std::move(fields), record);
   return series{record, std::move(array)};
 }
 
@@ -551,8 +549,8 @@ auto build_column(normalized_column const& column,
 }
 
 auto build_column(normalized_column const& column,
-                  ::clickhouse::ColumnBool const& values,
-                  value_path const&, diagnostic_handler&) -> series {
+                  ::clickhouse::ColumnBool const& values, value_path const&,
+                  diagnostic_handler&) -> series {
   auto builder = series_builder{column.output_type};
   auto field = builder_ref{builder};
   for_each_present_row(column, field, [&](size_t row) {
@@ -588,8 +586,8 @@ auto build_column(normalized_column const& column, Column const& values,
 }
 
 auto build_column(normalized_column const& column,
-                  ::clickhouse::ColumnInt128 const& values,
-                  value_path const&, diagnostic_handler&) -> series {
+                  ::clickhouse::ColumnInt128 const& values, value_path const&,
+                  diagnostic_handler&) -> series {
   auto builder = series_builder{column.output_type};
   auto field = builder_ref{builder};
   for_each_present_row(column, field, [&](size_t row) {
@@ -599,8 +597,8 @@ auto build_column(normalized_column const& column,
 }
 
 auto build_column(normalized_column const& column,
-                  ::clickhouse::ColumnUInt128 const& values,
-                  value_path const&, diagnostic_handler&) -> series {
+                  ::clickhouse::ColumnUInt128 const& values, value_path const&,
+                  diagnostic_handler&) -> series {
   auto builder = series_builder{column.output_type};
   auto field = builder_ref{builder};
   for_each_present_row(column, field, [&](size_t row) {
@@ -610,8 +608,8 @@ auto build_column(normalized_column const& column,
 }
 
 auto build_column(normalized_column const& column,
-                  ::clickhouse::ColumnUUID const& values,
-                  value_path const&, diagnostic_handler&) -> series {
+                  ::clickhouse::ColumnUUID const& values, value_path const&,
+                  diagnostic_handler&) -> series {
   auto builder = series_builder{column.output_type};
   auto field = builder_ref{builder};
   for_each_present_row(column, field, [&](size_t row) {
@@ -641,9 +639,9 @@ auto build_column(normalized_column const& column,
   auto builder = series_builder{column.output_type};
   auto field = builder_ref{builder};
   for_each_present_row(column, field, [&](size_t row) {
-    append_or_null(time_from_unix_days(int64_t{values.At(row)}), warnings,
-                   field, path, dh,
-                   "Date32 value is out of range after rescaling to nanoseconds");
+    append_or_null(
+      time_from_unix_days(int64_t{values.At(row)}), warnings, field, path, dh,
+      "Date32 value is out of range after rescaling to nanoseconds");
   });
   return builder.finish_assert_one_array();
 }
@@ -671,8 +669,8 @@ auto build_column(normalized_column const& column,
   auto field = builder_ref{builder};
   for_each_present_row(column, field, [&](size_t row) {
     append_or_null(
-      time_from_nanos(rescale_decimal_to_nanos(values.At(row),
-                                               values.GetPrecision())),
+      time_from_nanos(
+        rescale_decimal_to_nanos(values.At(row), values.GetPrecision())),
       warnings, field, path, dh,
       "DateTime64 value is out of range after rescaling to nanoseconds");
   });
@@ -702,8 +700,8 @@ auto build_column(normalized_column const& column,
   auto field = builder_ref{builder};
   for_each_present_row(column, field, [&](size_t row) {
     append_or_null(
-      duration_from_nanos(rescale_decimal_to_nanos(values.At(row),
-                                                   values.GetPrecision())),
+      duration_from_nanos(
+        rescale_decimal_to_nanos(values.At(row), values.GetPrecision())),
       warnings, field, path, dh,
       "Time64 value is out of range after rescaling to nanoseconds");
   });
@@ -741,8 +739,8 @@ auto build_column(normalized_column const& column,
 }
 
 auto build_column(normalized_column const& column,
-                  ::clickhouse::ColumnDecimal const& values,
-                  value_path const&, diagnostic_handler&) -> series {
+                  ::clickhouse::ColumnDecimal const& values, value_path const&,
+                  diagnostic_handler&) -> series {
   auto builder = series_builder{column.output_type};
   auto field = builder_ref{builder};
   for_each_present_row(column, field, [&](size_t row) {
@@ -766,8 +764,8 @@ auto build_column(normalized_column const& column, Column const& values,
 
 auto build_blob_array_series(normalized_column const& column,
                              ::clickhouse::ColumnArray const& values,
-                             value_path const& path,
-                             diagnostic_handler& dh) -> series {
+                             value_path const& path, diagnostic_handler& dh)
+  -> series {
   auto warnings = warning_state{};
   auto builder = series_builder{column.output_type};
   auto field = builder_ref{builder};
@@ -789,7 +787,8 @@ auto build_blob_array_series(normalized_column const& column,
     auto nested = values.GetAsColumn(row);
     auto bytes = nested->template As<::clickhouse::ColumnUInt8>();
     if (not bytes) {
-      null_with_warning(warnings, field, path, dh, "expected Array(UInt8) data");
+      null_with_warning(warnings, field, path, dh,
+                        "expected Array(UInt8) data");
       continue;
     }
     auto value = blob{};
@@ -814,8 +813,8 @@ auto build_array_series(normalized_column const& column,
   if (not flat->array) {
     // series_builder returns a default series{} when given a 0-row column
     // (i.e., all outer arrays are empty). Create a typed empty array instead.
-    auto empty = check(arrow::MakeArrayOfNull(
-      list.value_type().to_arrow_type(), 0, arrow_memory_pool()));
+    auto empty = check(arrow::MakeArrayOfNull(list.value_type().to_arrow_type(),
+                                              0, arrow_memory_pool()));
     flat = series{list.value_type(), std::move(empty)};
   }
   TENZIR_ASSERT_EQ(flat->type, list.value_type());
@@ -988,11 +987,11 @@ auto build_low_cardinality_series(normalized_column const& column,
     }
     case ::clickhouse::Type::Time:
       for_each_present_row(column, field, [&](size_t row) {
-        append_or_null(
-          duration_from_clickhouse_time(
-            column.original->GetItem(row).get<int32_t>()),
-          warnings, field, path, dh,
-          "Time value is out of range after rescaling to nanoseconds");
+        append_or_null(duration_from_clickhouse_time(
+                         column.original->GetItem(row).get<int32_t>()),
+                       warnings, field, path, dh,
+                       "Time value is out of range after rescaling to "
+                       "nanoseconds");
       });
       break;
     case ::clickhouse::Type::Time64: {
@@ -1009,17 +1008,16 @@ auto build_low_cardinality_series(normalized_column const& column,
     }
     case ::clickhouse::Type::IPv4:
       for_each_present_row(column, field, [&](size_t row) {
-        append_or_null(parse_ip_bytes<4UZ>(
-                         column.original->GetItem(row).AsBinaryData()),
-                       warnings, field, path, dh, "expected 4-byte IPv4 data");
+        append_or_null(
+          parse_ip_bytes<4UZ>(column.original->GetItem(row).AsBinaryData()),
+          warnings, field, path, dh, "expected 4-byte IPv4 data");
       });
       break;
     case ::clickhouse::Type::IPv6:
       for_each_present_row(column, field, [&](size_t row) {
-        append_or_null(parse_ip_bytes<16UZ>(
-                         column.original->GetItem(row).AsBinaryData()),
-                       warnings, field, path, dh,
-                       "expected 16-byte IPv6 data");
+        append_or_null(
+          parse_ip_bytes<16UZ>(column.original->GetItem(row).AsBinaryData()),
+          warnings, field, path, dh, "expected 16-byte IPv6 data");
       });
       break;
     case ::clickhouse::Type::Decimal:
@@ -1029,11 +1027,10 @@ auto build_low_cardinality_series(normalized_column const& column,
       auto scale
         = column.logical_type.type->As<::clickhouse::DecimalType>()->GetScale();
       for_each_present_row(column, field, [&](size_t row) {
-        append_or_null(
-          decimal_from_bytes(column.original->GetItem(row).AsBinaryData(),
-                             scale),
-          warnings, field, path, dh,
-          "expected decimal payload width of 4, 8, or 16 bytes");
+        append_or_null(decimal_from_bytes(
+                         column.original->GetItem(row).AsBinaryData(), scale),
+                       warnings, field, path, dh,
+                       "expected decimal payload width of 4, 8, or 16 bytes");
       });
       break;
     }
@@ -1047,10 +1044,10 @@ auto build_low_cardinality_series(normalized_column const& column,
     case ::clickhouse::Type::Polygon:
     case ::clickhouse::Type::MultiPolygon:
     case ::clickhouse::Type::JSON:
-      null_entire_column_with_warning(
-        column, warnings, field, path, dh,
-        "unsupported LowCardinality ClickHouse type `{}`",
-        column.logical_type.type->GetName());
+      null_entire_column_with_warning(column, warnings, field, path, dh,
+                                      "unsupported LowCardinality ClickHouse "
+                                      "type `{}`",
+                                      column.logical_type.type->GetName());
       break;
   }
   return builder.finish_assert_one_array();
@@ -1063,29 +1060,32 @@ auto build_series(::clickhouse::ColumnRef const& column, value_path path,
     emit_unsupported_column_warning(path, column->Type()->GetName(), dh);
     return None{};
   }
-  return match(*normalized->effective,
-               [&]<class Column>(Column const& values) -> Option<series> {
-    if constexpr (std::same_as<Column, ::clickhouse::ColumnTuple>) {
-      return build_tuple_series(*normalized, values, path, dh);
-    } else if constexpr (std::same_as<Column, ::clickhouse::ColumnArray>) {
-      if (is<list_type>(normalized->output_type)) {
-        return build_array_series(*normalized, values, path, dh);
+  return match(
+    *normalized->effective,
+    [&]<class Column>(Column const& values) -> Option<series> {
+      if constexpr (std::same_as<Column, ::clickhouse::ColumnTuple>) {
+        return build_tuple_series(*normalized, values, path, dh);
+      } else if constexpr (std::same_as<Column, ::clickhouse::ColumnArray>) {
+        if (is<list_type>(normalized->output_type)) {
+          return build_array_series(*normalized, values, path, dh);
+        }
+        return build_blob_array_series(*normalized, values, path, dh);
+      } else if constexpr (std::same_as<Column,
+                                        ::clickhouse::ColumnLowCardinality>) {
+        return build_low_cardinality_series(*normalized, path, dh);
+      } else if constexpr (std::same_as<Column, ::clickhouse::ColumnNothing>) {
+        auto builder = series_builder{normalized->output_type};
+        auto field = builder_ref{builder};
+        for (auto row = size_t{0}; row < normalized->original->Size(); ++row) {
+          field.null();
+        }
+        return builder.finish_assert_one_array();
+      } else if constexpr (std::same_as<Column, ::clickhouse::ColumnNullable>) {
+        TENZIR_UNREACHABLE();
+      } else {
+        return build_column(*normalized, values, path, dh);
       }
-      return build_blob_array_series(*normalized, values, path, dh);
-    } else if constexpr (std::same_as<Column, ::clickhouse::ColumnLowCardinality>) {
-      return build_low_cardinality_series(*normalized, path, dh);
-    } else if constexpr (std::same_as<Column, ::clickhouse::ColumnNothing>) {
-      auto builder = series_builder{normalized->output_type};
-      auto field = builder_ref{builder};
-      for (auto row = size_t{0}; row < normalized->original->Size(); ++row)
-        field.null();
-      return builder.finish_assert_one_array();
-    } else if constexpr (std::same_as<Column, ::clickhouse::ColumnNullable>) {
-      TENZIR_UNREACHABLE();
-    } else {
-      return build_column(*normalized, values, path, dh);
-    }
-  });
+    });
 }
 
 } // namespace
