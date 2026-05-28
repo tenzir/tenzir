@@ -38,6 +38,7 @@
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/futures/Future.h>
 
+#include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -301,9 +302,28 @@ struct partition_source_state {
   caf::error error = {};
   tenzir::time min_import_time = tenzir::time::max();
   tenzir::time max_import_time = tenzir::time::min();
+  std::atomic<duration::rep> loaded_min_import_time
+    = time::max().time_since_epoch().count();
   std::vector<partition_info> selected_partitions = {};
   std::vector<partition_info> loaded_partitions = {};
   bool input_complete = true;
+
+  auto observe_import_time(time import_time) -> void {
+    min_import_time = std::min(min_import_time, import_time);
+    max_import_time = std::max(max_import_time, import_time);
+    auto import_time_count = import_time.time_since_epoch().count();
+    auto current = loaded_min_import_time.load(std::memory_order_relaxed);
+    while (import_time_count < current
+           and not loaded_min_import_time.compare_exchange_weak(
+             current, import_time_count, std::memory_order_relaxed)) {
+      // nop
+    }
+  }
+
+  auto min_loaded_import_time() const -> time {
+    return time{}
+           + duration{loaded_min_import_time.load(std::memory_order_relaxed)};
+  }
 };
 
 class partition_loader {
@@ -359,11 +379,7 @@ public:
         co_return;
       }
       for (auto&& slice : *maybe_slices) {
-        const auto import_time = slice.import_time();
-        state_->min_import_time
-          = std::min(state_->min_import_time, import_time);
-        state_->max_import_time
-          = std::max(state_->max_import_time, import_time);
+        state_->observe_import_time(slice.import_time());
         if (slice.rows() == 0) {
           continue;
         }
@@ -704,7 +720,8 @@ auto partition_transformer(
                              "externally pushed table slices");
     },
     [self](atom::done) -> caf::result<void> {
-      auto process_slice = [self](table_slice slice) {
+      auto process_slice = [self](table_slice slice,
+                                  time fallback_import_time) {
         auto& partition_data = self->state().create_or_get_partition(slice);
         if (not partition_data.synopsis) {
           partition_data.id = tenzir::uuid::random();
@@ -715,7 +732,10 @@ auto partition_transformer(
         }
         auto* unshared_synopsis = partition_data.synopsis.unshared_ptr();
         if (slice.import_time() == time{}) {
-          slice.import_time(self->state().min_import_time);
+          if (fallback_import_time == time::max()) {
+            fallback_import_time = time{};
+          }
+          slice.import_time(fallback_import_time);
         }
         unshared_synopsis->min_import_time
           = std::min(unshared_synopsis->min_import_time, slice.import_time());
@@ -832,7 +852,7 @@ auto partition_transformer(
               co_await loader.feed(push_input);
             };
             auto drain_output
-              = [self, weak, process_slice](
+              = [self, weak, process_slice, source_state](
                   Pull<OperatorMsg<table_slice>>& pull_output) mutable
               -> Task<void> {
               while (auto msg = co_await pull_output()) {
@@ -851,10 +871,13 @@ auto partition_transformer(
                     if (not strong) {
                       promise_ptr->setValue(folly::unit);
                     } else {
+                      auto fallback_import_time
+                        = source_state->min_loaded_import_time();
                       self->schedule_fn(
                         [process_slice, slice = std::move(slice),
+                         fallback_import_time,
                          promise = std::move(promise_ptr)]() mutable {
-                          process_slice(std::move(slice));
+                          process_slice(std::move(slice), fallback_import_time);
                           promise->setValue(folly::unit);
                         });
                     }

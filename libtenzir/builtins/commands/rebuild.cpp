@@ -640,7 +640,6 @@ struct rebuilder_state {
                 return lhs.max_import_time < rhs.max_import_time;
               });
     auto selected_partitions = current_run_partitions;
-    auto retry_partitions = selected_partitions;
     const auto num_partitions = current_run_partitions.size();
     self
       ->mail(atom::apply_v, std::move(*rebatch),
@@ -712,16 +711,10 @@ struct rebuilder_state {
           rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
                       atom::rebuild_v);
         },
-        [this, num_partitions, retry_partitions = std::move(retry_partitions),
-         rp](caf::error& error) mutable {
+        [this, num_partitions, rp](caf::error& error) mutable {
           TENZIR_WARN("{} failed to rebuild partitions: {}", *self, error);
           run->statistics.num_rebuilding -= num_partitions;
-          run->remaining_partitions.insert(run->remaining_partitions.begin(),
-                                           retry_partitions.begin(),
-                                           retry_partitions.end());
-          // Pick up new work until we run out of remainig partitions.
-          rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
-                      atom::rebuild_v);
+          rp.deliver(std::move(error));
         });
     return rp;
   }
