@@ -207,4 +207,14 @@ assertions:
                   - timestamp: 1778839220000
                     value: 16.0
             version: 2.0.0
+        14_stale_marker.tql:
+          - content_type: application/x-protobuf
+            metadata: []
+            timeseries:
+              - labels:
+                  __name__: stale_metric
+                samples:
+                  - timestamp: 1778839221000
+                    value: stale
+            version: 0.1.0
 timeout: 60

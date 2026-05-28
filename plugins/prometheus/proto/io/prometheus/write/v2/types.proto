@@ -1,5 +1,15 @@
-// Copyright 2024 Prometheus Team
-// Licensed under the Apache License, Version 2.0.
+// SPDX-FileCopyrightText: Copyright 2024 Prometheus Team
+// SPDX-License-Identifier: Apache-2.0
+//
+// This file comes from a 3rd party and has been adapted to fit into the Tenzir
+// code base. Details about the original file:
+//
+// - Repository: https://github.com/prometheus/prometheus
+// - Commit:     55226fb8b27fe4a903489dbb64829ccc9482ae85
+// - Path:       prompb/io/prometheus/write/v2/types.proto
+// - Author:     Prometheus Team
+// - Copyright:  Copyright 2024 Prometheus Team
+// - License:    Apache-2.0
 //
 // Sanitized for Tenzir: gogoproto options/imports and native histogram/exemplar
 // fields unused by the Remote Write MVP were removed without changing package

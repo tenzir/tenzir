@@ -30,6 +30,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <charconv>
 #include <chrono>
 #include <cmath>
@@ -59,6 +60,7 @@ constexpr auto v2_content_type
 constexpr auto v2_samples_written_header
   = "X-Prometheus-Remote-Write-Samples-Written";
 constexpr auto max_uncompressed_bytes_default = uint64_t{4 * 1024 * 1024};
+constexpr auto prometheus_stale_marker_bits = uint64_t{0x7ff0000000000002};
 
 using Headers = std::vector<http::Header>;
 
@@ -155,6 +157,11 @@ struct Series {
   Metadata metadata;
 };
 
+/// Returns whether `name` is one of the Remote Write headers that the
+/// specification reserves for senders. Users may add authentication headers,
+/// but these protocol headers must stay under operator control so payload
+/// schema, compression, and write-version negotiation remain consistent with
+/// the body.
 auto is_reserved_header(std::string_view name) -> bool {
   constexpr auto reserved = std::array{
     "content-encoding"sv,
@@ -168,6 +175,11 @@ auto is_reserved_header(std::string_view name) -> bool {
   });
 }
 
+/// Rewrites an arbitrary metric name to the legacy Prometheus identifier shape.
+/// Remote Write v1 requires `[a-zA-Z_:][a-zA-Z0-9_:]*`; with
+/// `sanitize_names=true`, this helper keeps valid ASCII bytes and replaces any
+/// byte that would violate the regex with `_`. Empty names remain empty so the
+/// caller can reject them with a precise diagnostic.
 auto sanitize_metric_name(std::string name) -> std::string {
   if (name.empty()) {
     return name;
@@ -189,6 +201,10 @@ auto sanitize_metric_name(std::string name) -> std::string {
   return name;
 }
 
+/// Rewrites an arbitrary label name to the legacy Prometheus identifier shape.
+/// Label names use the metric-name rules without `:`. This intentionally works
+/// byte-by-byte instead of normalizing UTF-8: Remote Write v2 can keep UTF-8
+/// names by disabling sanitization, while v1 needs ASCII-safe labels.
 auto sanitize_label_name(std::string name) -> std::string {
   if (name.empty()) {
     return name;
@@ -210,6 +226,7 @@ auto sanitize_label_name(std::string name) -> std::string {
   return name;
 }
 
+/// Checks the Remote Write v1 metric-name regex without rewriting the input.
 auto valid_legacy_metric_name(std::string_view name) -> bool {
   if (name.empty()) {
     return false;
@@ -223,6 +240,7 @@ auto valid_legacy_metric_name(std::string_view name) -> bool {
   });
 }
 
+/// Checks the Remote Write v1 label-name regex without rewriting the input.
 auto valid_legacy_label_name(std::string_view name) -> bool {
   if (name.empty()) {
     return false;
@@ -236,6 +254,9 @@ auto valid_legacy_label_name(std::string_view name) -> bool {
   });
 }
 
+/// Parses the OpenMetrics/Prometheus metadata type names accepted by the
+/// operator. `unknown` is distinct from parse failure: v1 can serialize
+/// UNKNOWN, while v2 skips invalid type text to avoid unspecified metadata.
 auto parse_metric_type(std::string_view type) -> Option<MetricType> {
   auto normalized = detail::ascii_tolower(type);
   if (normalized == "unknown") {
@@ -265,11 +286,17 @@ auto parse_metric_type(std::string_view type) -> Option<MetricType> {
   return {};
 }
 
+/// Returns whether a row carries any metadata worth serializing. `family` alone
+/// is not metadata on the wire; it only chooses the v1 metadata family name.
 auto has_metadata(Metadata const& metadata) -> bool {
   return metadata.type != MetricType::unknown or not metadata.help.empty()
          or not metadata.unit.empty();
 }
 
+/// Fills missing metadata fields without overwriting earlier non-empty values.
+/// Rows for the same series or metric family can arrive with partial metadata;
+/// merging makes the emitted metadata independent from row order when later
+/// rows supply fields that earlier rows omitted.
 auto merge_metadata(Metadata& target, Metadata source) -> void {
   if (target.family.empty()) {
     target.family = std::move(source.family);
@@ -345,6 +372,9 @@ auto to_string_value(data_view3 value, ast::expression const& expr,
   return to_string_value(value, expr.get_location(), dh);
 }
 
+/// Converts numeric Tenzir values to Prometheus' float64 sample value. Other
+/// types are rejected by returning `None` so callers can skip the row with a
+/// warning instead of inventing a value.
 auto to_double(data_view3 value) -> Option<double> {
   return value.match(
     [](double x) -> Option<double> {
@@ -361,6 +391,9 @@ auto to_double(data_view3 value) -> Option<double> {
     });
 }
 
+/// Converts accepted timestamp inputs to Prometheus milliseconds since epoch.
+/// Unsigned integers above `INT64_MAX` are rejected because the protobuf field
+/// is signed; using a checked cast here would panic on user data.
 auto to_timestamp_ms(data_view3 value) -> Option<int64_t> {
   return value.match(
     [](time x) -> Option<int64_t> {
@@ -382,6 +415,13 @@ auto to_timestamp_ms(data_view3 value) -> Option<int64_t> {
     });
 }
 
+/// Returns true for Prometheus' stale-marker NaN. Remote Write reserves this
+/// exact IEEE-754 bit pattern to mark a time series as no longer appended to;
+/// other NaNs remain invalid sample values.
+auto is_prometheus_stale_marker(double value) -> bool {
+  return std::bit_cast<uint64_t>(value) == prometheus_stale_marker_bits;
+}
+
 auto now_ms() -> int64_t {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
            std::chrono::system_clock::now().time_since_epoch())
@@ -399,6 +439,9 @@ auto parse_u64(std::string_view value) -> Option<uint64_t> {
   return result;
 }
 
+/// Validates the mandatory Remote Write v2 acknowledgement header. A 2xx
+/// without the expected written-sample count may mean a v1 receiver decoded the
+/// v2 body as an empty v1 request, so accepting it would silently drop data.
 auto check_v2_written_samples(http::Response const& response,
                               uint64_t expected_samples, OpCtx& ctx,
                               location loc) -> bool {
@@ -425,6 +468,9 @@ auto check_v2_written_samples(http::Response const& response,
   return true;
 }
 
+/// Adds `value` to the Remote Write v2 symbol table and returns its reference.
+/// The v2 wire format interns label and metadata strings by index; the first
+/// symbol must stay the empty string for optional unset references.
 auto add_symbol(std::vector<std::string>& symbols,
                 std::unordered_map<std::string, uint32_t>& symbol_refs,
                 std::string value) -> uint32_t {
@@ -437,6 +483,9 @@ auto add_symbol(std::vector<std::string>& symbols,
   return ref;
 }
 
+/// Serializes series into the legacy `prometheus.WriteRequest` schema. Metadata
+/// is request-wide in v1, so this first merges partial metadata per metric
+/// family and emits at most one metadata record for each family.
 auto serialize_v1(std::vector<Series> series) -> std::string {
   auto request = ::prometheus::WriteRequest{};
   auto metadata_by_family = std::map<std::string, Metadata>{};
@@ -475,6 +524,9 @@ auto serialize_v1(std::vector<Series> series) -> std::string {
   return request.SerializeAsString();
 }
 
+/// Serializes series into the Remote Write v2 schema. Labels and metadata use
+/// symbol references, and metadata is only emitted when a concrete metric type
+/// exists because strict receivers may reject `METRIC_TYPE_UNSPECIFIED`.
 auto serialize_v2(std::vector<Series> series) -> std::string {
   auto request = ::io::prometheus::write::v2::Request{};
   auto symbols = std::vector<std::string>{""};
@@ -512,12 +564,17 @@ auto serialize_v2(std::vector<Series> series) -> std::string {
   return request.SerializeAsString();
 }
 
+/// Sorts samples in-place to satisfy Remote Write's per-series timestamp order.
+/// This must happen before request-size splitting so recursive sends preserve
+/// the global order for one series across multiple HTTP requests.
 auto sort_samples(std::vector<Series>& series) -> void {
   for (auto& entry : series) {
     std::ranges::sort(entry.samples, {}, &Sample::timestamp_ms);
   }
 }
 
+/// Compresses the protobuf body with Snappy block compression, the only
+/// compression format Remote Write v1/v2 receivers are required to accept.
 auto snappy_compress(std::string body, diagnostic_handler& dh, location loc)
   -> Option<std::string> {
   auto codec_result = arrow::util::Codec::Create(
@@ -550,6 +607,9 @@ auto snappy_compress(std::string body, diagnostic_handler& dh, location loc)
   return output;
 }
 
+/// Resolves the endpoint URL and user headers. Header secrets are resolved into
+/// the same vector that later gets copied for each request before protocol
+/// headers are overwritten.
 auto resolve_secrets(OpCtx& ctx, ToPrometheusArgs& args,
                      std::string& resolved_url, Headers& resolved_headers)
   -> Task<failure_or<void>> {
@@ -639,7 +699,10 @@ public:
       }
       add_sample(std::move(*sample));
       if (pending_sample_count_ >= args_.max_samples_per_request.inner) {
-        co_await send_request(ctx);
+        if (not co_await send_request(ctx)) {
+          done_ = true;
+          co_return;
+        }
         next_flush_ = None{};
       } else if (next_flush_.is_none()) {
         arm_flush_timer();
@@ -660,19 +723,27 @@ public:
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(result);
     if (next_flush_ and std::chrono::steady_clock::now() >= *next_flush_) {
-      co_await send_request(ctx);
+      if (not co_await send_request(ctx)) {
+        done_ = true;
+        co_return;
+      }
       next_flush_ = None{};
     }
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    co_await send_request(ctx);
+    if (not co_await send_request(ctx)) {
+      done_ = true;
+      co_return FinalizeBehavior::done;
+    }
     done_ = true;
     co_return FinalizeBehavior::done;
   }
 
   auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
-    co_await send_request(ctx);
+    if (not co_await send_request(ctx)) {
+      done_ = true;
+    }
     next_flush_ = None{};
   }
 
@@ -694,6 +765,9 @@ private:
     Metadata metadata;
   };
 
+  /// Converts one input row into a pending Prometheus sample. This is where the
+  /// operator applies v1/v2 naming rules, row-level validation, timestamp
+  /// fallback, and metadata extraction before the sample joins a pending series.
   auto make_sample(int64_t row, multi_series const& names,
                    multi_series const& values, multi_series const& timestamps,
                    multi_series const& labels, multi_series const& types,
@@ -731,9 +805,12 @@ private:
       return {};
     }
     auto value = to_double(values.view3_at(row));
-    if (not value or not std::isfinite(*value)) {
+    if (not value
+        or (not std::isfinite(*value)
+            and not is_prometheus_stale_marker(*value))) {
       diagnostic::warning(
-        "metric value must be a finite number, skipping event")
+        "metric value must be a finite number or Prometheus stale marker, "
+        "skipping event")
         .primary(args_.value)
         .emit(ctx);
       return {};
@@ -857,6 +934,8 @@ private:
     return result;
   }
 
+  /// Adds a row to the current request buffer, grouping by the complete sorted
+  /// label set so all samples for one time series share one protobuf series.
   auto add_sample(PendingSample sample) -> void {
     auto& series = pending_[sample.labels];
     if (series.samples.empty()) {
@@ -868,6 +947,8 @@ private:
     ++pending_sample_count_;
   }
 
+  /// Moves the pending map into a linear vector that can be sorted, split, and
+  /// serialized without holding on to mutable operator buffering state.
   auto take_pending() -> std::vector<Series> {
     auto result = std::vector<Series>{};
     result.reserve(pending_.size());
@@ -888,6 +969,9 @@ private:
                                      : serialize_v2(std::move(series));
   }
 
+  /// Splits an oversized serialized request roughly in half. For multi-series
+  /// requests this splits by series; for a single huge series it splits the
+  /// already timestamp-sorted sample vector to keep recursive sends ordered.
   auto split_series(std::vector<Series>& series) -> std::vector<Series> {
     TENZIR_ASSERT(
       series.size() > 1
@@ -922,16 +1006,21 @@ private:
     flush_ready_->notify_one();
   }
 
-  auto send_request(OpCtx& ctx) -> Task<void> {
+  /// Flushes the current pending buffer. The boolean return value tells callers
+  /// whether they may continue sending follow-up split requests; diagnostics at
+  /// error severity already cancel the pipeline, but this avoids extra noise.
+  auto send_request(OpCtx& ctx) -> Task<bool> {
     if (pending_.empty() or not pool_) {
-      co_return;
+      co_return true;
     }
-    co_await send_series(take_pending(), ctx);
+    co_return co_await send_series(take_pending(), ctx);
   }
 
-  auto send_series(std::vector<Series> series, OpCtx& ctx) -> Task<void> {
+  /// Serializes, compresses, and sends a concrete series batch. Returns false
+  /// after any emitted error so recursive split handling can stop immediately.
+  auto send_series(std::vector<Series> series, OpCtx& ctx) -> Task<bool> {
     if (series.empty()) {
-      co_return;
+      co_return true;
     }
     auto sample_count = uint64_t{0};
     for (auto const& entry : series) {
@@ -946,17 +1035,18 @@ private:
           "`max_uncompressed_bytes`")
           .primary(args_.max_uncompressed_bytes)
           .emit(ctx);
-        co_return;
+        co_return false;
       }
       auto second_half = split_series(series);
-      co_await send_series(std::move(series), ctx);
-      co_await send_series(std::move(second_half), ctx);
-      co_return;
+      if (not co_await send_series(std::move(series), ctx)) {
+        co_return false;
+      }
+      co_return co_await send_series(std::move(second_half), ctx);
     }
     auto compressed = snappy_compress(std::move(uncompressed), ctx.dh(),
                                       args_.operator_location);
     if (not compressed) {
-      co_return;
+      co_return false;
     }
     auto headers = headers_;
     http::set(headers, "Content-Type",
@@ -975,7 +1065,7 @@ private:
                         std::move(result).unwrap_err())
         .primary(args_.operator_location)
         .emit(ctx);
-      co_return;
+      co_return false;
     }
     auto response = std::move(result).unwrap();
     if (not response.is_status_success()) {
@@ -983,15 +1073,16 @@ private:
         .note("response body: {}", response.body)
         .primary(args_.operator_location)
         .emit(ctx);
-      co_return;
+      co_return false;
     }
     if (protocol_ == Protocol::v2
         and not check_v2_written_samples(response, sample_count, ctx,
                                          args_.operator_location)) {
-      co_return;
+      co_return false;
     }
     bytes_write_counter_.add(compressed_size);
     events_write_counter_.add(sample_count);
+    co_return true;
   }
 
   auto get_timeout() const -> std::chrono::milliseconds {

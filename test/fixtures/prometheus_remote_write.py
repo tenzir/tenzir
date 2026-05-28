@@ -7,7 +7,7 @@ import shutil
 import struct
 import tempfile
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field as dataclass_field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -32,6 +32,12 @@ def _decode_int64(value: int) -> int:
     if value >= 1 << 63:
         return value - (1 << 64)
     return value
+
+
+def _decode_sample_value(field: bytes) -> float | str:
+    if int.from_bytes(field, "little") == 0x7FF0000000000002:
+        return "stale"
+    return struct.unpack("<d", field)[0]
 
 
 def _snappy_decompress(buf: bytes) -> bytes:
@@ -111,7 +117,7 @@ def _parse_sample(buf: bytes) -> dict[str, object]:
     sample: dict[str, object] = {}
     for number, wire_type, field in _fields(buf):
         if number == 1 and wire_type == 1:
-            sample["value"] = struct.unpack("<d", field)[0]
+            sample["value"] = _decode_sample_value(field)
         elif number == 2:
             sample["timestamp"] = _decode_int64(field)
         elif number == 3:
@@ -211,7 +217,7 @@ class Capture:
 
 @dataclass(frozen=True)
 class PrometheusRemoteWriteAssertions:
-    requests: dict[str, list[dict[str, object]]] = field(default_factory=dict)
+    requests: dict[str, list[dict[str, object]]] = dataclass_field(default_factory=dict)
 
 
 def _make_handler(capture: Capture):

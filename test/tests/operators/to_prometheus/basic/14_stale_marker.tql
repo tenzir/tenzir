@@ -1,0 +1,9 @@
+from {
+  metric: "stale_metric",
+  value: 1.0,
+  timestamp: 2026-05-15T10:00:21Z,
+}
+python "import struct\nself.value = struct.unpack('<d', bytes.fromhex('020000000000f07f'))[0]"
+to_prometheus env("PROMETHEUS_REMOTE_WRITE_URL"),
+              flush_interval=10s,
+              max_samples_per_request=100
