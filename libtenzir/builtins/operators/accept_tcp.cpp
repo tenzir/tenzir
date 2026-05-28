@@ -8,13 +8,16 @@
 
 #include <tenzir/arc.hpp>
 #include <tenzir/async/dns.hpp>
+#include <tenzir/async/metrics.hpp>
 #include <tenzir/async/semaphore.hpp>
 #include <tenzir/async/tcp.hpp>
 #include <tenzir/async/tls.hpp>
+#include <tenzir/atomic.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/concept/parseable/to.hpp>
+#include <tenzir/defaults.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/endpoint.hpp>
@@ -90,6 +93,45 @@ struct PeerInfo {
   int64_t port;
 };
 
+struct TcpConnectionMetrics {
+  TcpConnectionMetrics(folly::coro::Transport const& transport,
+                       metric_handler handler)
+    : handle{transport.getPeerAddress().describe()},
+      handler{std::move(handler)} {
+    TENZIR_ASSERT(transport.getPeerAddress().isFamilyInet());
+  }
+
+  std::string handle;
+  metric_handler handler;
+  Atomic<uint64_t> reads = {};
+  Atomic<uint64_t> bytes_read = {};
+  Atomic<bool> closed = false;
+
+  auto record_read(size_t bytes) -> void {
+    reads.fetch_add(1, std::memory_order_relaxed);
+    bytes_read.fetch_add(bytes, std::memory_order_relaxed);
+  }
+
+  auto emit() -> void {
+    handler.emit({
+      {"handle", handle},
+      {"reads", reads.exchange(0, std::memory_order_relaxed)},
+      {"writes", uint64_t{0}},
+      {"bytes_read", bytes_read.exchange(0, std::memory_order_relaxed)},
+      {"bytes_written", uint64_t{0}},
+    });
+  }
+
+  auto close() -> void {
+    closed.store(true, std::memory_order_relaxed);
+    emit();
+  }
+
+  auto is_closed() const -> bool {
+    return closed.load(std::memory_order_relaxed);
+  }
+};
+
 auto make_peer_info(folly::SocketAddress const& address) -> PeerInfo {
   auto storage = sockaddr_storage{};
   auto length = address.getAddress(&storage);
@@ -111,6 +153,29 @@ auto make_peer_info(folly::SocketAddress const& address) -> PeerInfo {
     .address = result,
     .port = int64_t{address.getPort()},
   };
+}
+
+auto tcp_metrics_type() -> type {
+  return {
+    "tenzir.metrics.tcp",
+    record_type{
+      {"handle", string_type{}},
+      {"reads", uint64_type{}},
+      {"writes", uint64_type{}},
+      {"bytes_read", uint64_type{}},
+      {"bytes_written", uint64_type{}},
+    },
+  };
+}
+
+auto emit_tcp_metrics(Arc<TcpConnectionMetrics> metrics) -> Task<void> {
+  while (true) {
+    co_await sleep_for(defaults::metrics_interval);
+    if (metrics->is_closed()) {
+      co_return;
+    }
+    metrics->emit();
+  }
 }
 
 class AcceptTcpListener final : public Operator<void, table_slice> {
@@ -222,6 +287,7 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "accept_tcp"},
                          MetricsDirection::read, MetricsVisibility::external_,
                          MetricsUnit::events);
+    tcp_metrics_ = make_metric_handler(ctx, tcp_metrics_type());
     ctx.spawn_task([this, &ctx]() -> Task<void> {
       auto notify_finished = detail::scope_guard{[this, &ctx]() noexcept {
         ctx.spawn_task([this]() -> Task<void> {
@@ -305,6 +371,11 @@ public:
         co_await ctx.spawn_sub<chunk_ptr>(std::move(key),
                                           std::move(pipeline_copy),
                                           DiagnosticBehavior::ErrorToWarning);
+        auto tcp_metrics = Arc<TcpConnectionMetrics>{
+          std::in_place,
+          *transport,
+          tcp_metrics_,
+        };
         auto [_, inserted]
           = connections_.emplace(conn_id, std::move(transport));
         TENZIR_ASSERT(inserted);
@@ -312,11 +383,12 @@ public:
         if (it == connections_.end()) {
           co_return;
         }
+        ctx.spawn_task(emit_tcp_metrics(tcp_metrics));
         auto message_queue = message_queue_;
         ctx.spawn_task(folly::coro::co_withExecutor(
           transport_evb,
           read_loop(conn_id, it->second, std::move(message_queue),
-                    std::move(bytes_read))));
+                    std::move(bytes_read), std::move(tcp_metrics))));
       },
       [&](Payload payload) -> Task<void> {
         auto key = sub_key_for(payload.conn_id);
@@ -735,9 +807,10 @@ private:
     }
   }
 
-  static auto read_loop(uint64_t conn_id, Connection connection,
-                        Arc<MessageQueue> message_queue,
-                        MetricsCounter bytes_counter) -> Task<void> {
+  static auto
+  read_loop(uint64_t conn_id, Connection connection,
+            Arc<MessageQueue> message_queue, MetricsCounter bytes_counter,
+            Arc<TcpConnectionMetrics> tcp_metrics) -> Task<void> {
     auto read_error = Option<std::string>{};
     while (true) {
       try {
@@ -747,6 +820,7 @@ private:
           break;
         }
         bytes_counter.add((*read_result)->size());
+        tcp_metrics->record_read((*read_result)->size());
         co_await message_queue->enqueue(
           Payload{conn_id, std::move(*read_result)});
       } catch (folly::AsyncSocketException const& e) {
@@ -754,6 +828,7 @@ private:
         break;
       }
     }
+    tcp_metrics->close();
     co_await message_queue->enqueue(
       ConnectionClosed{conn_id, std::move(read_error)});
   }
@@ -774,6 +849,7 @@ private:
   Semaphore connection_slots_;
   std::unordered_map<uint64_t, Connection> connections_;
   MetricsCounter events_read_counter_;
+  metric_handler tcp_metrics_;
   Box<folly::CancellationSource> accept_cancel_{std::in_place};
   bool accept_loop_finished_ = true;
   bool peer_resolution_warning_emitted_ = false;
