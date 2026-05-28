@@ -7,7 +7,6 @@ from {id: 1, message: "hello"}
 ai::prompt model="fixture-model", endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT")
 select id,
        text=ai.prompt.text,
-       value=ai.prompt.value,
        model=ai.prompt.model,
        status=ai.prompt.status,
        input_tokens=ai.prompt.usage.input_tokens,

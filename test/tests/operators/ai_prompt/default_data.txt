@@ -1,7 +1,6 @@
 {
   id: 1,
   text: "id=1 message=hello",
-  value: null,
   model: "fixture-model",
   status: "completed",
   input_tokens: 1,

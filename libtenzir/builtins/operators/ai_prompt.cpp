@@ -143,11 +143,6 @@ auto append_response(series_builder& builder,
                      openai::ResponsesResult const& response) -> void {
   auto row = builder.record();
   row.field("text", response.text);
-  if (auto parsed = from_json(response.text)) {
-    row.field("value", *parsed);
-  } else {
-    row.field("value", caf::none);
-  }
   if (response.model) {
     row.field("model", *response.model);
   } else {
