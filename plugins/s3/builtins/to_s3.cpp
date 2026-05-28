@@ -19,6 +19,8 @@
 namespace tenzir::plugins::s3 {
 namespace {
 
+constexpr auto default_request_timeout = 30.0;
+
 struct ToS3Args : ToArrowFsArgs {
   bool anonymous = false;
   Option<located<record>> aws_iam;
@@ -72,6 +74,9 @@ protected:
       co_return failure::promise();
     }
     auto opts = opts_result.MoveValueUnsafe();
+    if (opts.request_timeout < 0) {
+      opts.request_timeout = default_request_timeout;
+    }
     if (args_.anonymous) {
       opts.ConfigureAnonymousCredentials();
     } else {
