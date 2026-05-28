@@ -1,4 +1,4 @@
-"""Prometheus Remote Write receiver fixture."""
+"""Mock Prometheus Remote Write receiver fixture."""
 
 from __future__ import annotations
 
@@ -216,7 +216,7 @@ class Capture:
 
 
 @dataclass(frozen=True)
-class PrometheusRemoteWriteAssertions:
+class PrometheusRemoteWriteMockAssertions:
     requests: dict[str, list[dict[str, object]]] = dataclass_field(default_factory=dict)
 
 
@@ -263,7 +263,10 @@ def _make_handler(capture: Capture):
     return Handler
 
 
-@fixture(name="prometheus_remote_write", assertions=PrometheusRemoteWriteAssertions)
+@fixture(
+    name="prometheus_remote_write_mock",
+    assertions=PrometheusRemoteWriteMockAssertions,
+)
 def run() -> FixtureHandle:
     temp_dir = Path(tempfile.mkdtemp(prefix="prometheus-remote-write-"))
     capture = Capture(temp_dir / "requests.jsonl")
@@ -280,7 +283,7 @@ def run() -> FixtureHandle:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
     def assert_test(
-        *, test: Path, assertions: PrometheusRemoteWriteAssertions, **_: Any
+        *, test: Path, assertions: PrometheusRemoteWriteMockAssertions, **_: Any
     ) -> None:
         expected = assertions.requests.get(test.name)
         if expected is None:

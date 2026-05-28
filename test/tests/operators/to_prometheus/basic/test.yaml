@@ -1,10 +1,10 @@
 suite:
   name: to-prometheus-basic
   mode: sequential
-fixtures: [prometheus_remote_write]
+fixtures: [prometheus_remote_write_mock]
 assertions:
   fixtures:
-    prometheus_remote_write:
+    prometheus_remote_write_mock:
       requests:
         01_send_v1.tql:
           - content_type: application/x-protobuf

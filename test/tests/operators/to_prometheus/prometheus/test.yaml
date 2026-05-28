@@ -1,0 +1,7 @@
+suite:
+  name: to-prometheus-prometheus
+  mode: sequential
+fixtures: [prometheus]
+skip:
+  on: fixture-unavailable
+timeout: 180
