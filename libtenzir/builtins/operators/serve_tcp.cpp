@@ -6,12 +6,16 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arc.hpp>
+#include <tenzir/async/metrics.hpp>
 #include <tenzir/async/semaphore.hpp>
 #include <tenzir/async/tls.hpp>
+#include <tenzir/atomic.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/concept/parseable/to.hpp>
+#include <tenzir/defaults.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/endpoint.hpp>
@@ -57,6 +61,68 @@ struct ServeTcpArgs {
   located<ir::pipeline> printer;
 };
 
+struct TcpConnectionMetrics {
+  TcpConnectionMetrics(folly::coro::Transport const& transport,
+                       metric_handler handler)
+    : handle{transport.getPeerAddress().describe()},
+      handler{std::move(handler)} {
+    TENZIR_ASSERT(transport.getPeerAddress().isFamilyInet());
+  }
+
+  auto record_write(size_t bytes) -> void {
+    writes.fetch_add(1, std::memory_order_relaxed);
+    bytes_written.fetch_add(bytes, std::memory_order_relaxed);
+  }
+
+  auto emit() -> void {
+    handler.emit({
+      {"handle", handle},
+      {"reads", uint64_t{0}},
+      {"writes", writes.exchange(0, std::memory_order_relaxed)},
+      {"bytes_read", uint64_t{0}},
+      {"bytes_written", bytes_written.exchange(0, std::memory_order_relaxed)},
+    });
+  }
+
+  auto close() -> void {
+    closed.store(true, std::memory_order_relaxed);
+    emit();
+  }
+
+  auto is_closed() const -> bool {
+    return closed.load(std::memory_order_relaxed);
+  }
+
+  std::string handle;
+  metric_handler handler;
+  Atomic<uint64_t> writes = {};
+  Atomic<uint64_t> bytes_written = {};
+  Atomic<bool> closed = false;
+};
+
+auto tcp_metrics_type() -> type {
+  return {
+    "tenzir.metrics.tcp",
+    record_type{
+      {"handle", string_type{}},
+      {"reads", uint64_type{}},
+      {"writes", uint64_type{}},
+      {"bytes_read", uint64_type{}},
+      {"bytes_written", uint64_type{}},
+    },
+  };
+}
+
+auto emit_tcp_metrics(Arc<TcpConnectionMetrics> metrics) -> Task<void> {
+  while (true) {
+    co_await sleep_for(defaults::metrics_interval);
+    if (metrics->is_closed()) {
+      co_return;
+    }
+    metrics->emit();
+  }
+}
+
 class ServeTcp final : public Operator<table_slice, void> {
 public:
   struct Accepted {
@@ -71,6 +137,11 @@ public:
 
   using Message = variant<Accepted, Payload, AcceptLoopFinished>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
+
+  struct Client {
+    Box<folly::coro::Transport> transport;
+    Arc<TcpConnectionMetrics> metrics;
+  };
 
   enum class Lifecycle {
     running,
@@ -118,6 +189,7 @@ public:
     server_ = std::make_unique<folly::coro::ServerSocket>(
       std::move(socket), address_, listen_backlog);
     accept_loop_finished_ = false;
+    tcp_metrics_ = make_metric_handler(ctx, tcp_metrics_type());
     ctx.spawn_task([this, &ctx]() -> Task<void> {
       auto notify_finished = detail::scope_guard{[this, &ctx]() noexcept {
         ctx.spawn_task([this]() -> Task<void> {
@@ -160,7 +232,16 @@ public:
         }
         TENZIR_DEBUG("accepted client {}",
                      accepted.client->getPeerAddress().describe());
-        clients_.push_back(std::move(accepted.client));
+        auto metrics = Arc<TcpConnectionMetrics>{
+          std::in_place,
+          *accepted.client,
+          tcp_metrics_,
+        };
+        ctx.spawn_task(emit_tcp_metrics(metrics));
+        clients_.push_back({
+          .transport = std::move(accepted.client),
+          .metrics = std::move(metrics),
+        });
         co_return;
       },
       [&](Payload payload) -> Task<void> {
@@ -238,6 +319,11 @@ private:
     });
   }
 
+  static auto close_client(Client client) -> void {
+    client.metrics->close();
+    close_client(std::move(client.transport));
+  }
+
   auto stop_accepting() -> void {
     accept_cancel_->requestCancellation();
     if (server_ and evb_) {
@@ -291,12 +377,13 @@ private:
     clients_.clear();
   }
 
-  auto write_to_client(folly::coro::Transport& client, folly::ByteRange data)
-    -> Task<bool> {
-    auto* client_evb = client.getEventBase();
+  auto write_to_client(Client& client, folly::ByteRange data) -> Task<bool> {
+    auto* client_evb = client.transport->getEventBase();
     TENZIR_ASSERT(client_evb);
     try {
-      co_await folly::coro::co_withExecutor(client_evb, client.write(data));
+      co_await folly::coro::co_withExecutor(client_evb,
+                                            client.transport->write(data));
+      client.metrics->record_write(data.size());
       co_return true;
     } catch (folly::AsyncSocketException const&) {
       // TODO: Surface peer disconnects and other routine TCP write failures
@@ -314,7 +401,7 @@ private:
       chunk->size(),
     };
     for (size_t i = 0; i < clients_.size();) {
-      auto ok = co_await write_to_client(*clients_[i], data);
+      auto ok = co_await write_to_client(clients_[i], data);
       if (ok) {
         ++i;
         continue;
@@ -403,7 +490,8 @@ private:
                                            message_queue_capacity};
   Semaphore connection_slots_;
   Box<folly::CancellationSource> accept_cancel_{std::in_place};
-  std::vector<Box<folly::coro::Transport>> clients_;
+  std::vector<Client> clients_;
+  metric_handler tcp_metrics_ = {};
   bool accept_loop_finished_ = true;
   Lifecycle lifecycle_ = Lifecycle::running;
 };

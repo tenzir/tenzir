@@ -9,6 +9,7 @@
 #include "tenzir/detail/weak_run_delayed.hpp"
 
 #include <tenzir/async.hpp>
+#include <tenzir/async/metrics.hpp>
 #include <tenzir/async/task.hpp>
 #include <tenzir/checked_math.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -238,9 +239,31 @@ public:
   explicit Throttle(ThrottleArgs args) : args_{std::move(args)} {
   }
 
+  auto start(OpCtx& ctx) -> Task<void> override {
+    if (args_.drop) {
+      throttle_metrics_
+        = make_metric_handler(ctx, type{
+                                     "tenzir.metrics.throttle",
+                                     record_type{
+                                       {"dropped_events", int64_type{}},
+                                     },
+                                   });
+      last_emit_ = std::chrono::steady_clock::now();
+    }
+    co_return;
+  }
+
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     auto now = std::chrono::steady_clock::now();
+    if (args_.drop and last_emit_
+        and now - *last_emit_ >= std::chrono::seconds{1}) {
+      last_emit_ = now;
+      if (dropped_events_ > 0) {
+        throttle_metrics_.emit({{"dropped_events", int64_t(dropped_events_)}});
+        dropped_events_ = 0;
+      }
+    }
     if (not start_) {
       start_ = now;
     }
@@ -251,6 +274,7 @@ public:
     // Preemptive check: the previous slice already exhausted the window budget.
     if (total_ >= args_.rate.inner) {
       if (args_.drop) {
+        dropped_events_ += input.rows();
         diagnostic::warning("dropping input due to rate limit")
           .primary(*args_.drop)
           .emit(ctx.dh());
@@ -268,6 +292,7 @@ public:
         break;
       }
       if (first_cutoff != input.rows()) {
+        dropped_events_ += input.rows() - first_cutoff;
         diagnostic::warning("dropping input due to rate limit")
           .primary(*args_.drop)
           .emit(ctx.dh());
@@ -354,9 +379,21 @@ private:
     }
   }
 
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(push, ctx);
+    if (args_.drop and dropped_events_ > 0) {
+      throttle_metrics_.emit({{"dropped_events", int64_t(dropped_events_)}});
+    }
+    co_return FinalizeBehavior::done;
+  }
+
   ThrottleArgs args_;
   Option<std::chrono::steady_clock::time_point> start_;
   uint64_t total_ = 0;
+  metric_handler throttle_metrics_ = {};
+  uint64_t dropped_events_ = 0;
+  Option<std::chrono::steady_clock::time_point> last_emit_ = {};
 };
 
 class plugin final : public virtual operator_plugin2<throttle_operator>,
