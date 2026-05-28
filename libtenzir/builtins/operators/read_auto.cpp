@@ -260,12 +260,24 @@ auto detect_json_field(read_detection_input input, std::string_view field,
 }
 
 auto detect_gelf(read_detection_input input) -> read_detection_result {
-  if (input.bytes.contains("\"version\"") and input.bytes.contains("\"host\"")
+  auto object = detect_json_object(input);
+  auto ndjson = detect_ndjson(input);
+  if (object.state == detection_state::reject
+      and ndjson.state == detection_state::reject) {
+    return reject();
+  }
+  auto valid_json_shape = object.state == detection_state::match
+                          or ndjson.state == detection_state::match;
+  if (valid_json_shape and input.bytes.contains("\"version\"")
+      and input.bytes.contains("\"host\"")
       and input.bytes.contains("\"short_message\"")) {
     return match(90, "GELF fields");
   }
-  auto object = detect_json_object(input);
-  return object.state == detection_state::need_more ? need_more() : reject();
+  if (object.state == detection_state::need_more
+      or ndjson.state == detection_state::need_more) {
+    return need_more();
+  }
+  return reject();
 }
 
 auto detect_zeek_tsv(read_detection_input input) -> read_detection_result {
