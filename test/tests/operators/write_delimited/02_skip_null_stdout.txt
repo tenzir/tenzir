@@ -1,1 +1,6 @@
-a|b|
+a|b|warning: dropped null value
+ --> tests/operators/write_delimited/02_skip_null_stdout.tql:3:19
+  |
+3 |   write_delimited data?, "|"
+  |                   ~~~~ 
+  |

@@ -54,10 +54,16 @@ public:
     auto append_separator = [&] {
       buffer.insert(buffer.end(), separator_.begin(), separator_.end());
     };
+    auto warn_about_nulls = [&](arrow::Array const& array) {
+      if (array.null_count() > 0) {
+        diagnostic::warning("dropped null value").primary(args_.value).emit(ctx);
+      }
+    };
     for (auto const& selected : evaluated.parts()) {
-      auto result = match(
+      match(
         selected,
-        [&](basic_series<string_type> const& part) -> failure_or<void> {
+        [&](basic_series<string_type> const& part) {
+          warn_about_nulls(*part.array);
           for (auto value : part.values3()) {
             if (value) {
               auto bytes = as_bytes(*value);
@@ -65,31 +71,25 @@ public:
               append_separator();
             }
           }
-          return {};
         },
-        [&](basic_series<blob_type> const& part) -> failure_or<void> {
+        [&](basic_series<blob_type> const& part) {
+          warn_about_nulls(*part.array);
           for (auto value : part.values3()) {
             if (value) {
               buffer.insert(buffer.end(), value->begin(), value->end());
               append_separator();
             }
           }
-          return {};
         },
-        [](basic_series<null_type> const&) -> failure_or<void> {
-          return {};
+        [&](basic_series<null_type> const& part) {
+          warn_about_nulls(*part.array);
         },
-        [&](auto const& part) -> failure_or<void> {
-          diagnostic::error("expected `string`, `blob`, or `null`, but got "
-                            "`{}`",
-                            type{part.type}.kind())
+        [&](auto const& part) {
+          diagnostic::warning("expected `string` or `blob`, but got `{}`",
+                              type{part.type}.kind())
             .primary(args_.value)
             .emit(ctx);
-          return failure::promise();
         });
-      if (not result) {
-        co_return;
-      }
     }
     if (not buffer.empty()) {
       co_await push(chunk::make(std::move(buffer)));
@@ -108,7 +108,7 @@ private:
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.write_delimited";
+    return "write_delimited";
   }
 
   auto describe() const -> Description override {

@@ -1,6 +1,0 @@
-error: expected `string`, `blob`, or `null`, but got `int64`
- --> tests/operators/write_delimited/08_error_unsupported_value_type.tql:7:19
-  |
-7 |   write_delimited data, "|"
-  |                   ^^^^ 
-  |
