@@ -1,0 +1,12 @@
+from {
+  metric: "positive_infinity",
+  value: 1.0e999,
+  timestamp: 2026-05-15T10:00:22Z,
+}, {
+  metric: "negative_infinity",
+  value: -1.0e999,
+  timestamp: 2026-05-15T10:00:23Z,
+}
+to_prometheus env("PROMETHEUS_REMOTE_WRITE_URL"),
+              flush_interval=10s,
+              max_samples_per_request=100

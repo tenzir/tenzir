@@ -217,4 +217,19 @@ assertions:
                   - timestamp: 1778839221000
                     value: stale
             version: 0.1.0
+        16_infinite_values.tql:
+          - content_type: application/x-protobuf
+            metadata: []
+            timeseries:
+              - labels:
+                  __name__: negative_infinity
+                samples:
+                  - timestamp: 1778839223000
+                    value: -.inf
+              - labels:
+                  __name__: positive_infinity
+                samples:
+                  - timestamp: 1778839222000
+                    value: .inf
+            version: 0.1.0
 timeout: 60

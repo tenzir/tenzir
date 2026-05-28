@@ -832,11 +832,10 @@ private:
     }
     auto value = to_double(values.view3_at(row));
     if (not value
-        or (not std::isfinite(*value)
-            and not is_prometheus_stale_marker(*value))) {
+        or (std::isnan(*value) and not is_prometheus_stale_marker(*value))) {
       diagnostic::warning(
-        "metric value must be a finite number or Prometheus stale marker, "
-        "skipping event")
+        "metric value must be a number or Prometheus stale marker, skipping "
+        "event")
         .primary(args_.value)
         .emit(ctx);
       return {};
