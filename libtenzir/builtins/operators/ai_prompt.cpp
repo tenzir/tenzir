@@ -148,11 +148,6 @@ auto append_response(series_builder& builder,
   } else {
     row.field("model", caf::none);
   }
-  if (response.status) {
-    row.field("status", *response.status);
-  } else {
-    row.field("status", caf::none);
-  }
   append_usage(row, response.usage);
   row.field("latency", response.latency);
 }

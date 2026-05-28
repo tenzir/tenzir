@@ -1,5 +1,4 @@
 {
   text: "{\"answer\":42,\"id\":7}",
   model: "fixture-model",
-  status: "completed",
 }

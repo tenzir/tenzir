@@ -38,7 +38,6 @@ struct TokenUsage {
 struct ResponsesResult {
   std::string text;
   Option<std::string> model = None{};
-  Option<std::string> status = None{};
   Option<TokenUsage> usage = None{};
   duration latency = duration::zero();
 };

@@ -8,7 +8,6 @@ ai::prompt model="fixture-model", endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOIN
 select id,
        text=ai.prompt.text,
        model=ai.prompt.model,
-       status=ai.prompt.status,
        input_tokens=ai.prompt.usage.input_tokens,
        output_tokens=ai.prompt.usage.output_tokens,
        total_tokens=ai.prompt.usage.total_tokens

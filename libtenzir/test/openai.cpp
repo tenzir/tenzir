@@ -70,8 +70,6 @@ TEST("responses body parser") {
   CHECK_EQUAL(result.text, R"({"answer":42})");
   REQUIRE(result.model);
   CHECK_EQUAL(*result.model, "test-model");
-  REQUIRE(result.status);
-  CHECK_EQUAL(*result.status, "completed");
   REQUIRE(result.usage);
   REQUIRE(result.usage->input_tokens);
   CHECK_EQUAL(*result.usage->input_tokens, uint64_t{11});

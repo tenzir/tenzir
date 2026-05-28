@@ -156,7 +156,6 @@ auto parse_responses_body(std::string_view body, duration latency)
   auto result = ResponsesResult{};
   result.latency = latency;
   result.model = optional_string(object, "model");
-  result.status = optional_string(object, "status");
   auto output = simdjson::dom::array{};
   auto found_output_text = false;
   if (object["output"].get_array().get(output) == simdjson::SUCCESS) {

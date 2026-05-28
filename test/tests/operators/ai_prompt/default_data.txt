@@ -2,7 +2,6 @@
   id: 1,
   text: "id=1 message=hello",
   model: "fixture-model",
-  status: "completed",
   input_tokens: 1,
   output_tokens: 2,
   total_tokens: 3,
