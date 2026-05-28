@@ -12,6 +12,7 @@
 #include <tenzir/defaults.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
+#include <tenzir/read_detection.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::parquet {
@@ -153,7 +154,7 @@ private:
   std::vector<chunk_ptr> chunks_;
 };
 
-class Plugin final : public virtual OperatorPlugin {
+class Plugin final : public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "tql2.read_parquet";
@@ -162,6 +163,17 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ReadParquetArgs, ReadParquet>{};
     return d.without_optimize();
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate("parquet", "read_parquet", "read_parquet", 50,
+                                [](read_detection_input input) {
+                                  return read_detection::magic_prefix(
+                                    input, "PAR1", 100);
+                                }),
+    };
   }
 };
 

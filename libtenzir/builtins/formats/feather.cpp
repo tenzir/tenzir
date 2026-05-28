@@ -21,6 +21,7 @@
 #include <tenzir/make_byte_reader.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/read_detection.hpp>
 #include <tenzir/store.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -1181,7 +1182,7 @@ private:
 
 class read_plugin final
   : public virtual operator_plugin2<parser_adapter<feather_parser>>,
-    public virtual OperatorPlugin {
+    public virtual ReadOperatorPlugin {
 public:
   auto describe() const -> Description override {
     auto d = Describer<ReadFeatherArgs, ReadFeather>{};
@@ -1199,6 +1200,17 @@ public:
     return {
       .extensions = {"feather", "arrow"},
       .mime_types = {"application/vnd.apache.arrow.file"},
+    };
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate("feather", "read_feather", "read_feather", 50,
+                                [](read_detection_input input) {
+                                  return read_detection::magic_prefix(
+                                    input, "ARROW1", 100);
+                                }),
     };
   }
 };

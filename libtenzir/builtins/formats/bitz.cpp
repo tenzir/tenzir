@@ -15,6 +15,7 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/read_detection.hpp>
 #include <tenzir/secret.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -534,7 +535,7 @@ class plugin final : public virtual parser_plugin<bitz_parser>,
 };
 
 class read_bitz_plugin final : public virtual operator_factory_plugin,
-                               public virtual OperatorPlugin {
+                               public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_bitz";
@@ -554,6 +555,17 @@ public:
 
   auto read_properties() const -> read_properties_t override {
     return {.extensions = {"bitz"}};
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate("bitz", "read_bitz", "read_bitz", 50,
+                                [](read_detection_input input) {
+                                  return read_detection::magic_prefix(
+                                    input, "TNZ1", 100);
+                                }),
+    };
   }
 };
 

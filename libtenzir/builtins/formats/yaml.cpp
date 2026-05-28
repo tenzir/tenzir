@@ -19,6 +19,7 @@
 #include <tenzir/error.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/read_detection.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/to_lines.hpp>
@@ -495,7 +496,7 @@ private:
 
 class read_yaml final
   : public virtual operator_plugin2<parser_adapter<yaml_parser>>,
-    public virtual OperatorPlugin {
+    public virtual ReadOperatorPlugin {
 public:
   auto describe() const -> Description override {
     auto d = Describer<ReadYamlArgs, ReadYaml>{};
@@ -519,6 +520,14 @@ public:
     return {
       .extensions = {"yaml", "yml"},
       .mime_types = {"application/yaml", "text/yaml", "text/x-yaml"},
+    };
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate("yaml", "read_yaml", "read_yaml", -10,
+                                read_detection::yaml),
     };
   }
 };

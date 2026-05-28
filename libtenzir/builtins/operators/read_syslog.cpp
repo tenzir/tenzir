@@ -13,6 +13,7 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin/register.hpp>
+#include <tenzir/read_detection.hpp>
 #include <tenzir/tql2/ast.hpp>
 
 #include <algorithm>
@@ -453,7 +454,7 @@ private:
   syslog::builder_tag last_ = syslog::builder_tag::unknown_syslog_builder;
 };
 
-class plugin final : public virtual OperatorPlugin {
+class plugin final : public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "tql2.read_syslog";
@@ -466,6 +467,14 @@ public:
     d.operator_location(&ReadSyslogArgs::operator_location);
     d.validate(add_msb_to_describer(d, &ReadSyslogArgs::msb_options));
     return d.without_optimize();
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate("syslog", "read_syslog", "read_syslog", 0,
+                                read_detection::syslog),
+    };
   }
 };
 

@@ -19,6 +19,7 @@
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/read_detection.hpp>
 #include <tenzir/to_lines.hpp>
 #include <tenzir/view3.hpp>
 
@@ -870,7 +871,7 @@ auto validate_splitter(const located<std::string>& split,
 }
 
 class read_kv : public operator_plugin2<parser_adapter<kv_parser>>,
-                public virtual OperatorPlugin {
+                public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_kv";
@@ -933,6 +934,14 @@ public:
 
   auto read_properties() const -> read_properties_t override {
     return {.extensions = {"kv"}};
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate("kv", "read_kv", "read_kv", 0,
+                                read_detection::kv),
+    };
   }
 };
 
