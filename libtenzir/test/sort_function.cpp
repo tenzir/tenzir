@@ -86,7 +86,7 @@ TEST("sort cmp deduplicates diagnostics from comparator evaluation") {
   CHECK_EQUAL(std::move(dh).collect().size(), size_t{2});
 }
 
-TEST("sort list records from sliced input") {
+TEST("sort sliced list input") {
   auto dh = collecting_diagnostic_handler{};
   auto provider = session_provider::make(dh);
   auto ctx = provider.as_session();
@@ -99,6 +99,6 @@ TEST("sort list records from sliced input") {
   auto value = materialize(result.view3_at(0));
   auto* sorted = try_as<list>(&value);
   REQUIRE(sorted);
-  CHECK_EQUAL(*sorted, (list{record{{"a", int64_t{2}}, {"b", int64_t{1}}}}));
+  CHECK_EQUAL(*sorted, (list{record{{"b", int64_t{1}}, {"a", int64_t{2}}}}));
   CHECK(is<caf::none_t>(materialize(result.view3_at(1))));
 }

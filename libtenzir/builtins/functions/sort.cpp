@@ -111,25 +111,20 @@ auto eval_sort_predicate(const ast::lambda_expr& cmp, const data& lhs_value,
   return false;
 }
 
-auto sort_array_recursive(std::shared_ptr<arrow::Array> array)
+auto sort_records_recursive(std::shared_ptr<arrow::Array> array)
   -> std::shared_ptr<arrow::Array>;
 
 auto sort_list(const series& input, const std::optional<table_slice>& scope,
                bool descending, const std::optional<ast::lambda_expr>& cmp,
                session ctx) -> series {
-  auto input_array = sort_array_recursive(input.array);
-  auto input_type = input.type;
-  if (input_array->type() != input.array->type()) {
-    input_type = type::from_arrow(*input_array->type());
-  }
-  auto builder = series_builder{input_type};
+  auto builder = series_builder{input.type};
   TENZIR_ASSERT(
     not scope or scope->rows() == detail::narrow_cast<size_t>(input.length()));
   auto warning_state = comparator_warning_state{};
   auto fallback_scope = empty_scope_slice();
   auto row = int64_t{0};
-  for (const auto& value : values(type{as<list_type>(input_type)},
-                                  as<arrow::ListArray>(*input_array))) {
+  for (const auto& value : values(type{as<list_type>(input.type)},
+                                  as<arrow::ListArray>(*input.array))) {
     auto row_scope = scope ? subslice(*scope, row, row + 1) : fallback_scope;
     ++row;
     if (is<caf::none_t>(value)) {
@@ -182,7 +177,7 @@ auto sort_record(const arrow::StructArray& array)
   };
   auto data = std::vector<kv_pair>(fields.size());
   for (size_t i = 0; i < data.size(); ++i) {
-    auto sorted_array = sort_array_recursive(arrays[i]);
+    auto sorted_array = sort_records_recursive(arrays[i]);
     if (sorted_array->type() != fields[i]->type()) {
       fields[i] = fields[i]->WithType(sorted_array->type());
     }
@@ -206,7 +201,7 @@ auto sort_record(const arrow::StructArray& array)
                                               array.null_count(), 0);
 }
 
-auto sort_array_recursive(std::shared_ptr<arrow::Array> array)
+auto sort_records_recursive(std::shared_ptr<arrow::Array> array)
   -> std::shared_ptr<arrow::Array> {
   if (auto* record = try_as<arrow::StructArray>(*array)) {
     return sort_record(*record);
@@ -215,7 +210,7 @@ auto sort_array_recursive(std::shared_ptr<arrow::Array> array)
     const auto value_offset = list->value_offset(0);
     const auto value_length = list->value_offset(list->length()) - value_offset;
     auto values = list->values()->Slice(value_offset, value_length);
-    auto sorted_values = sort_array_recursive(values);
+    auto sorted_values = sort_records_recursive(values);
     if (sorted_values == values) {
       return array;
     }
