@@ -15,6 +15,7 @@
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/si_literals.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -29,11 +30,13 @@ namespace tenzir::plugins::read_auto {
 
 namespace {
 
+using namespace tenzir::si_literals;
+
 using detection_state = read_detection_result::result_state;
 
 struct ReadAutoArgs {
   std::string fallback = "none";
-  uint64_t max_probe_bytes = 1024 * 1024;
+  uint64_t max_probe_bytes = 1_Mi;
   location operator_location;
 };
 
