@@ -1,0 +1,5 @@
+from {key: "a", a: "x", b: 42}, {key: "b", a: "x", b: 42}
+batch 10
+to_stdout {
+  write_delimited this[key], "|"
+}

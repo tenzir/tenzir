@@ -41,6 +41,8 @@ class TcpOptions:
 @dataclass(frozen=True)
 class TcpAssertions:
     server_received_contains: str | None = None
+    # Hex-encoded exact byte match for binary payload checks.
+    server_received_equals_hex: str | None = None
     client_received_contains: str | None = None
     server_sent_contains: str | None = None
 
@@ -51,6 +53,14 @@ class _TcpState:
     server_received: bytearray = field(default_factory=bytearray)
     client_received: bytearray = field(default_factory=bytearray)
     server_sent: bytearray = field(default_factory=bytearray)
+    server_capture_complete: bool = False
+
+
+def _bytes_from_hex(value: str, field: str) -> bytes:
+    try:
+        return bytes.fromhex(value)
+    except ValueError as exc:
+        raise TypeError(f"tcp fixture assertion `{field}` must be hexadecimal") from exc
 
 
 @fixture(options=TcpOptions, assertions=TcpAssertions)
@@ -147,16 +157,24 @@ def tcp() -> FixtureHandle:
     ) -> None:
         if isinstance(assertions, dict):
             assertions = TcpAssertions(**assertions)
+        expected_server_received: bytes | None = None
+        if assertions.server_received_equals_hex is not None:
+            expected_server_received = _bytes_from_hex(
+                assertions.server_received_equals_hex,
+                "server_received_equals_hex",
+            )
         deadline = time.monotonic() + _ASSERTION_WAIT_TIMEOUT
         while True:
             with state.lock:
-                server_received = state.server_received.decode(
+                server_received_bytes = bytes(state.server_received)
+                server_received = server_received_bytes.decode(
                     "utf-8", errors="replace"
                 )
                 client_received = state.client_received.decode(
                     "utf-8", errors="replace"
                 )
                 server_sent = state.server_sent.decode("utf-8", errors="replace")
+                server_capture_complete = state.server_capture_complete
             missing_message = None
             if (
                 assertions.server_received_contains is not None
@@ -166,6 +184,20 @@ def tcp() -> FixtureHandle:
                     f"{test.name}: expected fixture server capture to contain "
                     f"{assertions.server_received_contains!r}, got {server_received!r}"
                 )
+            elif expected_server_received is not None:
+                # A prefix can match before a later recv appends trailing bytes.
+                if not server_capture_complete:
+                    missing_message = (
+                        f"{test.name}: expected fixture server capture bytes "
+                        f"{expected_server_received.hex()}, got "
+                        f"{server_received_bytes.hex()} so far"
+                    )
+                elif server_received_bytes != expected_server_received:
+                    missing_message = (
+                        f"{test.name}: expected fixture server capture bytes "
+                        f"{expected_server_received.hex()}, got "
+                        f"{server_received_bytes.hex()}"
+                    )
             elif (
                 assertions.client_received_contains is not None
                 and assertions.client_received_contains not in client_received
@@ -330,6 +362,8 @@ def _run_server_worker(
                 conn, _ = server.accept()
             except socket.timeout:
                 continue
+            with state.lock:
+                state.server_capture_complete = False
             try:
                 if tls:
                     assert cert_path is not None
@@ -367,3 +401,6 @@ def _run_server_worker(
                             idle_deadline = time.monotonic() + 2
             except (ssl.SSLError, OSError):
                 pass
+            finally:
+                with state.lock:
+                    state.server_capture_complete = True

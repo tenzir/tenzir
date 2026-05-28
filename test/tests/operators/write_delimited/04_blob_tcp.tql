@@ -1,0 +1,16 @@
+---
+fixtures:
+  - tcp:
+      mode: server
+      payload: ""
+assertions:
+  fixtures:
+    tcp:
+      server_received_equals_hex: "00666f6fff01626172ff"
+timeout: 60
+---
+
+from {data: b"\x00foo"}, {data: b"\x01bar"}
+to_tcp env("TCP_ENDPOINT") {
+  write_delimited data, b"\xff"
+}

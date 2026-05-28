@@ -1,0 +1,16 @@
+---
+fixtures:
+  - tcp:
+      mode: server
+      payload: ""
+assertions:
+  fixtures:
+    tcp:
+      server_received_equals_hex: "7b2278223a317d007b2278223a327d00"
+timeout: 60
+---
+
+from {x: 1}, {x: 2}
+to_tcp env("TCP_ENDPOINT") {
+  write_delimited this.print_ndjson(), "\x00"
+}

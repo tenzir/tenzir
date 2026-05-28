@@ -1,0 +1,6 @@
+x|warning: expected `string` or `blob`, but got `int64`
+ --> tests/operators/write_delimited/12_warning_unsupported_multi_series_type.tql:4:19
+  |
+4 |   write_delimited this[key], "|"
+  |                   ~~~~~~~~~ 
+  |

@@ -8,6 +8,7 @@
 
 #include "tenzir/async.hpp"
 
+#include <tenzir/arc.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/detail/posix.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -113,7 +114,7 @@ auto write_chunk(folly::AsyncPipeWriter& writer, chunk_ptr chunk)
 
   class WriteCallback final : public folly::AsyncWriter::WriteCallback {
   public:
-    explicit WriteCallback(std::shared_ptr<ResultQueue> result_queue)
+    explicit WriteCallback(Arc<ResultQueue> result_queue)
       : result_queue_{std::move(result_queue)} {
     }
 
@@ -129,11 +130,11 @@ auto write_chunk(folly::AsyncPipeWriter& writer, chunk_ptr chunk)
     }
 
   private:
-    std::shared_ptr<ResultQueue> result_queue_;
+    Arc<ResultQueue> result_queue_;
   };
 
   TENZIR_ASSERT(chunk);
-  auto result_queue = std::make_shared<ResultQueue>(1);
+  auto result_queue = Arc<ResultQueue>{std::in_place, 1};
   auto write_callback = std::make_unique<WriteCallback>(result_queue);
   auto buffer = folly::IOBuf::copyBuffer(chunk->data(), chunk->size());
   writer.write(std::move(buffer), write_callback.get());
@@ -160,7 +161,7 @@ public:
     }
     if (not pipe.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
       diagnostic::error("failed to substitute pipeline")
-        .primary(args_.pipe ? args_.pipe->source : args_.self)
+        .primary(args_.self)
         .emit(ctx);
       done_ = true;
       co_return;

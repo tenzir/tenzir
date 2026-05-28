@@ -1,0 +1,4 @@
+from {data: "a"}, {data: "b"}
+to_stdout {
+  write_delimited data, ""
+}

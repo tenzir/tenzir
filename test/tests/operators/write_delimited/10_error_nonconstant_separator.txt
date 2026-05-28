@@ -1,0 +1,13 @@
+error: expected a constant expression
+ --> tests/operators/write_delimited/10_error_nonconstant_separator.tql:7:25
+  |
+7 |   write_delimited data, data
+  |                         ^^^^ 
+  |
+
+error: failed to substitute pipeline
+ --> tests/operators/write_delimited/10_error_nonconstant_separator.tql:6:1
+  |
+6 | to_stdout {
+  | ^^^^^^^^^ 
+  |
