@@ -1,0 +1,13 @@
+{
+  id: 1,
+  text: "{\"answer\":42,\"id\":1}",
+  value: {
+    answer: 42,
+    id: 1,
+  },
+}
+{
+  id: 2,
+  text: "42",
+  value: 42,
+}

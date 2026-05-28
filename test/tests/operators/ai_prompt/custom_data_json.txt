@@ -1,0 +1,7 @@
+{
+  text: "{\"answer\":42,\"id\":7}",
+  answer: 42,
+  result_id: 7,
+  model: "fixture-model",
+  status: "completed",
+}

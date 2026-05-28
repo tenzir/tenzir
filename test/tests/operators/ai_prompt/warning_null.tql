@@ -1,0 +1,10 @@
+---
+fixtures: [openai_responses]
+timeout: 60
+---
+
+from {id: 1, mode: "fail"}
+ai::prompt model="fixture-model",
+           endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT"),
+           data={mode: mode}
+select id, prompt=ai.prompt

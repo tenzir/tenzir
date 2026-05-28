@@ -1,0 +1,11 @@
+---
+fixtures: [openai_responses]
+timeout: 60
+---
+
+from {id: 1, delay_ms: 80}, {id: 2, delay_ms: 0}
+ai::prompt model="fixture-model",
+           endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT"),
+           data={mode: "order", id: id, delay_ms: delay_ms},
+           concurrency=2
+select id, text=ai.prompt.text

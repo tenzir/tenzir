@@ -1,0 +1,10 @@
+---
+fixtures: [openai_responses]
+timeout: 60
+---
+
+from {id: 1, mode: "json"}, {id: 2, mode: "json_number"}
+ai::prompt model="fixture-model",
+           endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT"),
+           data={mode: mode, id: id}
+select id, text=ai.prompt.text, value=ai.prompt.value
