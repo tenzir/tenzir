@@ -38,47 +38,6 @@ auto make_separator_blob(located<data> const& separator) -> blob {
     });
 }
 
-auto append_delimited_part(series const& selected, ast::expression const& value,
-                           blob const& separator, blob& buffer, OpCtx& ctx)
-  -> bool {
-  auto append_separator = [&] {
-    buffer.insert(buffer.end(), separator.begin(), separator.end());
-  };
-  return match(
-    selected,
-    [&](basic_series<string_type> const& part) {
-      for (auto value : part.values3()) {
-        if (not value) {
-          continue;
-        }
-        auto bytes = as_bytes(*value);
-        buffer.insert(buffer.end(), bytes.begin(), bytes.end());
-        append_separator();
-      }
-      return true;
-    },
-    [&](basic_series<blob_type> const& part) {
-      for (auto value : part.values3()) {
-        if (not value) {
-          continue;
-        }
-        buffer.insert(buffer.end(), value->begin(), value->end());
-        append_separator();
-      }
-      return true;
-    },
-    [](basic_series<null_type> const&) {
-      return true;
-    },
-    [&](auto const& part) {
-      diagnostic::error("expected `string`, `blob`, or `null`, but got `{}`",
-                        type{part.type}.kind())
-        .primary(value)
-        .emit(ctx);
-      return false;
-    });
-}
-
 class WriteDelimited final : public Operator<table_slice, chunk_ptr> {
 public:
   explicit WriteDelimited(WriteDelimitedArgs args)
@@ -92,9 +51,43 @@ public:
     }
     auto evaluated = eval(args_.value, input, ctx.dh());
     auto buffer = blob{};
+    auto append_separator = [&] {
+      buffer.insert(buffer.end(), separator_.begin(), separator_.end());
+    };
     for (auto const& selected : evaluated.parts()) {
-      if (not append_delimited_part(selected, args_.value, separator_, buffer,
-                                    ctx)) {
+      auto result = match(
+        selected,
+        [&](basic_series<string_type> const& part) -> failure_or<void> {
+          for (auto value : part.values3()) {
+            if (value) {
+              auto bytes = as_bytes(*value);
+              buffer.insert(buffer.end(), bytes.begin(), bytes.end());
+              append_separator();
+            }
+          }
+          return {};
+        },
+        [&](basic_series<blob_type> const& part) -> failure_or<void> {
+          for (auto value : part.values3()) {
+            if (value) {
+              buffer.insert(buffer.end(), value->begin(), value->end());
+              append_separator();
+            }
+          }
+          return {};
+        },
+        [](basic_series<null_type> const&) -> failure_or<void> {
+          return {};
+        },
+        [&](auto const& part) -> failure_or<void> {
+          diagnostic::error("expected `string`, `blob`, or `null`, but got "
+                            "`{}`",
+                            type{part.type}.kind())
+            .primary(args_.value)
+            .emit(ctx);
+          return failure::promise();
+        });
+      if (not result) {
         co_return;
       }
     }
