@@ -13,7 +13,6 @@
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/try.hpp>
-#include <tenzir/type.hpp>
 #include <tenzir/view3.hpp>
 
 namespace tenzir::plugins::write_delimited {
@@ -22,36 +21,27 @@ namespace {
 
 struct WriteDelimitedArgs {
   ast::expression value;
-  ast::expression separator;
+  located<data> separator;
 };
 
-auto evaluate_separator(ast::expression const& separator,
-                        diagnostic_handler& dh) -> failure_or<blob> {
-  TRY(auto value, const_eval(separator, dh));
-  if (auto* str = try_as<std::string>(&value)) {
-    return blob{as_bytes(*str)};
-  }
-  if (auto* bytes = try_as<blob>(&value)) {
-    return std::move(*bytes);
-  }
-  diagnostic::error("expected `string` or `blob`, but got `{}`",
-                    type_kind_of_data(value))
-    .primary(separator)
-    .emit(dh);
-  return failure::promise();
+auto make_separator_blob(located<data> const& separator) -> blob {
+  return match(
+    separator.inner,
+    [](std::string const& str) {
+      return blob{as_bytes(str)};
+    },
+    [](blob const& bytes) {
+      return bytes;
+    },
+    [](auto const&) -> blob {
+      TENZIR_UNREACHABLE();
+    });
 }
 
 class WriteDelimited final : public Operator<table_slice, chunk_ptr> {
 public:
-  explicit WriteDelimited(WriteDelimitedArgs args) : args_{std::move(args)} {
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> override {
-    auto separator = evaluate_separator(args_.separator, ctx.dh());
-    if (not separator) {
-      co_return;
-    }
-    separator_ = std::move(*separator);
+  explicit WriteDelimited(WriteDelimitedArgs args)
+    : args_{std::move(args)}, separator_{make_separator_blob(args_.separator)} {
   }
 
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
@@ -122,7 +112,18 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<WriteDelimitedArgs, WriteDelimited>{};
     d.positional("value", &WriteDelimitedArgs::value, "any");
-    d.positional("separator", &WriteDelimitedArgs::separator, "string|blob");
+    auto separator = d.positional("separator", &WriteDelimitedArgs::separator,
+                                  "string|blob");
+    d.validate([separator](DescribeCtx& ctx) -> Empty {
+      TRY(auto sep, ctx.get(separator));
+      if (not is<std::string>(sep.inner) and not is<blob>(sep.inner)) {
+        diagnostic::error("expected `string` or `blob`, but got `{}`",
+                          type_kind_of_data(sep.inner))
+          .primary(sep.source)
+          .emit(ctx);
+      }
+      return {};
+    });
     return d.without_optimize();
   }
 };
