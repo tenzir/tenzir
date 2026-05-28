@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   deploy:
@@ -27,8 +28,8 @@ jobs:
           R2_BUCKET: ${{ vars.CCACHE_R2_BUCKET }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_SUBJECT: ${{ vars.CCACHE_R2_GITHUB_SUBJECT }}
-          GITHUB_OIDC_AUDIENCE: ${{ vars.CCACHE_R2_GITHUB_OIDC_AUDIENCE || 'ccache-r2-broker' }}
-          R2_ALLOWED_PREFIXES: ${{ vars.CCACHE_R2_ALLOWED_PREFIXES }}
+          GITHUB_OIDC_AUDIENCE: ${{ vars.CCACHE_R2_OIDC_AUDIENCE || 'ccache-r2-broker' }}
+          R2_ALLOWED_PREFIXES: ${{ vars.CCACHE_R2_ALLOWED_PREFIXES || 'ccache/' }}
           R2_TEMP_CREDENTIAL_PERMISSION: ${{ vars.CCACHE_R2_TEMP_CREDENTIAL_PERMISSION || 'object-read-write' }}
           R2_TEMP_CREDENTIAL_TTL_SECONDS: ${{ vars.CCACHE_R2_TEMP_CREDENTIAL_TTL_SECONDS || '3600' }}
         run: |
@@ -69,3 +70,70 @@ jobs:
         env:
           R2_PARENT_ACCESS_KEY_ID: ${{ secrets.CCACHE_R2_PARENT_ACCESS_KEY_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CCACHE_R2_API_TOKEN }}
+      - name: Smoke test ccache R2 broker
+        env:
+          BROKER_URL: ${{ vars.CCACHE_R2_OIDC_BROKER_URL }}
+          BROKER_AUDIENCE: ${{ vars.CCACHE_R2_OIDC_AUDIENCE || 'ccache-r2-broker' }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          headers = {
+              "Accept": "application/json",
+              "User-Agent": "tenzir-ccache-s3-storage-helper/1",
+          }
+
+          broker_url = os.environ["BROKER_URL"]
+          if not broker_url:
+              print("::notice::CCACHE_R2_OIDC_BROKER_URL is unset, skipping broker smoke test")
+              sys.exit(0)
+
+          audience = urllib.parse.quote(os.environ["BROKER_AUDIENCE"], safe="")
+          token_url = f"{os.environ['ACTIONS_ID_TOKEN_REQUEST_URL']}&audience={audience}"
+          token_request = urllib.request.Request(
+              token_url,
+              headers={
+                  **headers,
+                  "Authorization": f"Bearer {os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']}",
+              },
+          )
+          with urllib.request.urlopen(token_request, timeout=30) as response:
+              oidc_token = json.load(response)["value"]
+
+          body = json.dumps({"token": oidc_token}).encode()
+          broker_request = urllib.request.Request(
+              broker_url,
+              data=body,
+              headers={
+                  **headers,
+                  "Content-Type": "application/json",
+              },
+              method="POST",
+          )
+          try:
+              with urllib.request.urlopen(broker_request, timeout=30) as response:
+                  credentials = json.load(response)
+          except urllib.error.HTTPError as error:
+              body = error.read().decode(errors="replace")
+              raise SystemExit(f"broker smoke test failed: HTTP {error.code}: {body}") from error
+
+          required_keys = [
+              "accessKeyId",
+              "secretAccessKey",
+              "sessionToken",
+              "bucket",
+              "endpointUrl",
+          ]
+          missing_keys = [key for key in required_keys if not credentials.get(key)]
+          if missing_keys:
+              raise SystemExit(
+                  "broker smoke test returned incomplete credentials: "
+                  + ", ".join(missing_keys)
+              )
+          print("Broker minted temporary R2 credentials successfully")
+          PY
