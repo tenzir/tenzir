@@ -45,9 +45,10 @@ auto make_async_sqs_queue(const Args& args, OpCtx& ctx)
       .throw_();
   }
   auto resolved_creds = std::move(auth->credentials);
-  // Strip the sqs:// scheme prefix if present (e.g. `from_sqs "sqs://name"`).
-  // The argument may also be a full queue URL (`https://...`), in which case
-  // we leave it intact and let `AsyncSqsQueue` skip URL resolution.
+  // Strip the sqs:// scheme prefix if present (e.g.
+  // `from_amazon_sqs "sqs://name"`). The argument may also be a full queue URL
+  // (`https://...`), in which case we leave it intact and let `AsyncSqsQueue`
+  // skip URL resolution.
   auto queue_name = args.queue;
   if (queue_name.inner.starts_with("sqs://")) {
     queue_name.inner.erase(0, 6);
@@ -95,9 +96,9 @@ auto make_async_sqs_queue(const Args& args, OpCtx& ctx)
 
 } // namespace
 
-// --- default_to_sqs_message_expression ---
+// --- default_to_amazon_sqs_message_expression ---
 
-auto default_to_sqs_message_expression() -> ast::expression {
+auto default_to_amazon_sqs_message_expression() -> ast::expression {
   auto function
     = ast::entity{{ast::identifier{"print_ndjson", location::unknown}}};
   // Defaults bypass parser resolution in `OperatorPlugin`, so the entity
@@ -132,11 +133,11 @@ auto FromSqs::start(OpCtx& ctx) -> Task<void> {
         : std::nullopt;
   queue_ = co_await make_async_sqs_queue(args_, ctx);
   bytes_read_counter_
-    = ctx.make_counter(MetricsLabel{"operator", "from_sqs"},
+    = ctx.make_counter(MetricsLabel{"operator", "from_amazon_sqs"},
                        MetricsDirection::read, MetricsVisibility::external_,
                        MetricsUnit::bytes);
   events_read_counter_
-    = ctx.make_counter(MetricsLabel{"operator", "from_sqs"},
+    = ctx.make_counter(MetricsLabel{"operator", "from_amazon_sqs"},
                        MetricsDirection::read, MetricsVisibility::external_,
                        MetricsUnit::events);
 }
@@ -277,11 +278,11 @@ ToSqs::ToSqs(ToSqsArgs args) : args_{std::move(args)} {
 auto ToSqs::start(OpCtx& ctx) -> Task<void> {
   queue_ = co_await make_async_sqs_queue(args_, ctx);
   bytes_write_counter_
-    = ctx.make_counter(MetricsLabel{"operator", "to_sqs"},
+    = ctx.make_counter(MetricsLabel{"operator", "to_amazon_sqs"},
                        MetricsDirection::write, MetricsVisibility::external_,
                        MetricsUnit::bytes);
   events_write_counter_
-    = ctx.make_counter(MetricsLabel{"operator", "to_sqs"},
+    = ctx.make_counter(MetricsLabel{"operator", "to_amazon_sqs"},
                        MetricsDirection::write, MetricsVisibility::external_,
                        MetricsUnit::events);
 }

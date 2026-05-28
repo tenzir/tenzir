@@ -1,5 +1,5 @@
 suite:
-  name: localstack-from-sqs
+  name: localstack-from-amazon-sqs
   mode: sequential
 fixtures: [localstack]
 timeout: 120

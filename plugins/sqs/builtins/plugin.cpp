@@ -79,7 +79,7 @@ public:
     -> failure_or<ir::CompileResult> override {
     diagnostic::error("`load_sqs` is not supported by the new executor")
       .primary(inv.op.get_location())
-      .hint("use `from_sqs` to produce events directly")
+      .hint("use `from_amazon_sqs` to produce events directly")
       .emit(ctx);
     return failure::promise();
   }
@@ -106,7 +106,7 @@ public:
     -> failure_or<ir::CompileResult> override {
     diagnostic::error("`save_sqs` is not supported by the new executor")
       .primary(inv.op.get_location())
-      .hint("use `to_sqs` to send events directly")
+      .hint("use `to_amazon_sqs` to send events directly")
       .emit(ctx);
     return failure::promise();
   }
@@ -123,7 +123,7 @@ public:
 class from_plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "from_sqs";
+    return "from_amazon_sqs";
   }
 
   auto describe() const -> Description override {
@@ -181,12 +181,12 @@ public:
 class to_plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "to_sqs";
+    return "to_amazon_sqs";
   }
 
   auto describe() const -> Description override {
     auto initial = ToSqsArgs{};
-    initial.message = default_to_sqs_message_expression();
+    initial.message = default_to_amazon_sqs_message_expression();
     auto d = Describer<ToSqsArgs, ToSqs>{std::move(initial)};
     d.operator_location(&ToSqsArgs::operator_location);
     auto queue = d.positional("queue", &ToSqsArgs::queue);

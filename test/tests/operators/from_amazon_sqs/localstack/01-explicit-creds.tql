@@ -1,6 +1,6 @@
-// Test from_sqs with explicit AWS credentials.
+// Test from_amazon_sqs with explicit AWS credentials.
 // Each test uses its own queue to avoid message consumption conflicts.
-from_sqs env("LOCALSTACK_SQS_QUEUE_BASIC"), aws_iam={
+from_amazon_sqs env("LOCALSTACK_SQS_QUEUE_BASIC"), aws_iam={
   access_key_id: "test",
   secret_access_key: "test",
   region: "us-east-1"

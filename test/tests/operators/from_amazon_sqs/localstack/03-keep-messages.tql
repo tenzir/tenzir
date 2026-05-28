@@ -1,7 +1,9 @@
-// Test that messages received with keep_messages=true become visible again.
-from_sqs env("LOCALSTACK_SQS_QUEUE_NO_DELETE"),
+// Test from_amazon_sqs while keeping received messages.
+from_amazon_sqs env("LOCALSTACK_SQS_QUEUE_NO_DELETE"),
+         keep_messages=true,
          batch_size=2,
          poll_time=1s,
+         visibility_timeout=1s,
          aws_iam={
            access_key_id: "test",
            secret_access_key: "test",
