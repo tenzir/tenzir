@@ -278,8 +278,7 @@ jobs:
                input_enabled docker-tenzir ||
                input_enabled benchmark-reference-docker ||
                input_enabled sync-openapi-to-docs ||
-               input_enabled regression-tests ||
-               input_enabled python; then
+               input_enabled regression-tests; then
               echo "run-docker-tenzir=true" >> $GITHUB_OUTPUT
             fi
             if input_enabled tenzir-static-aarch64-linux ||
@@ -328,7 +327,7 @@ jobs:
           run_if_changed python "python/"
           TENZIR_SOURCES=(cmake/ CMakeLists.txt contrib/tenzir-plugins/ libtenzir/ libtenzir_test/ schema/ tenzir/ tenzir.yaml.example version.json plugins/)
           run_if_changed tenzir "${TENZIR_SOURCES[@]}"
-          run_docker_tenzir="$(any ${run_tenzir} ${run_python})"
+          run_docker_tenzir="${run_tenzir}"
           run_if_changed_default docker-tenzir $run_docker_tenzir \
             "Dockerfile" ".dockerignore" \
             "scripts/debian/build-*.sh" \
@@ -337,7 +336,7 @@ jobs:
             ".github/workflows/push-manifest.yaml" \
             ".github/workflows/docker-config-base.json"
           run_if_changed_default regression-tests $run_docker_tenzir
-          run_if_changed tenzir-nix \
+          run_if_changed_default tenzir-nix $run_python \
             "${TENZIR_SOURCES[@]}" plugins/ contrib/tenzir-plugins/ flake.nix flake.lock nix/ \
             ".github/workflows/nix.nu" \
             ".github/workflows/nix.yaml" \
@@ -471,7 +470,6 @@ jobs:
                 set_output run-tenzir true
                 ;;
               python)
-                enable_job docker-tenzir
                 enable_job tenzir-static-x86_64-linux
                 set_output run-python true
                 ;;
@@ -1072,7 +1070,6 @@ jobs:
   python:
     needs:
       - configure
-      - docker-tenzir
       - tenzir-static-x86_64-linux
     if: ${{ needs.configure.outputs.run-python == 'true' }}
     name: Python
@@ -1114,13 +1111,6 @@ jobs:
         working-directory: python
         run: |
           uv run --all-packages --group dev pytest
-      - name: Run tests in Docker
-        working-directory: python
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.tenzir-container-ref }}"
-          export TENZIR_CONTAINER_REGISTRY=ghcr.io
-          ./docker-uv-run.sh --all-packages --group dev pytest
       - name: Sync tenzir-plugins nix sources
         run: |
           GH_TOKEN="${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}" nix/update-plugins.sh
@@ -1128,6 +1118,19 @@ jobs:
         working-directory: python
         run: |
           uv build --wheel --all-packages
+      - name: Run integration tests
+        working-directory: python
+        run: |
+          uv venv "${RUNNER_TEMP}/tenzir-python-integration"
+          uv pip install \
+            --python "${RUNNER_TEMP}/tenzir-python-integration/bin/python" \
+            "pytest>=9.0.3,<10.0" \
+            "pytest-asyncio>=1.3.0,<2.0.0" \
+            dist/*.whl
+          export PATH="${RUNNER_TEMP}/tenzir-python-integration/bin:${PATH}"
+          TENZIR_PYTHON_INTEGRATION=1 \
+            "${RUNNER_TEMP}/tenzir-python-integration/bin/python" \
+            -m pytest
 
   python-package:
     needs:
