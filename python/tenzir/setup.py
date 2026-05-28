@@ -88,11 +88,20 @@ def _run_nix() -> list[Path]:
     if custom_cmd:
         args: list[str] = shlex.split(custom_cmd)
     else:
+        version_env = [
+            name
+            for name in ["TENZIR_VERSION_SUFFIX", "TENZIR_VERSION_BUILD_METADATA"]
+            if os.environ.get(name)
+        ]
         args = [
             "nix",
             "--accept-flake-config",
             "--print-build-logs",
             "build",
+        ]
+        if version_env:
+            args.append("--impure")
+        args += [
             "--no-link",
             "--print-out-paths",
             f"{repo_root}#{attr}^package",
