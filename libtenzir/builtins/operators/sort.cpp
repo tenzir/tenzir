@@ -116,17 +116,25 @@ auto eval_sort_predicate(const ast::lambda_expr& cmp, const data& lhs_value,
   return false;
 }
 
+auto sort_array_recursive(std::shared_ptr<arrow::Array> array)
+  -> std::shared_ptr<arrow::Array>;
+
 auto sort_list(const series& input, const std::optional<table_slice>& scope,
                bool descending, const std::optional<ast::lambda_expr>& cmp,
                session ctx) -> series {
-  auto builder = series_builder{input.type};
+  auto input_array = sort_array_recursive(input.array);
+  auto input_type = input.type;
+  if (input_array->type() != input.array->type()) {
+    input_type = type::from_arrow(*input_array->type());
+  }
+  auto builder = series_builder{input_type};
   TENZIR_ASSERT(
     not scope or scope->rows() == detail::narrow_cast<size_t>(input.length()));
   auto warning_state = comparator_warning_state{};
   auto fallback_scope = empty_scope_slice();
   auto row = int64_t{0};
-  for (const auto& value : values(type{as<list_type>(input.type)},
-                                  as<arrow::ListArray>(*input.array))) {
+  for (const auto& value : values(type{as<list_type>(input_type)},
+                                  as<arrow::ListArray>(*input_array))) {
     auto row_scope = scope ? subslice(*scope, row, row + 1) : fallback_scope;
     ++row;
     if (is<caf::none_t>(value)) {
@@ -175,6 +183,11 @@ auto sort_record(const arrow::StructArray& array)
   };
   auto data = std::vector<kv_pair>(fields.size());
   for (size_t i = 0; i < data.size(); ++i) {
+    auto sorted_array = sort_array_recursive(arrays[i]);
+    if (sorted_array->type() != fields[i]->type()) {
+      fields[i] = fields[i]->WithType(sorted_array->type());
+    }
+    arrays[i] = std::move(sorted_array);
     data[i] = {std::move(fields[i]), std::move(arrays[i])};
   }
   std::ranges::sort(data, std::less<>{}, &kv_pair::name);
@@ -185,6 +198,23 @@ auto sort_record(const arrow::StructArray& array)
   return std::make_shared<arrow::StructArray>(
     arrow::struct_(fields), array.length(), std::move(arrays),
     array.null_bitmap(), array.null_count(), array.offset());
+}
+
+auto sort_array_recursive(std::shared_ptr<arrow::Array> array)
+  -> std::shared_ptr<arrow::Array> {
+  if (auto* record = try_as<arrow::StructArray>(*array)) {
+    return sort_record(*record);
+  }
+  if (auto* list = try_as<arrow::ListArray>(*array)) {
+    auto values = sort_array_recursive(list->values());
+    if (values == list->values()) {
+      return array;
+    }
+    return check(arrow::ListArray::FromArrays(
+      *list->offsets(), *values, arrow_memory_pool(), list->null_bitmap(),
+      list->data()->null_count));
+  }
+  return array;
 }
 
 auto sort_record(const series& input) -> series {

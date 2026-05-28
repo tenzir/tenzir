@@ -1,0 +1,7 @@
+from {
+  z: 0,
+  a: {d: 4, c: 3},
+  xs: [{b: 2, a: 1}, {b: 1, a: 2}],
+  nums: [3, 1, 2],
+}
+this = sort(this)

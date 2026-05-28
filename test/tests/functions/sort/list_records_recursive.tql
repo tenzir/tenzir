@@ -1,0 +1,4 @@
+from {
+  xs: [{b: 2, a: 1}, {b: 1, a: 2}],
+}
+select ys = sort(xs)
