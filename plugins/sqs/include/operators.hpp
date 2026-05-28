@@ -40,9 +40,9 @@ struct ToSqsArgs {
   location operator_location;
 };
 
-/// Returns the default `message=` expression used by `to_sqs`
+/// Returns the default `message=` expression used by `to_amazon_sqs`
 /// (`print_ndjson(this)`).
-auto default_to_sqs_message_expression() -> ast::expression;
+auto default_to_amazon_sqs_message_expression() -> ast::expression;
 
 class FromSqs final : public Operator<void, table_slice> {
 public:

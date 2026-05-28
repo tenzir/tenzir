@@ -8,13 +8,13 @@ prs:
 created: 2026-05-13T09:08:28.12779Z
 ---
 
-The `from_sqs` and `to_sqs` operators now derive the AWS region from a queue
-URL when `aws_region` is not set, so passing a full URL such as
+The `from_amazon_sqs` and `to_amazon_sqs` operators now derive the AWS region
+from a queue URL when `aws_region` is not set, so passing a full URL such as
 `https://sqs.us-west-2.amazonaws.com/123456789012/my-queue` works without
 having to specify the region again:
 
 ```tql
-from_sqs "https://sqs.us-west-2.amazonaws.com/123456789012/my-queue"
+from_amazon_sqs "https://sqs.us-west-2.amazonaws.com/123456789012/my-queue"
 ```
 
 Previously, this would fall back to the SDK default region and fail with a

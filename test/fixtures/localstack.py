@@ -18,8 +18,10 @@ Usage overview:
 - **LOCALSTACK_SQS_QUEUE_ROLE_URL** – Full URL of the role assumption queue.
 - **LOCALSTACK_SQS_QUEUE_SAVE** – SQS queue name for save_sqs tests.
 - **LOCALSTACK_SQS_QUEUE_SAVE_URL** – Full URL of the save_sqs queue.
-- **LOCALSTACK_SQS_QUEUE_NO_DELETE** – SQS queue name for from_sqs delete=false tests.
-- **LOCALSTACK_SQS_QUEUE_NO_DELETE_URL** – Full URL of the from_sqs delete=false queue.
+- **LOCALSTACK_SQS_QUEUE_NO_DELETE** – SQS queue name for from_amazon_sqs
+  delete=false tests.
+- **LOCALSTACK_SQS_QUEUE_NO_DELETE_URL** – Full URL of the from_amazon_sqs
+  delete=false queue.
 - **LOCALSTACK_ROLE_ARN** – ARN of a test IAM role for assume role tests.
 - **LOCALSTACK_EXTERNAL_ID** – External ID for assume role tests.
 - **LOCALSTACK_SQS_QUEUE_WEB_IDENTITY_FILE** – SQS queue name for web identity token_file tests.

@@ -87,6 +87,7 @@ constexpr porting_hint unported_replacements[] = {
            "`from_http`) "
            "instead"},
   {"from_gcs", "use `from_google_cloud_storage` instead"},
+  {"from_sqs", "use `from_amazon_sqs` instead"},
   {"from_udp", "use `accept_udp` instead"},
   {"http", "use `from_http` instead, combined with `each` if needed"},
   {"load_amqp", "use `from_amqp` instead"},
@@ -98,7 +99,7 @@ constexpr porting_hint unported_replacements[] = {
   {"load_nic", "use `from_nic` instead"},
   {"load_s3", "use `from_s3` instead"},
   {"load_stdin", "use `from_stdin` instead"},
-  {"load_sqs", "use `from_sqs` instead"},
+  {"load_sqs", "use `from_amazon_sqs` instead"},
   {"load_tcp", "use `accept_tcp` instead"},
   {"load_zmq", "use `from_zmq` instead"},
   {"move", "use the `dst = move src` keyword form instead"},
@@ -110,10 +111,11 @@ constexpr porting_hint unported_replacements[] = {
   {"save_kafka", "use `to_kafka` instead"},
   {"save_s3", "use `to_s3` instead"},
   {"save_stdout", "use `to_stdout` instead"},
-  {"save_sqs", "use `to_sqs` instead"},
+  {"save_sqs", "use `to_amazon_sqs` instead"},
   {"save_zmq", "use `to_zmq` instead"},
   {"to", "use one of the `to_*` operators (e.g. `to_file`, `to_http`) "
          "instead"},
+  {"to_sqs", "use `to_amazon_sqs` instead"},
   {"to_hive",
    "use `to_file`, `to_s3`, etc. with the `partition_by` argument instead"},
 };

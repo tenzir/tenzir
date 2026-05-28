@@ -1,7 +1,7 @@
-// Test from_sqs with web identity using token_file.
+// Test from_amazon_sqs with web identity using token_file.
 // Uses AssumeRoleWithWebIdentity with a token read from a file.
 // Each test uses its own queue to avoid message consumption conflicts.
-from_sqs env("LOCALSTACK_SQS_QUEUE_WEB_IDENTITY_FILE"), aws_iam={
+from_amazon_sqs env("LOCALSTACK_SQS_QUEUE_WEB_IDENTITY_FILE"), aws_iam={
   region: "us-east-1",
   assume_role: env("LOCALSTACK_WEB_IDENTITY_ROLE_ARN"),
   web_identity: {

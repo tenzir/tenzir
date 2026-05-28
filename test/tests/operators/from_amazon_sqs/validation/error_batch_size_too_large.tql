@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+from_amazon_sqs "queue", batch_size=11
