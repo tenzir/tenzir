@@ -43,6 +43,8 @@ namespace tenzir::plugins::feather {
 
 namespace {
 
+constexpr auto arrow_magic_bytes = std::string_view{"ARROW1"};
+
 auto has_location(diagnostic const& diag) -> bool {
   for (auto const& annotation : diag.annotations) {
     if (annotation.source != location::unknown) {
@@ -60,6 +62,59 @@ auto emit_with_location(DiagnosticBuilder&& diag, DiagnosticHandler& dh,
                                           operator_location);
   }
   std::forward<DiagnosticBuilder>(diag).emit(dh);
+}
+
+template <class Metadata>
+auto has_tenzir_name_metadata(std::shared_ptr<Metadata> const& metadata)
+  -> bool {
+  return metadata
+         and std::find(metadata->keys().begin(), metadata->keys().end(),
+                       "TENZIR:name:0")
+               != metadata->keys().end();
+}
+
+template <class Metadata>
+auto has_tenzir_metadata(std::shared_ptr<Metadata> const& metadata) -> bool {
+  return metadata
+         and std::ranges::any_of(metadata->keys(), [](std::string const& key) {
+               return key.starts_with("TENZIR:");
+             });
+}
+
+auto ensure_tenzir_name_metadata(std::shared_ptr<arrow::RecordBatch> batch)
+  -> std::shared_ptr<arrow::RecordBatch> {
+  TENZIR_ASSERT(batch);
+  auto metadata = batch->schema()->metadata();
+  if (has_tenzir_name_metadata(metadata)) {
+    return batch;
+  }
+  auto copy
+    = metadata ? metadata->Copy() : std::make_shared<arrow::KeyValueMetadata>();
+  copy->Append("TENZIR:name:0", "undefined");
+  return batch->ReplaceSchemaMetadata(std::move(copy));
+}
+
+auto starts_with_arrow_magic(chunk_ptr const& chunk) -> bool {
+  return chunk and chunk->size() >= arrow_magic_bytes.size()
+         and std::memcmp(chunk->data(), arrow_magic_bytes.data(),
+                         arrow_magic_bytes.size())
+               == 0;
+}
+
+auto is_store_envelope(std::shared_ptr<arrow::RecordBatch> const& batch)
+  -> bool {
+  TENZIR_ASSERT(batch);
+  auto const& schema = batch->schema();
+  if (schema->num_fields() != 2) {
+    return false;
+  }
+  auto const& import_time_field = schema->field(0);
+  auto const& event_field = schema->field(1);
+  return import_time_field->name() == "import_time"
+         and import_time_field->type()->Equals(time_type::to_arrow_type())
+         and event_field->name() == "event"
+         and event_field->type()->id() == arrow::Type::STRUCT
+         and has_tenzir_metadata(event_field->metadata());
 }
 
 namespace store {
@@ -117,16 +172,10 @@ auto wrap_record_batch(const table_slice& slice)
   return new_rb;
 }
 
-/// Decode an Arrow IPC stream incrementally.
-auto decode_ipc_stream(chunk_ptr chunk)
-  -> caf::expected<generator<std::shared_ptr<arrow::RecordBatch>>> {
-  // See arrow::ipc::internal::kArrowMagicBytes in
-  // arrow/ipc/metadata_internal.h.
-  static constexpr auto arrow_magic_bytes = std::string_view{"ARROW1"};
-  if (chunk->size() < arrow_magic_bytes.length()
-      or std::memcmp(chunk->data(), arrow_magic_bytes.data(),
-                     arrow_magic_bytes.size())
-           != 0) {
+/// Decode an Arrow IPC file.
+auto decode_ipc_file(chunk_ptr chunk) -> caf::expected<
+  generator<caf::expected<std::shared_ptr<arrow::RecordBatch>>>> {
+  if (not starts_with_arrow_magic(chunk)) {
     return caf::make_error(ec::format_error, "not an Apache Feather v1 or "
                                              "Arrow IPC file");
   }
@@ -145,30 +194,36 @@ auto decode_ipc_stream(chunk_ptr chunk)
                                     get_generator_result.status().ToString()));
   }
   auto gen = get_generator_result.MoveValueUnsafe();
-  return
-    []([[maybe_unused]] auto reader,
-       decltype(gen) gen) -> generator<std::shared_ptr<arrow::RecordBatch>> {
-      while (true) {
-        auto next = gen();
-        if (not next.is_finished()) {
-          // TODO: We block the CAF worker thread here. Presumably we are okay
-          // with this since work is happening in an Arrow worker thread.
-          next.Wait();
-        }
-        TENZIR_ASSERT(next.is_finished());
-        auto result = check(next.MoveResult());
-        if (arrow::IsIterationEnd(result)) {
-          co_return;
-        }
-        co_yield std::move(result);
+  return []([[maybe_unused]] auto reader, decltype(gen) gen)
+           -> generator<caf::expected<std::shared_ptr<arrow::RecordBatch>>> {
+    while (true) {
+      auto next = gen();
+      if (not next.is_finished()) {
+        // TODO: We block the CAF worker thread here. Presumably we are okay
+        // with this since work is happening in an Arrow worker thread.
+        next.Wait();
       }
-    }(std::move(reader), std::move(gen));
+      TENZIR_ASSERT(next.is_finished());
+      auto result = next.MoveResult();
+      if (not result.ok()) {
+        co_yield caf::make_error(
+          ec::format_error,
+          fmt::format("failed to read record batch: {}",
+                      result.status().ToStringWithoutContextLines()));
+        co_return;
+      }
+      if (arrow::IsIterationEnd(result)) {
+        co_return;
+      }
+      co_yield result.MoveValueUnsafe();
+    }
+  }(std::move(reader), std::move(gen));
 }
 
 class passive_feather_store final : public passive_store {
   [[nodiscard]] auto load(chunk_ptr chunk) -> caf::error override {
     TENZIR_ASSERT(chunk);
-    if (auto decode_result = decode_ipc_stream(chunk->slice(0, chunk->size()));
+    if (auto decode_result = decode_ipc_file(chunk->slice(0, chunk->size()));
         not decode_result) {
       return caf::make_error(ec::format_error,
                              fmt::format("failed to load feather store: {}",
@@ -184,7 +239,7 @@ class passive_feather_store final : public passive_store {
     if (not chunk_) {
       co_return;
     }
-    auto decode_result = decode_ipc_stream(make_chunk_view());
+    auto decode_result = decode_ipc_file(make_chunk_view());
     if (not decode_result) {
       TENZIR_ASSERT(false, "failed to decode feather store after load");
       co_return;
@@ -193,7 +248,7 @@ class passive_feather_store final : public passive_store {
     auto offset = id{};
     auto schema = schema_;
     for (auto it = batches.begin(); it != batches.end(); ++it) {
-      auto batch = std::move(*it);
+      auto batch = check(std::move(*it));
       TENZIR_ASSERT(batch);
       auto import_time_column = batch->GetColumnByName("import_time");
       auto slice = schema ? table_slice{unwrap_record_batch(batch), *schema}
@@ -375,6 +430,38 @@ private:
 };
 
 } // namespace store
+
+auto make_table_slice(std::shared_ptr<arrow::RecordBatch> batch,
+                      diagnostic_handler& dh, location operator_location)
+  -> std::optional<table_slice> {
+  auto validate_status = batch->Validate();
+  TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+  if (is_store_envelope(batch)) {
+    auto import_time_column = batch->GetColumnByName("import_time");
+    auto unwrapped = ensure_tenzir_name_metadata(
+      store::unwrap_record_batch(std::move(batch)));
+    auto slice = table_slice::try_from(std::move(unwrapped));
+    if (not slice) {
+      emit_with_location(diagnostic::error("Feather input contains unsupported "
+                                           "types")
+                           .note("{}", slice.error().message),
+                         dh, operator_location);
+      return std::nullopt;
+    }
+    slice->import_time(store::derive_import_time(import_time_column));
+    return std::move(*slice);
+  }
+  batch = ensure_tenzir_name_metadata(std::move(batch));
+  auto slice = table_slice::try_from(std::move(batch));
+  if (not slice) {
+    emit_with_location(diagnostic::error("Feather input contains unsupported "
+                                         "types")
+                         .note("{}", slice.error().message),
+                       dh, operator_location);
+    return std::nullopt;
+  }
+  return std::move(*slice);
+}
 
 class callback_listener : public arrow::ipc::Listener {
 public:
@@ -638,6 +725,12 @@ struct ReadFeatherArgs {
   location operator_location = location::unknown;
 };
 
+enum class ReadFeatherMode {
+  undecided,
+  stream,
+  file,
+};
+
 class ReadFeather final : public Operator<chunk_ptr, table_slice> {
 public:
   explicit ReadFeather(ReadFeatherArgs args)
@@ -651,15 +744,38 @@ public:
     if (done_ or not input or input->size() == 0) {
       co_return;
     }
+    if (mode_ == ReadFeatherMode::file) {
+      file_chunks_.push_back(std::move(input));
+      co_return;
+    }
     append(std::move(input));
+    if (mode_ == ReadFeatherMode::undecided) {
+      if (available() < arrow_magic_bytes.size()) {
+        co_return;
+      }
+      mode_ = starts_with_arrow_magic(buffer_) ? ReadFeatherMode::file
+                                               : ReadFeatherMode::stream;
+    }
+    if (mode_ == ReadFeatherMode::file) {
+      file_chunks_.push_back(buffer_->slice(offset_, available()));
+      buffer_ = chunk::make_empty();
+      offset_ = 0;
+      co_return;
+    }
     co_await parse_available(push, ctx.dh());
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
-    TENZIR_UNUSED(push);
+    if (done_) {
+      co_return FinalizeBehavior::done;
+    }
+    if (mode_ == ReadFeatherMode::file) {
+      co_await parse_file(push, ctx.dh());
+      co_return FinalizeBehavior::done;
+    }
     auto trailing_bytes = truncated_bytes_ + available();
-    if (not done_ and trailing_bytes != 0) {
+    if (trailing_bytes != 0) {
       emit_with_location(diagnostic::warning("truncated Feather input")
                            .note("discarded {} trailing bytes", trailing_bytes)
                            .severity(decoded_once_ ? severity::warning
@@ -746,24 +862,49 @@ private:
         truncated_bytes_ = 0;
         auto batch = listener_->record_batch_buffer.front();
         listener_->record_batch_buffer.pop();
-        auto validate_status = batch->Validate();
-        TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
-        const auto& metadata = batch->schema()->metadata();
-        if (not metadata
-            or std::find(metadata->keys().begin(), metadata->keys().end(),
-                         "TENZIR:name:0")
-                 == metadata->keys().end()) {
-          emit_with_location(
-            diagnostic::error("missing Tenzir metadata in Feather input")
-              .note("cannot convert Feather without the `TENZIR:name:0` "
-                    "metadata entry"),
-            dh, args_.operator_location);
+        auto slice
+          = make_table_slice(std::move(batch), dh, args_.operator_location);
+        if (not slice) {
           done_ = true;
           co_return;
         }
-        co_await push(table_slice{std::move(batch)});
+        co_await push(std::move(*slice));
       }
     }
+  }
+
+  auto parse_file(Push<table_slice>& push, diagnostic_handler& dh)
+    -> Task<void> {
+    auto input = join_chunks(std::move(file_chunks_));
+    auto batches = store::decode_ipc_file(std::move(input));
+    if (not batches) {
+      emit_with_location(diagnostic::error("failed to decode Feather input")
+                           .note("{}", batches.error()),
+                         dh, args_.operator_location);
+      done_ = true;
+      co_return;
+    }
+    for (auto&& batch_result : *batches) {
+      if (not batch_result) {
+        emit_with_location(diagnostic::error("failed to decode Feather input")
+                             .note("{}", batch_result.error()),
+                           dh, args_.operator_location);
+        done_ = true;
+        co_return;
+      }
+      auto batch = std::move(*batch_result);
+      auto slice
+        = make_table_slice(std::move(batch), dh, args_.operator_location);
+      if (not slice) {
+        done_ = true;
+        co_return;
+      }
+      co_await push(std::move(*slice));
+    }
+    buffer_ = chunk::make_empty();
+    offset_ = 0;
+    decoded_once_ = true;
+    done_ = true;
   }
 
   ReadFeatherArgs args_;
@@ -772,6 +913,8 @@ private:
   size_t truncated_bytes_ = 0;
   bool decoded_once_ = false;
   bool done_ = false;
+  ReadFeatherMode mode_ = ReadFeatherMode::undecided;
+  std::vector<chunk_ptr> file_chunks_;
   std::shared_ptr<callback_listener> listener_;
   Box<arrow::ipc::StreamDecoder> stream_decoder_;
 };

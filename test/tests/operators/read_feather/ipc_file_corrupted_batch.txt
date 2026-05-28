@@ -1,0 +1,7 @@
+error: failed to decode Feather input
+ --> tests/operators/read_feather/ipc_file_corrupted_batch.tql:6:3
+  |
+6 |   read_feather
+  |   ^^^^^^^^^^^^ 
+  |
+  = note: !! format_error: failed to read record batch: IOError: ZSTD decompression failed: Src size is incorrect

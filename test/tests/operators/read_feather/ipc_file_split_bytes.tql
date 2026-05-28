@@ -1,0 +1,4 @@
+from_file f"{env("TENZIR_INPUTS")}/feather/ipc_file.feather" {
+  split_bytes 1
+  read_feather
+}
