@@ -10,9 +10,9 @@
 #include "clickhouse/block_to_table_slice.hpp"
 #include "clickhouse/easy_client.hpp"
 #include "clickhouse/filter_to_where_clause.hpp"
-#include "clickhouse/sql_predicate_pushdown.hpp"
 #include "tenzir/arc.hpp"
 #include "tenzir/async.hpp"
+#include "tenzir/async/blocking_executor.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/operator_plugin.hpp"
@@ -25,6 +25,7 @@
 #include <folly/coro/BoundedQueue.h>
 
 #include <algorithm>
+#include <unordered_set>
 #include <utility>
 
 namespace tenzir::plugins::clickhouse {
@@ -50,7 +51,6 @@ struct FromClickhouseArgs {
 struct QueryPlan {
   std::string query;
   std::string schema_name;
-  ir::optimize_filter local_filter;
 };
 
 struct SliceMessage {
@@ -113,8 +113,6 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto plan = make_query_plan(args_);
-    local_filter_ = std::move(plan.local_filter);
     auto ssl_opts = args_.tls ? tls_options{*args_.tls} : tls_options{};
     auto ssl = ssl_opts.resolve(ctx.actor_system().config(), ctx.dh());
     if (not ssl) {
@@ -163,6 +161,33 @@ public:
         client_args.port = located<uint64_t>{default_port, location::unknown};
       }
     }
+    auto options = client_args.make_options();
+    // Build the query plan: for table mode, fetch the schema first so we can
+    // push only conjuncts that reference existing columns.
+    auto plan = QueryPlan{};
+    if (args_.table) {
+      auto qualified = std::string{args_.table->inner};
+      auto known = co_await spawn_blocking(
+        [options, qualified]() -> std::unordered_set<std::string> {
+          return fetch_schema(options, qualified);
+        });
+      auto where = filter_to_where_clause(args_.filter, known);
+      local_filter_ = std::move(where.residual_filter);
+      plan = {
+        .query = where.predicate.empty()
+                   ? fmt::format("SELECT * FROM {}", qualified)
+                   : fmt::format("SELECT * FROM {} WHERE {}", qualified,
+                                 where.predicate),
+        .schema_name = make_schema_name_from_table(args_.table->inner),
+      };
+    } else {
+      // SQL mode: no pushdown, all filters applied locally.
+      local_filter_ = args_.filter;
+      plan = {
+        .query = args_.sql->inner,
+        .schema_name = "clickhouse.query",
+      };
+    }
     // Helper task to shutdown our query on cancellation.
     ctx.spawn_task([runtime = runtime_]() mutable -> Task<void> {
       if (not co_await catch_cancellation(wait_forever())) {
@@ -170,7 +195,6 @@ public:
       }
     });
     // The actual query task.
-    auto options = client_args.make_options();
     ctx.spawn_task([this, options = std::move(options), plan = std::move(plan),
                     &dh = ctx.dh(),
                     loc = args_.operator_location]() mutable -> Task<void> {
@@ -223,6 +247,28 @@ public:
   }
 
 private:
+  static auto fetch_schema(::clickhouse::ClientOptions const& options,
+                           std::string_view qualified_table)
+    -> std::unordered_set<std::string> {
+    auto columns = std::unordered_set<std::string>{};
+    try {
+      auto client = ::clickhouse::Client{options};
+      auto query = ::clickhouse::Query{
+        fmt::format("DESCRIBE TABLE {} SETTINGS describe_compact_output=1",
+                    qualified_table)};
+      query.OnData([&](::clickhouse::Block const& block) {
+        for (size_t i = 0; i < block.GetRowCount(); ++i) {
+          columns.insert(
+            std::string{block[0]->As<::clickhouse::ColumnString>()->At(i)});
+        }
+      });
+      client.Execute(query);
+    } catch (std::exception const&) {
+      return {};
+    }
+    return columns;
+  }
+
   static auto split_validated_table_name(std::string_view table)
     -> split_table_name_result {
     if (auto split = table_name_quoting.split_at_unquoted(table, '.')) {
@@ -241,39 +287,6 @@ private:
                          table_name);
     }
     return fmt::format("clickhouse.{}", table_name);
-  }
-
-  static auto make_query_plan(FromClickhouseArgs const& args) -> QueryPlan {
-    TENZIR_ASSERT(args.sql or args.table);
-    if (args.sql) {
-      auto where = filter_to_where_clause(args.filter);
-      if (not where.predicate.empty()) {
-        if (auto query
-            = pushdown_predicate_into_sql(args.sql->inner, where.predicate)) {
-          return QueryPlan{
-            .query = std::move(*query),
-            .schema_name = "clickhouse.query",
-            .local_filter = std::move(where.residual_filter),
-          };
-        }
-      }
-      return QueryPlan{
-        .query = args.sql->inner,
-        .schema_name = "clickhouse.query",
-        .local_filter = args.filter,
-      };
-    }
-    TENZIR_ASSERT(args.table);
-    auto qualified = std::string{args.table->inner};
-    auto where = filter_to_where_clause(args.filter);
-    return QueryPlan{
-      .query = where.predicate.empty()
-                 ? fmt::format("SELECT * FROM {}", qualified)
-                 : fmt::format("SELECT * FROM {} WHERE {}", qualified,
-                               where.predicate),
-      .schema_name = make_schema_name_from_table(args.table->inner),
-      .local_filter = std::move(where.residual_filter),
-    };
   }
 
   auto run_query(::clickhouse::ClientOptions options, QueryPlan plan,
