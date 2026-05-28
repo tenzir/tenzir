@@ -566,7 +566,8 @@ public:
       probe_.append(bytes);
     }
     auto exhausted = probe_.size() >= args_.max_probe_bytes;
-    if (auto selected = select(exhausted, ctx)) {
+    if (auto selected
+        = select({.eof = false, .done_probing = exhausted}, ctx)) {
       co_await spawn_selected(*selected, ctx);
     }
   }
@@ -581,7 +582,7 @@ public:
       done_ = true;
       co_return FinalizeBehavior::done;
     }
-    if (auto selected = select(true, ctx)) {
+    if (auto selected = select({.eof = true, .done_probing = true}, ctx)) {
       co_await spawn_selected(*selected, ctx);
       co_await close_selected(ctx);
       co_return FinalizeBehavior::continue_;
@@ -612,7 +613,12 @@ public:
   }
 
 private:
-  auto select(bool final, OpCtx& ctx) -> std::optional<size_t> {
+  struct SelectionInput {
+    bool eof = false;
+    bool done_probing = false;
+  };
+
+  auto select(SelectionInput input, OpCtx& ctx) -> std::optional<size_t> {
     auto any_need_more = false;
     auto matches = std::vector<size_t>{};
     for (auto i = size_t{0}; i < candidates_.size(); ++i) {
@@ -622,12 +628,13 @@ private:
       }
       auto result = std::invoke([&] {
         if (candidate.detector) {
-          return detect(*candidate.detector, {probe_, final});
+          return detect(*candidate.detector, {probe_, input.eof});
         }
         if (candidate.plugin_candidate) {
           auto& plugin_candidate
             = plugin_detection_candidates()[*candidate.plugin_candidate];
-          return plugin_candidate.detect(read_detection_input{probe_, final});
+          return plugin_candidate.detect(
+            read_detection_input{probe_, input.eof});
         }
         return reject();
       });
@@ -644,11 +651,11 @@ private:
           break;
       }
     }
-    if (not final and any_need_more) {
+    if (not input.done_probing and any_need_more) {
       return std::nullopt;
     }
     if (matches.empty()) {
-      return fallback(final, ctx);
+      return fallback(input.done_probing, ctx);
     }
     auto score = [&](size_t index) {
       auto& candidate = candidates_[index];
