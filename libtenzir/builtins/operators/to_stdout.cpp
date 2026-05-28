@@ -160,7 +160,7 @@ public:
     }
     if (not pipe.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
       diagnostic::error("failed to substitute pipeline")
-        .primary(args_.pipe ? args_.pipe->source : args_.self)
+        .primary(args_.self)
         .emit(ctx);
       done_ = true;
       co_return;
