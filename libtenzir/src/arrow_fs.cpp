@@ -632,21 +632,20 @@ auto ToArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
   // `set_path` finalises `has_uuid()` based on the actual path portion and
   // emits any `{uuid}`-placement diagnostics.
   // TODO: Consider using separate types here to differentiate.
-  template_.set_path(std::move(fs->path), base_args_.url.source, append(),
-                     ctx.dh());
+  template_.set_path(std::move(fs->path), base_args_.url.source, ctx.dh());
   if (not template_.has_uuid()) {
     if (base_args_.max_size) {
       diagnostic::warning("`max_size` has no effect without a `{{uuid}}` "
                           "placeholder in the URL")
         .primary(base_args_.max_size->source)
-        .note("rotation requires `{{uuid}}` to produce unique filenames")
+        .note("rotation requires `{uuid}` to produce unique filenames")
         .emit(ctx.dh());
     }
     if (base_args_.timeout) {
       diagnostic::warning("`timeout` has no effect without a `{{uuid}}` "
                           "placeholder in the URL")
         .primary(base_args_.timeout->source)
-        .note("rotation requires `{{uuid}}` to produce unique filenames")
+        .note("rotation requires `{uuid}` to produce unique filenames")
         .emit(ctx.dh());
     }
   }
