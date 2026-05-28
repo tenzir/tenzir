@@ -50,6 +50,8 @@ CLAUDE.local.md
 CLAUDE-TODOS.md
 .docs/
 
+AGENTS.local.md
+
 # The VSCode codex extension really wants to create this empty file for reasons
 .codex
 .agents/agents.override.md

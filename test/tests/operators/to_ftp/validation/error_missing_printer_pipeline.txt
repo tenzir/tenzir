@@ -4,5 +4,5 @@ error: required subpipeline was not provided
 5 | to_ftp "ftp://127.0.0.1:21/upload.ndjson"
   | ^^^^^^ 
   |
-  = usage: to_ftp url:secret, [tls=record]
+  = usage: to_ftp url:string, [tls=record]
   = docs: https://docs.tenzir.com/reference/operators/to_ftp
