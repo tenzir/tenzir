@@ -200,44 +200,50 @@ protected:
         .emit(dh);
       co_return failure::promise();
     }
-    co_return MakeFilesystemResult{fs_result.MoveValueUnsafe(),
-                                   std::move(path)};
+    auto service_client_result = opts.MakeBlobServiceClient();
+    if (not service_client_result.ok()) {
+      diagnostic::error("failed to create Azure Blob Storage service client")
+        .primary(args_.url)
+        .note(service_client_result.status().ToStringWithoutContextLines())
+        .emit(dh);
+      co_return failure::promise();
+    }
+    service_client_ = std::move(*service_client_result);
+    co_return MakeFilesystemResult{
+      fs_result.MoveValueUnsafe(),
+      std::move(path),
+    };
   }
 
   auto remove_file(std::string const& path, diagnostic_handler& dh) const
     -> Task<void> override {
-    auto* abs_fs
-      = dynamic_cast<arrow::fs::AzureFileSystem*>(filesystem().get());
-    TENZIR_ASSERT(abs_fs);
-    co_await spawn_blocking([&] {
-      auto service_client_result = abs_fs->options().MakeBlobServiceClient();
-      if (not service_client_result.ok()) {
-        diagnostic::warning("failed to delete `{}`", path)
-          .primary(args_.url)
-          .note("{}",
-                service_client_result.status().ToStringWithoutContextLines())
-          .emit(dh);
-        return;
-      }
-      try {
-        auto service_client = std::move(*service_client_result);
-        auto [container, blob_path] = split_at_first_slash(path);
-        auto container_client
-          = service_client->GetBlobContainerClient(container);
-        auto blob_client = container_client.GetBlobClient(blob_path);
-        blob_client.Delete();
-      } catch (const Azure::Core::RequestFailedException& e) {
-        diagnostic::warning("failed to delete `{}`", path)
-          .primary(args_.url)
-          .note("{}", e.what())
-          .emit(dh);
-      }
-    });
+    TENZIR_ASSERT(service_client_);
+    auto [container, blob_path] = split_at_first_slash(path);
+    auto error_message
+      = co_await spawn_blocking([service_client = *service_client_, container,
+                                 blob_path] -> Option<std::string> {
+          try {
+            auto container_client
+              = service_client.GetBlobContainerClient(container);
+            auto blob_client = container_client.GetBlobClient(blob_path);
+            blob_client.Delete();
+            return std::nullopt;
+          } catch (const Azure::Core::RequestFailedException& e) {
+            return e.what();
+          }
+        });
+    if (error_message) {
+      diagnostic::warning("failed to delete `{}`", path)
+        .primary(args_.url)
+        .note("{}", *error_message)
+        .emit(dh);
+    }
   }
 
 private:
   FromAzureBlobStorageArgs args_;
   std::string resolved_account_key_;
+  std::unique_ptr<Azure::Storage::Blobs::BlobServiceClient> service_client_;
 };
 
 class from_abs final : public operator_plugin2<from_abs_operator>,

@@ -9,6 +9,7 @@
 #include "tenzir/configuration.hpp"
 #include "tenzir/detail/env.hpp"
 #include "tenzir/detail/scope_guard.hpp"
+#include "tenzir/folly_init.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/test/test.hpp"
@@ -47,6 +48,10 @@ std::vector<std::string> get_test_args(int argc, const char* const* argv) {
 } // namespace
 
 int main(int argc, char** argv) {
+  // Initialize folly singletons (logger, Timekeeper, etc.) so tests can use
+  // folly facilities like coroutine timeouts. Wrapped in libtenzir so the
+  // folly headers and link dependency don't leak into consuming plugins.
+  auto folly_init = tenzir::folly_init_guard{argv};
   TENZIR_ASSERT(tenzir::detail::setenv("TENZIR_ABORT_ON_PANIC", "1")
                 == caf::none);
   TENZIR_ASSERT(tenzir::detail::setenv("TENZIR_BARE_MODE", "true")

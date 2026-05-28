@@ -52,14 +52,11 @@ public:
 
   /// Store the path extracted from `make_filesystem`'s result, undoing the
   /// sanitization. Finalises `has_uuid()` against the actual path and emits
-  /// any placeholder-related diagnostics. Call exactly once, after
-  /// `make_filesystem` returns.
-  ///
-  /// When `append` is set, the partition-without-`{uuid}` overwrite warning
-  /// is suppressed because in append mode each partition's stable file is
-  /// extended rather than overwritten.
+  /// a diagnostic if a `{uuid}` from the original URL was lost to the
+  /// authority/query portion. Call exactly once, after `make_filesystem`
+  /// returns.
   void set_path(std::string path_with_tokens, location url_loc,
-                Option<location> append, diagnostic_handler& dh);
+                diagnostic_handler& dh);
 
   /// Expand the stored path template with concrete partition values and a
   /// fresh UUIDv7.  `key` is the composite partition key (a `list` when

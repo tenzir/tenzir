@@ -174,49 +174,51 @@ protected:
         .emit(dh);
       co_return failure::promise();
     }
-    co_return MakeFilesystemResult{fs_result.MoveValueUnsafe(),
-                                   std::move(path)};
+    auto gc_opts = google::cloud::Options{};
+    if (not opts.endpoint_override.empty()) {
+      gc_opts.set<google::cloud::storage::RestEndpointOption>(
+        opts.scheme + "://" + opts.endpoint_override);
+    }
+    if (opts.credentials.anonymous()) {
+      gc_opts.set<google::cloud::UnifiedCredentialsOption>(
+        google::cloud::MakeInsecureCredentials());
+    } else if (not opts.credentials.json_credentials().empty()) {
+      gc_opts.set<google::cloud::UnifiedCredentialsOption>(
+        google::cloud::MakeServiceAccountCredentials(
+          opts.credentials.json_credentials()));
+    } else if (not opts.credentials.access_token().empty()) {
+      gc_opts.set<google::cloud::UnifiedCredentialsOption>(
+        google::cloud::MakeAccessTokenCredentials(
+          opts.credentials.access_token(),
+          time_point_cast<std::chrono::system_clock::duration>(
+            opts.credentials.expiration())));
+    }
+    client_.emplace(std::move(gc_opts));
+    co_return MakeFilesystemResult{
+      fs_result.MoveValueUnsafe(),
+      std::move(path),
+    };
   }
 
   auto remove_file(std::string const& path, diagnostic_handler& dh) const
     -> Task<void> override {
-    auto* gcs_fs = dynamic_cast<arrow::fs::GcsFileSystem*>(filesystem().get());
-    TENZIR_ASSERT(gcs_fs);
-    co_await spawn_blocking([&] {
-      auto const& opts = gcs_fs->options();
-      auto gc_opts = google::cloud::Options{};
-      if (not opts.endpoint_override.empty()) {
-        gc_opts.set<google::cloud::storage::RestEndpointOption>(
-          opts.scheme + "://" + opts.endpoint_override);
-      }
-      if (opts.credentials.anonymous()) {
-        gc_opts.set<google::cloud::UnifiedCredentialsOption>(
-          google::cloud::MakeInsecureCredentials());
-      } else if (not opts.credentials.json_credentials().empty()) {
-        gc_opts.set<google::cloud::UnifiedCredentialsOption>(
-          google::cloud::MakeServiceAccountCredentials(
-            opts.credentials.json_credentials()));
-      } else if (not opts.credentials.access_token().empty()) {
-        gc_opts.set<google::cloud::UnifiedCredentialsOption>(
-          google::cloud::MakeAccessTokenCredentials(
-            opts.credentials.access_token(),
-            time_point_cast<std::chrono::system_clock::duration>(
-              opts.credentials.expiration())));
-      }
-      auto client = google::cloud::storage::Client{std::move(gc_opts)};
-      auto [bucket, key] = split_at_first_slash(path);
-      auto gc_status = client.DeleteObject(bucket, key);
-      if (not gc_status.ok()) {
-        diagnostic::warning("failed to delete `{}`", path)
-          .primary(args_.url)
-          .note("{}", gc_status.message())
-          .emit(dh);
-      }
-    });
+    TENZIR_ASSERT(client_);
+    auto [bucket, key] = split_at_first_slash(path);
+    auto gc_status
+      = co_await spawn_blocking([client = *client_, bucket, key] mutable {
+          return client.DeleteObject(bucket, key);
+        });
+    if (not gc_status.ok()) {
+      diagnostic::warning("failed to delete `{}`", path)
+        .primary(args_.url)
+        .note("{}", gc_status.message())
+        .emit(dh);
+    }
   }
 
 private:
   FromGoogleCloudStorageArgs args_;
+  Option<google::cloud::storage::Client> client_;
 };
 
 class from_gcs final : public operator_plugin2<from_gcs_operator> {

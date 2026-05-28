@@ -312,43 +312,44 @@ protected:
         .emit(dh);
       co_return failure::promise();
     }
-    co_return MakeFilesystemResult{fs_result.MoveValueUnsafe(),
-                                   std::move(path)};
+    auto config = Aws::S3::S3ClientConfiguration{};
+    config.region = opts.region;
+    if (not opts.endpoint_override.empty()) {
+      config.endpointOverride = opts.endpoint_override;
+      config.useVirtualAddressing = opts.force_virtual_addressing;
+    }
+    config.scheme = opts.scheme == "http" ? Aws::Http::Scheme::HTTP
+                                          : Aws::Http::Scheme::HTTPS;
+    client_.emplace(opts.credentials_provider, nullptr, config);
+    co_return MakeFilesystemResult{
+      fs_result.MoveValueUnsafe(),
+      std::move(path),
+    };
   }
 
   auto remove_file(std::string const& path, diagnostic_handler& dh) const
     -> Task<void> override {
-    auto* s3_fs = dynamic_cast<arrow::fs::S3FileSystem*>(filesystem().get());
-    TENZIR_ASSERT(s3_fs);
-    co_await spawn_blocking([&] {
-      auto const& options = s3_fs->options();
-      auto config = Aws::S3::S3ClientConfiguration{};
-      config.region = options.region;
-      if (not options.endpoint_override.empty()) {
-        config.endpointOverride = options.endpoint_override;
-        config.useVirtualAddressing = options.force_virtual_addressing;
-      }
-      config.scheme = options.scheme == "http" ? Aws::Http::Scheme::HTTP
-                                               : Aws::Http::Scheme::HTTPS;
-      auto [bucket, key] = split_at_first_slash(path);
-      auto client
-        = Aws::S3::S3Client{options.credentials_provider, nullptr, config};
-      auto request = Aws::S3::Model::DeleteObjectRequest{};
-      request.SetBucket(bucket);
-      request.SetKey(key);
-      auto outcome = client.DeleteObject(request);
-      if (not outcome.IsSuccess()) {
-        diagnostic::warning("failed to delete `{}`", path)
-          .primary(args_.url)
-          .note("{}", outcome.GetError().GetMessage())
-          .emit(dh);
-      }
-    });
+    TENZIR_ASSERT(client_);
+    auto [bucket, key] = split_at_first_slash(path);
+    auto request = Aws::S3::Model::DeleteObjectRequest{};
+    request.SetBucket(bucket);
+    request.SetKey(key);
+    auto outcome = co_await spawn_blocking(
+      [client = *client_, request = std::move(request)] mutable {
+        return client.DeleteObject(request);
+      });
+    if (not outcome.IsSuccess()) {
+      diagnostic::warning("failed to delete `{}`", path)
+        .primary(args_.url)
+        .note("{}", outcome.GetError().GetMessage())
+        .emit(dh);
+    }
   }
 
 private:
   FromS3Args args_;
   std::optional<ResolvedAwsIamAuth> resolved_;
+  Option<Aws::S3::S3Client> client_;
 };
 
 class from_s3 final : public operator_plugin2<from_s3_operator>,
