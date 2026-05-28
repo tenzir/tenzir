@@ -18,5 +18,5 @@ ai::prompt model="gpt-4.1-mini"
 
 By default the operator serializes `this` as compact JSON, writes the result to
 `ai.prompt`, and uses the local Ollama endpoint at
-`http://localhost:11434/v1`. Override `endpoint` to use another
+`http://127.0.0.1:11434/v1`. Override `endpoint` to use another
 OpenAI-compatible service.

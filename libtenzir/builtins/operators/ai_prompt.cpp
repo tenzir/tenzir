@@ -37,7 +37,7 @@
 namespace tenzir::plugins::ai_prompt {
 namespace {
 
-constexpr auto default_endpoint = std::string_view{"http://localhost:11434/v1"};
+constexpr auto default_endpoint = std::string_view{"http://127.0.0.1:11434/v1"};
 
 auto default_result_field() -> ast::field_path {
   auto expr = ast::expression{
@@ -301,9 +301,16 @@ public:
       }
       builder.null();
       if (row.error) {
-        diagnostic::warning("AI request failed: {}", *row.error)
-          .primary(args_.operator_location)
-          .emit(ctx);
+        auto diag = diagnostic::warning("AI request failed: {}", *row.error)
+                      .primary(args_.operator_location);
+        if (not args_.endpoint) {
+          diag = std::move(diag)
+                   .note("endpoint: {}/responses", default_endpoint)
+                   .hint("the default endpoint targets Ollama; check that "
+                         "Ollama is running and the model name is valid, or "
+                         "set `endpoint=...`");
+        }
+        std::move(diag).emit(ctx);
       }
     }
     auto slice_start = size_t{};
