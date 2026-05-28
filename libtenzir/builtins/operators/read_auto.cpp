@@ -8,6 +8,7 @@
 
 #include "tenzir/async.hpp"
 #include "tenzir/compile_ctx.hpp"
+#include "tenzir/detail/inspection_common.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/ir.hpp"
@@ -58,6 +59,11 @@ enum class DetectorKind {
   parquet,
 };
 
+template <class Inspector>
+auto inspect(Inspector& f, DetectorKind& x) {
+  return detail::inspect_enum(f, x);
+}
+
 struct Candidate {
   std::string id;
   std::string pipeline;
@@ -67,6 +73,16 @@ struct Candidate {
   bool live = true;
   std::optional<read_detection_result> last;
 };
+
+template <class Inspector>
+auto inspect(Inspector& f, Candidate& x) {
+  return f.object(x)
+    .pretty_name("Candidate")
+    .fields(f.field("id", x.id), f.field("pipeline", x.pipeline),
+            f.field("priority", x.priority), f.field("detector", x.detector),
+            f.field("plugin_candidate", x.plugin_candidate),
+            f.field("live", x.live));
+}
 
 auto reject(std::string reason = {}) -> read_detection_result {
   return {.state = detection_state::reject, .reason = std::move(reason)};
@@ -651,11 +667,11 @@ private:
           break;
       }
     }
-    if (not input.done_probing and any_need_more) {
-      return std::nullopt;
-    }
     if (matches.empty()) {
-      return fallback(input.done_probing, ctx);
+      if (not input.done_probing and any_need_more) {
+        return std::nullopt;
+      }
+      return fallback(input, ctx);
     }
     auto score = [&](size_t index) {
       auto& candidate = candidates_[index];
@@ -676,8 +692,8 @@ private:
     return matches[0];
   }
 
-  auto fallback(bool final, OpCtx& ctx) -> std::optional<size_t> {
-    if (not final) {
+  auto fallback(SelectionInput input, OpCtx& ctx) -> std::optional<size_t> {
+    if (not input.done_probing) {
       return std::nullopt;
     }
     if (args_.fallback == "none") {
@@ -687,8 +703,10 @@ private:
       return std::nullopt;
     }
     auto pipeline = std::string{};
+    auto valid_utf8 = input.eof ? detail::is_valid_utf8(probe_)
+                                : detail::is_valid_utf8_prefix(probe_);
     if (args_.fallback == "lines") {
-      if (not detail::is_valid_utf8(probe_)) {
+      if (not valid_utf8) {
         diagnostic::error("read_auto fallback `lines` requires UTF-8 input")
           .primary(args_.operator_location)
           .emit(ctx);
@@ -696,8 +714,7 @@ private:
       }
       pipeline = "read_lines";
     } else {
-      pipeline
-        = detail::is_valid_utf8(probe_) ? "read_all" : "read_all binary=true";
+      pipeline = valid_utf8 ? "read_all" : "read_all binary=true";
     }
     candidates_.push_back(Candidate{
       .id = fmt::format("fallback.{}", args_.fallback),
@@ -775,6 +792,15 @@ private:
       co_return;
     }
     co_await as<SubHandle<chunk_ptr>>(*sub).close();
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("candidates", candidates_);
+    serde("buffered", buffered_);
+    serde("probe", probe_);
+    serde("selected", selected_);
+    serde("seen-bytes", seen_bytes_);
+    serde("done", done_);
   }
 
   ReadAutoArgs args_;
