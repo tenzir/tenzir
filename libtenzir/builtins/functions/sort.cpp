@@ -235,8 +235,11 @@ auto sort_records_recursive(std::shared_ptr<arrow::Array> array)
       return array;
     }
     auto buffers = rebase_list_array_buffers(*list);
+    auto value_field = std::static_pointer_cast<arrow::ListType>(list->type())
+                         ->value_field()
+                         ->WithType(sorted_values->type());
     return std::make_shared<arrow::ListArray>(
-      arrow::list(sorted_values->type()), buffers.length,
+      arrow::list(std::move(value_field)), buffers.length,
       std::move(buffers.offsets), std::move(sorted_values),
       std::move(buffers.null_bitmap), buffers.null_count, 0);
   }
