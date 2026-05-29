@@ -220,6 +220,11 @@ struct rebuilder_state {
       = std::max<uint64_t>(partition.approx_bytes / partition.events, 1);
   }
 
+  auto has_size_estimate(const partition_info& partition) const -> bool {
+    return partition.events == 0 or partition.approx_bytes > 0
+           or approx_bytes_per_event.contains(partition.schema);
+  }
+
   auto estimate_approx_bytes(const partition_info& partition,
                              uint64_t unknown_partition_bytes) const
     -> uint64_t {
@@ -490,7 +495,8 @@ struct rebuilder_state {
       = run->options.undersized and current_run_partitions.size() == 1
         and current_run_partitions[0].version
               == version::current_partition_version
-        and current_run_partitions[0].events <= max_partition_size;
+        and current_run_partitions[0].events <= max_partition_size
+        and has_size_estimate(current_run_partitions[0]);
     if (skip_rebuild) {
       run->statistics.num_rebuilding -= 1;
       run->statistics.num_total -= 1;

@@ -695,6 +695,7 @@ auto partition_transformer(
       auto input_partition_path_template
         = std::move(self->state().input_partition_path_template);
       auto archive_dir = std::move(self->state().archive_dir);
+      auto fs = self->state().fs;
       auto ast = std::move(self->state().transform);
       // We deliver `rp` immediately and signal real completion later via the
       // store-builder monitors set up in `finish_transform`.
@@ -708,8 +709,8 @@ auto partition_transformer(
           [ast = std::move(ast), input_partitions = std::move(input_partitions),
            input_partition_path_template
            = std::move(input_partition_path_template),
-           archive_dir = std::move(archive_dir), &sys, weak, self,
-           process_slice,
+           archive_dir = std::move(archive_dir), fs = std::move(fs), &sys, weak,
+           self, process_slice,
            source_state]() mutable -> folly::coro::Task<failure_or<void>> {
             // Compaction and rebuild have no user-facing diagnostic sink, so
             // we log to the server log. The handler is owned by this
@@ -723,7 +724,7 @@ auto partition_transformer(
               std::move(input_partitions),
               std::move(input_partition_path_template),
               std::move(archive_dir),
-              self->state().fs,
+              std::move(fs),
               source_state,
             };
             auto feed_input
