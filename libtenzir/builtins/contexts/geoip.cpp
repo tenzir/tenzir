@@ -313,6 +313,7 @@ public:
       case MMDB_DATA_TYPE_UINT128:
         r[key] = cast_128_bit_unsigned_to_64_bit(
           entry_data_list->entry_data.uint128);
+        entry_data_list = entry_data_list->next;
         break;
       case MMDB_DATA_TYPE_INT32:
         r[key] = int64_t{entry_data_list->entry_data.int32};
