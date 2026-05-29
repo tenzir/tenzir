@@ -1,0 +1,6 @@
+from_microsoft_sql sql="/* " + "x".repeat(40000) + " */ SELECT 1 AS value",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_USER"),
+                   password=env("MSSQL_PASSWORD"),
+                   database=env("MSSQL_DATABASE")
