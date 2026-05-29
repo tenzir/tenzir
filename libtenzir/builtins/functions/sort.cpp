@@ -89,26 +89,30 @@ auto eval_sort_predicate(const ast::lambda_expr& cmp, const data& lhs_value,
     }
     return false;
   }
-  auto value = materialize(result.view3_at(0));
-  if (auto* boolean = try_as<bool>(&value)) {
-    return *boolean;
-  }
-  if (is<caf::none_t>(value)) {
-    if (not warning_state.null_result) {
-      diagnostic::warning("`cmp` lambda must return `bool`, got `null`")
-        .primary(cmp.body)
-        .emit(ctx);
-      warning_state.null_result = true;
-    }
-    return false;
-  }
-  if (not warning_state.non_boolean_result) {
-    diagnostic::warning("`cmp` lambda must return `bool`")
-      .primary(cmp.body)
-      .emit(ctx);
-    warning_state.non_boolean_result = true;
-  }
-  return false;
+  auto value = result.view3_at(0);
+  return match(
+    value,
+    [](bool boolean) {
+      return boolean;
+    },
+    [&](caf::none_t) {
+      if (not warning_state.null_result) {
+        diagnostic::warning("`cmp` lambda must return `bool`, got `null`")
+          .primary(cmp.body)
+          .emit(ctx);
+        warning_state.null_result = true;
+      }
+      return false;
+    },
+    [&](const auto&) {
+      if (not warning_state.non_boolean_result) {
+        diagnostic::warning("`cmp` lambda must return `bool`")
+          .primary(cmp.body)
+          .emit(ctx);
+        warning_state.non_boolean_result = true;
+      }
+      return false;
+    });
 }
 
 auto sort_records_recursive(std::shared_ptr<arrow::Array> array)
@@ -159,14 +163,9 @@ auto sort_list(const series& input, const std::optional<table_slice>& scope,
   return builder.finish_assert_one_array();
 }
 
-auto sort_record(const arrow::StructArray& array)
+auto sort_record(std::shared_ptr<arrow::StructArray> array)
   -> std::shared_ptr<arrow::StructArray> {
-  auto fields = array.struct_type()->fields();
-  auto arrays = arrow::ArrayVector{};
-  arrays.reserve(array.num_fields());
-  for (auto i = 0; i < array.num_fields(); ++i) {
-    arrays.push_back(array.field(i));
-  }
+  const auto& fields = array->struct_type()->fields();
   struct kv_pair {
     std::shared_ptr<arrow::Field> key;
     std::shared_ptr<arrow::Array> value;
@@ -176,37 +175,58 @@ auto sort_record(const arrow::StructArray& array)
     }
   };
   auto data = std::vector<kv_pair>(fields.size());
+  auto children_changed = false;
+  auto fields_sorted = true;
   for (size_t i = 0; i < data.size(); ++i) {
-    auto sorted_array = sort_records_recursive(arrays[i]);
-    if (sorted_array->type() != fields[i]->type()) {
-      fields[i] = fields[i]->WithType(sorted_array->type());
+    if (i > 0 and fields[i - 1]->name() > fields[i]->name()) {
+      fields_sorted = false;
     }
-    arrays[i] = std::move(sorted_array);
-    data[i] = {std::move(fields[i]), std::move(arrays[i])};
+    auto child = array->field(detail::narrow<int>(i));
+    auto sorted_child = sort_records_recursive(child);
+    children_changed |= sorted_child != child;
+    auto field = fields[i];
+    if (sorted_child->type() != field->type()) {
+      field = field->WithType(sorted_child->type());
+    }
+    data[i] = {std::move(field), std::move(sorted_child)};
   }
-  std::ranges::sort(data, std::less<>{}, &kv_pair::name);
+  if (not children_changed and fields_sorted) {
+    return array;
+  }
+  if (not fields_sorted) {
+    std::ranges::sort(data, std::less<>{}, &kv_pair::name);
+  }
+  auto sorted_fields = arrow::FieldVector{};
+  auto sorted_arrays = arrow::ArrayVector{};
+  sorted_fields.reserve(data.size());
+  sorted_arrays.reserve(data.size());
   for (size_t i = 0; i < data.size(); ++i) {
-    fields[i] = std::move(data[i].key);
-    arrays[i] = std::move(data[i].value);
+    sorted_fields.push_back(std::move(data[i].key));
+    sorted_arrays.push_back(std::move(data[i].value));
   }
-  auto null_bitmap = array.null_bitmap();
-  if (array.offset() != 0 and array.null_bitmap_data()) {
-    null_bitmap = check(
-      arrow::internal::CopyBitmap(arrow_memory_pool(), array.null_bitmap_data(),
-                                  array.offset(), array.length()));
+  auto null_bitmap = array->null_bitmap();
+  if (array->offset() != 0 and array->null_bitmap_data()) {
+    null_bitmap
+      = check(arrow::internal::CopyBitmap(arrow_memory_pool(),
+                                          array->null_bitmap_data(),
+                                          array->offset(), array->length()));
   }
-  return std::make_shared<arrow::StructArray>(arrow::struct_(fields),
-                                              array.length(), std::move(arrays),
-                                              std::move(null_bitmap),
-                                              array.null_count(), 0);
+  return std::make_shared<arrow::StructArray>(
+    arrow::struct_(sorted_fields), array->length(), std::move(sorted_arrays),
+    std::move(null_bitmap), array->null_count(), 0);
 }
 
 auto sort_records_recursive(std::shared_ptr<arrow::Array> array)
   -> std::shared_ptr<arrow::Array> {
-  if (auto* record = try_as<arrow::StructArray>(*array)) {
-    return sort_record(*record);
+  if (try_as<arrow::StructArray>(*array)) {
+    return sort_record(
+      std::static_pointer_cast<arrow::StructArray>(std::move(array)));
   }
   if (auto* list = try_as<arrow::ListArray>(*array)) {
+    if (not try_as<arrow::StructArray>(*list->values())
+        and not try_as<arrow::ListArray>(*list->values())) {
+      return array;
+    }
     const auto value_offset = list->value_offset(0);
     const auto value_length = list->value_offset(list->length()) - value_offset;
     auto values = list->values()->Slice(value_offset, value_length);
@@ -224,7 +244,12 @@ auto sort_records_recursive(std::shared_ptr<arrow::Array> array)
 }
 
 auto sort_record(const series& input) -> series {
-  auto array = sort_record(as<arrow::StructArray>(*input.array));
+  TENZIR_ASSERT(try_as<arrow::StructArray>(*input.array));
+  auto array
+    = sort_record(std::static_pointer_cast<arrow::StructArray>(input.array));
+  if (array == input.array) {
+    return input;
+  }
   auto type = type::from_arrow(*array->struct_type());
   return series{
     std::move(type),
