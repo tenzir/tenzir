@@ -14,6 +14,7 @@
 #include "tenzir/atomic.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/compile_ctx.hpp"
+#include "tenzir/detail/available_memory.hpp"
 #include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/fbs/utils.hpp"
 #include "tenzir/ir.hpp"
@@ -40,7 +41,6 @@
 
 #include <atomic>
 #include <filesystem>
-#include <fstream>
 #include <memory>
 #include <optional>
 #include <string>
@@ -49,133 +49,14 @@ namespace tenzir {
 
 namespace {
 
-struct memory_available {
-  uint64_t bytes = 0;
-  std::string source = {};
-};
-
 struct memory_budget {
   uint64_t initial_available = 0;
   uint64_t bytes = 0;
   std::string source = {};
 };
 
-auto read_memory_value(const std::filesystem::path& path)
-  -> std::optional<uint64_t> {
-  auto file = std::ifstream{path};
-  auto value = std::string{};
-  file >> value;
-  if (value.empty() or value == "max") {
-    return std::nullopt;
-  }
-  try {
-    return std::stoull(value);
-  } catch (const std::exception&) {
-    return std::nullopt;
-  }
-}
-
-auto read_cgroup_memory_available(const std::filesystem::path& dir,
-                                  std::string source)
-  -> std::optional<memory_available> {
-  auto current = read_memory_value(dir / "memory.current");
-  auto max = read_memory_value(dir / "memory.max");
-  if (not current or not max) {
-    current = read_memory_value(dir / "memory.usage_in_bytes");
-    max = read_memory_value(dir / "memory.limit_in_bytes");
-  }
-  if (not current or not max) {
-    return std::nullopt;
-  }
-  static constexpr auto unlimited_cgroup_limit = uint64_t{1} << 60;
-  if (*max >= unlimited_cgroup_limit) {
-    return std::nullopt;
-  }
-  if (*current >= *max) {
-    return memory_available{
-      .bytes = 0,
-      .source = std::move(source),
-    };
-  }
-  return memory_available{
-    .bytes = *max - *current,
-    .source = std::move(source),
-  };
-}
-
-auto relative_cgroup_path(std::string_view raw) -> std::filesystem::path {
-  while (raw.starts_with('/')) {
-    raw.remove_prefix(1);
-  }
-  return std::filesystem::path{std::string{raw}};
-}
-
-auto cgroup_memory_available() -> std::optional<memory_available> {
-  auto cgroups = std::ifstream{"/proc/self/cgroup"};
-  auto line = std::string{};
-  while (std::getline(cgroups, line)) {
-    const auto first = line.find(':');
-    if (first == std::string::npos) {
-      continue;
-    }
-    const auto second = line.find(':', first + 1);
-    if (second == std::string::npos) {
-      continue;
-    }
-    const auto controllers
-      = std::string_view{line}.substr(first + 1, second - first - 1);
-    const auto path
-      = relative_cgroup_path(std::string_view{line}.substr(second + 1));
-    if (controllers.empty()) {
-      if (auto result = read_cgroup_memory_available(
-            std::filesystem::path{"/sys/fs/cgroup"} / path, "cgroup-v2")) {
-        return result;
-      }
-    } else if (controllers.find("memory") != std::string_view::npos) {
-      if (auto result = read_cgroup_memory_available(
-            std::filesystem::path{"/sys/fs/cgroup/memory"} / path,
-            "cgroup-v1")) {
-        return result;
-      }
-      if (auto result = read_cgroup_memory_available(
-            std::filesystem::path{"/sys/fs/cgroup"} / path, "cgroup-v1")) {
-        return result;
-      }
-    }
-  }
-  return read_cgroup_memory_available("/sys/fs/cgroup", "cgroup");
-}
-
-auto system_memory_available() -> std::optional<memory_available> {
-  auto meminfo = std::ifstream{"/proc/meminfo"};
-  auto key = std::string{};
-  auto value = uint64_t{};
-  auto unit = std::string{};
-  while (meminfo >> key >> value >> unit) {
-    if (key == "MemAvailable:") {
-      return memory_available{
-        .bytes = value * uint64_t{1024},
-        .source = "/proc/meminfo",
-      };
-    }
-  }
-  return std::nullopt;
-}
-
-auto available_memory() -> std::optional<memory_available> {
-  auto cgroup = cgroup_memory_available();
-  auto system = system_memory_available();
-  if (cgroup and system and system->bytes < cgroup->bytes) {
-    return system;
-  }
-  if (cgroup) {
-    return cgroup;
-  }
-  return system;
-}
-
 auto make_memory_budget() -> std::optional<memory_budget> {
-  auto available = available_memory();
+  auto available = detail::available_memory();
   if (not available) {
     return std::nullopt;
   }
@@ -188,7 +69,7 @@ auto make_memory_budget() -> std::optional<memory_budget> {
 
 auto live_budget_used(const memory_budget& budget)
   -> std::optional<std::pair<uint64_t, uint64_t>> {
-  auto current = available_memory();
+  auto current = detail::available_memory();
   if (not current) {
     return std::nullopt;
   }

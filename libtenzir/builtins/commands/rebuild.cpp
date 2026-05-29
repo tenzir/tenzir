@@ -14,6 +14,7 @@
 #include <tenzir/connect_to_node.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/defaults.hpp>
+#include <tenzir/detail/available_memory.hpp>
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/saturating_arithmetic.hpp>
@@ -43,8 +44,6 @@
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
 
-#include <filesystem>
-#include <fstream>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -99,135 +98,17 @@ namespace {
 /// configured 'tenzir.max-partition-size'.
 inline constexpr auto undersized_threshold = 0.8;
 
-struct memory_available {
-  uint64_t bytes = 0;
-  std::string source = {};
-};
-
 struct memory_budget {
   uint64_t bytes = 0;
-  memory_available available = {};
+  detail::available_memory_info available = {};
 };
 
-auto read_memory_value(const std::filesystem::path& path)
-  -> std::optional<uint64_t> {
-  auto file = std::ifstream{path};
-  auto value = std::string{};
-  file >> value;
-  if (value.empty() or value == "max") {
-    return std::nullopt;
-  }
-  try {
-    return std::stoull(value);
-  } catch (const std::exception&) {
-    return std::nullopt;
-  }
-}
-
-auto read_cgroup_memory_available(const std::filesystem::path& dir,
-                                  std::string source)
-  -> std::optional<memory_available> {
-  auto current = read_memory_value(dir / "memory.current");
-  auto max = read_memory_value(dir / "memory.max");
-  if (not current or not max) {
-    current = read_memory_value(dir / "memory.usage_in_bytes");
-    max = read_memory_value(dir / "memory.limit_in_bytes");
-  }
-  if (not current or not max) {
-    return std::nullopt;
-  }
-  static constexpr auto unlimited_cgroup_limit = uint64_t{1} << 60;
-  if (*max >= unlimited_cgroup_limit) {
-    return std::nullopt;
-  }
-  if (*current >= *max) {
-    return memory_available{
-      .bytes = 0,
-      .source = std::move(source),
-    };
-  }
-  return memory_available{
-    .bytes = *max - *current,
-    .source = std::move(source),
-  };
-}
-
-auto relative_cgroup_path(std::string_view raw) -> std::filesystem::path {
-  while (raw.starts_with('/')) {
-    raw.remove_prefix(1);
-  }
-  return std::filesystem::path{std::string{raw}};
-}
-
-auto cgroup_memory_available() -> std::optional<memory_available> {
-  auto cgroups = std::ifstream{"/proc/self/cgroup"};
-  auto line = std::string{};
-  while (std::getline(cgroups, line)) {
-    const auto first = line.find(':');
-    if (first == std::string::npos) {
-      continue;
-    }
-    const auto second = line.find(':', first + 1);
-    if (second == std::string::npos) {
-      continue;
-    }
-    const auto controllers
-      = std::string_view{line}.substr(first + 1, second - first - 1);
-    const auto path
-      = relative_cgroup_path(std::string_view{line}.substr(second + 1));
-    if (controllers.empty()) {
-      if (auto result = read_cgroup_memory_available(
-            std::filesystem::path{"/sys/fs/cgroup"} / path, "cgroup-v2")) {
-        return result;
-      }
-    } else if (controllers.find("memory") != std::string_view::npos) {
-      if (auto result = read_cgroup_memory_available(
-            std::filesystem::path{"/sys/fs/cgroup/memory"} / path,
-            "cgroup-v1")) {
-        return result;
-      }
-      if (auto result = read_cgroup_memory_available(
-            std::filesystem::path{"/sys/fs/cgroup"} / path, "cgroup-v1")) {
-        return result;
-      }
-    }
-  }
-  return read_cgroup_memory_available("/sys/fs/cgroup", "cgroup");
-}
-
-auto system_memory_available() -> std::optional<memory_available> {
-  auto meminfo = std::ifstream{"/proc/meminfo"};
-  auto key = std::string{};
-  auto value = uint64_t{};
-  auto unit = std::string{};
-  while (meminfo >> key >> value >> unit) {
-    if (key == "MemAvailable:") {
-      return memory_available{
-        .bytes = value * uint64_t{1024},
-        .source = "/proc/meminfo",
-      };
-    }
-  }
-  return std::nullopt;
-}
-
-auto available_memory() -> std::optional<memory_available> {
-  auto cgroup = cgroup_memory_available();
-  auto system = system_memory_available();
-  if (cgroup and system and system->bytes < cgroup->bytes) {
-    return system;
-  }
-  if (cgroup) {
-    return cgroup;
-  }
-  return system;
-}
-
 auto rebuild_byte_budget() -> memory_budget {
-  auto available = available_memory().value_or(memory_available{
-    .bytes = uint64_t{512} * 1024 * 1024,
-    .source = "fallback",
-  });
+  auto available
+    = detail::available_memory().value_or(detail::available_memory_info{
+      .bytes = uint64_t{512} * 1024 * 1024,
+      .source = "fallback",
+    });
   return {
     // The transformer currently holds decoded output slices before persisting
     // the new Feather store, and the store writer builds additional Arrow
