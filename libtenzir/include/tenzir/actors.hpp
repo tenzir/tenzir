@@ -217,7 +217,7 @@ using index_actor = typed_actor_fwd<
   // ids, and makes new partitions preserving them.
   auto(atom::apply, ast::pipeline, std::vector<tenzir::partition_info>,
        keep_original_partition, std::string)
-    ->caf::result<partition_transform_apply_result>,
+    ->caf::result<partition_apply_result>,
   // Decomissions all active partitions, effectively flushing them to disk.
   auto(atom::flush)->caf::result<void>,
   // Returns all events from active and unpersisted partitions.
@@ -266,7 +266,7 @@ using filesystem_actor = typed_actor_fwd<
 using partition_transformer_actor = typed_actor_fwd<
   // Persist the transformed partitions and return the generated
   // partition synopses.
-  auto(atom::persist)->caf::result<partition_transform_result>,
+  auto(atom::persist)->caf::result<partition_transformer_result>,
   // INTERNAL: Continuation handler for `atom::done`.
   auto(atom::internal, atom::resume, atom::done)->caf::result<void>>
   // extract_query_context API
@@ -496,7 +496,7 @@ CAF_END_TYPE_ID_BLOCK(tenzir_actors)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<tenzir_uuid_synopsis_map>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::partition_synopsis_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::partition_synopsis_pair)
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::partition_transform_result)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::partition_transformer_result)
 #undef tenzir_uuid_synopsis_map
 
 #undef TENZIR_ADD_TYPE_ID

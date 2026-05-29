@@ -648,7 +648,7 @@ struct rebuilder_state {
       .request(index, caf::infinite)
       .then(
         [this, rp, selected_partitions = std::move(selected_partitions),
-         num_partitions](partition_transform_apply_result& result) mutable {
+         num_partitions](partition_apply_result& result) mutable {
           if (result.input_partitions.empty()
               and result.output_partitions.empty()) {
             TENZIR_DEBUG("{} skipped {} partitions as they are already being "

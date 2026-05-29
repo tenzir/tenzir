@@ -599,7 +599,7 @@ void partition_transformer_state::fulfill(
   // Return early if no error occured and no new data was created,
   // ie. the input was erased completely.
   if (self->state().events == 0) {
-    promise.deliver(partition_transform_result{
+    promise.deliver(partition_transformer_result{
       .input_partitions = self->state().transformed_input_partitions,
       .output_partitions = {},
       .input_complete = self->state().input_complete,
@@ -646,7 +646,7 @@ void partition_transformer_state::fulfill(
         quit_or_stall(self,
                       partition_transformer_state::transformer_is_finished{
                         .promise = std::move(promise),
-                        .result = partition_transform_result{
+                        .result = partition_transformer_result{
                           .input_partitions
                           = self->state().transformed_input_partitions,
                           .output_partitions = std::move(result),
@@ -1047,9 +1047,10 @@ auto partition_transformer(
       }();
       store_or_fulfill(self, std::move(stream_data));
     },
-    [self](atom::persist) -> caf::result<partition_transform_result> {
+    [self](atom::persist) -> caf::result<partition_transformer_result> {
       TENZIR_DEBUG("{} received request to persist", *self);
-      auto promise = self->make_response_promise<partition_transform_result>();
+      auto promise
+        = self->make_response_promise<partition_transformer_result>();
       auto path_data = partition_transformer_state::path_data{
         .promise = promise,
       };

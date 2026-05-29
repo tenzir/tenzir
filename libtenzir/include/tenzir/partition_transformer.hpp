@@ -29,7 +29,7 @@ namespace tenzir {
 struct partition_transformer_state {
   static constexpr const char* name = "partition-transformer";
 
-  using result_type = partition_transform_result;
+  using result_type = partition_transformer_result;
   using promise_type = caf::typed_response_promise<result_type>;
   using partition_tuple = std::tuple<tenzir::uuid, tenzir::type, chunk_ptr>;
   using synopsis_tuple = std::tuple<tenzir::uuid, chunk_ptr>;

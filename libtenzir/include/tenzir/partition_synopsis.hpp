@@ -196,30 +196,30 @@ struct partition_synopsis_pair {
   }
 };
 
-struct partition_transform_result {
+struct partition_transformer_result {
   std::vector<partition_info> input_partitions;
   std::vector<partition_synopsis_pair> output_partitions;
   bool input_complete = true;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, partition_transform_result& x) {
+  friend auto inspect(Inspector& f, partition_transformer_result& x) {
     return f.object(x)
-      .pretty_name("tenzir.partition-transform-result")
+      .pretty_name("tenzir.partition-transformer-result")
       .fields(f.field("input-partitions", x.input_partitions),
               f.field("output-partitions", x.output_partitions),
               f.field("input-complete", x.input_complete));
   }
 };
 
-struct partition_transform_apply_result {
+struct partition_apply_result {
   std::vector<partition_info> input_partitions;
   std::vector<partition_info> output_partitions;
   bool input_complete = true;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, partition_transform_apply_result& x) {
+  friend auto inspect(Inspector& f, partition_apply_result& x) {
     return f.object(x)
-      .pretty_name("tenzir.partition-transform-apply-result")
+      .pretty_name("tenzir.partition-apply-result")
       .fields(f.field("input-partitions", x.input_partitions),
               f.field("output-partitions", x.output_partitions),
               f.field("input-complete", x.input_complete));

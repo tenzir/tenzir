@@ -1523,8 +1523,8 @@ index(index_actor::stateful_pointer<index_state> self,
     },
     [self](atom::apply, ast::pipeline pipe,
            std::vector<partition_info> selected_partitions,
-           keep_original_partition keep, std::string origin)
-      -> caf::result<partition_transform_apply_result> {
+           keep_original_partition keep,
+           std::string origin) -> caf::result<partition_apply_result> {
       if (selected_partitions.empty()) {
         return caf::make_error(ec::invalid_argument, "no partitions given");
       }
@@ -1562,7 +1562,7 @@ index(index_actor::stateful_pointer<index_state> self,
         }
       }
       if (corrected_partitions.empty()) {
-        return partition_transform_apply_result{};
+        return partition_apply_result{};
       }
       auto store_id = std::string{self->state().store_actor_plugin->name()};
       auto input_partition_path_template
@@ -1596,39 +1596,38 @@ index(index_actor::stateful_pointer<index_state> self,
         std::move(partition_completion_disposable));
       TENZIR_ASSERT(inserted);
       auto marker_path = self->state().marker_path(uuid::random());
-      auto rp = self->make_response_promise<partition_transform_apply_result>();
-      auto deliver =
-        [self, rp, corrected_partitions, marker_path](
-          caf::expected<partition_transform_apply_result>&& result) mutable {
-          // Erase errors don't matter too much here, leftover in-progress
-          // transforms will be cleaned up on next startup.
-          self->mail(atom::erase_v, marker_path)
-            .request(self->state().filesystem, caf::infinite)
-            .then(
-              [](atom::done) { /* nop */
-                               ;
-              },
-              [self, marker_path](const caf::error& e) {
-                TENZIR_DEBUG("{} failed to erase in-progress marker at {}: "
-                             "{}",
-                             *self, marker_path, e);
-              });
-          for (const auto& [_, candidate_info] :
-               corrected_partitions.candidate_infos) {
-            for (const auto& partition : candidate_info.partition_infos) {
-              self->state().partitions_in_transformation.erase(partition.uuid);
-            }
+      auto rp = self->make_response_promise<partition_apply_result>();
+      auto deliver = [self, rp, corrected_partitions, marker_path](
+                       caf::expected<partition_apply_result>&& result) mutable {
+        // Erase errors don't matter too much here, leftover in-progress
+        // transforms will be cleaned up on next startup.
+        self->mail(atom::erase_v, marker_path)
+          .request(self->state().filesystem, caf::infinite)
+          .then(
+            [](atom::done) { /* nop */
+                             ;
+            },
+            [self, marker_path](const caf::error& e) {
+              TENZIR_DEBUG("{} failed to erase in-progress marker at {}: "
+                           "{}",
+                           *self, marker_path, e);
+            });
+        for (const auto& [_, candidate_info] :
+             corrected_partitions.candidate_infos) {
+          for (const auto& partition : candidate_info.partition_infos) {
+            self->state().partitions_in_transformation.erase(partition.uuid);
           }
-          if (result) {
-            rp.deliver(std::move(*result));
-          } else {
-            rp.deliver(std::move(result.error()));
-          }
-          // We clear the in-memory partitions here because they are only used
-          // by the partition transformer which will take quite some time to
-          // start again.
-          self->state().inmem_partitions.clear();
-        };
+        }
+        if (result) {
+          rp.deliver(std::move(*result));
+        } else {
+          rp.deliver(std::move(result.error()));
+        }
+        // We clear the in-memory partitions here because they are only used
+        // by the partition transformer which will take quite some time to
+        // start again.
+        self->state().inmem_partitions.clear();
+      };
       // TODO: Implement some kind of monadic composition instead of these
       // nested requests.
       // TODO: With CAF 0.19 it will no longer be needed to keep
@@ -1639,7 +1638,7 @@ index(index_actor::stateful_pointer<index_state> self,
         .then(
           [self, deliver, corrected_partitions, keep, marker_path, rp,
            partition_transfomer](
-            partition_transform_result& transform_result) mutable {
+            partition_transformer_result& transform_result) mutable {
             std::vector<uuid> old_partition_ids;
             old_partition_ids.reserve(transform_result.input_partitions.size());
             for (const auto& partition : transform_result.input_partitions) {
@@ -1711,7 +1710,7 @@ index(index_actor::stateful_pointer<index_state> self,
                                       aps.uuid);
                                   }
                                   self->state().flush_to_disk();
-                                  deliver(partition_transform_apply_result{
+                                  deliver(partition_apply_result{
                                     .input_partitions
                                     = std::move(transformed_input_partitions),
                                     .output_partitions = std::move(result),
@@ -1722,7 +1721,7 @@ index(index_actor::stateful_pointer<index_state> self,
                                   deliver(std::move(e));
                                 });
                           } else {
-                            deliver(partition_transform_apply_result{
+                            deliver(partition_apply_result{
                               .input_partitions
                               = std::move(transformed_input_partitions),
                               .output_partitions = std::move(result),
@@ -1746,7 +1745,7 @@ index(index_actor::stateful_pointer<index_state> self,
                                            caf::infinite)
                                   .then(
                                     [=](atom::done) mutable {
-                                      deliver(partition_transform_apply_result{
+                                      deliver(partition_apply_result{
                                         .input_partitions = std::move(
                                           transformed_input_partitions),
                                         .output_partitions = std::move(result),
