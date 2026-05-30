@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/scope_guard.hpp"
 
+#include <folly/coro/Baton.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 
@@ -22,6 +23,45 @@
 namespace tenzir {
 
 namespace {
+
+class UdsAcceptCallback final
+  : public folly::AsyncServerSocket::AcceptCallback {
+public:
+  explicit UdsAcceptCallback(folly::coro::Baton& baton,
+                             std::shared_ptr<folly::AsyncServerSocket> socket)
+    : baton_{baton}, socket_{std::move(socket)} {
+  }
+
+  auto connectionAccepted(folly::NetworkSocket fd_network_socket,
+                          folly::SocketAddress const&, AcceptInfo) noexcept
+    -> void override {
+    socket_->pauseAccepting();
+    socket_->removeAcceptCallback(this, nullptr);
+    accept_fd = fd_network_socket.toFd();
+    baton_.post();
+  }
+
+  auto acceptError(folly::exception_wrapper ex) noexcept -> void override {
+    socket_->pauseAccepting();
+    socket_->removeAcceptCallback(this, nullptr);
+    error = std::move(ex);
+    accept_fd = -1;
+    baton_.post();
+  }
+
+  auto acceptStarted() noexcept -> void override {
+  }
+
+  auto acceptStopped() noexcept -> void override {
+  }
+
+  int accept_fd = -1;
+  folly::exception_wrapper error = {};
+
+private:
+  folly::coro::Baton& baton_;
+  std::shared_ptr<folly::AsyncServerSocket> socket_;
+};
 
 auto max_uds_path_size() -> size_t {
   return sizeof(sockaddr_un{}.sun_path) - 1;
@@ -63,6 +103,54 @@ auto uds_path_has_listener(std::string const& path, location source,
 }
 
 } // namespace
+
+UdsServerSocket::UdsServerSocket(
+  std::shared_ptr<folly::AsyncServerSocket> socket,
+  folly::SocketAddress address, uint32_t listen_queue_depth)
+  : socket_{std::move(socket)} {
+  socket_->bind(address);
+  socket_->listen(listen_queue_depth);
+}
+
+auto UdsServerSocket::accept()
+  -> Task<std::unique_ptr<folly::coro::Transport>> {
+  co_await folly::coro::co_safe_point;
+  auto baton = folly::coro::Baton{};
+  auto callback = UdsAcceptCallback{baton, socket_};
+  socket_->addAcceptCallback(&callback, nullptr);
+  socket_->startAccepting();
+  auto cancel_token = co_await folly::coro::co_current_cancellation_token;
+  auto cancellation_callback = folly::CancellationCallback{
+    cancel_token,
+    [&baton] {
+      baton.post();
+    },
+  };
+  co_await baton;
+  if (cancel_token.isCancellationRequested()) {
+    socket_->stopAccepting();
+    co_yield folly::coro::co_stopped_may_throw;
+  }
+  if (callback.error) {
+    co_yield folly::coro::co_error(std::move(callback.error));
+  }
+  co_return std::make_unique<folly::coro::Transport>(
+    socket_->getEventBase(),
+    folly::AsyncSocket::newSocket(
+      socket_->getEventBase(),
+      folly::NetworkSocket::fromFd(callback.accept_fd)));
+}
+
+void UdsServerSocket::close() noexcept {
+  if (socket_) {
+    socket_->stopAccepting();
+  }
+}
+
+auto UdsServerSocket::get_async_server_socket() const
+  -> folly::AsyncServerSocket const* {
+  return socket_.get();
+}
 
 auto make_uds_socket_address(std::string const& path, location source,
                              diagnostic_handler& dh)

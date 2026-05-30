@@ -30,7 +30,6 @@
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/async/AsyncServerSocket.h>
 #include <folly/io/async/AsyncSocketException.h>
-#include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
 
 #include <filesystem>
@@ -97,8 +96,8 @@ public:
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
     auto socket = folly::AsyncServerSocket::newSocket(evb_);
-    server_ = std::make_unique<folly::coro::ServerSocket>(
-      std::move(socket), address_, listen_backlog);
+    server_ = std::make_unique<UdsServerSocket>(std::move(socket), address_,
+                                                listen_backlog);
     should_cleanup_socket_ = true;
     accept_loop_finished_ = false;
     bytes_write_counter_
@@ -380,7 +379,7 @@ private:
   std::string path_;
   folly::SocketAddress address_;
   folly::EventBase* evb_ = nullptr;
-  std::unique_ptr<folly::coro::ServerSocket> server_;
+  std::unique_ptr<UdsServerSocket> server_;
   uint64_t max_connections_ = 128;
   mutable Box<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
