@@ -1,0 +1,10 @@
+---
+fixtures:
+  - uds:
+      mode: server
+error: true
+---
+
+accept_uds env("UDS_PATH") {
+  read_lines
+}

@@ -35,11 +35,15 @@
 #include <folly/io/async/AsyncSocketException.h>
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
+#include <sys/socket.h>
 #include <sys/un.h>
 
+#include <cerrno>
+#include <cstring>
 #include <filesystem>
 #include <limits>
 #include <memory>
+#include <unistd.h>
 
 namespace tenzir::plugins::accept_uds {
 
@@ -89,6 +93,41 @@ auto make_socket_address(std::string const& path, location source,
   return result;
 }
 
+auto socket_has_listener(std::string const& path, location source,
+                         diagnostic_handler& dh) -> failure_or<bool> {
+  auto fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+  if (fd == -1) {
+    diagnostic::error("failed to probe UNIX domain socket")
+      .primary(source)
+      .note("path: {}", path)
+      .note("reason: {}", std::strerror(errno))
+      .emit(dh);
+    return failure::promise();
+  }
+  auto close_fd = detail::scope_guard{[fd]() noexcept {
+    ::close(fd);
+  }};
+  auto address = sockaddr_un{};
+  address.sun_family = AF_UNIX;
+#if defined(__APPLE__)
+  address.sun_len = sizeof(sockaddr_un);
+#endif
+  std::memcpy(address.sun_path, path.c_str(), path.size() + 1);
+  if (::connect(fd, reinterpret_cast<sockaddr*>(&address), sizeof(address))
+      == 0) {
+    return true;
+  }
+  if (errno == ECONNREFUSED or errno == ENOENT) {
+    return false;
+  }
+  diagnostic::error("failed to probe UNIX domain socket")
+    .primary(source)
+    .note("path: {}", path)
+    .note("reason: {}", std::strerror(errno))
+    .emit(dh);
+  return failure::promise();
+}
+
 auto prepare_listen_path(std::string const& path, location source,
                          diagnostic_handler& dh) -> failure_or<void> {
   auto ec = std::error_code{};
@@ -107,6 +146,14 @@ auto prepare_listen_path(std::string const& path, location source,
         .primary(source)
         .note("path: {}", path)
         .hint("remove the existing non-socket file or choose another path")
+        .emit(dh);
+      return failure::promise();
+    }
+    TRY(auto active, socket_has_listener(path, source, dh));
+    if (active) {
+      diagnostic::error("UNIX domain socket path is already in use")
+        .primary(source)
+        .hint("stop the existing server or choose another path")
         .emit(dh);
       return failure::promise();
     }

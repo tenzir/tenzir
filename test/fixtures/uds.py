@@ -103,6 +103,12 @@ def uds() -> FixtureHandle:
             daemon=True,
         )
     worker.start()
+    if opts.mode == "server":
+        deadline = time.monotonic() + 2
+        while not socket_path.exists():
+            if time.monotonic() >= deadline:
+                raise RuntimeError("uds fixture server did not create socket path")
+            time.sleep(_CLIENT_RETRY_DELAY)
 
     env: dict[str, str] = {"UDS_PATH": str(socket_path)}
     if server_capture_path is not None:

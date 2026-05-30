@@ -1,0 +1,21 @@
+---
+fixtures:
+  - uds:
+      mode: client
+      payload: ""
+assertions:
+  fixtures:
+    uds:
+      client_received_contains: "aaa"
+timeout: 60
+---
+
+every 50ms {
+  from {
+    data: "a",
+  }
+}
+head 3
+serve_uds env("UDS_PATH") {
+  write_all data
+}

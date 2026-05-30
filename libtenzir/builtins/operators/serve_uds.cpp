@@ -31,11 +31,15 @@
 #include <folly/io/async/AsyncSocketException.h>
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
+#include <sys/socket.h>
 #include <sys/un.h>
 
+#include <cerrno>
+#include <cstring>
 #include <filesystem>
 #include <limits>
 #include <memory>
+#include <unistd.h>
 
 namespace tenzir::plugins::serve_uds {
 
@@ -78,6 +82,41 @@ auto make_socket_address(std::string const& path, location source,
   return result;
 }
 
+auto socket_has_listener(std::string const& path, location source,
+                         diagnostic_handler& dh) -> failure_or<bool> {
+  auto fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+  if (fd == -1) {
+    diagnostic::error("failed to probe UNIX domain socket")
+      .primary(source)
+      .note("path: {}", path)
+      .note("reason: {}", std::strerror(errno))
+      .emit(dh);
+    return failure::promise();
+  }
+  auto close_fd = detail::scope_guard{[fd]() noexcept {
+    ::close(fd);
+  }};
+  auto address = sockaddr_un{};
+  address.sun_family = AF_UNIX;
+#if defined(__APPLE__)
+  address.sun_len = sizeof(sockaddr_un);
+#endif
+  std::memcpy(address.sun_path, path.c_str(), path.size() + 1);
+  if (::connect(fd, reinterpret_cast<sockaddr*>(&address), sizeof(address))
+      == 0) {
+    return true;
+  }
+  if (errno == ECONNREFUSED or errno == ENOENT) {
+    return false;
+  }
+  diagnostic::error("failed to probe UNIX domain socket")
+    .primary(source)
+    .note("path: {}", path)
+    .note("reason: {}", std::strerror(errno))
+    .emit(dh);
+  return failure::promise();
+}
+
 auto prepare_listen_path(std::string const& path, location source,
                          diagnostic_handler& dh) -> failure_or<void> {
   auto ec = std::error_code{};
@@ -96,6 +135,14 @@ auto prepare_listen_path(std::string const& path, location source,
         .primary(source)
         .note("path: {}", path)
         .hint("remove the existing non-socket file or choose another path")
+        .emit(dh);
+      return failure::promise();
+    }
+    TRY(auto active, socket_has_listener(path, source, dh));
+    if (active) {
+      diagnostic::error("UNIX domain socket path is already in use")
+        .primary(source)
+        .hint("stop the existing server or choose another path")
         .emit(dh);
       return failure::promise();
     }
@@ -124,7 +171,10 @@ public:
 
   struct AcceptLoopFinished {};
 
-  using Message = variant<Accepted, Payload, AcceptLoopFinished>;
+  struct PrinterFinished {};
+
+  using Message
+    = variant<Accepted, Payload, AcceptLoopFinished, PrinterFinished>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
   enum class Lifecycle {
@@ -212,7 +262,7 @@ public:
         co_return;
       },
       [&](Payload payload) -> Task<void> {
-        if (lifecycle_ != Lifecycle::running or not payload.chunk
+        if (lifecycle_ == Lifecycle::done or not payload.chunk
             or payload.chunk->size() == 0 or clients_.empty()) {
           co_return;
         }
@@ -221,6 +271,10 @@ public:
       [&](AcceptLoopFinished) -> Task<void> {
         accept_loop_finished_ = true;
         maybe_finish_draining();
+        co_return;
+      },
+      [&](PrinterFinished) -> Task<void> {
+        co_await request_stop();
         co_return;
       });
   }
@@ -245,7 +299,7 @@ public:
   }
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
-    if (lifecycle_ != Lifecycle::running or not chunk or chunk->size() == 0) {
+    if (lifecycle_ == Lifecycle::done or not chunk or chunk->size() == 0) {
       co_return;
     }
     co_await message_queue_->enqueue(Payload{std::move(chunk)});
@@ -270,7 +324,7 @@ public:
   }
 
   auto finish_sub(SubKeyView, OpCtx&) -> Task<void> override {
-    co_await request_stop();
+    co_await message_queue_->enqueue(PrinterFinished{});
     co_return;
   }
 

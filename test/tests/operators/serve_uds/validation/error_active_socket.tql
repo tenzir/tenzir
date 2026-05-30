@@ -1,0 +1,10 @@
+---
+fixtures:
+  - uds:
+      mode: server
+error: true
+---
+
+serve_uds env("UDS_PATH") {
+  write_ndjson
+}
