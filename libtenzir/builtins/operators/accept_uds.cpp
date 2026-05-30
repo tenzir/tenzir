@@ -9,6 +9,7 @@
 #include <tenzir/arc.hpp>
 #include <tenzir/async/semaphore.hpp>
 #include <tenzir/async/tcp.hpp>
+#include <tenzir/async/uds.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/detail/narrow.hpp>
@@ -35,15 +36,10 @@
 #include <folly/io/async/AsyncSocketException.h>
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
-#include <sys/socket.h>
-#include <sys/un.h>
 
-#include <cerrno>
-#include <cstring>
 #include <filesystem>
 #include <limits>
 #include <memory>
-#include <unistd.h>
 
 namespace tenzir::plugins::accept_uds {
 
@@ -62,112 +58,8 @@ struct AcceptUdsArgs {
   located<ir::pipeline> user_pipeline;
 };
 
-auto max_uds_path_size() -> size_t {
-  return sizeof(sockaddr_un{}.sun_path) - 1;
-}
-
 auto expand_socket_path(std::string path) -> std::string {
   return expand_home(std::move(path));
-}
-
-auto make_socket_address(std::string const& path, location source,
-                         diagnostic_handler& dh)
-  -> failure_or<folly::SocketAddress> {
-  if (path.size() > max_uds_path_size()) {
-    diagnostic::error("UNIX domain socket path is too long")
-      .primary(source)
-      .note("path length: {}, maximum: {}", path.size(), max_uds_path_size())
-      .emit(dh);
-    return failure::promise();
-  }
-  auto result = folly::SocketAddress{};
-  try {
-    result.setFromPath(path);
-  } catch (std::exception const& ex) {
-    diagnostic::error("invalid UNIX domain socket path")
-      .primary(source)
-      .note("reason: {}", ex.what())
-      .emit(dh);
-    return failure::promise();
-  }
-  return result;
-}
-
-auto socket_has_listener(std::string const& path, location source,
-                         diagnostic_handler& dh) -> failure_or<bool> {
-  auto fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
-  if (fd == -1) {
-    diagnostic::error("failed to probe UNIX domain socket")
-      .primary(source)
-      .note("path: {}", path)
-      .note("reason: {}", std::strerror(errno))
-      .emit(dh);
-    return failure::promise();
-  }
-  auto close_fd = detail::scope_guard{[fd]() noexcept {
-    ::close(fd);
-  }};
-  auto address = sockaddr_un{};
-  address.sun_family = AF_UNIX;
-#if defined(__APPLE__)
-  address.sun_len = sizeof(sockaddr_un);
-#endif
-  std::memcpy(address.sun_path, path.c_str(), path.size() + 1);
-  if (::connect(fd, reinterpret_cast<sockaddr*>(&address), sizeof(address))
-      == 0) {
-    return true;
-  }
-  if (errno == ECONNREFUSED or errno == ENOENT) {
-    return false;
-  }
-  diagnostic::error("failed to probe UNIX domain socket")
-    .primary(source)
-    .note("path: {}", path)
-    .note("reason: {}", std::strerror(errno))
-    .emit(dh);
-  return failure::promise();
-}
-
-auto prepare_listen_path(std::string const& path, location source,
-                         diagnostic_handler& dh) -> failure_or<void> {
-  auto ec = std::error_code{};
-  auto status = std::filesystem::status(path, ec);
-  if (ec and ec != std::errc::no_such_file_or_directory) {
-    diagnostic::error("failed to inspect UNIX domain socket path")
-      .primary(source)
-      .note("path: {}", path)
-      .note("reason: {}", ec.message())
-      .emit(dh);
-    return failure::promise();
-  }
-  if (not ec and status.type() != std::filesystem::file_type::not_found) {
-    if (status.type() != std::filesystem::file_type::socket) {
-      diagnostic::error("UNIX domain socket path already exists")
-        .primary(source)
-        .note("path: {}", path)
-        .hint("remove the existing non-socket file or choose another path")
-        .emit(dh);
-      return failure::promise();
-    }
-    TRY(auto active, socket_has_listener(path, source, dh));
-    if (active) {
-      diagnostic::error("UNIX domain socket path is already in use")
-        .primary(source)
-        .hint("stop the existing server or choose another path")
-        .emit(dh);
-      return failure::promise();
-    }
-    std::filesystem::remove(path, ec);
-    if (ec) {
-      diagnostic::error("failed to remove stale UNIX domain socket")
-        .primary(source)
-        .note("path: {}", path)
-        .note("reason: {}", ec.message())
-        .emit(dh);
-      return failure::promise();
-    }
-  }
-  return {};
 }
 
 class AcceptUdsListener final : public Operator<void, table_slice> {
@@ -203,12 +95,12 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     path_ = expand_socket_path(args_.path.inner);
-    auto address = make_socket_address(path_, args_.path.source, ctx.dh());
+    auto address = make_uds_socket_address(path_, args_.path.source, ctx.dh());
     if (not address) {
       request_abort();
       co_return;
     }
-    if (not prepare_listen_path(path_, args_.path.source, ctx.dh())) {
+    if (not prepare_uds_listen_path(path_, args_.path.source, ctx.dh())) {
       request_abort();
       co_return;
     }

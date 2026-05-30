@@ -8,6 +8,7 @@
 
 #include <tenzir/arc.hpp>
 #include <tenzir/async/tcp.hpp>
+#include <tenzir/async/uds.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/detail/narrow.hpp>
@@ -28,9 +29,7 @@
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/async/AsyncSocketException.h>
 #include <folly/io/coro/Transport.h>
-#include <sys/un.h>
 
-#include <filesystem>
 #include <limits>
 #include <memory>
 
@@ -57,35 +56,8 @@ struct FromUdsArgs {
   located<ir::pipeline> user_pipeline;
 };
 
-auto max_uds_path_size() -> size_t {
-  return sizeof(sockaddr_un{}.sun_path) - 1;
-}
-
 auto expand_socket_path(std::string path) -> std::string {
   return expand_home(std::move(path));
-}
-
-auto make_socket_address(std::string const& path, location source,
-                         diagnostic_handler& dh)
-  -> failure_or<folly::SocketAddress> {
-  if (path.size() > max_uds_path_size()) {
-    diagnostic::error("UNIX domain socket path is too long")
-      .primary(source)
-      .note("path length: {}, maximum: {}", path.size(), max_uds_path_size())
-      .emit(dh);
-    return failure::promise();
-  }
-  auto result = folly::SocketAddress{};
-  try {
-    result.setFromPath(path);
-  } catch (std::exception const& ex) {
-    diagnostic::error("invalid UNIX domain socket path")
-      .primary(source)
-      .note("reason: {}", ex.what())
-      .emit(dh);
-    return failure::promise();
-  }
-  return result;
 }
 
 auto describe_socket_error(folly::AsyncSocketException const& ex)
@@ -122,7 +94,7 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     path_ = expand_socket_path(args_.path.inner);
-    auto address = make_socket_address(path_, args_.path.source, ctx.dh());
+    auto address = make_uds_socket_address(path_, args_.path.source, ctx.dh());
     if (not address) {
       startup_failed_ = true;
       co_return;

@@ -1,0 +1,27 @@
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
+//
+// SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
+#pragma once
+
+#include "tenzir/diagnostics.hpp"
+#include "tenzir/location.hpp"
+
+#include <folly/SocketAddress.h>
+
+#include <string>
+
+namespace tenzir {
+
+auto make_uds_socket_address(std::string const& path, location source,
+                             diagnostic_handler& dh)
+  -> failure_or<folly::SocketAddress>;
+
+auto prepare_uds_listen_path(std::string const& path, location source,
+                             diagnostic_handler& dh) -> failure_or<void>;
+
+} // namespace tenzir
