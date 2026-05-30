@@ -31,7 +31,7 @@ public:
 
   auto accept() -> Task<Box<folly::coro::Transport>>;
 
-  void close() noexcept;
+  auto close() noexcept -> void;
 
 private:
   Arc<folly::AsyncServerSocket> socket_;

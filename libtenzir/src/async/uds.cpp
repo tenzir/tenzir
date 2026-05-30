@@ -155,7 +155,7 @@ auto UdsServerSocket::accept() -> Task<Box<folly::coro::Transport>> {
   };
 }
 
-void UdsServerSocket::close() noexcept {
+auto UdsServerSocket::close() noexcept -> void {
   socket_->stopAccepting();
 }
 
