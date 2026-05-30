@@ -39,7 +39,6 @@
 #include <filesystem>
 #include <limits>
 #include <memory>
-#include <optional>
 
 namespace tenzir::plugins::accept_uds {
 
@@ -447,7 +446,7 @@ private:
   std::string path_;
   folly::SocketAddress address_;
   folly::EventBase* evb_ = nullptr;
-  std::optional<Box<UdsServerSocket>> server_;
+  Option<Box<UdsServerSocket>> server_;
   uint64_t max_connections_ = 128;
   mutable Arc<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
