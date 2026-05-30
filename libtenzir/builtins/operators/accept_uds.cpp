@@ -58,10 +58,6 @@ struct AcceptUdsArgs {
   located<ir::pipeline> user_pipeline;
 };
 
-auto expand_socket_path(std::string path) -> std::string {
-  return expand_home(std::move(path));
-}
-
 class AcceptUdsListener final : public Operator<void, table_slice> {
 public:
   using Connection = Arc<folly::coro::Transport>;
@@ -94,7 +90,7 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    path_ = expand_socket_path(args_.path.inner);
+    path_ = expand_home(args_.path.inner);
     auto address = make_uds_socket_address(path_, args_.path.source, ctx.dh());
     if (not address) {
       request_abort();

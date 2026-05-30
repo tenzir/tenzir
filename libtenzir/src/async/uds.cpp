@@ -146,11 +146,6 @@ void UdsServerSocket::close() noexcept {
   socket_->stopAccepting();
 }
 
-auto UdsServerSocket::get_async_server_socket() const
-  -> folly::AsyncServerSocket const* {
-  return &*socket_;
-}
-
 auto make_uds_socket_address(std::string const& path, location source,
                              diagnostic_handler& dh)
   -> failure_or<folly::SocketAddress> {

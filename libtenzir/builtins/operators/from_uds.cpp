@@ -56,10 +56,6 @@ struct FromUdsArgs {
   located<ir::pipeline> user_pipeline;
 };
 
-auto expand_socket_path(std::string path) -> std::string {
-  return expand_home(std::move(path));
-}
-
 auto describe_socket_error(folly::AsyncSocketException const& ex)
   -> std::string {
   if (auto err = ex.getErrno(); err > 0) {
@@ -93,7 +89,7 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    path_ = expand_socket_path(args_.path.inner);
+    path_ = expand_home(args_.path.inner);
     auto address = make_uds_socket_address(path_, args_.path.source, ctx.dh());
     if (not address) {
       startup_failed_ = true;

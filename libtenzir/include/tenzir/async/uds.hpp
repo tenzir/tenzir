@@ -33,8 +33,6 @@ public:
 
   void close() noexcept;
 
-  auto get_async_server_socket() const -> folly::AsyncServerSocket const*;
-
 private:
   Arc<folly::AsyncServerSocket> socket_;
 };
