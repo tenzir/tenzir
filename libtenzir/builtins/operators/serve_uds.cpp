@@ -35,6 +35,7 @@
 #include <filesystem>
 #include <limits>
 #include <memory>
+#include <optional>
 
 namespace tenzir::plugins::serve_uds {
 
@@ -96,8 +97,10 @@ public:
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
     auto socket = folly::AsyncServerSocket::newSocket(evb_);
-    server_ = std::make_unique<UdsServerSocket>(std::move(socket), address_,
-                                                listen_backlog);
+    server_.emplace(
+      std::in_place,
+      Arc<folly::AsyncServerSocket>::from_non_null(std::move(socket)), address_,
+      listen_backlog);
     should_cleanup_socket_ = true;
     accept_loop_finished_ = false;
     bytes_write_counter_
@@ -239,7 +242,7 @@ private:
     if (server_ and evb_) {
       evb_->runImmediatelyOrRunInEventBaseThreadAndWait([this] {
         if (server_) {
-          server_->close();
+          (*server_)->close();
         }
       });
     }
@@ -353,10 +356,10 @@ private:
       auto transport = co_await folly::coro::retryWithExponentialBackoff(
         std::numeric_limits<uint32_t>::max(), accept_retry_delay,
         accept_retry_delay, 0.0,
-        [this, &ctx]() -> Task<std::unique_ptr<folly::coro::Transport>> {
+        [this, &ctx]() -> Task<Box<folly::coro::Transport>> {
           try {
-            co_return co_await folly::coro::co_withExecutor(evb_,
-                                                            server_->accept());
+            co_return co_await folly::coro::co_withExecutor(
+              evb_, (*server_)->accept());
           } catch (folly::AsyncSocketException const& ex) {
             diagnostic::warning("failed to accept incoming connection")
               .primary(args_.path.source)
@@ -367,9 +370,7 @@ private:
           }
         },
         should_retry_accept);
-      auto client
-        = Box<folly::coro::Transport>::from_non_null(std::move(transport));
-      ctx.spawn_task(finish_accept(std::move(client)));
+      ctx.spawn_task(finish_accept(std::move(transport)));
       release_connection_slot_guard.disable();
     }
   }
@@ -379,7 +380,7 @@ private:
   std::string path_;
   folly::SocketAddress address_;
   folly::EventBase* evb_ = nullptr;
-  std::unique_ptr<UdsServerSocket> server_;
+  std::optional<Box<UdsServerSocket>> server_;
   uint64_t max_connections_ = 128;
   mutable Box<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};

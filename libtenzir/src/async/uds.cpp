@@ -28,7 +28,7 @@ class UdsAcceptCallback final
   : public folly::AsyncServerSocket::AcceptCallback {
 public:
   explicit UdsAcceptCallback(folly::coro::Baton& baton,
-                             std::shared_ptr<folly::AsyncServerSocket> socket)
+                             Arc<folly::AsyncServerSocket> socket)
     : baton_{baton}, socket_{std::move(socket)} {
   }
 
@@ -60,7 +60,7 @@ public:
 
 private:
   folly::coro::Baton& baton_;
-  std::shared_ptr<folly::AsyncServerSocket> socket_;
+  Arc<folly::AsyncServerSocket> socket_;
 };
 
 auto max_uds_path_size() -> size_t {
@@ -104,16 +104,15 @@ auto uds_path_has_listener(std::string const& path, location source,
 
 } // namespace
 
-UdsServerSocket::UdsServerSocket(
-  std::shared_ptr<folly::AsyncServerSocket> socket,
-  folly::SocketAddress address, uint32_t listen_queue_depth)
+UdsServerSocket::UdsServerSocket(Arc<folly::AsyncServerSocket> socket,
+                                 folly::SocketAddress const& address,
+                                 uint32_t listen_queue_depth)
   : socket_{std::move(socket)} {
   socket_->bind(address);
   socket_->listen(listen_queue_depth);
 }
 
-auto UdsServerSocket::accept()
-  -> Task<std::unique_ptr<folly::coro::Transport>> {
+auto UdsServerSocket::accept() -> Task<Box<folly::coro::Transport>> {
   co_await folly::coro::co_safe_point;
   auto baton = folly::coro::Baton{};
   auto callback = UdsAcceptCallback{baton, socket_};
@@ -134,22 +133,22 @@ auto UdsServerSocket::accept()
   if (callback.error) {
     co_yield folly::coro::co_error(std::move(callback.error));
   }
-  co_return std::make_unique<folly::coro::Transport>(
+  co_return Box<folly::coro::Transport>{
+    std::in_place,
     socket_->getEventBase(),
     folly::AsyncSocket::newSocket(
       socket_->getEventBase(),
-      folly::NetworkSocket::fromFd(callback.accept_fd)));
+      folly::NetworkSocket::fromFd(callback.accept_fd)),
+  };
 }
 
 void UdsServerSocket::close() noexcept {
-  if (socket_) {
-    socket_->stopAccepting();
-  }
+  socket_->stopAccepting();
 }
 
 auto UdsServerSocket::get_async_server_socket() const
   -> folly::AsyncServerSocket const* {
-  return socket_.get();
+  return &*socket_;
 }
 
 auto make_uds_socket_address(std::string const& path, location source,
