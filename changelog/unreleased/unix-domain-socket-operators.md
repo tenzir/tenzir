@@ -16,6 +16,10 @@ operators:
 - `serve_uds` listens on a socket path and broadcasts serialized output to all
   connected clients.
 
+These operators replace the previous `uds=true` options on `from_file` and
+`to_file`. Use `from_uds` or `to_uds` for Unix domain socket clients, and keep
+`from_file` and `to_file` for regular filesystem and object-storage access.
+
 ```tql
 accept_uds "/run/collector.sock" {
   read_json
