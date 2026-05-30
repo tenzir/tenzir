@@ -3,101 +3,100 @@
 //    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
 //    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
-// SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
+// SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arc.hpp>
-#include <tenzir/async/dns.hpp>
 #include <tenzir/async/tcp.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
-#include <tenzir/concept/parseable/tenzir/endpoint.hpp>
-#include <tenzir/concept/parseable/to.hpp>
-#include <tenzir/endpoint.hpp>
+#include <tenzir/detail/narrow.hpp>
+#include <tenzir/file.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/si_literals.hpp>
-#include <tenzir/socket.hpp>
 #include <tenzir/substitute_ctx.hpp>
-#include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <folly/CancellationToken.h>
 #include <folly/SocketAddress.h>
 #include <folly/coro/BoundedQueue.h>
-#include <folly/coro/Error.h>
 #include <folly/coro/Retry.h>
 #include <folly/executors/GlobalExecutor.h>
+#include <folly/io/async/AsyncSocketException.h>
 #include <folly/io/coro/Transport.h>
+#include <sys/un.h>
 
-#include <cstring>
+#include <filesystem>
 #include <limits>
 #include <memory>
 
-namespace tenzir::plugins::from_tcp {
+namespace tenzir::plugins::from_uds {
 
 namespace {
 
 using namespace tenzir::si_literals;
 
-// Read at most 64 KiB per socket callback. This keeps the per-connection
-// working set modest while still amortizing callback overhead well for TCP
-// streams, and it aligns with the movable-buffer read path below where folly
-// hands us owned buffers that we transfer directly into chunks.
 constexpr auto buffer_size = size_t{64_Ki};
-// Give remote endpoints long enough for a normal TCP plus TLS setup while
-// still surfacing unavailable servers quickly to the retry loop.
 constexpr auto connect_timeout = std::chrono::seconds{5};
-// Reconnect almost immediately after the first failure so short races during
-// fixture startup or service restarts do not stall the pipeline.
 constexpr auto connect_initial_backoff = std::chrono::milliseconds{100};
-// Cap retries at five seconds to avoid hammering broken endpoints while still
-// keeping recovery reasonably quick once the peer comes back.
 constexpr auto connect_max_backoff = std::chrono::milliseconds{5_k};
-// Preserve the current deterministic reconnect timing; if many connectors are
-// expected to flap together, revisit this and add jitter.
 constexpr auto connect_retry_jitter = 0.0;
 constexpr auto connect_max_retries = std::numeric_limits<uint32_t>::max();
-// Leave room for many in-flight read and close notifications without turning
-// the queue into another large per-connection memory sink.
 constexpr auto message_queue_capacity = uint32_t{1_Ki};
 
 constexpr auto should_retry_connect = [](folly::exception_wrapper const& ew) {
   return ew.is_compatible_with<folly::AsyncSocketException>();
 };
 
-struct FromTcpArgs {
-  located<std::string> endpoint;
-  Option<located<data>> tls;
+struct FromUdsArgs {
+  located<std::string> path;
   located<ir::pipeline> user_pipeline;
-  let_id peer_info;
 };
 
-auto socket_address_to_ip(folly::SocketAddress const& address) -> ip {
-  auto storage = sockaddr_storage{};
-  auto length = address.getAddress(&storage);
-  TENZIR_ASSERT(length > 0);
-  auto result = ip{};
-  if (storage.ss_family == AF_INET) {
-    auto sockaddr = sockaddr_in{};
-    std::memcpy(&sockaddr, &storage, sizeof(sockaddr));
-    auto err = convert(sockaddr, result);
-    TENZIR_ASSERT(not err);
-  } else {
-    TENZIR_ASSERT(storage.ss_family == AF_INET6);
-    auto sockaddr = sockaddr_in6{};
-    std::memcpy(&sockaddr, &storage, sizeof(sockaddr));
-    auto err = convert(sockaddr, result);
-    TENZIR_ASSERT(not err);
+auto max_uds_path_size() -> size_t {
+  return sizeof(sockaddr_un{}.sun_path) - 1;
+}
+
+auto expand_socket_path(std::string path) -> std::string {
+  return expand_home(std::move(path));
+}
+
+auto make_socket_address(std::string const& path, location source,
+                         diagnostic_handler& dh)
+  -> failure_or<folly::SocketAddress> {
+  if (path.size() > max_uds_path_size()) {
+    diagnostic::error("UNIX domain socket path is too long")
+      .primary(source)
+      .note("path length: {}, maximum: {}", path.size(), max_uds_path_size())
+      .emit(dh);
+    return failure::promise();
+  }
+  auto result = folly::SocketAddress{};
+  try {
+    result.setFromPath(path);
+  } catch (std::exception const& ex) {
+    diagnostic::error("invalid UNIX domain socket path")
+      .primary(source)
+      .note("reason: {}", ex.what())
+      .emit(dh);
+    return failure::promise();
   }
   return result;
 }
 
-class FromTcpConnector final : public Operator<void, table_slice> {
+auto describe_socket_error(folly::AsyncSocketException const& ex)
+  -> std::string {
+  if (auto err = ex.getErrno(); err > 0) {
+    return folly::errnoStr(err);
+  }
+  return ex.what();
+}
+
+class FromUdsConnector final : public Operator<void, table_slice> {
 public:
   using Connection = Arc<folly::coro::Transport>;
 
@@ -118,64 +117,21 @@ public:
   using Message = variant<Connected, Payload, ConnectionClosed>;
   using MessageQueue = folly::coro::BoundedQueue<Message>;
 
-  explicit FromTcpConnector(FromTcpArgs args) : args_{std::move(args)} {
-    auto ep = to<Endpoint>(args_.endpoint.inner);
-    TENZIR_ASSERT(ep);
-    TENZIR_ASSERT(ep->port);
-    TENZIR_ASSERT(not ep->host.empty());
-    host_ = ep->host;
-    port_ = ep->port->number();
-    if (args_.tls) {
-      tls_ = tls_options{*args_.tls, {.is_server = false}};
-    }
+  explicit FromUdsConnector(FromUdsArgs args) : args_{std::move(args)} {
   }
 
-  FromTcpConnector(FromTcpConnector const&) = delete;
-  auto operator=(FromTcpConnector const&) -> FromTcpConnector& = delete;
-  FromTcpConnector(FromTcpConnector&&) noexcept = default;
-  auto operator=(FromTcpConnector&&) noexcept -> FromTcpConnector& = default;
-
   auto start(OpCtx& ctx) -> Task<void> override {
-    if (tls_) {
-      auto resolved = tls_->resolve(ctx.actor_system().config(), ctx);
-      if (not resolved) {
-        startup_failed_ = true;
-        co_return;
-      }
-      tls_enabled_ = resolved->tls.inner;
-      if (tls_enabled_) {
-        auto context = resolved->make_folly_ssl_context(ctx);
-        if (not context) {
-          startup_failed_ = true;
-          co_return;
-        }
-        tls_context_ = std::move(*context);
-      }
-    }
-    auto resolved = co_await forward_dns_.resolve(host_);
-    auto* addresses = resolved->is_err()
-                        ? nullptr
-                        : try_as<ForwardDnsResolved>(&resolved->unwrap());
-    if (not addresses or addresses->answers.empty()) {
-      auto diag = diagnostic::error("failed to resolve remote endpoint")
-                    .primary(args_.endpoint.source)
-                    .note("host: {}", host_);
-      if (resolved->is_err()) {
-        std::move(diag)
-          .note("reason: {}", resolved->unwrap_err().error)
-          .emit(ctx);
-      } else {
-        std::move(diag).note("reason: no matching A or AAAA records").emit(ctx);
-      }
+    path_ = expand_socket_path(args_.path.inner);
+    auto address = make_socket_address(path_, args_.path.source, ctx.dh());
+    if (not address) {
       startup_failed_ = true;
       co_return;
     }
-    address_.setFromIpPort(fmt::to_string(addresses->answers.front().address),
-                           port_);
+    address_ = std::move(*address);
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
     events_read_counter_
-      = ctx.make_counter(MetricsLabel{"operator", "from_tcp"},
+      = ctx.make_counter(MetricsLabel{"operator", "from_uds"},
                          MetricsDirection::read, MetricsVisibility::external_,
                          MetricsUnit::events);
     co_return;
@@ -189,29 +145,26 @@ public:
       connect_max_retries, connect_initial_backoff, connect_max_backoff,
       connect_retry_jitter,
       [this, &dh]() -> Task<Box<folly::coro::Transport>> {
-        TENZIR_DEBUG("connecting to {}", address_.describe());
+        TENZIR_DEBUG("from_uds: connecting to {}", path_);
         try {
-          co_return Box<folly::coro::Transport>{co_await connect_tcp_client(
-            evb_, address_,
-            std::chrono::duration_cast<std::chrono::milliseconds>(
-              connect_timeout),
-            tls_context_, host_)};
+          co_return Box<folly::coro::Transport>{
+            co_await folly::coro::co_withExecutor(
+              evb_, folly::coro::Transport::newConnectedSocket(
+                      evb_, address_,
+                      std::chrono::duration_cast<std::chrono::milliseconds>(
+                        connect_timeout)))};
         } catch (folly::AsyncSocketException const& ex) {
-          // TODO: Surface connect retries and failures as metrics in a
-          // follow-up that covers all TCP operators.
-          auto diag
-            = diagnostic::warning("failed to connect to {}",
-                                  address_.describe())
-                .primary(args_.endpoint.source)
-                .note("reason: {}", ex.what())
-                .hint("ensure a TCP server is listening on this endpoint");
-          add_tls_client_diagnostic_hints(std::move(diag), tls_enabled_)
+          diagnostic::warning("failed to connect to UNIX domain socket")
+            .primary(args_.path.source)
+            .note("path: {}", path_)
+            .note("reason: {}", describe_socket_error(ex))
+            .hint("ensure a server is listening on this socket path")
             .emit(dh);
           throw;
         }
       },
       should_retry_connect);
-    TENZIR_DEBUG("connected to {}", address_.describe());
+    TENZIR_DEBUG("from_uds: connected to {}", path_);
     co_return Message{Connected{std::move(transport)}};
   }
 
@@ -228,26 +181,10 @@ public:
         auto transport = std::move(connected.transport);
         auto* transport_evb = transport->getEventBase();
         TENZIR_ASSERT(transport_evb);
-        auto peer_addr = transport->getPeerAddress();
-        auto peer_ip = socket_address_to_ip(peer_addr);
-        auto peer_record = record{
-          {"ip", peer_ip},
-          {"port", int64_t{peer_addr.getPort()}},
-        };
-        auto bytes_read_counter = ctx.make_counter(
-          MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
-                                    fmt::to_string(peer_ip))},
-          MetricsDirection::read, MetricsVisibility::external_,
-          MetricsUnit::bytes);
         auto conn_id = next_conn_id_++;
         auto pipeline_copy = args_.user_pipeline.inner;
-        auto env = substitute_ctx::env_t{};
-        env[args_.peer_info] = std::move(peer_record);
-        auto reg = global_registry();
-        auto b_ctx = base_ctx{ctx, *reg};
-        auto sub_result
-          = pipeline_copy.substitute(substitute_ctx{b_ctx, &env}, true);
-        if (not sub_result) {
+        if (not pipeline_copy.substitute(substitute_ctx{{ctx}, nullptr},
+                                         true)) {
           close_transport(std::move(transport));
           co_return;
         }
@@ -255,11 +192,15 @@ public:
                                           std::move(pipeline_copy));
         current_conn_id_ = conn_id;
         current_connection_ = Connection{std::move(*transport)};
+        bytes_read_counter_
+          = ctx.make_counter(MetricsLabel{"operator", "from_uds"},
+                             MetricsDirection::read,
+                             MetricsVisibility::external_, MetricsUnit::bytes);
         auto message_queue = message_queue_;
         ctx.spawn_task(folly::coro::co_withExecutor(
           transport_evb,
           read_loop(conn_id, *current_connection_, std::move(message_queue),
-                    std::move(bytes_read_counter))));
+                    bytes_read_counter_)));
       },
       [&](Payload payload) -> Task<void> {
         if (not current_conn_id_ or payload.conn_id != *current_conn_id_) {
@@ -274,11 +215,9 @@ public:
       },
       [&](ConnectionClosed closed) -> Task<void> {
         if (closed.error) {
-          // TODO: Surface routine TCP read failures and disconnects as metrics
-          // in a follow-up that covers all TCP operators.
           diagnostic::warning("connection closed after read error")
-            .primary(args_.endpoint.source)
-            .note("endpoint: {}", address_.describe())
+            .primary(args_.path.source)
+            .note("path: {}", path_)
             .note("reason: {}", *closed.error)
             .emit(ctx);
         }
@@ -350,7 +289,6 @@ private:
         co_await message_queue->enqueue(
           Payload{conn_id, std::move(*read_result)});
       } catch (folly::AsyncSocketException const& e) {
-        // Socket errors are connection-scoped; log and reconnect.
         read_error = e.what();
         break;
       }
@@ -362,54 +300,32 @@ private:
     });
   }
 
-  FromTcpArgs args_;
+  FromUdsArgs args_;
+  std::string path_;
   folly::SocketAddress address_;
-  std::string host_;
-  uint16_t port_ = 0;
-  ForwardDnsResolver forward_dns_;
-  Option<tls_options> tls_;
-  std::shared_ptr<folly::SSLContext> tls_context_;
-  bool tls_enabled_ = false;
   folly::EventBase* evb_ = nullptr;
   mutable Arc<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
   Option<Connection> current_connection_;
   Option<uint64_t> current_conn_id_;
+  MetricsCounter bytes_read_counter_;
   MetricsCounter events_read_counter_;
   uint64_t next_conn_id_{0};
   bool startup_failed_ = false;
 };
 
-class from_tcp_plugin final : public virtual OperatorPlugin {
+class FromUdsPlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.from_tcp";
+    return "tql2.from_uds";
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromTcpArgs, FromTcpConnector>{};
-    auto endpoint_arg = d.positional("endpoint", &FromTcpArgs::endpoint);
-    auto tls_arg = d.named("tls", &FromTcpArgs::tls);
+    auto d = Describer<FromUdsArgs, FromUdsConnector>{};
+    d.positional("path", &FromUdsArgs::path);
     auto pipeline_arg
-      = d.pipeline(&FromTcpArgs::user_pipeline, SubOptimize::from_downstream,
-                   {{"peer", &FromTcpArgs::peer_info}});
+      = d.pipeline(&FromUdsArgs::user_pipeline, SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
-      TRY(auto ep_str, ctx.get(endpoint_arg));
-      auto ep = to<Endpoint>(ep_str.inner);
-      auto loc = ctx.get_location(endpoint_arg).value_or(location::unknown);
-      if (not ep) {
-        diagnostic::error("failed to parse endpoint").primary(loc).emit(ctx);
-      } else if (not ep->port) {
-        diagnostic::error("port number is required").primary(loc).emit(ctx);
-      } else if (ep->host.empty()) {
-        diagnostic::error("host is required").primary(loc).emit(ctx);
-      }
-      if (auto tls_val = ctx.get(tls_arg)) {
-        auto tls_opts = tls_options{*tls_val, {.is_server = false}};
-        if (auto valid = tls_opts.validate(ctx); not valid) {
-          return {};
-        }
-      }
       TRY(auto pipeline, ctx.get(pipeline_arg));
       auto output = pipeline.inner.infer_type(tag_v<chunk_ptr>, ctx);
       if (output.is_error()) {
@@ -428,6 +344,6 @@ public:
 
 } // namespace
 
-} // namespace tenzir::plugins::from_tcp
+} // namespace tenzir::plugins::from_uds
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::from_tcp::from_tcp_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::from_uds::FromUdsPlugin)

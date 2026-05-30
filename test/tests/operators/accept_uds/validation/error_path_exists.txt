@@ -1,0 +1,8 @@
+error: UNIX domain socket path already exists
+ --> tests/operators/accept_uds/validation/error_path_exists.tql:5:12
+  |
+5 | accept_uds "/tmp" {
+  |            ^^^^^^ 
+  |
+  = note: path: /tmp
+  = hint: remove the existing non-socket file or choose another path

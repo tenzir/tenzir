@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+serve_uds "/tmp" {
+  write_ndjson
+}

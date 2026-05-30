@@ -1,0 +1,15 @@
+---
+fixtures:
+  - uds:
+      mode: server
+assertions:
+  fixtures:
+    uds:
+      server_sent_contains: "foo"
+timeout: 60
+---
+
+from_uds env("UDS_PATH") {
+  read_lines
+}
+head 1

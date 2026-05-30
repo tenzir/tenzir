@@ -19,9 +19,9 @@
 
 namespace tenzir {
 
-auto read_tcp_chunk(folly::coro::Transport& transport, size_t buffer_size,
-                    std::chrono::milliseconds timeout)
-  -> Task<tcp_read_result> {
+auto read_stream_chunk(folly::coro::Transport& transport, size_t buffer_size,
+                       std::chrono::milliseconds timeout)
+  -> Task<stream_read_result> {
   auto* evb = transport.getEventBase();
   TENZIR_ASSERT(evb);
   auto* async_transport = transport.getTransport();
@@ -46,6 +46,12 @@ auto read_tcp_chunk(folly::coro::Transport& transport, size_t buffer_size,
                         [buf = std::move(iobuf)]() noexcept {
                           static_cast<void>(buf);
                         });
+}
+
+auto read_tcp_chunk(folly::coro::Transport& transport, size_t buffer_size,
+                    std::chrono::milliseconds timeout)
+  -> Task<tcp_read_result> {
+  co_return co_await read_stream_chunk(transport, buffer_size, timeout);
 }
 
 auto connect_tcp_client(folly::EventBase* evb,

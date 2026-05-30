@@ -1,0 +1,9 @@
+error: failed to connect to UNIX domain socket: No such file or directory
+ --> tests/operators/to_uds/error_connect_max_retry_count.tql:9:8
+  |
+9 | to_uds "/tmp/tenzir-uds-missing.sock", max_retry_count=1 {
+  |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |
+  = note: path: /tmp/tenzir-uds-missing.sock
+  = note: gave up after 1 retry
+  = hint: ensure a server is listening on this socket path

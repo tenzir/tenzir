@@ -1,0 +1,6 @@
+error: pipeline must return events
+ --> tests/operators/accept_uds/validation/error_pipeline_not_events.tql:5:49
+  |
+5 | accept_uds env("TENZIR_TMP_DIR") + "/test.sock" {
+  |                                                 ^ 
+  |

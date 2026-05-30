@@ -1,0 +1,6 @@
+error: pipeline must return bytes
+ --> tests/operators/serve_uds/validation/error_pipeline_not_bytes.tql:5:48
+  |
+5 | serve_uds env("TENZIR_TMP_DIR") + "/test.sock" {
+  |                                                ^ 
+  |
