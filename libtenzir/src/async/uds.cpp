@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/scope_guard.hpp"
 
+#include <folly/CancellationToken.h>
 #include <folly/coro/Baton.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -36,14 +37,12 @@ public:
                           folly::SocketAddress const&, AcceptInfo) noexcept
     -> void override {
     socket_->pauseAccepting();
-    socket_->removeAcceptCallback(this, nullptr);
     accept_fd = fd_network_socket.toFd();
     baton_.post();
   }
 
   auto acceptError(folly::exception_wrapper ex) noexcept -> void override {
     socket_->pauseAccepting();
-    socket_->removeAcceptCallback(this, nullptr);
     error = std::move(ex);
     accept_fd = -1;
     baton_.post();
@@ -57,6 +56,7 @@ public:
 
   int accept_fd = -1;
   folly::exception_wrapper error = {};
+  bool registered = true;
 
 private:
   folly::coro::Baton& baton_;
@@ -117,6 +117,19 @@ auto UdsServerSocket::accept() -> Task<Box<folly::coro::Transport>> {
   auto baton = folly::coro::Baton{};
   auto callback = UdsAcceptCallback{baton, socket_};
   socket_->addAcceptCallback(&callback, nullptr);
+  auto unregister_callback = detail::scope_guard{[this, &callback] noexcept {
+    if (callback.registered) {
+      socket_->pauseAccepting();
+      try {
+        socket_->removeAcceptCallback(&callback, nullptr);
+      } catch (std::exception const&) {
+        // AsyncServerSocket may remove the callback as part of completing an
+        // accept. The guard still has to run on cancellation, where the stack
+        // callback must not remain registered.
+      }
+      callback.registered = false;
+    }
+  }};
   socket_->startAccepting();
   auto cancel_token = co_await folly::coro::co_current_cancellation_token;
   auto cancellation_callback = folly::CancellationCallback{
@@ -126,12 +139,12 @@ auto UdsServerSocket::accept() -> Task<Box<folly::coro::Transport>> {
     },
   };
   co_await baton;
-  if (cancel_token.isCancellationRequested()) {
-    socket_->stopAccepting();
-    co_yield folly::coro::co_stopped_may_throw;
-  }
   if (callback.error) {
     co_yield folly::coro::co_error(std::move(callback.error));
+  }
+  if (callback.accept_fd == -1 and cancel_token.isCancellationRequested()) {
+    socket_->stopAccepting();
+    co_yield folly::coro::co_stopped_may_throw;
   }
   co_return Box<folly::coro::Transport>{
     std::in_place,
