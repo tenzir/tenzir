@@ -7,14 +7,12 @@ authors:
 created: 2026-05-30T00:00:00Z
 ---
 
-Tenzir now supports Unix stream sockets in the new executor with four dedicated
+Tenzir now supports Unix stream sockets in the new executor with three dedicated
 operators:
 
 - `from_uds` connects to a Unix domain socket and parses incoming bytes.
 - `accept_uds` listens on a socket path and parses each accepted client stream.
 - `to_uds` connects to a socket path and writes serialized bytes.
-- `serve_uds` listens on a socket path and broadcasts serialized output to all
-  connected clients.
 
 These operators replace the previous `uds=true` options on `from_file` and
 `to_file`. Use `from_uds` or `to_uds` for Unix domain socket clients, and keep

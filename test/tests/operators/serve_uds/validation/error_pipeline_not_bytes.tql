@@ -1,7 +1,0 @@
----
-error: true
----
-
-serve_uds env("TENZIR_TMP_DIR") + "/test.sock" {
-  pass
-}
