@@ -15,7 +15,6 @@
 #include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/substitute_ctx.hpp"
 
-#include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Retry.h>
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/io/coro/Transport.h>
@@ -81,31 +80,15 @@ public:
     events_write_counter_.add(rows);
   }
 
-  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
+  auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
+    -> Task<void> override {
     if (not chunk or chunk->size() == 0) {
       co_return;
     }
-    co_await message_queue_->enqueue(std::move(chunk));
-  }
-
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
-    TENZIR_UNUSED(dh);
-    co_return co_await message_queue_->dequeue();
-  }
-
-  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    auto* chunk = result.try_as<chunk_ptr>();
-    if (not chunk) {
+    if (lifecycle_ == Lifecycle::done or chunk->size() == 0) {
       co_return;
     }
-    if (not *chunk) {
-      finish();
-      co_return;
-    }
-    if (lifecycle_ == Lifecycle::done or (*chunk)->size() == 0) {
-      co_return;
-    }
-    co_await write_chunk(*chunk, ctx);
+    co_await write_chunk(chunk, ctx);
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
@@ -128,16 +111,12 @@ public:
   }
 
   auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
-    co_await flush_queued_chunks(ctx);
+    TENZIR_UNUSED(ctx);
     co_return;
   }
 
   auto finish_sub(SubKeyView, OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(ctx);
-    if (lifecycle_ == Lifecycle::done) {
-      co_return;
-    }
-    co_await message_queue_->enqueue(chunk_ptr{});
+    co_await finish_gracefully(ctx);
     co_return;
   }
 
@@ -147,28 +126,40 @@ public:
   }
 
 private:
-  using MessageQueue = folly::coro::BoundedQueue<chunk_ptr>;
-
-  auto flush_queued_chunks(OpCtx& ctx) -> Task<void> {
-    while (auto next = message_queue_->try_dequeue()) {
-      auto chunk = std::move(*next);
-      if (not chunk) {
-        finish();
-        co_return;
-      }
-      if (lifecycle_ == Lifecycle::done or chunk->size() == 0) {
-        continue;
-      }
-      co_await write_chunk(chunk, ctx);
-    }
-  }
-
   auto close_current_transport() -> void {
     if (transport_) {
       auto old_transport = std::move(*transport_);
       transport_ = None{};
       close_stream_transport(std::move(old_transport));
     }
+  }
+
+  auto finish_gracefully(OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(ctx);
+    lifecycle_ = Lifecycle::done;
+    if (not transport_) {
+      co_return;
+    }
+    auto* transport_evb = transport_->getEventBase();
+    TENZIR_ASSERT(transport_evb);
+    co_await folly::coro::co_withExecutor(
+      transport_evb, [this]() -> Task<void> {
+        if (auto* transport = transport_->getTransport()) {
+          transport->shutdownWrite();
+        }
+        co_return;
+      }());
+    try {
+      while (co_await folly::coro::co_withExecutor(
+        transport_evb, read_stream_chunk(*transport_, buffer_size,
+                                         graceful_close_drain_timeout))) {
+      }
+    } catch (folly::AsyncSocketException const&) {
+      // This is a best-effort drain for peers that send data to a sink before
+      // reading. Timeouts or close races should not turn a successful sink into
+      // a failed pipeline.
+    }
+    close_current_transport();
   }
 
   auto ensure_connected(OpCtx& ctx) -> Task<void> {
@@ -241,14 +232,12 @@ private:
   static constexpr auto connect_retry_jitter = 0.0;
   static constexpr auto default_connect_max_retry_count
     = std::numeric_limits<uint32_t>::max();
-  static constexpr auto message_queue_capacity = uint32_t{10};
+  static constexpr auto buffer_size = size_t{64 * 1024};
+  static constexpr auto graceful_close_drain_timeout
+    = std::chrono::milliseconds{10};
   Impl impl_;
   data sub_key_ = data{int64_t{0}};
   folly::EventBase* evb_ = nullptr;
-  mutable Box<MessageQueue> message_queue_{
-    std::in_place,
-    message_queue_capacity,
-  };
   Option<folly::coro::Transport> transport_;
   MetricsCounter bytes_write_counter_;
   MetricsCounter events_write_counter_;
