@@ -117,46 +117,7 @@ auto materialize_value_as(data& value, const type& value_type)
     }
     return result;
   }
-  if (const auto* map_type = try_as<tenzir::map_type>(&value_type)) {
-    auto* values = try_as<map>(&value);
-    if (not values) {
-      return {.valid = false};
-    }
-    auto result = value_materialization_result{};
-    auto key_type = map_type->key_type();
-    auto nested_value_type = map_type->value_type();
-    for (auto& [key, nested_value] : *values) {
-      auto key_result = materialize_value_as(key, key_type);
-      auto value_result = materialize_value_as(nested_value, nested_value_type);
-      if (not key_result.valid or not value_result.valid) {
-        return {.valid = false};
-      }
-      result.changed
-        = result.changed or key_result.changed or value_result.changed;
-    }
-    return result;
-  }
-  if (const auto* record_type = try_as<tenzir::record_type>(&value_type)) {
-    auto* values = try_as<record>(&value);
-    if (not values or values->size() != record_type->num_fields()) {
-      return {.valid = false};
-    }
-    auto result = value_materialization_result{};
-    for (const auto& field : record_type->fields()) {
-      auto it = values->find(field.name);
-      if (it == values->end()) {
-        return {.valid = false};
-      }
-      auto nested_result = materialize_value_as(it->second, field.type);
-      if (not nested_result.valid) {
-        return {.valid = false};
-      }
-      result.changed = result.changed or nested_result.changed;
-    }
-    return result;
-  }
-  return {.valid = value_type.kind() == type_kind_of_data(value)
-                   or type_check(value_type, value)};
+  return {.valid = type_check(value_type, value)};
 }
 
 auto make_usage_string(std::string_view op_name,

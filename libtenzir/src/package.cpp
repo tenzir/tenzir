@@ -23,7 +23,6 @@
 #include <caf/typed_event_based_actor.hpp>
 
 #include <algorithm>
-#include <cctype>
 #include <ranges>
 #include <string_view>
 #include <type_traits>
@@ -437,38 +436,25 @@ auto is_field_path_type(const package_operator_parameter& param) -> bool {
   return param.type and detail::ascii_icase_equal(*param.type, "field");
 }
 
-auto normalize_type_name(std::string_view name) -> std::string {
-  auto is_identifier_char = [](char ch) {
-    auto unsigned_ch = static_cast<unsigned char>(ch);
-    return std::isalnum(unsigned_ch) or ch == '_';
-  };
-  auto normalize_token = [](std::string_view token) -> std::string_view {
-    if (token == "int") {
-      return "int64";
-    }
-    if (token == "uint") {
-      return "uint64";
-    }
-    if (token == "float") {
-      return "double";
-    }
-    return token;
-  };
-  auto result = std::string{};
-  result.reserve(name.size());
-  for (auto i = size_t{}; i < name.size();) {
-    if (not is_identifier_char(name[i])) {
-      result.push_back(name[i]);
-      ++i;
-      continue;
-    }
-    auto token_begin = i;
-    while (i < name.size() and is_identifier_char(name[i])) {
-      ++i;
-    }
-    result += normalize_token(name.substr(token_begin, i - token_begin));
+auto normalize_basic_type_name(std::string_view name) -> std::string {
+  if (name == "int") {
+    return "int64";
   }
-  return result;
+  if (name == "uint") {
+    return "uint64";
+  }
+  if (name == "float") {
+    return "double";
+  }
+  return std::string{name};
+}
+
+auto normalize_type_name(std::string_view name) -> std::string {
+  if (name.starts_with("list<") and name.ends_with(">")) {
+    auto inner = name.substr(5, name.size() - 6);
+    return fmt::format("list<{}>", normalize_basic_type_name(inner));
+  }
+  return normalize_basic_type_name(name);
 }
 
 auto parse_parameter_value_type(const package_operator_parameter& param,
