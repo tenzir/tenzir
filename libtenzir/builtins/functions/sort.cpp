@@ -262,32 +262,46 @@ auto sort_record(std::shared_ptr<arrow::StructArray> array)
 
 auto sort_records_recursive(std::shared_ptr<arrow::Array> array)
   -> std::shared_ptr<arrow::Array> {
-  if (try_as<arrow::StructArray>(*array)) {
-    return sort_record(
-      std::static_pointer_cast<arrow::StructArray>(std::move(array)));
-  }
-  if (auto* list = try_as<arrow::ListArray>(*array)) {
-    if (not try_as<arrow::StructArray>(*list->values())
-        and not try_as<arrow::ListArray>(*list->values())) {
+  return match(
+    *array,
+    [&](const arrow::StructArray&) -> std::shared_ptr<arrow::Array> {
+      return sort_record(
+        std::static_pointer_cast<arrow::StructArray>(std::move(array)));
+    },
+    [&](const arrow::ListArray& list) -> std::shared_ptr<arrow::Array> {
+      const auto values_contain_records = match(
+        *list.values(),
+        [](const arrow::StructArray&) {
+          return true;
+        },
+        [](const arrow::ListArray&) {
+          return true;
+        },
+        [](const auto&) {
+          return false;
+        });
+      if (not values_contain_records) {
+        return array;
+      }
+      const auto value_offset = list.value_offset(0);
+      const auto value_length = list.value_offset(list.length()) - value_offset;
+      auto values = list.values()->Slice(value_offset, value_length);
+      auto sorted_values = sort_records_recursive(values);
+      if (sorted_values == values) {
+        return array;
+      }
+      auto buffers = rebase_list_array_buffers(list);
+      auto value_field = std::static_pointer_cast<arrow::ListType>(list.type())
+                           ->value_field()
+                           ->WithType(sorted_values->type());
+      return std::make_shared<arrow::ListArray>(
+        arrow::list(std::move(value_field)), buffers.length,
+        std::move(buffers.offsets), std::move(sorted_values),
+        std::move(buffers.null_bitmap), buffers.null_count, 0);
+    },
+    [&](const auto&) -> std::shared_ptr<arrow::Array> {
       return array;
-    }
-    const auto value_offset = list->value_offset(0);
-    const auto value_length = list->value_offset(list->length()) - value_offset;
-    auto values = list->values()->Slice(value_offset, value_length);
-    auto sorted_values = sort_records_recursive(values);
-    if (sorted_values == values) {
-      return array;
-    }
-    auto buffers = rebase_list_array_buffers(*list);
-    auto value_field = std::static_pointer_cast<arrow::ListType>(list->type())
-                         ->value_field()
-                         ->WithType(sorted_values->type());
-    return std::make_shared<arrow::ListArray>(
-      arrow::list(std::move(value_field)), buffers.length,
-      std::move(buffers.offsets), std::move(sorted_values),
-      std::move(buffers.null_bitmap), buffers.null_count, 0);
-  }
-  return array;
+    });
 }
 
 auto sort_record(const series& input) -> series {
