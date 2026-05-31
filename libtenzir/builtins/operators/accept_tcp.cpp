@@ -9,24 +9,20 @@
 #include <tenzir/arc.hpp>
 #include <tenzir/async/dns.hpp>
 #include <tenzir/async/metrics.hpp>
-#include <tenzir/async/semaphore.hpp>
-#include <tenzir/async/tcp.hpp>
+#include <tenzir/async/stream_accept.hpp>
 #include <tenzir/async/tls.hpp>
 #include <tenzir/atomic.hpp>
-#include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/narrow.hpp>
-#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/si_literals.hpp>
 #include <tenzir/socket.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
@@ -36,14 +32,10 @@
 #include <folly/CancellationToken.h>
 #include <folly/OperationCancelled.h>
 #include <folly/SocketAddress.h>
-#include <folly/coro/BoundedQueue.h>
-#include <folly/coro/DetachOnCancel.h>
-#include <folly/coro/Retry.h>
-#include <folly/coro/WithCancellation.h>
-#include <folly/executors/GlobalExecutor.h>
 #include <folly/io/IOBuf.h>
 #include <folly/io/async/AsyncServerSocket.h>
 #include <folly/io/async/AsyncSocket.h>
+#include <folly/io/async/AsyncSocketException.h>
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
 
@@ -51,31 +43,12 @@
 #include <cstring>
 #include <limits>
 #include <memory>
-#include <unordered_map>
 
 namespace tenzir::plugins::accept_tcp {
 
 namespace {
 
-using namespace tenzir::si_literals;
-
-// Read at most 64 KiB per socket callback. This keeps the per-connection
-// working set modest while still amortizing callback overhead well for TCP
-// streams, and it aligns with the movable-buffer read path below where folly
-// hands us owned buffers that we transfer directly into chunks.
-constexpr auto buffer_size = size_t{64_Ki};
-// Match a typical TCP server listen queue depth: large enough for short bursts
-// of incoming connections without implying that we expect unbounded fan-in.
 constexpr auto listen_backlog = uint32_t{128};
-// Leave room for many in-flight connection lifecycle notifications without
-// turning the queue into another large per-listener memory sink.
-constexpr auto message_queue_capacity = uint32_t{1_Ki};
-// Retry accepts quickly after transient socket errors so the listener recovers
-// fast, while still backing off enough to avoid a tight warning loop.
-constexpr auto accept_retry_delay = std::chrono::milliseconds{100};
-// Bound the time spent waiting for the first client byte when auto-detecting
-// TLS. Without this, idle clients could occupy connection slots before the
-// normal read loop starts.
 constexpr auto tls_probe_timeout = std::chrono::seconds{5};
 
 struct AcceptTcpArgs {
@@ -123,7 +96,9 @@ struct TcpConnectionMetrics {
   }
 
   auto close() -> void {
-    closed.store(true, std::memory_order_relaxed);
+    if (closed.exchange(true, std::memory_order_relaxed)) {
+      return;
+    }
     emit();
   }
 
@@ -178,46 +153,29 @@ auto emit_tcp_metrics(Arc<TcpConnectionMetrics> metrics) -> Task<void> {
   }
 }
 
-class AcceptTcpListener final : public Operator<void, table_slice> {
-public:
+struct TcpAccept {
+  using Args = AcceptTcpArgs;
   using Connection = Arc<folly::coro::Transport>;
 
-  struct Accepted {
+  struct AcceptedInfo {
     Connection transport;
     ip peer_ip;
     int64_t peer_port;
     Arc<ReverseDnsResult> peer_reverse_dns;
   };
 
-  struct Payload {
-    uint64_t conn_id;
-    chunk_ptr chunk;
+  struct ConnectionState {
+    Arc<TcpConnectionMetrics> metrics;
   };
 
-  struct ConnectionClosed {
-    uint64_t conn_id;
-    Option<std::string> error;
-  };
-
-  struct AcceptLoopFinished {};
-
-  struct TlsProbeResult {
-    bool is_tls = false;
-  };
-
-  using Message
-    = variant<AcceptLoopFinished, Accepted, Payload, ConnectionClosed>;
-  using MessageQueue = folly::coro::BoundedQueue<Message>;
-
-  explicit AcceptTcpListener(AcceptTcpArgs args)
+  explicit TcpAccept(Args args)
     : args_{std::move(args)},
-      max_connections_{args_.max_connections ? args_.max_connections->inner
-                                             : uint64_t{128}},
       reverse_dns_{std::in_place,
                    ReverseDnsConfig{
-                     .max_in_flight = detail::narrow<size_t>(max_connections_),
-                   }},
-      connection_slots_{detail::narrow<size_t>(max_connections_)} {
+                     .max_in_flight = detail::narrow<size_t>(
+                       args_.max_connections ? args_.max_connections->inner
+                                             : uint64_t{128}),
+                   }} {
     auto ep = to<Endpoint>(args_.endpoint.inner);
     TENZIR_ASSERT(ep);
     TENZIR_ASSERT(ep->port);
@@ -228,281 +186,62 @@ public:
     }
   }
 
-  AcceptTcpListener(AcceptTcpListener const&) = delete;
-  auto operator=(AcceptTcpListener const&) -> AcceptTcpListener& = delete;
-  AcceptTcpListener(AcceptTcpListener&&) noexcept = default;
-  auto operator=(AcceptTcpListener&&) noexcept -> AcceptTcpListener& = default;
+  auto max_connections() const -> uint64_t {
+    return args_.max_connections ? args_.max_connections->inner : uint64_t{128};
+  }
 
-  auto start(OpCtx& ctx) -> Task<void> override {
+  auto prepare(OpCtx& ctx) -> Task<bool> {
     if (tls_) {
       auto resolved = tls_->resolve(ctx.actor_system().config(), ctx);
       if (not resolved) {
-        request_abort();
-        co_return;
+        co_return false;
       }
       if (resolved->tls.inner) {
         auto context = resolved->make_folly_ssl_context(ctx);
         if (not context) {
-          request_abort();
-          co_return;
+          co_return false;
         }
         tls_context_ = std::move(*context);
       }
     }
     if (bind_host_.empty()) {
       address_.setFromLocalPort(bind_port_);
-    } else {
-      auto resolved = co_await forward_dns_.resolve(bind_host_);
-      auto* addresses = resolved->is_err()
-                          ? nullptr
-                          : try_as<ForwardDnsResolved>(&resolved->unwrap());
-      if (not addresses or addresses->answers.empty()) {
-        auto diag = diagnostic::error("failed to resolve listen address")
-                      .primary(args_.endpoint.source)
-                      .note("host: {}", bind_host_);
-        if (resolved->is_err()) {
-          std::move(diag)
-            .note("reason: {}", resolved->unwrap_err().error)
-            .emit(ctx);
-        } else {
-          std::move(diag)
-            .note("reason: no matching A or AAAA records")
-            .emit(ctx);
-        }
-        request_abort();
-        co_return;
-      }
-      address_.setFromIpPort(fmt::to_string(addresses->answers.front().address),
-                             bind_port_);
+      co_return true;
     }
+    auto resolved = co_await forward_dns_.resolve(bind_host_);
+    auto* addresses = resolved->is_err()
+                        ? nullptr
+                        : try_as<ForwardDnsResolved>(&resolved->unwrap());
+    if (not addresses or addresses->answers.empty()) {
+      auto diag = diagnostic::error("failed to resolve listen address")
+                    .primary(args_.endpoint.source)
+                    .note("host: {}", bind_host_);
+      if (resolved->is_err()) {
+        std::move(diag)
+          .note("reason: {}", resolved->unwrap_err().error)
+          .emit(ctx);
+      } else {
+        std::move(diag).note("reason: no matching A or AAAA records").emit(ctx);
+      }
+      co_return false;
+    }
+    address_.setFromIpPort(fmt::to_string(addresses->answers.front().address),
+                           bind_port_);
+    co_return true;
+  }
+
+  auto start_listener(folly::EventBase* evb, OpCtx& ctx) -> Task<bool> {
     TENZIR_DEBUG("starting listener on {}", address_.describe());
-    evb_ = folly::getGlobalIOExecutor()->getEventBase();
-    TENZIR_ASSERT(evb_);
-    auto socket = folly::AsyncServerSocket::newSocket(evb_);
-    // Let ServerSocket handle bind/listen setup
+    auto socket = folly::AsyncServerSocket::newSocket(evb);
     server_ = std::make_unique<folly::coro::ServerSocket>(
       std::move(socket), address_, listen_backlog);
-    events_read_counter_
-      = ctx.make_counter(MetricsLabel{"operator", "accept_tcp"},
-                         MetricsDirection::read, MetricsVisibility::external_,
-                         MetricsUnit::events);
     tcp_metrics_ = make_metric_handler(ctx, tcp_metrics_type());
-    ctx.spawn_task([this, &ctx]() -> Task<void> {
-      auto notify_finished = detail::scope_guard{[this, &ctx]() noexcept {
-        ctx.spawn_task([this]() -> Task<void> {
-          co_await message_queue_->enqueue(AcceptLoopFinished{});
-        });
-      }};
-      auto token = folly::cancellation_token_merge(
-        co_await folly::coro::co_current_cancellation_token,
-        accept_cancel_->getToken());
-      co_await folly::coro::co_withCancellation(token, accept_loop(ctx));
-    });
-    co_return;
+    co_return true;
   }
 
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
-    TENZIR_UNUSED(dh);
-    co_return co_await message_queue_->dequeue();
-  }
-
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    TENZIR_UNUSED(push);
-    auto message = std::move(result).as<Message>();
-    co_await co_match(
-      std::move(message),
-      [&](Accepted accepted) -> Task<void> {
-        auto transport = std::move(accepted.transport);
-        if (lifecycle_ != Lifecycle::running) {
-          close_transport(std::move(transport));
-          release_connection_slot();
-          maybe_finish_draining();
-          co_return;
-        }
-        auto* transport_evb = transport->getEventBase();
-        TENZIR_ASSERT(transport_evb);
-        auto peer_record = record{
-          {"ip", accepted.peer_ip},
-          {"port", accepted.peer_port},
-        };
-        if (args_.resolve_hostnames) {
-          auto hostname = Option<std::string>{};
-          if (not accepted.peer_reverse_dns->is_err()) {
-            if (auto* resolved = try_as<ReverseDnsResolved>(
-                  &accepted.peer_reverse_dns->unwrap())) {
-              hostname = resolved->hostname;
-            }
-          }
-          peer_record.emplace("hostname", std::move(hostname));
-          if (accepted.peer_reverse_dns->is_err()
-              and not peer_resolution_warning_emitted_) {
-            diagnostic::warning("{}",
-                                accepted.peer_reverse_dns->unwrap_err().error)
-              .note("failed to resolve peer hostname for {}", accepted.peer_ip)
-              .note(
-                "set `resolve_hostnames=false` to disable hostname resolution")
-              .primary(args_.endpoint.source)
-              .emit(ctx);
-            peer_resolution_warning_emitted_ = true;
-          }
-        }
-        auto conn_id = next_conn_id_++;
-        auto pipeline_copy = args_.user_pipeline.inner;
-        auto env = substitute_ctx::env_t{};
-        env[args_.peer_info] = std::move(peer_record);
-        auto bytes_read = ctx.make_counter(
-          MetricsLabel{"peer_ip", MetricsLabel::FixedString::truncate(
-                                    fmt::to_string(accepted.peer_ip))},
-          MetricsDirection::read, MetricsVisibility::external_,
-          MetricsUnit::bytes);
-        auto reg = global_registry();
-        auto b_ctx = base_ctx{ctx, *reg};
-        auto sub_result
-          = pipeline_copy.substitute(substitute_ctx{b_ctx, &env}, true);
-        if (not sub_result) {
-          close_transport(std::move(transport));
-          release_connection_slot();
-          maybe_finish_draining();
-          co_return;
-        }
-        auto key = sub_key_for(conn_id);
-        co_await ctx.spawn_sub<chunk_ptr>(std::move(key),
-                                          std::move(pipeline_copy),
-                                          DiagnosticBehavior::ErrorToWarning);
-        auto tcp_metrics = Arc<TcpConnectionMetrics>{
-          std::in_place,
-          *transport,
-          tcp_metrics_,
-        };
-        auto [_, inserted]
-          = connections_.emplace(conn_id, std::move(transport));
-        TENZIR_ASSERT(inserted);
-        auto it = connections_.find(conn_id);
-        if (it == connections_.end()) {
-          co_return;
-        }
-        ctx.spawn_task(emit_tcp_metrics(tcp_metrics));
-        auto message_queue = message_queue_;
-        ctx.spawn_task(folly::coro::co_withExecutor(
-          transport_evb,
-          read_loop(conn_id, it->second, std::move(message_queue),
-                    std::move(bytes_read), std::move(tcp_metrics))));
-      },
-      [&](Payload payload) -> Task<void> {
-        auto key = sub_key_for(payload.conn_id);
-        if (auto sub = ctx.get_sub(make_view(key))) {
-          auto& pipe = as<SubHandle<chunk_ptr>>(*sub);
-          auto push_result = co_await pipe.push(std::move(payload.chunk));
-          if (push_result.is_err()) {
-            // Subpipeline closed — shut down the TCP connection so read_loop
-            // gets an error and sends ConnectionClosed.
-            if (auto it = connections_.find(payload.conn_id);
-                it != connections_.end()) {
-              close_transport(it->second);
-            }
-          }
-        }
-      },
-      [&](ConnectionClosed closed) -> Task<void> {
-        if (closed.error) {
-          // TODO: Surface routine TCP read failures and disconnects as metrics
-          // in a follow-up that covers all TCP operators.
-          diagnostic::warning("connection closed after read error")
-            .primary(args_.endpoint.source)
-            .note("connection id: {}", closed.conn_id)
-            .note("reason: {}", *closed.error)
-            .emit(ctx);
-        }
-        if (connections_.erase(closed.conn_id) == 1) {
-          co_await close_subpipeline(closed.conn_id, ctx);
-          release_connection_slot();
-        }
-        maybe_finish_draining();
-        co_return;
-      },
-      [&](AcceptLoopFinished) -> Task<void> {
-        if (lifecycle_ != Lifecycle::done) {
-          lifecycle_ = Lifecycle::draining_connections;
-        }
-        maybe_finish_draining();
-        co_return;
-      });
-  }
-
-  auto process_sub(SubKeyView, table_slice slice, Push<table_slice>& push,
-                   OpCtx&) -> Task<void> override {
-    auto const rows = slice.rows();
-    co_await push(std::move(slice));
-    events_read_counter_.add(rows);
-  }
-
-  auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
-    -> Task<void> override {
-    auto conn_id = static_cast<uint64_t>(as<int64_t>(key));
-    if (auto it = connections_.find(conn_id); it != connections_.end()) {
-      auto connection = std::move(it->second);
-      connections_.erase(it);
-      release_connection_slot();
-      close_transport(std::move(connection));
-      maybe_finish_draining();
-    }
-    co_return;
-  }
-
-  auto finish_sub(SubKeyView key, failure error, Push<table_slice>& push,
-                  OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(error);
-    co_await finish_sub(key, push, ctx);
-  }
-
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
-    -> Task<FinalizeBehavior> override {
-    TENZIR_UNUSED(push, ctx);
-    if (lifecycle_ == Lifecycle::done) {
-      co_return FinalizeBehavior::done;
-    }
-    if (lifecycle_ == Lifecycle::running) {
-      lifecycle_ = Lifecycle::draining_accept_loop;
-      stop_accepting();
-    }
-    close_all_connections();
-    maybe_finish_draining();
-    co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
-                                            : FinalizeBehavior::continue_;
-  }
-
-  auto state() -> OperatorState override {
-    maybe_finish_draining();
-    return lifecycle_ == Lifecycle::done ? OperatorState::done
-                                         : OperatorState::normal;
-  }
-
-  auto stop(OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(ctx);
-    if (lifecycle_ == Lifecycle::done) {
-      co_return;
-    }
-    if (lifecycle_ == Lifecycle::running) {
-      lifecycle_ = Lifecycle::draining_accept_loop;
-      stop_accepting();
-    }
-    close_all_connections();
-    maybe_finish_draining();
-  }
-
-private:
-  enum class Lifecycle {
-    running,
-    draining_accept_loop,
-    draining_connections,
-    done,
-  };
-
-  auto stop_accepting() -> void {
-    accept_cancel_->requestCancellation();
-    if (server_ and evb_) {
-      evb_->runImmediatelyOrRunInEventBaseThreadAndWait([this] {
+  auto stop_accepting(folly::EventBase* evb) -> void {
+    if (server_ and evb) {
+      evb->runImmediatelyOrRunInEventBaseThreadAndWait([this] {
         if (server_) {
           server_->close();
         }
@@ -510,82 +249,22 @@ private:
     }
   }
 
-  auto request_abort() -> void {
-    if (lifecycle_ == Lifecycle::done) {
-      return;
-    }
-    lifecycle_ = Lifecycle::done;
-    stop_accepting();
-    close_all_connections();
+  auto cleanup() -> void {
   }
 
-  auto close_all_connections() -> void {
-    for (auto& [_, connection] : connections_) {
-      close_transport(connection);
-      release_connection_slot();
-    }
-    connections_.clear();
-  }
-
-  auto maybe_finish_draining() -> void {
-    if (lifecycle_ != Lifecycle::draining_connections) {
-      return;
-    }
-    if (static_cast<uint64_t>(connection_slots_.available_permits())
-        == max_connections_) {
-      lifecycle_ = Lifecycle::done;
-    }
-  }
-
-  static auto close_transport(Connection connection) -> void {
-    auto* evb = connection->getEventBase();
-    TENZIR_ASSERT(evb);
-    evb->runInEventBaseThread([connection = std::move(connection)]() mutable {
-      connection->close();
-    });
-  }
-
-  static auto close_transport(Box<folly::coro::Transport> transport) -> void {
-    auto* evb = transport->getEventBase();
-    TENZIR_ASSERT(evb);
-    evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
-      transport->close();
-    });
-  }
-
-  static auto sub_key_for(uint64_t conn_id) -> data {
-    TENZIR_ASSERT(
-      conn_id <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()));
-    return data{int64_t{static_cast<int64_t>(conn_id)}};
-  }
-
-  static auto close_subpipeline(uint64_t conn_id, OpCtx& ctx) -> Task<void> {
-    auto key = sub_key_for(conn_id);
-    if (auto sub = ctx.get_sub(make_view(key))) {
-      auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
-      co_await pipeline.close();
-    }
-    co_return;
-  }
-
-  auto release_connection_slot() -> void {
-    connection_slots_.add_permit();
+  auto accept(folly::EventBase* evb) -> Task<Box<folly::coro::Transport>> {
+    TENZIR_ASSERT(server_);
+    auto transport
+      = co_await folly::coro::co_withExecutor(evb, server_->accept());
+    co_return Box<folly::coro::Transport>::from_non_null(std::move(transport));
   }
 
   auto finish_accept(Box<folly::coro::Transport> transport,
-                     folly::SocketAddress peer, diagnostic_handler& dh)
-    -> Task<void> {
-    auto release_connection_slot_guard = detail::scope_guard{[this]() noexcept {
-      release_connection_slot();
-    }};
-    auto current_token = co_await folly::coro::co_current_cancellation_token;
-    auto cancel_token = folly::cancellation_token_merge(
-      current_token, accept_cancel_->getToken());
-    if (lifecycle_ != Lifecycle::running
-        or cancel_token.isCancellationRequested()) {
-      close_transport(std::move(transport));
-      co_return;
-    }
+                     folly::CancellationToken current_token,
+                     folly::CancellationToken local_token,
+                     folly::CancellationToken cancel_token,
+                     diagnostic_handler& dh) -> Task<Option<AcceptedInfo>> {
+    auto peer = transport->getPeerAddress();
     if (tls_context_) {
       try {
         auto should_upgrade = true;
@@ -602,21 +281,14 @@ private:
                                                      tls_context_)};
         }
       } catch (folly::AsyncSocketException const& ex) {
-        // Peer-driven TLS failures are expected at runtime; keep serving other
-        // connections instead of failing the whole operator.
         diagnostic::warning("TLS handshake failed")
           .primary(args_.endpoint.source)
           .note("peer IP: {}", make_peer_info(peer).address)
           .note("reason: {}", ex.what())
           .hint("verify TLS settings and certificates on both sides")
           .emit(dh);
-        co_return;
+        co_return None{};
       }
-    }
-    if (lifecycle_ != Lifecycle::running
-        or cancel_token.isCancellationRequested()) {
-      close_transport(std::move(transport));
-      co_return;
     }
     auto peer_info = make_peer_info(peer);
     auto peer_reverse_dns
@@ -626,43 +298,116 @@ private:
         peer_reverse_dns = co_await folly::coro::co_withCancellation(
           cancel_token, reverse_dns_->resolve(peer_info.address));
       } catch (folly::OperationCancelled const&) {
-        close_transport(std::move(transport));
         if (current_token.isCancellationRequested()
-            and not accept_cancel_->getToken().isCancellationRequested()) {
+            and not local_token.isCancellationRequested()) {
           throw;
         }
-        co_return;
+        co_return None{};
       }
     }
-    if (lifecycle_ != Lifecycle::running
-        or cancel_token.isCancellationRequested()) {
-      close_transport(std::move(transport));
-      co_return;
-    }
     TENZIR_DEBUG("accepted connection from {}", peer.describe());
-    co_await message_queue_->enqueue(Accepted{
+    co_return AcceptedInfo{
       .transport = Connection{std::move(*transport)},
       .peer_ip = peer_info.address,
       .peer_port = peer_info.port,
       .peer_reverse_dns = std::move(peer_reverse_dns),
-    });
-    release_connection_slot_guard.disable();
+    };
   }
 
-  // TLS records start with a 5-byte header. A ClientHello record then begins
-  // with handshake type 0x01 as the first byte of the record payload:
-  //
-  //   byte:   0        1        2        3..4       5
-  //          +--------+--------+--------+----------+--------+
-  //          | 0x16   | 0x03   | ver    | length   | 0x01   |
-  //          +--------+--------+--------+----------+--------+
-  //          | record | major  | minor  | payload  | Client |
-  //          | type   |        |        | length   | Hello  |
-  //
-  // We only sniff enough to distinguish a plausible TLS ClientHello from
-  // plaintext. This also covers ECH, where the visible outer ClientHello still
-  // uses the regular TLS record and handshake headers. OpenSSL performs full
-  // validation after we put these bytes back.
+  auto substitute(ir::pipeline& pipeline, AcceptedInfo& info, OpCtx& ctx)
+    -> bool {
+    auto peer_record = record{
+      {"ip", info.peer_ip},
+      {"port", info.peer_port},
+    };
+    if (args_.resolve_hostnames) {
+      auto hostname = Option<std::string>{};
+      if (not info.peer_reverse_dns->is_err()) {
+        if (auto* resolved
+            = try_as<ReverseDnsResolved>(&info.peer_reverse_dns->unwrap())) {
+          hostname = resolved->hostname;
+        }
+      }
+      peer_record.emplace("hostname", std::move(hostname));
+      if (info.peer_reverse_dns->is_err()
+          and not peer_resolution_warning_emitted_) {
+        diagnostic::warning("{}", info.peer_reverse_dns->unwrap_err().error)
+          .note("failed to resolve peer hostname for {}", info.peer_ip)
+          .note("set `resolve_hostnames=false` to disable hostname resolution")
+          .primary(args_.endpoint.source)
+          .emit(ctx);
+        peer_resolution_warning_emitted_ = true;
+      }
+    }
+    auto env = substitute_ctx::env_t{};
+    env[args_.peer_info] = std::move(peer_record);
+    auto reg = global_registry();
+    auto b_ctx = base_ctx{ctx, *reg};
+    return static_cast<bool>(
+      pipeline.substitute(substitute_ctx{b_ctx, &env}, true));
+  }
+
+  auto make_connection_state(folly::coro::Transport& transport, AcceptedInfo&,
+                             OpCtx& ctx) const -> ConnectionState {
+    auto metrics = Arc<TcpConnectionMetrics>{
+      std::in_place,
+      transport,
+      tcp_metrics_,
+    };
+    ctx.spawn_task(emit_tcp_metrics(metrics));
+    return {.metrics = std::move(metrics)};
+  }
+
+  static auto record_read(ConnectionState& state, size_t bytes) -> void {
+    state.metrics->record_read(bytes);
+  }
+
+  static auto close_connection_state(ConnectionState& state) -> void {
+    state.metrics->close();
+  }
+
+  auto pipeline() -> located<ir::pipeline>& {
+    return args_.user_pipeline;
+  }
+
+  auto events_metric_label() const -> MetricsLabel {
+    return {"operator", "accept_tcp"};
+  }
+
+  auto bytes_metric_label(AcceptedInfo const& info) const -> MetricsLabel {
+    return {
+      "peer_ip",
+      MetricsLabel::FixedString::truncate(fmt::to_string(info.peer_ip)),
+    };
+  }
+
+  auto emit_accept_warning(folly::AsyncSocketException const& ex,
+                           diagnostic_handler& dh) const -> void {
+    diagnostic::warning("failed to accept incoming connection")
+      .primary(args_.endpoint.source)
+      .note("endpoint: {}", address_.describe())
+      .note("reason: {}", ex.what())
+      .emit(dh);
+  }
+
+  auto emit_read_warning(uint64_t conn_id, std::string const& error,
+                         diagnostic_handler& dh) const -> void {
+    diagnostic::warning("connection closed after read error")
+      .primary(args_.endpoint.source)
+      .note("connection id: {}", conn_id)
+      .note("reason: {}", error)
+      .emit(dh);
+  }
+
+  auto debug_name() const -> std::string_view {
+    return "accept_tcp";
+  }
+
+private:
+  struct TlsProbeResult {
+    bool is_tls = false;
+  };
+
   static auto could_be_tls_client_hello(std::span<std::byte const> bytes)
     -> bool {
     if (bytes.empty()) {
@@ -741,10 +486,6 @@ private:
       if (size == 0) {
         co_return {};
       }
-      // Read the full TLS record prefix only after seeing a TLS handshake
-      // record byte. Plaintext clients that send a short first line should not
-      // have to wait for the probe timeout before entering the normal read
-      // loop.
       if (prefix[0] == std::byte{0x16}) {
         co_await read_some(prefix.size());
       }
@@ -765,96 +506,20 @@ private:
     co_return {};
   }
 
-  auto accept_loop(OpCtx& ctx) -> Task<void> {
-    TENZIR_ASSERT(server_);
-    TENZIR_ASSERT(evb_);
-    TENZIR_DEBUG("accept_tcp: accept loop started on {}", address_.describe());
-    auto should_retry_accept = [](folly::exception_wrapper const& ew) {
-      return ew.is_compatible_with<folly::AsyncSocketException>();
-    };
-    while (true) {
-      co_await connection_slots_.consume();
-      auto release_connection_slot_guard
-        = detail::scope_guard{[this]() noexcept {
-            release_connection_slot();
-          }};
-      auto transport = co_await folly::coro::retryWithExponentialBackoff(
-        std::numeric_limits<uint32_t>::max(), accept_retry_delay,
-        accept_retry_delay, 0.0,
-        [this, &ctx]() -> Task<std::unique_ptr<folly::coro::Transport>> {
-          try {
-            // `await_task` is now queue-based, so accepting runs in this task.
-            co_return co_await folly::coro::co_withExecutor(evb_,
-                                                            server_->accept());
-          } catch (folly::AsyncSocketException const& ex) {
-            // Accept failures are per-connection network errors; keep the
-            // listener alive and continue accepting new clients.
-            diagnostic::warning("failed to accept incoming connection")
-              .primary(args_.endpoint.source)
-              .note("endpoint: {}", address_.describe())
-              .note("reason: {}", ex.what())
-              .emit(ctx.dh());
-            throw;
-          }
-        },
-        should_retry_accept);
-      auto boxed
-        = Box<folly::coro::Transport>::from_non_null(std::move(transport));
-      auto peer = boxed->getPeerAddress();
-      ctx.spawn_task(
-        finish_accept(std::move(boxed), std::move(peer), ctx.dh()));
-      release_connection_slot_guard.disable();
-    }
-  }
-
-  static auto
-  read_loop(uint64_t conn_id, Connection connection,
-            Arc<MessageQueue> message_queue, MetricsCounter bytes_counter,
-            Arc<TcpConnectionMetrics> tcp_metrics) -> Task<void> {
-    auto read_error = Option<std::string>{};
-    while (true) {
-      try {
-        auto read_result = co_await read_tcp_chunk(
-          *connection, buffer_size, std::chrono::milliseconds{0});
-        if (not read_result) {
-          break;
-        }
-        bytes_counter.add((*read_result)->size());
-        tcp_metrics->record_read((*read_result)->size());
-        co_await message_queue->enqueue(
-          Payload{conn_id, std::move(*read_result)});
-      } catch (folly::AsyncSocketException const& e) {
-        read_error = e.what();
-        break;
-      }
-    }
-    tcp_metrics->close();
-    co_await message_queue->enqueue(
-      ConnectionClosed{conn_id, std::move(read_error)});
-  }
-
-  AcceptTcpArgs args_;
+  Args args_;
   folly::SocketAddress address_;
   Option<tls_options> tls_;
   std::shared_ptr<folly::SSLContext> tls_context_;
-  folly::EventBase* evb_ = nullptr;
   std::unique_ptr<folly::coro::ServerSocket> server_;
-  uint64_t max_connections_ = 128;
   std::string bind_host_;
   uint16_t bind_port_ = 0;
   ForwardDnsResolver forward_dns_;
   Arc<ReverseDnsResolver> reverse_dns_;
-  mutable Arc<MessageQueue> message_queue_{std::in_place,
-                                           message_queue_capacity};
-  Semaphore connection_slots_;
-  std::unordered_map<uint64_t, Connection> connections_;
-  MetricsCounter events_read_counter_;
-  metric_handler tcp_metrics_;
-  Box<folly::CancellationSource> accept_cancel_{std::in_place};
+  metric_handler tcp_metrics_ = {};
   bool peer_resolution_warning_emitted_ = false;
-  Lifecycle lifecycle_ = Lifecycle::running;
-  mutable uint64_t next_conn_id_{0};
 };
+
+using AcceptTcp = StreamAccept<TcpAccept>;
 
 class AcceptTcpPlugin final : public virtual OperatorPlugin {
 public:
@@ -863,7 +528,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<AcceptTcpArgs, AcceptTcpListener>{};
+    auto d = Describer<AcceptTcpArgs, AcceptTcp>{};
     auto endpoint_arg = d.positional("endpoint", &AcceptTcpArgs::endpoint);
     auto tls_arg = d.named("tls", &AcceptTcpArgs::tls);
     auto max_connections_arg

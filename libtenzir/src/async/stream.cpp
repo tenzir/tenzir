@@ -1,0 +1,85 @@
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
+//
+// SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
+#include "tenzir/async/stream.hpp"
+
+#include "tenzir/as_bytes.hpp"
+#include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/scope_guard.hpp"
+
+#include <folly/String.h>
+#include <folly/io/IOBufQueue.h>
+#include <folly/io/coro/Transport.h>
+#include <folly/io/coro/TransportCallbacks.h>
+
+namespace tenzir {
+
+auto read_stream_chunk(folly::coro::Transport& transport, size_t buffer_size,
+                       std::chrono::milliseconds timeout)
+  -> Task<Option<chunk_ptr>> {
+  auto* evb = transport.getEventBase();
+  TENZIR_ASSERT(evb);
+  auto* async_transport = transport.getTransport();
+  TENZIR_ASSERT(async_transport);
+  auto buffer = folly::IOBufQueue{folly::IOBufQueue::cacheChainLength()};
+  auto callback = folly::coro::ReadCallback{
+    evb->timer(), *async_transport, &buffer, 1, buffer_size, timeout,
+  };
+  async_transport->setReadCB(&callback);
+  auto reset_read_callback = detail::scope_guard{[async_transport]() noexcept {
+    async_transport->setReadCB(nullptr);
+  }};
+  co_await callback.wait();
+  if (callback.error()) {
+    callback.error().throw_exception();
+  }
+  auto length = buffer.chainLength();
+  if (length == 0) {
+    co_return None{};
+  }
+  auto iobuf = buffer.move();
+  auto range = iobuf->coalesce();
+  co_return chunk::make(as_bytes(range.data(), range.size()),
+                        [buf = std::move(iobuf)]() noexcept {
+                          static_cast<void>(buf);
+                        });
+}
+
+auto close_stream_transport(folly::coro::Transport transport) -> void {
+  auto* evb = transport.getEventBase();
+  TENZIR_ASSERT(evb);
+  evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
+    transport.close();
+  });
+}
+
+auto close_stream_transport(Box<folly::coro::Transport> transport) -> void {
+  auto* evb = transport->getEventBase();
+  TENZIR_ASSERT(evb);
+  evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
+    transport->close();
+  });
+}
+
+auto close_stream_transport(Arc<folly::coro::Transport> transport) -> void {
+  auto* evb = transport->getEventBase();
+  TENZIR_ASSERT(evb);
+  evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
+    transport->close();
+  });
+}
+
+auto describe_socket_error(folly::AsyncSocketException const& ex)
+  -> std::string {
+  if (auto err = ex.getErrno(); err > 0) {
+    return folly::errnoStr(err);
+  }
+  return ex.what();
+}
+
+} // namespace tenzir
