@@ -1,0 +1,7 @@
+error: lambda-valued `let` bindings are not supported
+ --> tests/language/lambda/let_lambda.tql:5:11
+  |
+5 | let $f = (x => $missing)
+  |           ^^^^^^^^^^^^^ 
+  |
+  = hint: inline the lambda expression at the use site

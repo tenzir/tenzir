@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+let $f = (x => $missing)
+from {xs: [1, 2, 3]}
+ys = xs.map($f)

@@ -240,9 +240,19 @@ public:
         ++it;
         continue;
       }
+      auto name = std::string{let->name_without_dollar()};
+      if (try_as<ast::lambda_expr>(*let->expr.kind)) {
+        diagnostic::error("lambda-valued `let` bindings are not supported")
+          .primary(let->expr)
+          .hint("inline the lambda expression at the use site")
+          .emit(ctx_);
+        failure_ = failure::promise();
+        map_[std::move(name)] = std::nullopt;
+        it = x.body.erase(it);
+        continue;
+      }
       visit(let->expr);
       auto value = const_eval(let->expr, ctx_);
-      auto name = std::string{let->name_without_dollar()};
       if (value) {
         map_[std::move(name)] = tenzir::match(
           std::move(*value),
