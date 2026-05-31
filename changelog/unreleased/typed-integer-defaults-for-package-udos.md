@@ -1,6 +1,6 @@
 ---
-title: Typed integer defaults for package UDOs
-type: bugfix
+title: TQL type syntax for package UDOs
+type: breaking
 authors:
   - mavam
   - codex
@@ -9,9 +9,12 @@ prs:
 created: 2026-05-31T06:44:24.431435Z
 ---
 
-Package UDO arguments declared as `int` now accept positive YAML defaults without being misidentified as `uint64`.
+Package UDO argument types now use TQL type names, such as `int`, `uint`, and
+`float`, instead of legacy names such as `int64`, `uint64`, and `double`. List
+types use TQL syntax, for example `type: "[int]"` in YAML.
 
-For example, a package operator argument like this now materializes `$limit` as `int64`:
+For example, a package operator argument like this now materializes `$limit`
+as `int64`:
 
 ```yaml
 args:

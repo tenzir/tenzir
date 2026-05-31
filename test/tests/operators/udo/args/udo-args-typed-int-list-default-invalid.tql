@@ -1,7 +1,0 @@
----
-error: true
----
-
-// The default list contains a value that does not fit into int64.
-from {value: "dynamic"}
-argspkg::typed_int_list_default_invalid

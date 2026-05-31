@@ -8,9 +8,7 @@
 
 #include "tenzir/tql2/user_defined_operator.hpp"
 
-#include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/similarity.hpp"
-#include "tenzir/option.hpp"
 #include "tenzir/secret.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -43,98 +41,6 @@ auto parameter_default_string(const ast::expression& expr)
 auto is_null_constant_expression(const ast::expression& expr) -> bool {
   const auto* constant = try_as<ast::constant>(expr);
   return constant and is<caf::none_t>(constant->value);
-}
-
-struct value_materialization_result final {
-  bool valid = true;
-  bool changed = false;
-};
-
-auto make_constant_expression(data value, location source) -> ast::expression {
-  auto constant_value = match(
-    std::move(value),
-    [](pattern const&) -> ast::constant::kind {
-      TENZIR_UNREACHABLE();
-    },
-    []<class T>(T&& x) -> ast::constant::kind
-      requires(not std::same_as<std::decay_t<T>, pattern>)
-    {
-      return std::forward<T>(x);
-    });
-  return ast::expression{ast::constant{std::move(constant_value), source}};
-}
-
-auto constant_data(ast::expression const& expr) -> Option<data> {
-  return expr.match<Option<data>>(
-    [](ast::constant const& constant) -> Option<data> {
-      return constant.as_data();
-    },
-    [](ast::list const& list_expr) -> Option<data> {
-      auto values = list{};
-      values.reserve(list_expr.items.size());
-      for (auto const& item : list_expr.items) {
-        auto nested_value = match(
-          item,
-          [](ast::expression const& nested_expr) -> Option<data> {
-            return constant_data(nested_expr);
-          },
-          [](ast::spread const&) -> Option<data> {
-            return None{};
-          });
-        if (not nested_value) {
-          return None{};
-        }
-        values.push_back(std::move(*nested_value));
-      }
-      return values;
-    },
-    [](auto const&) -> Option<data> {
-      return None{};
-    });
-}
-
-auto materialize_value_as(data& value, type const& value_type)
-  -> value_materialization_result {
-  return match(
-    value,
-    [](caf::none_t const&) -> value_materialization_result {
-      return {};
-    },
-    [&](uint64_t unsigned_value) -> value_materialization_result {
-      if (not value_type.kind().is<int64_type>()) {
-        return {.valid = type_check(value_type, value)};
-      }
-      if (unsigned_value
-          > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
-        return {.valid = false};
-      }
-      value = detail::narrow<int64_t>(unsigned_value);
-      return {.changed = true};
-    },
-    [&](list& values) -> value_materialization_result {
-      return match(
-        value_type,
-        [&](
-          tenzir::list_type const& list_type) -> value_materialization_result {
-          auto result = value_materialization_result{};
-          auto nested_type = list_type.value_type();
-          for (auto& nested_value : values) {
-            auto nested_result
-              = materialize_value_as(nested_value, nested_type);
-            if (not nested_result.valid) {
-              return {.valid = false};
-            }
-            result.changed = result.changed or nested_result.changed;
-          }
-          return result;
-        },
-        [&](auto const&) -> value_materialization_result {
-          return {.valid = type_check(value_type, value)};
-        });
-    },
-    [&](auto const&) -> value_materialization_result {
-      return {.valid = type_check(value_type, value)};
-    });
 }
 
 auto make_usage_string(std::string_view op_name,
@@ -472,21 +378,8 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
       return {};
     }
     auto diag_loc = explicit_location.value_or(expr.get_location());
-    auto value = constant_data(expr);
-    if (not value) {
-      if (auto const_value = try_const_eval(expr, ctx)) {
-        value = std::move(*const_value);
-      }
-    }
-    if (value) {
-      auto materialized_value = *value;
-      auto materialized
-        = materialize_value_as(materialized_value, *param.value_type);
-      if (materialized.valid) {
-        if (materialized.changed) {
-          expr = make_constant_expression(std::move(materialized_value),
-                                          expr.get_location());
-        }
+    if (auto value = try_const_eval(expr, ctx)) {
+      if (type_check(*param.value_type, *value)) {
         return {};
       }
       auto actual_type = type::infer(*value);

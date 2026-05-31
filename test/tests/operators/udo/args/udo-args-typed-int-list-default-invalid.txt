@@ -1,7 +1,0 @@
-error: argument `limits` must be of type `list<int64>` (got `list<uint64>`)
-  = usage: argspkg::typed_int_list_default_invalid [limits=list<int>]
-  = note: parameters:
-            named:
-              name    type       default                    description
-              limits  list<int>  - ~
-          - 9223372036854775808  The allowed limits

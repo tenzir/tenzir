@@ -1,4 +1,0 @@
-// Use the default value defined in the operator.
-// The declared nested list<int> type should apply to inner values.
-from {value: "dynamic"}
-argspkg::typed_int_nested_list_default

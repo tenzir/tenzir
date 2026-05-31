@@ -1,4 +1,4 @@
 // Use the default value defined in the operator.
-// The declared int type should apply to the default value.
+// The declared int type should accept the default value.
 from {value: "dynamic"}
 argspkg::typed_int_default

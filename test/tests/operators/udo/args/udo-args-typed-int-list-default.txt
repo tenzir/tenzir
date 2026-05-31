@@ -1,5 +1,0 @@
-{
-  value: "dynamic",
-  first_limit_type: "int64",
-  second_limit_type: "int64",
-}

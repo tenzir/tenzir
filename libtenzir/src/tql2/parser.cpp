@@ -1655,6 +1655,14 @@ auto parse_expression_with_bad_diagnostics(std::string_view source, session ctx)
   });
 }
 
+auto parse_type_def_with_bad_diagnostics(std::string_view source, session ctx)
+  -> failure_or<ast::type_def> {
+  TRY(auto tokens, tokenize(source, ctx));
+  return parser::parse_with(tokens, source, ctx, true, [](class parser& self) {
+    return self.parse_type_def();
+  });
+}
+
 auto parse_expression_stream_with_bad_diagnostics(std::string_view source,
                                                   session ctx)
   -> failure_or<expression_stream> {

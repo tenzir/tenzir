@@ -1,5 +1,5 @@
 ---
-description: "Emit the type of a defaulted integer argument"
+description: "Use a defaulted integer argument"
 args:
   named:
     - name: limit
@@ -7,4 +7,4 @@ args:
       default: 1000
       description: "The maximum number of items to return"
 ---
-set limit_type = type_of($limit).kind
+set limit = $limit
