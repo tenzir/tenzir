@@ -8,7 +8,6 @@
 
 #include "tenzir/async/tls.hpp"
 
-#include "tenzir/async/stream.hpp"
 #include "tenzir/detail/assert.hpp"
 
 #include <folly/coro/Invoke.h>
@@ -111,6 +110,14 @@ auto get_socket_transport(folly::coro::Transport& transport)
     };
   }
   return socket;
+}
+
+auto close_transport(folly::coro::Transport transport) -> void {
+  auto* evb = transport.getEventBase();
+  TENZIR_ASSERT(evb);
+  evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
+    transport.close();
+  });
 }
 
 } // namespace

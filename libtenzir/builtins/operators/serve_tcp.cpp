@@ -9,7 +9,6 @@
 #include <tenzir/arc.hpp>
 #include <tenzir/async/metrics.hpp>
 #include <tenzir/async/semaphore.hpp>
-#include <tenzir/async/stream.hpp>
 #include <tenzir/async/tls.hpp>
 #include <tenzir/atomic.hpp>
 #include <tenzir/co_match.hpp>
@@ -19,7 +18,6 @@
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/scope_guard.hpp>
-#include <tenzir/detail/stream_operators.hpp>
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -49,6 +47,9 @@ namespace {
 // Match a typical TCP server listen queue depth: large enough for short bursts
 // of incoming connections without implying that we expect unbounded fan-in.
 constexpr auto listen_backlog = uint32_t{128};
+// Retry accepts quickly after transient socket errors so the listener recovers
+// fast, while still backing off enough to avoid a tight warning loop.
+constexpr auto accept_retry_delay = std::chrono::milliseconds{100};
 // The listener queue only carries accepted sockets, so a modest fixed
 // capacity is sufficient while still tolerating short bursts.
 constexpr auto message_queue_capacity = uint32_t{512};
@@ -224,7 +225,7 @@ public:
       std::move(message),
       [&](Accepted accepted) -> Task<void> {
         if (lifecycle_ != Lifecycle::running) {
-          close_transport(std::move(accepted.client));
+          close_client(std::move(accepted.client));
           release_connection_slot();
           maybe_finish_draining();
           co_return;
@@ -310,9 +311,17 @@ public:
   }
 
 private:
+  static auto close_client(Box<folly::coro::Transport> client) -> void {
+    auto* evb = client->getEventBase();
+    TENZIR_ASSERT(evb);
+    evb->runInEventBaseThread([client = std::move(client)]() mutable {
+      client->close();
+    });
+  }
+
   static auto close_client(Client client) -> void {
     client.metrics->close();
-    close_transport(std::move(client.transport));
+    close_client(std::move(client.transport));
   }
 
   auto stop_accepting() -> void {
@@ -387,7 +396,10 @@ private:
   auto broadcast_payload(chunk_ptr const& chunk, diagnostic_handler& dh)
     -> Task<void> {
     TENZIR_UNUSED(dh);
-    auto data = as_byte_range(chunk);
+    auto data = folly::ByteRange{
+      reinterpret_cast<unsigned char const*>(chunk->data()),
+      chunk->size(),
+    };
     for (size_t i = 0; i < clients_.size();) {
       auto ok = co_await write_to_client(clients_[i], data);
       if (ok) {
@@ -429,6 +441,9 @@ private:
   auto accept_loop(OpCtx& ctx) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_DEBUG("serve_tcp: accept loop started on {}", address_.describe());
+    auto should_retry_accept = [](folly::exception_wrapper const& ew) {
+      return ew.is_compatible_with<folly::AsyncSocketException>();
+    };
     while (true) {
       co_await connection_slots_.consume();
       auto release_connection_slot_guard
@@ -436,8 +451,8 @@ private:
             release_connection_slot();
           }};
       auto transport = co_await folly::coro::retryWithExponentialBackoff(
-        std::numeric_limits<uint32_t>::max(), detail::stream_accept_retry_delay,
-        detail::stream_accept_retry_delay, 0.0,
+        std::numeric_limits<uint32_t>::max(), accept_retry_delay,
+        accept_retry_delay, 0.0,
         [this, &ctx]() -> Task<std::unique_ptr<folly::coro::Transport>> {
           try {
             co_return co_await folly::coro::co_withExecutor(evb_,
@@ -453,7 +468,7 @@ private:
             throw;
           }
         },
-        should_retry_socket);
+        should_retry_accept);
       auto client
         = Box<folly::coro::Transport>::from_non_null(std::move(transport));
       auto peer = client->getPeerAddress().describe();

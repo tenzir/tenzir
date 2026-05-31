@@ -7,13 +7,11 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/async/semaphore.hpp>
-#include <tenzir/async/stream.hpp>
 #include <tenzir/async/uds.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/scope_guard.hpp>
-#include <tenzir/detail/stream_operators.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -43,6 +41,7 @@ namespace tenzir::plugins::serve_uds {
 namespace {
 
 constexpr auto listen_backlog = uint32_t{128};
+constexpr auto accept_retry_delay = std::chrono::milliseconds{100};
 constexpr auto message_queue_capacity = uint32_t{512};
 
 struct ServeUdsArgs {
@@ -146,7 +145,7 @@ public:
       std::move(message),
       [&](Accepted accepted) -> Task<void> {
         if (lifecycle_ != Lifecycle::running) {
-          close_transport(std::move(accepted.client));
+          close_client(std::move(accepted.client));
           release_connection_slot();
           maybe_finish_draining();
           co_return;
@@ -229,6 +228,14 @@ public:
   }
 
 private:
+  static auto close_client(Box<folly::coro::Transport> client) -> void {
+    auto* evb = client->getEventBase();
+    TENZIR_ASSERT(evb);
+    evb->runInEventBaseThread([client = std::move(client)]() mutable {
+      client->close();
+    });
+  }
+
   auto stop_accepting() -> void {
     accept_cancel_->requestCancellation();
     if (server_ and evb_) {
@@ -285,7 +292,7 @@ private:
 
   auto close_all_clients() -> void {
     for (auto& client : clients_) {
-      close_transport(std::move(client));
+      close_client(std::move(client));
       release_connection_slot();
     }
     clients_.clear();
@@ -307,14 +314,17 @@ private:
   auto broadcast_payload(chunk_ptr const& chunk, diagnostic_handler& dh)
     -> Task<void> {
     TENZIR_UNUSED(dh);
-    auto data = as_byte_range(chunk);
+    auto data = folly::ByteRange{
+      reinterpret_cast<unsigned char const*>(chunk->data()),
+      chunk->size(),
+    };
     for (size_t i = 0; i < clients_.size();) {
       auto ok = co_await write_to_client(clients_[i], data);
       if (ok) {
         ++i;
         continue;
       }
-      close_transport(std::move(clients_[i]));
+      close_client(std::move(clients_[i]));
       release_connection_slot();
       clients_.erase(clients_.begin() + i);
       maybe_finish_draining();
@@ -333,6 +343,9 @@ private:
   auto accept_loop(OpCtx& ctx) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_DEBUG("serve_uds: accept loop started on {}", path_);
+    auto should_retry_accept = [](folly::exception_wrapper const& ew) {
+      return ew.is_compatible_with<folly::AsyncSocketException>();
+    };
     while (true) {
       co_await connection_slots_.consume();
       auto release_connection_slot_guard
@@ -340,8 +353,8 @@ private:
             release_connection_slot();
           }};
       auto transport = co_await folly::coro::retryWithExponentialBackoff(
-        std::numeric_limits<uint32_t>::max(), detail::stream_accept_retry_delay,
-        detail::stream_accept_retry_delay, 0.0,
+        std::numeric_limits<uint32_t>::max(), accept_retry_delay,
+        accept_retry_delay, 0.0,
         [this, &ctx]() -> Task<Box<folly::coro::Transport>> {
           try {
             co_return co_await folly::coro::co_withExecutor(
@@ -355,7 +368,7 @@ private:
             throw;
           }
         },
-        should_retry_socket);
+        should_retry_accept);
       ctx.spawn_task(finish_accept(std::move(transport)));
       release_connection_slot_guard.disable();
     }

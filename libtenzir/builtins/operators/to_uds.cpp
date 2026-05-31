@@ -8,11 +8,9 @@
 
 #include "tenzir/async.hpp"
 
-#include <tenzir/async/stream.hpp>
 #include <tenzir/async/uds.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/detail/narrow.hpp>
-#include <tenzir/detail/stream_operators.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -38,13 +36,31 @@ namespace tenzir::plugins::to_uds {
 
 namespace {
 
+constexpr auto connect_timeout = std::chrono::seconds{5};
+constexpr auto connect_initial_backoff = std::chrono::milliseconds{100};
+constexpr auto connect_max_backoff = std::chrono::seconds{5};
+constexpr auto connect_retry_jitter = 0.0;
+constexpr auto default_connect_max_retry_count
+  = std::numeric_limits<uint32_t>::max();
 constexpr auto message_queue_capacity = uint32_t{10};
+
+constexpr auto should_retry_connect = [](folly::exception_wrapper const& ew) {
+  return ew.is_compatible_with<folly::AsyncSocketException>();
+};
 
 struct ToUdsArgs {
   located<std::string> path;
   Option<located<uint64_t>> max_retry_count;
   located<ir::pipeline> printer;
 };
+
+auto describe_socket_error(folly::AsyncSocketException const& ex)
+  -> std::string {
+  if (auto err = ex.getErrno(); err > 0) {
+    return folly::errnoStr(err);
+  }
+  return ex.what();
+}
 
 class ToUds final : public Operator<table_slice, void> {
 public:
@@ -167,6 +183,14 @@ public:
 private:
   using MessageQueue = folly::coro::BoundedQueue<chunk_ptr>;
 
+  static auto close_transport(folly::coro::Transport transport) -> void {
+    auto* evb = transport.getEventBase();
+    TENZIR_ASSERT(evb);
+    evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
+      transport.close();
+    });
+  }
+
   auto close_current_transport() -> void {
     if (transport_) {
       auto old_transport = std::move(*transport_);
@@ -182,7 +206,7 @@ private:
     auto const max_retry_count
       = args_.max_retry_count
           ? detail::narrow<uint32_t>(args_.max_retry_count->inner)
-          : detail::stream_default_connect_max_retry_count;
+          : default_connect_max_retry_count;
     auto emit_final_error = [&](folly::AsyncSocketException const& ex) {
       diagnostic::error("failed to connect to UNIX domain socket: {}",
                         describe_socket_error(ex))
@@ -208,12 +232,12 @@ private:
         evb_, folly::coro::Transport::newConnectedSocket(
                 evb_, address_,
                 std::chrono::duration_cast<std::chrono::milliseconds>(
-                  detail::stream_connect_timeout)));
+                  connect_timeout)));
     };
     try {
       transport_ = co_await folly::coro::retryWithExponentialBackoff(
-        max_retry_count, detail::stream_connect_initial_backoff,
-        detail::stream_connect_max_backoff, detail::stream_connect_retry_jitter,
+        max_retry_count, connect_initial_backoff, connect_max_backoff,
+        connect_retry_jitter,
         [this, &connect,
          &emit_retry_warning]() -> Task<folly::coro::Transport> {
           try {
@@ -225,7 +249,7 @@ private:
             throw;
           }
         },
-        should_retry_socket);
+        should_retry_connect);
     } catch (folly::AsyncSocketException const& ex) {
       emit_final_error(ex);
       co_return;
@@ -234,7 +258,10 @@ private:
   }
 
   auto write_chunk(chunk_ptr const& chunk, OpCtx& ctx) -> Task<void> {
-    auto data = as_byte_range(chunk);
+    auto data = folly::ByteRange{
+      reinterpret_cast<unsigned char const*>(chunk->data()),
+      chunk->size(),
+    };
     while (lifecycle_ != Lifecycle::done) {
       co_await ensure_connected(ctx);
       if (lifecycle_ == Lifecycle::done or not transport_) {

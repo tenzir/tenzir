@@ -10,7 +10,6 @@
 #include <tenzir/async/dns.hpp>
 #include <tenzir/async/metrics.hpp>
 #include <tenzir/async/semaphore.hpp>
-#include <tenzir/async/stream.hpp>
 #include <tenzir/async/tcp.hpp>
 #include <tenzir/async/tls.hpp>
 #include <tenzir/atomic.hpp>
@@ -21,7 +20,6 @@
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/scope_guard.hpp>
-#include <tenzir/detail/stream_operators.hpp>
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -72,6 +70,9 @@ constexpr auto listen_backlog = uint32_t{128};
 // Leave room for many in-flight connection lifecycle notifications without
 // turning the queue into another large per-listener memory sink.
 constexpr auto message_queue_capacity = uint32_t{1_Ki};
+// Retry accepts quickly after transient socket errors so the listener recovers
+// fast, while still backing off enough to avoid a tight warning loop.
+constexpr auto accept_retry_delay = std::chrono::milliseconds{100};
 // Bound the time spent waiting for the first client byte when auto-detecting
 // TLS. Without this, idle clients could occupy connection slots before the
 // normal read loop starts.
@@ -366,7 +367,7 @@ public:
           maybe_finish_draining();
           co_return;
         }
-        auto key = detail::stream_sub_key_for(conn_id);
+        auto key = sub_key_for(conn_id);
         co_await ctx.spawn_sub<chunk_ptr>(std::move(key),
                                           std::move(pipeline_copy),
                                           DiagnosticBehavior::ErrorToWarning);
@@ -390,7 +391,7 @@ public:
                     std::move(bytes_read), std::move(tcp_metrics))));
       },
       [&](Payload payload) -> Task<void> {
-        auto key = detail::stream_sub_key_for(payload.conn_id);
+        auto key = sub_key_for(payload.conn_id);
         if (auto sub = ctx.get_sub(make_view(key))) {
           auto& pipe = as<SubHandle<chunk_ptr>>(*sub);
           auto push_result = co_await pipe.push(std::move(payload.chunk));
@@ -415,7 +416,7 @@ public:
             .emit(ctx);
         }
         if (connections_.erase(closed.conn_id) == 1) {
-          co_await detail::stream_close_subpipeline(closed.conn_id, ctx);
+          co_await close_subpipeline(closed.conn_id, ctx);
           release_connection_slot();
         }
         maybe_finish_draining();
@@ -534,6 +535,37 @@ private:
               == max_connections_) {
       lifecycle_ = Lifecycle::done;
     }
+  }
+
+  static auto close_transport(Connection connection) -> void {
+    auto* evb = connection->getEventBase();
+    TENZIR_ASSERT(evb);
+    evb->runInEventBaseThread([connection = std::move(connection)]() mutable {
+      connection->close();
+    });
+  }
+
+  static auto close_transport(Box<folly::coro::Transport> transport) -> void {
+    auto* evb = transport->getEventBase();
+    TENZIR_ASSERT(evb);
+    evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
+      transport->close();
+    });
+  }
+
+  static auto sub_key_for(uint64_t conn_id) -> data {
+    TENZIR_ASSERT(
+      conn_id <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()));
+    return data{int64_t{static_cast<int64_t>(conn_id)}};
+  }
+
+  static auto close_subpipeline(uint64_t conn_id, OpCtx& ctx) -> Task<void> {
+    auto key = sub_key_for(conn_id);
+    if (auto sub = ctx.get_sub(make_view(key))) {
+      auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
+      co_await pipeline.close();
+    }
+    co_return;
   }
 
   auto release_connection_slot() -> void {
@@ -737,6 +769,9 @@ private:
     TENZIR_ASSERT(server_);
     TENZIR_ASSERT(evb_);
     TENZIR_DEBUG("accept_tcp: accept loop started on {}", address_.describe());
+    auto should_retry_accept = [](folly::exception_wrapper const& ew) {
+      return ew.is_compatible_with<folly::AsyncSocketException>();
+    };
     while (true) {
       co_await connection_slots_.consume();
       auto release_connection_slot_guard
@@ -744,8 +779,8 @@ private:
             release_connection_slot();
           }};
       auto transport = co_await folly::coro::retryWithExponentialBackoff(
-        std::numeric_limits<uint32_t>::max(), detail::stream_accept_retry_delay,
-        detail::stream_accept_retry_delay, 0.0,
+        std::numeric_limits<uint32_t>::max(), accept_retry_delay,
+        accept_retry_delay, 0.0,
         [this, &ctx]() -> Task<std::unique_ptr<folly::coro::Transport>> {
           try {
             // `await_task` is now queue-based, so accepting runs in this task.
@@ -762,7 +797,7 @@ private:
             throw;
           }
         },
-        should_retry_socket);
+        should_retry_accept);
       auto boxed
         = Box<folly::coro::Transport>::from_non_null(std::move(transport));
       auto peer = boxed->getPeerAddress();
@@ -776,16 +811,26 @@ private:
   read_loop(uint64_t conn_id, Connection connection,
             Arc<MessageQueue> message_queue, MetricsCounter bytes_counter,
             Arc<TcpConnectionMetrics> tcp_metrics) -> Task<void> {
-    auto metrics = tcp_metrics;
-    co_await detail::stream_read_loop<Payload, ConnectionClosed>(
-      conn_id, std::move(connection), std::move(message_queue), buffer_size,
-      std::move(bytes_counter),
-      [metrics = std::move(metrics)](size_t bytes) mutable {
-        metrics->record_read(bytes);
-      },
-      [tcp_metrics = std::move(tcp_metrics)]() mutable {
-        tcp_metrics->close();
-      });
+    auto read_error = Option<std::string>{};
+    while (true) {
+      try {
+        auto read_result = co_await read_stream_chunk(
+          *connection, buffer_size, std::chrono::milliseconds{0});
+        if (not read_result) {
+          break;
+        }
+        bytes_counter.add((*read_result)->size());
+        tcp_metrics->record_read((*read_result)->size());
+        co_await message_queue->enqueue(
+          Payload{conn_id, std::move(*read_result)});
+      } catch (folly::AsyncSocketException const& e) {
+        read_error = e.what();
+        break;
+      }
+    }
+    tcp_metrics->close();
+    co_await message_queue->enqueue(
+      ConnectionClosed{conn_id, std::move(read_error)});
   }
 
   AcceptTcpArgs args_;

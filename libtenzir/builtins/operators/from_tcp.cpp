@@ -8,13 +8,11 @@
 
 #include <tenzir/arc.hpp>
 #include <tenzir/async/dns.hpp>
-#include <tenzir/async/stream.hpp>
 #include <tenzir/async/tcp.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/concept/parseable/to.hpp>
-#include <tenzir/detail/stream_operators.hpp>
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -53,11 +51,24 @@ using namespace tenzir::si_literals;
 constexpr auto buffer_size = size_t{64_Ki};
 // Give remote endpoints long enough for a normal TCP plus TLS setup while
 // still surfacing unavailable servers quickly to the retry loop.
-constexpr auto connect_max_retries
-  = detail::stream_default_connect_max_retry_count;
+constexpr auto connect_timeout = std::chrono::seconds{5};
+// Reconnect almost immediately after the first failure so short races during
+// fixture startup or service restarts do not stall the pipeline.
+constexpr auto connect_initial_backoff = std::chrono::milliseconds{100};
+// Cap retries at five seconds to avoid hammering broken endpoints while still
+// keeping recovery reasonably quick once the peer comes back.
+constexpr auto connect_max_backoff = std::chrono::milliseconds{5_k};
+// Preserve the current deterministic reconnect timing; if many connectors are
+// expected to flap together, revisit this and add jitter.
+constexpr auto connect_retry_jitter = 0.0;
+constexpr auto connect_max_retries = std::numeric_limits<uint32_t>::max();
 // Leave room for many in-flight read and close notifications without turning
 // the queue into another large per-connection memory sink.
 constexpr auto message_queue_capacity = uint32_t{1_Ki};
+
+constexpr auto should_retry_connect = [](folly::exception_wrapper const& ew) {
+  return ew.is_compatible_with<folly::AsyncSocketException>();
+};
 
 struct FromTcpArgs {
   located<std::string> endpoint;
@@ -175,15 +186,15 @@ public:
       co_return co_await message_queue_->dequeue();
     }
     auto transport = co_await folly::coro::retryWithExponentialBackoff(
-      connect_max_retries, detail::stream_connect_initial_backoff,
-      detail::stream_connect_max_backoff, detail::stream_connect_retry_jitter,
+      connect_max_retries, connect_initial_backoff, connect_max_backoff,
+      connect_retry_jitter,
       [this, &dh]() -> Task<Box<folly::coro::Transport>> {
         TENZIR_DEBUG("connecting to {}", address_.describe());
         try {
           co_return Box<folly::coro::Transport>{co_await connect_tcp_client(
             evb_, address_,
             std::chrono::duration_cast<std::chrono::milliseconds>(
-              detail::stream_connect_timeout),
+              connect_timeout),
             tls_context_, host_)};
         } catch (folly::AsyncSocketException const& ex) {
           // TODO: Surface connect retries and failures as metrics in a
@@ -199,7 +210,7 @@ public:
           throw;
         }
       },
-      should_retry_socket);
+      should_retry_connect);
     TENZIR_DEBUG("connected to {}", address_.describe());
     co_return Message{Connected{std::move(transport)}};
   }
@@ -308,12 +319,47 @@ public:
   }
 
 private:
+  static auto close_transport(Connection connection) -> void {
+    auto* evb = connection->getEventBase();
+    TENZIR_ASSERT(evb);
+    evb->runInEventBaseThread([connection = std::move(connection)]() mutable {
+      connection->close();
+    });
+  }
+
+  static auto close_transport(Box<folly::coro::Transport> transport) -> void {
+    auto* evb = transport->getEventBase();
+    TENZIR_ASSERT(evb);
+    evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
+      transport->close();
+    });
+  }
+
   static auto read_loop(uint64_t conn_id, Connection connection,
                         Arc<MessageQueue> message_queue,
                         MetricsCounter bytes_read_counter) -> Task<void> {
-    co_await detail::stream_read_loop<Payload, ConnectionClosed>(
-      conn_id, std::move(connection), std::move(message_queue), buffer_size,
-      std::move(bytes_read_counter), [](size_t) {});
+    auto read_error = std::string{};
+    while (true) {
+      try {
+        auto read_result = co_await read_stream_chunk(
+          *connection, buffer_size, std::chrono::milliseconds{0});
+        if (not read_result) {
+          break;
+        }
+        bytes_read_counter.add((*read_result)->size());
+        co_await message_queue->enqueue(
+          Payload{conn_id, std::move(*read_result)});
+      } catch (folly::AsyncSocketException const& e) {
+        // Socket errors are connection-scoped; log and reconnect.
+        read_error = e.what();
+        break;
+      }
+    }
+    co_await message_queue->enqueue(ConnectionClosed{
+      conn_id,
+      read_error.empty() ? Option<std::string>{}
+                         : Option<std::string>{std::move(read_error)},
+    });
   }
 
   FromTcpArgs args_;

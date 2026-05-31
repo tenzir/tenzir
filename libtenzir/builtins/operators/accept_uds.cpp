@@ -8,13 +8,12 @@
 
 #include <tenzir/arc.hpp>
 #include <tenzir/async/semaphore.hpp>
-#include <tenzir/async/stream.hpp>
+#include <tenzir/async/tcp.hpp>
 #include <tenzir/async/uds.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/scope_guard.hpp>
-#include <tenzir/detail/stream_operators.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -50,6 +49,7 @@ using namespace tenzir::si_literals;
 constexpr auto buffer_size = size_t{64_Ki};
 constexpr auto listen_backlog = uint32_t{128};
 constexpr auto message_queue_capacity = uint32_t{1_Ki};
+constexpr auto accept_retry_delay = std::chrono::milliseconds{100};
 
 struct AcceptUdsArgs {
   located<std::string> path;
@@ -161,7 +161,7 @@ public:
           maybe_finish_draining();
           co_return;
         }
-        auto key = detail::stream_sub_key_for(conn_id);
+        auto key = sub_key_for(conn_id);
         co_await ctx.spawn_sub<chunk_ptr>(std::move(key),
                                           std::move(pipeline_copy),
                                           DiagnosticBehavior::ErrorToWarning);
@@ -179,7 +179,7 @@ public:
                     bytes_read_counter_)));
       },
       [&](Payload payload) -> Task<void> {
-        auto key = detail::stream_sub_key_for(payload.conn_id);
+        auto key = sub_key_for(payload.conn_id);
         if (auto sub = ctx.get_sub(make_view(key))) {
           auto& pipe = as<SubHandle<chunk_ptr>>(*sub);
           auto push_result = co_await pipe.push(std::move(payload.chunk));
@@ -200,7 +200,7 @@ public:
             .emit(ctx);
         }
         if (connections_.erase(closed.conn_id) == 1) {
-          co_await detail::stream_close_subpipeline(closed.conn_id, ctx);
+          co_await close_subpipeline(closed.conn_id, ctx);
           release_connection_slot();
         }
         maybe_finish_draining();
@@ -328,6 +328,37 @@ private:
     }
   }
 
+  static auto close_transport(Connection connection) -> void {
+    auto* evb = connection->getEventBase();
+    TENZIR_ASSERT(evb);
+    evb->runInEventBaseThread([connection = std::move(connection)]() mutable {
+      connection->close();
+    });
+  }
+
+  static auto close_transport(Box<folly::coro::Transport> transport) -> void {
+    auto* evb = transport->getEventBase();
+    TENZIR_ASSERT(evb);
+    evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
+      transport->close();
+    });
+  }
+
+  static auto sub_key_for(uint64_t conn_id) -> data {
+    TENZIR_ASSERT(
+      conn_id <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()));
+    return data{int64_t{static_cast<int64_t>(conn_id)}};
+  }
+
+  static auto close_subpipeline(uint64_t conn_id, OpCtx& ctx) -> Task<void> {
+    auto key = sub_key_for(conn_id);
+    if (auto sub = ctx.get_sub(make_view(key))) {
+      auto& pipeline = as<SubHandle<chunk_ptr>>(*sub);
+      co_await pipeline.close();
+    }
+    co_return;
+  }
+
   auto release_connection_slot() -> void {
     connection_slots_.add_permit();
   }
@@ -354,6 +385,9 @@ private:
   auto accept_loop(OpCtx& ctx) -> Task<void> {
     TENZIR_ASSERT(server_);
     TENZIR_DEBUG("accept_uds: accept loop started on {}", path_);
+    auto should_retry_accept = [](folly::exception_wrapper const& ew) {
+      return ew.is_compatible_with<folly::AsyncSocketException>();
+    };
     while (true) {
       co_await connection_slots_.consume();
       auto release_connection_slot_guard
@@ -361,8 +395,8 @@ private:
             release_connection_slot();
           }};
       auto transport = co_await folly::coro::retryWithExponentialBackoff(
-        std::numeric_limits<uint32_t>::max(), detail::stream_accept_retry_delay,
-        detail::stream_accept_retry_delay, 0.0,
+        std::numeric_limits<uint32_t>::max(), accept_retry_delay,
+        accept_retry_delay, 0.0,
         [this, &ctx]() -> Task<Box<folly::coro::Transport>> {
           try {
             co_return co_await folly::coro::co_withExecutor(
@@ -376,7 +410,7 @@ private:
             throw;
           }
         },
-        should_retry_socket);
+        should_retry_accept);
       ctx.spawn_task(finish_accept(std::move(transport)));
       release_connection_slot_guard.disable();
     }
@@ -385,9 +419,27 @@ private:
   static auto read_loop(uint64_t conn_id, Connection connection,
                         Arc<MessageQueue> message_queue,
                         MetricsCounter bytes_read_counter) -> Task<void> {
-    co_await detail::stream_read_loop<Payload, ConnectionClosed>(
-      conn_id, std::move(connection), std::move(message_queue), buffer_size,
-      std::move(bytes_read_counter), [](size_t) {});
+    auto read_error = std::string{};
+    while (true) {
+      try {
+        auto read_result = co_await read_stream_chunk(
+          *connection, buffer_size, std::chrono::milliseconds{0});
+        if (not read_result) {
+          break;
+        }
+        bytes_read_counter.add((*read_result)->size());
+        co_await message_queue->enqueue(
+          Payload{conn_id, std::move(*read_result)});
+      } catch (folly::AsyncSocketException const& e) {
+        read_error = e.what();
+        break;
+      }
+    }
+    co_await message_queue->enqueue(ConnectionClosed{
+      conn_id,
+      read_error.empty() ? Option<std::string>{}
+                         : Option<std::string>{std::move(read_error)},
+    });
   }
 
   AcceptUdsArgs args_;
