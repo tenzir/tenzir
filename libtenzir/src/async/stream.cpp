@@ -10,6 +10,7 @@
 
 #include "tenzir/as_bytes.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/scope_guard.hpp"
 
 #include <folly/io/IOBufQueue.h>
 #include <folly/io/coro/Transport.h>
@@ -29,8 +30,10 @@ auto read_stream_chunk(folly::coro::Transport& transport, size_t buffer_size,
     evb->timer(), *async_transport, &buffer, 1, buffer_size, timeout,
   };
   async_transport->setReadCB(&callback);
+  auto reset_read_callback = detail::scope_guard{[async_transport]() noexcept {
+    async_transport->setReadCB(nullptr);
+  }};
   co_await callback.wait();
-  async_transport->setReadCB(nullptr);
   if (callback.error()) {
     callback.error().throw_exception();
   }
