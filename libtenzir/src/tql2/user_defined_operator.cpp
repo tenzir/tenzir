@@ -8,10 +8,14 @@
 
 #include "tenzir/tql2/user_defined_operator.hpp"
 
+#include "tenzir/detail/narrow.hpp"
+#include "tenzir/detail/overload.hpp"
 #include "tenzir/detail/similarity.hpp"
 #include "tenzir/secret.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
+
+#include <limits>
 
 namespace tenzir {
 
@@ -39,6 +43,96 @@ auto parameter_default_string(const ast::expression& expr)
 auto is_null_constant_expression(const ast::expression& expr) -> bool {
   const auto* constant = try_as<ast::constant>(expr);
   return constant and is<caf::none_t>(constant->value);
+}
+
+struct value_materialization_result final {
+  bool valid = true;
+  bool changed = false;
+};
+
+auto make_constant_expression(data value, location source) -> ast::expression {
+  auto constant_value = match(
+    std::move(value),
+    detail::overload{[](const pattern&) -> ast::constant::kind {
+                       TENZIR_UNREACHABLE();
+                     },
+                     []<class T>(T&& x) -> ast::constant::kind
+                       requires(not std::same_as<std::decay_t<T>, pattern>)
+                     {
+                       return std::forward<T>(x);
+                     }});
+  return ast::expression{ast::constant{std::move(constant_value), source}};
+}
+
+auto materialize_value_as(data& value, const type& value_type)
+  -> value_materialization_result {
+  if (is<caf::none_t>(value)) {
+    return {};
+  }
+  if (auto* unsigned_value = try_as<uint64_t>(&value);
+      unsigned_value and value_type.kind().is<int64_type>()) {
+    if (*unsigned_value
+        > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+      return {.valid = false};
+    }
+    value = detail::narrow<int64_t>(*unsigned_value);
+    return {.changed = true};
+  }
+  if (const auto* list_type = try_as<tenzir::list_type>(&value_type)) {
+    auto* values = try_as<list>(&value);
+    if (not values) {
+      return {.valid = false};
+    }
+    auto result = value_materialization_result{};
+    auto nested_type = list_type->value_type();
+    for (auto& nested_value : *values) {
+      auto nested_result = materialize_value_as(nested_value, nested_type);
+      if (not nested_result.valid) {
+        return {.valid = false};
+      }
+      result.changed = result.changed or nested_result.changed;
+    }
+    return result;
+  }
+  if (const auto* map_type = try_as<tenzir::map_type>(&value_type)) {
+    auto* values = try_as<map>(&value);
+    if (not values) {
+      return {.valid = false};
+    }
+    auto result = value_materialization_result{};
+    auto key_type = map_type->key_type();
+    auto nested_value_type = map_type->value_type();
+    for (auto& [key, nested_value] : *values) {
+      auto key_result = materialize_value_as(key, key_type);
+      auto value_result = materialize_value_as(nested_value, nested_value_type);
+      if (not key_result.valid or not value_result.valid) {
+        return {.valid = false};
+      }
+      result.changed
+        = result.changed or key_result.changed or value_result.changed;
+    }
+    return result;
+  }
+  if (const auto* record_type = try_as<tenzir::record_type>(&value_type)) {
+    auto* values = try_as<record>(&value);
+    if (not values or values->size() != record_type->num_fields()) {
+      return {.valid = false};
+    }
+    auto result = value_materialization_result{};
+    for (const auto& field : record_type->fields()) {
+      auto it = values->find(field.name);
+      if (it == values->end()) {
+        return {.valid = false};
+      }
+      auto nested_result = materialize_value_as(it->second, field.type);
+      if (not nested_result.valid) {
+        return {.valid = false};
+      }
+      result.changed = result.changed or nested_result.changed;
+    }
+    return result;
+  }
+  return {.valid = type_check(value_type, value)};
 }
 
 auto make_usage_string(std::string_view op_name,
@@ -370,15 +464,21 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
     };
 
   auto validate_type
-    = [&](const user_defined_operator::parameter& param,
-          const ast::expression& expr,
+    = [&](const user_defined_operator::parameter& param, ast::expression& expr,
           std::optional<location> explicit_location) -> failure_or<void> {
     if (not param.value_type) {
       return {};
     }
     auto diag_loc = explicit_location.value_or(expr.get_location());
     if (auto value = try_const_eval(expr, ctx)) {
-      if (type_check(*param.value_type, *value)) {
+      auto materialized_value = *value;
+      auto materialized
+        = materialize_value_as(materialized_value, *param.value_type);
+      if (materialized.valid) {
+        if (materialized.changed) {
+          expr = make_constant_expression(std::move(materialized_value),
+                                          expr.get_location());
+        }
         return {};
       }
       auto actual_type = type::infer(*value);

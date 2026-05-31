@@ -3,5 +3,5 @@ error: argument `limits` must be of type `list<int>` (got `list<uint64>`)
   = note: parameters:
             named:
               name    type       default                    description
-              limits  list<int>  - 1
+              limits  list<int>  - ~
           - 9223372036854775808  The allowed limits
