@@ -1,0 +1,10 @@
+---
+description: "Reject an out-of-range typed integer list default"
+args:
+  named:
+    - name: limits
+      type: list<int>
+      default: [1, 9223372036854775808]
+      description: "The allowed limits"
+---
+set limits_type = type_of($limits).kind

@@ -490,21 +490,30 @@ auto parse_parameter_value_type(const package_operator_parameter& param,
   return std::optional<type>{type::from_legacy_type(legacy)};
 }
 
-auto coerce_package_default_value(data& value, const type& value_type) -> void {
+auto coerce_package_default_value(data& value, const type& value_type) -> bool {
   if (auto* unsigned_value = try_as<uint64_t>(&value);
       unsigned_value and value_type.kind().is<int64_type>()
       and *unsigned_value
             <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
     value = static_cast<int64_t>(*unsigned_value);
+    return true;
+  }
+  if (auto* unsigned_value = try_as<uint64_t>(&value);
+      unsigned_value and value_type.kind().is<int64_type>()) {
+    return false;
   }
   if (const auto* list_type = try_as<tenzir::list_type>(&value_type)) {
     if (auto* values = try_as<list>(&value)) {
       const auto nested_type = list_type->value_type();
       for (auto& nested_value : *values) {
-        coerce_package_default_value(nested_value, nested_type);
+        if (not coerce_package_default_value(nested_value, nested_type)
+            or not type_check(nested_type, nested_value)) {
+          return false;
+        }
       }
     }
   }
+  return true;
 }
 
 auto load_tql_with_frontmatter(std::string_view input)
@@ -1286,7 +1295,10 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
       return failure::promise();
     }
     if (value_type) {
-      coerce_package_default_value(*yaml_data, *value_type);
+      auto coerced = *yaml_data;
+      if (coerce_package_default_value(coerced, *value_type)) {
+        *yaml_data = std::move(coerced);
+      }
     }
     auto expr = make_constant_expression(std::move(*yaml_data));
     return std::optional<ast::expression>{std::move(expr)};
