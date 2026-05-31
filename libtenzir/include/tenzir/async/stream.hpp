@@ -28,11 +28,9 @@
 
 namespace tenzir {
 
-using stream_read_result = Option<chunk_ptr>;
-
 auto read_stream_chunk(folly::coro::Transport& transport, size_t buffer_size,
                        std::chrono::milliseconds timeout)
-  -> Task<stream_read_result>;
+  -> Task<Option<chunk_ptr>>;
 
 inline constexpr auto should_retry_socket
   = [](folly::exception_wrapper const& ew) {

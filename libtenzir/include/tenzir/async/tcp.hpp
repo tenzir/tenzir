@@ -27,10 +27,9 @@ class Transport;
 
 namespace tenzir {
 
-using tcp_read_result = stream_read_result;
-
 auto read_tcp_chunk(folly::coro::Transport& transport, size_t buffer_size,
-                    std::chrono::milliseconds timeout) -> Task<tcp_read_result>;
+                    std::chrono::milliseconds timeout)
+  -> Task<Option<chunk_ptr>>;
 
 auto connect_tcp_client(folly::EventBase* evb,
                         folly::SocketAddress const& address,

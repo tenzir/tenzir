@@ -20,7 +20,7 @@ namespace tenzir {
 
 auto read_stream_chunk(folly::coro::Transport& transport, size_t buffer_size,
                        std::chrono::milliseconds timeout)
-  -> Task<stream_read_result> {
+  -> Task<Option<chunk_ptr>> {
   auto* evb = transport.getEventBase();
   TENZIR_ASSERT(evb);
   auto* async_transport = transport.getTransport();
