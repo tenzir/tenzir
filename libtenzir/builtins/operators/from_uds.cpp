@@ -7,11 +7,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arc.hpp>
-#include <tenzir/async/tcp.hpp>
+#include <tenzir/as_bytes.hpp>
 #include <tenzir/async/uds.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -27,8 +28,10 @@
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Retry.h>
 #include <folly/executors/GlobalExecutor.h>
+#include <folly/io/IOBufQueue.h>
 #include <folly/io/async/AsyncSocketException.h>
 #include <folly/io/coro/Transport.h>
+#include <folly/io/coro/TransportCallbacks.h>
 
 #include <limits>
 #include <memory>
@@ -62,6 +65,38 @@ auto describe_socket_error(folly::AsyncSocketException const& ex)
     return folly::errnoStr(err);
   }
   return ex.what();
+}
+
+auto read_uds_chunk(folly::coro::Transport& transport, size_t size)
+  -> Task<Option<chunk_ptr>> {
+  auto* evb = transport.getEventBase();
+  TENZIR_ASSERT(evb);
+  auto* async_transport = transport.getTransport();
+  TENZIR_ASSERT(async_transport);
+  auto buffer = folly::IOBufQueue{folly::IOBufQueue::cacheChainLength()};
+  auto callback = folly::coro::ReadCallback{
+    evb->timer(), *async_transport,
+    &buffer,      1,
+    size,         std::chrono::milliseconds{0},
+  };
+  async_transport->setReadCB(&callback);
+  auto reset_read_callback = detail::scope_guard{[async_transport]() noexcept {
+    async_transport->setReadCB(nullptr);
+  }};
+  co_await callback.wait();
+  if (callback.error()) {
+    callback.error().throw_exception();
+  }
+  auto length = buffer.chainLength();
+  if (length == 0) {
+    co_return None{};
+  }
+  auto iobuf = buffer.move();
+  auto range = iobuf->coalesce();
+  co_return chunk::make(as_bytes(range.data(), range.size()),
+                        [buf = std::move(iobuf)]() noexcept {
+                          static_cast<void>(buf);
+                        });
 }
 
 class FromUdsConnector final : public Operator<void, table_slice> {
@@ -248,8 +283,7 @@ private:
     auto read_error = std::string{};
     while (true) {
       try {
-        auto read_result = co_await read_stream_chunk(
-          *connection, buffer_size, std::chrono::milliseconds{0});
+        auto read_result = co_await read_uds_chunk(*connection, buffer_size);
         if (not read_result) {
           break;
         }

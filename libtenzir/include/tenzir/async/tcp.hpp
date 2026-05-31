@@ -29,10 +29,6 @@ class Transport;
 
 namespace tenzir {
 
-auto read_stream_chunk(folly::coro::Transport& transport, size_t buffer_size,
-                       std::chrono::milliseconds timeout)
-  -> Task<Option<chunk_ptr>>;
-
 auto read_tcp_chunk(folly::coro::Transport& transport, size_t buffer_size,
                     std::chrono::milliseconds timeout)
   -> Task<Option<chunk_ptr>>;

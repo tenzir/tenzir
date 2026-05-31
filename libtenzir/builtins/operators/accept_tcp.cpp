@@ -814,7 +814,7 @@ private:
     auto read_error = Option<std::string>{};
     while (true) {
       try {
-        auto read_result = co_await read_stream_chunk(
+        auto read_result = co_await read_tcp_chunk(
           *connection, buffer_size, std::chrono::milliseconds{0});
         if (not read_result) {
           break;
