@@ -8,45 +8,12 @@
 
 #include "tenzir/async/tcp.hpp"
 
-#include "tenzir/as_bytes.hpp"
 #include "tenzir/async/tls.hpp"
-#include "tenzir/detail/assert.hpp"
 
 #include <folly/SocketAddress.h>
-#include <folly/io/IOBufQueue.h>
 #include <folly/io/coro/Transport.h>
-#include <folly/io/coro/TransportCallbacks.h>
 
 namespace tenzir {
-
-auto read_stream_chunk(folly::coro::Transport& transport, size_t buffer_size,
-                       std::chrono::milliseconds timeout)
-  -> Task<stream_read_result> {
-  auto* evb = transport.getEventBase();
-  TENZIR_ASSERT(evb);
-  auto* async_transport = transport.getTransport();
-  TENZIR_ASSERT(async_transport);
-  auto buffer = folly::IOBufQueue{folly::IOBufQueue::cacheChainLength()};
-  auto callback = folly::coro::ReadCallback{
-    evb->timer(), *async_transport, &buffer, 1, buffer_size, timeout,
-  };
-  async_transport->setReadCB(&callback);
-  co_await callback.wait();
-  async_transport->setReadCB(nullptr);
-  if (callback.error()) {
-    callback.error().throw_exception();
-  }
-  auto length = buffer.chainLength();
-  if (length == 0) {
-    co_return None{};
-  }
-  auto iobuf = buffer.move();
-  auto range = iobuf->coalesce();
-  co_return chunk::make(as_bytes(range.data(), range.size()),
-                        [buf = std::move(iobuf)]() noexcept {
-                          static_cast<void>(buf);
-                        });
-}
 
 auto read_tcp_chunk(folly::coro::Transport& transport, size_t buffer_size,
                     std::chrono::milliseconds timeout)

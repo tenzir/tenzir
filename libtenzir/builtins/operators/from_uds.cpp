@@ -6,8 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "detail/stream.hpp"
+
 #include <tenzir/arc.hpp>
-#include <tenzir/async/tcp.hpp>
+#include <tenzir/async/stream.hpp>
 #include <tenzir/async/uds.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
@@ -40,29 +42,14 @@ namespace {
 using namespace tenzir::si_literals;
 
 constexpr auto buffer_size = size_t{64_Ki};
-constexpr auto connect_timeout = std::chrono::seconds{5};
-constexpr auto connect_initial_backoff = std::chrono::milliseconds{100};
-constexpr auto connect_max_backoff = std::chrono::milliseconds{5_k};
-constexpr auto connect_retry_jitter = 0.0;
-constexpr auto connect_max_retries = std::numeric_limits<uint32_t>::max();
+constexpr auto connect_max_retries
+  = stream_detail::default_connect_max_retry_count;
 constexpr auto message_queue_capacity = uint32_t{1_Ki};
-
-constexpr auto should_retry_connect = [](folly::exception_wrapper const& ew) {
-  return ew.is_compatible_with<folly::AsyncSocketException>();
-};
 
 struct FromUdsArgs {
   located<std::string> path;
   located<ir::pipeline> user_pipeline;
 };
-
-auto describe_socket_error(folly::AsyncSocketException const& ex)
-  -> std::string {
-  if (auto err = ex.getErrno(); err > 0) {
-    return folly::errnoStr(err);
-  }
-  return ex.what();
-}
 
 class FromUdsConnector final : public Operator<void, table_slice> {
 public:
@@ -110,8 +97,8 @@ public:
       co_return co_await message_queue_->dequeue();
     }
     auto transport = co_await folly::coro::retryWithExponentialBackoff(
-      connect_max_retries, connect_initial_backoff, connect_max_backoff,
-      connect_retry_jitter,
+      connect_max_retries, stream_detail::connect_initial_backoff,
+      stream_detail::connect_max_backoff, stream_detail::connect_retry_jitter,
       [this, &dh]() -> Task<Box<folly::coro::Transport>> {
         TENZIR_DEBUG("from_uds: connecting to {}", path_);
         try {
@@ -120,18 +107,18 @@ public:
               evb_, folly::coro::Transport::newConnectedSocket(
                       evb_, address_,
                       std::chrono::duration_cast<std::chrono::milliseconds>(
-                        connect_timeout)))};
+                        stream_detail::connect_timeout)))};
         } catch (folly::AsyncSocketException const& ex) {
           diagnostic::warning("failed to connect to UNIX domain socket")
             .primary(args_.path.source)
             .note("path: {}", path_)
-            .note("reason: {}", describe_socket_error(ex))
+            .note("reason: {}", stream_detail::describe_socket_error(ex))
             .hint("ensure a server is listening on this socket path")
             .emit(dh);
           throw;
         }
       },
-      should_retry_connect);
+      stream_detail::should_retry_socket);
     TENZIR_DEBUG("from_uds: connected to {}", path_);
     co_return Message{Connected{std::move(transport)}};
   }
@@ -153,7 +140,7 @@ public:
         auto pipeline_copy = args_.user_pipeline.inner;
         if (not pipeline_copy.substitute(substitute_ctx{{ctx}, nullptr},
                                          true)) {
-          close_transport(std::move(transport));
+          stream_detail::close_transport(std::move(transport));
           co_return;
         }
         co_await ctx.spawn_sub<chunk_ptr>(data{int64_t(conn_id)},
@@ -214,7 +201,7 @@ public:
       if (current_connection_) {
         auto connection = std::move(*current_connection_);
         current_connection_ = None{};
-        close_transport(std::move(connection));
+        stream_detail::close_transport(std::move(connection));
       }
       current_conn_id_ = None{};
     }
@@ -226,46 +213,12 @@ public:
   }
 
 private:
-  static auto close_transport(Connection connection) -> void {
-    auto* evb = connection->getEventBase();
-    TENZIR_ASSERT(evb);
-    evb->runInEventBaseThread([connection = std::move(connection)]() mutable {
-      connection->close();
-    });
-  }
-
-  static auto close_transport(Box<folly::coro::Transport> transport) -> void {
-    auto* evb = transport->getEventBase();
-    TENZIR_ASSERT(evb);
-    evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
-      transport->close();
-    });
-  }
-
   static auto read_loop(uint64_t conn_id, Connection connection,
                         Arc<MessageQueue> message_queue,
                         MetricsCounter bytes_read_counter) -> Task<void> {
-    auto read_error = std::string{};
-    while (true) {
-      try {
-        auto read_result = co_await read_stream_chunk(
-          *connection, buffer_size, std::chrono::milliseconds{0});
-        if (not read_result) {
-          break;
-        }
-        bytes_read_counter.add((*read_result)->size());
-        co_await message_queue->enqueue(
-          Payload{conn_id, std::move(*read_result)});
-      } catch (folly::AsyncSocketException const& e) {
-        read_error = e.what();
-        break;
-      }
-    }
-    co_await message_queue->enqueue(ConnectionClosed{
-      conn_id,
-      read_error.empty() ? Option<std::string>{}
-                         : Option<std::string>{std::move(read_error)},
-    });
+    co_await stream_detail::read_loop<Payload, ConnectionClosed>(
+      conn_id, std::move(connection), std::move(message_queue), buffer_size,
+      std::move(bytes_read_counter), [](size_t) {});
   }
 
   FromUdsArgs args_;

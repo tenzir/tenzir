@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "detail/stream.hpp"
 #include "tenzir/async.hpp"
 
 #include <tenzir/async/tcp.hpp>
@@ -42,37 +43,9 @@ namespace {
 
 using namespace tenzir::si_literals;
 
-// Give remote endpoints long enough for a normal TCP plus TLS setup while
-// still surfacing unavailable servers quickly to the retry loop.
-constexpr auto connect_timeout = std::chrono::seconds{5};
-// Reconnect almost immediately after the first failure so short races during
-// fixture startup or service restarts do not stall the pipeline.
-constexpr auto connect_initial_backoff = std::chrono::milliseconds{100};
-// Cap retries at five seconds to avoid hammering broken endpoints while still
-// keeping recovery reasonably quick once the peer comes back.
-constexpr auto connect_max_backoff = std::chrono::seconds{5};
-// Preserve the current deterministic reconnect timing; if many sinks are
-// expected to flap together, revisit this and add jitter.
-constexpr auto connect_retry_jitter = 0.0;
-// Used when the user does not set `max_retry_count`; effectively unbounded so
-// the operator keeps trying to reach the peer until the pipeline is shut down.
-constexpr auto default_connect_max_retry_count
-  = std::numeric_limits<uint32_t>::max();
 // Leave room for some queued payloads while still applying backpressure when
 // the remote peer falls behind or reconnects take time.
 constexpr auto message_queue_capacity = uint32_t{10};
-
-constexpr auto should_retry_connect = [](folly::exception_wrapper const& ew) {
-  return ew.is_compatible_with<folly::AsyncSocketException>();
-};
-
-auto describe_socket_error(folly::AsyncSocketException const& ex)
-  -> std::string {
-  if (auto err = ex.getErrno(); err > 0) {
-    return folly::errnoStr(err);
-  }
-  return ex.what();
-}
 
 struct ToTcpArgs {
   located<std::string> endpoint;
@@ -217,19 +190,11 @@ public:
 private:
   using MessageQueue = folly::coro::BoundedQueue<chunk_ptr>;
 
-  static auto close_transport(folly::coro::Transport transport) -> void {
-    auto* evb = transport.getEventBase();
-    TENZIR_ASSERT(evb);
-    evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
-      transport.close();
-    });
-  }
-
   auto close_current_transport() -> void {
     if (transport_) {
       auto old_transport = std::move(*transport_);
       transport_ = None{};
-      close_transport(std::move(old_transport));
+      stream_detail::close_transport(std::move(old_transport));
     }
   }
 
@@ -240,11 +205,11 @@ private:
     auto const max_retry_count
       = args_.max_retry_count
           ? detail::narrow<uint32_t>(args_.max_retry_count->inner)
-          : default_connect_max_retry_count;
+          : stream_detail::default_connect_max_retry_count;
     auto emit_final_error = [&](folly::AsyncSocketException const& ex) {
       auto diag
         = diagnostic::error("failed to connect to {}: {}", address_.describe(),
-                            describe_socket_error(ex))
+                            stream_detail::describe_socket_error(ex))
             .primary(args_.endpoint.source)
             .note("gave up after {} {}", max_retry_count,
                   max_retry_count == 1 ? "retry" : "retries")
@@ -256,11 +221,11 @@ private:
     auto emit_retry_warning = [&](folly::AsyncSocketException const& ex) {
       // TODO: Surface connect retries and failures as metrics in a follow-up
       // that covers all TCP operators.
-      auto diag
-        = diagnostic::warning("failed to connect to {}: {}",
-                              address_.describe(), describe_socket_error(ex))
-            .primary(args_.endpoint.source)
-            .hint("ensure a TCP server is listening on this endpoint");
+      auto diag = diagnostic::warning("failed to connect to {}: {}",
+                                      address_.describe(),
+                                      stream_detail::describe_socket_error(ex))
+                    .primary(args_.endpoint.source)
+                    .hint("ensure a TCP server is listening on this endpoint");
       ctx.dh().emit(
         add_tls_client_diagnostic_hints(std::move(diag), is_tls_enabled())
           .done());
@@ -269,13 +234,14 @@ private:
       TENZIR_DEBUG("to_tcp: connecting to {}", address_.describe());
       co_return co_await connect_tcp_client(
         evb_, address_,
-        std::chrono::duration_cast<std::chrono::milliseconds>(connect_timeout),
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+          stream_detail::connect_timeout),
         tls_context_, host_);
     };
     try {
       transport_ = co_await folly::coro::retryWithExponentialBackoff(
-        max_retry_count, connect_initial_backoff, connect_max_backoff,
-        connect_retry_jitter,
+        max_retry_count, stream_detail::connect_initial_backoff,
+        stream_detail::connect_max_backoff, stream_detail::connect_retry_jitter,
         [this, &connect,
          &emit_retry_warning]() -> Task<folly::coro::Transport> {
           try {
@@ -287,7 +253,7 @@ private:
             throw;
           }
         },
-        should_retry_connect);
+        stream_detail::should_retry_socket);
     } catch (folly::AsyncSocketException const& ex) {
       emit_final_error(ex);
       co_return;
@@ -302,10 +268,7 @@ private:
   }
 
   auto write_chunk(chunk_ptr const& chunk, OpCtx& ctx) -> Task<void> {
-    auto data = folly::ByteRange{
-      reinterpret_cast<unsigned char const*>(chunk->data()),
-      chunk->size(),
-    };
+    auto data = stream_detail::as_byte_range(chunk);
     while (lifecycle_ != Lifecycle::done) {
       co_await ensure_connected(ctx);
       if (lifecycle_ == Lifecycle::done or not transport_) {
