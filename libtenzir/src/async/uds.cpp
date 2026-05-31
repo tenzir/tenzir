@@ -241,6 +241,26 @@ auto prepare_uds_listen_path(std::string const& path, location source,
       .emit(dh);
     return failure::promise();
   }
+  auto parent = std::filesystem::path{path}.parent_path();
+  if (not parent.empty()) {
+    auto parent_status = std::filesystem::status(parent, ec);
+    if (ec) {
+      diagnostic::error("failed to inspect UNIX domain socket directory")
+        .primary(source)
+        .note("path: {}", parent.string())
+        .note("reason: {}", ec.message())
+        .emit(dh);
+      return failure::promise();
+    }
+    if (not std::filesystem::is_directory(parent_status)) {
+      diagnostic::error("UNIX domain socket directory is not available")
+        .primary(source)
+        .note("path: {}", parent.string())
+        .hint("create the directory or choose another path")
+        .emit(dh);
+      return failure::promise();
+    }
+  }
   if (not ec and status.type() != std::filesystem::file_type::not_found) {
     if (status.type() != std::filesystem::file_type::socket) {
       diagnostic::error("UNIX domain socket path already exists")

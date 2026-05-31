@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+serve_uds "/tmp/tenzir-uds-missing-parent/test.sock" {
+  write_ndjson
+}
