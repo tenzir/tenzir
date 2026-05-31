@@ -12,7 +12,6 @@
 #include "tenzir/concept/parseable/tenzir/legacy_type.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/load_contents.hpp"
-#include "tenzir/detail/overload.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/legacy_type.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -1243,14 +1242,14 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
   auto make_constant_expression = [](data value) -> ast::expression {
     auto constant_value = match(
       std::move(value),
-      detail::overload{[](const pattern&) -> ast::constant::kind {
-                         TENZIR_UNREACHABLE();
-                       },
-                       []<class T>(T&& x) -> ast::constant::kind
-                         requires(not std::same_as<std::decay_t<T>, pattern>)
-                       {
-                         return std::forward<T>(x);
-                       }});
+      [](pattern const&) -> ast::constant::kind {
+        TENZIR_UNREACHABLE();
+      },
+      []<class T>(T&& x) -> ast::constant::kind
+        requires(not std::same_as<std::decay_t<T>, pattern>)
+      {
+        return std::forward<T>(x);
+      });
     return ast::expression{
       ast::constant{std::move(constant_value), location::unknown}};
   };
