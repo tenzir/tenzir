@@ -28,6 +28,8 @@ auto parse_pipeline_with_bad_diagnostics(std::string_view source, session ctx)
   -> failure_or<ast::pipeline>;
 auto parse_expression_with_bad_diagnostics(std::string_view source, session ctx)
   -> failure_or<ast::expression>;
+auto parse_type_def_with_bad_diagnostics(std::string_view source, session ctx)
+  -> failure_or<ast::type_def>;
 struct expression_stream {
   std::vector<ast::expression> expressions;
   size_t bytes_consumed = 0;

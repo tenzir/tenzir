@@ -13,6 +13,8 @@
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
 
+#include <limits>
+
 namespace tenzir {
 
 namespace {
@@ -370,8 +372,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
     };
 
   auto validate_type
-    = [&](const user_defined_operator::parameter& param,
-          const ast::expression& expr,
+    = [&](const user_defined_operator::parameter& param, ast::expression& expr,
           std::optional<location> explicit_location) -> failure_or<void> {
     if (not param.value_type) {
       return {};

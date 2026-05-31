@@ -9,12 +9,11 @@
 
 #include "tenzir/concept/parseable/core.hpp"
 #include "tenzir/concept/parseable/string/char_class.hpp"
-#include "tenzir/concept/parseable/tenzir/legacy_type.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/load_contents.hpp"
-#include "tenzir/detail/overload.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
-#include "tenzir/legacy_type.hpp"
+#include "tenzir/module.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/registry.hpp"
@@ -23,6 +22,7 @@
 #include <caf/typed_event_based_actor.hpp>
 
 #include <algorithm>
+#include <limits>
 #include <ranges>
 #include <string_view>
 #include <type_traits>
@@ -436,57 +436,71 @@ auto is_field_path_type(const package_operator_parameter& param) -> bool {
   return param.type and detail::ascii_icase_equal(*param.type, "field");
 }
 
-auto normalize_basic_type_name(std::string_view name) -> std::string {
-  if (name == "int") {
-    return "int64";
-  }
-  if (name == "uint") {
-    return "uint64";
-  }
-  if (name == "float") {
-    return "double";
-  }
-  return std::string{name};
+auto lower_parameter_type_def(ast::type_def const& def,
+                              package_operator_parameter const& param,
+                              std::string_view op_id, diagnostic_handler& dh)
+  -> failure_or<type> {
+  return match(
+    def,
+    [&](ast::type_name const& name) -> failure_or<type> {
+      if (auto result = translate_builtin_type(name.id.name)) {
+        return *result;
+      }
+      diagnostic::error("invalid type `{}` for parameter `{}` in operator `{}`",
+                        *param.type, param.name, op_id)
+        .note("type aliases are not allowed")
+        .emit(dh);
+      return failure::promise();
+    },
+    [&](ast::record_def const&) -> failure_or<type> {
+      diagnostic::error("invalid type `{}` for parameter `{}` in operator `{}`",
+                        *param.type, param.name, op_id)
+        .note("record types are not supported")
+        .emit(dh);
+      return failure::promise();
+    },
+    [&](ast::list_def const& list) -> failure_or<type> {
+      TRY(auto value_type,
+          lower_parameter_type_def(list.type, param, op_id, dh));
+      return type{list_type{std::move(value_type)}};
+    });
 }
 
-auto parse_parameter_value_type(const package_operator_parameter& param,
-                                std::string_view op_id, diagnostic_handler& dh)
+auto parse_parameter_value_type(package_operator_parameter const& param,
+                                std::string_view op_id, session ctx,
+                                diagnostic_handler& dh)
   -> failure_or<std::optional<type>> {
   if (not param.type or is_field_path_type(param)) {
     return std::optional<type>{};
   }
-  if (*param.type == "secret") {
-    return std::optional<type>{type{secret_type{}}};
-  }
-  // Using the legacy parser here because it is convenient.
-  // We will eventually add support for user defined operators in TQL itself and
-  // deprecate this approach, so it does not make sense to refactor the tql2
-  // parser at this time.
-  auto normalized = normalize_basic_type_name(*param.type);
-  auto legacy = legacy_type{};
-  auto f = normalized.begin();
-  auto l = normalized.end();
-  if (not parsers::legacy_type(f, l, legacy) or f != l) {
+  auto parsed = parse_type_def_with_bad_diagnostics(*param.type, ctx);
+  if (parsed.is_error()) {
     diagnostic::error("invalid type `{}` for parameter `{}` in operator `{}`",
                       *param.type, param.name, op_id)
       .emit(dh);
     return failure::promise();
   }
-  if (not legacy.name().empty()) {
-    diagnostic::error("invalid type `{}` for parameter `{}` in operator `{}`",
-                      *param.type, param.name, op_id)
-      .note("type aliases are not allowed")
-      .emit(dh);
+  auto value_type = lower_parameter_type_def(*parsed, param, op_id, dh);
+  if (value_type.is_error()) {
     return failure::promise();
   }
-  if (is<legacy_record_type>(legacy)) {
-    diagnostic::error("invalid type `{}` for parameter `{}` in operator `{}`",
-                      *param.type, param.name, op_id)
-      .note("record types are not supported")
-      .emit(dh);
-    return failure::promise();
+  return std::optional<type>{std::move(*value_type)};
+}
+
+auto materialize_default_value(data& value,
+                               std::optional<type> const& value_type) -> void {
+  if (not value_type or not is<int64_type>(*value_type)) {
+    return;
   }
-  return std::optional<type>{type::from_legacy_type(legacy)};
+  auto* unsigned_value = try_as<uint64_t>(&value);
+  if (not unsigned_value) {
+    return;
+  }
+  if (*unsigned_value
+      > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+    return;
+  }
+  value = detail::narrow<int64_t>(*unsigned_value);
 }
 
 auto load_tql_with_frontmatter(std::string_view input)
@@ -1235,18 +1249,19 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
   auto make_constant_expression = [](data value) -> ast::expression {
     auto constant_value = match(
       std::move(value),
-      detail::overload{[](const pattern&) -> ast::constant::kind {
-                         TENZIR_UNREACHABLE();
-                       },
-                       []<class T>(T&& x) -> ast::constant::kind
-                         requires(not std::same_as<std::decay_t<T>, pattern>)
-                       {
-                         return std::forward<T>(x);
-                       }});
+      [](pattern const&) -> ast::constant::kind {
+        TENZIR_UNREACHABLE();
+      },
+      []<class T>(T&& x) -> ast::constant::kind
+        requires(not std::same_as<std::decay_t<T>, pattern>)
+      {
+        return std::forward<T>(x);
+      });
     return ast::expression{
       ast::constant{std::move(constant_value), location::unknown}};
   };
-  auto parse_default_expression = [&](const package_operator_parameter& param)
+  auto parse_default_expression = [&](const package_operator_parameter& param,
+                                      std::optional<type> const& value_type)
     -> failure_or<std::optional<ast::expression>> {
     if (not param.default_) {
       return std::optional<ast::expression>{};
@@ -1266,6 +1281,7 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
         .emit(dh);
       return failure::promise();
     }
+    materialize_default_value(*yaml_data, value_type);
     auto expr = make_constant_expression(std::move(*yaml_data));
     return std::optional<ast::expression>{std::move(expr)};
   };
@@ -1303,7 +1319,11 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
           .emit(dh);
         return failure::promise();
       }
-      auto default_expr = parse_default_expression(arg);
+      auto value_type = parse_parameter_value_type(arg, op_id, ctx, dh);
+      if (value_type.is_error()) {
+        return failure::promise();
+      }
+      auto default_expr = parse_default_expression(arg, *value_type);
       if (default_expr.is_error()) {
         return failure::promise();
       }
@@ -1314,10 +1334,6 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
                           "optional positional parameter",
                           arg.name)
           .emit(dh);
-        return failure::promise();
-      }
-      auto value_type = parse_parameter_value_type(arg, op_id, dh);
-      if (value_type.is_error()) {
         return failure::promise();
       }
       udo.positional_params.push_back({
@@ -1336,12 +1352,12 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
           .emit(dh);
         return failure::promise();
       }
-      auto default_expr = parse_default_expression(opt);
-      if (default_expr.is_error()) {
+      auto value_type = parse_parameter_value_type(opt, op_id, ctx, dh);
+      if (value_type.is_error()) {
         return failure::promise();
       }
-      auto value_type = parse_parameter_value_type(opt, op_id, dh);
-      if (value_type.is_error()) {
+      auto default_expr = parse_default_expression(opt, *value_type);
+      if (default_expr.is_error()) {
         return failure::promise();
       }
       udo.named_params.push_back({

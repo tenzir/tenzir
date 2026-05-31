@@ -11,14 +11,14 @@ Working with variants in Tenzir.
 | `try_as<T>(x)` | `std::get_if<T>(&x)`           |
 
 ```cpp
-if (is<int64_t>(value)) {
-  auto num = as<int64_t>(value);
-}
-
 if (auto* str = try_as<std::string>(value)) {
   // Use *str
 }
 ```
+
+When you need the value, prefer `try_as<T>` over `is<T>` followed by `as<T>`.
+If you would probe the same value for multiple alternatives, use `match`
+instead.
 
 ## Match for Multi-Case Dispatch
 
@@ -32,6 +32,8 @@ auto result = match(
   [](const auto&) { /* fallback */ },
 );
 ```
+
+Pass visitors directly to `match`; do not wrap them in `detail::overload`.
 
 ## `co_match` for Async Dispatch
 

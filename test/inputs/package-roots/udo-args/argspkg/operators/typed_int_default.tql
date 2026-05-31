@@ -1,0 +1,10 @@
+---
+description: "Use a defaulted integer argument"
+args:
+  named:
+    - name: limit
+      type: int
+      default: 1000
+      description: "The maximum number of items to return"
+---
+set limit = $limit
