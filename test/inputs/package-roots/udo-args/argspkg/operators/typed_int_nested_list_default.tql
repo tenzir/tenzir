@@ -1,0 +1,10 @@
+---
+description: "Emit the type of a defaulted nested integer list argument"
+args:
+  named:
+    - name: limits
+      type: list<list<int>>
+      default: [[1]]
+      description: "The grouped limits"
+---
+set nested_limit_type = type_of($limits[0][0]).kind

@@ -452,7 +452,7 @@ auto normalize_basic_type_name(std::string_view name) -> std::string {
 auto normalize_type_name(std::string_view name) -> std::string {
   if (name.starts_with("list<") and name.ends_with(">")) {
     auto inner = name.substr(5, name.size() - 6);
-    return fmt::format("list<{}>", normalize_basic_type_name(inner));
+    return fmt::format("list<{}>", normalize_type_name(inner));
   }
   return normalize_basic_type_name(name);
 }
