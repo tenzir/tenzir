@@ -18,12 +18,16 @@
 #include <cerrno>
 #include <cstring>
 #include <exception>
+#include <fcntl.h>
 #include <filesystem>
+#include <poll.h>
 #include <unistd.h>
 
 namespace tenzir {
 
 namespace {
+
+constexpr auto uds_probe_timeout = std::chrono::milliseconds{100};
 
 class UdsAcceptCallback final
   : public folly::AsyncServerSocket::AcceptCallback {
@@ -67,20 +71,30 @@ auto max_uds_path_size() -> size_t {
   return sizeof(sockaddr_un{}.sun_path) - 1;
 }
 
+auto emit_probe_error(std::string const& path, location source,
+                      diagnostic_handler& dh, std::string_view reason) -> void {
+  diagnostic::error("failed to probe UNIX domain socket")
+    .primary(source)
+    .note("path: {}", path)
+    .note("reason: {}", reason)
+    .emit(dh);
+}
+
 auto uds_path_has_listener(std::string const& path, location source,
                            diagnostic_handler& dh) -> failure_or<bool> {
   auto fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
   if (fd == -1) {
-    diagnostic::error("failed to probe UNIX domain socket")
-      .primary(source)
-      .note("path: {}", path)
-      .note("reason: {}", std::strerror(errno))
-      .emit(dh);
+    emit_probe_error(path, source, dh, std::strerror(errno));
     return failure::promise();
   }
   auto close_fd = detail::scope_guard{[fd]() noexcept {
     ::close(fd);
   }};
+  auto flags = ::fcntl(fd, F_GETFL, 0);
+  if (flags == -1 or ::fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+    emit_probe_error(path, source, dh, std::strerror(errno));
+    return failure::promise();
+  }
   auto address = sockaddr_un{};
   address.sun_family = AF_UNIX;
 #if defined(__APPLE__)
@@ -94,11 +108,37 @@ auto uds_path_has_listener(std::string const& path, location source,
   if (errno == ECONNREFUSED or errno == ENOENT) {
     return false;
   }
-  diagnostic::error("failed to probe UNIX domain socket")
-    .primary(source)
-    .note("path: {}", path)
-    .note("reason: {}", std::strerror(errno))
-    .emit(dh);
+  if (errno != EINPROGRESS and errno != EAGAIN and errno != EWOULDBLOCK) {
+    emit_probe_error(path, source, dh, std::strerror(errno));
+    return failure::promise();
+  }
+  auto fds = pollfd{
+    .fd = fd,
+    .events = POLLOUT,
+    .revents = 0,
+  };
+  auto timeout = static_cast<int>(uds_probe_timeout.count());
+  auto ready = ::poll(&fds, 1, timeout);
+  if (ready == 0) {
+    return true;
+  }
+  if (ready == -1) {
+    emit_probe_error(path, source, dh, std::strerror(errno));
+    return failure::promise();
+  }
+  auto error = int{0};
+  auto error_size = socklen_t{sizeof(error)};
+  if (::getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &error_size) == -1) {
+    emit_probe_error(path, source, dh, std::strerror(errno));
+    return failure::promise();
+  }
+  if (error == 0) {
+    return true;
+  }
+  if (error == ECONNREFUSED or error == ENOENT) {
+    return false;
+  }
+  emit_probe_error(path, source, dh, std::strerror(error));
   return failure::promise();
 }
 
