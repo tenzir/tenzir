@@ -101,16 +101,14 @@ public:
       request_abort();
       co_return;
     }
-    address_ = std::move(*address);
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
     auto socket = folly::AsyncServerSocket::newSocket(evb_);
     server_.emplace(
       std::in_place,
-      Arc<folly::AsyncServerSocket>::from_non_null(std::move(socket)), address_,
+      Arc<folly::AsyncServerSocket>::from_non_null(std::move(socket)), *address,
       listen_backlog);
-    should_cleanup_socket_ = true;
-    accept_loop_finished_ = false;
+    socket_path_to_cleanup_ = std::filesystem::path{path_};
     events_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "accept_uds"},
                          MetricsDirection::read, MetricsVisibility::external_,
@@ -208,7 +206,9 @@ public:
         maybe_finish_draining();
       },
       [&](AcceptLoopFinished) -> Task<void> {
-        accept_loop_finished_ = true;
+        if (lifecycle_ != Lifecycle::done) {
+          lifecycle_ = Lifecycle::draining_connections;
+        }
         maybe_finish_draining();
         co_return;
       });
@@ -247,10 +247,10 @@ public:
       co_return FinalizeBehavior::done;
     }
     if (lifecycle_ == Lifecycle::running) {
-      lifecycle_ = Lifecycle::draining;
+      lifecycle_ = Lifecycle::draining_accept_loop;
       stop_accepting();
-      close_all_connections();
     }
+    close_all_connections();
     maybe_finish_draining();
     co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
                                             : FinalizeBehavior::continue_;
@@ -267,8 +267,10 @@ public:
     if (lifecycle_ == Lifecycle::done) {
       co_return;
     }
-    lifecycle_ = Lifecycle::draining;
-    stop_accepting();
+    if (lifecycle_ == Lifecycle::running) {
+      lifecycle_ = Lifecycle::draining_accept_loop;
+      stop_accepting();
+    }
     close_all_connections();
     maybe_finish_draining();
   }
@@ -276,7 +278,8 @@ public:
 private:
   enum class Lifecycle {
     running,
-    draining,
+    draining_accept_loop,
+    draining_connections,
     done,
   };
 
@@ -293,12 +296,12 @@ private:
   }
 
   auto cleanup_socket_path() -> void {
-    if (not should_cleanup_socket_) {
+    if (not socket_path_to_cleanup_) {
       return;
     }
-    should_cleanup_socket_ = false;
     auto ec = std::error_code{};
-    std::filesystem::remove(path_, ec);
+    std::filesystem::remove(*socket_path_to_cleanup_, ec);
+    socket_path_to_cleanup_ = None{};
   }
 
   auto request_abort() -> void {
@@ -319,12 +322,11 @@ private:
   }
 
   auto maybe_finish_draining() -> void {
-    if (lifecycle_ != Lifecycle::draining) {
+    if (lifecycle_ != Lifecycle::draining_connections) {
       return;
     }
-    if (accept_loop_finished_
-        and static_cast<uint64_t>(connection_slots_.available_permits())
-              == max_connections_) {
+    if (static_cast<uint64_t>(connection_slots_.available_permits())
+        == max_connections_) {
       lifecycle_ = Lifecycle::done;
       cleanup_socket_path();
     }
@@ -468,9 +470,9 @@ private:
 
   AcceptUdsArgs args_;
   std::string path_;
-  folly::SocketAddress address_;
   folly::EventBase* evb_ = nullptr;
   Option<Box<UdsServerSocket>> server_;
+  Option<std::filesystem::path> socket_path_to_cleanup_ = None{};
   uint64_t max_connections_ = 128;
   mutable Arc<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
@@ -480,8 +482,6 @@ private:
   MetricsCounter bytes_read_counter_;
   MetricsCounter events_read_counter_;
   uint64_t next_conn_id_{0};
-  bool accept_loop_finished_ = true;
-  bool should_cleanup_socket_ = false;
   Lifecycle lifecycle_ = Lifecycle::running;
 };
 
