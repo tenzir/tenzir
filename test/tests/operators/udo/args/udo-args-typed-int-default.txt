@@ -1,0 +1,4 @@
+{
+  value: "dynamic",
+  limit_type: "int64",
+}

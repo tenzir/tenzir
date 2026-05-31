@@ -23,6 +23,7 @@
 #include <caf/typed_event_based_actor.hpp>
 
 #include <algorithm>
+#include <limits>
 #include <ranges>
 #include <string_view>
 #include <type_traits>
@@ -487,6 +488,23 @@ auto parse_parameter_value_type(const package_operator_parameter& param,
     return failure::promise();
   }
   return std::optional<type>{type::from_legacy_type(legacy)};
+}
+
+auto coerce_package_default_value(data& value, const type& value_type) -> void {
+  if (auto* unsigned_value = try_as<uint64_t>(&value);
+      unsigned_value and value_type.kind().is<int64_type>()
+      and *unsigned_value
+            <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+    value = static_cast<int64_t>(*unsigned_value);
+  }
+  if (const auto* list_type = try_as<tenzir::list_type>(&value_type)) {
+    if (auto* values = try_as<list>(&value)) {
+      const auto nested_type = list_type->value_type();
+      for (auto& nested_value : *values) {
+        coerce_package_default_value(nested_value, nested_type);
+      }
+    }
+  }
 }
 
 auto load_tql_with_frontmatter(std::string_view input)
@@ -1246,7 +1264,8 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
     return ast::expression{
       ast::constant{std::move(constant_value), location::unknown}};
   };
-  auto parse_default_expression = [&](const package_operator_parameter& param)
+  auto parse_default_expression = [&](const package_operator_parameter& param,
+                                      const std::optional<type>& value_type)
     -> failure_or<std::optional<ast::expression>> {
     if (not param.default_) {
       return std::optional<ast::expression>{};
@@ -1265,6 +1284,9 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
                         param.name)
         .emit(dh);
       return failure::promise();
+    }
+    if (value_type) {
+      coerce_package_default_value(*yaml_data, *value_type);
     }
     auto expr = make_constant_expression(std::move(*yaml_data));
     return std::optional<ast::expression>{std::move(expr)};
@@ -1303,7 +1325,11 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
           .emit(dh);
         return failure::promise();
       }
-      auto default_expr = parse_default_expression(arg);
+      auto value_type = parse_parameter_value_type(arg, op_id, dh);
+      if (value_type.is_error()) {
+        return failure::promise();
+      }
+      auto default_expr = parse_default_expression(arg, *value_type);
       if (default_expr.is_error()) {
         return failure::promise();
       }
@@ -1314,10 +1340,6 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
                           "optional positional parameter",
                           arg.name)
           .emit(dh);
-        return failure::promise();
-      }
-      auto value_type = parse_parameter_value_type(arg, op_id, dh);
-      if (value_type.is_error()) {
         return failure::promise();
       }
       udo.positional_params.push_back({
@@ -1336,12 +1358,12 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
           .emit(dh);
         return failure::promise();
       }
-      auto default_expr = parse_default_expression(opt);
-      if (default_expr.is_error()) {
-        return failure::promise();
-      }
       auto value_type = parse_parameter_value_type(opt, op_id, dh);
       if (value_type.is_error()) {
+        return failure::promise();
+      }
+      auto default_expr = parse_default_expression(opt, *value_type);
+      if (default_expr.is_error()) {
         return failure::promise();
       }
       udo.named_params.push_back({
