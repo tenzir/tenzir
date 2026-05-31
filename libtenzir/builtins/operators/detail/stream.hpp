@@ -57,28 +57,32 @@ inline auto as_byte_range(chunk_ptr const& chunk) -> folly::ByteRange {
   };
 }
 
-inline auto close_transport(folly::coro::Transport transport) -> void {
+inline auto run_on_transport_event_base(folly::coro::Transport& transport,
+                                        auto action) -> void {
   auto* evb = transport.getEventBase();
   TENZIR_ASSERT(evb);
-  evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
-    transport.close();
-  });
+  evb->runInEventBaseThread(std::move(action));
+}
+
+inline auto close_transport(folly::coro::Transport transport) -> void {
+  run_on_transport_event_base(transport,
+                              [transport = std::move(transport)]() mutable {
+                                transport.close();
+                              });
 }
 
 inline auto close_transport(Box<folly::coro::Transport> transport) -> void {
-  auto* evb = transport->getEventBase();
-  TENZIR_ASSERT(evb);
-  evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
-    transport->close();
-  });
+  run_on_transport_event_base(*transport,
+                              [transport = std::move(transport)]() mutable {
+                                transport->close();
+                              });
 }
 
 inline auto close_transport(Arc<folly::coro::Transport> transport) -> void {
-  auto* evb = transport->getEventBase();
-  TENZIR_ASSERT(evb);
-  evb->runInEventBaseThread([transport = std::move(transport)]() mutable {
-    transport->close();
-  });
+  run_on_transport_event_base(*transport,
+                              [transport = std::move(transport)]() mutable {
+                                transport->close();
+                              });
 }
 
 inline auto sub_key_for(uint64_t conn_id) -> data {
