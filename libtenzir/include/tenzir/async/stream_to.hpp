@@ -127,6 +127,11 @@ public:
                                             : FinalizeBehavior::continue_;
   }
 
+  auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
+    co_await flush_queued_chunks(ctx);
+    co_return;
+  }
+
   auto finish_sub(SubKeyView, OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
     if (lifecycle_ == Lifecycle::done) {
@@ -143,6 +148,20 @@ public:
 
 private:
   using MessageQueue = folly::coro::BoundedQueue<chunk_ptr>;
+
+  auto flush_queued_chunks(OpCtx& ctx) -> Task<void> {
+    while (auto next = message_queue_->try_dequeue()) {
+      auto chunk = std::move(*next);
+      if (not chunk) {
+        finish();
+        co_return;
+      }
+      if (lifecycle_ == Lifecycle::done or chunk->size() == 0) {
+        continue;
+      }
+      co_await write_chunk(chunk, ctx);
+    }
+  }
 
   auto close_current_transport() -> void {
     if (transport_) {
