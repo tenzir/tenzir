@@ -59,38 +59,6 @@ struct AcceptUdsArgs {
   located<ir::pipeline> user_pipeline;
 };
 
-auto read_uds_chunk(folly::coro::Transport& transport, size_t size)
-  -> Task<Option<chunk_ptr>> {
-  auto* evb = transport.getEventBase();
-  TENZIR_ASSERT(evb);
-  auto* async_transport = transport.getTransport();
-  TENZIR_ASSERT(async_transport);
-  auto buffer = folly::IOBufQueue{folly::IOBufQueue::cacheChainLength()};
-  auto callback = folly::coro::ReadCallback{
-    evb->timer(), *async_transport,
-    &buffer,      1,
-    size,         std::chrono::milliseconds{0},
-  };
-  async_transport->setReadCB(&callback);
-  auto reset_read_callback = detail::scope_guard{[async_transport]() noexcept {
-    async_transport->setReadCB(nullptr);
-  }};
-  co_await callback.wait();
-  if (callback.error()) {
-    callback.error().throw_exception();
-  }
-  auto length = buffer.chainLength();
-  if (length == 0) {
-    co_return None{};
-  }
-  auto iobuf = buffer.move();
-  auto range = iobuf->coalesce();
-  co_return chunk::make(as_bytes(range.data(), range.size()),
-                        [buf = std::move(iobuf)]() noexcept {
-                          static_cast<void>(buf);
-                        });
-}
-
 class AcceptUdsListener final : public Operator<void, table_slice> {
 public:
   using Connection = Arc<folly::coro::Transport>;
@@ -456,13 +424,36 @@ private:
     auto read_error = std::string{};
     while (true) {
       try {
-        auto read_result = co_await read_uds_chunk(*connection, buffer_size);
-        if (not read_result) {
+        auto* evb = connection->getEventBase();
+        TENZIR_ASSERT(evb);
+        auto* async_transport = connection->getTransport();
+        TENZIR_ASSERT(async_transport);
+        auto buffer = folly::IOBufQueue{folly::IOBufQueue::cacheChainLength()};
+        auto callback = folly::coro::ReadCallback{
+          evb->timer(), *async_transport,
+          &buffer,      1,
+          buffer_size,  std::chrono::milliseconds{0},
+        };
+        async_transport->setReadCB(&callback);
+        auto reset_read_callback
+          = detail::scope_guard{[async_transport]() noexcept {
+              async_transport->setReadCB(nullptr);
+            }};
+        co_await callback.wait();
+        if (callback.error()) {
+          callback.error().throw_exception();
+        }
+        if (buffer.chainLength() == 0) {
           break;
         }
-        bytes_read_counter.add((*read_result)->size());
-        co_await message_queue->enqueue(
-          Payload{conn_id, std::move(*read_result)});
+        auto iobuf = buffer.move();
+        auto range = iobuf->coalesce();
+        auto chunk = chunk::make(as_bytes(range.data(), range.size()),
+                                 [buf = std::move(iobuf)]() noexcept {
+                                   static_cast<void>(buf);
+                                 });
+        bytes_read_counter.add(chunk->size());
+        co_await message_queue->enqueue(Payload{conn_id, std::move(chunk)});
       } catch (folly::AsyncSocketException const& e) {
         read_error = e.what();
         break;
