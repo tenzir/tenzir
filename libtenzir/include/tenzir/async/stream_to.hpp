@@ -128,12 +128,11 @@ public:
   }
 
   auto finish_sub(SubKeyView, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
     if (lifecycle_ == Lifecycle::done) {
       co_return;
     }
-    ctx.spawn_task([this]() -> Task<void> {
-      co_await message_queue_->enqueue(chunk_ptr{});
-    });
+    co_await message_queue_->enqueue(chunk_ptr{});
     co_return;
   }
 
