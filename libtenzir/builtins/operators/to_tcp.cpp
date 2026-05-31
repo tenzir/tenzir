@@ -108,8 +108,7 @@ public:
         finish();
         co_return;
       }
-      tls_enabled_ = resolved->tls.inner;
-      if (tls_enabled_) {
+      if (resolved->tls.inner) {
         auto context = resolved->make_folly_ssl_context(ctx);
         if (not context) {
           finish();
@@ -339,7 +338,7 @@ private:
   }
 
   auto is_tls_enabled() const -> bool {
-    return tls_enabled_;
+    return tls_context_ != nullptr;
   }
 
   ToTcpArgs args_;
@@ -347,7 +346,6 @@ private:
   folly::SocketAddress address_;
   std::string host_;
   Option<tls_options> tls_;
-  bool tls_enabled_ = false;
   std::shared_ptr<folly::SSLContext> tls_context_;
   folly::EventBase* evb_ = nullptr;
   mutable Box<MessageQueue> message_queue_{

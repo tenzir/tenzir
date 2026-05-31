@@ -95,7 +95,6 @@ public:
     path_ = expand_home(args_.path.inner);
     auto address = make_uds_socket_address(path_, args_.path.source, ctx.dh());
     if (not address) {
-      startup_failed_ = true;
       co_return;
     }
     address_ = std::move(*address);
@@ -118,10 +117,11 @@ public:
       [this, &dh]() -> Task<Box<folly::coro::Transport>> {
         TENZIR_DEBUG("from_uds: connecting to {}", path_);
         try {
+          TENZIR_ASSERT(address_);
           co_return Box<folly::coro::Transport>{
             co_await folly::coro::co_withExecutor(
               evb_, folly::coro::Transport::newConnectedSocket(
-                      evb_, address_,
+                      evb_, *address_,
                       std::chrono::duration_cast<std::chrono::milliseconds>(
                         connect_timeout)))};
         } catch (folly::AsyncSocketException const& ex) {
@@ -225,7 +225,7 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return startup_failed_ ? OperatorState::done : OperatorState::normal;
+    return address_ ? OperatorState::normal : OperatorState::done;
   }
 
 private:
@@ -295,7 +295,7 @@ private:
 
   FromUdsArgs args_;
   std::string path_;
-  folly::SocketAddress address_;
+  Option<folly::SocketAddress> address_;
   folly::EventBase* evb_ = nullptr;
   mutable Arc<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
@@ -304,7 +304,6 @@ private:
   MetricsCounter bytes_read_counter_;
   MetricsCounter events_read_counter_;
   uint64_t next_conn_id_{0};
-  bool startup_failed_ = false;
 };
 
 class FromUdsPlugin final : public virtual OperatorPlugin {

@@ -282,7 +282,6 @@ public:
     // Let ServerSocket handle bind/listen setup
     server_ = std::make_unique<folly::coro::ServerSocket>(
       std::move(socket), address_, listen_backlog);
-    accept_loop_finished_ = false;
     events_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "accept_tcp"},
                          MetricsDirection::read, MetricsVisibility::external_,
@@ -423,7 +422,9 @@ public:
         co_return;
       },
       [&](AcceptLoopFinished) -> Task<void> {
-        accept_loop_finished_ = true;
+        if (lifecycle_ != Lifecycle::done) {
+          lifecycle_ = Lifecycle::draining_connections;
+        }
         maybe_finish_draining();
         co_return;
       });
@@ -462,10 +463,10 @@ public:
       co_return FinalizeBehavior::done;
     }
     if (lifecycle_ == Lifecycle::running) {
-      lifecycle_ = Lifecycle::draining;
+      lifecycle_ = Lifecycle::draining_accept_loop;
       stop_accepting();
-      close_all_connections();
     }
+    close_all_connections();
     maybe_finish_draining();
     co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
                                             : FinalizeBehavior::continue_;
@@ -482,8 +483,10 @@ public:
     if (lifecycle_ == Lifecycle::done) {
       co_return;
     }
-    lifecycle_ = Lifecycle::draining;
-    stop_accepting();
+    if (lifecycle_ == Lifecycle::running) {
+      lifecycle_ = Lifecycle::draining_accept_loop;
+      stop_accepting();
+    }
     close_all_connections();
     maybe_finish_draining();
   }
@@ -491,7 +494,8 @@ public:
 private:
   enum class Lifecycle {
     running,
-    draining,
+    draining_accept_loop,
+    draining_connections,
     done,
   };
 
@@ -524,15 +528,11 @@ private:
   }
 
   auto maybe_finish_draining() -> void {
-    if (lifecycle_ != Lifecycle::draining) {
+    if (lifecycle_ != Lifecycle::draining_connections) {
       return;
     }
-    // All connection permits must be returned *and* the accept loop must have
-    // finished before we can safely transition to done.
-    // TODO: This might be racing with the other usages of the semaphore.
-    if (accept_loop_finished_
-        and static_cast<uint64_t>(connection_slots_.available_permits())
-              == max_connections_) {
+    if (static_cast<uint64_t>(connection_slots_.available_permits())
+        == max_connections_) {
       lifecycle_ = Lifecycle::done;
     }
   }
@@ -851,7 +851,6 @@ private:
   MetricsCounter events_read_counter_;
   metric_handler tcp_metrics_;
   Box<folly::CancellationSource> accept_cancel_{std::in_place};
-  bool accept_loop_finished_ = true;
   bool peer_resolution_warning_emitted_ = false;
   Lifecycle lifecycle_ = Lifecycle::running;
   mutable uint64_t next_conn_id_{0};

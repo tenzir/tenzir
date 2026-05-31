@@ -139,14 +139,11 @@ public:
     if (tls_) {
       auto resolved = tls_->resolve(ctx.actor_system().config(), ctx);
       if (not resolved) {
-        startup_failed_ = true;
         co_return;
       }
-      tls_enabled_ = resolved->tls.inner;
-      if (tls_enabled_) {
+      if (resolved->tls.inner) {
         auto context = resolved->make_folly_ssl_context(ctx);
         if (not context) {
-          startup_failed_ = true;
           co_return;
         }
         tls_context_ = std::move(*context);
@@ -167,11 +164,12 @@ public:
       } else {
         std::move(diag).note("reason: no matching A or AAAA records").emit(ctx);
       }
-      startup_failed_ = true;
       co_return;
     }
-    address_.setFromIpPort(fmt::to_string(addresses->answers.front().address),
-                           port_);
+    auto address = folly::SocketAddress{};
+    address.setFromIpPort(fmt::to_string(addresses->answers.front().address),
+                          port_);
+    address_ = std::move(address);
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
     events_read_counter_
@@ -189,10 +187,11 @@ public:
       connect_max_retries, connect_initial_backoff, connect_max_backoff,
       connect_retry_jitter,
       [this, &dh]() -> Task<Box<folly::coro::Transport>> {
-        TENZIR_DEBUG("connecting to {}", address_.describe());
+        TENZIR_ASSERT(address_);
+        TENZIR_DEBUG("connecting to {}", address_->describe());
         try {
           co_return Box<folly::coro::Transport>{co_await connect_tcp_client(
-            evb_, address_,
+            evb_, *address_,
             std::chrono::duration_cast<std::chrono::milliseconds>(
               connect_timeout),
             tls_context_, host_)};
@@ -201,17 +200,19 @@ public:
           // follow-up that covers all TCP operators.
           auto diag
             = diagnostic::warning("failed to connect to {}",
-                                  address_.describe())
+                                  address_->describe())
                 .primary(args_.endpoint.source)
                 .note("reason: {}", ex.what())
                 .hint("ensure a TCP server is listening on this endpoint");
-          add_tls_client_diagnostic_hints(std::move(diag), tls_enabled_)
+          add_tls_client_diagnostic_hints(std::move(diag),
+                                          tls_context_ != nullptr)
             .emit(dh);
           throw;
         }
       },
       should_retry_connect);
-    TENZIR_DEBUG("connected to {}", address_.describe());
+    TENZIR_ASSERT(address_);
+    TENZIR_DEBUG("connected to {}", address_->describe());
     co_return Message{Connected{std::move(transport)}};
   }
 
@@ -278,7 +279,7 @@ public:
           // in a follow-up that covers all TCP operators.
           diagnostic::warning("connection closed after read error")
             .primary(args_.endpoint.source)
-            .note("endpoint: {}", address_.describe())
+            .note("endpoint: {}", address_->describe())
             .note("reason: {}", *closed.error)
             .emit(ctx);
         }
@@ -315,7 +316,7 @@ public:
   }
 
   auto state() -> OperatorState override {
-    return startup_failed_ ? OperatorState::done : OperatorState::normal;
+    return address_ ? OperatorState::normal : OperatorState::done;
   }
 
 private:
@@ -363,13 +364,12 @@ private:
   }
 
   FromTcpArgs args_;
-  folly::SocketAddress address_;
+  Option<folly::SocketAddress> address_;
   std::string host_;
   uint16_t port_ = 0;
   ForwardDnsResolver forward_dns_;
   Option<tls_options> tls_;
   std::shared_ptr<folly::SSLContext> tls_context_;
-  bool tls_enabled_ = false;
   folly::EventBase* evb_ = nullptr;
   mutable Arc<MessageQueue> message_queue_{std::in_place,
                                            message_queue_capacity};
@@ -377,7 +377,6 @@ private:
   Option<uint64_t> current_conn_id_;
   MetricsCounter events_read_counter_;
   uint64_t next_conn_id_{0};
-  bool startup_failed_ = false;
 };
 
 class from_tcp_plugin final : public virtual OperatorPlugin {
