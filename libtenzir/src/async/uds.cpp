@@ -40,13 +40,13 @@ public:
   auto connectionAccepted(folly::NetworkSocket fd_network_socket,
                           folly::SocketAddress const&, AcceptInfo) noexcept
     -> void override {
-    socket_->pauseAccepting();
+    unregister();
     accept_fd = fd_network_socket.toFd();
     baton_.post();
   }
 
   auto acceptError(folly::exception_wrapper ex) noexcept -> void override {
-    socket_->pauseAccepting();
+    unregister();
     error = std::move(ex);
     accept_fd = -1;
     baton_.post();
@@ -63,6 +63,21 @@ public:
   bool registered = true;
 
 private:
+  auto unregister() noexcept -> void {
+    if (not registered) {
+      return;
+    }
+    socket_->pauseAccepting();
+    try {
+      socket_->removeAcceptCallback(this, nullptr);
+    } catch (std::exception const&) {
+      // AsyncServerSocket may remove the callback as part of completing an
+      // accept. The guard still has to run on cancellation, where the stack
+      // callback must not remain registered.
+    }
+    registered = false;
+  }
+
   folly::coro::Baton& baton_;
   Arc<folly::AsyncServerSocket> socket_;
 };

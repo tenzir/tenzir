@@ -190,6 +190,7 @@ public:
     server_ = std::make_unique<folly::coro::ServerSocket>(
       std::move(socket), address_, listen_backlog);
     tcp_metrics_ = make_metric_handler(ctx, tcp_metrics_type());
+    accept_loop_started_ = true;
     ctx.spawn_task([this, &ctx]() -> Task<void> {
       auto notify_finished = detail::scope_guard{[this, &ctx]() noexcept {
         ctx.spawn_task([this]() -> Task<void> {
@@ -339,6 +340,10 @@ private:
 
   auto begin_draining() -> void {
     if (lifecycle_ != Lifecycle::running) {
+      return;
+    }
+    if (not accept_loop_started_) {
+      lifecycle_ = Lifecycle::done;
       return;
     }
     lifecycle_ = Lifecycle::draining_accept_loop;
@@ -491,6 +496,7 @@ private:
   Box<folly::CancellationSource> accept_cancel_{std::in_place};
   std::vector<Client> clients_;
   metric_handler tcp_metrics_ = {};
+  bool accept_loop_started_ = false;
   Lifecycle lifecycle_ = Lifecycle::running;
 };
 
