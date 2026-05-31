@@ -295,6 +295,8 @@ private:
 
   FromUdsArgs args_;
   std::string path_;
+  // Empty when startup validation failed; `state()` uses this to stop before
+  // `await_task()` tries to connect.
   Option<folly::SocketAddress> address_;
   folly::EventBase* evb_ = nullptr;
   mutable Arc<MessageQueue> message_queue_{std::in_place,

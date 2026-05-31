@@ -364,6 +364,8 @@ private:
   }
 
   FromTcpArgs args_;
+  // Empty when startup validation failed; `state()` uses this to stop before
+  // `await_task()` tries to connect.
   Option<folly::SocketAddress> address_;
   std::string host_;
   uint16_t port_ = 0;
