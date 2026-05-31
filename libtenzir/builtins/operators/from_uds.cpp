@@ -6,14 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "detail/stream.hpp"
-
 #include <tenzir/arc.hpp>
 #include <tenzir/async/stream.hpp>
 #include <tenzir/async/uds.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/stream_operators.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -43,7 +42,7 @@ using namespace tenzir::si_literals;
 
 constexpr auto buffer_size = size_t{64_Ki};
 constexpr auto connect_max_retries
-  = stream_detail::default_connect_max_retry_count;
+  = detail::stream_default_connect_max_retry_count;
 constexpr auto message_queue_capacity = uint32_t{1_Ki};
 
 struct FromUdsArgs {
@@ -97,8 +96,8 @@ public:
       co_return co_await message_queue_->dequeue();
     }
     auto transport = co_await folly::coro::retryWithExponentialBackoff(
-      connect_max_retries, stream_detail::connect_initial_backoff,
-      stream_detail::connect_max_backoff, stream_detail::connect_retry_jitter,
+      connect_max_retries, detail::stream_connect_initial_backoff,
+      detail::stream_connect_max_backoff, detail::stream_connect_retry_jitter,
       [this, &dh]() -> Task<Box<folly::coro::Transport>> {
         TENZIR_DEBUG("from_uds: connecting to {}", path_);
         try {
@@ -107,18 +106,18 @@ public:
               evb_, folly::coro::Transport::newConnectedSocket(
                       evb_, address_,
                       std::chrono::duration_cast<std::chrono::milliseconds>(
-                        stream_detail::connect_timeout)))};
+                        detail::stream_connect_timeout)))};
         } catch (folly::AsyncSocketException const& ex) {
           diagnostic::warning("failed to connect to UNIX domain socket")
             .primary(args_.path.source)
             .note("path: {}", path_)
-            .note("reason: {}", stream_detail::describe_socket_error(ex))
+            .note("reason: {}", describe_socket_error(ex))
             .hint("ensure a server is listening on this socket path")
             .emit(dh);
           throw;
         }
       },
-      stream_detail::should_retry_socket);
+      should_retry_socket);
     TENZIR_DEBUG("from_uds: connected to {}", path_);
     co_return Message{Connected{std::move(transport)}};
   }
@@ -140,7 +139,7 @@ public:
         auto pipeline_copy = args_.user_pipeline.inner;
         if (not pipeline_copy.substitute(substitute_ctx{{ctx}, nullptr},
                                          true)) {
-          stream_detail::close_transport(std::move(transport));
+          close_transport(std::move(transport));
           co_return;
         }
         co_await ctx.spawn_sub<chunk_ptr>(data{int64_t(conn_id)},
@@ -201,7 +200,7 @@ public:
       if (current_connection_) {
         auto connection = std::move(*current_connection_);
         current_connection_ = None{};
-        stream_detail::close_transport(std::move(connection));
+        close_transport(std::move(connection));
       }
       current_conn_id_ = None{};
     }
@@ -216,7 +215,7 @@ private:
   static auto read_loop(uint64_t conn_id, Connection connection,
                         Arc<MessageQueue> message_queue,
                         MetricsCounter bytes_read_counter) -> Task<void> {
-    co_await stream_detail::read_loop<Payload, ConnectionClosed>(
+    co_await detail::stream_read_loop<Payload, ConnectionClosed>(
       conn_id, std::move(connection), std::move(message_queue), buffer_size,
       std::move(bytes_read_counter), [](size_t) {});
   }

@@ -6,14 +6,14 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "detail/stream.hpp"
-
 #include <tenzir/async/semaphore.hpp>
+#include <tenzir/async/stream.hpp>
 #include <tenzir/async/uds.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/scope_guard.hpp>
+#include <tenzir/detail/stream_operators.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -146,7 +146,7 @@ public:
       std::move(message),
       [&](Accepted accepted) -> Task<void> {
         if (lifecycle_ != Lifecycle::running) {
-          stream_detail::close_transport(std::move(accepted.client));
+          close_transport(std::move(accepted.client));
           release_connection_slot();
           maybe_finish_draining();
           co_return;
@@ -285,7 +285,7 @@ private:
 
   auto close_all_clients() -> void {
     for (auto& client : clients_) {
-      stream_detail::close_transport(std::move(client));
+      close_transport(std::move(client));
       release_connection_slot();
     }
     clients_.clear();
@@ -307,14 +307,14 @@ private:
   auto broadcast_payload(chunk_ptr const& chunk, diagnostic_handler& dh)
     -> Task<void> {
     TENZIR_UNUSED(dh);
-    auto data = stream_detail::as_byte_range(chunk);
+    auto data = as_byte_range(chunk);
     for (size_t i = 0; i < clients_.size();) {
       auto ok = co_await write_to_client(clients_[i], data);
       if (ok) {
         ++i;
         continue;
       }
-      stream_detail::close_transport(std::move(clients_[i]));
+      close_transport(std::move(clients_[i]));
       release_connection_slot();
       clients_.erase(clients_.begin() + i);
       maybe_finish_draining();
@@ -340,8 +340,8 @@ private:
             release_connection_slot();
           }};
       auto transport = co_await folly::coro::retryWithExponentialBackoff(
-        std::numeric_limits<uint32_t>::max(), stream_detail::accept_retry_delay,
-        stream_detail::accept_retry_delay, 0.0,
+        std::numeric_limits<uint32_t>::max(), detail::stream_accept_retry_delay,
+        detail::stream_accept_retry_delay, 0.0,
         [this, &ctx]() -> Task<Box<folly::coro::Transport>> {
           try {
             co_return co_await folly::coro::co_withExecutor(
@@ -355,7 +355,7 @@ private:
             throw;
           }
         },
-        stream_detail::should_retry_socket);
+        should_retry_socket);
       ctx.spawn_task(finish_accept(std::move(transport)));
       release_connection_slot_guard.disable();
     }

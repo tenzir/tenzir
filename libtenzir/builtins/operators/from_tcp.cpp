@@ -6,15 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "detail/stream.hpp"
-
 #include <tenzir/arc.hpp>
 #include <tenzir/async/dns.hpp>
+#include <tenzir/async/stream.hpp>
 #include <tenzir/async/tcp.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/concept/parseable/to.hpp>
+#include <tenzir/detail/stream_operators.hpp>
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -54,7 +54,7 @@ constexpr auto buffer_size = size_t{64_Ki};
 // Give remote endpoints long enough for a normal TCP plus TLS setup while
 // still surfacing unavailable servers quickly to the retry loop.
 constexpr auto connect_max_retries
-  = stream_detail::default_connect_max_retry_count;
+  = detail::stream_default_connect_max_retry_count;
 // Leave room for many in-flight read and close notifications without turning
 // the queue into another large per-connection memory sink.
 constexpr auto message_queue_capacity = uint32_t{1_Ki};
@@ -175,15 +175,15 @@ public:
       co_return co_await message_queue_->dequeue();
     }
     auto transport = co_await folly::coro::retryWithExponentialBackoff(
-      connect_max_retries, stream_detail::connect_initial_backoff,
-      stream_detail::connect_max_backoff, stream_detail::connect_retry_jitter,
+      connect_max_retries, detail::stream_connect_initial_backoff,
+      detail::stream_connect_max_backoff, detail::stream_connect_retry_jitter,
       [this, &dh]() -> Task<Box<folly::coro::Transport>> {
         TENZIR_DEBUG("connecting to {}", address_.describe());
         try {
           co_return Box<folly::coro::Transport>{co_await connect_tcp_client(
             evb_, address_,
             std::chrono::duration_cast<std::chrono::milliseconds>(
-              stream_detail::connect_timeout),
+              detail::stream_connect_timeout),
             tls_context_, host_)};
         } catch (folly::AsyncSocketException const& ex) {
           // TODO: Surface connect retries and failures as metrics in a
@@ -199,7 +199,7 @@ public:
           throw;
         }
       },
-      stream_detail::should_retry_socket);
+      should_retry_socket);
     TENZIR_DEBUG("connected to {}", address_.describe());
     co_return Message{Connected{std::move(transport)}};
   }
@@ -237,7 +237,7 @@ public:
         auto sub_result
           = pipeline_copy.substitute(substitute_ctx{b_ctx, &env}, true);
         if (not sub_result) {
-          stream_detail::close_transport(std::move(transport));
+          close_transport(std::move(transport));
           co_return;
         }
         co_await ctx.spawn_sub<chunk_ptr>(data{int64_t(conn_id)},
@@ -296,7 +296,7 @@ public:
       if (current_connection_) {
         auto connection = std::move(*current_connection_);
         current_connection_ = None{};
-        stream_detail::close_transport(std::move(connection));
+        close_transport(std::move(connection));
       }
       current_conn_id_ = None{};
     }
@@ -311,7 +311,7 @@ private:
   static auto read_loop(uint64_t conn_id, Connection connection,
                         Arc<MessageQueue> message_queue,
                         MetricsCounter bytes_read_counter) -> Task<void> {
-    co_await stream_detail::read_loop<Payload, ConnectionClosed>(
+    co_await detail::stream_read_loop<Payload, ConnectionClosed>(
       conn_id, std::move(connection), std::move(message_queue), buffer_size,
       std::move(bytes_read_counter), [](size_t) {});
   }

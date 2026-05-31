@@ -6,14 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "detail/stream.hpp"
 #include "tenzir/async.hpp"
 
+#include <tenzir/async/stream.hpp>
 #include <tenzir/async/tcp.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/stream_operators.hpp>
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -194,7 +195,7 @@ private:
     if (transport_) {
       auto old_transport = std::move(*transport_);
       transport_ = None{};
-      stream_detail::close_transport(std::move(old_transport));
+      close_transport(std::move(old_transport));
     }
   }
 
@@ -205,11 +206,11 @@ private:
     auto const max_retry_count
       = args_.max_retry_count
           ? detail::narrow<uint32_t>(args_.max_retry_count->inner)
-          : stream_detail::default_connect_max_retry_count;
+          : detail::stream_default_connect_max_retry_count;
     auto emit_final_error = [&](folly::AsyncSocketException const& ex) {
       auto diag
         = diagnostic::error("failed to connect to {}: {}", address_.describe(),
-                            stream_detail::describe_socket_error(ex))
+                            describe_socket_error(ex))
             .primary(args_.endpoint.source)
             .note("gave up after {} {}", max_retry_count,
                   max_retry_count == 1 ? "retry" : "retries")
@@ -221,11 +222,11 @@ private:
     auto emit_retry_warning = [&](folly::AsyncSocketException const& ex) {
       // TODO: Surface connect retries and failures as metrics in a follow-up
       // that covers all TCP operators.
-      auto diag = diagnostic::warning("failed to connect to {}: {}",
-                                      address_.describe(),
-                                      stream_detail::describe_socket_error(ex))
-                    .primary(args_.endpoint.source)
-                    .hint("ensure a TCP server is listening on this endpoint");
+      auto diag
+        = diagnostic::warning("failed to connect to {}: {}",
+                              address_.describe(), describe_socket_error(ex))
+            .primary(args_.endpoint.source)
+            .hint("ensure a TCP server is listening on this endpoint");
       ctx.dh().emit(
         add_tls_client_diagnostic_hints(std::move(diag), is_tls_enabled())
           .done());
@@ -235,13 +236,13 @@ private:
       co_return co_await connect_tcp_client(
         evb_, address_,
         std::chrono::duration_cast<std::chrono::milliseconds>(
-          stream_detail::connect_timeout),
+          detail::stream_connect_timeout),
         tls_context_, host_);
     };
     try {
       transport_ = co_await folly::coro::retryWithExponentialBackoff(
-        max_retry_count, stream_detail::connect_initial_backoff,
-        stream_detail::connect_max_backoff, stream_detail::connect_retry_jitter,
+        max_retry_count, detail::stream_connect_initial_backoff,
+        detail::stream_connect_max_backoff, detail::stream_connect_retry_jitter,
         [this, &connect,
          &emit_retry_warning]() -> Task<folly::coro::Transport> {
           try {
@@ -253,7 +254,7 @@ private:
             throw;
           }
         },
-        stream_detail::should_retry_socket);
+        should_retry_socket);
     } catch (folly::AsyncSocketException const& ex) {
       emit_final_error(ex);
       co_return;
@@ -268,7 +269,7 @@ private:
   }
 
   auto write_chunk(chunk_ptr const& chunk, OpCtx& ctx) -> Task<void> {
-    auto data = stream_detail::as_byte_range(chunk);
+    auto data = as_byte_range(chunk);
     while (lifecycle_ != Lifecycle::done) {
       co_await ensure_connected(ctx);
       if (lifecycle_ == Lifecycle::done or not transport_) {

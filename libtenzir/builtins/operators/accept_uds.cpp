@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "detail/stream.hpp"
-
 #include <tenzir/arc.hpp>
 #include <tenzir/async/semaphore.hpp>
 #include <tenzir/async/stream.hpp>
@@ -16,6 +14,7 @@
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/scope_guard.hpp>
+#include <tenzir/detail/stream_operators.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -146,7 +145,7 @@ public:
       [&](Accepted accepted) -> Task<void> {
         auto transport = std::move(accepted.transport);
         if (lifecycle_ != Lifecycle::running) {
-          stream_detail::close_transport(std::move(transport));
+          close_transport(std::move(transport));
           release_connection_slot();
           maybe_finish_draining();
           co_return;
@@ -157,12 +156,12 @@ public:
         auto pipeline_copy = args_.user_pipeline.inner;
         if (not pipeline_copy.substitute(substitute_ctx{{ctx}, nullptr},
                                          true)) {
-          stream_detail::close_transport(std::move(transport));
+          close_transport(std::move(transport));
           release_connection_slot();
           maybe_finish_draining();
           co_return;
         }
-        auto key = stream_detail::sub_key_for(conn_id);
+        auto key = detail::stream_sub_key_for(conn_id);
         co_await ctx.spawn_sub<chunk_ptr>(std::move(key),
                                           std::move(pipeline_copy),
                                           DiagnosticBehavior::ErrorToWarning);
@@ -180,14 +179,14 @@ public:
                     bytes_read_counter_)));
       },
       [&](Payload payload) -> Task<void> {
-        auto key = stream_detail::sub_key_for(payload.conn_id);
+        auto key = detail::stream_sub_key_for(payload.conn_id);
         if (auto sub = ctx.get_sub(make_view(key))) {
           auto& pipe = as<SubHandle<chunk_ptr>>(*sub);
           auto push_result = co_await pipe.push(std::move(payload.chunk));
           if (push_result.is_err()) {
             if (auto it = connections_.find(payload.conn_id);
                 it != connections_.end()) {
-              stream_detail::close_transport(it->second);
+              close_transport(it->second);
             }
           }
         }
@@ -201,7 +200,7 @@ public:
             .emit(ctx);
         }
         if (connections_.erase(closed.conn_id) == 1) {
-          co_await stream_detail::close_subpipeline(closed.conn_id, ctx);
+          co_await detail::stream_close_subpipeline(closed.conn_id, ctx);
           release_connection_slot();
         }
         maybe_finish_draining();
@@ -227,7 +226,7 @@ public:
       auto connection = std::move(it->second);
       connections_.erase(it);
       release_connection_slot();
-      stream_detail::close_transport(std::move(connection));
+      close_transport(std::move(connection));
       maybe_finish_draining();
     }
     co_return;
@@ -311,7 +310,7 @@ private:
 
   auto close_all_connections() -> void {
     for (auto& [_, connection] : connections_) {
-      stream_detail::close_transport(connection);
+      close_transport(connection);
       release_connection_slot();
     }
     connections_.clear();
@@ -342,7 +341,7 @@ private:
       current_token, accept_cancel_->getToken());
     if (lifecycle_ != Lifecycle::running
         or cancel_token.isCancellationRequested()) {
-      stream_detail::close_transport(std::move(transport));
+      close_transport(std::move(transport));
       co_return;
     }
     TENZIR_DEBUG("accept_uds: accepted connection on {}", path_);
@@ -362,8 +361,8 @@ private:
             release_connection_slot();
           }};
       auto transport = co_await folly::coro::retryWithExponentialBackoff(
-        std::numeric_limits<uint32_t>::max(), stream_detail::accept_retry_delay,
-        stream_detail::accept_retry_delay, 0.0,
+        std::numeric_limits<uint32_t>::max(), detail::stream_accept_retry_delay,
+        detail::stream_accept_retry_delay, 0.0,
         [this, &ctx]() -> Task<Box<folly::coro::Transport>> {
           try {
             co_return co_await folly::coro::co_withExecutor(
@@ -377,7 +376,7 @@ private:
             throw;
           }
         },
-        stream_detail::should_retry_socket);
+        should_retry_socket);
       ctx.spawn_task(finish_accept(std::move(transport)));
       release_connection_slot_guard.disable();
     }
@@ -386,7 +385,7 @@ private:
   static auto read_loop(uint64_t conn_id, Connection connection,
                         Arc<MessageQueue> message_queue,
                         MetricsCounter bytes_read_counter) -> Task<void> {
-    co_await stream_detail::read_loop<Payload, ConnectionClosed>(
+    co_await detail::stream_read_loop<Payload, ConnectionClosed>(
       conn_id, std::move(connection), std::move(message_queue), buffer_size,
       std::move(bytes_read_counter), [](size_t) {});
   }

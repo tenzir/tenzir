@@ -6,12 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "detail/stream.hpp"
 #include "tenzir/async.hpp"
 
+#include <tenzir/async/stream.hpp>
 #include <tenzir/async/uds.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/stream_operators.hpp>
 #include <tenzir/file.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -170,7 +171,7 @@ private:
     if (transport_) {
       auto old_transport = std::move(*transport_);
       transport_ = None{};
-      stream_detail::close_transport(std::move(old_transport));
+      close_transport(std::move(old_transport));
     }
   }
 
@@ -181,10 +182,10 @@ private:
     auto const max_retry_count
       = args_.max_retry_count
           ? detail::narrow<uint32_t>(args_.max_retry_count->inner)
-          : stream_detail::default_connect_max_retry_count;
+          : detail::stream_default_connect_max_retry_count;
     auto emit_final_error = [&](folly::AsyncSocketException const& ex) {
       diagnostic::error("failed to connect to UNIX domain socket: {}",
-                        stream_detail::describe_socket_error(ex))
+                        describe_socket_error(ex))
         .primary(args_.path.source)
         .note("path: {}", path_)
         .note("gave up after {} {}", max_retry_count,
@@ -195,7 +196,7 @@ private:
     };
     auto emit_retry_warning = [&](folly::AsyncSocketException const& ex) {
       diagnostic::warning("failed to connect to UNIX domain socket: {}",
-                          stream_detail::describe_socket_error(ex))
+                          describe_socket_error(ex))
         .primary(args_.path.source)
         .note("path: {}", path_)
         .hint("ensure a server is listening on this socket path")
@@ -207,12 +208,12 @@ private:
         evb_, folly::coro::Transport::newConnectedSocket(
                 evb_, address_,
                 std::chrono::duration_cast<std::chrono::milliseconds>(
-                  stream_detail::connect_timeout)));
+                  detail::stream_connect_timeout)));
     };
     try {
       transport_ = co_await folly::coro::retryWithExponentialBackoff(
-        max_retry_count, stream_detail::connect_initial_backoff,
-        stream_detail::connect_max_backoff, stream_detail::connect_retry_jitter,
+        max_retry_count, detail::stream_connect_initial_backoff,
+        detail::stream_connect_max_backoff, detail::stream_connect_retry_jitter,
         [this, &connect,
          &emit_retry_warning]() -> Task<folly::coro::Transport> {
           try {
@@ -224,7 +225,7 @@ private:
             throw;
           }
         },
-        stream_detail::should_retry_socket);
+        should_retry_socket);
     } catch (folly::AsyncSocketException const& ex) {
       emit_final_error(ex);
       co_return;
@@ -233,7 +234,7 @@ private:
   }
 
   auto write_chunk(chunk_ptr const& chunk, OpCtx& ctx) -> Task<void> {
-    auto data = stream_detail::as_byte_range(chunk);
+    auto data = as_byte_range(chunk);
     while (lifecycle_ != Lifecycle::done) {
       co_await ensure_connected(ctx);
       if (lifecycle_ == Lifecycle::done or not transport_) {

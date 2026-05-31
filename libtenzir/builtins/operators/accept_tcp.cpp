@@ -6,12 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "detail/stream.hpp"
-
 #include <tenzir/arc.hpp>
 #include <tenzir/async/dns.hpp>
 #include <tenzir/async/metrics.hpp>
 #include <tenzir/async/semaphore.hpp>
+#include <tenzir/async/stream.hpp>
 #include <tenzir/async/tcp.hpp>
 #include <tenzir/async/tls.hpp>
 #include <tenzir/atomic.hpp>
@@ -22,6 +21,7 @@
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/scope_guard.hpp>
+#include <tenzir/detail/stream_operators.hpp>
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -315,7 +315,7 @@ public:
       [&](Accepted accepted) -> Task<void> {
         auto transport = std::move(accepted.transport);
         if (lifecycle_ != Lifecycle::running) {
-          stream_detail::close_transport(std::move(transport));
+          close_transport(std::move(transport));
           release_connection_slot();
           maybe_finish_draining();
           co_return;
@@ -361,12 +361,12 @@ public:
         auto sub_result
           = pipeline_copy.substitute(substitute_ctx{b_ctx, &env}, true);
         if (not sub_result) {
-          stream_detail::close_transport(std::move(transport));
+          close_transport(std::move(transport));
           release_connection_slot();
           maybe_finish_draining();
           co_return;
         }
-        auto key = stream_detail::sub_key_for(conn_id);
+        auto key = detail::stream_sub_key_for(conn_id);
         co_await ctx.spawn_sub<chunk_ptr>(std::move(key),
                                           std::move(pipeline_copy),
                                           DiagnosticBehavior::ErrorToWarning);
@@ -390,7 +390,7 @@ public:
                     std::move(bytes_read), std::move(tcp_metrics))));
       },
       [&](Payload payload) -> Task<void> {
-        auto key = stream_detail::sub_key_for(payload.conn_id);
+        auto key = detail::stream_sub_key_for(payload.conn_id);
         if (auto sub = ctx.get_sub(make_view(key))) {
           auto& pipe = as<SubHandle<chunk_ptr>>(*sub);
           auto push_result = co_await pipe.push(std::move(payload.chunk));
@@ -399,7 +399,7 @@ public:
             // gets an error and sends ConnectionClosed.
             if (auto it = connections_.find(payload.conn_id);
                 it != connections_.end()) {
-              stream_detail::close_transport(it->second);
+              close_transport(it->second);
             }
           }
         }
@@ -415,7 +415,7 @@ public:
             .emit(ctx);
         }
         if (connections_.erase(closed.conn_id) == 1) {
-          co_await stream_detail::close_subpipeline(closed.conn_id, ctx);
+          co_await detail::stream_close_subpipeline(closed.conn_id, ctx);
           release_connection_slot();
         }
         maybe_finish_draining();
@@ -442,7 +442,7 @@ public:
       auto connection = std::move(it->second);
       connections_.erase(it);
       release_connection_slot();
-      stream_detail::close_transport(std::move(connection));
+      close_transport(std::move(connection));
       maybe_finish_draining();
     }
     co_return;
@@ -516,7 +516,7 @@ private:
 
   auto close_all_connections() -> void {
     for (auto& [_, connection] : connections_) {
-      stream_detail::close_transport(connection);
+      close_transport(connection);
       release_connection_slot();
     }
     connections_.clear();
@@ -551,7 +551,7 @@ private:
       current_token, accept_cancel_->getToken());
     if (lifecycle_ != Lifecycle::running
         or cancel_token.isCancellationRequested()) {
-      stream_detail::close_transport(std::move(transport));
+      close_transport(std::move(transport));
       co_return;
     }
     if (tls_context_) {
@@ -583,7 +583,7 @@ private:
     }
     if (lifecycle_ != Lifecycle::running
         or cancel_token.isCancellationRequested()) {
-      stream_detail::close_transport(std::move(transport));
+      close_transport(std::move(transport));
       co_return;
     }
     auto peer_info = make_peer_info(peer);
@@ -594,7 +594,7 @@ private:
         peer_reverse_dns = co_await folly::coro::co_withCancellation(
           cancel_token, reverse_dns_->resolve(peer_info.address));
       } catch (folly::OperationCancelled const&) {
-        stream_detail::close_transport(std::move(transport));
+        close_transport(std::move(transport));
         if (current_token.isCancellationRequested()
             and not accept_cancel_->getToken().isCancellationRequested()) {
           throw;
@@ -604,7 +604,7 @@ private:
     }
     if (lifecycle_ != Lifecycle::running
         or cancel_token.isCancellationRequested()) {
-      stream_detail::close_transport(std::move(transport));
+      close_transport(std::move(transport));
       co_return;
     }
     TENZIR_DEBUG("accepted connection from {}", peer.describe());
@@ -744,8 +744,8 @@ private:
             release_connection_slot();
           }};
       auto transport = co_await folly::coro::retryWithExponentialBackoff(
-        std::numeric_limits<uint32_t>::max(), stream_detail::accept_retry_delay,
-        stream_detail::accept_retry_delay, 0.0,
+        std::numeric_limits<uint32_t>::max(), detail::stream_accept_retry_delay,
+        detail::stream_accept_retry_delay, 0.0,
         [this, &ctx]() -> Task<std::unique_ptr<folly::coro::Transport>> {
           try {
             // `await_task` is now queue-based, so accepting runs in this task.
@@ -762,7 +762,7 @@ private:
             throw;
           }
         },
-        stream_detail::should_retry_socket);
+        should_retry_socket);
       auto boxed
         = Box<folly::coro::Transport>::from_non_null(std::move(transport));
       auto peer = boxed->getPeerAddress();
@@ -777,7 +777,7 @@ private:
             Arc<MessageQueue> message_queue, MetricsCounter bytes_counter,
             Arc<TcpConnectionMetrics> tcp_metrics) -> Task<void> {
     auto metrics = tcp_metrics;
-    co_await stream_detail::read_loop<Payload, ConnectionClosed>(
+    co_await detail::stream_read_loop<Payload, ConnectionClosed>(
       conn_id, std::move(connection), std::move(message_queue), buffer_size,
       std::move(bytes_counter),
       [metrics = std::move(metrics)](size_t bytes) mutable {
