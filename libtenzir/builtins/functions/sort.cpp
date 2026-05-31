@@ -18,12 +18,10 @@
 #include <tenzir/tql2/set.hpp>
 #include <tenzir/type.hpp>
 
-#include <arrow/compute/api_vector.h>
 #include <arrow/record_batch.h>
 #include <arrow/util/bitmap_ops.h>
 
 #include <algorithm>
-#include <numeric>
 #include <optional>
 #include <ranges>
 #include <string_view>
@@ -66,13 +64,13 @@ private:
   diagnostic_deduplicator& deduplicator_;
 };
 
-auto eval_sort_predicate(const ast::lambda_expr& cmp, series lhs_series,
-                         series rhs_series, const table_slice& scope,
+auto eval_sort_predicate(const ast::lambda_expr& cmp, const data& lhs_value,
+                         const data& rhs_value, const table_slice& scope,
                          comparator_warning_state& warning_state, session ctx)
   -> bool {
   TENZIR_ASSERT(cmp.is_binary());
-  TENZIR_ASSERT(lhs_series.length() == 1);
-  TENZIR_ASSERT(rhs_series.length() == 1);
+  auto lhs_series = data_to_series(lhs_value, int64_t{1});
+  auto rhs_series = data_to_series(rhs_value, int64_t{1});
   auto lhs_param_path
     = check(ast::field_path::try_from(ast::root_field{cmp.param(0), false}));
   auto rhs_param_path
@@ -123,88 +121,46 @@ auto sort_records_recursive(std::shared_ptr<arrow::Array> array)
 auto sort_list(const series& input, const std::optional<table_slice>& scope,
                bool descending, const std::optional<ast::lambda_expr>& cmp,
                session ctx) -> series {
-  auto& list_type = as<tenzir::list_type>(input.type);
-  auto& list_array = as<arrow::ListArray>(*input.array);
-  auto values = list_array.values();
-  auto offsets_builder
-    = arrow::TypedBufferBuilder<int32_t>{tenzir::arrow_memory_pool()};
-  check(offsets_builder.Reserve(input.length() + 1));
-  offsets_builder.UnsafeAppend(0);
-  auto null_bitmap = std::shared_ptr<arrow::Buffer>{};
-  const auto has_null_bitmap = list_array.null_bitmap() != nullptr;
-  auto null_builder
-    = arrow::TypedBufferBuilder<bool>{tenzir::arrow_memory_pool()};
-  if (has_null_bitmap) {
-    check(null_builder.Reserve(input.length()));
-  }
-  auto indices_builder = arrow::Int64Builder{tenzir::arrow_memory_pool()};
-  check(indices_builder.Reserve(values->length()));
-  auto indices = std::vector<int64_t>{};
-  auto sorted_values_length = int64_t{0};
-  auto null_count = int64_t{0};
+  auto builder = series_builder{input.type};
   TENZIR_ASSERT(
     not scope or scope->rows() == detail::narrow_cast<size_t>(input.length()));
   auto warning_state = comparator_warning_state{};
   auto fallback_scope = empty_scope_slice();
-  for (auto row = int64_t{0}; row < input.length(); ++row) {
+  auto row = int64_t{0};
+  for (const auto& value : values(type{as<list_type>(input.type)},
+                                  as<arrow::ListArray>(*input.array))) {
     auto row_scope = scope ? subslice(*scope, row, row + 1) : fallback_scope;
-    if (list_array.IsNull(row)) {
-      if (has_null_bitmap) {
-        null_builder.UnsafeAppend(false);
-      }
-      offsets_builder.UnsafeAppend(
-        detail::narrow<int32_t>(sorted_values_length));
-      ++null_count;
+    ++row;
+    if (is<caf::none_t>(value)) {
+      builder.null();
       continue;
     }
-    if (has_null_bitmap) {
-      null_builder.UnsafeAppend(true);
-    }
-    const auto begin = list_array.value_offset(row);
-    const auto end = list_array.value_offset(row + 1);
-    indices.resize(end - begin);
-    std::iota(indices.begin(), indices.end(), begin);
+    const auto* list_view = try_as<view<list>>(&value);
+    TENZIR_ASSERT(list_view);
+    auto materialized = materialize(*list_view);
     if (cmp) {
-      std::stable_sort(
-        indices.begin(), indices.end(), [&](int64_t lhs, int64_t rhs) {
-          if (descending) {
-            std::swap(lhs, rhs);
-          }
-          return eval_sort_predicate(
-            *cmp, series{list_type.value_type(), values->Slice(lhs, 1)},
-            series{list_type.value_type(), values->Slice(rhs, 1)}, row_scope,
-            warning_state, ctx);
-        });
+      std::stable_sort(materialized.begin(), materialized.end(),
+                       [&](const data& lhs, const data& rhs) {
+                         const auto& cmp_lhs = descending ? rhs : lhs;
+                         const auto& cmp_rhs = descending ? lhs : rhs;
+                         return eval_sort_predicate(*cmp, cmp_lhs, cmp_rhs,
+                                                    row_scope, warning_state,
+                                                    ctx);
+                       });
     } else if (descending) {
-      std::stable_sort(
-        indices.begin(), indices.end(), [&](int64_t lhs, int64_t rhs) {
-          return weak_order(view_at(*values, lhs), view_at(*values, rhs))
-                 == std::weak_ordering::greater;
-        });
+      std::stable_sort(materialized.begin(), materialized.end(),
+                       [](const data& lhs, const data& rhs) {
+                         return rhs < lhs;
+                       });
     } else {
-      std::stable_sort(
-        indices.begin(), indices.end(), [&](int64_t lhs, int64_t rhs) {
-          return weak_order(view_at(*values, lhs), view_at(*values, rhs))
-                 == std::weak_ordering::less;
-        });
+      std::stable_sort(materialized.begin(), materialized.end(),
+                       [](const data& lhs, const data& rhs) {
+                         return lhs < rhs;
+                       });
     }
-    for (const auto index : indices) {
-      indices_builder.UnsafeAppend(index);
-    }
-    sorted_values_length += detail::narrow<int64_t>(indices.size());
-    offsets_builder.UnsafeAppend(detail::narrow<int32_t>(sorted_values_length));
+    builder.data(materialized);
   }
-  if (has_null_bitmap) {
-    null_bitmap = check(null_builder.FinishWithLength(input.length()));
-  }
-  auto value_indices = finish(indices_builder);
-  auto sorted_values = check(arrow::compute::Take(*values, *value_indices));
-  return {
-    input.type,
-    std::make_shared<arrow::ListArray>(
-      list_array.type(), input.length(), check(offsets_builder.Finish()),
-      std::move(sorted_values), std::move(null_bitmap), null_count, 0),
-  };
+  return builder.finish_assert_one_array();
 }
 
 auto sort_record(std::shared_ptr<arrow::StructArray> array)
@@ -262,46 +218,32 @@ auto sort_record(std::shared_ptr<arrow::StructArray> array)
 
 auto sort_records_recursive(std::shared_ptr<arrow::Array> array)
   -> std::shared_ptr<arrow::Array> {
-  return match(
-    *array,
-    [&](const arrow::StructArray&) -> std::shared_ptr<arrow::Array> {
-      return sort_record(
-        std::static_pointer_cast<arrow::StructArray>(std::move(array)));
-    },
-    [&](const arrow::ListArray& list) -> std::shared_ptr<arrow::Array> {
-      const auto values_contain_records = match(
-        *list.values(),
-        [](const arrow::StructArray&) {
-          return true;
-        },
-        [](const arrow::ListArray&) {
-          return true;
-        },
-        [](const auto&) {
-          return false;
-        });
-      if (not values_contain_records) {
-        return array;
-      }
-      const auto value_offset = list.value_offset(0);
-      const auto value_length = list.value_offset(list.length()) - value_offset;
-      auto values = list.values()->Slice(value_offset, value_length);
-      auto sorted_values = sort_records_recursive(values);
-      if (sorted_values == values) {
-        return array;
-      }
-      auto buffers = rebase_list_array_buffers(list);
-      auto value_field = std::static_pointer_cast<arrow::ListType>(list.type())
-                           ->value_field()
-                           ->WithType(sorted_values->type());
-      return std::make_shared<arrow::ListArray>(
-        arrow::list(std::move(value_field)), buffers.length,
-        std::move(buffers.offsets), std::move(sorted_values),
-        std::move(buffers.null_bitmap), buffers.null_count, 0);
-    },
-    [&](const auto&) -> std::shared_ptr<arrow::Array> {
+  if (try_as<arrow::StructArray>(*array)) {
+    return sort_record(
+      std::static_pointer_cast<arrow::StructArray>(std::move(array)));
+  }
+  if (auto* list = try_as<arrow::ListArray>(*array)) {
+    if (not try_as<arrow::StructArray>(*list->values())
+        and not try_as<arrow::ListArray>(*list->values())) {
       return array;
-    });
+    }
+    const auto value_offset = list->value_offset(0);
+    const auto value_length = list->value_offset(list->length()) - value_offset;
+    auto values = list->values()->Slice(value_offset, value_length);
+    auto sorted_values = sort_records_recursive(values);
+    if (sorted_values == values) {
+      return array;
+    }
+    auto buffers = rebase_list_array_buffers(*list);
+    auto value_field = std::static_pointer_cast<arrow::ListType>(list->type())
+                         ->value_field()
+                         ->WithType(sorted_values->type());
+    return std::make_shared<arrow::ListArray>(
+      arrow::list(std::move(value_field)), buffers.length,
+      std::move(buffers.offsets), std::move(sorted_values),
+      std::move(buffers.null_bitmap), buffers.null_count, 0);
+  }
+  return array;
 }
 
 auto sort_record(const series& input) -> series {
