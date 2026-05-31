@@ -23,6 +23,7 @@
 #include <caf/typed_event_based_actor.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <ranges>
 #include <string_view>
 #include <type_traits>
@@ -436,17 +437,38 @@ auto is_field_path_type(const package_operator_parameter& param) -> bool {
   return param.type and detail::ascii_icase_equal(*param.type, "field");
 }
 
-auto normalize_basic_type_name(std::string_view name) -> std::string {
-  if (name == "int") {
-    return "int64";
+auto normalize_type_name(std::string_view name) -> std::string {
+  auto is_identifier_char = [](char ch) {
+    auto unsigned_ch = static_cast<unsigned char>(ch);
+    return std::isalnum(unsigned_ch) or ch == '_';
+  };
+  auto normalize_token = [](std::string_view token) -> std::string_view {
+    if (token == "int") {
+      return "int64";
+    }
+    if (token == "uint") {
+      return "uint64";
+    }
+    if (token == "float") {
+      return "double";
+    }
+    return token;
+  };
+  auto result = std::string{};
+  result.reserve(name.size());
+  for (auto i = size_t{}; i < name.size();) {
+    if (not is_identifier_char(name[i])) {
+      result.push_back(name[i]);
+      ++i;
+      continue;
+    }
+    auto token_begin = i;
+    while (i < name.size() and is_identifier_char(name[i])) {
+      ++i;
+    }
+    result += normalize_token(name.substr(token_begin, i - token_begin));
   }
-  if (name == "uint") {
-    return "uint64";
-  }
-  if (name == "float") {
-    return "double";
-  }
-  return std::string{name};
+  return result;
 }
 
 auto parse_parameter_value_type(const package_operator_parameter& param,
@@ -462,7 +484,7 @@ auto parse_parameter_value_type(const package_operator_parameter& param,
   // We will eventually add support for user defined operators in TQL itself and
   // deprecate this approach, so it does not make sense to refactor the tql2
   // parser at this time.
-  auto normalized = normalize_basic_type_name(*param.type);
+  auto normalized = normalize_type_name(*param.type);
   auto legacy = legacy_type{};
   auto f = normalized.begin();
   auto l = normalized.end();

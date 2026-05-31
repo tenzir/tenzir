@@ -1,0 +1,4 @@
+// Use the default value defined in the operator.
+// The declared list<int> type should apply to all default values.
+from {value: "dynamic"}
+argspkg::typed_int_list_default

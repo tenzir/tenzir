@@ -64,6 +64,29 @@ auto make_constant_expression(data value, location source) -> ast::expression {
   return ast::expression{ast::constant{std::move(constant_value), source}};
 }
 
+auto constant_data(const ast::expression& expr) -> std::optional<data> {
+  if (const auto* constant = try_as<ast::constant>(&expr)) {
+    return constant->as_data();
+  }
+  if (const auto* list_expr = try_as<ast::list>(&expr)) {
+    auto values = list{};
+    values.reserve(list_expr->items.size());
+    for (const auto& item : list_expr->items) {
+      const auto* nested_expr = try_as<ast::expression>(&item);
+      if (not nested_expr) {
+        return std::nullopt;
+      }
+      auto nested_value = constant_data(*nested_expr);
+      if (not nested_value) {
+        return std::nullopt;
+      }
+      values.push_back(std::move(*nested_value));
+    }
+    return values;
+  }
+  return std::nullopt;
+}
+
 auto materialize_value_as(data& value, const type& value_type)
   -> value_materialization_result {
   if (is<caf::none_t>(value)) {
@@ -132,7 +155,8 @@ auto materialize_value_as(data& value, const type& value_type)
     }
     return result;
   }
-  return {.valid = type_check(value_type, value)};
+  return {.valid = value_type.kind() == type_kind_of_data(value)
+                   or type_check(value_type, value)};
 }
 
 auto make_usage_string(std::string_view op_name,
@@ -470,7 +494,11 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
       return {};
     }
     auto diag_loc = explicit_location.value_or(expr.get_location());
-    if (auto value = try_const_eval(expr, ctx)) {
+    auto value = constant_data(expr);
+    if (not value) {
+      value = try_const_eval(expr, ctx);
+    }
+    if (value) {
       auto materialized_value = *value;
       auto materialized
         = materialize_value_as(materialized_value, *param.value_type);

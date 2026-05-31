@@ -1,0 +1,11 @@
+---
+description: "Emit the type of a defaulted integer list argument"
+args:
+  named:
+    - name: limits
+      type: list<int>
+      default: [1, -1]
+      description: "The allowed limits"
+---
+set first_limit_type = type_of($limits[0]).kind
+set second_limit_type = type_of($limits[1]).kind
