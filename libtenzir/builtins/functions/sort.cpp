@@ -229,19 +229,20 @@ auto sort_records_recursive(std::shared_ptr<arrow::Array> array)
     }
     const auto value_offset = list->value_offset(0);
     const auto value_length = list->value_offset(list->length()) - value_offset;
-    auto values = list->values()->Slice(value_offset, value_length);
-    auto sorted_values = sort_records_recursive(values);
-    if (sorted_values == values) {
+    auto sliced_values = list->values()->Slice(value_offset, value_length);
+    auto sorted_values = sort_records_recursive(sliced_values);
+    if (sorted_values == sliced_values) {
       return array;
     }
     auto buffers = rebase_list_array_buffers(*list);
     auto value_field = std::static_pointer_cast<arrow::ListType>(list->type())
                          ->value_field()
                          ->WithType(sorted_values->type());
-    return std::make_shared<arrow::ListArray>(
-      arrow::list(std::move(value_field)), buffers.length,
-      std::move(buffers.offsets), std::move(sorted_values),
-      std::move(buffers.null_bitmap), buffers.null_count, 0);
+    auto values = series{
+      type::from_arrow(*value_field),
+      std::move(sorted_values),
+    };
+    return make_list_series_with_offsets(values, std::move(buffers)).array;
   }
   return array;
 }
