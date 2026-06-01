@@ -18,6 +18,7 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <string_view>
 
@@ -68,11 +69,132 @@ auto read_cgroup_memory_available(const std::filesystem::path& dir,
   };
 }
 
+auto octal_digit(char ch) -> std::optional<char> {
+  if (ch < '0' or ch > '7') {
+    return std::nullopt;
+  }
+  return ch - '0';
+}
+
+auto unescape_mountinfo_field(std::string_view raw) -> std::string {
+  auto result = std::string{};
+  result.reserve(raw.size());
+  for (auto i = size_t{0}; i < raw.size(); ++i) {
+    if (raw[i] != '\\' or i + 3 >= raw.size()) {
+      result.push_back(raw[i]);
+      continue;
+    }
+    auto first = octal_digit(raw[i + 1]);
+    auto second = octal_digit(raw[i + 2]);
+    auto third = octal_digit(raw[i + 3]);
+    if (not first or not second or not third) {
+      result.push_back(raw[i]);
+      continue;
+    }
+    result.push_back(
+      static_cast<char>((*first << 6) + (*second << 3) + *third));
+    i += 3;
+  }
+  return result;
+}
+
 auto relative_cgroup_path(std::string_view raw) -> std::filesystem::path {
   while (raw.starts_with('/')) {
     raw.remove_prefix(1);
   }
   return std::filesystem::path{std::string{raw}};
+}
+
+struct cgroup2_mount {
+  std::filesystem::path root = {};
+  std::filesystem::path mount_point = {};
+};
+
+auto find_cgroup2_mount() -> std::optional<cgroup2_mount> {
+  auto mountinfo = std::ifstream{"/proc/self/mountinfo"};
+  auto line = std::string{};
+  while (std::getline(mountinfo, line)) {
+    const auto separator = line.find(" - ");
+    if (separator == std::string::npos) {
+      continue;
+    }
+    auto before_separator = std::istringstream{line.substr(0, separator)};
+    auto id = std::string{};
+    auto parent_id = std::string{};
+    auto major_minor = std::string{};
+    auto root = std::string{};
+    auto mount_point = std::string{};
+    if (not(before_separator >> id >> parent_id >> major_minor >> root
+            >> mount_point)) {
+      continue;
+    }
+    auto after_separator = std::istringstream{line.substr(separator + 3)};
+    auto filesystem_type = std::string{};
+    after_separator >> filesystem_type;
+    if (filesystem_type != "cgroup2") {
+      continue;
+    }
+    return cgroup2_mount{
+      .root = unescape_mountinfo_field(root),
+      .mount_point = unescape_mountinfo_field(mount_point),
+    };
+  }
+  return std::nullopt;
+}
+
+auto path_stays_below_root(const std::filesystem::path& path) -> bool {
+  for (const auto& element : path) {
+    if (element == "..") {
+      return false;
+    }
+  }
+  return true;
+}
+
+auto resolve_cgroup2_path(const cgroup2_mount& mount,
+                          const std::filesystem::path& path)
+  -> std::filesystem::path {
+  auto absolute_path = (std::filesystem::path{"/"} / path).lexically_normal();
+  auto root = mount.root.lexically_normal();
+  if (root.empty()) {
+    root = "/";
+  }
+  auto relative_path = std::filesystem::path{};
+  if (root == "/") {
+    relative_path = absolute_path.relative_path();
+  } else if (absolute_path == root) {
+    relative_path = std::filesystem::path{};
+  } else if (auto relative_to_root = absolute_path.lexically_relative(root);
+             not relative_to_root.empty()
+             and path_stays_below_root(relative_to_root)) {
+    relative_path = relative_to_root;
+  } else {
+    relative_path = path;
+  }
+  return (mount.mount_point / relative_path).lexically_normal();
+}
+
+auto cgroup2_memory_available(const std::filesystem::path& path)
+  -> std::optional<available_memory_info> {
+  auto mount = find_cgroup2_mount().value_or(cgroup2_mount{
+    .root = "/",
+    .mount_point = "/sys/fs/cgroup",
+  });
+  auto current = resolve_cgroup2_path(mount, path);
+  auto root = mount.mount_point.lexically_normal();
+  auto result = std::optional<available_memory_info>{};
+  while (true) {
+    if (auto available = read_cgroup_memory_available(current, "cgroup-v2")) {
+      if (not result or available->bytes < result->bytes) {
+        result = std::move(available);
+      }
+    }
+    if (current == root or current == current.parent_path()) {
+      break;
+    }
+    current = current.parent_path();
+  }
+  return result;
 }
 
 auto cgroup_memory_available() -> std::optional<available_memory_info> {
@@ -92,8 +214,7 @@ auto cgroup_memory_available() -> std::optional<available_memory_info> {
     const auto path
       = relative_cgroup_path(std::string_view{line}.substr(second + 1));
     if (controllers.empty()) {
-      if (auto result = read_cgroup_memory_available(
-            std::filesystem::path{"/sys/fs/cgroup"} / path, "cgroup-v2")) {
+      if (auto result = cgroup2_memory_available(path)) {
         return result;
       }
     } else if (controllers.find("memory") != std::string_view::npos) {
