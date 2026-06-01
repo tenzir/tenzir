@@ -1,4 +1,4 @@
-Tenzir v6.0.0-rc.6 continues the rollout of the rewritten execution engine that unlocks faster, more capable, and more scalable pipelines. This release candidate includes breaking changes; use the migration guide at https://docs.tenzir.com/guides/tenzir-v6-migration when testing your workloads.
+Tenzir v6 ships with a rewritten execution engine that unlocks faster, more capable, and more scalable pipelines. Refer to the migration guide at https://docs.tenzir.com/guides/tenzir-v6-migration before upgrading.
 
 ## 💥 Breaking changes
 
