@@ -743,6 +743,13 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
         return {};
       },
       [&](ast::let_stmt x) -> failure_or<void> {
+        if (try_as<ast::lambda_expr>(*x.expr.kind)) {
+          diagnostic::error("lambda-valued `let` bindings are not supported")
+            .primary(x.expr)
+            .hint("inline the lambda expression at the use site")
+            .emit(ctx);
+          return failure::promise();
+        }
         TRY(x.expr.bind(ctx));
         auto id = scope.let(std::string{x.name_without_dollar()});
         lets.emplace_back(std::move(x.name), std::move(x.expr), id);
@@ -788,6 +795,13 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
       // bindings might reference earlier ones.
       TRY(auto subst, let.expr.substitute(ctx.with_env(&env)));
       TENZIR_ASSERT(subst == ast::substitute_result::no_remaining);
+      if (try_as<ast::lambda_expr>(*let.expr.kind)) {
+        diagnostic::error("lambda-valued `let` bindings are not supported")
+          .primary(let.expr)
+          .hint("inline the lambda expression at the use site")
+          .emit(ctx);
+        return failure::promise();
+      }
       TRY(auto value, const_eval(let.expr, ctx));
       // TODO: Clean this up. Should probably make `const_eval` return it.
       auto converted = match(
