@@ -106,12 +106,12 @@ auto make_list_series_with_offsets(const series& values,
                                    rebased_list_buffers buffers)
   -> basic_series<list_type> {
   TENZIR_ASSERT_EQ(values.array->length(), buffers.value_length);
+  auto result_type = list_type{values.type};
   return {
-    list_type{values.type},
+    result_type,
     std::make_shared<arrow::ListArray>(
-      arrow::list(values.type.to_arrow_type()), buffers.length,
-      std::move(buffers.offsets), values.array, std::move(buffers.null_bitmap),
-      buffers.null_count, 0),
+      result_type.to_arrow_type(), buffers.length, std::move(buffers.offsets),
+      values.array, std::move(buffers.null_bitmap), buffers.null_count, 0),
   };
 }
 
