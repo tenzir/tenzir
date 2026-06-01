@@ -85,7 +85,7 @@ public:
     if (not chunk or chunk->size() == 0) {
       co_return;
     }
-    if (lifecycle_ == Lifecycle::done or chunk->size() == 0) {
+    if (lifecycle_ == Lifecycle::done) {
       co_return;
     }
     co_await write_chunk(chunk, ctx);
