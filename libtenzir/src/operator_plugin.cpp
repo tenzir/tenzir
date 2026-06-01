@@ -757,7 +757,12 @@ auto OperatorPlugin::describe_shared() const
       desc->name.erase(0, tql2_prefix.size());
     }
     if (desc->docs.empty()) {
-      desc->docs = "https://docs.tenzir.com/reference/operators/" + desc->name;
+      auto docs_path = desc->name;
+      for (auto pos = docs_path.find("::"); pos != std::string::npos;
+           pos = docs_path.find("::")) {
+        docs_path.replace(pos, 2, "/");
+      }
+      desc->docs = "https://docs.tenzir.com/reference/operators/" + docs_path;
     }
     cached_desc_ = std::move(desc);
   });
