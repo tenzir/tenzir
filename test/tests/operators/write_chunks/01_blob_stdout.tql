@@ -1,0 +1,4 @@
+from {bytes: b"hello"}, {bytes: b" "}, {bytes: b"world"}
+to_stdout {
+  write_chunks
+}
