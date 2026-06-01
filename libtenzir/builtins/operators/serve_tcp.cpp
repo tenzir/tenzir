@@ -145,7 +145,8 @@ public:
 
   enum class Lifecycle {
     running,
-    draining,
+    draining_accept_loop,
+    draining_connections,
     done,
   };
 
@@ -188,8 +189,8 @@ public:
     auto socket = folly::AsyncServerSocket::newSocket(evb_);
     server_ = std::make_unique<folly::coro::ServerSocket>(
       std::move(socket), address_, listen_backlog);
-    accept_loop_finished_ = false;
     tcp_metrics_ = make_metric_handler(ctx, tcp_metrics_type());
+    accept_loop_started_ = true;
     ctx.spawn_task([this, &ctx]() -> Task<void> {
       auto notify_finished = detail::scope_guard{[this, &ctx]() noexcept {
         ctx.spawn_task([this]() -> Task<void> {
@@ -252,7 +253,9 @@ public:
         co_await broadcast_payload(payload.chunk, ctx.dh());
       },
       [&](AcceptLoopFinished) -> Task<void> {
-        accept_loop_finished_ = true;
+        if (lifecycle_ != Lifecycle::done) {
+          lifecycle_ = Lifecycle::draining_connections;
+        }
         maybe_finish_draining();
         co_return;
       });
@@ -339,7 +342,11 @@ private:
     if (lifecycle_ != Lifecycle::running) {
       return;
     }
-    lifecycle_ = Lifecycle::draining;
+    if (not accept_loop_started_) {
+      lifecycle_ = Lifecycle::done;
+      return;
+    }
+    lifecycle_ = Lifecycle::draining_accept_loop;
     stop_accepting();
   }
 
@@ -353,14 +360,11 @@ private:
   }
 
   auto maybe_finish_draining() -> void {
-    if (lifecycle_ != Lifecycle::draining) {
+    if (lifecycle_ != Lifecycle::draining_connections) {
       return;
     }
-    // All connection permits must be returned *and* the accept loop must have
-    // finished before we can safely transition to done.
-    if (accept_loop_finished_
-        and static_cast<uint64_t>(connection_slots_.available_permits())
-              == max_connections_) {
+    if (static_cast<uint64_t>(connection_slots_.available_permits())
+        == max_connections_) {
       lifecycle_ = Lifecycle::done;
     }
   }
@@ -492,7 +496,7 @@ private:
   Box<folly::CancellationSource> accept_cancel_{std::in_place};
   std::vector<Client> clients_;
   metric_handler tcp_metrics_ = {};
-  bool accept_loop_finished_ = true;
+  bool accept_loop_started_ = false;
   Lifecycle lifecycle_ = Lifecycle::running;
 };
 

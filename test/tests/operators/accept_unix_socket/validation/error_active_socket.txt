@@ -1,0 +1,7 @@
+error: UNIX domain socket path is already in use
+ --> tests/operators/accept_unix_socket/validation/error_active_socket.tql:8:20
+  |
+8 | accept_unix_socket env("UDS_PATH") {
+  |                    ^^^^^^^^^^^^^^^ 
+  |
+  = hint: stop the existing server or choose another path

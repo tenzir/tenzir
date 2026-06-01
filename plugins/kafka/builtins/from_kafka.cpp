@@ -717,7 +717,7 @@ private:
   struct PartitionSource {
     int32_t partition = -1;
     std::optional<SourceConsumer> source_consumer;
-    std::optional<Box<AsyncConsumerQueue>> queue;
+    Option<Box<AsyncConsumerQueue>> queue;
   };
 
   /// Owns mutable runtime state for source/build/emit stages.

@@ -1,0 +1,11 @@
+---
+fixtures:
+  - uds:
+      mode: client
+timeout: 60
+---
+
+accept_unix_socket env("UDS_PATH") {
+  read_lines
+}
+head 1
