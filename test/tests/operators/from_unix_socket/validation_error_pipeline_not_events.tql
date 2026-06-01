@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from_unix_socket env("TENZIR_TMP_DIR") + "/test.sock" {
+  pass
+}

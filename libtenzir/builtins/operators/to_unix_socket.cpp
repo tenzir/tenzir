@@ -26,20 +26,20 @@
 
 #include <limits>
 
-namespace tenzir::plugins::to_uds {
+namespace tenzir::plugins::to_unix_socket {
 
 namespace {
 
 constexpr auto connect_timeout = std::chrono::seconds{5};
 
-struct UdsTo {
+struct UnixSocketTo {
   struct Args {
     located<std::string> path;
     Option<located<uint64_t>> max_retry_count;
     located<ir::pipeline> printer;
   };
 
-  explicit UdsTo(Args args) : args_{std::move(args)} {
+  explicit UnixSocketTo(Args args) : args_{std::move(args)} {
   }
 
   auto prepare(OpCtx& ctx) -> Task<bool> {
@@ -61,11 +61,11 @@ struct UdsTo {
   }
 
   auto events_metric_label() const -> MetricsLabel {
-    return {"operator", "to_uds"};
+    return {"operator", "to_unix_socket"};
   }
 
   auto bytes_metric_label_before_connect() const -> Option<MetricsLabel> {
-    return MetricsLabel{"operator", "to_uds"};
+    return MetricsLabel{"operator", "to_unix_socket"};
   }
 
   auto bytes_metric_label_after_connect(folly::coro::Transport const&) const
@@ -74,13 +74,13 @@ struct UdsTo {
   }
 
   auto connect(folly::EventBase* evb) -> Task<folly::coro::Transport> {
-    TENZIR_DEBUG("to_uds: connecting to {}", path_);
+    TENZIR_DEBUG("to_unix_socket: connecting to {}", path_);
     auto transport = co_await folly::coro::co_withExecutor(
       evb, folly::coro::Transport::newConnectedSocket(
              evb, address_,
              std::chrono::duration_cast<std::chrono::milliseconds>(
                connect_timeout)));
-    TENZIR_DEBUG("to_uds: connected to {}", path_);
+    TENZIR_DEBUG("to_unix_socket: connected to {}", path_);
     co_return transport;
   }
 
@@ -123,22 +123,22 @@ private:
   folly::SocketAddress address_;
 };
 
-using ToUdsArgs = UdsTo::Args;
-using ToUds = StreamTo<UdsTo>;
+using ToUnixSocketArgs = UnixSocketTo::Args;
+using ToUnixSocket = StreamTo<UnixSocketTo>;
 
-class ToUdsPlugin final : public OperatorPlugin {
+class ToUnixSocketPlugin final : public OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.to_uds";
+    return "tql2.to_unix_socket";
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ToUdsArgs, ToUds>{};
-    d.positional("path", &ToUdsArgs::path);
+    auto d = Describer<ToUnixSocketArgs, ToUnixSocket>{};
+    d.positional("path", &ToUnixSocketArgs::path);
     auto max_retry_count_arg
-      = d.named("max_retry_count", &ToUdsArgs::max_retry_count);
+      = d.named("max_retry_count", &ToUnixSocketArgs::max_retry_count);
     auto printer_arg
-      = d.pipeline(&ToUdsArgs::printer, SubOptimize::from_downstream);
+      = d.pipeline(&ToUnixSocketArgs::printer, SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto max_retry_count = ctx.get(max_retry_count_arg)) {
         if (max_retry_count->inner > std::numeric_limits<uint32_t>::max()) {
@@ -166,6 +166,6 @@ public:
 
 } // namespace
 
-} // namespace tenzir::plugins::to_uds
+} // namespace tenzir::plugins::to_unix_socket
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::to_uds::ToUdsPlugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::to_unix_socket::ToUnixSocketPlugin)

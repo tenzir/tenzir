@@ -2,6 +2,6 @@
 error: true
 ---
 
-accept_uds "/tmp" {
+accept_unix_socket "/tmp" {
   read_lines
 }

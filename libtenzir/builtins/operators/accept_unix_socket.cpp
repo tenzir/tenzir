@@ -28,13 +28,13 @@
 #include <filesystem>
 #include <limits>
 
-namespace tenzir::plugins::accept_uds {
+namespace tenzir::plugins::accept_unix_socket {
 
 namespace {
 
 constexpr auto listen_backlog = uint32_t{128};
 
-struct UdsAccept {
+struct UnixSocketAccept {
   using Connection = Arc<folly::coro::Transport>;
 
   struct Args {
@@ -49,7 +49,7 @@ struct UdsAccept {
 
   struct ConnectionState {};
 
-  explicit UdsAccept(Args args) : args_{std::move(args)} {
+  explicit UnixSocketAccept(Args args) : args_{std::move(args)} {
   }
 
   auto max_connections() const -> uint64_t {
@@ -109,7 +109,7 @@ struct UdsAccept {
                      folly::CancellationToken, folly::CancellationToken,
                      folly::CancellationToken, diagnostic_handler&)
     -> Task<Option<AcceptedInfo>> {
-    TENZIR_DEBUG("accept_uds: accepted connection on {}", path_);
+    TENZIR_DEBUG("accept_unix_socket: accepted connection on {}", path_);
     co_return AcceptedInfo{.transport = Connection{std::move(*transport)}};
   }
 
@@ -135,11 +135,11 @@ struct UdsAccept {
   }
 
   auto events_metric_label() const -> MetricsLabel {
-    return {"operator", "accept_uds"};
+    return {"operator", "accept_unix_socket"};
   }
 
   auto bytes_metric_label(AcceptedInfo const&) const -> MetricsLabel {
-    return {"operator", "accept_uds"};
+    return {"operator", "accept_unix_socket"};
   }
 
   auto emit_accept_warning(folly::AsyncSocketException const& ex,
@@ -161,7 +161,7 @@ struct UdsAccept {
   }
 
   auto debug_name() const -> std::string_view {
-    return "accept_uds";
+    return "accept_unix_socket";
   }
 
 private:
@@ -172,22 +172,22 @@ private:
   Option<std::filesystem::path> socket_path_to_cleanup_ = None{};
 };
 
-using AcceptUdsArgs = UdsAccept::Args;
-using AcceptUds = StreamAccept<UdsAccept>;
+using AcceptUnixSocketArgs = UnixSocketAccept::Args;
+using AcceptUnixSocket = StreamAccept<UnixSocketAccept>;
 
-class AcceptUdsPlugin final : public virtual OperatorPlugin {
+class AcceptUnixSocketPlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.accept_uds";
+    return "tql2.accept_unix_socket";
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<AcceptUdsArgs, AcceptUds>{};
-    d.positional("path", &AcceptUdsArgs::path);
+    auto d = Describer<AcceptUnixSocketArgs, AcceptUnixSocket>{};
+    d.positional("path", &AcceptUnixSocketArgs::path);
     auto max_connections_arg
-      = d.named("max_connections", &AcceptUdsArgs::max_connections);
-    auto pipeline_arg
-      = d.pipeline(&AcceptUdsArgs::user_pipeline, SubOptimize::from_downstream);
+      = d.named("max_connections", &AcceptUnixSocketArgs::max_connections);
+    auto pipeline_arg = d.pipeline(&AcceptUnixSocketArgs::user_pipeline,
+                                   SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto max_connections = ctx.get(max_connections_arg);
           max_connections) {
@@ -224,6 +224,7 @@ public:
 
 } // namespace
 
-} // namespace tenzir::plugins::accept_uds
+} // namespace tenzir::plugins::accept_unix_socket
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::accept_uds::AcceptUdsPlugin)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::plugins::accept_unix_socket::AcceptUnixSocketPlugin)

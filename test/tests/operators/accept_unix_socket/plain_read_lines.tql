@@ -5,7 +5,7 @@ fixtures:
 timeout: 60
 ---
 
-accept_uds env("UDS_PATH") {
+accept_unix_socket env("UDS_PATH") {
   read_lines
 }
 head 1

@@ -1,0 +1,11 @@
+---
+timeout: 30
+error: true
+---
+
+from {
+  line: "hello-from-to_unix_socket",
+}
+to_unix_socket "/tmp/tenzir-uds-missing.sock", max_retry_count=1 {
+  write_ndjson
+}

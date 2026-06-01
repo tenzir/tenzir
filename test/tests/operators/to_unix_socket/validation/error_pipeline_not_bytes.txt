@@ -1,0 +1,6 @@
+error: pipeline must return bytes
+ --> tests/operators/to_unix_socket/validation/error_pipeline_not_bytes.tql:5:53
+  |
+5 | to_unix_socket env("TENZIR_TMP_DIR") + "/test.sock" {
+  |                                                     ^ 
+  |

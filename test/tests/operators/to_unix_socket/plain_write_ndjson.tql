@@ -1,0 +1,17 @@
+---
+fixtures:
+  - uds:
+      mode: server
+assertions:
+  fixtures:
+    uds:
+      server_received_contains: "hello-from-to_unix_socket"
+timeout: 60
+---
+
+from {
+  line: "hello-from-to_unix_socket"
+}
+to_unix_socket env("UDS_PATH") {
+  write_ndjson
+}

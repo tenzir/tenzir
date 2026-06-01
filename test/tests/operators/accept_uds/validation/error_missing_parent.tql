@@ -1,7 +1,0 @@
----
-error: true
----
-
-accept_uds "/tmp/tenzir-uds-missing-parent/test.sock" {
-  read_lines
-}

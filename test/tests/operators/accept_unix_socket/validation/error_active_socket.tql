@@ -5,6 +5,6 @@ fixtures:
 error: true
 ---
 
-accept_uds env("UDS_PATH") {
+accept_unix_socket env("UDS_PATH") {
   read_lines
 }

@@ -24,13 +24,13 @@
 #include <folly/io/async/AsyncSocketException.h>
 #include <folly/io/coro/Transport.h>
 
-namespace tenzir::plugins::from_uds {
+namespace tenzir::plugins::from_unix_socket {
 
 namespace {
 
 constexpr auto connect_timeout = std::chrono::seconds{5};
 
-struct UdsFrom {
+struct UnixSocketFrom {
   struct Args {
     located<std::string> path;
     located<ir::pipeline> user_pipeline;
@@ -38,7 +38,7 @@ struct UdsFrom {
 
   struct ConnectionInfo {};
 
-  explicit UdsFrom(Args args) : args_{std::move(args)} {
+  explicit UnixSocketFrom(Args args) : args_{std::move(args)} {
   }
 
   auto prepare(OpCtx& ctx) -> Task<bool> {
@@ -53,14 +53,14 @@ struct UdsFrom {
 
   auto connect(folly::EventBase* evb) const
     -> Task<Box<folly::coro::Transport>> {
-    TENZIR_DEBUG("from_uds: connecting to {}", path_);
+    TENZIR_DEBUG("from_unix_socket: connecting to {}", path_);
     TENZIR_ASSERT(address_);
     auto transport = co_await folly::coro::co_withExecutor(
       evb, folly::coro::Transport::newConnectedSocket(
              evb, *address_,
              std::chrono::duration_cast<std::chrono::milliseconds>(
                connect_timeout)));
-    TENZIR_DEBUG("from_uds: connected to {}", path_);
+    TENZIR_DEBUG("from_unix_socket: connected to {}", path_);
     co_return Box<folly::coro::Transport>{std::move(transport)};
   }
 
@@ -80,11 +80,11 @@ struct UdsFrom {
   }
 
   auto events_metric_label() const -> MetricsLabel {
-    return {"operator", "from_uds"};
+    return {"operator", "from_unix_socket"};
   }
 
   auto bytes_metric_label(ConnectionInfo const&) const -> MetricsLabel {
-    return {"operator", "from_uds"};
+    return {"operator", "from_unix_socket"};
   }
 
   auto ready() const -> bool {
@@ -116,20 +116,20 @@ private:
   Option<folly::SocketAddress> address_;
 };
 
-using FromUdsArgs = UdsFrom::Args;
-using FromUds = StreamFrom<UdsFrom>;
+using FromUnixSocketArgs = UnixSocketFrom::Args;
+using FromUnixSocket = StreamFrom<UnixSocketFrom>;
 
-class FromUdsPlugin final : public virtual OperatorPlugin {
+class FromUnixSocketPlugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.from_uds";
+    return "tql2.from_unix_socket";
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromUdsArgs, FromUds>{};
-    d.positional("path", &FromUdsArgs::path);
-    auto pipeline_arg
-      = d.pipeline(&FromUdsArgs::user_pipeline, SubOptimize::from_downstream);
+    auto d = Describer<FromUnixSocketArgs, FromUnixSocket>{};
+    d.positional("path", &FromUnixSocketArgs::path);
+    auto pipeline_arg = d.pipeline(&FromUnixSocketArgs::user_pipeline,
+                                   SubOptimize::from_downstream);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto pipeline, ctx.get(pipeline_arg));
       auto output = pipeline.inner.infer_type(tag_v<chunk_ptr>, ctx);
@@ -149,6 +149,6 @@ public:
 
 } // namespace
 
-} // namespace tenzir::plugins::from_uds
+} // namespace tenzir::plugins::from_unix_socket
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::from_uds::FromUdsPlugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::from_unix_socket::FromUnixSocketPlugin)

@@ -1,0 +1,6 @@
+error: pipeline must return events
+ --> tests/operators/accept_unix_socket/validation/error_pipeline_not_events.tql:5:57
+  |
+5 | accept_unix_socket env("TENZIR_TMP_DIR") + "/test.sock" {
+  |                                                         ^ 
+  |
