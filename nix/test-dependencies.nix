@@ -37,28 +37,23 @@ rec {
     # `python -m tenzir_test._python_runner`). Those subprocesses do not inherit
     # the package's embedded Python path, so add the site-packages they need
     # here as well.
-    postFixup = ''
-      wrapProgram $out/bin/tenzir-test \
-        --prefix PYTHONPATH : "$out/${python3Packages.python.sitePackages}:${
-          python3Packages.makePythonPath [
-            python3Packages.click
-            python3Packages.pyyaml
-            python3Packages.boto3
-            python3Packages.pyarrow
-            python3Packages.python-box
-            python3Packages.pymysql
-            python3Packages.pyzmq
-            python3Packages.trustme
+    postFixup =
+      let
+        pythonDeps = import ./python-dependencies.nix;
+        subprocessDeps =
+          with python3Packages;
+          [
+            click
+            pyyaml
           ]
-        }"
-    '';
+          ++ pythonDeps.integration python3Packages
+          ++ pythonDeps.integration-container python3Packages;
+      in
+      ''
+        wrapProgram $out/bin/tenzir-test \
+          --prefix PYTHONPATH : "$out/${python3Packages.python.sitePackages}:${python3Packages.makePythonPath subprocessDeps}"
+      '';
   });
-
-  pythonPkgsFn = ps: [
-    ps.trustme
-    ps.pymysql
-    ps.pyzmq
-  ];
 
   tenzir-integration-test-deps = [
     curl
