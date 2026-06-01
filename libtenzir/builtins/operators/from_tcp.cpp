@@ -7,13 +7,13 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/async/dns.hpp>
-#include <tenzir/async/stream_from.hpp>
 #include <tenzir/async/tcp.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/parseable/tenzir/endpoint.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/operator/stream_from.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>

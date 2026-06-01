@@ -9,7 +9,6 @@
 #include <tenzir/arc.hpp>
 #include <tenzir/async/dns.hpp>
 #include <tenzir/async/metrics.hpp>
-#include <tenzir/async/stream_accept.hpp>
 #include <tenzir/async/tls.hpp>
 #include <tenzir/atomic.hpp>
 #include <tenzir/compile_ctx.hpp>
@@ -19,6 +18,7 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/operator/stream_accept.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
