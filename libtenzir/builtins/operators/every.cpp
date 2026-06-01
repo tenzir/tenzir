@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/async/semaphore.hpp>
 #include <tenzir/async/task.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/logger.hpp>
@@ -33,27 +34,33 @@ struct EveryImpl {
   }
 
   auto start_impl(OpCtx& ctx) -> Task<void> {
-    if (next_ == 0) {
+    if (next_sub_id_ == 0) {
       co_await spawn_new(ctx);
     }
   }
 
   auto await_task_impl() const -> Task<Any> {
-    auto next = last_started_ + args_.interval;
-    co_await sleep_until(next);
-    co_return {};
+    // Start the timer once the subpipeline was actually started. This makes it
+    // so that it runs for the specified interval. The time it takes for it to
+    // close before starting the new pipelines is added on top of that. We could
+    // also do it differently and aim for the total time to match the specified
+    // interval. But if the subpipeline is slow to shut down (e.g., `to_http`
+    // sending requests), then we run into trouble when the interval is short.
+    // Hence we're going with the former, safer alternative for now.
+    auto permit = co_await sleep_permits_.acquire();
+    co_await sleep_for(args_.interval);
+    co_return permit;
   }
 
-  auto process_task_impl(OpCtx& ctx) -> Task<void> {
-    if (sleep_done_) {
-      co_return;
-    }
-    sleep_done_ = true;
+  auto process_task_impl(Any result, OpCtx& ctx) -> Task<void> {
+    TENZIR_ASSERT(not sleep_done_);
+    sleep_done_ = std::move(result).as<SemaphorePermit>();
     // For transformation sub-pipelines, close the current one so it
     // finishes and triggers finish_sub.
     if constexpr (not std::same_as<Input, void>) {
-      TENZIR_ASSERT(next_ > 0);
-      auto sub = ctx.get_sub(next_ - 1);
+      TENZIR_ASSERT(next_sub_id_ > 0);
+      auto sub = ctx.get_sub(next_sub_id_ - 1);
+      // The pipeline might have already terminated on its own.
       if (sub) {
         auto& pipe = as<SubHandle<Input>>(*sub);
         co_await pipe.close();
@@ -69,50 +76,67 @@ struct EveryImpl {
 
   // TODO: Clean this up with the upcoming subpipelines PR.
   auto finalize_impl() -> FinalizeBehavior {
-    done_ = true;
+    stop_spawning_ = true;
     return FinalizeBehavior::done;
+  }
+
+  auto state_impl() -> OperatorState {
+    // We want to wait for subpipeline completion when we closed the subpipeline
+    // ourselves before processing further input. Note that the case where the
+    // subpipeline closed itself does not block input here, because as described
+    // below, the expected behavior with `head` is to just drop the data.
+    return sleep_done_ ? OperatorState::blocked : OperatorState::normal;
   }
 
   auto process_input_impl(table_slice input, OpCtx& ctx) -> Task<void>
     requires(std::same_as<Input, table_slice>)
   {
-    TENZIR_ASSERT(next_ > 0);
-    // TODO: This can drop events at the boundary between closing the old
-    // sub-pipeline and spawning the new one.
-    auto sub = ctx.get_sub(int64_t{next_ - 1});
+    // This function will not be called if we are in a blocked state.
+    TENZIR_ASSERT(state_impl() != OperatorState::blocked);
+    TENZIR_ASSERT(next_sub_id_ > 0);
+    auto sub = ctx.get_sub(int64_t{next_sub_id_ - 1});
     if (not sub) {
-      TENZIR_WARN("every: dropping {} rows; sub-pipeline not available",
-                  input.rows());
+      // The subpipeline might already be gone. This happens if it terminates on
+      // its own, for example with `head`, which implies that we can simply drop
+      // the data. For the case where we ourselves close the subpipeline and
+      // wait for its completion, we transition to a state that blocks the input
+      // channel, which is also asserted above. So we know it's the first case.
       co_return;
     }
     auto& pipe = as<SubHandle<table_slice>>(*sub);
+    // The subpipeline might have already closed its input channel, without
+    // having terminated fully. The same reasoning as above applies here, so we
+    // simply drop the data if we can't send it.
     std::ignore = co_await pipe.push(std::move(input));
   }
 
-  auto snapshot_impl(Serde& s) -> void {
-    s("next", next_);
+  auto snapshot_impl(Serde&) -> void {
+    // TODO: I deleted the previous snapshotting implementation because it was
+    // broken, and a TODO is better than a broken implementation. This needs to
+    // be implemented once we want to enable checkpointing.
+    TENZIR_TODO();
   }
 
   auto spawn_new(OpCtx& ctx) -> Task<void> {
-    last_started_ = steady_clock::now();
-    sleep_done_ = false;
-    sub_finished_ = false;
-    co_await ctx.spawn_sub<Input>(next_, args_.pipe.inner);
-    ++next_;
+    co_await ctx.spawn_sub<Input>(next_sub_id_, args_.pipe.inner);
+    next_sub_id_ += 1;
   }
 
   auto maybe_respawn(OpCtx& ctx) -> Task<void> {
-    if (sleep_done_ and sub_finished_ and not done_) {
+    if (sleep_done_ and sub_finished_ and not stop_spawning_) {
+      // Release the sleep permit, which will start a new timer.
+      sleep_done_ = None{};
+      sub_finished_ = false;
       co_await spawn_new(ctx);
     }
   }
 
   EveryArgs args_;
-  steady_clock::time_point last_started_ = steady_clock::time_point::min();
-  int64_t next_ = 0;
-  bool sleep_done_ = false;
+  mutable Semaphore sleep_permits_{1};
+  Option<SemaphorePermit> sleep_done_;
+  int64_t next_sub_id_ = 0;
   bool sub_finished_ = false;
-  bool done_ = false;
+  bool stop_spawning_ = false;
 };
 
 template <class Input, class Output>
@@ -135,8 +159,8 @@ public:
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_UNUSED(result, push);
-    return process_task_impl(ctx);
+    TENZIR_UNUSED(push);
+    return process_task_impl(std::move(result), ctx);
   }
 
   auto finish_sub(SubKeyView key, Push<table_slice>& push, OpCtx& ctx)
@@ -149,6 +173,10 @@ public:
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push, ctx);
     co_return finalize_impl();
+  }
+
+  auto state() -> OperatorState override {
+    return state_impl();
   }
 
   auto snapshot(Serde& s) -> void override {
@@ -180,8 +208,8 @@ public:
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_UNUSED(result, push);
-    return process_task_impl(ctx);
+    TENZIR_UNUSED(push);
+    return process_task_impl(std::move(result), ctx);
   }
 
   auto finish_sub(SubKeyView key, Push<table_slice>& push, OpCtx& ctx)
@@ -194,6 +222,10 @@ public:
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push, ctx);
     co_return finalize_impl();
+  }
+
+  auto state() -> OperatorState override {
+    return state_impl();
   }
 
   auto snapshot(Serde& s) -> void override {
@@ -217,8 +249,7 @@ public:
   }
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(result);
-    return process_task_impl(ctx);
+    return process_task_impl(std::move(result), ctx);
   }
 
   auto finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> override {
@@ -229,6 +260,10 @@ public:
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
     co_return finalize_impl();
+  }
+
+  auto state() -> OperatorState override {
+    return state_impl();
   }
 
   auto snapshot(Serde& s) -> void override {
@@ -256,8 +291,7 @@ public:
   }
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(result);
-    return process_task_impl(ctx);
+    return process_task_impl(std::move(result), ctx);
   }
 
   auto finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> override {
@@ -268,6 +302,10 @@ public:
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
     co_return finalize_impl();
+  }
+
+  auto state() -> OperatorState override {
+    return state_impl();
   }
 
   auto snapshot(Serde& s) -> void override {
