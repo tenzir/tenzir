@@ -1,6 +1,6 @@
 {
-  bytes: b"hello\n",
+  data: b"hello\n",
 }
 {
-  bytes: b"world\n",
+  data: b"world\n",
 }

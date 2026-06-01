@@ -1,4 +1,4 @@
-error: field `bytes` has unsupported type `string`
+error: field `data` has unsupported type `string`
  --> tests/operators/write_chunks/02_string_stdout.tql:7:3
   |
 7 |   write_chunks

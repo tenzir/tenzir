@@ -1,0 +1,4 @@
+from {payload: b"hello"}, {payload: b" "}, {payload: b"world"}
+to_stdout {
+  write_chunks payload
+}

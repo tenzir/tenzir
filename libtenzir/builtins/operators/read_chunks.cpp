@@ -30,7 +30,7 @@ public:
     if (input->size() == 0) {
       co_return;
     }
-    builder_.record().field("bytes", as_bytes(input));
+    builder_.record().field("data", as_bytes(input));
     co_await pusher_.push(builder_.yield_ready(type_name), push);
   }
 

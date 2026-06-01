@@ -2,7 +2,7 @@
 error: true
 ---
 
-from {bytes: "not a blob"}
+from {data: "not a blob"}
 to_stdout {
   write_chunks
 }
