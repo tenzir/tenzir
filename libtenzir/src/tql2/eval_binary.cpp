@@ -15,6 +15,7 @@
 #include "tenzir/checked_math.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
@@ -902,6 +903,84 @@ auto eval_and_or(evaluator& self, ast::binary_expr const& x,
   return series{bool_type{}, std::move(result)};
 }
 
+/// Combines two row-aligned series and appends the result to `out`. For each
+/// row `i`, the value is taken from `a` when `take_a(i)` is `true`, otherwise
+/// from `b`. `take_a` is queried for the window-relative indices
+/// `[0, a.length())`.
+///
+/// The result uses as few parts as possible. A window over which `take_a` never
+/// flips is appended as a single copy-free slice. Otherwise, when the two sides
+/// share a type — or one side is `null`, which contributes nulls — the runs are
+/// appended into a single builder, yielding one array. Only when the types are
+/// genuinely incompatible (e.g. records with differing fields) do we fall back
+/// to one slice per run, keeping the distinct types apart.
+template <class Selector>
+auto append_combined(multi_series& out, series const& a, series const& b,
+                     Selector&& take_a) -> void {
+  auto const length = a.length();
+  TENZIR_ASSERT_EQ(b.length(), length);
+  if (length == 0) {
+    return;
+  }
+  // Locate the first row where the selector flips.
+  auto const first = take_a(0);
+  auto flip = int64_t{1};
+  while (flip < length and take_a(flip) == first) {
+    ++flip;
+  }
+  if (flip == length) {
+    // Single run: the whole window comes from one side; append it as-is.
+    out.append(first ? a : b);
+    return;
+  }
+  // Invoke `on_run(from_a, start, end)` for each contiguous run, with the
+  // selected side and the run's `[start, end)` range.
+  auto for_each_run = [&](auto&& on_run) {
+    on_run(first, int64_t{0}, flip);
+    auto start = flip;
+    auto from_a = not first;
+    for (auto i = flip + 1; i < length; ++i) {
+      if (take_a(i) != from_a) {
+        on_run(from_a, start, i);
+        start = i;
+        from_a = not from_a;
+      }
+    }
+    on_run(from_a, start, length);
+  };
+  // The unified type of the two sides, or `None` if they cannot share an array.
+  auto const null = type{null_type{}};
+  auto fuse_type = Option<type>{};
+  if (a.type == b.type) {
+    fuse_type = a.type;
+  } else if (a.type == null) {
+    fuse_type = b.type;
+  } else if (b.type == null) {
+    fuse_type = a.type;
+  }
+  if (not fuse_type) {
+    // Incompatible types: keep one copy-free slice per run.
+    for_each_run([&](bool from_a, int64_t start, int64_t end) {
+      out.append((from_a ? a : b).slice(start, end));
+    });
+    return;
+  }
+  // Mergeable: append every run into a single builder of the fused type. Each
+  // run is bulk-appended from its source array; a `null`-typed side contributes
+  // the matching number of nulls.
+  auto builder = fuse_type->make_arrow_builder(tenzir::arrow_memory_pool());
+  for_each_run([&](bool from_a, int64_t start, int64_t end) {
+    auto const& src = from_a ? a : b;
+    auto const count = end - start;
+    if (src.type == null) {
+      check(builder->AppendNulls(count));
+    } else {
+      check(append_array_slice(*builder, *fuse_type, *src.array, start, count));
+    }
+  });
+  out.append(series{*fuse_type, check(builder->Finish())});
+}
+
 auto eval_if(evaluator& self, ast::binary_expr const& x,
              ast::expression const& fallback, ActiveRows const& active)
   -> multi_series;
@@ -990,34 +1069,15 @@ auto eval_if(evaluator& self, ast::binary_expr const& x,
   });
   auto then_ms = self.eval_narrowed(x.left, then_active);
   auto else_ms = self.eval_narrowed(fallback, else_active);
-  // Combine: pick then where cond is true, else where cond is false.
+  // Combine: pick then where the condition holds, else the fallback.
   auto result = multi_series{};
   auto offset = int64_t{0};
   for (auto [then_part, else_part] : split_multi_series(then_ms, else_ms)) {
-    auto length = then_part.length();
-    auto begin = offset;
-    offset += length;
-    auto get_cond = [&](int64_t i) -> bool {
+    auto const begin = offset;
+    offset += then_part.length();
+    append_combined(result, then_part, else_part, [&](int64_t i) {
       return cond_active->GetView(begin + i);
-    };
-    if (length == 0) {
-      continue;
-    }
-    auto range_start = int64_t{0};
-    auto range_val = get_cond(0);
-    auto append_range = [&](int64_t end) {
-      result.append(
-        (range_val ? then_part : else_part).slice(range_start, end));
-    };
-    for (auto i = int64_t{1}; i < length; ++i) {
-      if (get_cond(i) == range_val) {
-        continue;
-      }
-      append_range(i);
-      range_start = i;
-      range_val = not range_val;
-    }
-    append_range(length);
+    });
   }
   TENZIR_ASSERT_EQ(result.length(), self.length());
   return result;
@@ -1055,33 +1115,9 @@ auto eval_else(evaluator& self, ast::binary_expr const& x,
   // Combine: pick left where non-null, else pick right.
   auto result = multi_series{};
   for (auto [left_part, right_part] : split_multi_series(left_ms, right_ms)) {
-    auto length = left_part.length();
-    if (left_part.array->null_count() == 0) {
-      result.append(left_part);
-      continue;
-    }
-    if (left_part.array->null_count() == length) {
-      result.append(right_part);
-      continue;
-    }
-    auto range_start = int64_t{0};
-    auto range_valid = left_part.array->IsValid(0);
-    auto append_range = [&](int64_t end) {
-      if (range_valid) {
-        result.append(left_part.slice(range_start, end));
-      } else {
-        result.append(right_part.slice(range_start, end));
-      }
-    };
-    for (auto i = int64_t{1}; i < length; ++i) {
-      if (left_part.array->IsValid(i) == range_valid) {
-        continue;
-      }
-      append_range(i);
-      range_start = i;
-      range_valid = not range_valid;
-    }
-    append_range(length);
+    append_combined(result, left_part, right_part, [&](int64_t i) {
+      return left_part.array->IsValid(i);
+    });
   }
   TENZIR_ASSERT_EQ(result.length(), self.length());
   return result;
