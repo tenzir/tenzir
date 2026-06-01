@@ -64,13 +64,9 @@ struct UnixSocketTo {
     return {"operator", "to_unix_socket"};
   }
 
-  auto bytes_metric_label_before_connect() const -> Option<MetricsLabel> {
-    return MetricsLabel{"operator", "to_unix_socket"};
-  }
-
-  auto bytes_metric_label_after_connect(folly::coro::Transport const&) const
+  auto bytes_metric_label(Option<folly::coro::Transport const&>) const
     -> Option<MetricsLabel> {
-    return None{};
+    return MetricsLabel{"operator", "to_unix_socket"};
   }
 
   auto connect(folly::EventBase* evb) -> Task<folly::coro::Transport> {

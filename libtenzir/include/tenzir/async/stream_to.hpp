@@ -52,7 +52,7 @@ public:
     events_write_counter_
       = ctx.make_counter(impl_.events_metric_label(), MetricsDirection::write,
                          MetricsVisibility::external_, MetricsUnit::events);
-    if (auto label = impl_.bytes_metric_label_before_connect()) {
+    if (auto label = impl_.bytes_metric_label(None{})) {
       bytes_write_counter_
         = ctx.make_counter(*label, MetricsDirection::write,
                            MetricsVisibility::external_, MetricsUnit::bytes);
@@ -190,7 +190,7 @@ private:
       finish();
       co_return;
     }
-    if (auto label = impl_.bytes_metric_label_after_connect(*transport_)) {
+    if (auto label = impl_.bytes_metric_label(*transport_)) {
       bytes_write_counter_
         = ctx.make_counter(*label, MetricsDirection::write,
                            MetricsVisibility::external_, MetricsUnit::bytes);

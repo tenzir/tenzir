@@ -86,13 +86,12 @@ struct TcpTo {
     return {"operator", "to_tcp"};
   }
 
-  auto bytes_metric_label_before_connect() const -> Option<MetricsLabel> {
-    return None{};
-  }
-
-  auto bytes_metric_label_after_connect(
-    folly::coro::Transport const& transport) const -> Option<MetricsLabel> {
-    auto peer_addr = transport.getPeerAddress();
+  auto bytes_metric_label(Option<folly::coro::Transport const&> transport) const
+    -> Option<MetricsLabel> {
+    if (not transport) {
+      return None{};
+    }
+    auto peer_addr = transport->getPeerAddress();
     return MetricsLabel{
       "peer_ip",
       MetricsLabel::FixedString::truncate(peer_addr.getAddressStr()),
