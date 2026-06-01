@@ -72,14 +72,44 @@ public:
     switch (op) {
       case relational_operator::in:
         return membership();
-      case relational_operator::not_in:
-        if (auto result = membership()) {
-          // Invert the result if we are sure.
-          return not *result;
-        } else {
-          // May or may not contain the elements.
-          return result;
+      case relational_operator::not_in: {
+        // `min` and `max` are values we are sure exist in the partition.
+        // The predicate definitely holds whenever one of them is provably
+        // missing from the list; it can only be ruled out when every
+        // stored value is in the list, which from min/max alone is
+        // provable just in the degenerate `min == max` case.
+        auto xs = try_as<view<list>>(&rhs);
+        if (not xs) {
+          return {};
         }
+        auto min_found = false;
+        auto max_found = false;
+        auto uncomparable = false;
+        for (auto x : **xs) {
+          auto v = try_as<view<T>>(&x);
+          if (not v) {
+            // A type-mismatched element could still match an endpoint
+            // after coercion; treat it as preventing a definitive answer.
+            uncomparable = true;
+            continue;
+          }
+          if (*v == min_) {
+            min_found = true;
+          }
+          if (*v == max_) {
+            max_found = true;
+          }
+        }
+        // We can only conclude an endpoint is *not* in the list when we
+        // walked the entire list without any uncomparable entries.
+        if ((not min_found or not max_found) and not uncomparable) {
+          return true;
+        }
+        if (min_found and max_found and min_ == max_) {
+          return false;
+        }
+        return std::nullopt;
+      }
       case relational_operator::equal:
       case relational_operator::not_equal:
       case relational_operator::less:
