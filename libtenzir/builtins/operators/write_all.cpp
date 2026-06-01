@@ -109,6 +109,10 @@ public:
     auto d = Describer<WriteAllArgs, WriteAll>{};
     auto field = d.positional("field", &WriteAllArgs::field, "field");
     d.validate([=](DescribeCtx& ctx) -> Empty {
+      diagnostic::warning("`write_all` is deprecated")
+        .primary(ctx.operator_location())
+        .hint("use `write_chunks` instead")
+        .emit(ctx);
       auto value = ctx.get(field);
       if (value and value->path().empty()) {
         diagnostic::error("cannot write all of `this`")
