@@ -103,18 +103,20 @@ struct memory_budget {
   detail::available_memory_info available = {};
 };
 
-auto rebuild_byte_budget() -> memory_budget {
+auto rebuild_byte_budget(size_t parallelism) -> memory_budget {
   auto available
     = detail::available_memory().value_or(detail::available_memory_info{
       .bytes = uint64_t{512} * 1024 * 1024,
       .source = "fallback",
     });
+  const auto divisor
+    = std::max<uint64_t>(detail::narrow_cast<uint64_t>(parallelism), 1);
   return {
     // The transformer currently holds decoded output slices before persisting
     // the new Feather store, and the store writer builds additional Arrow
     // structures during persist. Admit substantially less than the apparent
     // free memory to leave room for those copies and unrelated node activity.
-    .bytes = available.bytes / 4,
+    .bytes = available.bytes / 4 / divisor,
     .available = std::move(available),
   };
 }
@@ -440,7 +442,7 @@ struct rebuilder_state {
     auto current_run_events = size_t{0};
     auto current_run_bytes = uint64_t{0};
     auto current_run_is_full = false;
-    auto current_run_budget = rebuild_byte_budget();
+    auto current_run_budget = rebuild_byte_budget(run->options.parallel);
     if (current_run_budget.bytes == 0) {
       return caf::make_error(ec::out_of_memory,
                              "rebuild has no memory budget available "
