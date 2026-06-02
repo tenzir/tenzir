@@ -200,6 +200,8 @@ public:
   auto optimize(optimize_filter filter,
                 event_order order) && -> optimize_result override;
 
+  auto try_merge_successor(Operator& successor) -> bool override;
+
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override;
 

@@ -1,0 +1,106 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     from_ir {
+       events: [
+         record {
+           begin: 5..6,
+           items: [
+             field {
+               name: `a` @ 6..7,
+               expr: record {
+                 begin: 9..10,
+                 items: [
+                   field {
+                     name: `b` @ 10..11,
+                     expr: constant int64 0 @ 13..14
+                   }
+                 ],
+                 end: 14..15
+               }
+             }
+           ],
+           end: 15..16
+         }
+       ],
+       self: 0..4
+     },
+     SetIr {
+       assignments: [
+         {
+           left: field_path {
+             expr: field_access {
+               left: root_field {
+                 id: `a` @ 17..18,
+                 has_question_mark: false
+               },
+               dot: 18..19,
+               has_question_mark: false,
+               name: `b` @ 19..20
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `a` @ 17..18,
+                 has_question_mark: false
+               },
+               {
+                 id: `b` @ 19..20,
+                 has_question_mark: false
+               }
+             ]
+           },
+           equals: 21..22,
+           right: constant int64 1 @ 23..24
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: field_path {
+             expr: root_field {
+               id: `y` @ 25..26,
+               has_question_mark: false
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `y` @ 25..26,
+                 has_question_mark: false
+               }
+             ]
+           },
+           equals: 27..28,
+           right: root_field {
+             id: `a` @ 29..30,
+             has_question_mark: false
+           }
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ 0..0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }

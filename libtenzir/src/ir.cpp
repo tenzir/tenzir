@@ -25,6 +25,7 @@
 #include "tenzir/view3.hpp"
 
 #include <algorithm>
+#include <iterator>
 #include <ranges>
 #include <utility>
 
@@ -252,6 +253,20 @@ auto touched_fields_for_set(const std::vector<ast::assignment>& assignments)
   return result;
 }
 
+auto rhs_refs_for_set(const std::vector<ast::assignment>& assignments)
+  -> Option<ast::ExprRefs> {
+  auto result = ast::ExprRefs{};
+  for (const auto& assignment : assignments) {
+    auto refs = ast::collect_refs(assignment.right);
+    if (not refs or not refs->let_ids.empty()) {
+      return None{};
+    }
+    std::ranges::move(refs->field_paths,
+                      std::back_inserter(result.field_paths));
+  }
+  return result;
+}
+
 } // namespace
 
 auto ir::SetIr::optimize(ir::optimize_filter filter,
@@ -275,6 +290,33 @@ auto ir::SetIr::optimize(ir::optimize_filter filter,
     order_,
     ir::pipeline{{}, std::move(ops)},
   };
+}
+
+auto ir::SetIr::try_merge_successor(ir::Operator& successor) -> bool {
+  auto* other = dynamic_cast<SetIr*>(&successor);
+  if (other == nullptr) {
+    return false;
+  }
+  auto touched_paths = touched_fields_for_set(assignments_);
+  if (not touched_paths) {
+    return false;
+  }
+  if (not touched_fields_for_set(other->assignments_)) {
+    return false;
+  }
+  auto rhs_refs = rhs_refs_for_set(other->assignments_);
+  if (not rhs_refs) {
+    return false;
+  }
+  auto touched = ast::ExprRefs{.field_paths = std::move(*touched_paths)};
+  if (rhs_refs->overlaps(touched)) {
+    return false;
+  }
+  assignments_.insert(assignments_.end(),
+                      std::move_iterator{other->assignments_.begin()},
+                      std::move_iterator{other->assignments_.end()});
+  order_ = weaker_event_order(order_, other->order_);
+  return true;
 }
 
 auto ir::SetIr::infer_type(element_type_tag input, diagnostic_handler& dh) const

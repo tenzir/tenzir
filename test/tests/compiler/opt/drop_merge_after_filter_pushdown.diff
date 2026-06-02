@@ -1,0 +1,133 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     from_ir {
+       events: [
+         record {
+           begin: 5..6,
+           items: [
+             field {
+               name: `a` @ 6..7,
+               expr: constant int64 1 @ 9..10
+             },
+             field {
+               name: `b` @ 12..13,
+               expr: constant int64 2 @ 15..16
+             },
+             field {
+               name: `keep` @ 18..22,
+               expr: constant bool true @ 24..28
+             }
+           ],
+           end: 28..29
+         }
+       ],
+       self: 0..4
+     },
++    where_ir {
++      self: 0..0,
++      predicate: binary_expr {
++        left: root_field {
++          id: `keep` @ 43..47,
++          has_question_mark: false
++        },
++        op: "eq" @ 48..50,
++        right: constant bool true @ 51..55
++      }
++    },
+     GenericIr {
+       op: {
+         path: [
+           `drop` @ 30..34
+         ],
+         ref: std::drop/op
+       },
+       desc: "tql2.drop",
+       args: [
+         field_path {
+           expr: root_field {
+             id: `a` @ 35..36,
+             has_question_mark: false
+           },
+           has_this: false,
+           path: [
+             {
+               id: `a` @ 35..36,
+               has_question_mark: false
+             }
+           ]
+-        }
+-      ],
+-      filter: [
+-        
+-      ],
+-      order: "ordered",
+-      named_args: [
+-        
+-      ]
+-    },
+-    where_ir {
+-      self: 37..42,
+-      predicate: binary_expr {
+-        left: root_field {
+-          id: `keep` @ 43..47,
+-          has_question_mark: false
+         },
+-        op: "eq" @ 48..50,
+-        right: constant bool true @ 51..55
+-      }
+-    },
+-    GenericIr {
+-      op: {
+-        path: [
+-          `drop` @ 56..60
+-        ],
+-        ref: std::drop/op
+-      },
+-      desc: "tql2.drop",
+-      args: [
+         field_path {
+           expr: root_field {
+             id: `b` @ 61..62,
+             has_question_mark: false
+           },
+           has_this: false,
+           path: [
+             {
+               id: `b` @ 61..62,
+               has_question_mark: false
+             }
+           ]
+         }
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ 0..0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }

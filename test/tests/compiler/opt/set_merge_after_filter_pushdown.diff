@@ -1,0 +1,111 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     from_ir {
+       events: [
+         record {
+           begin: 5..6,
+           items: [
+             field {
+               name: `a` @ 6..7,
+               expr: constant int64 0 @ 9..10
+             },
+             field {
+               name: `keep` @ 12..16,
+               expr: constant bool true @ 18..22
+             }
+           ],
+           end: 22..23
+         }
+       ],
+       self: 0..4
+     },
++    where_ir {
++      self: 0..0,
++      predicate: binary_expr {
++        left: root_field {
++          id: `keep` @ 36..40,
++          has_question_mark: false
++        },
++        op: "eq" @ 41..43,
++        right: constant bool true @ 44..48
++      }
++    },
+     SetIr {
+       assignments: [
+         {
+           left: field_path {
+             expr: root_field {
+               id: `a` @ 24..25,
+               has_question_mark: false
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `a` @ 24..25,
+                 has_question_mark: false
+               }
+             ]
+           },
+           equals: 26..27,
+           right: constant int64 1 @ 28..29
+-        }
+-      ],
+-      order: "ordered"
+-    },
+-    where_ir {
+-      self: 30..35,
+-      predicate: binary_expr {
+-        left: root_field {
+-          id: `keep` @ 36..40,
+-          has_question_mark: false
+         },
+-        op: "eq" @ 41..43,
+-        right: constant bool true @ 44..48
+-      }
+-    },
+-    SetIr {
+-      assignments: [
+         {
+           left: field_path {
+             expr: root_field {
+               id: `b` @ 49..50,
+               has_question_mark: false
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `b` @ 49..50,
+                 has_question_mark: false
+               }
+             ]
+           },
+           equals: 51..52,
+           right: constant int64 2 @ 53..54
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ 0..0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }
