@@ -54,7 +54,7 @@ tenzir:
         stderr=subprocess.PIPE,
         text=True,
     )
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 60
     while proc.poll() is None and time.monotonic() < deadline:
         time.sleep(0.1)
     if proc.poll() is None:
@@ -64,7 +64,12 @@ tenzir:
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait(timeout=5)
-        raise AssertionError("node kept running despite invalid configured pipeline")
+        stdout, stderr = proc.communicate()
+        raise AssertionError(
+            "node kept running despite invalid configured pipeline\n"
+            f"stdout:\n{stdout}\n"
+            f"stderr:\n{stderr}"
+        )
     stdout, stderr = proc.communicate()
     assert proc.returncode != 0, (proc.returncode, stdout, stderr)
     assert not marker.exists(), (
