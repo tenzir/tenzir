@@ -252,6 +252,7 @@ CREATE TABLE dbo.full_types (
   smalldatetime_val SMALLDATETIME NOT NULL,
   datetime2_val DATETIME2(7) NOT NULL,
   datetimeoffset_val DATETIMEOFFSET(0) NOT NULL,
+  nullable_tiny_val TINYINT NULL,
   nullable_int_val INT NULL,
   nullable_bit_val BIT NULL,
   nullable_float_val FLOAT NULL,
@@ -272,7 +273,7 @@ INSERT INTO dbo.full_types VALUES
    CAST('2024-05-06T07:08:00' AS SMALLDATETIME),
    CAST('2024-05-06T07:08:09.1234567' AS DATETIME2(7)),
    CAST('2024-05-06T07:08:09+02:00' AS DATETIMEOFFSET(0)),
-   42, 1, 2.5, 99.9900,
+   255, 42, 1, 2.5, 99.9900,
    CAST('2024-05-06T07:08:09.123' AS DATETIME),
    CAST('<root><x>1</x></root>' AS XML),
    N'{{"x":1}}');
