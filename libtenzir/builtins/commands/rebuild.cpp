@@ -218,8 +218,16 @@ struct rebuilder_state {
     if (partition.events == 0 or partition.approx_bytes == 0) {
       return;
     }
-    approx_bytes_per_event[partition.schema]
+    const auto bytes_per_event
       = std::max<uint64_t>(partition.approx_bytes / partition.events, 1);
+    auto& estimate = approx_bytes_per_event[partition.schema];
+    if (estimate == 0) {
+      estimate = bytes_per_event;
+    } else if (estimate < bytes_per_event) {
+      estimate += (bytes_per_event - estimate) / 2;
+    } else {
+      estimate = bytes_per_event + (estimate - bytes_per_event) / 2;
+    }
   }
 
   auto has_size_estimate(const partition_info& partition) const -> bool {

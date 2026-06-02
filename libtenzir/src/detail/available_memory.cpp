@@ -8,6 +8,8 @@
 
 #include "tenzir/detail/available_memory.hpp"
 
+#include "tenzir/config.hpp"
+
 #if defined(__APPLE__) && __has_include(<mach/mach.h>)
 #  include <mach/mach.h>
 #  include <mach/mach_host.h>
@@ -15,10 +17,14 @@
 #  include <unistd.h>
 #endif
 
+#if TENZIR_LINUX
+#  include <pfs/procfs.hpp>
+#endif
+
+#include <algorithm>
 #include <exception>
 #include <filesystem>
 #include <fstream>
-#include <sstream>
 #include <string>
 #include <string_view>
 
@@ -69,35 +75,6 @@ auto read_cgroup_memory_available(const std::filesystem::path& dir,
   };
 }
 
-auto octal_digit(char ch) -> std::optional<char> {
-  if (ch < '0' or ch > '7') {
-    return std::nullopt;
-  }
-  return ch - '0';
-}
-
-auto unescape_mountinfo_field(std::string_view raw) -> std::string {
-  auto result = std::string{};
-  result.reserve(raw.size());
-  for (auto i = size_t{0}; i < raw.size(); ++i) {
-    if (raw[i] != '\\' or i + 3 >= raw.size()) {
-      result.push_back(raw[i]);
-      continue;
-    }
-    auto first = octal_digit(raw[i + 1]);
-    auto second = octal_digit(raw[i + 2]);
-    auto third = octal_digit(raw[i + 3]);
-    if (not first or not second or not third) {
-      result.push_back(raw[i]);
-      continue;
-    }
-    result.push_back(
-      static_cast<char>((*first << 6) + (*second << 3) + *third));
-    i += 3;
-  }
-  return result;
-}
-
 auto relative_cgroup_path(std::string_view raw) -> std::filesystem::path {
   while (raw.starts_with('/')) {
     raw.remove_prefix(1);
@@ -111,34 +88,20 @@ struct cgroup2_mount {
 };
 
 auto find_cgroup2_mount() -> std::optional<cgroup2_mount> {
-  auto mountinfo = std::ifstream{"/proc/self/mountinfo"};
-  auto line = std::string{};
-  while (std::getline(mountinfo, line)) {
-    const auto separator = line.find(" - ");
-    if (separator == std::string::npos) {
-      continue;
+#if TENZIR_LINUX
+  try {
+    for (const auto& mount : pfs::procfs{}.get_task().get_mountinfo()) {
+      if (mount.filesystem_type != "cgroup2") {
+        continue;
+      }
+      return cgroup2_mount{
+        .root = mount.root,
+        .mount_point = mount.point,
+      };
     }
-    auto before_separator = std::istringstream{line.substr(0, separator)};
-    auto id = std::string{};
-    auto parent_id = std::string{};
-    auto major_minor = std::string{};
-    auto root = std::string{};
-    auto mount_point = std::string{};
-    if (not(before_separator >> id >> parent_id >> major_minor >> root
-            >> mount_point)) {
-      continue;
-    }
-    auto after_separator = std::istringstream{line.substr(separator + 3)};
-    auto filesystem_type = std::string{};
-    after_separator >> filesystem_type;
-    if (filesystem_type != "cgroup2") {
-      continue;
-    }
-    return cgroup2_mount{
-      .root = unescape_mountinfo_field(root),
-      .mount_point = unescape_mountinfo_field(mount_point),
-    };
+  } catch (const std::exception&) {
   }
+#endif
   return std::nullopt;
 }
 
@@ -198,37 +161,31 @@ auto cgroup2_memory_available(const std::filesystem::path& path)
 }
 
 auto cgroup_memory_available() -> std::optional<available_memory_info> {
-  auto cgroups = std::ifstream{"/proc/self/cgroup"};
-  auto line = std::string{};
-  while (std::getline(cgroups, line)) {
-    const auto first = line.find(':');
-    if (first == std::string::npos) {
-      continue;
-    }
-    const auto second = line.find(':', first + 1);
-    if (second == std::string::npos) {
-      continue;
-    }
-    const auto controllers
-      = std::string_view{line}.substr(first + 1, second - first - 1);
-    const auto path
-      = relative_cgroup_path(std::string_view{line}.substr(second + 1));
-    if (controllers.empty()) {
-      if (auto result = cgroup2_memory_available(path)) {
-        return result;
-      }
-    } else if (controllers.find("memory") != std::string_view::npos) {
-      if (auto result = read_cgroup_memory_available(
-            std::filesystem::path{"/sys/fs/cgroup/memory"} / path,
-            "cgroup-v1")) {
-        return result;
-      }
-      if (auto result = read_cgroup_memory_available(
-            std::filesystem::path{"/sys/fs/cgroup"} / path, "cgroup-v1")) {
-        return result;
+#if TENZIR_LINUX
+  try {
+    for (const auto& cgroup : pfs::procfs{}.get_task().get_cgroups()) {
+      const auto path = relative_cgroup_path(cgroup.pathname);
+      if (cgroup.controllers.empty()) {
+        if (auto result = cgroup2_memory_available(path)) {
+          return result;
+        }
+      } else if (std::find(cgroup.controllers.begin(), cgroup.controllers.end(),
+                           "memory")
+                 != cgroup.controllers.end()) {
+        if (auto result = read_cgroup_memory_available(
+              std::filesystem::path{"/sys/fs/cgroup/memory"} / path,
+              "cgroup-v1")) {
+          return result;
+        }
+        if (auto result = read_cgroup_memory_available(
+              std::filesystem::path{"/sys/fs/cgroup"} / path, "cgroup-v1")) {
+          return result;
+        }
       }
     }
+  } catch (const std::exception&) {
   }
+#endif
   return read_cgroup_memory_available("/sys/fs/cgroup", "cgroup");
 }
 

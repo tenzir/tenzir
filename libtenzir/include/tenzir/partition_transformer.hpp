@@ -123,8 +123,9 @@ struct partition_transformer_state {
   /// Options for creating new value indices.
   caf::settings index_opts = {};
 
-  // Format strings that can be formatted with a `tenzir::uuid` as the single
-  // parameter for input partitions and transformed output files.
+  // Paths used to read existing partitions and write transformed output files.
+  // The template strings can be formatted with a `tenzir::uuid` as the single
+  // parameter.
   std::string input_partition_path_template;
   std::filesystem::path archive_dir;
   std::string partition_path_template;
