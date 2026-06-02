@@ -18,7 +18,7 @@ docker run \
 
 sleep 3
 
-docker exec -e TENZIR_TQL2=true tenzir-regression \
+docker exec -i -e TENZIR_TQL2=true tenzir-regression \
   tenzir 'read_suricata | import' \
   <test/inputs/suricata/eve.json
 
