@@ -252,6 +252,7 @@ auto build_partition_slices(const std::vector<partition_synopsis_pair>& synopses
             + synopsis.synopsis->indexes_file.size
             + synopsis.synopsis->sketches_file.size);
     event.field("events").data(synopsis.synopsis->events);
+    event.field("approx_bytes").data(synopsis.synopsis->approx_bytes);
     event.field("min_import_time").data(synopsis.synopsis->min_import_time);
     event.field("max_import_time").data(synopsis.synopsis->max_import_time);
     event.field("version").data(synopsis.synopsis->version);

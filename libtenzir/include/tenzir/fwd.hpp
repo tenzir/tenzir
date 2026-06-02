@@ -250,9 +250,11 @@ struct operator_metric;
 struct package;
 struct package_pipelines_map;
 struct package_contexts_map;
+struct partition_apply_result;
 struct partition_info;
 struct partition_synopsis_pair;
 struct partition_synopsis;
+struct partition_transformer_result;
 struct passive_partition_state;
 struct predicate;
 struct qualified_record_field;
@@ -474,9 +476,11 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::operator_metric))
   TENZIR_ADD_TYPE_ID((tenzir::operator_type))
   TENZIR_ADD_TYPE_ID((tenzir::package))
+  TENZIR_ADD_TYPE_ID((tenzir::partition_apply_result))
   TENZIR_ADD_TYPE_ID((tenzir::partition_info))
   TENZIR_ADD_TYPE_ID((tenzir::partition_synopsis_pair))
   TENZIR_ADD_TYPE_ID((tenzir::partition_synopsis_ptr))
+  TENZIR_ADD_TYPE_ID((tenzir::partition_transformer_result))
   TENZIR_ADD_TYPE_ID((tenzir::pattern))
   TENZIR_ADD_TYPE_ID((tenzir::pipeline))
   TENZIR_ADD_TYPE_ID((tenzir::ast::pipeline))

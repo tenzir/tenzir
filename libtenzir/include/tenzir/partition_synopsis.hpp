@@ -73,6 +73,9 @@ struct partition_synopsis final : public caf::ref_counted {
   /// The version number of this partition.
   uint64_t version = version::current_partition_version;
 
+  /// Best-effort estimate of the decoded in-memory size of the partition data.
+  uint64_t approx_bytes = 0;
+
   /// The schema of this partition. This is only set for partition synopses with
   /// a version >= 1, because they are guaranteed to be homogenous.
   type schema = {};
@@ -109,18 +112,24 @@ struct partition_info {
   partition_info() noexcept = default;
 
   partition_info(class uuid uuid, size_t events, time max_import_time,
-                 type schema, uint64_t version) noexcept
+                 type schema, uint64_t version,
+                 uint64_t approx_bytes = 0) noexcept
     : uuid{uuid},
       events{events},
       max_import_time{max_import_time},
       schema{std::move(schema)},
-      version{version} {
+      version{version},
+      approx_bytes{approx_bytes} {
     // nop
   }
 
   partition_info(class uuid uuid, const partition_synopsis& synopsis)
-    : partition_info{uuid, synopsis.events, synopsis.max_import_time,
-                     synopsis.schema, synopsis.version} {
+    : partition_info{uuid,
+                     synopsis.events,
+                     synopsis.max_import_time,
+                     synopsis.schema,
+                     synopsis.version,
+                     synopsis.approx_bytes} {
     // nop
   }
 
@@ -139,6 +148,9 @@ struct partition_info {
 
   /// The internal version of the partition.
   uint64_t version = {};
+
+  /// Best-effort estimate of the decoded in-memory size of the partition data.
+  uint64_t approx_bytes = 0;
 
   friend std::strong_ordering
   operator<=>(const partition_info& lhs, const partition_info& rhs) noexcept {
@@ -166,7 +178,8 @@ struct partition_info {
       .pretty_name("tenzir.partition-info")
       .fields(f.field("uuid", x.uuid), f.field("events", x.events),
               f.field("max-import-time", x.max_import_time),
-              f.field("schema", x.schema), f.field("version", x.version));
+              f.field("schema", x.schema), f.field("version", x.version),
+              f.field("approx-bytes", x.approx_bytes));
   }
 };
 
@@ -180,6 +193,36 @@ struct partition_synopsis_pair {
     return f.object(x)
       .pretty_name("tenzir.partition-synopsis-pair")
       .fields(f.field("uuid", x.uuid), f.field("synopsis", x.synopsis));
+  }
+};
+
+struct partition_transformer_result {
+  std::vector<partition_info> input_partitions;
+  std::vector<partition_synopsis_pair> output_partitions;
+  bool input_complete = true;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, partition_transformer_result& x) {
+    return f.object(x)
+      .pretty_name("tenzir.partition-transformer-result")
+      .fields(f.field("input-partitions", x.input_partitions),
+              f.field("output-partitions", x.output_partitions),
+              f.field("input-complete", x.input_complete));
+  }
+};
+
+struct partition_apply_result {
+  std::vector<partition_info> input_partitions;
+  std::vector<partition_info> output_partitions;
+  bool input_complete = true;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, partition_apply_result& x) {
+    return f.object(x)
+      .pretty_name("tenzir.partition-apply-result")
+      .fields(f.field("input-partitions", x.input_partitions),
+              f.field("output-partitions", x.output_partitions),
+              f.field("input-complete", x.input_complete));
   }
 };
 

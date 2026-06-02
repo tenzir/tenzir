@@ -343,6 +343,14 @@ std::filesystem::path index_state::partition_path(const uuid& id) const {
   return dir / fmt::format("{:l}", id);
 }
 
+std::filesystem::path index_state::archive_dir() const {
+  return dir / ".." / "archive";
+}
+
+std::string index_state::partition_path_template() const {
+  return (dir / "{:l}").string();
+}
+
 std::filesystem::path
 index_state::transformer_partition_path(const uuid& id) const {
   return markersdir / fmt::format("{:l}", id);
@@ -1516,14 +1524,15 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](atom::apply, ast::pipeline pipe,
            std::vector<partition_info> selected_partitions,
            keep_original_partition keep,
-           std::string origin) -> caf::result<std::vector<partition_info>> {
-      const auto current_sender = self->current_sender();
+           std::string origin) -> caf::result<partition_apply_result> {
       if (selected_partitions.empty()) {
         return caf::make_error(ec::invalid_argument, "no partitions given");
       }
       TENZIR_DEBUG("{} applies a pipeline to partitions {}", *self,
                    selected_partitions);
       TENZIR_ASSERT(self->state().store_actor_plugin);
+      auto input_partitions = std::vector<partition_info>{};
+      input_partitions.reserve(selected_partitions.size());
       std::erase_if(selected_partitions, [&](const auto& entry) {
         if (self->state().persisted_partitions.contains(entry.uuid)) {
           return false;
@@ -1539,6 +1548,7 @@ index(index_actor::stateful_pointer<index_state> self,
               .second) {
           corrected_partitions.candidate_infos[partition.schema]
             .partition_infos.emplace_back(partition);
+          input_partitions.emplace_back(partition);
         } else {
           // Getting overlapping partitions triggers a warning, and we
           // silently ignore the partition at the cost of the transformation
@@ -1552,9 +1562,12 @@ index(index_actor::stateful_pointer<index_state> self,
         }
       }
       if (corrected_partitions.empty()) {
-        return std::vector<partition_info>{};
+        return partition_apply_result{};
       }
       auto store_id = std::string{self->state().store_actor_plugin->name()};
+      auto input_partition_path_template
+        = self->state().partition_path_template();
+      auto archive_dir = self->state().archive_dir();
       auto partition_path_template
         = self->state().transformer_partition_path_template();
       auto partition_synopsis_path_template
@@ -1563,7 +1576,9 @@ index(index_actor::stateful_pointer<index_state> self,
       partition_transformer_actor partition_transfomer = self->spawn(
         partition_transformer, store_id, self->state().synopsis_opts,
         self->state().index_opts, self->state().catalog,
-        self->state().filesystem, pipe, std::move(partition_path_template),
+        self->state().filesystem, std::move(input_partitions), pipe,
+        std::move(input_partition_path_template), std::move(archive_dir),
+        std::move(partition_path_template),
         std::move(partition_synopsis_path_template), std::move(origin));
       /// Monitor the actor to remove it from the collection of active
       /// transformers.
@@ -1580,71 +1595,39 @@ index(index_actor::stateful_pointer<index_state> self,
         std::move(partition_transformer_addr),
         std::move(partition_completion_disposable));
       TENZIR_ASSERT(inserted);
-      // match_everything == '"" in #schema'
-      static const auto match_everything
-        = tenzir::predicate{meta_extractor{meta_extractor::schema},
-                            relational_operator::ni, data{""}};
-      auto query_context = query_context::make_extract(
-        fmt::format("{:?}", pipe), partition_transfomer, match_everything);
-      auto transform_id = self->state().pending_queries.create_query_id();
-      query_context.id = transform_id;
-      // We set the query priority for partition transforms to zero so they
-      // always get less priority than queries.
-      query_context.priority = 0;
-      TENZIR_TRACE("{} emplaces {} for pipeline {:?}", *self, query_context,
-                   pipe);
-      auto query_contexts = query_state::type_query_context_map{};
-      for (const auto& [type, _] : corrected_partitions.candidate_infos) {
-        query_contexts[type] = query_context;
-      }
-      auto input_size
-        = detail::narrow_cast<uint32_t>(corrected_partitions.size());
-      auto err = self->state().pending_queries.insert(
-        query_state{.query_contexts_per_type = query_contexts,
-                    .client = caf::actor_cast<receiver_actor<atom::done>>(
-                      partition_transfomer),
-                    .candidate_partitions = input_size,
-                    .requested_partitions = input_size},
-        catalog_lookup_result{corrected_partitions});
-      TENZIR_ASSERT(err == caf::none);
-      const auto num_scheduled = self->state().schedule_lookups();
-      TENZIR_DEBUG("{} scheduled {} partitions following a request to "
-                   "transform partitions",
-                   *self, num_scheduled);
-      auto marker_path = self->state().marker_path(transform_id);
-      auto rp = self->make_response_promise<std::vector<partition_info>>();
-      auto deliver =
-        [self, rp, corrected_partitions, marker_path](
-          caf::expected<std::vector<partition_info>>&& result) mutable {
-          // Erase errors don't matter too much here, leftover in-progress
-          // transforms will be cleaned up on next startup.
-          self->mail(atom::erase_v, marker_path)
-            .request(self->state().filesystem, caf::infinite)
-            .then(
-              [](atom::done) { /* nop */
-                               ;
-              },
-              [self, marker_path](const caf::error& e) {
-                TENZIR_DEBUG("{} failed to erase in-progress marker at {}: "
-                             "{}",
-                             *self, marker_path, e);
-              });
-          for (const auto& [_, candidate_info] :
-               corrected_partitions.candidate_infos) {
-            for (const auto& partition : candidate_info.partition_infos) {
-              self->state().partitions_in_transformation.erase(partition.uuid);
-            }
+      auto marker_path = self->state().marker_path(uuid::random());
+      auto rp = self->make_response_promise<partition_apply_result>();
+      auto deliver = [self, rp, corrected_partitions, marker_path](
+                       caf::expected<partition_apply_result>&& result) mutable {
+        // Erase errors don't matter too much here, leftover in-progress
+        // transforms will be cleaned up on next startup.
+        self->mail(atom::erase_v, marker_path)
+          .request(self->state().filesystem, caf::infinite)
+          .then(
+            [](atom::done) { /* nop */
+                             ;
+            },
+            [self, marker_path](const caf::error& e) {
+              TENZIR_DEBUG("{} failed to erase in-progress marker at {}: "
+                           "{}",
+                           *self, marker_path, e);
+            });
+        for (const auto& [_, candidate_info] :
+             corrected_partitions.candidate_infos) {
+          for (const auto& partition : candidate_info.partition_infos) {
+            self->state().partitions_in_transformation.erase(partition.uuid);
           }
-          if (result) {
-            rp.deliver(std::move(*result));
-          } else {
-            rp.deliver(std::move(result.error()));
-          }
-          // We clear the in-memory partitions here because they are only used
-          // by the partition transformer which will take quite some time to
-          // start again.
-          self->state().inmem_partitions.clear();
-        };
+        }
+        if (result) {
+          rp.deliver(std::move(*result));
+        } else {
+          rp.deliver(std::move(result.error()));
+        }
+        // We clear the in-memory partitions here because they are only used
+        // by the partition transformer which will take quite some time to
+        // start again.
+        self->state().inmem_partitions.clear();
+      };
       // TODO: Implement some kind of monadic composition instead of these
       // nested requests.
       // TODO: With CAF 0.19 it will no longer be needed to keep
@@ -1655,15 +1638,13 @@ index(index_actor::stateful_pointer<index_state> self,
         .then(
           [self, deliver, corrected_partitions, keep, marker_path, rp,
            partition_transfomer](
-            std::vector<partition_synopsis_pair>& apsv) mutable {
+            partition_transformer_result& transform_result) mutable {
             std::vector<uuid> old_partition_ids;
-            old_partition_ids.reserve(corrected_partitions.size());
-            for (const auto& [_, candidate_info] :
-                 corrected_partitions.candidate_infos) {
-              for (const auto& partition : candidate_info.partition_infos) {
-                old_partition_ids.emplace_back(partition.uuid);
-              }
+            old_partition_ids.reserve(transform_result.input_partitions.size());
+            for (const auto& partition : transform_result.input_partitions) {
+              old_partition_ids.emplace_back(partition.uuid);
             }
+            auto apsv = std::move(transform_result.output_partitions);
             std::vector<uuid> new_partition_ids;
             new_partition_ids.reserve(apsv.size());
             for (auto const& [uuid, _] : apsv) {
@@ -1681,6 +1662,9 @@ index(index_actor::stateful_pointer<index_state> self,
               };
               result.emplace_back(std::move(info));
             }
+            auto transformed_input_partitions
+              = std::move(transform_result.input_partitions);
+            auto input_complete = transform_result.input_complete;
             // Record in-progress marker.
             auto marker_chunk
               = create_marker(old_partition_ids, new_partition_ids, keep);
@@ -1716,7 +1700,8 @@ index(index_actor::stateful_pointer<index_state> self,
                             self->mail(atom::merge_v, apsv)
                               .request(self->state().catalog, caf::infinite)
                               .then(
-                                [self, deliver, result = std::move(result),
+                                [self, deliver, transformed_input_partitions,
+                                 result, input_complete,
                                  apsv](atom::ok) mutable {
                                   // Update index statistics and list of
                                   // persisted partitions.
@@ -1725,20 +1710,31 @@ index(index_actor::stateful_pointer<index_state> self,
                                       aps.uuid);
                                   }
                                   self->state().flush_to_disk();
-                                  deliver(std::move(result));
+                                  deliver(partition_apply_result{
+                                    .input_partitions
+                                    = std::move(transformed_input_partitions),
+                                    .output_partitions = std::move(result),
+                                    .input_complete = input_complete,
+                                  });
                                 },
                                 [deliver](caf::error& e) mutable {
                                   deliver(std::move(e));
                                 });
                           } else {
-                            deliver(result);
+                            deliver(partition_apply_result{
+                              .input_partitions
+                              = std::move(transformed_input_partitions),
+                              .output_partitions = std::move(result),
+                              .input_complete = input_complete,
+                            });
                           }
                         } else { // keep == keep_original_partition::no
                           self->mail(atom::replace_v, old_partition_ids, apsv)
                             .request(self->state().catalog, caf::infinite)
                             .then(
-                              [self, deliver, old_partition_ids, result,
-                               apsv](atom::ok) mutable {
+                              [self, deliver, old_partition_ids,
+                               transformed_input_partitions, result, apsv,
+                               input_complete](atom::ok) mutable {
                                 for (auto const& aps : apsv) {
                                   self->state().persisted_partitions.emplace(
                                     aps.uuid);
@@ -1749,7 +1745,12 @@ index(index_actor::stateful_pointer<index_state> self,
                                            caf::infinite)
                                   .then(
                                     [=](atom::done) mutable {
-                                      deliver(result);
+                                      deliver(partition_apply_result{
+                                        .input_partitions = std::move(
+                                          transformed_input_partitions),
+                                        .output_partitions = std::move(result),
+                                        .input_complete = input_complete,
+                                      });
                                     },
                                     [=](const caf::error& e) mutable {
                                       deliver(e);

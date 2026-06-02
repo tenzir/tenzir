@@ -14,8 +14,10 @@
 #include <tenzir/connect_to_node.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/defaults.hpp>
+#include <tenzir/detail/available_memory.hpp>
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/saturating_arithmetic.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/index.hpp>
@@ -41,6 +43,11 @@
 #include <caf/type_id.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
+
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace tenzir::plugins::rebuild {
 
@@ -90,6 +97,36 @@ namespace {
 /// The threshold at which to consider a partition undersized, relative to the
 /// configured 'tenzir.max-partition-size'.
 inline constexpr auto undersized_threshold = 0.8;
+
+struct memory_budget {
+  uint64_t bytes = 0;
+  detail::available_memory_info available = {};
+};
+
+auto rebuild_byte_budget(size_t parallelism) -> memory_budget {
+  auto available
+    = detail::available_memory().value_or(detail::available_memory_info{
+      .bytes = uint64_t{512} * 1024 * 1024,
+      .source = "fallback",
+    });
+  const auto divisor
+    = std::max<uint64_t>(detail::narrow_cast<uint64_t>(parallelism), 1);
+  return {
+    // The transformer currently holds decoded output slices before persisting
+    // the new Feather store, and the store writer builds additional Arrow
+    // structures during persist. Admit substantially less than the apparent
+    // free memory to leave room for those copies and unrelated node activity.
+    .bytes = available.bytes / 4 / divisor,
+    .available = std::move(available),
+  };
+}
+
+auto format_bytes(uint64_t bytes) -> std::string {
+  if (bytes == std::numeric_limits<uint64_t>::max()) {
+    return "unlimited";
+  }
+  return fmt::format("{} bytes", bytes);
+}
 
 /// Statistics for an ongoing rebuild. Numbers are partitions.
 struct statistics {
@@ -145,6 +182,10 @@ struct rebuilder_state {
   std::optional<struct run> run = {};
   bool stopping = false;
 
+  /// Runtime byte estimates for legacy partitions that do not have persisted
+  /// `approx_bytes` metadata yet.
+  std::unordered_map<type, uint64_t> approx_bytes_per_event = {};
+
   /// Shows the status of a currently ongoing rebuild.
   auto status(status_verbosity) -> record {
     if (not run) {
@@ -171,6 +212,41 @@ struct rebuilder_state {
          {"automatic", run->options.automatic},
        }},
     };
+  }
+
+  void learn_size_estimate(const partition_info& partition) {
+    if (partition.events == 0 or partition.approx_bytes == 0) {
+      return;
+    }
+    const auto bytes_per_event
+      = std::max<uint64_t>(partition.approx_bytes / partition.events, 1);
+    auto& estimate = approx_bytes_per_event[partition.schema];
+    if (estimate == 0) {
+      estimate = bytes_per_event;
+    } else if (estimate < bytes_per_event) {
+      estimate += (bytes_per_event - estimate) / 2;
+    } else {
+      estimate = bytes_per_event + (estimate - bytes_per_event) / 2;
+    }
+  }
+
+  auto has_size_estimate(const partition_info& partition) const -> bool {
+    return partition.events == 0 or partition.approx_bytes > 0
+           or approx_bytes_per_event.contains(partition.schema);
+  }
+
+  auto estimate_approx_bytes(const partition_info& partition,
+                             uint64_t unknown_partition_bytes) const
+    -> uint64_t {
+    if (partition.approx_bytes > 0 or partition.events == 0) {
+      return partition.approx_bytes;
+    }
+    if (auto it = approx_bytes_per_event.find(partition.schema);
+        it != approx_bytes_per_event.end()) {
+      return detail::saturating_mul(
+        it->second, detail::narrow_cast<uint64_t>(partition.events));
+    }
+    return unknown_partition_bytes;
   }
 
   /// Start a new rebuild.
@@ -255,6 +331,10 @@ struct rebuilder_state {
         [this, finish](catalog_lookup_result& lookup_result) mutable {
           TENZIR_ASSERT(run->statistics.num_total == 0);
           for (auto& [type, result] : lookup_result.candidate_infos) {
+            std::erase_if(result.partition_infos,
+                          [](const partition_info& partition) {
+                            return partition.events == 0;
+                          });
             if (not run->options.all) {
               std::erase_if(
                 result.partition_infos, [&](const partition_info& partition) {
@@ -269,6 +349,9 @@ struct rebuilder_state {
                   }
                   return true;
                 });
+            }
+            for (const auto& partition : result.partition_infos) {
+              learn_size_estimate(partition);
             }
             if (run->options.max_partitions < result.partition_infos.size()) {
               std::stable_sort(result.partition_infos.begin(),
@@ -365,6 +448,16 @@ struct rebuilder_state {
     }
     auto current_run_partitions = std::vector<partition_info>{};
     auto current_run_events = size_t{0};
+    auto current_run_bytes = uint64_t{0};
+    auto current_run_is_full = false;
+    auto current_run_budget = rebuild_byte_budget(run->options.parallel);
+    if (current_run_budget.bytes == 0) {
+      return caf::make_error(ec::out_of_memory,
+                             "rebuild has no memory budget available "
+                             "({} available from {})",
+                             format_bytes(current_run_budget.available.bytes),
+                             current_run_budget.available.source);
+    }
     // Take the first partition and collect as many of the same
     // type as possible to create new paritions. The approach used may
     // collects too many partitions if there is no exact match, but that is
@@ -377,13 +470,27 @@ struct rebuilder_state {
       run->remaining_partitions.begin(), run->remaining_partitions.end(),
       [&](const partition_info& partition) {
         if (schema == partition.schema
-            and current_run_events < max_partition_size) {
+            and current_run_events < max_partition_size
+            and not current_run_is_full) {
+          const auto partition_bytes
+            = estimate_approx_bytes(partition, current_run_budget.bytes);
+          if (not current_run_partitions.empty()
+              and detail::saturating_add(current_run_bytes, partition_bytes)
+                    > current_run_budget.bytes) {
+            current_run_is_full = true;
+            return false;
+          }
+          current_run_bytes
+            = detail::saturating_add(current_run_bytes, partition_bytes);
           current_run_events += partition.events;
           current_run_partitions.push_back(partition);
           TENZIR_TRACE("{} selects partition {} (v{}, {}) with "
-                       "{} events (total: {})",
+                       "{} events and {} estimated bytes (total: {} events, "
+                       "{} estimated bytes, budget: {})",
                        *self, partition.uuid, partition.version,
-                       partition.schema, partition.events, current_run_events);
+                       partition.schema, partition.events, partition_bytes,
+                       current_run_events, current_run_bytes,
+                       current_run_budget.bytes);
           return true;
         }
         return false;
@@ -398,18 +505,22 @@ struct rebuilder_state {
       = run->options.undersized and current_run_partitions.size() == 1
         and current_run_partitions[0].version
               == version::current_partition_version
-        and current_run_partitions[0].events <= max_partition_size;
+        and current_run_partitions[0].events <= max_partition_size
+        and has_size_estimate(current_run_partitions[0]);
     if (skip_rebuild) {
-      TENZIR_DEBUG("{} skips rebuilding of undersized partition {} because no "
-                   "other partition of schema {} exists",
-                   *self, current_run_partitions[0].uuid,
-                   current_run_partitions[0].schema);
       run->statistics.num_rebuilding -= 1;
       run->statistics.num_total -= 1;
       // Pick up new work until we run out of remainig partitions.
       return self->mail(atom::internal_v, atom::rebuild_v)
         .delegate(static_cast<rebuilder_actor>(self));
     }
+    TENZIR_VERBOSE(
+      "{} selected {} partition(s) for rebuild of schema {} with {} "
+      "estimated decoded bytes (budget: {}, available: {} from {})",
+      *self, current_run_partitions.size(), schema,
+      format_bytes(current_run_bytes), format_bytes(current_run_budget.bytes),
+      format_bytes(current_run_budget.available.bytes),
+      current_run_budget.available.source);
     // Ask the index to rebuild the partitions we selected.
     auto rp = self->make_response_promise<void>();
     auto dh = null_diagnostic_handler{};
@@ -425,6 +536,8 @@ struct rebuilder_state {
               [](const partition_info& lhs, const partition_info& rhs) {
                 return lhs.max_import_time < rhs.max_import_time;
               });
+    auto selected_partitions = current_run_partitions;
+    auto retry_partitions = current_run_partitions;
     const auto num_partitions = current_run_partitions.size();
     self
       ->mail(atom::apply_v, std::move(*rebatch),
@@ -432,9 +545,10 @@ struct rebuilder_state {
              std::string{"rebuild"})
       .request(index, caf::infinite)
       .then(
-        [this, rp, current_run_events,
-         num_partitions](std::vector<partition_info>& result) mutable {
-          if (result.empty()) {
+        [this, rp, selected_partitions = std::move(selected_partitions),
+         num_partitions](partition_apply_result& result) mutable {
+          if (result.input_partitions.empty()
+              and result.output_partitions.empty()) {
             TENZIR_DEBUG("{} skipped {} partitions as they are already being "
                          "transformed by another actor",
                          *self, num_partitions);
@@ -445,41 +559,64 @@ struct rebuilder_state {
                         atom::rebuild_v);
             return;
           }
+          auto unconsumed_partitions = selected_partitions;
+          std::erase_if(unconsumed_partitions, [&](const auto& partition) {
+            return std::find(result.input_partitions.begin(),
+                             result.input_partitions.end(), partition)
+                   != result.input_partitions.end();
+          });
+          if (not result.input_complete or not unconsumed_partitions.empty()) {
+            TENZIR_DEBUG("{} requeues {} partition(s) that were selected but "
+                         "not loaded by the transformer",
+                         *self, unconsumed_partitions.size());
+            run->remaining_partitions.insert(run->remaining_partitions.begin(),
+                                             unconsumed_partitions.begin(),
+                                             unconsumed_partitions.end());
+          }
           TENZIR_DEBUG("{} rebuilt {} into {} partitions", *self,
-                       num_partitions, result.size());
+                       result.input_partitions.size(),
+                       result.output_partitions.size());
+          for (const auto& partition : result.output_partitions) {
+            learn_size_estimate(partition);
+          }
           // If the number of events in the resulting partitions does not
           // match the number of events in the partitions that went in we ran
           // into a conflict with other partition transformations on an
           // overlapping set.
-          const auto result_events
-            = std::transform_reduce(result.begin(), result.end(), size_t{},
-                                    std::plus<>{},
-                                    [](const partition_info& partition) {
-                                      return partition.events;
-                                    });
-          if (current_run_events != result_events) {
+          const auto input_events = std::transform_reduce(
+            result.input_partitions.begin(), result.input_partitions.end(),
+            size_t{}, std::plus<>{}, [](const partition_info& partition) {
+              return partition.events;
+            });
+          const auto result_events = std::transform_reduce(
+            result.output_partitions.begin(), result.output_partitions.end(),
+            size_t{}, std::plus<>{}, [](const partition_info& partition) {
+              return partition.events;
+            });
+          if (input_events != result_events) {
             TENZIR_WARN("{} detected a mismatch: rebuilt {} events from {} "
                         "partitions into {} events in {} partitions",
-                        *self, current_run_events, num_partitions,
-                        result_events, result.size());
+                        *self, input_events, result.input_partitions.size(),
+                        result_events, result.output_partitions.size());
           }
           // Adjust the counters, update the indicator, and move back
           // undersized transformed partitions to the list of remainig
           // partitions as desired.
-          run->statistics.num_completed += num_partitions;
-          run->statistics.num_results += result.size();
+          run->statistics.num_completed += result.input_partitions.size();
+          run->statistics.num_results += result.output_partitions.size();
           run->statistics.num_rebuilding -= num_partitions;
           // Pick up new work until we run out of remainig partitions.
           rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
                       atom::rebuild_v);
         },
-        [this, num_partitions = current_run_partitions.size(),
+        [this, retry_partitions = std::move(retry_partitions), num_partitions,
          rp](caf::error& error) mutable {
-          TENZIR_WARN("{} failed to rebuild partititons: {}", *self, error);
+          TENZIR_WARN("{} failed to rebuild partitions: {}", *self, error);
+          run->remaining_partitions.insert(run->remaining_partitions.begin(),
+                                           retry_partitions.begin(),
+                                           retry_partitions.end());
           run->statistics.num_rebuilding -= num_partitions;
-          // Pick up new work until we run out of remainig partitions.
-          rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
-                      atom::rebuild_v);
+          rp.deliver(std::move(error));
         });
     return rp;
   }
