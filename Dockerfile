@@ -460,6 +460,7 @@ RUN XDG_CACHE_HOME=/tmp XDG_DATA_HOME=/tmp \
     "${PREFIX}/libexec/uv" tool run \
     --python ">=3.12" \
     --with trustme \
+    --from https://github.com/tenzir/test/archive/refs/heads/topic/ensure-parallel.tar.gz \
     tenzir-test \
     --root test \
     -j $(nproc) && \
