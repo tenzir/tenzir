@@ -30,7 +30,7 @@ auto emit_resolve_error(resolve_error const& err, diagnostic_handler& dh)
 }
 
 struct WriteChunksArgs {
-  Option<ast::field_path> field;
+  ast::field_path field;
   location operator_location;
 };
 
@@ -68,31 +68,32 @@ public:
   }
 
 private:
-  auto select_field(const table_slice& slice, OpCtx& ctx) -> Option<series> {
-    if (args_.field) {
-      auto resolved = resolve(*args_.field, slice);
+  auto select_field(const table_slice& slice, OpCtx& ctx)
+    -> std::optional<series> {
+    if (not args_.field.path().empty()) {
+      auto resolved = resolve(args_.field, slice);
       if (auto* error = std::get_if<resolve_error>(&resolved)) {
         emit_resolve_error(*error, ctx);
-        return None;
+        return std::nullopt;
       }
       return std::get<series>(std::move(resolved));
     }
-    // Default: look up the "bytes" field.
+    // Default: look up the "data" field.
     auto batch = to_record_batch(slice);
     auto column = batch->GetColumnByName("data");
     if (not column) {
       diagnostic::warning("expected a field named `data`")
         .primary(args_.operator_location)
         .emit(ctx);
-      return None;
+      return std::nullopt;
     }
     auto rt = try_as<record_type>(slice.schema());
     if (not rt) {
-      return None;
+      return std::nullopt;
     }
     auto ty = rt->field("data");
     if (not ty) {
-      return None;
+      return std::nullopt;
     }
     return series{*ty, column};
   }
