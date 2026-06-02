@@ -305,6 +305,19 @@ auto make_set_ir(ast::assignment x) -> Box<ir::Operator> {
   return ir::SetIr{std::move(assignments)};
 }
 
+auto merge_consecutive_operators(std::vector<Box<ir::Operator>> operators)
+  -> std::vector<Box<ir::Operator>> {
+  auto result = std::vector<Box<ir::Operator>>{};
+  result.reserve(operators.size());
+  for (auto& op : operators) {
+    if (not result.empty() and result.back()->try_merge_successor(*op)) {
+      continue;
+    }
+    result.push_back(std::move(op));
+  }
+  return result;
+}
+
 struct IfArgs {
   struct Else {
     location else_keyword;
@@ -883,6 +896,8 @@ auto ir::pipeline::optimize(optimize_filter filter,
       std::move_iterator{opt.replacement.operators.begin()},
       std::move_iterator{opt.replacement.operators.end()});
   }
+  replacement.operators
+    = merge_consecutive_operators(std::move(replacement.operators));
   return {std::move(filter), order, std::move(replacement)};
 }
 
@@ -899,6 +914,11 @@ auto ir::Operator::optimize(optimize_filter filter,
     event_order::ordered,
     pipeline{{}, std::move(replacement)},
   };
+}
+
+auto ir::Operator::try_merge_successor(Operator& successor) -> bool {
+  TENZIR_UNUSED(successor);
+  return false;
 }
 
 auto ir::Operator::copy() const -> Box<Operator> {
