@@ -42,6 +42,8 @@ namespace tenzir::plugins::clickhouse {
 
 namespace {
 
+using ConstColumnRef = std::shared_ptr<::clickhouse::Column const>;
+
 auto format_uint128(::clickhouse::UInt128 value) -> std::string {
   auto result = std::string{};
   while (value != 0) {
@@ -375,9 +377,9 @@ auto infer_type(::clickhouse::TypeRef const& type_ref, value_path path,
 }
 
 struct normalized_column {
-  ::clickhouse::ColumnRef original;
-  ::clickhouse::ColumnRef effective;
-  std::shared_ptr<::clickhouse::ColumnNullable> nullable = nullptr;
+  ConstColumnRef original;
+  ConstColumnRef effective;
+  std::shared_ptr<::clickhouse::ColumnNullable const> nullable = nullptr;
   unwrapped_type logical_type = {};
   type output_type = {};
 };
@@ -386,7 +388,7 @@ struct warning_state {
   bool malformed = false;
 };
 
-auto normalize_column(::clickhouse::ColumnRef const& column, value_path path,
+auto normalize_column(ConstColumnRef const& column, value_path path,
                       diagnostic_handler& dh) -> Option<normalized_column> {
   auto output_type = infer_type(column->Type(), path, dh);
   if (not output_type) {
@@ -472,7 +474,7 @@ auto for_each_present_row(normalized_column const& column, builder_ref field,
   }
 }
 
-auto build_series(::clickhouse::ColumnRef const& column, value_path path,
+auto build_series(ConstColumnRef const& column, value_path path,
                   diagnostic_handler& dh) -> Option<series>;
 
 auto make_null_bitmap(normalized_column const& column)
@@ -835,7 +837,7 @@ auto build_array_series(normalized_column const& column,
   check(offsets.Finish(&offset_array));
   auto list_array = check(arrow::ListArray::FromArrays(
     *offset_array, *flat->array, arrow_memory_pool()));
-  return series{list_type{list.value_type()}, std::move(list_array)};
+  return series{column.output_type, std::move(list_array)};
 }
 
 auto build_low_cardinality_series(normalized_column const& column,
@@ -1053,7 +1055,7 @@ auto build_low_cardinality_series(normalized_column const& column,
   return builder.finish_assert_one_array();
 }
 
-auto build_series(::clickhouse::ColumnRef const& column, value_path path,
+auto build_series(ConstColumnRef const& column, value_path path,
                   diagnostic_handler& dh) -> Option<series> {
   auto normalized = normalize_column(column, path, dh);
   if (not normalized) {

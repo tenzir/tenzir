@@ -1,0 +1,62 @@
+Add cmake package config generation (from unmerged upstream PR #411)
+
+This was present in the clickhouse-cpp commit originally used by this Nix
+package (6b5109cf "Support for CMake") but was never merged into the upstream
+master branch. Without it, find_package(clickhouse-cpp) cannot locate the
+library in Nix builds.
+
+--- a/clickhouse/CMakeLists.txt
++++ b/clickhouse/CMakeLists.txt
+@@ -122,7 +122,9 @@
+     zstd::zstd
+ )
+ TARGET_INCLUDE_DIRECTORIES (clickhouse-cpp-lib
+-    PUBLIC ${PROJECT_SOURCE_DIR}
++    PUBLIC
++         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
++         $<INSTALL_INTERFACE:include/clickhouse>
+ )
+ IF (CH_MAP_BOOL_TO_UINT8)
+     TARGET_COMPILE_DEFINITIONS (clickhouse-cpp-lib PUBLIC CH_MAP_BOOL_TO_UINT8=1)
+@@ -164,9 +166,28 @@
+
+
+ INSTALL (TARGETS clickhouse-cpp-lib
++    EXPORT clickhouse-cpp-config
+     ARCHIVE DESTINATION lib
+     LIBRARY DESTINATION lib
+ )
++
++include(CMakePackageConfigHelpers)
++configure_package_config_file(
++    ../cmake/clickhouse-cpp-config.cmake.in
++    ${CMAKE_CURRENT_BINARY_DIR}/lib/cmake/clickhouse-cpp-config.cmake
++    INSTALL_DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/cmake/clickhouse-cpp
++)
++
++INSTALL(EXPORT clickhouse-cpp-config
++    FILE clickhouse-cpp-targets.cmake
++    DESTINATION lib/cmake/clickhouse-cpp
++)
++
++install(FILES ${CMAKE_CURRENT_BINARY_DIR}/lib/cmake/clickhouse-cpp-config.cmake DESTINATION lib/cmake/clickhouse-cpp)
++
++install(FILES ../cmake/Findcityhash.cmake DESTINATION lib/cmake/clickhouse-cpp)
++install(FILES ../cmake/Findlz4.cmake DESTINATION lib/cmake/clickhouse-cpp)
++install(FILES ../cmake/Findzstd.cmake DESTINATION lib/cmake/clickhouse-cpp)
+ IF (NOT BUILD_SHARED_LIBS)
+     IF (NOT WITH_SYSTEM_CITYHASH)
+         INSTALL (TARGETS cityhash
+--- /dev/null
++++ b/cmake/clickhouse-cpp-config.cmake.in
+@@ -0,0 +1,10 @@
++@PACKAGE_INIT@
++
++include(CMakeFindDependencyMacro)
++list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR})
++find_dependency(absl)
++find_dependency(cityhash)
++find_dependency(lz4)
++find_dependency(zstd)
++
++include(clickhouse-cpp-targets)
