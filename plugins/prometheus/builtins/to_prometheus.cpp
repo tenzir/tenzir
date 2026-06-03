@@ -38,7 +38,6 @@
 #include <iterator>
 #include <limits>
 #include <map>
-#include <memory>
 #include <ranges>
 #include <set>
 #include <string>
@@ -652,9 +651,9 @@ public:
       done_ = true;
       co_return;
     }
-    auto config = http::make_http_pool_config(
-      args_.tls, url_, args_.url.source, ctx.dh(), get_timeout(),
-      std::addressof(ctx.actor_system().config()));
+    auto config
+      = http::make_http_pool_config(args_.tls, url_, args_.url.source, ctx.dh(),
+                                    get_timeout(), ctx.actor_system().config());
     if (config.is_success()) {
       config->connection_timeout = get_connection_timeout();
       config->max_retry_count = get_max_retry_count();
