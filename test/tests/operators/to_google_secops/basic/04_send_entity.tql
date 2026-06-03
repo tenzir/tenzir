@@ -1,0 +1,33 @@
+from {
+  metadata: {
+    collectedTimestamp: 2026-01-01T00:00:01,
+    vendorName: "Tenzir",
+    productName: "Tenzir Pipeline",
+    entityType: "USER",
+  },
+  entity: {
+    user: {
+      userid: "live-entity@example.com",
+      productObjectId: "live-entity-0001",
+      userDisplayName: "Live Entity Example",
+      emailAddresses: ["live-entity@example.com", "live-entity@corp.example"],
+      employeeId: "E0001",
+      title: "Security Analyst",
+      companyName: "Example Corp",
+      department: "Security Operations",
+    },
+  },
+  additional: {
+    fields: {
+      sourcePipeline: {stringValue: "to_google_secops-basic-test"},
+      marker: {stringValue: "tenzir-live-entity-rich"},
+    },
+  },
+}
+to_google_secops mode="udm_entity",
+                 project="test-project",
+                 region="us",
+                 instance="test-instance",
+                 log_type="AZURE_AD_CONTEXT",
+                 service_credentials=env("GOOGLE_SECOPS_SERVICE_CREDENTIALS"),
+                 _ingestion_url=env("GOOGLE_SECOPS_INGESTION_URL")

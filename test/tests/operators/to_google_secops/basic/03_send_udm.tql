@@ -1,0 +1,52 @@
+from {
+  metadata: {
+    eventTimestamp: 2026-01-01T00:00:00,
+    collectedTimestamp: 2026-01-01T00:00:01,
+    eventType: "NETWORK_CONNECTION",
+    vendorName: "Tenzir",
+    productName: "Tenzir Pipeline",
+    productVersion: "dev",
+    productEventType: "live-connection",
+    productLogId: "live-udm-001",
+    description: "Network connection observed by Tenzir",
+  },
+  principal: {
+    hostname: "live-udm.example",
+    ip: ["192.0.2.10"],
+    user: {
+      userid: "alice",
+      emailAddresses: ["alice@example.com"],
+    },
+  },
+  target: {
+    hostname: "live-service.example",
+    ip: ["198.51.100.20"],
+    port: 443,
+  },
+  observer: {
+    hostname: "sensor-01.example",
+    ip: ["192.0.2.5"],
+  },
+  network: {
+    applicationProtocol: "HTTPS",
+    ipProtocol: "TCP",
+    sentBytes: 1250,
+    receivedBytes: 4096,
+  },
+  securityResult: [{
+    action: ["ALLOW"],
+    severity: "LOW",
+  }],
+  additional: {
+    fields: {
+      sourcePipeline: {stringValue: "to_google_secops-basic-test"},
+      marker: {stringValue: "tenzir-live-udm-rich"},
+    },
+  },
+}
+to_google_secops mode="udm_event",
+                 project="test-project",
+                 region="us",
+                 instance="test-instance",
+                 service_credentials=env("GOOGLE_SECOPS_SERVICE_CREDENTIALS"),
+                 _ingestion_url=env("GOOGLE_SECOPS_INGESTION_URL")
