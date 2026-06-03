@@ -1,0 +1,4 @@
+from {data: b"hello"}, {data: b" "}, {data: b"world"}
+to_stdout {
+  write_chunks
+}

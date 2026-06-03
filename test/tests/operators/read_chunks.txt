@@ -1,0 +1,6 @@
+{
+  data: b"hello\n",
+}
+{
+  data: b"world\n",
+}

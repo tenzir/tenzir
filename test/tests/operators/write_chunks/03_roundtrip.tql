@@ -1,0 +1,5 @@
+from {line: "hello"}, {line: "world"}
+write_lines
+read_chunks
+write_chunks
+read_lines

@@ -1,0 +1,7 @@
+error: field has unsupported type `string`
+ --> tests/operators/write_chunks/02_string_stdout.tql:7:3
+  |
+7 |   write_chunks
+  |   ^^^^^^^^^^^^ 
+  |
+  = hint: `write_chunks` expects a field of type `blob`

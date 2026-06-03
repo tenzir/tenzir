@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {data: "not a blob"}
+to_stdout {
+  write_chunks
+}

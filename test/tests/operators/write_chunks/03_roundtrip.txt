@@ -1,0 +1,6 @@
+{
+  line: "hello",
+}
+{
+  line: "world",
+}
