@@ -9,6 +9,10 @@ Phase 3: two sequential publishers + subscriber -> SIGTERM -> restart
          -> verify events from both publishers survived.
 Phase 4: publisher batches via sort, then publishes -> SIGTERM -> restart
          -> verify all events in correct order survived.
+Phase 5: source `every` with slow subpipeline -> SIGTERM -> restart
+         -> verify shutdown does not spawn an extra subpipeline.
+Phase 6: streaming input into `every` with slow subpipeline -> SIGTERM
+         -> restart -> verify shutdown still spawns follow-up subpipelines.
 
 Adapted from the pubsub/drain test pattern.  Uses managed pipelines
 (created via the REST API) so that all work runs inside the node and
@@ -206,6 +210,7 @@ class NodeController:
             f"--cache-directory={self.cache_dir}",
             "--endpoint=localhost:0",
             "--print-endpoint",
+            "--no-autostart",  # When restarting, don't resume pipelines
         ]
         if package_dirs := env.get("TENZIR_PACKAGE_DIRS"):
             cmd.append(f"--package-dirs={package_dirs}")
@@ -385,6 +390,60 @@ try:
     )
     assert rows == [{"x": 1}] * 3 + [{"x": 2}] * 3 + [{"x": 3}] * 3, f"phase4: {rows}"
     print("phase4-batched-publish-survives-sigterm: ok")
+
+    # --- Phase 5: source every stops respawning during shutdown ----------
+    # The first subpipeline takes longer than the interval. During graceful
+    # shutdown, `every` must drain the in-flight subpipeline, but must not
+    # start another one after stop was requested.
+
+    web_proc, api = start_web_server(node.env)
+    tenzir = Executor.from_env(node.env)
+
+    create_pipeline(
+        api,
+        "every 200ms {\n"
+        "  from {x: 1, _ts: 1970-01-01T00:00:02}\n"
+        "  delay _ts, start=1970-01-01T00:00:00, speed=1.0\n"
+        "  drop _ts\n"
+        '  @name = "shutdown-phase5"\n'
+        "  import\n"
+        "}",
+        name="phase5-every-source",
+    )
+    time.sleep(0.5)  # Let the timer elapse while the first subpipeline runs.
+    tenzir = stop_and_restart()
+    data = export_summary(tenzir, "shutdown-phase5", "x")
+    assert data == {"count": 1, "lo": 1, "hi": 1}, f"phase5: {data}"
+    print("phase5-every-source-stops: ok")
+
+    # --- Phase 6: sink every keeps respawning during shutdown ------------
+    # Unlike the source case above, `every` with table-slice input must keep
+    # spawning follow-up subpipelines while draining buffered input.
+
+    web_proc, api = start_web_server(node.env)
+    tenzir = Executor.from_env(node.env)
+
+    create_pipeline(
+        api,
+        """
+        from {}
+        repeat 100
+        enumerate seq
+        d = 1970-01-01T00:00 + 23ms * seq
+        delay d
+        drop d
+        every 50ms {
+          @name = "shutdown-phase6"
+          import
+        }
+        """,
+        name="phase6-every-transform",
+    )
+    time.sleep(1)  # Let it run (but not fully)
+    tenzir = stop_and_restart()
+    data = export_summary(tenzir, "shutdown-phase6", "seq")
+    assert data == {"count": 100, "lo": 0, "hi": 99}, f"phase6: {data}"
+    print("phase6-every-transform-drains: ok")
 
 finally:
     if web_proc:

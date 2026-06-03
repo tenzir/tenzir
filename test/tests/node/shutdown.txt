@@ -2,3 +2,5 @@ phase1-import-survives-sigterm: ok
 phase2-pubsub-drain-survives-sigterm: ok
 phase3-sequential-publishers-survive-sigterm: ok
 phase4-batched-publish-survives-sigterm: ok
+phase5-every-source-stops: ok
+phase6-every-transform-drains: ok
