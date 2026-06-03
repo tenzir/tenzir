@@ -1,0 +1,6 @@
+from_file env("TENZIR_INPUT") {
+  read_feather
+}
+to_prometheus env("PROMETHEUS_REMOTE_WRITE_URL"),
+              flush_interval=10s,
+              max_samples_per_request=100

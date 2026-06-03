@@ -1,0 +1,11 @@
+from {
+  metric: "v2_metadata_needs_type",
+  value: 16,
+  timestamp: 2026-05-15T10:00:20Z,
+  help: "Missing type metadata",
+  unit: "widgets",
+}
+to_prometheus env("PROMETHEUS_REMOTE_WRITE_URL"),
+              protobuf_message="io.prometheus.write.v2.Request",
+              flush_interval=10s,
+              max_samples_per_request=100

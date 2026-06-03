@@ -1,0 +1,23 @@
+from {
+  metric: "v1_family_merge",
+  value: 14,
+  timestamp: 2026-05-15T10:00:18Z,
+  labels: {
+    series: "a-partial",
+  },
+  help: "Family help",
+  unit: "widgets",
+  family: "v1_family_merge",
+}, {
+  metric: "v1_family_merge",
+  value: 15,
+  timestamp: 2026-05-15T10:00:19Z,
+  labels: {
+    series: "b-complete",
+  },
+  type: "gauge",
+  family: "v1_family_merge",
+}
+to_prometheus env("PROMETHEUS_REMOTE_WRITE_URL"),
+              flush_interval=10s,
+              max_samples_per_request=100

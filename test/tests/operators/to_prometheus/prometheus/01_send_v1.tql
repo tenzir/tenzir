@@ -1,0 +1,15 @@
+from {
+  metric: "tenzir_prometheus_fixture_v1_total",
+  value: 42,
+  timestamp: 2026-05-15T11:00:00Z,
+  labels: {
+    source: "container",
+  },
+  type: "counter",
+  help: "Tenzir Prometheus fixture v1",
+  unit: "events",
+  family: "tenzir_prometheus_fixture_v1",
+}
+to_prometheus env("PROMETHEUS_REMOTE_WRITE_URL"),
+              flush_interval=10s,
+              max_samples_per_request=100

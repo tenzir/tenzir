@@ -1,0 +1,32 @@
+from {
+  metric: "tenzir_prometheus_fixture_split",
+  value: 4,
+  timestamp: 2026-05-15T11:00:05Z,
+  labels: {
+    source: "container",
+  },
+}, {
+  metric: "tenzir_prometheus_fixture_split",
+  value: 1,
+  timestamp: 2026-05-15T11:00:02Z,
+  labels: {
+    source: "container",
+  },
+}, {
+  metric: "tenzir_prometheus_fixture_split",
+  value: 3,
+  timestamp: 2026-05-15T11:00:04Z,
+  labels: {
+    source: "container",
+  },
+}, {
+  metric: "tenzir_prometheus_fixture_split",
+  value: 2,
+  timestamp: 2026-05-15T11:00:03Z,
+  labels: {
+    source: "container",
+  },
+}
+to_prometheus env("PROMETHEUS_REMOTE_WRITE_URL"),
+              flush_interval=10s,
+              max_uncompressed_bytes=100

@@ -1,0 +1,235 @@
+suite:
+  name: to-prometheus-basic
+  mode: sequential
+fixtures: [prometheus_remote_write_mock]
+assertions:
+  fixtures:
+    prometheus_remote_write_mock:
+      requests:
+        01_send_v1.tql:
+          - content_type: application/x-protobuf
+            metadata:
+              - family: http_requests
+                help: HTTP requests
+                type: 1
+                unit: requests
+            timeseries:
+              - labels:
+                  __name__: http_requests_total
+                  method: GET
+                  path: /
+                  status: "200"
+                samples:
+                  - timestamp: 1778839200000
+                    value: 42.0
+            version: 0.1.0
+        02_send_v2.tql:
+          - content_type: application/x-protobuf;proto=io.prometheus.write.v2.Request
+            symbols: ["", __name__, cpu_usage, host, sensor-a, CPU usage, percent]
+            timeseries:
+              - labels:
+                  __name__: cpu_usage
+                  host: sensor-a
+                metadata:
+                  help: CPU usage
+                  type: 2
+                  unit: percent
+                samples:
+                  - start_timestamp: 1778835600000
+                    timestamp: 1778839201000
+                    value: 0.5
+            version: 2.0.0
+        03_v1_metadata_after_empty.tql:
+          - content_type: application/x-protobuf
+            metadata:
+              - family: mixed_metric
+                help: Mixed metadata
+                type: 2
+                unit: widgets
+            timeseries:
+              - labels:
+                  __name__: mixed_metric
+                  series: empty-metadata
+                samples:
+                  - timestamp: 1778839202000
+                    value: 1.0
+              - labels:
+                  __name__: mixed_metric
+                  series: with-metadata
+                samples:
+                  - timestamp: 1778839203000
+                    value: 2.0
+            version: 0.1.0
+        04_v1_ignores_start_timestamp.tql:
+          - content_type: application/x-protobuf
+            metadata: []
+            timeseries:
+              - labels:
+                  __name__: v1_start_timestamp_ignored
+                samples:
+                  - timestamp: 1778839204000
+                    value: 3.0
+            version: 0.1.0
+        05_v2_utf8_names.tql:
+          - content_type: application/x-protobuf;proto=io.prometheus.write.v2.Request
+            symbols: ["", __name__, service.latency, service.name, checkout]
+            timeseries:
+              - labels:
+                  __name__: service.latency
+                  service.name: checkout
+                metadata: {}
+                samples:
+                  - timestamp: 1778839205000
+                    value: 4.0
+            version: 2.0.0
+        06_split_orders_samples.tql:
+          - content_type: application/x-protobuf
+            metadata: []
+            timeseries:
+              - labels:
+                  __name__: split_order_metric
+                samples:
+                  - timestamp: 1778839206000
+                    value: 1.0
+                  - timestamp: 1778839207000
+                    value: 2.0
+            version: 0.1.0
+          - content_type: application/x-protobuf
+            metadata: []
+            timeseries:
+              - labels:
+                  __name__: split_order_metric
+                samples:
+                  - timestamp: 1778839208000
+                    value: 3.0
+                  - timestamp: 1778839209000
+                    value: 4.0
+            version: 0.1.0
+        07_invalid_labels_skip_rows.tql:
+          - content_type: application/x-protobuf
+            metadata: []
+            timeseries:
+              - labels:
+                  __name__: valid_after_invalid_labels
+                  status: ok
+                samples:
+                  - timestamp: 1778839212000
+                    value: 7.0
+            version: 0.1.0
+        08_v2_merges_metadata.tql:
+          - content_type: application/x-protobuf;proto=io.prometheus.write.v2.Request
+            symbols: ["", __name__, v2_metadata_merge, instance, a, Merged metadata, items]
+            timeseries:
+              - labels:
+                  __name__: v2_metadata_merge
+                  instance: a
+                metadata:
+                  help: Merged metadata
+                  type: 2
+                  unit: items
+                samples:
+                  - timestamp: 1778839213000
+                    value: 8.0
+                  - timestamp: 1778839214000
+                    value: 9.0
+            version: 2.0.0
+        09_v2_invalid_type_skips_row.tql:
+          - content_type: application/x-protobuf;proto=io.prometheus.write.v2.Request
+            symbols: ["", __name__, v2_valid_after_invalid_type]
+            timeseries:
+              - labels:
+                  __name__: v2_valid_after_invalid_type
+                metadata: {}
+                samples:
+                  - timestamp: 1778839216000
+                    value: 11.0
+            version: 2.0.0
+        10_negative_timestamp.tql:
+          - content_type: application/x-protobuf;proto=io.prometheus.write.v2.Request
+            symbols: ["", __name__, v2_negative_timestamp]
+            timeseries:
+              - labels:
+                  __name__: v2_negative_timestamp
+                metadata: {}
+                samples:
+                  - start_timestamp: -2000
+                    timestamp: -1000
+                    value: 12.0
+            version: 2.0.0
+        11_timer_flushes_before_finalize.tql:
+          - content_type: application/x-protobuf
+            metadata: []
+            timeseries:
+              - labels:
+                  __name__: timer_flush_metric
+                samples:
+                  - timestamp: 1778839217000
+                    value: 13.0
+            version: 0.1.0
+          - content_type: application/x-protobuf
+            metadata: []
+            timeseries:
+              - labels:
+                  __name__: timer_flush_metric
+                samples:
+                  - timestamp: 1778839217000
+                    value: 13.0
+            version: 0.1.0
+        12_v1_merges_family_metadata.tql:
+          - content_type: application/x-protobuf
+            metadata:
+              - family: v1_family_merge
+                help: Family help
+                type: 2
+                unit: widgets
+            timeseries:
+              - labels:
+                  __name__: v1_family_merge
+                  series: a-partial
+                samples:
+                  - timestamp: 1778839218000
+                    value: 14.0
+              - labels:
+                  __name__: v1_family_merge
+                  series: b-complete
+                samples:
+                  - timestamp: 1778839219000
+                    value: 15.0
+            version: 0.1.0
+        13_v2_metadata_requires_type.tql:
+          - content_type: application/x-protobuf;proto=io.prometheus.write.v2.Request
+            symbols: ["", __name__, v2_metadata_needs_type]
+            timeseries:
+              - labels:
+                  __name__: v2_metadata_needs_type
+                metadata: {}
+                samples:
+                  - timestamp: 1778839220000
+                    value: 16.0
+            version: 2.0.0
+        14_stale_marker.tql:
+          - content_type: application/x-protobuf
+            metadata: []
+            timeseries:
+              - labels:
+                  __name__: stale_metric
+                samples:
+                  - timestamp: 1778839221000
+                    value: stale
+            version: 0.1.0
+        16_infinite_values.tql:
+          - content_type: application/x-protobuf
+            metadata: []
+            timeseries:
+              - labels:
+                  __name__: negative_infinity
+                samples:
+                  - timestamp: 1778839223000
+                    value: -.inf
+              - labels:
+                  __name__: positive_infinity
+                samples:
+                  - timestamp: 1778839222000
+                    value: .inf
+            version: 0.1.0
+timeout: 60

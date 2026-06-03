@@ -68,12 +68,7 @@ auto parse_http_date(std::string_view value)
 }
 
 auto normalize_content_encoding(std::string_view encoding) -> std::string {
-  auto result = std::string{detail::trim(encoding)};
-  std::transform(result.begin(), result.end(), result.begin(), [](char c) {
-    return static_cast<char>(
-      detail::ascii_tolower(static_cast<unsigned char>(c)));
-  });
-  return result;
+  return detail::ascii_tolower(detail::trim(encoding));
 }
 
 } // namespace

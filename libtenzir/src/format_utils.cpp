@@ -265,11 +265,7 @@ auto get_file(const std::string_view& path) -> std::string {
 auto normalize_content_type(std::string_view content_type) -> std::string {
   content_type = content_type.substr(0, content_type.find(';'));
   content_type = detail::trim(content_type);
-  auto result = std::string{content_type};
-  std::ranges::transform(result, result.begin(), [](unsigned char c) {
-    return static_cast<char>(detail::ascii_tolower(c));
-  });
-  return result;
+  return detail::ascii_tolower(content_type);
 }
 
 auto read_plugin_for_content_type(std::string_view content_type)

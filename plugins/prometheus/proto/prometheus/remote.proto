@@ -1,0 +1,27 @@
+// SPDX-FileCopyrightText: Copyright 2016 Prometheus Team
+// SPDX-License-Identifier: Apache-2.0
+//
+// This file comes from a 3rd party and has been adapted to fit into the Tenzir
+// code base. Details about the original file:
+//
+// - Repository: https://github.com/prometheus/prometheus
+// - Commit:     55226fb8b27fe4a903489dbb64829ccc9482ae85
+// - Path:       prompb/remote.proto
+// - Author:     Prometheus Team
+// - Copyright:  Copyright 2016 Prometheus Team
+// - License:    Apache-2.0
+//
+// Sanitized for Tenzir: gogoproto options/imports and read-side messages were
+// removed without changing package names, message names, or field numbers used
+// by Remote Write.
+
+syntax = "proto3";
+package prometheus;
+
+import "prometheus/types.proto";
+
+message WriteRequest {
+  repeated prometheus.TimeSeries timeseries = 1;
+  reserved 2;
+  repeated prometheus.MetricMetadata metadata = 3;
+}

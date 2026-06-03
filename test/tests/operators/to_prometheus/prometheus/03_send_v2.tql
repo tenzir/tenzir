@@ -1,0 +1,16 @@
+from {
+  metric: "tenzir_prometheus_fixture_v2",
+  value: 7,
+  timestamp: 2026-05-15T11:00:01Z,
+  labels: {
+    source: "container",
+  },
+  type: "gauge",
+  help: "Tenzir Prometheus fixture v2",
+  unit: "events",
+  start_timestamp: 2026-05-15T10:59:00Z,
+}
+to_prometheus env("PROMETHEUS_REMOTE_WRITE_URL"),
+              protobuf_message="io.prometheus.write.v2.Request",
+              flush_interval=10s,
+              max_samples_per_request=100

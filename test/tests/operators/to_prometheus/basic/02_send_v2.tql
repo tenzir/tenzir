@@ -1,0 +1,16 @@
+from {
+  metric: "cpu.usage",
+  value: 0.5,
+  timestamp: 2026-05-15T10:00:01Z,
+  labels: {
+    host: "sensor-a",
+  },
+  type: "gauge",
+  help: "CPU usage",
+  unit: "percent",
+  family: "cpu_usage",
+  start_timestamp: 2026-05-15T09:00:00Z,
+}
+to_prometheus env("PROMETHEUS_REMOTE_WRITE_URL"),
+              protobuf_message="io.prometheus.write.v2.Request",
+              flush_interval=10s
