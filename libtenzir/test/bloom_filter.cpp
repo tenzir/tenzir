@@ -9,12 +9,16 @@
 #include "tenzir/bloom_filter.hpp"
 
 #include "tenzir/bloom_filter_parameters.hpp"
+#include "tenzir/data.hpp"
+#include "tenzir/dcso_bloom_hasher.hpp"
 #include "tenzir/detail/legacy_deserialize.hpp"
 #include "tenzir/detail/serialize.hpp"
+#include "tenzir/hash/fnv.hpp"
 #include "tenzir/hash/hash_append.hpp"
 #include "tenzir/hash/xxhash.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/test/test.hpp"
+#include "tenzir/view3.hpp"
 
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
@@ -218,4 +222,25 @@ TEST("bloom filter - duplicate tracking") {
   CHECK(x.add(42));
   CHECK(x.lookup(42));
   CHECK(not x.add(42));
+}
+
+TEST("null does not collide with empty string") {
+  bloom_filter_parameters params;
+  params.n = 100;
+  params.p = 0.01;
+  auto filter = tenzir::test::unbox(
+    make_bloom_filter<fnv1<64>, dcso_bloom_hasher>(params));
+  // Insert an empty string so the "" bucket is populated.
+  filter.add(data{std::string{""}});
+  // Inserting null must not populate the "" bucket additionally.
+  filter.add(data{caf::none});
+  // A genuine empty-string lookup must match.
+  CHECK_EQUAL(filter.lookup(data{std::string{""}}), true);
+  // Null lookups always return false, even though "" is in the filter.
+  CHECK_EQUAL(filter.lookup(caf::none_t{}), false);
+  CHECK_EQUAL(filter.lookup(data{caf::none}), false);
+  // Normal string inserts are unaffected.
+  filter.add(data{std::string{"hello"}});
+  CHECK_EQUAL(filter.lookup(data{std::string{"hello"}}), true);
+  CHECK_EQUAL(filter.lookup(data{std::string{"world"}}), false);
 }

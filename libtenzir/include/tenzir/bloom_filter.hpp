@@ -10,10 +10,11 @@
 
 #include "tenzir/bitvector.hpp"
 #include "tenzir/bloom_filter_parameters.hpp"
+#include "tenzir/data.hpp"
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/hash/hasher.hpp"
-#include "tenzir/legacy_type.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/view3.hpp"
 
 #include <climits>
 #include <cstddef>
@@ -61,14 +62,25 @@ public:
   /// @returns `false` iff *x* already exists in the filter.
   template <class T>
   bool add(T&& x) {
-    auto& digests = hasher_(std::forward<T>(x));
-    auto unique = false;
-    for (size_t i = 0; i < digests.size(); ++i) {
-      auto bit = bits_[position(i, digests[i])];
-      unique |= bit == false;
-      bit = true;
+    if constexpr (std::same_as<std::remove_cvref_t<T>, caf::none_t>) {
+      return false;
+    } else {
+      return add_impl(std::forward<T>(x));
     }
-    return unique;
+  }
+
+  bool add(const data_view3& x) {
+    if (is<caf::none_t>(x)) {
+      return false;
+    }
+    return add_impl(x);
+  }
+
+  bool add(const data& x) {
+    if (is<caf::none_t>(x)) {
+      return false;
+    }
+    return add_impl(x);
   }
 
   /// Test whether an element exists in the Bloom filter.
@@ -77,13 +89,25 @@ public:
   ///          according to the false-positive probability of the filter.
   template <class T>
   bool lookup(T&& x) const {
-    auto& digests = hasher_(std::forward<T>(x));
-    for (size_t i = 0; i < digests.size(); ++i) {
-      if (not bits_[position(i, digests[i])]) {
-        return false;
-      }
+    if constexpr (std::same_as<std::remove_cvref_t<T>, caf::none_t>) {
+      return false;
+    } else {
+      return lookup_impl(std::forward<T>(x));
     }
-    return true;
+  }
+
+  bool lookup(const data_view3& x) const {
+    if (is<caf::none_t>(x)) {
+      return false;
+    }
+    return lookup_impl(x);
+  }
+
+  bool lookup(const data& x) const {
+    if (is<caf::none_t>(x)) {
+      return false;
+    }
+    return lookup_impl(x);
   }
 
   /// @returns The number of cells in the underlying bit vector.
@@ -127,6 +151,29 @@ public:
   }
 
 private:
+  template <class T>
+  bool add_impl(T&& x) {
+    auto& digests = hasher_(std::forward<T>(x));
+    auto unique = false;
+    for (size_t i = 0; i < digests.size(); ++i) {
+      auto bit = bits_[position(i, digests[i])];
+      unique |= bit == false;
+      bit = true;
+    }
+    return unique;
+  }
+
+  template <class T>
+  bool lookup_impl(T&& x) const {
+    auto& digests = hasher_(std::forward<T>(x));
+    for (size_t i = 0; i < digests.size(); ++i) {
+      if (not bits_[position(i, digests[i])]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   template <class Digest>
   size_t position([[maybe_unused]] size_t i, Digest x) const {
     if constexpr (partitioning_policy == policy::partitioning::no) {
@@ -173,7 +220,11 @@ make_bloom_filter(bloom_filter_parameters xs, std::vector<size_t> seeds = {}) {
     } else if (seeds.size() != *ys->k) {
       return {};
     }
-    return result_type{*ys->m, hasher_type{*ys->k, std::move(seeds)}};
+    if constexpr (std::is_same_v<hasher_type, double_hasher<HashFunction>>) {
+      return result_type{*ys->m, hasher_type{*ys->k, std::move(seeds)}};
+    } else {
+      return result_type{*ys->m, hasher_type{*ys->k}};
+    }
   }
   return {};
 }
