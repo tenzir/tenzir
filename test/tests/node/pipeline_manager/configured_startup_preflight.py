@@ -47,6 +47,7 @@ tenzir:
             f"--config={config}",
             f"--state-directory={root / 'state'}",
             f"--cache-directory={root / 'cache'}",
+            "--endpoint=false",
             "--console-verbosity=error",
         ],
         stdout=subprocess.PIPE,
