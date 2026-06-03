@@ -37,7 +37,7 @@ from ._utils import find_free_port
 
 logger = logging.getLogger(__name__)
 
-PROMETHEUS_IMAGE = "docker.io/prom/prometheus:latest"
+PROMETHEUS_IMAGE = "docker.io/prom/prometheus:v3.12.0"
 STARTUP_TIMEOUT = 60
 HEALTH_CHECK_INTERVAL = 1
 
