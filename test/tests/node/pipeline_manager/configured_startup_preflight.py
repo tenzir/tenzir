@@ -43,7 +43,6 @@ tenzir:
     proc = subprocess.Popen(
         [
             *_node_binary(),
-            "--plugins=bundled",
             f"--config={config}",
             f"--state-directory={root / 'state'}",
             f"--cache-directory={root / 'cache'}",
