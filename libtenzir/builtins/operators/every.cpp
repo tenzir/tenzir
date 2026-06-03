@@ -80,7 +80,16 @@ struct EveryImpl {
     return FinalizeBehavior::done;
   }
 
+  auto stop_impl() -> void
+    requires(std::same_as<Input, void>)
+  {
+    stop_spawning_ = true;
+  }
+
   auto state_impl() -> OperatorState {
+    if (stop_spawning_ and sub_finished_) {
+      return OperatorState::done;
+    }
     // We want to wait for subpipeline completion when we closed the subpipeline
     // ourselves before processing further input. Note that the case where the
     // subpipeline closed itself does not block input here, because as described
@@ -175,6 +184,12 @@ public:
     co_return finalize_impl();
   }
 
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    stop_impl();
+    co_return;
+  }
+
   auto state() -> OperatorState override {
     return state_impl();
   }
@@ -260,6 +275,12 @@ public:
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
     co_return finalize_impl();
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    stop_impl();
+    co_return;
   }
 
   auto state() -> OperatorState override {

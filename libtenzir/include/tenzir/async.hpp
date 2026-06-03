@@ -27,9 +27,11 @@
 /// - `process_task(result, push, ctx)` - Called when `await_task()` completes.
 /// - `prepare_snapshot(push, ctx)` - Called when checkpointing to let
 ///   operators push buffered output before state serialization.
-/// - `finalize(push, ctx)` - Called exactly once when upstream signals
-///   end-of-data. Use for buffering operators (tail, sort, aggregations) that
-///   must see all input before producing output.
+/// - `stop(ctx)` - Called on graceful shutdown to stop producing new external
+///   work while still draining all input that was already accepted.
+///   This must not be treated as end-of-input.
+/// - `finalize(push, ctx)` - Called exactly once after the input stream is
+///   exhausted.
 /// - `state()` - Polled after processing; return `done` for early completion.
 ///
 /// ## Key Invariants
@@ -285,7 +287,7 @@ public:
     co_return;
   }
 
-  /// Called once at end-of-stream. See file-level docs.
+  /// Called once after the input stream is exhausted. See file-level docs.
   virtual auto finalize(Push<Output>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> {
     TENZIR_UNUSED(push, ctx);
@@ -440,7 +442,14 @@ public:
     return OperatorState::normal;
   }
 
-  /// Called to signal that a source should gracefully shut down.
+  /// Called to request a graceful shutdown.
+  ///
+  /// `stop()` means "stop producing new work, but finish draining work that is
+  /// already in flight". For `Input != void`, operators should keep processing
+  /// accepted input until they later receive end-of-data and the executor calls
+  /// `finalize()`. For sources (`Input == void`), `stop()` typically quiesces
+  /// timers, listeners, or other work producers so that `finalize()` can run
+  /// afterwards.
   virtual auto stop(OpCtx& ctx) -> Task<void> {
     TENZIR_UNUSED(ctx);
     co_return;
