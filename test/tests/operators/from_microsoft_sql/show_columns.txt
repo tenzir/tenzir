@@ -1,0 +1,40 @@
+{
+  table_schema: "dbo",
+  table_name: "users",
+  column_name: "id",
+  data_type: "int",
+  is_nullable: "NO",
+  ordinal_position: 1,
+}
+{
+  table_schema: "dbo",
+  table_name: "users",
+  column_name: "name",
+  data_type: "varchar",
+  is_nullable: "NO",
+  ordinal_position: 2,
+}
+{
+  table_schema: "dbo",
+  table_name: "users",
+  column_name: "email",
+  data_type: "varchar",
+  is_nullable: "YES",
+  ordinal_position: 3,
+}
+{
+  table_schema: "dbo",
+  table_name: "users",
+  column_name: "age",
+  data_type: "int",
+  is_nullable: "YES",
+  ordinal_position: 4,
+}
+{
+  table_schema: "dbo",
+  table_name: "users",
+  column_name: "is_active",
+  data_type: "bit",
+  is_nullable: "NO",
+  ordinal_position: 5,
+}

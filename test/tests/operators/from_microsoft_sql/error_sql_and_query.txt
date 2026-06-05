@@ -1,0 +1,1 @@
+error: `sql` and `query` are mutually exclusive

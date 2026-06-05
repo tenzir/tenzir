@@ -1,0 +1,6 @@
+error: `tracking_column` requires `live=true`
+ --> tests/operators/from_microsoft_sql/error_tracking_column_without_live.tql:6:36
+  |
+6 |                    tracking_column="id"
+  |                                    ^^^^ 
+  |

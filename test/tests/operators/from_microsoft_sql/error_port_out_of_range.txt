@@ -1,0 +1,6 @@
+error: `port` must be in range [0, 65535]
+ --> tests/operators/from_microsoft_sql/error_port_out_of_range.tql:6:25
+  |
+6 |                    port=-1
+  |                         ^^ 
+  |

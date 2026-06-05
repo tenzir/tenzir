@@ -1,0 +1,25 @@
+{
+  table_schema: "dbo",
+  table_name: "full_types",
+  table_type: "BASE TABLE",
+}
+{
+  table_schema: "dbo",
+  table_name: "large_values",
+  table_type: "BASE TABLE",
+}
+{
+  table_schema: "dbo",
+  table_name: "many_rows",
+  table_type: "BASE TABLE",
+}
+{
+  table_schema: "dbo",
+  table_name: "types",
+  table_type: "BASE TABLE",
+}
+{
+  table_schema: "dbo",
+  table_name: "users",
+  table_type: "BASE TABLE",
+}

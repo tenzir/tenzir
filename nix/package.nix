@@ -134,6 +134,7 @@ rec {
           [
             ps.compaction
             ps.context
+            ps.from_microsoft_sql
             ps.packages
             ps.pipeline-manager
             ps.platform

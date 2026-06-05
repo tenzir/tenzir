@@ -1,0 +1,1 @@
+error: custom queries and `show` are mutually exclusive

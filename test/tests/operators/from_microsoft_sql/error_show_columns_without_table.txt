@@ -1,0 +1,6 @@
+error: `show="columns"` requires `table` to be set
+ --> tests/operators/from_microsoft_sql/error_show_columns_without_table.tql:5:25
+  |
+5 | from_microsoft_sql show="columns"
+  |                         ^^^^^^^^^ 
+  |

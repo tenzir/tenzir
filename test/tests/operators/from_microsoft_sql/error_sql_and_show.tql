@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_microsoft_sql sql="SELECT 1",
+                   show="tables"

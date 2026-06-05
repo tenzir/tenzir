@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_microsoft_sql table="dbo.users",
+                   sql="SELECT 1"

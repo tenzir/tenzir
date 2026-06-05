@@ -1,0 +1,12 @@
+suite: from-microsoft-sql-live-stream-insert
+fixtures:
+  - microsoft_sql:
+      streaming: true
+requires:
+  operators:
+    - from_microsoft_sql
+timeout: 240
+skip:
+  on:
+    - fixture-unavailable
+    - capability-unavailable

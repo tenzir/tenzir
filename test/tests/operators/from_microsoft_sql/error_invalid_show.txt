@@ -1,0 +1,7 @@
+error: invalid show mode `indexes`
+ --> tests/operators/from_microsoft_sql/error_invalid_show.tql:5:25
+  |
+5 | from_microsoft_sql show="indexes"
+  |                         ^^^^^^^^^ 
+  |
+  = hint: valid show modes are `tables` and `columns`
