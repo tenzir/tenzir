@@ -5,6 +5,8 @@ authors:
   - raxyte
   - codex
 created: 2026-06-03T00:00:00Z
+prs:
+  - 6216
 ---
 
 The `to_google_secops` operator now uses the Chronicle `logs.import`,
@@ -13,5 +15,5 @@ ingestion API.
 
 The operator now targets a SecOps instance with `project`, `region`, and
 `instance`, authenticates with Google Cloud OAuth2 credentials, and supports raw
-log ingestion with `mode="log"`, UDM event ingestion with `mode="udm"`, and
-entity ingestion with `mode="entity"`.
+log ingestion with `mode="raw_log"`, UDM event ingestion with `mode="udm_event"`, and
+entity ingestion with `mode="udm_entity"`.
