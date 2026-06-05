@@ -1,0 +1,6 @@
+error: `size` must be a positive duration
+ --> tests/operators/window/error_zero_size.tql:6:13
+  |
+6 | window size=0s, on=ts {
+  |             ^^ 
+  |

@@ -1,0 +1,11 @@
+// A window closes only once the clock moves strictly past `end + tolerance`.
+// With the default tolerance of 0, an event whose timestamp equals the window end
+// advances the clock to that end but does not close the window: the [0s, 2s)
+// window stays open and still flushes its earlier event at end of input.
+from {ts: 0s.from_epoch()},
+     {ts: 2s.from_epoch()}
+window size=2s, on=ts {
+  summarize n=count()
+  start = $window.start.since_epoch()
+}
+sort start

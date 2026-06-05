@@ -1,0 +1,16 @@
+{
+  n: 1,
+  start: -1s,
+}
+{
+  n: 2,
+  start: 0ns,
+}
+{
+  n: 2,
+  start: 1s,
+}
+{
+  n: 1,
+  start: 2s,
+}

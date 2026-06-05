@@ -1,0 +1,13 @@
+// Windows use left-closed, right-open intervals and are aligned to the epoch,
+// including for pre-epoch (negative) timestamps. The event at exactly 2s
+// belongs to [2s, 4s), not [0s, 2s).
+from {ts: (-3s).from_epoch()},
+     {ts: (-1s).from_epoch()},
+     {ts: 0s.from_epoch()},
+     {ts: 2s.from_epoch()}
+window size=2s, on=ts {
+  summarize n=count()
+  start = $window.start.since_epoch()
+  end = $window.end.since_epoch()
+}
+sort start

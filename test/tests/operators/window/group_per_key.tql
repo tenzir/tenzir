@@ -1,0 +1,14 @@
+// Per-key windowing: wrapping `window` in an outer `group` gives each key its
+// own window clock. `$group` and `$window` compose.
+from {ts: 0s.from_epoch(), k: "a"},
+     {ts: 1s.from_epoch(), k: "b"},
+     {ts: 1s.from_epoch(), k: "a"},
+     {ts: 2s.from_epoch(), k: "b"}
+group k {
+  window size=10s, on=ts {
+    summarize n=count()
+    k = $group
+    start = $window.start.since_epoch()
+  }
+}
+sort k

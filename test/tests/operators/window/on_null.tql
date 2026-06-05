@@ -1,0 +1,8 @@
+// Events whose `on` expression evaluates to null (or a non-timestamp) are
+// dropped with a warning and do not advance the clock.
+from {ts: 0s.from_epoch()},
+     {ts: null},
+     {ts: 1s.from_epoch()}
+window size=10s, on=ts {
+  summarize n=count()
+}

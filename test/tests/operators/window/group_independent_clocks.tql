@@ -1,0 +1,15 @@
+// Under an outer `group`, each key advances its own event-time clock. Key "a"
+// receives a later event that advances its clock and closes its first window,
+// while key "b" only ever sees one event, so its window stays open until the
+// input ends. Both first windows still emit.
+from {ts: 0s.from_epoch(), k: "a"},
+     {ts: 0s.from_epoch(), k: "b"},
+     {ts: 100s.from_epoch(), k: "a"}
+group k {
+  window size=10s, on=ts {
+    summarize n=count()
+    k = $group
+    start = $window.start.since_epoch()
+  }
+}
+sort k, start

@@ -1,0 +1,11 @@
+// `every` need not divide `size`. With size=3s and every=2s the windows partly
+// overlap (each event lands in two windows except at the edges), and starts are
+// still aligned to the epoch.
+from {ts: 0s.from_epoch()},
+     {ts: 2s.from_epoch()},
+     {ts: 4s.from_epoch()}
+window size=3s, every=2s, on=ts {
+  summarize n=count()
+  start = $window.start.since_epoch()
+}
+sort start

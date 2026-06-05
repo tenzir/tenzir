@@ -1,0 +1,13 @@
+// A subpipeline may terminate on its own, for example via `head`. Once a
+// window's subpipeline has finished, the window is not reopened: further events
+// for that window are dropped rather than starting a fresh subpipeline. Here
+// `head 2` keeps the first two events of the single [0s, 10s) window and the
+// third event is discarded.
+from {ts: 0s.from_epoch(), v: 1},
+     {ts: 1s.from_epoch(), v: 2},
+     {ts: 2s.from_epoch(), v: 3}
+window size=10s, on=ts {
+  head 2
+}
+drop ts
+sort v

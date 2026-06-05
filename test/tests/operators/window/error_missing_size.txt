@@ -1,0 +1,8 @@
+error: required argument `size` was not provided
+ --> tests/operators/window/error_missing_size.tql:6:1
+  |
+6 | window on=ts {
+  | ^^^^^^ 
+  |
+  = usage: window size=duration, on=time, [every=duration, tolerance=duration, idle_timeout=duration]
+  = docs: https://docs.tenzir.com/reference/operators/window

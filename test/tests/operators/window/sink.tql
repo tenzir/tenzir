@@ -1,0 +1,7 @@
+// A subpipeline that ends in a sink makes `window` itself a sink: it produces
+// no output.
+from {ts: 0s.from_epoch()},
+     {ts: 1s.from_epoch()}
+window size=1s, on=ts {
+  discard
+}

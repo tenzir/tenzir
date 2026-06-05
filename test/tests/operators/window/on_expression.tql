@@ -1,0 +1,10 @@
+// `on` is an arbitrary expression that evaluates to a timestamp, not just a
+// field reference. Here the event time is shifted by adding a duration before
+// windowing.
+from {ts: 0s.from_epoch()},
+     {ts: 1s.from_epoch()}
+window size=2s, on=(ts + 100s) {
+  summarize n=count()
+  start = $window.start.since_epoch()
+}
+sort start

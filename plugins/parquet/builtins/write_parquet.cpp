@@ -66,10 +66,10 @@ public:
   /// Parquet footer (written only on `Close()`) references every prior row
   /// group by file offset, so restoring from a snapshot would either drop
   /// pre-checkpoint rows from the final file or produce an invalid concatenated
-  /// Parquet stream. Until we support seekable/appendable Parquet output, we
-  /// fail checkpoints explicitly rather than silently producing corrupt data.
+  /// Parquet stream. Checkpointing is not supported until we support
+  /// seekable/appendable Parquet output.
   auto snapshot(Serde&) -> void override {
-    diagnostic::error("write_parquet does not support checkpoints yet").throw_();
+    TENZIR_TODO();
   }
 
   auto state() -> OperatorState override {

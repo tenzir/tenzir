@@ -1,0 +1,19 @@
+{
+  values: [
+    "a",
+  ],
+  start: -1s,
+}
+{
+  values: [
+    "a",
+    "b",
+  ],
+  start: 0ns,
+}
+{
+  values: [
+    "b",
+  ],
+  start: 1s,
+}

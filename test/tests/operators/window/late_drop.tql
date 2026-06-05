@@ -1,0 +1,11 @@
+// With the default tolerance of 0, the [0s, 2s) window closes as soon as
+// the clock reaches 5s. The trailing event at 1s is therefore late and dropped
+// with a warning.
+from {ts: 0s.from_epoch()},
+     {ts: 5s.from_epoch()},
+     {ts: 1s.from_epoch()}
+window size=2s, on=ts {
+  summarize n=count()
+  start = $window.start.since_epoch()
+}
+sort start

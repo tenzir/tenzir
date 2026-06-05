@@ -1,0 +1,11 @@
+// With a lag tolerance, an out-of-order event still lands in its window as long
+// as the window has not closed yet. The event at 1s arrives after the clock has
+// advanced to 3s, but `tolerance=3s` keeps the [0s, 2s) window open.
+from {ts: 0s.from_epoch()},
+     {ts: 3s.from_epoch()},
+     {ts: 1s.from_epoch()}
+window size=2s, tolerance=3s, on=ts {
+  summarize n=count()
+  start = $window.start.since_epoch()
+}
+sort start
