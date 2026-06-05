@@ -293,10 +293,10 @@ private:
       for (auto index = first; index <= last; ++index) {
         auto start = window_start(index);
         auto end = start + args_.size;
-        // A window has closed once the clock moved past `end + tolerance`. The
+        // A window has closed once the clock reached `end + tolerance`. The
         // clock reflects all preceding events, so an out-of-order event is late
-        // exactly when an earlier event already advanced past its window.
-        if (clock and *clock > end + args_.tolerance) {
+        // exactly when an earlier event already advanced to its close point.
+        if (clock and *clock >= end + args_.tolerance) {
           any_late = true;
           continue;
         }
@@ -364,7 +364,7 @@ private:
     // `size`, it is also ordered by end. Hence the first window that is not yet
     // passed marks the end of the closeable prefix.
     for (const auto& [start, state] : open_) {
-      if (*current_time_ > state.end + args_.tolerance) {
+      if (*current_time_ >= state.end + args_.tolerance) {
         to_close.push_back(start);
       } else {
         break;
@@ -385,7 +385,7 @@ private:
     while (not seen_.empty()) {
       auto start = *seen_.begin();
       auto end = start + args_.size;
-      if (*current_time_ > end + args_.tolerance) {
+      if (*current_time_ >= end + args_.tolerance) {
         seen_.erase(seen_.begin());
       } else {
         break;
