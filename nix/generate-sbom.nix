@@ -3,6 +3,9 @@
   sbomnix,
   package,
 }:
+let
+  packageDrvPath = builtins.unsafeDiscardOutputDependency package.unchecked.drvPath;
+in
 pkgs.writeScriptBin "generate" ''
   #!${pkgs.runtimeShell}
   TMP="$(mktemp -d)"
@@ -12,11 +15,10 @@ pkgs.writeScriptBin "generate" ''
   fi
   mkdir -p "$(dirname "$OUTPUT")"
   echo "Writing intermediate files to $TMP"
-  staticDrv="$(${pkgs.nix}/bin/nix path-info --derivation ${package.unchecked})"
   echo "Converting vendored spdx info from KV to JSON"
   ${pkgs.python3Packages.spdx-tools}/bin/pyspdxtools -i vendored.spdx -o $TMP/vendored.spdx.json
   echo "Deriving SPDX from the Nix package"
-  ${sbomnix}/bin/sbomnix --buildtime ''${staticDrv} \
+  ${sbomnix}/bin/sbomnix --buildtime ${packageDrvPath} \
     --spdx=$TMP/nix.spdx.json \
     --csv=/dev/null \
     --cdx=/dev/null
