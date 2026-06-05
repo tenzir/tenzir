@@ -354,6 +354,14 @@ public:
     return "GenericIr";
   }
 
+  auto copy() const -> Box<ir::Operator> override {
+    return GenericIr{*this};
+  }
+
+  auto move() && -> Box<ir::Operator> override {
+    return GenericIr{std::move(*this)};
+  }
+
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override {
     if (desc_->spawner) {

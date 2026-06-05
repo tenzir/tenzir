@@ -189,6 +189,10 @@ public:
 
   auto name() const -> std::string override;
 
+  auto copy() const -> Box<Operator> override;
+
+  auto move() && -> Box<Operator> override;
+
   auto substitute(substitute_ctx ctx, bool instantiate)
     -> failure_or<void> override;
 
