@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+// Passing a non-lambda (here `null`) to `map` must fail cleanly with a
+// diagnostic instead of crashing with an internal error. Regression test for
+// an assertion failure in `expression::get_location()` reached via an empty
+// lambda body. See the original report:
+//   y = [1, ...x?.map(null) else [], 2]
+from {x: [1, 2, 3]}
+y = x.map(null)
