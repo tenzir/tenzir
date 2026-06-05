@@ -221,6 +221,14 @@ auto ir::SetIr::name() const -> std::string {
   return "SetIr";
 }
 
+auto ir::SetIr::copy() const -> Box<ir::Operator> {
+  return SetIr{*this};
+}
+
+auto ir::SetIr::move() && -> Box<ir::Operator> {
+  return SetIr{std::move(*this)};
+}
+
 auto ir::SetIr::substitute(substitute_ctx ctx, bool instantiate)
   -> failure_or<void> {
   (void)instantiate;
@@ -506,6 +514,14 @@ public:
 
   auto name() const -> std::string override {
     return "If";
+  }
+
+  auto copy() const -> Box<ir::Operator> override {
+    return IfIr{args_};
+  }
+
+  auto move() && -> Box<ir::Operator> override {
+    return IfIr{std::move(args_)};
   }
 
   auto substitute(substitute_ctx ctx, bool instantiate)
