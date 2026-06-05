@@ -1,0 +1,30 @@
+{
+  x: "a,b,c",
+  keep: "a",
+  suffix: "!",
+  y: [
+    "a",
+    "b",
+    "c",
+  ],
+  filtered: [
+    "a",
+  ],
+  mapped: [
+    "a!",
+    "b!",
+    "c!",
+  ],
+}
+{
+  x: null,
+  keep: "b",
+  suffix: "?",
+  y: [],
+  filtered: [
+    "b",
+  ],
+  mapped: [
+    "?",
+  ],
+}

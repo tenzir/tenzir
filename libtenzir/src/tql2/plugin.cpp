@@ -39,6 +39,15 @@ auto function_use::evaluator::operator()(
   return static_cast<tenzir::evaluator*>(self_)->eval(expr, input);
 }
 
+auto function_use::evaluator::operator()(const ast::lambda_expr& expr,
+                                         const basic_series<list_type>& input,
+                                         int64_t input_offset) const
+  -> multi_series {
+  auto* evaluator = static_cast<tenzir::evaluator*>(self_);
+  return evaluator->slice(input_offset, input_offset + input.length())
+    .eval(expr, input);
+}
+
 auto aggregation_plugin::make_function(function_invocation inv,
                                        session ctx) const
   -> failure_or<function_ptr> {
