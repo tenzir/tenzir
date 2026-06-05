@@ -1,0 +1,12 @@
+// A window closes once the clock reaches `end + tolerance`. With the default
+// tolerance of 0, an event whose timestamp equals the window end advances the
+// clock to that end and closes the previous window. The trailing event at 1s is
+// therefore late and dropped.
+from {ts: 0s.from_epoch()},
+     {ts: 2s.from_epoch()},
+     {ts: 1s.from_epoch()}
+window size=2s, on=ts {
+  summarize n=count()
+  start = $window.start.since_epoch()
+}
+sort start

@@ -1,0 +1,10 @@
+// Hopping windows copy each event into every overlapping window. Collecting the
+// event values per window shows the duplication concretely: with size=2s and
+// every=1s the event at 1s appears in the windows starting at 0s and 1s.
+from {ts: 0s.from_epoch(), v: "a"},
+     {ts: 1s.from_epoch(), v: "b"}
+window size=2s, every=1s, on=ts {
+  summarize values=collect(v)
+  start = $window.start.since_epoch()
+}
+sort start

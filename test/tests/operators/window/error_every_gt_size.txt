@@ -1,0 +1,9 @@
+error: `every` must not be greater than `size`
+ --> tests/operators/window/error_every_gt_size.tql:6:23
+  |
+6 | window size=1s, every=2s, on=ts {
+  |                       ^^ 
+  ⋮
+6 | window size=1s, every=2s, on=ts {
+  |             -- 
+  |

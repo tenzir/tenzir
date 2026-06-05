@@ -1,0 +1,6 @@
+error: `tolerance` must not be negative
+ --> tests/operators/window/error_negative_tolerance.tql:6:27
+  |
+6 | window size=1s, tolerance=-1s, on=ts {
+  |                           ^^^ 
+  |

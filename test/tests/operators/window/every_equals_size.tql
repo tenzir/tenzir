@@ -1,0 +1,11 @@
+// Setting `every` equal to `size` is the same as omitting it: non-overlapping
+// tumbling windows, each event in exactly one window.
+from {ts: 0s.from_epoch()},
+     {ts: 1s.from_epoch()},
+     {ts: 2s.from_epoch()},
+     {ts: 3s.from_epoch()}
+window size=2s, every=2s, on=ts {
+  summarize n=count()
+  start = $window.start.since_epoch()
+}
+sort start

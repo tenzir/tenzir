@@ -1,0 +1,8 @@
+error: required argument `on` was not provided
+ --> tests/operators/window/error_missing_on.tql:6:1
+  |
+6 | window size=1s {
+  | ^^^^^^ 
+  |
+  = usage: window size=duration, on=time, [every=duration, tolerance=duration, idle_timeout=duration]
+  = docs: https://docs.tenzir.com/reference/operators/window

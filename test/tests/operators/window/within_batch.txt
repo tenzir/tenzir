@@ -1,0 +1,14 @@
+{
+  n: 1,
+  start: 0ns,
+}
+{
+  n: 1,
+  start: 4s,
+}
+warning: `window` dropped 1 late event(s) that arrived after their window had closed
+  --> tests/operators/window/within_batch.tql:10:20
+   |
+10 | window size=2s, on=ts {
+   |                    ~~ 
+   |

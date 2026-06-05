@@ -1,0 +1,14 @@
+// Events are processed in stream order regardless of how they are batched.
+// Combining the events into a single batch with `batch` produces exactly the
+// same result as `late_drop` (where they arrive separately): the out-of-order
+// event at 1s is late and dropped, because the event at 5s already advanced the
+// clock past the [0s, 2s) window.
+from {ts: 0s.from_epoch()},
+     {ts: 5s.from_epoch()},
+     {ts: 1s.from_epoch()}
+batch
+window size=2s, on=ts {
+  summarize n=count()
+  start = $window.start.since_epoch()
+}
+sort start

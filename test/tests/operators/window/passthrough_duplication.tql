@@ -1,0 +1,11 @@
+// A non-aggregating subpipeline forwards events as they arrive. With hopping
+// windows each event is forwarded once per overlapping window, so the output is
+// duplicated: the event at 0s is emitted for windows [-1s, 1s) and [0s, 2s).
+from {ts: 0s.from_epoch(), v: "a"},
+     {ts: 1s.from_epoch(), v: "b"}
+window size=2s, every=1s, on=ts {
+  where true
+  w = $window.start.since_epoch()
+}
+drop ts
+sort w, v

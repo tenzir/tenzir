@@ -1,0 +1,9 @@
+{
+  n: 2,
+}
+warning: `window` dropped 1 event(s) where `on` did not evaluate to a timestamp
+ --> tests/operators/window/on_null.tql:6:21
+  |
+6 | window size=10s, on=ts {
+  |                     ~~ 
+  |

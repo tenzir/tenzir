@@ -1,0 +1,10 @@
+{
+  n: 1,
+  start: 0ns,
+}
+warning: `window` dropped 1 late event(s) that arrived after their window had closed
+  --> tests/operators/window/idle_timeout.tql:16:21
+   |
+16 | window size=10s, on=ts, idle_timeout=10ms {
+   |                     ~~ 
+   |

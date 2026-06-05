@@ -1,0 +1,19 @@
+---
+timeout: 30
+retry: 2
+---
+
+// The first event opens the [0s, 10s) window. With a 10ms idle timeout, that
+// window is force-closed long before the second event arrives a second later.
+// The second event then targets the already-closed window and is dropped as
+// late. Without `idle_timeout` both events would share one window (n=2).
+every 1s {
+  from {}
+}
+head 2
+enumerate i
+set ts = (i * 1s).from_epoch()
+window size=10s, on=ts, idle_timeout=10ms {
+  summarize n=count()
+  start = $window.start.since_epoch()
+}

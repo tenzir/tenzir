@@ -1,0 +1,11 @@
+// Hopping windows: with size=2s and every=1s an event is copied into every
+// overlapping window. Windows are aligned to the Unix epoch, so the event at
+// 0s also belongs to the window starting at -1s.
+from {ts: 0s.from_epoch()},
+     {ts: 1s.from_epoch()},
+     {ts: 2s.from_epoch()}
+window size=2s, every=1s, on=ts {
+  summarize n=count()
+  start = $window.start.since_epoch()
+}
+sort start

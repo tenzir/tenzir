@@ -1,0 +1,37 @@
+{
+  vals: [
+    "x",
+  ],
+  start: -2s,
+}
+{
+  vals: [
+    "x",
+  ],
+  start: -1s,
+}
+{
+  vals: [
+    "x",
+  ],
+  start: 0ns,
+}
+{
+  vals: [
+    "y",
+    "z",
+  ],
+  start: 3s,
+}
+{
+  vals: [
+    "y",
+  ],
+  start: 4s,
+}
+{
+  vals: [
+    "y",
+  ],
+  start: 5s,
+}
