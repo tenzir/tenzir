@@ -1,9 +1,9 @@
 // An out-of-order event in a hopping configuration is delivered to every target
 // window that is still open and silently skipped for those that have already
 // closed. With size=3s, every=1s and the default lag tolerance, the clock
-// reaches 5s before the event at 3s arrives: its window [1s, 4s) has closed and
-// is skipped, while [2s, 5s) and [3s, 6s) still receive it. Because the event
-// reaches at least one open window, it is not reported as fully dropped.
+// reaches 5s before the event at 3s arrives: its windows [1s, 4s) and [2s, 5s)
+// have closed and are skipped, while [3s, 6s) still receives it. Because the
+// event reaches at least one open window, it is not reported as fully dropped.
 from {ts: 0s.from_epoch(), v: "x"},
      {ts: 5s.from_epoch(), v: "y"},
      {ts: 3s.from_epoch(), v: "z"}
