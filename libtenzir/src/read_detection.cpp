@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <array>
 #include <ranges>
+#include <simdjson.h>
 #include <utility>
 #include <vector>
 
@@ -94,11 +95,20 @@ auto scan_json_value(std::string_view input) -> json_scan_result {
   return {};
 }
 
+auto is_valid_json(std::string_view input, simdjson::dom::element_type expected)
+  -> bool {
+  auto parser = simdjson::dom::parser{};
+  auto bytes = std::string{input};
+  auto doc = parser.parse(bytes);
+  return not doc.error() and doc.value_unsafe().type() == expected;
+}
+
 auto complete_json_object_line(std::string_view line) -> bool {
   auto scan = scan_json_value(line);
   return scan.state == json_scan_result::kind::complete
          and scan.top_level == '{'
-         and detail::trim_front(line.substr(scan.end)).empty();
+         and detail::trim_front(line.substr(scan.end)).empty()
+         and is_valid_json(line, simdjson::dom::element_type::OBJECT);
 }
 
 } // namespace
@@ -148,6 +158,9 @@ auto json_object(read_detection_input input) -> read_detection_result {
   if (not rest.empty()) {
     return reject("trailing bytes after object");
   }
+  if (not is_valid_json(input.bytes, simdjson::dom::element_type::OBJECT)) {
+    return reject("invalid JSON object");
+  }
   return match(70, "top-level JSON object");
 }
 
@@ -159,7 +172,8 @@ auto json_array(read_detection_input input) -> read_detection_result {
   if (scan.state == json_scan_result::kind::incomplete) {
     return input.eof ? reject("incomplete JSON array") : need_more();
   }
-  if (scan.top_level == '[' and scan.first_array_element == '{') {
+  if (scan.top_level == '[' and scan.first_array_element == '{'
+      and is_valid_json(input.bytes, simdjson::dom::element_type::ARRAY)) {
     return match(75, "top-level array of objects");
   }
   return reject();
@@ -182,6 +196,10 @@ auto ndjson(read_detection_input input) -> read_detection_result {
   auto scan = scan_json_value(bytes);
   if (scan.state == json_scan_result::kind::complete
       and scan.top_level == '{') {
+    auto first_object = bytes.substr(0, scan.end);
+    if (not is_valid_json(first_object, simdjson::dom::element_type::OBJECT)) {
+      return reject("invalid JSON object");
+    }
     auto rest = detail::trim_front(bytes.substr(scan.end));
     if (not rest.empty()) {
       return match(82, "JSON object followed by more input");
