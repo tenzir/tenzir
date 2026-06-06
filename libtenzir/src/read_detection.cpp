@@ -215,16 +215,18 @@ auto json_field(read_detection_input input, std::string_view field,
                 uint64_t confidence) -> read_detection_result {
   auto object = json_object(input);
   auto lines = ndjson(input);
-  if (object.state == detection_state::reject
-      and lines.state == detection_state::reject) {
-    return reject();
-  }
-  if (input.bytes.contains(field)) {
+  auto valid_json_shape = object.state == detection_state::match
+                          or lines.state == detection_state::match;
+  if (valid_json_shape and input.bytes.contains(field)) {
     return match(confidence, fmt::format("contains `{}`", field));
   }
   if (object.state == detection_state::need_more
       or lines.state == detection_state::need_more) {
     return need_more();
+  }
+  if (object.state == detection_state::reject
+      and lines.state == detection_state::reject) {
+    return reject();
   }
   return reject();
 }
