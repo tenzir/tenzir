@@ -29,6 +29,10 @@ TEST("responses URL") {
   url = openai::make_responses_url("http://");
   REQUIRE(url.is_err());
   CHECK_EQUAL(url.unwrap_err(), "endpoint must include a host");
+
+  url = openai::make_responses_url("ftp://example.com/v1");
+  REQUIRE(url.is_err());
+  CHECK_EQUAL(url.unwrap_err(), "endpoint must use HTTP or HTTPS");
 }
 
 TEST("responses request body") {
