@@ -23,14 +23,6 @@
 namespace tenzir::openai {
 namespace {
 
-auto trim_response_body(std::string_view body) -> std::string_view {
-  constexpr auto max_body_size = size_t{1024};
-  if (body.size() <= max_body_size) {
-    return body;
-  }
-  return body.substr(0, max_body_size);
-}
-
 auto optional_string(simdjson::dom::object object, std::string_view field)
   -> Option<std::string> {
   auto value = simdjson::dom::element{};
@@ -105,6 +97,9 @@ auto make_responses_url(std::string endpoint)
   auto path = std::string{url.path()};
   if (path.empty()) {
     path = "/";
+  }
+  while (path.size() > 1 and path.ends_with('/')) {
+    path.pop_back();
   }
   if (not path.ends_with("/responses")) {
     if (not path.ends_with('/')) {
@@ -204,9 +199,13 @@ auto ResponsesClient::create(ResponsesRequest request)
   }
   auto http_response = std::move(response).unwrap();
   if (not http_response.is_status_success()) {
+    constexpr auto max_body_size = size_t{1024};
+    auto body = std::string_view{http_response.body};
+    if (body.size() > max_body_size) {
+      body = body.substr(0, max_body_size);
+    }
     co_return Err{fmt::format("HTTP request returned status {}: {}",
-                              http_response.status_code,
-                              trim_response_body(http_response.body))};
+                              http_response.status_code, body)};
   }
   co_return parse_responses_body(http_response.body, latency);
 }

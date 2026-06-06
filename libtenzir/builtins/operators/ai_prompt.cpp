@@ -40,26 +40,24 @@ namespace {
 
 constexpr auto default_endpoint = std::string_view{"http://127.0.0.1:11434/v1"};
 
-auto default_result_field() -> ast::field_path {
-  auto expr = ast::expression{
-    ast::root_field{ast::identifier{"ai", location::unknown}}};
-  expr = ast::expression{ast::field_access{
-    std::move(expr),
-    location::unknown,
-    false,
-    ast::identifier{"prompt", location::unknown},
-  }};
-  auto result = ast::field_path::try_from(std::move(expr));
-  TENZIR_ASSERT(result);
-  return std::move(*result);
-}
-
 struct PromptArgs {
   located<std::string> model;
   Option<located<secret>> endpoint;
   Option<located<std::string>> system;
   Option<ast::expression> data;
-  ast::field_path into = default_result_field();
+  ast::field_path into = [] {
+    auto expr = ast::expression{
+      ast::root_field{ast::identifier{"ai", location::unknown}}};
+    expr = ast::expression{ast::field_access{
+      std::move(expr),
+      location::unknown,
+      false,
+      ast::identifier{"prompt", location::unknown},
+    }};
+    auto result = ast::field_path::try_from(std::move(expr));
+    TENZIR_ASSERT(result);
+    return std::move(*result);
+  }();
   Option<located<secret>> api_key;
   located<double> temperature{0.0, location::unknown};
   Option<located<uint64_t>> max_tokens;
@@ -75,39 +73,26 @@ struct RowResult {
   Option<std::string> error = None{};
 };
 
-auto data_expr(PromptArgs const& args) -> ast::expression {
-  if (args.data) {
-    return *args.data;
-  }
-  return ast::expression{ast::this_{args.operator_location}};
-}
-
-auto print_json(data_view3 value) -> Result<std::string, std::string> {
+auto make_input_data(PromptArgs const& args, table_slice const& input,
+                     diagnostic_handler& dh) -> std::vector<RowResult> {
+  auto results = std::vector<RowResult>{};
+  results.resize(detail::narrow<size_t>(input.rows()));
+  auto expr = args.data ? *args.data
+                        : ast::expression{ast::this_{args.operator_location}};
+  auto values = eval(std::move(expr), input, dh);
   static auto const options = json_printer_options{
     .style = no_style(),
     .oneline = true,
   };
   static auto const printer = json_printer{options};
-  auto result = std::string{};
-  auto out = std::back_inserter(result);
-  if (not printer.print(out, value)) {
-    return Err{std::string{"failed to serialize data as JSON"}};
-  }
-  return result;
-}
-
-auto make_input_data(PromptArgs const& args, table_slice const& input,
-                     diagnostic_handler& dh) -> std::vector<RowResult> {
-  auto results = std::vector<RowResult>{};
-  results.resize(detail::narrow<size_t>(input.rows()));
-  auto values = eval(data_expr(args), input, dh);
   auto row = size_t{};
   for (auto value : values.values3()) {
-    auto printed = print_json(value);
-    if (printed.is_err()) {
-      results[row].error = std::move(printed).unwrap_err();
+    auto result = std::string{};
+    auto out = std::back_inserter(result);
+    if (not printer.print(out, value)) {
+      results[row].error = std::string{"failed to serialize data as JSON"};
     } else {
-      results[row].input = std::move(printed).unwrap();
+      results[row].input = std::move(result);
     }
     ++row;
   }
@@ -232,18 +217,9 @@ public:
     if (not api_key.empty()) {
       headers.push_back({"Authorization", fmt::format("Bearer {}", api_key)});
     }
-    try {
-      auto pool
-        = HttpPool::make(ctx.io_executor(), std::move(responses_url).unwrap(),
-                         std::move(*config));
-      client_.emplace(std::in_place, std::move(pool), std::move(headers));
-    } catch (std::exception const& e) {
-      diagnostic::error("failed to initialize HTTP client: {}", e.what())
-        .primary(endpoint_location)
-        .emit(ctx);
-      done_ = true;
-      co_return;
-    }
+    auto pool = HttpPool::make(
+      ctx.io_executor(), std::move(responses_url).unwrap(), std::move(*config));
+    client_.emplace(std::in_place, std::move(pool), std::move(headers));
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)

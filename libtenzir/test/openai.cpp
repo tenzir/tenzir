@@ -21,6 +21,10 @@ TEST("responses URL") {
   url = openai::make_responses_url("https://api.openai.com/v1/responses");
   REQUIRE(url);
   CHECK_EQUAL(url.unwrap(), "https://api.openai.com/v1/responses");
+
+  url = openai::make_responses_url("https://api.openai.com/v1/responses/");
+  REQUIRE(url);
+  CHECK_EQUAL(url.unwrap(), "https://api.openai.com/v1/responses");
 }
 
 TEST("responses request body") {
