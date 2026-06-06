@@ -12,18 +12,14 @@
 #include "tenzir/concept/printable/tenzir/ip.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/data.hpp"
-#include "tenzir/word.hpp"
 
 #include <arpa/inet.h>
 #include <fmt/format.h>
 #include <netinet/in.h>
-#include <openssl/crypto.h>
-#include <openssl/err.h>
-#include <openssl/evp.h>
-#include <openssl/ossl_typ.h>
 #include <sys/socket.h>
 
-#include <cstdlib>
+#include <algorithm>
+#include <cstdint>
 #include <string_view>
 #include <utility>
 
@@ -31,83 +27,22 @@ namespace tenzir {
 
 namespace {
 
-inline auto bitmask32(size_t bottom_bits) -> uint32_t {
-  return bottom_bits >= 32 ? 0xffffffff : ((uint32_t{1} << bottom_bits) - 1);
+auto all_equal(std::span<uint8_t const> bytes, uint8_t value) -> bool {
+  return std::ranges::all_of(bytes, [value](auto byte) {
+    return byte == value;
+  });
 }
 
-class address_encryptor {
-public:
-  explicit address_encryptor(const std::array<ip::byte_type, 32>& key) {
-    cipher_ = EVP_get_cipherbyname("aes-128-ecb");
-    block_size_ = EVP_CIPHER_block_size(cipher_);
-    pad_ = std::vector<ip::byte_type>(block_size_);
-    auto pad_out_len = 0;
-    EVP_CipherInit_ex(ctx_.get(), cipher_, nullptr, key.data(), nullptr, 1);
-    // use second 16-byte half of key for padding
-    EVP_CipherUpdate(ctx_.get(), pad_.data(), &pad_out_len,
-                     key.data() + block_size_, block_size_);
-  }
-
-  auto operator()(ip::byte_array bytes, size_t byte_offset) {
-    auto bytes_to_encrypt = std::span{bytes.begin() + byte_offset, bytes.end()};
-    auto one_time_pad = generate_one_time_pad(bytes_to_encrypt);
-    for (auto i = size_t{0}; i < bytes_to_encrypt.size(); ++i) {
-      bytes[i + byte_offset] = bytes_to_encrypt[i] ^ one_time_pad[i];
-    }
-    return bytes;
-  }
-
-private:
-  static constexpr inline auto msb_of_byte_mask = 0b10000000;
-  std::unique_ptr<EVP_CIPHER_CTX, std::function<void(EVP_CIPHER_CTX*)>> ctx_
-    = {EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free};
-  const EVP_CIPHER* cipher_ = {};
-  int block_size_ = {};
-  std::vector<ip::byte_type> pad_ = {};
-
-  auto generate_one_time_pad(std::span<ip::byte_type> bytes_to_encrypt)
-    -> std::vector<ip::byte_type> {
-    auto out_len = 0;
-    auto cipher_input = std::vector<ip::byte_type>(pad_);
-    auto cipher_output = std::vector<ip::byte_type>(pad_);
-    EVP_CipherUpdate(ctx_.get(), cipher_output.data(), &out_len,
-                     cipher_input.data(), block_size_);
-    auto byte_index = 0;
-    auto bit_index = 0;
-    auto one_time_pad = std::vector<ip::byte_type>(bytes_to_encrypt.size());
-    one_time_pad[byte_index] |= cipher_output[0] & msb_of_byte_mask;
-    for (auto i = size_t{0}; i < bytes_to_encrypt.size() * 8 - 1;) {
-      auto padding_mask = 0xff >> (bit_index + 1);
-      auto original_mask = ~padding_mask;
-      auto padding_byte = pad_[byte_index];
-      auto original_byte = bytes_to_encrypt[byte_index];
-      cipher_input[byte_index]
-        = (original_byte & original_mask) | (padding_byte & padding_mask);
-      EVP_CipherUpdate(ctx_.get(), cipher_output.data(), &out_len,
-                       cipher_input.data(), block_size_);
-      ++i;
-      byte_index = i / 8;
-      bit_index = i % 8;
-      one_time_pad[byte_index]
-        |= (cipher_output[0] & msb_of_byte_mask) >> bit_index;
-    }
-    return one_time_pad;
-  }
-};
+auto all_zero(std::span<uint8_t const> bytes) -> bool {
+  return all_equal(bytes, 0);
+}
 
 } // namespace
 
-auto ip::pseudonymize(
-  const ip& original,
-  const std::array<byte_type, pseudonymization_seed_array_size>& seed) -> ip {
-  auto byte_offset = (original.is_v4() ? 12 : 0);
-  address_encryptor encryptor(seed);
-  auto pseudonymized_bytes = encryptor(original.bytes_, byte_offset);
-  return ip(pseudonymized_bytes);
-}
-
 auto ip::is_v4() const -> bool {
-  return std::memcmp(&bytes_, &v4_mapped_prefix, 12) == 0;
+  return std::memcmp(bytes_.data(), v4_mapped_prefix.data(),
+                     v4_mapped_prefix.size())
+         == 0;
 }
 
 auto ip::is_v6() const -> bool {
@@ -118,18 +53,12 @@ auto ip::is_loopback() const -> bool {
   if (is_v4()) {
     return bytes_[12] == 127;
   } else {
-    return ((bytes_[0] == 0) and (bytes_[1] == 0) and (bytes_[2] == 0)
-            and (bytes_[3] == 0) and (bytes_[4] == 0) and (bytes_[5] == 0)
-            and (bytes_[6] == 0) and (bytes_[7] == 0) and (bytes_[8] == 0)
-            and (bytes_[9] == 0) and (bytes_[10] == 0) and (bytes_[11] == 0)
-            and (bytes_[12] == 0) and (bytes_[13] == 0) and (bytes_[14] == 0)
-            and (bytes_[15] == 1));
+    return all_zero(std::span{bytes_}.first<15>()) and bytes_[15] == 1;
   }
 }
 
 auto ip::is_broadcast() const -> bool {
-  return is_v4() and bytes_[12] == 0xff and bytes_[13] == 0xff
-         and bytes_[14] == 0xff and bytes_[15] == 0xff;
+  return is_v4() and all_equal(std::span{bytes_}.subspan<12, 4>(), 0xff);
 }
 
 auto ip::is_multicast() const -> bool {
@@ -144,14 +73,15 @@ auto ip::is_private() const -> bool {
     // 172.16.0.0/12 (172.16.0.0 - 172.31.255.255)
     // 192.168.0.0/16 (192.168.0.0 - 192.168.255.255)
     // Note: 169.254.0.0/16 (link-local) is NOT included here
-    return (bytes_[12] == 10)
-           or (bytes_[12] == 172 and bytes_[13] >= 16 and bytes_[13] <= 31)
-           or (bytes_[12] == 192 and bytes_[13] == 168);
+    auto first = bytes_[12];
+    auto second = bytes_[13];
+    return (first == 10) or (first == 172 and second >= 16 and second <= 31)
+           or (first == 192 and second == 168);
   } else {
     // IPv6 private addresses:
     // fc00::/7 - Unique Local Addresses (ULA)
     // Note: fe80::/10 (link-local) is NOT included here
-    return (bytes_[0] >= 0xfc and bytes_[0] <= 0xfd);
+    return bytes_[0] >= 0xfc and bytes_[0] <= 0xfd;
   }
 }
 
@@ -167,20 +97,12 @@ auto ip::is_global() const -> bool {
   // Check for unspecified address
   if (is_v4()) {
     // For IPv4, check if the last 4 bytes are all zero (0.0.0.0)
-    if (bytes_[12] == 0 and bytes_[13] == 0 and bytes_[14] == 0
-        and bytes_[15] == 0) {
+    if (all_zero(std::span{bytes_}.subspan<12, 4>())) {
       return false;
     }
   } else {
     // For IPv6, check if all bytes are zero (::)
-    bool is_unspecified = true;
-    for (int i = 0; i < 16; ++i) {
-      if (bytes_[i] != 0) {
-        is_unspecified = false;
-        break;
-      }
-    }
-    if (is_unspecified) {
+    if (all_zero(std::span{bytes_})) {
       return false;
     }
   }
@@ -195,7 +117,7 @@ auto ip::is_link_local() const -> bool {
     return bytes_[12] == 169 and bytes_[13] == 254;
   } else {
     // IPv6 link-local: fe80::/10
-    return (bytes_[0] == 0xfe) and ((bytes_[1] & 0xc0) == 0x80);
+    return bytes_[0] == 0xfe and ((bytes_[1] & 0xc0) == 0x80);
   }
 }
 
@@ -203,20 +125,12 @@ auto ip::type() const -> ip_address_class {
   // Check for unspecified address first (0.0.0.0 or ::)
   if (is_v4()) {
     // For IPv4, check if the last 4 bytes are all zero (0.0.0.0)
-    if (bytes_[12] == 0 and bytes_[13] == 0 and bytes_[14] == 0
-        and bytes_[15] == 0) {
+    if (all_zero(std::span{bytes_}.subspan<12, 4>())) {
       return ip_address_class::unspecified;
     }
   } else {
     // For IPv6, check if all bytes are zero (::)
-    bool is_unspecified = true;
-    for (int i = 0; i < 16; ++i) {
-      if (bytes_[i] != 0) {
-        is_unspecified = false;
-        break;
-      }
-    }
-    if (is_unspecified) {
+    if (all_zero(std::span{bytes_})) {
       return ip_address_class::unspecified;
     }
   }
@@ -245,18 +159,14 @@ auto ip::mask(unsigned top_bits_to_keep) -> bool {
   if (top_bits_to_keep > 128) {
     return false;
   }
-  uint32_t m[4] = {0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff};
-  auto r = std::ldiv(top_bits_to_keep, 32);
-  if (r.quot < 4) {
-    m[r.quot] = detail::to_network_order(m[r.quot] & ~bitmask32(32 - r.rem));
+  auto byte_index = top_bits_to_keep / 8;
+  auto bits_to_keep = top_bits_to_keep % 8;
+  if (bits_to_keep != 0) {
+    auto mask = static_cast<uint8_t>(0xff << (8 - bits_to_keep));
+    bytes_[byte_index] &= mask;
+    ++byte_index;
   }
-  for (size_t i = r.quot + 1; i < 4; ++i) {
-    m[i] = 0;
-  }
-  auto p = reinterpret_cast<uint32_t*>(std::launder(&bytes_[0]));
-  for (size_t i = 0; i < 4; ++i) {
-    p[i] &= m[i];
-  }
+  std::ranges::fill(std::span{bytes_}.subspan(byte_index), 0);
   return true;
 }
 
@@ -299,7 +209,7 @@ auto ip::compare(const ip& other, size_t k) const -> bool {
       return false;
     }
   }
-  auto mask = word<byte_type>::msb_fill(k);
+  auto mask = static_cast<uint8_t>(0xff << (8 - k));
   return (*x & mask) == (*y & mask);
 }
 

@@ -1,0 +1,15 @@
+{
+  client_ip: 192.0.2.1,
+  server_ip: 2001:db8::1,
+  missing_ip: null,
+  encrypted_client: 2.90.93.17,
+  encrypted_server: dd92:2c44:3fc0:ff1e:7ff9:c7f0:8180:7e00,
+  encrypted_missing: null,
+  decrypted_client: 192.0.2.1,
+  decrypted_server: 2001:db8::1,
+  decrypted_missing: null,
+  ambiguous_ciphertext: 192.0.2.1,
+  ambiguous_plaintext: c3ff:3ff8:7cff:81f1:4c03:f000:7f08:7c4e,
+  ambiguous_roundtrip: 192.0.2.1,
+  inferred_plaintext: 57.255.50.129,
+}

@@ -1,0 +1,24 @@
+let $seed = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+
+from {
+  client_ip: 192.0.2.1,
+  server_ip: 2001:db8::1,
+  missing_ip: ip(null),
+}
+
+encrypted_client = client_ip.encrypt_cryptopan(seed=$seed)
+encrypted_server = server_ip.encrypt_cryptopan(seed=$seed)
+encrypted_missing = missing_ip.encrypt_cryptopan(seed=$seed)
+
+decrypted_client = encrypted_client.decrypt_cryptopan(seed=$seed)
+decrypted_server = encrypted_server.decrypt_cryptopan(seed=$seed)
+decrypted_missing = encrypted_missing.decrypt_cryptopan(seed=$seed)
+ambiguous_ciphertext = 192.0.2.1
+ambiguous_plaintext = ambiguous_ciphertext.decrypt_cryptopan(seed=$seed, family="ipv6")
+ambiguous_roundtrip = ambiguous_plaintext.encrypt_cryptopan(seed=$seed)
+inferred_plaintext = ambiguous_ciphertext.decrypt_cryptopan(seed=$seed)
+
+assert decrypted_client == client_ip
+assert decrypted_server == server_ip
+assert ambiguous_roundtrip == ambiguous_ciphertext
+assert inferred_plaintext != ambiguous_plaintext
