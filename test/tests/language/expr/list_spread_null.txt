@@ -1,0 +1,78 @@
+{
+  x: null,
+  am: {},
+  literal: [
+    0,
+    3,
+  ],
+  concat_left: [
+    0,
+  ],
+  concat_right: [
+    3,
+  ],
+  appended: [
+    4,
+  ],
+  prepended: [
+    5,
+  ],
+  answers: [
+    {
+      class: "static",
+    },
+  ],
+}
+{
+  x: [
+    1,
+    2,
+  ],
+  am: {
+    sections: {
+      dns: {
+        ipv4: [
+          1.1.1.1,
+        ],
+      },
+    },
+  },
+  literal: [
+    0,
+    1,
+    2,
+    3,
+  ],
+  concat_left: [
+    0,
+    1,
+    2,
+  ],
+  concat_right: [
+    1,
+    2,
+    3,
+  ],
+  appended: [
+    1,
+    2,
+    4,
+  ],
+  prepended: [
+    5,
+    1,
+    2,
+  ],
+  answers: [
+    {
+      class: "IN",
+      type: "A",
+      rdata: "1.1.1.1",
+    },
+    {
+      class: "static",
+      type: null,
+      rdata: null,
+    },
+  ],
+}

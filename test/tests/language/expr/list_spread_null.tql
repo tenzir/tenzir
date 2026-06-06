@@ -1,0 +1,25 @@
+from (
+  {
+    x: null,
+    am: {},
+  },
+  {
+    x: [1, 2],
+    am: {sections: {dns: {ipv4: [1.1.1.1]}}},
+  },
+)
+literal = [0, ...x, 3]
+concat_left = concatenate([0], x)
+concat_right = concatenate(x, [3])
+appended = append(x, 4)
+prepended = prepend(x, 5)
+answers = [
+  ...am.sections?.dns?.ipv4?.map(ip => {
+    class: "IN",
+    type: "A",
+    rdata: ip.string(),
+  }),
+  {
+    class: "static",
+  },
+]
