@@ -94,6 +94,9 @@ auto make_responses_url(std::string endpoint)
       fmt::format("failed to parse endpoint: {}", parsed.error().message())};
   }
   auto url = boost::urls::url{*parsed};
+  if (url.host().empty()) {
+    return Err{std::string{"endpoint must include a host"}};
+  }
   auto path = std::string{url.path()};
   if (path.empty()) {
     path = "/";
