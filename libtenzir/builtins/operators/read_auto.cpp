@@ -8,7 +8,6 @@
 
 #include "tenzir/async.hpp"
 #include "tenzir/compile_ctx.hpp"
-#include "tenzir/detail/inspection_common.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/ir.hpp"
@@ -49,16 +48,6 @@ struct Candidate {
   bool live = true;
   std::optional<read_detection_result> last;
 };
-
-template <class Inspector>
-auto inspect(Inspector& f, Candidate& x) {
-  return f.object(x)
-    .pretty_name("Candidate")
-    .fields(f.field("format_name", x.format_name),
-            f.field("pipeline", x.pipeline), f.field("priority", x.priority),
-            f.field("plugin_candidate", x.plugin_candidate),
-            f.field("live", x.live));
-}
 
 auto plugin_detection_candidates()
   -> const std::vector<read_detection_candidate>& {
@@ -322,12 +311,12 @@ private:
   }
 
   auto snapshot(Serde& serde) -> void override {
-    serde("candidates", candidates_);
-    serde("buffered", buffered_);
-    serde("probe", probe_);
-    serde("selected", selected_);
-    serde("seen-bytes", seen_bytes_);
-    serde("done", done_);
+    TENZIR_UNUSED(serde);
+    // `read_auto` cannot checkpoint its internal state until the executor can
+    // restore dynamically spawned subpipelines. In particular, restoring the
+    // selected reader in the parent without restoring the child reader loses
+    // the parser state owned by the child. Keep this intentionally empty
+    // instead of restoring incomplete state.
   }
 
   ReadAutoArgs args_;
