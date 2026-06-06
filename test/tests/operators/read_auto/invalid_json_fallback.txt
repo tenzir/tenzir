@@ -1,0 +1,6 @@
+{
+  line: "{not-json}",
+}
+{
+  line: "{version host}",
+}
