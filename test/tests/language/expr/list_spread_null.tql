@@ -1,13 +1,10 @@
-from (
-  {
-    x: null,
-    am: {},
-  },
-  {
-    x: [1, 2],
-    am: {sections: {dns: {ipv4: [1.1.1.1]}}},
-  },
-)
+from {
+  x: null,
+  am: {},
+}, {
+  x: [1, 2],
+  am: {sections: {dns: {ipv4: [1.1.1.1]}}},
+}
 literal = [0, ...x, 3]
 concat_left = concatenate([0], x)
 concat_right = concatenate(x, [3])
