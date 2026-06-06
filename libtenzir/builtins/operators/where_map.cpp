@@ -337,7 +337,10 @@ auto make_where_function(function_invocation inv, session ctx)
       arguments::parse("where", "predicate", "any => bool", inv, ctx));
   return function_use::make(
     [args = std::move(args)](function_plugin::evaluator eval, session ctx) {
+      auto field_offset = int64_t{0};
       return map_series(eval(args.field), [&](series field) -> multi_series {
+        auto current_field_offset = field_offset;
+        field_offset += field.length();
         return match(
           field.type,
           [&](const null_type&) -> series {
@@ -355,7 +358,8 @@ auto make_where_function(function_invocation inv, session ctx)
             // itself is `null`. This is very unlikely to happen in practice,
             // and one proper fix for this would be passing in a null bitmap to
             // the call to evaluate to indicate which rows not to evaluate.
-            for (const auto& result : eval(args.lambda, lists)) {
+            for (const auto& result :
+                 eval(args.lambda, lists, current_field_offset)) {
               match(
                 result.type,
                 [&](const bool_type&) {
@@ -504,7 +508,10 @@ auto make_map_function(function_invocation inv, session ctx)
   TRY(auto args, arguments::parse("map", "function", "any -> any", inv, ctx));
   return function_use::make([args = std::move(args)](
                               function_plugin::evaluator eval, session ctx) {
+    auto field_offset = int64_t{0};
     return map_series(eval(args.field), [&](series field) -> multi_series {
+      auto current_field_offset = field_offset;
+      field_offset += field.length();
       if (field.as<null_type>()) {
         return field;
       }
@@ -539,7 +546,7 @@ auto make_map_function(function_invocation inv, session ctx)
         }
         return b.finish_assert_one_array();
       }
-      auto ms = eval(args.lambda, *field_list);
+      auto ms = eval(args.lambda, *field_list, current_field_offset);
       TENZIR_ASSERT(not ms.parts().empty());
       // If there were no conflicts in the result, we are in the happy case
       // Here we just need to take that slice and re-join it with the offsets

@@ -127,6 +127,10 @@ public:
     auto operator()(const ast::lambda_expr& expr,
                     const basic_series<list_type>& input) const -> multi_series;
 
+    auto operator()(const ast::lambda_expr& expr,
+                    const basic_series<list_type>& input,
+                    int64_t input_offset) const -> multi_series;
+
     auto length() const -> int64_t;
 
     auto get_input() const -> std::optional<table_slice>;

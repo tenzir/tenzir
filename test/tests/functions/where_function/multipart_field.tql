@@ -1,0 +1,19 @@
+// Regression: when the field expression evaluates to a multi-part multi_series
+// (e.g. because `x? else ""` creates two type-split parts), each part must be
+// evaluated against the correct row range of the parent slice.  Without the
+// fix, the second part would either hit a rows-vs-length assertion or resolve
+// captured fields from the wrong rows.
+//
+// Three cases in one pipeline:
+//   y        – no captures, asserts row count is consistent
+//   filtered – captures `keep`; must resolve to each row's own value
+//   mapped   – map() with captures, same fix as where()
+from {rows: [
+  {x: "a,b,c", keep: "a", suffix: "!"},
+  {x: null,    keep: "b", suffix: "?"},
+]}
+unroll rows
+this = rows
+y        = (x? else "").split(",").where(a => a != "")
+filtered = (x? else "a,b").split(",").where(a => a == keep)
+mapped   = (x? else "").split(",").map(a => a + suffix)
