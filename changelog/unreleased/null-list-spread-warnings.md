@@ -1,6 +1,6 @@
 ---
 title: Null list spread warnings
-type: bugfix
+type: change
 authors:
   - mavam
   - codex
