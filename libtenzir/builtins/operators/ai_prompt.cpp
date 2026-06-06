@@ -198,9 +198,10 @@ public:
     }
     auto timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
       args_.timeout.inner);
-    auto config = http::make_http_pool_config(
-      args_.tls, endpoint, endpoint_location, ctx.dh(), timeout,
-      std::addressof(ctx.actor_system().config()));
+    auto config
+      = http::make_http_pool_config(args_.tls, endpoint, endpoint_location,
+                                    ctx.dh(), timeout,
+                                    ctx.actor_system().config());
     if (config.is_error()) {
       done_ = true;
       co_return;
