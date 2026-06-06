@@ -20,6 +20,7 @@
 #include <array>
 #include <bit>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <span>
 #include <string>
@@ -34,14 +35,9 @@ TENZIR_ENUM(ip_address_class, unspecified, loopback, link_local, multicast,
 /// An IP address.
 class ip : detail::bitwise<ip> {
 public:
-  using byte_type = uint8_t;
-  using byte_array = std::array<byte_type, 16>;
-
   /// Top 96 bits of v4-mapped-addr.
-  static constexpr std::array<byte_type, 12> v4_mapped_prefix
+  static constexpr std::array<uint8_t, 12> v4_mapped_prefix
     = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}};
-
-  static inline constexpr auto pseudonymization_seed_array_size = size_t{32};
 
   /// Address family.
   enum family { ipv4, ipv6 };
@@ -67,8 +63,8 @@ public:
     if constexpr (Endian == std::endian::little) {
       bytes = detail::byteswap(bytes);
     }
-    auto ptr = reinterpret_cast<const byte_type*>(&bytes);
-    return v4(std::span<const byte_type, 4>{ptr, 4});
+    auto ptr = reinterpret_cast<uint8_t const*>(&bytes);
+    return v4(std::span<uint8_t const, 4>{ptr, 4});
   }
 
   /// Constructs an IPv6 address from 16 raw bytes.
@@ -84,25 +80,16 @@ public:
 
   template <std::endian Endian = std::endian::native>
   static auto v6(std::span<uint32_t, 4> bytes) -> ip {
-    ip result;
-    std::memcpy(result.bytes_.data(), bytes.data(), 16);
+    auto words = std::array{bytes[0], bytes[1], bytes[2], bytes[3]};
     if constexpr (Endian == std::endian::little) {
-      auto ptr = reinterpret_cast<uint32_t*>(result.bytes_.data());
-      auto span = std::span<uint32_t, 4>{ptr, 4};
-      for (auto& block : span) {
+      for (auto& block : words) {
         block = detail::byteswap(block);
       }
     }
+    ip result;
+    std::memcpy(result.bytes_.data(), words.data(), 16);
     return result;
   }
-
-  /// Construct a pseudonymized address using the Crypto-PAn algorithm.
-  /// @param original The address to be pseudonymized.
-  /// @param seed 256-bit seed for the cipher and padding.
-  /// @returns A copy of the `original` address with pseudonymized bytes.
-  static auto pseudonymize(
-    const ip& original,
-    const std::array<byte_type, pseudonymization_seed_array_size>& seed) -> ip;
 
   /// Default-constructs an (invalid) address.
   constexpr ip() {
@@ -111,7 +98,16 @@ public:
 
   /// Constructs an IP address from 16 bytes in network byte order.
   /// @param bytes The 16 bytes representing the IP address.
-  constexpr explicit ip(byte_array bytes) : bytes_{bytes} {
+  constexpr explicit ip(std::array<std::byte, 16> bytes) {
+    for (auto i = size_t{0}; i < bytes_.size(); ++i) {
+      bytes_[i] = std::to_integer<uint8_t>(bytes[i]);
+    }
+  }
+
+  template <class Byte>
+    requires(sizeof(Byte) == 1)
+  explicit ip(std::array<Byte, 16> bytes) {
+    std::memcpy(bytes_.data(), bytes.data(), 16);
   }
 
   template <class Byte>
@@ -192,8 +188,12 @@ public:
   /// @pre `k > 0 && k <= 128`
   [[nodiscard]] auto compare(const ip& other, size_t k) const -> bool;
 
-  explicit constexpr operator byte_array() const {
-    return bytes_;
+  explicit constexpr operator std::array<std::byte, 16>() const {
+    auto result = std::array<std::byte, 16>{};
+    for (auto i = size_t{0}; i < result.size(); ++i) {
+      result[i] = std::byte{bytes_[i]};
+    }
+    return result;
   }
 
   friend auto operator<=>(const ip& x, const ip& y) -> std::strong_ordering {
@@ -218,12 +218,12 @@ public:
   }
 
 private:
-  byte_array bytes_;
+  std::array<uint8_t, 16> bytes_;
 };
 
 template <>
 struct is_uniquely_represented<ip>
-  : std::bool_constant<sizeof(ip) == sizeof(ip::byte_array)> {};
+  : std::bool_constant<sizeof(ip) == sizeof(std::array<std::byte, 16>)> {};
 
 // TODO: this specialization disables oneshot hashing for addresses to force
 // hashing of addresses via hash_append when using the legacy hash function.
