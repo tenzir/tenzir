@@ -131,7 +131,8 @@ private:
   std::vector<PendingRecord> batch_;
   size_t batch_size_ = 500;
   duration batch_timeout_ = std::chrono::seconds{1};
-  Option<std::chrono::steady_clock::time_point> batch_started_ = None{};
+  mutable Option<std::chrono::steady_clock::time_point> batch_deadline_ = None{};
+  mutable Box<Notify> batch_ready_{std::in_place};
   uint64_t parallel_ = 1;
   bool failed_ = false;
   MetricsCounter bytes_write_counter_;

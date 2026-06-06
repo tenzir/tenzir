@@ -1,0 +1,6 @@
+error: `access_key_id` and `secret_access_key` must be specified together
+ --> tests/operators/to_amazon_kinesis/validation/error_invalid_aws_iam.tql:6:37
+  |
+6 | to_amazon_kinesis "stream", aws_iam={access_key_id: "x"}
+  |                                     ^^^^^^^^^^^^^^^^^^^^ 
+  |

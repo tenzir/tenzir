@@ -729,7 +729,8 @@ auto ToAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
   client_ = co_await make_kinesis_http_client(args_.aws_region, args_.aws_iam,
                                               args_.endpoint, ctx);
   if (not client_) {
-    throw std::runtime_error{"failed to initialize Kinesis client"};
+    failed_ = true;
+    co_return;
   }
   batch_size_
     = args_.batch_size ? detail::narrow<size_t>(args_.batch_size->inner) : 500;
@@ -789,7 +790,8 @@ auto ToAmazonKinesis::process(table_slice input, OpCtx& ctx) -> Task<void> {
     const auto now = std::chrono::steady_clock::now();
     batch_.push_back(PendingRecord{std::move(*message), std::move(key)});
     if (was_empty) {
-      batch_started_ = now;
+      batch_deadline_ = now + batch_timeout_;
+      batch_ready_->notify_one();
     }
     if (batch_.size() >= batch_size_) {
       co_await flush(ctx);
@@ -807,9 +809,26 @@ auto ToAmazonKinesis::process(table_slice input, OpCtx& ctx) -> Task<void> {
 
 auto ToAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
   TENZIR_UNUSED(dh);
-  co_await folly::coro::sleep(
-    std::chrono::ceil<folly::HighResDuration>(batch_timeout_));
-  co_return true;
+  while (true) {
+    if (failed_) {
+      co_await folly::coro::sleep(std::chrono::milliseconds{10});
+      co_return true;
+    }
+    if (not batch_deadline_) {
+      co_await batch_ready_->wait();
+      continue;
+    }
+    auto const deadline = *batch_deadline_;
+    auto [timeout, ready] = co_await folly::coro::collectAnyNoDiscard(
+      sleep_until(deadline), batch_ready_->wait());
+    if (timeout.hasValue()) {
+      co_return true;
+    }
+    if (ready.hasValue()) {
+      continue;
+    }
+    co_return true;
+  }
 }
 
 auto ToAmazonKinesis::process_task(Any result, OpCtx& ctx) -> Task<void> {
@@ -822,22 +841,22 @@ auto ToAmazonKinesis::process_task(Any result, OpCtx& ctx) -> Task<void> {
 
 auto ToAmazonKinesis::flush_if_timed_out(OpCtx& ctx) -> Task<void> {
   if (failed_ or batch_.empty()) {
-    batch_started_ = None{};
+    batch_deadline_ = None{};
     co_return;
   }
-  TENZIR_ASSERT(batch_started_);
-  if (std::chrono::steady_clock::now() - *batch_started_ >= batch_timeout_) {
+  TENZIR_ASSERT(batch_deadline_);
+  if (std::chrono::steady_clock::now() >= *batch_deadline_) {
     co_await flush(ctx);
   }
 }
 
 auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
   if (failed_ or batch_.empty() or not client_) {
-    batch_started_ = None{};
+    batch_deadline_ = None{};
     co_return;
   }
   auto records = std::exchange(batch_, {});
-  batch_started_ = None{};
+  batch_deadline_ = None{};
   auto chunks = std::vector<std::vector<PendingRecord>>{};
   auto chunk = std::vector<PendingRecord>{};
   auto chunk_size = size_t{0};
@@ -872,7 +891,8 @@ auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
     }
   }
   if (not batch_.empty()) {
-    batch_started_ = std::chrono::steady_clock::now();
+    batch_deadline_ = std::chrono::steady_clock::now() + batch_timeout_;
+    batch_ready_->notify_one();
   }
   if (not errors.empty()) {
     failed_ = true;
