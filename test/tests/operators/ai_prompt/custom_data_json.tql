@@ -1,0 +1,11 @@
+---
+fixtures: [openai_responses]
+timeout: 60
+---
+
+from {id: 7, message: "ignored"}
+ai::prompt model="fixture-model",
+           endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT"),
+           data={mode: "json", id: id}
+select text=ai.prompt.text,
+       model=ai.prompt.model

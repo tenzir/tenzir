@@ -1,0 +1,13 @@
+---
+fixtures: [openai_responses]
+timeout: 60
+---
+
+from {id: 1, message: "hello"}
+ai::prompt model="fixture-model", endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT")
+select id,
+       text=ai.prompt.text,
+       model=ai.prompt.model,
+       input_tokens=ai.prompt.usage.input_tokens,
+       output_tokens=ai.prompt.usage.output_tokens,
+       total_tokens=ai.prompt.usage.total_tokens

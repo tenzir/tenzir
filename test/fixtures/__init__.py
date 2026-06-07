@@ -23,6 +23,7 @@ from . import microsoft_graph  # noqa: F401
 from . import microsoft_sql  # noqa: F401
 from . import mysql  # noqa: F401
 from . import nats  # noqa: F401
+from . import openai_responses  # noqa: F401
 from . import s3  # noqa: F401
 from . import sentinelone  # noqa: F401
 from . import splunk  # noqa: F401
@@ -64,6 +65,7 @@ __all__ = [
     "mock_s3",
     "mysql",
     "nats",
+    "openai_responses",
     "platform_ws",
     "prometheus",
     "prometheus_remote_write_mock",
