@@ -31,6 +31,7 @@ type _ocsf.v1_9_0_dev.object.account = record{
   type: string #optional,
   type_id: int64 #recommended #enum=41b1dc7e #sibling=type,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // The Actor object contains details about the user, role, application, service,
@@ -40,6 +41,7 @@ type _ocsf.v1_9_0_dev.object.actor = record{
   app_name: string #optional,
   app_uid: string #optional,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional,
+  iam_role: _ocsf.v1_9_0_dev.object.iam_role #optional,
   idp: _ocsf.v1_9_0_dev.object.idp #optional,
   invoked_by: string #optional,
   process: _ocsf.v1_9_0_dev.object.process #recommended,
@@ -152,6 +154,7 @@ type _ocsf.v1_9_0_dev.object.ai_model = record{
   ai_provider: string #required,
   name: string #required,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   version: string #recommended,
 }
 
@@ -170,6 +173,7 @@ type _ocsf.v1_9_0_dev.object.aircraft = record{
   track_direction: string #optional,
   uid: string #recommended,
   uid_alt: string #optional,
+  uid_numeric: int64 #optional,
   vertical_speed: string #optional,
 }
 
@@ -193,6 +197,7 @@ type _ocsf.v1_9_0_dev.object.analytic_nonrecursive = record{
   type: string #optional,
   type_id: int64 #required #enum=5693f9f8 #sibling=type,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   version: string #optional,
 }
 
@@ -210,6 +215,7 @@ type _ocsf.v1_9_0_dev.object.analytic = record{
   type: string #optional,
   type_id: int64 #required #enum=5693f9f8 #sibling=type,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   version: string #optional,
 }
 
@@ -287,6 +293,7 @@ type _ocsf.v1_9_0_dev.object.assessment = record{
   name: string #recommended,
   policy: _ocsf.v1_9_0_dev.object.policy #optional,
   uid: string #optional,
+  uid_numeric: int64 #optional,
 }
 
 // The MITRE ATT&CK® & ATLAS™ object describes the tactic, technique, sub-
@@ -589,6 +596,7 @@ type _ocsf.v1_9_0_dev.object.d3f_tactic = record{
   name: string #recommended,
   src_url: string #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // The MITRE D3FEND™ Technique object describes the leaf defensive technique ID
@@ -597,6 +605,7 @@ type _ocsf.v1_9_0_dev.object.d3f_technique = record{
   name: string #recommended,
   src_url: string #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // The MITRE D3FEND™ object describes the tactic & technique associated with a
@@ -670,6 +679,7 @@ type _ocsf.v1_9_0_dev.object.database = record{
   type: string #recommended,
   type_id: int64 #required #enum=f73a806f #sibling=type,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // The databucket object is a basic container that holds data, typically
@@ -707,6 +717,7 @@ type _ocsf.v1_9_0_dev.object.databucket = record{
   type_id: int64 #required #enum=74758145 #sibling=type,
   uid: string #recommended,
   uid_alt: string #optional,
+  uid_numeric: int64 #optional,
   version: string #optional,
   zone: string #optional #profile=cloud,
 }
@@ -775,6 +786,7 @@ type _ocsf.v1_9_0_dev.object.device = record{
   os: _ocsf.v1_9_0_dev.object.os #optional,
   os_machine_uuid: string #optional,
   owner: _ocsf.v1_9_0_dev.object.user #recommended,
+  peripheral_devices: list<_ocsf.v1_9_0_dev.object.peripheral_device> #optional,
   pool: _ocsf.v1_9_0_dev.object.group #optional,
   region: string #recommended,
   risk_level: string #optional,
@@ -787,6 +799,7 @@ type _ocsf.v1_9_0_dev.object.device = record{
   udid: string #optional,
   uid: string #recommended,
   uid_alt: string #optional,
+  uid_numeric: int64 #optional,
   vendor_name: string #recommended,
   vlan_uid: string #optional,
   vpc_uid: string #optional,
@@ -892,6 +905,15 @@ type _ocsf.v1_9_0_dev.object.domain_contact = record{
   uid: string #optional,
 }
 
+// The Download Info object contains metadata pertaining to a downloaded file.
+type _ocsf.v1_9_0_dev.object.download_info = record{
+  referrer: string #optional,
+  src_endpoint: _ocsf.v1_9_0_dev.object.network_endpoint #optional,
+  src_url: string #recommended,
+  type: string #optional,
+  type_id: int64 #recommended #enum=d2325c7b #sibling=type,
+}
+
 // Represents a connection or relationship between two nodes in a graph.
 type _ocsf.v1_9_0_dev.object.edge = record{
   data: null #variant #optional,
@@ -901,11 +923,14 @@ type _ocsf.v1_9_0_dev.object.edge = record{
   source: string #required,
   target: string #required,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // The Email object describes the email metadata such as sender, recipients, and
 // direction, and can include embedded URLs and files.
 type _ocsf.v1_9_0_dev.object.email = record{
+  bcc: list<string> #optional,
+  bcc_mailboxes: list<string> #optional,
   cc: list<string> #optional,
   cc_mailboxes: list<string> #optional,
   data_classification: _ocsf.v1_9_0_dev.object.data_classification #recommended #profile=data_classification,
@@ -988,6 +1013,7 @@ type _ocsf.v1_9_0_dev.object.endpoint = record{
   type: string #optional,
   type_id: int64 #recommended #enum=218e23f2 #sibling=type,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   vlan_uid: string #optional,
   vpc_uid: string #optional,
   zone: string #optional,
@@ -1065,6 +1091,7 @@ type _ocsf.v1_9_0_dev.object.evidences = record{
   src_endpoint: _ocsf.v1_9_0_dev.object.network_endpoint #recommended,
   tls: _ocsf.v1_9_0_dev.object.tls #recommended,
   uid: string #optional,
+  uid_numeric: int64 #optional,
   url: _ocsf.v1_9_0_dev.object.url #recommended,
   user: _ocsf.v1_9_0_dev.object.user #recommended,
   verdict: string #optional,
@@ -1079,6 +1106,7 @@ type _ocsf.v1_9_0_dev.object.evidences = record{
 type _ocsf.v1_9_0_dev.object.extension = record{
   name: string #recommended,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   version: string #required,
 }
 
@@ -1089,6 +1117,7 @@ type _ocsf.v1_9_0_dev.object.extension = record{
 type _ocsf.v1_9_0_dev.object.feature = record{
   name: string #recommended,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   version: string #recommended,
 }
 
@@ -1109,6 +1138,7 @@ type _ocsf.v1_9_0_dev.object.file = record{
   data_classification: _ocsf.v1_9_0_dev.object.data_classification #recommended #profile=data_classification,
   data_classifications: list<_ocsf.v1_9_0_dev.object.data_classification> #recommended #profile=data_classification,
   desc: string #optional,
+  download_info: _ocsf.v1_9_0_dev.object.download_info #optional,
   drive_type: string #optional,
   drive_type_id: int64 #optional #enum=41d44a6f #sibling=drive_type,
   encryption_details: _ocsf.v1_9_0_dev.object.encryption_details #optional,
@@ -1139,6 +1169,7 @@ type _ocsf.v1_9_0_dev.object.file = record{
   type: string #optional,
   type_id: int64 #required #enum=4da1357b #sibling=type,
   uid: string #optional,
+  uid_numeric: int64 #optional,
   uri: string #optional,
   url: _ocsf.v1_9_0_dev.object.url #optional,
   version: string #optional,
@@ -1228,6 +1259,7 @@ type _ocsf.v1_9_0_dev.object.firewall_rule = record{
   sensitivity: string #optional,
   type: string #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   version: string #optional,
 }
 
@@ -1263,6 +1295,7 @@ type _ocsf.v1_9_0_dev.object.graph = record{
   query_language_id: int64 #recommended #enum=acd6859e #sibling=query_language,
   type: string #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // The Group object represents a collection or association of entities, such as
@@ -1278,6 +1311,7 @@ type _ocsf.v1_9_0_dev.object.group = record{
   type: string #optional,
   uid: string #recommended,
   uid_alt: string #optional,
+  uid_numeric: int64 #optional,
 }
 
 // The HASSH object contains SSH network fingerprinting values for specific
@@ -1351,6 +1385,26 @@ type _ocsf.v1_9_0_dev.object.http_response = record{
   status: string #optional,
 }
 
+// The IAM Role object describes permission characteristics (or privileges)
+// associated with a user or group of users as security principals against one
+// or more resources. In some cases only the name or ID of the role is known
+// hence other attributes are optional. In some systems a user or group of users
+// can have multiple roles, imparting the union of privileges to the principal.
+// In some systems the role can serve as a temporary security principal without
+// its own credentials on behalf of the actual security principal.
+type _ocsf.v1_9_0_dev.object.iam_role = record{
+  account: _ocsf.v1_9_0_dev.object.account #optional,
+  name: string #recommended,
+  policies: list<_ocsf.v1_9_0_dev.object.policy> #optional,
+  privileges: list<string> #optional,
+  programmatic_credentials: list<_ocsf.v1_9_0_dev.object.programmatic_credential> #optional,
+  resources: list<_ocsf.v1_9_0_dev.object.resource_details> #optional,
+  session: _ocsf.v1_9_0_dev.object.session #optional,
+  uid: string #recommended,
+  uid_alt: string #optional,
+  uid_numeric: int64 #optional,
+}
+
 // The Identity Activity Metrics object captures usage patterns, authentication
 // activity, credential usage and other metrics for identities across cloud and
 // on-premises environments. Example identities include AWS IAM Users, Roles,
@@ -1388,6 +1442,7 @@ type _ocsf.v1_9_0_dev.object.idp = record{
   state_id: int64 #optional #enum=7f77d955 #sibling=state,
   tenant_uid: string #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   url_string: string #optional,
 }
 
@@ -1400,6 +1455,7 @@ type _ocsf.v1_9_0_dev.object.image = record{
   tag: string #optional,
   tags: list<_ocsf.v1_9_0_dev.object.key_value_object> #optional,
   uid: string #required,
+  uid_numeric: int64 #optional,
 }
 
 // The JA4+ fingerprint object provides detailed fingerprint information about
@@ -1423,13 +1479,44 @@ type _ocsf.v1_9_0_dev.object.job = record{
   created_time_dt: time #optional #profile=datetime,
   desc: string #recommended,
   file: _ocsf.v1_9_0_dev.object.file #optional,
+  job_actions: list<_ocsf.v1_9_0_dev.object.job_action> #optional,
+  job_triggers: list<_ocsf.v1_9_0_dev.object.job_trigger> #optional,
   last_run_time: time #epochtime #recommended,
   last_run_time_dt: time #optional #profile=datetime,
-  name: string #required,
+  name: string #recommended,
   next_run_time: time #epochtime #optional,
   next_run_time_dt: time #optional #profile=datetime,
   run_state: string #optional,
-  run_state_id: int64 #recommended #enum=d4aec81e #sibling=run_state,
+  run_state_id: int64 #recommended #enum=7c7040e4 #sibling=run_state,
+  type: string #optional,
+  type_id: int64 #recommended #enum=9909dd34 #sibling=type,
+  uid: string #optional,
+  user: _ocsf.v1_9_0_dev.object.user #optional,
+}
+
+// The action that will be performed by the job when certain conditions are met.
+type _ocsf.v1_9_0_dev.object.job_action = record{
+  cmd_line: string #optional,
+  com_class_uuid: string #optional,
+  file: _ocsf.v1_9_0_dev.object.file #optional,
+  properties: list<_ocsf.v1_9_0_dev.object.key_value_object> #recommended,
+  type: string #recommended,
+  type_id: int64 #required #enum=6145a596 #sibling=type,
+  working_directory: string #optional,
+}
+
+// The condition or event that, when met, will initiate the job to perform
+// specified actions.
+type _ocsf.v1_9_0_dev.object.job_trigger = record{
+  event_codes: list<string> #optional,
+  last_run_time: time #epochtime #recommended,
+  last_run_time_dt: time #optional #profile=datetime,
+  log_sources: list<string> #optional,
+  next_run_time: time #epochtime #optional,
+  next_run_time_dt: time #optional #profile=datetime,
+  properties: list<_ocsf.v1_9_0_dev.object.key_value_object> #recommended,
+  type: string #recommended,
+  type_id: int64 #required #enum=f7d80497 #sibling=type,
   user: _ocsf.v1_9_0_dev.object.user #optional,
 }
 
@@ -1577,6 +1664,7 @@ type _ocsf.v1_9_0_dev.object.load_balancer = record{
   name: string #recommended,
   status_detail: string #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // The Geo Location object describes a geographical location, usually associated
@@ -1622,6 +1710,7 @@ type _ocsf.v1_9_0_dev.object.logger = record{
   transmit_time: time #epochtime #recommended,
   transmit_time_dt: time #optional #profile=datetime,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   untruncated_size: int64 #optional,
   version: string #optional,
 }
@@ -1649,6 +1738,7 @@ type _ocsf.v1_9_0_dev.object.malware = record{
   severity: string #optional,
   severity_id: int64 #recommended #enum=acf27835 #sibling=severity,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // The malware scan information object describes characteristics, metadata of a
@@ -1666,6 +1756,7 @@ type _ocsf.v1_9_0_dev.object.malware_scan_info = record{
   type: string #optional,
   type_id: int64 #required #enum=0cea921b #sibling=type,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   unique_malware_count: int64 #optional,
 }
 
@@ -1687,6 +1778,7 @@ type _ocsf.v1_9_0_dev.object.managed_entity = record{
   type: string #recommended,
   type_id: int64 #recommended #enum=c186f8e6 #sibling=type,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   user: _ocsf.v1_9_0_dev.object.user #recommended,
   version: string #recommended,
 }
@@ -1703,6 +1795,7 @@ type _ocsf.v1_9_0_dev.object.message_context = record{
   service: _ocsf.v1_9_0_dev.object.service #recommended,
   total_tokens: int64 #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // The Metadata object describes the metadata associated with the event.
@@ -1761,6 +1854,7 @@ type _ocsf.v1_9_0_dev.object.mitigation = record{
   name: string #recommended,
   src_url: string #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // The Module object describes the attributes of a module.
@@ -1827,6 +1921,7 @@ type _ocsf.v1_9_0_dev.object.network_endpoint = record{
   type: string #optional,
   type_id: int64 #recommended #enum=218e23f2 #sibling=type,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   vlan_uid: string #optional,
   vpc_uid: string #optional,
   zone: string #optional,
@@ -1845,6 +1940,7 @@ type _ocsf.v1_9_0_dev.object.network_interface = record{
   type: string #optional,
   type_id: int64 #recommended #enum=870ae596 #sibling=type,
   uid: string #optional,
+  uid_numeric: int64 #optional,
 }
 
 // The network proxy endpoint object describes a proxy server, which acts as an
@@ -1881,6 +1977,7 @@ type _ocsf.v1_9_0_dev.object.network_proxy_nonrecursive = record{
   type: string #optional,
   type_id: int64 #recommended #enum=218e23f2 #sibling=type,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   vlan_uid: string #optional,
   vpc_uid: string #optional,
   zone: string #optional,
@@ -1921,6 +2018,7 @@ type _ocsf.v1_9_0_dev.object.network_proxy = record{
   type: string #optional,
   type_id: int64 #recommended #enum=218e23f2 #sibling=type,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   vlan_uid: string #optional,
   vpc_uid: string #optional,
   zone: string #optional,
@@ -1969,7 +2067,7 @@ type _ocsf.v1_9_0_dev.object.observable = record{
   name: string #recommended,
   reputation: _ocsf.v1_9_0_dev.object.reputation #optional,
   type: string #optional,
-  type_id: int64 #required #enum=08885bbf #sibling=type,
+  type_id: int64 #required #enum=f4d726dd #sibling=type,
   type_uid: int64 #optional,
   value: string #optional,
 }
@@ -2007,6 +2105,7 @@ type _ocsf.v1_9_0_dev.object.organization = record{
   ou_name: string #recommended,
   ou_uid: string #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // The Operating System (OS) object describes characteristics of an OS, such as
@@ -2142,6 +2241,7 @@ type _ocsf.v1_9_0_dev.object.peripheral_device = record{
   type: string #optional,
   type_id: int64 #recommended #enum=8f8c0e29 #sibling=type,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   vendor_id_list: list<string> #recommended,
   vendor_name: string #recommended,
 }
@@ -2176,6 +2276,7 @@ type _ocsf.v1_9_0_dev.object.policy = record{
   name: string #recommended,
   type: string #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   version: string #recommended,
 }
 
@@ -2237,6 +2338,7 @@ type _ocsf.v1_9_0_dev.object.process_nonrecursive = record{
   terminated_time_dt: time #optional #profile=datetime,
   tid: int64 #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   user: _ocsf.v1_9_0_dev.object.user #recommended,
   working_directory: string #optional,
   xattributes: null #variant #must_be_record #optional,
@@ -2273,6 +2375,7 @@ type _ocsf.v1_9_0_dev.object.process = record{
   terminated_time_dt: time #optional #profile=datetime,
   tid: int64 #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   user: _ocsf.v1_9_0_dev.object.user #recommended,
   working_directory: string #optional,
   xattributes: null #variant #must_be_record #optional,
@@ -2288,6 +2391,7 @@ type _ocsf.v1_9_0_dev.object.process_entity = record{
   path: string #optional,
   pid: int64 #recommended,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // The Product object describes characteristics of a software product.
@@ -2300,6 +2404,7 @@ type _ocsf.v1_9_0_dev.object.product = record{
   name: string #recommended,
   path: string #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   url_string: string #optional,
   vendor_name: string #recommended,
   version: string #recommended,
@@ -2356,6 +2461,7 @@ type _ocsf.v1_9_0_dev.object.query_info = record{
   query_time: time #epochtime #optional,
   query_time_dt: time #optional #profile=datetime,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // The Related Event object describes an event or another finding related to a
@@ -2405,6 +2511,7 @@ type _ocsf.v1_9_0_dev.object.reporter = record{
   name: string #recommended,
   org: _ocsf.v1_9_0_dev.object.organization #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // The Reputation object describes the reputation/risk score of an entity (e.g.
@@ -2454,6 +2561,7 @@ type _ocsf.v1_9_0_dev.object.resource_details = record{
   type: string #optional,
   uid: string #recommended,
   uid_alt: string #optional,
+  uid_numeric: int64 #optional,
   version: string #optional,
   zone: string #optional #profile=cloud,
 }
@@ -2486,6 +2594,7 @@ type _ocsf.v1_9_0_dev.object.rule = record{
   name: string #recommended,
   type: string #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   version: string #optional,
 }
 
@@ -2516,6 +2625,7 @@ type _ocsf.v1_9_0_dev.object.scan = record{
   type: string #optional,
   type_id: int64 #required #enum=0cea921b #sibling=type,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // The System for Cross-domain Identity Management (SCIM) Configuration object
@@ -2582,6 +2692,7 @@ type _ocsf.v1_9_0_dev.object.service = record{
   name: string #recommended,
   tags: list<_ocsf.v1_9_0_dev.object.key_value_object> #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   version: string #recommended,
 }
 
@@ -2704,6 +2815,7 @@ type _ocsf.v1_9_0_dev.object.sub_technique = record{
   name: string #recommended,
   src_url: string #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // The table object represents a table within a structured relational database
@@ -2719,6 +2831,7 @@ type _ocsf.v1_9_0_dev.object.table = record{
   name: string #recommended,
   size: int64 #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // The MITRE Tactic object describes the ATT&CK® or ATLAS™ Tactic ID and/or name
@@ -2727,6 +2840,7 @@ type _ocsf.v1_9_0_dev.object.tactic = record{
   name: string #recommended,
   src_url: string #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // The MITRE Technique object describes the ATT&CK® or ATLAS™ Technique ID
@@ -2735,6 +2849,7 @@ type _ocsf.v1_9_0_dev.object.technique = record{
   name: string #recommended,
   src_url: string #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
 }
 
 // Threat actor is responsible for the observed malicious activity.
@@ -2866,6 +2981,7 @@ type _ocsf.v1_9_0_dev.object.trait = record{
   name: string #recommended,
   type: string #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   values: list<string> #optional,
 }
 
@@ -2877,6 +2993,7 @@ type _ocsf.v1_9_0_dev.object.transformation_info = record{
   time: time #epochtime #recommended,
   time_dt: time #optional #profile=datetime,
   uid: string #optional,
+  uid_numeric: int64 #optional,
   url_string: string #recommended,
 }
 
@@ -2900,6 +3017,7 @@ type _ocsf.v1_9_0_dev.object.unmanned_aerial_system = record{
   type_id: int64 #recommended #enum=6a322fc4 #sibling=type,
   uid: string #recommended,
   uid_alt: string #recommended,
+  uid_numeric: int64 #optional,
   uuid: string #recommended,
   vertical_speed: string #optional,
 }
@@ -2977,6 +3095,7 @@ type _ocsf.v1_9_0_dev.object.user_nonrecursive = record{
   type_id: int64 #recommended #enum=fc528b11 #sibling=type,
   uid: string #recommended,
   uid_alt: string #optional,
+  uid_numeric: int64 #optional,
 }
 
 // The User object describes the characteristics of a user/person or a security
@@ -3003,6 +3122,7 @@ type _ocsf.v1_9_0_dev.object.user = record{
   type_id: int64 #recommended #enum=fc528b11 #sibling=type,
   uid: string #recommended,
   uid_alt: string #optional,
+  uid_numeric: int64 #optional,
 }
 
 // The Vendor Attributes object can be used to represent values of attributes
@@ -3071,6 +3191,7 @@ type _ocsf.v1_9_0_dev.object.web_resource = record{
   type: string #optional,
   uid: string #recommended,
   uid_alt: string #optional,
+  uid_numeric: int64 #optional,
   url_string: string #recommended,
 }
 
@@ -3143,6 +3264,7 @@ type _ocsf.v1_9_0_dev.object.win_resource = record{
   type_id: int64 #required #enum=8d15adbd #sibling=type,
   uid: string #recommended,
   uid_alt: string #optional,
+  uid_numeric: int64 #optional,
 } #extension=win
 
 // The Windows Service object describes a Windows service.
@@ -3166,12 +3288,13 @@ type _ocsf.v1_9_0_dev.object.win_service = record{
   service_type_id: int64 #recommended #extension=win #enum=b1584802 #sibling=service_type,
   tags: list<_ocsf.v1_9_0_dev.object.key_value_object> #optional,
   uid: string #recommended,
+  uid_numeric: int64 #optional,
   version: string #recommended,
 } #extension=win
 
 // Account Change events report when specific user account management tasks are
-// performed, such as a user/role being created, changed, deleted, renamed,
-// disabled, enabled, locked out or unlocked.
+// performed, such as a user/role being created or role assigned, changed,
+// deleted, renamed, disabled, enabled, locked out or unlocked.
 type _ocsf.v1_9_0_dev.account_change = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control #enum=10af4c36 #sibling=action,
@@ -3744,12 +3867,12 @@ type _ocsf.v1_9_0_dev.authentication = record{
   user: _ocsf.v1_9_0_dev.object.user #required,
 }
 
-// Authorize Session events report privileges or groups assigned to a new user
-// session, usually at login time.
+// Authorize Session events report privileges, groups or roles assigned to a new
+// user session, usually at login time.
 type _ocsf.v1_9_0_dev.authorize_session = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control #enum=10af4c36 #sibling=action,
-  activity_id: int64 #required #enum=b3d9b3ca #sibling=activity_name,
+  activity_id: int64 #required #enum=9861ed01 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #recommended,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
@@ -3774,8 +3897,10 @@ type _ocsf.v1_9_0_dev.authorize_session = record{
   enrichments: list<_ocsf.v1_9_0_dev.object.enrichment> #optional,
   firewall_rule: _ocsf.v1_9_0_dev.object.firewall_rule #optional #profile=security_control,
   group: _ocsf.v1_9_0_dev.object.group #recommended,
+  groups: list<_ocsf.v1_9_0_dev.object.group> #recommended,
   http_request: _ocsf.v1_9_0_dev.object.http_request #optional,
   http_response: _ocsf.v1_9_0_dev.object.http_response #optional,
+  iam_roles: list<_ocsf.v1_9_0_dev.object.iam_role> #recommended,
   is_alert: bool #recommended #profile=security_control,
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
@@ -3806,7 +3931,7 @@ type _ocsf.v1_9_0_dev.authorize_session = record{
   time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
-  type_uid: int64 #required #enum=cd41a4dd #sibling=type_name,
+  type_uid: int64 #required #enum=e10e3ff4 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
   user: _ocsf.v1_9_0_dev.object.user #required,
 }
@@ -4259,14 +4384,18 @@ type _ocsf.v1_9_0_dev.datastore_activity = record{
 }
 
 // A Detection Finding describes detections or alerts generated by security
-// products using correlation engines, detection engines or other methodologies.
-// Note: if the event producer is a security control, the
-// <code>security_control</code> profile should be applied and its
+// products using correlation engines, detection engines or other
+// methodologies.<br><strong>Note: </strong>If the event producer is a security
+// control, the <code>Security Control</code> profile should be applied and its
 // <code>attacks</code> information, if present, should be duplicated into the
 // <code>finding_info</code> object. <br><strong>Note: </strong>If the Finding
 // is an incident, i.e. requires incident workflow, also apply the
-// <code>incident</code> profile  or aggregate this finding into an
-// <code>Incident Finding</code>.
+// <code>Incident</code> profile or aggregate the finding into an <code>Incident
+// Finding</code>.<p><strong>Note: </strong>Findings are mutable and as such
+// have a lifecycle, via <code>Update</code> activities. When modeling atomic
+// alerts, you are encouraged to consider using the <code>Security
+// Control</code> profile with the activity event associated with the alert. See
+// the referenced article below.
 type _ocsf.v1_9_0_dev.detection_finding = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control #enum=10af4c36 #sibling=action,
@@ -4922,6 +5051,7 @@ type _ocsf.v1_9_0_dev.entity_management = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=ced5b80d #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
+  updated_entity: _ocsf.v1_9_0_dev.object.managed_entity #recommended,
 }
 
 // Event Log Activity events report actions pertaining to the system's event
@@ -5121,6 +5251,7 @@ type _ocsf.v1_9_0_dev.file_system_activity = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=570eddc6 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
+  updated_file: _ocsf.v1_9_0_dev.object.file #recommended,
 }
 
 // File Hosting Activity events report the actions taken by file management
@@ -5196,6 +5327,7 @@ type _ocsf.v1_9_0_dev.file_hosting_activity = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=8ad2d96d #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
+  updated_file: _ocsf.v1_9_0_dev.object.file #optional,
 }
 
 // File Query events report information about files that are present on the
@@ -5477,12 +5609,19 @@ type _ocsf.v1_9_0_dev.ftp_activity = record{
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
 }
 
-// Group Management events report management updates to a group, including
-// updates to membership and permissions.
+// Group Management events report lifecycle management of a group, as well as
+// privileges, roles, and resources associated with the group. There are two
+// ways updates to the state of a group may be expressed: Using the
+// <code>Update</code> activity, for example when updating multiple items at one
+// time, the <code>updated_group</code> reflects the changes made to
+// <code>group</code>. Using discrete activities, such as <code>Assign
+// Privileges</code> the state change is expressed by the
+// <code>privileges</code> attribute. Optionally, on success, the
+// <code>updated_group</code> reflects the new state of the group.
 type _ocsf.v1_9_0_dev.group_management = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control #enum=10af4c36 #sibling=action,
-  activity_id: int64 #required #enum=8fbf9385 #sibling=activity_name,
+  activity_id: int64 #required #enum=ac2f2668 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #recommended,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
@@ -5508,6 +5647,7 @@ type _ocsf.v1_9_0_dev.group_management = record{
   group: _ocsf.v1_9_0_dev.object.group #required,
   http_request: _ocsf.v1_9_0_dev.object.http_request #optional,
   http_response: _ocsf.v1_9_0_dev.object.http_response #optional,
+  iam_roles: list<_ocsf.v1_9_0_dev.object.iam_role> #recommended,
   is_alert: bool #recommended #profile=security_control,
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
@@ -5515,12 +5655,14 @@ type _ocsf.v1_9_0_dev.group_management = record{
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
+  policies: list<_ocsf.v1_9_0_dev.object.policy> #recommended,
   policy: _ocsf.v1_9_0_dev.object.policy #optional #profile=security_control,
   privileges: list<string> #recommended,
   raw_data: string #optional,
   raw_data_hash: _ocsf.v1_9_0_dev.object.fingerprint #optional,
   raw_data_size: int64 #optional,
   resource: _ocsf.v1_9_0_dev.object.resource_details #recommended,
+  resources: list<_ocsf.v1_9_0_dev.object.resource_details> #recommended,
   risk_details: string #optional #profile=security_control,
   risk_level: string #optional #profile=security_control,
   risk_level_id: int64 #optional #profile=security_control #enum=a3f9a2fa #sibling=risk_level,
@@ -5539,8 +5681,9 @@ type _ocsf.v1_9_0_dev.group_management = record{
   time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
-  type_uid: int64 #required #enum=e747204f #sibling=type_name,
+  type_uid: int64 #required #enum=bc1d251f #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
+  updated_group: _ocsf.v1_9_0_dev.object.group #recommended,
   user: _ocsf.v1_9_0_dev.object.user #recommended,
 }
 
@@ -5548,7 +5691,7 @@ type _ocsf.v1_9_0_dev.group_management = record{
 type _ocsf.v1_9_0_dev.http_activity = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control #enum=10af4c36 #sibling=action,
-  activity_id: int64 #required #enum=6e9ab1c2 #sibling=activity_name,
+  activity_id: int64 #required #enum=6931e595 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
@@ -5625,7 +5768,7 @@ type _ocsf.v1_9_0_dev.http_activity = record{
   trace: _ocsf.v1_9_0_dev.object.trace #recommended #profile=trace,
   traffic: _ocsf.v1_9_0_dev.object.network_traffic #recommended,
   type_name: string #optional,
-  type_uid: int64 #required #enum=9b9269f0 #sibling=type_name,
+  type_uid: int64 #required #enum=1de0a893 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
 }
 
@@ -6325,6 +6468,8 @@ type _ocsf.v1_9_0_dev.network_activity = record{
   end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_9_0_dev.object.enrichment> #optional,
   firewall_rule: _ocsf.v1_9_0_dev.object.firewall_rule #optional #profile=security_control,
+  initiator: string #optional,
+  initiator_id: int64 #recommended #enum=2eb4a03e #sibling=initiator,
   is_alert: bool #recommended #profile=security_control,
   is_src_dst_assignment_known: bool #recommended,
   ja4_fingerprint_list: list<_ocsf.v1_9_0_dev.object.ja4_fingerprint> #optional,
@@ -7338,6 +7483,83 @@ type _ocsf.v1_9_0_dev.remediation_activity = record{
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
 }
 
+// Role Management events report lifecycle management of a role, as well as
+// privileges, policies, credentials, and resources associated with the role.
+// There are two ways updates to the state of a role may be expressed: Using the
+// <code>Update</code> activity, for example when updating multiple items at one
+// time, the <code>updated_role</code> reflects the changes made to
+// <code>iam_role</code>. Using discrete activities, such as <code>Assign
+// Privileges</code> the state change is expressed by the
+// <code>privileges</code> attribute. Optionally, on success, the
+// <code>updated_role</code> reflects the new state of the role. Roles assigned
+// or removed from users and groups are expressed by the <code>User
+// Management</code> and <code>Group Management</code> classes.
+type _ocsf.v1_9_0_dev.role_management = record{
+  action: string #optional #profile=security_control,
+  action_id: int64 #recommended #profile=security_control #enum=10af4c36 #sibling=action,
+  activity_id: int64 #required #enum=7e2d77a8 #sibling=activity_name,
+  activity_name: string #optional,
+  actor: _ocsf.v1_9_0_dev.object.actor #recommended,
+  api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
+  attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
+  category_name: string #optional,
+  category_uid: int64 #required #enum=8c353181 #sibling=category_name,
+  class_name: string #optional,
+  class_uid: int64 #required #enum=9473b3f5 #sibling=class_name,
+  cloud: _ocsf.v1_9_0_dev.object.cloud #required #profile=cloud,
+  confidence: string #optional #profile=security_control,
+  confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
+  confidence_score: int64 #optional #profile=security_control,
+  count: int64 #optional,
+  device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
+  duration: int64 #optional,
+  end_time: time #epochtime #optional,
+  end_time_dt: time #optional #profile=datetime,
+  enrichments: list<_ocsf.v1_9_0_dev.object.enrichment> #optional,
+  firewall_rule: _ocsf.v1_9_0_dev.object.firewall_rule #optional #profile=security_control,
+  http_request: _ocsf.v1_9_0_dev.object.http_request #optional,
+  http_response: _ocsf.v1_9_0_dev.object.http_response #optional,
+  iam_role: _ocsf.v1_9_0_dev.object.iam_role #required,
+  is_alert: bool #recommended #profile=security_control,
+  malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
+  malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
+  message: string #recommended,
+  metadata: _ocsf.v1_9_0_dev.object.metadata #required,
+  observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
+  osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
+  policies: list<_ocsf.v1_9_0_dev.object.policy> #optional,
+  policy: _ocsf.v1_9_0_dev.object.policy #optional #profile=security_control,
+  privileges: list<string> #recommended,
+  programmatic_credentials: list<_ocsf.v1_9_0_dev.object.programmatic_credential> #recommended,
+  raw_data: string #optional,
+  raw_data_hash: _ocsf.v1_9_0_dev.object.fingerprint #optional,
+  raw_data_size: int64 #optional,
+  resources: list<_ocsf.v1_9_0_dev.object.resource_details> #recommended,
+  risk_details: string #optional #profile=security_control,
+  risk_level: string #optional #profile=security_control,
+  risk_level_id: int64 #optional #profile=security_control #enum=a3f9a2fa #sibling=risk_level,
+  risk_score: int64 #optional #profile=security_control,
+  severity: string #optional,
+  severity_id: int64 #required #enum=acf27835 #sibling=severity,
+  src_endpoint: _ocsf.v1_9_0_dev.object.network_endpoint #recommended,
+  start_time: time #epochtime #optional,
+  start_time_dt: time #optional #profile=datetime,
+  status: string #recommended,
+  status_code: string #recommended,
+  status_detail: string #recommended,
+  status_id: int64 #recommended #enum=06bb2e5e #sibling=status,
+  time: time #epochtime #required,
+  time_dt: time #optional #profile=datetime,
+  timezone_offset: int64 #recommended,
+  type_name: string #optional,
+  type_uid: int64 #required #enum=392f7a97 #sibling=type_name,
+  unmapped: null #variant #must_be_record #optional #nullify_empty_records,
+  updated_role: _ocsf.v1_9_0_dev.object.iam_role #recommended,
+}
+
 // Scan events report the start, completion, and results of a scan job. The scan
 // event includes the number of items that were scanned and the number of
 // detections that were resolved.
@@ -7469,6 +7691,7 @@ type _ocsf.v1_9_0_dev.scheduled_job_activity = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=9359db2f #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
+  updated_job: _ocsf.v1_9_0_dev.object.job #recommended,
 }
 
 // Script Activity events report when a process executes a script.
@@ -8123,7 +8346,7 @@ type _ocsf.v1_9_0_dev.tunnel_activity = record{
 type _ocsf.v1_9_0_dev.user_access_management = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control #enum=10af4c36 #sibling=action,
-  activity_id: int64 #required #enum=c91b3473 #sibling=activity_name,
+  activity_id: int64 #required #enum=7731ff86 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #recommended,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
@@ -8148,6 +8371,7 @@ type _ocsf.v1_9_0_dev.user_access_management = record{
   firewall_rule: _ocsf.v1_9_0_dev.object.firewall_rule #optional #profile=security_control,
   http_request: _ocsf.v1_9_0_dev.object.http_request #optional,
   http_response: _ocsf.v1_9_0_dev.object.http_response #optional,
+  iam_role: _ocsf.v1_9_0_dev.object.iam_role #recommended,
   is_alert: bool #recommended #profile=security_control,
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
@@ -8156,7 +8380,7 @@ type _ocsf.v1_9_0_dev.user_access_management = record{
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_9_0_dev.object.policy #optional #profile=security_control,
-  privileges: list<string> #required,
+  privileges: list<string> #recommended,
   raw_data: string #optional,
   raw_data_hash: _ocsf.v1_9_0_dev.object.fingerprint #optional,
   raw_data_size: int64 #optional,
@@ -8179,7 +8403,7 @@ type _ocsf.v1_9_0_dev.user_access_management = record{
   time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
-  type_uid: int64 #required #enum=737944b2 #sibling=type_name,
+  type_uid: int64 #required #enum=af2f517e #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
   user: _ocsf.v1_9_0_dev.object.user #required,
 }
@@ -8242,6 +8466,83 @@ type _ocsf.v1_9_0_dev.user_inventory_info = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=668b3844 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
+  user: _ocsf.v1_9_0_dev.object.user #required,
+}
+
+// User Management events report lifecycle management of a user and account
+// management tasks that are performed, such as a password change or reset, a
+// user being created, updated, deleted, disabled, enabled, locked out or
+// unlocked. There are two ways updates to the state of a user may be expressed:
+// Using the <code>Update</code> activity, for example when updating multiple
+// items at one time, the <code>updated_user</code> reflects the changes made to
+// <code>user</code>. Using discrete activities, such as <code>Assign
+// Privileges</code> the state change is expressed by the
+// <code>privileges</code> attribute. Optionally, on successful changes, the
+// <code>updated_user</code> reflects the new state of the user.
+type _ocsf.v1_9_0_dev.user_management = record{
+  action: string #optional #profile=security_control,
+  action_id: int64 #recommended #profile=security_control #enum=10af4c36 #sibling=action,
+  activity_id: int64 #required #enum=b07d4ebb #sibling=activity_name,
+  activity_name: string #optional,
+  actor: _ocsf.v1_9_0_dev.object.actor #recommended,
+  api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
+  attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  auth_factors: list<_ocsf.v1_9_0_dev.object.auth_factor> #recommended,
+  authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
+  category_name: string #optional,
+  category_uid: int64 #required #enum=8c353181 #sibling=category_name,
+  class_name: string #optional,
+  class_uid: int64 #required #enum=bffdf072 #sibling=class_name,
+  cloud: _ocsf.v1_9_0_dev.object.cloud #required #profile=cloud,
+  confidence: string #optional #profile=security_control,
+  confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
+  confidence_score: int64 #optional #profile=security_control,
+  count: int64 #optional,
+  device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
+  duration: int64 #optional,
+  end_time: time #epochtime #optional,
+  end_time_dt: time #optional #profile=datetime,
+  enrichments: list<_ocsf.v1_9_0_dev.object.enrichment> #optional,
+  firewall_rule: _ocsf.v1_9_0_dev.object.firewall_rule #optional #profile=security_control,
+  http_request: _ocsf.v1_9_0_dev.object.http_request #optional,
+  http_response: _ocsf.v1_9_0_dev.object.http_response #optional,
+  iam_roles: list<_ocsf.v1_9_0_dev.object.iam_role> #recommended,
+  is_alert: bool #recommended #profile=security_control,
+  malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
+  malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
+  message: string #recommended,
+  metadata: _ocsf.v1_9_0_dev.object.metadata #required,
+  observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
+  osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
+  policies: list<_ocsf.v1_9_0_dev.object.policy> #recommended,
+  policy: _ocsf.v1_9_0_dev.object.policy #optional #profile=security_control,
+  privileges: list<string> #recommended,
+  raw_data: string #optional,
+  raw_data_hash: _ocsf.v1_9_0_dev.object.fingerprint #optional,
+  raw_data_size: int64 #optional,
+  resources: list<_ocsf.v1_9_0_dev.object.resource_details> #recommended,
+  risk_details: string #optional #profile=security_control,
+  risk_level: string #optional #profile=security_control,
+  risk_level_id: int64 #optional #profile=security_control #enum=a3f9a2fa #sibling=risk_level,
+  risk_score: int64 #optional #profile=security_control,
+  severity: string #optional,
+  severity_id: int64 #required #enum=acf27835 #sibling=severity,
+  src_endpoint: _ocsf.v1_9_0_dev.object.network_endpoint #recommended,
+  start_time: time #epochtime #optional,
+  start_time_dt: time #optional #profile=datetime,
+  status: string #recommended,
+  status_code: string #recommended,
+  status_detail: string #recommended,
+  status_id: int64 #recommended #enum=06bb2e5e #sibling=status,
+  time: time #epochtime #required,
+  time_dt: time #optional #profile=datetime,
+  timezone_offset: int64 #recommended,
+  type_name: string #optional,
+  type_uid: int64 #required #enum=4fa62102 #sibling=type_name,
+  unmapped: null #variant #must_be_record #optional #nullify_empty_records,
+  updated_user: _ocsf.v1_9_0_dev.object.user #recommended,
   user: _ocsf.v1_9_0_dev.object.user #required,
 }
 
@@ -8534,6 +8835,7 @@ type _ocsf.v1_9_0_dev.web_resources_activity = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=7c439c80 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
+  updated_web_resources: list<_ocsf.v1_9_0_dev.object.web_resource> #recommended,
   web_resources: list<_ocsf.v1_9_0_dev.object.web_resource> #required,
   web_resources_result: list<_ocsf.v1_9_0_dev.object.web_resource> #recommended,
 }
