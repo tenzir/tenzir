@@ -1,0 +1,9 @@
+from {
+  x: {
+    a: null,
+    b: null,
+    c: null,
+    d: 1
+  }
+}
+result = drop_null_fields(x, a, c)

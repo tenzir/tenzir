@@ -1,0 +1,10 @@
+{
+  x: 42,
+  result: null,
+}
+warning: expected `record`, got `int64`
+ --> tests/functions/drop_null_fields/non_record.tql:2:27
+  |
+2 | result = drop_null_fields(x)
+  |                           ~ 
+  |

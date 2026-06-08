@@ -1,0 +1,12 @@
+{
+  x: {
+    a: null,
+    b: null,
+    c: null,
+    d: 1,
+  },
+  result: {
+    b: null,
+    d: 1,
+  },
+}

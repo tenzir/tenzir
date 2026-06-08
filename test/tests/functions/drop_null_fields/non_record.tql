@@ -1,0 +1,2 @@
+from {x: 42}
+result = drop_null_fields(x)
