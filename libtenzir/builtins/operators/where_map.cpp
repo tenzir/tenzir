@@ -327,7 +327,7 @@ struct arguments {
     for (auto& diag : diags) {
       ctx.dh().emit(std::move(diag));
     }
-    return args;
+    return failure::promise();
   }
 };
 

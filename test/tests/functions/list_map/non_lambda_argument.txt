@@ -1,0 +1,8 @@
+error: expected a lambda
+  --> tests/functions/list_map/non_lambda_argument.tql:11:11
+   |
+11 | y = x.map(null)
+   |           ^^^^ 
+   |
+   = usage: map(list:list, function:any -> any)
+   = docs: https://docs.tenzir.com/reference/functions/map
