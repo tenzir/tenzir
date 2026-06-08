@@ -45,8 +45,12 @@ auto wrap_as_slice(series value, std::string_view wrapper_name) -> table_slice {
   auto wrapper_type = type{wrapper_record_type};
   auto arrow_schema = arrow::schema(
     {wrapper_field_type.to_arrow_field(std::string{wrapper_name})});
+  // Capture the row count before moving `value.array`, because argument
+  // evaluation order is unspecified and `series::length()` returns 0 once
+  // the array shared_ptr has been moved from.
+  const auto length = value.length();
   auto batch = arrow::RecordBatch::Make(
-    std::move(arrow_schema), value.length(),
+    std::move(arrow_schema), length,
     std::vector<std::shared_ptr<arrow::Array>>{std::move(value.array)});
   return table_slice{std::move(batch), std::move(wrapper_type)};
 }
