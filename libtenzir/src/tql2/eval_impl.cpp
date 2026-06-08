@@ -284,6 +284,9 @@ auto evaluator::eval(ast::list const& x, ActiveRows const& active)
         [&](const ast::spread& spread) {
           auto list = array.as<list_type>();
           if (not list) {
+            if (array.type.kind().is<null_type>()) {
+              return;
+            }
             diagnostic::warning("expected list, got `{}` instead",
                                 array.type.kind())
               .primary(spread.expr)
