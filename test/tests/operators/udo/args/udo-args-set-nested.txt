@@ -1,0 +1,7 @@
+{
+  a: 42,
+  b: {
+    aux: "value",
+    subfield: "test",
+  },
+}

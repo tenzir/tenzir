@@ -457,12 +457,13 @@ auto set_operator::operator()(generator<table_slice> input,
       TENZIR_ASSERT(assignments_.size() == values_slice.size());
       for (auto [assignment, value] :
            std::views::zip(assignments_, values_slice)) {
+        auto left = ast::selector::try_from(assignment.left);
+        TENZIR_ASSERT(left);
         auto begin = int64_t{0};
         for (auto& entry : state) {
           auto entry_rows = detail::narrow<int64_t>(entry.rows());
-          auto assigned
-            = assign(assignment.left, value.slice(begin, entry_rows), entry,
-                     ctrl.diagnostics());
+          auto assigned = assign(*left, value.slice(begin, entry_rows), entry,
+                                 ctrl.diagnostics());
           begin += entry_rows;
           new_state.insert(new_state.end(),
                            std::move_iterator{assigned.begin()},

@@ -32,6 +32,33 @@ TEST("tql2 tokenizer: ranges and spread dots") {
   CHECK_EQUAL(tokens[6].end, size_t{15});
 }
 
+TEST("tql2 parser: dollar variable selector paths") {
+  auto dh = collecting_diagnostic_handler{};
+  auto provider = session_provider::make(dh);
+  auto parse = [&](std::string_view source) {
+    auto assignment
+      = parse_assignment_with_bad_diagnostics(source, provider.as_session());
+    REQUIRE(assignment);
+    return assignment->left;
+  };
+  auto dotted = parse("$event.foo = 1");
+  auto* dotted_access = try_as<ast::field_access>(dotted);
+  REQUIRE(dotted_access);
+  auto* dotted_root = try_as<ast::dollar_var>(dotted_access->left);
+  REQUIRE(dotted_root);
+  CHECK_EQUAL(dotted_root->id.name, "$event");
+  CHECK_EQUAL(dotted_access->name.name, "foo");
+  auto indexed = parse(R"($event["foo"].bar = 1)");
+  auto* indexed_access = try_as<ast::field_access>(indexed);
+  REQUIRE(indexed_access);
+  auto* index = try_as<ast::index_expr>(indexed_access->left);
+  REQUIRE(index);
+  auto* indexed_root = try_as<ast::dollar_var>(index->expr);
+  REQUIRE(indexed_root);
+  CHECK_EQUAL(indexed_root->id.name, "$event");
+  CHECK_EQUAL(indexed_access->name.name, "bar");
+}
+
 TEST("tql2 parser: expression stream parses multiple records") {
   auto dh = collecting_diagnostic_handler{};
   auto provider = session_provider::make(dh);

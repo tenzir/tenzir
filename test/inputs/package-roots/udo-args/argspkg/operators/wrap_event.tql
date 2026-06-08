@@ -1,0 +1,13 @@
+---
+description: "Wrap an event in a target field"
+args:
+  named:
+    - name: event
+      type: field
+      description: "The event field to wrap"
+    - name: value
+      type: string
+      description: "The value to add"
+---
+$event = {source: $event}
+$event.mapped["sub-value"] = $value

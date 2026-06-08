@@ -263,6 +263,10 @@ public:
   field_path() = default;
 
   static auto try_from(ast::expression expr) -> std::optional<field_path>;
+  static auto make(ast::expression expr, bool has_this,
+                   std::vector<segment> path) -> field_path {
+    return field_path{std::move(expr), has_this, std::move(path)};
+  }
 
   auto get_location() const -> location {
     return expr_.get_location();
@@ -446,11 +450,11 @@ struct lambda_expr {
 struct assignment {
   assignment() = default;
 
-  assignment(selector left, location equals, expression right)
+  assignment(expression left, location equals, expression right)
     : left{std::move(left)}, equals{equals}, right{std::move(right)} {
   }
 
-  selector left;
+  expression left;
   location equals;
   expression right;
 

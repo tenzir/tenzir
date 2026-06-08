@@ -28,19 +28,10 @@ namespace tenzir::ast {
 
 namespace {
 
-auto combine_selector_location(location result, selector const& sel,
-                               std::vector<expression const*>& stack)
+auto combine_assignment_location(location result, expression const& expr,
+                                 std::vector<expression const*>& stack)
   -> location {
-  sel.match(
-    [&](meta const& x) {
-      result = result.combine(x.source);
-    },
-    [&](field_path const& x) {
-      stack.push_back(&x.inner());
-    },
-    [&](dollar_var const& x) {
-      result = result.combine(x.id.location);
-    });
+  stack.push_back(&expr);
   return result;
 }
 
@@ -48,9 +39,8 @@ class named_expression_substituter
   : public ast::visitor<named_expression_substituter> {
 public:
   named_expression_substituter(
-    const std::unordered_map<std::string, ast::expression>& replacements,
-    diagnostic_handler& dh)
-    : replacements_{replacements}, dh_{dh} {
+    const std::unordered_map<std::string, ast::expression>& replacements)
+    : replacements_{replacements} {
   }
 
   void visit(ast::expression& expr) {
@@ -80,29 +70,21 @@ public:
     }
   }
 
-  void visit(ast::selector& selector) {
-    selector.match(
-      [&](ast::dollar_var& var) {
-        auto name = std::string{var.name_without_dollar()};
-        if (shadowed_.contains(name)) {
-          return;
-        }
-        auto it = replacements_.find(name);
-        if (it == replacements_.end()) {
-          return;
-        }
-        if (auto new_selector = ast::selector::try_from(it->second)) {
-          selector = std::move(*new_selector);
-          return;
-        }
-        diagnostic::error("cannot assign to `{}` constant value", var.id.name)
-          .primary(var)
-          .emit(dh_);
-        failure_ = failure::promise();
-      },
-      [](auto&) {
-        // Nothing to do
-      });
+  auto substitute(ast::dollar_var& var) -> std::optional<ast::expression> {
+    auto name = std::string{var.name_without_dollar()};
+    if (shadowed_.contains(name)) {
+      return {};
+    }
+    auto it = replacements_.find(name);
+    if (it == replacements_.end()) {
+      return {};
+    }
+    return it->second;
+  }
+
+  void visit(ast::assignment& assignment) {
+    visit(assignment.left);
+    visit(assignment.right);
   }
 
   template <class T>
@@ -110,15 +92,9 @@ public:
     enter(x);
   }
 
-  auto has_failed() const -> bool {
-    return failure_.is_error();
-  }
-
 private:
   const std::unordered_map<std::string, ast::expression>& replacements_;
   std::unordered_set<std::string> shadowed_;
-  failure_or<void> failure_;
-  diagnostic_handler& dh_;
 };
 
 } // namespace
@@ -130,16 +106,14 @@ auto substitute_named_expressions(
   if (replacements.empty()) {
     return pipe;
   }
-  auto substituter = named_expression_substituter{replacements, dh};
+  TENZIR_UNUSED(dh);
+  auto substituter = named_expression_substituter{replacements};
   substituter.visit(pipe);
-  if (substituter.has_failed()) {
-    return failure::promise();
-  }
   return pipe;
 }
 
 auto field_path::try_from(ast::expression expr) -> std::optional<field_path> {
-  // Path is collect in reversed order (outside-in).
+  // Path is collected in reversed order (outside-in).
   auto has_this = false;
   auto path = std::vector<field_path::segment>{};
   auto* current = &expr;
@@ -359,7 +333,7 @@ auto expression::get_location() const -> location {
         stack.push_back(&x.expr);
       },
       [&](assignment const& x) {
-        result = combine_selector_location(result, x.left, stack);
+        result = combine_assignment_location(result, x.left, stack);
         stack.push_back(&x.right);
       },
       [&](dollar_var const& x) {

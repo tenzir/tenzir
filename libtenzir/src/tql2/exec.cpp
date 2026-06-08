@@ -278,7 +278,7 @@ public:
   }
 
   void visit(ast::selector& x) {
-    auto* dollar_var = std::get_if<ast::dollar_var>(&x);
+    auto* dollar_var = try_as<ast::dollar_var>(x);
     if (not dollar_var) {
       enter(x);
       return;

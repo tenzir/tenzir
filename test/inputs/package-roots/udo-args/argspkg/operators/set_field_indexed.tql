@@ -1,0 +1,14 @@
+---
+description: "Set an indexed nested field to a specific value"
+args:
+  positional:
+    - name: field
+      type: field
+      description: "The parent field to set"
+    - name: key
+      type: string
+      description: "The nested field name to set"
+    - name: value
+      description: "The value to set"
+---
+$field[$key] = $value

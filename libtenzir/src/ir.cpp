@@ -136,6 +136,17 @@ auto merge_compiled_pipeline(std::vector<ir::let>& lets,
                    std::move_iterator{pipe.operators.end()});
 }
 
+auto resolve_assignment_left(ast::assignment& assignment,
+                             diagnostic_handler& dh)
+  -> failure_or<ast::selector> {
+  auto result = ast::selector::try_from(assignment.left);
+  if (result) {
+    return std::move(*result);
+  }
+  diagnostic::error("expected selector").primary(assignment.left).emit(dh);
+  return failure::promise();
+}
+
 class Set final : public Operator<table_slice, table_slice> {
 public:
   Set(std::vector<ast::assignment> assignments, event_order order)
@@ -173,11 +184,13 @@ public:
       auto new_state = std::vector<table_slice>{};
       for (auto [assignment, value] :
            std::views::zip(assignments_, values_slice)) {
+        auto left = ast::selector::try_from(assignment.left);
+        TENZIR_ASSERT(left);
         auto begin = int64_t{0};
         for (auto& entry : state) {
           auto entry_rows = detail::narrow<int64_t>(entry.rows());
-          auto assigned = assign(assignment.left,
-                                 value.slice(begin, entry_rows), entry, ctx);
+          auto assigned
+            = assign(*left, value.slice(begin, entry_rows), entry, ctx);
           begin += entry_rows;
           new_state.insert(new_state.end(),
                            std::move_iterator{assigned.begin()},
@@ -233,6 +246,7 @@ auto ir::SetIr::substitute(substitute_ctx ctx, bool instantiate)
   -> failure_or<void> {
   (void)instantiate;
   for (auto& x : assignments_) {
+    TRY(x.left.substitute(ctx));
     TRY(x.right.substitute(ctx));
   }
   return {};
@@ -251,7 +265,8 @@ auto touched_fields_for_set(const std::vector<ast::assignment>& assignments)
   for (const auto& assignment : assignments) {
     auto [resolved, moved_fields] = resolve_move_keyword(assignment);
     std::ranges::move(moved_fields, std::back_inserter(result));
-    const auto* path = try_as<ast::field_path>(&resolved.left);
+    auto left = ast::selector::try_from(resolved.left);
+    const auto* path = left ? try_as<ast::field_path>(&*left) : nullptr;
     if (path == nullptr or path->path().empty()) {
       return None{};
     }
@@ -753,7 +768,8 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
           });
       },
       [&](ast::assignment x) -> failure_or<void> {
-        // TODO: What about left?
+        TRY(x.left.bind(ctx));
+        TRY(resolve_assignment_left(x, ctx));
         TRY(x.right.bind(ctx));
         operators.push_back(make_set_ir(std::move(x)));
         return {};

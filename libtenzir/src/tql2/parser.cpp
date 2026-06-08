@@ -356,15 +356,15 @@ public:
         std::move(def),
       };
     }
-    auto left = to_selector(std::move(unary_expr));
     if (auto equal = accept(tk::equal)) {
       auto right = parse_expression();
       return assignment{
-        std::move(left),
+        std::move(unary_expr),
         equal.location,
         std::move(right),
       };
     }
+    auto left = to_selector(std::move(unary_expr));
     // TODO: Improve this.
     auto simple_sel = std::get_if<field_path>(&left);
     auto root = simple_sel
@@ -491,11 +491,10 @@ public:
       }
       if (min_prec == 0) {
         if (auto equal = accept(tk::equal)) {
-          auto left = to_selector(expr);
           // TODO: Check precedence.
           auto right = parse_expression();
           expr = assignment{
-            std::move(left),
+            std::move(expr),
             equal.location,
             std::move(right),
           };

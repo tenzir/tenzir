@@ -291,7 +291,8 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
         .emit(dh);
       return failure::promise();
     }
-    auto* left = try_as<ast::field_path>(assignment->left);
+    auto selector = ast::selector::try_from(assignment->left);
+    auto* left = selector ? try_as<ast::field_path>(&*selector) : nullptr;
     if ((left == nullptr) or left->has_this() or left->path().size() != 1
         or left->path()[0].has_question_mark) {
       diagnostic::error("invalid argument name")

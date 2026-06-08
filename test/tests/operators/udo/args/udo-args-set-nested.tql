@@ -1,0 +1,7 @@
+from {
+  a: 42,
+  b: {
+    aux: "value",
+  },
+}
+argspkg::set_field_nested b, "test"

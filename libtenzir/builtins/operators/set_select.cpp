@@ -23,12 +23,13 @@ auto make_select_assignments(std::vector<ast::expression> args,
   auto assignments = std::vector<ast::assignment>{};
   assignments.reserve(1 + args.size());
   assignments.emplace_back(
-    ast::field_path::try_from(ast::this_{}).value(), location::unknown,
+    ast::this_{}, location::unknown,
     ast::record{location::unknown, {}, location::unknown});
   for (auto& arg : args) {
     if (auto* assignment = std::get_if<ast::assignment>(&*arg.kind)) {
-      auto* selector = std::get_if<ast::field_path>(&assignment->left);
-      if (not selector) {
+      auto selector = ast::selector::try_from(assignment->left);
+      auto* field = selector ? try_as<ast::field_path>(&*selector) : nullptr;
+      if (not field) {
         diagnostic::error("expected selector")
           .primary(assignment->left)
           .emit(dh);
@@ -43,8 +44,9 @@ auto make_select_assignments(std::vector<ast::expression> args,
       diagnostic::error("expected selector").primary(original_arg).emit(dh);
       return failure::promise();
     }
-    auto rhs = selector->inner();
-    assignments.emplace_back(std::move(*selector), location::unknown,
+    auto left = selector->inner();
+    auto rhs = left;
+    assignments.emplace_back(std::move(left), location::unknown,
                              std::move(rhs));
   }
   return assignments;
