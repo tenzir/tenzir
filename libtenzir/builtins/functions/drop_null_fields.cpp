@@ -23,31 +23,38 @@ namespace tenzir::plugins::drop_null_fields_function {
 
 namespace {
 
-/// Treats a record-valued series as a table_slice whose top-level columns are
-/// the record's fields, so the shared `drop_null_fields` implementation can
-/// operate on it directly without an extra wrapper field.
-auto record_series_as_slice(series value) -> table_slice {
-  auto input_type = value.type;
-  const auto length = value.length();
-  auto struct_array
-    = std::static_pointer_cast<arrow::StructArray>(std::move(value.array));
-  auto arrow_schema = arrow::schema(struct_array->type()->fields());
+/// Wraps a non-null run of a record-valued struct array as a table_slice. The
+/// caller has already ensured `array` has no null rows, so we can hand the
+/// child arrays straight to `RecordBatch::Make` without losing the parent
+/// null bitmap.
+auto non_null_run_as_slice(std::shared_ptr<arrow::StructArray> array)
+  -> table_slice {
+  const auto length = array->length();
+  auto arrow_schema = arrow::schema(array->type()->fields());
   auto batch = arrow::RecordBatch::Make(std::move(arrow_schema), length,
-                                        struct_array->fields());
-  return table_slice{std::move(batch), std::move(input_type)};
+                                        array->fields());
+  // Pass no explicit schema so the table_slice derives an anonymous
+  // record_type from the Arrow schema. Passing the input series' named type
+  // here would trip the table_slice constructor's schema/arrow-schema
+  // consistency check, because the wrapping operation strips metadata.
+  return table_slice{std::move(batch)};
 }
 
-/// Reconstructs a record-valued series from a slice produced by
-/// `drop_null_fields`. Empty-schema slices map to a null series carrying the
-/// original record type so the caller's row count is preserved.
-auto slice_as_record_series(const table_slice& slice,
-                            const type& original_record_type) -> series {
-  if (slice.rows() == 0) {
-    return series::null(original_record_type, 0);
-  }
+/// Converts a slice produced by `drop_null_fields` back into a record-valued
+/// series. Empty-schema slices become anonymous empty-record series, matching
+/// the operator's behavior of emitting `{}` when every field is dropped.
+auto slice_as_record_series(const table_slice& slice) -> series {
   const auto* record = try_as<record_type>(slice.schema());
-  if (not record or record->num_fields() == 0) {
-    return series::null(original_record_type, slice.rows());
+  if (not record) {
+    return series::null(null_type{}, slice.rows());
+  }
+  if (record->num_fields() == 0) {
+    auto empty_struct = make_struct_array(
+      slice.rows(), nullptr, arrow::FieldVector{}, arrow::ArrayVector{});
+    return series{slice.schema(), std::move(empty_struct)};
+  }
+  if (slice.rows() == 0) {
+    return series::null(slice.schema(), 0);
   }
   auto batch = to_record_batch(slice);
   auto struct_array = check(batch->ToStructArray());
@@ -106,22 +113,60 @@ public:
           return multi_series{series::null(null_type{}, input_length)};
         }
         auto input_type = value.type;
-        auto slice = record_series_as_slice(std::move(value));
-        auto parts = tenzir::drop_null_fields(std::move(slice), selectors,
-                                              event_order::ordered, ctx.dh());
+        auto struct_array = std::static_pointer_cast<arrow::StructArray>(
+          std::move(value.array));
+        // Apply drop_null_fields to a contiguous run of non-null parent rows
+        // and append the result to `out`.
+        auto process_run = [&](std::shared_ptr<arrow::StructArray> sub,
+                               multi_series& out) {
+          const auto run_length = sub->length();
+          auto slice = non_null_run_as_slice(std::move(sub));
+          auto parts = tenzir::drop_null_fields(std::move(slice), selectors,
+                                                event_order::ordered, ctx.dh());
+          auto produced = int64_t{0};
+          for (const auto& part : parts) {
+            auto part_series = slice_as_record_series(part);
+            produced += part_series.length();
+            out.append(std::move(part_series));
+          }
+          // Defensive backstop: should not trigger, but guarantees
+          // `map_series`'s length invariant if a future change to the
+          // shared implementation ever drops rows from its output.
+          if (produced < run_length) {
+            auto empty_struct
+              = make_struct_array(run_length - produced, nullptr,
+                                  arrow::FieldVector{}, arrow::ArrayVector{});
+            out.append(series{type{record_type{}}, std::move(empty_struct)});
+          }
+        };
         auto result = multi_series{};
-        auto produced = int64_t{0};
-        for (const auto& part : parts) {
-          auto produced_part = slice_as_record_series(part, input_type);
-          produced += produced_part.length();
-          result.append(std::move(produced_part));
+        if (struct_array->null_count() == 0) {
+          // Fast path: every input row carries a valid record.
+          process_run(std::move(struct_array), result);
+          return result;
         }
-        // The shared implementation can return zero rows when every field of
-        // a row gets dropped (the empty-record case). Pad with null rows of
-        // the original record type so the function preserves the input row
-        // count, as required by `map_series`.
-        if (produced < input_length) {
-          result.append(series::null(input_type, input_length - produced));
+        // Some parent rows are null. Walk runs so we can pass each non-null
+        // run through the shared implementation while emitting null rows for
+        // the null runs. This preserves the row-level null semantics that
+        // child arrays under a null parent would otherwise lose if we handed
+        // the unflattened struct to `RecordBatch::Make`.
+        auto row = int64_t{0};
+        while (row < input_length) {
+          const auto run_is_null = struct_array->IsNull(row);
+          auto run_end = row + 1;
+          while (run_end < input_length
+                 and struct_array->IsNull(run_end) == run_is_null) {
+            ++run_end;
+          }
+          const auto run_length = run_end - row;
+          if (run_is_null) {
+            result.append(series::null(input_type, run_length));
+          } else {
+            auto sub = std::static_pointer_cast<arrow::StructArray>(
+              struct_array->Slice(row, run_length));
+            process_run(std::move(sub), result);
+          }
+          row = run_end;
         }
         return result;
       });

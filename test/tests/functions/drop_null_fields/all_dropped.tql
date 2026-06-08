@@ -1,0 +1,4 @@
+// When every field of a record is null, the result must be an empty record,
+// matching the operator. The function should not collapse this case to null.
+from {a: null, b: null}
+result = drop_null_fields(this)
