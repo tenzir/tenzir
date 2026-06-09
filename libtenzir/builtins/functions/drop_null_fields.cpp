@@ -31,8 +31,19 @@ auto non_null_run_as_slice(std::shared_ptr<arrow::StructArray> array)
   -> table_slice {
   const auto length = array->length();
   auto arrow_schema = arrow::schema(array->type()->fields());
+  // Use `StructArray::field(i)` rather than `fields()`. `Slice()` only
+  // applies the offset to the parent struct, leaving `fields()` pointing at
+  // the unsliced child vector — so when this function receives a sliced run
+  // from the null-parent walk below, the raw children would be longer than
+  // `length` and the resulting RecordBatch would read the wrong rows.
+  // `field(i)` slices each child to match the parent's offset and length.
+  auto columns = arrow::ArrayVector{};
+  columns.reserve(array->num_fields());
+  for (auto i = 0; i < array->num_fields(); ++i) {
+    columns.push_back(array->field(i));
+  }
   auto batch = arrow::RecordBatch::Make(std::move(arrow_schema), length,
-                                        array->fields());
+                                        std::move(columns));
   // Pass no explicit schema so the table_slice derives an anonymous
   // record_type from the Arrow schema. Passing the input series' named type
   // here would trip the table_slice constructor's schema/arrow-schema
