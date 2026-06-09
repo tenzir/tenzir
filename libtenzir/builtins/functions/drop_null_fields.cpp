@@ -140,15 +140,7 @@ public:
             produced += part_series.length();
             out.append(std::move(part_series));
           }
-          // Defensive backstop: should not trigger, but guarantees
-          // `map_series`'s length invariant if a future change to the
-          // shared implementation ever drops rows from its output.
-          if (produced < run_length) {
-            auto empty_struct
-              = make_struct_array(run_length - produced, nullptr,
-                                  arrow::FieldVector{}, arrow::ArrayVector{});
-            out.append(series{type{record_type{}}, std::move(empty_struct)});
-          }
+          TENZIR_ASSERT(produced == run_length);
         };
         auto result = multi_series{};
         if (struct_array->null_count() == 0) {
