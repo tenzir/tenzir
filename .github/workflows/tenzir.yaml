@@ -338,9 +338,8 @@ jobs:
           run_if_changed_default regression-tests $run_docker_tenzir
           run_if_changed_default tenzir-nix $run_python \
             "${TENZIR_SOURCES[@]}" plugins/ contrib/tenzir-plugins/ flake.nix flake.lock nix/ \
-            ".github/workflows/nix.nu" \
-            ".github/workflows/nix.yaml" \
-            ".github/workflows/nix-config-base.json"
+            ".github/workflows/nix-build.py" \
+            ".github/workflows/nix-build-job.yaml"
       - name: Configure Docker
         id: docker
         if: steps.configure.outputs.run-docker-tenzir == 'true'
