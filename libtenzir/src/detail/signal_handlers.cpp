@@ -33,6 +33,15 @@
 
 #include <dlfcn.h>
 
+#ifndef __has_feature
+#  define __has_feature(x) 0
+#endif
+
+#if (__has_feature(address_sanitizer) or defined(__SANITIZE_ADDRESS__))        \
+  and __has_include(<sanitizer/lsan_interface.h>)
+#  include <sanitizer/lsan_interface.h>
+#endif
+
 namespace {
 
 // Async-signal-safe write wrapper.
@@ -311,6 +320,10 @@ __attribute__((constructor(102))) void early_install_signal_handlers() {
   // Set up alternate signal stack to handle stack overflow scenarios.
   stack_t ss{};
   ss.ss_sp = malloc(SIGSTKSZ);
+#if (__has_feature(address_sanitizer) or defined(__SANITIZE_ADDRESS__))        \
+  and __has_include(<sanitizer/lsan_interface.h>)
+  __lsan_ignore_object(ss.ss_sp);
+#endif
   ss.ss_size = SIGSTKSZ;
   sigaltstack(&ss, nullptr);
 
