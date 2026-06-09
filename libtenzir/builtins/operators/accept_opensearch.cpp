@@ -35,7 +35,6 @@
 #include <proxygen/lib/http/coro/HTTPFixedSource.h>
 #include <proxygen/lib/http/coro/HTTPSourceReader.h>
 #include <proxygen/lib/http/coro/server/HTTPServer.h>
-#include <proxygen/lib/http/coro/server/ScopedHTTPServer.h>
 #include <proxygen/lib/utils/URL.h>
 
 #include <cstddef>
@@ -329,10 +328,10 @@ public:
     auto request_handler = std::make_shared<RequestHandler>(
       args_, message_queue_, request_id_gen, active_connections_);
     try {
-      auto server = proxygen::coro::ScopedHTTPServer::start(
+      auto server = http_server::scoped_server::start(
         std::move(config.unwrap()), std::move(request_handler));
-      server_ = Arc<proxygen::coro::ScopedHTTPServer>::from_non_null(
-        std::move(server));
+      server_
+        = Arc<http_server::scoped_server>::from_non_null(std::move(server));
     } catch (std::exception const& ex) {
       diagnostic::error("failed to start HTTP server: {}", ex.what())
         .primary(args_.url)
@@ -605,7 +604,7 @@ private:
   AcceptOpenSearchArgs args_;
   // --- transient ---
   Arc<Semaphore> active_connections_;
-  Option<Arc<proxygen::coro::ScopedHTTPServer>> server_;
+  Option<Arc<http_server::scoped_server>> server_;
   std::unordered_map<uint64_t, InFlightRequest> active_requests_{{}};
   MetricsCounter bytes_read_counter_;
   MetricsCounter events_read_counter_;

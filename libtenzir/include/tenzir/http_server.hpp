@@ -18,12 +18,15 @@
 #include "tenzir/tls_options.hpp"
 
 #include <proxygen/lib/http/coro/HTTPSourceHolder.h>
+#include <proxygen/lib/http/coro/server/HTTPServer.h>
 #include <wangle/ssl/SSLContextConfig.h>
 
 #include <charconv>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <string_view>
+#include <thread>
 
 namespace tenzir::http_server {
 
@@ -63,5 +66,37 @@ auto is_tls_enabled(Option<located<data>> const& tls,
 
 auto make_response(uint16_t status, const std::string& content_type,
                    std::string body) -> proxygen::coro::HTTPSourceHolder;
+
+/// Drop-in replacement for `proxygen::coro::ScopedHTTPServer` whose destructor
+/// is safe when `start()` fails. The upstream version joins its IO thread both
+/// in `start()` (after a bind failure) and again in the destructor, which
+/// throws `std::system_error` during stack unwinding and terminates the
+/// process.
+class scoped_server {
+public:
+  static auto start(proxygen::coro::HTTPServer::Config config,
+                    std::shared_ptr<proxygen::coro::HTTPHandler> handler)
+    -> std::unique_ptr<scoped_server>;
+
+  ~scoped_server();
+
+  scoped_server(scoped_server const&) = delete;
+  scoped_server(scoped_server&&) = delete;
+  auto operator=(scoped_server const&) -> scoped_server& = delete;
+  auto operator=(scoped_server&&) -> scoped_server& = delete;
+
+  auto getServer() -> proxygen::coro::HTTPServer& {
+    return server_;
+  }
+
+private:
+  scoped_server(proxygen::coro::HTTPServer::Config config,
+                std::shared_ptr<proxygen::coro::HTTPHandler> handler);
+
+  void start_impl();
+
+  proxygen::coro::HTTPServer server_;
+  std::thread thread_;
+};
 
 } // namespace tenzir::http_server

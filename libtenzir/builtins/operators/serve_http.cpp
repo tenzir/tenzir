@@ -35,7 +35,6 @@
 #include <proxygen/lib/http/coro/HTTPSourceHolder.h>
 #include <proxygen/lib/http/coro/HTTPStreamSource.h>
 #include <proxygen/lib/http/coro/server/HTTPServer.h>
-#include <proxygen/lib/http/coro/server/ScopedHTTPServer.h>
 
 #include <limits>
 #include <memory>
@@ -339,10 +338,10 @@ public:
     auto request_handler
       = std::make_shared<RequestHandler>(message_queue_, active_connections_);
     try {
-      auto server = proxygen::coro::ScopedHTTPServer::start(
+      auto server = http_server::scoped_server::start(
         std::move(config.unwrap()), std::move(request_handler));
-      server_ = Arc<proxygen::coro::ScopedHTTPServer>::from_non_null(
-        std::move(server));
+      server_
+        = Arc<http_server::scoped_server>::from_non_null(std::move(server));
     } catch (std::exception const& ex) {
       diagnostic::error("failed to start HTTP server: {}", ex.what())
         .primary(args_.endpoint)
@@ -625,7 +624,7 @@ private:
   // --- transient ---
   data sub_key_ = data{int64_t{0}};
   mutable Arc<MessageQueue> message_queue_{std::in_place, 64};
-  Option<Arc<proxygen::coro::ScopedHTTPServer>> server_;
+  Option<Arc<http_server::scoped_server>> server_;
   Arc<Semaphore> active_connections_;
   std::vector<Arc<Client>> clients_;
   // --- state ---
