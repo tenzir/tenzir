@@ -175,22 +175,25 @@ auto make_response(uint16_t status, const std::string& content_type,
   return proxygen::coro::HTTPSourceHolder{source};
 }
 
-scoped_server::scoped_server(
-  proxygen::coro::HTTPServer::Config config,
-  std::shared_ptr<proxygen::coro::HTTPHandler> handler)
+ScopedServer::ScopedServer(proxygen::coro::HTTPServer::Config config,
+                           std::shared_ptr<proxygen::coro::HTTPHandler> handler)
   : server_{std::move(config), std::move(handler)} {
 }
 
-auto scoped_server::start(proxygen::coro::HTTPServer::Config config,
-                          std::shared_ptr<proxygen::coro::HTTPHandler> handler)
-  -> std::unique_ptr<scoped_server> {
-  auto s = std::unique_ptr<scoped_server>{
-    new scoped_server{std::move(config), std::move(handler)}};
-  s->start_impl();
+auto ScopedServer::start(proxygen::coro::HTTPServer::Config config,
+                         std::shared_ptr<proxygen::coro::HTTPHandler> handler)
+  -> Result<std::unique_ptr<ScopedServer>, std::string> {
+  auto s = std::unique_ptr<ScopedServer>{
+    new ScopedServer{std::move(config), std::move(handler)}};
+  try {
+    s->start_impl();
+  } catch (std::exception const& ex) {
+    return Err{std::string{ex.what()}};
+  }
   return s;
 }
 
-void scoped_server::start_impl() {
+void ScopedServer::start_impl() {
   std::exception_ptr eptr;
   folly::Baton baton;
   thread_ = std::thread{[&] {
@@ -213,7 +216,7 @@ void scoped_server::start_impl() {
   }
 }
 
-scoped_server::~scoped_server() {
+ScopedServer::~ScopedServer() {
   if (not thread_.joinable()) {
     // `start_impl()` failed and already joined the IO thread. Calling
     // `drain()`/`forceStop()` on a server that never reached RUNNING is

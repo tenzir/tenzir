@@ -327,17 +327,17 @@ public:
     auto request_id_gen = Arc<Atomic<uint64_t>>{std::in_place, uint64_t{0}};
     auto request_handler = std::make_shared<RequestHandler>(
       args_, message_queue_, request_id_gen, active_connections_);
-    try {
-      auto server = http_server::scoped_server::start(
-        std::move(config.unwrap()), std::move(request_handler));
-      server_
-        = Arc<http_server::scoped_server>::from_non_null(std::move(server));
-    } catch (std::exception const& ex) {
-      diagnostic::error("failed to start HTTP server: {}", ex.what())
+    auto server = http_server::ScopedServer::start(std::move(config.unwrap()),
+                                                   std::move(request_handler));
+    if (server.is_err()) {
+      diagnostic::error("failed to start HTTP server: {}",
+                        std::move(server).unwrap_err())
         .primary(args_.url)
         .emit(ctx);
       co_return;
     }
+    server_ = Arc<http_server::ScopedServer>::from_non_null(
+      std::move(server).unwrap());
     // When the operator is forcefully stopped (e.g., by `head 1` finishing),
     // the executor skips `finish_sub` and cancels the operator scope. Catch
     // that cancellation, reply to already-accepted requests ourselves, then
@@ -541,7 +541,7 @@ private:
 
   void force_stop() {
     if (server_) {
-      (*server_)->getServer().forceStop();
+      (*server_)->server().forceStop();
       // move server to a new thread, where it can call thread join
       std::thread([srv = std::exchange(server_, None{})] {}).detach();
     }
@@ -604,7 +604,7 @@ private:
   AcceptOpenSearchArgs args_;
   // --- transient ---
   Arc<Semaphore> active_connections_;
-  Option<Arc<http_server::scoped_server>> server_;
+  Option<Arc<http_server::ScopedServer>> server_;
   std::unordered_map<uint64_t, InFlightRequest> active_requests_{{}};
   MetricsCounter bytes_read_counter_;
   MetricsCounter events_read_counter_;

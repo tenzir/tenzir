@@ -337,18 +337,18 @@ public:
     }
     auto request_handler
       = std::make_shared<RequestHandler>(message_queue_, active_connections_);
-    try {
-      auto server = http_server::scoped_server::start(
-        std::move(config.unwrap()), std::move(request_handler));
-      server_
-        = Arc<http_server::scoped_server>::from_non_null(std::move(server));
-    } catch (std::exception const& ex) {
-      diagnostic::error("failed to start HTTP server: {}", ex.what())
+    auto server = http_server::ScopedServer::start(std::move(config.unwrap()),
+                                                   std::move(request_handler));
+    if (server.is_err()) {
+      diagnostic::error("failed to start HTTP server: {}",
+                        std::move(server).unwrap_err())
         .primary(args_.endpoint)
         .emit(ctx);
       lifecycle_ = Lifecycle::done;
       co_return;
     }
+    server_ = Arc<http_server::ScopedServer>::from_non_null(
+      std::move(server).unwrap());
     ctx.spawn_task([this]() -> Task<void> {
       co_await catch_cancellation(wait_forever());
       co_await force_stop();
@@ -492,7 +492,7 @@ private:
     }
     lifecycle_ = Lifecycle::draining;
     if (server_) {
-      (*server_)->getServer().drain();
+      (*server_)->server().drain();
     }
   }
 
@@ -532,7 +532,7 @@ private:
     }
     if (clients_.empty() and message_queue_->empty()) {
       if (server_) {
-        (*server_)->getServer().forceStop();
+        (*server_)->server().forceStop();
         // move server to a new thread, where it can call thread join
         std::thread([srv = std::exchange(server_, None{})] {}).detach();
       }
@@ -624,7 +624,7 @@ private:
   // --- transient ---
   data sub_key_ = data{int64_t{0}};
   mutable Arc<MessageQueue> message_queue_{std::in_place, 64};
-  Option<Arc<http_server::scoped_server>> server_;
+  Option<Arc<http_server::ScopedServer>> server_;
   Arc<Semaphore> active_connections_;
   std::vector<Arc<Client>> clients_;
   // --- state ---
