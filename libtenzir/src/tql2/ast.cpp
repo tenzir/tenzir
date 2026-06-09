@@ -656,11 +656,12 @@ auto split_legacy_expression(const ast::expression& x)
         }
         auto result
           = expression{predicate{std::move(*left), *rel_op, std::move(*right)}};
-        if (not normalize_and_validate(result)) {
+        auto normalized = normalize_and_validate(std::move(result));
+        if (not normalized) {
           return std::pair{trivially_true_expression(), x};
         }
         return std::pair{
-          std::move(result),
+          std::move(*normalized),
           ast::expression{ast::constant{true, location::unknown}},
         };
       }

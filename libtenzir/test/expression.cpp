@@ -8,6 +8,7 @@
 
 #include "tenzir/expression.hpp"
 
+#include "tenzir/bitmap_algorithms.hpp"
 #include "tenzir/concept/parseable/tenzir/expression.hpp"
 #include "tenzir/concept/parseable/tenzir/schema.hpp"
 #include "tenzir/concept/parseable/tenzir/subnet.hpp"
@@ -20,7 +21,10 @@
 #include "tenzir/detail/serialize.hpp"
 #include "tenzir/detail/stable_map.hpp"
 #include "tenzir/expression_visitors.hpp"
+#include "tenzir/ids.hpp"
 #include "tenzir/module.hpp"
+#include "tenzir/series_builder.hpp"
+#include "tenzir/table_slice.hpp"
 #include "tenzir/test/test.hpp"
 
 #include <string>
@@ -345,6 +349,40 @@ WITH_FIXTURE(fixture) {
     concat(expected, resolve_pred("x == 5", {0, 1, 0}, t));
     concat(expected, resolve_pred("y == false", {0, 1, 1}, t));
     CHECK_EQUAL(xs, expected);
+  }
+
+  TEST("tailor flips unaligned substring in predicate") {
+    // Regression test: an unaligned `"needle" in field` predicate (literal on
+    // the left) must still resolve and evaluate correctly. `tailor` does not
+    // normalize its input, so it has to flip the operator itself when moving
+    // the extractor to the left-hand side; otherwise the substring check is
+    // inverted and matches nothing.
+    auto b = series_builder{};
+    b.record().field("log").data("contains ,TRAFFIC,end, here");
+    b.record().field("log").data("nothing of interest");
+    auto slices = b.finish_as_table_slice("test");
+    REQUIRE_EQUAL(slices.size(), 1u);
+    const auto& slice = slices[0];
+    // Construct the predicate directly so that it is *not* aligned by
+    // `normalize` first.
+    auto expr = expression{predicate{
+      data{",TRAFFIC,end,"},
+      relational_operator::in,
+      field_extractor{"log"},
+    }};
+    auto tailored = tailor(expr, slice.schema());
+    REQUIRE(tailored);
+    // The extractor must have moved to the left-hand side with the operator
+    // flipped from `in` to `ni`.
+    const auto* p = try_as<predicate>(&tailored->get_data());
+    REQUIRE(p);
+    CHECK(is<data_extractor>(p->lhs));
+    CHECK_EQUAL(p->op, relational_operator::ni);
+    // Evaluation must select exactly the one matching row. The slice was built
+    // directly and has no offset assigned, so `evaluate` treats its offset as
+    // zero; the hints therefore span `[0, rows)`.
+    auto result = evaluate(*tailored, slice, make_ids({{0, slice.rows()}}));
+    CHECK_EQUAL(rank(result), 1u);
   }
 
   TEST("parse print roundtrip") {
