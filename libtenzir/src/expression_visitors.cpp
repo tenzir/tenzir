@@ -17,6 +17,7 @@
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/ids.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/table_slice.hpp"
@@ -447,6 +448,17 @@ type_resolver::operator()(const type_extractor& ex, const data& d) {
 
 caf::expected<expression>
 type_resolver::operator()(const data& d, const type_extractor& ex) {
+  // Swapping the operands moves the extractor to the left-hand side, so the
+  // operator must be flipped to preserve the predicate's meaning. Inputs are
+  // normally aligned before they reach us, but we flip here as well so that an
+  // unaligned predicate resolves correctly instead of silently inverting
+  // asymmetric operators such as `in`. The flip is a no-op for symmetric
+  // operators like `==`. We restore `op_` on the way out so the mutation stays
+  // local to this delegated call.
+  auto guard = detail::scope_guard{[this, previous = op_]() noexcept {
+    op_ = previous;
+  }};
+  op_ = flip(op_);
   return (*this)(ex, d);
 }
 
@@ -477,6 +489,12 @@ type_resolver::operator()(const field_extractor& ex, const data& d) {
 
 caf::expected<expression>
 type_resolver::operator()(const data& d, const field_extractor& ex) {
+  // See the `type_extractor` overload above: flipping the operator keeps the
+  // predicate's meaning intact when the extractor moves to the left-hand side.
+  auto guard = detail::scope_guard{[this, previous = op_]() noexcept {
+    op_ = previous;
+  }};
+  op_ = flip(op_);
   return (*this)(ex, d);
 }
 
