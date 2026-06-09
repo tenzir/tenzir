@@ -223,7 +223,7 @@ expression deduplicator::operator()(const disjunction& d) const {
 }
 
 expression deduplicator::operator()(const negation& n) const {
-  return match(n.expr(), *this);
+  return negation{match(n.expr(), *this)};
 }
 
 expression deduplicator::operator()(const predicate& p) const {
