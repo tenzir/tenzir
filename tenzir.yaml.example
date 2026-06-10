@@ -104,6 +104,13 @@ tenzir:
     # minimum total cache capacity of 64MiB.
     #capacity: 1Gi
 
+  # Configure OpenTelemetry tracing. Tracing is disabled unless an endpoint is
+  # set; spans are exported over OTLP/HTTP.
+  opentelemetry:
+    # The OTLP/HTTP endpoint to export traces to, e.g. an OpenTelemetry
+    # Collector. Leave unset to disable tracing.
+    #endpoint: http://localhost:4318/v1/traces
+
   # A certificate file used as the default for operators accepting a `cacert`
   # option. This will default to an appropriate directory for the system. For
   # example:
