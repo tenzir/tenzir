@@ -14,6 +14,7 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/module.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/registry.hpp"
@@ -1286,7 +1287,13 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
     return std::optional<ast::expression>{std::move(expr)};
   };
   for (const auto& [op_name, op] : pkg.operators) {
-    auto parsed = parse_pipeline_with_bad_diagnostics(op.definition, ctx);
+    auto source = Arc<SourceMap::Source>{std::in_place};
+    source->index = SourceMap::Source::next_index();
+    source->text = op.definition;
+    source->origin
+      = fmt::format("<packages/{}:{}>", pkg.id, fmt::join(op_name, "::"));
+    auto parsed
+      = parse_pipeline_with_source_index(op.definition, source->index, ctx);
     if (not parsed) {
       diagnostic::error("failed to parse operator `{}` in package `{}`",
                         fmt::join(op_name, "::"), pkg.id)
@@ -1307,7 +1314,8 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
     auto* parent = ensure_module(*pkg_mod, head_span);
     auto& set = parent->defs[op_name.back()];
     // Create user_defined_operator with parameter information
-    auto udo = user_defined_operator{std::move(pipe), {}, {}};
+    auto udo
+      = user_defined_operator{std::move(pipe), std::move(source), {}, {}};
     auto seen_names = std::unordered_set<std::string>{};
     seen_names.reserve(op.args.positional.size() + op.args.named.size());
     auto seen_optional_positional = false;

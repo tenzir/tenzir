@@ -10,25 +10,25 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/arc.hpp"
+#include "tenzir/box.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/default_formatter.hpp"
-#include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/type_traits.hpp"
 
 #include <fmt/format.h>
 
 #include <functional>
+#include <limits>
 #include <span>
-#include <string>
-#include <vector>
+#include <utility>
 
 namespace tenzir {
 
 struct into_location;
 
-/// Identifies an entry in `SourceMap::sources()`, where `0` refers to the
-/// main source.
+/// Identifies a source in a `SourceMap`, where `0` refers to the main source.
 using SourceId = uint32_t;
 
 /// Identifies an entry in `SourceMap::call_sites()`, where `0` means
@@ -66,7 +66,7 @@ struct location {
     }
     const auto first = begin + pos;
     const auto last = (count > end - first) ? end : (first + count);
-    return {first, last, source_index};
+    return {first, last, source_index, callsite_index};
   }
 
   auto combine(into_location other) const -> location;
@@ -83,7 +83,8 @@ struct location {
     return f.object(x)
       .pretty_name("location")
       .fields(f.field("begin", x.begin), f.field("end", x.end),
-              f.field("source_index", x.source_index));
+              f.field("source_index", x.source_index),
+              f.field("callsite_index", x.callsite_index));
   }
 };
 
@@ -99,29 +100,19 @@ inline constexpr auto enable_default_formatter<location> = true;
 /// of user-defined operators whose bodies were expanded into the result.
 class SourceMap {
 public:
+  SourceMap();
+  SourceMap(const SourceMap&);
+  SourceMap(SourceMap&&) noexcept;
+  auto operator=(const SourceMap&) -> SourceMap&;
+  auto operator=(SourceMap&&) noexcept -> SourceMap&;
+  ~SourceMap();
+
   /// A TQL source text that was used during compilation.
-  struct Source {
-    /// The TQL source text.
-    std::string text;
-
-    /// A description of where the text comes from, e.g., `<input>`, a config
-    /// file path, or a package name.
-    std::string origin;
-
-    friend auto inspect(auto& f, Source& x) -> bool {
-      return f.object(x).pretty_name("source").fields(
-        f.field("text", x.text), f.field("origin", x.origin));
-    }
-  };
+  /// See source.hpp
+  struct Source;
 
   /// Register a source and return its id.
-  ///
-  /// The main source is expected to be registered first, such that its id
-  /// matches `location::source_index == 0`.
-  auto add_source(Source source) -> SourceId {
-    sources_.push_back(std::move(source));
-    return detail::narrow_cast<SourceId>(sources_.size() - 1);
-  }
+  auto add_source(Arc<const Source> source) -> SourceId;
 
   /// Register the location of a user-defined operator invocation and return
   /// its id.
@@ -129,44 +120,24 @@ public:
   /// The location's `source_index` identifies the caller's source, and its
   /// `callsite_index` the parent call site for nested calls (`0` means
   /// top-level).
-  auto add_call_site(location call_site) -> CallSiteId {
-    call_sites_.push_back(call_site);
-    return detail::narrow_cast<CallSiteId>(call_sites_.size());
-  }
+  auto add_call_site(location call_site) -> CallSiteId;
 
   /// Return the source for the given id.
-  auto source(SourceId id) const -> const Source& {
-    TENZIR_ASSERT(id < sources_.size());
-    return sources_[id];
-  }
+  auto source(SourceId id) const -> const Source&;
 
   /// Return the call site for the given id, which must not be `0`.
-  auto call_site(CallSiteId id) const -> location {
-    TENZIR_ASSERT(id >= 1);
-    TENZIR_ASSERT(id <= call_sites_.size());
-    return call_sites_[id - 1];
-  }
+  auto call_site(CallSiteId id) const -> location;
 
   /// Return all registered sources.
-  auto sources() const -> std::span<const Source> {
-    return sources_;
-  }
+  auto sources() const -> std::span<const Arc<const Source>>;
 
   /// Return all registered call sites.
-  auto call_sites() const -> std::span<const location> {
-    return call_sites_;
-  }
-
-  friend auto inspect(auto& f, SourceMap& x) -> bool {
-    return f.object(x)
-      .pretty_name("source_map")
-      .fields(f.field("sources", x.sources_),
-              f.field("call_sites", x.call_sites_));
-  }
+  auto call_sites() const -> std::span<const location>;
 
 private:
-  std::vector<Source> sources_;
-  std::vector<location> call_sites_;
+  struct Impl;
+
+  Box<Impl> impl_;
 };
 
 /// Provides a `T` together with a `location`.

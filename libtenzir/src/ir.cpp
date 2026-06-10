@@ -16,6 +16,7 @@
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/rebatch.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -734,6 +735,8 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             return {};
           },
           [&](const user_defined_operator& op) -> failure_or<void> {
+            std::ignore = ctx.source_map().add_source(
+              Arc<const SourceMap::Source>{*op.source});
             auto op_name = make_operator_name(x.op);
             auto udo_dh = udo_diagnostic_handler{
               &static_cast<diagnostic_handler&>(ctx), op_name, op};
