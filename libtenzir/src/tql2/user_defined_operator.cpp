@@ -226,9 +226,202 @@ inline auto udo_diagnostic_handler::emit(diagnostic diag) const -> void {
   std::move(builder).emit(*inner_);
 }
 
+namespace {
+
+struct callsite_injector : ast::visitor<callsite_injector> {
+  explicit callsite_injector(CallSiteId callid) : callid{callid} {
+  }
+
+  auto visit(location& x) -> void {
+    if (x) {
+      x.callsite_index = callid;
+    }
+  }
+
+  template <class T>
+  auto visit(located<T>& x) -> void {
+    visit(x.source);
+  }
+
+  auto visit(ast::identifier& x) -> void {
+    visit(x.location);
+  }
+
+  auto visit(ast::meta& x) -> void {
+    visit(x.source);
+  }
+
+  auto visit(ast::underscore& x) -> void {
+    visit(static_cast<location&>(x));
+  }
+
+  auto visit(ast::constant& x) -> void {
+    visit(x.source);
+  }
+
+  auto visit(ast::this_& x) -> void {
+    visit(x.source);
+  }
+
+  auto visit(ast::dollar_var& x) -> void {
+    visit(x.id);
+  }
+
+  auto visit(ast::unpack& x) -> void {
+    visit(x.brackets);
+    enter(x);
+  }
+
+  auto visit(ast::binary_expr& x) -> void {
+    visit(x.op);
+    enter(x);
+  }
+
+  auto visit(ast::unary_expr& x) -> void {
+    visit(x.op);
+    enter(x);
+  }
+
+  auto visit(ast::lambda_expr& x) -> void {
+    visit(x.arrow);
+    enter(x);
+  }
+
+  auto visit(ast::assignment& x) -> void {
+    visit(x.equals);
+    enter(x);
+  }
+
+  auto visit(ast::function_call& x) -> void {
+    visit(x.rpar);
+    enter(x);
+  }
+
+  auto visit(ast::field_access& x) -> void {
+    visit(x.dot);
+    visit(x.name);
+    enter(x);
+  }
+
+  auto visit(ast::index_expr& x) -> void {
+    visit(x.lbracket);
+    visit(x.rbracket);
+    enter(x);
+  }
+
+  auto visit(ast::spread& x) -> void {
+    visit(x.dots);
+    enter(x);
+  }
+
+  auto visit(ast::list& x) -> void {
+    visit(x.begin);
+    visit(x.end);
+    enter(x);
+  }
+
+  auto visit(ast::record& x) -> void {
+    visit(x.begin);
+    visit(x.end);
+    enter(x);
+  }
+
+  auto visit(ast::let_stmt& x) -> void {
+    visit(x.let);
+    enter(x);
+  }
+
+  auto visit(ast::if_stmt& x) -> void {
+    visit(x.if_kw);
+    if (x.else_) {
+      visit(x.else_->kw);
+    }
+    enter(x);
+  }
+
+  auto visit(ast::match_pattern& x) -> void {
+    x.kind->match(
+      [&](ast::wildcard_pattern& pattern) {
+        visit(pattern.source);
+      },
+      [&](ast::expression_pattern& pattern) {
+        visit(pattern.expr);
+      },
+      [&](ast::range_pattern& pattern) {
+        visit(pattern.dots);
+        visit(pattern.lower);
+        visit(pattern.upper);
+      });
+  }
+
+  auto visit(ast::match_stmt& x) -> void {
+    visit(x.begin);
+    visit(x.end);
+    enter(x);
+  }
+
+  auto visit(ast::field_path& x) -> void {
+    auto expr = std::move(x).unwrap();
+    visit(expr);
+    auto updated = ast::field_path::try_from(std::move(expr));
+    TENZIR_ASSERT(updated);
+    x = std::move(*updated);
+  }
+
+  auto visit(ast::type_stmt& x) -> void {
+    visit(x.type_location);
+    visit(x.equals);
+    enter(x);
+  }
+
+  auto visit(ast::type_expr& x) -> void {
+    visit(x.keyword);
+    enter(x);
+  }
+
+  auto visit(ast::record_def& x) -> void {
+    visit(x.begin);
+    visit(x.end);
+    enter(x);
+  }
+
+  auto visit(ast::list_def& x) -> void {
+    visit(x.begin);
+    visit(x.end);
+    enter(x);
+  }
+
+  auto visit(ast::pipeline_expr& x) -> void {
+    visit(x.begin);
+    visit(x.end);
+    enter(x);
+  }
+
+  auto visit(ast::format_expr& x) -> void {
+    visit(x.location);
+    enter(x);
+  }
+
+  template <class T>
+  auto visit(T& x) -> void {
+    enter(x);
+  }
+
+  CallSiteId callid;
+};
+
+} // namespace
+
+auto inject_callsite(ast::pipeline in, CallSiteId callid) -> ast::pipeline {
+  auto visitor = callsite_injector{callid};
+  visitor.visit(in);
+  return in;
+}
+
 auto instantiate_user_defined_operator(const user_defined_operator& udo,
                                        operator_factory_invocation& inv,
-                                       session ctx, udo_diagnostic_handler& dh)
+                                       session ctx, CallSiteId callsite,
+                                       udo_diagnostic_handler& dh)
   -> failure_or<ast::pipeline> {
   struct positional_value {
     ast::expression expr;
@@ -454,7 +647,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
   }
   // We intentionally don't support pipelines that are passed to udos yet.
 
-  auto modified_pipeline = udo.definition;
+  auto modified_pipeline = inject_callsite(udo.definition, callsite);
   return ast::substitute_named_expressions(std::move(modified_pipeline),
                                            substitutions);
 }

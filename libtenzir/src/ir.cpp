@@ -737,6 +737,8 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
           [&](const user_defined_operator& op) -> failure_or<void> {
             ctx.source_map().add_source(
               Arc<const SourceMap::Source>{*op.source});
+            auto const callid
+              = ctx.source_map().add_call_site(x.get_location());
             auto op_name = make_operator_name(x.op);
             auto udo_dh = udo_diagnostic_handler{
               &static_cast<diagnostic_handler&>(ctx), op_name, op};
@@ -756,7 +758,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             auto inv
               = operator_factory_invocation{std::move(x.op), std::move(x.args)};
             TRY(auto substituted, instantiate_user_defined_operator(
-                                    op, inv, sp.as_session(), udo_dh));
+                                    op, inv, sp.as_session(), callid, udo_dh));
             // The body is hygienic: it cannot see outer `let` bindings. Any
             // outer references reach the body only through arguments, which
             // we pre-bound above before substitution copied them in.
