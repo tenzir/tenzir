@@ -26,9 +26,10 @@ public:
     -> Arc<const Source> {
     static auto id_generator = std::atomic<SourceId>{1};
     const auto id = id_generator.fetch_add(1);
-    auto r = std::make_shared<Source>(id, std::move(text), std::move(origin),
-                                      eager_split, Token{});
-    return Arc<const Source>::from_non_null(std::move(r));
+    return Arc<const Source>{
+      std::in_place_type<Source>, id,          std::move(text),
+      std::move(origin),          eager_split, Token{},
+    };
   }
 
   /// The source id used in `location::source_index`.
@@ -59,7 +60,7 @@ private:
       return None{};
     }
     auto split = detail::split(text, "\n");
-    return std::move(split);
+    return split;
   }
 };
 

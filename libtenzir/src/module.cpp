@@ -262,7 +262,7 @@ load_symbols2(const detail::stable_set<std::filesystem::path>& module_dirs,
       TENZIR_ASSERT(str);
       auto source_map = SourceMap{};
       source_map.add_source(
-        SourceMap::Source{.text = *str, .origin = std::string{f}});
+        SourceMap::Source::new_source(*str, std::string{f}, true));
       auto dh = make_diagnostic_printer(source_map, color_diagnostics::yes,
                                         std::cerr);
       auto sp = session_provider::make(*dh);
