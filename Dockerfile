@@ -59,6 +59,13 @@ FROM build-base AS rdkafka-package
 COPY scripts/debian/build-rdkafka-package.sh .
 RUN ./build-rdkafka-package.sh
 
+# -- opentelemetry-cpp-package -------------------------------------------------
+
+FROM build-base AS opentelemetry-cpp-package
+
+COPY scripts/debian/build-opentelemetry-cpp-package.sh .
+RUN ./build-opentelemetry-cpp-package.sh
+
 # -- fluent-bit-package --------------------------------------------------------
 
 FROM build-base AS fluent-bit-package
@@ -94,9 +101,10 @@ COPY --from=jemalloc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=arrow-adbc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=rdkafka-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=opentelemetry-cpp-package /tmp/*.deb /tmp/custom-packages/
 
 COPY ./scripts/debian/install-dev-dependencies.sh ./scripts/debian/
-RUN ./scripts/debian/install-dev-dependencies.sh && \
+RUN TENZIR_SKIP_OPENTELEMETRY_BUILD=1 ./scripts/debian/install-dev-dependencies.sh && \
     apt-get -y --no-install-recommends install /tmp/custom-packages/*.deb && \
     rm -rf /tmp/custom-packages && \
     rm -rf /var/lib/apt/lists/*
@@ -199,6 +207,7 @@ COPY --from=jemalloc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=arrow-adbc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=rdkafka-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=opentelemetry-cpp-package /tmp/*.deb /tmp/custom-packages/
 
 RUN apt-get update && \
     apt-get -y --no-install-recommends install \

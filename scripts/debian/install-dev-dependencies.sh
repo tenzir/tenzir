@@ -87,3 +87,12 @@ curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
 export POETRY_HOME=/opt/poetry
 curl -sSL https://install.python-poetry.org | python3 - --version 1.8.2
 ln -nsf /opt/poetry/bin/poetry /usr/local/bin/poetry
+
+# OpenTelemetry C++ is not packaged for Debian, so we build it from source.
+# In the Docker image it is provided as a prebuilt package instead, which sets
+# TENZIR_SKIP_OPENTELEMETRY_BUILD to avoid building it twice.
+if [ -z "${TENZIR_SKIP_OPENTELEMETRY_BUILD:-}" ]; then
+  script_dir="$(cd "$(dirname "$0")" && pwd)"
+  "${script_dir}/build-opentelemetry-cpp-package.sh"
+  apt-get -y --no-install-recommends install /tmp/opentelemetry-cpp_*.deb
+fi
