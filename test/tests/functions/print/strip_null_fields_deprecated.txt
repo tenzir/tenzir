@@ -1,0 +1,21 @@
+{
+  x: 1,
+  y: null,
+  json: "{\n  \"x\": 1\n}",
+  ndjson: "{\"x\":1}",
+}
+warning: the `strip_null_fields` option is deprecated
+ --> tests/functions/print/strip_null_fields_deprecated.tql:2:50
+  |
+2 | json = {x: x, y: y}.print_json(strip_null_fields=true)
+  |                                                  ~~~~ 
+  |
+  = hint: use the `drop_null_fields` function instead, e.g. `x.drop_null_fields().print_json()`
+
+warning: the `strip_null_fields` option is deprecated
+ --> tests/functions/print/strip_null_fields_deprecated.tql:3:54
+  |
+3 | ndjson = {x: x, y: y}.print_ndjson(strip_null_fields=true)
+  |                                                      ~~~~ 
+  |
+  = hint: use the `drop_null_fields` function instead, e.g. `x.drop_null_fields().print_ndjson()`
