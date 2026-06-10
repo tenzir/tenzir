@@ -21,6 +21,16 @@ TEST("ASCII case-insensitive equality") {
   CHECK(not ascii_icase_equal("abc", "abd"));
 }
 
+TEST("UTF-8 code point counting") {
+  CHECK_EQUAL(utf8_codepoint_count(""), 0u);
+  CHECK_EQUAL(utf8_codepoint_count("tenzir"), 6u);
+  CHECK_EQUAL(utf8_codepoint_count("ä"), 1u);
+  CHECK_EQUAL(utf8_codepoint_count("äöü"), 3u);
+  CHECK_EQUAL(utf8_codepoint_count("日本語"), 3u);
+  CHECK_EQUAL(utf8_codepoint_count("🤖"), 1u);
+  CHECK_EQUAL(utf8_codepoint_count("a🤖b"), 3u);
+}
+
 TEST("string byte escaping") {
   // Identities.
   CHECK_EQUAL(byte_escape(""), "");

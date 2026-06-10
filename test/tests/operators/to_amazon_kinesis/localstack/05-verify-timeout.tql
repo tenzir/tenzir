@@ -1,0 +1,5 @@
+from_amazon_kinesis env("LOCALSTACK_KINESIS_STREAM_OUTPUT"),
+                    start="trim_horizon",
+                    exit=true
+where partition_key == "timer"
+this = {message: string(message)}
