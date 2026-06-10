@@ -67,7 +67,7 @@ struct ReadRecord {
 
 struct ReadResult {
   std::vector<ReadRecord> records;
-  size_t shard_index = std::numeric_limits<size_t>::max();
+  std::string shard_id;
   std::string next_iterator;
   std::string next_sequence_number;
   bool shard_closed = false;
@@ -268,8 +268,8 @@ auto list_shards(amazon::SignedHttpClient& client, std::string_view stream,
 }
 
 auto read_from_shard(amazon::SignedHttpClient& client, std::string_view stream,
-                     size_t shard_index, std::string_view shard_id,
-                     std::string iterator, int limit) -> Task<ReadResult> {
+                     std::string_view shard_id, std::string iterator, int limit)
+  -> Task<ReadResult> {
   auto request = Aws::Kinesis::Model::GetRecordsRequest{};
   request.SetShardIterator(Aws::String{iterator.data(), iterator.size()});
   request.SetLimit(limit);
@@ -277,17 +277,18 @@ auto read_from_shard(amazon::SignedHttpClient& client, std::string_view stream,
   if (aws_result.is_err()) {
     auto error = std::move(aws_result).unwrap_err();
     if (is_error(error, "ExpiredIteratorException")) {
-      co_return {.shard_index = shard_index, .iterator_expired = true};
+      co_return {.shard_id = std::string{shard_id}, .iterator_expired = true};
     }
     if (is_error(error, "ProvisionedThroughputExceededException")) {
-      co_return {.shard_index = shard_index, .throttled = true};
+      co_return {.shard_id = std::string{shard_id}, .throttled = true};
     }
-    co_return {.shard_index = shard_index, .error = std::move(error.message)};
+    co_return {.shard_id = std::string{shard_id},
+               .error = std::move(error.message)};
   }
   auto result
     = Aws::Kinesis::Model::GetRecordsResult{std::move(aws_result).unwrap()};
   auto output = ReadResult{};
-  output.shard_index = shard_index;
+  output.shard_id = std::string{shard_id};
   output.next_iterator = amazon::from_aws_string(result.GetNextShardIterator());
   output.shard_closed = output.next_iterator.empty();
   output.records.reserve(result.GetRecords().size());
@@ -545,6 +546,10 @@ auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
                                    .parents = std::move(info.parents)});
     }
   }
+  if (shards_.empty() and args_.exit) {
+    done_ = true;
+    co_return;
+  }
   for (auto& shard : shards_) {
     if (shard.closed) {
       continue;
@@ -552,13 +557,8 @@ auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
     if (starts_at_latest(args_.start) and not shard.latest_start_time) {
       shard.latest_start_time = time::clock::now();
     }
-    auto iterator = co_await recreate_iterator(shard);
-    if (iterator.is_err()) {
-      fail(std::move(iterator).unwrap_err());
-      co_return;
-    }
-    shard.iterator = std::move(iterator).unwrap();
   }
+  spawn_ready_loops(ctx);
   bytes_read_counter_
     = ctx.make_counter(MetricsLabel{"operator", "from_amazon_kinesis"},
                        MetricsDirection::read, MetricsVisibility::external_,
@@ -569,7 +569,7 @@ auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
                        MetricsUnit::events);
 }
 
-auto FromAmazonKinesis::recreate_iterator(ShardState& shard)
+auto FromAmazonKinesis::recreate_shard_iterator(const ShardState& shard)
   -> Task<Result<std::string, KinesisApiError>> {
   if (shard.next_sequence_number.empty() and shard.trim_horizon_start) {
     co_return co_await make_shard_iterator(
@@ -585,87 +585,99 @@ auto FromAmazonKinesis::recreate_iterator(ShardState& shard)
                                          shard.next_sequence_number);
 }
 
+auto FromAmazonKinesis::shard_loop(ShardState shard) -> Task<void> {
+  auto iterator = std::string{};
+  while (true) {
+    if (iterator.empty()) {
+      auto created = co_await recreate_shard_iterator(shard);
+      if (created.is_err()) {
+        auto result = ReadResult{};
+        result.shard_id = shard.id;
+        result.error = std::move(created).unwrap_err().message;
+        co_await results_->enqueue(Any{std::move(result)});
+        co_return;
+      }
+      iterator = std::move(created).unwrap();
+      if (iterator.empty()) {
+        auto result = ReadResult{};
+        result.shard_id = shard.id;
+        result.shard_closed = true;
+        co_await results_->enqueue(Any{std::move(result)});
+        co_return;
+      }
+    }
+    auto result = co_await read_from_shard(
+      *client_, args_.stream.inner, shard.id, iterator, records_per_call_);
+    if (result.throttled) {
+      co_await folly::coro::sleep(
+        std::chrono::duration_cast<folly::HighResDuration>(throttle_backoff));
+      continue;
+    }
+    if (result.iterator_expired) {
+      iterator.clear();
+      continue;
+    }
+    iterator = result.next_iterator;
+    if (not result.next_sequence_number.empty()) {
+      shard.next_sequence_number = result.next_sequence_number;
+    }
+    const auto failed = not result.error.empty();
+    const auto closed = result.shard_closed;
+    const auto idle = result.records.empty();
+    co_await results_->enqueue(Any{std::move(result)});
+    if (failed or closed) {
+      co_return;
+    }
+    if (idle) {
+      co_await folly::coro::sleep(
+        std::chrono::duration_cast<folly::HighResDuration>(poll_idle_));
+    }
+  }
+}
+
+auto FromAmazonKinesis::parents_closed(const ShardState& shard) const -> bool {
+  return std::ranges::all_of(shard.parents, [&](const std::string& parent) {
+    auto it = std::ranges::find(shards_, parent, &ShardState::id);
+    return it == shards_.end() or it->closed;
+  });
+}
+
+auto FromAmazonKinesis::spawn_ready_loops(OpCtx& ctx) -> void {
+  for (const auto& shard : shards_) {
+    if (shard.closed or not parents_closed(shard)) {
+      continue;
+    }
+    if (std::ranges::find(running_, shard.id) != running_.end()) {
+      continue;
+    }
+    running_.push_back(shard.id);
+    ctx.spawn_task(shard_loop(shard));
+  }
+}
+
 auto FromAmazonKinesis::discover_new_shards(OpCtx& ctx) -> Task<void> {
-  const auto fail = [&](KinesisApiError error) {
-    diagnostic::error("{}", error.message)
-      .primary(args_.stream.source)
-      .emit(ctx);
-    done_ = true;
-  };
   auto shard_infos = co_await list_shards(*client_, args_.stream.inner,
                                           starts_at_latest(args_.start));
   if (shard_infos.is_err()) {
-    fail(std::move(shard_infos).unwrap_err());
+    diagnostic::error("{}", std::move(shard_infos).unwrap_err().message)
+      .primary(args_.stream.source)
+      .emit(ctx);
+    done_ = true;
     co_return;
   }
   for (auto& info : std::move(shard_infos).unwrap()) {
     if (std::ranges::find(shards_, info.id, &ShardState::id) != shards_.end()) {
       continue;
     }
-    auto iterator = co_await make_shard_iterator(
-      *client_, args_.stream.inner, info.id,
-      Aws::Kinesis::Model::ShardIteratorType::TRIM_HORIZON);
-    if (iterator.is_err()) {
-      fail(std::move(iterator).unwrap_err());
-      co_return;
-    }
     shards_.push_back(ShardState{.id = std::move(info.id),
                                  .parents = std::move(info.parents),
-                                 .iterator = std::move(iterator).unwrap(),
                                  .trim_horizon_start = true});
-  }
-  if (next_shard_ >= shards_.size()) {
-    next_shard_ = 0;
   }
 }
 
 auto FromAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
   TENZIR_UNUSED(dh);
-  if (done_ or shards_.empty()) {
-    co_await folly::coro::sleep(std::chrono::milliseconds{10});
-    co_return ReadResult{};
-  }
-  auto index = std::optional<size_t>{};
-  const auto parents_closed = [&](const ShardState& shard) {
-    return std::ranges::all_of(shard.parents, [&](const std::string& parent) {
-      auto it = std::ranges::find(shards_, parent, &ShardState::id);
-      return it == shards_.end() or it->closed;
-    });
-  };
-  auto any_eligible = false;
-  auto all_eligible_idle = true;
-  for (const auto& shard : shards_) {
-    const auto eligible = not shard.closed and not shard.iterator.empty()
-                          and parents_closed(shard);
-    any_eligible = any_eligible or eligible;
-    all_eligible_idle = all_eligible_idle and (not eligible or shard.idle);
-  }
-  if (any_eligible and all_eligible_idle) {
-    co_await folly::coro::sleep(
-      std::chrono::duration_cast<folly::HighResDuration>(poll_idle_));
-  }
-  for (auto i = size_t{0}; i < shards_.size(); ++i) {
-    auto candidate = (next_shard_ + i) % shards_.size();
-    if (not shards_[candidate].closed
-        and not shards_[candidate].iterator.empty()
-        and parents_closed(shards_[candidate])) {
-      index = candidate;
-      break;
-    }
-  }
-  if (not index) {
-    co_await folly::coro::sleep(std::chrono::milliseconds{10});
-    co_return ReadResult{};
-  }
-  const auto& shard = shards_[*index];
-  auto result
-    = co_await read_from_shard(*client_, args_.stream.inner, *index, shard.id,
-                               shard.iterator, records_per_call_);
-  if (result.throttled) {
-    co_await folly::coro::sleep(
-      std::chrono::duration_cast<folly::HighResDuration>(throttle_backoff));
-  }
-  co_return std::move(result);
+  co_return co_await results_->dequeue();
 }
 
 auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
@@ -676,33 +688,20 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
     done_ = true;
     co_return;
   }
-  if (batch.shard_index < shards_.size()) {
-    auto& shard = shards_[batch.shard_index];
-    if (batch.throttled) {
-      shard.idle = false;
-    } else if (batch.iterator_expired) {
-      auto iterator = co_await recreate_iterator(shard);
-      if (iterator.is_err()) {
-        diagnostic::error("{}", std::move(iterator).unwrap_err().message)
-          .primary(args_.stream.source)
-          .emit(ctx);
-        done_ = true;
+  if (auto it = std::ranges::find(shards_, batch.shard_id, &ShardState::id);
+      it != shards_.end()) {
+    it->closed = batch.shard_closed;
+    it->idle = batch.records.empty();
+    if (not batch.next_sequence_number.empty()) {
+      it->next_sequence_number = batch.next_sequence_number;
+    }
+    if (batch.shard_closed) {
+      std::erase(running_, batch.shard_id);
+      co_await discover_new_shards(ctx);
+      if (done_) {
         co_return;
       }
-      shard.iterator = std::move(iterator).unwrap();
-      shard.closed = false;
-      shard.idle = false;
-    } else {
-      shard.iterator = std::move(batch.next_iterator);
-      shard.closed = batch.shard_closed;
-      shard.idle = batch.records.empty();
-      if (not batch.next_sequence_number.empty()) {
-        shard.next_sequence_number = batch.next_sequence_number;
-      }
-    }
-    next_shard_ = (batch.shard_index + 1) % shards_.size();
-    if (batch.shard_closed) {
-      co_await discover_new_shards(ctx);
+      spawn_ready_loops(ctx);
     }
   }
   if (batch.records.empty()) {
@@ -755,7 +754,6 @@ auto FromAmazonKinesis::state() -> OperatorState {
 
 auto FromAmazonKinesis::snapshot(Serde& serde) -> void {
   serde("shards", shards_);
-  serde("next_shard", next_shard_);
   serde("emitted", emitted_);
   serde("done", done_);
 }
@@ -775,6 +773,9 @@ auto ToAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
     = args_.batch_size ? detail::narrow<size_t>(args_.batch_size->inner) : 500;
   batch_timeout_ = args_.batch_timeout ? args_.batch_timeout->inner : 1s;
   parallel_ = args_.parallel ? args_.parallel->inner : 1;
+  request_slots_ = Semaphore{detail::narrow<size_t>(parallel_)};
+  send_queue_ = Arc<folly::coro::BoundedQueue<SendReport>>{
+    std::in_place, detail::narrow<uint32_t>(parallel_ + 1)};
   bytes_write_counter_
     = ctx.make_counter(MetricsLabel{"operator", "to_amazon_kinesis"},
                        MetricsDirection::write, MetricsVisibility::external_,
@@ -849,28 +850,38 @@ auto ToAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
   while (true) {
     if (failed_) {
       co_await folly::coro::sleep(std::chrono::milliseconds{10});
-      co_return true;
+      co_return FlushTimeout{};
     }
     if (not batch_deadline_) {
-      co_await batch_ready_->wait();
+      auto [ready, report] = co_await folly::coro::collectAnyNoDiscard(
+        batch_ready_->wait(), report_ready_->wait());
+      if (report.hasValue()) {
+        co_return ReportReady{};
+      }
       continue;
     }
     auto const deadline = *batch_deadline_;
-    auto [timeout, ready] = co_await folly::coro::collectAnyNoDiscard(
-      sleep_until(deadline), batch_ready_->wait());
+    auto [timeout, ready, report] = co_await folly::coro::collectAnyNoDiscard(
+      sleep_until(deadline), batch_ready_->wait(), report_ready_->wait());
+    if (report.hasValue()) {
+      co_return ReportReady{};
+    }
     if (timeout.hasValue()) {
-      co_return true;
+      co_return FlushTimeout{};
     }
     if (ready.hasValue()) {
       continue;
     }
-    co_return true;
+    co_return FlushTimeout{};
   }
 }
 
 auto ToAmazonKinesis::process_task(Any result, OpCtx& ctx) -> Task<void> {
-  TENZIR_UNUSED(result);
   if (failed_) {
+    co_return;
+  }
+  if (result.try_as<ReportReady>()) {
+    drain_send_reports(ctx);
     co_return;
   }
   co_await flush_if_timed_out(ctx);
@@ -894,11 +905,7 @@ auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
   }
   auto records = std::exchange(batch_, {});
   batch_deadline_ = None{};
-  auto sent_events = records.size();
-  auto sent_bytes = size_t{0};
-  for (const auto& record : records) {
-    sent_bytes += record.message.size();
-  }
+  drain_send_reports(ctx);
   auto chunks = std::vector<std::vector<PendingRecord>>{};
   auto chunk = std::vector<PendingRecord>{};
   auto chunk_size = size_t{0};
@@ -906,7 +913,7 @@ auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
     const auto size = record_size(record);
     if ((not chunk.empty() and chunk_size + size > max_put_records_request_size)
         or chunk.size() >= max_put_records_entries) {
-      chunks.push_back(std::move(chunk));
+      chunks.push_back(std::exchange(chunk, {}));
       chunk_size = 0;
     }
     chunk_size += size;
@@ -915,50 +922,88 @@ auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
   if (not chunk.empty()) {
     chunks.push_back(std::move(chunk));
   }
-  auto errors = std::vector<std::string>{};
-  for (auto offset = size_t{0}; offset < chunks.size(); offset += parallel_) {
-    auto tasks = std::vector<Task<PutRecordsResult>>{};
-    const auto end = std::min<size_t>(chunks.size(), offset + parallel_);
-    tasks.reserve(end - offset);
-    for (auto index = offset; index < end; ++index) {
-      tasks.push_back(
-        put_records(*client_, args_.stream.inner, std::move(chunks[index])));
+  for (auto& records : chunks) {
+    auto permit = request_slots_.try_acquire();
+    while (not permit and not failed_) {
+      auto report = co_await (*send_queue_)->dequeue();
+      handle_send_report(std::move(report), ctx);
+      permit = request_slots_.try_acquire();
     }
-    auto results = co_await folly::coro::collectAllRange(std::move(tasks));
-    for (auto& result : results) {
-      if (result.error) {
-        errors.push_back(std::move(*result.error));
+    if (failed_) {
+      co_return;
+    }
+    ++pending_reports_;
+    ctx.spawn_task([client = client_, stream = args_.stream.inner,
+                    records = std::move(records), queue = *send_queue_,
+                    report_ready = report_ready_,
+                    permit = std::move(*permit)]() mutable -> Task<void> {
+      auto report = SendReport{};
+      report.events = records.size();
+      for (const auto& record : records) {
+        report.bytes += record.message.size();
       }
+      auto result
+        = co_await put_records(*client, std::move(stream), std::move(records));
       for (const auto& failed : result.failed_records) {
-        sent_bytes -= failed.message.size();
-        --sent_events;
+        report.bytes -= failed.message.size();
+        --report.events;
       }
-      std::ranges::move(result.failed_records, std::back_inserter(batch_));
-    }
+      report.failed_records = std::move(result.failed_records);
+      if (result.error) {
+        report.errors.push_back(std::move(*result.error));
+      }
+      permit.release();
+      co_await queue->enqueue(std::move(report));
+      report_ready->notify_one();
+    });
   }
-  bytes_write_counter_.add(sent_bytes);
-  events_write_counter_.add(sent_events);
-  if (not batch_.empty()) {
-    batch_deadline_ = std::chrono::steady_clock::now() + batch_timeout_;
-    batch_ready_->notify_one();
-  }
-  if (not errors.empty()) {
+}
+
+auto ToAmazonKinesis::handle_send_report(SendReport report, OpCtx& ctx)
+  -> void {
+  bytes_write_counter_.add(report.bytes);
+  events_write_counter_.add(report.events);
+  TENZIR_ASSERT(pending_reports_ > 0);
+  --pending_reports_;
+  if (not report.errors.empty()) {
     failed_ = true;
     diagnostic::error("failed to write records to Kinesis")
       .primary(args_.stream.source)
-      .note("{}", fmt::join(errors, "; "))
+      .note("{}", fmt::join(report.errors, "; "))
+      .note("{} records remain unsent", report.failed_records.size())
       .emit(ctx);
+  }
+}
+
+auto ToAmazonKinesis::drain_send_reports(OpCtx& ctx) -> void {
+  if (not send_queue_) {
+    return;
+  }
+  while (auto report = (*send_queue_)->try_dequeue()) {
+    handle_send_report(std::move(*report), ctx);
+  }
+}
+
+auto ToAmazonKinesis::wait_for_requests(OpCtx& ctx) -> Task<void> {
+  if (not send_queue_) {
+    co_return;
+  }
+  while (pending_reports_ > 0) {
+    auto report = co_await (*send_queue_)->dequeue();
+    handle_send_report(std::move(report), ctx);
   }
 }
 
 auto ToAmazonKinesis::prepare_snapshot(OpCtx& ctx) -> Task<void> {
   co_await flush(ctx);
+  co_await wait_for_requests(ctx);
   fail_if_unsent(ctx);
   co_return;
 }
 
 auto ToAmazonKinesis::finalize(OpCtx& ctx) -> Task<FinalizeBehavior> {
   co_await flush(ctx);
+  co_await wait_for_requests(ctx);
   fail_if_unsent(ctx);
   co_return FinalizeBehavior::done;
 }
