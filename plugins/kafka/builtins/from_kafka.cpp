@@ -140,11 +140,13 @@ private:
 ///
 /// Source granularity is one subscription (one consumer), for exact and regex
 /// topics alike: the broker owns partition assignment, and regex matching is
-/// resolved broker-side and dynamically. Should fetch-side parallelism become
-/// the bottleneck, fan out per-assigned-partition queues from this single
-/// subscription (`rd_kafka_queue_get_partition` from the rebalance callback)
-/// instead of adding consumers; `RuntimeState::sources` stays a vector to
-/// leave room for that.
+/// resolved broker-side and dynamically. Measured locally, the fetch stage is
+/// bound by the consumer's single in-flight fetch request per broker — not by
+/// queue draining — so larger per-partition fetches (see the throughput
+/// defaults below) are the first lever. If more fetch parallelism is ever
+/// needed, subscribe additional consumers as members of the same group and
+/// let the broker split partitions across them; `RuntimeState::sources` stays
+/// a vector to leave room for that.
 
 /// Default delay before flushing a partial batch.
 constexpr auto default_batch_timeout = 100ms;
@@ -170,12 +172,15 @@ auto from_kafka_throughput_defaults()
   using entry = std::pair<std::string, std::string>;
   // Performance note: these defaults intentionally bias towards low broker-side
   // holdback (`fetch.min.bytes=1`, `fetch.wait.max.ms=500`) while increasing
-  // client queue depth. Local 10M-message fixture runs showed this combination
-  // avoids source stalls better than aggressive "large batch" defaults.
+  // client queue depth. The subscribed consumer keeps roughly one fetch
+  // request in flight per broker, so its drain rate is bound by bytes per
+  // fetch round trip: local 1M/4M-message runs against a single broker showed
+  // `max.partition.fetch.bytes=8Mi` roughly doubles throughput over the 1Mi
+  // value tuned for the earlier consumer-per-partition layout.
   static const auto defaults = std::array<entry, 5>{
     entry{"fetch.min.bytes", std::to_string(1)},
     entry{"fetch.wait.max.ms", std::to_string(500)},
-    entry{"max.partition.fetch.bytes", std::to_string(1_Mi)},
+    entry{"max.partition.fetch.bytes", std::to_string(8_Mi)},
     entry{"queued.min.messages", std::to_string(200_k)},
     entry{"queued.max.messages.kbytes", std::to_string(256_k)},
   };
