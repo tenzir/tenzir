@@ -14,6 +14,7 @@
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/co_match.hpp"
+#include "tenzir/compile.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/configuration.hpp"
 #include "tenzir/defaults.hpp"
@@ -2305,14 +2306,14 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   // Transform the AST into IR.
   auto b_ctx = base_ctx{ctx.dh(), ctx.reg()};
   // (void)b_ctx.system();
-  auto c_ctx = compile_ctx::make_root(b_ctx);
-  TRY(auto ir, std::move(ast).compile(c_ctx));
+  TRY(auto compiled, compile(std::move(ast), b_ctx));
+  auto ir = std::move(compiled.ir);
   if (cfg.dump_ir) {
     fmt::print("{:#?}\n", ir);
     return not ctx.has_failure();
   }
   // Instantiate the IR.
-  auto sub_ctx = substitute_ctx{c_ctx, nullptr};
+  auto sub_ctx = substitute_ctx{b_ctx, nullptr};
   TRY(ir.substitute(sub_ctx, true));
   if (cfg.dump_inst_ir) {
     fmt::print("{:#?}\n", ir);
@@ -2328,7 +2329,8 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   auto parse_implicit
     = [&](std::string_view definition) -> failure_or<ir::pipeline> {
     TRY(auto ast, parse_pipeline_with_bad_diagnostics(definition, ctx));
-    TRY(auto pipe, std::move(ast).compile(c_ctx));
+    TRY(auto implicit, compile(std::move(ast), b_ctx));
+    auto pipe = std::move(implicit.ir);
     TRY(pipe.substitute(sub_ctx, true));
     return pipe;
   };

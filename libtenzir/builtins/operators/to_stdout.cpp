@@ -9,7 +9,7 @@
 #include "tenzir/async.hpp"
 
 #include <tenzir/arc.hpp>
-#include <tenzir/compile_ctx.hpp>
+#include <tenzir/compile.hpp>
 #include <tenzir/detail/posix.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
@@ -50,8 +50,8 @@ struct SaveStdoutArgs {
 auto make_default_printer(base_ctx ctx) -> failure_or<ir::pipeline> {
   auto sessions = session_provider::make(static_cast<diagnostic_handler&>(ctx));
   TRY(auto pipe, parse("write_tql", sessions.as_session()));
-  auto root = compile_ctx::make_root(ctx);
-  return std::move(pipe).compile(root);
+  TRY(auto compiled, compile(std::move(pipe), ctx));
+  return std::move(compiled.ir);
 }
 
 class StdoutNonblockingGuard {

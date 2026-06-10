@@ -9,7 +9,7 @@
 #include <tenzir/async.hpp>
 #include <tenzir/async/notify.hpp>
 #include <tenzir/base_ctx.hpp>
-#include <tenzir/compile_ctx.hpp>
+#include <tenzir/compile.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pcap.hpp>
@@ -91,8 +91,9 @@ auto make_default_parser_pipeline(diagnostic_handler& dh)
   auto provider = session_provider::make(dh);
   auto session = provider.as_session();
   TRY(auto ast, parse("read_pcap", session));
-  auto ctx = compile_ctx::make_root(base_ctx{session.dh(), session.reg()});
-  return std::move(ast).compile(ctx);
+  TRY(auto compiled,
+      compile(std::move(ast), base_ctx{session.dh(), session.reg()}));
+  return std::move(compiled.ir);
 }
 
 auto lookup_capture_netmask(std::string const& iface) -> bpf_u_int32 {

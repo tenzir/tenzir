@@ -13,6 +13,7 @@
 #include "tenzir/async/mail.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/co_match.hpp"
+#include "tenzir/compile.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/available_memory.hpp"
 #include "tenzir/detail/fanout_counter.hpp"
@@ -390,9 +391,9 @@ auto compile_table_slice_transform(ast::pipeline ast, diagnostic_handler& dh)
   auto provider = session_provider::make(dh);
   auto ctx = provider.as_session();
   auto b_ctx = base_ctx{ctx.dh(), ctx.reg()};
-  auto c_ctx = compile_ctx::make_root(b_ctx);
-  TRY(auto ir, std::move(ast).compile(c_ctx));
-  auto sub_ctx = substitute_ctx{c_ctx, nullptr};
+  TRY(auto compiled, compile(std::move(ast), b_ctx));
+  auto ir = std::move(compiled.ir);
+  auto sub_ctx = substitute_ctx{b_ctx, nullptr};
   TRY(ir.substitute(sub_ctx, true));
   TRY(auto output, ir.infer_type(tag_v<table_slice>, dh));
   if (not output) {

@@ -11,7 +11,7 @@
 #include <tenzir/blob.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/co_match.hpp>
-#include <tenzir/compile_ctx.hpp>
+#include <tenzir/compile.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/curl.hpp>
 #include <tenzir/detail/narrow.hpp>
@@ -669,8 +669,8 @@ auto make_parser_pipeline(operator_factory_plugin const& plugin, location loc,
                           OpCtx& ctx) -> failure_or<ir::pipeline> {
   auto ast = ast::pipeline{};
   ast.body.emplace_back(invocation_for_plugin(plugin, loc));
-  auto root = compile_ctx::make_root(ctx);
-  return std::move(ast).compile(root);
+  TRY(auto compiled, compile(std::move(ast), ctx));
+  return std::move(compiled.ir);
 }
 
 struct retryable_http_response : std::runtime_error {

@@ -10,6 +10,7 @@
 
 #include "tenzir/base_ctx.hpp"
 #include "tenzir/let_id.hpp"
+#include "tenzir/source_map.hpp"
 
 namespace tenzir {
 
@@ -43,6 +44,11 @@ public:
 
   /// Create a copy of this context, but without the environment.
   [[nodiscard]] auto without_env() const -> compile_ctx;
+
+  /// Return the source map that is populated during compilation.
+  auto source_map() const -> SourceMap& {
+    return root_.source_map_;
+  }
 
   /// A scope object owns the environment from which the context reads.
   ///
@@ -87,6 +93,11 @@ public:
     operator base_ctx() const;
     operator compile_ctx();
 
+    /// Extract the source map after compilation has finished.
+    auto source_map() && -> SourceMap {
+      return std::move(source_map_);
+    }
+
   private:
     friend class compile_ctx;
 
@@ -95,6 +106,7 @@ public:
 
     base_ctx ctx_;
     uint64_t last_let_id_ = 0;
+    SourceMap source_map_;
   };
 
   auto reg() const -> const registry& {
