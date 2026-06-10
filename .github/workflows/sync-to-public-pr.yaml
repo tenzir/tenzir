@@ -1,0 +1,140 @@
+name: Sync PR to Public Repo
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - closed
+
+concurrency:
+  # Fast consecutive pushes to the same PR cancel stale sync runs; only the
+  # last push wins.
+  group: sync-public-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  sync:
+    name: Mirror PR to tenzir/tenzir
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a token
+        id: generate_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.TENZIR_AUTOBUMPER_APP_ID }}
+          private-key: ${{ secrets.TENZIR_AUTOBUMPER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: tenzir
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          # The mirrored tree and the commit status must both refer to the
+          # real PR head, not the ephemeral merge commit.
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Push snapshot branch to tenzir/tenzir
+        id: push
+        env:
+          GITHUB_APP_TOKEN: ${{ steps.generate_token.outputs.token }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          git config --global user.name 'tenzir-bot'
+          git config --global user.email 'engineering@tenzir.com'
+          git remote add public "https://x-access-token:${GITHUB_APP_TOKEN}@github.com/tenzir/tenzir.git"
+          git fetch --depth=1 public main
+
+          # Build a snapshot commit on top of public main whose tree is the
+          # PR head tree minus the internal-only directory. Unlike a patch,
+          # this can never conflict and is binary-safe. The Internal-Head
+          # trailer lets notify-internal-ci.yaml (in tenzir/tenzir) map the
+          # CI result back to the exact internal commit it was computed for.
+          git read-tree "$PR_HEAD_SHA"
+          git rm -rq --cached --ignore-unmatch contrib/tenzir-plugins
+          tree=$(git write-tree)
+          commit=$(git commit-tree "$tree" -p FETCH_HEAD \
+            -m "Mirror of tenzir/tenzir-internal#${PR_NUMBER}" \
+            -m "Internal-Head: ${PR_HEAD_SHA}")
+          git push --force public "${commit}:refs/heads/topic/internal-pr-${PR_NUMBER}"
+
+          if [ "$tree" = "$(git rev-parse 'FETCH_HEAD^{tree}')" ]; then
+            echo "public-changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "public-changes=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Create or update public PR
+        id: public_pr
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          INTERNAL_URL: ${{ github.event.pull_request.html_url }}
+          PUBLIC_CHANGES: ${{ steps.push.outputs.public-changes }}
+        run: |
+          branch="topic/internal-pr-${PR_NUMBER}"
+          {
+            echo "Mirror of tenzir/tenzir-internal#${PR_NUMBER} (${INTERNAL_URL})."
+            echo
+            if [ "$PUBLIC_CHANGES" = "true" ]; then
+              echo "This PR exists to run the public CI; it is merged and" \
+                "closed automatically from the internal side."
+            else
+              echo "The internal PR currently contains no public changes;" \
+                "the public CI will trivially pass."
+            fi
+          } > /tmp/body.md
+          existing=$(gh pr list --repo tenzir/tenzir --head "$branch" \
+            --state open --json number -q '.[0].number')
+          if [ -z "$existing" ]; then
+            # Draft avoids CODEOWNERS review requests and reviewer noise.
+            gh pr create --repo tenzir/tenzir --draft \
+              --head "$branch" --base main \
+              --title "$PR_TITLE" --body-file /tmp/body.md
+          else
+            gh pr edit --repo tenzir/tenzir "$existing" --body-file /tmp/body.md
+          fi
+          url=$(gh pr list --repo tenzir/tenzir --head "$branch" \
+            --state open --json url -q '.[0].url')
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Set pending commit status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUBLIC_PR_URL: ${{ steps.public_pr.outputs.url }}
+        run: |
+          gh api "repos/${{ github.repository }}/statuses/${PR_HEAD_SHA}" \
+            -f state=pending -f context="public-ci / tenzir" \
+            -f description="Waiting for public CI..." \
+            -f target_url="$PUBLIC_PR_URL"
+
+  close:
+    name: Close public PR
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a token
+        id: generate_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.TENZIR_AUTOBUMPER_APP_ID }}
+          private-key: ${{ secrets.TENZIR_AUTOBUMPER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: tenzir
+      - name: Close public PR and delete branch
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Also runs on merge: the merged changes reach public main via the
+          # main sync, not via this mirror PR.
+          pr=$(gh pr list --repo tenzir/tenzir --head "topic/internal-pr-${PR_NUMBER}" \
+            --state open --json number -q '.[0].number')
+          if [ -n "$pr" ]; then
+            gh pr close --repo tenzir/tenzir "$pr" --delete-branch
+          fi
