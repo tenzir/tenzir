@@ -88,14 +88,16 @@ jobs:
                                  and .commit_id == \"$head_sha\")] | length")
             # Unresolved review threads opened by Codex. Thread resolution is
             # only exposed via GraphQL, where bot logins lack the `[bot]`
-            # suffix.
-            unresolved=$(gh api graphql \
+            # suffix. `--paginate` follows `pageInfo` via `$endCursor`, and
+            # `--slurp` collects the pages into one array.
+            unresolved=$(gh api graphql --paginate --slurp \
               -F owner="${GH_REPO%/*}" -F name="${GH_REPO#*/}" -F number="$pr" \
               -f query='
-                query($owner: String!, $name: String!, $number: Int!) {
+                query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
                   repository(owner: $owner, name: $name) {
                     pullRequest(number: $number) {
-                      reviewThreads(first: 100) {
+                      reviewThreads(first: 100, after: $endCursor) {
+                        pageInfo { hasNextPage endCursor }
                         nodes {
                           isResolved
                           comments(first: 1) { nodes { author { login } } }
@@ -104,7 +106,7 @@ jobs:
                     }
                   }
                 }' \
-              --jq '[.data.repository.pullRequest.reviewThreads.nodes[]
+              | jq '[.[].data.repository.pullRequest.reviewThreads.nodes[]
                      | select(.isResolved | not)
                      | select((.comments.nodes[0].author.login // "")
                               | startswith("chatgpt-codex-connector"))]
