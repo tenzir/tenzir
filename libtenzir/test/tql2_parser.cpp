@@ -138,8 +138,8 @@ TEST("tql2 parser: expression stream keeps parsed prefix on hard suffix "
 
 TEST("tql2 parser: deep left-associated or location") {
   auto expr = ast::expression{ast::constant{false, location{0, 1}}};
-  auto end = size_t{1};
-  for (auto i = size_t{1}; i < 70; ++i) {
+  auto end = uint32_t{1};
+  for (auto i = uint32_t{1}; i < 70; ++i) {
     auto begin = i * 2;
     end = begin + 1;
     expr = ast::expression{ast::binary_expr{
@@ -150,6 +150,6 @@ TEST("tql2 parser: deep left-associated or location") {
   }
   auto location = expr.get_location();
   CHECK(location);
-  CHECK_EQUAL(location.begin, size_t{0});
+  CHECK_EQUAL(location.begin, uint32_t{0});
   CHECK_EQUAL(location.end, end);
 }

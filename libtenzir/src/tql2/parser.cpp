@@ -14,6 +14,7 @@
 #include "tenzir/concept/parseable/tenzir/subnet.hpp"
 #include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
 
@@ -1363,8 +1364,9 @@ public:
     auto end = tokens_[idx].end;
     // This ignores the suppress mode on purpose — caller decides whether to
     // use the result for diagnostics.
-    auto si
-      = (source_index_ != suppress_source_index) ? source_index_ : size_t{0};
+    auto si = (source_index_ != suppress_source_index)
+                ? detail::narrow_cast<uint32_t>(source_index_)
+                : uint32_t{0};
     return {begin, end, si};
   }
 

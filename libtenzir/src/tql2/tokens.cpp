@@ -275,7 +275,7 @@ auto verify_tokens(std::span<const token> tokens, session ctx)
   auto result = failure_or<void>{};
   for (const auto& token : tokens) {
     if (token.kind == token_kind::error) {
-      auto begin = size_t{0};
+      auto begin = uint32_t{0};
       if (&token != tokens.data()) {
         begin = (&token - 1)->end;
       }

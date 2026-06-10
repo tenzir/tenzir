@@ -15,6 +15,7 @@
 #include "tenzir/concept/parseable/tenzir/expression.hpp"
 #include "tenzir/concept/parseable/tenzir/pipeline.hpp"
 #include "tenzir/concept/parseable/tenzir/si.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/expression.hpp"
@@ -576,16 +577,16 @@ private:
                          .apply(current_, end_));
   }
 
-  auto next_pos() -> size_t {
+  auto next_pos() -> uint32_t {
     advance_to_token();
     return current_pos();
   }
 
-  auto current_pos() const -> size_t {
+  auto current_pos() const -> uint32_t {
     if (internal_) {
       return 0;
     }
-    return current_ - source_.data();
+    return detail::narrow_cast<uint32_t>(current_ - source_.data());
   }
 
   std::string source_;

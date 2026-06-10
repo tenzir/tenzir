@@ -13,6 +13,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/session.hpp"
 
+#include <cstdint>
 #include <string_view>
 
 namespace tenzir {
@@ -52,11 +53,11 @@ struct token {
       = (tenzir::parsers::alpha | '_') >> *continue_ident;
   };
 
-  token(token_kind kind, size_t end) : kind{kind}, end{end} {
+  token(token_kind kind, uint32_t end) : kind{kind}, end{end} {
   }
 
   token_kind kind;
-  size_t end;
+  uint32_t end;
 };
 
 /// Try to tokenize the source. This is a combination of calling:

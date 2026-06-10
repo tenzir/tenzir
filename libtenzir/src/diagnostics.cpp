@@ -9,6 +9,7 @@
 #include "tenzir/diagnostics.hpp"
 
 #include "tenzir/detail/backtrace.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
@@ -125,8 +126,8 @@ public:
                  std::string(indent_width - std::to_string(line).size(), ' '),
                  bold, blue, line, reset, src->lines[line_idx]);
       // TODO: This doesn't respect multi-line spans.
-      auto count
-        = std::max(size_t{1}, annotation.source.end - annotation.source.begin);
+      auto count = std::max(uint32_t{1},
+                            annotation.source.end - annotation.source.begin);
       auto pseudo_severity
         = annotation.primary ? diag.severity : severity::note;
       fmt::print(stream_, "{} {}{}| {}{}{} {}{}\n", indent, bold, blue,
@@ -325,7 +326,8 @@ auto to_diagnostic(const panic_exception& e) -> diagnostic {
     note += detail::format_frame(frame) + "\n";
   }
   return diagnostic::error("unexpected internal error: {}", e.message)
-    .primary(location{e.trace.begin, e.trace.end})
+    .primary(location{detail::narrow_cast<uint32_t>(e.trace.begin),
+                      detail::narrow_cast<uint32_t>(e.trace.end)})
     .note(std::move(note))
     .done();
 }
