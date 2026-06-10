@@ -735,7 +735,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             return {};
           },
           [&](const user_defined_operator& op) -> failure_or<void> {
-            std::ignore = ctx.source_map().add_source(
+            ctx.source_map().add_source(
               Arc<const SourceMap::Source>{*op.source});
             auto op_name = make_operator_name(x.op);
             auto udo_dh = udo_diagnostic_handler{

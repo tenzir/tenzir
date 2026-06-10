@@ -33,10 +33,14 @@ auto SourceMap::operator=(SourceMap&&) noexcept -> SourceMap& = default;
 
 SourceMap::~SourceMap() = default;
 
-auto SourceMap::add_source(Arc<const Source> source) -> SourceId {
-  auto result = source->index;
+void SourceMap::add_source(Arc<const Source> source) {
+  auto it = std::ranges::find_if(impl_->sources, [&](const auto& existing) {
+    return existing->index == source->index;
+  });
+  if (it != impl_->sources.end()) {
+    return;
+  }
   impl_->sources.push_back(std::move(source));
-  return result;
 }
 
 auto SourceMap::add_call_site(location call_site) -> CallSiteId {
@@ -44,17 +48,20 @@ auto SourceMap::add_call_site(location call_site) -> CallSiteId {
   return detail::narrow_cast<CallSiteId>(impl_->call_sites.size());
 }
 
-auto SourceMap::source(SourceId id) const -> const Source& {
+auto SourceMap::source(SourceId id) const -> Option<const Source&> {
   auto it = std::ranges::find_if(impl_->sources, [&](const auto& source) {
     return source->index == id;
   });
-  TENZIR_ASSERT(it != impl_->sources.end());
+  if (it == impl_->sources.end()) {
+    return None{};
+  }
   return **it;
 }
 
-auto SourceMap::call_site(CallSiteId id) const -> location {
-  TENZIR_ASSERT(id >= 1);
-  TENZIR_ASSERT(id <= impl_->call_sites.size());
+auto SourceMap::call_site(CallSiteId id) const -> Option<location> {
+  if (id < 1 or id >= impl_->call_sites.size()) {
+    return None{};
+  }
   return impl_->call_sites[id - 1];
 }
 

@@ -16,6 +16,7 @@
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/type_traits.hpp"
+#include "tenzir/option.hpp"
 
 #include <fmt/format.h>
 
@@ -111,8 +112,8 @@ public:
   /// See source.hpp
   struct Source;
 
-  /// Register a source and return its id.
-  auto add_source(Arc<const Source> source) -> SourceId;
+  /// Register a source. It will be kept alive by the SourceMap.
+  void add_source(Arc<const Source> source);
 
   /// Register the location of a user-defined operator invocation and return
   /// its id.
@@ -123,10 +124,10 @@ public:
   auto add_call_site(location call_site) -> CallSiteId;
 
   /// Return the source for the given id.
-  auto source(SourceId id) const -> const Source&;
+  auto source(SourceId id) const -> Option<const Source&>;
 
   /// Return the call site for the given id, which must not be `0`.
-  auto call_site(CallSiteId id) const -> location;
+  auto call_site(CallSiteId id) const -> Option<location>;
 
   /// Return all registered sources.
   auto sources() const -> std::span<const Arc<const Source>>;

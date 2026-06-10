@@ -1287,11 +1287,9 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
     return std::optional<ast::expression>{std::move(expr)};
   };
   for (const auto& [op_name, op] : pkg.operators) {
-    auto source = Arc<SourceMap::Source>{std::in_place};
-    source->index = SourceMap::Source::next_index();
-    source->text = op.definition;
-    source->origin
-      = fmt::format("<packages/{}:{}>", pkg.id, fmt::join(op_name, "::"));
+    auto source = SourceMap::Source::new_source(
+      op.definition,
+      fmt::format("<packages/{}:{}>", pkg.id, fmt::join(op_name, "::")), true);
     auto parsed
       = parse_pipeline_with_source_index(op.definition, source->index, ctx);
     if (not parsed) {
