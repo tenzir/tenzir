@@ -1,0 +1,5 @@
+tenzir:
+  auth:
+    - name: bearer-static
+      strategy: bearer-static
+      token: test-token
