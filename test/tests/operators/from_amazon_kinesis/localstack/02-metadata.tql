@@ -7,5 +7,5 @@ this = {
   shard_id: shard_id,
   partition_key: partition_key,
   has_sequence_number: sequence_number != "",
-  millis_behind_latest: millis_behind_latest,
+  behind_latest: behind_latest,
 }

@@ -13,6 +13,7 @@
 #include <tenzir/data.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/pipeline_metrics.hpp>
+#include <tenzir/result.hpp>
 #include <tenzir/tql2/ast.hpp>
 
 #include <cstddef>
@@ -21,6 +22,11 @@
 #include <vector>
 
 namespace tenzir::plugins::amazon_kinesis {
+
+struct KinesisApiError {
+  std::string message;
+  std::string code;
+};
 
 struct FromAmazonKinesisArgs {
   located<std::string> stream;
@@ -69,6 +75,11 @@ public:
 
 private:
   auto discover_new_shards(OpCtx& ctx) -> Task<void>;
+
+  struct ShardState;
+
+  auto recreate_iterator(ShardState& shard)
+    -> Task<Result<std::string, KinesisApiError>>;
 
   struct ShardState {
     std::string id;
@@ -131,7 +142,8 @@ private:
   std::vector<PendingRecord> batch_;
   size_t batch_size_ = 500;
   duration batch_timeout_ = std::chrono::seconds{1};
-  mutable Option<std::chrono::steady_clock::time_point> batch_deadline_ = None{};
+  mutable Option<std::chrono::steady_clock::time_point> batch_deadline_
+    = None{};
   mutable Box<Notify> batch_ready_{std::in_place};
   uint64_t parallel_ = 1;
   bool failed_ = false;
