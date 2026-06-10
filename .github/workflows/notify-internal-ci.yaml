@@ -1,0 +1,56 @@
+name: Notify Internal CI
+on:
+  workflow_run:
+    workflows:
+      - Tenzir
+    types:
+      - completed
+    branches:
+      - topic/internal-pr-*
+
+permissions: {}
+
+jobs:
+  notify:
+    name: Report public CI result to tenzir-internal
+    # Guard against fork branches named topic/internal-pr-*: workflow_run jobs run
+    # in the base-repo context with secrets, so without this check a fork
+    # could flip an internal PR's status with its own CI run.
+    if: github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a token
+        id: generate_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.TENZIR_AUTOBUMPER_APP_ID }}
+          private-key: ${{ secrets.TENZIR_AUTOBUMPER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: tenzir-internal
+      - name: Write commit status on tenzir-internal
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+          HEAD_COMMIT_MESSAGE: ${{ github.event.workflow_run.head_commit.message }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          # The mirrored commit (created by sync-to-public-pr.yaml in
+          # tenzir-internal) carries an Internal-Head trailer naming the
+          # internal commit this CI run was computed for. Writing the status
+          # to that SHA instead of the internal PR's current head ensures a
+          # late-finishing run can never mark a newer, untested commit.
+          sha=$(printf '%s\n' "$HEAD_COMMIT_MESSAGE" \
+            | sed -n 's/^Internal-Head: \([0-9a-f]\{40\}\)$/\1/p' | head -n1)
+          if [ -z "$sha" ]; then
+            echo "No Internal-Head trailer found; skipping."
+            exit 0
+          fi
+          if [ "$CONCLUSION" = "success" ]; then
+            state=success
+          else
+            state=failure
+          fi
+          gh api "repos/${{ github.repository_owner }}/tenzir-internal/statuses/${sha}" \
+            -f state="$state" -f context="public-ci / tenzir" \
+            -f description="Public CI: ${CONCLUSION}" \
+            -f target_url="$RUN_URL"
