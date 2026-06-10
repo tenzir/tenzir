@@ -182,12 +182,16 @@ public:
   /// The POST JSON body, if it existed.
   std::string json_body;
 
+  /// The W3C `traceparent` header, if it was present.
+  std::string traceparent;
+
   template <class Inspector>
   friend auto inspect(Inspector& f, http_request_description& e) {
     return f.object(e)
       .pretty_name("tenzir.http_request_description")
       .fields(f.field("canonical_path", e.canonical_path),
-              f.field("json_body", e.json_body));
+              f.field("json_body", e.json_body),
+              f.field("traceparent", e.traceparent));
   }
 };
 

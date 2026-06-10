@@ -206,6 +206,12 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         return response->abort(
           422, "failed to parse endpoint parameters: ", params.error());
       }
+      // Forward the W3C trace context so that handlers can parent their spans
+      // to the caller's trace, mirroring what the node does for requests that
+      // arrive through the platform.
+      if (auto traceparent = header.opt_value_of("traceparent")) {
+        (*params)["traceparent"] = std::string{*traceparent};
+      }
       // Note that the handler should return a valid "error" response by itself
       // if possible (ie. invalid arguments), the error handler is to catch
       // timeouts and real internal errors.
