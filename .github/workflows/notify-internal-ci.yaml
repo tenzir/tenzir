@@ -2,6 +2,10 @@ name: Notify Internal CI
 on:
   workflow_run:
     workflows:
+      # Mirror CI is the temporary macOS-only workflow that
+      # sync-to-public-pr.yaml injects into mirrored PRs; Tenzir is the full
+      # CI that takes over once we commit to the switch to public CI.
+      - Mirror CI
       - Tenzir
     types:
       - completed
