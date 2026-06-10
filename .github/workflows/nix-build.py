@@ -433,9 +433,6 @@ def registry_login(registry: str) -> bool:
 
 def cmd_build(args: argparse.Namespace) -> int:
     """Build the Nix package and output the package directory."""
-    # Update the tenzir-plugins submodule source info.
-    _ = run(["nix/update-plugins.sh"])
-
     version_env = [
         name
         for name in ["TENZIR_VERSION_SUFFIX", "TENZIR_VERSION_BUILD_METADATA"]
