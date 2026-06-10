@@ -704,8 +704,8 @@ struct pipeline {
 /// expressions.
 auto substitute_named_expressions(
   pipeline pipe,
-  const std::unordered_map<std::string, ast::expression>& replacements,
-  diagnostic_handler& dh) -> failure_or<ast::pipeline>;
+  const std::unordered_map<std::string, ast::expression>& replacements)
+  -> ast::pipeline;
 
 struct let_stmt {
   let_stmt() = default;

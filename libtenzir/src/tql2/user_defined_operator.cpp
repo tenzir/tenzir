@@ -456,7 +456,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
 
   auto modified_pipeline = udo.definition;
   return ast::substitute_named_expressions(std::move(modified_pipeline),
-                                           substitutions, dh);
+                                           substitutions);
 }
 
 } // namespace tenzir

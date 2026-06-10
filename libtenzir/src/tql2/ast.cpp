@@ -28,17 +28,10 @@ namespace tenzir::ast {
 
 namespace {
 
-auto combine_assignment_location(location result, expression const& expr,
-                                 std::vector<expression const*>& stack)
-  -> location {
-  stack.push_back(&expr);
-  return result;
-}
-
 class named_expression_substituter
   : public ast::visitor<named_expression_substituter> {
 public:
-  named_expression_substituter(
+  explicit named_expression_substituter(
     const std::unordered_map<std::string, ast::expression>& replacements)
     : replacements_{replacements} {
   }
@@ -70,23 +63,6 @@ public:
     }
   }
 
-  auto substitute(ast::dollar_var& var) -> std::optional<ast::expression> {
-    auto name = std::string{var.name_without_dollar()};
-    if (shadowed_.contains(name)) {
-      return {};
-    }
-    auto it = replacements_.find(name);
-    if (it == replacements_.end()) {
-      return {};
-    }
-    return it->second;
-  }
-
-  void visit(ast::assignment& assignment) {
-    visit(assignment.left);
-    visit(assignment.right);
-  }
-
   template <class T>
   void visit(T& x) {
     enter(x);
@@ -101,12 +77,11 @@ private:
 
 auto substitute_named_expressions(
   pipeline pipe,
-  const std::unordered_map<std::string, ast::expression>& replacements,
-  diagnostic_handler& dh) -> failure_or<ast::pipeline> {
+  const std::unordered_map<std::string, ast::expression>& replacements)
+  -> ast::pipeline {
   if (replacements.empty()) {
     return pipe;
   }
-  TENZIR_UNUSED(dh);
   auto substituter = named_expression_substituter{replacements};
   substituter.visit(pipe);
   return pipe;
@@ -333,7 +308,7 @@ auto expression::get_location() const -> location {
         stack.push_back(&x.expr);
       },
       [&](assignment const& x) {
-        result = combine_assignment_location(result, x.left, stack);
+        stack.push_back(&x.left);
         stack.push_back(&x.right);
       },
       [&](dollar_var const& x) {
