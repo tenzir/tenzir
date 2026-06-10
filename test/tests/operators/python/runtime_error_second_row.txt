@@ -6,3 +6,8 @@ error: Traceback (most recent call last):
     if self.x == 2: raise RuntimeError('boom on second row')
 RuntimeError: boom on second row
 on input event: {'x': 2}
+ --> tests/operators/python/runtime_error_second_row.tql:6:1
+  |
+6 | python "if self.x == 2: raise RuntimeError('boom on second row')"
+  | ^^^^^^ 
+  |
