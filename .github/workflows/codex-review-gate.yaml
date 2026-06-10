@@ -7,7 +7,9 @@
 # The label is only ever added, never removed: delaying the build is a CI
 # cost optimization, while merge safety comes from the `Tenzir CI` commit
 # status and required conversation resolution. Applying the label manually
-# unlocks the build without waiting for Codex.
+# unlocks the build without waiting for Codex. As a fail-safe, a PR whose
+# head has no Codex verdict 30 minutes after the push is treated as clean,
+# so that an unavailable Codex does not hold up CI.
 #
 # This needs to be a cron sweep because GitHub emits no webhook events for
 # reactions. The label is applied with a GitHub App token so that it can
@@ -50,9 +52,13 @@ jobs:
           gh label create "$LABEL" --force --color 2EA44F \
             --description "Unlocks the CI build; applied when the Codex review is clean"
 
+          # Heads pushed before this without a Codex verdict unlock the build.
+          grace_cutoff=$(date -u -d '30 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
+
           process_pr() {
             local pr=$1
-            local head_sha pushed thumb reviewed unresolved clean has_label
+            local head_sha pushed thumb reviewed unresolved verdict clean
+            local has_label
             # The label is sticky, so labeled PRs need no further checks.
             has_label=$(gh api "repos/$GH_REPO/issues/$pr" \
               --jq "[.labels[].name] | any(. == \"$LABEL\")")
@@ -111,14 +117,23 @@ jobs:
                      | select((.comments.nodes[0].author.login // "")
                               | startswith("chatgpt-codex-connector"))]
                     | length')
-            # Clean if Codex reviewed the current head or its 👍 reaction
-            # postdates the last push, and no Codex threads are unresolved.
-            # ISO-8601 timestamps compare lexicographically.
+            # Codex's verdict applies to the current head if it reviewed that
+            # commit or its 👍 reaction postdates the last push. ISO-8601
+            # timestamps compare lexicographically.
+            verdict=false
+            if [[ "$reviewed" -gt 0 ]] \
+               || [[ -n "$thumb" && "$thumb" > "$pushed" ]]; then
+              verdict=true
+            fi
             clean=false
-            if [[ "$unresolved" -eq 0 ]] \
-               && { [[ "$reviewed" -gt 0 ]] \
-                    || [[ -n "$thumb" && "$thumb" > "$pushed" ]]; }; then
+            if [[ "$verdict" == true && "$unresolved" -eq 0 ]]; then
               clean=true
+            elif [[ "$verdict" == false && "$pushed" < "$grace_cutoff" ]]; then
+              # Fail-safe: no verdict within the grace period means Codex is
+              # down or out of tokens, so unlock the build. Unresolved
+              # threads from earlier heads still block the merge.
+              clean=true
+              echo "PR #$pr: no Codex verdict within grace period"
             fi
             if [[ "$clean" == true ]]; then
               gh api -X POST "repos/$GH_REPO/issues/$pr/labels" \
