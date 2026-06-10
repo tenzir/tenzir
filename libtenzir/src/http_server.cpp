@@ -10,9 +10,13 @@
 
 #include "tenzir/concept/parseable/tenzir/endpoint.hpp"
 
+#include <folly/synchronization/Baton.h>
 #include <proxygen/lib/http/coro/HTTPFixedSource.h>
 #include <proxygen/lib/http/coro/server/HTTPServer.h>
 #include <proxygen/lib/utils/URL.h>
+
+#include <exception>
+#include <utility>
 
 namespace tenzir::http_server {
 
@@ -169,6 +173,59 @@ auto make_response(uint16_t status, const std::string& content_type,
                                    content_type);
   }
   return proxygen::coro::HTTPSourceHolder{source};
+}
+
+ScopedServer::ScopedServer(proxygen::coro::HTTPServer::Config config,
+                           std::shared_ptr<proxygen::coro::HTTPHandler> handler)
+  : server_{std::move(config), std::move(handler)} {
+}
+
+auto ScopedServer::start(proxygen::coro::HTTPServer::Config config,
+                         std::shared_ptr<proxygen::coro::HTTPHandler> handler)
+  -> Result<std::unique_ptr<ScopedServer>, std::string> {
+  auto s = std::unique_ptr<ScopedServer>{
+    new ScopedServer{std::move(config), std::move(handler)}};
+  try {
+    s->start_impl();
+  } catch (std::exception const& ex) {
+    return Err{std::string{ex.what()}};
+  }
+  return s;
+}
+
+void ScopedServer::start_impl() {
+  std::exception_ptr eptr;
+  folly::Baton baton;
+  thread_ = std::thread{[&] {
+    server_.start(
+      [&] {
+        baton.post();
+      },
+      [&](std::exception_ptr ex) {
+        eptr = ex;
+        baton.post();
+      });
+  }};
+  baton.wait();
+  if (eptr) {
+    // The IO thread returned without starting the server; join it here. The
+    // destructor checks `joinable()` so it will not try to join again while
+    // unwinding the exception we are about to rethrow.
+    thread_.join();
+    std::rethrow_exception(eptr);
+  }
+}
+
+ScopedServer::~ScopedServer() {
+  if (not thread_.joinable()) {
+    // `start_impl()` failed and already joined the IO thread. Calling
+    // `drain()`/`forceStop()` on a server that never reached RUNNING is
+    // unnecessary, and `thread_.join()` would throw `std::system_error`.
+    return;
+  }
+  server_.drain();
+  server_.forceStop();
+  thread_.join();
 }
 
 } // namespace tenzir::http_server
