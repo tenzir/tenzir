@@ -74,6 +74,11 @@ on:
     types:
       - opened
       - synchronize
+      # The build is delayed until the Codex review has no open issues, which
+      # the `codex-review-gate` workflow signals by applying the `ci-ready`
+      # label. Applying the label manually unlocks the build without waiting
+      # for Codex.
+      - labeled
   merge_group:
     types:
       - checks_requested
@@ -90,7 +95,14 @@ concurrency:
   # it's running smoothly for all users.
   group: ${{ github.workflow }}-${{ github.ref }}
   # Cancel all in-progress runs of this action for the same pull request.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+  # Label events never cancel: runs for unrelated labels are no-ops, and the
+  # `ci-ready` run that starts the build can only fire while previous runs
+  # were no-ops as well, since the label is never removed.
+  cancel-in-progress: >-
+    ${{ github.event_name == 'merge_group' ||
+        (github.event_name == 'pull_request' &&
+         (github.event.action == 'opened' ||
+          github.event.action == 'synchronize')) }}
 
 env:
   CCACHE_MAXSIZE: "5G"
@@ -117,6 +129,18 @@ jobs:
   configure:
     name: Configure
     runs-on: ubuntu-latest
+    # On PRs, wait for the Codex review to have no open issues: the
+    # `codex-review-gate` workflow applies the `ci-ready` label, whose
+    # `labeled` event starts the build. The label is sticky: once present,
+    # later pushes build right away. All other jobs depend on this one's
+    # outputs, so skipping it skips the entire workflow. Events for unrelated
+    # labels are ignored to avoid spurious rebuilds.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (contains(github.event.pull_request.labels.*.name, 'ci-ready') &&
+       (github.event.action == 'opened' ||
+        github.event.action == 'synchronize' ||
+        github.event.label.name == 'ci-ready'))
     outputs:
       version-matrix: ${{ steps.configure.outputs.version-matrix }}
       build-version: ${{ steps.configure.outputs.build-version }}
@@ -1306,12 +1330,42 @@ jobs:
     runs-on: ubuntu-latest
     name: Pass Branch Protections
     steps:
-      - name: Failure
-        if: contains(join(needs.*.result, ','), 'failure') || contains(join(needs.*.result, ','), 'cancelled')
+      - name: Publish commit status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # On PRs, publish on the head commit rather than the merge commit.
+          SHA: >-
+            ${{ github.event_name == 'pull_request'
+                && github.event.pull_request.head.sha
+                || github.sha }}
         run: |
-          # This check runs after any other job failed.
-          exit 1
-      - name: Success
-        run: |
-          # This check runs after all other jobs are done or skipped
-          exit 0
+          # Branch protection requires the `Tenzir CI` commit status instead
+          # of this job's check run: label events for unrelated labels
+          # trigger no-op runs whose check run would overwrite the one
+          # published by the real build for this head, whereas a commit
+          # status only changes when a run explicitly sets it.
+          if ${{ contains(join(needs.*.result, ','), 'failure') || contains(join(needs.*.result, ','), 'cancelled') }}; then
+            state=failure
+            description="A required job failed or was cancelled."
+          elif ${{ github.event_name == 'pull_request' && needs.configure.result == 'skipped' }}; then
+            # The build is gated on the `ci-ready` label, which the
+            # `codex-review-gate` workflow applies. Without the label, mark
+            # the head as awaiting review; applying the label triggers a real
+            # run. With the label, this is a no-op run for an unrelated label
+            # event, so leave the status of the real build untouched.
+            if ${{ contains(github.event.pull_request.labels.*.name, 'ci-ready') }}; then
+              echo "No-op run for an unrelated label event; keeping the status."
+              exit 0
+            fi
+            state=pending
+            description="The build starts once the Codex review is clean; apply the ci-ready label to skip the wait."
+          else
+            state=success
+            description="All required jobs succeeded."
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$SHA" \
+            -f "state=$state" \
+            -f "context=Tenzir CI" \
+            -f "description=$description" \
+            -f "target_url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          [[ "$state" == success ]]
