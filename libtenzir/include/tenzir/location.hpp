@@ -240,6 +240,7 @@ inline auto location::combine(into_location other) const -> location {
     return *this;
   }
   TENZIR_ASSERT(source_index == other.source_index);
+  TENZIR_ASSERT(callsite_index == other.callsite_index);
   return {std::min(begin, other.begin), std::max(end, other.end), source_index};
 }
 

@@ -21,9 +21,9 @@
 #include "tenzir/expression.hpp"
 #include "tenzir/parser_interface.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/tql/expression.hpp"
 #include "tenzir/type.hpp"
-#include "tenzir/source.hpp"
 
 #include <iterator>
 #include <string_view>

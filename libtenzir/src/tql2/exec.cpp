@@ -28,6 +28,7 @@
 #include "tenzir/series_builder.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/si_literals.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -37,7 +38,6 @@
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/tokens.hpp"
 #include "tenzir/try.hpp"
-#include "tenzir/source.hpp"
 
 #include <arrow/util/utf8.h>
 #include <caf/actor_from_state.hpp>
@@ -2411,8 +2411,8 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
 
 } // namespace
 
-auto exec2(const Source& source, diagnostic_handler& dh,
-           const exec_config& cfg, caf::actor_system& sys) -> bool {
+auto exec2(const Source& source, diagnostic_handler& dh, const exec_config& cfg,
+           caf::actor_system& sys) -> bool {
   auto result = std::invoke([&]() -> failure_or<bool> {
     TRY(load_packages_for_exec(dh, sys));
     auto provider = session_provider::make(dh);
@@ -2458,8 +2458,7 @@ auto exec2(const Source& source, diagnostic_handler& dh,
       pipes = std::move(*split);
     }
     for (auto& pipe : pipes) {
-      auto result
-        = exec_pipeline(std::move(pipe), source, ctx, cfg, sys);
+      auto result = exec_pipeline(std::move(pipe), source, ctx, cfg, sys);
       if (not result) {
         if (result.error() != ec::silent) {
           diagnostic::error(result.error()).emit(ctx);

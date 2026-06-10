@@ -735,8 +735,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             return {};
           },
           [&](const user_defined_operator& op) -> failure_or<void> {
-            ctx.source_map().add_source(
-              Arc<const Source>{*op.source});
+            ctx.source_map().add_source(Arc<const Source>{*op.source});
             auto const callid
               = ctx.source_map().add_call_site(x.get_location());
             auto op_name = make_operator_name(x.op);

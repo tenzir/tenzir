@@ -14,11 +14,11 @@
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/session.hpp>
+#include <tenzir/source.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/exec.hpp>
 #include <tenzir/tql2/parser.hpp>
 #include <tenzir/uuid.hpp>
-#include <tenzir/source.hpp>
 
 #include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>

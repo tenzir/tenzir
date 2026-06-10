@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/location.hpp"
+
 #include <tenzir/detail/env.hpp>
 #include <tenzir/detail/load_contents.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -128,7 +129,8 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
     filename = "<input>";
     content = args[0];
   }
-  auto source = Source::new_source(std::move(content), std::move(filename), false);
+  auto source
+    = Source::new_source(std::move(content), std::move(filename), false);
   auto source_map = SourceMap{};
   source_map.add_source(source);
   if (cfg.dump_diagnostics) {

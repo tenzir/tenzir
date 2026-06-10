@@ -38,11 +38,9 @@ struct fixture {
 /// printer.
 auto make_fixture() -> fixture {
   auto map = SourceMap{};
-  map.add_source(
-    Source::new_source("from {}\nouter\n", "<input>", true));
+  map.add_source(Source::new_source("from {}\nouter\n", "<input>", true));
   auto outer = Source::new_source("inner\n", "<outer>", false);
-  auto inner
-    = Source::new_source("assert this == 42\n", "<inner>", true);
+  auto inner = Source::new_source("assert this == 42\n", "<inner>", true);
   auto outer_id = outer->index;
   auto inner_id = inner->index;
   map.add_source(std::move(outer));
@@ -206,10 +204,8 @@ TEST("diagnostic printer - reflects changes to the source map") {
   CHECK_EQUAL(stream.str(), "error: oops\n");
   // Sources and call sites registered after the printer was created are
   // picked up by subsequent emits of the same printer.
-  map.add_source(
-    Source::new_source("from {}\nouter\n", "<input>", false));
-  auto inner
-    = Source::new_source("assert this == 42\n", "<inner>", false);
+  map.add_source(Source::new_source("from {}\nouter\n", "<input>", false));
+  auto inner = Source::new_source("assert this == 42\n", "<inner>", false);
   auto inner_src = inner->index;
   map.add_source(std::move(inner));
   auto call_id = map.add_call_site(outer_call);
