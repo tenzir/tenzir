@@ -23,6 +23,7 @@
   nlohmann_json,
   crc32c,
   grpc,
+  opentelemetry-cpp,
   spdlog,
   simdjson,
   robin-map,
@@ -118,6 +119,7 @@ in
     nlohmann_json
     crc32c
     grpc
+    opentelemetry-cpp
     libmaxminddb
     jemalloc-tenzir
     mimalloc-tenzir
