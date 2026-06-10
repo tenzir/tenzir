@@ -144,6 +144,17 @@ public:
     -> Task<failure_or<void>>
     = 0;
 
+  /// Resolves a named authentication via the node actor.
+  ///
+  /// The implementation generates a fresh ECC transport keypair, sends the
+  /// request to the connected platform actor, decrypts the per-field secret
+  /// payloads with the private half of the transport key, and returns a
+  /// flattened `resolved_authentication` whose `fields` record contains the
+  /// platform's `public_config` merged with the decrypted secret fields.
+  virtual auto resolve_authentication(std::string name)
+    -> Task<failure_or<resolved_authentication>>
+    = 0;
+
   /// Spawn a subpipeline with the given key and input type.
   ///
   /// The returned handle allows you to push data in. Data flowing out of the

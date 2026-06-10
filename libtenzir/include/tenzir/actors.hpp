@@ -13,6 +13,7 @@
 #include "tenzir/aliases.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/authentication_store.hpp"
 #include "tenzir/secret_store.hpp"
 
 #include <caf/inspector_access.hpp>
@@ -408,7 +409,10 @@ struct node_actor_traits {
     ::append_from<pipeline_shell_actor_traits::signatures>
     // Enable secret resolution through the node actor. It will first check the
     // node config and then dispatch to the platform actor if necessary/possible.
-    ::append_from<secret_store_actor_traits::signatures>;
+    ::append_from<secret_store_actor_traits::signatures>
+    // Enable named authentication resolution. The handler forwards to the
+    // platform actor; node-local YAML entries are resolved by the operator.
+    ::append_from<authentication_store_actor_traits::signatures>;
 };
 using node_actor = caf::typed_actor<node_actor_traits>;
 

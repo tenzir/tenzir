@@ -714,6 +714,63 @@ private:
     co_return {};
   }
 
+  auto resolve_authentication(std::string name)
+    -> Task<failure_or<resolved_authentication>> override {
+    auto node = co_await fetch_node(sys_, *dh_);
+    if (not node or not *node) {
+      co_return failure::promise();
+    }
+    auto key_pair = ecc::generate_keypair();
+    if (not key_pair) {
+      diagnostic::error("failed to generate auth transport keypair: {}",
+                        key_pair.error())
+        .emit(dh_);
+      co_return failure::promise();
+    }
+    auto public_key = key_pair->public_key;
+    auto result
+      = co_await async_mail(atom::resolve_authentication_v, name,
+                            std::move(public_key))
+          .request(*node);
+    if (not result) {
+      diagnostic::error("failed to resolve authentication `{}`: {}", name,
+                        result.error())
+        .emit(dh_);
+      co_return failure::promise();
+    }
+    auto out = resolved_authentication{};
+    auto success = match(
+      *result,
+      [&](encrypted_authentication_value& v) -> bool {
+        out.strategy = std::move(v.strategy);
+        for (auto& [k, val] : v.public_config) {
+          out.fields.emplace(std::move(k), std::move(val));
+        }
+        for (auto& [k, ciphertext] : v.encrypted_secret_fields) {
+          auto decrypted = ecc::decrypt(ciphertext, *key_pair);
+          if (not decrypted) {
+            diagnostic::error("failed to decrypt auth field `{}`: {}", k,
+                              decrypted.error())
+              .emit(dh_);
+            return false;
+          }
+          out.fields.emplace(std::move(k),
+                             std::string{decrypted->begin(), decrypted->end()});
+        }
+        return true;
+      },
+      [&](const authentication_resolution_error& e) -> bool {
+        diagnostic::error("authentication `{}` could not be resolved: {}", name,
+                          e.message)
+          .emit(dh_);
+        return false;
+      });
+    if (not success) {
+      co_return failure::promise();
+    }
+    co_return out;
+  }
+
   auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input,
                  DiagnosticBehavior diag_behavior)
     -> Task<AnySubHandle&> override {
