@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 69..75
+           `export` @ 144..150
          ],
          ref: std::export/op
        },
@@ -15,15 +15,7 @@
          
        ],
        filter: [
--        
-+        binary_expr {
-+          left: root_field {
-+            id: `x` @ 93..94,
-+            has_question_mark: false
-+          },
-+          op: "gt" @ 95..96,
-+          right: constant int64 1 @ 97..98
-+        }
+         
        ],
 -      order: "ordered",
 +      order: "unordered",
@@ -34,7 +26,7 @@
      GenericIr {
        op: {
          path: [
-           `parallel` @ 76..84
+           `parallel` @ 151..159
          ],
          ref: std::parallel/op
        },
@@ -56,21 +48,22 @@
              
            ],
            operators: [
--            where_ir {
--              self: 87..92,
--              predicate: binary_expr {
--                left: root_field {
--                  id: `x` @ 93..94,
--                  has_question_mark: false
--                },
--                op: "gt" @ 95..96,
--                right: constant int64 1 @ 97..98
--              }
--            },
+             where_ir {
+-              self: 162..167,
++              self: 0..0,
+               predicate: binary_expr {
+                 left: root_field {
+                   id: `x` @ 168..169,
+                   has_question_mark: false
+                 },
+                 op: "gt" @ 170..171,
+                 right: constant int64 1 @ 172..173
+               }
+             },
              GenericIr {
                op: {
                  path: [
-                   `discard` @ 101..108
+                   `discard` @ 176..183
                  ],
                  ref: std::discard/op
                },
@@ -87,7 +80,7 @@
                ]
              }
            ]
-         } @ 85..110,
+         } @ 160..185,
          let_ids: {
            
          }
