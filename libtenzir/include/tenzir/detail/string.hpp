@@ -367,17 +367,6 @@ replace_all(std::string str, std::string_view search, std::string_view replace);
 std::vector<std::string_view>
 split(std::string_view str, std::string_view sep, size_t max_splits = -1);
 
-/// Splits a character sequence into lines.
-/// Treats CRLF as a single line separator by trimming a trailing '\r' from
-/// every returned line.
-/// @param str The string to split.
-/// @param max_lines The maximum number of lines to return.
-/// @warning The lifetime of the returned substrings are bound to the lifetime
-/// of the string pointed to by `str`.
-/// @returns A vector of line substrings.
-std::vector<std::string_view>
-split_lines(std::string_view str, size_t max_lines = -1);
-
 /// Splits a character sequence into two substrings.
 /// If `sep` does not occur in `str`, the second substring will be empty.
 /// @param str The string to split.

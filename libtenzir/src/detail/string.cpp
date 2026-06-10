@@ -416,34 +416,6 @@ split(std::string_view str, std::string_view sep, size_t max_splits) {
   return out;
 }
 
-std::vector<std::string_view>
-split_lines(std::string_view str, size_t max_lines) {
-  if (max_lines == 0) {
-    return {};
-  }
-  auto result = std::vector<std::string_view>{};
-  auto rest = str;
-  while (result.size() < max_lines) {
-    auto newline = rest.find('\n');
-    if (newline == std::string_view::npos) {
-      result.push_back(rest);
-      break;
-    }
-    result.push_back(rest.substr(0, newline));
-    rest.remove_prefix(newline + 1);
-    if (rest.empty() and result.size() < max_lines) {
-      result.push_back("");
-      break;
-    }
-  }
-  for (auto& line : result) {
-    if (not line.empty() and line.back() == '\r') {
-      line.remove_suffix(1);
-    }
-  }
-  return result;
-}
-
 std::pair<std::string_view, std::string_view>
 split_once(std::string_view str, std::string_view sep) {
   auto parts = split(str, sep, 1);

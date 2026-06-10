@@ -1,0 +1,6 @@
+{
+  line: "{\"x\":1}",
+}
+{
+  line: "this is not json",
+}

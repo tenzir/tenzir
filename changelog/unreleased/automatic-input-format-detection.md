@@ -16,4 +16,6 @@ from_stdin {
 }
 ```
 
+Detection dry-runs the actual parsers on a bounded probe of the input. When multiple readers are capable of consuming the bytes, the most specific format wins, e.g., Suricata EVE beats generic NDJSON. Formats that accept arbitrary text, such as space-separated values, are never auto-detected; select their readers explicitly instead.
+
 By default, `read_auto` fails when detection finds no unique match. Use `fallback="lines"` or `fallback="all"` to opt into generic line or whole-input reading for otherwise unknown input.

@@ -1,0 +1,9 @@
+{
+  line: "2026-06-10 12:00:01 INFO: server started",
+}
+{
+  line: "2026-06-10 12:00:02 WARN: disk almost full",
+}
+{
+  line: "2026-06-10 12:00:03 INFO: client connected",
+}
