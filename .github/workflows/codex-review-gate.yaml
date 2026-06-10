@@ -56,27 +56,31 @@ jobs:
           grace_cutoff=$(date -u -d '30 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
 
           process_pr() {
+            # `set -e` is suppressed in functions called from a conditional,
+            # so fallible commands abort explicitly via `|| return`.
             local pr=$1
             local head_sha pushed thumb reviewed unresolved verdict clean
             local has_label
             # The label is sticky, so labeled PRs need no further checks.
             has_label=$(gh api "repos/$GH_REPO/issues/$pr" \
-              --jq "[.labels[].name] | any(. == \"$LABEL\")")
+              --jq "[.labels[].name] | any(. == \"$LABEL\")") || return
             if [[ "$has_label" == true ]]; then
               echo "PR #$pr: already labeled"
               return
             fi
-            head_sha=$(gh api "repos/$GH_REPO/pulls/$pr" --jq .head.sha)
+            head_sha=$(gh api "repos/$GH_REPO/pulls/$pr" --jq .head.sha) \
+              || return
             # The head commit's committer timestamp can predate the time it
             # was pushed to the PR, e.g., for pre-existing local commits, so
             # prefer the creation time of the earliest workflow run for the
             # head as the push time and only fall back to the commit.
             pushed=$(gh api \
               "repos/$GH_REPO/actions/runs?head_sha=$head_sha&per_page=100" \
-              --jq '[.workflow_runs[].created_at] | min // empty')
+              --jq '[.workflow_runs[].created_at] | min // empty') \
+              || return
             if [[ -z "$pushed" ]]; then
               pushed=$(gh api "repos/$GH_REPO/commits/$head_sha" \
-                --jq .commit.committer.date)
+                --jq .commit.committer.date) || return
             fi
             # Latest 👍 reaction by Codex on the PR description. `--slurp`
             # collects the pages into one array so that the filter runs once
@@ -86,12 +90,13 @@ jobs:
               "repos/$GH_REPO/issues/$pr/reactions" \
               | jq -r "[.[][] | select(.user.login == \"$CODEX_BOT\"
                                  and .content == \"+1\")
-                        | .created_at] | max // empty")
+                        | .created_at] | max // empty") || return
             # Reviews submitted by Codex against the current head commit.
             reviewed=$(gh api --paginate --slurp \
               "repos/$GH_REPO/pulls/$pr/reviews" \
               | jq -r "[.[][] | select(.user.login == \"$CODEX_BOT\"
-                                 and .commit_id == \"$head_sha\")] | length")
+                                 and .commit_id == \"$head_sha\")] | length") \
+              || return
             # Unresolved review threads opened by Codex. Thread resolution is
             # only exposed via GraphQL, where bot logins lack the `[bot]`
             # suffix. `--paginate` follows `pageInfo` via `$endCursor`, and
@@ -116,7 +121,7 @@ jobs:
                      | select(.isResolved | not)
                      | select((.comments.nodes[0].author.login // "")
                               | startswith("chatgpt-codex-connector"))]
-                    | length')
+                    | length') || return
             # Codex's verdict applies to the current head if it reviewed that
             # commit or its 👍 reaction postdates the last push. ISO-8601
             # timestamps compare lexicographically.
@@ -137,7 +142,7 @@ jobs:
             fi
             if [[ "$clean" == true ]]; then
               gh api -X POST "repos/$GH_REPO/issues/$pr/labels" \
-                -f "labels[]=$LABEL" --silent
+                -f "labels[]=$LABEL" --silent || return
               echo "PR #$pr: added $LABEL"
             else
               echo "PR #$pr: not clean"
