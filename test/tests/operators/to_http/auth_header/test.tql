@@ -1,0 +1,17 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /options/body
+      header_name: Authorization
+      header_value: Bearer test-token
+timeout: 60
+---
+
+from {
+  value: 42,
+}
+to_http env("HTTP_FIXTURE_BODY_URL"), auth="bearer-static" {
+  write_ndjson
+}

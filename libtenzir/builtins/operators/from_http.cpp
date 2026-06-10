@@ -19,6 +19,7 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/format_utils.hpp>
 #include <tenzir/http.hpp>
+#include <tenzir/http_auth.hpp>
 #include <tenzir/http_pool.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -73,6 +74,7 @@ struct FromHttpArgs {
   Option<located<std::string>> method;
   Option<located<data>> body;
   Option<located<data>> headers;
+  Option<located<std::string>> auth;
   Option<located<data>> tls;
   Option<located<duration>> timeout;
   Option<ast::field_path> error_field;
@@ -105,8 +107,8 @@ struct RetryWarning {
   std::string message;
 };
 
-using Message
-  = variant<ResponseHeader, ResponseBody, FetchError, FetchDone, RetryWarning>;
+using Message = variant<ResponseHeader, ResponseBody, FetchError, FetchDone,
+                        RetryWarning>;
 using MessageQueue = folly::coro::BoundedQueue<Message>;
 
 // Builds a Proxygen request source, working around a bug in Proxygen's
@@ -689,18 +691,26 @@ struct retryable_http_response : std::runtime_error {
   blob body;
 };
 
+struct auth_retry_response : std::runtime_error {
+  explicit auth_retry_response(std::vector<http::Header> headers)
+    : std::runtime_error{"auth retry"}, headers{std::move(headers)} {
+  }
+
+  std::vector<http::Header> headers;
+};
+
 // Static fetch task that runs on the Proxygen EventBase thread. All
 // results are communicated through the message queue; no operator members
 // are touched from this task.
 auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
-           FetchConfig config, bool buffer_retryable_body, Arc<MessageQueue> mq)
-  -> Task<void> {
+           FetchConfig config, bool buffer_retryable_body,
+           Arc<MessageQueue> mq) -> Task<void> {
   co_return co_await folly::coro::co_withExecutor(
-    evb,
-    folly::coro::co_invoke([evb, url = std::move(url),
-                            request = std::move(request),
-                            config = std::move(config), buffer_retryable_body,
-                            mq = std::move(mq)]() mutable -> Task<void> {
+    evb, folly::coro::co_invoke([evb, url = std::move(url),
+                                 request = std::move(request),
+                                 config = std::move(config),
+                                 buffer_retryable_body,
+                                 mq = std::move(mq)]() mutable -> Task<void> {
       auto result = co_await folly::coro::co_awaitTry([&]() -> Task<void> {
         auto const& host = url.getHost();
         auto const is_secure = url.isSecure();
@@ -1091,7 +1101,7 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    if (pagination_.next_request) {
+      if (pagination_.next_request) {
       // next page
       auto next = std::move(*pagination_.next_request);
       pagination_.current_url = std::move(next.url);
@@ -1138,6 +1148,16 @@ private:
       } else {
         lifecycle_ = Lifecycle::done;
         co_return;
+      }
+    }
+    if (args_.auth) {
+      auto auth = co_await fetch_authorization(args_.auth->inner, ctx);
+      if (not auth) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+      for (auto const& header : auth->headers) {
+        http::set(request.headers, header.name, header.value);
       }
     }
     bytes_read_ = ctx.make_counter(
@@ -1268,6 +1288,7 @@ public:
       = d.named("max_retry_count", &FromHttpArgs::max_retry_count);
     auto retry_delay_arg = d.named("retry_delay", &FromHttpArgs::retry_delay);
     auto encode_arg = d.named("encode", &FromHttpArgs::encode);
+    auto auth_arg = d.named("auth", &FromHttpArgs::auth);
     auto server_arg = d.named("server", &FromHttpArgs::server);
     auto parser_arg
       = d.pipeline(&FromHttpArgs::parser, SubOptimize::from_downstream,
@@ -1343,6 +1364,11 @@ public:
             }
           }
         }
+      }
+      if (auto auth = ctx.get(auth_arg); auth and auth->inner.empty()) {
+        diagnostic::error("`auth` must not be empty")
+          .primary(auth->source)
+          .emit(ctx);
       }
       // Validate method when explicitly provided.
       if (auto method = ctx.get(method_arg)) {
