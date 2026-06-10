@@ -16,7 +16,7 @@
 
 namespace tenzir {
 
-struct SourceMap::Source {
+struct Source {
 private:
   struct Token {};
 

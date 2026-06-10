@@ -15,6 +15,7 @@
 #include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
 
@@ -1645,14 +1646,14 @@ auto parse_expression_stream(std::span<token> tokens, std::string_view source,
 
 } // namespace
 
-auto parse(std::span<token> tokens, std::string_view source, session ctx)
+auto parse(std::span<token> tokens, const Source& source, session ctx)
   -> failure_or<ast::pipeline> {
-  return parse_pipeline(tokens, source, ctx, 0);
+  return parse_pipeline(tokens, source.text, ctx, source.index);
 }
 
 auto parse(std::string_view source, session ctx) -> failure_or<ast::pipeline> {
   TRY(auto tokens, tokenize(source, ctx));
-  return parse(tokens, source, ctx);
+  return parse_pipeline(tokens, source, ctx, 0);
 }
 
 auto parse_pipeline_with_bad_diagnostics(std::string_view source, session ctx)

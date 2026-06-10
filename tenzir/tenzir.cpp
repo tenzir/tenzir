@@ -309,7 +309,7 @@ auto main(int argc, char** argv) -> int try {
     auto ctx = provider.as_session();
     struct config_udo {
       ast::pipeline definition;
-      Arc<const SourceMap::Source> source;
+      Arc<const Source> source;
     };
     auto udos = std::unordered_map<std::string, config_udo>{};
     for (auto&& [name, value] : *r) {
@@ -320,7 +320,7 @@ auto main(int argc, char** argv) -> int try {
                      name);
         return EXIT_FAILURE;
       }
-      auto source = SourceMap::Source::new_source(
+      auto source = Source::new_source(
         *definition, fmt::format("tenzir.operators.{}", name), true);
       auto pipe
         = parse_pipeline_with_source_index(*definition, source->index, ctx);

@@ -23,7 +23,7 @@ struct module_def;
 struct user_defined_operator {
   /// Definition with resolved entities, but without resolved `let`s.
   ast::pipeline definition;
-  Arc<const SourceMap::Source> source;
+  Arc<const Source> source;
 
   /// Parameter definitions for arguments and options
   struct parameter {

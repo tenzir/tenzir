@@ -229,7 +229,7 @@ public:
 private:
   /// A source resolved for the duration of a single `emit()` call.
   struct ResolvedSource {
-    const SourceMap::Source* source;
+    const Source* source;
     std::span<const std::string_view> lines;
   };
 

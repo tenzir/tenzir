@@ -37,6 +37,7 @@
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/tokens.hpp"
 #include "tenzir/try.hpp"
+#include "tenzir/source.hpp"
 
 #include <arrow/util/utf8.h>
 #include <caf/actor_from_state.hpp>
@@ -2410,16 +2411,16 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
 
 } // namespace
 
-auto exec2(std::string_view source, diagnostic_handler& dh,
+auto exec2(const Source& source, diagnostic_handler& dh,
            const exec_config& cfg, caf::actor_system& sys) -> bool {
   auto result = std::invoke([&]() -> failure_or<bool> {
     TRY(load_packages_for_exec(dh, sys));
     auto provider = session_provider::make(dh);
     auto ctx = provider.as_session();
-    TRY(validate_utf8(source, ctx));
-    auto tokens = tokenize_permissive(source);
+    TRY(validate_utf8(source.text, ctx));
+    auto tokens = tokenize_permissive(source.text);
     if (cfg.dump_tokens) {
-      return dump_tokens(tokens, source);
+      return dump_tokens(tokens, source.text);
     }
     TRY(verify_tokens(tokens, ctx));
     TRY(auto parsed, parse(tokens, source, ctx));
@@ -2458,7 +2459,7 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
     }
     for (auto& pipe : pipes) {
       auto result
-        = exec_pipeline(std::move(pipe), std::string{source}, ctx, cfg, sys);
+        = exec_pipeline(std::move(pipe), source, ctx, cfg, sys);
       if (not result) {
         if (result.error() != ec::silent) {
           diagnostic::error(result.error()).emit(ctx);

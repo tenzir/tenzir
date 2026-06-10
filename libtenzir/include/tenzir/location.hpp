@@ -94,6 +94,10 @@ inline const location location::unknown = location{};
 template <>
 inline constexpr auto enable_default_formatter<location> = true;
 
+/// A TQL source text that was used during compilation.
+/// See source.hpp
+struct Source;
+
 /// Maps locations in compiled IR back to their originating sources.
 ///
 /// The source map is populated during compilation from AST to IR. It records
@@ -107,10 +111,6 @@ public:
   auto operator=(const SourceMap&) -> SourceMap&;
   auto operator=(SourceMap&&) noexcept -> SourceMap&;
   ~SourceMap();
-
-  /// A TQL source text that was used during compilation.
-  /// See source.hpp
-  struct Source;
 
   /// Register a source. It will be kept alive by the SourceMap.
   void add_source(Arc<const Source> source);

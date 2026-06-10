@@ -186,6 +186,7 @@ class wah_bitmap;
 
 class compile_ctx;
 class SourceMap;
+struct Source;
 struct CompiledPipeline;
 class substitute_ctx;
 class finalize_ctx;

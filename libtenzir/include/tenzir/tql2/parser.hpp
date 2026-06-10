@@ -18,7 +18,7 @@
 
 namespace tenzir {
 
-auto parse(std::span<token> tokens, std::string_view source, session ctx)
+auto parse(std::span<token> tokens, const Source& source, session ctx)
   -> failure_or<ast::pipeline>;
 
 auto parse(std::string_view source, session ctx) -> failure_or<ast::pipeline>;

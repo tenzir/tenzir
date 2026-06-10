@@ -18,6 +18,7 @@
 #include <tenzir/tql2/exec.hpp>
 #include <tenzir/tql2/parser.hpp>
 #include <tenzir/uuid.hpp>
+#include <tenzir/source.hpp>
 
 #include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>
@@ -221,7 +222,7 @@ struct exec_pipeline_handler_state {
 
 } // namespace
 
-auto exec_pipeline(pipeline pipe, std::string definition,
+auto exec_pipeline(pipeline pipe, const Source& definition,
                    diagnostic_handler& dh, const exec_config& cfg,
                    caf::actor_system& sys) -> caf::expected<void> {
   auto implicit_pipe = add_implicit_source_and_sink(std::move(pipe), dh, cfg);
@@ -243,7 +244,7 @@ auto exec_pipeline(pipeline pipe, std::string definition,
     [&](
       caf::stateful_actor<exec_pipeline_handler_state>* self) -> caf::behavior {
       self->state().executor
-        = self->spawn(pipeline_executor, std::move(pipe), std::move(definition),
+        = self->spawn(pipeline_executor, std::move(pipe), definition.text,
                       caf::actor_cast<receiver_actor<diagnostic>>(self),
                       caf::actor_cast<metrics_receiver_actor>(self),
                       node_actor{}, true, true, fmt::to_string(uuid::random()));
@@ -322,14 +323,14 @@ auto exec_pipeline(pipeline pipe, std::string definition,
   return result;
 }
 
-auto exec_pipeline(std::string content, diagnostic_handler& dh,
+auto exec_pipeline(const Source& source, diagnostic_handler& dh,
                    const exec_config& cfg, caf::actor_system& sys)
   -> caf::expected<void> {
   if (not cfg.legacy) {
-    auto success = exec2(std::move(content), dh, cfg, sys);
+    auto success = exec2(source, dh, cfg, sys);
     return success ? caf::expected<void>{} : ec::silent;
   }
-  auto parsed = tql::parse(content, dh);
+  auto parsed = tql::parse(source.text, dh);
   if (not parsed) {
     return ec::silent;
   }
@@ -340,7 +341,7 @@ auto exec_pipeline(std::string content, diagnostic_handler& dh,
     return {};
   }
   auto pipe = tql::to_pipeline(std::move(*parsed));
-  return exec_pipeline(std::move(pipe), std::move(content), dh, cfg, sys);
+  return exec_pipeline(std::move(pipe), source, dh, cfg, sys);
 }
 
 } // namespace tenzir

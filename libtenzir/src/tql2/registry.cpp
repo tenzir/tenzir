@@ -77,7 +77,7 @@ auto operator_def::make(operator_factory_invocation inv, session ctx) const
         return std::make_unique<pipeline>(std::move(compiled));
       }
       TRY(auto instantiated,
-          instantiate_user_defined_operator(udo, inv, ctx, dh));
+          instantiate_user_defined_operator(udo, inv, ctx, 0, dh));
       TRY(auto compiled, compile(std::move(instantiated), ctx));
       return std::make_unique<pipeline>(std::move(compiled));
     },

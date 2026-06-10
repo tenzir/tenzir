@@ -1287,7 +1287,7 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
     return std::optional<ast::expression>{std::move(expr)};
   };
   for (const auto& [op_name, op] : pkg.operators) {
-    auto source = SourceMap::Source::new_source(
+    auto source = Source::new_source(
       op.definition,
       fmt::format("<packages/{}:{}>", pkg.id, fmt::join(op_name, "::")), true);
     auto parsed
