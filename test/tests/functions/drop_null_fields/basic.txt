@@ -1,0 +1,21 @@
+{
+  x: {
+    a: null,
+    b: 42,
+    c: null,
+    d: "hello",
+    e: {
+      f: null,
+      g: 100,
+      h: null,
+    },
+    i: null,
+  },
+  result: {
+    b: 42,
+    d: "hello",
+    e: {
+      g: 100,
+    },
+  },
+}
