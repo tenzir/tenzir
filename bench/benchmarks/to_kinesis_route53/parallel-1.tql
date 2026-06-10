@@ -1,0 +1,13 @@
+---
+bench:
+  id: to-kinesis-parallel-1
+  description: Write the Route53 sample payload to mock Kinesis with sequential PutRecords.
+---
+from_file env("BENCHMARK_INPUT_PATH") {
+  read_lines
+}
+to_amazon_kinesis f"{env("BENCHMARK_KINESIS_STREAM")}",
+  message=line,
+  batch_size=500,
+  endpoint=f"{env("BENCHMARK_KINESIS_ENDPOINT")}",
+  aws_iam={access_key_id: "bench", secret_access_key: "bench", region: "us-east-1"}
