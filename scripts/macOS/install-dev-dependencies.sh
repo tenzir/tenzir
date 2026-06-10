@@ -33,6 +33,7 @@ brew install --overwrite \
   mimalloc \
   ninja \
   nmap \
+  opentelemetry-cpp \
   pandoc \
   parallel \
   poetry \
