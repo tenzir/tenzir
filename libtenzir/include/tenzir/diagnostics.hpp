@@ -473,11 +473,11 @@ struct location_origin {
   std::string source;
 };
 
-/// Creates a diagnostic printer that renders source context from `origins`.
-/// `origins[i]` supplies the filename and source text for locations whose
-/// `source_index` equals `i`. An empty vector disables source-context
-/// rendering (equivalent to the former `std::nullopt` argument).
-auto make_diagnostic_printer(std::vector<location_origin> origins,
+/// Creates a diagnostic printer that renders source context from
+/// `source_map`. The source registered with id `i` supplies the origin and
+/// source text for locations whose `source_index` equals `i`. An empty
+/// source map disables source-context rendering.
+auto make_diagnostic_printer(SourceMap const& source_map,
                              color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler>;
 

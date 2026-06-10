@@ -23,6 +23,7 @@
 #include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/taxonomies.hpp"
 #include "tenzir/tql2/parser.hpp"
 
@@ -246,7 +247,7 @@ load_symbols2(const detail::stable_set<std::filesystem::path>& module_dirs,
   for (const auto& dir : module_dirs) {
     TENZIR_VERBOSE("loading schemas from {}", dir);
     std::error_code err{};
-    if (! std::filesystem::exists(dir, err)) {
+    if (not std::filesystem::exists(dir, err)) {
       TENZIR_DEBUG("{} skips non-existing directory: {}", __func__, dir);
       continue;
     }
@@ -259,9 +260,11 @@ load_symbols2(const detail::stable_set<std::filesystem::path>& module_dirs,
       TENZIR_DEBUG("loading schema {}", f);
       auto str = detail::load_contents(f);
       TENZIR_ASSERT(str);
-      auto dh = make_diagnostic_printer(
-        std::vector<location_origin>{{std::string{f}, *str}},
-        color_diagnostics::yes, std::cerr);
+      auto source_map = SourceMap{};
+      source_map.add_source(
+        SourceMap::Source{.text = *str, .origin = std::string{f}});
+      auto dh = make_diagnostic_printer(source_map, color_diagnostics::yes,
+                                        std::cerr);
       auto sp = session_provider::make(*dh);
       auto ast = parse(*str, sp.as_session());
       if (not ast) {
@@ -294,8 +297,8 @@ load_symbols2(const detail::stable_set<std::filesystem::path>& module_dirs,
       }
     }
   }
-  auto dh = make_diagnostic_printer(std::vector<location_origin>{},
-                                    color_diagnostics::yes, std::cerr);
+  auto dh
+    = make_diagnostic_printer(SourceMap{}, color_diagnostics::yes, std::cerr);
   struct visitor {
     visitor(symbol_map2& res, diagnostic_handler& dh) : res{res}, dh{dh} {
     }

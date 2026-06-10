@@ -12,7 +12,9 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
+#include "tenzir/source.hpp"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/functional/hash.hpp>
@@ -65,15 +67,15 @@ struct colors {
 
 class diagnostic_printer final : public diagnostic_handler, private colors {
 public:
-  diagnostic_printer(std::vector<location_origin> origins,
-                     color_diagnostics color, std::ostream& stream)
+  diagnostic_printer(SourceMap const& source_map, color_diagnostics color,
+                     std::ostream& stream)
     : colors{colors::make(color)}, stream_{stream} {
-    sources_.reserve(origins.size());
-    for (auto& o : origins) {
-      auto storage = std::move(o.source);
-      auto lines = detail::split(storage, "\n");
-      sources_.push_back(
-        {std::move(storage), std::move(lines), std::move(o.filename)});
+    for (const auto& source : source_map.sources()) {
+      // The views returned by `split` point into the `Arc`'d source text,
+      // which is stable because we keep the `Arc` alive in `per_source`.
+      auto lines = detail::split(source->text, "\n");
+      sources_lines_.try_emplace(source->index,
+                                 PerSource{source, std::move(lines)});
     }
   }
 
@@ -86,7 +88,7 @@ public:
                diag.severity, uncolor, diag.message, reset);
     auto indent_width = size_t{0};
     for (auto& annotation : diag.annotations) {
-      auto* src = source_for(annotation.source.source_index);
+      auto src = source_for(annotation.source.source_index);
       if (not src) {
         // TODO: This is a hack for the case where we don't have the information.
         break;
@@ -98,7 +100,7 @@ public:
     }
     auto indent = std::string(indent_width, ' ');
     for (auto& annotation : diag.annotations) {
-      auto* src = source_for(annotation.source.source_index);
+      auto src = source_for(annotation.source.source_index);
       if (not src) {
         // TODO: This is a hack for the case where we don't have the information.
         break;
@@ -117,7 +119,7 @@ public:
       auto line = line_idx + 1;
       if (&annotation == &diag.annotations.front()) {
         fmt::print(stream_, "{}{}{}-->{} {}:{}:{}\n", indent, bold, blue, reset,
-                   src->filename, line, col + 1);
+                   src->source->origin, line, col + 1);
         fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
       } else {
         fmt::print(stream_, "{} {}{}⋮{}\n", indent, bold, blue, reset);
@@ -156,10 +158,9 @@ public:
   }
 
 private:
-  struct per_source {
-    std::string storage;
+  struct PerSource {
+    Arc<const SourceMap::Source> source;
     std::vector<std::string_view> lines;
-    std::string filename;
   };
 
   static auto symbol(severity s) -> char {
@@ -186,16 +187,17 @@ private:
     TENZIR_UNREACHABLE();
   }
 
-  auto source_for(size_t source_index) const -> const per_source* {
-    if (source_index >= sources_.size()) {
-      return nullptr;
+  auto source_for(SourceId source_index) const -> Option<const PerSource&> {
+    auto it = sources_lines_.find(source_index);
+    if (it == sources_lines_.end()) {
+      return None{};
     }
-    return &sources_[source_index];
+    return it->second;
   }
 
   /// Returned indices are zero-based. Returns nullopt if the offset is
   /// beyond the end of the source text.
-  static auto line_col_indices(const per_source& src, size_t offset)
+  static auto line_col_indices(const PerSource& src, size_t offset)
     -> std::optional<std::pair<size_t, size_t>> {
     auto line = size_t{0};
     auto col = offset;
@@ -214,7 +216,7 @@ private:
 
   bool first = true;
   bool error_ = false;
-  std::vector<per_source> sources_;
+  std::unordered_map<SourceId, PerSource> sources_lines_;
   std::ostream& stream_;
 };
 
@@ -222,7 +224,7 @@ private:
 
 diagnostic_annotation::diagnostic_annotation(bool primary, std::string text,
                                              location source)
-  : primary{primary}, text{std::move(text)}, source{std::move(source)} {
+  : primary{primary}, text{std::move(text)}, source{source} {
   trim_and_truncate(this->text);
 }
 
@@ -231,11 +233,10 @@ diagnostic_note::diagnostic_note(diagnostic_note_kind kind, std::string message)
   trim_and_truncate(this->message);
 }
 
-auto make_diagnostic_printer(std::vector<location_origin> origins,
+auto make_diagnostic_printer(SourceMap const& source_map,
                              color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler> {
-  return std::make_unique<diagnostic_printer>(std::move(origins), color,
-                                              stream);
+  return std::make_unique<diagnostic_printer>(source_map, color, stream);
 }
 
 auto diagnostic::builder(enum severity s, caf::error err,

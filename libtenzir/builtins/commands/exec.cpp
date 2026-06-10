@@ -11,6 +11,7 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/exec_pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/source.hpp>
 
 #include <iostream>
 #include <unistd.h>
@@ -22,9 +23,11 @@ namespace {
 void dump_diagnostics_to_stdout(std::span<const diagnostic> diagnostics,
                                 std::string filename, std::string content) {
   // Replay diagnostics to reconstruct `stderr` on `stdout`.
-  auto printer = make_diagnostic_printer(
-    std::vector<location_origin>{{std::move(filename), std::move(content)}},
-    color_diagnostics::no, std::cout);
+  auto source_map = SourceMap{};
+  source_map.add_source(SourceMap::Source{.text = std::move(content),
+                                          .origin = std::move(filename)});
+  auto printer
+    = make_diagnostic_printer(source_map, color_diagnostics::no, std::cout);
   for (auto&& diag : diagnostics) {
     printer->emit(diag);
   }
@@ -59,8 +62,7 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
     }
     if (color_mode != "auto") {
       diagnostic::error("`--color` must be one of `auto`, `always`, `never`")
-        .emit(*make_diagnostic_printer(std::vector<location_origin>{}, color,
-                                       std::cerr));
+        .emit(*make_diagnostic_printer(SourceMap{}, color, std::cerr));
       return false;
     }
   }
@@ -108,8 +110,7 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   auto filename = std::string{};
   auto content = std::string{};
   const auto& args = inv.arguments;
-  auto printer
-    = make_diagnostic_printer(std::vector<location_origin>{}, color, std::cerr);
+  auto printer = make_diagnostic_printer(SourceMap{}, color, std::cerr);
   if (args.size() != 1) {
     printer->emit(diagnostic::error("expected exactly one argument, but got {}",
                                     args.size())
@@ -136,8 +137,9 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
                                std::move(content));
     return result;
   }
-  printer = make_diagnostic_printer(
-    std::vector<location_origin>{{filename, content}}, color, std::cerr);
+  auto source_map = SourceMap{};
+  source_map.add_source(SourceMap::Source{.text = content, .origin = filename});
+  printer = make_diagnostic_printer(source_map, color, std::cerr);
   return exec_command_impl(std::move(content), *printer, cfg, sys);
 }
 
