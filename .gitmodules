@@ -1,12 +1,8 @@
+
 [submodule "plugins/web/aux/restinio"]
 	path = plugins/web/aux/restinio
 	url = https://github.com/Stiffstream/restinio
 	shallow = true
-[submodule "contrib/tenzir-plugins"]
-	path = contrib/tenzir-plugins
-	url = git@github.com:tenzir/tenzir-plugins
-	shallow = false
-	update = rebase
 [submodule "libtenzir/aux/simdjson"]
 	path = libtenzir/aux/simdjson
 	url = https://github.com/simdjson/simdjson
