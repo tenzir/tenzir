@@ -12,6 +12,7 @@
 #include "tenzir/metric_handler.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/tql/parser.hpp"
 #include "tenzir/uuid.hpp"
 
@@ -130,7 +131,8 @@ pipeline::pipeline(std::vector<operator_ptr> operators) {
 
 auto pipeline::parse(std::string source, diagnostic_handler& diag)
   -> std::optional<pipeline> {
-  auto parsed = tql::parse(std::move(source), diag);
+  auto parsed = tql::parse(
+    *Source::new_source(std::move(source), "<input>", false), diag);
   if (not parsed) {
     return {};
   }

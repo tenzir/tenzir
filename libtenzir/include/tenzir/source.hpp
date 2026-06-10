@@ -8,8 +8,10 @@
 
 #pragma once
 
+#include "tenzir/arc.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/location.hpp"
+#include "tenzir/option.hpp"
 
 #include <atomic>
 #include <string>

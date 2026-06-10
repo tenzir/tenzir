@@ -330,7 +330,7 @@ auto exec_pipeline(const Source& source, diagnostic_handler& dh,
     auto success = exec2(source, dh, cfg, sys);
     return success ? caf::expected<void>{} : ec::silent;
   }
-  auto parsed = tql::parse(source.text, dh);
+  auto parsed = tql::parse(source, dh);
   if (not parsed) {
     return ec::silent;
   }
