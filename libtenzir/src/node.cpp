@@ -613,6 +613,12 @@ auto node(node_actor::stateful_pointer<node_state> self,
         }
         rp.deliver(std::move(*response));
       };
+      // Forward the W3C trace context to the handler. We inject it here, after
+      // the metrics closure captured its own copy of the parameters, so it does
+      // not interfere with the typed api metrics.
+      if (not desc.traceparent.empty()) {
+        (*params)["traceparent"] = desc.traceparent;
+      }
       self->mail(atom::http_request_v, endpoint.endpoint_id, *params)
         .request(handler, caf::infinite)
         .then(
