@@ -297,8 +297,7 @@ load_symbols2(const detail::stable_set<std::filesystem::path>& module_dirs,
       }
     }
   }
-  auto dh
-    = make_diagnostic_printer(SourceMap{}, color_diagnostics::yes, std::cerr);
+  auto dh = make_diagnostic_printer(color_diagnostics::yes, std::cerr);
   struct visitor {
     visitor(symbol_map2& res, diagnostic_handler& dh) : res{res}, dh{dh} {
     }

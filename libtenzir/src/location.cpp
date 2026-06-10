@@ -59,7 +59,7 @@ auto SourceMap::source(SourceId id) const -> Option<const Source&> {
 }
 
 auto SourceMap::call_site(CallSiteId id) const -> Option<location> {
-  if (id < 1 or id >= impl_->call_sites.size()) {
+  if (id < 1 or id > impl_->call_sites.size()) {
     return None{};
   }
   return impl_->call_sites[id - 1];

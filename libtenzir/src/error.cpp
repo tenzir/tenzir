@@ -119,7 +119,7 @@ auto render(const caf::error& err, bool pretty_diagnostics) -> std::string {
                         and detail::getenv("NO_COLOR").value_or("").empty())
                          ? color_diagnostics::yes
                          : color_diagnostics::no;
-    auto printer = make_diagnostic_printer(SourceMap{}, color, oss);
+    auto printer = make_diagnostic_printer(color, oss);
     auto ctx = err.context();
     caf::message_handler{
       [&](const diagnostic& diag) {

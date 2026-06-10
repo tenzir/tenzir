@@ -13,6 +13,7 @@
 #include "tenzir/detail/string.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/ref.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
 #include "tenzir/source.hpp"
 
@@ -22,7 +23,9 @@
 #include <fmt/color.h>
 
 #include <iostream>
+#include <span>
 #include <string_view>
+#include <unordered_map>
 
 namespace tenzir {
 
@@ -69,16 +72,7 @@ class diagnostic_printer final : public diagnostic_handler, private colors {
 public:
   diagnostic_printer(SourceMap const& source_map, color_diagnostics color,
                      std::ostream& stream)
-    : colors{colors::make(color)}, stream_{stream} {
-    for (const auto& source : source_map.sources()) {
-      // The views returned by `split` point into the `Arc`'d source text,
-      // which is stable because we keep the `Arc` alive in `per_source`.
-      auto lines = detail::split(source->text, "\n");
-      sources_lines_.try_emplace(source->index,
-                                 PerSource{source, std::move(lines)});
-    }
-    auto call_sites = source_map.call_sites();
-    call_sites_.assign(call_sites.begin(), call_sites.end());
+    : colors{colors::make(color)}, source_map_{source_map}, stream_{stream} {
   }
 
   void emit(diagnostic diag) override {
@@ -88,15 +82,39 @@ public:
     // TODO: Do not print the same line multiple times. Merge annotations instead.
     fmt::print(stream_, "{}{}{}{}: {}{}\n", bold, color(diag.severity),
                diag.severity, uncolor, diag.message, reset);
+    // Sources are resolved against the source map on every emit because the
+    // map may change during the printer's lifetime. Sources without pre-split
+    // lines are split here; the cache keeps those splits alive for the
+    // duration of this call. The views point into the source text, which the
+    // `Arc` in the source map keeps stable.
+    auto split_cache
+      = std::unordered_map<SourceId, std::vector<std::string_view>>{};
+    auto resolve = [&](SourceId id) -> Option<ResolvedSource> {
+      auto source = source_map_->source(id);
+      if (not source) {
+        return None{};
+      }
+      if (source->lines) {
+        return ResolvedSource{&*source, *source->lines};
+      }
+      auto [it, inserted] = split_cache.try_emplace(id);
+      if (inserted) {
+        it->second = detail::split(source->text, "\n");
+      }
+      return ResolvedSource{&*source, it->second};
+    };
     // Resolve the call-site chain of the primary location, so that we can
     // show where the failing operator was called from.
     auto call_chain = std::vector<location>{};
     if (not diag.annotations.empty()) {
       auto id = diag.annotations.front().source.callsite_index;
-      while (id != 0 and id <= call_sites_.size()) {
-        auto call_site = call_sites_[id - 1];
-        call_chain.push_back(call_site);
-        id = call_site.callsite_index;
+      while (id != 0) {
+        auto call_site = source_map_->call_site(id);
+        if (not call_site) {
+          break;
+        }
+        call_chain.push_back(*call_site);
+        id = call_site->callsite_index;
         // Defensive limit in case of malformed (cyclic) call-site data.
         if (call_chain.size() > 100) {
           break;
@@ -105,29 +123,29 @@ public:
     }
     auto indent_width = size_t{0};
     for (auto& annotation : diag.annotations) {
-      auto src = source_for(annotation.source.source_index);
+      auto src = resolve(annotation.source.source_index);
       if (not src) {
         // TODO: This is a hack for the case where we don't have the information.
         break;
       }
-      if (auto lc = line_col_indices(*src, annotation.source.begin)) {
+      if (auto lc = line_col_indices(src->lines, annotation.source.begin)) {
         auto [line, col] = *lc;
         indent_width = std::max(indent_width, std::to_string(line + 1).size());
       }
     }
     for (auto& call_site : call_chain) {
-      auto src = source_for(call_site.source_index);
+      auto src = resolve(call_site.source_index);
       if (not src) {
         continue;
       }
-      if (auto lc = line_col_indices(*src, call_site.begin)) {
+      if (auto lc = line_col_indices(src->lines, call_site.begin)) {
         auto [line, col] = *lc;
         indent_width = std::max(indent_width, std::to_string(line + 1).size());
       }
     }
     auto indent = std::string(indent_width, ' ');
     for (auto& annotation : diag.annotations) {
-      auto src = source_for(annotation.source.source_index);
+      auto src = resolve(annotation.source.source_index);
       if (not src) {
         // TODO: This is a hack for the case where we don't have the information.
         break;
@@ -136,7 +154,7 @@ public:
         TENZIR_VERBOSE("annotation does not have source: {:?}", annotation);
         continue;
       }
-      auto lc = line_col_indices(*src, annotation.source.begin);
+      auto lc = line_col_indices(src->lines, annotation.source.begin);
       if (not lc) {
         // Source offset is beyond the available source text. This can
         // happen when diagnostics reference a modified definition.
@@ -168,11 +186,11 @@ public:
       }
     }
     for (auto& call_site : call_chain) {
-      auto src = source_for(call_site.source_index);
+      auto src = resolve(call_site.source_index);
       if (not src) {
         continue;
       }
-      auto lc = line_col_indices(*src, call_site.begin);
+      auto lc = line_col_indices(src->lines, call_site.begin);
       if (not lc) {
         continue;
       }
@@ -209,9 +227,10 @@ public:
   }
 
 private:
-  struct PerSource {
-    Arc<const SourceMap::Source> source;
-    std::vector<std::string_view> lines;
+  /// A source resolved for the duration of a single `emit()` call.
+  struct ResolvedSource {
+    const SourceMap::Source* source;
+    std::span<const std::string_view> lines;
   };
 
   static auto symbol(severity s) -> char {
@@ -238,28 +257,21 @@ private:
     TENZIR_UNREACHABLE();
   }
 
-  auto source_for(SourceId source_index) const -> Option<const PerSource&> {
-    auto it = sources_lines_.find(source_index);
-    if (it == sources_lines_.end()) {
-      return None{};
-    }
-    return it->second;
-  }
-
   /// Returned indices are zero-based. Returns nullopt if the offset is
   /// beyond the end of the source text.
-  static auto line_col_indices(const PerSource& src, size_t offset)
+  static auto
+  line_col_indices(std::span<const std::string_view> lines, size_t offset)
     -> std::optional<std::pair<size_t, size_t>> {
     auto line = size_t{0};
     auto col = offset;
     while (true) {
-      if (line >= src.lines.size()) {
+      if (line >= lines.size()) {
         return std::nullopt;
       }
-      if (col <= src.lines[line].size()) {
+      if (col <= lines[line].size()) {
         break;
       }
-      col -= src.lines[line].size() + 1;
+      col -= lines[line].size() + 1;
       line += 1;
     }
     return std::pair{line, col};
@@ -267,8 +279,7 @@ private:
 
   bool first = true;
   bool error_ = false;
-  std::vector<location> call_sites_;
-  std::unordered_map<SourceId, PerSource> sources_lines_;
+  Ref<const SourceMap> source_map_;
   std::ostream& stream_;
 };
 
@@ -289,6 +300,12 @@ auto make_diagnostic_printer(SourceMap const& source_map,
                              color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler> {
   return std::make_unique<diagnostic_printer>(source_map, color, stream);
+}
+
+auto make_diagnostic_printer(color_diagnostics color, std::ostream& stream)
+  -> std::unique_ptr<diagnostic_handler> {
+  static const auto empty = SourceMap{};
+  return std::make_unique<diagnostic_printer>(empty, color, stream);
 }
 
 auto diagnostic::builder(enum severity s, caf::error err,

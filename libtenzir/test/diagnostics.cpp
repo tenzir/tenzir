@@ -18,46 +18,36 @@ namespace tenzir {
 
 namespace {
 
-/// The main source, registered with id `0`:
-/// ```
-/// from {}
-/// outer
-/// ```
-constexpr auto main_text = std::string_view{"from {}\nouter\n"};
-
 /// The location of `outer` in the main source (line 2, column 1).
 constexpr auto outer_call = location{8, 13, 0, 0};
 
-/// The body of the `outer` operator, registered with id `1`:
-/// ```
-/// inner
-/// ```
-constexpr auto outer_body_text = std::string_view{"inner\n"};
+struct fixture {
+  SourceMap map;
+  /// The id of the body of the `outer` operator.
+  SourceId outer_id;
+  /// The id of the body of the `inner` operator.
+  SourceId inner_id;
+};
 
-/// The body of the `inner` operator, registered with id `2`:
-/// ```
-/// assert this == 42
-/// ```
-constexpr auto inner_body_text = std::string_view{"assert this == 42\n"};
-
-auto make_source_map() -> SourceMap {
+/// Creates a source map modeling this scenario:
+/// - The main source (id `0`) calls `outer` on line 2.
+/// - The body of `outer` calls `inner`.
+/// - The body of `inner` contains a failing `assert`.
+///
+/// The sources mix eager and lazy line splitting to cover both paths in the
+/// printer.
+auto make_fixture() -> fixture {
   auto map = SourceMap{};
-  map.add_source(SourceMap::Source{
-    .index = 0,
-    .text = std::string{main_text},
-    .origin = "<input>",
-  });
-  map.add_source(SourceMap::Source{
-    .index = 1,
-    .text = std::string{outer_body_text},
-    .origin = "<outer>",
-  });
-  map.add_source(SourceMap::Source{
-    .index = 2,
-    .text = std::string{inner_body_text},
-    .origin = "<inner>",
-  });
-  return map;
+  map.add_source(
+    SourceMap::Source::main_source("from {}\nouter\n", "<input>", true));
+  auto outer = SourceMap::Source::new_source("inner\n", "<outer>", false);
+  auto inner
+    = SourceMap::Source::new_source("assert this == 42\n", "<inner>", true);
+  auto outer_id = outer->index;
+  auto inner_id = inner->index;
+  map.add_source(std::move(outer));
+  map.add_source(std::move(inner));
+  return fixture{std::move(map), outer_id, inner_id};
 }
 
 auto print(const SourceMap& map, diagnostic diag) -> std::string {
@@ -70,7 +60,7 @@ auto print(const SourceMap& map, diagnostic diag) -> std::string {
 } // namespace
 
 TEST("diagnostic printer - no call site means no call stack") {
-  auto map = make_source_map();
+  auto [map, outer_src, inner_src] = make_fixture();
   auto diag
     = diagnostic::error("oops").primary(location{0, 4, 0, 0}, "here").done();
   CHECK_EQUAL(print(map, std::move(diag)), R"(error: oops
@@ -83,12 +73,12 @@ TEST("diagnostic printer - no call site means no call stack") {
 }
 
 TEST("diagnostic printer - single call site") {
-  auto map = make_source_map();
+  auto [map, outer_src, inner_src] = make_fixture();
   auto call_id = map.add_call_site(outer_call);
   // The diagnostic points at `assert` inside the body of `inner`, which was
   // called from `outer` in the main source.
   auto diag = diagnostic::error("assertion failed")
-                .primary(location{0, 6, 2, call_id}, "here")
+                .primary(location{0, 6, inner_src, call_id}, "here")
                 .done();
   CHECK_EQUAL(print(map, std::move(diag)), R"(error: assertion failed
  --> <inner>:1:1
@@ -105,13 +95,14 @@ TEST("diagnostic printer - single call site") {
 }
 
 TEST("diagnostic printer - nested call sites print innermost first") {
-  auto map = make_source_map();
+  auto [map, outer_src, inner_src] = make_fixture();
   // `outer` was called from the main source, top-level.
-  auto outer_id = map.add_call_site(outer_call);
+  auto outer_call_id = map.add_call_site(outer_call);
   // `inner` was called from within the body of `outer`.
-  auto inner_id = map.add_call_site(location{0, 5, 1, outer_id});
+  auto inner_call_id
+    = map.add_call_site(location{0, 5, outer_src, outer_call_id});
   auto diag = diagnostic::error("assertion failed")
-                .primary(location{0, 6, 2, inner_id}, "here")
+                .primary(location{0, 6, inner_src, inner_call_id}, "here")
                 .done();
   CHECK_EQUAL(print(map, std::move(diag)), R"(error: assertion failed
  --> <inner>:1:1
@@ -133,12 +124,12 @@ TEST("diagnostic printer - nested call sites print innermost first") {
 }
 
 TEST("diagnostic printer - call stack follows the primary annotation") {
-  auto map = make_source_map();
+  auto [map, outer_src, inner_src] = make_fixture();
   auto call_id = map.add_call_site(outer_call);
   // Only the first annotation's chain is used; the secondary annotation has
   // no call site and must not suppress or duplicate the call stack.
   auto diag = diagnostic::error("assertion failed")
-                .primary(location{0, 6, 2, call_id}, "here")
+                .primary(location{0, 6, inner_src, call_id}, "here")
                 .secondary(location{0, 4, 0, 0}, "related")
                 .done();
   CHECK_EQUAL(print(map, std::move(diag)), R"(error: assertion failed
@@ -159,10 +150,11 @@ TEST("diagnostic printer - call stack follows the primary annotation") {
 }
 
 TEST("diagnostic printer - out-of-bounds call site is ignored") {
-  auto map = make_source_map();
+  auto [map, outer_src, inner_src] = make_fixture();
   // No call sites registered, but the location claims one.
-  auto diag
-    = diagnostic::error("oops").primary(location{0, 6, 2, 42}, "here").done();
+  auto diag = diagnostic::error("oops")
+                .primary(location{0, 6, inner_src, 42}, "here")
+                .done();
   CHECK_EQUAL(print(map, std::move(diag)), R"(error: oops
  --> <inner>:1:1
   |
@@ -173,11 +165,11 @@ TEST("diagnostic printer - out-of-bounds call site is ignored") {
 }
 
 TEST("diagnostic printer - call site with unknown source is skipped") {
-  auto map = make_source_map();
+  auto [map, outer_src, inner_src] = make_fixture();
   // The call site references a source that is not part of the map.
-  auto call_id = map.add_call_site(location{0, 5, 99, 0});
+  auto call_id = map.add_call_site(location{0, 5, 9999999, 0});
   auto diag = diagnostic::error("oops")
-                .primary(location{0, 6, 2, call_id}, "here")
+                .primary(location{0, 6, inner_src, call_id}, "here")
                 .done();
   CHECK_EQUAL(print(map, std::move(diag)), R"(error: oops
  --> <inner>:1:1
@@ -189,11 +181,11 @@ TEST("diagnostic printer - call site with unknown source is skipped") {
 }
 
 TEST("diagnostic printer - call site beyond source text is skipped") {
-  auto map = make_source_map();
+  auto [map, outer_src, inner_src] = make_fixture();
   // The call site offset lies beyond the end of the main source text.
   auto call_id = map.add_call_site(location{1000, 1005, 0, 0});
   auto diag = diagnostic::error("oops")
-                .primary(location{0, 6, 2, call_id}, "here")
+                .primary(location{0, 6, inner_src, call_id}, "here")
                 .done();
   CHECK_EQUAL(print(map, std::move(diag)), R"(error: oops
  --> <inner>:1:1
@@ -204,14 +196,51 @@ TEST("diagnostic printer - call site beyond source text is skipped") {
 )");
 }
 
+TEST("diagnostic printer - reflects changes to the source map") {
+  auto map = SourceMap{};
+  auto stream = std::stringstream{};
+  auto printer = make_diagnostic_printer(map, color_diagnostics::no, stream);
+  // Without any sources, only the message is printed.
+  printer->emit(
+    diagnostic::error("oops").primary(location{0, 4, 0, 0}, "here").done());
+  CHECK_EQUAL(stream.str(), "error: oops\n");
+  // Sources and call sites registered after the printer was created are
+  // picked up by subsequent emits of the same printer.
+  map.add_source(
+    SourceMap::Source::main_source("from {}\nouter\n", "<input>", false));
+  auto inner
+    = SourceMap::Source::new_source("assert this == 42\n", "<inner>", false);
+  auto inner_src = inner->index;
+  map.add_source(std::move(inner));
+  auto call_id = map.add_call_site(outer_call);
+  stream.str("");
+  printer->emit(diagnostic::error("assertion failed")
+                  .primary(location{0, 6, inner_src, call_id}, "here")
+                  .done());
+  // The printer separates consecutive diagnostics with a blank line.
+  CHECK_EQUAL(stream.str(), R"(
+error: assertion failed
+ --> <inner>:1:1
+  |
+1 | assert this == 42
+  | ^^^^^^ here
+  |
+ --> <input>:2:1
+  |
+2 | outer
+  | ----- called from here
+  |
+)");
+}
+
 TEST("diagnostic printer - cyclic call sites terminate") {
-  auto map = make_source_map();
+  auto [map, outer_src, inner_src] = make_fixture();
   // A call site that names itself as its own parent must not loop forever.
   // The printer cuts the chain off after 101 entries.
   auto call_id = map.add_call_site(location{8, 13, 0, 1});
   REQUIRE_EQUAL(call_id, CallSiteId{1});
   auto diag = diagnostic::error("oops")
-                .primary(location{0, 6, 2, call_id}, "here")
+                .primary(location{0, 6, inner_src, call_id}, "here")
                 .done();
   auto expected = std::string{R"(error: oops
  --> <inner>:1:1

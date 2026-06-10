@@ -62,7 +62,7 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
     }
     if (color_mode != "auto") {
       diagnostic::error("`--color` must be one of `auto`, `always`, `never`")
-        .emit(*make_diagnostic_printer(SourceMap{}, color, std::cerr));
+        .emit(*make_diagnostic_printer(color, std::cerr));
       return false;
     }
   }
@@ -110,7 +110,7 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   auto filename = std::string{};
   auto content = std::string{};
   const auto& args = inv.arguments;
-  auto printer = make_diagnostic_printer(SourceMap{}, color, std::cerr);
+  auto printer = make_diagnostic_printer(color, std::cerr);
   if (args.size() != 1) {
     printer->emit(diagnostic::error("expected exactly one argument, but got {}",
                                     args.size())

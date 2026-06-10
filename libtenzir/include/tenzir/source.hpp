@@ -21,7 +21,7 @@ private:
   struct Token {};
 
 public:
-  /// Creates a new imutable Source object with a unique ID in it.
+  /// Creates a new immutable Source object with a unique ID in it.
   static auto new_source(std::string text, std::string origin, bool eager_split)
     -> Arc<const Source> {
     static auto id_generator = std::atomic<SourceId>{1};
@@ -50,7 +50,7 @@ public:
     : index{index},
       text{std::move(text)},
       origin{std::move(origin)},
-      lines{maybe_split(text, eager_split)} {
+      lines{maybe_split(this->text, eager_split)} {
   }
 
 private:

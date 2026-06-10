@@ -477,8 +477,23 @@ struct location_origin {
 /// `source_map`. The source registered with id `i` supplies the origin and
 /// source text for locations whose `source_index` equals `i`. An empty
 /// source map disables source-context rendering.
+///
+/// The printer keeps a reference to `source_map`, which must outlive the
+/// returned handler. The map is consulted anew on every emitted diagnostic,
+/// so changes to it are picked up by subsequent emits.
 auto make_diagnostic_printer(SourceMap const& source_map,
                              color_diagnostics color, std::ostream& stream)
+  -> std::unique_ptr<diagnostic_handler>;
+
+/// Temporary source maps would dangle; use the overload without a source map
+/// instead.
+auto make_diagnostic_printer(SourceMap&& source_map, color_diagnostics color,
+                             std::ostream& stream)
+  -> std::unique_ptr<diagnostic_handler>
+  = delete;
+
+/// Creates a diagnostic printer without source-context rendering.
+auto make_diagnostic_printer(color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler>;
 
 // TODO: Return this when emitting an error.

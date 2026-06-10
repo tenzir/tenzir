@@ -73,14 +73,14 @@ auto enrich_with_actor(tenzir::diagnostic diag, caf::scheduled_actor* actor)
 
 auto emit_diagnostic(tenzir::diagnostic diag, bool is_server) -> void {
   if (not is_server) {
-    auto dh = make_diagnostic_printer(
-      tenzir::SourceMap{}, tenzir::color_diagnostics::yes, std::cerr);
+    auto dh
+      = make_diagnostic_printer(tenzir::color_diagnostics::yes, std::cerr);
     dh->emit(diag);
   } else {
     auto buffer = std::stringstream{};
     buffer << "internal error\n";
-    auto printer = make_diagnostic_printer(
-      tenzir::SourceMap{}, tenzir::color_diagnostics::no, buffer);
+    auto printer
+      = make_diagnostic_printer(tenzir::color_diagnostics::no, buffer);
     printer->emit(diag);
     auto string = std::move(buffer).str();
     if (not string.empty() and string.back() == '\n') {
@@ -304,8 +304,7 @@ auto main(int argc, char** argv) -> int try {
       TENZIR_ERROR("could not load `tenzir.operators`: invalid record");
       return EXIT_FAILURE;
     }
-    auto dh
-      = make_diagnostic_printer(SourceMap{}, color_diagnostics::yes, std::cerr);
+    auto dh = make_diagnostic_printer(color_diagnostics::yes, std::cerr);
     auto provider = session_provider::make(*dh);
     auto ctx = provider.as_session();
     struct config_udo {
