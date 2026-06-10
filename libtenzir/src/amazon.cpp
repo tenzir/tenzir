@@ -215,6 +215,7 @@ SignedHttpClient::SignedHttpClient(SignedHttpClientConfig config)
   pool_config.request_timeout = config.request_timeout;
   pool_config.max_retry_count = config.max_retry_count;
   pool_config.retry_delay = config.retry_delay;
+  pool_config.max_concurrent_streams_per_connection = 1;
   pool_ = HttpPool::make(std::move(config.io_executor), endpoint_,
                          std::move(pool_config));
 }
