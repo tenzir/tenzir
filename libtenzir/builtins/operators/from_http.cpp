@@ -19,6 +19,7 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/format_utils.hpp>
 #include <tenzir/http.hpp>
+#include <tenzir/http_auth.hpp>
 #include <tenzir/http_pool.hpp>
 #include <tenzir/http_proxy_connect.hpp>
 #include <tenzir/ir.hpp>
@@ -73,6 +74,7 @@ struct FromHttpArgs {
   Option<located<std::string>> method;
   Option<located<data>> body;
   Option<located<data>> headers;
+  Option<located<std::string>> auth;
   Option<located<data>> tls;
   Option<located<duration>> timeout;
   Option<ast::field_path> error_field;
@@ -694,16 +696,22 @@ struct retryable_http_response : std::runtime_error {
   blob body;
 };
 
+struct AuthRetryResponse : std::runtime_error {
+  AuthRetryResponse() : std::runtime_error{"auth retry"} {
+  }
+};
+
 // Static fetch task that runs on the Proxygen EventBase thread. All
 // results are communicated through the message queue; no operator members
 // are touched from this task.
 auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
-           FetchConfig config, bool buffer_retryable_body, Arc<MessageQueue> mq)
-  -> Task<void> {
+           Option<std::string> auth_name, OpCtx& ctx, FetchConfig config,
+           bool buffer_retryable_body, Arc<MessageQueue> mq) -> Task<void> {
   co_return co_await folly::coro::co_withExecutor(
     evb,
     folly::coro::co_invoke([evb, url = std::move(url),
                             request = std::move(request),
+                            auth_name = std::move(auth_name), &ctx,
                             config = std::move(config), buffer_retryable_body,
                             mq = std::move(mq)]() mutable -> Task<void> {
       auto result = co_await folly::coro::co_awaitTry([&]() -> Task<void> {
@@ -723,6 +731,8 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
         // A diagnostic warning is emitted before each retry attempt.
         auto emitted_messages = false;
         auto retries_done = uint32_t{0};
+        auto auth_retry_done = false;
+        auto needs_refresh = false;
         co_await folly::coro::retryWhen(
           [&]() -> Task<void> {
             emitted_messages = false;
@@ -734,12 +744,26 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
             auto proxy_request = co_await make_http_proxy_request(
               *evb, host, url.getPort(), conn_params, sess_params,
               config.connection_timeout, is_secure);
+            auto headers = request.headers;
+            if (auth_name) {
+              auto auth
+                = co_await fetch_authorization(*auth_name, ctx, needs_refresh);
+              needs_refresh = false;
+              if (not auth) {
+                co_yield folly::coro::co_error(
+                  folly::make_exception_wrapper<std::runtime_error>(
+                    "failed to authorize HTTP request"));
+              }
+              for (auto const& header : auth->headers) {
+                http::set(headers, header.name, header.value);
+              }
+            }
             // Build a streaming reader that feeds messages into the queue.
             auto reader = proxygen::coro::HTTPSourceReader{};
             Option<retryable_http_response> retryable_response;
             reader
               .onHeadersAsync([mq, &emitted_messages, &retryable_response,
-                               buffer_retryable_body](
+                               buffer_retryable_body, auth_name](
                                 std::unique_ptr<proxygen::HTTPMessage> msg,
                                 bool is_final,
                                 bool) mutable -> folly::coro::Task<bool> {
@@ -754,6 +778,9 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
                     hdrs.emplace_back(k, v);
                   });
                 auto status = msg->getStatusCode();
+                if (status == 401 and auth_name) {
+                  throw AuthRetryResponse{};
+                }
                 if (http::is_retryable_http_status(status)) {
                   auto retry_after = http::parse_retry_after(
                     msg->getHeaders().getSingleOrEmpty("Retry-After"));
@@ -792,9 +819,10 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
               body_buf = folly::IOBuf::copyBuffer(request.body.data(),
                                                   request.body.size());
             }
-            auto req_source = build_request_source(
-              url, request.method, request.headers, std::move(body_buf),
-              proxy_request.target_form(), proxy_request.proxy());
+            auto req_source = build_request_source(url, request.method, headers,
+                                                   std::move(body_buf),
+                                                   proxy_request.target_form(),
+                                                   proxy_request.proxy());
             co_await proxy_request.send(
               std::move(req_source), std::move(reader), config.request_timeout);
             if (retryable_response) {
@@ -809,6 +837,19 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
               co_yield folly::coro::co_error(std::move(ew));
             }
             auto retryable = false;
+            auto auth_retry = ew.is_compatible_with<AuthRetryResponse>();
+            auto retry_after = Option<std::chrono::seconds>{};
+            auto reason = std::string{"connection error"};
+            if (auth_retry) {
+              if (auth_retry_done) {
+                co_yield folly::coro::co_error(std::move(ew));
+              }
+              auth_retry_done = true;
+              needs_refresh = true;
+              retryable = true;
+              reason = "HTTP error 401";
+              retry_after = std::chrono::seconds{0};
+            }
             if (ew.is_compatible_with<folly::AsyncSocketException>()) {
               retryable = true;
             }
@@ -818,11 +859,11 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
             ew.with_exception([&](proxygen::coro::HTTPError const& err) {
               retryable = http::is_retryable_http_error(err.code);
             });
-            if (not retryable or retries_done >= config.max_retry_count) {
+            if (not retryable
+                or (not auth_retry
+                    and retries_done >= config.max_retry_count)) {
               co_yield folly::coro::co_error(std::move(ew));
             }
-            auto retry_after = Option<std::chrono::seconds>{};
-            auto reason = std::string{"connection error"};
             ew.with_exception([&](retryable_http_response const& e) {
               reason = fmt::format("HTTP error {}", e.status_code);
               retry_after = e.retry_after;
@@ -1143,9 +1184,10 @@ private:
                    MetricsLabel::FixedString::truncate(parsed_url.getHost())},
       MetricsDirection::read, MetricsVisibility::external_,
       MetricsUnit::events);
-    ctx.spawn_task(fetch(evb_, std::move(parsed_url), std::move(request),
-                         fetch_config_, static_cast<bool>(args_.error_field),
-                         message_queue_));
+    ctx.spawn_task(fetch(
+      evb_, std::move(parsed_url), std::move(request),
+      args_.auth ? Option<std::string>{args_.auth->inner} : None{}, ctx,
+      fetch_config_, static_cast<bool>(args_.error_field), message_queue_));
     co_return;
   }
 
@@ -1262,6 +1304,7 @@ public:
       = d.named("max_retry_count", &FromHttpArgs::max_retry_count);
     auto retry_delay_arg = d.named("retry_delay", &FromHttpArgs::retry_delay);
     auto encode_arg = d.named("encode", &FromHttpArgs::encode);
+    auto auth_arg = d.named("auth", &FromHttpArgs::auth);
     auto server_arg = d.named("server", &FromHttpArgs::server);
     auto parser_arg
       = d.pipeline(&FromHttpArgs::parser, SubOptimize::from_downstream,
@@ -1337,6 +1380,11 @@ public:
             }
           }
         }
+      }
+      if (auto auth = ctx.get(auth_arg); auth and auth->inner.empty()) {
+        diagnostic::error("`auth` must not be empty")
+          .primary(auth->source)
+          .emit(ctx);
       }
       // Validate method when explicitly provided.
       if (auto method = ctx.get(method_arg)) {

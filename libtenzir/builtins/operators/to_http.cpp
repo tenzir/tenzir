@@ -15,6 +15,7 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/http.hpp>
+#include <tenzir/http_auth.hpp>
 #include <tenzir/http_pool.hpp>
 #include <tenzir/http_proxy_connect.hpp>
 #include <tenzir/ir.hpp>
@@ -72,6 +73,7 @@ struct ToHttpArgs {
   located<secret> url;
   Option<located<std::string>> method;
   Option<located<data>> headers;
+  Option<located<std::string>> auth;
   Option<located<data>> tls;
   Option<located<duration>> timeout;
   Option<located<duration>> connection_timeout;
@@ -406,9 +408,9 @@ private:
   auto start_request_task(OpCtx& ctx) -> void {
     TENZIR_ASSERT(body_rx_);
     request_started_ = true;
-    ctx.spawn_task([this, dh = &ctx.dh(),
+    ctx.spawn_task([this, ctx = &ctx, dh = &ctx.dh(),
                     body_rx = std::move(*body_rx_)]() mutable -> Task<void> {
-      co_await run_request(*dh, std::move(body_rx));
+      co_await run_request(*ctx, *dh, std::move(body_rx));
     });
     body_rx_.reset();
   }
@@ -416,10 +418,10 @@ private:
   auto start_buffered_request_task(OpCtx& ctx) -> void {
     request_started_ = true;
     auto body = buffered_body_.move();
-    ctx.spawn_task(
-      [this, dh = &ctx.dh(), body = std::move(body)]() mutable -> Task<void> {
-        co_await run_buffered_request(*dh, std::move(body));
-      });
+    ctx.spawn_task([this, ctx = &ctx, dh = &ctx.dh(),
+                    body = std::move(body)]() mutable -> Task<void> {
+      co_await run_buffered_request(*ctx, *dh, std::move(body));
+    });
   }
 
   auto begin_draining(OpCtx& ctx) -> Task<void> {
@@ -436,24 +438,45 @@ private:
     co_await pipeline.close();
   }
 
-  auto run_request(diagnostic_handler& dh, Receiver<chunk_ptr> body_rx_val)
-    -> Task<void> {
+  auto run_request(OpCtx& ctx, diagnostic_handler& dh,
+                   Receiver<chunk_ptr> body_rx_val) -> Task<void> {
     auto max_retries = get_max_retry_count();
     auto attempt = uint32_t{0};
     auto response = http::Response{};
     auto body_rx = Option<Receiver<chunk_ptr>>{std::move(body_rx_val)};
+    auto auth_retry_done = false;
+    auto needs_refresh = false;
     while (true) {
-      auto attempt_result = co_await try_single_request(body_rx);
+      auto attempt_result = co_await try_single_request(
+        ctx, body_rx, needs_refresh, auth_retry_done);
+      needs_refresh = false;
       if (attempt_result.is_ok()) {
         response = std::move(attempt_result).unwrap();
+        if (response.status_code == 401 and args_.auth
+            and not auth_retry_done) {
+          auth_retry_done = true;
+          needs_refresh = true;
+          continue;
+        }
         break;
       }
       auto error = std::move(attempt_result).unwrap_err();
       auto error_message = scrub_errno(error.what().toStdString());
       auto retry = get_retry_info(error);
+      auto is_auth_retry = false;
+      error.with_exception([&](retryable_http_response const& e) {
+        if (e.status_code == 401 and args_.auth and not auth_retry_done) {
+          is_auth_retry = true;
+        }
+      });
       // Once the receiver has been moved into the streaming source,
       // the body cannot be replayed and retries are impossible.
-      if (not body_rx or not retry or attempt >= max_retries) {
+      if (is_auth_retry) {
+        auth_retry_done = true;
+        needs_refresh = true;
+      }
+      if (not body_rx or not retry
+          or (attempt >= max_retries and not is_auth_retry)) {
         diagnostic::error("HTTP request to `{}` failed: {}", url_,
                           error_message)
           .primary(args_.operator_location)
@@ -476,13 +499,14 @@ private:
   }
 
   auto make_request_message(HttpRequestTargetForm target_form,
-                            Option<proxy_url> const& proxy) const
+                            Option<proxy_url> const& proxy,
+                            Headers const& headers) const
     -> std::unique_ptr<proxygen::HTTPMessage> {
     auto msg = std::make_unique<proxygen::HTTPMessage>();
     msg->setURL(make_proxy_request_target(parsed_url_, target_form));
     msg->setMethod(get_method());
     msg->setSecure(parsed_url_.isSecure());
-    for (auto const& [name, value] : headers_) {
+    for (auto const& [name, value] : headers) {
       msg->getHeaders().add(name, value);
     }
     add_forward_proxy_authorization(msg->getHeaders(), target_form, proxy);
@@ -496,19 +520,29 @@ private:
   /// Attempts a single HTTP request. On success, moves `body_rx` into the
   /// streaming source (leaving it empty). On connection failure before
   /// the source is created, `body_rx` remains valid for a retry.
-  auto try_single_request(Option<Receiver<chunk_ptr>>& body_rx)
+  auto try_single_request(OpCtx& ctx, Option<Receiver<chunk_ptr>>& body_rx,
+                          bool needs_refresh, bool auth_retry_done)
     -> Task<Result<http::Response, folly::exception_wrapper>> {
     auto attempt_res = co_await async_try(folly::coro::co_withExecutor(
       folly::Executor::KeepAlive<>{evb_},
-      folly::coro::co_invoke([this, &body_rx]() -> Task<http::Response> {
+      folly::coro::co_invoke([this, &ctx, &body_rx, needs_refresh,
+                              auth_retry_done]() -> Task<http::Response> {
         // Create a one-shot request handle, routing through the configured
         // HTTP proxy when one applies.
         auto proxy_request = co_await make_http_proxy_request(
           *evb_, parsed_url_.getHost(), parsed_url_.getPort(), conn_params_,
           proxygen::coro::HTTPCoroConnector::defaultSessionParams(),
           get_connection_timeout(), parsed_url_.isSecure());
+        auto headers = headers_;
+        if (auto auth_result
+            = co_await authorize_headers(ctx, headers, needs_refresh);
+            auth_result.is_error()) {
+          co_yield folly::coro::co_error(
+            folly::make_exception_wrapper<std::runtime_error>(
+              "failed to authorize HTTP request"));
+        }
         auto msg = make_request_message(proxy_request.target_form(),
-                                        proxy_request.proxy());
+                                        proxy_request.proxy(), headers);
         // Create the streaming source. If the request fails before the
         // source starts reading body events, the receiver can still be reused
         // for a retry.
@@ -526,6 +560,17 @@ private:
             std::move(request_result).unwrap_err());
         }
         auto http_response = http::to_http_response(resp);
+        if (http_response.status_code == 401 and args_.auth
+            and not auth_retry_done) {
+          if (auto retry_rx = source.take_receiver_for_retry()) {
+            body_rx = std::move(retry_rx);
+          }
+          throw retryable_http_response{
+            http_response.status_code,
+            http::parse_retry_after(
+              resp.headers->getHeaders().getSingleOrEmpty("Retry-After")),
+          };
+        }
         if (not source.body_started()) {
           if (http::is_retryable_http_status(http_response.status_code)) {
             if (auto retry_rx = source.take_receiver_for_retry()) {
@@ -553,21 +598,41 @@ private:
     co_return std::move(attempt_res).unwrap();
   }
 
-  auto run_buffered_request(diagnostic_handler& dh,
+  auto run_buffered_request(OpCtx& ctx, diagnostic_handler& dh,
                             std::unique_ptr<folly::IOBuf> body) -> Task<void> {
     auto max_retries = get_max_retry_count();
     auto attempt = uint32_t{0};
     auto response = http::Response{};
+    auto auth_retry_done = false;
+    auto needs_refresh = false;
     while (true) {
-      auto attempt_result = co_await try_single_buffered_request(body->clone());
+      auto attempt_result = co_await try_single_buffered_request(
+        ctx, body->clone(), needs_refresh, auth_retry_done);
+      needs_refresh = false;
       if (attempt_result.is_ok()) {
         response = std::move(attempt_result).unwrap();
+        if (response.status_code == 401 and args_.auth
+            and not auth_retry_done) {
+          auth_retry_done = true;
+          needs_refresh = true;
+          continue;
+        }
         break;
       }
       auto error = std::move(attempt_result).unwrap_err();
       auto error_message = scrub_errno(error.what().toStdString());
       auto retry = get_retry_info(error);
-      if (not retry or attempt >= max_retries) {
+      auto is_auth_retry = false;
+      error.with_exception([&](retryable_http_response const& e) {
+        if (e.status_code == 401 and args_.auth and not auth_retry_done) {
+          is_auth_retry = true;
+        }
+      });
+      if (is_auth_retry) {
+        auth_retry_done = true;
+        needs_refresh = true;
+      }
+      if (not retry or (attempt >= max_retries and not is_auth_retry)) {
         diagnostic::error("HTTP request to `{}` failed: {}", url_,
                           error_message)
           .primary(args_.operator_location)
@@ -588,20 +653,31 @@ private:
     std::ignore = response_->send(std::move(response));
   }
 
-  auto try_single_buffered_request(std::unique_ptr<folly::IOBuf> body)
+  auto
+  try_single_buffered_request(OpCtx& ctx, std::unique_ptr<folly::IOBuf> body,
+                              bool needs_refresh, bool auth_retry_done)
     -> Task<Result<http::Response, folly::exception_wrapper>> {
     auto attempt_res = co_await async_try(folly::coro::co_withExecutor(
       folly::Executor::KeepAlive<>{evb_},
       folly::coro::co_invoke(
-        [this, body = std::move(body)]() mutable -> Task<http::Response> {
+        [this, &ctx, body = std::move(body), needs_refresh,
+         auth_retry_done]() mutable -> Task<http::Response> {
           // Routes through the configured HTTP proxy when applicable.
           auto proxy_request = co_await make_http_proxy_request(
             *evb_, parsed_url_.getHost(), parsed_url_.getPort(), conn_params_,
             proxygen::coro::HTTPCoroConnector::defaultSessionParams(),
             get_connection_timeout(), parsed_url_.isSecure());
           // HTTPFixedSource sets Content-Length automatically from the body.
+          auto headers = headers_;
+          if (auto auth_result
+              = co_await authorize_headers(ctx, headers, needs_refresh);
+              auth_result.is_error()) {
+            co_yield folly::coro::co_error(
+              folly::make_exception_wrapper<std::runtime_error>(
+                "failed to authorize HTTP request"));
+          }
           auto msg = make_request_message(proxy_request.target_form(),
-                                          proxy_request.proxy());
+                                          proxy_request.proxy(), headers);
           auto source
             = proxygen::coro::HTTPFixedSource{std::move(msg), std::move(body)};
           auto resp = proxygen::coro::HTTPClient::Response{};
@@ -613,6 +689,14 @@ private:
               std::move(request_result).unwrap_err());
           }
           auto http_response = http::to_http_response(resp);
+          if (http_response.status_code == 401 and args_.auth
+              and not auth_retry_done) {
+            throw retryable_http_response{
+              http_response.status_code,
+              http::parse_retry_after(
+                resp.headers->getHeaders().getSingleOrEmpty("Retry-After")),
+            };
+          }
           if (http::is_retryable_http_status(http_response.status_code)) {
             throw retryable_http_response{
               http_response.status_code,
@@ -670,6 +754,22 @@ private:
     return http::default_retry_delay;
   }
 
+  auto authorize_headers(OpCtx& ctx, std::vector<http::Header>& headers,
+                         bool needs_refresh) -> Task<failure_or<void>> {
+    if (not args_.auth) {
+      co_return {};
+    }
+    auto auth
+      = co_await fetch_authorization(args_.auth->inner, ctx, needs_refresh);
+    if (not auth) {
+      co_return failure::promise();
+    }
+    for (auto const& header : auth->headers) {
+      http::set(headers, header.name, header.value);
+    }
+    co_return {};
+  }
+
   static auto sub_key() -> int64_t {
     return int64_t{0};
   }
@@ -703,6 +803,7 @@ public:
     d.positional("url", &ToHttpArgs::url);
     auto method_arg = d.named("method", &ToHttpArgs::method);
     auto headers_arg = d.named("headers", &ToHttpArgs::headers, "record");
+    auto auth_arg = d.named("auth", &ToHttpArgs::auth);
     auto tls_validator
       = tls_options{{.is_server = false}}.add_to_describer(d, &ToHttpArgs::tls);
     auto timeout_arg = d.named("timeout", &ToHttpArgs::timeout);
@@ -774,6 +875,11 @@ public:
             }
           }
         }
+      }
+      if (auto auth = ctx.get(auth_arg); auth and auth->inner.empty()) {
+        diagnostic::error("`auth` must not be empty")
+          .primary(auth->source)
+          .emit(ctx);
       }
       TRY(auto printer, ctx.get(printer_arg));
       auto output = printer.inner.infer_type(tag_v<table_slice>, ctx);
