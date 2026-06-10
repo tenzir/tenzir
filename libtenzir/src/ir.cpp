@@ -241,7 +241,8 @@ auto ir::SetIr::substitute(substitute_ctx ctx, bool instantiate)
   -> failure_or<void> {
   (void)instantiate;
   for (auto& x : assignments_) {
-    TRY(x.left.substitute(ctx));
+    // The left-hand side is resolved to a selector at compile time and cannot
+    // contain `$`-variables. UDO parameters are resolved even before that.
     TRY(x.right.substitute(ctx));
   }
   return {};

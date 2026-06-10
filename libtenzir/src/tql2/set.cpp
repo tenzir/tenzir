@@ -300,9 +300,6 @@ auto assign(const ast::selector& left, series right, const table_slice& input,
       auto result = std::vector<table_slice>{};
       result.push_back(assign(left, std::move(right), input, dh, position));
       return result;
-    },
-    [&](const ast::dollar_var&) -> std::vector<table_slice> {
-      TENZIR_UNREACHABLE();
     });
 }
 
@@ -345,20 +342,14 @@ auto resolve_move_keyword(ast::assignment assignment)
 auto resolve_assignment_left(const ast::assignment& assignment,
                              diagnostic_handler& dh)
   -> failure_or<ast::selector> {
-  auto result = ast::selector::try_from(assignment.left);
-  if (not result) {
-    diagnostic::error("expected selector").primary(assignment.left).emit(dh);
-    return failure::promise();
+  if (auto result = ast::selector::try_from(assignment.left)) {
+    return std::move(*result);
   }
-  if (auto* var = try_as<ast::dollar_var>(*result)) {
-    // A `let` binds a name to a constant value, but field paths are not values
-    // yet, so a `$` variable cannot describe an assignment target.
-    diagnostic::error("cannot assign to `{}` constant value", var->id.name)
-      .primary(*var)
-      .emit(dh);
-    return failure::promise();
-  }
-  return std::move(*result);
+  diagnostic::error(
+    "left side of `=` must be a field path or metadata reference")
+    .primary(assignment.left)
+    .emit(dh);
+  return failure::promise();
 }
 
 auto drop(const table_slice& slice, std::span<const ast::field_path> fields,

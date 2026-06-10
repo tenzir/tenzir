@@ -1,4 +1,4 @@
-error: cannot assign to `$foo` constant value
+error: left side of `=` must be a field path or metadata reference
  --> tests/operators/set/let_target.tql:7:5
   |
 7 | set $foo = "test"

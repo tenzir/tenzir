@@ -322,8 +322,12 @@ auto collect_refs(const expression& expr) -> Option<ExprRefs>;
 ///
 /// Note that this is not an actual `expression`. Instead, expressions can be
 /// converted to `selector` on-demand. Currently, this is limited to meta
-/// selectors (e.g., `@tag`) and simple selectors (see `simple_selector`).
-struct selector : variant<meta, field_path, dollar_var> {
+/// selectors (e.g., `@tag`) and field paths (see `ast::field_path`). In
+/// packages, `ast::dollar_var` can also be on the left side of an assignment,
+/// which is why `ast::assignment` carries an `ast::expressions` instead of an
+/// `ast::selector`. But the package machinery is responsible for those
+/// parameter references before compiling the pipeline.
+struct selector : variant<meta, field_path> {
   using variant::variant;
 
   static auto try_from(ast::expression expr) -> std::optional<selector>;
