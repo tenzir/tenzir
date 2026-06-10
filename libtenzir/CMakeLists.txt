@@ -413,6 +413,21 @@ string(APPEND TENZIR_FIND_DEPENDENCY_LIST
 target_link_libraries(libtenzir PUBLIC spdlog::spdlog)
 dependency_summary("spdlog" spdlog::spdlog "Dependencies")
 
+# Link against OpenTelemetry for emitting traces via the OTLP/HTTP exporter.
+# opentelemetry-cpp is provided on all platforms (nixpkgs, Homebrew, and a
+# from-source build on Debian/Docker), so we treat it as a regular dependency.
+# The API is header-only; we link it PUBLIC so that plugins can instrument
+# through libtenzir without depending on opentelemetry-cpp directly. Only
+# libtenzir configures the tracer provider, so the SDK and the exporter are
+# PRIVATE.
+find_package(opentelemetry-cpp CONFIG REQUIRED)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+       "\nfind_package(opentelemetry-cpp CONFIG REQUIRED)")
+target_link_libraries(libtenzir PUBLIC opentelemetry-cpp::api)
+target_link_libraries(libtenzir PRIVATE opentelemetry-cpp::sdk
+                                        opentelemetry-cpp::otlp_http_exporter)
+dependency_summary("OpenTelemetry" opentelemetry-cpp::api "Dependencies")
+
 # Link against simdjson
 option(TENZIR_ENABLE_BUNDLED_SIMDJSON "Use the simdjson submodule"
        "${TENZIR_ENABLE_BUNDLED_DEPENDENCIES}")

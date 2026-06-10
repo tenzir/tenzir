@@ -19,6 +19,7 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/modules.hpp"
+#include "tenzir/opentelemetry.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/scope_linked.hpp"
 #include "tenzir/session.hpp"
@@ -176,6 +177,10 @@ auto main(int argc, char** argv) -> int try {
   if (not log_context) {
     return EXIT_FAILURE;
   }
+  // Set up OpenTelemetry tracing for nodes. This is a no-op unless an OTLP/HTTP
+  // endpoint is configured under `tenzir.opentelemetry.endpoint`.
+  auto opentelemetry_guard
+    = is_server ? initialize_opentelemetry(cfg.content) : OpenTelemetryGuard{};
   if (not is_server) {
     // Force the use of $TMPDIR as cache directory when running as a client.
     auto ec = std::error_code{};
