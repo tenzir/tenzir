@@ -1,0 +1,6 @@
+error: cannot assign to `$foo` constant value
+ --> tests/language/expr/assign_to_let.tql:7:1
+  |
+7 | $foo = "test"
+  | ^^^^ 
+  |

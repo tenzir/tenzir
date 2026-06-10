@@ -1,23 +1,6 @@
- {
-   lets: [
--    {
--      ident: `$foo` @ 25..29,
--      expr: constant string "field" @ 32..39,
--      id: 1
--    }
-+    
-   ],
-   operators: [
-     SetIr {
-       assignments: [
-         {
--          left: dollar_var `$foo` -> 1 @ 41..45,
-+          left: constant string "field" @ 41..45,
-           equals: 46..47,
-           right: constant string "test" @ 48..54
-         }
-       ],
-       order: "ordered"
-     }
-   ]
- }
+ error: cannot assign to `$foo` constant value
+  --> tests/compiler/instantiation/let_selector.tql:7:1
+   |
+ 7 | $foo = "test"
+   | ^^^^ 
+   |

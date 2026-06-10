@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -48,6 +49,14 @@ assign(const ast::field_path& left, series right, const table_slice& input,
 
 [[nodiscard]] auto resolve_move_keyword(ast::assignment assignment)
   -> std::pair<ast::assignment, std::vector<ast::field_path>>;
+
+/// Validates that the left-hand side of an assignment describes a selector.
+///
+/// Emits a diagnostic and fails for expressions that cannot be assigned to.
+/// This includes `$` variables, which only bind names to constant values.
+[[nodiscard]] auto resolve_assignment_left(const ast::assignment& assignment,
+                                           diagnostic_handler& dh)
+  -> failure_or<ast::selector>;
 
 [[nodiscard]] auto
 drop(const table_slice& slice, std::span<const ast::field_path> fields,

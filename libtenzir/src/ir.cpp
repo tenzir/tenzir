@@ -136,17 +136,6 @@ auto merge_compiled_pipeline(std::vector<ir::let>& lets,
                    std::move_iterator{pipe.operators.end()});
 }
 
-auto resolve_assignment_left(ast::assignment& assignment,
-                             diagnostic_handler& dh)
-  -> failure_or<ast::selector> {
-  auto result = ast::selector::try_from(assignment.left);
-  if (result) {
-    return std::move(*result);
-  }
-  diagnostic::error("expected selector").primary(assignment.left).emit(dh);
-  return failure::promise();
-}
-
 class Set final : public Operator<table_slice, table_slice> {
 public:
   Set(std::vector<ast::assignment> assignments, event_order order)
@@ -156,6 +145,14 @@ public:
         = resolve_move_keyword(std::move(assignment));
       assignment = std::move(pruned_assignment);
       std::ranges::move(moved_fields, std::back_inserter(moved_fields_));
+    }
+    // Compilation rejects assignment targets that do not describe a selector,
+    // so the conversion cannot fail here anymore.
+    lefts_.reserve(assignments_.size());
+    for (const auto& assignment : assignments_) {
+      auto left = ast::selector::try_from(assignment.left);
+      TENZIR_ASSERT(left);
+      lefts_.push_back(std::move(*left));
     }
   }
 
@@ -182,15 +179,12 @@ public:
       state.push_back(subslice(slice, begin, end));
       begin = end;
       auto new_state = std::vector<table_slice>{};
-      for (auto [assignment, value] :
-           std::views::zip(assignments_, values_slice)) {
-        auto left = ast::selector::try_from(assignment.left);
-        TENZIR_ASSERT(left);
+      for (auto [left, value] : std::views::zip(lefts_, values_slice)) {
         auto begin = int64_t{0};
         for (auto& entry : state) {
           auto entry_rows = detail::narrow<int64_t>(entry.rows());
           auto assigned
-            = assign(*left, value.slice(begin, entry_rows), entry, ctx);
+            = assign(left, value.slice(begin, entry_rows), entry, ctx);
           begin += entry_rows;
           new_state.insert(new_state.end(),
                            std::move_iterator{assigned.begin()},
@@ -217,6 +211,7 @@ public:
 
 private:
   std::vector<ast::assignment> assignments_;
+  std::vector<ast::selector> lefts_;
   event_order order_{};
   std::vector<ast::field_path> moved_fields_;
 };

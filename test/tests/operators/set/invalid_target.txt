@@ -1,0 +1,6 @@
+error: expected selector
+ --> tests/operators/set/invalid_target.tql:6:5
+  |
+6 | set now() = 1
+  |     ^^^^^ 
+  |

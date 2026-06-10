@@ -63,7 +63,9 @@ public:
     for (auto& arg : inv.args) {
       arg.match(
         [&](ast::assignment& x) {
-          assignments.push_back(std::move(x));
+          if (not resolve_assignment_left(x, ctx.dh()).is_error()) {
+            assignments.push_back(std::move(x));
+          }
         },
         [&](auto&) {
           diagnostic::error("expected assignment")
@@ -91,6 +93,8 @@ public:
           .emit(ctx);
         return failure::promise();
       }
+      TRY(assignment->left.bind(ctx));
+      TRY(resolve_assignment_left(*assignment, ctx));
       TRY(assignment->right.bind(ctx));
       assignments.push_back(std::move(*assignment));
     }

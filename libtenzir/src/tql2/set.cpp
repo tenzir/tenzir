@@ -342,6 +342,25 @@ auto resolve_move_keyword(ast::assignment assignment)
   return {std::move(assignment), std::move(f.out)};
 }
 
+auto resolve_assignment_left(const ast::assignment& assignment,
+                             diagnostic_handler& dh)
+  -> failure_or<ast::selector> {
+  auto result = ast::selector::try_from(assignment.left);
+  if (not result) {
+    diagnostic::error("expected selector").primary(assignment.left).emit(dh);
+    return failure::promise();
+  }
+  if (auto* var = try_as<ast::dollar_var>(*result)) {
+    // A `let` binds a name to a constant value, but field paths are not values
+    // yet, so a `$` variable cannot describe an assignment target.
+    diagnostic::error("cannot assign to `{}` constant value", var->id.name)
+      .primary(*var)
+      .emit(dh);
+    return failure::promise();
+  }
+  return std::move(*result);
+}
+
 auto drop(const table_slice& slice, std::span<const ast::field_path> fields,
           diagnostic_handler& dh, bool warn_for_duplicates) -> table_slice {
   constexpr auto drop = [](auto&&...) {
@@ -425,6 +444,15 @@ auto drop(const table_slice& slice, std::span<const ast::field_path> fields,
 auto set_operator::operator()(generator<table_slice> input,
                               operator_control_plane& ctrl) const
   -> generator<table_slice> {
+  // The operator's factories reject assignment targets that do not describe a
+  // selector, so the conversion cannot fail here anymore.
+  auto lefts = std::vector<ast::selector>{};
+  lefts.reserve(assignments_.size());
+  for (const auto& assignment : assignments_) {
+    auto left = ast::selector::try_from(assignment.left);
+    TENZIR_ASSERT(left);
+    lefts.push_back(std::move(*left));
+  }
   for (auto&& slice : input) {
     if (slice.rows() == 0) {
       co_yield {};
@@ -455,14 +483,11 @@ auto set_operator::operator()(generator<table_slice> input,
       begin = end;
       auto new_state = std::vector<table_slice>{};
       TENZIR_ASSERT(assignments_.size() == values_slice.size());
-      for (auto [assignment, value] :
-           std::views::zip(assignments_, values_slice)) {
-        auto left = ast::selector::try_from(assignment.left);
-        TENZIR_ASSERT(left);
+      for (auto [left, value] : std::views::zip(lefts, values_slice)) {
         auto begin = int64_t{0};
         for (auto& entry : state) {
           auto entry_rows = detail::narrow<int64_t>(entry.rows());
-          auto assigned = assign(*left, value.slice(begin, entry_rows), entry,
+          auto assigned = assign(left, value.slice(begin, entry_rows), entry,
                                  ctrl.diagnostics());
           begin += entry_rows;
           new_state.insert(new_state.end(),
