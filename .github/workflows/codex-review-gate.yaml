@@ -1,0 +1,135 @@
+# Periodically sweeps open PRs and applies the `ci-ready` label to PRs where
+# the Codex review has no open issues, i.e., either Codex left a 👍 reaction
+# (its "no comments" verdict) or all review threads it opened are resolved.
+# The signal must apply to the current head: a review must reference the head
+# commit, and a reaction must postdate the time the head was pushed.
+#
+# The label is only ever added, never removed: delaying the build is a CI
+# cost optimization, while merge safety comes from the `Tenzir CI` commit
+# status and required conversation resolution. Applying the label manually
+# unlocks the build without waiting for Codex.
+#
+# This needs to be a cron sweep because GitHub emits no webhook events for
+# reactions. The label is applied with a GitHub App token so that it can
+# trigger `pull_request: labeled` workflows, which events created by the
+# default `GITHUB_TOKEN` cannot.
+name: Codex Review Gate
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    name: Sweep
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate an app token
+        id: generate_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.TENZIR_AUTOBUMPER_APP_ID }}
+          private-key: ${{ secrets.TENZIR_AUTOBUMPER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+      - name: Sweep open PRs
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          CODEX_BOT: chatgpt-codex-connector[bot]
+          LABEL: ci-ready
+        run: |
+          set -euo pipefail
+
+          gh label create "$LABEL" --force --color 2EA44F \
+            --description "Unlocks the CI build; applied when the Codex review is clean"
+
+          process_pr() {
+            local pr=$1
+            local head_sha pushed thumb reviewed unresolved clean has_label
+            # The label is sticky, so labeled PRs need no further checks.
+            has_label=$(gh api "repos/$GH_REPO/issues/$pr" \
+              --jq "[.labels[].name] | any(. == \"$LABEL\")")
+            if [[ "$has_label" == true ]]; then
+              echo "PR #$pr: already labeled"
+              return
+            fi
+            head_sha=$(gh api "repos/$GH_REPO/pulls/$pr" --jq .head.sha)
+            # The head commit's committer timestamp can predate the time it
+            # was pushed to the PR, e.g., for pre-existing local commits, so
+            # prefer the creation time of the earliest workflow run for the
+            # head as the push time and only fall back to the commit.
+            pushed=$(gh api \
+              "repos/$GH_REPO/actions/runs?head_sha=$head_sha&per_page=100" \
+              --jq '[.workflow_runs[].created_at] | min // empty')
+            if [[ -z "$pushed" ]]; then
+              pushed=$(gh api "repos/$GH_REPO/commits/$head_sha" \
+                --jq .commit.committer.date)
+            fi
+            # Latest 👍 reaction by Codex on the PR description. `--slurp`
+            # collects the pages into one array so that the filter runs once
+            # over all of them rather than once per page; it does not combine
+            # with `--jq`, so pipe to jq instead.
+            thumb=$(gh api --paginate --slurp \
+              "repos/$GH_REPO/issues/$pr/reactions" \
+              | jq -r "[.[][] | select(.user.login == \"$CODEX_BOT\"
+                                 and .content == \"+1\")
+                        | .created_at] | max // empty")
+            # Reviews submitted by Codex against the current head commit.
+            reviewed=$(gh api --paginate --slurp \
+              "repos/$GH_REPO/pulls/$pr/reviews" \
+              | jq -r "[.[][] | select(.user.login == \"$CODEX_BOT\"
+                                 and .commit_id == \"$head_sha\")] | length")
+            # Unresolved review threads opened by Codex. Thread resolution is
+            # only exposed via GraphQL, where bot logins lack the `[bot]`
+            # suffix.
+            unresolved=$(gh api graphql \
+              -F owner="${GH_REPO%/*}" -F name="${GH_REPO#*/}" -F number="$pr" \
+              -f query='
+                query($owner: String!, $name: String!, $number: Int!) {
+                  repository(owner: $owner, name: $name) {
+                    pullRequest(number: $number) {
+                      reviewThreads(first: 100) {
+                        nodes {
+                          isResolved
+                          comments(first: 1) { nodes { author { login } } }
+                        }
+                      }
+                    }
+                  }
+                }' \
+              --jq '[.data.repository.pullRequest.reviewThreads.nodes[]
+                     | select(.isResolved | not)
+                     | select((.comments.nodes[0].author.login // "")
+                              | startswith("chatgpt-codex-connector"))]
+                    | length')
+            # Clean if Codex reviewed the current head or its 👍 reaction
+            # postdates the last push, and no Codex threads are unresolved.
+            # ISO-8601 timestamps compare lexicographically.
+            clean=false
+            if [[ "$unresolved" -eq 0 ]] \
+               && { [[ "$reviewed" -gt 0 ]] \
+                    || [[ -n "$thumb" && "$thumb" > "$pushed" ]]; }; then
+              clean=true
+            fi
+            if [[ "$clean" == true ]]; then
+              gh api -X POST "repos/$GH_REPO/issues/$pr/labels" \
+                -f "labels[]=$LABEL" --silent
+              echo "PR #$pr: added $LABEL"
+            else
+              echo "PR #$pr: not clean"
+            fi
+          }
+
+          for pr in $(gh pr list --state open --limit 200 \
+                        --json number --jq '.[].number'); do
+            if ! process_pr "$pr"; then
+              echo "::warning::Failed to process PR #$pr"
+            fi
+          done
