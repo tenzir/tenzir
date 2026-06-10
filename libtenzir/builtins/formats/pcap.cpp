@@ -26,6 +26,8 @@
 
 #include <arrow/record_batch.h>
 
+#include <cstring>
+
 namespace tenzir::plugins::pcap {
 
 namespace {
@@ -1134,9 +1136,22 @@ public:
 
   auto read_detection_candidates() const
     -> std::vector<read_detection_candidate> override {
+    auto detect = [](read_detection_input input) {
+      auto raw_magic = uint32_t{};
+      if (input.bytes.size() < sizeof(raw_magic)) {
+        return input.eof ? read_detection::reject()
+                         : read_detection::need_more();
+      }
+      std::memcpy(&raw_magic, input.bytes.data(), sizeof(raw_magic));
+      if (normalized_magic_number(raw_magic)
+          or raw_magic == pcapng::magic_number) {
+        return read_detection::match("PCAP magic");
+      }
+      return read_detection::reject();
+    };
     return {
-      read_detection::candidate("pcap", "read_pcap", "read_pcap", 50,
-                                read_detection::pcap),
+      read_detection::candidate("pcap", "read_pcap", "read_pcap",
+                                read_detection::specificity::magic, detect),
     };
   }
 };

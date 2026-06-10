@@ -563,12 +563,12 @@ public:
   auto read_detection_candidates() const
     -> std::vector<read_detection_candidate> override {
     return {
-      read_detection::candidate("cef", "read_cef", "read_cef", 20,
-                                [](read_detection_input input) {
-                                  input.bytes = detail::trim_front(input.bytes);
-                                  return read_detection::magic_prefix(
-                                    input, "CEF:", 90);
-                                }),
+      read_detection::candidate(
+        "cef", "read_cef", "read_cef", read_detection::specificity::dialect,
+        [](read_detection_input input) {
+          input.bytes = detail::trim_front(input.bytes);
+          return read_detection::magic_prefix(input, "CEF:", "CEF prefix");
+        }),
     };
   }
 };

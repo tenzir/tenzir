@@ -14,6 +14,7 @@
 #include <tenzir/collect.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/detail/assert.hpp>
+#include <tenzir/detail/string.hpp>
 #include <tenzir/multi_series_builder.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/operator_control_plane.hpp>
@@ -26,6 +27,7 @@
 #include <arrow/api.h>
 #include <re2/re2.h>
 
+#include <algorithm>
 #include <string_view>
 
 namespace tenzir::plugins::kv {
@@ -939,9 +941,56 @@ public:
   auto read_detection_candidates() const
     -> std::vector<read_detection_candidate> override {
     return {
-      read_detection::candidate("kv", "read_kv", "read_kv", 0,
-                                read_detection::kv),
+      read_detection::candidate("kv", "read_kv", "read_kv",
+                                read_detection::specificity::keyed, detect_kv),
     };
+  }
+
+private:
+  static auto detect_kv(read_detection_input input) -> read_detection_result {
+    namespace rd = read_detection;
+    if (not detail::is_valid_utf8(input.bytes)) {
+      if (not input.eof and detail::is_valid_utf8_prefix(input.bytes)) {
+        return rd::need_more("partial UTF-8 sequence");
+      }
+      return rd::reject();
+    }
+    auto sample = rd::sample_lines(input, 2);
+    std::erase_if(sample.complete, [](std::string_view& line) {
+      line = detail::trim_front(line);
+      return line.empty();
+    });
+    if (sample.complete.empty()) {
+      return input.eof ? rd::reject() : rd::need_more();
+    }
+    // Dry-run the reader's splitters with their default configuration. The
+    // parser itself tolerates lines without a value separator by folding
+    // them into the previous value, which makes it accept arbitrary prose;
+    // for detection, require every line to yield at least one real
+    // key-value assignment.
+    static auto const field_split
+      = splitter{located<std::string_view>{"\\s", location::unknown}};
+    static auto const value_split
+      = splitter{located<std::string_view>{"=", location::unknown}};
+    auto const quoting = detail::quoting_escaping_policy{};
+    auto has_assignment = [&](std::string_view line) {
+      while (not line.empty()) {
+        auto const [head, tail, field_sep] = field_split.split(line, quoting);
+        auto const [key, value, value_sep] = value_split.split(head, quoting);
+        if (value_sep.found() and not key.empty() and not value.empty()) {
+          return true;
+        }
+        if (line == tail) {
+          break;
+        }
+        line = tail;
+      }
+      return false;
+    };
+    if (std::ranges::all_of(sample.complete, has_assignment)) {
+      return rd::match("key-value assignments");
+    }
+    return rd::reject("line without key-value assignment");
   }
 };
 

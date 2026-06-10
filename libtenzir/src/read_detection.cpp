@@ -12,9 +12,6 @@
 
 #include <fmt/format.h>
 
-#include <algorithm>
-#include <array>
-#include <ranges>
 #include <simdjson.h>
 #include <utility>
 #include <vector>
@@ -121,26 +118,51 @@ auto need_more(std::string reason) -> read_detection_result {
   return {.state = detection_state::need_more, .reason = std::move(reason)};
 }
 
-auto match(uint64_t confidence, std::string reason) -> read_detection_result {
-  return {
-    .state = detection_state::match,
-    .confidence = confidence,
-    .reason = std::move(reason),
-  };
+auto match(std::string reason) -> read_detection_result {
+  return {.state = detection_state::match, .reason = std::move(reason)};
 }
 
 auto candidate(std::string format_name, std::string operator_name,
-               std::string pipeline, int64_t priority,
-               std::function<read_detection_result(read_detection_input)> detect,
-               std::vector<std::string> after) -> read_detection_candidate {
+               std::string pipeline, uint64_t specificity,
+               std::function<read_detection_result(read_detection_input)> detect)
+  -> read_detection_candidate {
   return {
     .format_name = std::move(format_name),
     .operator_name = std::move(operator_name),
     .pipeline = std::move(pipeline),
-    .after = std::move(after),
-    .priority = priority,
+    .specificity = specificity,
     .detect = std::move(detect),
   };
+}
+
+auto sample_lines(read_detection_input input, size_t max_lines) -> line_sample {
+  auto result = line_sample{};
+  auto rest = input.bytes;
+  while (result.complete.size() < max_lines) {
+    auto newline = rest.find('\n');
+    if (newline == std::string_view::npos) {
+      break;
+    }
+    auto line = rest.substr(0, newline);
+    if (not line.empty() and line.back() == '\r') {
+      line.remove_suffix(1);
+    }
+    result.complete.push_back(line);
+    rest.remove_prefix(newline + 1);
+  }
+  if (result.complete.size() == max_lines) {
+    return result;
+  }
+  // The final unterminated line is complete evidence at EOF and a partial
+  // line while more input may arrive.
+  if (input.eof) {
+    if (not rest.empty()) {
+      result.complete.push_back(rest);
+    }
+  } else {
+    result.partial = rest;
+  }
+  return result;
 }
 
 auto json_object(read_detection_input input) -> read_detection_result {
@@ -161,7 +183,7 @@ auto json_object(read_detection_input input) -> read_detection_result {
   if (not is_valid_json(input.bytes, simdjson::dom::element_type::OBJECT)) {
     return reject("invalid JSON object");
   }
-  return match(70, "top-level JSON object");
+  return match("top-level JSON object");
 }
 
 auto json_array(read_detection_input input) -> read_detection_result {
@@ -174,59 +196,60 @@ auto json_array(read_detection_input input) -> read_detection_result {
   }
   if (scan.top_level == '[' and scan.first_array_element == '{'
       and is_valid_json(input.bytes, simdjson::dom::element_type::ARRAY)) {
-    return match(75, "top-level array of objects");
+    return match("top-level array of objects");
   }
   return reject();
 }
 
 auto ndjson(read_detection_input input) -> read_detection_result {
-  auto lines = detail::split_lines(input.bytes, 3);
-  std::erase_if(lines, [](std::string_view& line) {
+  auto sample = sample_lines(input, 3);
+  std::erase_if(sample.complete, [](std::string_view& line) {
     line = detail::trim_front(line);
     return line.empty();
   });
-  if (lines.empty()) {
+  // NDJSON readers consume input line by line, so every complete line must
+  // be a valid JSON object on its own.
+  for (auto line : sample.complete) {
+    if (not complete_json_object_line(line)) {
+      return reject("line is not a JSON object");
+    }
+  }
+  // An unterminated trailing line must still be the prefix of a JSON object.
+  auto partial = detail::trim_front(sample.partial);
+  if (not partial.empty()) {
+    auto scan = scan_json_value(partial);
+    if (scan.state == json_scan_result::kind::invalid
+        or scan.top_level == '[') {
+      return reject("trailing line is not a JSON object prefix");
+    }
+    if (scan.state == json_scan_result::kind::complete
+        and not detail::trim_front(partial.substr(scan.end)).empty()) {
+      return reject("trailing bytes after object");
+    }
+  }
+  if (sample.complete.empty()) {
     return input.eof ? reject() : need_more();
   }
-  if (lines.size() >= 2 and complete_json_object_line(lines[0])
-      and complete_json_object_line(lines[1])) {
-    return match(82, "multiple JSON object lines");
+  if (sample.complete.size() == 1 and partial.empty()) {
+    // A single object could equally be a whole-input JSON document; defer to
+    // the JSON object detector until more evidence arrives.
+    return input.eof ? reject() : need_more();
   }
-  auto bytes = detail::trim_front(input.bytes);
-  auto scan = scan_json_value(bytes);
-  if (scan.state == json_scan_result::kind::complete
-      and scan.top_level == '{') {
-    auto first_object = bytes.substr(0, scan.end);
-    if (not is_valid_json(first_object, simdjson::dom::element_type::OBJECT)) {
-      return reject("invalid JSON object");
-    }
-    auto rest = detail::trim_front(bytes.substr(scan.end));
-    if (not rest.empty()) {
-      return match(82, "JSON object followed by more input");
-    }
-  }
-  if (input.eof) {
-    return reject();
-  }
-  return need_more();
+  return match("JSON object lines");
 }
 
-auto json_field(read_detection_input input, std::string_view field,
-                uint64_t confidence) -> read_detection_result {
+auto json_field(read_detection_input input, std::string_view field)
+  -> read_detection_result {
   auto object = json_object(input);
   auto lines = ndjson(input);
   auto valid_json_shape = object.state == detection_state::match
                           or lines.state == detection_state::match;
   if (valid_json_shape and input.bytes.contains(field)) {
-    return match(confidence, fmt::format("contains `{}`", field));
+    return match(fmt::format("contains `{}`", field));
   }
   if (object.state == detection_state::need_more
       or lines.state == detection_state::need_more) {
     return need_more();
-  }
-  if (object.state == detection_state::reject
-      and lines.state == detection_state::reject) {
-    return reject();
   }
   return reject();
 }
@@ -234,16 +257,12 @@ auto json_field(read_detection_input input, std::string_view field,
 auto gelf(read_detection_input input) -> read_detection_result {
   auto object = json_object(input);
   auto lines = ndjson(input);
-  if (object.state == detection_state::reject
-      and lines.state == detection_state::reject) {
-    return reject();
-  }
   auto valid_json_shape = object.state == detection_state::match
                           or lines.state == detection_state::match;
   if (valid_json_shape and input.bytes.contains("\"version\"")
       and input.bytes.contains("\"host\"")
       and input.bytes.contains("\"short_message\"")) {
-    return match(90, "GELF fields");
+    return match("GELF fields");
   }
   if (object.state == detection_state::need_more
       or lines.state == detection_state::need_more) {
@@ -252,158 +271,15 @@ auto gelf(read_detection_input input) -> read_detection_result {
   return reject();
 }
 
-auto zeek_tsv(read_detection_input input) -> read_detection_result {
-  auto bytes = detail::trim_front(input.bytes);
-  if (bytes.starts_with("#separator") or bytes.starts_with("#fields")
-      or bytes.starts_with("#types")) {
-    return match(95, "Zeek TSV header");
-  }
-  return bytes.size() < 10 and not input.eof ? need_more() : reject();
-}
-
-auto syslog(read_detection_input input) -> read_detection_result {
-  auto bytes = detail::trim_front(input.bytes);
-  if (bytes.empty()) {
-    return input.eof ? reject() : need_more();
-  }
-  if (bytes.front() == '<') {
-    auto end = bytes.find('>');
-    if (end != std::string_view::npos and end > 1 and end <= 4) {
-      auto pri = bytes.substr(1, end - 1);
-      if (std::ranges::all_of(pri, [](char c) {
-            return c >= '0' and c <= '9';
-          })) {
-        return match(50, "syslog priority prefix");
-      }
-    }
-  }
-  return bytes.size() < 32 and not input.eof ? need_more() : reject();
-}
-
-auto xsv(read_detection_input input, char sep, uint64_t confidence)
-  -> read_detection_result {
-  if (not detail::is_valid_utf8(input.bytes)) {
-    if (not input.eof and detail::is_valid_utf8_prefix(input.bytes)) {
-      return need_more("partial UTF-8 sequence");
-    }
-    return reject();
-  }
-  auto quoting = detail::quoting_escaping_policy{
-    .quotes = "\"'",
-    .backslashes_escape = true,
-    .doubled_quotes_escape = true,
-  };
-  auto count_separators = [&](std::string_view line) {
-    auto count = size_t{0};
-    auto offset = size_t{0};
-    while (offset < line.size()) {
-      auto next = quoting.find_not_in_quotes(line, sep, offset);
-      if (next == std::string_view::npos) {
-        break;
-      }
-      ++count;
-      offset = next + 1;
-    }
-    return count;
-  };
-  auto lines = detail::split_lines(input.bytes, 3);
-  std::erase_if(lines, [](std::string_view& line) {
-    line = detail::trim_front(line);
-    return line.empty();
-  });
-  auto counts = std::vector<size_t>{};
-  for (auto line : lines) {
-    if (line.starts_with("#")) {
-      continue;
-    }
-    counts.push_back(count_separators(line));
-  }
-  if (counts.size() >= 2 and counts[0] > 0
-      and std::ranges::all_of(counts, [&](size_t count) {
-            return count == counts[0];
-          })) {
-    return match(confidence, "stable delimiter counts");
-  }
-  if (input.eof and counts.size() == 1 and counts[0] > 0) {
-    return match(confidence - 5, "single delimited row");
-  }
-  return input.eof ? reject() : need_more();
-}
-
-auto kv(read_detection_input input) -> read_detection_result {
-  auto lines = detail::split_lines(input.bytes, 2);
-  std::erase_if(lines, [](std::string_view& line) {
-    line = detail::trim_front(line);
-    return line.empty();
-  });
-  if (lines.empty()) {
-    return input.eof ? reject() : need_more();
-  }
-  auto has_kv = [](std::string_view line) {
-    auto eq = line.find('=');
-    return eq != std::string_view::npos and eq > 0 and eq + 1 < line.size();
-  };
-  if (std::ranges::all_of(lines, has_kv)) {
-    return match(65, "key-value assignments");
-  }
-  return input.eof ? reject() : need_more();
-}
-
-auto yaml(read_detection_input input) -> read_detection_result {
-  if (not detail::is_valid_utf8(input.bytes)) {
-    if (not input.eof and detail::is_valid_utf8_prefix(input.bytes)) {
-      return need_more("partial UTF-8 sequence");
-    }
-    return reject();
-  }
-  auto bytes = detail::trim_front(input.bytes);
-  if (bytes.empty()) {
-    return input.eof ? reject() : need_more();
-  }
-  if (bytes.front() == '{' or bytes.front() == '[') {
-    return reject("JSON-compatible YAML is left to JSON detectors");
-  }
-  auto lines = detail::split_lines(bytes, 3);
-  std::erase_if(lines, [](std::string_view& line) {
-    line = detail::trim_front(line);
-    return line.empty();
-  });
-  if (std::ranges::any_of(lines, [](std::string_view line) {
-        auto colon = line.find(':');
-        return colon != std::string_view::npos and colon > 0;
-      })) {
-    return match(45, "YAML mapping");
-  }
-  return input.eof ? reject() : need_more();
-}
-
-auto pcap(read_detection_input input) -> read_detection_result {
-  constexpr auto magics = std::array{
-    std::string_view{"\xd4\xc3\xb2\xa1", 4},
-    std::string_view{"\xa1\xb2\xc3\xd4", 4},
-    std::string_view{"\x4d\x3c\xb2\xa1", 4},
-    std::string_view{"\xa1\xb2\x3c\x4d", 4},
-    std::string_view{"\x0a\x0d\x0d\x0a", 4},
-  };
-  if (input.bytes.size() < 4) {
-    return input.eof ? reject() : need_more();
-  }
-  return std::ranges::any_of(magics,
-                             [&](std::string_view magic) {
-                               return input.bytes.starts_with(magic);
-                             })
-           ? match(100, "pcap magic")
-           : reject();
-}
-
 auto magic_prefix(read_detection_input input, std::string_view magic,
-                  uint64_t confidence, std::string reason)
-  -> read_detection_result {
+                  std::string reason) -> read_detection_result {
   if (input.bytes.size() < magic.size()) {
-    return input.eof ? reject() : need_more();
+    if (input.eof or not magic.starts_with(input.bytes)) {
+      return reject();
+    }
+    return need_more();
   }
-  return input.bytes.starts_with(magic) ? match(confidence, std::move(reason))
-                                        : reject();
+  return input.bytes.starts_with(magic) ? match(std::move(reason)) : reject();
 }
 
 } // namespace tenzir::read_detection

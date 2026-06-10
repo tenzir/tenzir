@@ -21,7 +21,6 @@
 #include "tenzir/tql2/plugin.hpp"
 
 #include <algorithm>
-#include <limits>
 #include <optional>
 #include <ranges>
 #include <string_view>
@@ -43,10 +42,9 @@ struct ReadAutoArgs {
 struct Candidate {
   std::string format_name;
   std::string pipeline;
-  int64_t priority = 0;
+  uint64_t specificity = 0;
   std::optional<size_t> plugin_candidate;
   bool live = true;
-  std::optional<read_detection_result> last;
 };
 
 auto plugin_detection_candidates()
@@ -84,11 +82,12 @@ public:
       candidates_.push_back(Candidate{
         .format_name = candidate.format_name,
         .pipeline = candidate.pipeline,
-        .priority = candidate.priority,
+        .specificity = candidate.specificity,
         .plugin_candidate = index,
         .live = not candidate.format_name.empty()
                 and not candidate.operator_name.empty()
-                and not candidate.pipeline.empty() and candidate.detect
+                and not candidate.pipeline.empty() and candidate.specificity > 0
+                and candidate.detect
                 and operator_available(candidate.operator_name),
       });
     }
@@ -182,7 +181,6 @@ private:
         .bytes = probe_,
         .eof = input.eof,
       });
-      candidate.last = result;
       switch (result.state) {
         case detection_state::reject:
           candidate.live = false;
@@ -195,16 +193,6 @@ private:
           break;
       }
     }
-    auto matched_format = [&](std::string_view format) {
-      return std::ranges::any_of(matches, [&](size_t index) {
-        return candidates_[index].format_name == format;
-      });
-    };
-    std::erase_if(matches, [&](size_t index) {
-      auto& plugin_candidate
-        = plugin_detection_candidates()[*candidates_[index].plugin_candidate];
-      return std::ranges::any_of(plugin_candidate.after, matched_format);
-    });
     if (matches.empty()) {
       if (not input.done_probing and any_need_more) {
         return std::nullopt;
@@ -212,9 +200,7 @@ private:
       return fallback(input, ctx);
     }
     auto score = [&](size_t index) {
-      auto& candidate = candidates_[index];
-      TENZIR_ASSERT(candidate.last);
-      return std::pair{candidate.last->confidence, candidate.priority};
+      return candidates_[index].specificity;
     };
     std::ranges::sort(matches, [&](size_t lhs, size_t rhs) {
       return score(lhs) > score(rhs);
@@ -258,7 +244,6 @@ private:
     candidates_.push_back(Candidate{
       .format_name = fmt::format("fallback.{}", args_.fallback),
       .pipeline = std::move(pipeline),
-      .priority = std::numeric_limits<int64_t>::min(),
     });
     return candidates_.size() - 1;
   }

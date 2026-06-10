@@ -560,11 +560,11 @@ public:
   auto read_detection_candidates() const
     -> std::vector<read_detection_candidate> override {
     return {
-      read_detection::candidate("bitz", "read_bitz", "read_bitz", 50,
-                                [](read_detection_input input) {
-                                  return read_detection::magic_prefix(
-                                    input, "TNZ1", 100);
-                                }),
+      read_detection::candidate(
+        "bitz", "read_bitz", "read_bitz", read_detection::specificity::magic,
+        [](read_detection_input input) {
+          return read_detection::magic_prefix(input, "TNZ1", "BITZ magic");
+        }),
     };
   }
 };

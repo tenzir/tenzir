@@ -220,16 +220,20 @@ struct read_detection_result {
   };
 
   result_state state = result_state::reject;
-  uint64_t confidence = 0;
   std::string reason = {};
 };
 
+/// A reader that `read_auto` can select when its detector matches the probed
+/// input. The detector must be a pure function of the input that decides
+/// whether the reader is *capable* of consuming the bytes, ideally by running
+/// the reader's actual parser on them. Cross-format precedence is expressed
+/// solely through `specificity`, drawn from the vocabulary in
+/// `tenzir/read_detection.hpp`.
 struct read_detection_candidate {
   std::string format_name = {};
   std::string operator_name = {};
   std::string pipeline = {};
-  std::vector<std::string> after = {};
-  int64_t priority = 0;
+  uint64_t specificity = 0;
   std::function<read_detection_result(read_detection_input)> detect = {};
 };
 
