@@ -555,16 +555,13 @@ auto auth_cache() -> Mutex<std::map<AuthCacheKey, Arc<AuthCacheEntry>>>& {
   return cache;
 }
 
-auto find_auth_entry(std::string_view name, location loc, OpCtx& ctx)
-  -> Task<failure_or<located<record>>> {
+auto find_local_auth_entry(std::string_view name, location loc, OpCtx& ctx)
+  -> Task<failure_or<Option<located<record>>>> {
   auto const& config = content(ctx.actor_system().config());
   auto const* auth_list
     = caf::get_if<caf::config_value::list>(&config, "tenzir.auth");
   if (auth_list == nullptr) {
-    diagnostic::error("missing `tenzir.auth` configuration")
-      .primary(loc)
-      .emit(ctx);
-    co_return failure::promise();
+    co_return Option<located<record>>{};
   }
   auto found = Option<located<record>>{};
   for (auto const& entry : *auth_list) {
@@ -602,28 +599,54 @@ auto find_auth_entry(std::string_view name, location loc, OpCtx& ctx)
       found = located{*auth, location::unknown};
     }
   }
-  if (not found) {
-    diagnostic::error("unknown HTTP auth `{}`", name)
-      .primary(loc)
-      .note("configure the auth object under `tenzir.auth`")
-      .emit(ctx);
+  co_return found;
+}
+
+auto fetch_platform_auth_entry(std::string_view name, OpCtx& ctx)
+  -> Task<failure_or<located<record>>> {
+  auto resolved = co_await ctx.resolve_authentication(std::string{name});
+  if (not resolved) {
     co_return failure::promise();
   }
-  co_return *found;
+  auto rec = std::move(resolved->fields);
+  rec.insert_or_assign("name", std::string{name});
+  rec.insert_or_assign("strategy", std::move(resolved->strategy));
+  co_return located{std::move(rec), location::unknown};
 }
 
 auto find_cached_auth_entry(std::string_view name, location loc, OpCtx& ctx)
   -> Task<failure_or<Arc<AuthCacheEntry>>> {
-  auto config = co_await find_auth_entry(name, loc, ctx);
-  if (not config) {
+  auto key = AuthCacheKey{&ctx.actor_system(), std::string{name}};
+  {
+    auto guard = co_await auth_cache().lock();
+    if (auto it = guard->find(key); it != guard->end()) {
+      co_return it->second;
+    }
+  }
+  auto local = co_await find_local_auth_entry(name, loc, ctx);
+  if (not local) {
     co_return failure::promise();
   }
-  auto key = AuthCacheKey{&ctx.actor_system(), std::string{name}};
+  auto config = located<record>{};
+  if (*local) {
+    config = std::move(**local);
+  } else {
+    auto platform = co_await fetch_platform_auth_entry(name, ctx);
+    if (not platform) {
+      diagnostic::error("unknown HTTP auth `{}`", name)
+        .primary(loc)
+        .note("configure the auth object under `tenzir.auth` or on the "
+              "platform")
+        .emit(ctx);
+      co_return failure::promise();
+    }
+    config = std::move(*platform);
+  }
   auto guard = co_await auth_cache().lock();
   auto it = guard->find(key);
   if (it == guard->end()) {
     it = guard
-           ->emplace(key, Arc<AuthCacheEntry>{std::in_place, std::move(*config)})
+           ->emplace(key, Arc<AuthCacheEntry>{std::in_place, std::move(config)})
            .first;
   }
   co_return it->second;

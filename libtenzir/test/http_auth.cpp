@@ -71,6 +71,11 @@ struct TestOpCtx final : OpCtx {
     co_return {};
   }
 
+  auto resolve_authentication(std::string)
+    -> Task<failure_or<resolved_authentication>> override {
+    throw std::logic_error{"unexpected resolve_authentication call"};
+  }
+
   auto spawn_sub(SubKey, ir::pipeline, element_type_tag, DiagnosticBehavior)
     -> Task<AnySubHandle&> override {
     throw std::logic_error{"unexpected spawn_sub call"};
