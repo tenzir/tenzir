@@ -77,6 +77,8 @@ public:
       sources_lines_.try_emplace(source->index,
                                  PerSource{source, std::move(lines)});
     }
+    auto call_sites = source_map.call_sites();
+    call_sites_.assign(call_sites.begin(), call_sites.end());
   }
 
   void emit(diagnostic diag) override {
@@ -86,6 +88,21 @@ public:
     // TODO: Do not print the same line multiple times. Merge annotations instead.
     fmt::print(stream_, "{}{}{}{}: {}{}\n", bold, color(diag.severity),
                diag.severity, uncolor, diag.message, reset);
+    // Resolve the call-site chain of the primary location, so that we can
+    // show where the failing operator was called from.
+    auto call_chain = std::vector<location>{};
+    if (not diag.annotations.empty()) {
+      auto id = diag.annotations.front().source.callsite_index;
+      while (id != 0 and id <= call_sites_.size()) {
+        auto call_site = call_sites_[id - 1];
+        call_chain.push_back(call_site);
+        id = call_site.callsite_index;
+        // Defensive limit in case of malformed (cyclic) call-site data.
+        if (call_chain.size() > 100) {
+          break;
+        }
+      }
+    }
     auto indent_width = size_t{0};
     for (auto& annotation : diag.annotations) {
       auto src = source_for(annotation.source.source_index);
@@ -94,6 +111,16 @@ public:
         break;
       }
       if (auto lc = line_col_indices(*src, annotation.source.begin)) {
+        auto [line, col] = *lc;
+        indent_width = std::max(indent_width, std::to_string(line + 1).size());
+      }
+    }
+    for (auto& call_site : call_chain) {
+      auto src = source_for(call_site.source_index);
+      if (not src) {
+        continue;
+      }
+      if (auto lc = line_col_indices(*src, call_site.begin)) {
         auto [line, col] = *lc;
         indent_width = std::max(indent_width, std::to_string(line + 1).size());
       }
@@ -139,6 +166,30 @@ public:
       if (&annotation == &diag.annotations.back()) {
         fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
       }
+    }
+    for (auto& call_site : call_chain) {
+      auto src = source_for(call_site.source_index);
+      if (not src) {
+        continue;
+      }
+      auto lc = line_col_indices(*src, call_site.begin);
+      if (not lc) {
+        continue;
+      }
+      auto [line_idx, col] = *lc;
+      auto line = line_idx + 1;
+      fmt::print(stream_, "{}{}{}-->{} {}:{}:{}\n", indent, bold, blue, reset,
+                 src->source->origin, line, col + 1);
+      fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
+      fmt::print(stream_, "{}{}{}{} |{} {}\n",
+                 std::string(indent_width - std::to_string(line).size(), ' '),
+                 bold, blue, line, reset, src->lines[line_idx]);
+      // TODO: This doesn't respect multi-line spans.
+      auto count = std::max(uint32_t{1}, call_site.end - call_site.begin);
+      fmt::print(stream_, "{} {}{}| {}{}{} called from here{}\n", indent, bold,
+                 blue, color(severity::note), std::string(col, ' '),
+                 std::string(count, symbol(severity::note)), reset);
+      fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
     }
     for (auto& note : diag.notes) {
       auto lines = detail::split(note.message, "\n");
@@ -216,6 +267,7 @@ private:
 
   bool first = true;
   bool error_ = false;
+  std::vector<location> call_sites_;
   std::unordered_map<SourceId, PerSource> sources_lines_;
   std::ostream& stream_;
 };
