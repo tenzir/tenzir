@@ -1,0 +1,6 @@
+error: `exit` is incompatible with regex topic subscriptions
+ --> tests/operators/from_kafka/error_exit_with_regex_topic.tql:6:17
+  |
+6 |            exit=true
+  |                 ^^^^ 
+  |
