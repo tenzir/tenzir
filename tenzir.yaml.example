@@ -111,6 +111,11 @@ tenzir:
     # Collector. Leave unset to disable tracing.
     #endpoint: http://localhost:4318/v1/traces
 
+    # Additional HTTP headers to send with every OTLP request, e.g. to
+    # authenticate against a hosted backend.
+    #headers:
+    #  authorization: Bearer YOUR_API_KEY
+
   # A certificate file used as the default for operators accepting a `cacert`
   # option. This will default to an appropriate directory for the system. For
   # example:
