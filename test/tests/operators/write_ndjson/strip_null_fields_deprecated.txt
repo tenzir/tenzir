@@ -1,0 +1,8 @@
+{"x":1}
+warning: the `strip_null_fields` option is deprecated
+ --> tests/operators/write_ndjson/strip_null_fields_deprecated.tql:2:32
+  |
+2 | write_ndjson strip_null_fields=true
+  |                                ~~~~ 
+  |
+  = hint: use the `drop_null_fields` operator before `write_ndjson` instead
