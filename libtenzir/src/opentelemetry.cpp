@@ -48,6 +48,16 @@ auto initialize_opentelemetry(const caf::settings& config)
   }
   auto exporter_options = otlp::OtlpHttpExporterOptions{};
   exporter_options.url = endpoint;
+  if (const auto* headers
+      = caf::get_if<caf::settings>(&config, "tenzir.opentelemetry.headers")) {
+    for (const auto& [name, value] : *headers) {
+      if (auto str = caf::get_as<std::string>(value)) {
+        exporter_options.http_headers.emplace(name, std::move(*str));
+      } else {
+        TENZIR_WARN("ignoring non-string OpenTelemetry header '{}'", name);
+      }
+    }
+  }
   auto exporter = otlp::OtlpHttpExporterFactory::Create(exporter_options);
   auto processor = trace_sdk::BatchSpanProcessorFactory::Create(
     std::move(exporter), trace_sdk::BatchSpanProcessorOptions{});
