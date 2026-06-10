@@ -14,7 +14,6 @@
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/co_match.hpp"
-#include "tenzir/compile.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/configuration.hpp"
 #include "tenzir/defaults.hpp"

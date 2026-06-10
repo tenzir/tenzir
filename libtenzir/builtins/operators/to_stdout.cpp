@@ -9,7 +9,7 @@
 #include "tenzir/async.hpp"
 
 #include <tenzir/arc.hpp>
-#include <tenzir/compile.hpp>
+#include <tenzir/compile_ctx.hpp>
 #include <tenzir/detail/posix.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>

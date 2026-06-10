@@ -9,7 +9,7 @@
 #include <tenzir/async.hpp>
 #include <tenzir/async/notify.hpp>
 #include <tenzir/base_ctx.hpp>
-#include <tenzir/compile.hpp>
+#include <tenzir/compile_ctx.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pcap.hpp>

@@ -8,6 +8,8 @@
 
 #include "tenzir/compile_ctx.hpp"
 
+#include "tenzir/try.hpp"
+
 #include <utility>
 
 namespace tenzir {
@@ -97,6 +99,12 @@ compile_ctx::root::operator base_ctx() const {
 
 compile_ctx::compile_ctx(root& root, const env_t* env)
   : root_{root}, env_{env} {
+}
+
+auto compile(ast::pipeline ast, base_ctx ctx) -> failure_or<CompiledPipeline> {
+  auto root = compile_ctx::make_root(ctx);
+  TRY(auto ir, std::move(ast).compile(root));
+  return CompiledPipeline{std::move(ir), std::move(root).source_map()};
 }
 
 } // namespace tenzir

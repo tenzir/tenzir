@@ -11,7 +11,7 @@
 #include <tenzir/blob.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/co_match.hpp>
-#include <tenzir/compile.hpp>
+#include <tenzir/compile_ctx.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/curl.hpp>
 #include <tenzir/detail/narrow.hpp>

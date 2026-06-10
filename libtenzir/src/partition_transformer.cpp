@@ -13,7 +13,6 @@
 #include "tenzir/async/mail.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/co_match.hpp"
-#include "tenzir/compile.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/available_memory.hpp"
 #include "tenzir/detail/fanout_counter.hpp"
