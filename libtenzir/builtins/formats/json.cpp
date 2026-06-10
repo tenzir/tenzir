@@ -611,6 +611,14 @@ struct printer_args {
   }
 };
 
+auto warn_strip_null_fields_deprecated(location source, std::string_view hint,
+                                       diagnostic_handler& dh) -> void {
+  diagnostic::warning("the `strip_null_fields` option is deprecated")
+    .primary(source)
+    .hint("{}", hint)
+    .emit(dh);
+}
+
 class json_printer final : public plugin_printer {
 public:
   json_printer() = default;
@@ -2091,7 +2099,8 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<WriteJsonArgs, WriteJson>{WriteJsonArgs{.tql = tql_}};
     d.named("strip", &WriteJsonArgs::strip);
-    d.named("strip_null_fields", &WriteJsonArgs::strip_null_fields);
+    auto strip_null_fields_arg
+      = d.named("strip_null_fields", &WriteJsonArgs::strip_null_fields);
     d.named("strip_nulls_in_lists", &WriteJsonArgs::strip_nulls_in_lists);
     d.named("strip_empty_records", &WriteJsonArgs::strip_empty_records);
     d.named("strip_empty_lists", &WriteJsonArgs::strip_empty_lists);
@@ -2101,6 +2110,13 @@ public:
     if (not tql_) {
       d.named("arrays_of_objects", &WriteJsonArgs::arrays_of_objects);
       d.validate([=](DescribeCtx& ctx) -> Empty {
+        if (ctx.get(strip_null_fields_arg).value_or(false)) {
+          warn_strip_null_fields_deprecated(
+            ctx.get_location(strip_null_fields_arg)
+              .value_or(location::unknown),
+            "use the `drop_null_fields` operator before `write_json` instead",
+            ctx);
+        }
         if (ctx.get(jobs_arg)) {
           diagnostic::error("`_jobs` is not supported for `write_json` in neo")
             .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
@@ -2110,6 +2126,13 @@ public:
       });
     } else {
       d.validate([=](DescribeCtx& ctx) -> Empty {
+        if (ctx.get(strip_null_fields_arg).value_or(false)) {
+          warn_strip_null_fields_deprecated(
+            ctx.get_location(strip_null_fields_arg)
+              .value_or(location::unknown),
+            "use the `drop_null_fields` operator before `write_tql` instead",
+            ctx);
+        }
         if (ctx.get(jobs_arg)) {
           diagnostic::error("`_jobs` is not supported for `write_tql` in neo")
             .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
@@ -2131,6 +2154,14 @@ public:
     args.add(parser, tql_, not tql_, true);
     parser.named("_jobs", n_jobs);
     TRY(parser.parse(inv, ctx));
+    if (args.omit_null_fields) {
+      warn_strip_null_fields_deprecated(
+        *args.omit_null_fields,
+        tql_ ? "use the `drop_null_fields` operator before `write_tql` instead"
+             : "use the `drop_null_fields` operator before `write_json` "
+               "instead",
+        ctx);
+    }
     if (n_jobs and n_jobs->inner == 0) {
       diagnostic::error("`_jobs` must be larger than 0")
         .primary(*n_jobs)
@@ -2168,7 +2199,8 @@ public:
     auto d
       = Describer<WriteJsonArgs, WriteJson>{WriteJsonArgs{.compact = true}};
     d.named("strip", &WriteJsonArgs::strip);
-    d.named("strip_null_fields", &WriteJsonArgs::strip_null_fields);
+    auto strip_null_fields_arg
+      = d.named("strip_null_fields", &WriteJsonArgs::strip_null_fields);
     d.named("strip_nulls_in_lists", &WriteJsonArgs::strip_nulls_in_lists);
     d.named("strip_empty_records", &WriteJsonArgs::strip_empty_records);
     d.named("strip_empty_lists", &WriteJsonArgs::strip_empty_lists);
@@ -2177,6 +2209,12 @@ public:
     d.named("color", &WriteJsonArgs::color);
     auto jobs_arg = d.named_optional("_jobs", &WriteJsonArgs::jobs);
     d.validate([=](DescribeCtx& ctx) -> Empty {
+      if (ctx.get(strip_null_fields_arg).value_or(false)) {
+        warn_strip_null_fields_deprecated(
+          ctx.get_location(strip_null_fields_arg).value_or(location::unknown),
+          "use the `drop_null_fields` operator before `write_ndjson` instead",
+          ctx);
+      }
       if (auto jobs = ctx.get(jobs_arg); jobs and *jobs == 0) {
         diagnostic::error("`_jobs` must be greater than zero")
           .primary(ctx.get_location(jobs_arg).value_or(location::unknown))
@@ -2201,6 +2239,12 @@ public:
     args.add(parser, false, true, true);
     parser.named("_jobs", n_jobs);
     TRY(parser.parse(inv, ctx));
+    if (args.omit_null_fields) {
+      warn_strip_null_fields_deprecated(
+        *args.omit_null_fields,
+        "use the `drop_null_fields` operator before `write_ndjson` instead",
+        ctx);
+    }
     if (n_jobs and n_jobs->inner == 0) {
       diagnostic::error("`_jobs` must be larger than 0")
         .primary(*n_jobs)
@@ -2243,6 +2287,14 @@ public:
     parser.positional("x", expr, "any");
     args.add(parser, false, false, false);
     TRY(parser.parse(inv, ctx));
+    if (args.omit_null_fields) {
+      warn_strip_null_fields_deprecated(
+        *args.omit_null_fields,
+        fmt::format("use the `drop_null_fields` function instead, e.g. "
+                    "`x.drop_null_fields().{}()`",
+                    name()),
+        ctx);
+    }
     auto opts = json_printer_options{
       .tql = false,
       .style = no_style(),
