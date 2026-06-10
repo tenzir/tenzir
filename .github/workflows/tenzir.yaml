@@ -2,34 +2,6 @@ name: Tenzir
 on:
   workflow_dispatch:
     inputs:
-      policy-enforcement:
-        description: Run the `policy-enforcement` job.
-        type: boolean
-        default: false
-      docker-tenzir-amd64:
-        description: Run the `docker-tenzir-amd64` job.
-        type: boolean
-        default: false
-      docker-tenzir-arm64:
-        description: Run the `docker-tenzir-arm64` job.
-        type: boolean
-        default: false
-      docker-tenzir:
-        description: Run the `docker-tenzir` manifest job.
-        type: boolean
-        default: false
-      benchmark-reference-docker:
-        description: Run the `benchmark-reference-docker` job.
-        type: boolean
-        default: false
-      sync-openapi-to-docs:
-        description: Run the `sync-openapi-to-docs` job.
-        type: boolean
-        default: false
-      regression-tests:
-        description: Run the `regression-tests` job.
-        type: boolean
-        default: false
       tenzir-static-aarch64-linux:
         description: Run the `tenzir-static-aarch64-linux` job.
         type: boolean
@@ -48,10 +20,6 @@ on:
         default: false
       benchmark-reference-static:
         description: Run the `benchmark-reference-static` job.
-        type: boolean
-        default: false
-      tenzir:
-        description: Run the `tenzir` job.
         type: boolean
         default: false
       python:
@@ -118,28 +86,16 @@ jobs:
     name: Configure
     runs-on: ubuntu-latest
     outputs:
-      version-matrix: ${{ steps.configure.outputs.version-matrix }}
       build-version: ${{ steps.configure.outputs.build-version }}
       release-version: ${{ steps.configure.outputs.release-version }}
       ref-slug: ${{ steps.configure.outputs.ref-slug }}
       head-ref-slug: ${{ steps.configure.outputs.head-ref-slug }}
       base-ref-slug: ${{ steps.configure.outputs.base-ref-slug }}
-      tenzir-container-ref: ${{ steps.configure.outputs.tenzir-container-ref }}
       tenzir-version-suffix: ${{ steps.configure.outputs.tenzir-version-suffix }}
       tenzir-version-build-metadata: ${{ steps.configure.outputs.tenzir-version-build-metadata }}
-      run-docker-tenzir: ${{ steps.configure.outputs.run-docker-tenzir }}
-      docker-config: ${{ steps.docker.outputs.docker-config }}
-      run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
       run-tenzir-nix: ${{ steps.configure.outputs.run-tenzir-nix }}
-      run-tenzir: ${{ steps.configure.outputs.run-tenzir }}
       run-python: ${{ steps.configure.outputs.run-python }}
       run-python-package: ${{ steps.configure.outputs.run-python-package }}
-      run-policy-enforcement: ${{ steps.select-jobs.outputs.run-policy-enforcement }}
-      run-docker-tenzir-amd64: ${{ steps.select-jobs.outputs.run-docker-tenzir-amd64 }}
-      run-docker-tenzir-arm64: ${{ steps.select-jobs.outputs.run-docker-tenzir-arm64 }}
-      run-docker-tenzir-manifest: ${{ steps.select-jobs.outputs.run-docker-tenzir }}
-      run-benchmark-reference-docker: ${{ steps.select-jobs.outputs.run-benchmark-reference-docker }}
-      run-sync-openapi-to-docs: ${{ steps.select-jobs.outputs.run-sync-openapi-to-docs }}
       run-tenzir-static-aarch64-linux: ${{ steps.select-jobs.outputs.run-tenzir-static-aarch64-linux }}
       run-tenzir-static-x86_64-linux: ${{ steps.select-jobs.outputs.run-tenzir-static-x86_64-linux }}
       run-tenzir-static-arm64-darwin: ${{ steps.select-jobs.outputs.run-tenzir-static-arm64-darwin }}
@@ -180,38 +136,6 @@ jobs:
           release_version="${version}"
           build_version="${version}+g${id_sha:0:10}"
 
-          # Create a matrix with Tenzir versions greater or equal than
-          # limit_version. We derive limit_version from the current release by
-          # going back 5 minor versions.
-          major_minor_patch="${version#v}"
-          major="${major_minor_patch%%.*}"
-          minor_patch="${major_minor_patch#*.}"
-          minor="${minor_patch%%.*}"
-          limit_minor=$((minor - 5))
-          if ((limit_minor < 0)); then
-            limit_minor=0
-          fi
-          limit_version="v${major}.${limit_minor}.0"
-          if git rev-parse "${limit_version}" -- >/dev/null 2>&1; then
-            dated_versions=$(git for-each-ref --format="%(creatordate:format:%s)#%(refname:short)" "refs/tags/v[1-9]*" | grep -v '\-rc[0-9]\+$')
-            dated_limit_version=$(printf "%s\n" "$dated_versions" | awk -F# -v version="$limit_version" '$2==version{print; exit}')
-            # We filter out versions older than limit_version and known bad
-            # versions that should not run in regression tests.
-            known_bad_versions=(
-              "v5.27.3"
-              "v5.29.3"
-            )
-            filtered_versions=$(printf "%s\n" "$dated_versions" | awk -F# -v limit="$dated_limit_version" '$0>=limit{print$2}')
-            for bad_version in "${known_bad_versions[@]}"; do
-              filtered_versions=$(printf "%s\n" "$filtered_versions" | grep -Fvx "$bad_version" || true)
-            done
-            version_matrix="$(printf "%s\n" "$filtered_versions" latest | sed '/^$/d' | jq -R | jq -sc 'map({version: .})')"
-          else
-            # If the computed limit does not exist (e.g., because of an
-            # intentional break), only check latest.
-            version_matrix="$(printf "latest\n" | jq -R | jq -sc 'map({version: .})')"
-          fi
-          echo "version-matrix=${version_matrix}" >> $GITHUB_OUTPUT
           echo "build-version=${build_version}" >> $GITHUB_OUTPUT
           echo "release-version=${release_version}" >> $GITHUB_OUTPUT
           # Inject the branch slugs for cache names.
@@ -225,33 +149,21 @@ jobs:
           fi
           echo "tenzir-version-suffix=${tenzir_version_suffix}" >> $GITHUB_OUTPUT
           echo "tenzir-version-build-metadata=${tenzir_version_build_metadata}" >> $GITHUB_OUTPUT
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            tenzir_container_ref="${GITHUB_HEAD_REF_SLUG}"
-          else
-            tenzir_container_ref="${{ github.sha }}"
-          fi
-          echo "tenzir-container-ref=${tenzir_container_ref}" >> $GITHUB_OUTPUT
           #################################
           ######## Decide what jobs to run.
           #################################
           # TODO: Split this into two steps:
           # * Set version variables (above)
           # * Enable Jobs (below)
-          echo "::notice Disable all others so we can selectivly enable again"
-          echo "run-regression-tests=false" >> $GITHUB_OUTPUT
+          echo "::notice Disable all others so we can selectively enable again"
           echo "run-python=false" >> $GITHUB_OUTPUT
           echo "run-python-package=false" >> $GITHUB_OUTPUT
-          echo "run-docker-tenzir=false" >> $GITHUB_OUTPUT
           echo "run-tenzir-nix=false" >> $GITHUB_OUTPUT
-          echo "run-tenzir=false" >> $GITHUB_OUTPUT
           # A little helper to enable all checks.
           shopt -s expand_aliases
           alias run_all_checks=' \
-            echo "run-regression-tests=true" >> $GITHUB_OUTPUT; \
             echo "run-python=true" >> $GITHUB_OUTPUT; \
-            echo "run-docker-tenzir=true" >> $GITHUB_OUTPUT; \
-            echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT; \
-            echo "run-tenzir=true" >> $GITHUB_OUTPUT;'
+            echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT;'
           # Run all if this is a release.
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             echo "::notice Enabling release jobs"
@@ -273,14 +185,6 @@ jobs:
               jq -e --arg name "$name" '.[$name] == true or .[$name] == "true"' \
                 <<< "$WORKFLOW_DISPATCH_INPUTS" >/dev/null
             }
-            if input_enabled docker-tenzir-amd64 ||
-               input_enabled docker-tenzir-arm64 ||
-               input_enabled docker-tenzir ||
-               input_enabled benchmark-reference-docker ||
-               input_enabled sync-openapi-to-docs ||
-               input_enabled regression-tests; then
-              echo "run-docker-tenzir=true" >> $GITHUB_OUTPUT
-            fi
             if input_enabled tenzir-static-aarch64-linux ||
                input_enabled tenzir-static-x86_64-linux ||
                input_enabled tenzir-static-arm64-darwin ||
@@ -290,12 +194,6 @@ jobs:
                input_enabled python-package ||
                input_enabled update-homebrew-tap; then
               echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT
-            fi
-            if input_enabled regression-tests; then
-              echo "run-regression-tests=true" >> $GITHUB_OUTPUT
-            fi
-            if input_enabled tenzir; then
-              echo "run-tenzir=true" >> $GITHUB_OUTPUT
             fi
             if input_enabled python; then
               echo "run-python=true" >> $GITHUB_OUTPUT
@@ -326,86 +224,16 @@ jobs:
           fi
           run_if_changed python "python/"
           TENZIR_SOURCES=(cmake/ CMakeLists.txt contrib/tenzir-plugins/ libtenzir/ libtenzir_test/ schema/ tenzir/ tenzir.yaml.example version.json plugins/)
-          run_if_changed tenzir "${TENZIR_SOURCES[@]}"
-          run_docker_tenzir="${run_tenzir}"
-          run_if_changed_default docker-tenzir $run_docker_tenzir \
-            "Dockerfile" ".dockerignore" \
-            "scripts/debian/build-*.sh" \
-            "scripts/debian/install-dev-dependencies.sh" \
-            ".github/workflows/docker.yaml" \
-            ".github/workflows/push-manifest.yaml" \
-            ".github/workflows/docker-config-base.json"
-          run_if_changed_default regression-tests $run_docker_tenzir
           run_if_changed_default tenzir-nix $run_python \
             "${TENZIR_SOURCES[@]}" plugins/ contrib/tenzir-plugins/ flake.nix flake.lock nix/ \
             ".github/workflows/nix.nu" \
             ".github/workflows/nix.yaml" \
             ".github/workflows/nix-config-base.json"
-      - name: Configure Docker
-        id: docker
-        if: steps.configure.outputs.run-docker-tenzir == 'true'
-        run: |
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            source_tag="${{ steps.configure.outputs.head-ref-slug }}"
-            tags=("${{ steps.configure.outputs.head-ref-slug }}")
-          elif [[ "$GITHUB_EVENT_NAME" == "push" || "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            source_tag="${{ github.sha }}"
-            if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
-              tags=('main' "${{ github.sha }}")
-            else
-              tags=("${{ steps.configure.outputs.ref-slug }}" "${{ github.sha }}")
-            fi
-          elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            source_tag="${{ github.sha }}"
-            major_minor_patch='${{ steps.configure.outputs.release-version }}'
-            major_minor=$(echo $major_minor_patch | sed 's/\(v[0-9]*\.[0-9]*\)\..*/\1/')
-            major=$(echo $major_minor_patch | sed 's/\(v[0-9]*\)\..*/\1/')
-            if [[ "${{ github.event.release.prerelease }}" == "true" || "$major_minor_patch" == *-* ]]; then
-              tags=("${{ github.sha }}" "${major_minor_patch}")
-            else
-              tags=('latest' "${{ github.sha }}" "${major_minor_patch}" "${major_minor}" "${major}")
-            fi
-          else
-            echo "::error::unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
-            exit 1
-          fi
-          docker_config="$(jq -c \
-            '."build-version" = $build_version | ."version-suffix" = $vs | ."source-tag" = $source | ."tags" = $ARGS.positional' \
-            .github/workflows/docker-config-base.json \
-            --arg build_version "${{ steps.configure.outputs.build-version }}" \
-            --arg vs "${{ steps.configure.outputs.tenzir-version-suffix }}" \
-            --arg source "${source_tag}" \
-            --args -- "${tags[@]}")"
-          # PRs only publish the community images to GHCR.
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            docker_config="$(jq -c '(.editions[] | ."image-registries") |= [] |
-              (.editions[] | select(.name == "tenzir" or .name == "tenzir-node") |
-              ."image-registries") |= ["ghcr.io"]' \
-              <<< "${docker_config}")"
-          # Release builds additionally publish the Docker Hub community images.
-          elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            docker_config="$(jq -c '
-              (.editions[]
-               | select(.name == "tenzir" or .name == "tenzir-node")
-               | ."image-registries") += ["docker.io"] |
-              (.editions[] | ."image-registries") |= unique' \
-              <<< "${docker_config}")"
-          # `push` and `workflow_dispatch` hit this branch; they must not push the demo image.
-          else
-            docker_config="$(jq -c '
-              (.editions[] | select(.name == "tenzir-demo") | ."image-registries") |= []' \
-              <<< "${docker_config}")"
-          fi
-          echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
-          echo "::notice docker-config = ${docker_config}"
       - name: Select Jobs
         id: select-jobs
         env:
           WORKFLOW_DISPATCH_INPUTS: ${{ toJSON(inputs) }}
-          RUN_DOCKER_TENZIR: ${{ steps.configure.outputs.run-docker-tenzir }}
-          RUN_REGRESSION_TESTS: ${{ steps.configure.outputs.run-regression-tests }}
           RUN_TENZIR_NIX: ${{ steps.configure.outputs.run-tenzir-nix }}
-          RUN_TENZIR: ${{ steps.configure.outputs.run-tenzir }}
           RUN_PYTHON: ${{ steps.configure.outputs.run-python }}
           RUN_PYTHON_PACKAGE: ${{ steps.configure.outputs.run-python-package }}
         run: |
@@ -422,32 +250,6 @@ jobs:
           enable_job() {
             local job="$1"
             case "$job" in
-              policy-enforcement)
-                set_output run-policy-enforcement true
-                ;;
-              docker-tenzir-amd64)
-                set_output run-docker-tenzir-amd64 true
-                ;;
-              docker-tenzir-arm64)
-                set_output run-docker-tenzir-arm64 true
-                ;;
-              docker-tenzir)
-                enable_job docker-tenzir-amd64
-                enable_job docker-tenzir-arm64
-                set_output run-docker-tenzir true
-                ;;
-              benchmark-reference-docker)
-                enable_job docker-tenzir-amd64
-                set_output run-benchmark-reference-docker true
-                ;;
-              sync-openapi-to-docs)
-                enable_job docker-tenzir
-                set_output run-sync-openapi-to-docs true
-                ;;
-              regression-tests)
-                enable_job docker-tenzir
-                set_output run-regression-tests true
-                ;;
               tenzir-static-aarch64-linux)
                 set_output run-tenzir-static-aarch64-linux true
                 ;;
@@ -465,9 +267,6 @@ jobs:
               benchmark-reference-static)
                 enable_job tenzir-static-x86_64-linux
                 set_output run-benchmark-reference-static true
-                ;;
-              tenzir)
-                set_output run-tenzir true
                 ;;
               python)
                 enable_job tenzir-static-x86_64-linux
@@ -491,19 +290,11 @@ jobs:
           }
 
           for key in \
-            run-policy-enforcement \
-            run-docker-tenzir-amd64 \
-            run-docker-tenzir-arm64 \
-            run-docker-tenzir \
-            run-benchmark-reference-docker \
-            run-sync-openapi-to-docs \
-            run-regression-tests \
             run-tenzir-static-aarch64-linux \
             run-tenzir-static-x86_64-linux \
             run-tenzir-static-arm64-darwin \
             run-docker-slim \
             run-benchmark-reference-static \
-            run-tenzir \
             run-python \
             run-python-package \
             run-update-homebrew-tap; do
@@ -512,19 +303,11 @@ jobs:
 
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             for job in \
-              policy-enforcement \
-              docker-tenzir-amd64 \
-              docker-tenzir-arm64 \
-              docker-tenzir \
-              benchmark-reference-docker \
-              sync-openapi-to-docs \
-              regression-tests \
               tenzir-static-aarch64-linux \
               tenzir-static-x86_64-linux \
               tenzir-static-arm64-darwin \
               docker-slim \
               benchmark-reference-static \
-              tenzir \
               python \
               python-package \
               update-homebrew-tap; do
@@ -535,240 +318,28 @@ jobs:
             exit 0
           fi
 
-          set_output run-policy-enforcement true
-
-          if [[ "$RUN_DOCKER_TENZIR" == "true" ]]; then
-            set_output run-docker-tenzir-amd64 true
-            set_output run-docker-tenzir-arm64 true
-            set_output run-docker-tenzir true
-          fi
-          if [[ "$RUN_DOCKER_TENZIR" == "true" && "$GITHUB_REF" == "refs/heads/main" ]]; then
-            set_output run-sync-openapi-to-docs true
-          fi
-          if [[ "$RUN_REGRESSION_TESTS" == "true" ]]; then
-            set_output run-regression-tests true
-          fi
-
           if [[ "$RUN_TENZIR_NIX" == "true" ]]; then
             set_output run-tenzir-static-aarch64-linux true
             set_output run-tenzir-static-x86_64-linux true
-            set_output run-tenzir-static-arm64-darwin true
             set_output run-docker-slim true
           fi
 
-          if [[ "$RUN_DOCKER_TENZIR" == "true" ]]; then
-            if [[ "$GITHUB_REF" == "refs/heads/main" ]] || [[ "$GITHUB_EVENT_NAME" == "release" && "$GITHUB_REF_NAME" != *-rc* ]]; then
-              set_output run-benchmark-reference-docker true
-            fi
-          fi
           if [[ "$RUN_TENZIR_NIX" == "true" ]]; then
             if [[ "$GITHUB_REF" == "refs/heads/main" ]] || [[ "$GITHUB_EVENT_NAME" == "release" && "$GITHUB_REF_NAME" != *-rc* ]]; then
               set_output run-benchmark-reference-static true
             fi
           fi
 
-          if [[ "$RUN_TENZIR" == "true" ]]; then
-            set_output run-tenzir true
-          fi
           if [[ "$RUN_PYTHON" == "true" ]]; then
             set_output run-python true
           fi
           if [[ "$RUN_PYTHON_PACKAGE" == "true" ]]; then
+            set_output run-tenzir-static-arm64-darwin true
             set_output run-python-package true
           fi
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             set_output run-update-homebrew-tap true
           fi
-
-  policy-enforcement:
-    name: Policy Enforcement
-    needs:
-      - configure
-    if: needs.configure.outputs.run-policy-enforcement == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          fetch-depth: 1
-      - name: Detect contrib/tenzir-plugins changes
-        id: changes
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
-        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
-        with:
-          filters: |
-            plugins:
-              - 'contrib/tenzir-plugins'
-      - name: Configure ssh-agent
-        if: |
-          (
-            github.event_name != 'pull_request' &&
-            github.event_name != 'merge_group'
-          ) ||
-          steps.changes.outputs.plugins == 'true'
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
-      - name: Require contrib/tenzir-plugins to be downstream of current `main`
-        if: |
-          (
-            github.event_name != 'pull_request' &&
-            github.event_name != 'merge_group'
-          ) ||
-          steps.changes.outputs.plugins == 'true'
-        run: |
-          git submodule update --init contrib/tenzir-plugins
-          git -C contrib/tenzir-plugins fetch origin main
-          # Check that the plugins submodule commit is either already merged
-          # into `main` or descends from current `main`.
-          git -C contrib/tenzir-plugins merge-base --is-ancestor \
-            $(git -C contrib/tenzir-plugins rev-parse origin/main) \
-            $(git -C contrib/tenzir-plugins rev-parse HEAD) || \
-          git -C contrib/tenzir-plugins merge-base --is-ancestor \
-            $(git -C contrib/tenzir-plugins rev-parse HEAD) \
-            $(git -C contrib/tenzir-plugins rev-parse origin/main)
-      - name: Generate a token
-        id: generate_token
-        if: github.event_name == 'pull_request' && steps.changes.outputs.plugins == 'true'
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ vars.TENZIR_AUTOBUMPER_APP_ID }}
-          private-key: ${{ secrets.TENZIR_AUTOBUMPER_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-      - name: Require an open non-draft PR for a submodule bump
-        if: github.event_name == 'pull_request' && steps.changes.outputs.plugins == 'true'
-        env:
-          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
-        run: |
-          # Read the gitlink recorded in the superproject instead of relying on
-          # the submodule being initialized as a nested Git checkout.
-          plugins_sha=$(git rev-parse HEAD:contrib/tenzir-plugins)
-          plugins_main_sha=$(gh api repos/tenzir/tenzir-plugins/commits/main --jq .sha)
-
-          if [[ "$plugins_sha" != "$plugins_main_sha" ]]; then
-            pr_number=$(gh pr --repo tenzir/tenzir-plugins list --draft=false \
-              --search "$plugins_sha" --json number -q ".[0].number")
-            [[ -n "$pr_number" ]] # Assert the pr number was non-empty
-          fi
-
-  docker-tenzir-amd64:
-    name: Docker
-    needs:
-      - configure
-    if: needs.configure.outputs.run-docker-tenzir-amd64 == 'true'
-    uses: ./.github/workflows/docker.yaml
-    with:
-      config: ${{ needs.configure.outputs.docker-config }}
-      runner: ubuntu-latest
-      arch: amd64
-    secrets: inherit
-
-  docker-tenzir-arm64:
-    name: Docker
-    needs:
-      - configure
-    if: needs.configure.outputs.run-docker-tenzir-arm64 == 'true'
-    uses: ./.github/workflows/docker.yaml
-    with:
-      config: ${{ needs.configure.outputs.docker-config }}
-      runner: ubicloud-standard-8-arm
-      arch: arm64
-    secrets: inherit
-
-  docker-tenzir:
-    name: Push Docker Manifest
-    needs:
-      - configure
-      - docker-tenzir-amd64
-      - docker-tenzir-arm64
-    if: needs.configure.outputs.run-docker-tenzir-manifest == 'true'
-    uses: ./.github/workflows/push-manifest.yaml
-    with:
-      source-images: "${{ needs.docker-tenzir-amd64.outputs.images }} ${{ needs.docker-tenzir-arm64.outputs.images }}"
-      arch-suffixes: "amd64 arm64"
-      tags: "${{ join(fromJSON(needs.configure.outputs.docker-config).tags, ' ') }}"
-    secrets: inherit
-
-  benchmark-reference-docker:
-    name: Benchmark reference (docker)
-    needs:
-      - configure
-      - docker-tenzir-amd64
-    if: needs.configure.outputs.run-benchmark-reference-docker == 'true'
-    runs-on: ubuntu-latest
-    env:
-      BENCHMARK_AWS_ROLE_ARN: ${{ vars.BENCHMARK_AWS_ROLE_ARN }}
-      BENCHMARK_S3_BUCKET: ${{ vars.BENCHMARK_S3_BUCKET }}
-      BENCHMARK_S3_PREFIX: ${{ vars.BENCHMARK_S3_PREFIX }}
-      TENZIR_BENCH_RUNNER_CLASS: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      - name: Authenticate to GHCR
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2  # v4.0.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Benchmark the docker image
-        uses: ./.github/actions/benchmark
-        with:
-          target: ${{ needs.docker-tenzir-amd64.outputs.benchmark-image }}
-          publish-results: true
-          destination-prefix: >-
-            ${{ github.ref_type == 'tag'
-                && format('refs/tags/{0}/docker', github.ref_name)
-                || format('refs/main/{0}/docker', github.sha) }}
-
-  sync-openapi-to-docs:
-    name: Sync OpenAPI to Docs
-    needs: [docker-tenzir, configure]
-    if: needs.configure.outputs.run-sync-openapi-to-docs == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Generate app token
-        id: app-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ vars.TENZIR_GITHUB_APP_ID }}
-          private-key: ${{ secrets.TENZIR_GITHUB_APP_PRIVATE_KEY }}
-          repositories: docs
-
-      - name: Trigger docs OpenAPI regeneration
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          gh workflow run generate-openapi-node.yaml \
-            --repo tenzir/docs \
-            --field tenzir_docker_tag="${{ github.sha }}"
-
-  regression-tests:
-    needs:
-      - docker-tenzir
-      - configure
-    if: needs.configure.outputs.run-regression-tests == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        regression-tests: ${{ fromJson(needs.configure.outputs.version-matrix) }}
-    name: Regression Tests (${{ matrix.regression-tests.version }})
-    runs-on: ubuntu-latest
-    env:
-      DOCKER_BUILDKIT: 1
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Run Regression Tests
-        run: |
-          scripts/regression-tests.sh ${{ matrix.regression-tests.version }} ${{ needs.configure.outputs.tenzir-container-ref }}
 
   tenzir-static-aarch64-linux:
     name: Nix
@@ -856,217 +427,6 @@ jobs:
                 && format('refs/tags/{0}/static', github.ref_name)
                 || format('refs/main/{0}/static', github.sha) }}
 
-  tenzir:
-    needs:
-      - configure
-    if: ${{ needs.configure.outputs.run-tenzir == 'true' }}
-    name: Tenzir (${{ matrix.tenzir.name }})
-    runs-on: ${{ matrix.tenzir.os }}
-    container: ${{ matrix.tenzir.container }}
-    strategy:
-      fail-fast: false
-      matrix:
-        tenzir:
-          - os: macos-26
-            container: null
-            name: macOS
-            compiler: Clang
-            cmake-extra-flags: |
-              -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON \
-              -DTENZIR_ENABLE_BUNDLED_SIMDJSON:BOOL=ON \
-              -DTENZIR_PLUGINS_BLACKLIST="from_velociraptor;platform;snowflake"
-            bundled-plugins:
-              # macOS runners in GitHub Actions CI are very limited, so we
-              # prefer to have fewer jobs running and build the proprietary
-              # plugins as bundled on macOS.
-              - plugins/*
-              - contrib/tenzir-plugins/*
-    env:
-      BUILD_DIR: build
-      CCACHE_ABSSTDERR: true
-      CCACHE_COMPRESS: true
-      CCACHE_COMPRESSLEVEL: 6
-      # We're intentionally placing the cache dir outside of `${{ github.workspace }}`
-      # because that has a weird issue where it switches between `/home/runner` and
-      # `/__w/` depending on the current context. See https://github.com/actions/checkout/issues/785
-      # and https://github.com/actions/runner/issues/2058.
-      # We use `/tmp` because that's writable on both mac and linux runners.
-      CCACHE_DIR: "/tmp/ccache"
-      CCACHE_NOHASHDIR: true
-      CCACHE_SLOPPINESS: "file_macro,time_macros"
-      CCACHE_UNIFY: true
-      CMAKE_CXX_COMPILER_LAUNCHER: ccache
-      CMAKE_C_COMPILER_LAUNCHER: ccache
-      CMAKE_GENERATOR: Ninja
-      CMAKE_MAKE_PROGRAM: ninja
-      DEBIAN_FRONTEND: noninteractive
-      HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
-      HOMEBREW_NO_ANALYTICS: 1
-      HOMEBREW_NO_INSTALL_CLEANUP: 1
-      HOMEBREW_NO_AUTO_UPDATE: 1
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      - name: Tailscale
-        if: false && runner.os == 'Linux'
-        uses: tailscale/github-action@v3
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-          version: 1.66.4
-          args: --ssh
-          # 1. Kernel space networking needs CAP_NET_ADMIN but that is not
-          #    available in containerized GitHub Actions jobs.
-          # 2. Tailscale SSH doesn't work without an accessible statedir. This
-          #    is only needed inside of containerized jobs.
-          #    -> https://github.com/tailscale/tailscale/issues/11039
-          tailscaled-args: --tun=userspace-networking --state=$HOME/tailscaled.state --statedir=$HOME/var/lib/tailscale
-      - name: Configure ssh-agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
-      - name: Checkout submodules
-        run: |
-          git config --global --add safe.directory '*'
-          git submodule update --init --recursive contrib/tenzir-plugins
-          git submodule update --init --recursive libtenzir
-          git submodule update --init --recursive plugins
-          git submodule update --init --recursive tenzir
-      - name: Setup Homebrew Clang and Install Dependencies (macOS)
-        if: ${{ matrix.tenzir.name == 'macOS' }}
-        run: |
-          # Use CommandLineTools SDK instead of Xcode's SDK for LLVM compatibility
-          sudo xcode-select --switch /Library/Developer/CommandLineTools
-          # Setup Homebrew Clang
-          brew install llvm
-          llvm_root="$(brew --prefix llvm)"
-          echo "${llvm_root}/bin" >> $GITHUB_PATH
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "BUILD_DIR=build/clang/relwithdebinfo" >> $GITHUB_ENV
-            echo "CMAKE_PRESET=macos-clang-relwithdebinfo" >> $GITHUB_ENV
-          else
-            echo "BUILD_DIR=build/clang/release" >> $GITHUB_ENV
-            echo "CMAKE_PRESET=macos-clang-release" >> $GITHUB_ENV
-          fi
-          # Install all other dependencies.
-          ./scripts/macOS/install-dev-dependencies.sh
-      - name: Setup Python (macOS)
-        if: ${{ matrix.tenzir.name == 'macOS' }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install Nix
-        uses: cachix/install-nix-action@v30
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
-      - name: Configure Environment
-        run: |
-          PACKAGE_NAME="$(echo "tenzir-${{ needs.configure.outputs.build-version }}-$(uname -s)-Release-${{ matrix.tenzir.compiler }}" | awk '{ print tolower($0) }')"
-          PUBLISH_NAME="$(echo "tenzir-$(uname -s)-Release-${{ matrix.tenzir.compiler }}" | awk '{ print tolower($0) }')"
-          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-          echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
-      - name: Fetch ccache Cache
-        id: ccache_restore
-        uses: actions/cache/restore@v4
-        with:
-          # Note that the `path` is implicitly part of the key when looking up cache hits:
-          # GitHub will only download artifacts that contain files whose locations matches `path`,
-          # so if the `path` changes nothing will be downloaded even if the key name matches.
-          path: ${{ env.CCACHE_DIR }}
-          key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.ref-slug }}-${{ github.sha }}
-          restore-keys: |
-            ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.ref-slug }}
-            ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-main
-            ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}
-      - name: Configure
-        run: |
-          echo "$PATH"
-          python3 --version
-          python3 -m pip --version
-          bash --version
-          ccache --version
-          # Zero the cache statistics (but not the configuration options).
-          ccache --zero-stats
-          ccache --show-config
-          # Setting different values for CMAKE_INSTALL_PREFIX and
-          # CPACK_PACKAGING_INSTALL_PREFIX is currently not supported and causes
-          # a warning. We accept this drawback because the package we generate
-          # here is built specifically as input for the plugin CI jobs and not
-          # suitable for general use.
-          cmake --preset "${CMAKE_PRESET}" \
-            -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/tenzir" \
-            -DCPACK_GENERATOR:STRING=TGZ \
-            -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
-            -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="/" \
-            -DTENZIR_PLUGINS:STRING="${{ join(matrix.tenzir.bundled-plugins, ';') }}" \
-            -DTENZIR_VERSION_SUFFIX:STRING="${{ needs.configure.outputs.tenzir-version-suffix }}" \
-            -DTENZIR_VERSION_BUILD_METADATA:STRING="${{ needs.configure.outputs.tenzir-version-build-metadata }}" \
-            ${{ matrix.tenzir.cmake-extra-flags }}
-      - name: Compile All Targets
-        id: compile_all_targets
-        run: |
-          cmake --build "$BUILD_DIR" --target all --parallel --verbose
-      - name: Show ccache Statistics
-        if: ${{ always() && steps.compile_all_targets.outcome != 'skipped' }}
-        run: |
-          # Print statistics counter IDs and corresponding values.
-          ccache --show-stats
-          # Print statistics about cache compression.
-          ccache --show-compression
-      - name: Save ccache Cache
-        if: ${{ always() && steps.compile_all_targets.outcome != 'skipped' && steps.ccache_restore.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ${{ steps.ccache_restore.outputs.cache-primary-key }}
-          enableCrossOsArchive: true
-      - name: Run Unit Tests
-        env:
-          TENZIR_ALLOC_STATS: ${{ matrix.tenzir.name != 'macOS' && '1' || '' }}
-          TENZIR_ALLOC_ACTOR_STATS: ${{ matrix.tenzir.name != 'macOS' && '1' || '' }}
-        run: |
-          cmake --build "$BUILD_DIR" --target unit-tests
-      - name: Run Integration Tests
-        env:
-          TENZIR_ALLOC_STATS: ${{ matrix.tenzir.name != 'macOS' && '1' || '' }}
-          TENZIR_ALLOC_ACTOR_STATS: ${{ matrix.tenzir.name != 'macOS' && '1' || '' }}
-        run: |
-          cmake --build "$BUILD_DIR" --target integration-tests
-      - name: Install
-        run: |
-          cmake --install "$BUILD_DIR"
-      - name: Package
-        env:
-          DESTDIR: ${{ env.PWD }}
-        run: |
-          cmake --build "$BUILD_DIR" --target package
-      - name: Upload Artifact to GitHub
-        uses: actions/upload-artifact@v4
-        with:
-          name: "${{ env.PACKAGE_NAME }}.tar.gz"
-          path: "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz"
-          if-no-files-found: error
-      - name: Authenticate to Google Cloud
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
-          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-      - name: Configure GCloud Credentials
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: google-github-actions/setup-gcloud@v2
-      - name: Upload Artifact to GCS
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        timeout-minutes: 15
-        run: |
-          artifact="${BUILD_DIR}/package/${PACKAGE_NAME}.tar.gz"
-          destination="gs://${{ vars.GCS_BUCKET }}/${PACKAGE_NAME}.tar.gz"
-          test -s "$artifact"
-          ls -lh "$artifact"
-          gcloud --quiet --verbosity=info storage cp "$artifact" "$destination"
-          gcloud --quiet storage ls "$destination"
-
   python:
     needs:
       - configure
@@ -1111,9 +471,6 @@ jobs:
         working-directory: python
         run: |
           uv run --all-packages --group dev pytest
-      - name: Sync tenzir-plugins nix sources
-        run: |
-          GH_TOKEN="${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}" nix/update-plugins.sh
       - name: Build package
         working-directory: python
         run: |
@@ -1181,9 +538,6 @@ jobs:
         run: |
           TARBALL_PATH="$(ls ${{ runner.temp }}/signed-tarball/*.tar.gz)"
           echo "TENZIR_SIGNED_TARBALL_PATH=$TARBALL_PATH" >> "$GITHUB_ENV"
-      - name: Sync tenzir-plugins nix sources
-        run: |
-          GH_TOKEN="${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}" nix/update-plugins.sh
       - name: Build sdist
         working-directory: python
         run: |
@@ -1296,16 +650,9 @@ jobs:
   pass-branch-protections:
     needs:
       - configure
-      - docker-tenzir
-      - docker-tenzir-amd64
-      - docker-tenzir-arm64
-      - policy-enforcement
       - python
       - python-package
       - update-homebrew-tap
-      # TODO: Re-enable this after v4.26 was released.
-      # - regression-tests
-      - tenzir
       - tenzir-static-arm64-darwin
       - tenzir-static-aarch64-linux
       - tenzir-static-x86_64-linux
