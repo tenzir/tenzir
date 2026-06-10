@@ -14,6 +14,7 @@
 #include "tenzir/pipeline.hpp"
 #include "tenzir/pipeline_executor.hpp"
 #include "tenzir/scope_linked.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/exec.hpp"
 #include "tenzir/view.hpp"
@@ -340,9 +341,10 @@ auto make_load_balancer(
     pipe.prepend(std::make_unique<load_balance_source>(self));
     auto has_terminal = false;
     TENZIR_DEBUG("spawning inner executor");
+    auto source = Source::new_source(definition, "<input>", false);
     auto executor
-      = self->spawn(pipeline_executor, pipe, definition, self, self, node,
-                    has_terminal, is_hidden, self->state().pipeline_id);
+      = self->spawn(pipeline_executor, pipe, std::move(source), self, self,
+                    node, has_terminal, is_hidden, self->state().pipeline_id);
     self->monitor(
       executor, [self, source = executor->address()](const caf::error& err) {
         if (err.valid()) {

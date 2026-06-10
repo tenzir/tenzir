@@ -14,6 +14,7 @@
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/scope_linked.hpp>
+#include <tenzir/source.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -267,11 +268,11 @@ private:
         branch_actor{self_}, predicate, pipe->source));
       TENZIR_ASSERT(pipe->inner.is_closed());
     }
-    auto handle = self_->spawn(pipeline_executor,
-                               std::move(pipe->inner).optimize_if_closed(),
-                               definition_, receiver_actor<diagnostic>{self_},
-                               metrics_receiver_actor{self_}, node_, false,
-                               is_hidden_, pipeline_id_);
+    auto source = Source::new_source(definition_, "<input>", false);
+    auto handle = self_->spawn(
+      pipeline_executor, std::move(pipe->inner).optimize_if_closed(),
+      std::move(source), receiver_actor<diagnostic>{self_},
+      metrics_receiver_actor{self_}, node_, false, is_hidden_, pipeline_id_);
     ++running_branches_;
     self_->monitor(handle, [this, source = pipe->source](caf::error err) {
       if (err.valid()) {

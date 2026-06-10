@@ -14,6 +14,7 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/source.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -516,11 +517,12 @@ struct parallel_operator final : public operator_base {
   spawn_pipeline(operator_control_plane& ctrl, const transceiver_actor& hdl,
                  execution_state& state) const -> void {
     auto pipe = make_pipeline<table_slice>(hdl);
+    auto source
+      = Source::new_source(std::string{ctrl.definition()}, "<input>", false);
     const auto exec
-      = ctrl.self().spawn(pipeline_executor, std::move(pipe),
-                          std::string{ctrl.definition()}, hdl, hdl, ctrl.node(),
-                          ctrl.has_terminal(), ctrl.is_hidden(),
-                          std::string{ctrl.pipeline_id()});
+      = ctrl.self().spawn(pipeline_executor, std::move(pipe), std::move(source),
+                          hdl, hdl, ctrl.node(), ctrl.has_terminal(),
+                          ctrl.is_hidden(), std::string{ctrl.pipeline_id()});
     ctrl.self().attach_functor([exec] {
       caf::anon_send_exit(exec, caf::exit_reason::user_shutdown);
     });

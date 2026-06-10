@@ -12,6 +12,7 @@
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/session.hpp>
+#include <tenzir/source.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
@@ -588,9 +589,10 @@ auto from_file_state::start_stream(
                        : std::nullopt));
     pipe = pipe.optimize_if_closed();
   }
+  auto definition = Source::new_source(definition_, "<input>", false);
   auto executor
-    = self_->spawn(pipeline_executor, std::move(pipe), definition_, self_,
-                   self_, node_, false, is_hidden_, pipeline_id_);
+    = self_->spawn(pipeline_executor, std::move(pipe), std::move(definition),
+                   self_, self_, node_, false, is_hidden_, pipeline_id_);
   self_->attach_functor([this, weak]() {
     if (auto strong = weak.lock()) {
       // FIXME: This should not be necessary to ensure that the actor is

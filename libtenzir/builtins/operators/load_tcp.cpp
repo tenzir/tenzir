@@ -18,6 +18,7 @@
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/scope_linked.hpp>
+#include <tenzir/source.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -769,11 +770,11 @@ struct connection_manager_state {
     pipeline.append(std::move(sink));
     TENZIR_ASSERT(pipeline.is_closed());
     TENZIR_ASSERT(not connection->pipeline_executor);
-    connection->pipeline_executor
-      = self->spawn(pipeline_executor, std::move(pipeline), definition,
-                    receiver_actor<diagnostic>{self},
-                    metrics_receiver_actor{self}, node, has_terminal, is_hidden,
-                    pipeline_id);
+    auto pipeline_source = Source::new_source(definition, "<input>", false);
+    connection->pipeline_executor = self->spawn(
+      pipeline_executor, std::move(pipeline), std::move(pipeline_source),
+      receiver_actor<diagnostic>{self}, metrics_receiver_actor{self}, node,
+      has_terminal, is_hidden, pipeline_id);
     self->monitor(
       connection->pipeline_executor,
       [this, source = connection->pipeline_executor->address()](
