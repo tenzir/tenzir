@@ -1,0 +1,3 @@
+from {x: 1, y: null}
+json = {x: x, y: y}.print_json(strip_null_fields=true)
+ndjson = {x: x, y: y}.print_ndjson(strip_null_fields=true)
