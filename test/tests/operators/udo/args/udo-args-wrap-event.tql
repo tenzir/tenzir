@@ -1,2 +1,0 @@
-from {x: 1}
-argspkg::wrap_event event=this, value="test"

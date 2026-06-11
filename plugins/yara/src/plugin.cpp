@@ -29,20 +29,6 @@ namespace tenzir::plugins::yara {
 
 namespace {
 
-/// Arguments to the operator.
-struct operator_args {
-  bool compiled_rules;
-  bool fast_scan;
-  std::vector<std::string> rules;
-
-  friend auto inspect(auto& f, operator_args& x) -> bool {
-    return f.object(x)
-      .pretty_name("operator_args")
-      .fields(f.field("compiled_rules", x.compiled_rules),
-              f.field("fast_scan", x.fast_scan), f.field("rules", x.rules));
-  }
-};
-
 /// Options to pass to rules::scan() that affect the scanning behavior.
 struct scan_options {
   bool fast_scan{false};
@@ -421,108 +407,6 @@ private:
   YR_COMPILER* compiler_ = nullptr;
 };
 
-/// The `yara` operator implementation.
-class yara_operator final : public crtp_operator<yara_operator> {
-public:
-  yara_operator() = default;
-
-  explicit yara_operator(operator_args args) : args_{std::move(args)} {
-  }
-
-  auto
-  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    auto rules = caf::expected<class rules>{caf::error{}};
-    auto compiler = compiler::make();
-    if (not compiler) {
-      diagnostic::error("insufficient memory to create YARA compiler")
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    if (args_.compiled_rules) {
-      TENZIR_ASSERT(args_.rules.size() == 1);
-      rules = rules::load(args_.rules[0]);
-      if (not rules) {
-        diagnostic::error("failed to load compiled YARA rules")
-          .note("{}", rules.error())
-          .emit(ctrl.diagnostics());
-        co_return;
-      }
-    } else {
-      for (const auto& rule : args_.rules) {
-        if (auto err = compiler->add(std::filesystem::path{rule});
-            err.valid()) {
-          diagnostic::error("failed to add YARA rule to compiler")
-            .note("rule: {}", rule)
-            .note("error: {}", err)
-            .emit(ctrl.diagnostics());
-          co_return;
-        }
-      }
-      rules = compiler->compile();
-    }
-    auto opts = scan_options{
-      .fast_scan = args_.fast_scan,
-    };
-    auto scanner = scanner::make(*rules, opts);
-    if (not scanner) {
-      diagnostic::warning("failed to construct YARA scanner")
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    // Small optimization: in case the entire input consists of a single
-    // chunk, we don't want to copy it at all. This actually may happen
-    // frequently when memory-mapping files, so it's worthwhile addressing.
-    auto first = chunk_ptr{};
-    std::vector<std::byte> buffer;
-    for (auto&& chunk : input) {
-      if (not chunk) {
-        co_yield {};
-        continue;
-      }
-      if (not buffer.empty()) {
-        buffer.insert(buffer.end(), chunk->begin(), chunk->end());
-      } else if (not first) {
-        first = chunk;
-      } else {
-        buffer.reserve(first->size() + chunk->size());
-        buffer.insert(buffer.end(), first->begin(), first->end());
-        buffer.insert(buffer.end(), chunk->begin(), chunk->end());
-      }
-    }
-    auto bytes = buffer.empty() ? as_bytes(first) : as_bytes(buffer);
-    if (auto slices = scanner->scan(bytes)) {
-      for (auto&& slice : *slices) {
-        co_yield slice;
-      }
-    } else {
-      diagnostic::error("failed to scan input with YARA rules")
-        .hint("{}", slices.error())
-        .emit(ctrl.diagnostics());
-    }
-  }
-
-  auto name() const -> std::string override {
-    return "yara";
-  }
-
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    (void)filter;
-    (void)order;
-    return do_not_optimize(*this);
-  }
-
-  friend auto inspect(auto& f, yara_operator& x) -> bool {
-    return f.object(x)
-      .pretty_name("yara_operator")
-      .fields(f.field("args", x.args_));
-  }
-
-private:
-  operator_args args_ = {};
-};
-
 struct YaraArgs {
   located<data> rules = {};
   bool compiled_rules = false;
@@ -666,9 +550,7 @@ private:
 };
 
 /// The `yara` plugin.
-class plugin final : public virtual operator_plugin<yara_operator>,
-                     public virtual operator_factory_plugin,
-                     public virtual OperatorPlugin {
+class plugin final : public virtual OperatorPlugin {
 public:
   plugin() {
     const auto ok = yr_initialize();
@@ -679,8 +561,8 @@ public:
     yr_finalize();
   }
 
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
+  auto name() const -> std::string override {
+    return "yara";
   }
 
   auto describe() const -> Description override {
@@ -698,48 +580,6 @@ public:
       return {};
     });
     return d.without_optimize();
-  }
-
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto args = operator_args{};
-    auto rules = located<data>{};
-    argument_parser2::operator_("yara")
-      .positional("rules", rules, "string|list<string>")
-      .named("compiled_rules", args.compiled_rules)
-      .named("fast_scan", args.fast_scan)
-      .parse(inv, ctx)
-      .ignore();
-    auto rule_strings = extract_rules(rules, args.compiled_rules, ctx);
-    if (not rule_strings) {
-      return failure::promise();
-    }
-    args.rules = std::move(*rule_strings);
-    return std::make_unique<yara_operator>(std::move(args));
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto args = operator_args{};
-    while (auto arg = p.accept_shell_arg()) {
-      if (arg) {
-        if (arg->inner == "-C" or arg->inner == "--compiled-rules") {
-          args.compiled_rules = true;
-        } else if (arg->inner == "-f" or arg->inner == "--fast-scan") {
-          args.fast_scan = true;
-        } else {
-          args.rules.push_back(std::move(arg->inner));
-        }
-      }
-    }
-    if (args.rules.empty()) {
-      diagnostic::error("no rules provided").throw_();
-    }
-    if (args.compiled_rules and args.rules.size() != 1) {
-      diagnostic::error("can't accept multiple rules in compiled form")
-        .hint("provide exactly one rule argument")
-        .throw_();
-    }
-    return std::make_unique<yara_operator>(std::move(args));
   }
 };
 

@@ -76,9 +76,20 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   cfg.dump_metrics
     = caf::get_or(inv.options, "tenzir.exec.dump-metrics", false);
   auto as_file = caf::get_or(inv.options, "tenzir.exec.file", false);
-  cfg.neo = caf::get_or(inv.options, "tenzir.neo", cfg.neo);
-  const auto use_neo_executor
-    = cfg.neo or cfg.dump_ir or cfg.dump_inst_ir or cfg.dump_opt_ir;
+  auto printer = make_diagnostic_printer(std::nullopt, color, std::cerr);
+  if (detail::getenv("TENZIR_NEO").value_or("") == "false") {
+    printer->emit(diagnostic::error("legacy execution was removed")
+                    .note("remove `TENZIR_NEO=false`")
+                    .done());
+    return false;
+  }
+  if (const auto* neo = caf::get_if<bool>(&inv.options, "tenzir.neo");
+      neo and not *neo) {
+    printer->emit(diagnostic::error("legacy execution was removed")
+                    .note("remove `tenzir.neo=false`")
+                    .done());
+    return false;
+  }
   const auto stdout_color
     = (color_mode == "auto" and not no_color_env and isatty(STDOUT_FILENO))
       or color_mode == "always";
@@ -86,18 +97,14 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
     inv.options, "tenzir.exec.implicit-bytes-sink", cfg.implicit_bytes_sink);
   cfg.implicit_events_sink = caf::get_or(
     inv.options, "tenzir.exec.implicit-events-sink",
-    use_neo_executor
-      ? (stdout_color ? "to_stdout { write_tql color=true }" : "to_stdout")
-      : make_default_implicit_events_sink(stdout_color));
+    stdout_color ? "to_stdout { write_tql color=true }" : "to_stdout");
   cfg.implicit_bytes_source
     = caf::get_or(inv.options, "tenzir.exec.implicit-bytes-source",
                   cfg.implicit_bytes_source);
   cfg.implicit_events_source
     = caf::get_or(inv.options, "tenzir.exec.implicit-events-source",
-                  use_neo_executor ? R"(from_stdin { read_json })"
-                                   : cfg.implicit_events_source);
+                  cfg.implicit_events_source);
   cfg.multi = caf::get_or(inv.options, "tenzir.exec.multi", cfg.multi);
-  cfg.legacy = caf::get_or(inv.options, "tenzir.legacy", cfg.legacy);
   cfg.strict = caf::get_or(inv.options, "tenzir.exec.strict", cfg.strict);
   auto profile_str
     = caf::get_or(inv.options, "tenzir.exec.profile", std::string{});
@@ -107,7 +114,6 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   auto filename = std::string{};
   auto content = std::string{};
   const auto& args = inv.arguments;
-  auto printer = make_diagnostic_printer(std::nullopt, color, std::cerr);
   if (args.size() != 1) {
     printer->emit(diagnostic::error("expected exactly one argument, but got {}",
                                     args.size())

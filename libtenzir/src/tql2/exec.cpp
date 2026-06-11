@@ -277,6 +277,30 @@ public:
     failure_ = failure::promise();
   }
 
+  void visit(ast::selector& x) {
+    auto* dollar_var = std::get_if<ast::dollar_var>(&x);
+    if (not dollar_var) {
+      enter(x);
+      return;
+    }
+    auto it = map_.find(std::string{dollar_var->name_without_dollar()});
+    if (it == map_.end()) {
+      emit_not_found(*dollar_var);
+      return;
+    }
+    if (not it->second) {
+      // Variable exists but there was an error during evaluation.
+      return;
+    }
+    // let bound variables cannot be on the lhs for now, because a let can
+    // only bind a name to a value, but field_paths are not values yet.
+    diagnostic::error("cannot assign to `{}` constant value",
+                      dollar_var->id.name)
+      .primary(*dollar_var)
+      .emit(ctx_);
+    failure_ = failure::promise();
+  }
+
   void visit(ast::expression& x) {
     const auto* dollar_var = std::get_if<ast::dollar_var>(&*x.kind);
     if (not dollar_var) {
@@ -2390,7 +2414,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   // TODO: Can this happen?
   TENZIR_ASSERT(opt.filter.empty());
   ir = std::move(opt.replacement);
-  if (cfg.dump_opt_ir) {
+  if (cfg.dump_pipeline or cfg.dump_opt_ir) {
     fmt::print("{:#?}\n", ir);
     return not ctx.has_failure();
   }
@@ -2426,49 +2450,7 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
       fmt::print("{:#?}\n", parsed);
       return not ctx.has_failure();
     }
-    if ((cfg.neo and not cfg.dump_pipeline) or cfg.dump_ir or cfg.dump_inst_ir
-        or cfg.dump_opt_ir) {
-      // This new code path will eventually supersede the current one.
-      return exec_with_ir(std::move(parsed), cfg, ctx, sys);
-    }
-    if (cfg.profile) {
-      diagnostic::warning("`--profile` is only supported with `--neo`")
-        .emit(ctx);
-    }
-    TRY(auto pipe, compile(std::move(parsed), ctx));
-    if (cfg.dump_pipeline) {
-      fmt::print("{:#?}\n", pipe);
-      return not ctx.has_failure();
-    }
-    if (ctx.has_failure()) {
-      // Do not proceed to execution if there has been an error.
-      return false;
-    }
-    auto pipes = std::vector<pipeline>{};
-    if (not cfg.multi) {
-      pipes.push_back(std::move(pipe));
-    } else {
-      auto split = std::move(pipe).split_at_void();
-      if (not split) {
-        diagnostic::error(split.error()).emit(ctx);
-        return false;
-      }
-      pipes = std::move(*split);
-    }
-    for (auto& pipe : pipes) {
-      auto result
-        = exec_pipeline(std::move(pipe), std::string{source}, ctx, cfg, sys);
-      if (not result) {
-        if (result.error() != ec::silent) {
-          diagnostic::error(result.error()).emit(ctx);
-        }
-        return false;
-      }
-      if (ctx.has_failure()) {
-        return false;
-      }
-    }
-    return true;
+    return exec_with_ir(std::move(parsed), cfg, ctx, sys);
   });
   return result ? *result : false;
 }

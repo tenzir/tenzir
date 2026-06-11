@@ -263,10 +263,6 @@ public:
   field_path() = default;
 
   static auto try_from(ast::expression expr) -> std::optional<field_path>;
-  static auto make(ast::expression expr, bool has_this,
-                   std::vector<segment> path) -> field_path {
-    return field_path{std::move(expr), has_this, std::move(path)};
-  }
 
   auto get_location() const -> location {
     return expr_.get_location();
@@ -322,12 +318,8 @@ auto collect_refs(const expression& expr) -> Option<ExprRefs>;
 ///
 /// Note that this is not an actual `expression`. Instead, expressions can be
 /// converted to `selector` on-demand. Currently, this is limited to meta
-/// selectors (e.g., `@tag`) and field paths (see `ast::field_path`). In
-/// packages, `ast::dollar_var` can also be on the left side of an assignment,
-/// which is why `ast::assignment` carries an `ast::expressions` instead of an
-/// `ast::selector`. But the package machinery is responsible for those
-/// parameter references before compiling the pipeline.
-struct selector : variant<meta, field_path> {
+/// selectors (e.g., `@tag`) and simple selectors (see `simple_selector`).
+struct selector : variant<meta, field_path, dollar_var> {
   using variant::variant;
 
   static auto try_from(ast::expression expr) -> std::optional<selector>;
@@ -454,11 +446,11 @@ struct lambda_expr {
 struct assignment {
   assignment() = default;
 
-  assignment(expression left, location equals, expression right)
+  assignment(selector left, location equals, expression right)
     : left{std::move(left)}, equals{equals}, right{std::move(right)} {
   }
 
-  expression left;
+  selector left;
   location equals;
   expression right;
 
@@ -708,8 +700,8 @@ struct pipeline {
 /// expressions.
 auto substitute_named_expressions(
   pipeline pipe,
-  const std::unordered_map<std::string, ast::expression>& replacements)
-  -> ast::pipeline;
+  const std::unordered_map<std::string, ast::expression>& replacements,
+  diagnostic_handler& dh) -> failure_or<ast::pipeline>;
 
 struct let_stmt {
   let_stmt() = default;

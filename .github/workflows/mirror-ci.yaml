@@ -1,0 +1,45 @@
+# CI for PRs mirrored to tenzir/tenzir by sync-to-public-pr.yaml, which
+# installs this file as .github/workflows/mirror-ci.yaml in the mirrored
+# snapshot. It lives outside workflows/ so it never runs in this repository.
+#
+# TEMPORARY: Mirrored PRs only run the macOS build until we commit to the
+# switch to gating on the full public CI.
+name: Mirror CI
+on:
+  pull_request:
+concurrency:
+  group: mirror-ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    outputs:
+      build-version: ${{ steps.configure.outputs.build-version }}
+      version-suffix: ${{ steps.configure.outputs.version-suffix }}
+      version-build-metadata: ${{ steps.configure.outputs.version-build-metadata }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Configure
+        id: configure
+        run: |
+          version="v$(jq -r '."tenzir-version"' version.json)"
+          id_sha="${{ github.event.pull_request.head.sha }}"
+          {
+            echo "build-version=${version}+g${id_sha:0:10}"
+            echo "version-suffix=pr${{ github.event.number }}"
+            echo "version-build-metadata=g${id_sha:0:10}"
+          } >> "$GITHUB_OUTPUT"
+  tenzir-static-arm64-darwin:
+    name: Nix
+    needs: [configure]
+    uses: ./.github/workflows/nix-build-job.yaml
+    with:
+      runner: macos-26
+      os: darwin
+      arch: arm64
+      attribute: tenzir-de-static
+      build-version: ${{ needs.configure.outputs.build-version }}
+      version-suffix: ${{ needs.configure.outputs.version-suffix }}
+      version-build-metadata: ${{ needs.configure.outputs.version-build-metadata }}
+    secrets: inherit
