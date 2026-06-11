@@ -17,7 +17,7 @@
          }
        ],
        self: 0..4
-+    },
+     },
 +    where_ir {
 +      self: 0..0,
 +      predicate: binary_expr {
@@ -28,22 +28,13 @@
 +        op: "eq" @ 63..65,
 +        right: constant string "tenzir.com" @ 66..78
 +      }
-     },
++    },
      SetIr {
        assignments: [
          {
-           left: field_path {
-             expr: root_field {
-               id: `resolved` @ 32..40,
-               has_question_mark: false
-             },
-             has_this: false,
-             path: [
-               {
-                 id: `resolved` @ 32..40,
-                 has_question_mark: false
-               }
-             ]
+           left: root_field {
+             id: `resolved` @ 32..40,
+             has_question_mark: false
            },
            equals: 41..42,
            right: root_field {

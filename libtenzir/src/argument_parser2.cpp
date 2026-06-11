@@ -196,7 +196,9 @@ auto argument_parser2::parse(const ast::entity& self,
   for (; arg != args.end(); ++arg) {
     arg->match(
       [&](const ast::assignment& assignment) {
-        const auto* sel = try_as<ast::field_path>(assignment.left);
+        auto selector = ast::selector::try_from(assignment.left);
+        const auto* sel
+          = selector ? try_as<ast::field_path>(&*selector) : nullptr;
         if (not sel or sel->has_this() or sel->path().size() != 1
             or sel->path()[0].has_question_mark) {
           emit(diagnostic::error("invalid name").primary(assignment.left));

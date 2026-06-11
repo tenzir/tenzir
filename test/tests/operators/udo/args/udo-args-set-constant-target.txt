@@ -1,0 +1,6 @@
+error: left side of `=` must be a field path or metadata reference
+ --> tests/operators/udo/args/udo-args-set-constant-target.tql:6:29
+  |
+6 | argspkg::set_untyped_target "not-a-field", "test"
+  |                             ^^^^^^^^^^^^^ 
+  |

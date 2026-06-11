@@ -1,0 +1,6 @@
+// Using `=` (assignment) instead of `==` (comparison) in a condition is a
+// common mistake. The assignment is evaluated as an expression, which warns
+// and yields `null` rather than crashing.
+from {x: 1}
+let $x = 1
+if ($x = 42) { }

@@ -598,7 +598,8 @@ auto build_config(std::vector<ast::expression> exprs, session ctx)
         add_aggregate(std::nullopt, std::move(arg));
       },
       [&](ast::assignment& arg) {
-        auto* left = try_as<ast::field_path>(arg.left);
+        auto selector = ast::selector::try_from(arg.left);
+        auto* left = selector ? try_as<ast::field_path>(&*selector) : nullptr;
         if (not left) {
           diagnostic::error("expected data selector, not meta")
             .primary(arg.left)

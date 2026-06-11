@@ -21,13 +21,7 @@
      SetIr {
        assignments: [
          {
-           left: field_path {
-             expr: this_ 12..16,
-             has_this: true,
-             path: [
-               
-             ]
-           },
+           left: this_ 12..16,
            equals: 17..18,
            right: record {
              begin: 19..20,

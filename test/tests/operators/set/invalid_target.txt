@@ -1,0 +1,6 @@
+error: left side of `=` must be a field path or metadata reference
+ --> tests/operators/set/invalid_target.tql:6:5
+  |
+6 | set now() = 1
+  |     ^^^^^ 
+  |

@@ -40,7 +40,7 @@ auto make_replacement_ir(mode which, ast::field_path selector, location self,
     ast::root_field{ast::identifier{"count", self}});
   TENZIR_ASSERT(count_field);
   auto summarize_arg
-    = ast::assignment{count_field.value(), self, std::move(count_call)};
+    = ast::assignment{count_field->inner(), self, std::move(count_call)};
   TENZIR_ASSERT(resolve_entities(summarize_arg.right, provider.as_session()));
   auto summarize_inv = invocation_for_plugin(*summarize, self);
   summarize_inv.args.push_back(std::move(selector).unwrap());
@@ -88,7 +88,7 @@ public:
     auto call = ast::function_call{ast::entity{{ident}}, {}, loc, false};
     auto out = ast::field_path::try_from(ast::root_field{std::move(ident)});
     TENZIR_ASSERT(out);
-    auto summarize_args = ast::assignment{out.value(), loc, call};
+    auto summarize_args = ast::assignment{out->inner(), loc, call};
     TENZIR_ASSERT(resolve_entities(summarize_args.right, ctx));
     auto summarized = summarize->make(
       {

@@ -146,6 +146,14 @@ public:
       assignment = std::move(pruned_assignment);
       std::ranges::move(moved_fields, std::back_inserter(moved_fields_));
     }
+    // Compilation rejects assignment targets that do not describe a selector,
+    // so the conversion cannot fail here anymore.
+    lefts_.reserve(assignments_.size());
+    for (const auto& assignment : assignments_) {
+      auto left = ast::selector::try_from(assignment.left);
+      TENZIR_ASSERT(left);
+      lefts_.push_back(std::move(*left));
+    }
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
@@ -171,13 +179,12 @@ public:
       state.push_back(subslice(slice, begin, end));
       begin = end;
       auto new_state = std::vector<table_slice>{};
-      for (auto [assignment, value] :
-           std::views::zip(assignments_, values_slice)) {
+      for (auto [left, value] : std::views::zip(lefts_, values_slice)) {
         auto begin = int64_t{0};
         for (auto& entry : state) {
           auto entry_rows = detail::narrow<int64_t>(entry.rows());
-          auto assigned = assign(assignment.left,
-                                 value.slice(begin, entry_rows), entry, ctx);
+          auto assigned
+            = assign(left, value.slice(begin, entry_rows), entry, ctx);
           begin += entry_rows;
           new_state.insert(new_state.end(),
                            std::move_iterator{assigned.begin()},
@@ -204,6 +211,7 @@ public:
 
 private:
   std::vector<ast::assignment> assignments_;
+  std::vector<ast::selector> lefts_;
   event_order order_{};
   std::vector<ast::field_path> moved_fields_;
 };
@@ -233,6 +241,8 @@ auto ir::SetIr::substitute(substitute_ctx ctx, bool instantiate)
   -> failure_or<void> {
   (void)instantiate;
   for (auto& x : assignments_) {
+    // The left-hand side is resolved to a selector at compile time and cannot
+    // contain `$`-variables. UDO parameters are resolved even before that.
     TRY(x.right.substitute(ctx));
   }
   return {};
@@ -251,7 +261,8 @@ auto touched_fields_for_set(const std::vector<ast::assignment>& assignments)
   for (const auto& assignment : assignments) {
     auto [resolved, moved_fields] = resolve_move_keyword(assignment);
     std::ranges::move(moved_fields, std::back_inserter(result));
-    const auto* path = try_as<ast::field_path>(&resolved.left);
+    auto left = ast::selector::try_from(resolved.left);
+    const auto* path = left ? try_as<ast::field_path>(&*left) : nullptr;
     if (path == nullptr or path->path().empty()) {
       return None{};
     }
@@ -753,7 +764,8 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
           });
       },
       [&](ast::assignment x) -> failure_or<void> {
-        // TODO: What about left?
+        TRY(x.left.bind(ctx));
+        TRY(resolve_assignment_left(x, ctx));
         TRY(x.right.bind(ctx));
         operators.push_back(make_set_ir(std::move(x)));
         return {};
