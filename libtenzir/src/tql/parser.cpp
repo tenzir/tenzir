@@ -632,7 +632,7 @@ auto make_parser_interface(std::string source, diagnostic_handler& diag)
 auto parse(Source const& source, diagnostic_handler& diag)
   -> std::optional<std::vector<located<operator_ptr>>> {
   auto recursed = std::unordered_set<std::string>{};
-  return parser{std::move(source.text), diag, false, recursed}.parse();
+  return parser{source.text, diag, false, recursed}.parse();
 }
 
 auto parse_internal(std::string source) -> caf::expected<pipeline> {
