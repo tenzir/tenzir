@@ -85,7 +85,10 @@ private:
     Option<time> latest_start_time;
     bool trim_horizon_start = false;
     bool closed = false;
-    bool idle = false;
+    /// Whether the shard's loop finished because it caught up with the
+    /// stream tip in exit mode. Monotone: only ever set by the shard's own
+    /// final result, so it can never go stale while a read is in flight.
+    bool caught_up = false;
     /// Whether a `shard_loop()` task is currently reading this shard.
     /// Transient runtime state, deliberately excluded from `inspect()` so
     /// that restored shards respawn their loops.
@@ -97,7 +100,7 @@ private:
         f.field("next_sequence_number", x.next_sequence_number),
         f.field("latest_start_time", x.latest_start_time),
         f.field("trim_horizon_start", x.trim_horizon_start),
-        f.field("closed", x.closed), f.field("idle", x.idle));
+        f.field("closed", x.closed), f.field("caught_up", x.caught_up));
     }
   };
 
@@ -114,6 +117,10 @@ private:
   auto parents_closed(const ShardState& shard) const -> bool;
 
   auto discover_new_shards(OpCtx& ctx) -> Task<void>;
+
+  /// Whether every shard has either closed or caught up with the stream tip,
+  /// which is the exit-mode termination condition.
+  auto all_shards_finished() const -> bool;
 
   FromAmazonKinesisArgs args_;
   std::shared_ptr<amazon::SignedHttpClient> client_;

@@ -73,9 +73,14 @@ struct ReadResult {
   std::string shard_id;
   std::string next_iterator;
   std::string next_sequence_number;
+  /// How far this response lags behind the tip of the shard; zero means the
+  /// read is caught up with the stream.
+  duration behind_latest = {};
   bool shard_closed = false;
   bool iterator_expired = false;
   bool throttled = false;
+  /// Whether the shard loop finished because it reached the tip in exit mode.
+  bool caught_up = false;
   std::string error;
 };
 
@@ -217,6 +222,8 @@ auto read_from_shard(amazon::SignedHttpClient& client, std::string_view stream,
   output.shard_id = std::string{shard_id};
   output.next_iterator = amazon::from_aws_string(result.GetNextShardIterator());
   output.shard_closed = output.next_iterator.empty();
+  output.behind_latest
+    = std::chrono::milliseconds{result.GetMillisBehindLatest()};
   output.records.reserve(result.GetRecords().size());
   for (const auto& record : result.GetRecords()) {
     const auto& bytes = record.GetData();
@@ -594,11 +601,17 @@ auto FromAmazonKinesis::shard_loop(ShardState shard) -> Task<void> {
     if (not result.next_sequence_number.empty()) {
       shard.next_sequence_number = result.next_sequence_number;
     }
+    // In exit mode, a shard is finished once it reaches the tip of the
+    // stream; the loop ends and reports this completion as its final result.
+    // An empty response alone is not enough: sparse streams can return empty
+    // batches with records still ahead.
+    result.caught_up = args_.exit and result.behind_latest == duration::zero();
     const auto failed = not result.error.empty();
     const auto closed = result.shard_closed;
+    const auto finished = result.caught_up;
     const auto idle = result.records.empty();
     co_await results_->enqueue(Any{std::move(result)});
-    if (failed or closed) {
+    if (failed or closed or finished) {
       co_return;
     }
     if (idle) {
@@ -617,7 +630,8 @@ auto FromAmazonKinesis::parents_closed(const ShardState& shard) const -> bool {
 
 auto FromAmazonKinesis::spawn_ready_loops(OpCtx& ctx) -> void {
   for (auto& shard : shards_) {
-    if (shard.closed or shard.loop_running or not parents_closed(shard)) {
+    if (shard.closed or shard.caught_up or shard.loop_running
+        or not parents_closed(shard)) {
       continue;
     }
     shard.loop_running = true;
@@ -682,7 +696,10 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
   if (auto it = std::ranges::find(shards_, batch.shard_id, &ShardState::id);
       it != shards_.end()) {
     it->closed = batch.shard_closed;
-    it->idle = batch.records.empty();
+    if (batch.caught_up) {
+      it->caught_up = true;
+      it->loop_running = false;
+    }
     if (not batch.next_sequence_number.empty()) {
       it->next_sequence_number = batch.next_sequence_number;
     }
@@ -697,15 +714,7 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
   }
   if (batch.records.empty()) {
     if (args_.exit) {
-      // Queued results may still carry records for shards whose state says
-      // idle, so only exit once everything enqueued has been processed. The
-      // queue is the authority: the driver re-arms `await_task()` only after
-      // this function returns, so no result can be dequeued but unprocessed
-      // while we decide.
-      done_ = results_->empty()
-              and std::ranges::all_of(shards_, [](const ShardState& shard) {
-                    return shard.closed or shard.idle;
-                  });
+      done_ = all_shards_finished();
     }
     co_return;
   }
@@ -743,13 +752,22 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
   if (limit_ != 0 and emitted_ >= limit_) {
     done_ = true;
   }
-  // A shard can deliver its final records and close in the same batch, so the
-  // exit condition must also be evaluated when records arrived.
-  if (args_.exit and not done_ and results_->empty()) {
-    done_ = std::ranges::all_of(shards_, [](const ShardState& shard) {
-      return shard.closed or shard.idle;
-    });
+  // A shard can deliver its final records and finish or close in the same
+  // batch, so the exit condition must also be evaluated when records arrived.
+  if (args_.exit and not done_) {
+    done_ = all_shards_finished();
   }
+}
+
+auto FromAmazonKinesis::all_shards_finished() const -> bool {
+  // Exit once every shard has either closed or caught up with the stream
+  // tip. Both flags are monotone and only set when the shard's own loop has
+  // already terminated, and the results queue is FIFO, so by the time the
+  // last completion marker is processed, every record enqueued before it has
+  // been delivered. No in-flight read can race this decision.
+  return std::ranges::all_of(shards_, [](const ShardState& shard) {
+    return shard.closed or shard.caught_up;
+  });
 }
 
 auto FromAmazonKinesis::state() -> OperatorState {
