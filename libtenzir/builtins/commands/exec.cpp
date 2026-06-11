@@ -132,7 +132,7 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   auto source
     = Source::new_source(std::move(content), std::move(filename), false);
   auto source_map = SourceMap{};
-  source_map.add_primary_source(source);
+  source_map.add_source(source);
   if (cfg.dump_diagnostics) {
     auto collector = collecting_diagnostic_handler{};
     auto result = exec_command_impl(std::move(source), collector, cfg, sys);

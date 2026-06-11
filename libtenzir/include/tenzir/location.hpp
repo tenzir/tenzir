@@ -29,7 +29,7 @@ namespace tenzir {
 
 struct into_location;
 
-/// Identifies a source in a `SourceMap`, where `0` refers to the main source.
+/// Identifies a source in a `SourceMap`.
 using SourceId = uint32_t;
 
 /// Identifies an entry in `SourceMap::call_sites()`, where `0` means
@@ -115,10 +115,6 @@ public:
   /// Register a source. It will be kept alive by the SourceMap.
   void add_source(Arc<const Source> source);
 
-  /// Register the primary source. It will be kept alive by the SourceMap and
-  /// returned for source id `0`.
-  void add_primary_source(Arc<const Source> source);
-
   /// Register the location of a user-defined operator invocation and return
   /// its id.
   ///
@@ -130,11 +126,11 @@ public:
   /// Return the source for the given id.
   auto source(SourceId id) const -> Option<const Source&>;
 
-  /// Return the primary source.
-  auto primary_source() const -> Option<const Source&>;
+  /// Add call-site annotations to a diagnostic.
+  auto enrich(diagnostic diag) const -> diagnostic;
 
-  /// Translate a location to its top-level source location.
-  auto translate(location loc) const -> location;
+  /// Reset primary annotation locations except top-level annotations.
+  void reset_primary_locations_except_top_callsite(diagnostic& diag) const;
 
   /// Return the call site for the given id, which must not be `0`.
   auto call_site(CallSiteId id) const -> Option<location>;
@@ -241,18 +237,6 @@ struct into_location : location {
       })} {
   }
 };
-
-inline auto location::combine(into_location other) const -> location {
-  if (not *this) {
-    return other;
-  }
-  if (not other) {
-    return *this;
-  }
-  TENZIR_ASSERT(source_index == other.source_index);
-  TENZIR_ASSERT(callsite_index == other.callsite_index);
-  return {std::min(begin, other.begin), std::max(end, other.end), source_index};
-}
 
 template <class T>
 struct as_located {

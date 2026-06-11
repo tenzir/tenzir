@@ -103,28 +103,6 @@ public:
       }
       return ResolvedSource{&*source, it->second};
     };
-    // Resolve the call-site chain of the primary location, so that we can
-    // show where the failing operator was called from.
-    auto call_chain = std::vector<location>{};
-    for (auto& annotation : diag.annotations) {
-      if (not annotation.primary or not annotation.source) {
-        continue;
-      }
-      auto id = annotation.source.callsite_index;
-      while (id != 0) {
-        auto call_site = source_map_->call_site(id);
-        if (not call_site) {
-          break;
-        }
-        call_chain.push_back(*call_site);
-        id = call_site->callsite_index;
-        // Defensive limit in case of malformed (cyclic) call-site data.
-        if (call_chain.size() > 100) {
-          break;
-        }
-      }
-      break;
-    }
     auto indent_width = size_t{0};
     for (auto& annotation : diag.annotations) {
       if (not annotation.source) {
@@ -135,16 +113,6 @@ public:
         continue;
       }
       if (auto lc = line_col_indices(src->lines, annotation.source.begin)) {
-        auto [line, col] = *lc;
-        indent_width = std::max(indent_width, std::to_string(line + 1).size());
-      }
-    }
-    for (auto& call_site : call_chain) {
-      auto src = resolve(call_site.source_index);
-      if (not src) {
-        continue;
-      }
-      if (auto lc = line_col_indices(src->lines, call_site.begin)) {
         auto [line, col] = *lc;
         indent_width = std::max(indent_width, std::to_string(line + 1).size());
       }
@@ -182,30 +150,6 @@ public:
                  color(pseudo_severity), std::string(col, ' '),
                  std::string(count, symbol(pseudo_severity)), annotation.text,
                  reset);
-      fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
-    }
-    for (auto& call_site : call_chain) {
-      auto src = resolve(call_site.source_index);
-      if (not src) {
-        continue;
-      }
-      auto lc = line_col_indices(src->lines, call_site.begin);
-      if (not lc) {
-        continue;
-      }
-      auto [line_idx, col] = *lc;
-      auto line = line_idx + 1;
-      fmt::print(stream_, "{}{}{}-->{} {}:{}:{}\n", indent, bold, blue, reset,
-                 src->source->origin, line, col + 1);
-      fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
-      fmt::print(stream_, "{}{}{}{} |{} {}\n",
-                 std::string(indent_width - std::to_string(line).size(), ' '),
-                 bold, blue, line, reset, src->lines[line_idx]);
-      // TODO: This doesn't respect multi-line spans.
-      auto count = std::max(uint32_t{1}, call_site.end - call_site.begin);
-      fmt::print(stream_, "{} {}{}| {}{}{} called from here{}\n", indent, bold,
-                 blue, color(severity::note), std::string(col, ' '),
-                 std::string(count, symbol(severity::note)), reset);
       fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
     }
     for (auto& note : diag.notes) {

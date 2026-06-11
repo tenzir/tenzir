@@ -647,6 +647,13 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
   }
   // We intentionally don't support pipelines that are passed to udos yet.
 
+  // Inject the callsite into argument expressions so all locations in the
+  // substituted body have a uniform callsite_index.
+  auto arg_injector = callsite_injector{callsite};
+  for (auto& [name, expr] : substitutions) {
+    arg_injector.visit(expr);
+  }
+
   auto modified_pipeline = inject_callsite(udo.definition, callsite);
   return ast::substitute_named_expressions(std::move(modified_pipeline),
                                            substitutions);

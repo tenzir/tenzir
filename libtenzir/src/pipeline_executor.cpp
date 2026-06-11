@@ -353,7 +353,7 @@ auto pipeline_executor(
   self->state().self = self;
   self->state().node = std::move(node);
   self->state().source = std::move(source);
-  self->state().source_map.add_primary_source(self->state().source);
+  self->state().source_map.add_source(self->state().source);
   self->state().pipe = std::move(pipe);
   self->state().diagnostics = std::move(diagnostics);
   self->state().metrics = std::move(metrics);
