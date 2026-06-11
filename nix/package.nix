@@ -35,10 +35,6 @@ rec {
   '';
 
   excluded-integration-tests = lib.fileset.unions [
-    # plugins not available in the Nix build.
-    ../test/tests/operators/from_sentinelone_data_lake
-    ../test/tests/operators/to_sentinelone_data_lake
-
     # dns lookup output mismatches in the sandboxed environment
     ../test/tests/operators/dns_lookup
 
@@ -135,6 +131,7 @@ rec {
             ps.compaction
             ps.context
             ps.from_microsoft_sql
+            ps.from_sentinelone_data_lake
             ps.packages
             ps.pipeline-manager
             ps.platform
@@ -144,6 +141,7 @@ rec {
             ps.to_splunk
             ps.to_google_secops
             ps.to_google_cloud_logging
+            ps.to_sentinelone_data_lake
             ps.vast
           ]
           ++ lib.optionals (!linkPkgs.stdenv.hostPlatform.isStatic) [
