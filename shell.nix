@@ -145,24 +145,32 @@ pkgs.mkShell (
     env.CCACHE_R2_ALLOWED_PREFIXES = "ccache/";
     env.CCACHE_R2_TEMP_CREDENTIAL_PERMISSION = "object-read-write";
     env.CCACHE_R2_TEMP_CREDENTIAL_TTL_SECONDS = "3600";
-    env.CCACHE_NOREMOTE_ONLY = "true";
-    env.CCACHE_RESHARE = "true";
     env.CCACHE_NAMESPACE = "tenzir";
     env.CCACHE_COMPRESS = "true";
-    env.CCACHE_DIR = "/tmp/tenzir-ccache/cache";
     env.CCACHE_SLOPPINESS = "pch_defines,time_macros,include_file_mtime,include_file_ctime,random_seed";
 
     shellHook = ''
+      # Keep the local cache in the persistent ~/.cache/ccache (ccache's default
+      # location) so the dev shell reuses warm artifacts across sessions instead
+      # of the ephemeral /tmp tmpfs used by sandboxed builds. Honor an explicit
+      # override if the caller already set CCACHE_DIR.
+      export CCACHE_DIR="''${CCACHE_DIR:-$HOME/.cache/ccache}"
+      mkdir -p "$CCACHE_DIR"
+
+      # Layer the R2 remote cache on top, but only when the helper socket is
+      # live. Without it, fall back to the local cache alone.
       ccache_s3_dir="/tmp/tenzir-ccache"
       ccache_s3_sock="$ccache_s3_dir/s3.sock"
-      mkdir -p "$ccache_s3_dir/cache"
+      mkdir -p "$ccache_s3_dir"
       chmod 1777 "$ccache_s3_dir" 2>/dev/null || true
-      chmod 0777 "$ccache_s3_dir/cache" 2>/dev/null || true
-      export CCACHE_REMOTE_STORAGE="crsh:$ccache_s3_sock data-timeout=10s request-timeout=60s @max-pool-connections=64 @object-list-min-interval=300 @upload-queue-size=4096 @upload-queue-bytes=536870912 @upload-workers=8 @upload-drain-timeout=60"
       if [ -S "$ccache_s3_sock" ] && socat -u OPEN:/dev/null "UNIX-CONNECT:$ccache_s3_sock" >/dev/null 2>&1; then
-        echo "ccache R2 helper: already running at $ccache_s3_sock."
+        export CCACHE_REMOTE_STORAGE="crsh:$ccache_s3_sock data-timeout=10s request-timeout=60s @max-pool-connections=64 @object-list-min-interval=300 @upload-queue-size=4096 @upload-queue-bytes=536870912 @upload-workers=8 @upload-drain-timeout=60"
+        export CCACHE_RESHARE=true
+        echo "ccache: local ($CCACHE_DIR) + R2 remote helper at $ccache_s3_sock."
       else
-        echo "ccache R2 helper: run 'wrangler login' if needed, then 'scripts/ccache/s3-storage-helper.py --deamonize --socket-mode 0666' to enable remote cache."
+        unset CCACHE_REMOTE_STORAGE
+        unset CCACHE_RESHARE
+        echo "ccache: local only ($CCACHE_DIR). Run 'wrangler login' if needed, then 'scripts/ccache/s3-storage-helper.py --deamonize --socket-mode 0666' to enable the R2 cache."
       fi
       # Use editable mode for python code part of the python operator. This
       # makes changes to the python code observable in the python operator
