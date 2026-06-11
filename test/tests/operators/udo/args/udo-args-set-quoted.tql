@@ -1,5 +1,0 @@
-from {
-  a: 42,
-  b: {},
-}
-argspkg::set_field_quoted b, "test"

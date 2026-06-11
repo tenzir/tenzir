@@ -1,6 +1,0 @@
----
-error: true
----
-
-from {x: 1}
-set now() = 1

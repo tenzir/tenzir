@@ -44,9 +44,18 @@
         },
         args: [
           assignment {
-            left: root_field {
-              id: `f` @ 25..26,
-              has_question_mark: false
+            left: field_path {
+              expr: root_field {
+                id: `f` @ 25..26,
+                has_question_mark: false
+              },
+              has_this: false,
+              path: [
+                {
+                  id: `f` @ 25..26,
+                  has_question_mark: false
+                }
+              ]
             },
             equals: 26..27,
             right: root_field {

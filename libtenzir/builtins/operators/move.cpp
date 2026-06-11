@@ -94,9 +94,7 @@ struct move_plugin final : public operator_plugin2<move_operator> {
           .emit(ctx);
         return failure::promise();
       }
-      auto selector = ast::selector::try_from(assignment->left);
-      auto* const left
-        = selector ? try_as<ast::field_path>(&*selector) : nullptr;
+      auto* const left = try_as<ast::field_path>(assignment->left);
       auto right = ast::field_path::try_from(assignment->right);
       if (not left or not right) {
         diagnostic::error("can only move fields")
