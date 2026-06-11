@@ -155,12 +155,6 @@ struct CompiledPipeline {
 
   /// The source map populated during compilation.
   SourceMap source_map;
-
-  friend auto inspect(auto& f, CompiledPipeline& x) -> bool {
-    return f.object(x)
-      .pretty_name("compiled_pipeline")
-      .fields(f.field("ir", x.ir), f.field("source_map", x.source_map));
-  }
 };
 
 /// Compile an AST pipeline into IR.
