@@ -27,6 +27,7 @@
 #include <charconv>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <ctime>
 #include <filesystem>
 #include <mutex>
@@ -863,6 +864,14 @@ auto ensure_default_ca_paths() -> void {
   static std::once_flag flag;
   std::call_once(flag, [] {
     auto ca_paths = std::vector<std::string>{};
+    // Respect the OpenSSL convention for overriding the CA bundle location.
+    // This also makes TLS work in environments without an FHS layout, such as
+    // Nix build sandboxes.
+    if (auto const* env = std::getenv("SSL_CERT_FILE")) {
+      if (std::filesystem::exists(env)) {
+        ca_paths.emplace_back(env);
+      }
+    }
     for (auto const* path : {
            "/etc/ssl/certs/ca-certificates.crt",
            "/etc/pki/tls/cert.pem",
