@@ -656,6 +656,7 @@ find_package(libbacktrace)
 if (TARGET libbacktrace::libbacktrace)
   target_link_libraries(libtenzir PRIVATE libbacktrace::libbacktrace)
 endif ()
+provide_find_module(libbacktrace)
 
 if (LINUX)
   find_package(Boost COMPONENTS stacktrace_backtrace)
