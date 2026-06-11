@@ -3,6 +3,7 @@ title: Nested assignment through package UDO field parameters
 type: bugfix
 authors:
   - mavam
+  - jachris
   - codex
 prs:
   - 6264
