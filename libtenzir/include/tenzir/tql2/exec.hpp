@@ -74,7 +74,7 @@ auto build_profiler_slices(ProfilerSnapshot const& snapshot,
   -> std::vector<table_slice>;
 
 auto exec2(const Source& source, diagnostic_handler& dh, const exec_config& cfg,
-           caf::actor_system& sys) -> bool;
+           caf::actor_system& sys, SourceMap& source_map) -> bool;
 
 auto compile(ast::pipeline&& pipe, session ctx) -> failure_or<pipeline>;
 

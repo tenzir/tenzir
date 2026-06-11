@@ -33,8 +33,9 @@ void dump_diagnostics_to_stdout(std::span<const diagnostic> diagnostics,
 }
 
 auto exec_command_impl(const Source& source, diagnostic_handler& dh,
-                       const exec_config& cfg, caf::actor_system& sys) -> bool {
-  auto result = exec_pipeline(source, dh, cfg, sys);
+                       const exec_config& cfg, caf::actor_system& sys,
+                       SourceMap& source_map) -> bool {
+  auto result = exec_pipeline(source, dh, cfg, sys, source_map);
   if (result) {
     return true;
   }
@@ -135,12 +136,13 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   source_map.add_source(source);
   if (cfg.dump_diagnostics) {
     auto collector = collecting_diagnostic_handler{};
-    auto result = exec_command_impl(std::move(source), collector, cfg, sys);
+    auto result
+      = exec_command_impl(std::move(source), collector, cfg, sys, source_map);
     dump_diagnostics_to_stdout(std::move(collector).collect(), source_map);
     return result;
   }
   printer = make_diagnostic_printer(source_map, color, std::cerr);
-  return exec_command_impl(std::move(source), *printer, cfg, sys);
+  return exec_command_impl(std::move(source), *printer, cfg, sys, source_map);
 }
 
 class plugin final : public virtual command_plugin {

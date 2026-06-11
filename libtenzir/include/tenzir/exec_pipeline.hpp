@@ -43,8 +43,8 @@ struct exec_config {
 };
 
 auto exec_pipeline(const Source& source, diagnostic_handler& dh,
-                   const exec_config& cfg, caf::actor_system& sys)
-  -> caf::expected<void>;
+                   const exec_config& cfg, caf::actor_system& sys,
+                   SourceMap& source_map) -> caf::expected<void>;
 
 auto exec_pipeline(pipeline pipe, const Source& definition,
                    diagnostic_handler& dh, const exec_config& cfg,

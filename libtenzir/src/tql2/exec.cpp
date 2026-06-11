@@ -2302,12 +2302,15 @@ namespace {
 
 // TODO: failure_or<bool> is bad
 auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
-                  caf::actor_system& sys) -> failure_or<bool> {
+                  caf::actor_system& sys, SourceMap& source_map)
+  -> failure_or<bool> {
   // Transform the AST into IR.
   auto b_ctx = base_ctx{ctx.dh(), ctx.reg()};
   // (void)b_ctx.system();
-  TRY(auto compiled, compile(std::move(ast), b_ctx));
-  auto ir = std::move(compiled.ir);
+  // Compile into the externally owned source map so that the diagnostic
+  // printer can resolve locations into sources registered during compilation,
+  // such as the bodies of user-defined operators.
+  TRY(auto ir, compile(std::move(ast), b_ctx, source_map));
   if (cfg.dump_ir) {
     fmt::print("{:#?}\n", ir);
     return not ctx.has_failure();
@@ -2412,7 +2415,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
 } // namespace
 
 auto exec2(const Source& source, diagnostic_handler& dh, const exec_config& cfg,
-           caf::actor_system& sys) -> bool {
+           caf::actor_system& sys, SourceMap& source_map) -> bool {
   auto result = std::invoke([&]() -> failure_or<bool> {
     TRY(load_packages_for_exec(dh, sys));
     auto provider = session_provider::make(dh);
@@ -2431,7 +2434,7 @@ auto exec2(const Source& source, diagnostic_handler& dh, const exec_config& cfg,
     if ((cfg.neo and not cfg.dump_pipeline) or cfg.dump_ir or cfg.dump_inst_ir
         or cfg.dump_opt_ir) {
       // This new code path will eventually supersede the current one.
-      return exec_with_ir(std::move(parsed), cfg, ctx, sys);
+      return exec_with_ir(std::move(parsed), cfg, ctx, sys, source_map);
     }
     if (cfg.profile) {
       diagnostic::warning("`--profile` is only supported with `--neo`")

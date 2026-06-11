@@ -18,6 +18,10 @@ auto compile_ctx::make_root(base_ctx ctx) -> root {
   return root{ctx};
 }
 
+auto compile_ctx::make_root(base_ctx ctx, SourceMap& source_map) -> root {
+  return root{ctx, source_map};
+}
+
 auto compile_ctx::open_scope() -> scope {
   auto original_env = env_;
   auto new_env = std::make_unique<env_t>(env());
@@ -105,6 +109,12 @@ auto compile(ast::pipeline ast, base_ctx ctx) -> failure_or<CompiledPipeline> {
   auto root = compile_ctx::make_root(ctx);
   TRY(auto ir, std::move(ast).compile(root));
   return CompiledPipeline{std::move(ir), std::move(root).source_map()};
+}
+
+auto compile(ast::pipeline ast, base_ctx ctx, SourceMap& source_map)
+  -> failure_or<ir::pipeline> {
+  auto root = compile_ctx::make_root(ctx, source_map);
+  return std::move(ast).compile(root);
 }
 
 } // namespace tenzir

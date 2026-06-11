@@ -326,10 +326,10 @@ auto exec_pipeline(pipeline pipe, const Source& definition,
 }
 
 auto exec_pipeline(const Source& source, diagnostic_handler& dh,
-                   const exec_config& cfg, caf::actor_system& sys)
-  -> caf::expected<void> {
+                   const exec_config& cfg, caf::actor_system& sys,
+                   SourceMap& source_map) -> caf::expected<void> {
   if (not cfg.legacy) {
-    auto success = exec2(source, dh, cfg, sys);
+    auto success = exec2(source, dh, cfg, sys, source_map);
     return success ? caf::expected<void>{} : ec::silent;
   }
   auto parsed = tql::parse(source, dh);
