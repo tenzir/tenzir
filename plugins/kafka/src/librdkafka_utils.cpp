@@ -39,6 +39,8 @@ namespace tenzir::plugins::kafka {
 
 namespace {
 
+constexpr auto committed_offsets_timeout_ms = 5000;
+
 auto aws_iam_mode(std::optional<resolved_aws_credentials> const& creds) -> const
   char* {
   if (not creds) {
@@ -302,10 +304,10 @@ private:
   diagnostic_handler& dh_;
 };
 
-/// Callback that assigns explicit offsets during partition rebalance.
+/// Callback that preserves committed offsets during partition rebalance.
 class rebalance_callback final : public RdKafka::RebalanceCb {
 public:
-  /// Constructs a callback that assigns `offset` for new partitions.
+  /// Constructs a callback that uses `offset` for uncommitted partitions.
   rebalance_callback(int64_t offset,
                      std::shared_ptr<Atomic<uint64_t>> assignment_generation)
     : offset_{offset},
@@ -317,11 +319,7 @@ public:
                     std::vector<RdKafka::TopicPartition*>& partitions)
     -> void override {
     if (err == RdKafka::ERR__ASSIGN_PARTITIONS) {
-      if (offset_ != RdKafka::Topic::OFFSET_INVALID) {
-        for (auto* partition : partitions) {
-          partition->set_offset(offset_);
-        }
-      }
+      apply_start_offsets(*consumer, partitions);
       if (consumer->rebalance_protocol() == "COOPERATIVE") {
         if (auto* e = consumer->incremental_assign(partitions)) {
           auto err_guard = std::unique_ptr<RdKafka::Error>{e};
@@ -362,6 +360,74 @@ public:
   }
 
 private:
+  auto
+  apply_start_offsets(RdKafka::KafkaConsumer& consumer,
+                      std::vector<RdKafka::TopicPartition*>& partitions) const
+    -> void {
+    if (offset_ == RdKafka::Topic::OFFSET_INVALID) {
+      return;
+    }
+    if (offset_ == RdKafka::Topic::OFFSET_STORED) {
+      for (auto* partition : partitions) {
+        if (partition != nullptr) {
+          partition->set_offset(offset_);
+        }
+      }
+      return;
+    }
+    apply_explicit_start_offsets(consumer, partitions);
+  }
+
+  auto apply_explicit_start_offsets(
+    RdKafka::KafkaConsumer& consumer,
+    std::vector<RdKafka::TopicPartition*>& partitions) const -> void {
+    auto assigned_partitions = std::vector<RdKafka::TopicPartition*>{};
+    auto committed_offsets
+      = std::vector<std::unique_ptr<RdKafka::TopicPartition>>{};
+    auto raw_committed_offsets = std::vector<RdKafka::TopicPartition*>{};
+    assigned_partitions.reserve(partitions.size());
+    committed_offsets.reserve(partitions.size());
+    raw_committed_offsets.reserve(partitions.size());
+    for (auto* partition : partitions) {
+      if (partition == nullptr) {
+        continue;
+      }
+      assigned_partitions.push_back(partition);
+      committed_offsets.emplace_back(RdKafka::TopicPartition::create(
+        partition->topic(), partition->partition()));
+      TENZIR_ASSERT(committed_offsets.back());
+      raw_committed_offsets.push_back(committed_offsets.back().get());
+    }
+    if (raw_committed_offsets.empty()) {
+      return;
+    }
+    auto const err
+      = consumer.committed(raw_committed_offsets, committed_offsets_timeout_ms);
+    if (err != RdKafka::ERR_NO_ERROR) {
+      TENZIR_WARN("failed to fetch committed Kafka offsets during rebalance: "
+                  "{}; leaving assignment offsets unchanged",
+                  RdKafka::err2str(err));
+      return;
+    }
+    for (auto index = size_t{0}; index < raw_committed_offsets.size();
+         ++index) {
+      auto* partition = assigned_partitions[index];
+      auto* committed_offset = raw_committed_offsets[index];
+      auto const committed_err = committed_offset->err();
+      if (committed_err != RdKafka::ERR_NO_ERROR
+          and committed_err != RdKafka::ERR__NO_OFFSET) {
+        TENZIR_WARN("failed to fetch committed Kafka offset for {}[{}]: {}; "
+                    "leaving assignment offset unchanged",
+                    partition->topic(), partition->partition(),
+                    RdKafka::err2str(committed_err));
+        continue;
+      }
+      auto const committed = committed_offset->offset();
+      partition->set_offset(
+        committed == RdKafka::Topic::OFFSET_INVALID ? offset_ : committed);
+    }
+  }
+
   auto mark_assignment_changed() const -> void {
     if (assignment_generation_) {
       assignment_generation_->fetch_add(1, std::memory_order_release);
