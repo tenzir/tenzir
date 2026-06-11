@@ -70,8 +70,8 @@ namespace tenzir {
 using namespace tenzir::si_literals;
 
 namespace {
-auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys)
-  -> failure_or<void> {
+auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
+                            SourceMap* source_map) -> failure_or<void> {
   auto package_dirs = std::vector<std::filesystem::path>{};
   for (const auto& dir : config_dirs(sys.config())) {
     package_dirs.emplace_back(dir / "packages");
@@ -198,7 +198,7 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys)
       had_errors = true;
       continue;
     }
-    auto module = build_package_operator_module(pkg, dh);
+    auto module = build_package_operator_module(pkg, dh, source_map);
     if (not module) {
       had_errors = true;
       continue;
@@ -2417,7 +2417,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
 auto exec2(const Source& source, diagnostic_handler& dh, const exec_config& cfg,
            caf::actor_system& sys, SourceMap& source_map) -> bool {
   auto result = std::invoke([&]() -> failure_or<bool> {
-    TRY(load_packages_for_exec(dh, sys));
+    TRY(load_packages_for_exec(dh, sys, &source_map));
     auto provider = session_provider::make(dh);
     auto ctx = provider.as_session();
     TRY(validate_utf8(source.text, ctx));
@@ -2425,7 +2425,7 @@ auto exec2(const Source& source, diagnostic_handler& dh, const exec_config& cfg,
     if (cfg.dump_tokens) {
       return dump_tokens(tokens, source.text);
     }
-    TRY(verify_tokens(tokens, ctx));
+    TRY(verify_tokens(tokens, ctx, source.index));
     TRY(auto parsed, parse(tokens, source, ctx));
     if (cfg.dump_ast) {
       fmt::print("{:#?}\n", parsed);

@@ -1665,7 +1665,8 @@ auto parse_pipeline_with_bad_diagnostics(std::string_view source, session ctx)
 auto parse_pipeline_with_source_index(std::string_view source,
                                       size_t source_index, session ctx)
   -> failure_or<ast::pipeline> {
-  TRY(auto tokens, tokenize(source, ctx));
+  TRY(auto tokens,
+      tokenize(source, ctx, detail::narrow_cast<SourceId>(source_index)));
   return parse_pipeline(tokens, source, ctx, source_index);
 }
 

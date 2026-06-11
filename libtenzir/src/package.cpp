@@ -13,6 +13,7 @@
 #include "tenzir/detail/load_contents.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/location.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/source.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -1225,7 +1226,8 @@ auto package::to_record() const -> record {
   return info_record;
 }
 
-auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
+auto build_package_operator_module(const package& pkg, diagnostic_handler& dh,
+                                   SourceMap* source_map)
   -> failure_or<std::unique_ptr<module_def>> {
   auto module = std::make_unique<module_def>();
   auto module_name = package_module_name(pkg.id);
@@ -1290,6 +1292,9 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
     auto source = Source::new_source(
       op.definition,
       fmt::format("<packages/{}:{}>", pkg.id, fmt::join(op_name, "::")), true);
+    if (source_map != nullptr) {
+      source_map->add_source(source);
+    }
     auto parsed
       = parse_pipeline_with_source_index(op.definition, source->index, ctx);
     if (not parsed) {

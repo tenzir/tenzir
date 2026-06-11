@@ -19,11 +19,11 @@
 
 namespace tenzir {
 
-auto tokenize(std::string_view content, session ctx)
+auto tokenize(std::string_view content, session ctx, SourceId source_index)
   -> failure_or<std::vector<token>> {
   TRY(validate_utf8(content, ctx));
   auto tokens = tokenize_permissive(content);
-  TRY(verify_tokens(tokens, ctx));
+  TRY(verify_tokens(tokens, ctx, source_index));
   return tokens;
 }
 
@@ -270,8 +270,8 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
   return result;
 }
 
-auto verify_tokens(std::span<const token> tokens, session ctx)
-  -> failure_or<void> {
+auto verify_tokens(std::span<const token> tokens, session ctx,
+                   SourceId source_index) -> failure_or<void> {
   auto result = failure_or<void>{};
   for (const auto& token : tokens) {
     if (token.kind == token_kind::error) {
@@ -280,7 +280,7 @@ auto verify_tokens(std::span<const token> tokens, session ctx)
         begin = (&token - 1)->end;
       }
       diagnostic::error("could not parse token")
-        .primary(location{begin, token.end})
+        .primary(location{begin, token.end, source_index})
         .emit(ctx);
       result = failure::promise();
     }
