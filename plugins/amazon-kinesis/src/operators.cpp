@@ -876,7 +876,7 @@ auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
   if (not chunk.empty()) {
     chunks.push_back(std::move(chunk));
   }
-  for (auto& records : chunks) {
+  for (auto index = size_t{0}; index < chunks.size(); ++index) {
     auto permit = request_slots_.try_acquire();
     while (not permit and not failed_) {
       auto report = co_await (*send_queue_)->dequeue();
@@ -884,11 +884,16 @@ auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
       permit = request_slots_.try_acquire();
     }
     if (failed_) {
+      // Return unsent chunks to the batch so that fail_if_unsent() accounts
+      // for them.
+      for (auto& chunk : chunks | std::views::drop(index)) {
+        std::ranges::move(chunk, std::back_inserter(batch_));
+      }
       co_return;
     }
     ++pending_reports_;
     ctx.spawn_task([client = client_, stream = args_.stream.inner,
-                    records = std::move(records), queue = *send_queue_,
+                    records = std::move(chunks[index]), queue = *send_queue_,
                     report_ready = report_ready_,
                     permit = std::move(*permit)]() mutable -> Task<void> {
       auto report = SendReport{};
@@ -924,9 +929,11 @@ auto ToAmazonKinesis::handle_send_report(SendReport report, OpCtx& ctx)
     diagnostic::error("failed to write records to Kinesis")
       .primary(args_.stream.source)
       .note("{}", fmt::join(report.errors, "; "))
-      .note("{} records remain unsent", report.failed_records.size())
       .emit(ctx);
   }
+  // Return failed records to the batch so that fail_if_unsent() accounts for
+  // them.
+  std::ranges::move(report.failed_records, std::back_inserter(batch_));
 }
 
 auto ToAmazonKinesis::drain_send_reports(OpCtx& ctx) -> void {
@@ -967,16 +974,17 @@ auto ToAmazonKinesis::state() -> OperatorState {
 }
 
 auto ToAmazonKinesis::fail_if_unsent(OpCtx& ctx) -> void {
-  if (failed_) {
+  if (batch_.empty()) {
     return;
   }
-  if (not batch_.empty()) {
-    failed_ = true;
-    diagnostic::error("failed to write all records to Kinesis")
-      .primary(args_.stream.source)
-      .note("{} records remain unsent", batch_.size())
-      .emit(ctx);
-  }
+  failed_ = true;
+  diagnostic::error("failed to write all records to Kinesis")
+    .primary(args_.stream.source)
+    .note("{} records remain unsent", batch_.size())
+    .emit(ctx);
+  // Clearing the batch makes the report idempotent if both a snapshot and
+  // finalization observe the same failure.
+  batch_.clear();
 }
 
 } // namespace tenzir::plugins::amazon_kinesis
