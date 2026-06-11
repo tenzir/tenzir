@@ -30,8 +30,7 @@ auto parse_pipeline_with_bad_diagnostics(std::string_view source, session ctx)
 /// Parse `source` with real locations stamped with `source_index`. The index
 /// is an opaque key into the caller's source registry and will appear on every
 /// location produced by this parse call.
-auto parse_pipeline_with_source_index(std::string_view source,
-                                      size_t source_index, session ctx)
+auto parse_pipeline_with_source_index(const Source& source, session ctx)
   -> failure_or<ast::pipeline>;
 auto parse_expression_with_bad_diagnostics(std::string_view source, session ctx)
   -> failure_or<ast::expression>;
