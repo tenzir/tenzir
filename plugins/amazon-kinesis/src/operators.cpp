@@ -568,7 +568,7 @@ auto FromAmazonKinesis::shard_loop(ShardState shard) -> Task<void> {
         auto result = ReadResult{};
         result.shard_id = shard.id;
         result.error = std::move(created).unwrap_err().message;
-        ++pending_results_;
+        pending_results_.fetch_add(1, std::memory_order_relaxed);
         co_await results_->enqueue(Any{std::move(result)});
         co_return;
       }
@@ -577,7 +577,7 @@ auto FromAmazonKinesis::shard_loop(ShardState shard) -> Task<void> {
         auto result = ReadResult{};
         result.shard_id = shard.id;
         result.shard_closed = true;
-        ++pending_results_;
+        pending_results_.fetch_add(1, std::memory_order_relaxed);
         co_await results_->enqueue(Any{std::move(result)});
         co_return;
       }
@@ -600,7 +600,7 @@ auto FromAmazonKinesis::shard_loop(ShardState shard) -> Task<void> {
     const auto failed = not result.error.empty();
     const auto closed = result.shard_closed;
     const auto idle = result.records.empty();
-    ++pending_results_;
+    pending_results_.fetch_add(1, std::memory_order_relaxed);
     co_await results_->enqueue(Any{std::move(result)});
     if (failed or closed) {
       co_return;
@@ -681,8 +681,9 @@ auto FromAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
 auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
                                      OpCtx& ctx) -> Task<void> {
   auto batch = std::move(result).as<ReadResult>();
-  TENZIR_ASSERT(pending_results_ > 0);
-  --pending_results_;
+  const auto previous_pending
+    = pending_results_.fetch_sub(1, std::memory_order_relaxed);
+  TENZIR_ASSERT(previous_pending > 0);
   if (not batch.error.empty()) {
     diagnostic::error("{}", batch.error).primary(args_.stream.source).emit(ctx);
     done_ = true;
@@ -708,7 +709,7 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
     if (args_.exit) {
       // Queued results may still carry records for shards whose state says
       // idle, so only exit once everything enqueued has been processed.
-      done_ = pending_results_ == 0
+      done_ = pending_results_.load(std::memory_order_relaxed) == 0
               and std::ranges::all_of(shards_, [](const ShardState& shard) {
                     return shard.closed or shard.idle;
                   });
@@ -751,7 +752,8 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
   }
   // A shard can deliver its final records and close in the same batch, so the
   // exit condition must also be evaluated when records arrived.
-  if (args_.exit and not done_ and pending_results_ == 0) {
+  if (args_.exit and not done_
+      and pending_results_.load(std::memory_order_relaxed) == 0) {
     done_ = std::ranges::all_of(shards_, [](const ShardState& shard) {
       return shard.closed or shard.idle;
     });

@@ -13,6 +13,7 @@
 #include <tenzir/async.hpp>
 #include <tenzir/async/notify.hpp>
 #include <tenzir/async/semaphore.hpp>
+#include <tenzir/atomic.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/pipeline_metrics.hpp>
@@ -117,8 +118,11 @@ private:
   std::vector<ShardState> shards_;
   std::vector<std::string> running_;
   /// The number of enqueued but unprocessed read results, to prevent `exit`
-  /// from triggering while records are still in flight.
-  uint64_t pending_results_ = 0;
+  /// from triggering while records are still in flight. Atomic because shard
+  /// loops increment it concurrently with each other and with the decrement on
+  /// the operator driver; relaxed ordering suffices since the results queue
+  /// orders each increment before the driver processes the matching result.
+  Atomic<uint64_t> pending_results_ = 0;
   uint64_t emitted_ = 0;
   uint64_t limit_ = 0;
   int records_per_call_ = 1000;
