@@ -464,6 +464,11 @@ auto make_kinesis_http_client(Option<located<std::string>> const& aws_region,
 
 FromAmazonKinesis::FromAmazonKinesis(FromAmazonKinesisArgs args)
   : args_{std::move(args)} {
+  limit_ = args_.count ? args_.count->inner : 0;
+  records_per_call_ = args_.records_per_call
+                        ? detail::narrow<int>(args_.records_per_call->inner)
+                        : 1000;
+  poll_idle_ = args_.poll_idle ? args_.poll_idle->inner : 1s;
 }
 
 auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
@@ -473,11 +478,6 @@ auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
     done_ = true;
     co_return;
   }
-  limit_ = args_.count ? args_.count->inner : 0;
-  records_per_call_ = args_.records_per_call
-                        ? detail::narrow<int>(args_.records_per_call->inner)
-                        : 1000;
-  poll_idle_ = args_.poll_idle ? args_.poll_idle->inner : 1s;
   if (shards_.empty()) {
     auto shard_infos = co_await list_shards(*client_, args_.stream.inner,
                                             starts_at_latest(args_.start));
@@ -616,14 +616,11 @@ auto FromAmazonKinesis::parents_closed(const ShardState& shard) const -> bool {
 }
 
 auto FromAmazonKinesis::spawn_ready_loops(OpCtx& ctx) -> void {
-  for (const auto& shard : shards_) {
-    if (shard.closed or not parents_closed(shard)) {
+  for (auto& shard : shards_) {
+    if (shard.closed or shard.loop_running or not parents_closed(shard)) {
       continue;
     }
-    if (std::ranges::find(running_, shard.id) != running_.end()) {
-      continue;
-    }
-    running_.push_back(shard.id);
+    shard.loop_running = true;
     ctx.spawn_task(shard_loop(shard));
   }
 }
@@ -690,7 +687,7 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
       it->next_sequence_number = batch.next_sequence_number;
     }
     if (batch.shard_closed) {
-      std::erase(running_, batch.shard_id);
+      it->loop_running = false;
       co_await discover_new_shards(ctx);
       if (done_) {
         co_return;
@@ -767,6 +764,11 @@ auto FromAmazonKinesis::snapshot(Serde& serde) -> void {
 
 ToAmazonKinesis::ToAmazonKinesis(ToAmazonKinesisArgs args)
   : args_{std::move(args)} {
+  batch_size_
+    = args_.batch_size ? detail::narrow<size_t>(args_.batch_size->inner) : 500;
+  batch_timeout_ = args_.batch_timeout ? args_.batch_timeout->inner : 1s;
+  request_slots_ = Semaphore{
+    detail::narrow<size_t>(args_.parallel ? args_.parallel->inner : 1)};
 }
 
 auto ToAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
@@ -776,17 +778,6 @@ auto ToAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
     failed_ = true;
     co_return;
   }
-  batch_size_
-    = args_.batch_size ? detail::narrow<size_t>(args_.batch_size->inner) : 500;
-  batch_timeout_ = args_.batch_timeout ? args_.batch_timeout->inner : 1s;
-  parallel_ = args_.parallel ? args_.parallel->inner : 1;
-  request_slots_ = Semaphore{detail::narrow<size_t>(parallel_)};
-  send_queue_ = Arc<folly::coro::BoundedQueue<SendReport>>{
-    std::in_place, detail::narrow<uint32_t>(parallel_ + 1)};
-  // One slot per possible ReportReady plus one for the flush timer, so
-  // enqueueing wakeups never blocks a helper task.
-  wakeup_queue_ = Arc<folly::coro::BoundedQueue<Any>>{
-    std::in_place, detail::narrow<uint32_t>(parallel_ + 2)};
   auto request = Aws::Kinesis::Model::DescribeStreamSummaryRequest{};
   request.SetStreamName(
     Aws::String{args_.stream.inner.data(), args_.stream.inner.size()});
@@ -883,8 +874,7 @@ auto ToAmazonKinesis::process(table_slice input, OpCtx& ctx) -> Task<void> {
 
 auto ToAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
   TENZIR_UNUSED(dh);
-  TENZIR_ASSERT(wakeup_queue_);
-  co_return co_await (*wakeup_queue_)->dequeue();
+  co_return co_await wakeup_queue_->dequeue();
 }
 
 auto ToAmazonKinesis::process_task(Any result, OpCtx& ctx) -> Task<void> {
@@ -907,9 +897,8 @@ auto ToAmazonKinesis::process_task(Any result, OpCtx& ctx) -> Task<void> {
 
 auto ToAmazonKinesis::arm_flush_timer(OpCtx& ctx) -> void {
   TENZIR_ASSERT(batch_deadline_);
-  TENZIR_ASSERT(wakeup_queue_);
   timer_armed_ = true;
-  ctx.spawn_task([queue = *wakeup_queue_,
+  ctx.spawn_task([queue = wakeup_queue_,
                   deadline = *batch_deadline_]() mutable -> Task<void> {
     co_await sleep_until(deadline);
     co_await queue->enqueue(Any{FlushTimeout{}});
@@ -954,7 +943,7 @@ auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
   for (auto index = size_t{0}; index < chunks.size(); ++index) {
     auto permit = request_slots_.try_acquire();
     while (not permit and not failed_) {
-      auto report = co_await (*send_queue_)->dequeue();
+      auto report = co_await send_queue_->dequeue();
       handle_send_report(std::move(report), ctx);
       permit = request_slots_.try_acquire();
     }
@@ -968,8 +957,8 @@ auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
     }
     ++pending_reports_;
     ctx.spawn_task([client = client_, stream = args_.stream.inner,
-                    records = std::move(chunks[index]), queue = *send_queue_,
-                    wakeup = *wakeup_queue_,
+                    records = std::move(chunks[index]), queue = send_queue_,
+                    wakeup = wakeup_queue_,
                     permit = std::move(*permit)]() mutable -> Task<void> {
       auto report = SendReport{};
       report.events = records.size();
@@ -1012,20 +1001,14 @@ auto ToAmazonKinesis::handle_send_report(SendReport report, OpCtx& ctx)
 }
 
 auto ToAmazonKinesis::drain_send_reports(OpCtx& ctx) -> void {
-  if (not send_queue_) {
-    return;
-  }
-  while (auto report = (*send_queue_)->try_dequeue()) {
+  while (auto report = send_queue_->try_dequeue()) {
     handle_send_report(std::move(*report), ctx);
   }
 }
 
 auto ToAmazonKinesis::wait_for_requests(OpCtx& ctx) -> Task<void> {
-  if (not send_queue_) {
-    co_return;
-  }
   while (pending_reports_ > 0) {
-    auto report = co_await (*send_queue_)->dequeue();
+    auto report = co_await send_queue_->dequeue();
     handle_send_report(std::move(report), ctx);
   }
 }

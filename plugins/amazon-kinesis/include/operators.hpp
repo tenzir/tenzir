@@ -86,6 +86,10 @@ private:
     bool trim_horizon_start = false;
     bool closed = false;
     bool idle = false;
+    /// Whether a `shard_loop()` task is currently reading this shard.
+    /// Transient runtime state, deliberately excluded from `inspect()` so
+    /// that restored shards respawn their loops.
+    bool loop_running = false;
 
     friend auto inspect(auto& f, ShardState& x) -> bool {
       return f.object(x).fields(
@@ -103,8 +107,8 @@ private:
   /// Reads one shard until it closes or fails, enqueueing results.
   auto shard_loop(ShardState shard) -> Task<void>;
 
-  /// Spawns loops for shards that have no running loop and whose parents are
-  /// all closed, preserving parent-before-child ordering.
+  /// Spawns loops for shards without a running loop and whose parents are all
+  /// closed, preserving parent-before-child ordering.
   auto spawn_ready_loops(OpCtx& ctx) -> void;
 
   auto parents_closed(const ShardState& shard) const -> bool;
@@ -114,7 +118,6 @@ private:
   FromAmazonKinesisArgs args_;
   std::shared_ptr<amazon::SignedHttpClient> client_;
   std::vector<ShardState> shards_;
-  std::vector<std::string> running_;
   uint64_t emitted_ = 0;
   uint64_t limit_ = 0;
   int records_per_call_ = 1000;
@@ -181,12 +184,13 @@ private:
   bool timer_armed_ = false;
   /// Wakeup messages for `await_task()`. Helper tasks enqueue, only the
   /// operator driver dequeues and updates state; operator members are never
-  /// touched from concurrently running tasks.
-  mutable Option<Arc<folly::coro::BoundedQueue<Any>>> wakeup_queue_;
-  Option<Arc<folly::coro::BoundedQueue<SendReport>>> send_queue_;
+  /// touched from concurrently running tasks. Queue capacities just bound
+  /// buffering: a full queue suspends the producing helper task until the
+  /// driver drains it.
+  mutable Arc<folly::coro::BoundedQueue<Any>> wakeup_queue_{std::in_place, 16};
+  Arc<folly::coro::BoundedQueue<SendReport>> send_queue_{std::in_place, 16};
   Semaphore request_slots_{1};
   uint64_t pending_reports_ = 0;
-  uint64_t parallel_ = 1;
   bool failed_ = false;
   MetricsCounter bytes_write_counter_;
   MetricsCounter events_write_counter_;
