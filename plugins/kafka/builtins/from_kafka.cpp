@@ -1694,7 +1694,7 @@ private:
 
   /// Requests pipeline stop once every assigned partition reached EOF.
   auto check_eof_exit() -> void {
-    if (not args_.exit or assigned_partitions_.empty()) {
+    if (not args_.exit) {
       return;
     }
     if (eof_partitions_.size() == assigned_partitions_.size()) {
