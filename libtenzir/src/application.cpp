@@ -98,6 +98,14 @@ void add_root_opts(command& cmd) {
   cmd.options.add<duration>("?tenzir", "rebuild-interval",
                             "timespan after which an automatic rebuild is "
                             "triggered (default: 2h)");
+  cmd.options.add<std::string>(
+    "?tenzir", "http-proxy",
+    "URL of an HTTP/HTTPS proxy used for outbound requests "
+    "(e.g. http://proxy.example.com:3128). Must include an explicit port.");
+  cmd.options.add<std::string>(
+    "?tenzir", "no-proxy",
+    "comma-separated list of hostnames or suffixes to bypass the proxy for; "
+    "an entry starting with `.` matches every subdomain");
 }
 
 auto make_start_command() {

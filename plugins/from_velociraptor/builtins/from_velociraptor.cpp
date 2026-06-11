@@ -15,6 +15,7 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin/register.hpp>
+#include <tenzir/proxy_settings.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/variant.hpp>
 
@@ -47,6 +48,7 @@ constexpr auto message_queue_capacity = uint32_t{1024};
 constexpr auto reactor_queue_overflow_error
   = "Velociraptor reactor queue overflow";
 constexpr auto grpc_request_failed_error = "Velociraptor gRPC request failed";
+constexpr auto grpc_http_proxy_channel_arg = "grpc.http_proxy";
 
 struct FromVelociraptorArgs {
   record plugin_config;
@@ -271,6 +273,9 @@ public:
     });
     auto channel_args = grpc::ChannelArguments{};
     channel_args.SetSslTargetNameOverride("VelociraptorServer");
+    if (auto proxy = proxy_for_grpc_target(config->api_connection_string)) {
+      channel_args.SetString(grpc_http_proxy_channel_arg, *proxy);
+    }
     auto channel = grpc::CreateCustomChannel(config->api_connection_string,
                                              credentials, channel_args);
     auto stub = proto::API::NewStub(channel);

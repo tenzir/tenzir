@@ -10,7 +10,9 @@
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
+#include <tenzir/http_proxy_connect.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/proxy_settings.hpp>
 
 #include <fmt/format.h>
 #include <folly/ScopeGuard.h>
@@ -156,7 +158,21 @@ struct HttpPool::Impl {
   proxygen::URL url;
   HttpPoolConfig config;
   SessionPoolPtr pool;
+  bool use_authenticated_proxy = false;
 };
+
+auto make_conn_params(auto const& impl)
+  -> proxygen::coro::HTTPCoroConnector::ConnectionParams {
+  auto secure = impl.config.tls
+                  ? proxygen::coro::HTTPClient::SecureTransportImpl::TLS
+                  : proxygen::coro::HTTPClient::SecureTransportImpl::NONE;
+  auto conn_params
+    = proxygen::coro::HTTPClient::getConnParams(secure, impl.url.getHost());
+  if (impl.config.ssl_context) {
+    conn_params.sslContext = impl.config.ssl_context;
+  }
+  return conn_params;
+}
 
 HttpPool::HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
                    std::string url, HttpPoolConfig config)
@@ -168,26 +184,60 @@ HttpPool::HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
   if (not impl_->url.isValid() or not impl_->url.hasHost()) {
     throw std::runtime_error(fmt::format("invalid url: {}", url));
   }
-  auto secure = impl_->config.tls
-                  ? proxygen::coro::HTTPClient::SecureTransportImpl::TLS
-                  : proxygen::coro::HTTPClient::SecureTransportImpl::NONE;
   if (impl_->config.tls) {
     http::ensure_default_ca_paths();
   }
-  auto conn_params
-    = proxygen::coro::HTTPClient::getConnParams(secure, impl_->url.getHost());
-  if (impl_->config.ssl_context) {
-    conn_params.sslContext = impl_->config.ssl_context;
-  }
+  auto conn_params = make_conn_params(*impl_);
   auto pool_params = proxygen::coro::HTTPCoroSessionPool::PoolParams{};
   pool_params.connectTimeout = impl_->config.connection_timeout;
-  impl_->pool = SessionPoolPtr{
-    std::make_unique<proxygen::coro::HTTPCoroSessionPool>(
-      impl_->evb, impl_->url.getHost(), impl_->url.getPort(), pool_params,
-      conn_params, proxygen::coro::HTTPCoroConnector::defaultSessionParams(),
-      true)
-      .release(),
-  };
+  // When a proxy is configured and the target is not on the bypass
+  // list, chain through Proxygen's built-in proxyPool support: TCP
+  // connections to the proxy are pooled by `proxy_pool`, and the
+  // target pool reuses CONNECT-tunnelled sessions on top of them.
+  auto proxy = proxy_for_host(impl_->url.getHost());
+  if (proxy) {
+    auto const& ps = get_proxy_settings();
+    TENZIR_ASSERT(ps.proxy_host and ps.proxy_port and ps.proxy_scheme);
+    if (ps.proxy_username) {
+      impl_->use_authenticated_proxy = true;
+      return;
+    }
+    // TLS-wrap the connection to the proxy itself when the proxy
+    // URL uses `https://`. The CONNECT tunnel then carries the
+    // target's own TLS (when `conn_params` requests it).
+    auto proxy_secure
+      = *ps.proxy_scheme == "https"
+          ? proxygen::coro::HTTPClient::SecureTransportImpl::TLS
+          : proxygen::coro::HTTPClient::SecureTransportImpl::NONE;
+    if (proxy_secure == proxygen::coro::HTTPClient::SecureTransportImpl::TLS) {
+      http::ensure_default_ca_paths();
+    }
+    auto proxy_conn_params
+      = proxygen::coro::HTTPClient::getConnParams(proxy_secure, *ps.proxy_host);
+    auto proxy_pool = std::shared_ptr<proxygen::coro::HTTPCoroSessionPool>(
+      new proxygen::coro::HTTPCoroSessionPool(
+        impl_->evb, *ps.proxy_host, *ps.proxy_port, pool_params,
+        proxy_conn_params,
+        proxygen::coro::HTTPCoroConnector::defaultSessionParams(),
+        /*allowNameLookup=*/true),
+      SessionPoolDeleter{});
+    impl_->pool = SessionPoolPtr{
+      std::make_unique<proxygen::coro::HTTPCoroSessionPool>(
+        impl_->evb, impl_->url.getHost(), impl_->url.getPort(),
+        std::move(proxy_pool), pool_params, conn_params,
+        proxygen::coro::HTTPCoroConnector::defaultSessionParams(),
+        /*observer=*/nullptr)
+        .release(),
+    };
+  } else {
+    impl_->pool = SessionPoolPtr{
+      std::make_unique<proxygen::coro::HTTPCoroSessionPool>(
+        impl_->evb, impl_->url.getHost(), impl_->url.getPort(), pool_params,
+        conn_params, proxygen::coro::HTTPCoroConnector::defaultSessionParams(),
+        true)
+        .release(),
+    };
+  }
 }
 
 auto HttpPool::make(folly::Executor::KeepAlive<folly::IOExecutor> executor,
@@ -253,13 +303,42 @@ auto HttpPool::request(proxygen::HTTPMethod method, Option<std::string> path,
             throw std::runtime_error{std::move(headers).unwrap_err()};
           }
           auto request_headers = std::move(headers).unwrap();
-          auto sr = co_await impl->pool->getSessionWithReservation();
-          TENZIR_ASSERT_ALWAYS(sr.session);
+          auto* session
+            = static_cast<proxygen::coro::HTTPCoroSession*>(nullptr);
+          auto reservation
+            = proxygen::coro::HTTPCoroSession::RequestReservation{};
+          auto holder = proxygen::coro::HTTPSessionContextPtr{};
+          if (impl->use_authenticated_proxy) {
+            auto conn_params = make_conn_params(*impl);
+            auto sess_params
+              = proxygen::coro::HTTPCoroConnector::defaultSessionParams();
+            session = co_await connect_session_via_proxy_if_configured(
+              impl->evb, impl->url.getHost(), impl->url.getPort(),
+              std::move(conn_params), std::move(sess_params),
+              impl->config.connection_timeout);
+            holder = session->acquireKeepAlive();
+            auto direct_reservation = session->reserveRequest();
+            if (direct_reservation.hasException()) {
+              co_yield folly::coro::co_error(
+                std::move(direct_reservation.exception()));
+            }
+            reservation = std::move(*direct_reservation);
+          } else {
+            auto sr = co_await impl->pool->getSessionWithReservation();
+            TENZIR_ASSERT_ALWAYS(sr.session);
+            session = sr.session;
+            reservation = std::move(sr.reservation);
+          }
+          SCOPE_EXIT {
+            if (auto* s = holder.get()) {
+              s->initiateDrain();
+            }
+          };
           auto* source = make_request_source(impl->url, path, method,
                                              request_headers, body);
           auto resp = proxygen::coro::HTTPClient::Response{};
           co_await proxygen::coro::HTTPClient::request(
-            sr.session, std::move(sr.reservation), source,
+            session, std::move(reservation), source,
             proxygen::coro::HTTPClient::makeDefaultReader(resp),
             impl->config.request_timeout);
           co_return resp;
@@ -349,8 +428,37 @@ auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
             throw std::runtime_error{std::move(headers).unwrap_err()};
           }
           auto request_headers = std::move(headers).unwrap();
-          auto sr = co_await impl->pool->getSessionWithReservation();
-          TENZIR_ASSERT_ALWAYS(sr.session);
+          auto* session
+            = static_cast<proxygen::coro::HTTPCoroSession*>(nullptr);
+          auto reservation
+            = proxygen::coro::HTTPCoroSession::RequestReservation{};
+          auto holder = proxygen::coro::HTTPSessionContextPtr{};
+          if (impl->use_authenticated_proxy) {
+            auto conn_params = make_conn_params(*impl);
+            auto sess_params
+              = proxygen::coro::HTTPCoroConnector::defaultSessionParams();
+            session = co_await connect_session_via_proxy_if_configured(
+              impl->evb, impl->url.getHost(), impl->url.getPort(),
+              std::move(conn_params), std::move(sess_params),
+              impl->config.connection_timeout);
+            holder = session->acquireKeepAlive();
+            auto direct_reservation = session->reserveRequest();
+            if (direct_reservation.hasException()) {
+              co_yield folly::coro::co_error(
+                std::move(direct_reservation.exception()));
+            }
+            reservation = std::move(*direct_reservation);
+          } else {
+            auto sr = co_await impl->pool->getSessionWithReservation();
+            TENZIR_ASSERT_ALWAYS(sr.session);
+            session = sr.session;
+            reservation = std::move(sr.reservation);
+          }
+          SCOPE_EXIT {
+            if (auto* s = holder.get()) {
+              s->initiateDrain();
+            }
+          };
           auto* source = make_request_source(impl->url, path, method,
                                              request_headers, body);
           auto response = http::Response{};
@@ -393,7 +501,7 @@ auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
               error_message = std::move(err.msg);
             });
           co_await proxygen::coro::HTTPClient::request(
-            sr.session, std::move(sr.reservation), source, std::move(reader),
+            session, std::move(reservation), source, std::move(reader),
             impl->config.request_timeout);
           if (error_code and not retryable_status) {
             throw proxygen::coro::HTTPError{*error_code,
@@ -481,9 +589,16 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
         if (url_parsed.isSecure()) {
           http::ensure_default_ca_paths();
         }
-        auto* session = co_await proxygen::coro::HTTPClient::getHTTPSession(
+        auto secure = url_parsed.isSecure()
+                        ? proxygen::coro::HTTPClient::SecureTransportImpl::TLS
+                        : proxygen::coro::HTTPClient::SecureTransportImpl::NONE;
+        auto conn_params = proxygen::coro::HTTPClient::getConnParams(
+          secure, url_parsed.getHost());
+        auto sess_params
+          = proxygen::coro::HTTPClient::getSessionParams(timeout);
+        auto* session = co_await connect_session_via_proxy_if_configured(
           evb, url_parsed.getHost(), url_parsed.getPort(),
-          url_parsed.isSecure(), false, timeout, timeout);
+          std::move(conn_params), std::move(sess_params), timeout);
         auto holder = session->acquireKeepAlive();
         SCOPE_EXIT {
           if (auto* s = holder.get()) {
