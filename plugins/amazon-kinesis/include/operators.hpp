@@ -116,6 +116,9 @@ private:
   std::shared_ptr<amazon::SignedHttpClient> client_;
   std::vector<ShardState> shards_;
   std::vector<std::string> running_;
+  /// The number of enqueued but unprocessed read results, to prevent `exit`
+  /// from triggering while records are still in flight.
+  uint64_t pending_results_ = 0;
   uint64_t emitted_ = 0;
   uint64_t limit_ = 0;
   int records_per_call_ = 1000;

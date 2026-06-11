@@ -568,6 +568,7 @@ auto FromAmazonKinesis::shard_loop(ShardState shard) -> Task<void> {
         auto result = ReadResult{};
         result.shard_id = shard.id;
         result.error = std::move(created).unwrap_err().message;
+        ++pending_results_;
         co_await results_->enqueue(Any{std::move(result)});
         co_return;
       }
@@ -576,6 +577,7 @@ auto FromAmazonKinesis::shard_loop(ShardState shard) -> Task<void> {
         auto result = ReadResult{};
         result.shard_id = shard.id;
         result.shard_closed = true;
+        ++pending_results_;
         co_await results_->enqueue(Any{std::move(result)});
         co_return;
       }
@@ -598,6 +600,7 @@ auto FromAmazonKinesis::shard_loop(ShardState shard) -> Task<void> {
     const auto failed = not result.error.empty();
     const auto closed = result.shard_closed;
     const auto idle = result.records.empty();
+    ++pending_results_;
     co_await results_->enqueue(Any{std::move(result)});
     if (failed or closed) {
       co_return;
@@ -630,22 +633,43 @@ auto FromAmazonKinesis::spawn_ready_loops(OpCtx& ctx) -> void {
 }
 
 auto FromAmazonKinesis::discover_new_shards(OpCtx& ctx) -> Task<void> {
-  auto shard_infos = co_await list_shards(*client_, args_.stream.inner,
-                                          starts_at_latest(args_.start));
+  // List without the AT_LATEST filter: descendants of a consumed shard may
+  // themselves have closed again before discovery runs, and the latest-only
+  // view would skip them and lose their records. For latest-start pipelines,
+  // lineage decides membership instead: a discovered shard joins only if it
+  // descends from a tracked shard, which keeps pre-start history excluded.
+  auto shard_infos = co_await list_shards(*client_, args_.stream.inner);
   if (shard_infos.is_err()) {
-    diagnostic::error("{}", std::move(shard_infos).unwrap_err().message)
+    diagnostic::error("{}", shard_infos.unwrap_err().message)
       .primary(args_.stream.source)
       .emit(ctx);
     done_ = true;
     co_return;
   }
-  for (auto& info : std::move(shard_infos).unwrap()) {
-    if (std::ranges::find(shards_, info.id, &ShardState::id) != shards_.end()) {
-      continue;
+  auto infos = std::move(shard_infos).unwrap();
+  const auto latest = starts_at_latest(args_.start);
+  auto added = true;
+  while (added) {
+    added = false;
+    for (auto& info : infos) {
+      if (info.id.empty()
+          or std::ranges::find(shards_, info.id, &ShardState::id)
+               != shards_.end()) {
+        continue;
+      }
+      const auto descends_from_tracked
+        = std::ranges::any_of(info.parents, [&](const std::string& parent) {
+            return std::ranges::find(shards_, parent, &ShardState::id)
+                   != shards_.end();
+          });
+      if (latest and not descends_from_tracked) {
+        continue;
+      }
+      shards_.push_back(ShardState{.id = std::move(info.id),
+                                   .parents = std::move(info.parents),
+                                   .trim_horizon_start = true});
+      added = true;
     }
-    shards_.push_back(ShardState{.id = std::move(info.id),
-                                 .parents = std::move(info.parents),
-                                 .trim_horizon_start = true});
   }
 }
 
@@ -657,6 +681,8 @@ auto FromAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
 auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
                                      OpCtx& ctx) -> Task<void> {
   auto batch = std::move(result).as<ReadResult>();
+  TENZIR_ASSERT(pending_results_ > 0);
+  --pending_results_;
   if (not batch.error.empty()) {
     diagnostic::error("{}", batch.error).primary(args_.stream.source).emit(ctx);
     done_ = true;
@@ -680,9 +706,12 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
   }
   if (batch.records.empty()) {
     if (args_.exit) {
-      done_ = std::ranges::all_of(shards_, [](const ShardState& shard) {
-        return shard.closed or shard.idle;
-      });
+      // Queued results may still carry records for shards whose state says
+      // idle, so only exit once everything enqueued has been processed.
+      done_ = pending_results_ == 0
+              and std::ranges::all_of(shards_, [](const ShardState& shard) {
+                    return shard.closed or shard.idle;
+                  });
     }
     co_return;
   }
@@ -719,6 +748,13 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
   }
   if (limit_ != 0 and emitted_ >= limit_) {
     done_ = true;
+  }
+  // A shard can deliver its final records and close in the same batch, so the
+  // exit condition must also be evaluated when records arrived.
+  if (args_.exit and not done_ and pending_results_ == 0) {
+    done_ = std::ranges::all_of(shards_, [](const ShardState& shard) {
+      return shard.closed or shard.idle;
+    });
   }
 }
 
