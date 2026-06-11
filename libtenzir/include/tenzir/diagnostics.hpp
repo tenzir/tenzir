@@ -508,6 +508,18 @@ auto make_diagnostic_printer(SourceMap&& source_map, color_diagnostics color,
 auto make_diagnostic_printer(color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler>;
 
+/// Creates a diagnostic handler that calls `source_map.enrich()` on every
+/// diagnostic before forwarding it to `inner`. Both `source_map` and `inner`
+/// must outlive the returned handler. The map is consulted on each emit, so
+/// call sites registered after construction are picked up automatically.
+auto make_enriching_handler(const SourceMap& source_map, diagnostic_handler& inner)
+  -> std::unique_ptr<diagnostic_handler>;
+
+/// Temporary source maps would dangle; use the overload that takes a reference.
+auto make_enriching_handler(SourceMap&& source_map, diagnostic_handler& inner)
+  -> std::unique_ptr<diagnostic_handler>
+  = delete;
+
 // TODO: Return this when emitting an error.
 struct [[nodiscard]] failure {
 public:

@@ -377,7 +377,7 @@ auto pipeline_executor(
           buffer << "internal error in operator\n";
           auto printer = make_diagnostic_printer(self->state().source_map,
                                                  color_diagnostics::no, buffer);
-          printer->emit(diagnostic);
+          printer->emit(self->state().source_map.enrich(diagnostic));
           auto string = std::move(buffer).str();
           if (not string.empty() and string.back() == '\n') {
             string.pop_back();

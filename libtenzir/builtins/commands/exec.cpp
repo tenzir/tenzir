@@ -28,7 +28,7 @@ void dump_diagnostics_to_stdout(std::span<const diagnostic> diagnostics,
   auto printer
     = make_diagnostic_printer(source_map, color_diagnostics::no, std::cout);
   for (auto&& diag : diagnostics) {
-    printer->emit(diag);
+    printer->emit(source_map.enrich(diag));
   }
 }
 
@@ -142,7 +142,8 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
     return result;
   }
   printer = make_diagnostic_printer(source_map, color, std::cerr);
-  return exec_command_impl(std::move(source), *printer, cfg, sys, source_map);
+  auto enricher = make_enriching_handler(source_map, *printer);
+  return exec_command_impl(std::move(source), *enricher, cfg, sys, source_map);
 }
 
 class plugin final : public virtual command_plugin {

@@ -75,14 +75,13 @@ public:
     : colors{colors::make(color)}, source_map_{source_map}, stream_{stream} {
   }
 
-  void emit(diagnostic diagnostic) override {
+  void emit(diagnostic diag) override {
     if (not std::exchange(first, false)) {
       fmt::print(stream_, "\n");
     }
     // TODO: Do not print the same line multiple times. Merge annotations instead.
-    fmt::print(stream_, "{}{}{}{}: {}{}\n", bold, color(diagnostic.severity),
-               diagnostic.severity, uncolor, diagnostic.message, reset);
-    auto diag = source_map_->enrich(std::move(diagnostic));
+    fmt::print(stream_, "{}{}{}{}: {}{}\n", bold, color(diag.severity),
+               diag.severity, uncolor, diag.message, reset);
     // Sources are resolved against the source map on every emit because the
     // map may change during the printer's lifetime. Sources without pre-split
     // lines are split here; the cache keeps those splits alive for the
@@ -250,6 +249,31 @@ auto make_diagnostic_printer(color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler> {
   static const auto empty = SourceMap{};
   return std::make_unique<diagnostic_printer>(empty, color, stream);
+}
+
+namespace {
+
+class enriching_handler final : public diagnostic_handler {
+public:
+  enriching_handler(const SourceMap& source_map, diagnostic_handler& inner)
+    : source_map_{source_map}, inner_{inner} {
+  }
+
+  void emit(diagnostic diag) override {
+    inner_->emit(source_map_->enrich(std::move(diag)));
+  }
+
+private:
+  Ref<const SourceMap> source_map_;
+  Ref<diagnostic_handler> inner_;
+};
+
+} // namespace
+
+auto make_enriching_handler(const SourceMap& source_map,
+                            diagnostic_handler& inner)
+  -> std::unique_ptr<diagnostic_handler> {
+  return std::make_unique<enriching_handler>(source_map, inner);
 }
 
 auto diagnostic::builder(enum severity s, caf::error err,
