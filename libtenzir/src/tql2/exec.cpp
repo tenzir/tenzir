@@ -2414,19 +2414,20 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
 
 } // namespace
 
-auto exec2(const Source& source, diagnostic_handler& dh, const exec_config& cfg,
-           caf::actor_system& sys, SourceMap& source_map) -> bool {
+auto exec2(Arc<const Source> source, diagnostic_handler& dh,
+           const exec_config& cfg, caf::actor_system& sys,
+           SourceMap& source_map) -> bool {
   auto result = std::invoke([&]() -> failure_or<bool> {
     TRY(load_packages_for_exec(dh, sys, &source_map));
     auto provider = session_provider::make(dh);
     auto ctx = provider.as_session();
-    TRY(validate_utf8(source.text, ctx));
-    auto tokens = tokenize_permissive(source.text);
+    TRY(validate_utf8(source->text, ctx));
+    auto tokens = tokenize_permissive(source->text);
     if (cfg.dump_tokens) {
-      return dump_tokens(tokens, source.text);
+      return dump_tokens(tokens, source->text);
     }
-    TRY(verify_tokens(tokens, ctx, source.index));
-    TRY(auto parsed, parse(tokens, source, ctx));
+    TRY(verify_tokens(tokens, ctx, source->index));
+    TRY(auto parsed, parse(tokens, *source, ctx));
     if (cfg.dump_ast) {
       fmt::print("{:#?}\n", parsed);
       return not ctx.has_failure();

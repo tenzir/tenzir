@@ -310,7 +310,9 @@ struct connection_manager_state {
   [[maybe_unused]] static constexpr auto name = "connection-manager";
 
   connection_manager_actor<Elements>::pointer self = {};
-  std::string definition;
+  /// The definition of the pipeline; set during actor startup. Empty only
+  /// before `make_connection_manager` assigns it.
+  Option<Arc<const Source>> definition = {};
   load_tcp_args args = {};
   // Set during actor startup from `args.ssl.resolve()` and used by
   // `handle_connection` to configure each incoming TLS connection.
@@ -770,11 +772,11 @@ struct connection_manager_state {
     pipeline.append(std::move(sink));
     TENZIR_ASSERT(pipeline.is_closed());
     TENZIR_ASSERT(not connection->pipeline_executor);
-    auto pipeline_source = Source::new_source(definition, "<input>", false);
-    connection->pipeline_executor = self->spawn(
-      pipeline_executor, std::move(pipeline), std::move(pipeline_source),
-      receiver_actor<diagnostic>{self}, metrics_receiver_actor{self}, node,
-      has_terminal, is_hidden, pipeline_id);
+    connection->pipeline_executor
+      = self->spawn(pipeline_executor, std::move(pipeline), *definition,
+                    receiver_actor<diagnostic>{self},
+                    metrics_receiver_actor{self}, node, has_terminal, is_hidden,
+                    pipeline_id);
     self->monitor(
       connection->pipeline_executor,
       [this, source = connection->pipeline_executor->address()](
@@ -916,7 +918,7 @@ auto make_connection_manager(
   typename connection_manager_actor<Elements>::template stateful_pointer<
     connection_manager_state<Elements>>
     self,
-  std::string definition, const load_tcp_args& args,
+  Arc<const Source> definition, const load_tcp_args& args,
   const shared_diagnostic_handler& diagnostics,
   const metrics_receiver_actor& metrics_receiver, uint64_t operator_id,
   bool is_hidden, const node_actor& node, std::string pipeline_id)
@@ -1000,7 +1002,7 @@ public:
     auto args = args_;
     const auto connection_manager_actor
       = scope_linked{ctrl.self().spawn<caf::linked>(
-        make_connection_manager<Elements>, std::string{ctrl.definition()}, args,
+        make_connection_manager<Elements>, ctrl.definition(), args,
         ctrl.shared_diagnostics(), ctrl.metrics_receiver(),
         ctrl.operator_index(), ctrl.is_hidden(), ctrl.node(),
         std::string{ctrl.pipeline_id()})};

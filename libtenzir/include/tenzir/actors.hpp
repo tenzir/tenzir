@@ -342,6 +342,13 @@ struct pipeline_shell_actor_traits {
   using signatures = caf::type_list<
     // Spawn a set of execution nodes for a given pipeline. Does not start the
     // execution nodes.
+    // TODO: The definition is sent as a plain string and re-wrapped in a new
+    // `Source` on the receiving side, which allocates a fresh source id that
+    // does not match the ids stamped on diagnostic locations during parsing.
+    // As a result, the remote executor's `SourceMap` cannot resolve any
+    // locations locally. Sending `Arc<const Source>` instead requires
+    // remapping source ids on receive to avoid collisions with the receiving
+    // process's own id counter.
     auto(atom::spawn, operator_box, operator_type, std::string definition,
          receiver_actor<diagnostic>, metrics_receiver_actor, int32_t index,
          bool is_hidden, uuid run_id, std::string pipeline_id)

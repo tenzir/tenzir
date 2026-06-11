@@ -32,10 +32,10 @@ void dump_diagnostics_to_stdout(std::span<const diagnostic> diagnostics,
   }
 }
 
-auto exec_command_impl(const Source& source, diagnostic_handler& dh,
+auto exec_command_impl(Arc<const Source> source, diagnostic_handler& dh,
                        const exec_config& cfg, caf::actor_system& sys,
                        SourceMap& source_map) -> bool {
-  auto result = exec_pipeline(source, dh, cfg, sys, source_map);
+  auto result = exec_pipeline(std::move(source), dh, cfg, sys, source_map);
   if (result) {
     return true;
   }

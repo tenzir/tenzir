@@ -79,7 +79,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
                          int32_t op_index) -> caf::expected<operator_type> {
     auto description = fmt::format("{:?}", op);
     auto spawn_result
-      = spawn_exec_node(self, std::move(op), input_type, source->text, node,
+      = spawn_exec_node(self, std::move(op), input_type, *definition, node,
                         diagnostics, metrics, op_index, has_terminal, is_hidden,
                         run_id, pipeline_id);
     if (not spawn_result) {
@@ -127,8 +127,8 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
     exec_nodes.emplace_back();
     self
       ->mail(atom::spawn_v, operator_box{std::move(op)}, input_type,
-             source->text, diagnostics, metrics, op_index, is_hidden, run_id,
-             pipeline_id)
+             (*definition)->text, diagnostics, metrics, op_index, is_hidden,
+             run_id, pipeline_id)
       .request(shell, caf::infinite)
       .then(
         [this, description, index](exec_node_actor& exec_node) {
@@ -342,7 +342,7 @@ auto pipeline_executor_state::resume() -> caf::result<void> {
 
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline pipe, Arc<const Source> source,
+  pipeline pipe, Arc<const Source> definition,
   receiver_actor<diagnostic> diagnostics, metrics_receiver_actor metrics,
   node_actor node, bool has_terminal, bool is_hidden, std::string pipeline_id)
   -> pipeline_executor_actor::behavior_type {
@@ -352,8 +352,8 @@ auto pipeline_executor(
   });
   self->state().self = self;
   self->state().node = std::move(node);
-  self->state().source = std::move(source);
-  self->state().source_map.add_source(self->state().source);
+  self->state().definition = std::move(definition);
+  self->state().source_map.add_source(*self->state().definition);
   self->state().pipe = std::move(pipe);
   self->state().diagnostics = std::move(diagnostics);
   self->state().metrics = std::move(metrics);

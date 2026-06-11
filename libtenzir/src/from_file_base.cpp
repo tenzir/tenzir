@@ -257,7 +257,7 @@ auto from_file_args::handle(session ctx) const -> failure_or<pipeline> {
 from_file_state::from_file_state(
   from_file_actor::pointer self, from_file_args args, std::string plaintext_url,
   event_order order, std::unique_ptr<diagnostic_handler> dh,
-  std::string definition, node_actor node, bool is_hidden,
+  Arc<const Source> definition, node_actor node, bool is_hidden,
   metrics_receiver_actor metrics_receiver, uint64_t operator_index,
   std::string pipeline_id)
   : self_{self},
@@ -298,7 +298,7 @@ from_file_state::from_file_state(
   from_file_actor::pointer self, from_file_args args, std::string expanded,
   std::string path, std::shared_ptr<arrow::fs::FileSystem> fs,
   event_order order, std::unique_ptr<diagnostic_handler> dh,
-  std::string definition, node_actor node, bool is_hidden,
+  Arc<const Source> definition, node_actor node, bool is_hidden,
   metrics_receiver_actor metrics_receiver, uint64_t operator_index,
   std::string pipeline_id)
   : self_{self},
@@ -589,10 +589,9 @@ auto from_file_state::start_stream(
                        : std::nullopt));
     pipe = pipe.optimize_if_closed();
   }
-  auto definition = Source::new_source(definition_, "<input>", false);
   auto executor
-    = self_->spawn(pipeline_executor, std::move(pipe), std::move(definition),
-                   self_, self_, node_, false, is_hidden_, pipeline_id_);
+    = self_->spawn(pipeline_executor, std::move(pipe), definition_, self_,
+                   self_, node_, false, is_hidden_, pipeline_id_);
   self_->attach_functor([this, weak]() {
     if (auto strong = weak.lock()) {
       // FIXME: This should not be necessary to ensure that the actor is

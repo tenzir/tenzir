@@ -191,10 +191,8 @@ public:
     auto pipe = pipe_.inner;
     pipe.prepend(
       std::make_unique<internal_fork_source_operator>(side_channel.get()));
-    auto source
-      = Source::new_source(std::string{ctrl.definition()}, "<input>", false);
     const auto pipeline_executor = scope_linked{ctrl.self().spawn(
-      tenzir::pipeline_executor, std::move(pipe), std::move(source),
+      tenzir::pipeline_executor, std::move(pipe), ctrl.definition(),
       side_channel.get(), side_channel.get(), ctrl.node(), ctrl.has_terminal(),
       ctrl.is_hidden(), std::string{ctrl.pipeline_id()})};
     ctrl.self().monitor(pipeline_executor.get(), [&](caf::error err) {

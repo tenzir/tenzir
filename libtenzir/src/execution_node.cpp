@@ -201,7 +201,7 @@ struct exec_node_control_plane final : public operator_control_plane {
     return *state.self;
   }
 
-  auto definition() const noexcept -> std::string_view override {
+  auto definition() const noexcept -> Arc<const Source> override {
     return state.definition;
   }
 
@@ -406,7 +406,7 @@ struct exec_node_control_plane final : public operator_control_plane {
 template <class Input, class Output>
 struct exec_node_state {
   exec_node_state(exec_node_actor::pointer self, operator_ptr op,
-                  std::string definition, const node_actor& node,
+                  Arc<const Source> definition, const node_actor& node,
                   const receiver_actor<diagnostic>& diagnostic_handler,
                   const metrics_receiver_actor& metrics_receiver, int index,
                   bool has_terminal, bool is_hidden, uuid run_id,
@@ -605,8 +605,9 @@ struct exec_node_state {
   /// A pointer to the parent actor.
   exec_node_actor::pointer self = {};
 
-  /// The definition of this pipeline.
-  std::string definition;
+  /// The definition of this pipeline; its source id matches the ids on
+  /// diagnostic locations produced during parsing.
+  Arc<const Source> definition;
 
   /// A unique identifier for the current run.
   uuid run_id = {};
@@ -1296,7 +1297,7 @@ struct exec_node_state {
 } // namespace
 
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
-                     operator_type input_type, std::string definition,
+                     operator_type input_type, Arc<const Source> definition,
                      node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
                      metrics_receiver_actor metrics_receiver, int index,

@@ -323,7 +323,7 @@ private:
 
 auto make_load_balancer(
   load_balancer_actor::stateful_pointer<load_balancer_state> self,
-  std::vector<pipeline> pipes, std::string definition,
+  std::vector<pipeline> pipes, Arc<const Source> definition,
   shared_diagnostic_handler diagnostics, metrics_receiver_actor metrics,
   uint64_t operator_index, bool is_hidden, const node_actor& node,
   std::string pipeline_id) -> load_balancer_actor::behavior_type {
@@ -341,10 +341,9 @@ auto make_load_balancer(
     pipe.prepend(std::make_unique<load_balance_source>(self));
     auto has_terminal = false;
     TENZIR_DEBUG("spawning inner executor");
-    auto source = Source::new_source(definition, "<input>", false);
     auto executor
-      = self->spawn(pipeline_executor, pipe, std::move(source), self, self,
-                    node, has_terminal, is_hidden, self->state().pipeline_id);
+      = self->spawn(pipeline_executor, pipe, definition, self, self, node,
+                    has_terminal, is_hidden, self->state().pipeline_id);
     self->monitor(
       executor, [self, source = executor->address()](const caf::error& err) {
         if (err.valid()) {
@@ -455,9 +454,9 @@ public:
     // In case of subtle problems around the shutdown logic here, this could
     // potentially be simplified.
     auto load_balancer = scope_linked{ctrl.self().spawn<caf::linked>(
-      make_load_balancer, pipes_, std::string{ctrl.definition()},
-      ctrl.shared_diagnostics(), ctrl.metrics_receiver(), ctrl.operator_index(),
-      ctrl.is_hidden(), ctrl.node(), std::string{ctrl.pipeline_id()})};
+      make_load_balancer, pipes_, ctrl.definition(), ctrl.shared_diagnostics(),
+      ctrl.metrics_receiver(), ctrl.operator_index(), ctrl.is_hidden(),
+      ctrl.node(), std::string{ctrl.pipeline_id()})};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};

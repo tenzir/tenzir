@@ -12,6 +12,7 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
@@ -47,8 +48,8 @@ namespace tenzir {
 /// @param self The actor that spawns and monitors the execution node.
 /// @param op The operator to execute.
 /// @param input_type The input type to assume for the operator.
-/// @param definition The top-most definition of this pipeline for use in
-/// diagnostics.
+/// @param definition The definition of this pipeline; its source id must
+/// match the ids stamped on diagnostic locations during parsing.
 /// @param node The node actor to expose in the control plane. Must be set if
 /// the operator runs at a remote node.
 /// @param diagnostics_handler The handler asked to spawn diagnostics.
@@ -63,7 +64,7 @@ namespace tenzir {
 /// @pre node != nullptr or not (op->location() == operator_location::remote)
 /// @pre diagnostics_handler != nullptr
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
-                     operator_type input_type, std::string definition,
+                     operator_type input_type, Arc<const Source> definition,
                      node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
                      metrics_receiver_actor metrics_receiver, int index,

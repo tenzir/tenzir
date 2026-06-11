@@ -12,6 +12,7 @@
 #include <tenzir/argument_parser2.hpp>
 #include <tenzir/glob.hpp>
 #include <tenzir/pipeline.hpp>
+#include <tenzir/source.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/set.hpp>
 
@@ -102,14 +103,14 @@ public:
   from_file_state(from_file_actor::pointer self, from_file_args args,
                   std::string plaintext_url, event_order order,
                   std::unique_ptr<diagnostic_handler> dh,
-                  std::string definition, node_actor node, bool is_hidden,
+                  Arc<const Source> definition, node_actor node, bool is_hidden,
                   metrics_receiver_actor metrics_receiver,
                   uint64_t operator_index, std::string pipeline_id);
   from_file_state(from_file_actor::pointer self, from_file_args args,
                   std::string expanded, std::string path,
                   std::shared_ptr<arrow::fs::FileSystem> fs, event_order order,
                   std::unique_ptr<diagnostic_handler> dh,
-                  std::string definition, node_actor node, bool is_hidden,
+                  Arc<const Source> definition, node_actor node, bool is_hidden,
                   metrics_receiver_actor metrics_receiver,
                   uint64_t operator_index, std::string pipeline_id);
   auto make_behavior() -> from_file_actor::behavior_type;
@@ -164,7 +165,7 @@ private:
   std::deque<std::pair<table_slice, caf::typed_response_promise<void>>> puts_;
 
   // Information needed for spawning subpipelines.
-  std::string definition_;
+  Arc<const Source> definition_;
   node_actor node_;
   bool is_hidden_;
   std::string pipeline_id_;

@@ -35,6 +35,7 @@
 #include "tenzir/posix_filesystem.hpp"
 #include "tenzir/secret_store.hpp"
 #include "tenzir/shutdown.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/terminate.hpp"
 #include "tenzir/uuid.hpp"
 #include "tenzir/version.hpp"
@@ -663,9 +664,11 @@ auto node(node_actor::stateful_pointer<node_state> self,
                                            *self, op->name()));
       }
       auto description = fmt::format("{:?}", op);
+      auto node_source
+        = Source::new_source(std::move(definition), "<input>", false);
       auto spawn_result
         = spawn_exec_node(self, std::move(op), input_type,
-                          std::move(definition), static_cast<node_actor>(self),
+                          std::move(node_source), static_cast<node_actor>(self),
                           diagnostic_handler, metrics_receiver, index, false,
                           is_hidden, run_id, std::move(pipeline_id));
       if (not spawn_result) {
