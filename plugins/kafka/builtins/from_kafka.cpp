@@ -457,7 +457,7 @@ public:
       worker_count_{other.worker_count_},
       worker_batch_size_{other.worker_batch_size_},
       emitted_messages_{other.emitted_messages_},
-      checkpoint_pending_offsets_{std::move(other.checkpoint_pending_offsets_)},
+      pending_commit_offsets_{std::move(other.pending_commit_offsets_)},
       assigned_partitions_{std::move(other.assigned_partitions_)},
       eof_partitions_{std::move(other.eof_partitions_)},
       perf_enabled_{other.perf_enabled_},
@@ -626,7 +626,7 @@ public:
       }
     }
     if (frame.message_count > 0) {
-      advance_checkpoint(frame.max_offsets);
+      record_pending_offsets(frame.max_offsets);
       co_await commit_pending_offsets(&ctx.dh());
       emitted_messages_ += frame.message_count;
       add_perf_counter(perf_.emitted_batches);
@@ -660,14 +660,14 @@ public:
   }
 
   auto commit_pending_offsets(diagnostic_handler* dh = nullptr) -> Task<void> {
-    if (checkpoint_pending_offsets_.empty()) {
+    if (pending_commit_offsets_.empty()) {
       co_return;
     }
     auto clear_pending = std::vector<std::string>{};
     auto commit_keys = std::vector<std::string>{};
     auto commit_labels = std::vector<std::string>{};
     auto offsets = std::vector<std::unique_ptr<RdKafka::TopicPartition>>{};
-    for (auto const& [partition_key, offset] : checkpoint_pending_offsets_) {
+    for (auto const& [partition_key, offset] : pending_commit_offsets_) {
       auto topic_partition = parse_topic_partition_key(partition_key);
       if (not topic_partition) {
         if (dh) {
@@ -728,14 +728,14 @@ public:
       }
     }
     for (auto const& partition_key : clear_pending) {
-      checkpoint_pending_offsets_.erase(partition_key);
+      pending_commit_offsets_.erase(partition_key);
     }
   }
 
   auto snapshot(Serde& serde) -> void override {
     // Persist only recovery state that reflects consumed progress.
     serde("emitted_messages", emitted_messages_);
-    serde("checkpoint_pending_offsets", checkpoint_pending_offsets_);
+    serde("pending_commit_offsets", pending_commit_offsets_);
   }
 
   /// Stops background tasks as soon as the runner asks this source to stop.
@@ -1595,12 +1595,11 @@ private:
     }
   }
 
-  /// Moves per-partition offsets from one emitted batch into checkpoint state.
-  auto
-  advance_checkpoint(std::unordered_map<std::string, int64_t> const& offsets)
-    -> void {
+  /// Moves per-partition offsets from one emitted batch into commit state.
+  auto record_pending_offsets(
+    std::unordered_map<std::string, int64_t> const& offsets) -> void {
     for (auto const& [partition_key, offset] : offsets) {
-      checkpoint_pending_offsets_[partition_key] = offset + 1;
+      pending_commit_offsets_[partition_key] = offset + 1;
     }
   }
 
@@ -1672,7 +1671,7 @@ private:
   // Number of records emitted so far; used for `count=` resumption.
   size_t emitted_messages_ = 0;
   // Invariant: committed offsets are stored as "next offset to consume".
-  std::unordered_map<std::string, int64_t> checkpoint_pending_offsets_;
+  std::unordered_map<std::string, int64_t> pending_commit_offsets_;
   // Snapshot of the subscription's current assignment; only maintained for
   // `exit=true`, refreshed lazily when an EOF for an unknown partition arrives.
   std::unordered_set<std::string> assigned_partitions_;

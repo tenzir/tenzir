@@ -26,9 +26,3 @@ partition assignments now follow group rebalances, so they may shift when
 pipelines with the same `group.id` start or stop. The `exit` option is not
 available for regex topics, because a regex subscription has no bounded set of
 partitions to reach the end of.
-
-To track offsets correctly across matching topics, `from_kafka` now stores
-checkpointed offsets by topic and partition. Checkpoints written by earlier
-versions are incompatible: pipelines restored from them fail instead of
-resuming. Restart these pipelines once after upgrading; they continue from
-Kafka's stored consumer group offsets.
