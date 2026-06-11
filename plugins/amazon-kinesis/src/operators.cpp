@@ -33,7 +33,6 @@
 #include <aws/kinesis/model/ListShardsResult.h>
 #include <aws/kinesis/model/PutRecordsResult.h>
 #include <aws/kinesis/model/ShardIteratorType.h>
-#include <folly/coro/Collect.h>
 #include <folly/coro/Sleep.h>
 
 #include <algorithm>
@@ -568,7 +567,6 @@ auto FromAmazonKinesis::shard_loop(ShardState shard) -> Task<void> {
         auto result = ReadResult{};
         result.shard_id = shard.id;
         result.error = std::move(created).unwrap_err().message;
-        pending_results_.fetch_add(1, std::memory_order_relaxed);
         co_await results_->enqueue(Any{std::move(result)});
         co_return;
       }
@@ -577,7 +575,6 @@ auto FromAmazonKinesis::shard_loop(ShardState shard) -> Task<void> {
         auto result = ReadResult{};
         result.shard_id = shard.id;
         result.shard_closed = true;
-        pending_results_.fetch_add(1, std::memory_order_relaxed);
         co_await results_->enqueue(Any{std::move(result)});
         co_return;
       }
@@ -600,7 +597,6 @@ auto FromAmazonKinesis::shard_loop(ShardState shard) -> Task<void> {
     const auto failed = not result.error.empty();
     const auto closed = result.shard_closed;
     const auto idle = result.records.empty();
-    pending_results_.fetch_add(1, std::memory_order_relaxed);
     co_await results_->enqueue(Any{std::move(result)});
     if (failed or closed) {
       co_return;
@@ -681,9 +677,6 @@ auto FromAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
 auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
                                      OpCtx& ctx) -> Task<void> {
   auto batch = std::move(result).as<ReadResult>();
-  const auto previous_pending
-    = pending_results_.fetch_sub(1, std::memory_order_relaxed);
-  TENZIR_ASSERT(previous_pending > 0);
   if (not batch.error.empty()) {
     diagnostic::error("{}", batch.error).primary(args_.stream.source).emit(ctx);
     done_ = true;
@@ -708,8 +701,11 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
   if (batch.records.empty()) {
     if (args_.exit) {
       // Queued results may still carry records for shards whose state says
-      // idle, so only exit once everything enqueued has been processed.
-      done_ = pending_results_.load(std::memory_order_relaxed) == 0
+      // idle, so only exit once everything enqueued has been processed. The
+      // queue is the authority: the driver re-arms `await_task()` only after
+      // this function returns, so no result can be dequeued but unprocessed
+      // while we decide.
+      done_ = results_->empty()
               and std::ranges::all_of(shards_, [](const ShardState& shard) {
                     return shard.closed or shard.idle;
                   });
@@ -752,8 +748,7 @@ auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
   }
   // A shard can deliver its final records and close in the same batch, so the
   // exit condition must also be evaluated when records arrived.
-  if (args_.exit and not done_
-      and pending_results_.load(std::memory_order_relaxed) == 0) {
+  if (args_.exit and not done_ and results_->empty()) {
     done_ = std::ranges::all_of(shards_, [](const ShardState& shard) {
       return shard.closed or shard.idle;
     });
@@ -788,6 +783,10 @@ auto ToAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
   request_slots_ = Semaphore{detail::narrow<size_t>(parallel_)};
   send_queue_ = Arc<folly::coro::BoundedQueue<SendReport>>{
     std::in_place, detail::narrow<uint32_t>(parallel_ + 1)};
+  // One slot per possible ReportReady plus one for the flush timer, so
+  // enqueueing wakeups never blocks a helper task.
+  wakeup_queue_ = Arc<folly::coro::BoundedQueue<Any>>{
+    std::in_place, detail::narrow<uint32_t>(parallel_ + 2)};
   auto request = Aws::Kinesis::Model::DescribeStreamSummaryRequest{};
   request.SetStreamName(
     Aws::String{args_.stream.inner.data(), args_.stream.inner.size()});
@@ -864,7 +863,9 @@ auto ToAmazonKinesis::process(table_slice input, OpCtx& ctx) -> Task<void> {
     batch_.push_back(PendingRecord{std::move(*message), std::move(key)});
     if (was_empty) {
       batch_deadline_ = now + batch_timeout_;
-      batch_ready_->notify_one();
+      if (not timer_armed_) {
+        arm_flush_timer(ctx);
+      }
     }
     if (batch_.size() >= batch_size_) {
       co_await flush(ctx);
@@ -882,33 +883,8 @@ auto ToAmazonKinesis::process(table_slice input, OpCtx& ctx) -> Task<void> {
 
 auto ToAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
   TENZIR_UNUSED(dh);
-  while (true) {
-    if (failed_) {
-      co_await folly::coro::sleep(std::chrono::milliseconds{10});
-      co_return FlushTimeout{};
-    }
-    if (not batch_deadline_) {
-      auto [ready, report] = co_await folly::coro::collectAnyNoDiscard(
-        batch_ready_->wait(), report_ready_->wait());
-      if (report.hasValue()) {
-        co_return ReportReady{};
-      }
-      continue;
-    }
-    auto const deadline = *batch_deadline_;
-    auto [timeout, ready, report] = co_await folly::coro::collectAnyNoDiscard(
-      sleep_until(deadline), batch_ready_->wait(), report_ready_->wait());
-    if (report.hasValue()) {
-      co_return ReportReady{};
-    }
-    if (timeout.hasValue()) {
-      co_return FlushTimeout{};
-    }
-    if (ready.hasValue()) {
-      continue;
-    }
-    co_return FlushTimeout{};
-  }
+  TENZIR_ASSERT(wakeup_queue_);
+  co_return co_await (*wakeup_queue_)->dequeue();
 }
 
 auto ToAmazonKinesis::process_task(Any result, OpCtx& ctx) -> Task<void> {
@@ -919,7 +895,25 @@ auto ToAmazonKinesis::process_task(Any result, OpCtx& ctx) -> Task<void> {
     drain_send_reports(ctx);
     co_return;
   }
+  TENZIR_ASSERT(result.try_as<FlushTimeout>());
+  timer_armed_ = false;
   co_await flush_if_timed_out(ctx);
+  if (not failed_ and batch_deadline_) {
+    // The timer was armed for a batch that has since been flushed by size;
+    // re-arm it for the batch that started afterwards.
+    arm_flush_timer(ctx);
+  }
+}
+
+auto ToAmazonKinesis::arm_flush_timer(OpCtx& ctx) -> void {
+  TENZIR_ASSERT(batch_deadline_);
+  TENZIR_ASSERT(wakeup_queue_);
+  timer_armed_ = true;
+  ctx.spawn_task([queue = *wakeup_queue_,
+                  deadline = *batch_deadline_]() mutable -> Task<void> {
+    co_await sleep_until(deadline);
+    co_await queue->enqueue(Any{FlushTimeout{}});
+  });
 }
 
 auto ToAmazonKinesis::flush_if_timed_out(OpCtx& ctx) -> Task<void> {
@@ -975,7 +969,7 @@ auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
     ++pending_reports_;
     ctx.spawn_task([client = client_, stream = args_.stream.inner,
                     records = std::move(chunks[index]), queue = *send_queue_,
-                    report_ready = report_ready_,
+                    wakeup = *wakeup_queue_,
                     permit = std::move(*permit)]() mutable -> Task<void> {
       auto report = SendReport{};
       report.events = records.size();
@@ -994,7 +988,7 @@ auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
       }
       permit.release();
       co_await queue->enqueue(std::move(report));
-      report_ready->notify_one();
+      co_await wakeup->enqueue(Any{ReportReady{}});
     });
   }
 }

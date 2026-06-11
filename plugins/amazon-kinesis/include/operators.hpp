@@ -11,9 +11,7 @@
 #include <tenzir/amazon.hpp>
 #include <tenzir/arc.hpp>
 #include <tenzir/async.hpp>
-#include <tenzir/async/notify.hpp>
 #include <tenzir/async/semaphore.hpp>
-#include <tenzir/atomic.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/pipeline_metrics.hpp>
@@ -117,12 +115,6 @@ private:
   std::shared_ptr<amazon::SignedHttpClient> client_;
   std::vector<ShardState> shards_;
   std::vector<std::string> running_;
-  /// The number of enqueued but unprocessed read results, to prevent `exit`
-  /// from triggering while records are still in flight. Atomic because shard
-  /// loops increment it concurrently with each other and with the decrement on
-  /// the operator driver; relaxed ordering suffices since the results queue
-  /// orders each increment before the driver processes the matching result.
-  Atomic<uint64_t> pending_results_ = 0;
   uint64_t emitted_ = 0;
   uint64_t limit_ = 0;
   int records_per_call_ = 1000;
@@ -148,7 +140,7 @@ public:
     size_t events = 0;
   };
 
-  /// Wakeup markers returned by `await_task()`.
+  /// Wakeup messages delivered to `await_task()` through `wakeup_queue_`.
   struct ReportReady {};
   struct FlushTimeout {};
 
@@ -165,6 +157,11 @@ public:
 private:
   auto flush_if_timed_out(OpCtx& ctx) -> Task<void>;
   auto flush(OpCtx& ctx) -> Task<void>;
+
+  /// Spawns a task that sleeps until the current batch deadline and then
+  /// enqueues a `FlushTimeout` wakeup.
+  auto arm_flush_timer(OpCtx& ctx) -> void;
+
   auto handle_send_report(SendReport report, OpCtx& ctx) -> void;
   auto drain_send_reports(OpCtx& ctx) -> void;
   auto wait_for_requests(OpCtx& ctx) -> Task<void>;
@@ -177,10 +174,15 @@ private:
   /// The stream's configured record size limit, discovered at startup.
   size_t max_record_size_ = 10 * 1024 * 1024;
   duration batch_timeout_ = std::chrono::seconds{1};
-  mutable Option<std::chrono::steady_clock::time_point> batch_deadline_
-    = None{};
-  mutable Box<Notify> batch_ready_{std::in_place};
-  mutable Arc<Notify> report_ready_{std::in_place};
+  Option<std::chrono::steady_clock::time_point> batch_deadline_ = None{};
+  /// Whether a flush-timer task is outstanding. Bounds the number of live
+  /// timer tasks to one; a timer that fires for an already-flushed batch
+  /// re-arms itself for the deadline of the batch that replaced it.
+  bool timer_armed_ = false;
+  /// Wakeup messages for `await_task()`. Helper tasks enqueue, only the
+  /// operator driver dequeues and updates state; operator members are never
+  /// touched from concurrently running tasks.
+  mutable Option<Arc<folly::coro::BoundedQueue<Any>>> wakeup_queue_;
   Option<Arc<folly::coro::BoundedQueue<SendReport>>> send_queue_;
   Semaphore request_slots_{1};
   uint64_t pending_reports_ = 0;
