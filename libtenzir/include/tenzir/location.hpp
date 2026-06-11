@@ -129,9 +129,6 @@ public:
   /// Add call-site annotations to a diagnostic.
   auto enrich(diagnostic diag) const -> diagnostic;
 
-  /// Reset primary annotation locations except top-level annotations.
-  void reset_primary_locations_except_top_callsite(diagnostic& diag) const;
-
   /// Return the call site for the given id, which must not be `0`.
   auto call_site(CallSiteId id) const -> Option<location>;
 

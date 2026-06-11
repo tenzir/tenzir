@@ -114,15 +114,6 @@ auto SourceMap::enrich(diagnostic diag) const -> diagnostic {
   return diag;
 }
 
-void SourceMap::reset_primary_locations_except_top_callsite(
-  diagnostic& diag) const {
-  for (auto& annotation : diag.annotations) {
-    if (annotation.primary and annotation.source.callsite_index != 0) {
-      annotation.source = location::unknown;
-    }
-  }
-}
-
 auto SourceMap::call_site(CallSiteId id) const -> Option<location> {
   if (id < 1 or id > impl_->call_sites.size()) {
     return None{};

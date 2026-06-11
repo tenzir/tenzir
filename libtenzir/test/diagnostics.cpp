@@ -392,7 +392,7 @@ TEST("source map - enrich terminates on cyclic call sites") {
   CHECK_EQUAL(enriched.annotations[1].source, cyclic_location);
 }
 
-TEST("source map - reset primary locations except top-level") {
+TEST("diagnostic - reset primary locations except top-level") {
   auto [map, input_src, outer_src, inner_src] = make_fixture();
   auto call_id = map.add_call_site(outer_call(input_src));
   auto diag = diagnostic::error("oops")
@@ -400,7 +400,7 @@ TEST("source map - reset primary locations except top-level") {
                 .primary(location{0, 4, input_src, 0}, "top-level primary")
                 .secondary(location{0, 5, outer_src, call_id}, "secondary")
                 .done();
-  map.reset_primary_locations_except_top_callsite(diag);
+  diag.reset_primary_locations_except_top_callsite();
   auto top_level_primary = location{0, 4, input_src, 0};
   auto secondary = location{0, 5, outer_src, call_id};
   CHECK_EQUAL(diag.annotations[0].source, location::unknown);

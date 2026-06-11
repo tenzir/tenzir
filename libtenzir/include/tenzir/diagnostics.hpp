@@ -173,6 +173,18 @@ struct [[nodiscard]] diagnostic : std::exception {
 
   auto modify() && -> diagnostic_builder;
 
+  /// Resets the locations of primary annotations that originate from a
+  /// call-site expansion (i.e. `callsite_index != 0`), leaving only top-level
+  /// annotations referencable. Used when serializing diagnostics whose
+  /// consumers can only resolve locations in the top-level source.
+  void reset_primary_locations_except_top_callsite() {
+    for (auto& annotation : annotations) {
+      if (annotation.primary and annotation.source.callsite_index != 0) {
+        annotation.source = location::unknown;
+      }
+    }
+  }
+
   /// Wraps the diagnostic in an error object.
   auto to_error() const& -> caf::error {
     return caf::make_error(ec::diagnostic, *this);
