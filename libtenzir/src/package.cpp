@@ -1290,8 +1290,7 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
     auto source = Source::new_source(
       op.definition,
       fmt::format("<packages/{}:{}>", pkg.id, fmt::join(op_name, "::")), true);
-    auto parsed
-      = parse_pipeline_with_source_index(op.definition, source->index, ctx);
+    auto parsed = parse(*source, ctx);
     if (not parsed) {
       diagnostic::error("failed to parse operator `{}` in package `{}`",
                         fmt::join(op_name, "::"), pkg.id)

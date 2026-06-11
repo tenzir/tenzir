@@ -49,7 +49,8 @@ struct SaveStdoutArgs {
 
 auto make_default_printer(base_ctx ctx) -> failure_or<ir::pipeline> {
   auto sessions = session_provider::make(static_cast<diagnostic_handler&>(ctx));
-  TRY(auto pipe, parse("write_tql", sessions.as_session()));
+  TRY(auto pipe,
+      parse_pipeline_with_bad_diagnostics("write_tql", sessions.as_session()));
   TRY(auto compiled, compile(std::move(pipe), ctx));
   return std::move(compiled.ir);
 }

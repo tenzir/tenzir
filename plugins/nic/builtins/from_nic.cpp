@@ -90,7 +90,7 @@ auto make_default_parser_pipeline(diagnostic_handler& dh)
   -> failure_or<ir::pipeline> {
   auto provider = session_provider::make(dh);
   auto session = provider.as_session();
-  TRY(auto ast, parse("read_pcap", session));
+  TRY(auto ast, parse_pipeline_with_bad_diagnostics("read_pcap", session));
   TRY(auto compiled,
       compile(std::move(ast), base_ctx{session.dh(), session.reg()}));
   return std::move(compiled.ir);

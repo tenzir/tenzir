@@ -512,7 +512,8 @@ auto make_diagnostic_printer(color_diagnostics color, std::ostream& stream)
 /// diagnostic before forwarding it to `inner`. Both `source_map` and `inner`
 /// must outlive the returned handler. The map is consulted on each emit, so
 /// call sites registered after construction are picked up automatically.
-auto make_enriching_handler(const SourceMap& source_map, diagnostic_handler& inner)
+auto make_enriching_handler(const SourceMap& source_map,
+                            diagnostic_handler& inner)
   -> std::unique_ptr<diagnostic_handler>;
 
 /// Temporary source maps would dangle; use the overload that takes a reference.

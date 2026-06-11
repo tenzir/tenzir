@@ -78,6 +78,14 @@ public:
   using tk = token_kind;
 
   template <class F>
+  static auto parse_with(std::span<token> tokens, Source const& source,
+                         diagnostic_handler& diag, F&& f)
+    -> failure_or<std::invoke_result_t<F, parser&>> {
+    return parse_with(tokens, source.text, diag, source.index,
+                      std::forward<F>(f));
+  }
+
+  template <class F>
   static auto parse_with(std::span<token> tokens, std::string_view source,
                          diagnostic_handler& diag, size_t source_index, F&& f)
     -> failure_or<std::invoke_result_t<F, parser&>> {
@@ -1616,8 +1624,7 @@ public:
 
   /// Sentinel value for `source_index_` that suppresses location output,
   /// equivalent to the former `anonymous = true` mode.
-  static constexpr size_t suppress_source_index
-    = std::numeric_limits<size_t>::max();
+  static constexpr size_t suppress_source_index = 0;
 
   std::span<token> tokens_;
   std::string_view source_;
@@ -1629,8 +1636,17 @@ public:
   size_t source_index_ = 0;
 };
 
-auto parse_pipeline(std::span<token> tokens, std::string_view source,
-                    diagnostic_handler& dh, size_t source_index)
+auto parse_pipeline(std::span<token> tokens, Source const& source,
+                    diagnostic_handler& dh) -> failure_or<ast::pipeline> {
+  return parser::parse_with(tokens, source, dh, [](parser& self) {
+    return self.parse_pipeline();
+  });
+}
+
+auto parse_pipeline_with_location_mode(std::span<token> tokens,
+                                       std::string_view source,
+                                       diagnostic_handler& dh,
+                                       size_t source_index)
   -> failure_or<ast::pipeline> {
   return parser::parse_with(tokens, source, dh, source_index, [](parser& self) {
     return self.parse_pipeline();
@@ -1646,27 +1662,21 @@ auto parse_expression_stream(std::span<token> tokens, std::string_view source,
 
 } // namespace
 
-auto parse(std::span<token> tokens, const Source& source, session ctx)
+auto parse(std::span<token> tokens, Source const& source, session ctx)
   -> failure_or<ast::pipeline> {
-  return parse_pipeline(tokens, source.text, ctx, source.index);
+  return parse_pipeline(tokens, source, ctx);
 }
 
-auto parse(std::string_view source, session ctx) -> failure_or<ast::pipeline> {
+auto parse(Source const& source, session ctx) -> failure_or<ast::pipeline> {
   TRY(auto tokens, tokenize(source, ctx));
-  return parse_pipeline(tokens, source, ctx, 0);
+  return parse_pipeline(tokens, source, ctx);
 }
 
 auto parse_pipeline_with_bad_diagnostics(std::string_view source, session ctx)
   -> failure_or<ast::pipeline> {
   TRY(auto tokens, tokenize(source, ctx));
-  return parse_pipeline(tokens, source, ctx, parser::suppress_source_index);
-}
-
-auto parse_pipeline_with_source_index(std::string_view source,
-                                      size_t source_index, session ctx)
-  -> failure_or<ast::pipeline> {
-  TRY(auto tokens, tokenize(source, ctx));
-  return parse_pipeline(tokens, source, ctx, source_index);
+  return parse_pipeline_with_location_mode(tokens, source, ctx,
+                                           parser::suppress_source_index);
 }
 
 auto parse_expression_with_bad_diagnostics(std::string_view source, session ctx)
@@ -1681,9 +1691,10 @@ auto parse_expression_with_bad_diagnostics(std::string_view source, session ctx)
 auto parse_type_def_with_bad_diagnostics(std::string_view source, session ctx)
   -> failure_or<ast::type_def> {
   TRY(auto tokens, tokenize(source, ctx));
-  return parser::parse_with(tokens, source, ctx, true, [](class parser& self) {
-    return self.parse_type_def();
-  });
+  return parser::parse_with(tokens, source, ctx, parser::suppress_source_index,
+                            [](class parser& self) {
+                              return self.parse_type_def();
+                            });
 }
 
 auto parse_expression_stream_with_bad_diagnostics(std::string_view source,
