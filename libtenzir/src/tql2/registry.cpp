@@ -10,7 +10,9 @@
 
 #include "tenzir/concept/parseable/tenzir/yaml.hpp"
 #include "tenzir/detail/similarity.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/ir.hpp"
+#include "tenzir/location.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -64,7 +66,13 @@ auto operator_def::make(operator_factory_invocation inv, session ctx) const
     kind_,
     [&](const user_defined_operator& udo) -> failure_or<operator_ptr> {
       auto op_name = make_operator_name(inv.self);
-      auto dh = udo_diagnostic_handler(&ctx.dh(), op_name, udo);
+      // Build a local source map so that diagnostics from the UDO body carry
+      // the call-site "called from here" trace even in the non-IR path.
+      auto source_map = SourceMap{};
+      source_map.add_source(udo.source);
+      auto callsite = source_map.add_call_site(inv.self.get_location());
+      auto enricher = make_enriching_handler(source_map, ctx.dh());
+      auto dh = udo_diagnostic_handler(enricher.get(), op_name, udo);
       // If there are no parameters defined, check that no arguments were provided
       if (udo.positional_params.empty() and udo.named_params.empty()) {
         if (not inv.args.empty()) {
@@ -77,7 +85,7 @@ auto operator_def::make(operator_factory_invocation inv, session ctx) const
         return std::make_unique<pipeline>(std::move(compiled));
       }
       TRY(auto instantiated,
-          instantiate_user_defined_operator(udo, inv, ctx, 0, dh));
+          instantiate_user_defined_operator(udo, inv, ctx, callsite, dh));
       TRY(auto compiled, compile(std::move(instantiated), ctx));
       return std::make_unique<pipeline>(std::move(compiled));
     },
