@@ -118,7 +118,7 @@ public:
       if (not assignment) {
         return std::nullopt;
       }
-      auto fp = ast::field_path::try_from(assignment->left);
+      auto const* const fp = try_as<ast::field_path>(assignment->left);
       if (not fp or fp->path().size() != 1) {
         return std::nullopt;
       }

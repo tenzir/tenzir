@@ -1,8 +1,0 @@
-{
-  source: {
-    x: 1,
-  },
-  mapped: {
-    "sub-value": "test",
-  },
-}

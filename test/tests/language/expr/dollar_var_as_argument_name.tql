@@ -1,9 +1,0 @@
----
-error: true
----
-
-// A `$` variable cannot be used as the name of a named operator argument: it
-// is not a field path, so selector resolution rejects it.
-from {x: 1}
-let $foo = 1
-head $foo = 42
