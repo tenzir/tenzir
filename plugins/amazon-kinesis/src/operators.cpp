@@ -11,6 +11,7 @@
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/aws_iam.hpp>
 #include <tenzir/blob.hpp>
+#include <tenzir/detail/base64.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/multi_series_builder.hpp>
@@ -30,8 +31,6 @@
 #include <aws/kinesis/model/GetShardIteratorResult.h>
 #include <aws/kinesis/model/ListShardsRequest.h>
 #include <aws/kinesis/model/ListShardsResult.h>
-#include <aws/kinesis/model/PutRecordsRequest.h>
-#include <aws/kinesis/model/PutRecordsRequestEntry.h>
 #include <aws/kinesis/model/PutRecordsResult.h>
 #include <aws/kinesis/model/ShardIteratorType.h>
 #include <folly/coro/Collect.h>
@@ -39,8 +38,8 @@
 
 #include <algorithm>
 #include <iterator>
-#include <limits>
 #include <ranges>
+#include <span>
 #include <utility>
 
 using namespace std::chrono_literals;
@@ -91,12 +90,17 @@ struct PutRecordsResult {
   std::optional<std::string> error;
 };
 
-template <class Request>
 auto kinesis_api_call(amazon::SignedHttpClient& client,
-                      std::string_view operation, Request& request)
+                      std::string_view operation, std::string body)
   -> Task<Result<Aws::AmazonWebServiceResult<Aws::Utils::Json::JsonValue>,
                  KinesisApiError>> {
-  auto response = co_await client.raw_api_call(operation, request);
+  auto headers = Aws::Http::HeaderValueCollection{
+    {"X-Amz-Target", fmt::format("Kinesis_20131202.{}", operation)},
+    {"Content-Type", "application/x-amz-json-1.1"},
+    {"X-Amz-Api-Version", "2013-12-02"},
+  };
+  auto response = co_await client.raw_post("/", std::move(body),
+                                           std::move(headers), operation);
   if (response.is_err()) {
     co_return Err{KinesisApiError{.message = std::move(response).unwrap_err()}};
   }
@@ -110,6 +114,16 @@ auto kinesis_api_call(amazon::SignedHttpClient& client,
     }};
   }
   co_return amazon::to_aws_json_result(std::move(http_response));
+}
+
+template <class Request>
+auto kinesis_api_call(amazon::SignedHttpClient& client,
+                      std::string_view operation, Request& request)
+  -> Task<Result<Aws::AmazonWebServiceResult<Aws::Utils::Json::JsonValue>,
+                 KinesisApiError>> {
+  auto payload = request.SerializePayload();
+  co_return co_await kinesis_api_call(
+    client, operation, std::string{payload.c_str(), payload.size()});
 }
 
 auto is_error(KinesisApiError const& error, std::string_view code) -> bool {
@@ -316,21 +330,45 @@ auto append_partition_keys(std::vector<Option<std::string>>& out,
   }
 }
 
+/// Serializes a PutRecords request body directly instead of going through the
+/// AWS SDK's JSON DOM, which costs two extra passes over every payload byte.
+auto make_put_records_body(
+  std::string_view escaped_stream,
+  std::span<const ToAmazonKinesis::PendingRecord> records) -> std::string {
+  auto size = escaped_stream.size() + 32;
+  for (const auto& record : records) {
+    size += detail::base64::encoded_size(record.message.size())
+            + record.partition_key.size() + 40;
+  }
+  auto body = std::string{};
+  body.reserve(size);
+  body += R"({"StreamName":)";
+  body += escaped_stream;
+  body += R"(,"Records":[)";
+  for (const auto& record : records) {
+    if (body.back() != '[') {
+      body += ',';
+    }
+    body += R"({"Data":")";
+    const auto offset = body.size();
+    body.resize(offset + detail::base64::encoded_size(record.message.size()));
+    detail::base64::encode(body.data() + offset, record.message.data(),
+                           record.message.size());
+    body += R"(","PartitionKey":)";
+    body += detail::json_escape(record.partition_key);
+    body += '}';
+  }
+  body += "]}";
+  return body;
+}
+
 auto put_records(amazon::SignedHttpClient& client, std::string stream,
                  std::vector<ToAmazonKinesis::PendingRecord> records)
   -> Task<PutRecordsResult> {
+  const auto escaped_stream = detail::json_escape(stream);
   for (auto attempt = size_t{0}; attempt < put_records_attempts; ++attempt) {
-    auto request = Aws::Kinesis::Model::PutRecordsRequest{};
-    request.SetStreamName(Aws::String{stream.data(), stream.size()});
-    for (const auto& record : records) {
-      auto entry = Aws::Kinesis::Model::PutRecordsRequestEntry{};
-      entry.SetPartitionKey(record.partition_key);
-      entry.SetData(Aws::Utils::ByteBuffer{
-        reinterpret_cast<const unsigned char*>(record.message.data()),
-        record.message.size()});
-      request.AddRecords(std::move(entry));
-    }
-    auto aws_result = co_await kinesis_api_call(client, "PutRecords", request);
+    auto aws_result = co_await kinesis_api_call(
+      client, "PutRecords", make_put_records_body(escaped_stream, records));
     if (aws_result.is_err()) {
       auto error = std::move(aws_result).unwrap_err();
       if (not is_retryable(error) or attempt + 1 == put_records_attempts) {

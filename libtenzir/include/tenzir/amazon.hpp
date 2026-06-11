@@ -94,15 +94,6 @@ public:
                             operation);
   }
 
-  template <class Request>
-  auto raw_api_call(std::string_view operation, Request& request)
-    -> Task<Result<http::Response, std::string>> {
-    auto payload = request.SerializePayload();
-    auto body = std::string{payload.c_str(), payload.size()};
-    co_return co_await raw_post("/", std::move(body), request.GetHeaders(),
-                                operation);
-  }
-
   auto
   post(std::string path, std::string body,
        Aws::Http::HeaderValueCollection headers, std::string_view operation)
