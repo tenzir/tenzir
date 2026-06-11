@@ -106,8 +106,11 @@ public:
     // Resolve the call-site chain of the primary location, so that we can
     // show where the failing operator was called from.
     auto call_chain = std::vector<location>{};
-    if (not diag.annotations.empty()) {
-      auto id = diag.annotations.front().source.callsite_index;
+    for (auto& annotation : diag.annotations) {
+      if (not annotation.primary or not annotation.source) {
+        continue;
+      }
+      auto id = annotation.source.callsite_index;
       while (id != 0) {
         auto call_site = source_map_->call_site(id);
         if (not call_site) {
@@ -120,13 +123,16 @@ public:
           break;
         }
       }
+      break;
     }
     auto indent_width = size_t{0};
     for (auto& annotation : diag.annotations) {
+      if (not annotation.source) {
+        continue;
+      }
       auto src = resolve(annotation.source.source_index);
       if (not src) {
-        // TODO: This is a hack for the case where we don't have the information.
-        break;
+        continue;
       }
       if (auto lc = line_col_indices(src->lines, annotation.source.begin)) {
         auto [line, col] = *lc;
@@ -145,13 +151,12 @@ public:
     }
     auto indent = std::string(indent_width, ' ');
     for (auto& annotation : diag.annotations) {
-      auto src = resolve(annotation.source.source_index);
-      if (not src) {
-        // TODO: This is a hack for the case where we don't have the information.
-        break;
-      }
       if (not annotation.source) {
         TENZIR_VERBOSE("annotation does not have source: {:?}", annotation);
+        continue;
+      }
+      auto src = resolve(annotation.source.source_index);
+      if (not src) {
         continue;
       }
       auto lc = line_col_indices(src->lines, annotation.source.begin);
@@ -162,13 +167,9 @@ public:
       }
       auto [line_idx, col] = *lc;
       auto line = line_idx + 1;
-      if (&annotation == &diag.annotations.front()) {
-        fmt::print(stream_, "{}{}{}-->{} {}:{}:{}\n", indent, bold, blue, reset,
-                   src->source->origin, line, col + 1);
-        fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
-      } else {
-        fmt::print(stream_, "{} {}{}⋮{}\n", indent, bold, blue, reset);
-      }
+      fmt::print(stream_, "{}{}{}-->{} {}:{}:{}\n", indent, bold, blue, reset,
+                 src->source->origin, line, col + 1);
+      fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
       fmt::print(stream_, "{}{}{}{} |{} {}\n",
                  std::string(indent_width - std::to_string(line).size(), ' '),
                  bold, blue, line, reset, src->lines[line_idx]);
@@ -181,9 +182,7 @@ public:
                  color(pseudo_severity), std::string(col, ' '),
                  std::string(count, symbol(pseudo_severity)), annotation.text,
                  reset);
-      if (&annotation == &diag.annotations.back()) {
-        fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
-      }
+      fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
     }
     for (auto& call_site : call_chain) {
       auto src = resolve(call_site.source_index);

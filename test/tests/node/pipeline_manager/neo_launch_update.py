@@ -179,6 +179,19 @@ def _check_launch_compile_diagnostics(base_url: str) -> None:
         if isinstance(diagnostic, dict)
     ]
     assert all("pipeline has no sink" not in message for message in messages), messages
+    for diagnostic in diagnostics:
+        assert isinstance(diagnostic, dict), body
+        rendered = diagnostic.get("rendered")
+        assert isinstance(rendered, str) and "this_operator_does_not_exist" in rendered
+        annotations = diagnostic.get("annotations")
+        assert isinstance(annotations, list) and annotations, diagnostic
+        for annotation in annotations:
+            assert isinstance(annotation, dict), diagnostic
+            source = annotation.get("source")
+            assert isinstance(source, dict), annotation
+            assert isinstance(source.get("begin"), int), annotation
+            assert isinstance(source.get("end"), int), annotation
+            assert "[" not in json.dumps(source), annotation
     print("neo-launch-compile-diagnostics: ok")
 
 

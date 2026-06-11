@@ -115,6 +115,10 @@ public:
   /// Register a source. It will be kept alive by the SourceMap.
   void add_source(Arc<const Source> source);
 
+  /// Register the primary source. It will be kept alive by the SourceMap and
+  /// returned for source id `0`.
+  void add_primary_source(Arc<const Source> source);
+
   /// Register the location of a user-defined operator invocation and return
   /// its id.
   ///
@@ -125,6 +129,12 @@ public:
 
   /// Return the source for the given id.
   auto source(SourceId id) const -> Option<const Source&>;
+
+  /// Return the primary source.
+  auto primary_source() const -> Option<const Source&>;
+
+  /// Translate a location to its top-level source location.
+  auto translate(location loc) const -> location;
 
   /// Return the call site for the given id, which must not be `0`.
   auto call_site(CallSiteId id) const -> Option<location>;
