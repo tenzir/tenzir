@@ -31,11 +31,12 @@ import (
 )
 
 type server struct {
-	stream     string
-	shards     int
-	latency    time.Duration
-	throttle   float64
-	maxRecords int
+	stream       string
+	shards       int
+	latency      time.Duration
+	throttle     float64
+	maxRecords   int
+	maxRecordKiB int
 	// encoded[g] is the base64-encoded dataset line g; record j of shard s is
 	// global line j*shards + s.
 	encoded   []string
@@ -127,6 +128,15 @@ func (s *server) handleListShards(w http.ResponseWriter, _ []byte) {
 	}
 	b.WriteString(`]}`)
 	writeJSON(w, b.String())
+}
+
+func (s *server) handleDescribeStreamSummary(w http.ResponseWriter, _ []byte) {
+	writeJSON(w, fmt.Sprintf(`{"StreamDescriptionSummary":{"StreamName":%q,`+
+		`"StreamARN":"arn:aws:kinesis:us-east-1:000000000000:stream/%s",`+
+		`"StreamStatus":"ACTIVE","RetentionPeriodHours":24,`+
+		`"StreamCreationTimestamp":%s,"EnhancedMonitoring":[],`+
+		`"OpenShardCount":%d,"MaxRecordSizeInKiB":%d}}`,
+		s.stream, s.stream, s.arrival, s.shards, s.maxRecordKiB))
 }
 
 func (s *server) handleGetShardIterator(w http.ResponseWriter, body []byte) {
@@ -271,6 +281,8 @@ func (s *server) handleAPI(w http.ResponseWriter, r *http.Request) {
 	switch action {
 	case "ListShards":
 		s.handleListShards(w, body)
+	case "DescribeStreamSummary":
+		s.handleDescribeStreamSummary(w, body)
 	case "GetShardIterator":
 		s.handleGetShardIterator(w, body)
 	case "GetRecords":
@@ -324,6 +336,8 @@ func main() {
 		"probability of throttling a call or record")
 	maxRecords := flag.Int("max-records", 10000,
 		"maximum records per GetRecords response")
+	maxRecordKiB := flag.Int("max-record-size-kib", 1024,
+		"stream record size limit reported by DescribeStreamSummary")
 	dataset := flag.String("dataset", "", "NDJSON file to replay (one record per line)")
 	stream := flag.String("stream", "tenzir-bench", "stream name")
 	flag.Parse()
@@ -332,13 +346,14 @@ func main() {
 		log.Fatalf("failed to load dataset: %v", err)
 	}
 	s := &server{
-		stream:     *stream,
-		shards:     *shards,
-		latency:    *latency,
-		throttle:   *throttleRate,
-		maxRecords: *maxRecords,
-		encoded:    encoded,
-		startTime:  time.Now(),
+		stream:       *stream,
+		shards:       *shards,
+		latency:      *latency,
+		throttle:     *throttleRate,
+		maxRecords:   *maxRecords,
+		maxRecordKiB: *maxRecordKiB,
+		encoded:      encoded,
+		startTime:    time.Now(),
 	}
 	s.arrival = fmt.Sprintf("%.3f", float64(s.startTime.UnixMilli())/1000.0)
 	mux := http.NewServeMux()

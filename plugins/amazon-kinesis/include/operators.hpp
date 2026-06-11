@@ -167,6 +167,8 @@ private:
   std::shared_ptr<amazon::SignedHttpClient> client_;
   std::vector<PendingRecord> batch_;
   size_t batch_size_ = 500;
+  /// The stream's configured record size limit, discovered at startup.
+  size_t max_record_size_ = 10 * 1024 * 1024;
   duration batch_timeout_ = std::chrono::seconds{1};
   mutable Option<std::chrono::steady_clock::time_point> batch_deadline_
     = None{};

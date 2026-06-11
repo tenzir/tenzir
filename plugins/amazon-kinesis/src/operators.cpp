@@ -21,6 +21,8 @@
 #include <arrow/array/array_binary.h>
 #include <aws/core/utils/Array.h>
 #include <aws/core/utils/DateTime.h>
+#include <aws/kinesis/model/DescribeStreamSummaryRequest.h>
+#include <aws/kinesis/model/DescribeStreamSummaryResult.h>
 #include <aws/kinesis/model/EncryptionType.h>
 #include <aws/kinesis/model/GetRecordsRequest.h>
 #include <aws/kinesis/model/GetRecordsResult.h>
@@ -47,7 +49,10 @@ namespace tenzir::plugins::amazon_kinesis {
 
 namespace {
 
+/// The API-level record size ceiling; streams default to 1 MiB unless their
+/// maximum record size is raised explicitly.
 constexpr auto max_record_size = size_t{10 * 1024 * 1024};
+constexpr auto default_stream_record_size = size_t{1024 * 1024};
 constexpr auto max_put_records_request_size = max_record_size;
 constexpr auto max_put_records_entries = size_t{500};
 constexpr auto max_partition_key_size = size_t{256};
@@ -316,6 +321,26 @@ auto read_from_shard(amazon::SignedHttpClient& client, std::string_view stream,
     output.records.push_back(std::move(item));
   }
   co_return output;
+}
+
+/// Returns the stream's configured maximum record size in bytes.
+auto fetch_stream_record_size(amazon::SignedHttpClient& client,
+                              std::string_view stream)
+  -> Task<Result<size_t, KinesisApiError>> {
+  auto request = Aws::Kinesis::Model::DescribeStreamSummaryRequest{};
+  request.SetStreamName(Aws::String{stream.data(), stream.size()});
+  auto aws_result
+    = co_await kinesis_api_call(client, "DescribeStreamSummary", request);
+  if (aws_result.is_err()) {
+    co_return Err{std::move(aws_result).unwrap_err()};
+  }
+  auto result = Aws::Kinesis::Model::DescribeStreamSummaryResult{
+    std::move(aws_result).unwrap()};
+  const auto& summary = result.GetStreamDescriptionSummary();
+  if (not summary.MaxRecordSizeInKiBHasBeenSet()) {
+    co_return default_stream_record_size;
+  }
+  co_return detail::narrow<size_t>(summary.GetMaxRecordSizeInKiB()) * 1024;
 }
 
 auto validate_partition_key(std::string_view key, const location& loc,
@@ -776,6 +801,23 @@ auto ToAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
   request_slots_ = Semaphore{detail::narrow<size_t>(parallel_)};
   send_queue_ = Arc<folly::coro::BoundedQueue<SendReport>>{
     std::in_place, detail::narrow<uint32_t>(parallel_ + 1)};
+  auto stream_limit
+    = co_await fetch_stream_record_size(*client_, args_.stream.inner);
+  if (stream_limit.is_ok()) {
+    max_record_size_ = std::move(stream_limit).unwrap();
+  } else {
+    auto error = std::move(stream_limit).unwrap_err();
+    if (is_error(error, "ResourceNotFoundException")) {
+      diagnostic::error("{}", error.message)
+        .primary(args_.stream.source)
+        .emit(ctx);
+      failed_ = true;
+      co_return;
+    }
+    // Without permission to describe the stream we cannot know its configured
+    // record size limit, so stay at the API maximum and let the service
+    // enforce the effective limit.
+  }
   bytes_write_counter_
     = ctx.make_counter(MetricsLabel{"operator", "to_amazon_kinesis"},
                        MetricsDirection::write, MetricsVisibility::external_,
@@ -815,10 +857,10 @@ auto ToAmazonKinesis::process(table_slice input, OpCtx& ctx) -> Task<void> {
     } else {
       key = fmt::to_string(uuid::random());
     }
-    if (message->size() + key.size() > max_record_size) {
+    if (message->size() + key.size() > max_record_size_) {
       diagnostic::warning("Kinesis record payload and partition key must be at "
-                          "most {} bytes",
-                          max_record_size)
+                          "most {} bytes for this stream",
+                          max_record_size_)
         .primary(args_.message)
         .note("event is skipped")
         .emit(ctx);
