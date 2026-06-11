@@ -82,6 +82,19 @@ stdenv.mkDerivation (finalAttrs: {
     cmakeFlagsArray+=("-DCMAKE_CXX_FLAGS=-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mavx -mavx2")
   '';
 
+  # proxygen_utils_trace references symbols from
+  # proxygen_utils_trace_event_types without declaring the dependency. Add the
+  # missing edge so that consumers order the archives correctly when linking.
+  postInstall = ''
+        cat >> $out/lib/cmake/proxygen/proxygen-targets.cmake << 'EOF'
+
+    # Added by the Tenzir Nix build: proxygen_utils_trace references symbols from
+    # proxygen_utils_trace_event_types without declaring the dependency.
+    set_property(TARGET proxygen::proxygen_utils_trace APPEND PROPERTY
+      INTERFACE_LINK_LIBRARIES proxygen::proxygen_utils_trace_event_types)
+    EOF
+  '';
+
   doCheck = false;
 
   meta = {
