@@ -75,13 +75,14 @@ public:
     : colors{colors::make(color)}, source_map_{source_map}, stream_{stream} {
   }
 
-  void emit(diagnostic diag) override {
+  void emit(diagnostic diagnostic) override {
     if (not std::exchange(first, false)) {
       fmt::print(stream_, "\n");
     }
     // TODO: Do not print the same line multiple times. Merge annotations instead.
-    fmt::print(stream_, "{}{}{}{}: {}{}\n", bold, color(diag.severity),
-               diag.severity, uncolor, diag.message, reset);
+    fmt::print(stream_, "{}{}{}{}: {}{}\n", bold, color(diagnostic.severity),
+               diagnostic.severity, uncolor, diagnostic.message, reset);
+    auto diag = source_map_->enrich(std::move(diagnostic));
     // Sources are resolved against the source map on every emit because the
     // map may change during the printer's lifetime. Sources without pre-split
     // lines are split here; the cache keeps those splits alive for the
