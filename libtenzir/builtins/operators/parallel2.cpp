@@ -427,8 +427,8 @@ public:
         .emit(ctx);
       return failure::promise();
     });
-    // We use `invariant_order()` so that residual filters do not escape, but are
-    // reinserted at the front of the subpipeline instead.
+    // We use `invariant_order()` so that residual filters do not escape, but
+    // are reinserted at the front of the subpipeline instead.
     return d.invariant_order();
   }
 };
