@@ -91,22 +91,6 @@ struct PutRecordsResult {
   std::optional<std::string> error;
 };
 
-auto date_time_to_time(const Aws::Utils::DateTime& date_time) -> time {
-  return time{std::chrono::milliseconds{date_time.Millis()}};
-}
-
-auto time_to_date_time(time value) -> Aws::Utils::DateTime {
-  auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-    value.time_since_epoch());
-  return Aws::Utils::DateTime{ms.count()};
-}
-
-auto encryption_type_to_string(Aws::Kinesis::Model::EncryptionType type)
-  -> std::string {
-  return amazon::from_aws_string(
-    Aws::Kinesis::Model::EncryptionTypeMapper::GetNameForEncryptionType(type));
-}
-
 template <class Request>
 auto kinesis_api_call(amazon::SignedHttpClient& client,
                       std::string_view operation, Request& request)
@@ -146,31 +130,6 @@ auto is_retryable(KinesisApiError const& error) -> bool {
   return true;
 }
 
-auto configure_iterator_start(Aws::Kinesis::Model::GetShardIteratorRequest& req,
-                              const Option<located<data>>& start,
-                              const std::string& sequence_number) -> void {
-  using Aws::Kinesis::Model::ShardIteratorType;
-  if (not sequence_number.empty()) {
-    req.SetShardIteratorType(ShardIteratorType::AFTER_SEQUENCE_NUMBER);
-    req.SetStartingSequenceNumber(sequence_number);
-    return;
-  }
-  if (not start) {
-    req.SetShardIteratorType(ShardIteratorType::LATEST);
-    return;
-  }
-  if (auto value = try_as<std::string>(start->inner)) {
-    req.SetShardIteratorType(*value == "trim_horizon"
-                               ? ShardIteratorType::TRIM_HORIZON
-                               : ShardIteratorType::LATEST);
-    return;
-  }
-  auto value = try_as<time>(start->inner);
-  TENZIR_ASSERT(value);
-  req.SetShardIteratorType(ShardIteratorType::AT_TIMESTAMP);
-  req.SetTimestamp(time_to_date_time(*value));
-}
-
 auto starts_at_latest(const Option<located<data>>& start) -> bool {
   if (not start) {
     return true;
@@ -179,57 +138,6 @@ auto starts_at_latest(const Option<located<data>>& start) -> bool {
     return *value != "trim_horizon";
   }
   return false;
-}
-
-auto make_iterator_request(std::string_view stream, std::string_view shard_id)
-  -> Aws::Kinesis::Model::GetShardIteratorRequest {
-  auto request = Aws::Kinesis::Model::GetShardIteratorRequest{};
-  request.SetStreamName(Aws::String{stream.data(), stream.size()});
-  request.SetShardId(Aws::String{shard_id.data(), shard_id.size()});
-  return request;
-}
-
-auto fetch_shard_iterator(amazon::SignedHttpClient& client,
-                          Aws::Kinesis::Model::GetShardIteratorRequest request)
-  -> Task<Result<std::string, KinesisApiError>> {
-  auto aws_result
-    = co_await kinesis_api_call(client, "GetShardIterator", request);
-  if (aws_result.is_err()) {
-    co_return Err{std::move(aws_result).unwrap_err()};
-  }
-  auto result = Aws::Kinesis::Model::GetShardIteratorResult{
-    std::move(aws_result).unwrap()};
-  co_return amazon::from_aws_string(result.GetShardIterator());
-}
-
-auto make_shard_iterator(amazon::SignedHttpClient& client,
-                         std::string_view stream, std::string_view shard_id,
-                         const Option<located<data>>& start,
-                         const std::string& sequence_number)
-  -> Task<Result<std::string, KinesisApiError>> {
-  auto request = make_iterator_request(stream, shard_id);
-  configure_iterator_start(request, start, sequence_number);
-  co_return co_await fetch_shard_iterator(client, std::move(request));
-}
-
-auto make_shard_iterator(amazon::SignedHttpClient& client,
-                         std::string_view stream, std::string_view shard_id,
-                         time timestamp)
-  -> Task<Result<std::string, KinesisApiError>> {
-  auto request = make_iterator_request(stream, shard_id);
-  request.SetShardIteratorType(
-    Aws::Kinesis::Model::ShardIteratorType::AT_TIMESTAMP);
-  request.SetTimestamp(time_to_date_time(timestamp));
-  co_return co_await fetch_shard_iterator(client, std::move(request));
-}
-
-auto make_shard_iterator(amazon::SignedHttpClient& client,
-                         std::string_view stream, std::string_view shard_id,
-                         Aws::Kinesis::Model::ShardIteratorType type)
-  -> Task<Result<std::string, KinesisApiError>> {
-  auto request = make_iterator_request(stream, shard_id);
-  request.SetShardIteratorType(type);
-  co_return co_await fetch_shard_iterator(client, std::move(request));
 }
 
 auto list_shards(amazon::SignedHttpClient& client, std::string_view stream,
@@ -308,12 +216,13 @@ auto read_from_shard(amazon::SignedHttpClient& client, std::string_view stream,
     item.sequence_number = amazon::from_aws_string(record.GetSequenceNumber());
     item.partition_key = amazon::from_aws_string(record.GetPartitionKey());
     if (record.ApproximateArrivalTimestampHasBeenSet()) {
-      item.arrival_time
-        = date_time_to_time(record.GetApproximateArrivalTimestamp());
+      item.arrival_time = time{std::chrono::milliseconds{
+        record.GetApproximateArrivalTimestamp().Millis()}};
     }
     if (record.EncryptionTypeHasBeenSet()) {
-      item.encryption_type
-        = encryption_type_to_string(record.GetEncryptionType());
+      item.encryption_type = amazon::from_aws_string(
+        Aws::Kinesis::Model::EncryptionTypeMapper::GetNameForEncryptionType(
+          record.GetEncryptionType()));
     }
     item.behind_latest
       = std::chrono::milliseconds{result.GetMillisBehindLatest()};
@@ -321,26 +230,6 @@ auto read_from_shard(amazon::SignedHttpClient& client, std::string_view stream,
     output.records.push_back(std::move(item));
   }
   co_return output;
-}
-
-/// Returns the stream's configured maximum record size in bytes.
-auto fetch_stream_record_size(amazon::SignedHttpClient& client,
-                              std::string_view stream)
-  -> Task<Result<size_t, KinesisApiError>> {
-  auto request = Aws::Kinesis::Model::DescribeStreamSummaryRequest{};
-  request.SetStreamName(Aws::String{stream.data(), stream.size()});
-  auto aws_result
-    = co_await kinesis_api_call(client, "DescribeStreamSummary", request);
-  if (aws_result.is_err()) {
-    co_return Err{std::move(aws_result).unwrap_err()};
-  }
-  auto result = Aws::Kinesis::Model::DescribeStreamSummaryResult{
-    std::move(aws_result).unwrap()};
-  const auto& summary = result.GetStreamDescriptionSummary();
-  if (not summary.MaxRecordSizeInKiBHasBeenSet()) {
-    co_return default_stream_record_size;
-  }
-  co_return detail::narrow<size_t>(summary.GetMaxRecordSizeInKiB()) * 1024;
 }
 
 auto validate_partition_key(std::string_view key, const location& loc,
@@ -362,10 +251,6 @@ auto validate_partition_key(std::string_view key, const location& loc,
     return false;
   }
   return true;
-}
-
-auto record_size(const ToAmazonKinesis::PendingRecord& record) -> size_t {
-  return record.message.size() + record.partition_key.size();
 }
 
 auto append_messages(std::vector<Option<blob>>& out,
@@ -551,17 +436,14 @@ auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
                         ? detail::narrow<int>(args_.records_per_call->inner)
                         : 1000;
   poll_idle_ = args_.poll_idle ? args_.poll_idle->inner : 1s;
-  const auto fail = [&](KinesisApiError error) {
-    diagnostic::error("{}", error.message)
-      .primary(args_.stream.source)
-      .emit(ctx);
-    done_ = true;
-  };
   if (shards_.empty()) {
     auto shard_infos = co_await list_shards(*client_, args_.stream.inner,
                                             starts_at_latest(args_.start));
     if (shard_infos.is_err()) {
-      fail(std::move(shard_infos).unwrap_err());
+      diagnostic::error("{}", shard_infos.unwrap_err().message)
+        .primary(args_.stream.source)
+        .emit(ctx);
+      done_ = true;
       co_return;
     }
     auto infos = std::move(shard_infos).unwrap();
@@ -596,18 +478,42 @@ auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
 
 auto FromAmazonKinesis::recreate_shard_iterator(const ShardState& shard)
   -> Task<Result<std::string, KinesisApiError>> {
-  if (shard.next_sequence_number.empty() and shard.trim_horizon_start) {
-    co_return co_await make_shard_iterator(
-      *client_, args_.stream.inner, shard.id,
-      Aws::Kinesis::Model::ShardIteratorType::TRIM_HORIZON);
+  using Aws::Kinesis::Model::ShardIteratorType;
+  auto request = Aws::Kinesis::Model::GetShardIteratorRequest{};
+  request.SetStreamName(
+    Aws::String{args_.stream.inner.data(), args_.stream.inner.size()});
+  request.SetShardId(Aws::String{shard.id.data(), shard.id.size()});
+  if (not shard.next_sequence_number.empty()) {
+    request.SetShardIteratorType(ShardIteratorType::AFTER_SEQUENCE_NUMBER);
+    request.SetStartingSequenceNumber(shard.next_sequence_number);
+  } else if (shard.trim_horizon_start) {
+    request.SetShardIteratorType(ShardIteratorType::TRIM_HORIZON);
+  } else {
+    auto timestamp = shard.latest_start_time;
+    if (not timestamp and args_.start) {
+      if (auto value = try_as<time>(args_.start->inner)) {
+        timestamp = *value;
+      }
+    }
+    if (timestamp) {
+      const auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(
+        timestamp->time_since_epoch());
+      request.SetShardIteratorType(ShardIteratorType::AT_TIMESTAMP);
+      request.SetTimestamp(Aws::Utils::DateTime{millis.count()});
+    } else if (starts_at_latest(args_.start)) {
+      request.SetShardIteratorType(ShardIteratorType::LATEST);
+    } else {
+      request.SetShardIteratorType(ShardIteratorType::TRIM_HORIZON);
+    }
   }
-  if (shard.next_sequence_number.empty() and shard.latest_start_time) {
-    co_return co_await make_shard_iterator(*client_, args_.stream.inner,
-                                           shard.id, *shard.latest_start_time);
+  auto aws_result
+    = co_await kinesis_api_call(*client_, "GetShardIterator", request);
+  if (aws_result.is_err()) {
+    co_return Err{std::move(aws_result).unwrap_err()};
   }
-  co_return co_await make_shard_iterator(*client_, args_.stream.inner, shard.id,
-                                         args_.start,
-                                         shard.next_sequence_number);
+  auto result = Aws::Kinesis::Model::GetShardIteratorResult{
+    std::move(aws_result).unwrap()};
+  co_return amazon::from_aws_string(result.GetShardIterator());
 }
 
 auto FromAmazonKinesis::shard_loop(ShardState shard) -> Task<void> {
@@ -801,23 +707,29 @@ auto ToAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
   request_slots_ = Semaphore{detail::narrow<size_t>(parallel_)};
   send_queue_ = Arc<folly::coro::BoundedQueue<SendReport>>{
     std::in_place, detail::narrow<uint32_t>(parallel_ + 1)};
-  auto stream_limit
-    = co_await fetch_stream_record_size(*client_, args_.stream.inner);
-  if (stream_limit.is_ok()) {
-    max_record_size_ = std::move(stream_limit).unwrap();
-  } else {
-    auto error = std::move(stream_limit).unwrap_err();
-    if (is_error(error, "ResourceNotFoundException")) {
-      diagnostic::error("{}", error.message)
-        .primary(args_.stream.source)
-        .emit(ctx);
-      failed_ = true;
-      co_return;
-    }
-    // Without permission to describe the stream we cannot know its configured
-    // record size limit, so stay at the API maximum and let the service
-    // enforce the effective limit.
+  auto request = Aws::Kinesis::Model::DescribeStreamSummaryRequest{};
+  request.SetStreamName(
+    Aws::String{args_.stream.inner.data(), args_.stream.inner.size()});
+  auto aws_result
+    = co_await kinesis_api_call(*client_, "DescribeStreamSummary", request);
+  if (aws_result.is_ok()) {
+    auto result = Aws::Kinesis::Model::DescribeStreamSummaryResult{
+      std::move(aws_result).unwrap()};
+    const auto& summary = result.GetStreamDescriptionSummary();
+    max_record_size_
+      = summary.MaxRecordSizeInKiBHasBeenSet()
+          ? detail::narrow<size_t>(summary.GetMaxRecordSizeInKiB()) * 1024
+          : default_stream_record_size;
+  } else if (is_error(aws_result.unwrap_err(), "ResourceNotFoundException")) {
+    diagnostic::error("{}", aws_result.unwrap_err().message)
+      .primary(args_.stream.source)
+      .emit(ctx);
+    failed_ = true;
+    co_return;
   }
+  // Without permission to describe the stream we cannot know its configured
+  // record size limit, so stay at the API maximum and let the service enforce
+  // the effective limit.
   bytes_write_counter_
     = ctx.make_counter(MetricsLabel{"operator", "to_amazon_kinesis"},
                        MetricsDirection::write, MetricsVisibility::external_,
@@ -952,7 +864,7 @@ auto ToAmazonKinesis::flush(OpCtx& ctx) -> Task<void> {
   auto chunk = std::vector<PendingRecord>{};
   auto chunk_size = size_t{0};
   for (auto& record : records) {
-    const auto size = record_size(record);
+    const auto size = record.message.size() + record.partition_key.size();
     if ((not chunk.empty() and chunk_size + size > max_put_records_request_size)
         or chunk.size() >= max_put_records_entries) {
       chunks.push_back(std::exchange(chunk, {}));
