@@ -30,6 +30,7 @@
 #include <boost/algorithm/string/trim.hpp>
 #include <fmt/format.h>
 
+#include <atomic>
 #include <chrono>
 #include <string>
 #include <string_view>
@@ -305,7 +306,10 @@ private:
 class rebalance_callback final : public RdKafka::RebalanceCb {
 public:
   /// Constructs a callback that assigns `offset` for new partitions.
-  explicit rebalance_callback(int64_t offset) : offset_{offset} {
+  rebalance_callback(int64_t offset,
+                     std::shared_ptr<Atomic<uint64_t>> assignment_generation)
+    : offset_{offset},
+      assignment_generation_{std::move(assignment_generation)} {
   }
 
   /// Handles assign/revoke events while preserving cooperative semantics.
@@ -330,6 +334,7 @@ public:
                        RdKafka::err2str(assign_err));
         }
       }
+      mark_assignment_changed();
       return;
     }
     if (err == RdKafka::ERR__REVOKE_PARTITIONS) {
@@ -344,6 +349,7 @@ public:
         TENZIR_ERROR("failed to unassign partitions: {}",
                      RdKafka::err2str(unassign_err));
       }
+      mark_assignment_changed();
       return;
     }
     TENZIR_ERROR("rebalancing error: {}", RdKafka::err2str(err));
@@ -352,10 +358,18 @@ public:
       TENZIR_ERROR("failed to unassign partitions: {}",
                    RdKafka::err2str(unassign_err));
     }
+    mark_assignment_changed();
   }
 
 private:
+  auto mark_assignment_changed() const -> void {
+    if (assignment_generation_) {
+      assignment_generation_->fetch_add(1, std::memory_order_release);
+    }
+  }
+
   int64_t offset_ = RdKafka::Topic::OFFSET_INVALID;
+  std::shared_ptr<Atomic<uint64_t>> assignment_generation_;
 };
 
 /// Converts one librdkafka conf set result into a typed `caf::error`.
@@ -493,7 +507,9 @@ auto make_consumer_configuration(record const& options,
     return err;
   }
 
-  cfg.rebalance_callback = std::make_shared<rebalance_callback>(offset);
+  cfg.assignment_generation = std::make_shared<Atomic<uint64_t>>(0);
+  cfg.rebalance_callback
+    = std::make_shared<rebalance_callback>(offset, cfg.assignment_generation);
   if (auto err = set_conf_callback(*cfg.conf, "rebalance_cb",
                                    cfg.rebalance_callback.get());
       err) {

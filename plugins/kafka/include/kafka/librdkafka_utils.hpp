@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <tenzir/atomic.hpp>
 #include <tenzir/aws_iam.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/location.hpp>
@@ -17,6 +18,7 @@
 #include <caf/expected.hpp>
 #include <librdkafka/rdkafkacpp.h>
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -30,6 +32,7 @@ struct consumer_configuration {
   std::shared_ptr<RdKafka::OAuthBearerTokenRefreshCb> oauth_callback;
   std::shared_ptr<RdKafka::EventCb> event_callback;
   std::shared_ptr<RdKafka::RebalanceCb> rebalance_callback;
+  std::shared_ptr<Atomic<uint64_t>> assignment_generation;
   // `enable_sasl_queue(true)` is configured on `Conf` before consumer
   // creation. This is required to later attach OAUTH callback servicing to
   // librdkafka's background thread.

@@ -384,6 +384,7 @@ struct MessageBatch {
   std::vector<AsyncConsumerQueue::Message> messages;
   std::vector<std::string> eof_partitions;
   std::optional<std::string> fatal_error;
+  bool assignment_changed = false;
   bool reached_count = false;
   size_t payload_bytes = 0;
 };
@@ -396,6 +397,7 @@ struct TableSliceFrame {
   size_t message_count = 0;
   std::vector<std::string> eof_partitions;
   std::optional<std::string> fatal_error;
+  bool assignment_changed = false;
   std::vector<diagnostic> diagnostics;
 };
 
@@ -421,6 +423,7 @@ auto build_table_slice(MessageBatch& batch, multi_series_builder& builder,
   frame.seq = batch.seq;
   frame.eof_partitions = std::move(batch.eof_partitions);
   frame.fatal_error = std::move(batch.fatal_error);
+  frame.assignment_changed = batch.assignment_changed;
   for (auto& message : batch.messages) {
     auto payload_bytes = message.payload();
     if (payload_bytes.is_err()) {
@@ -633,6 +636,10 @@ public:
       add_perf_counter(perf_.emitted_messages,
                        static_cast<uint64_t>(frame.message_count));
     }
+    if (frame.assignment_changed and args_.exit
+        and not is_topic_regex(args_.topic)) {
+      refresh_assigned_partitions(ctx.dh());
+    }
     for (auto const& partition : frame.eof_partitions) {
       add_perf_counter(perf_.eof_events);
       if (args_.exit and not is_topic_regex(args_.topic)
@@ -766,6 +773,7 @@ private:
   struct SubscriptionSource {
     std::optional<SourceConsumer> source_consumer;
     Option<Box<AsyncConsumerQueue>> queue;
+    uint64_t observed_assignment_generation = 0;
   };
 
   /// Owns mutable runtime state for source/build/emit stages.
@@ -1160,10 +1168,12 @@ private:
   }
 
   /// Converts polled Kafka messages into one source payload batch.
-  auto to_fetched_batch(
-    std::vector<AsyncConsumerQueue::Message> fetched_messages) const
+  auto
+  to_fetched_batch(std::vector<AsyncConsumerQueue::Message> fetched_messages,
+                   bool assignment_changed) const
     -> std::optional<MessageBatch> {
     auto batch = MessageBatch{};
+    batch.assignment_changed = assignment_changed;
     batch.messages.reserve(fetched_messages.size());
     auto reached_count = false;
     for (auto& message : fetched_messages) {
@@ -1200,16 +1210,51 @@ private:
     }
     batch.reached_count = reached_count;
     if (batch.messages.empty() and batch.eof_partitions.empty()
-        and not batch.fatal_error and not batch.reached_count) {
+        and not batch.fatal_error and not batch.assignment_changed
+        and not batch.reached_count) {
       return std::nullopt;
     }
     batch.seq = runtime_.next_fetch_seq.fetch_add(1, std::memory_order_relaxed);
     return batch;
   }
 
+  /// Returns true when the rebalance callback changed the source assignment.
+  auto take_assignment_change(SubscriptionSource& source) const -> bool {
+    if (not args_.exit or is_topic_regex(args_.topic)
+        or not source.source_consumer) {
+      return false;
+    }
+    auto const& generation
+      = source.source_consumer->consumer_cfg.assignment_generation;
+    if (not generation) {
+      return false;
+    }
+    auto current = generation->load(std::memory_order_acquire);
+    if (current == source.observed_assignment_generation) {
+      return false;
+    }
+    source.observed_assignment_generation = current;
+    return true;
+  }
+
+  /// Returns true without consuming a pending assignment-change notification.
+  auto has_assignment_change(SubscriptionSource const& source) const -> bool {
+    if (not args_.exit or is_topic_regex(args_.topic)
+        or not source.source_consumer) {
+      return false;
+    }
+    auto const& generation
+      = source.source_consumer->consumer_cfg.assignment_generation;
+    if (not generation) {
+      return false;
+    }
+    auto current = generation->load(std::memory_order_acquire);
+    return current != source.observed_assignment_generation;
+  }
+
   /// Collects one source poll window with adaptive timeout/backoff behavior.
-  auto
-  collect_fetch_window(AsyncConsumerQueue& queue, size_t max_messages) const
+  auto collect_fetch_window(AsyncConsumerQueue& queue, size_t max_messages,
+                            SubscriptionSource const& source) const
     -> Task<std::vector<AsyncConsumerQueue::Message>> {
     auto pending_messages = std::vector<AsyncConsumerQueue::Message>{};
     pending_messages.reserve(max_messages);
@@ -1270,6 +1315,9 @@ private:
             if (std::chrono::steady_clock::now() < *state.batch_deadline) {
               continue;
             }
+            break;
+          }
+          if (has_assignment_change(source)) {
             break;
           }
           continue;
@@ -1366,14 +1414,16 @@ private:
           break;
         }
         auto pending_messages
-          = co_await collect_fetch_window(**source.queue, max_messages);
-        if (pending_messages.empty()) {
-          if (is_pipeline_stopping()) {
-            break;
-          }
+          = co_await collect_fetch_window(**source.queue, max_messages, source);
+        if (pending_messages.empty() and is_pipeline_stopping()) {
+          break;
+        }
+        auto assignment_changed = take_assignment_change(source);
+        if (pending_messages.empty() and not assignment_changed) {
           continue;
         }
-        auto fetched = to_fetched_batch(std::move(pending_messages));
+        auto fetched
+          = to_fetched_batch(std::move(pending_messages), assignment_changed);
         if (not fetched) {
           continue;
         }
