@@ -697,8 +697,16 @@ public:
         co_await folly::coro::sleep(offset_commit_retry_delay);
       }
       if (err == RdKafka::ERR_NO_ERROR) {
+        auto const& committed = runtime_.sources[0]
+                                  .source_consumer->consumer_cfg
+                                  .committed_partitions;
         for (auto const& partition : commit_keys) {
           pending_commit_offsets_.erase(partition);
+          if (committed) {
+            // Lets the rebalance callback resume from committed offsets for
+            // partitions whose progress stems from this run.
+            committed->insert(partition.topic, partition.partition);
+          }
         }
       } else {
         auto const partitions = tenzir::detail::join(commit_labels, ", ");

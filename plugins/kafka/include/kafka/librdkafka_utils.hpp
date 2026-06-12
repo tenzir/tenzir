@@ -20,11 +20,37 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <optional>
+#include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace tenzir::plugins::kafka {
+
+/// Tracks partitions whose offsets the current consumer run has committed.
+///
+/// The operator's commit path writes from executor tasks while librdkafka's
+/// rebalance callback reads from whichever thread serves the consumer queue.
+/// The callback cannot await a coroutine mutex, so a plain lock guards the
+/// tiny critical sections instead.
+class committed_partition_set {
+public:
+  auto insert(std::string topic, int32_t partition) -> void {
+    auto guard = std::scoped_lock{mutex_};
+    partitions_.emplace(std::move(topic), partition);
+  }
+
+  auto contains(std::string const& topic, int32_t partition) const -> bool {
+    auto guard = std::scoped_lock{mutex_};
+    return partitions_.contains({topic, partition});
+  }
+
+private:
+  mutable std::mutex mutex_;
+  std::set<std::pair<std::string, int32_t>> partitions_;
+};
 
 /// Owns librdkafka consumer config and callback objects with shared lifetime.
 struct consumer_configuration {
@@ -33,6 +59,7 @@ struct consumer_configuration {
   std::shared_ptr<RdKafka::EventCb> event_callback;
   std::shared_ptr<RdKafka::RebalanceCb> rebalance_callback;
   std::shared_ptr<Atomic<uint64_t>> assignment_generation;
+  std::shared_ptr<committed_partition_set> committed_partitions;
   // `enable_sasl_queue(true)` is configured on `Conf` before consumer
   // creation. This is required to later attach OAUTH callback servicing to
   // librdkafka's background thread.

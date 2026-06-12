@@ -32,16 +32,12 @@
 
 #include <atomic>
 #include <chrono>
-#include <set>
 #include <string>
 #include <string_view>
-#include <utility>
 
 namespace tenzir::plugins::kafka {
 
 namespace {
-
-constexpr auto committed_offsets_timeout_ms = 5000;
 
 auto aws_iam_mode(std::optional<resolved_aws_credentials> const& creds) -> const
   char* {
@@ -310,10 +306,12 @@ private:
 class rebalance_callback final : public RdKafka::RebalanceCb {
 public:
   /// Constructs a callback that uses `offset` for uncommitted partitions.
-  rebalance_callback(int64_t offset,
-                     std::shared_ptr<Atomic<uint64_t>> assignment_generation)
+  rebalance_callback(
+    int64_t offset, std::shared_ptr<Atomic<uint64_t>> assignment_generation,
+    std::shared_ptr<committed_partition_set> committed_partitions)
     : offset_{offset},
-      assignment_generation_{std::move(assignment_generation)} {
+      assignment_generation_{std::move(assignment_generation)},
+      committed_partitions_{std::move(committed_partitions)} {
   }
 
   /// Handles assign/revoke events while preserving cooperative semantics.
@@ -321,7 +319,7 @@ public:
                     std::vector<RdKafka::TopicPartition*>& partitions)
     -> void override {
     if (err == RdKafka::ERR__ASSIGN_PARTITIONS) {
-      apply_start_offsets(*consumer, partitions);
+      apply_start_offsets(partitions);
       if (consumer->rebalance_protocol() == "COOPERATIVE") {
         if (auto* e = consumer->incremental_assign(partitions)) {
           auto err_guard = std::unique_ptr<RdKafka::Error>{e};
@@ -362,81 +360,24 @@ public:
   }
 
 private:
-  auto apply_start_offsets(RdKafka::KafkaConsumer& consumer,
-                           std::vector<RdKafka::TopicPartition*>& partitions)
+  auto apply_start_offsets(std::vector<RdKafka::TopicPartition*>& partitions)
     -> void {
     if (offset_ == RdKafka::Topic::OFFSET_INVALID) {
       return;
     }
-    if (offset_ == RdKafka::Topic::OFFSET_STORED) {
-      for (auto* partition : partitions) {
-        if (partition != nullptr) {
-          partition->set_offset(offset_);
-        }
-      }
-      return;
-    }
-    apply_explicit_start_offsets(consumer, partitions);
-  }
-
-  auto apply_explicit_start_offsets(
-    RdKafka::KafkaConsumer& consumer,
-    std::vector<RdKafka::TopicPartition*>& partitions) -> void {
-    // The user-provided offset defines where consumption starts, so it must
-    // win over previously committed group offsets when a partition is first
-    // assigned. Only re-assignments after a later rebalance resume from the
-    // offsets this consumer committed in the meantime.
-    auto assigned_partitions = std::vector<RdKafka::TopicPartition*>{};
-    auto committed_offsets
-      = std::vector<std::unique_ptr<RdKafka::TopicPartition>>{};
-    auto raw_committed_offsets = std::vector<RdKafka::TopicPartition*>{};
-    assigned_partitions.reserve(partitions.size());
-    committed_offsets.reserve(partitions.size());
-    raw_committed_offsets.reserve(partitions.size());
+    // The user-provided offset defines where consumption starts, so it wins
+    // until this run has committed its own progress for a partition. After
+    // that, leaving the offset invalid makes librdkafka resume from the
+    // committed offset, which preserves progress across later rebalances.
     for (auto* partition : partitions) {
       if (partition == nullptr) {
         continue;
       }
-      auto const first_assignment
-        = seeded_partitions_.emplace(partition->topic(), partition->partition())
-            .second;
-      if (first_assignment) {
+      if (offset_ == RdKafka::Topic::OFFSET_STORED or not committed_partitions_
+          or not committed_partitions_->contains(partition->topic(),
+                                                 partition->partition())) {
         partition->set_offset(offset_);
-        continue;
       }
-      assigned_partitions.push_back(partition);
-      committed_offsets.emplace_back(RdKafka::TopicPartition::create(
-        partition->topic(), partition->partition()));
-      TENZIR_ASSERT(committed_offsets.back());
-      raw_committed_offsets.push_back(committed_offsets.back().get());
-    }
-    if (raw_committed_offsets.empty()) {
-      return;
-    }
-    auto const err
-      = consumer.committed(raw_committed_offsets, committed_offsets_timeout_ms);
-    if (err != RdKafka::ERR_NO_ERROR) {
-      TENZIR_WARN("failed to fetch committed Kafka offsets during rebalance: "
-                  "{}; leaving assignment offsets unchanged",
-                  RdKafka::err2str(err));
-      return;
-    }
-    for (auto index = size_t{0}; index < raw_committed_offsets.size();
-         ++index) {
-      auto* partition = assigned_partitions[index];
-      auto* committed_offset = raw_committed_offsets[index];
-      auto const committed_err = committed_offset->err();
-      if (committed_err != RdKafka::ERR_NO_ERROR
-          and committed_err != RdKafka::ERR__NO_OFFSET) {
-        TENZIR_WARN("failed to fetch committed Kafka offset for {}[{}]: {}; "
-                    "leaving assignment offset unchanged",
-                    partition->topic(), partition->partition(),
-                    RdKafka::err2str(committed_err));
-        continue;
-      }
-      auto const committed = committed_offset->offset();
-      partition->set_offset(
-        committed == RdKafka::Topic::OFFSET_INVALID ? offset_ : committed);
     }
   }
 
@@ -448,10 +389,7 @@ private:
 
   int64_t offset_ = RdKafka::Topic::OFFSET_INVALID;
   std::shared_ptr<Atomic<uint64_t>> assignment_generation_;
-  // Partitions that already received the explicit start offset once; only
-  // mutated from rebalance callbacks, which librdkafka serializes per
-  // consumer.
-  std::set<std::pair<std::string, int32_t>> seeded_partitions_;
+  std::shared_ptr<committed_partition_set> committed_partitions_;
 };
 
 /// Converts one librdkafka conf set result into a typed `caf::error`.
@@ -590,8 +528,9 @@ auto make_consumer_configuration(record const& options,
   }
 
   cfg.assignment_generation = std::make_shared<Atomic<uint64_t>>(0);
-  cfg.rebalance_callback
-    = std::make_shared<rebalance_callback>(offset, cfg.assignment_generation);
+  cfg.committed_partitions = std::make_shared<committed_partition_set>();
+  cfg.rebalance_callback = std::make_shared<rebalance_callback>(
+    offset, cfg.assignment_generation, cfg.committed_partitions);
   if (auto err = set_conf_callback(*cfg.conf, "rebalance_cb",
                                    cfg.rebalance_callback.get());
       err) {
