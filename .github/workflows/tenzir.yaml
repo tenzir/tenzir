@@ -329,9 +329,7 @@ jobs:
           run_if_changed tenzir "${TENZIR_SOURCES[@]}"
           run_docker_tenzir="${run_tenzir}"
           run_if_changed_default docker-tenzir $run_docker_tenzir \
-            "Dockerfile" ".dockerignore" \
-            "scripts/debian/build-*.sh" \
-            "scripts/debian/install-dev-dependencies.sh" \
+            "flake.nix" "flake.lock" "nix/" \
             ".github/workflows/docker.yaml" \
             ".github/workflows/push-manifest.yaml" \
             ".github/workflows/docker-config-base.json"
