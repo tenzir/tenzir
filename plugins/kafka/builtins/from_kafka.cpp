@@ -17,6 +17,7 @@
 #include "tenzir/detail/env.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/hash/hash.hpp"
 #include "tenzir/json_parser.hpp"
 #include "tenzir/si_literals.hpp"
 
@@ -34,7 +35,6 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <charconv>
 #include <chrono>
 #include <limits>
 #include <map>
@@ -348,41 +348,35 @@ auto is_topic_regex(std::string_view topic) -> bool {
   return topic.starts_with('^');
 }
 
-auto topic_partition_key(std::string_view topic, int32_t partition)
-  -> std::string {
-  return fmt::format("{}\n{}", topic, partition);
-}
-
+/// Identifies one Kafka partition; hashable for direct use as container key.
 struct TopicPartition {
   std::string topic;
   int32_t partition = -1;
+
+  auto operator==(TopicPartition const&) const -> bool = default;
+
+  friend auto inspect(auto& f, TopicPartition& x) -> bool {
+    return f.object(x).fields(f.field("topic", x.topic),
+                              f.field("partition", x.partition));
+  }
 };
 
-auto parse_topic_partition_key(std::string_view key)
-  -> std::optional<TopicPartition> {
-  auto const pos = key.rfind('\n');
-  if (pos == std::string_view::npos) {
-    return std::nullopt;
+struct TopicPartitionHash {
+  auto operator()(TopicPartition const& x) const -> size_t {
+    return tenzir::hash(x.topic, x.partition);
   }
-  auto partition = int32_t{};
-  auto const partition_text = key.substr(pos + 1);
-  auto const* first = partition_text.data();
-  auto const* last = first + partition_text.size();
-  auto [ptr, ec] = std::from_chars(first, last, partition);
-  if (ec != std::errc{} or ptr != last) {
-    return std::nullopt;
-  }
-  return TopicPartition{
-    .topic = std::string{key.substr(0, pos)},
-    .partition = partition,
-  };
-}
+};
+
+using TopicPartitionSet
+  = std::unordered_set<TopicPartition, TopicPartitionHash>;
+using TopicPartitionOffsets
+  = std::unordered_map<TopicPartition, int64_t, TopicPartitionHash>;
 
 /// Represents one polled Kafka message batch plus control metadata.
 struct MessageBatch {
   uint64_t seq = 0;
   std::vector<AsyncConsumerQueue::Message> messages;
-  std::vector<std::string> eof_partitions;
+  std::vector<TopicPartition> eof_partitions;
   std::optional<std::string> fatal_error;
   bool assignment_changed = false;
   bool reached_count = false;
@@ -393,9 +387,9 @@ struct MessageBatch {
 struct TableSliceFrame {
   uint64_t seq = 0;
   std::vector<table_slice> slices;
-  std::unordered_map<std::string, int64_t> max_offsets;
+  TopicPartitionOffsets max_offsets;
   size_t message_count = 0;
-  std::vector<std::string> eof_partitions;
+  std::vector<TopicPartition> eof_partitions;
   std::optional<std::string> fatal_error;
   bool assignment_changed = false;
   std::vector<diagnostic> diagnostics;
@@ -435,7 +429,7 @@ auto build_table_slice(MessageBatch& batch, multi_series_builder& builder,
     }
     auto payload = std::move(payload_bytes).unwrap();
     process_payload(payload);
-    frame.max_offsets[topic_partition_key(message.topic(), message.partition())]
+    frame.max_offsets[TopicPartition{message.topic(), message.partition()}]
       = message.offset();
     ++frame.message_count;
   }
@@ -670,31 +664,15 @@ public:
     if (pending_commit_offsets_.empty()) {
       co_return;
     }
-    auto clear_pending = std::vector<std::string>{};
-    auto commit_keys = std::vector<std::string>{};
+    auto commit_keys = std::vector<TopicPartition>{};
     auto commit_labels = std::vector<std::string>{};
     auto offsets = std::vector<std::unique_ptr<RdKafka::TopicPartition>>{};
-    for (auto const& [partition_key, offset] : pending_commit_offsets_) {
-      auto topic_partition = parse_topic_partition_key(partition_key);
-      if (not topic_partition) {
-        if (dh) {
-          diagnostic::warning("from_kafka: invalid topic partition key {} "
-                              "while committing",
-                              partition_key)
-            .emit(*dh);
-        } else {
-          TENZIR_WARN("from_kafka: invalid topic partition key {} while "
-                      "committing",
-                      partition_key);
-        }
-        clear_pending.push_back(partition_key);
-        continue;
-      }
-      commit_keys.push_back(partition_key);
-      commit_labels.push_back(fmt::format("{}[{}]", topic_partition->topic,
-                                          topic_partition->partition));
+    for (auto const& [partition, offset] : pending_commit_offsets_) {
+      commit_keys.push_back(partition);
+      commit_labels.push_back(
+        fmt::format("{}[{}]", partition.topic, partition.partition));
       offsets.emplace_back(RdKafka::TopicPartition::create(
-        topic_partition->topic, topic_partition->partition, offset));
+        partition.topic, partition.partition, offset));
     }
     if (not offsets.empty() and not runtime_.sources.empty()
         and runtime_.sources[0].source_consumer) {
@@ -718,8 +696,9 @@ public:
         co_await folly::coro::sleep(offset_commit_retry_delay);
       }
       if (err == RdKafka::ERR_NO_ERROR) {
-        clear_pending.insert(clear_pending.end(), commit_keys.begin(),
-                             commit_keys.end());
+        for (auto const& partition : commit_keys) {
+          pending_commit_offsets_.erase(partition);
+        }
       } else {
         auto const partitions = tenzir::detail::join(commit_labels, ", ");
         if (dh) {
@@ -733,9 +712,6 @@ public:
                       partitions, RdKafka::err2str(err));
         }
       }
-    }
-    for (auto const& partition_key : clear_pending) {
-      pending_commit_offsets_.erase(partition_key);
     }
   }
 
@@ -1190,7 +1166,7 @@ private:
         case RD_KAFKA_RESP_ERR__PARTITION_EOF: {
           if (args_.exit) {
             batch.eof_partitions.push_back(
-              topic_partition_key(message.topic(), message.partition()));
+              TopicPartition{message.topic(), message.partition()});
           }
           break;
         }
@@ -1646,10 +1622,9 @@ private:
   }
 
   /// Moves per-partition offsets from one emitted batch into commit state.
-  auto record_pending_offsets(
-    std::unordered_map<std::string, int64_t> const& offsets) -> void {
-    for (auto const& [partition_key, offset] : offsets) {
-      pending_commit_offsets_[partition_key] = offset + 1;
+  auto record_pending_offsets(TopicPartitionOffsets const& offsets) -> void {
+    for (auto const& [partition, offset] : offsets) {
+      pending_commit_offsets_[partition] = offset + 1;
     }
   }
 
@@ -1680,12 +1655,12 @@ private:
         continue;
       }
       assigned_partitions_.insert(
-        topic_partition_key(partition->topic(), partition->partition()));
+        TopicPartition{partition->topic(), partition->partition()});
     }
     // Keep EOF marks for partitions that remain assigned: librdkafka emits
     // `PARTITION_EOF` when the fetch position reaches the end, not continuously
     // while parked there, so a dropped mark may never be delivered again.
-    std::erase_if(eof_partitions_, [&](std::string const& partition) {
+    std::erase_if(eof_partitions_, [&](TopicPartition const& partition) {
       return not assigned_partitions_.contains(partition);
     });
     // A shrinking assignment can complete the EOF set without a new EOF event.
@@ -1705,7 +1680,7 @@ private:
   }
 
   /// Tracks partition EOF notifications and marks the source done if complete.
-  auto mark_partition_eof(std::string const& partition) -> void {
+  auto mark_partition_eof(TopicPartition const& partition) -> void {
     if (not args_.exit or not assigned_partitions_.contains(partition)) {
       return;
     }
@@ -1721,12 +1696,12 @@ private:
   // Number of records emitted so far; used for `count=` resumption.
   size_t emitted_messages_ = 0;
   // Invariant: committed offsets are stored as "next offset to consume".
-  std::unordered_map<std::string, int64_t> pending_commit_offsets_;
+  TopicPartitionOffsets pending_commit_offsets_;
   // Snapshot of the subscription's current assignment; only maintained for
   // `exit=true`, refreshed lazily when an EOF for an unknown partition arrives.
-  std::unordered_set<std::string> assigned_partitions_;
+  TopicPartitionSet assigned_partitions_;
   // Invariant: contains only partitions from `assigned_partitions_`.
-  std::unordered_set<std::string> eof_partitions_;
+  TopicPartitionSet eof_partitions_;
   // Optional counters for benchmarking; enabled via env flag.
   mutable FromKafkaPerfCounters perf_;
   mutable MetricsCounter read_bytes_counter_;
