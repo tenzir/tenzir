@@ -23,7 +23,6 @@
 #include <aws/core/utils/Array.h>
 #include <aws/core/utils/DateTime.h>
 #include <aws/kinesis/model/DescribeStreamSummaryRequest.h>
-#include <aws/kinesis/model/DescribeStreamSummaryResult.h>
 #include <aws/kinesis/model/EncryptionType.h>
 #include <aws/kinesis/model/GetRecordsRequest.h>
 #include <aws/kinesis/model/GetRecordsResult.h>
@@ -802,12 +801,12 @@ auto ToAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
   auto aws_result
     = co_await kinesis_api_call(*client_, "DescribeStreamSummary", request);
   if (aws_result.is_ok()) {
-    auto result = Aws::Kinesis::Model::DescribeStreamSummaryResult{
-      std::move(aws_result).unwrap()};
-    const auto& summary = result.GetStreamDescriptionSummary();
+    auto json = std::move(aws_result).unwrap().GetPayload().View();
+    auto summary = json.GetObject("StreamDescriptionSummary");
+    auto key = Aws::String{"MaxRecordSizeInKiB"};
     max_record_size_
-      = summary.MaxRecordSizeInKiBHasBeenSet()
-          ? detail::narrow<size_t>(summary.GetMaxRecordSizeInKiB()) * 1024
+      = summary.ValueExists(key)
+          ? detail::narrow<size_t>(summary.GetInteger(key)) * 1024
           : default_stream_record_size;
   } else if (is_error(aws_result.unwrap_err(), "ResourceNotFoundException")) {
     diagnostic::error("{}", aws_result.unwrap_err().message)

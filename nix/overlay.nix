@@ -28,10 +28,6 @@ let
     });
   };
 
-  aws-sdk-cpp = callFunction ./overrides/aws-sdk-cpp.nix {
-    inherit (prevPkgs) aws-sdk-cpp;
-  };
-
 in
 {
   curl = prevPkgs.curl.override (
@@ -62,9 +58,8 @@ in
     google-cloud-cpp = finalPkgs.google-cloud-cpp-tenzir;
     enableGcs = true; # Upstream disabled for darwin.
   };
-  inherit aws-sdk-cpp;
   aws-sdk-cpp-tenzir = callFunction ./overrides/aws-sdk-cpp-tenzir.nix {
-    inherit aws-sdk-cpp;
+    inherit (prevPkgs) aws-sdk-cpp;
   };
   caf = finalPkgs.callPackage ./caf { inherit (prevPkgs) caf; };
   cyrus_sasl = callFunction ./overrides/cyrus_sasl.nix { inherit (prevPkgs) cyrus_sasl; };
