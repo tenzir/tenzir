@@ -567,9 +567,10 @@ struct every_cron_operator final : public operator_base {
     ctrl.self().delay_for_fn(start - now, [&] {
       auto pipe = make_pipeline<void>(hdl);
       const auto exec
-        = ctrl.self().spawn(pipeline_executor, std::move(pipe), ctrl.definition(),
-                            hdl, hdl, ctrl.node(), ctrl.has_terminal(),
-                            ctrl.is_hidden(), std::string{ctrl.pipeline_id()});
+        = ctrl.self().spawn(pipeline_executor, std::move(pipe),
+                            ctrl.definition(), hdl, hdl, ctrl.node(),
+                            ctrl.has_terminal(), ctrl.is_hidden(),
+                            std::string{ctrl.pipeline_id()});
       ctrl.self().monitor(exec, [&, exec](const caf::error& err) {
         if (err.valid()) {
           diagnostic::error(err)
@@ -605,9 +606,10 @@ struct every_cron_operator final : public operator_base {
     ctrl.self().delay_for_fn(start - now, [&] {
       auto pipe = make_pipeline<table_slice>(hdl);
       const auto exec
-        = ctrl.self().spawn(pipeline_executor, std::move(pipe), ctrl.definition(),
-                            hdl, hdl, ctrl.node(), ctrl.has_terminal(),
-                            ctrl.is_hidden(), std::string{ctrl.pipeline_id()});
+        = ctrl.self().spawn(pipeline_executor, std::move(pipe),
+                            ctrl.definition(), hdl, hdl, ctrl.node(),
+                            ctrl.has_terminal(), ctrl.is_hidden(),
+                            std::string{ctrl.pipeline_id()});
       ctrl.self().monitor(exec, [&, exec](const caf::error& err) {
         TENZIR_TRACE("[every_cron] subpipeline shut down");
         if (err.valid()) {
