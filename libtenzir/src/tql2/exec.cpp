@@ -2241,8 +2241,13 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
   LOGI("end blocking");
   TRY(diag_handler.failure());
   if (not result) {
-    // The pipeline was cancelled, e.g., by a signal-triggered force-cancel.
-    return {};
+    // The pipeline was force-cancelled, either by a second signal or because
+    // the grace period after a graceful stop request expired. In-flight data
+    // may have been lost, so we report failure.
+    diagnostic::error("pipeline was aborted before completion")
+      .note("in-flight data may have been lost")
+      .emit(dh);
+    return failure::promise();
   }
   if (result->is_error()) {
     panic("got failure from run_plan but not in diagnostic handler");
