@@ -2,7 +2,8 @@
 title: Memory-mapped reads in `from_file`
 type: feature
 author: raxyte
-pr: 6036
+prs:
+  - 6036
 created: 2026-04-30T13:00:59.26973Z
 ---
 

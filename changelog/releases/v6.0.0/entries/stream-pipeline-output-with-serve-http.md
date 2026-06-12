@@ -2,7 +2,8 @@
 title: Stream pipeline output with `serve_http`
 type: feature
 author: aljazerzen
-pr: 6070
+prs:
+  - 6070
 created: 2026-04-30T12:59:33.02497Z
 ---
 

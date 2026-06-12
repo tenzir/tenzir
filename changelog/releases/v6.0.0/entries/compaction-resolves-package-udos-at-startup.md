@@ -2,7 +2,8 @@
 title: Compaction resolves package UDOs at startup
 type: bugfix
 author: raxyte
-pr: 6210
+prs:
+  - 6210
 created: 2026-05-20T17:40:00.000000Z
 ---
 

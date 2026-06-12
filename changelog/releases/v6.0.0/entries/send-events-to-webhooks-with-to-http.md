@@ -2,7 +2,8 @@
 title: Send events to webhooks with `to_http`
 type: feature
 author: aljazerzen
-pr: 6019
+prs:
+  - 6019
 created: 2026-04-30T12:59:46.103696Z
 ---
 

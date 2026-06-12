@@ -2,7 +2,8 @@
 title: Uncompressed Feather output
 type: feature
 author: mavam
-pr: 6045
+prs:
+  - 6045
 created: 2026-04-30T13:02:52.129138Z
 ---
 

@@ -2,7 +2,8 @@
 title: Live packet capture with `from_nic`
 type: feature
 author: mavam
-pr: 6022
+prs:
+  - 6022
 created: 2026-04-30T12:59:02.933262Z
 ---
 
