@@ -1,0 +1,7 @@
+suite: to_google_secops
+requires:
+  operators:
+    - tql2.to_google_secops
+skip:
+  on: capability-unavailable
+  reason: requires the to_google_secops plugin

@@ -8,6 +8,7 @@
   if stdenv.hostPlatform.isStatic then
     google-cloud-cpp.override {
       apis = [
+        "oauth2"
         "pubsub"
         "storage"
       ];

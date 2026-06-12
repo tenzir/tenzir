@@ -1,0 +1,21 @@
+---
+error: true
+---
+
+from {
+  metadata: {
+    collectedTimestamp: 2026-01-01T00:00:01,
+    vendorName: "Tenzir",
+    productName: "Tenzir Pipeline",
+    entityType: "USER",
+  },
+  entity: {
+    user: {
+      userid: "alice@example.com",
+      productObjectId: "alice-0001",
+    },
+  },
+}
+to_google_secops _dry_run=true, mode="udm_entity", project="PROJECT", region="us",
+  instance="INSTANCE", log_type="AZURE_AD_CONTEXT", log_text="raw",
+  collection_time=2026-01-01T00:00:01
