@@ -47,10 +47,10 @@ inline auto make_uri_transform(std::string_view argument_name) {
     auto argument_loc = uri.source;
     if (uri.source.end - uri.source.begin == uri.inner.size() + 2) {
       auto slash_offset = detail::narrow_cast<uint32_t>(slash);
-      project_id_loc
-        = location{uri.source.begin, uri.source.begin + slash_offset};
-      argument_loc
-        = location{uri.source.begin + slash_offset + 1, uri.source.end};
+      // Slice with `subloc` so the resulting locations keep the source and
+      // call-site indices of `uri.source` instead of resetting them to 0.
+      project_id_loc = uri.source.subloc(0, slash_offset);
+      argument_loc = uri.source.subloc(slash_offset + 1);
     }
     auto project_id = uri.inner.substr(0, slash);
     res.push_back(make("project_id", project_id, project_id_loc));
