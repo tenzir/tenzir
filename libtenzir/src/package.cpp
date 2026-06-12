@@ -475,7 +475,8 @@ auto parse_parameter_value_type(package_operator_parameter const& param,
   if (not param.type or is_field_path_type(param)) {
     return std::optional<type>{};
   }
-  auto parsed = parse_type_def_with_bad_diagnostics(*param.type, ctx);
+  auto parsed = parse_type_def_with_location_override(*param.type,
+                                                      location::unknown, ctx);
   if (parsed.is_error()) {
     diagnostic::error("invalid type `{}` for parameter `{}` in operator `{}`",
                       *param.type, param.name, op_id)

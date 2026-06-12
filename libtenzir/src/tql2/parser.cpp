@@ -14,7 +14,6 @@
 #include "tenzir/concept/parseable/tenzir/subnet.hpp"
 #include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/narrow.hpp"
 #include "tenzir/source.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -81,16 +80,16 @@ public:
   static auto parse_with(std::span<token> tokens, Source const& source,
                          diagnostic_handler& diag, F&& f)
     -> failure_or<std::invoke_result_t<F, parser&>> {
-    return parse_with(tokens, source.text, diag, source.index,
+    return parse_with(tokens, source.text, diag, source_origin{source.index},
                       std::forward<F>(f));
   }
 
   template <class F>
   static auto parse_with(std::span<token> tokens, std::string_view source,
-                         diagnostic_handler& diag, size_t source_index, F&& f)
+                         diagnostic_handler& diag, source_origin origin, F&& f)
     -> failure_or<std::invoke_result_t<F, parser&>> {
     try {
-      auto self = parser{tokens, source, diag, source_index};
+      auto self = parser{tokens, source, diag, origin};
       auto result = std::invoke(std::forward<F>(f), self);
       if (self.next_ != self.tokens_.size()) {
         self.throw_token("expected EOF");
@@ -1361,26 +1360,29 @@ public:
   }
 
   auto token_location(size_t idx) const -> location {
-    if (source_index_ == suppress_source_index) {
-      return location::unknown;
-    }
-    return force_token_location(idx);
+    auto span = token_span(idx);
+    return make_location(span.begin, span.end);
   }
 
-  auto force_token_location(size_t idx) const -> location {
+  auto token_span(size_t idx) const -> location {
     TENZIR_ASSERT(idx < tokens_.size());
     auto begin = idx == 0 ? 0 : tokens_[idx - 1].end;
     auto end = tokens_[idx].end;
-    // This ignores the suppress mode on purpose — caller decides whether to
-    // use the result for diagnostics.
-    auto si = (source_index_ != suppress_source_index)
-                ? detail::narrow_cast<uint32_t>(source_index_)
-                : uint32_t{0};
-    return {begin, end, si};
+    return {begin, end};
+  }
+
+  auto make_location(uint32_t begin, uint32_t end) const -> location {
+    return origin_.match(
+      [&](SourceId source_id) {
+        return location{begin, end, source_id, 0};
+      },
+      [](location override) {
+        return override;
+      });
   }
 
   auto token_string(size_t idx) const -> std::string_view {
-    auto loc = force_token_location(idx);
+    auto loc = token_span(idx);
     return source_.substr(loc.begin, loc.end - loc.begin);
   }
 
@@ -1534,19 +1536,16 @@ public:
   }
 
   auto next_location() const -> location {
-    if (source_index_ == suppress_source_index) {
-      return location::unknown;
-    }
-    auto loc = location{};
+    auto begin = uint32_t{};
+    auto end = uint32_t{};
     if (next_ < tokens_.size()) {
-      loc.begin = next_ == 0 ? 0 : tokens_[next_ - 1].end;
-      loc.end = tokens_[next_].end;
-    } else {
-      loc.begin = tokens_.back().end;
-      loc.end = tokens_.back().end;
+      begin = next_ == 0 ? 0 : tokens_[next_ - 1].end;
+      end = tokens_[next_].end;
+    } else if (not tokens_.empty()) {
+      begin = tokens_.back().end;
+      end = tokens_.back().end;
     }
-    loc.source_index = source_index_;
-    return loc;
+    return make_location(begin, end);
   }
 
   auto next_description() -> std::string_view {
@@ -1614,17 +1613,10 @@ public:
   }
 
   parser(std::span<token> tokens, std::string_view source,
-         diagnostic_handler& diag, size_t source_index)
-    : tokens_{tokens},
-      source_{source},
-      diag_{diag},
-      source_index_{source_index} {
+         diagnostic_handler& diag, source_origin origin)
+    : tokens_{tokens}, source_{source}, diag_{diag}, origin_{origin} {
     consume_trivia();
   }
-
-  /// Sentinel value for `source_index_` that suppresses location output,
-  /// equivalent to the former `anonymous = true` mode.
-  static constexpr size_t suppress_source_index = 0;
 
   std::span<token> tokens_;
   std::string_view source_;
@@ -1633,7 +1625,7 @@ public:
   size_t last_ = 0;
   bool ignore_newlines_ = false;
   std::vector<token_kind> tries_;
-  size_t source_index_ = 0;
+  source_origin origin_;
 };
 
 auto parse_pipeline(std::span<token> tokens, Source const& source,
@@ -1646,17 +1638,17 @@ auto parse_pipeline(std::span<token> tokens, Source const& source,
 auto parse_pipeline_with_location_mode(std::span<token> tokens,
                                        std::string_view source,
                                        diagnostic_handler& dh,
-                                       size_t source_index)
+                                       source_origin origin)
   -> failure_or<ast::pipeline> {
-  return parser::parse_with(tokens, source, dh, source_index, [](parser& self) {
+  return parser::parse_with(tokens, source, dh, origin, [](parser& self) {
     return self.parse_pipeline();
   });
 }
 
 auto parse_expression_stream(std::span<token> tokens, std::string_view source,
-                             diagnostic_handler& dh, size_t source_index)
+                             diagnostic_handler& dh, source_origin origin)
   -> failure_or<expression_stream> {
-  auto self = parser{tokens, source, dh, source_index};
+  auto self = parser{tokens, source, dh, origin};
   return self.parse_expression_stream();
 }
 
@@ -1672,55 +1664,63 @@ auto parse(Source const& source, session ctx) -> failure_or<ast::pipeline> {
   return parse_pipeline(tokens, source, ctx);
 }
 
-auto parse_pipeline_with_bad_diagnostics(std::string_view source, session ctx)
+auto parse_pipeline_with_location_override(std::string_view source,
+                                           location location_override,
+                                           session ctx)
   -> failure_or<ast::pipeline> {
-  TRY(auto tokens, tokenize(source, ctx));
+  TRY(auto tokens, tokenize(source, location_override, ctx));
   return parse_pipeline_with_location_mode(tokens, source, ctx,
-                                           parser::suppress_source_index);
+                                           location_override);
 }
 
-auto parse_expression_with_bad_diagnostics(std::string_view source, session ctx)
+auto parse_expression_with_location_override(std::string_view source,
+                                             location location_override,
+                                             session ctx)
   -> failure_or<ast::expression> {
-  TRY(auto tokens, tokenize(source, ctx));
-  return parser::parse_with(tokens, source, ctx, parser::suppress_source_index,
+  TRY(auto tokens, tokenize(source, location_override, ctx));
+  return parser::parse_with(tokens, source, ctx, location_override,
                             [](class parser& self) {
                               return self.parse_expression();
                             });
 }
 
-auto parse_type_def_with_bad_diagnostics(std::string_view source, session ctx)
+auto parse_type_def_with_location_override(std::string_view source,
+                                           location location_override,
+                                           session ctx)
   -> failure_or<ast::type_def> {
-  TRY(auto tokens, tokenize(source, ctx));
-  return parser::parse_with(tokens, source, ctx, parser::suppress_source_index,
+  TRY(auto tokens, tokenize(source, location_override, ctx));
+  return parser::parse_with(tokens, source, ctx, location_override,
                             [](class parser& self) {
                               return self.parse_type_def();
                             });
 }
 
-auto parse_expression_stream_with_bad_diagnostics(std::string_view source,
-                                                  session ctx)
+auto parse_expression_stream_with_location_override(std::string_view source,
+                                                    location location_override,
+                                                    session ctx)
   -> failure_or<expression_stream> {
   // Streaming callers may pass partial trailing UTF-8 sequences at chunk
   // boundaries; defer handling to permissive tokenization + parser recovery.
   auto tokens = tokenize_permissive(source);
-  return parse_expression_stream(tokens, source, ctx,
-                                 parser::suppress_source_index);
+  return parse_expression_stream(tokens, source, ctx, location_override);
 }
 
-auto parse_assignment_with_bad_diagnostics(std::string_view source, session ctx)
+auto parse_assignment_with_location_override(std::string_view source,
+                                             location location_override,
+                                             session ctx)
   -> failure_or<ast::assignment> {
-  TRY(auto tokens, tokenize(source, ctx));
-  return parser::parse_with(tokens, source, ctx, parser::suppress_source_index,
+  TRY(auto tokens, tokenize(source, location_override, ctx));
+  return parser::parse_with(tokens, source, ctx, location_override,
                             [](class parser& self) {
                               return self.parse_assignment();
                             });
 }
 
-auto parse_multiple_assignments_with_bad_diagnostics(std::string_view source,
-                                                     session ctx)
+auto parse_multiple_assignments_with_location_override(
+  std::string_view source, location location_override, session ctx)
   -> failure_or<std::vector<ast::assignment>> {
-  TRY(auto tokens, tokenize(source, ctx));
-  return parser::parse_with(tokens, source, ctx, parser::suppress_source_index,
+  TRY(auto tokens, tokenize(source, location_override, ctx));
+  return parser::parse_with(tokens, source, ctx, location_override,
                             [](class parser& self) {
                               return self.parse_multiple_assignments();
                             });

@@ -510,7 +510,8 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
 
 auto parse_and_compile(std::string_view source, session ctx)
   -> failure_or<pipeline> {
-  TRY(auto ast, parse_pipeline_with_bad_diagnostics(source, ctx));
+  TRY(auto ast,
+      parse_pipeline_with_location_override(source, location::unknown, ctx));
   return compile(std::move(ast), ctx);
 }
 
@@ -2304,6 +2305,23 @@ namespace {
 auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
                   caf::actor_system& sys, SourceMap& source_map)
   -> failure_or<bool> {
+  auto source_location = ast.get_location();
+  auto make_zero_width_location
+    = [](location source_location, uint32_t offset) {
+        if (not source_location) {
+          return location::unknown;
+        }
+        return location{
+          offset,
+          offset,
+          source_location.source_index,
+          source_location.callsite_index,
+        };
+      };
+  auto implicit_source_location
+    = make_zero_width_location(source_location, source_location.begin);
+  auto implicit_sink_location
+    = make_zero_width_location(source_location, source_location.end);
   // Transform the AST into IR.
   auto b_ctx = base_ctx{ctx.dh(), ctx.reg()};
   // (void)b_ctx.system();
@@ -2330,9 +2348,10 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   }
   // Type check the instantiated IR and add implicit sources before sinks.
   // During probing, suppress diagnostics for input types that do not match.
-  auto parse_implicit
-    = [&](std::string_view definition) -> failure_or<ir::pipeline> {
-    TRY(auto ast, parse_pipeline_with_bad_diagnostics(definition, ctx));
+  auto parse_implicit = [&](std::string_view definition,
+                            location override) -> failure_or<ir::pipeline> {
+    TRY(auto ast,
+        parse_pipeline_with_location_override(definition, override, ctx));
     auto implicit_root = compile_ctx::make_root(b_ctx);
     TRY(auto pipe, std::move(ast).compile(implicit_root));
     TRY(pipe.substitute(sub_ctx, true));
@@ -2355,7 +2374,8 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     TRY(output, ir.infer_type(tag_v<void>, ctx));
   }
   if (implicit_source) {
-    TRY(auto implicit, parse_implicit(*implicit_source));
+    TRY(auto implicit,
+        parse_implicit(*implicit_source, implicit_source_location));
     ir.lets.insert(ir.lets.begin(), std::move_iterator{implicit.lets.begin()},
                    std::move_iterator{implicit.lets.end()});
     ir.operators.insert(ir.operators.begin(),
@@ -2372,7 +2392,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   if (output->is_not<void>()) {
     auto sink_def = output->is<table_slice>() ? cfg.implicit_events_sink
                                               : cfg.implicit_bytes_sink;
-    TRY(auto implicit, parse_implicit(sink_def));
+    TRY(auto implicit, parse_implicit(sink_def, implicit_sink_location));
     ir.lets.insert(ir.lets.end(), std::move_iterator{implicit.lets.begin()},
                    std::move_iterator{implicit.lets.end()});
     ir.operators.insert(ir.operators.end(),

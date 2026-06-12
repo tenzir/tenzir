@@ -282,8 +282,6 @@ load_symbols2(const detail::stable_set<std::filesystem::path>& module_dirs,
       if (failed) {
         return ec::silent;
       }
-      ast = parse_pipeline_with_bad_diagnostics(*str, sp.as_session());
-      TENZIR_ASSERT(ast);
       for (auto& stmt : ast->body) {
         auto& t = as<ast::type_stmt>(stmt);
         const auto [_, success]

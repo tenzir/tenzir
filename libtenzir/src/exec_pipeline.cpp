@@ -130,7 +130,8 @@ auto format_metric(const operator_metric& metric) -> std::string {
 auto add_implicit(std::string_view what, pipeline pipe, diagnostic_handler& dh,
                   std::string_view source) -> caf::expected<pipeline> {
   auto sp = session_provider::make(dh);
-  auto maybe_ast = parse_pipeline_with_bad_diagnostics(source, sp.as_session());
+  auto maybe_ast = parse_pipeline_with_location_override(
+    source, location::unknown, sp.as_session());
   if (not maybe_ast) {
     return caf::make_error(ec::logic_error,
                            fmt::format("failed to parse implicit {}: `{}`",

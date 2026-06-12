@@ -525,8 +525,9 @@ struct rebuilder_state {
     auto rp = self->make_response_promise<void>();
     auto dh = null_diagnostic_handler{};
     auto provider = session_provider::make(dh);
-    auto rebatch = parse_pipeline_with_bad_diagnostics(
-      fmt::format("batch {}", desired_batch_size), provider.as_session());
+    auto rebatch = parse_pipeline_with_location_override(
+      fmt::format("batch {}", desired_batch_size), location::unknown,
+      provider.as_session());
     TENZIR_ASSERT(rebatch);
     // We sort the selected partitions from old to new so the rebuild transform
     // sees the batches (and events) in the order they arrived. This prevents
