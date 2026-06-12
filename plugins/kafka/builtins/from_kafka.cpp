@@ -30,6 +30,7 @@
 #include <folly/coro/Sleep.h>
 #include <folly/coro/ViaIfAsync.h>
 #include <folly/executors/GlobalExecutor.h>
+#include <librdkafka/rdkafka.h>
 #include <librdkafka/rdkafkacpp.h>
 
 #include <algorithm>
@@ -853,6 +854,24 @@ private:
           source_consumer.consumer_cfg.oauth_background_setup_note
             = fmt::format("sasl_background_callbacks_enable failed: {}",
                           err_guard->str());
+          // Fallback: nothing else services the dedicated SASL queue once
+          // background callbacks are unavailable, so forward it to the
+          // consumer queue that the fetch loop drains continuously. The
+          // consume calls then run the OAUTH refresh callback and the first
+          // token can still be minted.
+          auto* client = source_consumer.consumer->c_ptr();
+          auto* sasl_queue
+            = client != nullptr ? rd_kafka_queue_get_sasl(client) : nullptr;
+          if (sasl_queue != nullptr) {
+            if (auto* consumer_queue = rd_kafka_queue_get_consumer(client)) {
+              rd_kafka_queue_forward(sasl_queue, consumer_queue);
+              rd_kafka_queue_destroy(consumer_queue);
+              source_consumer.consumer_cfg.oauth_background_setup_note
+                += "; servicing OAUTH refresh callbacks via the consumer "
+                   "queue";
+            }
+            rd_kafka_queue_destroy(sasl_queue);
+          }
         }
       } else if (source_consumer.consumer_cfg.oauth_background_setup_note
                    .empty()) {
