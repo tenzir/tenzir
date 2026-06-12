@@ -160,8 +160,8 @@ jobs:
           jq -r '[.editions[] | select(."image-registries" | length > 0) | .package] | unique | .[]' \
             <<< '${{ inputs.config }}' | while read -r package; do
             echo "::group::Build ${package}"
-            nix "${nix_flags[@]}" build ".#${package}.unchecked" --no-link
-            nix "${nix_flags[@]}" build ".#${package}" --no-link
+            nix build "${nix_flags[@]}" ".#${package}.unchecked" --no-link
+            nix build "${nix_flags[@]}" ".#${package}" --no-link
             echo "::endgroup::"
           done
       - name: Push container images
@@ -179,7 +179,7 @@ jobs:
           push() {
             local package="$1" image="$2" dest="$3"
             echo "::notice Pushing ${dest}"
-            nix "${nix_flags[@]}" run \
+            nix run "${nix_flags[@]}" \
               ".#${package}.asImage.${image}.copyTo" -- \
               "docker://${dest}"
           }
