@@ -182,6 +182,7 @@ struct PythonArgs {
   located<secret> code = located{secret{}, location::unknown};
   Option<located<std::string>> file;
   Option<located<std::string>> requirements;
+  location operator_location = location::unknown;
 };
 
 auto process_path_env() -> std::vector<bp::filesystem::path> {
@@ -291,8 +292,8 @@ auto make_subprocess_env(const python_runtime& runtime)
 }
 
 auto prepare_runtime(const config& config, std::string_view requirements,
-                     diagnostic_handler& dh, const caf::settings& system_config)
-  -> failure_or<python_runtime> {
+                     diagnostic_handler& dh, const caf::settings& system_config,
+                     location operator_location) -> failure_or<python_runtime> {
   auto implicit_requirements = std::string{};
   auto bundled_wheels = std::vector<std::string>{};
   const auto python_dir = detail::install_datadir() / "python";
@@ -321,7 +322,9 @@ auto prepare_runtime(const config& config, std::string_view requirements,
   runtime.python_executable
     = std::filesystem::path{bp::search_path("python3", process_path).string()};
   if (runtime.python_executable.empty()) {
-    diagnostic::error("Failed to find python3").emit(dh);
+    diagnostic::error("Failed to find python3")
+      .primary(operator_location)
+      .emit(dh);
     return failure::promise();
   }
   if (not config.create_venvs) {
@@ -340,6 +343,7 @@ auto prepare_runtime(const config& config, std::string_view requirements,
   auto venv = fmt::format("{}/uvenv-XXXXXX", venv_base_dir.string());
   if (mkdtemp(venv.data()) == nullptr) {
     diagnostic::error("{}", detail::describe_errno())
+      .primary(operator_location)
       .note("failed to create a unique directory for the python virtual "
             "environment in {}",
             venv_base_dir)
@@ -363,7 +367,7 @@ auto prepare_runtime(const config& config, std::string_view requirements,
   auto uv_executable = bp::search_path("uv");
 #endif
   if (uv_executable.empty()) {
-    diagnostic::error("Failed to find uv").emit(dh);
+    diagnostic::error("Failed to find uv").primary(operator_location).emit(dh);
     return failure::promise();
   }
   auto venv_invocation = std::vector<std::string>{
@@ -379,6 +383,7 @@ auto prepare_runtime(const config& config, std::string_view requirements,
                  bp::detail::limit_handles_{})
       != 0) {
     diagnostic::error("{}", drain_pipe(venv_err))
+      .primary(operator_location)
       .note("failed to create virtualenv")
       .emit(dh);
     return failure::promise();
@@ -409,6 +414,7 @@ auto prepare_runtime(const config& config, std::string_view requirements,
                    bp::detail::limit_handles_{})
         != 0) {
       diagnostic::error("{}", drain_pipe(install_err))
+        .primary(operator_location)
         .note("{}", error_note)
         .emit(dh);
       return failure::promise();
@@ -870,12 +876,15 @@ public:
       auto requirements
         = args_.requirements ? args_.requirements->inner : std::string{};
       auto config = config_;
+      auto operator_location = args_.operator_location;
       auto system_config = caf::content(ctx.actor_system().config());
       auto runtime = co_await spawn_blocking(
         [config = std::move(config), requirements = std::move(requirements),
          dh = diagnostic_handler_ref{ctx.dh()},
+         operator_location = std::move(operator_location),
          system_config = std::move(system_config)]() mutable {
-          return prepare_runtime(config, requirements, dh, system_config);
+          return prepare_runtime(config, requirements, dh, system_config,
+                                 operator_location);
         });
       if (not runtime) {
         lifecycle_ = Lifecycle::done;
@@ -929,9 +938,12 @@ public:
         }
       }
       if (error.empty()) {
-        diagnostic::error("{}", *startup_failure).emit(ctx.dh());
+        diagnostic::error("{}", *startup_failure)
+          .primary(args_.operator_location)
+          .emit(ctx.dh());
       } else {
         diagnostic::error("{}", error)
+          .primary(args_.operator_location)
           .note("{}", *startup_failure)
           .emit(ctx.dh());
       }
@@ -1011,15 +1023,20 @@ public:
           }
           if (not return_code.exited()) {
             diagnostic::error("{}", error)
+              .primary(args_.operator_location)
               .note("python process {}", return_code.str())
               .emit(ctx.dh());
           } else {
-            diagnostic::error("{}", error).emit(ctx.dh());
+            diagnostic::error("{}", error)
+              .primary(args_.operator_location)
+              .emit(ctx.dh());
           }
         }
       }
     } catch (const std::exception& ex) {
-      diagnostic::error("{}", ex.what()).emit(ctx.dh());
+      diagnostic::error("{}", ex.what())
+        .primary(args_.operator_location)
+        .emit(ctx.dh());
     }
     lifecycle_ = Lifecycle::done;
     cleanup_venv();
@@ -1047,6 +1064,8 @@ private:
       auto code_chunk = chunk::make_empty();
       if (auto err = read(args_.file->inner, code_chunk); err.valid()) {
         diagnostic::error(err)
+          .primary(args_.file->source)
+          .primary(args_.operator_location)
           .note("failed to read code from file")
           .emit(ctx.dh());
         co_return None{};
@@ -1097,7 +1116,7 @@ private:
     if (error.empty()) {
       error = std::string{fallback};
     }
-    diagnostic::error("{}", error).emit(dh);
+    diagnostic::error("{}", error).primary(args_.operator_location).emit(dh);
     cleanup_venv();
   }
 
@@ -1161,12 +1180,14 @@ private:
       stream, input.schema().to_arrow_schema(), ipc_write_opts));
     if (not writer->WriteRecordBatch(*batch).ok()) {
       diagnostic::error("failed to convert input batch to Arrow format")
+        .primary(args_.operator_location)
         .note("failed to write in conversion from input batch to Arrow format")
         .emit(dh);
       return failure::promise();
     }
     if (auto status = writer->Close(); not status.ok()) {
       diagnostic::error("{}", status.message())
+        .primary(args_.operator_location)
         .note("failed to close writer in conversion from input batch to Arrow "
               "format")
         .emit(dh);
@@ -1175,6 +1196,7 @@ private:
     auto result = stream->Finish();
     if (not result.status().ok()) {
       diagnostic::error("{}", result.status().message())
+        .primary(args_.operator_location)
         .note("failed to flush in conversion from input batch to Arrow format")
         .emit(dh);
       return failure::promise();
@@ -1275,36 +1297,24 @@ public:
     auto code = d.optional_positional("code", &PythonArgs::code);
     auto file = d.named("file", &PythonArgs::file);
     d.named("requirements", &PythonArgs::requirements);
+    d.operator_location(&PythonArgs::operator_location);
     d.spawner([config = this->config, code, file]<class Input>(DescribeCtx& ctx)
                 -> failure_or<Option<SpawnWith<PythonArgs, Input>>> {
       auto validate = [&](DescribeCtx& ctx) -> failure_or<void> {
-        auto has_code = ctx.get(code).has_value();
-        auto has_file = ctx.get(file).has_value();
-        if (has_code and has_file) {
-          if (auto code_loc = ctx.get_location(code)) {
-            auto diag = diagnostic::error("cannot have `file` argument "
-                                          "together with inline code")
-                          .primary(*code_loc, "");
-            if (auto file_loc = ctx.get_location(file)) {
-              std::move(diag).primary(*file_loc, "").emit(ctx);
-            } else {
-              std::move(diag).emit(ctx);
-            }
-          } else if (auto file_loc = ctx.get_location(file)) {
-            diagnostic::error(
-              "cannot have `file` argument together with inline code")
-              .primary(*file_loc, "")
-              .emit(ctx);
-          } else {
-            diagnostic::error(
-              "cannot have `file` argument together with inline code")
-              .emit(ctx);
-          }
+        auto code_loc = ctx.get_location(code);
+        auto file_loc = ctx.get_location(file);
+        if (code_loc and file_loc) {
+          diagnostic::error(
+            "cannot have `file` argument together with inline code")
+            .primary(*code_loc)
+            .primary(*file_loc)
+            .emit(ctx);
           return failure::promise();
         }
-        if (not has_code and not has_file) {
+        if (not code_loc and not file_loc) {
           diagnostic::error(
             "must have either the `file` argument or inline code")
+            .primary(ctx.operator_location())
             .emit(ctx);
           return failure::promise();
         }

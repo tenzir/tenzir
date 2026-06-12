@@ -1,0 +1,8 @@
+every 200ms {
+  from {}
+}
+head 3
+to_amazon_kinesis env("LOCALSTACK_KINESIS_STREAM_OUTPUT"),
+                  message="timed",
+                  partition_key="timer",
+                  batch_timeout=50ms

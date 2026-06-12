@@ -1,6 +1,11 @@
-suite: basic
+suite:
+  name: basic
+  mode: sequential
 fixtures:
   - google_secops
 timeout: 60
 skip:
-  on: fixture-unavailable
+  on:
+    - fixture-unavailable
+    - capability-unavailable
+  reason: requires the to_google_secops plugin

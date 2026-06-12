@@ -1,0 +1,7 @@
+error: invalid start position: `oldest`
+ --> tests/operators/from_amazon_kinesis/validation/error_invalid_start.tql:5:37
+  |
+5 | from_amazon_kinesis "stream", start="oldest"
+  |                                     ^^^^^^^^ 
+  |
+  = hint: use `latest`, `trim_horizon`, or a timestamp

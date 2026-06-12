@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {metadata: {eventType: "NETWORK_DNS"}}
+to_google_secops _dry_run=true, mode="udm_event", project="PROJECT", region="us",
+  instance="INSTANCE", log_type="CUSTOM_DNS", forwarder="test-forwarder",
+  hint="test-hint", source_filename="test-source.log"

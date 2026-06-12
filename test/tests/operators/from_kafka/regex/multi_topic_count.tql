@@ -1,0 +1,11 @@
+// Consume all seeded messages from two topics matched by one regex. Each
+// topic holds two messages, so four results prove both topics matched, and
+// the overlapping partition ids exercise topic-keyed offset commits.
+from_kafka "^regex_topic_.*",
+           count=4,
+           offset="beginning",
+           options={
+             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+             "group.id": "tenzir-test-from-kafka-regex-multi"
+           }
+sort message

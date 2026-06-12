@@ -1,0 +1,11 @@
+from_amazon_kinesis env("LOCALSTACK_KINESIS_STREAM_INPUT"),
+                    start="trim_horizon",
+                    count=3,
+                    exit=true,
+                    aws_iam={
+                      access_key_id: "test",
+                      secret_access_key: "test",
+                      region: "us-east-1"
+                    }
+this = string(message).parse_json()
+sort id

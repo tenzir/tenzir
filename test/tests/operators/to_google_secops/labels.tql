@@ -1,0 +1,6 @@
+from {text: "CUSTOM_DNS_LOG"}
+to_google_secops _dry_run=true, mode="raw_log", project="PROJECT", region="us",
+  instance="INSTANCE", log_type="CUSTOM_DNS", log_text=text,
+  log_entry_time=2026-01-01T00:00:00,
+  collection_time=2026-01-01T00:00:01,
+  labels={env: "prod", tenant: {value: "acme", rbac_enabled: true}}

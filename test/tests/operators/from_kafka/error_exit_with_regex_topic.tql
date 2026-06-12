@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_kafka "^topic-.*",
+           exit=true

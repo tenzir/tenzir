@@ -1,0 +1,6 @@
+error: `batch_timeout` must be positive
+ --> tests/operators/to_amazon_kinesis/validation/error_batch_timeout_zero.tql:5:43
+  |
+5 | to_amazon_kinesis "stream", batch_timeout=0s
+  |                                           ^^ 
+  |
