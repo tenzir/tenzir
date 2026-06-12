@@ -1791,9 +1791,7 @@ void warn_deprecated_payload(const operator_factory_invocation& inv,
     match(
       arg,
       [&](const ast::assignment& arg) {
-        auto selector = ast::selector::try_from(arg.left);
-        const auto* name
-          = selector ? try_as<ast::field_path>(&*selector) : nullptr;
+        const auto* name = try_as<ast::field_path>(arg.left);
         if (name and name->path().size() == 1
             and name->path()[0].id.name == "payload") {
           diagnostic::warning(

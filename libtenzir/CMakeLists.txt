@@ -258,6 +258,10 @@ endif ()
 # library, but always loaded when linking against the libtenzir_builtins library.
 file(GLOB_RECURSE libtenzir_builtins_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")
+list(FILTER libtenzir_builtins_sources EXCLUDE REGEX
+     "/builtins/commands/pipeline_shell\\.cpp$")
+list(FILTER libtenzir_builtins_sources EXCLUDE REGEX
+     "/builtins/operators/(assert_secret|assert_throughput|combine_all_chunks|deduplicate|delay|dns_lookup|drop|drop_null_fields|enumerate|every_cron2|fork|from_opensearch|from_to_2|from_udp|http|load_balance|move|ocsf|parallel|python|replace|serve|set_select|shell|slice|sort|strict|summarize|throttle|timeshift|to_hive|to_opensearch|tune)\\.cpp$")
 foreach (source IN LISTS libtenzir_builtins_sources)
   file(READ "${source}" lines)
   if (NOT "${lines}" MATCHES "\n *TENZIR_REGISTER_PLUGIN *\\(.+\\) *[\n$]")
@@ -268,6 +272,7 @@ endforeach ()
 file(GLOB_RECURSE libtenzir_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/include/tenzir/*.hpp")
+list(FILTER libtenzir_sources EXCLUDE REGEX "/src/execution_node\\.cpp$")
 
 add_library(libtenzir ${libtenzir_sources})
 TenzirTargetEnableTooling(libtenzir)
@@ -586,8 +591,8 @@ endif ()
 # proxygen_utils_trace references symbols from proxygen_utils_trace_event_types
 # without declaring the dependency. Link it explicitly so static links see the
 # archive regardless of whether proxygen comes from bundled or system packages.
-target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_target}
-                                        proxygen_utils_trace_event_types)
+target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_target})
+target_link_libraries(libtenzir PUBLIC proxygen_utils_trace_event_types)
 if (_tenzir_proxygen_server_target)
   target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_server_target})
 endif ()

@@ -27,7 +27,7 @@
   proxygen = {
     owner = "facebook";
     repo = "proxygen";
-    rev = "8d14f87d173ef66a30d35a8062b16b3c619bc346";
-    hash = "sha256-1UBh5AL53QJQTzSXfF1cWJjT8bYv4rTb2liqtoxctKo=";
+    rev = "2695467cd138cee86fc93f428689c3f8da608372";
+    hash = "sha256-wB+EEOYMJ2WgUvRTn2dzjCrQAJpH4iRjv/ZfDeGPHAA=";
   };
 }

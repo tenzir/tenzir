@@ -37,7 +37,7 @@ inline auto make_uri_transform(std::string_view argument_name) {
       });
       TENZIR_ASSERT(sel);
       return {
-        std::move(*sel).unwrap(),
+        std::move(*sel),
         loc,
         ast::constant{std::move(text), loc},
       };

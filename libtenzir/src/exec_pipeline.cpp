@@ -14,7 +14,6 @@
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/session.hpp>
-#include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/exec.hpp>
 #include <tenzir/tql2/parser.hpp>
 #include <tenzir/uuid.hpp>
@@ -325,22 +324,8 @@ auto exec_pipeline(pipeline pipe, std::string definition,
 auto exec_pipeline(std::string content, diagnostic_handler& dh,
                    const exec_config& cfg, caf::actor_system& sys)
   -> caf::expected<void> {
-  if (not cfg.legacy) {
-    auto success = exec2(std::move(content), dh, cfg, sys);
-    return success ? caf::expected<void>{} : ec::silent;
-  }
-  auto parsed = tql::parse(content, dh);
-  if (not parsed) {
-    return ec::silent;
-  }
-  if (cfg.dump_ast) {
-    for (auto& op : *parsed) {
-      fmt::print("{:#?}\n", op);
-    }
-    return {};
-  }
-  auto pipe = tql::to_pipeline(std::move(*parsed));
-  return exec_pipeline(std::move(pipe), std::move(content), dh, cfg, sys);
+  auto success = exec2(std::move(content), dh, cfg, sys);
+  return success ? caf::expected<void>{} : ec::silent;
 }
 
 } // namespace tenzir

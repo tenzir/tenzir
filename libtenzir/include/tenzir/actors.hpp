@@ -337,18 +337,6 @@ using metrics_receiver_actor = typed_actor_fwd<
   // Receive the standard execution node metrics.
   auto(operator_metric)->caf::result<void>>::unwrap;
 
-/// The interface of the PIPELINE SHELL actor.
-struct pipeline_shell_actor_traits {
-  using signatures = caf::type_list<
-    // Spawn a set of execution nodes for a given pipeline. Does not start the
-    // execution nodes.
-    auto(atom::spawn, operator_box, operator_type, std::string definition,
-         receiver_actor<diagnostic>, metrics_receiver_actor, int32_t index,
-         bool is_hidden, uuid run_id, std::string pipeline_id)
-      ->caf::result<exec_node_actor>>;
-};
-using pipeline_shell_actor = caf::typed_actor<pipeline_shell_actor_traits>;
-
 /// Configuration for export operations.
 struct export_mode {
   bool retro = true;
@@ -397,15 +385,8 @@ struct node_actor_traits {
     auto(atom::get, atom::version)->caf::result<record>,
     // Set the listening endpoint of the tenzir-node.
     auto(atom::set, Endpoint)->caf::result<void>,
-    // Spawn a pipeline_shell subprocess.
-    auto(atom::spawn, atom::shell)->caf::result<pipeline_shell_actor>,
     // Spawn an export bridge for querying stored data.
-    auto(atom::spawn, expression, export_mode)->caf::result<export_bridge_actor>,
-    // Callback from subprocess when shell actor is ready.
-    auto(atom::connect, atom::shell, uint32_t child_id, pipeline_shell_actor)
-      ->caf::result<void>>
-    // Allow spawning exec nodes inside of the node process.
-    ::append_from<pipeline_shell_actor_traits::signatures>
+    auto(atom::spawn, expression, export_mode)->caf::result<export_bridge_actor>>
     // Enable secret resolution through the node actor. It will first check the
     // node config and then dispatch to the platform actor if necessary/possible.
     ::append_from<secret_store_actor_traits::signatures>;
@@ -478,7 +459,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::node_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_creation_listener_actor))
-  TENZIR_ADD_TYPE_ID((tenzir::pipeline_shell_actor))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::atom::done>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::diagnostic>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::table_slice>))

@@ -18,15 +18,13 @@
 #include <caf/actor.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
-#include <caf/typed_response_promise.hpp>
 
 #include <chrono>
-#include <deque>
 #include <filesystem>
+#include <set>
 #include <string>
 #include <unordered_map>
-
-#include <reproc++/reproc.hpp>
+#include <vector>
 
 namespace tenzir {
 
@@ -50,18 +48,6 @@ struct node_state {
 
   /// A pointer to the NODE actor handle.
   node_actor::pointer self = {};
-
-  // -- member functions -------------------------------------------------------
-
-  auto create_pipeline_shell() -> void;
-
-  auto get_pipeline_shell() -> caf::result<pipeline_shell_actor>;
-
-  auto connect_pipeline_shell(uint32_t child_id, pipeline_shell_actor handle)
-    -> caf::result<void>;
-
-  auto monitor_shell_for_pipe(caf::strong_actor_ptr client,
-                              reproc::process proc) -> void;
 
   // -- member types -----------------------------------------------------------
 
@@ -95,40 +81,11 @@ struct node_state {
 
   /// Listening endpoint.
   Option<tenzir::Endpoint> endpoint;
-
-  /// Weak handles to remotely spawned and monitored exec ndoes for cleanup on
-  /// node shutdown.
-  std::unordered_set<caf::actor_addr> monitored_exec_nodes;
-
-  /// Whether to create pipeline shells.
-  bool pipeline_subprocesses = false;
-
-  /// Response promises for pending subprocess creations.
-  std::deque<caf::typed_response_promise<pipeline_shell_actor>>
-    shell_response_promises;
-
-  /// Initializing pipeline shell child processes.
-  std::unordered_map<uint32_t, reproc::process> creating_pipeline_shells;
-
-  /// Counter for creating child processes. Used to identify created processes
-  /// in the connection handler.
-  uint32_t child_id = 0;
-
-  /// Pool of pre-created pipeline shell child processes.
-  struct pipeline_subprocess {
-    reproc::process process;
-    pipeline_shell_actor handle;
-  };
-  std::deque<pipeline_subprocess> created_pipeline_shells;
-
-  /// Pipeline shells that are currently allocated to a pipeline_executor.
-  std::unordered_map<caf::actor_addr, reproc::process> owned_shells;
 };
 
 /// Spawns a node.
 /// @param self The actor handle
 /// @param dir The directory where to store persistent state.
-/// @param pipeline_subprocesses Whether to enable pipeline subprocesses.
 node_actor::behavior_type
 node(node_actor::stateful_pointer<node_state> self, std::filesystem::path dir,
      bool pipeline_subprocesses);

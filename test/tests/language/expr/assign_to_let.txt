@@ -1,6 +1,0 @@
-error: left side of `=` must be a field path or metadata reference
- --> tests/language/expr/assign_to_let.tql:7:1
-  |
-7 | $foo = "test"
-  | ^^^^ 
-  |

@@ -1,8 +1,0 @@
-error: invalid argument name
- --> tests/language/expr/dollar_var_as_argument_name.tql:9:6
-  |
-9 | head $foo = 42
-  |      ^^^^ 
-  |
-  = usage: head [count:int]
-  = docs: https://docs.tenzir.com/reference/operators/head

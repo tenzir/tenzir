@@ -1,29 +1,60 @@
 [
   assignment {
-    left: root_field {
-      id: `activity_name` @ 0..13,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `activity_name` @ 0..13,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `activity_name` @ 0..13,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 14..15,
     right: constant string "Launch" @ 16..24
   },
   assignment {
-    left: root_field {
-      id: `activity_id` @ 25..36,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `activity_id` @ 25..36,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `activity_id` @ 25..36,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 37..38,
     right: constant int64 1 @ 39..40
   },
   assignment {
-    left: field_access {
-      left: root_field {
-        id: `actor` @ 41..46,
-        has_question_mark: false
+    left: field_path {
+      expr: field_access {
+        left: root_field {
+          id: `actor` @ 41..46,
+          has_question_mark: false
+        },
+        dot: 46..47,
+        has_question_mark: false,
+        name: `process` @ 47..54
       },
-      dot: 46..47,
-      has_question_mark: false,
-      name: `process` @ 47..54
+      has_this: false,
+      path: [
+        {
+          id: `actor` @ 41..46,
+          has_question_mark: false
+        },
+        {
+          id: `process` @ 47..54,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 55..56,
     right: record {
@@ -187,14 +218,27 @@
     ]
   },
   assignment {
-    left: field_access {
-      left: root_field {
-        id: `actor` @ 365..370,
-        has_question_mark: false
+    left: field_path {
+      expr: field_access {
+        left: root_field {
+          id: `actor` @ 365..370,
+          has_question_mark: false
+        },
+        dot: 370..371,
+        has_question_mark: false,
+        name: `user` @ 371..375
       },
-      dot: 370..371,
-      has_question_mark: false,
-      name: `user` @ 371..375
+      has_this: false,
+      path: [
+        {
+          id: `actor` @ 365..370,
+          has_question_mark: false
+        },
+        {
+          id: `user` @ 371..375,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 376..377,
     right: record {
@@ -316,17 +360,35 @@
     ]
   },
   assignment {
-    left: root_field {
-      id: `category_name` @ 574..587,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `category_name` @ 574..587,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `category_name` @ 574..587,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 588..589,
     right: constant string "System Activity" @ 590..607
   },
   assignment {
-    left: root_field {
-      id: `category_uid` @ 608..620,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `category_uid` @ 608..620,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `category_uid` @ 608..620,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 621..622,
     right: function_call {
@@ -348,17 +410,35 @@
     }
   },
   assignment {
-    left: root_field {
-      id: `class_name` @ 657..667,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `class_name` @ 657..667,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `class_name` @ 657..667,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 668..669,
     right: constant string "Process Activity" @ 670..688
   },
   assignment {
-    left: root_field {
-      id: `class_uid` @ 689..698,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `class_uid` @ 689..698,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `class_uid` @ 689..698,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 699..700,
     right: function_call {
@@ -380,9 +460,18 @@
     }
   },
   assignment {
-    left: root_field {
-      id: `device` @ 729..735,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `device` @ 729..735,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `device` @ 729..735,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 736..737,
     right: record {
@@ -453,17 +542,35 @@
     ]
   },
   assignment {
-    left: root_field {
-      id: `message` @ 906..913,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `message` @ 906..913,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `message` @ 906..913,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 914..915,
     right: constant string "A new process has been created." @ 916..949
   },
   assignment {
-    left: root_field {
-      id: `metadata` @ 950..958,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `metadata` @ 950..958,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `metadata` @ 950..958,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 959..960,
     right: record {
@@ -580,9 +687,18 @@
     ]
   },
   assignment {
-    left: root_field {
-      id: `process` @ 1238..1245,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `process` @ 1238..1245,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `process` @ 1238..1245,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 1246..1247,
     right: record {
@@ -787,41 +903,86 @@
     ]
   },
   assignment {
-    left: root_field {
-      id: `severity` @ 1610..1618,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `severity` @ 1610..1618,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `severity` @ 1610..1618,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 1619..1620,
     right: constant string "Informational" @ 1621..1636
   },
   assignment {
-    left: root_field {
-      id: `severity_id` @ 1637..1648,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `severity_id` @ 1637..1648,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `severity_id` @ 1637..1648,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 1649..1650,
     right: constant int64 1 @ 1651..1652
   },
   assignment {
-    left: root_field {
-      id: `status` @ 1653..1659,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `status` @ 1653..1659,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `status` @ 1653..1659,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 1660..1661,
     right: constant string "Success" @ 1662..1671
   },
   assignment {
-    left: root_field {
-      id: `status_id` @ 1672..1681,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `status_id` @ 1672..1681,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `status_id` @ 1672..1681,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 1682..1683,
     right: constant int64 1 @ 1684..1685
   },
   assignment {
-    left: root_field {
-      id: `time` @ 1686..1690,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `time` @ 1686..1690,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `time` @ 1686..1690,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 1691..1692,
     right: function_call {
@@ -875,25 +1036,52 @@
     }
   },
   assignment {
-    left: root_field {
-      id: `type_name` @ 1748..1757,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `type_name` @ 1748..1757,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `type_name` @ 1748..1757,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 1758..1759,
     right: constant string "Process Activity: Launch" @ 1760..1786
   },
   assignment {
-    left: root_field {
-      id: `type_uid` @ 1787..1795,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `type_uid` @ 1787..1795,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `type_uid` @ 1787..1795,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 1796..1797,
     right: constant int64 100701 @ 1798..1804
   },
   assignment {
-    left: root_field {
-      id: `unmapped` @ 1805..1813,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `unmapped` @ 1805..1813,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `unmapped` @ 1805..1813,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 1814..1815,
     right: root_field {

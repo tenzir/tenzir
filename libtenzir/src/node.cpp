@@ -20,12 +20,10 @@
 #include "tenzir/detail/actor_metrics.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/env.hpp"
-#include "tenzir/detail/process.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/disk_monitor.hpp"
 #include "tenzir/ecc.hpp"
-#include "tenzir/execution_node.hpp"
 #include "tenzir/export_bridge.hpp"
 #include "tenzir/importer.hpp"
 #include "tenzir/index.hpp"
@@ -40,7 +38,6 @@
 #include "tenzir/version.hpp"
 
 #include <boost/asio/execution_context.hpp>
-#include <boost/process/v2/environment.hpp>
 #include <caf/actor_from_state.hpp>
 #include <caf/actor_registry.hpp>
 #include <caf/actor_system_config.hpp>
@@ -350,95 +347,6 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
 
 } // namespace
 
-auto node_state::create_pipeline_shell() -> void {
-  TENZIR_ASSERT(endpoint);
-  static const auto tenzir_ctl
-    = detail::objectpath()->parent_path().parent_path() / "bin" / "tenzir-ctl";
-  auto proc = reproc::process{};
-  auto options = reproc::options{};
-  options.redirect.err.type = reproc::redirect::parent;
-  auto proc_stop = reproc::stop_actions{
-    .first = {.action = reproc::stop::terminate,
-              .timeout = reproc::milliseconds(10),},
-    .second = {.action = reproc::stop::kill,
-               .timeout = reproc::milliseconds(0),},
-    .third = {},
-  };
-  options.stop = proc_stop;
-  auto console_verbosity
-    = caf::get_or<std::string>(self->config().content,
-                               "tenzir.console-verbosity",
-                               tenzir::defaults::logger::console_verbosity);
-  auto args = std::vector<std::string>{
-    tenzir_ctl,
-    fmt::format("--console-verbosity={}", console_verbosity),
-    "pipeline_shell",
-    fmt::to_string(*endpoint),
-    fmt::to_string(child_id),
-  };
-  if (auto err = proc.start(args, options)) {
-    TENZIR_WARN("Failed to start child process: {}", err);
-    return;
-  }
-  creating_pipeline_shells.emplace(child_id, std::move(proc));
-  child_id++;
-}
-
-auto node_state::monitor_shell_for_pipe(caf::strong_actor_ptr client,
-                                        reproc::process proc) -> void {
-  auto addr = client->address();
-  owned_shells.emplace(addr, std::move(proc));
-  self->monitor(client, [this, addr](const caf::error&) {
-    auto& ps = owned_shells;
-    const auto it = ps.find(addr);
-    if (it == ps.end()) {
-      return;
-    }
-    TENZIR_ASSERT(it != ps.end(),
-                  "child terminator got down from unknown client");
-    if (auto err = it->second.terminate()) {
-      TENZIR_WARN("failed to terminate subprocess: {}", err);
-    }
-    ps.erase(it);
-  });
-}
-
-auto node_state::connect_pipeline_shell(uint32_t child_id,
-                                        pipeline_shell_actor handle)
-  -> caf::result<void> {
-  auto it = creating_pipeline_shells.find(child_id);
-  TENZIR_ASSERT(it != creating_pipeline_shells.end());
-  auto proc = std::move(it->second);
-  creating_pipeline_shells.erase(it);
-  if (shell_response_promises.empty()) {
-    created_pipeline_shells.emplace_back(std::move(proc), std::move(handle));
-    return {};
-  }
-  auto promise = shell_response_promises.front();
-  shell_response_promises.pop_front();
-  auto client = promise.source();
-  promise.deliver(std::move(handle));
-  monitor_shell_for_pipe(client, std::move(proc));
-  return {};
-}
-
-auto node_state::get_pipeline_shell() -> caf::result<pipeline_shell_actor> {
-  self->schedule_fn([this]() {
-    create_pipeline_shell();
-  });
-  if (not created_pipeline_shells.empty()) {
-    auto [proc, shell] = std::move(created_pipeline_shells.front());
-    created_pipeline_shells.pop_front();
-    auto client = self->current_sender();
-    monitor_shell_for_pipe(client, std::move(proc));
-    return shell;
-  }
-  // empty
-  auto rp = self->make_response_promise<pipeline_shell_actor>();
-  shell_response_promises.push_back(rp);
-  return rp;
-}
-
 auto node_state::get_endpoint_handler(const http_request_description& desc)
   -> const handler_and_endpoint& {
   static const auto empty_response = handler_and_endpoint{};
@@ -465,11 +373,9 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
 }
 
 auto node(node_actor::stateful_pointer<node_state> self,
-          std::filesystem::path dir, bool pipeline_subprocesses)
-  -> node_actor::behavior_type {
+          std::filesystem::path dir, bool) -> node_actor::behavior_type {
   self->state().self = self;
   self->state().dir = std::move(dir);
-  self->state().pipeline_subprocesses = pipeline_subprocesses;
   self->set_exception_handler([=](std::exception_ptr& ptr) -> caf::error {
     try {
       std::rethrow_exception(ptr);
@@ -649,46 +555,6 @@ auto node(node_actor::stateful_pointer<node_state> self,
     [self](atom::get, atom::version) {
       return retrieve_versions(check(to<record>(content(self->config()))));
     },
-    [self](atom::spawn, operator_box& box, operator_type input_type,
-           std::string definition,
-           const receiver_actor<diagnostic>& diagnostic_handler,
-           const metrics_receiver_actor& metrics_receiver, int index,
-           bool is_hidden, uuid run_id,
-           std::string pipeline_id) -> caf::result<exec_node_actor> {
-      auto op = std::move(box).unwrap();
-      if (op->location() == operator_location::local) {
-        return caf::make_error(ec::logic_error,
-                               fmt::format("{} cannot spawn local operator "
-                                           "'{}' in remote node",
-                                           *self, op->name()));
-      }
-      auto description = fmt::format("{:?}", op);
-      auto spawn_result
-        = spawn_exec_node(self, std::move(op), input_type,
-                          std::move(definition), static_cast<node_actor>(self),
-                          diagnostic_handler, metrics_receiver, index, false,
-                          is_hidden, run_id, std::move(pipeline_id));
-      if (not spawn_result) {
-        return caf::make_error(ec::logic_error,
-                               fmt::format("{} failed to spawn execution node "
-                                           "for operator '{}': {}",
-                                           *self, description,
-                                           spawn_result.error()));
-      }
-      self->monitor(
-        spawn_result->first,
-        [self, source = spawn_result->first->address()](const caf::error&) {
-          if (self->state().tearing_down) {
-            return;
-          }
-          const auto num_erased
-            = self->state().monitored_exec_nodes.erase(source);
-          TENZIR_ASSERT(num_erased == 1);
-        });
-      self->state().monitored_exec_nodes.insert(spawn_result->first->address());
-      // TODO: Check output type.
-      return spawn_result->first;
-    },
     [self](const caf::exit_msg& msg) {
       const auto source_name = [&]() -> std::string {
         const auto component = self->state().component_names.find(msg.source);
@@ -719,20 +585,6 @@ auto node(node_actor::stateful_pointer<node_state> self,
                       source_name)
                 .to_error();
       self->state().tearing_down = true;
-      for (auto&& exec_node :
-           std::exchange(self->state().monitored_exec_nodes, {})) {
-        if (auto handle = caf::actor_cast<caf::actor>(exec_node)) {
-          self->send_exit(handle, msg.reason);
-        }
-      }
-      // Tell pipeline executors that are waiting for pipeline shells that we
-      // are shutting down. This should not be treated as an error in the
-      // pipeline itself.
-      auto& ps = self->state().shell_response_promises;
-      for (auto& p : ps) {
-        p.deliver(caf::make_error(ec::silent));
-      }
-      ps.clear();
       auto& registry = self->state().registry;
       // Core components are terminated in a second stage, we remove them from
       // the registry upfront and deal with them later.
@@ -792,21 +644,6 @@ auto node(node_actor::stateful_pointer<node_state> self,
     [self](atom::set, Endpoint endpoint) {
       TENZIR_ASSERT(endpoint.port != 0);
       self->state().endpoint = std::move(endpoint);
-      if (self->state().pipeline_subprocesses) {
-        for (int i = 0; i < 5; i++) {
-          self->state().create_pipeline_shell();
-        }
-      }
-    },
-    [self](atom::spawn, atom::shell) -> caf::result<pipeline_shell_actor> {
-      if (not self->state().pipeline_subprocesses) {
-        return pipeline_shell_actor{};
-      }
-      if (not self->state().endpoint) {
-        return self->mail(atom::spawn_v, atom::shell_v)
-          .delegate(static_cast<node_actor>(self));
-      }
-      return self->state().get_pipeline_shell();
     },
     [self](atom::spawn, expression expr,
            export_mode mode) -> caf::result<export_bridge_actor> {
@@ -818,14 +655,6 @@ auto node(node_actor::stateful_pointer<node_state> self,
       return spawn_export_bridge(self->system(), std::move(expr), mode,
                                  std::move(filesystem),
                                  std::make_unique<null_diagnostic_handler>());
-    },
-    [self](atom::connect, atom::shell, uint32_t child_id,
-           pipeline_shell_actor handle) -> caf::result<void> {
-      if (self->state().tearing_down) {
-        // Just ignore.
-        return ec::no_error;
-      }
-      return self->state().connect_pipeline_shell(child_id, std::move(handle));
     },
     [self](atom::resolve, std::string name,
            std::string public_key) -> caf::result<secret_resolution_result> {
