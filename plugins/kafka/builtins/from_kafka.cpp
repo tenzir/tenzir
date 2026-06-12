@@ -11,6 +11,7 @@
 #include "kafka/librdkafka_utils.hpp"
 #include "kafka/message_builder.hpp"
 #include "kafka/operator_args.hpp"
+#include "tenzir/async/blocking_executor.hpp"
 #include "tenzir/async/notify.hpp"
 #include "tenzir/aws_iam.hpp"
 #include "tenzir/detail/enum.hpp"
@@ -456,6 +457,7 @@ public:
       worker_batch_size_{other.worker_batch_size_},
       emitted_messages_{other.emitted_messages_},
       pending_commit_offsets_{std::move(other.pending_commit_offsets_)},
+      consumer_closed_{other.consumer_closed_},
       assigned_partitions_{std::move(other.assigned_partitions_)},
       eof_partitions_{std::move(other.eof_partitions_)},
       perf_enabled_{other.perf_enabled_},
@@ -601,6 +603,7 @@ public:
       done_ = true;
       emit_perf_summary("end_of_stream");
       request_pipeline_stop();
+      co_await close_source_consumer(ctx.dh());
       co_return;
     }
     TENZIR_ASSERT(task_result.frame);
@@ -662,7 +665,7 @@ public:
   }
 
   auto commit_pending_offsets(diagnostic_handler* dh = nullptr) -> Task<void> {
-    if (pending_commit_offsets_.empty()) {
+    if (consumer_closed_ or pending_commit_offsets_.empty()) {
       co_return;
     }
     auto commit_keys = std::vector<TopicPartition>{};
@@ -697,9 +700,9 @@ public:
         co_await folly::coro::sleep(offset_commit_retry_delay);
       }
       if (err == RdKafka::ERR_NO_ERROR) {
-        auto const& committed = runtime_.sources[0]
-                                  .source_consumer->consumer_cfg
-                                  .committed_partitions;
+        auto const& committed
+          = runtime_.sources[0]
+              .source_consumer->consumer_cfg.committed_partitions;
         for (auto const& partition : commit_keys) {
           pending_commit_offsets_.erase(partition);
           if (committed) {
@@ -721,6 +724,34 @@ public:
                       partitions, RdKafka::err2str(err));
         }
       }
+    }
+  }
+
+  /// Leaves the consumer group so the coordinator can reassign partitions
+  /// without waiting for the session timeout.
+  auto close_source_consumer(diagnostic_handler& dh) -> Task<void> {
+    if (consumer_closed_ or runtime_.sources.empty()
+        or not runtime_.sources[0].source_consumer) {
+      co_return;
+    }
+    if (runtime_.live_fetchers.load() > 0
+        or runtime_.live_builders.load() > 0) {
+      // A cancelled run can reach end-of-stream while loops still wind down;
+      // closing would race their consume calls, so leave the group via the
+      // session timeout instead.
+      co_return;
+    }
+    // Flush consumed progress first; committing is impossible after close.
+    co_await commit_pending_offsets(&dh);
+    consumer_closed_ = true;
+    auto* consumer = &*runtime_.sources[0].source_consumer->consumer;
+    auto const err = co_await spawn_blocking([consumer] {
+      return consumer->close();
+    });
+    if (err != RdKafka::ERR_NO_ERROR) {
+      diagnostic::warning("from_kafka: failed to close consumer: {}",
+                          RdKafka::err2str(err))
+        .emit(dh);
     }
   }
 
@@ -1724,6 +1755,8 @@ private:
   size_t emitted_messages_ = 0;
   // Invariant: committed offsets are stored as "next offset to consume".
   TopicPartitionOffsets pending_commit_offsets_;
+  // Set once the group membership was closed; commits are impossible after.
+  bool consumer_closed_ = false;
   // Snapshot of the subscription's current assignment; only maintained for
   // `exit=true`, refreshed lazily when an EOF for an unknown partition arrives.
   TopicPartitionSet assigned_partitions_;
