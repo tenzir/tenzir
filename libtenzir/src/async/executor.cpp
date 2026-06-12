@@ -2054,11 +2054,13 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
         }
       });
 #endif
+      auto terminated = false;
       while (auto next = co_await driver.next()) {
         co_await co_match(
           std::move(*next),
           [&](Terminated) -> Task<void> {
             LOGI("run_pipeline got info that chain terminated");
+            terminated = true;
             from_control_sender = None{};
             // If the pipeline terminated without graceful stop,
             // the Notify would block the driver forever, never completing.
@@ -2068,6 +2070,12 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
             co_return;
           },
           [&](GracefulStopRequested) -> Task<void> {
+            if (terminated) {
+              // This is not a real stop request: the Terminated handler
+              // notifies `graceful_stop` solely to unblock the watcher task
+              // so that the JoinSet can complete.
+              co_return;
+            }
             LOGI("run_pipeline got graceful stop request");
             if (from_control_sender) {
               co_await from_control_sender->send(GracefulStop{});
