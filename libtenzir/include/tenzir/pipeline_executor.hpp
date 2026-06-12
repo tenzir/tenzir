@@ -14,6 +14,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
