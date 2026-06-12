@@ -4,6 +4,8 @@ type: feature
 authors:
   - aljazerzen
   - codex
+prs:
+  - 6243
 created: 2026-06-01T09:09:37.255561Z
 ---
 

@@ -4,8 +4,9 @@ type: feature
 authors:
   - mavam
   - codex
+prs:
+  - 6259
 created: 2026-06-06T00:00:00Z
-pr: 6259
 ---
 
 The new `decrypt_cryptopan` function decrypts IP addresses that were encrypted

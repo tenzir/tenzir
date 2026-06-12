@@ -3,6 +3,8 @@ title: "Fix `where` substring filters dropping all events from `subscribe`"
 type: bugfix
 authors:
   - jachris
+prs:
+  - 6265
 created: 2026-06-09T00:00:00.000000Z
 ---
 
