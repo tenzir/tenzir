@@ -1,0 +1,25 @@
+name: from_kinesis_route53
+description: >-
+  Read the CloudWatch Route53 dataset from a mock Kinesis stream with a single
+  shard and no artificial latency.
+tags:
+  benchmark: kinesis
+  dataset: route53
+inputs:
+  main:
+    path: cloudwatch/route53.ndjson
+    repetitions: 100
+    source:
+      url: https://datasets.tenzir.tools/CloudWatch/route53.ndjson
+      num_events: 2586
+env:
+  TENZIR_CONSOLE_FORMAT: none
+fixtures:
+  - kinesis:
+      inputs: [main]
+      stream: from-kinesis-route53-bench
+      shards: 1
+runtime:
+  warmup_runs: 1
+  measurement_runs: 3
+  timeout_seconds: 1800

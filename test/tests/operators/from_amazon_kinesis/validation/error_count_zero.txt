@@ -1,0 +1,6 @@
+error: `count` must be greater than zero
+ --> tests/operators/from_amazon_kinesis/validation/error_count_zero.tql:5:37
+  |
+5 | from_amazon_kinesis "stream", count=0
+  |                                     ^ 
+  |

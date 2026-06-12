@@ -11,12 +11,10 @@
 #include <tenzir/amazon.hpp>
 #include <tenzir/arc.hpp>
 #include <tenzir/async.hpp>
-#include <tenzir/async/notify.hpp>
 #include <tenzir/async/semaphore.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/tql2/ast.hpp>
-#include <tenzir/variant.hpp>
 
 #include <folly/CancellationToken.h>
 #include <folly/coro/BoundedQueue.h>
@@ -116,11 +114,10 @@ struct ToCloudWatchSendReport {
   bool failed = false;
 };
 
+/// Wakeup messages delivered to `ToCloudWatch::await_task()` through the
+/// wakeup queue.
 struct ToCloudWatchFlushTimeout {};
 struct ToCloudWatchReportReady {};
-
-using ToCloudWatchTask
-  = variant<ToCloudWatchFlushTimeout, ToCloudWatchReportReady>;
 
 auto default_to_amazon_cloudwatch_message_expression() -> ast::expression;
 
@@ -174,6 +171,10 @@ private:
   auto handle_send_report(ToCloudWatchSendReport report, OpCtx& ctx) -> void;
   auto drain_send_reports(OpCtx& ctx) -> void;
 
+  /// Spawns a task that sleeps until the current batch deadline and then
+  /// enqueues a `ToCloudWatchFlushTimeout` wakeup.
+  auto arm_flush_timer(OpCtx& ctx) -> void;
+
   ToCloudWatchArgs args_;
   ToMethod method_ = ToMethod::put;
   std::shared_ptr<amazon::SignedHttpClient> client_;
@@ -181,9 +182,17 @@ private:
   std::vector<Event> batch_;
   uint64_t batch_size_ = 1000;
   duration batch_timeout_ = std::chrono::seconds{1};
-  mutable Option<std::chrono::steady_clock::time_point> next_timeout_;
-  mutable Box<Notify> buffer_ready_{std::in_place};
-  mutable Arc<Notify> report_ready_{std::in_place};
+  Option<std::chrono::steady_clock::time_point> next_timeout_;
+  /// Whether a flush-timer task is outstanding. Bounds the number of live
+  /// timer tasks to one; a timer that fires for an already-flushed batch
+  /// re-arms itself for the deadline of the batch that replaced it.
+  bool timer_armed_ = false;
+  /// Wakeup messages for `await_task()`. Helper tasks enqueue, only the
+  /// operator driver dequeues and updates state; operator members are never
+  /// touched from concurrently running tasks. The capacity only bounds
+  /// buffering: a full queue suspends the producing helper task until the
+  /// driver drains it.
+  mutable Arc<folly::coro::BoundedQueue<Any>> wakeup_queue_{std::in_place, 16};
   mutable Option<Arc<folly::coro::BoundedQueue<ToCloudWatchSendReport>>>
     send_queue_;
   uint64_t parallel_ = 1;

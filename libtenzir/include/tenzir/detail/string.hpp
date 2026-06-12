@@ -75,6 +75,21 @@ ascii_icase_equal(std::string_view lhs, std::string_view rhs) noexcept -> bool {
   return true;
 }
 
+/// Counts UTF-8 code points in `value`.
+///
+/// This assumes valid UTF-8 and counts every byte that does not continue a
+/// multi-byte sequence.
+[[nodiscard]] inline constexpr auto
+utf8_codepoint_count(std::string_view value) noexcept -> size_t {
+  auto result = size_t{0};
+  for (auto byte : value) {
+    if ((static_cast<unsigned char>(byte) & 0b1100'0000) != 0b1000'0000) {
+      ++result;
+    }
+  }
+  return result;
+}
+
 /// Trims leading whitespace of string according to the given whitespace
 /// @param value the string to trim
 /// @param whitespace a string of characters, each of white is considered

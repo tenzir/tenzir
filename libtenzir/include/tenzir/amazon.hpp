@@ -65,6 +65,8 @@ auto http_headers(Aws::Http::HeaderValueCollection const& headers)
 auto to_aws_json_result(http::Response response)
   -> Aws::AmazonWebServiceResult<Aws::Utils::Json::JsonValue>;
 
+auto extract_aws_error_code(std::string const& body) -> std::string;
+
 auto extract_aws_error_message(std::string const& body) -> std::string;
 
 struct SignedHttpClientConfig {
@@ -95,6 +97,11 @@ public:
   auto
   post(std::string path, std::string body,
        Aws::Http::HeaderValueCollection headers, std::string_view operation)
+    -> Task<Result<http::Response, std::string>>;
+
+  auto
+  raw_post(std::string path, std::string body,
+           Aws::Http::HeaderValueCollection headers, std::string_view operation)
     -> Task<Result<http::Response, std::string>>;
 
   auto post(std::string path, std::string body,
