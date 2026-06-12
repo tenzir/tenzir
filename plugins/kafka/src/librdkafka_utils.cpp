@@ -32,8 +32,10 @@
 
 #include <atomic>
 #include <chrono>
+#include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace tenzir::plugins::kafka {
 
@@ -360,9 +362,8 @@ public:
   }
 
 private:
-  auto
-  apply_start_offsets(RdKafka::KafkaConsumer& consumer,
-                      std::vector<RdKafka::TopicPartition*>& partitions) const
+  auto apply_start_offsets(RdKafka::KafkaConsumer& consumer,
+                           std::vector<RdKafka::TopicPartition*>& partitions)
     -> void {
     if (offset_ == RdKafka::Topic::OFFSET_INVALID) {
       return;
@@ -380,7 +381,11 @@ private:
 
   auto apply_explicit_start_offsets(
     RdKafka::KafkaConsumer& consumer,
-    std::vector<RdKafka::TopicPartition*>& partitions) const -> void {
+    std::vector<RdKafka::TopicPartition*>& partitions) -> void {
+    // The user-provided offset defines where consumption starts, so it must
+    // win over previously committed group offsets when a partition is first
+    // assigned. Only re-assignments after a later rebalance resume from the
+    // offsets this consumer committed in the meantime.
     auto assigned_partitions = std::vector<RdKafka::TopicPartition*>{};
     auto committed_offsets
       = std::vector<std::unique_ptr<RdKafka::TopicPartition>>{};
@@ -390,6 +395,13 @@ private:
     raw_committed_offsets.reserve(partitions.size());
     for (auto* partition : partitions) {
       if (partition == nullptr) {
+        continue;
+      }
+      auto const first_assignment
+        = seeded_partitions_.emplace(partition->topic(), partition->partition())
+            .second;
+      if (first_assignment) {
+        partition->set_offset(offset_);
         continue;
       }
       assigned_partitions.push_back(partition);
@@ -436,6 +448,10 @@ private:
 
   int64_t offset_ = RdKafka::Topic::OFFSET_INVALID;
   std::shared_ptr<Atomic<uint64_t>> assignment_generation_;
+  // Partitions that already received the explicit start offset once; only
+  // mutated from rebalance callbacks, which librdkafka serializes per
+  // consumer.
+  std::set<std::pair<std::string, int32_t>> seeded_partitions_;
 };
 
 /// Converts one librdkafka conf set result into a typed `caf::error`.
