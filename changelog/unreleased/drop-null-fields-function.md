@@ -4,6 +4,8 @@ type: feature
 authors:
   - zedoraps
   - claude
+prs:
+  - 6261
 created: 2026-06-05T19:42:25Z
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: Google SecOps Chronicle import API
-type: breaking
+type: change
 authors:
   - raxyte
   - codex
