@@ -45,9 +45,6 @@ jobs:
           if [[ '${{ inputs.tag-sha }}' == 'true' ]]; then
             tags+=('${{ github.sha }}')
           fi
-          if [[ '${{ inputs.build }}' == 'true' ]]; then
-            tags+=('${{ github.sha }}')
-          fi
           docker_config="$(jq -nc \
             '."editions" = [
               if ${{ inputs.push-de-to-ghcr }} then

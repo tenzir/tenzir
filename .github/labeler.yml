@@ -12,7 +12,6 @@ build:
           - nix/**
           - flake.nix
           - flake.lock
-          - Dockerfile
           - ansible/**
           - docker-compose.yaml
           - scripts/**
