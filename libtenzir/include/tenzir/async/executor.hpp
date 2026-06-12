@@ -14,6 +14,7 @@
 #include "tenzir/async.hpp"
 #include "tenzir/async/channel.hpp"
 #include "tenzir/async/generator.hpp"
+#include "tenzir/async/notify.hpp"
 #include "tenzir/async/signal.hpp"
 #include "tenzir/result.hpp"
 
@@ -102,6 +103,14 @@ private:
 
 struct PostCommit {};
 
+/// Request a graceful shutdown of the operator.
+///
+/// For source operators (Input == void), calls `stop()` so the source can
+/// finish in-flight work and then proceed to `finalize()` naturally.
+/// Non-source operators ignore this signal — they drain via end-of-data
+/// propagation from upstream.
+struct GracefulStop {};
+
 /// Cancel everything that the inner operator implementation is doing.
 ///
 /// This does not stop the runner itself as we need to continue to forward
@@ -110,7 +119,7 @@ struct PostCommit {};
 /// to this signal immediately, but we'll leave that for later.
 struct HardStop {};
 
-using FromControl = variant<PostCommit, HardStop>;
+using FromControl = variant<PostCommit, GracefulStop, HardStop>;
 
 TENZIR_ENUM(
   /// A message sent from an operator to the controller.
@@ -282,7 +291,8 @@ public:
 
 /// Run a closed pipeline without external control.
 auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
-                  caf::actor_system& sys, DiagHandler& dh) -> Task<void>;
+                  caf::actor_system& sys, DiagHandler& dh,
+                  Notify* graceful_stop = nullptr) -> Task<void>;
 
 /// Run a right-open pipeline without external control.
 template <class Output>
