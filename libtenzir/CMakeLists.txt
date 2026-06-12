@@ -671,6 +671,7 @@ if (LINUX)
     find_package(libbacktrace REQUIRED)
     string(APPEND TENZIR_FIND_DEPENDENCY_LIST
            "\nfind_package(libbacktrace REQUIRED)")
+    provide_find_module(libbacktrace)
     set(TENZIR_USE_BOOST_STACKTRACE_LINK 0)
     set(TENZIR_USE_BOOST_STACKTRACE_BACKTRACE 1)
     target_link_libraries(libtenzir PUBLIC libbacktrace::libbacktrace)

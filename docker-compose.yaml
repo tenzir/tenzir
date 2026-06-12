@@ -3,8 +3,6 @@
 services:
   tenzir-node:
     image: ${TENZIR_IMAGE:-ghcr.io/tenzir/tenzir:${TENZIR_VERSION:-main}}
-    build:
-      target: tenzir
     environment:
       - TENZIR_PLATFORM_CONTROL_ENDPOINT=${TENZIR_PLATFORM_CONTROL_ENDPOINT:-}
       - TENZIR_TOKEN=${TENZIR_TOKEN:-}
@@ -21,8 +19,6 @@ services:
 
   tenzir-api:
     image: ${TENZIR_IMAGE:-ghcr.io/tenzir/tenzir:${TENZIR_VERSION:-main}}
-    build:
-      target: tenzir
     profiles:
       - donotstart
     depends_on:
@@ -41,8 +37,6 @@ services:
 
   tenzir:
     image: ${TENZIR_IMAGE:-ghcr.io/tenzir/tenzir:${TENZIR_VERSION:-main}}
-    build:
-      target: tenzir
     profiles:
       - donotstart
     depends_on:

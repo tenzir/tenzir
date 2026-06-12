@@ -1,6 +1,7 @@
 {
   lib,
   stdenvNoCC,
+  cacert,
   src,
   tenzirPythonPkgs,
   tenzir-integration-test-deps,
@@ -41,6 +42,7 @@ stdenvNoCC.mkDerivation {
       '';
     in
     ''
+      export SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt
       export PYTHONPATH=''${PYTHONPATH:+''${PYTHONPATH}:}${py3}/${py3.sitePackages}
       export UV_NO_INDEX=1
       export UV_OFFLINE=1
