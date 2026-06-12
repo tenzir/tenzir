@@ -737,7 +737,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
           [&](const user_defined_operator& op) -> failure_or<void> {
             ctx.source_map().add_source(op.source);
             auto const callid
-              = ctx.source_map().add_call_site(x.get_location());
+              = ctx.source_map().add_call_site(x.op.get_location());
             auto op_name = make_operator_name(x.op);
             auto udo_dh = udo_diagnostic_handler{
               &static_cast<diagnostic_handler&>(ctx), op_name, op};

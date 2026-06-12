@@ -63,7 +63,7 @@
 +    GenericIr {
 +      op: {
 +        path: [
-+          `to_stdout` @ [0]:0..0 from 0
++          `to_stdout` @ [1]:21..21 from 0
 +        ],
 +        ref: std::to_stdout/op
 +      },

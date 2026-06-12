@@ -118,6 +118,9 @@ public:
         indent_width = std::max(indent_width, std::to_string(line + 1).size());
       }
     }
+    if (not diag.notes.empty()) {
+      indent_width = std::max(indent_width, size_t{1});
+    }
     auto indent = std::string(indent_width, ' ');
     struct PrintedSourceLine {
       SourceId source_index;
