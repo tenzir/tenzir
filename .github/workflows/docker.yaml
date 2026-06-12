@@ -154,14 +154,20 @@ jobs:
           if [[ -n "${TENZIR_VERSION_SUFFIX}" ]]; then
             nix_flags+=(--impure)
           fi
-          # Build each package needed by an edition that gets pushed. Building
-          # the checked package runs the integration tests as part of the
-          # build.
+          # Build each package needed by an edition that gets pushed.
+          # The unchecked package is the actual image payload. On amd64 we also
+          # build the checked package to run the integration test suite as part
+          # of the Docker workflow, matching the old Dockerfile-based
+          # validation. On arm64 we skip the checked build here because a
+          # third-party restinio test is flaky on GitHub's runner; other CI
+          # jobs still cover the codebase on that architecture.
           jq -r '[.editions[] | select(."image-registries" | length > 0) | .package] | unique | .[]' \
             <<< '${{ inputs.config }}' | while read -r package; do
             echo "::group::Build ${package}"
             nix build "${nix_flags[@]}" ".#${package}.unchecked" --no-link
-            nix build "${nix_flags[@]}" ".#${package}" --no-link
+            if [[ '${{ inputs.arch }}' == 'amd64' ]]; then
+              nix build "${nix_flags[@]}" ".#${package}" --no-link
+            fi
             echo "::endgroup::"
           done
       - name: Push container images
@@ -180,7 +186,7 @@ jobs:
             local package="$1" image="$2" dest="$3"
             echo "::notice Pushing ${dest}"
             nix run "${nix_flags[@]}" \
-              ".#${package}.asImage.${image}.copyTo" -- \
+              ".#${package}.unchecked.asImage.${image}.copyTo" -- \
               "docker://${dest}"
           }
           images_file="$(mktemp)"
