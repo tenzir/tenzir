@@ -173,6 +173,17 @@ public:
     return OperatorState::normal;
   }
 
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    // Without an explicit count, `repeat` replays its input forever. A
+    // graceful stop must end this otherwise infinite replay. With a finite
+    // count, we instead keep draining the remaining repetitions.
+    if (count_ == std::numeric_limits<uint64_t>::max()) {
+      phase_ = Phase::finished;
+    }
+    co_return;
+  }
+
   auto snapshot(Serde& serde) -> void override {
     serde("buffer", buffer_);
     serde("phase", phase_);
