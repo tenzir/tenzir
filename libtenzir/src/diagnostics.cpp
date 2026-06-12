@@ -23,6 +23,7 @@
 #include <fmt/color.h>
 
 #include <iostream>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <unordered_map>
@@ -118,6 +119,11 @@ public:
       }
     }
     auto indent = std::string(indent_width, ' ');
+    struct PrintedSourceLine {
+      SourceId source_index;
+      size_t line_idx;
+    };
+    auto previous_line = std::optional<PrintedSourceLine>{};
     for (auto& annotation : diag.annotations) {
       if (not annotation.source) {
         TENZIR_VERBOSE("annotation does not have source: {:?}", annotation);
@@ -135,9 +141,18 @@ public:
       }
       auto [line_idx, col] = *lc;
       auto line = line_idx + 1;
-      fmt::print(stream_, "{}{}{}-->{} {}:{}:{}\n", indent, bold, blue, reset,
-                 src->source->origin, line, col + 1);
-      fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
+      if (previous_line
+          and previous_line->source_index == annotation.source.source_index
+          and previous_line->line_idx == line_idx) {
+        fmt::print(stream_, "{} {}{}⋮{}\n", indent, bold, blue, reset);
+      } else {
+        if (previous_line) {
+          fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
+        }
+        fmt::print(stream_, "{}{}{}-->{} {}:{}:{}\n", indent, bold, blue, reset,
+                   src->source->origin, line, col + 1);
+        fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
+      }
       fmt::print(stream_, "{}{}{}{} |{} {}\n",
                  std::string(indent_width - std::to_string(line).size(), ' '),
                  bold, blue, line, reset, src->lines[line_idx]);
@@ -150,6 +165,12 @@ public:
                  color(pseudo_severity), std::string(col, ' '),
                  std::string(count, symbol(pseudo_severity)), annotation.text,
                  reset);
+      previous_line = PrintedSourceLine{
+        .source_index = annotation.source.source_index,
+        .line_idx = line_idx,
+      };
+    }
+    if (previous_line) {
       fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
     }
     for (auto& note : diag.notes) {
