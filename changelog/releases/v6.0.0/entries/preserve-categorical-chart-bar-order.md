@@ -2,6 +2,8 @@
 title: Preserve categorical order in `chart_bar`
 type: change
 author: mavam
+prs:
+  - 6158
 created: 2026-05-12T00:00:00Z
 ---
 

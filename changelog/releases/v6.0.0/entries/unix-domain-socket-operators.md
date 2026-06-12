@@ -4,6 +4,8 @@ type: feature
 authors:
   - mavam
   - codex
+prs:
+  - 6240
 created: 2026-05-30T00:00:00Z
 ---
 

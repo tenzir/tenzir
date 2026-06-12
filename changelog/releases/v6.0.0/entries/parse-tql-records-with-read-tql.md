@@ -2,7 +2,8 @@
 title: Parse TQL records with `read_tql`
 type: feature
 author: mavam
-pr: 5707
+prs:
+  - 5707
 created: 2026-04-30T13:00:14.039139Z
 ---
 

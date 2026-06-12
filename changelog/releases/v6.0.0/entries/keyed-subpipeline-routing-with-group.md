@@ -2,7 +2,8 @@
 title: Keyed subpipeline routing with `group`
 type: feature
 author: jachris
-pr: 5980
+prs:
+  - 5980
 created: 2026-04-30T12:56:38.660784Z
 ---
 
