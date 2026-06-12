@@ -1374,7 +1374,8 @@ private:
         co_await base_op().post_commit(*this);
       },
       [&](GracefulStop) -> Task<void> {
-        if (phase_ != Phase::running or stop_requested_) {
+        if (phase_ == Phase::stopping_forced or phase_ == Phase::stopped
+            or stop_requested_) {
           co_return;
         }
         stop_requested_ = true;
