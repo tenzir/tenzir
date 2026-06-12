@@ -187,7 +187,6 @@ class wah_bitmap;
 class compile_ctx;
 class SourceMap;
 struct Source;
-struct CompiledPipeline;
 class substitute_ctx;
 class finalize_ctx;
 
@@ -397,8 +396,6 @@ using reader_ptr = std::unique_ptr<reader>;
 using writer_ptr = std::unique_ptr<writer>;
 
 } // namespace format
-
-struct Source;
 
 namespace ast {
 

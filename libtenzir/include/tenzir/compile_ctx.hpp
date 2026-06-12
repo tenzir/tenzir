@@ -148,28 +148,4 @@ private:
   const env_t* env_;
 };
 
-/// The result of compiling an AST pipeline into IR.
-struct CompiledPipeline {
-  /// The compiled IR pipeline.
-  ir::pipeline ir;
-
-  /// The source map populated during compilation.
-  SourceMap source_map;
-};
-
-/// Compile an AST pipeline into IR.
-///
-/// This is the entry point into compilation. It creates the compilation
-/// context internally and returns the resulting IR together with the source
-/// map that was populated during compilation.
-auto compile(ast::pipeline ast, base_ctx ctx) -> failure_or<CompiledPipeline>;
-
-/// Compile an AST pipeline into IR, populating the externally owned
-/// `source_map` during compilation. The referenced map must outlive the call.
-/// This allows a diagnostic printer that already references `source_map` to
-/// resolve locations into sources registered during compilation (e.g. the
-/// bodies of user-defined operators).
-auto compile(ast::pipeline ast, base_ctx ctx, SourceMap& source_map)
-  -> failure_or<ir::pipeline>;
-
 } // namespace tenzir

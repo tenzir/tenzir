@@ -2310,7 +2310,8 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   // Compile into the externally owned source map so that the diagnostic
   // printer can resolve locations into sources registered during compilation,
   // such as the bodies of user-defined operators.
-  TRY(auto ir, compile(std::move(ast), b_ctx, source_map));
+  auto root = compile_ctx::make_root(b_ctx, source_map);
+  TRY(auto ir, std::move(ast).compile(root));
   if (cfg.dump_ir) {
     fmt::print("{:#?}\n", ir);
     return not ctx.has_failure();
@@ -2332,8 +2333,8 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   auto parse_implicit
     = [&](std::string_view definition) -> failure_or<ir::pipeline> {
     TRY(auto ast, parse_pipeline_with_bad_diagnostics(definition, ctx));
-    TRY(auto implicit, compile(std::move(ast), b_ctx));
-    auto pipe = std::move(implicit.ir);
+    auto implicit_root = compile_ctx::make_root(b_ctx);
+    TRY(auto pipe, std::move(ast).compile(implicit_root));
     TRY(pipe.substitute(sub_ctx, true));
     return pipe;
   };

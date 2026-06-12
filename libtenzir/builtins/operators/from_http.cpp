@@ -669,8 +669,8 @@ auto make_parser_pipeline(operator_factory_plugin const& plugin, location loc,
                           OpCtx& ctx) -> failure_or<ir::pipeline> {
   auto ast = ast::pipeline{};
   ast.body.emplace_back(invocation_for_plugin(plugin, loc));
-  TRY(auto compiled, compile(std::move(ast), ctx));
-  return std::move(compiled.ir);
+  auto root = compile_ctx::make_root(ctx);
+  return std::move(ast).compile(root);
 }
 
 struct retryable_http_response : std::runtime_error {

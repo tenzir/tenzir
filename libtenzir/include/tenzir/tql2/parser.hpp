@@ -26,7 +26,6 @@ auto parse(Source const& source, session ctx) -> failure_or<ast::pipeline>;
 // TODO: These functions are only a temporary solution.
 auto parse_pipeline_with_bad_diagnostics(std::string_view source, session ctx)
   -> failure_or<ast::pipeline>;
-
 auto parse_expression_with_bad_diagnostics(std::string_view source, session ctx)
   -> failure_or<ast::expression>;
 auto parse_type_def_with_bad_diagnostics(std::string_view source, session ctx)

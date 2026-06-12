@@ -105,16 +105,4 @@ compile_ctx::compile_ctx(root& root, const env_t* env)
   : root_{root}, env_{env} {
 }
 
-auto compile(ast::pipeline ast, base_ctx ctx) -> failure_or<CompiledPipeline> {
-  auto root = compile_ctx::make_root(ctx);
-  TRY(auto ir, std::move(ast).compile(root));
-  return CompiledPipeline{std::move(ir), std::move(root).source_map()};
-}
-
-auto compile(ast::pipeline ast, base_ctx ctx, SourceMap& source_map)
-  -> failure_or<ir::pipeline> {
-  auto root = compile_ctx::make_root(ctx, source_map);
-  return std::move(ast).compile(root);
-}
-
 } // namespace tenzir

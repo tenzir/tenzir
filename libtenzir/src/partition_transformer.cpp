@@ -390,8 +390,8 @@ auto compile_table_slice_transform(ast::pipeline ast, diagnostic_handler& dh)
   auto provider = session_provider::make(dh);
   auto ctx = provider.as_session();
   auto b_ctx = base_ctx{ctx.dh(), ctx.reg()};
-  TRY(auto compiled, compile(std::move(ast), b_ctx));
-  auto ir = std::move(compiled.ir);
+  auto root = compile_ctx::make_root(b_ctx);
+  TRY(auto ir, std::move(ast).compile(root));
   auto sub_ctx = substitute_ctx{b_ctx, nullptr};
   TRY(ir.substitute(sub_ctx, true));
   TRY(auto output, ir.infer_type(tag_v<table_slice>, dh));
