@@ -271,6 +271,14 @@ public:
       return message_ ? message_->partition : -1;
     }
 
+    /// Returns the source topic name.
+    [[nodiscard]] auto topic() const -> std::string {
+      if (not message_ or not message_->rkt) {
+        return {};
+      }
+      return rd_kafka_topic_name(message_->rkt);
+    }
+
     /// Returns the source offset for this message.
     [[nodiscard]] auto offset() const -> int64_t {
       return message_ ? message_->offset : 0;
