@@ -646,7 +646,9 @@ def run_container_test(
 
         test_cmd = (
             'export PATH="/opt/tenzir/bin:/root/.local/bin:/usr/bin:/bin:$PATH" '
-            f"&& uvx --with trustme tenzir-test --root /src/tenzir/{test_root} "
+            "&& uvx --with trustme "
+            "--from https://github.com/tenzir/test/archive/refs/heads/topic/ensure-parallel.tar.gz "
+            f"tenzir-test --root /src/tenzir/{test_root} "
             f"{test_pattern}"
         )
         result = subprocess.run(
