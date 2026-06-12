@@ -35,6 +35,17 @@ auto parameter_default_string(const ast::expression& expr)
       return *yaml;
     }
   }
+  if (auto path = ast::field_path::try_from(ast::expression{expr})) {
+    if (path->path().empty()) {
+      return "this";
+    }
+    auto names_range
+      = path->path() | std::views::transform([](const auto& segment) {
+          return segment.id.name;
+        });
+    return fmt::format("{}{}", path->has_this() ? "this." : "",
+                       fmt::join(names_range, "."));
+  }
   return std::nullopt;
 }
 
