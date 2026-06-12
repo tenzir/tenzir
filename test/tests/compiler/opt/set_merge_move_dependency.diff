@@ -1,0 +1,98 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     from_ir {
+       events: [
+         record {
+           begin: 5..6,
+           items: [
+             field {
+               name: `a` @ 6..7,
+               expr: constant int64 1 @ 9..10
+             },
+             field {
+               name: `b` @ 12..13,
+               expr: constant int64 2 @ 15..16
+             }
+           ],
+           end: 16..17
+         }
+       ],
+       self: 0..4
+     },
+     SetIr {
+       assignments: [
+         {
+           left: field_path {
+             expr: root_field {
+               id: `a` @ 18..19,
+               has_question_mark: false
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `a` @ 18..19,
+                 has_question_mark: false
+               }
+             ]
+           },
+           equals: 20..21,
+           right: unary_expr {
+             op: "move" @ 22..26,
+             expr: root_field {
+               id: `b` @ 27..28,
+               has_question_mark: false
+             }
+           }
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: field_path {
+             expr: root_field {
+               id: `c` @ 29..30,
+               has_question_mark: false
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `c` @ 29..30,
+                 has_question_mark: false
+               }
+             ]
+           },
+           equals: 31..32,
+           right: root_field {
+             id: `b` @ 33..34,
+             has_question_mark: false
+           }
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ 0..0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }
