@@ -322,7 +322,7 @@ auto main(int argc, char** argv) -> int try {
       }
       auto source = Source::new_source(
         *definition, fmt::format("tenzir.operators.{}", name), true);
-      auto pipe = parse_pipeline_with_source_index(*source, ctx);
+      auto pipe = parse(*source, ctx);
       if (not pipe) {
         TENZIR_ERROR("parsing of user-defined operator `{}` failed", name);
         return EXIT_FAILURE;

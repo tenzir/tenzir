@@ -10,6 +10,7 @@
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/parser.hpp"
 
+#include <sstream>
 #include <string>
 #include <string_view>
 
@@ -30,6 +31,33 @@ TEST("tql2 tokenizer: ranges and spread dots") {
   CHECK_EQUAL(tokens[5].kind, token_kind::whitespace);
   CHECK_EQUAL(tokens[6].kind, token_kind::dot_dot);
   CHECK_EQUAL(tokens[6].end, size_t{15});
+}
+
+TEST("tql2 tokenizer: source-aware token errors use source id") {
+  auto source = Source::new_source("`", "<input>", true);
+  auto map = SourceMap{};
+  map.add_source(source);
+  auto stream = std::stringstream{};
+  auto printer = make_diagnostic_printer(map, color_diagnostics::no, stream);
+  auto provider = session_provider::make(*printer);
+  auto tokens = tokenize_permissive(source->text);
+  auto result = verify_tokens(tokens, *source, provider.as_session());
+  CHECK(not result);
+  auto rendered = stream.str();
+  CHECK(rendered.find("--> <input>:1:1") != std::string::npos);
+  CHECK(rendered.find("1 | `") != std::string::npos);
+}
+
+TEST("tql2 parser: bad type diagnostics suppress source locations") {
+  auto dh = collecting_diagnostic_handler{};
+  auto provider = session_provider::make(dh);
+  auto parsed
+    = parse_type_def_with_bad_diagnostics("foo bar", provider.as_session());
+  CHECK(not parsed);
+  auto diagnostics = std::move(dh).collect();
+  REQUIRE_EQUAL(diagnostics.size(), size_t{1});
+  REQUIRE_EQUAL(diagnostics[0].annotations.size(), size_t{1});
+  CHECK_EQUAL(diagnostics[0].annotations[0].source, location::unknown);
 }
 
 TEST("tql2 parser: dollar variable selector paths") {

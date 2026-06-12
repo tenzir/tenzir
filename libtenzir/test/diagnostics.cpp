@@ -91,6 +91,24 @@ TEST("diagnostic printer - warning uses warning underline") {
 )");
 }
 
+TEST("diagnostic printer - adjacent annotations on same line share location") {
+  auto [map, input_src, outer_src, inner_src] = make_fixture();
+  auto diag = diagnostic::warning("duplicate")
+                .primary(location{8, 13, input_src, 0}, "first")
+                .secondary(location{9, 13, input_src, 0}, "second")
+                .done();
+  CHECK_EQUAL(print(map, std::move(diag)), R"(warning: duplicate
+ --> <input>:2:1
+  |
+2 | outer
+  | ~~~~~ first
+  ⋮
+2 | outer
+  |  ---- second
+  |
+)");
+}
+
 TEST("diagnostic printer - single call site") {
   auto [map, input_src, outer_src, inner_src] = make_fixture();
   auto call_id = map.add_call_site(outer_call(input_src));

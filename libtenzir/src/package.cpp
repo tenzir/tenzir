@@ -1295,7 +1295,7 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh,
     if (source_map != nullptr) {
       source_map->add_source(source);
     }
-    auto parsed = parse_pipeline_with_source_index(*source, ctx);
+    auto parsed = parse(*source, ctx);
     if (not parsed) {
       diagnostic::error("failed to parse operator `{}` in package `{}`",
                         fmt::join(op_name, "::"), pkg.id)

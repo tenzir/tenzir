@@ -261,11 +261,12 @@ load_symbols2(const detail::stable_set<std::filesystem::path>& module_dirs,
       auto str = detail::load_contents(f);
       TENZIR_ASSERT(str);
       auto source_map = SourceMap{};
-      source_map.add_source(Source::new_source(*str, std::string{f}, true));
+      auto source = Source::new_source(*str, std::string{f}, true);
+      source_map.add_source(source);
       auto dh = make_diagnostic_printer(source_map, color_diagnostics::yes,
                                         std::cerr);
       auto sp = session_provider::make(*dh);
-      auto ast = parse(*str, sp.as_session());
+      auto ast = parse(*source, sp.as_session());
       if (not ast) {
         return ec::silent;
       }

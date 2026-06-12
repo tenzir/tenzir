@@ -510,7 +510,7 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
 
 auto parse_and_compile(std::string_view source, session ctx)
   -> failure_or<pipeline> {
-  TRY(auto ast, parse(source, ctx));
+  TRY(auto ast, parse_pipeline_with_bad_diagnostics(source, ctx));
   return compile(std::move(ast), ctx);
 }
 
@@ -2426,7 +2426,7 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
     if (cfg.dump_tokens) {
       return dump_tokens(tokens, source->text);
     }
-    TRY(verify_tokens(tokens, ctx, source->index));
+    TRY(verify_tokens(tokens, *source, ctx));
     TRY(auto parsed, parse(tokens, *source, ctx));
     if (cfg.dump_ast) {
       fmt::print("{:#?}\n", parsed);

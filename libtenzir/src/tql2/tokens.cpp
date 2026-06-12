@@ -19,11 +19,42 @@
 
 namespace tenzir {
 
-auto tokenize(std::string_view content, session ctx, SourceId source_index)
+namespace {
+
+auto verify_tokens(std::span<const token> tokens, location source_location,
+                   session ctx) -> failure_or<void> {
+  auto result = failure_or<void>{};
+  for (const auto& token : tokens) {
+    if (token.kind == token_kind::error) {
+      auto begin = uint32_t{0};
+      if (&token != tokens.data()) {
+        begin = (&token - 1)->end;
+      }
+      diagnostic::error("could not parse token")
+        .primary(location{begin, token.end, source_location.source_index,
+                          source_location.callsite_index})
+        .emit(ctx);
+      result = failure::promise();
+    }
+  }
+  return result;
+}
+
+} // namespace
+
+auto tokenize(std::string_view content, session ctx)
   -> failure_or<std::vector<token>> {
   TRY(validate_utf8(content, ctx));
   auto tokens = tokenize_permissive(content);
-  TRY(verify_tokens(tokens, ctx, source_index));
+  TRY(verify_tokens(tokens, ctx));
+  return tokens;
+}
+
+auto tokenize(Source const& source, session ctx)
+  -> failure_or<std::vector<token>> {
+  TRY(validate_utf8(source.text, ctx));
+  auto tokens = tokenize_permissive(source.text);
+  TRY(verify_tokens(tokens, source, ctx));
   return tokens;
 }
 
@@ -270,22 +301,14 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
   return result;
 }
 
-auto verify_tokens(std::span<const token> tokens, session ctx,
-                   SourceId source_index) -> failure_or<void> {
-  auto result = failure_or<void>{};
-  for (const auto& token : tokens) {
-    if (token.kind == token_kind::error) {
-      auto begin = uint32_t{0};
-      if (&token != tokens.data()) {
-        begin = (&token - 1)->end;
-      }
-      diagnostic::error("could not parse token")
-        .primary(location{begin, token.end, source_index})
-        .emit(ctx);
-      result = failure::promise();
-    }
-  }
-  return result;
+auto verify_tokens(std::span<const token> tokens, session ctx)
+  -> failure_or<void> {
+  return verify_tokens(tokens, location::unknown, ctx);
+}
+
+auto verify_tokens(std::span<const token> tokens, Source const& source,
+                   session ctx) -> failure_or<void> {
+  return verify_tokens(tokens, location{0, 0, source.index, 0}, ctx);
 }
 
 auto describe(token_kind k) -> std::string_view {

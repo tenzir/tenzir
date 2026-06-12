@@ -12,6 +12,7 @@
 #include "tenzir/detail/enum.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/source.hpp"
 
 #include <cstdint>
 #include <string_view>
@@ -64,8 +65,10 @@ struct token {
 /// - validate_utf8
 /// - tokenize_permissive
 /// - verify_tokens
-auto tokenize(std::string_view content, session ctx,
-              SourceId source_index = SourceId{0})
+auto tokenize(std::string_view content, session ctx)
+  -> failure_or<std::vector<token>>;
+
+auto tokenize(Source const& source, session ctx)
   -> failure_or<std::vector<token>>;
 
 /// Checks that the source is valid UTF-8.
@@ -75,7 +78,10 @@ auto validate_utf8(std::string_view content, session ctx) -> failure_or<void>;
 auto tokenize_permissive(std::string_view content) -> std::vector<token>;
 
 /// Emit errors for error tokens.
-auto verify_tokens(std::span<token const> tokens, session ctx,
-                   SourceId source_index = SourceId{0}) -> failure_or<void>;
+auto verify_tokens(std::span<token const> tokens, session ctx)
+  -> failure_or<void>;
+
+auto verify_tokens(std::span<token const> tokens, Source const& source,
+                   session ctx) -> failure_or<void>;
 
 } // namespace tenzir

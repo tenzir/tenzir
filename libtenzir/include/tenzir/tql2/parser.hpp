@@ -10,6 +10,7 @@
 
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/tokens.hpp"
 
@@ -18,20 +19,15 @@
 
 namespace tenzir {
 
-auto parse(std::span<token> tokens, const Source& source, session ctx)
+auto parse(std::span<token> tokens, Source const& source, session ctx)
   -> failure_or<ast::pipeline>;
 
-auto parse(std::string_view source, session ctx) -> failure_or<ast::pipeline>;
+auto parse(Source const& source, session ctx) -> failure_or<ast::pipeline>;
 
 // TODO: These functions are only a temporary solution.
 auto parse_pipeline_with_bad_diagnostics(std::string_view source, session ctx)
   -> failure_or<ast::pipeline>;
 
-/// Parse `source` with real locations stamped with `source_index`. The index
-/// is an opaque key into the caller's source registry and will appear on every
-/// location produced by this parse call.
-auto parse_pipeline_with_source_index(const Source& source, session ctx)
-  -> failure_or<ast::pipeline>;
 auto parse_expression_with_bad_diagnostics(std::string_view source, session ctx)
   -> failure_or<ast::expression>;
 auto parse_type_def_with_bad_diagnostics(std::string_view source, session ctx)
