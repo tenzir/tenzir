@@ -13,6 +13,9 @@ Phase 5: source `every` with slow subpipeline -> SIGTERM -> restart
          -> verify shutdown does not spawn an extra subpipeline.
 Phase 6: streaming input into `every` with slow subpipeline -> SIGTERM
          -> restart -> verify shutdown still spawns follow-up subpipelines.
+Phase 7: subscriber whose topic never had publishers -> SIGTERM
+         -> verify shutdown drains promptly instead of hitting the
+         grace-period force-kill.
 
 Adapted from the pubsub/drain test pattern.  Uses managed pipelines
 (created via the REST API) so that all work runs inside the node and
@@ -444,6 +447,28 @@ try:
     data = export_summary(tenzir, "shutdown-phase6", "seq")
     assert data == {"count": 100, "lo": 0, "hi": 99}, f"phase6: {data}"
     print("phase6-every-transform-drains: ok")
+
+    # --- Phase 7: subscriber without publishers drains promptly ----------
+    # A subscribe pipeline whose topic never had a publisher must complete
+    # its drain immediately on shutdown instead of waiting for publishers
+    # that do not exist until the grace-period watchdog force-kills it.
+
+    web_proc, api = start_web_server(node.env)
+    tenzir = Executor.from_env(node.env)
+
+    create_pipeline(
+        api,
+        'subscribe "shutdown-no-publishers"\n@name = "shutdown-phase7"\nimport',
+        name="phase7-subscriber",
+    )
+    time.sleep(1)  # Let subscriber attach.
+    start = time.monotonic()
+    tenzir = stop_and_restart()
+    elapsed = time.monotonic() - start
+    # A hung drain runs into the 20 s SIGKILL fallback in _terminate (the
+    # grace period itself is 30 s), so anything close to that is a bug.
+    assert elapsed < 15, f"phase7: shutdown took {elapsed:.1f}s"
+    print("phase7-subscriber-without-publishers-drains-promptly: ok")
 
 finally:
     if web_proc:
