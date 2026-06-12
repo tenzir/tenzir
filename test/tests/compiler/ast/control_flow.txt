@@ -2,7 +2,7 @@
   invocation {
     op: {
       path: [
-        `a` @ 0..1
+        `a` @ [1]:0..1 from 0
       ],
       ref: unresolved
     },
@@ -11,26 +11,26 @@
     ]
   },
   if_stmt {
-    if_kw: 2..4,
+    if_kw: [1]:2..4 from 0,
     condition: binary_expr {
       left: root_field {
-        id: `b` @ 5..6,
+        id: `b` @ [1]:5..6 from 0,
         has_question_mark: false
       },
-      op: "eq" @ 7..9,
-      right: constant int64 42 @ 10..12
+      op: "eq" @ [1]:7..9 from 0,
+      right: constant int64 42 @ [1]:10..12 from 0
     },
     then: [
       invocation {
         op: {
           path: [
-            `c` @ 17..18
+            `c` @ [1]:17..18 from 0
           ],
           ref: unresolved
         },
         args: [
           root_field {
-            id: `d` @ 19..20,
+            id: `d` @ [1]:19..20 from 0,
             has_question_mark: false
           }
         ]
@@ -38,19 +38,19 @@
       invocation {
         op: {
           path: [
-            `e` @ 23..24
+            `e` @ [1]:23..24 from 0
           ],
           ref: unresolved
         },
         args: [
           assignment {
             left: root_field {
-              id: `f` @ 25..26,
+              id: `f` @ [1]:25..26 from 0,
               has_question_mark: false
             },
-            equals: 26..27,
+            equals: [1]:26..27 from 0,
             right: root_field {
-              id: `g` @ 27..28,
+              id: `g` @ [1]:27..28 from 0,
               has_question_mark: false
             }
           }
@@ -61,7 +61,7 @@
   invocation {
     op: {
       path: [
-        `h` @ 31..32
+        `h` @ [1]:31..32 from 0
       ],
       ref: unresolved
     },
@@ -70,16 +70,16 @@
     ]
   },
   if_stmt {
-    if_kw: 33..35,
+    if_kw: [1]:33..35 from 0,
     condition: root_field {
-      id: `i` @ 36..37,
+      id: `i` @ [1]:36..37 from 0,
       has_question_mark: false
     },
     then: [
       
     ],
     else: {
-      kw: 41..45,
+      kw: [1]:41..45 from 0,
       pipe: [
         
       ]
@@ -88,7 +88,7 @@
   invocation {
     op: {
       path: [
-        `j` @ 49..50
+        `j` @ [1]:49..50 from 0
       ],
       ref: unresolved
     },
@@ -97,20 +97,20 @@
     ]
   },
   match_stmt {
-    begin: 51..56,
+    begin: [1]:51..56 from 0,
     expr: root_field {
-      id: `k` @ 57..58,
+      id: `k` @ [1]:57..58 from 0,
       has_question_mark: false
     },
     arms: [
       
     ],
-    end: 60..61
+    end: [1]:60..61 from 0
   },
   match_stmt {
-    begin: 62..67,
+    begin: [1]:62..67 from 0,
     expr: root_field {
-      id: `k` @ 68..69,
+      id: `k` @ [1]:68..69 from 0,
       has_question_mark: false
     },
     arms: [
@@ -118,7 +118,7 @@
         patterns: [
           {
             kind: expression_pattern {
-              expr: constant string "foo" @ 72..77
+              expr: constant string "foo" @ [1]:72..77 from 0
             }
           }
         ],
@@ -126,7 +126,7 @@
           invocation {
             op: {
               path: [
-                `bar` @ 83..86
+                `bar` @ [1]:83..86 from 0
               ],
               ref: unresolved
             },
@@ -137,12 +137,12 @@
         ]
       }
     ],
-    end: 89..90
+    end: [1]:89..90 from 0
   },
   match_stmt {
-    begin: 91..96,
+    begin: [1]:91..96 from 0,
     expr: root_field {
-      id: `k` @ 97..98,
+      id: `k` @ [1]:97..98 from 0,
       has_question_mark: false
     },
     arms: [
@@ -150,7 +150,7 @@
         patterns: [
           {
             kind: expression_pattern {
-              expr: constant string "foo" @ 103..108
+              expr: constant string "foo" @ [1]:103..108 from 0
             }
           }
         ],
@@ -158,7 +158,7 @@
           invocation {
             op: {
               path: [
-                `bar` @ 118..121
+                `bar` @ [1]:118..121 from 0
               ],
               ref: unresolved
             },
@@ -172,7 +172,7 @@
         patterns: [
           {
             kind: expression_pattern {
-              expr: constant int64 42 @ 128..130
+              expr: constant int64 42 @ [1]:128..130 from 0
             }
           }
         ],
@@ -180,13 +180,13 @@
           invocation {
             op: {
               path: [
-                `foo` @ 140..143
+                `foo` @ [1]:140..143 from 0
               ],
               ref: unresolved
             },
             args: [
               root_field {
-                id: `bar` @ 144..147,
+                id: `bar` @ [1]:144..147 from 0,
                 has_question_mark: false
               }
             ]
@@ -194,13 +194,13 @@
           invocation {
             op: {
               path: [
-                `qux` @ 152..155
+                `qux` @ [1]:152..155 from 0
               ],
               ref: unresolved
             },
             args: [
               root_field {
-                id: `bar` @ 156..159,
+                id: `bar` @ [1]:156..159 from 0,
                 has_question_mark: false
               }
             ]
@@ -208,6 +208,6 @@
         ]
       }
     ],
-    end: 164..165
+    end: [1]:164..165 from 0
   }
 ]

@@ -1,54 +1,54 @@
 [
   assignment {
     left: root_field {
-      id: `activity_name` @ 0..13,
+      id: `activity_name` @ [1]:0..13 from 0,
       has_question_mark: false
     },
-    equals: 14..15,
-    right: constant string "Launch" @ 16..24
+    equals: [1]:14..15 from 0,
+    right: constant string "Launch" @ [1]:16..24 from 0
   },
   assignment {
     left: root_field {
-      id: `activity_id` @ 25..36,
+      id: `activity_id` @ [1]:25..36 from 0,
       has_question_mark: false
     },
-    equals: 37..38,
-    right: constant int64 1 @ 39..40
+    equals: [1]:37..38 from 0,
+    right: constant int64 1 @ [1]:39..40 from 0
   },
   assignment {
     left: field_access {
       left: root_field {
-        id: `actor` @ 41..46,
+        id: `actor` @ [1]:41..46 from 0,
         has_question_mark: false
       },
-      dot: 46..47,
+      dot: [1]:46..47 from 0,
       has_question_mark: false,
-      name: `process` @ 47..54
+      name: `process` @ [1]:47..54 from 0
     },
-    equals: 55..56,
+    equals: [1]:55..56 from 0,
     right: record {
-      begin: 57..58,
+      begin: [1]:57..58 from 0,
       items: [
         field {
-          name: `file` @ 61..65,
+          name: `file` @ [1]:61..65 from 0,
           expr: record {
-            begin: 67..68,
+            begin: [1]:67..68 from 0,
             items: [
               field {
-                name: `path` @ 73..77,
+                name: `path` @ [1]:73..77 from 0,
                 expr: root_field {
-                  id: `path` @ 79..83,
+                  id: `path` @ [1]:79..83 from 0,
                   has_question_mark: false
                 }
               },
               field {
-                name: `parent_folder` @ 89..102,
+                name: `parent_folder` @ [1]:89..102 from 0,
                 expr: function_call {
                   fn: {
                     path: [
-                      `std` @ 104..107,
-                      `path` @ 109..113,
-                      `parent` @ 115..121
+                      `std` @ [1]:104..107 from 0,
+                      `path` @ [1]:109..113 from 0,
+                      `parent` @ [1]:115..121 from 0
                     ],
                     ref: unresolved
                   },
@@ -56,30 +56,30 @@
                     field_access {
                       left: field_access {
                         left: root_field {
-                          id: `src` @ 122..125,
+                          id: `src` @ [1]:122..125 from 0,
                           has_question_mark: false
                         },
-                        dot: 125..126,
+                        dot: [1]:125..126 from 0,
                         has_question_mark: false,
-                        name: `event_data` @ 126..136
+                        name: `event_data` @ [1]:126..136 from 0
                       },
-                      dot: 136..137,
+                      dot: [1]:136..137 from 0,
                       has_question_mark: false,
-                      name: `ParentImage` @ 137..148
+                      name: `ParentImage` @ [1]:137..148 from 0
                     }
                   ],
-                  rpar: 148..149,
+                  rpar: [1]:148..149 from 0,
                   method: false
                 }
               },
               field {
-                name: `name` @ 155..159,
+                name: `name` @ [1]:155..159 from 0,
                 expr: function_call {
                   fn: {
                     path: [
-                      `std` @ 161..164,
-                      `path` @ 166..170,
-                      `file_name` @ 172..181
+                      `std` @ [1]:161..164 from 0,
+                      `path` @ [1]:166..170 from 0,
+                      `file_name` @ [1]:172..181 from 0
                     ],
                     ref: unresolved
                   },
@@ -87,40 +87,40 @@
                     field_access {
                       left: field_access {
                         left: root_field {
-                          id: `src` @ 182..185,
+                          id: `src` @ [1]:182..185 from 0,
                           has_question_mark: false
                         },
-                        dot: 185..186,
+                        dot: [1]:185..186 from 0,
                         has_question_mark: false,
-                        name: `event_data` @ 186..196
+                        name: `event_data` @ [1]:186..196 from 0
                       },
-                      dot: 196..197,
+                      dot: [1]:196..197 from 0,
                       has_question_mark: false,
-                      name: `ParentImage` @ 197..208
+                      name: `ParentImage` @ [1]:197..208 from 0
                     }
                   ],
-                  rpar: 208..209,
+                  rpar: [1]:208..209 from 0,
                   method: false
                 }
               },
               field {
-                name: `type` @ 215..221,
-                expr: constant string "Unknown" @ 223..232
+                name: `type` @ [1]:215..221 from 0,
+                expr: constant string "Unknown" @ [1]:223..232 from 0
               },
               field {
-                name: `type_id` @ 238..245,
-                expr: constant int64 0 @ 247..248
+                name: `type_id` @ [1]:238..245 from 0,
+                expr: constant int64 0 @ [1]:247..248 from 0
               }
             ],
-            end: 252..253
+            end: [1]:252..253 from 0
           }
         },
         field {
-          name: `pid` @ 257..260,
+          name: `pid` @ [1]:257..260 from 0,
           expr: function_call {
             fn: {
               path: [
-                `int` @ 262..265
+                `int` @ [1]:262..265 from 0
               ],
               ref: unresolved
             },
@@ -128,30 +128,30 @@
               field_access {
                 left: field_access {
                   left: root_field {
-                    id: `src` @ 266..269,
+                    id: `src` @ [1]:266..269 from 0,
                     has_question_mark: false
                   },
-                  dot: 269..270,
+                  dot: [1]:269..270 from 0,
                   has_question_mark: false,
-                  name: `event_data` @ 270..280
+                  name: `event_data` @ [1]:270..280 from 0
                 },
-                dot: 280..281,
+                dot: [1]:280..281 from 0,
                 has_question_mark: false,
-                name: `ParentProcessId` @ 281..296
+                name: `ParentProcessId` @ [1]:281..296 from 0
               }
             ],
-            rpar: 296..297,
+            rpar: [1]:296..297 from 0,
             method: false
           }
         }
       ],
-      end: 299..300
+      end: [1]:299..300 from 0
     }
   },
   invocation {
     op: {
       path: [
-        `drop` @ 301..305
+        `drop` @ [1]:301..305 from 0
       ],
       ref: unresolved
     },
@@ -159,114 +159,114 @@
       field_access {
         left: field_access {
           left: root_field {
-            id: `src` @ 306..309,
+            id: `src` @ [1]:306..309 from 0,
             has_question_mark: false
           },
-          dot: 309..310,
+          dot: [1]:309..310 from 0,
           has_question_mark: false,
-          name: `event_data` @ 310..320
+          name: `event_data` @ [1]:310..320 from 0
         },
-        dot: 320..321,
+        dot: [1]:320..321 from 0,
         has_question_mark: false,
-        name: `ParentImage` @ 321..332
+        name: `ParentImage` @ [1]:321..332 from 0
       },
       field_access {
         left: field_access {
           left: root_field {
-            id: `src` @ 334..337,
+            id: `src` @ [1]:334..337 from 0,
             has_question_mark: false
           },
-          dot: 337..338,
+          dot: [1]:337..338 from 0,
           has_question_mark: false,
-          name: `event_data` @ 338..348
+          name: `event_data` @ [1]:338..348 from 0
         },
-        dot: 348..349,
+        dot: [1]:348..349 from 0,
         has_question_mark: false,
-        name: `ParentProcessId` @ 349..364
+        name: `ParentProcessId` @ [1]:349..364 from 0
       }
     ]
   },
   assignment {
     left: field_access {
       left: root_field {
-        id: `actor` @ 365..370,
+        id: `actor` @ [1]:365..370 from 0,
         has_question_mark: false
       },
-      dot: 370..371,
+      dot: [1]:370..371 from 0,
       has_question_mark: false,
-      name: `user` @ 371..375
+      name: `user` @ [1]:371..375 from 0
     },
-    equals: 376..377,
+    equals: [1]:376..377 from 0,
     right: record {
-      begin: 378..379,
+      begin: [1]:378..379 from 0,
       items: [
         field {
-          name: `account_type` @ 382..394,
-          expr: constant string "Windows Account" @ 396..413
+          name: `account_type` @ [1]:382..394 from 0,
+          expr: constant string "Windows Account" @ [1]:396..413 from 0
         },
         field {
-          name: `account_type_id` @ 417..432,
-          expr: constant int64 2 @ 434..435
+          name: `account_type_id` @ [1]:417..432 from 0,
+          expr: constant int64 2 @ [1]:434..435 from 0
         },
         field {
-          name: `domain` @ 439..445,
+          name: `domain` @ [1]:439..445 from 0,
           expr: field_access {
             left: field_access {
               left: root_field {
-                id: `src` @ 447..450,
+                id: `src` @ [1]:447..450 from 0,
                 has_question_mark: false
               },
-              dot: 450..451,
+              dot: [1]:450..451 from 0,
               has_question_mark: false,
-              name: `user` @ 451..455
+              name: `user` @ [1]:451..455 from 0
             },
-            dot: 455..456,
+            dot: [1]:455..456 from 0,
             has_question_mark: false,
-            name: `domain` @ 456..462
+            name: `domain` @ [1]:456..462 from 0
           }
         },
         field {
-          name: `name` @ 466..470,
+          name: `name` @ [1]:466..470 from 0,
           expr: field_access {
             left: field_access {
               left: root_field {
-                id: `src` @ 472..475,
+                id: `src` @ [1]:472..475 from 0,
                 has_question_mark: false
               },
-              dot: 475..476,
+              dot: [1]:475..476 from 0,
               has_question_mark: false,
-              name: `user` @ 476..480
+              name: `user` @ [1]:476..480 from 0
             },
-            dot: 480..481,
+            dot: [1]:480..481 from 0,
             has_question_mark: false,
-            name: `name` @ 481..485
+            name: `name` @ [1]:481..485 from 0
           }
         },
         field {
-          name: `uid` @ 489..492,
+          name: `uid` @ [1]:489..492 from 0,
           expr: field_access {
             left: field_access {
               left: root_field {
-                id: `src` @ 494..497,
+                id: `src` @ [1]:494..497 from 0,
                 has_question_mark: false
               },
-              dot: 497..498,
+              dot: [1]:497..498 from 0,
               has_question_mark: false,
-              name: `user` @ 498..502
+              name: `user` @ [1]:498..502 from 0
             },
-            dot: 502..503,
+            dot: [1]:502..503 from 0,
             has_question_mark: false,
-            name: `identifier` @ 503..513
+            name: `identifier` @ [1]:503..513 from 0
           }
         }
       ],
-      end: 515..516
+      end: [1]:515..516 from 0
     }
   },
   invocation {
     op: {
       path: [
-        `drop` @ 517..521
+        `drop` @ [1]:517..521 from 0
       ],
       ref: unresolved
     },
@@ -274,282 +274,282 @@
       field_access {
         left: field_access {
           left: root_field {
-            id: `src` @ 522..525,
+            id: `src` @ [1]:522..525 from 0,
             has_question_mark: false
           },
-          dot: 525..526,
+          dot: [1]:525..526 from 0,
           has_question_mark: false,
-          name: `user` @ 526..530
+          name: `user` @ [1]:526..530 from 0
         },
-        dot: 530..531,
+        dot: [1]:530..531 from 0,
         has_question_mark: false,
-        name: `domain` @ 531..537
+        name: `domain` @ [1]:531..537 from 0
       },
       field_access {
         left: field_access {
           left: root_field {
-            id: `src` @ 539..542,
+            id: `src` @ [1]:539..542 from 0,
             has_question_mark: false
           },
-          dot: 542..543,
+          dot: [1]:542..543 from 0,
           has_question_mark: false,
-          name: `user` @ 543..547
+          name: `user` @ [1]:543..547 from 0
         },
-        dot: 547..548,
+        dot: [1]:547..548 from 0,
         has_question_mark: false,
-        name: `name` @ 548..552
+        name: `name` @ [1]:548..552 from 0
       },
       field_access {
         left: field_access {
           left: root_field {
-            id: `src` @ 554..557,
+            id: `src` @ [1]:554..557 from 0,
             has_question_mark: false
           },
-          dot: 557..558,
+          dot: [1]:557..558 from 0,
           has_question_mark: false,
-          name: `user` @ 558..562
+          name: `user` @ [1]:558..562 from 0
         },
-        dot: 562..563,
+        dot: [1]:562..563 from 0,
         has_question_mark: false,
-        name: `identifier` @ 563..573
+        name: `identifier` @ [1]:563..573 from 0
       }
     ]
   },
   assignment {
     left: root_field {
-      id: `category_name` @ 574..587,
+      id: `category_name` @ [1]:574..587 from 0,
       has_question_mark: false
     },
-    equals: 588..589,
-    right: constant string "System Activity" @ 590..607
+    equals: [1]:588..589 from 0,
+    right: constant string "System Activity" @ [1]:590..607 from 0
   },
   assignment {
     left: root_field {
-      id: `category_uid` @ 608..620,
+      id: `category_uid` @ [1]:608..620 from 0,
       has_question_mark: false
     },
-    equals: 621..622,
+    equals: [1]:621..622 from 0,
     right: function_call {
       fn: {
         path: [
-          `ocsf` @ 623..627,
-          `category_uid` @ 629..641
+          `ocsf` @ [1]:623..627 from 0,
+          `category_uid` @ [1]:629..641 from 0
         ],
         ref: unresolved
       },
       args: [
         root_field {
-          id: `category_name` @ 642..655,
+          id: `category_name` @ [1]:642..655 from 0,
           has_question_mark: false
         }
       ],
-      rpar: 655..656,
+      rpar: [1]:655..656 from 0,
       method: false
     }
   },
   assignment {
     left: root_field {
-      id: `class_name` @ 657..667,
+      id: `class_name` @ [1]:657..667 from 0,
       has_question_mark: false
     },
-    equals: 668..669,
-    right: constant string "Process Activity" @ 670..688
+    equals: [1]:668..669 from 0,
+    right: constant string "Process Activity" @ [1]:670..688 from 0
   },
   assignment {
     left: root_field {
-      id: `class_uid` @ 689..698,
+      id: `class_uid` @ [1]:689..698 from 0,
       has_question_mark: false
     },
-    equals: 699..700,
+    equals: [1]:699..700 from 0,
     right: function_call {
       fn: {
         path: [
-          `ocsf` @ 701..705,
-          `class_uid` @ 707..716
+          `ocsf` @ [1]:701..705 from 0,
+          `class_uid` @ [1]:707..716 from 0
         ],
         ref: unresolved
       },
       args: [
         root_field {
-          id: `class_name` @ 717..727,
+          id: `class_name` @ [1]:717..727 from 0,
           has_question_mark: false
         }
       ],
-      rpar: 727..728,
+      rpar: [1]:727..728 from 0,
       method: false
     }
   },
   assignment {
     left: root_field {
-      id: `device` @ 729..735,
+      id: `device` @ [1]:729..735 from 0,
       has_question_mark: false
     },
-    equals: 736..737,
+    equals: [1]:736..737 from 0,
     right: record {
-      begin: 738..739,
+      begin: [1]:738..739 from 0,
       items: [
         field {
-          name: `hostname` @ 742..750,
+          name: `hostname` @ [1]:742..750 from 0,
           expr: field_access {
             left: root_field {
-              id: `src` @ 752..755,
+              id: `src` @ [1]:752..755 from 0,
               has_question_mark: false
             },
-            dot: 755..756,
+            dot: [1]:755..756 from 0,
             has_question_mark: false,
-            name: `computer_name` @ 756..769
+            name: `computer_name` @ [1]:756..769 from 0
           }
         },
         field {
-          name: `os` @ 773..775,
+          name: `os` @ [1]:773..775 from 0,
           expr: record {
-            begin: 777..778,
+            begin: [1]:777..778 from 0,
             items: [
               field {
-                name: `name` @ 783..787,
-                expr: constant string "Windows" @ 789..798
+                name: `name` @ [1]:783..787 from 0,
+                expr: constant string "Windows" @ [1]:789..798 from 0
               },
               field {
-                name: `type` @ 804..810,
-                expr: constant string "Windows" @ 812..821
+                name: `type` @ [1]:804..810 from 0,
+                expr: constant string "Windows" @ [1]:812..821 from 0
               },
               field {
-                name: `type_id` @ 827..834,
-                expr: constant int64 100 @ 836..839
+                name: `type_id` @ [1]:827..834 from 0,
+                expr: constant int64 100 @ [1]:836..839 from 0
               }
             ],
-            end: 843..844
+            end: [1]:843..844 from 0
           }
         },
         field {
-          name: `type` @ 848..854,
-          expr: constant string "Unknown" @ 856..865
+          name: `type` @ [1]:848..854 from 0,
+          expr: constant string "Unknown" @ [1]:856..865 from 0
         },
         field {
-          name: `type_id` @ 869..876,
-          expr: constant int64 0 @ 878..879
+          name: `type_id` @ [1]:869..876 from 0,
+          expr: constant int64 0 @ [1]:878..879 from 0
         }
       ],
-      end: 881..882
+      end: [1]:881..882 from 0
     }
   },
   invocation {
     op: {
       path: [
-        `drop` @ 883..887
+        `drop` @ [1]:883..887 from 0
       ],
       ref: unresolved
     },
     args: [
       field_access {
         left: root_field {
-          id: `src` @ 888..891,
+          id: `src` @ [1]:888..891 from 0,
           has_question_mark: false
         },
-        dot: 891..892,
+        dot: [1]:891..892 from 0,
         has_question_mark: false,
-        name: `computer_name` @ 892..905
+        name: `computer_name` @ [1]:892..905 from 0
       }
     ]
   },
   assignment {
     left: root_field {
-      id: `message` @ 906..913,
+      id: `message` @ [1]:906..913 from 0,
       has_question_mark: false
     },
-    equals: 914..915,
-    right: constant string "A new process has been created." @ 916..949
+    equals: [1]:914..915 from 0,
+    right: constant string "A new process has been created." @ [1]:916..949 from 0
   },
   assignment {
     left: root_field {
-      id: `metadata` @ 950..958,
+      id: `metadata` @ [1]:950..958 from 0,
       has_question_mark: false
     },
-    equals: 959..960,
+    equals: [1]:959..960 from 0,
     right: record {
-      begin: 961..962,
+      begin: [1]:961..962 from 0,
       items: [
         field {
-          name: `original_time` @ 965..978,
+          name: `original_time` @ [1]:965..978 from 0,
           expr: field_access {
             left: field_access {
               left: root_field {
-                id: `src` @ 980..983,
+                id: `src` @ [1]:980..983 from 0,
                 has_question_mark: false
               },
-              dot: 983..984,
+              dot: [1]:983..984 from 0,
               has_question_mark: false,
-              name: `event_data` @ 984..994
+              name: `event_data` @ [1]:984..994 from 0
             },
-            dot: 994..995,
+            dot: [1]:994..995 from 0,
             has_question_mark: false,
-            name: `UtcTime` @ 995..1002
+            name: `UtcTime` @ [1]:995..1002 from 0
           }
         },
         field {
-          name: `product` @ 1006..1013,
+          name: `product` @ [1]:1006..1013 from 0,
           expr: record {
-            begin: 1015..1016,
+            begin: [1]:1015..1016 from 0,
             items: [
               field {
-                name: `feature` @ 1021..1028,
+                name: `feature` @ [1]:1021..1028 from 0,
                 expr: record {
-                  begin: 1030..1031,
+                  begin: [1]:1030..1031 from 0,
                   items: [
                     field {
-                      name: `name` @ 1038..1042,
-                      expr: constant string "Security" @ 1044..1054
+                      name: `name` @ [1]:1038..1042 from 0,
+                      expr: constant string "Security" @ [1]:1044..1054 from 0
                     }
                   ],
-                  end: 1060..1061
+                  end: [1]:1060..1061 from 0
                 }
               },
               field {
-                name: `name` @ 1067..1071,
-                expr: constant string "Microsoft Windows" @ 1073..1092
+                name: `name` @ [1]:1067..1071 from 0,
+                expr: constant string "Microsoft Windows" @ [1]:1073..1092 from 0
               },
               field {
-                name: `vendor_name` @ 1098..1109,
-                expr: constant string "Microsoft" @ 1111..1122
+                name: `vendor_name` @ [1]:1098..1109 from 0,
+                expr: constant string "Microsoft" @ [1]:1111..1122 from 0
               }
             ],
-            end: 1126..1127
+            end: [1]:1126..1127 from 0
           }
         },
         field {
-          name: `profiles` @ 1131..1139,
+          name: `profiles` @ [1]:1131..1139 from 0,
           expr: list {
-            begin: 1141..1142,
+            begin: [1]:1141..1142 from 0,
             items: [
-              expression constant string "host" @ 1142..1148
+              expression constant string "host" @ [1]:1142..1148 from 0
             ],
-            end: 1148..1149
+            end: [1]:1148..1149 from 0
           }
         },
         field {
-          name: `uid` @ 1153..1156,
+          name: `uid` @ [1]:1153..1156 from 0,
           expr: field_access {
             left: root_field {
-              id: `src` @ 1158..1161,
+              id: `src` @ [1]:1158..1161 from 0,
               has_question_mark: false
             },
-            dot: 1161..1162,
+            dot: [1]:1161..1162 from 0,
             has_question_mark: false,
-            name: `record_id` @ 1162..1171
+            name: `record_id` @ [1]:1162..1171 from 0
           }
         },
         field {
-          name: `version` @ 1175..1182,
-          expr: constant string "1.1.0" @ 1184..1191
+          name: `version` @ [1]:1175..1182 from 0,
+          expr: constant string "1.1.0" @ [1]:1184..1191 from 0
         }
       ],
-      end: 1193..1194
+      end: [1]:1193..1194 from 0
     }
   },
   invocation {
     op: {
       path: [
-        `drop` @ 1195..1199
+        `drop` @ [1]:1195..1199 from 0
       ],
       ref: unresolved
     },
@@ -557,84 +557,84 @@
       field_access {
         left: field_access {
           left: root_field {
-            id: `src` @ 1200..1203,
+            id: `src` @ [1]:1200..1203 from 0,
             has_question_mark: false
           },
-          dot: 1203..1204,
+          dot: [1]:1203..1204 from 0,
           has_question_mark: false,
-          name: `event_data` @ 1204..1214
+          name: `event_data` @ [1]:1204..1214 from 0
         },
-        dot: 1214..1215,
+        dot: [1]:1214..1215 from 0,
         has_question_mark: false,
-        name: `UtcTime` @ 1215..1222
+        name: `UtcTime` @ [1]:1215..1222 from 0
       },
       field_access {
         left: root_field {
-          id: `src` @ 1224..1227,
+          id: `src` @ [1]:1224..1227 from 0,
           has_question_mark: false
         },
-        dot: 1227..1228,
+        dot: [1]:1227..1228 from 0,
         has_question_mark: false,
-        name: `record_id` @ 1228..1237
+        name: `record_id` @ [1]:1228..1237 from 0
       }
     ]
   },
   assignment {
     left: root_field {
-      id: `process` @ 1238..1245,
+      id: `process` @ [1]:1238..1245 from 0,
       has_question_mark: false
     },
-    equals: 1246..1247,
+    equals: [1]:1246..1247 from 0,
     right: record {
-      begin: 1248..1249,
+      begin: [1]:1248..1249 from 0,
       items: [
         field {
-          name: `cmd_line` @ 1252..1260,
+          name: `cmd_line` @ [1]:1252..1260 from 0,
           expr: field_access {
             left: field_access {
               left: root_field {
-                id: `src` @ 1262..1265,
+                id: `src` @ [1]:1262..1265 from 0,
                 has_question_mark: false
               },
-              dot: 1265..1266,
+              dot: [1]:1265..1266 from 0,
               has_question_mark: false,
-              name: `event_data` @ 1266..1276
+              name: `event_data` @ [1]:1266..1276 from 0
             },
-            dot: 1276..1277,
+            dot: [1]:1276..1277 from 0,
             has_question_mark: false,
-            name: `CommandLine` @ 1277..1288
+            name: `CommandLine` @ [1]:1277..1288 from 0
           }
         },
         field {
-          name: `file` @ 1292..1296,
+          name: `file` @ [1]:1292..1296 from 0,
           expr: record {
-            begin: 1298..1299,
+            begin: [1]:1298..1299 from 0,
             items: [
               field {
-                name: `path` @ 1304..1308,
+                name: `path` @ [1]:1304..1308 from 0,
                 expr: field_access {
                   left: field_access {
                     left: root_field {
-                      id: `src` @ 1310..1313,
+                      id: `src` @ [1]:1310..1313 from 0,
                       has_question_mark: false
                     },
-                    dot: 1313..1314,
+                    dot: [1]:1313..1314 from 0,
                     has_question_mark: false,
-                    name: `event_data` @ 1314..1324
+                    name: `event_data` @ [1]:1314..1324 from 0
                   },
-                  dot: 1324..1325,
+                  dot: [1]:1324..1325 from 0,
                   has_question_mark: false,
-                  name: `Image` @ 1325..1330
+                  name: `Image` @ [1]:1325..1330 from 0
                 }
               },
               field {
-                name: `parent_folder` @ 1336..1349,
+                name: `parent_folder` @ [1]:1336..1349 from 0,
                 expr: function_call {
                   fn: {
                     path: [
-                      `std` @ 1351..1354,
-                      `path` @ 1356..1360,
-                      `parent` @ 1362..1368
+                      `std` @ [1]:1351..1354 from 0,
+                      `path` @ [1]:1356..1360 from 0,
+                      `parent` @ [1]:1362..1368 from 0
                     ],
                     ref: unresolved
                   },
@@ -642,30 +642,30 @@
                     field_access {
                       left: field_access {
                         left: root_field {
-                          id: `src` @ 1369..1372,
+                          id: `src` @ [1]:1369..1372 from 0,
                           has_question_mark: false
                         },
-                        dot: 1372..1373,
+                        dot: [1]:1372..1373 from 0,
                         has_question_mark: false,
-                        name: `event_data` @ 1373..1383
+                        name: `event_data` @ [1]:1373..1383 from 0
                       },
-                      dot: 1383..1384,
+                      dot: [1]:1383..1384 from 0,
                       has_question_mark: false,
-                      name: `Image` @ 1384..1389
+                      name: `Image` @ [1]:1384..1389 from 0
                     }
                   ],
-                  rpar: 1389..1390,
+                  rpar: [1]:1389..1390 from 0,
                   method: false
                 }
               },
               field {
-                name: `name` @ 1396..1400,
+                name: `name` @ [1]:1396..1400 from 0,
                 expr: function_call {
                   fn: {
                     path: [
-                      `std` @ 1402..1405,
-                      `path` @ 1407..1411,
-                      `file_name` @ 1413..1422
+                      `std` @ [1]:1402..1405 from 0,
+                      `path` @ [1]:1407..1411 from 0,
+                      `file_name` @ [1]:1413..1422 from 0
                     ],
                     ref: unresolved
                   },
@@ -673,40 +673,40 @@
                     field_access {
                       left: field_access {
                         left: root_field {
-                          id: `src` @ 1423..1426,
+                          id: `src` @ [1]:1423..1426 from 0,
                           has_question_mark: false
                         },
-                        dot: 1426..1427,
+                        dot: [1]:1426..1427 from 0,
                         has_question_mark: false,
-                        name: `event_data` @ 1427..1437
+                        name: `event_data` @ [1]:1427..1437 from 0
                       },
-                      dot: 1437..1438,
+                      dot: [1]:1437..1438 from 0,
                       has_question_mark: false,
-                      name: `Image` @ 1438..1443
+                      name: `Image` @ [1]:1438..1443 from 0
                     }
                   ],
-                  rpar: 1443..1444,
+                  rpar: [1]:1443..1444 from 0,
                   method: false
                 }
               },
               field {
-                name: `type` @ 1450..1456,
-                expr: constant string "Unknown" @ 1458..1467
+                name: `type` @ [1]:1450..1456 from 0,
+                expr: constant string "Unknown" @ [1]:1458..1467 from 0
               },
               field {
-                name: `type_id` @ 1473..1480,
-                expr: constant int64 0 @ 1482..1483
+                name: `type_id` @ [1]:1473..1480 from 0,
+                expr: constant int64 0 @ [1]:1482..1483 from 0
               }
             ],
-            end: 1487..1488
+            end: [1]:1487..1488 from 0
           }
         },
         field {
-          name: `pid` @ 1492..1495,
+          name: `pid` @ [1]:1492..1495 from 0,
           expr: function_call {
             fn: {
               path: [
-                `int` @ 1497..1500
+                `int` @ [1]:1497..1500 from 0
               ],
               ref: unresolved
             },
@@ -714,30 +714,30 @@
               field_access {
                 left: field_access {
                   left: root_field {
-                    id: `src` @ 1501..1504,
+                    id: `src` @ [1]:1501..1504 from 0,
                     has_question_mark: false
                   },
-                  dot: 1504..1505,
+                  dot: [1]:1504..1505 from 0,
                   has_question_mark: false,
-                  name: `event_data` @ 1505..1515
+                  name: `event_data` @ [1]:1505..1515 from 0
                 },
-                dot: 1515..1516,
+                dot: [1]:1515..1516 from 0,
                 has_question_mark: false,
-                name: `ProcessId` @ 1516..1525
+                name: `ProcessId` @ [1]:1516..1525 from 0
               }
             ],
-            rpar: 1525..1526,
+            rpar: [1]:1525..1526 from 0,
             method: false
           }
         }
       ],
-      end: 1528..1529
+      end: [1]:1528..1529 from 0
     }
   },
   invocation {
     op: {
       path: [
-        `drop` @ 1530..1534
+        `drop` @ [1]:1530..1534 from 0
       ],
       ref: unresolved
     },
@@ -745,89 +745,89 @@
       field_access {
         left: field_access {
           left: root_field {
-            id: `src` @ 1535..1538,
+            id: `src` @ [1]:1535..1538 from 0,
             has_question_mark: false
           },
-          dot: 1538..1539,
+          dot: [1]:1538..1539 from 0,
           has_question_mark: false,
-          name: `event_data` @ 1539..1549
+          name: `event_data` @ [1]:1539..1549 from 0
         },
-        dot: 1549..1550,
+        dot: [1]:1549..1550 from 0,
         has_question_mark: false,
-        name: `CommandLine` @ 1550..1561
+        name: `CommandLine` @ [1]:1550..1561 from 0
       },
       field_access {
         left: field_access {
           left: root_field {
-            id: `src` @ 1563..1566,
+            id: `src` @ [1]:1563..1566 from 0,
             has_question_mark: false
           },
-          dot: 1566..1567,
+          dot: [1]:1566..1567 from 0,
           has_question_mark: false,
-          name: `event_data` @ 1567..1577
+          name: `event_data` @ [1]:1567..1577 from 0
         },
-        dot: 1577..1578,
+        dot: [1]:1577..1578 from 0,
         has_question_mark: false,
-        name: `Image` @ 1578..1583
+        name: `Image` @ [1]:1578..1583 from 0
       },
       field_access {
         left: field_access {
           left: root_field {
-            id: `src` @ 1585..1588,
+            id: `src` @ [1]:1585..1588 from 0,
             has_question_mark: false
           },
-          dot: 1588..1589,
+          dot: [1]:1588..1589 from 0,
           has_question_mark: false,
-          name: `event_data` @ 1589..1599
+          name: `event_data` @ [1]:1589..1599 from 0
         },
-        dot: 1599..1600,
+        dot: [1]:1599..1600 from 0,
         has_question_mark: false,
-        name: `ProcessId` @ 1600..1609
+        name: `ProcessId` @ [1]:1600..1609 from 0
       }
     ]
   },
   assignment {
     left: root_field {
-      id: `severity` @ 1610..1618,
+      id: `severity` @ [1]:1610..1618 from 0,
       has_question_mark: false
     },
-    equals: 1619..1620,
-    right: constant string "Informational" @ 1621..1636
+    equals: [1]:1619..1620 from 0,
+    right: constant string "Informational" @ [1]:1621..1636 from 0
   },
   assignment {
     left: root_field {
-      id: `severity_id` @ 1637..1648,
+      id: `severity_id` @ [1]:1637..1648 from 0,
       has_question_mark: false
     },
-    equals: 1649..1650,
-    right: constant int64 1 @ 1651..1652
+    equals: [1]:1649..1650 from 0,
+    right: constant int64 1 @ [1]:1651..1652 from 0
   },
   assignment {
     left: root_field {
-      id: `status` @ 1653..1659,
+      id: `status` @ [1]:1653..1659 from 0,
       has_question_mark: false
     },
-    equals: 1660..1661,
-    right: constant string "Success" @ 1662..1671
+    equals: [1]:1660..1661 from 0,
+    right: constant string "Success" @ [1]:1662..1671 from 0
   },
   assignment {
     left: root_field {
-      id: `status_id` @ 1672..1681,
+      id: `status_id` @ [1]:1672..1681 from 0,
       has_question_mark: false
     },
-    equals: 1682..1683,
-    right: constant int64 1 @ 1684..1685
+    equals: [1]:1682..1683 from 0,
+    right: constant int64 1 @ [1]:1684..1685 from 0
   },
   assignment {
     left: root_field {
-      id: `time` @ 1686..1690,
+      id: `time` @ [1]:1686..1690 from 0,
       has_question_mark: false
     },
-    equals: 1691..1692,
+    equals: [1]:1691..1692 from 0,
     right: function_call {
       fn: {
         path: [
-          `round` @ 1693..1698
+          `round` @ [1]:1693..1698 from 0
         ],
         ref: unresolved
       },
@@ -836,7 +836,7 @@
           left: function_call {
             fn: {
               path: [
-                `timestamp` @ 1728..1737
+                `timestamp` @ [1]:1728..1737 from 0
               ],
               ref: unresolved
             },
@@ -844,73 +844,73 @@
               function_call {
                 fn: {
                   path: [
-                    `time` @ 1699..1703
+                    `time` @ [1]:1699..1703 from 0
                   ],
                   ref: unresolved
                 },
                 args: [
                   field_access {
                     left: root_field {
-                      id: `metadata` @ 1704..1712,
+                      id: `metadata` @ [1]:1704..1712 from 0,
                       has_question_mark: false
                     },
-                    dot: 1712..1713,
+                    dot: [1]:1712..1713 from 0,
                     has_question_mark: false,
-                    name: `original_time` @ 1713..1726
+                    name: `original_time` @ [1]:1713..1726 from 0
                   }
                 ],
-                rpar: 1726..1727,
+                rpar: [1]:1726..1727 from 0,
                 method: false
               }
             ],
-            rpar: 1738..1739,
+            rpar: [1]:1738..1739 from 0,
             method: true
           },
-          op: "mul" @ 1740..1741,
-          right: constant int64 1000 @ 1742..1746
+          op: "mul" @ [1]:1740..1741 from 0,
+          right: constant int64 1000 @ [1]:1742..1746 from 0
         }
       ],
-      rpar: 1746..1747,
+      rpar: [1]:1746..1747 from 0,
       method: false
     }
   },
   assignment {
     left: root_field {
-      id: `type_name` @ 1748..1757,
+      id: `type_name` @ [1]:1748..1757 from 0,
       has_question_mark: false
     },
-    equals: 1758..1759,
-    right: constant string "Process Activity: Launch" @ 1760..1786
+    equals: [1]:1758..1759 from 0,
+    right: constant string "Process Activity: Launch" @ [1]:1760..1786 from 0
   },
   assignment {
     left: root_field {
-      id: `type_uid` @ 1787..1795,
+      id: `type_uid` @ [1]:1787..1795 from 0,
       has_question_mark: false
     },
-    equals: 1796..1797,
-    right: constant int64 100701 @ 1798..1804
+    equals: [1]:1796..1797 from 0,
+    right: constant int64 100701 @ [1]:1798..1804 from 0
   },
   assignment {
     left: root_field {
-      id: `unmapped` @ 1805..1813,
+      id: `unmapped` @ [1]:1805..1813 from 0,
       has_question_mark: false
     },
-    equals: 1814..1815,
+    equals: [1]:1814..1815 from 0,
     right: root_field {
-      id: `src` @ 1816..1819,
+      id: `src` @ [1]:1816..1819 from 0,
       has_question_mark: false
     }
   },
   invocation {
     op: {
       path: [
-        `drop` @ 1820..1824
+        `drop` @ [1]:1820..1824 from 0
       ],
       ref: unresolved
     },
     args: [
       root_field {
-        id: `src` @ 1825..1828,
+        id: `src` @ [1]:1825..1828 from 0,
         has_question_mark: false
       }
     ]

@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 0..6
+           `export` @ [1]:0..6 from 0
          ],
          ref: std::export/op
        },
@@ -26,14 +26,14 @@
      GenericIr {
        op: {
          path: [
-           `sort` @ 7..11
+           `sort` @ [1]:7..11 from 0
          ],
          ref: std::sort/op
        },
        desc: "tql2.sort",
        args: [
          expression root_field {
-           id: `x` @ 12..13,
+           id: `x` @ [1]:12..13 from 0,
            has_question_mark: false
          }
        ],
@@ -48,7 +48,7 @@
      GenericIr {
        op: {
          path: [
-           `python` @ 14..20
+           `python` @ [1]:14..20 from 0
          ],
          ref: std::python/op
        },
@@ -59,7 +59,7 @@
              chunk: chunk(size=52),
              table-offset: 12
            }
-         } @ 21..27
+         } @ [1]:21..27 from 0
        ],
        filter: [
          
@@ -73,7 +73,7 @@
      GenericIr {
        op: {
          path: [
-           `discard` @ 28..35
+           `discard` @ [1]:28..35 from 0
          ],
          ref: std::discard/op
        },

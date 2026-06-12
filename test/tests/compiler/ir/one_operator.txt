@@ -4,7 +4,7 @@
   ],
   operators: [
     version_ir {
-      self: 0..7
+      self: [1]:0..7 from 0
     }
   ]
 }

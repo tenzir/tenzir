@@ -398,6 +398,8 @@ using writer_ptr = std::unique_ptr<writer>;
 
 } // namespace format
 
+struct Source;
+
 namespace ast {
 
 struct assignment;

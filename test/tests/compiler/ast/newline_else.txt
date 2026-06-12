@@ -1,27 +1,27 @@
 [
   if_stmt {
-    if_kw: 45..47,
+    if_kw: [1]:45..47 from 0,
     condition: root_field {
-      id: `x` @ 48..49,
+      id: `x` @ [1]:48..49 from 0,
       has_question_mark: false
     },
     then: [
       
     ],
     else: {
-      kw: 53..57,
+      kw: [1]:53..57 from 0,
       pipe: [
         if_stmt {
-          if_kw: 58..60,
+          if_kw: [1]:58..60 from 0,
           condition: root_field {
-            id: `y` @ 61..62,
+            id: `y` @ [1]:61..62 from 0,
             has_question_mark: false
           },
           then: [
             
           ],
           else: {
-            kw: 66..70,
+            kw: [1]:66..70 from 0,
             pipe: [
               
             ]

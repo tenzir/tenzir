@@ -15,7 +15,6 @@
 #include "tenzir/metric_handler.hpp"
 #include "tenzir/secret_resolution.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
-#include "tenzir/source.hpp"
 
 #include <caf/typed_actor.hpp>
 

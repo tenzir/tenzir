@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 282..288
+           `export` @ [1]:282..288 from 0
          ],
          ref: std::export/op
        },
@@ -26,7 +26,7 @@
      GenericIr {
        op: {
          path: [
-           `load_balance` @ 289..301
+           `load_balance` @ [1]:289..301 from 0
          ],
          ref: std::load_balance/op
        },
@@ -35,7 +35,7 @@
          located [
            string "a",
            string "b"
-         ] @ 302..307
+         ] @ [1]:302..307 from 0
        ],
        filter: [
          
@@ -49,30 +49,30 @@
          pipeline: {
            lets: [
              {
-               ident: `$x` @ 316..318,
+               ident: `$x` @ [1]:316..318 from 0,
                expr: field_access {
-                 left: this_ 321..325,
-                 dot: 325..326,
+                 left: this_ [1]:321..325 from 0,
+                 dot: [1]:325..326 from 0,
                  has_question_mark: false,
-                 name: `n` @ 326..327
+                 name: `n` @ [1]:326..327 from 0
                },
                id: 3
              }
            ],
            operators: [
              where_ir {
--              self: 330..335,
-+              self: 0..0,
+-              self: [1]:330..335 from 0,
++              self: [0]:0..0 from 0,
                predicate: binary_expr {
-                 left: dollar_var `$x` -> 3 @ 336..338,
-                 op: "gt" @ 339..340,
-                 right: constant int64 1 @ 341..342
+                 left: dollar_var `$x` -> 3 @ [1]:336..338 from 0,
+                 op: "gt" @ [1]:339..340 from 0,
+                 right: constant int64 1 @ [1]:341..342 from 0
                }
              },
              GenericIr {
                op: {
                  path: [
-                   `discard` @ 345..352
+                   `discard` @ [1]:345..352 from 0
                  ],
                  ref: std::discard/op
                },
@@ -89,7 +89,7 @@
                ]
              }
            ]
-         } @ 308..354,
+         } @ [1]:308..354 from 0,
          let_ids: {
            "0": 2
          }

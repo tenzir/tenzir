@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 109..115
+           `export` @ [1]:109..115 from 0
          ],
          ref: std::export/op
        },
@@ -25,7 +25,7 @@
      GenericIr {
        op: {
          path: [
-           `each` @ 116..120
+           `each` @ [1]:116..120 from 0
          ],
          ref: std::each/op
        },
@@ -49,41 +49,41 @@
              from_ir {
                events: [
                  record {
-                   begin: 130..131,
+                   begin: [1]:130..131 from 0,
                    items: [
                      field {
-                       name: `x` @ 131..132,
+                       name: `x` @ [1]:131..132 from 0,
                        expr: field_access {
-                         left: dollar_var `$this` -> 1 @ 134..139,
-                         dot: 139..140,
+                         left: dollar_var `$this` -> 1 @ [1]:134..139 from 0,
+                         dot: [1]:139..140 from 0,
                          has_question_mark: false,
-                         name: `n` @ 140..141
+                         name: `n` @ [1]:140..141 from 0
                        }
                      }
                    ],
-                   end: 141..142
+                   end: [1]:141..142 from 0
                  }
                ],
-               self: 125..129
+               self: [1]:125..129 from 0
              },
              where_ir {
--              self: 145..150,
-+              self: 0..0,
+-              self: [1]:145..150 from 0,
++              self: [0]:0..0 from 0,
                predicate: binary_expr {
                  left: field_access {
-                   left: dollar_var `$this` -> 1 @ 151..156,
-                   dot: 156..157,
+                   left: dollar_var `$this` -> 1 @ [1]:151..156 from 0,
+                   dot: [1]:156..157 from 0,
                    has_question_mark: false,
-                   name: `n` @ 157..158
+                   name: `n` @ [1]:157..158 from 0
                  },
-                 op: "gt" @ 159..160,
-                 right: constant int64 1 @ 161..162
+                 op: "gt" @ [1]:159..160 from 0,
+                 right: constant int64 1 @ [1]:161..162 from 0
                }
              },
              GenericIr {
                op: {
                  path: [
-                   `discard` @ 165..172
+                   `discard` @ [1]:165..172 from 0
                  ],
                  ref: std::discard/op
                },
@@ -100,7 +100,7 @@
                ]
              }
            ]
-         } @ 121..174,
+         } @ [1]:121..174 from 0,
          let_ids: {
            "0": 1
          }

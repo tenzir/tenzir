@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 254..260
+           `export` @ [1]:254..260 from 0
          ],
          ref: std::export/op
        },
@@ -25,7 +25,7 @@
      GenericIr {
        op: {
          path: [
-           `to_file` @ 261..268
+           `to_file` @ [1]:261..268 from 0
          ],
          ref: std::to_file/op
        },
@@ -36,7 +36,7 @@
              chunk: chunk(size=56),
              table-offset: 12
            }
-         } @ 269..280
+         } @ [1]:269..280 from 0
        ],
        filter: [
          
@@ -49,30 +49,30 @@
          pipeline: {
            lets: [
              {
-               ident: `$x` @ 289..291,
+               ident: `$x` @ [1]:289..291 from 0,
                expr: field_access {
-                 left: this_ 294..298,
-                 dot: 298..299,
+                 left: this_ [1]:294..298 from 0,
+                 dot: [1]:298..299 from 0,
                  has_question_mark: false,
-                 name: `n` @ 299..300
+                 name: `n` @ [1]:299..300 from 0
                },
                id: 1
              }
            ],
            operators: [
              where_ir {
--              self: 303..308,
-+              self: 0..0,
+-              self: [1]:303..308 from 0,
++              self: [0]:0..0 from 0,
                predicate: binary_expr {
-                 left: dollar_var `$x` -> 1 @ 309..311,
-                 op: "gt" @ 312..313,
-                 right: constant int64 1 @ 314..315
+                 left: dollar_var `$x` -> 1 @ [1]:309..311 from 0,
+                 op: "gt" @ [1]:312..313 from 0,
+                 right: constant int64 1 @ [1]:314..315 from 0
                }
              },
              GenericIr {
                op: {
                  path: [
-                   `write_json` @ 318..328
+                   `write_json` @ [1]:318..328 from 0
                  ],
                  ref: std::write_json/op
                },
@@ -89,7 +89,7 @@
                ]
              }
            ]
-         } @ 281..330,
+         } @ [1]:281..330 from 0,
          let_ids: {
            
          }

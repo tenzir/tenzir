@@ -12,7 +12,6 @@
 #include "tenzir/detail/enum.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/session.hpp"
-#include "tenzir/source.hpp"
 
 #include <cstdint>
 #include <string_view>

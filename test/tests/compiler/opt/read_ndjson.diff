@@ -6,13 +6,13 @@
      GenericIr {
        op: {
          path: [
-           `from_tcp` @ 0..8
+           `from_tcp` @ [1]:0..8 from 0
          ],
          ref: std::from_tcp/op
        },
        desc: "tql2.from_tcp",
        args: [
-         located "127.0.0.1:8000" @ 9..25
+         located "127.0.0.1:8000" @ [1]:9..25 from 0
        ],
        filter: [
          
@@ -30,7 +30,7 @@
              GenericIr {
                op: {
                  path: [
-                   `read_ndjson` @ 30..41
+                   `read_ndjson` @ [1]:30..41 from 0
                  ],
                  ref: std::read_ndjson/op
                },
@@ -48,7 +48,7 @@
                ]
              }
            ]
-         } @ 26..43,
+         } @ [1]:26..43 from 0,
          let_ids: {
            "0": 1
          }
@@ -57,7 +57,7 @@
      GenericIr {
        op: {
          path: [
-           `discard` @ 44..51
+           `discard` @ [1]:44..51 from 0
          ],
          ref: std::discard/op
        },

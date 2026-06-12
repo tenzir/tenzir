@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 0..6
+           `export` @ [1]:0..6 from 0
          ],
          ref: std::export/op
        },
@@ -23,8 +23,8 @@
        ]
      },
      If {
-       if_keyword: 7..9,
-       condition: constant bool true @ 10..14,
+       if_keyword: [1]:7..9 from 0,
+       condition: constant bool true @ [1]:10..14 from 0,
        consequence: {
          lets: [
            
@@ -33,7 +33,7 @@
            GenericIr {
              op: {
                path: [
-                 `write_lines` @ 19..30
+                 `write_lines` @ [1]:19..30 from 0
                ],
                ref: std::write_lines/op
              },
@@ -52,7 +52,7 @@
            GenericIr {
              op: {
                path: [
-                 `read_ndjson` @ 33..44
+                 `read_ndjson` @ [1]:33..44 from 0
                ],
                ref: std::read_ndjson/op
              },
@@ -72,15 +72,15 @@
          ]
        },
        alternative: {
-         keyword: 47..51,
+         keyword: [1]:47..51 from 0,
          pipeline: {
            lets: [
              
            ],
            operators: [
              If {
-               if_keyword: 52..54,
-               condition: constant bool false @ 55..60,
+               if_keyword: [1]:52..54 from 0,
+               condition: constant bool false @ [1]:55..60 from 0,
                consequence: {
                  lets: [
                    
@@ -89,7 +89,7 @@
                    GenericIr {
                      op: {
                        path: [
-                         `write_lines` @ 65..76
+                         `write_lines` @ [1]:65..76 from 0
                        ],
                        ref: std::write_lines/op
                      },
@@ -108,7 +108,7 @@
                    GenericIr {
                      op: {
                        path: [
-                         `read_ndjson` @ 79..90
+                         `read_ndjson` @ [1]:79..90 from 0
                        ],
                        ref: std::read_ndjson/op
                      },
@@ -128,7 +128,7 @@
                  ]
                },
                alternative: {
-                 keyword: 93..97,
+                 keyword: [1]:93..97 from 0,
                  pipeline: {
                    lets: [
                      
@@ -137,7 +137,7 @@
                      GenericIr {
                        op: {
                          path: [
-                           `write_lines` @ 102..113
+                           `write_lines` @ [1]:102..113 from 0
                          ],
                          ref: std::write_lines/op
                        },
@@ -156,7 +156,7 @@
                      GenericIr {
                        op: {
                          path: [
-                           `read_ndjson` @ 116..127
+                           `read_ndjson` @ [1]:116..127 from 0
                          ],
                          ref: std::read_ndjson/op
                        },
@@ -184,7 +184,7 @@
      GenericIr {
        op: {
          path: [
-           `discard` @ 130..137
+           `discard` @ [1]:130..137 from 0
          ],
          ref: std::discard/op
        },

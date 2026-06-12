@@ -6,48 +6,48 @@
      from_ir {
        events: [
          record {
-           begin: 5..6,
+           begin: [1]:5..6 from 0,
            items: [
              field {
-               name: `x` @ 6..7,
-               expr: constant int64 1 @ 9..10
+               name: `x` @ [1]:6..7 from 0,
+               expr: constant int64 1 @ [1]:9..10 from 0
              }
            ],
-           end: 10..11
+           end: [1]:10..11 from 0
          }
        ],
-       self: 0..4
+       self: [1]:0..4 from 0
      },
      SetIr {
        assignments: [
          {
            left: meta {
              kind: "name",
-             source: 12..17
+             source: [1]:12..17 from 0
            },
-           equals: 18..19,
-           right: constant string "foo" @ 20..25
+           equals: [1]:18..19 from 0,
+           right: constant string "foo" @ [1]:20..25 from 0
          }
        ],
 -      order: "ordered"
 +      order: "unordered"
      },
      where_ir {
--      self: 26..31,
-+      self: 0..0,
+-      self: [1]:26..31 from 0,
++      self: [0]:0..0 from 0,
        predicate: binary_expr {
          left: meta {
            kind: "name",
-           source: 32..37
+           source: [1]:32..37 from 0
          },
-         op: "eq" @ 38..40,
-         right: constant string "foo" @ 41..46
+         op: "eq" @ [1]:38..40 from 0,
+         right: constant string "foo" @ [1]:41..46 from 0
        }
      },
      GenericIr {
        op: {
          path: [
-           `discard` @ 47..54
+           `discard` @ [1]:47..54 from 0
          ],
          ref: std::discard/op
        },

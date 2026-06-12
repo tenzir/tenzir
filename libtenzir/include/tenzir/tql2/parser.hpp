@@ -10,7 +10,6 @@
 
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/session.hpp"
-#include "tenzir/source.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/tokens.hpp"
 

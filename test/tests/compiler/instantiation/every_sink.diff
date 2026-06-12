@@ -6,14 +6,14 @@
      GenericIr {
        op: {
          path: [
-           `every` @ 107..112
+           `every` @ [1]:107..112 from 0
          ],
          ref: std::every/op
        },
        desc: "tql2.every",
        args: [
--        Incomplete constant duration "1s" @ 113..115
-+        located "1s" @ 113..115
+-        Incomplete constant duration "1s" @ [1]:113..115 from 0
++        located "1s" @ [1]:113..115 from 0
        ],
        filter: [
          
@@ -31,22 +31,22 @@
              from_ir {
                events: [
                  record {
-                   begin: 125..126,
+                   begin: [1]:125..126 from 0,
                    items: [
                      field {
-                       name: `x` @ 126..127,
-                       expr: constant int64 1 @ 129..130
+                       name: `x` @ [1]:126..127 from 0,
+                       expr: constant int64 1 @ [1]:129..130 from 0
                      }
                    ],
-                   end: 130..131
+                   end: [1]:130..131 from 0
                  }
                ],
-               self: 120..124
+               self: [1]:120..124 from 0
              },
              GenericIr {
                op: {
                  path: [
-                   `discard` @ 134..141
+                   `discard` @ [1]:134..141 from 0
                  ],
                  ref: std::discard/op
                },
@@ -63,7 +63,7 @@
                ]
              }
            ]
-         } @ 116..143,
+         } @ [1]:116..143 from 0,
          let_ids: {
            
          }

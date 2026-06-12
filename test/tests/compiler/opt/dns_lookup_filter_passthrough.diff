@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 0..6
+           `export` @ [1]:0..6 from 0
          ],
          ref: std::export/op
        },
@@ -17,11 +17,11 @@
        filter: [
 +        binary_expr {
 +          left: root_field {
-+            id: `x` @ 42..43,
++            id: `x` @ [1]:42..43 from 0,
 +            has_question_mark: false
 +          },
-+          op: "eq" @ 44..46,
-+          right: constant int64 1 @ 47..48
++          op: "eq" @ [1]:44..46 from 0,
++          right: constant int64 1 @ [1]:47..48 from 0
 +        }
 +      ],
 +      order: "unordered",
@@ -32,14 +32,14 @@
 +    GenericIr {
 +      op: {
 +        path: [
-+          `dns_lookup` @ 21..31
++          `dns_lookup` @ [1]:21..31 from 0
 +        ],
 +        ref: std::dns_lookup/op
 +      },
 +      desc: "dns_lookup",
 +      args: [
 +        expression root_field {
-+          id: `x` @ 32..33,
++          id: `x` @ [1]:32..33 from 0,
 +          has_question_mark: false
 +        }
 +      ],
@@ -54,7 +54,7 @@
 +    GenericIr {
 +      op: {
 +        path: [
-+          `to_stdout` @ 0..0
++          `to_stdout` @ [0]:0..0 from 0
 +        ],
 +        ref: std::to_stdout/op
 +      },
@@ -79,14 +79,14 @@
 -          GenericIr {
 -            op: {
 -              path: [
--                `dns_lookup` @ 21..31
+-                `dns_lookup` @ [1]:21..31 from 0
 -              ],
 -              ref: std::dns_lookup/op
 -            },
 -            desc: "dns_lookup",
 -            args: [
 -              expression root_field {
--                id: `x` @ 32..33,
+-                id: `x` @ [1]:32..33 from 0,
 -                has_question_mark: false
 -              }
 -            ],
@@ -99,19 +99,19 @@
 -            ]
 -          },
 -          where_ir {
--            self: 36..41,
+-            self: [1]:36..41 from 0,
 -            predicate: binary_expr {
 -              left: root_field {
--                id: `x` @ 42..43,
+-                id: `x` @ [1]:42..43 from 0,
 -                has_question_mark: false
 -              },
--              op: "eq" @ 44..46,
--              right: constant int64 1 @ 47..48
+-              op: "eq" @ [1]:44..46 from 0,
+-              right: constant int64 1 @ [1]:47..48 from 0
 -            }
 -          }
 -        ]
 -      },
--      loc: 7..16
+-      loc: [1]:7..16 from 0
      }
    ]
  }

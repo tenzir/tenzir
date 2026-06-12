@@ -76,10 +76,8 @@ struct location {
 
   friend auto inspect(auto& f, location& x) {
     if (auto dbg = as_debug_writer(f)) {
-      if (x.source_index != 0) {
-        return dbg->fmt_value("[{}]{}..{}", x.source_index, x.begin, x.end);
-      }
-      return dbg->fmt_value("{}..{}", x.begin, x.end);
+      return dbg->fmt_value("[{}]:{}..{} from {}", x.source_index, x.begin,
+                            x.end, x.callsite_index);
     }
     return f.object(x)
       .pretty_name("location")

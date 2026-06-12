@@ -12,7 +12,6 @@
 #include <tenzir/argument_parser2.hpp>
 #include <tenzir/glob.hpp>
 #include <tenzir/pipeline.hpp>
-#include <tenzir/source.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/set.hpp>
 

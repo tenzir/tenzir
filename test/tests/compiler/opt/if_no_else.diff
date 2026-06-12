@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 0..6
+           `export` @ [1]:0..6 from 0
          ],
          ref: std::export/op
        },
@@ -23,8 +23,8 @@
        ]
      },
      If {
-       if_keyword: 7..9,
-       condition: constant bool true @ 10..14,
+       if_keyword: [1]:7..9 from 0,
+       condition: constant bool true @ [1]:10..14 from 0,
        consequence: {
          lets: [
            
@@ -33,7 +33,7 @@
            GenericIr {
              op: {
                path: [
-                 `write_lines` @ 19..30
+                 `write_lines` @ [1]:19..30 from 0
                ],
                ref: std::write_lines/op
              },
@@ -52,7 +52,7 @@
            GenericIr {
              op: {
                path: [
-                 `read_ndjson` @ 33..44
+                 `read_ndjson` @ [1]:33..44 from 0
                ],
                ref: std::read_ndjson/op
              },
@@ -75,7 +75,7 @@
      GenericIr {
        op: {
          path: [
-           `discard` @ 47..54
+           `discard` @ [1]:47..54 from 0
          ],
          ref: std::discard/op
        },

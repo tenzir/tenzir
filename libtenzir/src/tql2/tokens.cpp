@@ -10,6 +10,7 @@
 
 #include "tenzir/concept/parseable/string/char_class.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/try.hpp"
 
 #include <arrow/util/utf8.h>
