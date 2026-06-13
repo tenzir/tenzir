@@ -418,6 +418,16 @@ std::vector<std::string>
 split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
               size_t max_splits = -1);
 
+/// Validates whether a string contains well-formed UTF-8.
+auto is_valid_utf8(std::string_view bytes) -> bool;
+
+/// Returns the number of trailing bytes that form an incomplete UTF-8 sequence.
+auto count_trailing_partial_utf8(std::string_view bytes) -> size_t;
+
+/// Validates whether a string is well-formed UTF-8 after ignoring one trailing
+/// incomplete UTF-8 sequence.
+auto is_valid_utf8_prefix(std::string_view bytes) -> bool;
+
 /// Constructs a `std::vector<std::string>` from a ::split result.
 /// @param v The vector of iterator pairs from ::split.
 /// @returns a vector of strings with the split elements.

@@ -18,12 +18,15 @@
 #include <tenzir/pcap.hpp>
 #include <tenzir/pcapng.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/read_detection.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
 #include <tenzir/view.hpp>
 
 #include <arrow/record_batch.h>
+
+#include <cstring>
 
 namespace tenzir::plugins::pcap {
 
@@ -1102,7 +1105,7 @@ private:
 
 class read_plugin final
   : public virtual operator_plugin2<parser_adapter<pcap_parser>>,
-    public virtual OperatorPlugin {
+    public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_pcap";
@@ -1128,6 +1131,27 @@ public:
     return {
       .extensions = {"pcap"},
       .mime_types = {"application/vnd.tcpdump.pcap"},
+    };
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    auto detect = [](read_detection_input input) {
+      auto raw_magic = uint32_t{};
+      if (input.bytes.size() < sizeof(raw_magic)) {
+        return input.eof ? read_detection::reject()
+                         : read_detection::need_more();
+      }
+      std::memcpy(&raw_magic, input.bytes.data(), sizeof(raw_magic));
+      if (normalized_magic_number(raw_magic)
+          or raw_magic == pcapng::magic_number) {
+        return read_detection::match("PCAP magic");
+      }
+      return read_detection::reject();
+    };
+    return {
+      read_detection::candidate("pcap", "read_pcap", "read_pcap",
+                                read_detection::specificity::magic, detect),
     };
   }
 };

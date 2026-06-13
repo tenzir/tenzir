@@ -19,9 +19,12 @@
 #include "tenzir/option.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
+#include <functional>
 #include <mutex>
 #include <span>
+#include <string>
 #include <string_view>
+#include <vector>
 
 namespace tenzir {
 
@@ -202,6 +205,44 @@ public:
 private:
   mutable std::once_flag desc_init_flag_;
   mutable std::shared_ptr<const Description> cached_desc_;
+};
+
+struct read_detection_input {
+  std::string_view bytes;
+  bool eof = false;
+};
+
+struct read_detection_result {
+  enum class result_state {
+    reject,
+    need_more,
+    match,
+  };
+
+  result_state state = result_state::reject;
+  std::string reason = {};
+};
+
+/// A reader that `read_auto` can select when its detector matches the probed
+/// input. The detector must be a pure function of the input that decides
+/// whether the reader is *capable* of consuming the bytes, ideally by running
+/// the reader's actual parser on them. Cross-format precedence is expressed
+/// solely through `specificity`, drawn from the vocabulary in
+/// `tenzir/read_detection.hpp`.
+struct read_detection_candidate {
+  std::string format_name = {};
+  std::string operator_name = {};
+  std::string pipeline = {};
+  uint64_t specificity = 0;
+  std::function<read_detection_result(read_detection_input)> detect = {};
+};
+
+class ReadOperatorPlugin : public virtual OperatorPlugin {
+public:
+  virtual auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> {
+    return {};
+  }
 };
 
 enum class ArgumentType { positional, named, pipeline };
@@ -1089,6 +1130,10 @@ using _::operator_plugin::Empty;
 using _::operator_plugin::OperatorPlugin;
 using _::operator_plugin::Optimization;
 using _::operator_plugin::Optimizer;
+using _::operator_plugin::read_detection_candidate;
+using _::operator_plugin::read_detection_input;
+using _::operator_plugin::read_detection_result;
+using _::operator_plugin::ReadOperatorPlugin;
 using _::operator_plugin::Spawn;
 using _::operator_plugin::SpawnFn;
 using _::operator_plugin::SpawnWith;

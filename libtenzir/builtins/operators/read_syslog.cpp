@@ -7,12 +7,14 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/async/pusher.hpp>
+#include <tenzir/detail/string.hpp>
 #include <tenzir/detail/syslog.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin/register.hpp>
+#include <tenzir/read_detection.hpp>
 #include <tenzir/tql2/ast.hpp>
 
 #include <algorithm>
@@ -453,7 +455,7 @@ private:
   syslog::builder_tag last_ = syslog::builder_tag::unknown_syslog_builder;
 };
 
-class plugin final : public virtual OperatorPlugin {
+class plugin final : public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "tql2.read_syslog";
@@ -466,6 +468,59 @@ public:
     d.operator_location(&ReadSyslogArgs::operator_location);
     d.validate(add_msb_to_describer(d, &ReadSyslogArgs::msb_options));
     return d.without_optimize();
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate("syslog", "read_syslog", "read_syslog",
+                                read_detection::specificity::grammar,
+                                detect_syslog),
+    };
+  }
+
+private:
+  static auto detect_syslog(read_detection_input input)
+    -> read_detection_result {
+    namespace rd = read_detection;
+    auto sample = rd::sample_lines(input, 2);
+    std::erase_if(sample.complete, [](std::string_view& line) {
+      line = detail::trim_front(line);
+      return line.empty();
+    });
+    if (sample.complete.empty()) {
+      auto partial = detail::trim_front(sample.partial);
+      if (partial.empty()) {
+        return input.eof ? rd::reject() : rd::need_more();
+      }
+      if (not partial.starts_with('<')) {
+        return rd::reject();
+      }
+      return rd::need_more();
+    }
+    auto line = sample.complete.front();
+    // RFC 3164 messages without a PRI prefix are indistinguishable from
+    // free-form text that happens to start with a timestamp; require the
+    // prefix for automatic detection and dry-run the actual parsers.
+    if (not line.starts_with('<')) {
+      return rd::reject("no syslog PRI prefix");
+    }
+    auto const* f = line.begin();
+    auto const* const l = line.end();
+    if (syslog::message_parser{}.parse(f, l, unused)) {
+      return rd::match("RFC 5424 syslog");
+    }
+    f = line.begin();
+    if (syslog::legacy_message_parser{}.parse(f, l, unused)) {
+      return rd::match("RFC 3164 syslog");
+    }
+    f = line.begin();
+    // The Cisco parser does not support parsing into `unused`.
+    auto cisco_msg = syslog::legacy_message{};
+    if (syslog::cisco_legacy_message_parser{}.parse(f, l, cisco_msg)) {
+      return rd::match("Cisco syslog");
+    }
+    return rd::reject("PRI prefix without syslog grammar");
   }
 };
 

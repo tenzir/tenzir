@@ -29,6 +29,7 @@
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin/parser.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/read_detection.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/to_lines.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -1337,7 +1338,7 @@ using zeek_tsv_writer_adapter = writer_adapter<zeek_tsv_printer>;
 
 class read_zeek_tsv final
   : public virtual operator_plugin2<zeek_tsv_parser_adapter>,
-    public virtual OperatorPlugin {
+    public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_zeek_tsv";
@@ -1359,6 +1360,23 @@ public:
     return {
       .extensions = {"zeek"},
       .mime_types = {"application/x-zeek"},
+    };
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    auto detect = [](read_detection_input input) {
+      auto bytes = detail::trim_front(input.bytes);
+      if (bytes.starts_with("#separator") or bytes.starts_with("#fields")
+          or bytes.starts_with("#types")) {
+        return read_detection::match("Zeek TSV header");
+      }
+      return bytes.size() < 10 and not input.eof ? read_detection::need_more()
+                                                 : read_detection::reject();
+    };
+    return {
+      read_detection::candidate("zeek.tsv", "read_zeek_tsv", "read_zeek_tsv",
+                                read_detection::specificity::magic, detect),
     };
   }
 };
