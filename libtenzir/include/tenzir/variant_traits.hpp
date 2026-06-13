@@ -188,7 +188,7 @@ concept variant_invocable_for_all
   // This is implemented as a hand rolled version, because recursive concepts
   // are illegal and an implementation via fold expressions does not allow the
   // compiler to point at the alternative that failed.
-  = (Variant_Size < 33 // Concept is only implemented up to 32 alternatives. If
+  = (Variant_Size < 43 // Concept is only implemented up to 42 alternatives. If
                        // you ever need more, just add cases at the bottom
      and ((Variant_Size < 1 or variant_invocable_for_r<F, V, R, 0>)
           and (Variant_Size < 2 or variant_invocable_for_r<F, V, R, 1>)
@@ -220,7 +220,17 @@ concept variant_invocable_for_all
           and (Variant_Size < 29 or variant_invocable_for_r<F, V, R, 27>)
           and (Variant_Size < 30 or variant_invocable_for_r<F, V, R, 29>)
           and (Variant_Size < 31 or variant_invocable_for_r<F, V, R, 30>)
-          and (Variant_Size < 32 or variant_invocable_for_r<F, V, R, 31>)));
+          and (Variant_Size < 32 or variant_invocable_for_r<F, V, R, 31>)
+          and (Variant_Size < 33 or variant_invocable_for_r<F, V, R, 32>)
+          and (Variant_Size < 34 or variant_invocable_for_r<F, V, R, 33>)
+          and (Variant_Size < 35 or variant_invocable_for_r<F, V, R, 34>)
+          and (Variant_Size < 36 or variant_invocable_for_r<F, V, R, 35>)
+          and (Variant_Size < 37 or variant_invocable_for_r<F, V, R, 36>)
+          and (Variant_Size < 38 or variant_invocable_for_r<F, V, R, 37>)
+          and (Variant_Size < 39 or variant_invocable_for_r<F, V, R, 38>)
+          and (Variant_Size < 40 or variant_invocable_for_r<F, V, R, 39>)
+          and (Variant_Size < 41 or variant_invocable_for_r<F, V, R, 40>)
+          and (Variant_Size < 42 or variant_invocable_for_r<F, V, R, 41>)));
 
 template <has_variant_traits V, class... Fs>
 struct variant_invoke_result

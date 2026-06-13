@@ -15,7 +15,7 @@ let
 in
 stdenv.mkDerivation {
   pname = "clickhouse-cpp";
-  version = "2.5.1-unstable-2025-02-26";
+  version = "2.6.1-unstable-2026-06-03";
 
   outputs = [
     "out"
@@ -23,13 +23,11 @@ stdenv.mkDerivation {
     #"dev"
   ];
 
-  # https://github.com/ClickHouse/clickhouse-cpp/pull/411 for easier
-  # integration.
   src = fetchFromGitHub {
     owner = "ClickHouse";
     repo = "clickhouse-cpp";
-    rev = "6b5109cf8d12525bc7d9ae6ba423ec3e23de2b33";
-    hash = "sha256-DAvJNaSKFS2HYHtJh4Q7x91fdmonFt3KITLeZKaOayw=";
+    rev = "3f6bc3f0252c659672dde6bd44a9880f88be9201";
+    hash = "sha256-mxm9AimUlKRlGw0isj5pQxZSEhflrjIkCXP2ZSWKbZ0=";
   };
 
   nativeBuildInputs = [
@@ -47,6 +45,10 @@ stdenv.mkDerivation {
     zstd
   ];
 
+  # cmake package config generation was never merged upstream (PR #411).
+  # Restore it so find_package(clickhouse-cpp) works in Nix builds.
+  patches = [ ./cmake-package-config.patch ];
+
   # Tries to compare arrays in the unit tests.
   env.NIX_CFLAGS_COMPILE = "-Wno-error";
 
@@ -59,6 +61,7 @@ stdenv.mkDerivation {
     "-DWITH_SYSTEM_LZ4=ON"
     "-DWITH_SYSTEM_ZSTD=ON"
     "-DDISABLE_CLANG_LIBC_WORKAROUND=ON"
+    "-DCH_MAP_BOOL_TO_UINT8=OFF"
   ];
 
   meta = {

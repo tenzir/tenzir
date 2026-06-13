@@ -1,0 +1,12 @@
+{
+  database: "default",
+  table: "fc_nested",
+}
+{
+  database: "default",
+  table: "fc_one",
+}
+{
+  database: "default",
+  table: "fc_sql",
+}
