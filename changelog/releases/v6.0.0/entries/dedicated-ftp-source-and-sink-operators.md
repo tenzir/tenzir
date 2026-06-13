@@ -2,7 +2,8 @@
 title: Dedicated FTP source and sink operators
 type: breaking
 author: mavam
-pr: 6044
+prs:
+  - 6044
 created: 2026-04-30T12:58:47.461872Z
 ---
 

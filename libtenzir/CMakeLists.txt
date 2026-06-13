@@ -568,20 +568,28 @@ elseif (TARGET proxygen::proxygen_http_coro_server_coro_httpserver)
   set(_tenzir_proxygen_server_target
       proxygen::proxygen_http_coro_server_coro_httpserver)
 endif ()
-# Ensure bundled proxygen headers win over Homebrew's proxygen headers. The
+# Ensure bundled Facebook library headers win over Homebrew headers. The
 # bundled target comes from add_subdirectory(... SYSTEM), so letting its usage
-# requirements propagate directly places the proxygen include roots after
+# requirements propagate directly places some include roots after
 # /opt/homebrew/include in Clang's effective search order. Add the vendored
-# include roots explicitly so they remain the effective first match.
+# roots explicitly so they remain the effective first match.
 if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
   target_include_directories(
     libtenzir BEFORE
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/proxygen"
-            "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/proxygen/generated")
+            "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/proxygen/generated"
+            "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/mvfst"
+            "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/wangle"
+            "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/fizz"
+            "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/fizz/fizz/generated")
   target_include_directories(
     libtenzir_builtins BEFORE
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/proxygen"
-            "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/proxygen/generated")
+            "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/proxygen/generated"
+            "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/mvfst"
+            "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/wangle"
+            "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/fizz"
+            "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/fizz/fizz/generated")
 endif ()
 # proxygen_utils_trace references symbols from proxygen_utils_trace_event_types
 # without declaring the dependency. Link it explicitly so static links see the

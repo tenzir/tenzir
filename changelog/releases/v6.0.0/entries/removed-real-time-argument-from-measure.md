@@ -2,7 +2,8 @@
 title: Removed `real_time` argument from `measure`
 type: breaking
 author: aljazerzen
-pr: 5880
+prs:
+  - 5880
 created: 2026-04-30T13:01:39.565524Z
 ---
 

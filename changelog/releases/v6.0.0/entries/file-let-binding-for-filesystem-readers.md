@@ -2,7 +2,8 @@
 title: '`$file` let-binding for filesystem readers'
 type: breaking
 author: raxyte
-pr: 6001
+prs:
+  - 6001
 created: 2026-04-30T13:00:47.360929Z
 ---
 

@@ -1,1 +1,2 @@
-error: default value for field parameter `field` must be `null`
+error: default value for field parameter `field` must be `null` or a selector
+ = note: default value: 1 + 2

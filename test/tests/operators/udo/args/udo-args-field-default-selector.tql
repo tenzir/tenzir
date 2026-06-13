@@ -1,0 +1,2 @@
+from {name: "Alice", age: 42}
+argspkg::field_default_selector

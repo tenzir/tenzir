@@ -3,6 +3,8 @@ title: Reduce disk I/O of time-based compaction
 type: bugfix
 authors:
   - lava
+prs:
+  - 6169
 created: 2026-05-12T13:32:50.629468Z
 ---
 

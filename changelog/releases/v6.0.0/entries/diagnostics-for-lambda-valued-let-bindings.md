@@ -4,7 +4,8 @@ type: bugfix
 authors:
   - mavam
   - codex
-pr: 6241
+prs:
+  - 6241
 created: 2026-05-31T06:17:30.259084Z
 ---
 

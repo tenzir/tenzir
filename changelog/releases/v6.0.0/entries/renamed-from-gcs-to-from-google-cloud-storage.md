@@ -2,7 +2,8 @@
 title: Renamed `from_gcs` to `from_google_cloud_storage`
 type: breaking
 author: raxyte
-pr: 5766
+prs:
+  - 5766
 created: 2026-04-30T13:03:17.226108Z
 ---
 

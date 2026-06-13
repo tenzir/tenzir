@@ -2,7 +2,8 @@
 title: '`to_kafka` defaults to NDJSON-encoded messages'
 type: breaking
 author: lava
-pr: 5742
+prs:
+  - 5742
 created: 2026-04-30T13:02:38.652347Z
 ---
 
