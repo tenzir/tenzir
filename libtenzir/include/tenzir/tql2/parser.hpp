@@ -23,28 +23,27 @@ auto parse(std::span<token> tokens, Source const& source, session ctx)
 
 auto parse(Source const& source, session ctx) -> failure_or<ast::pipeline>;
 
-/// Parse a source with an explicit location override. This is useful when
-/// parseing ad-hoc TQL. All locations in the resulting AST will point to
-/// source_location.
-auto parse_pipeline_with_location_override(std::string_view source,
-                                           location location_override,
-                                           session ctx)
+/// Parse a substring with an explicit source origin. This allows parsing a
+/// substring of a larger file while keeping locations correct relative to the
+/// full source (using `location_offset`) or overriding all locations to a fixed
+/// value (using `location`).
+auto parse(std::string_view source, source_origin origin, session ctx)
   -> failure_or<ast::pipeline>;
 
 /// Parse a source with an explicit location override. This is useful when
-/// parseing ad-hoc TQL. All locations in the resulting AST will point to
-/// source_location.
+/// parsing ad-hoc TQL. When passed a `location`, all locations in the resulting
+/// AST will point to that location. When passed a `location_offset`, token
+/// positions are shifted by the offset and use the given source id.
+auto parse_pipeline_with_location_override(std::string_view source,
+                                           source_origin origin, session ctx)
+  -> failure_or<ast::pipeline>;
+
 auto parse_expression_with_location_override(std::string_view source,
-                                             location location_override,
-                                             session ctx)
+                                             source_origin origin, session ctx)
   -> failure_or<ast::expression>;
 
-/// Parse a source with an explicit location override. This is useful when
-/// parseing ad-hoc TQL. All locations in the resulting AST will point to
-/// source_location.
 auto parse_type_def_with_location_override(std::string_view source,
-                                           location location_override,
-                                           session ctx)
+                                           source_origin origin, session ctx)
   -> failure_or<ast::type_def>;
 
 struct expression_stream {
@@ -52,27 +51,19 @@ struct expression_stream {
   size_t bytes_consumed = 0;
   bool has_error = false;
 };
-/// Parse a source with an explicit location override. This is useful when
-/// parseing ad-hoc TQL. All locations in the resulting AST will point to
-/// source_location.
+
 auto parse_expression_stream_with_location_override(std::string_view source,
-                                                    location location_override,
+                                                    source_origin origin,
                                                     session ctx)
   -> failure_or<expression_stream>;
 
-/// Parse a source with an explicit location override. This is useful when
-/// parseing ad-hoc TQL. All locations in the resulting AST will point to
-/// source_location.
 auto parse_assignment_with_location_override(std::string_view source,
-                                             location location_override,
-                                             session ctx)
+                                             source_origin origin, session ctx)
   -> failure_or<ast::assignment>;
 
-/// Parse a source with an explicit location override. This is useful when
-/// parseing ad-hoc TQL. All locations in the resulting AST will point to
-/// source_location.
-auto parse_multiple_assignments_with_location_override(
-  std::string_view source, location location_override, session ctx)
+auto parse_multiple_assignments_with_location_override(std::string_view source,
+                                                       source_origin origin,
+                                                       session ctx)
   -> failure_or<std::vector<ast::assignment>>;
 
 } // namespace tenzir

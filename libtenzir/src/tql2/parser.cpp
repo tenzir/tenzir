@@ -1378,6 +1378,10 @@ public:
       },
       [](location override) {
         return override;
+      },
+      [&](location_offset loff) {
+        return location{loff.begin_offset + begin, loff.begin_offset + end,
+                        loff.source_id, 0};
       });
   }
 
@@ -1664,63 +1668,65 @@ auto parse(Source const& source, session ctx) -> failure_or<ast::pipeline> {
   return parse_pipeline(tokens, source, ctx);
 }
 
-auto parse_pipeline_with_location_override(std::string_view source,
-                                           location location_override,
-                                           session ctx)
+auto parse(std::string_view source, source_origin origin, session ctx)
   -> failure_or<ast::pipeline> {
-  TRY(auto tokens, tokenize(source, location_override, ctx));
-  return parse_pipeline_with_location_mode(tokens, source, ctx,
-                                           location_override);
+  TRY(auto tokens, tokenize(source, origin, ctx));
+  return parse_pipeline_with_location_mode(tokens, source, ctx, origin);
+}
+
+auto parse_pipeline_with_location_override(std::string_view source,
+                                           source_origin origin, session ctx)
+  -> failure_or<ast::pipeline> {
+  TRY(auto tokens, tokenize(source, origin, ctx));
+  return parse_pipeline_with_location_mode(tokens, source, ctx, origin);
 }
 
 auto parse_expression_with_location_override(std::string_view source,
-                                             location location_override,
-                                             session ctx)
+                                             source_origin origin, session ctx)
   -> failure_or<ast::expression> {
-  TRY(auto tokens, tokenize(source, location_override, ctx));
-  return parser::parse_with(tokens, source, ctx, location_override,
+  TRY(auto tokens, tokenize(source, origin, ctx));
+  return parser::parse_with(tokens, source, ctx, origin,
                             [](class parser& self) {
                               return self.parse_expression();
                             });
 }
 
 auto parse_type_def_with_location_override(std::string_view source,
-                                           location location_override,
-                                           session ctx)
+                                           source_origin origin, session ctx)
   -> failure_or<ast::type_def> {
-  TRY(auto tokens, tokenize(source, location_override, ctx));
-  return parser::parse_with(tokens, source, ctx, location_override,
+  TRY(auto tokens, tokenize(source, origin, ctx));
+  return parser::parse_with(tokens, source, ctx, origin,
                             [](class parser& self) {
                               return self.parse_type_def();
                             });
 }
 
 auto parse_expression_stream_with_location_override(std::string_view source,
-                                                    location location_override,
+                                                    source_origin origin,
                                                     session ctx)
   -> failure_or<expression_stream> {
   // Streaming callers may pass partial trailing UTF-8 sequences at chunk
   // boundaries; defer handling to permissive tokenization + parser recovery.
   auto tokens = tokenize_permissive(source);
-  return parse_expression_stream(tokens, source, ctx, location_override);
+  return parse_expression_stream(tokens, source, ctx, origin);
 }
 
 auto parse_assignment_with_location_override(std::string_view source,
-                                             location location_override,
-                                             session ctx)
+                                             source_origin origin, session ctx)
   -> failure_or<ast::assignment> {
-  TRY(auto tokens, tokenize(source, location_override, ctx));
-  return parser::parse_with(tokens, source, ctx, location_override,
+  TRY(auto tokens, tokenize(source, origin, ctx));
+  return parser::parse_with(tokens, source, ctx, origin,
                             [](class parser& self) {
                               return self.parse_assignment();
                             });
 }
 
-auto parse_multiple_assignments_with_location_override(
-  std::string_view source, location location_override, session ctx)
+auto parse_multiple_assignments_with_location_override(std::string_view source,
+                                                       source_origin origin,
+                                                       session ctx)
   -> failure_or<std::vector<ast::assignment>> {
-  TRY(auto tokens, tokenize(source, location_override, ctx));
-  return parser::parse_with(tokens, source, ctx, location_override,
+  TRY(auto tokens, tokenize(source, origin, ctx));
+  return parser::parse_with(tokens, source, ctx, origin,
                             [](class parser& self) {
                               return self.parse_multiple_assignments();
                             });

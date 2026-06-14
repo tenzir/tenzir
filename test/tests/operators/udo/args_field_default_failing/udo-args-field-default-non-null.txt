@@ -1,2 +1,7 @@
 error: default value for field parameter `field` must be `null` or a selector
- = note: default value: 1 + 2
+ --> inputs/package-roots/udo-args-field-default-failing/argspkg_field_default_failing/operators/bad_field_default.tql:7:16
+  |
+7 |       default: 1 + 2
+  |                ^^^^^ 
+  |
+  = note: default value: 1 + 2

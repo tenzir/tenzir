@@ -30,6 +30,10 @@ auto make_location(uint32_t begin, uint32_t end, source_origin origin)
     },
     [](location override) {
       return override;
+    },
+    [&](location_offset loff) {
+      return location{loff.begin_offset + begin, loff.begin_offset + end,
+                      loff.source_id, 0};
     });
 }
 

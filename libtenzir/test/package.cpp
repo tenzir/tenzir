@@ -20,7 +20,7 @@ TEST("build_package_operator_module populates UDO source") {
   pkg.id = "sourcepkg";
   pkg.name = "Source Package";
   auto op = package_operator{};
-  op.definition = "where true";
+  op.tql_body = "where true";
   pkg.operators.emplace(std::vector<std::string>{"echo"}, std::move(op));
   auto dh = null_diagnostic_handler{};
   auto module = build_package_operator_module(pkg, dh);

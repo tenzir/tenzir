@@ -20,7 +20,15 @@
 
 namespace tenzir {
 
-using source_origin = variant<SourceId, location>;
+/// Instructs the parser/tokenizer to add a fixed byte offset to all token
+/// positions and use the given source id. This allows parsing a substring while
+/// producing locations that are correct relative to the full source file.
+struct location_offset {
+  SourceId source_id;
+  uint32_t begin_offset;
+};
+
+using source_origin = variant<SourceId, location, location_offset>;
 
 TENZIR_ENUM(
   ///
