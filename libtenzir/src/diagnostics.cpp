@@ -9,9 +9,13 @@
 #include "tenzir/diagnostics.hpp"
 
 #include "tenzir/detail/backtrace.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/option.hpp"
+#include "tenzir/ref.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
+#include "tenzir/source.hpp"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/functional/hash.hpp>
@@ -19,7 +23,10 @@
 #include <fmt/color.h>
 
 #include <iostream>
+#include <optional>
+#include <span>
 #include <string_view>
+#include <unordered_map>
 
 namespace tenzir {
 
@@ -64,14 +71,9 @@ struct colors {
 
 class diagnostic_printer final : public diagnostic_handler, private colors {
 public:
-  diagnostic_printer(std::optional<location_origin> origin,
-                     color_diagnostics color, std::ostream& stream)
-    : colors{colors::make(color)},
-      storage_{origin ? std::move(origin->source) : ""},
-      lines_{origin ? detail::split(storage_, "\n")
-                    : std::vector<std::string_view>{}},
-      stream_{stream},
-      filename_{origin ? std::move(origin->filename) : ""} {
+  diagnostic_printer(SourceMap const& source_map, color_diagnostics color,
+                     std::ostream& stream)
+    : colors{colors::make(color)}, source_map_{source_map}, stream_{stream} {
   }
 
   void emit(diagnostic diag) override {
@@ -81,28 +83,60 @@ public:
     // TODO: Do not print the same line multiple times. Merge annotations instead.
     fmt::print(stream_, "{}{}{}{}: {}{}\n", bold, color(diag.severity),
                diag.severity, uncolor, diag.message, reset);
+    // Sources are resolved against the source map on every emit because the
+    // map may change during the printer's lifetime. Sources without pre-split
+    // lines are split here; the cache keeps those splits alive for the
+    // duration of this call. The views point into the source text, which the
+    // `Arc` in the source map keeps stable.
+    auto split_cache
+      = std::unordered_map<SourceId, std::vector<std::string_view>>{};
+    auto resolve = [&](SourceId id) -> Option<ResolvedSource> {
+      auto source = source_map_->source(id);
+      if (not source) {
+        return None{};
+      }
+      if (source->lines) {
+        return ResolvedSource{&*source, *source->lines};
+      }
+      auto [it, inserted] = split_cache.try_emplace(id);
+      if (inserted) {
+        it->second = detail::split(source->text, "\n");
+      }
+      return ResolvedSource{&*source, it->second};
+    };
     auto indent_width = size_t{0};
     for (auto& annotation : diag.annotations) {
-      if (lines_.empty()) {
-        // TODO: This is a hack for the case where we don't have the information.
-        break;
+      if (not annotation.source) {
+        continue;
       }
-      if (auto lc = line_col_indices(annotation.source.begin)) {
+      auto src = resolve(annotation.source.source_index);
+      if (not src) {
+        continue;
+      }
+      if (auto lc = line_col_indices(src->lines, annotation.source.begin)) {
         auto [line, col] = *lc;
         indent_width = std::max(indent_width, std::to_string(line + 1).size());
       }
     }
+    if (not diag.notes.empty()) {
+      indent_width = std::max(indent_width, size_t{1});
+    }
     auto indent = std::string(indent_width, ' ');
+    struct PrintedSourceLine {
+      SourceId source_index;
+      size_t line_idx;
+    };
+    auto previous_line = std::optional<PrintedSourceLine>{};
     for (auto& annotation : diag.annotations) {
-      if (lines_.empty()) {
-        // TODO: This is a hack for the case where we don't have the information.
-        break;
-      }
       if (not annotation.source) {
         TENZIR_VERBOSE("annotation does not have source: {:?}", annotation);
         continue;
       }
-      auto lc = line_col_indices(annotation.source.begin);
+      auto src = resolve(annotation.source.source_index);
+      if (not src) {
+        continue;
+      }
+      auto lc = line_col_indices(src->lines, annotation.source.begin);
       if (not lc) {
         // Source offset is beyond the available source text. This can
         // happen when diagnostics reference a modified definition.
@@ -110,28 +144,37 @@ public:
       }
       auto [line_idx, col] = *lc;
       auto line = line_idx + 1;
-      if (&annotation == &diag.annotations.front()) {
-        fmt::print(stream_, "{}{}{}-->{} {}:{}:{}\n", indent, bold, blue, reset,
-                   filename_, line, col + 1);
-        fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
-      } else {
+      if (previous_line
+          and previous_line->source_index == annotation.source.source_index
+          and previous_line->line_idx == line_idx) {
         fmt::print(stream_, "{} {}{}⋮{}\n", indent, bold, blue, reset);
+      } else {
+        if (previous_line) {
+          fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
+        }
+        fmt::print(stream_, "{}{}{}-->{} {}:{}:{}\n", indent, bold, blue, reset,
+                   src->source->origin, line, col + 1);
+        fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
       }
       fmt::print(stream_, "{}{}{}{} |{} {}\n",
                  std::string(indent_width - std::to_string(line).size(), ' '),
-                 bold, blue, line, reset, lines_[line_idx]);
+                 bold, blue, line, reset, src->lines[line_idx]);
       // TODO: This doesn't respect multi-line spans.
-      auto count
-        = std::max(size_t{1}, annotation.source.end - annotation.source.begin);
+      auto count = std::max(uint32_t{1},
+                            annotation.source.end - annotation.source.begin);
       auto pseudo_severity
         = annotation.primary ? diag.severity : severity::note;
       fmt::print(stream_, "{} {}{}| {}{}{} {}{}\n", indent, bold, blue,
                  color(pseudo_severity), std::string(col, ' '),
                  std::string(count, symbol(pseudo_severity)), annotation.text,
                  reset);
-      if (&annotation == &diag.annotations.back()) {
-        fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
-      }
+      previous_line = PrintedSourceLine{
+        .source_index = annotation.source.source_index,
+        .line_idx = line_idx,
+      };
+    }
+    if (previous_line) {
+      fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
     }
     for (auto& note : diag.notes) {
       auto lines = detail::split(note.message, "\n");
@@ -151,6 +194,12 @@ public:
   }
 
 private:
+  /// A source resolved for the duration of a single `emit()` call.
+  struct ResolvedSource {
+    const Source* source;
+    std::span<const std::string_view> lines;
+  };
+
   static auto symbol(severity s) -> char {
     switch (s) {
       case severity::error:
@@ -177,18 +226,19 @@ private:
 
   /// Returned indices are zero-based. Returns nullopt if the offset is
   /// beyond the end of the source text.
-  auto line_col_indices(size_t offset)
+  static auto
+  line_col_indices(std::span<const std::string_view> lines, size_t offset)
     -> std::optional<std::pair<size_t, size_t>> {
     auto line = size_t{0};
     auto col = offset;
     while (true) {
-      if (line >= lines_.size()) {
+      if (line >= lines.size()) {
         return std::nullopt;
       }
-      if (col <= lines_[line].size()) {
+      if (col <= lines[line].size()) {
         break;
       }
-      col -= lines_[line].size() + 1;
+      col -= lines[line].size() + 1;
       line += 1;
     }
     return std::pair{line, col};
@@ -196,17 +246,15 @@ private:
 
   bool first = true;
   bool error_ = false;
-  std::string storage_;
-  std::vector<std::string_view> lines_;
+  Ref<const SourceMap> source_map_;
   std::ostream& stream_;
-  std::string filename_;
 };
 
 } // namespace
 
 diagnostic_annotation::diagnostic_annotation(bool primary, std::string text,
                                              location source)
-  : primary{primary}, text{std::move(text)}, source{std::move(source)} {
+  : primary{primary}, text{std::move(text)}, source{source} {
   trim_and_truncate(this->text);
 }
 
@@ -215,10 +263,41 @@ diagnostic_note::diagnostic_note(diagnostic_note_kind kind, std::string message)
   trim_and_truncate(this->message);
 }
 
-auto make_diagnostic_printer(std::optional<location_origin> origin,
+auto make_diagnostic_printer(SourceMap const& source_map,
                              color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler> {
-  return std::make_unique<diagnostic_printer>(std::move(origin), color, stream);
+  return std::make_unique<diagnostic_printer>(source_map, color, stream);
+}
+
+auto make_diagnostic_printer(color_diagnostics color, std::ostream& stream)
+  -> std::unique_ptr<diagnostic_handler> {
+  static const auto empty = SourceMap{};
+  return std::make_unique<diagnostic_printer>(empty, color, stream);
+}
+
+namespace {
+
+class enriching_handler final : public diagnostic_handler {
+public:
+  enriching_handler(const SourceMap& source_map, diagnostic_handler& inner)
+    : source_map_{source_map}, inner_{inner} {
+  }
+
+  void emit(diagnostic diag) override {
+    inner_->emit(source_map_->enrich(std::move(diag)));
+  }
+
+private:
+  Ref<const SourceMap> source_map_;
+  Ref<diagnostic_handler> inner_;
+};
+
+} // namespace
+
+auto make_enriching_handler(const SourceMap& source_map,
+                            diagnostic_handler& inner)
+  -> std::unique_ptr<diagnostic_handler> {
+  return std::make_unique<enriching_handler>(source_map, inner);
 }
 
 auto diagnostic::builder(enum severity s, caf::error err,
@@ -309,7 +388,8 @@ auto to_diagnostic(const panic_exception& e) -> diagnostic {
     note += detail::format_frame(frame) + "\n";
   }
   return diagnostic::error("unexpected internal error: {}", e.message)
-    .primary(location{e.trace.begin, e.trace.end})
+    .primary(location{detail::narrow_cast<uint32_t>(e.trace.begin),
+                      detail::narrow_cast<uint32_t>(e.trace.end)})
     .note(std::move(note))
     .done();
 }

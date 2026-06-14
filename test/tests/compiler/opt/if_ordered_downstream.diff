@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 0..6
+           `export` @ [1]:0..6 from 0
          ],
          ref: std::export/op
        },
@@ -23,8 +23,8 @@
        ]
      },
      If {
-       if_keyword: 7..9,
-       condition: constant bool true @ 10..14,
+       if_keyword: [1]:7..9 from 0,
+       condition: constant bool true @ [1]:10..14 from 0,
        consequence: {
          lets: [
            
@@ -33,7 +33,7 @@
            GenericIr {
              op: {
                path: [
-                 `head` @ 19..23
+                 `head` @ [1]:19..23 from 0
                ],
                ref: std::head/op
              },
@@ -52,7 +52,7 @@
          ]
        },
        alternative: {
-         keyword: 26..30,
+         keyword: [1]:26..30 from 0,
          pipeline: {
            lets: [
              
@@ -61,7 +61,7 @@
              GenericIr {
                op: {
                  path: [
-                   `head` @ 35..39
+                   `head` @ [1]:35..39 from 0
                  ],
                  ref: std::head/op
                },
@@ -84,7 +84,7 @@
      GenericIr {
        op: {
          path: [
-           `to_stdout` @ 42..51
+           `to_stdout` @ [1]:42..51 from 0
          ],
          ref: std::to_stdout/op
        },
@@ -108,7 +108,7 @@
              GenericIr {
                op: {
                  path: [
-                   `write_tql` @ 56..65
+                   `write_tql` @ [1]:56..65 from 0
                  ],
                  ref: std::write_tql/op
                },
@@ -125,7 +125,7 @@
                ]
              }
            ]
-         } @ 52..67,
+         } @ [1]:52..67 from 0,
          let_ids: {
            
          }

@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 0..6
+           `export` @ [1]:0..6 from 0
          ],
          ref: std::export/op
        },
@@ -24,102 +24,102 @@
        ]
      },
      If {
-       if_keyword: 7..9,
-       condition: constant bool true @ 10..14,
+       if_keyword: [1]:7..9 from 0,
+       condition: constant bool true @ [1]:10..14 from 0,
        consequence: {
          lets: [
            
          ],
          operators: [
            where_ir {
--            self: 19..24,
-+            self: 0..0,
+-            self: [1]:19..24 from 0,
++            self: [0]:0..0 from 0,
              predicate: root_field {
-               id: `a` @ 25..26,
+               id: `a` @ [1]:25..26 from 0,
                has_question_mark: false
 +            }
 +          },
 +          where_ir {
-+            self: 0..0,
++            self: [0]:0..0 from 0,
 +            predicate: binary_expr {
 +              left: root_field {
-+                id: `foo` @ 92..95,
++                id: `foo` @ [1]:92..95 from 0,
 +                has_question_mark: false
 +              },
-+              op: "eq" @ 96..98,
-+              right: constant int64 42 @ 99..101
++              op: "eq" @ [1]:96..98 from 0,
++              right: constant int64 42 @ [1]:99..101 from 0
              }
            }
          ]
        },
        alternative: {
-         keyword: 29..33,
+         keyword: [1]:29..33 from 0,
          pipeline: {
            lets: [
              
            ],
            operators: [
              If {
-               if_keyword: 34..36,
-               condition: constant bool false @ 37..42,
+               if_keyword: [1]:34..36 from 0,
+               condition: constant bool false @ [1]:37..42 from 0,
                consequence: {
                  lets: [
                    
                  ],
                  operators: [
                    where_ir {
--                    self: 47..52,
-+                    self: 0..0,
+-                    self: [1]:47..52 from 0,
++                    self: [0]:0..0 from 0,
                      predicate: root_field {
-                       id: `b` @ 53..54,
+                       id: `b` @ [1]:53..54 from 0,
                        has_question_mark: false
 +                    }
 +                  },
 +                  where_ir {
-+                    self: 0..0,
++                    self: [0]:0..0 from 0,
 +                    predicate: binary_expr {
 +                      left: root_field {
-+                        id: `foo` @ 92..95,
++                        id: `foo` @ [1]:92..95 from 0,
 +                        has_question_mark: false
 +                      },
-+                      op: "eq" @ 96..98,
-+                      right: constant int64 42 @ 99..101
++                      op: "eq" @ [1]:96..98 from 0,
++                      right: constant int64 42 @ [1]:99..101 from 0
                      }
                    }
                  ]
                },
                alternative: {
-                 keyword: 57..61,
+                 keyword: [1]:57..61 from 0,
                  pipeline: {
                    lets: [
                      
                    ],
                    operators: [
                      where_ir {
--                      self: 66..71,
-+                      self: 0..0,
+-                      self: [1]:66..71 from 0,
++                      self: [0]:0..0 from 0,
                        predicate: root_field {
-                         id: `c` @ 72..73,
+                         id: `c` @ [1]:72..73 from 0,
                          has_question_mark: false
                        }
                      },
                      where_ir {
--                      self: 76..81,
-+                      self: 0..0,
+-                      self: [1]:76..81 from 0,
++                      self: [0]:0..0 from 0,
                        predicate: root_field {
-                         id: `d` @ 82..83,
+                         id: `d` @ [1]:82..83 from 0,
                          has_question_mark: false
 +                      }
 +                    },
 +                    where_ir {
-+                      self: 0..0,
++                      self: [0]:0..0 from 0,
 +                      predicate: binary_expr {
 +                        left: root_field {
-+                          id: `foo` @ 92..95,
++                          id: `foo` @ [1]:92..95 from 0,
 +                          has_question_mark: false
 +                        },
-+                        op: "eq" @ 96..98,
-+                        right: constant int64 42 @ 99..101
++                        op: "eq" @ [1]:96..98 from 0,
++                        right: constant int64 42 @ [1]:99..101 from 0
                        }
                      }
                    ]
@@ -131,20 +131,20 @@
 -      }
 -    },
 -    where_ir {
--      self: 86..91,
+-      self: [1]:86..91 from 0,
 -      predicate: binary_expr {
 -        left: root_field {
--          id: `foo` @ 92..95,
+-          id: `foo` @ [1]:92..95 from 0,
 -          has_question_mark: false
 -        },
--        op: "eq" @ 96..98,
--        right: constant int64 42 @ 99..101
+-        op: "eq" @ [1]:96..98 from 0,
+-        right: constant int64 42 @ [1]:99..101 from 0
        }
      },
      GenericIr {
        op: {
          path: [
-           `discard` @ 102..109
+           `discard` @ [1]:102..109 from 0
          ],
          ref: std::discard/op
        },

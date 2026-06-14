@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 0..6
+           `export` @ [1]:0..6 from 0
          ],
          ref: std::export/op
        },
@@ -17,18 +17,18 @@
        filter: [
 +        binary_expr {
 +          left: root_field {
-+            id: `foo` @ 13..16,
++            id: `foo` @ [1]:13..16 from 0,
 +            has_question_mark: false
 +          },
-+          op: "in" @ 17..19,
++          op: "in" @ [1]:17..19 from 0,
 +          right: list {
-+            begin: 20..21,
++            begin: [1]:20..21 from 0,
 +            items: [
-+              expression constant int64 1 @ 21..22,
-+              expression constant int64 2 @ 24..25,
-+              expression constant int64 3 @ 27..28
++              expression constant int64 1 @ [1]:21..22 from 0,
++              expression constant int64 2 @ [1]:24..25 from 0,
++              expression constant int64 3 @ [1]:27..28 from 0
 +            ],
-+            end: 28..29
++            end: [1]:28..29 from 0
 +          }
 +        }
 +      ],
@@ -40,7 +40,7 @@
 +    GenericIr {
 +      op: {
 +        path: [
-+          `to_stdout` @ 0..0
++          `to_stdout` @ [1]:29..29 from 0
 +        ],
 +        ref: std::to_stdout/op
 +      },
@@ -57,21 +57,21 @@
        ]
 -    },
 -    where_ir {
--      self: 7..12,
+-      self: [1]:7..12 from 0,
 -      predicate: binary_expr {
 -        left: root_field {
--          id: `foo` @ 13..16,
+-          id: `foo` @ [1]:13..16 from 0,
 -          has_question_mark: false
 -        },
--        op: "in" @ 17..19,
+-        op: "in" @ [1]:17..19 from 0,
 -        right: list {
--          begin: 20..21,
+-          begin: [1]:20..21 from 0,
 -          items: [
--            expression constant int64 1 @ 21..22,
--            expression constant int64 2 @ 24..25,
--            expression constant int64 3 @ 27..28
+-            expression constant int64 1 @ [1]:21..22 from 0,
+-            expression constant int64 2 @ [1]:24..25 from 0,
+-            expression constant int64 3 @ [1]:27..28 from 0
 -          ],
--          end: 28..29
+-          end: [1]:28..29 from 0
 -        }
 -      }
      }

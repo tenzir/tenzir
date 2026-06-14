@@ -2,25 +2,25 @@
   invocation {
     op: {
       path: [
-        `a` @ 0..1
+        `a` @ [1]:0..1 from 0
       ],
       ref: unresolved
     },
     args: [
       root_field {
-        id: `b` @ 2..3,
+        id: `b` @ [1]:2..3 from 0,
         has_question_mark: false
       },
       root_field {
-        id: `c` @ 7..8,
+        id: `c` @ [1]:7..8 from 0,
         has_question_mark: false
       },
       root_field {
-        id: `d` @ 12..13,
+        id: `d` @ [1]:12..13 from 0,
         has_question_mark: false
       },
       root_field {
-        id: `e` @ 15..16,
+        id: `e` @ [1]:15..16 from 0,
         has_question_mark: false
       }
     ]
@@ -28,13 +28,13 @@
   invocation {
     op: {
       path: [
-        `f` @ 17..18
+        `f` @ [1]:17..18 from 0
       ],
       ref: unresolved
     },
     args: [
       root_field {
-        id: `g` @ 19..20,
+        id: `g` @ [1]:19..20 from 0,
         has_question_mark: false
       }
     ]
@@ -42,21 +42,21 @@
   invocation {
     op: {
       path: [
-        `h` @ 21..22
+        `h` @ [1]:21..22 from 0
       ],
       ref: unresolved
     },
     args: [
       root_field {
-        id: `i` @ 27..28,
+        id: `i` @ [1]:27..28 from 0,
         has_question_mark: false
       },
       root_field {
-        id: `j` @ 32..33,
+        id: `j` @ [1]:32..33 from 0,
         has_question_mark: false
       },
       root_field {
-        id: `k` @ 38..39,
+        id: `k` @ [1]:38..39 from 0,
         has_question_mark: false
       }
     ]
@@ -64,19 +64,19 @@
   invocation {
     op: {
       path: [
-        `l` @ 40..41
+        `l` @ [1]:40..41 from 0
       ],
       ref: unresolved
     },
     args: [
       binary_expr {
         left: root_field {
-          id: `m` @ 42..43,
+          id: `m` @ [1]:42..43 from 0,
           has_question_mark: false
         },
-        op: "add" @ 44..45,
+        op: "add" @ [1]:44..45 from 0,
         right: root_field {
-          id: `n` @ 48..49,
+          id: `n` @ [1]:48..49 from 0,
           has_question_mark: false
         }
       }

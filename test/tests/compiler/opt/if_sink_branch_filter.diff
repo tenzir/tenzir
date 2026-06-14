@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 0..6
+           `export` @ [1]:0..6 from 0
          ],
          ref: std::export/op
        },
@@ -24,8 +24,8 @@
        ]
      },
      If {
-       if_keyword: 7..9,
-       condition: constant bool true @ 10..14,
+       if_keyword: [1]:7..9 from 0,
+       condition: constant bool true @ [1]:10..14 from 0,
        consequence: {
          lets: [
            
@@ -34,7 +34,7 @@
            GenericIr {
              op: {
                path: [
-                 `discard` @ 19..26
+                 `discard` @ [1]:19..26 from 0
                ],
                ref: std::discard/op
              },
@@ -54,27 +54,27 @@
          ]
        },
        alternative: {
-         keyword: 29..33,
+         keyword: [1]:29..33 from 0,
          pipeline: {
            lets: [
              
            ],
            operators: [
 +            where_ir {
-+              self: 0..0,
++              self: [0]:0..0 from 0,
 +              predicate: binary_expr {
 +                left: root_field {
-+                  id: `b` @ 53..54,
++                  id: `b` @ [1]:53..54 from 0,
 +                  has_question_mark: false
 +                },
-+                op: "eq" @ 55..57,
-+                right: constant int64 2 @ 58..59
++                op: "eq" @ [1]:55..57 from 0,
++                right: constant int64 2 @ [1]:58..59 from 0
 +              }
 +            },
              GenericIr {
                op: {
                  path: [
-                   `drop` @ 38..42
+                   `drop` @ [1]:38..42 from 0
                  ],
                  ref: std::drop/op
                },
@@ -82,13 +82,13 @@
                args: [
                  field_path {
                    expr: root_field {
-                     id: `a` @ 43..44,
+                     id: `a` @ [1]:43..44 from 0,
                      has_question_mark: false
                    },
                    has_this: false,
                    path: [
                      {
-                       id: `a` @ 43..44,
+                       id: `a` @ [1]:43..44 from 0,
                        has_question_mark: false
                      }
                    ]
@@ -108,20 +108,20 @@
 -      }
 -    },
 -    where_ir {
--      self: 47..52,
+-      self: [1]:47..52 from 0,
 -      predicate: binary_expr {
 -        left: root_field {
--          id: `b` @ 53..54,
+-          id: `b` @ [1]:53..54 from 0,
 -          has_question_mark: false
 -        },
--        op: "eq" @ 55..57,
--        right: constant int64 2 @ 58..59
+-        op: "eq" @ [1]:55..57 from 0,
+-        right: constant int64 2 @ [1]:58..59 from 0
        }
      },
      GenericIr {
        op: {
          path: [
-           `discard` @ 60..67
+           `discard` @ [1]:60..67 from 0
          ],
          ref: std::discard/op
        },

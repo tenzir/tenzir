@@ -30,8 +30,9 @@ struct operator_control_plane {
   /// Returns the hosting actor.
   virtual auto self() noexcept -> exec_node_actor::base& = 0;
 
-  /// Returns the pipeline's definition.
-  virtual auto definition() const noexcept -> std::string_view = 0;
+  /// Returns the pipeline's definition, which carries the same id that was
+  /// stamped on diagnostic locations during parsing.
+  virtual auto definition() const noexcept -> Arc<const Source> = 0;
 
   /// Returns a unique id for the current run.
   virtual auto run_id() const noexcept -> uuid = 0;

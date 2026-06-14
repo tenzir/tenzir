@@ -10,29 +10,48 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/arc.hpp"
+#include "tenzir/box.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/type_traits.hpp"
+#include "tenzir/option.hpp"
 
 #include <fmt/format.h>
 
 #include <functional>
+#include <limits>
+#include <span>
+#include <utility>
 
 namespace tenzir {
 
 struct into_location;
 
+/// Identifies a source in a `SourceMap`.
+using SourceId = uint32_t;
+
+/// Identifies an entry in `SourceMap::call_sites()`, where `0` means
+/// top-level. Hence, valid call site ids start at `1`.
+using CallSiteId = uint32_t;
+
 /// Identifies a consecutive byte sequence within a source file.
 ///
-/// If both offsets are zero, the location is unknown. Otherwise, the location
-/// corresponds to the range `[begin, end)` in the main source file. In the
-/// future, a `file` field might be added in order to support diagnostics from
-/// multiple files simultaneously.
+/// If all fields are zero, the location is unknown. Otherwise, the location
+/// corresponds to the range `[begin, end)` in the source file identified by
+/// `source_index`.
 struct location {
-  size_t begin{};
-  size_t end{};
+  uint32_t begin{};
+  uint32_t end{};
+  /// The global index of the source file the location comes from. This is
+  /// populated by the parser when producing the AST.
+  SourceId source_index{0};
+  /// The global index of the callsite this came from; `0` means this was top
+  /// level. This is populated by the compiler when going from AST -> IR.
+  CallSiteId callsite_index{0};
 
-  /// The "unknown" location, where `begin` and `end` are 0.
+  /// The "unknown" location, where all fields are 0.
   static const location unknown;
 
   /// Returns true if the location is known, and false otherwise.
@@ -40,15 +59,15 @@ struct location {
     return *this != unknown;
   }
 
-  auto
-  subloc(size_t pos, size_t count = std::numeric_limits<size_t>::max()) const
+  auto subloc(uint32_t pos, uint32_t count
+                            = std::numeric_limits<uint32_t>::max()) const
     -> location {
     if (*this == unknown or pos > end) {
       return *this;
     }
     const auto first = begin + pos;
     const auto last = (count > end - first) ? end : (first + count);
-    return {first, last};
+    return {first, last, source_index, callsite_index};
   }
 
   auto combine(into_location other) const -> location;
@@ -57,11 +76,14 @@ struct location {
 
   friend auto inspect(auto& f, location& x) {
     if (auto dbg = as_debug_writer(f)) {
-      return dbg->fmt_value("{}..{}", x.begin, x.end);
+      return dbg->fmt_value("[{}]:{}..{} from {}", x.source_index, x.begin,
+                            x.end, x.callsite_index);
     }
     return f.object(x)
       .pretty_name("location")
-      .fields(f.field("begin", x.begin), f.field("end", x.end));
+      .fields(f.field("begin", x.begin), f.field("end", x.end),
+              f.field("source_index", x.source_index),
+              f.field("callsite_index", x.callsite_index));
   }
 };
 
@@ -69,6 +91,52 @@ inline const location location::unknown = location{};
 
 template <>
 inline constexpr auto enable_default_formatter<location> = true;
+
+/// Maps locations in compiled IR back to their originating sources.
+///
+/// The source map is populated during compilation from AST to IR. It records
+/// all sources that took part in the compilation, as well as all call sites
+/// of user-defined operators whose bodies were expanded into the result.
+class SourceMap {
+public:
+  SourceMap();
+  SourceMap(const SourceMap&);
+  SourceMap(SourceMap&&) noexcept;
+  auto operator=(const SourceMap&) -> SourceMap&;
+  auto operator=(SourceMap&&) noexcept -> SourceMap&;
+  ~SourceMap();
+
+  /// Register a source. It will be kept alive by the SourceMap.
+  void add_source(Arc<const Source> source);
+
+  /// Register the location of a user-defined operator invocation and return
+  /// its id.
+  ///
+  /// The location's `source_index` identifies the caller's source, and its
+  /// `callsite_index` the parent call site for nested calls (`0` means
+  /// top-level).
+  auto add_call_site(location call_site) -> CallSiteId;
+
+  /// Return the source for the given id.
+  auto source(SourceId id) const -> Option<const Source&>;
+
+  /// Add call-site annotations to a diagnostic.
+  auto enrich(diagnostic diag) const -> diagnostic;
+
+  /// Return the call site for the given id, which must not be `0`.
+  auto call_site(CallSiteId id) const -> Option<location>;
+
+  /// Return all registered sources.
+  auto sources() const -> std::span<const Arc<const Source>>;
+
+  /// Return all registered call sites.
+  auto call_sites() const -> std::span<const location>;
+
+private:
+  struct Impl;
+
+  Box<Impl> impl_;
+};
 
 /// Provides a `T` together with a `location`.
 template <class T>
@@ -160,18 +228,6 @@ struct into_location : location {
       })} {
   }
 };
-
-inline auto location::combine(into_location other) const -> location {
-  if (not *this) {
-    return other;
-  }
-  if (not other) {
-    return *this;
-  }
-  other.begin = std::min(begin, other.begin);
-  other.end = std::max(end, other.end);
-  return other;
-}
 
 template <class T>
 struct as_located {

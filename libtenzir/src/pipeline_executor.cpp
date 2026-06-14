@@ -16,6 +16,7 @@
 #include "tenzir/execution_node.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/source.hpp"
 
 #include <caf/actor_registry.hpp>
 #include <caf/actor_system_config.hpp>
@@ -79,7 +80,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
                          int32_t op_index) -> caf::expected<operator_type> {
     auto description = fmt::format("{:?}", op);
     auto spawn_result
-      = spawn_exec_node(self, std::move(op), input_type, definition, node,
+      = spawn_exec_node(self, std::move(op), input_type, *definition, node,
                         diagnostics, metrics, op_index, has_terminal, is_hidden,
                         run_id, pipeline_id);
     if (not spawn_result) {
@@ -126,8 +127,9 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
     auto index = exec_nodes.size();
     exec_nodes.emplace_back();
     self
-      ->mail(atom::spawn_v, operator_box{std::move(op)}, input_type, definition,
-             diagnostics, metrics, op_index, is_hidden, run_id, pipeline_id)
+      ->mail(atom::spawn_v, operator_box{std::move(op)}, input_type,
+             (*definition)->text, diagnostics, metrics, op_index, is_hidden,
+             run_id, pipeline_id)
       .request(shell, caf::infinite)
       .then(
         [this, description, index](exec_node_actor& exec_node) {
@@ -341,9 +343,9 @@ auto pipeline_executor_state::resume() -> caf::result<void> {
 
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline pipe, std::string definition, receiver_actor<diagnostic> diagnostics,
-  metrics_receiver_actor metrics, node_actor node, bool has_terminal,
-  bool is_hidden, std::string pipeline_id)
+  pipeline pipe, Arc<const Source> definition,
+  receiver_actor<diagnostic> diagnostics, metrics_receiver_actor metrics,
+  node_actor node, bool has_terminal, bool is_hidden, std::string pipeline_id)
   -> pipeline_executor_actor::behavior_type {
   TENZIR_TRACE("{} was created", *self);
   self->attach_functor([self] {
@@ -352,6 +354,7 @@ auto pipeline_executor(
   self->state().self = self;
   self->state().node = std::move(node);
   self->state().definition = std::move(definition);
+  self->state().source_map.add_source(*self->state().definition);
   self->state().pipe = std::move(pipe);
   self->state().diagnostics = std::move(diagnostics);
   self->state().metrics = std::move(metrics);
@@ -373,9 +376,9 @@ auto pipeline_executor(
         if (has_node) {
           auto buffer = std::stringstream{};
           buffer << "internal error in operator\n";
-          auto printer = make_diagnostic_printer(std::nullopt,
+          auto printer = make_diagnostic_printer(self->state().source_map,
                                                  color_diagnostics::no, buffer);
-          printer->emit(diagnostic);
+          printer->emit(self->state().source_map.enrich(diagnostic));
           auto string = std::move(buffer).str();
           if (not string.empty() and string.back() == '\n') {
             string.pop_back();

@@ -15,11 +15,13 @@
 #include "tenzir/concept/parseable/tenzir/expression.hpp"
 #include "tenzir/concept/parseable/tenzir/pipeline.hpp"
 #include "tenzir/concept/parseable/tenzir/si.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/parser_interface.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/tql/expression.hpp"
 #include "tenzir/type.hpp"
 
@@ -576,16 +578,16 @@ private:
                          .apply(current_, end_));
   }
 
-  auto next_pos() -> size_t {
+  auto next_pos() -> uint32_t {
     advance_to_token();
     return current_pos();
   }
 
-  auto current_pos() const -> size_t {
+  auto current_pos() const -> uint32_t {
     if (internal_) {
       return 0;
     }
-    return current_ - source_.data();
+    return detail::narrow_cast<uint32_t>(current_ - source_.data());
   }
 
   std::string source_;
@@ -627,10 +629,10 @@ auto make_parser_interface(std::string source, diagnostic_handler& diag)
                                   std::unordered_set<std::string>{});
 }
 
-auto parse(std::string source, diagnostic_handler& diag)
+auto parse(Source const& source, diagnostic_handler& diag)
   -> std::optional<std::vector<located<operator_ptr>>> {
   auto recursed = std::unordered_set<std::string>{};
-  return parser{std::move(source), diag, false, recursed}.parse();
+  return parser{source.text, diag, false, recursed}.parse();
 }
 
 auto parse_internal(std::string source) -> caf::expected<pipeline> {

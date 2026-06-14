@@ -20,6 +20,7 @@
 #include "tenzir/tql2/entity_path.hpp"
 #include "tenzir/variant.hpp"
 
+#include <iterator>
 #include <span>
 #include <type_traits>
 #include <unordered_map>
@@ -514,7 +515,7 @@ struct function_call {
   }
 
   auto get_location() const -> location {
-    auto left = location{};
+    auto left = location::unknown;
     if (method) {
       TENZIR_ASSERT(not args.empty());
       left = args[0].get_location();
@@ -662,7 +663,7 @@ struct record {
   }
 
   auto get_location() const -> location {
-    return tenzir::location{begin.begin, end.end};
+    return begin.combine(end);
   }
 };
 
@@ -677,7 +678,10 @@ struct invocation {
   std::vector<expression> args;
 
   auto get_location() const -> location {
-    return op.get_location();
+    if (args.empty()) {
+      return op.get_location();
+    }
+    return op.get_location().combine(args.back());
   }
 
   friend auto inspect(auto& f, invocation& x) -> bool {
@@ -700,6 +704,8 @@ struct pipeline {
   friend auto inspect(Inspector& f, pipeline& x) -> bool {
     return f.apply(x.body);
   }
+
+  auto get_location() const -> location;
 
   auto compile(compile_ctx ctx) && -> failure_or<ir::pipeline>;
 };
@@ -770,8 +776,13 @@ struct if_stmt {
   }
 
   auto get_location() const -> location {
-    // TODO
-    return if_kw;
+    auto result = if_kw.combine(condition);
+    result = result.combine(then);
+    if (else_) {
+      result = result.combine(else_->kw);
+      result = result.combine(else_->pipe);
+    }
+    return result;
   }
 };
 
@@ -813,7 +824,7 @@ struct range_pattern {
   }
 
   auto get_location() const -> location {
-    return lower.get_location();
+    return lower.get_location().combine(upper);
   }
 };
 
@@ -971,6 +982,10 @@ struct type_stmt {
                               f.field("equals", x.equals),
                               f.field("type", x.type));
   }
+
+  auto get_location() const -> location {
+    return type_location.combine(type);
+  }
 };
 
 struct type_expr {
@@ -1119,6 +1134,20 @@ inline pipeline::pipeline(std::vector<statement> body) : body{std::move(body)} {
 inline pipeline::~pipeline() = default;
 inline pipeline::pipeline(pipeline&&) noexcept = default;
 inline auto pipeline::operator=(pipeline&&) noexcept -> pipeline& = default;
+inline auto pipeline::get_location() const -> location {
+  if (body.empty()) {
+    return location::unknown;
+  }
+  auto result = match(body.front(), [](auto const& x) {
+    return x.get_location();
+  });
+  for (auto it = std::next(body.begin()); it != body.end(); ++it) {
+    result = result.combine(match(*it, [](auto const& x) {
+      return x.get_location();
+    }));
+  }
+  return result;
+}
 
 } // namespace tenzir::ast
 

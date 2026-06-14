@@ -1,8 +1,8 @@
  {
    lets: [
 -    {
--      ident: `$foo` @ 4..8,
--      expr: constant int64 1 @ 11..12,
+-      ident: `$foo` @ [1]:4..8 from 0,
+-      expr: constant int64 1 @ [1]:11..12 from 0,
 -      id: 1
 -    }
 +    
@@ -11,7 +11,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 14..20
+           `export` @ [1]:14..20 from 0
          ],
          ref: std::export/op
        },
@@ -28,82 +28,82 @@
        ]
      },
      If {
-       if_keyword: 21..23,
+       if_keyword: [1]:21..23 from 0,
        condition: binary_expr {
--        left: dollar_var `$foo` -> 1 @ 24..28,
-+        left: constant int64 1 @ 24..28,
-         op: "eq" @ 29..31,
-         right: constant int64 1 @ 32..33
+-        left: dollar_var `$foo` -> 1 @ [1]:24..28 from 0,
++        left: constant int64 1 @ [1]:24..28 from 0,
+         op: "eq" @ [1]:29..31 from 0,
+         right: constant int64 1 @ [1]:32..33 from 0
        },
        consequence: {
          lets: [
 -          {
--            ident: `$bar` @ 42..46,
--            expr: constant int64 2 @ 49..50,
+-            ident: `$bar` @ [1]:42..46 from 0,
+-            expr: constant int64 2 @ [1]:49..50 from 0,
 -            id: 2
 -          }
 +          
          ],
          operators: [
            where_ir {
-             self: 53..58,
+             self: [1]:53..58 from 0,
              predicate: binary_expr {
                left: binary_expr {
                  left: root_field {
-                   id: `foo` @ 59..62,
+                   id: `foo` @ [1]:59..62 from 0,
                    has_question_mark: false
                  },
-                 op: "eq" @ 63..65,
--                right: dollar_var `$foo` -> 1 @ 66..70
-+                right: constant int64 1 @ 66..70
+                 op: "eq" @ [1]:63..65 from 0,
+-                right: dollar_var `$foo` -> 1 @ [1]:66..70 from 0
++                right: constant int64 1 @ [1]:66..70 from 0
                },
-               op: "and_" @ 71..74,
+               op: "and_" @ [1]:71..74 from 0,
                right: binary_expr {
                  left: root_field {
-                   id: `bar` @ 75..78,
+                   id: `bar` @ [1]:75..78 from 0,
                    has_question_mark: false
                  },
-                 op: "eq" @ 79..81,
--                right: dollar_var `$bar` -> 2 @ 82..86
-+                right: constant int64 2 @ 82..86
+                 op: "eq" @ [1]:79..81 from 0,
+-                right: dollar_var `$bar` -> 2 @ [1]:82..86 from 0
++                right: constant int64 2 @ [1]:82..86 from 0
                }
              }
            }
          ]
        },
        alternative: {
-         keyword: 89..93,
+         keyword: [1]:89..93 from 0,
          pipeline: {
            lets: [
 -            {
--              ident: `$bar` @ 102..106,
--              expr: constant int64 3 @ 109..110,
+-              ident: `$bar` @ [1]:102..106 from 0,
+-              expr: constant int64 3 @ [1]:109..110 from 0,
 -              id: 3
 -            }
 +            
            ],
            operators: [
              where_ir {
-               self: 113..118,
+               self: [1]:113..118 from 0,
                predicate: binary_expr {
                  left: binary_expr {
                    left: root_field {
-                     id: `foo` @ 119..122,
+                     id: `foo` @ [1]:119..122 from 0,
                      has_question_mark: false
                    },
-                   op: "eq" @ 123..125,
--                  right: dollar_var `$foo` -> 1 @ 126..130
-+                  right: constant int64 1 @ 126..130
+                   op: "eq" @ [1]:123..125 from 0,
+-                  right: dollar_var `$foo` -> 1 @ [1]:126..130 from 0
++                  right: constant int64 1 @ [1]:126..130 from 0
                  },
-                 op: "and_" @ 131..134,
+                 op: "and_" @ [1]:131..134 from 0,
                  right: binary_expr {
                    left: root_field {
-                     id: `bar` @ 135..138,
+                     id: `bar` @ [1]:135..138 from 0,
                      has_question_mark: false
                    },
-                   op: "eq" @ 139..141,
--                  right: dollar_var `$bar` -> 3 @ 142..146
-+                  right: constant int64 3 @ 142..146
+                   op: "eq" @ [1]:139..141 from 0,
+-                  right: dollar_var `$bar` -> 3 @ [1]:142..146 from 0
++                  right: constant int64 3 @ [1]:142..146 from 0
                  }
                }
              }

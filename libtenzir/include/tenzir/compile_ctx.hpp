@@ -9,7 +9,9 @@
 #pragma once
 
 #include "tenzir/base_ctx.hpp"
+#include "tenzir/ir.hpp"
 #include "tenzir/let_id.hpp"
+#include "tenzir/location.hpp"
 
 namespace tenzir {
 
@@ -29,6 +31,12 @@ public:
   /// The root object must be kept alive while the context is being used.
   static auto make_root(base_ctx ctx) -> root;
 
+  /// Like `make_root`, but populates the externally owned `source_map` during
+  /// compilation instead of an internally owned one. The referenced map must
+  /// outlive the returned `root`. This lets a caller (e.g. the diagnostic
+  /// printer) observe sources and call sites as they are registered.
+  static auto make_root(base_ctx ctx, SourceMap& source_map) -> root;
+
   /// Open a new variable scope within this context.
   ///
   /// This operation modifies `this`, but not affect any previous copies. The
@@ -43,6 +51,11 @@ public:
 
   /// Create a copy of this context, but without the environment.
   [[nodiscard]] auto without_env() const -> compile_ctx;
+
+  /// Return the source map that is populated during compilation.
+  auto source_map() const -> SourceMap& {
+    return root_.source_map_ref();
+  }
 
   /// A scope object owns the environment from which the context reads.
   ///
@@ -87,14 +100,33 @@ public:
     operator base_ctx() const;
     operator compile_ctx();
 
+    /// Extract the source map after compilation has finished. Only meaningful
+    /// when the root owns its source map; if an external map was provided to
+    /// `make_root`, that map is populated directly instead.
+    auto source_map() && -> SourceMap {
+      return std::move(source_map_);
+    }
+
   private:
     friend class compile_ctx;
 
     explicit root(base_ctx ctx) : ctx_{ctx} {
     }
 
+    root(base_ctx ctx, SourceMap& source_map)
+      : ctx_{ctx}, external_source_map_{&source_map} {
+    }
+
+    /// Return the source map to populate: the external one if provided,
+    /// otherwise the internally owned one.
+    auto source_map_ref() -> SourceMap& {
+      return external_source_map_ ? *external_source_map_ : source_map_;
+    }
+
     base_ctx ctx_;
     uint64_t last_let_id_ = 0;
+    SourceMap source_map_;
+    SourceMap* external_source_map_ = nullptr;
   };
 
   auto reg() const -> const registry& {

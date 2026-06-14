@@ -87,7 +87,7 @@ public:
     TENZIR_UNIMPLEMENTED();
   }
 
-  auto definition() const noexcept -> std::string_view override {
+  auto definition() const noexcept -> Arc<const Source> override {
     TENZIR_UNIMPLEMENTED();
   }
 

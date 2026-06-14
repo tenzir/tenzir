@@ -8,12 +8,18 @@
 
 #include "tenzir/compile_ctx.hpp"
 
+#include "tenzir/try.hpp"
+
 #include <utility>
 
 namespace tenzir {
 
 auto compile_ctx::make_root(base_ctx ctx) -> root {
   return root{ctx};
+}
+
+auto compile_ctx::make_root(base_ctx ctx, SourceMap& source_map) -> root {
+  return root{ctx, source_map};
 }
 
 auto compile_ctx::open_scope() -> scope {

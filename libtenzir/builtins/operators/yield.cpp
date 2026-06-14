@@ -46,11 +46,12 @@ public:
     auto field = +(parsers::alnum | parsers::chr{'_'});
     auto current = extractor.inner.begin();
     auto end = extractor.inner.end();
-    auto to_offset = [&](std::string::iterator it, int64_t x = 0) -> size_t {
+    auto to_offset = [&](std::string::iterator it, int64_t x = 0) -> uint32_t {
       if (not extractor.source) {
         return 0;
       }
-      return extractor.source.begin + (it - extractor.inner.begin()) + x;
+      return detail::narrow_cast<uint32_t>(
+        extractor.source.begin + (it - extractor.inner.begin()) + x);
     };
     auto parse_field = [&]() -> projection {
       auto last = current;

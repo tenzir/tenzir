@@ -8,11 +8,13 @@
 
 #pragma once
 
+#include <tenzir/arc.hpp>
 #include <tenzir/context.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/flat_map.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/source.hpp>
 #include <tenzir/view.hpp>
 
 #include <memory>
@@ -114,20 +116,45 @@ struct package_operator_arguments final {
 
 struct package_operator final {
   std::optional<std::string> description;
-  std::string definition; // required to be non-empty
   package_operator_arguments args;
+  /// Full source file content (frontmatter + TQL body). Always set.
+  std::optional<Arc<const Source>> file_source;
+  /// View into `file_source->text` covering the raw YAML frontmatter (between
+  /// the `---` markers, not including them). Empty when there is no frontmatter.
+  std::string_view frontmatter;
+  /// View into `file_source->text` covering the TQL pipeline body.
+  std::string_view tql_body;
 
   auto to_record() const -> record;
 
   static auto parse(const view<record>& data)
     -> caf::expected<package_operator>;
-  static auto parse(std::string_view input) -> caf::expected<package_operator>;
+  static auto parse(Arc<const Source> source)
+    -> caf::expected<package_operator>;
 
   friend auto inspect(auto& f, package_operator& x) -> bool {
-    return f.object(x)
-      .pretty_name("package_pipeline")
-      .fields(f.field("description", x.description),
-              f.field("definition", x.definition), f.field("args", x.args));
+    using Inspector = std::remove_reference_t<decltype(f)>;
+    if constexpr (Inspector::is_loading) {
+      auto tql_body_str = std::string{};
+      if (! f.object(x)
+              .pretty_name("package_pipeline")
+              .fields(f.field("description", x.description),
+                      f.field("definition", tql_body_str),
+                      f.field("args", x.args))) {
+        return false;
+      }
+      auto src
+        = Source::new_source(std::move(tql_body_str), "<serialized>", false);
+      x.file_source = src;
+      x.tql_body = src->text;
+      return true;
+    } else {
+      auto tql_body_str = std::string{x.tql_body};
+      return f.object(x)
+        .pretty_name("package_pipeline")
+        .fields(f.field("description", x.description),
+                f.field("definition", tql_body_str), f.field("args", x.args));
+    }
   }
 };
 
@@ -274,7 +301,8 @@ namespace tenzir {
 
 struct module_def;
 
-auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
+auto build_package_operator_module(const package& pkg, diagnostic_handler& dh,
+                                   SourceMap* source_map = nullptr)
   -> failure_or<std::unique_ptr<module_def>>;
 
 auto package_module_name(std::string_view package_id) -> std::string;

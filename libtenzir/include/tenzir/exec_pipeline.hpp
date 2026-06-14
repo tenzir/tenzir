@@ -42,11 +42,11 @@ struct exec_config {
   std::optional<std::string> profile;
 };
 
-auto exec_pipeline(std::string content, diagnostic_handler& dh,
-                   const exec_config& cfg, caf::actor_system& sys)
-  -> caf::expected<void>;
+auto exec_pipeline(Arc<const Source> source, diagnostic_handler& dh,
+                   const exec_config& cfg, caf::actor_system& sys,
+                   SourceMap& source_map) -> caf::expected<void>;
 
-auto exec_pipeline(pipeline pipe, std::string definition,
+auto exec_pipeline(pipeline pipe, Arc<const Source> definition,
                    diagnostic_handler& dh, const exec_config& cfg,
                    caf::actor_system& sys) -> caf::expected<void>;
 

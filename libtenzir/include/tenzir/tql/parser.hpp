@@ -19,7 +19,7 @@ namespace tenzir::tql {
 void set_operator_aliases(std::unordered_map<std::string, std::string> map);
 
 /// Parse and set source locations.
-auto parse(std::string source, diagnostic_handler& diag)
+auto parse(Source const& source, diagnostic_handler& diag)
   -> std::optional<std::vector<located<operator_ptr>>>;
 
 /// No diagnostics will be emitted, no locations will be set.

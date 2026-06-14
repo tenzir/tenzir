@@ -341,10 +341,8 @@ struct TcpAccept {
     }
     auto env = substitute_ctx::env_t{};
     env[args_.peer_info] = std::move(peer_record);
-    auto reg = global_registry();
-    auto b_ctx = base_ctx{ctx, *reg};
     return static_cast<bool>(
-      pipeline.substitute(substitute_ctx{b_ctx, &env}, true));
+      pipeline.substitute(substitute_ctx{ctx, &env}, true));
   }
 
   auto make_connection_state(folly::coro::Transport& transport, AcceptedInfo&,

@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 113..119
+           `export` @ [1]:113..119 from 0
          ],
          ref: std::export/op
        },
@@ -26,7 +26,7 @@
      GenericIr {
        op: {
          path: [
-           `load_balance` @ 120..132
+           `load_balance` @ [1]:120..132 from 0
          ],
          ref: std::load_balance/op
        },
@@ -35,7 +35,7 @@
          located [
            string "a",
            string "b"
-         ] @ 133..138
+         ] @ [1]:133..138 from 0
        ],
        filter: [
          
@@ -52,18 +52,18 @@
            ],
            operators: [
              where_ir {
--              self: 143..148,
-+              self: 0..0,
+-              self: [1]:143..148 from 0,
++              self: [0]:0..0 from 0,
                predicate: binary_expr {
-                 left: dollar_var `$over` -> 2 @ 149..154,
-                 op: "eq" @ 155..157,
-                 right: constant string "a" @ 158..161
+                 left: dollar_var `$over` -> 2 @ [1]:149..154 from 0,
+                 op: "eq" @ [1]:155..157 from 0,
+                 right: constant string "a" @ [1]:158..161 from 0
                }
              },
              GenericIr {
                op: {
                  path: [
-                   `discard` @ 164..171
+                   `discard` @ [1]:164..171 from 0
                  ],
                  ref: std::discard/op
                },
@@ -80,7 +80,7 @@
                ]
              }
            ]
-         } @ 139..173,
+         } @ [1]:139..173 from 0,
          let_ids: {
            "0": 2
          }

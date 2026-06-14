@@ -6,29 +6,29 @@
      from_ir {
        events: [
          record {
-           begin: 5..6,
+           begin: [1]:5..6 from 0,
            items: [
              field {
-               name: `domain` @ 7..13,
-               expr: constant string "tenzir.com" @ 15..27
+               name: `domain` @ [1]:7..13 from 0,
+               expr: constant string "tenzir.com" @ [1]:15..27 from 0
              }
            ],
-           end: 28..29
+           end: [1]:28..29 from 0
          }
        ],
-       self: 0..4
+       self: [1]:0..4 from 0
      },
      GenericIr {
        op: {
          path: [
-           `dns_lookup` @ 30..40
+           `dns_lookup` @ [1]:30..40 from 0
          ],
          ref: std::dns_lookup/op
        },
        desc: "dns_lookup",
        args: [
          expression root_field {
-           id: `domain` @ 41..47,
+           id: `domain` @ [1]:41..47 from 0,
            has_question_mark: false
          }
        ],
@@ -41,13 +41,13 @@
            index: 0,
            value: field_path {
              expr: root_field {
-               id: `resolved` @ 56..64,
+               id: `resolved` @ [1]:56..64 from 0,
                has_question_mark: false
              },
              has_this: false,
              path: [
                {
-                 id: `resolved` @ 56..64,
+                 id: `resolved` @ [1]:56..64 from 0,
                  has_question_mark: false
                }
              ]
@@ -56,21 +56,21 @@
        ]
      },
      where_ir {
--      self: 65..70,
-+      self: 0..0,
+-      self: [1]:65..70 from 0,
++      self: [0]:0..0 from 0,
        predicate: binary_expr {
          left: root_field {
-           id: `resolved` @ 71..79,
+           id: `resolved` @ [1]:71..79 from 0,
            has_question_mark: false
          },
-         op: "neq" @ 80..82,
-         right: constant none_t {} @ 83..87
+         op: "neq" @ [1]:80..82 from 0,
+         right: constant none_t {} @ [1]:83..87 from 0
        }
 +    },
 +    GenericIr {
 +      op: {
 +        path: [
-+          `to_stdout` @ 0..0
++          `to_stdout` @ [1]:87..87 from 0
 +        ],
 +        ref: std::to_stdout/op
 +      },

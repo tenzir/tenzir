@@ -10,6 +10,7 @@
 
 #include "tenzir/concept/parseable/string/char_class.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/try.hpp"
 
 #include <arrow/util/utf8.h>
@@ -19,11 +20,56 @@
 
 namespace tenzir {
 
-auto tokenize(std::string_view content, session ctx)
+namespace {
+
+auto make_location(uint32_t begin, uint32_t end, source_origin origin)
+  -> location {
+  return origin.match(
+    [&](SourceId source_id) {
+      return location{begin, end, source_id, 0};
+    },
+    [](location override) {
+      return override;
+    },
+    [&](location_offset loff) {
+      return location{loff.begin_offset + begin, loff.begin_offset + end,
+                      loff.source_id, 0};
+    });
+}
+
+auto verify_tokens_impl(std::span<const token> tokens, source_origin origin,
+                        session ctx) -> failure_or<void> {
+  auto result = failure_or<void>{};
+  for (const auto& token : tokens) {
+    if (token.kind == token_kind::error) {
+      auto begin = uint32_t{0};
+      if (&token != tokens.data()) {
+        begin = (&token - 1)->end;
+      }
+      diagnostic::error("could not parse token")
+        .primary(make_location(begin, token.end, origin))
+        .emit(ctx);
+      result = failure::promise();
+    }
+  }
+  return result;
+}
+
+} // namespace
+
+auto tokenize(std::string_view content, source_origin origin, session ctx)
   -> failure_or<std::vector<token>> {
   TRY(validate_utf8(content, ctx));
   auto tokens = tokenize_permissive(content);
-  TRY(verify_tokens(tokens, ctx));
+  TRY(verify_tokens_impl(tokens, origin, ctx));
+  return tokens;
+}
+
+auto tokenize(Source const& source, session ctx)
+  -> failure_or<std::vector<token>> {
+  TRY(validate_utf8(source.text, ctx));
+  auto tokens = tokenize_permissive(source.text);
+  TRY(verify_tokens(tokens, source.index, ctx));
   return tokens;
 }
 
@@ -270,22 +316,14 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
   return result;
 }
 
-auto verify_tokens(std::span<const token> tokens, session ctx)
-  -> failure_or<void> {
-  auto result = failure_or<void>{};
-  for (const auto& token : tokens) {
-    if (token.kind == token_kind::error) {
-      auto begin = size_t{0};
-      if (&token != tokens.data()) {
-        begin = (&token - 1)->end;
-      }
-      diagnostic::error("could not parse token")
-        .primary(location{begin, token.end})
-        .emit(ctx);
-      result = failure::promise();
-    }
-  }
-  return result;
+auto verify_tokens(std::span<const token> tokens, source_origin origin,
+                   session ctx) -> failure_or<void> {
+  return verify_tokens_impl(tokens, origin, ctx);
+}
+
+auto verify_tokens(std::span<const token> tokens, Source const& source,
+                   session ctx) -> failure_or<void> {
+  return verify_tokens(tokens, source.index, ctx);
 }
 
 auto describe(token_kind k) -> std::string_view {

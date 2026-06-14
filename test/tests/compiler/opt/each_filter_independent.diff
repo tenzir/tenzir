@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 110..116
+           `export` @ [1]:110..116 from 0
          ],
          ref: std::export/op
        },
@@ -25,7 +25,7 @@
      GenericIr {
        op: {
          path: [
-           `each` @ 117..121
+           `each` @ [1]:117..121 from 0
          ],
          ref: std::each/op
        },
@@ -48,43 +48,43 @@
            operators: [
              from_ir {
                events: [
-                 dollar_var `$this` -> 1 @ 131..136
+                 dollar_var `$this` -> 1 @ [1]:131..136 from 0
                ],
-               self: 126..130
+               self: [1]:126..130 from 0
 +            },
 +            where_ir {
-+              self: 0..0,
++              self: [0]:0..0 from 0,
 +              predicate: binary_expr {
 +                left: root_field {
-+                  id: `x` @ 145..146,
++                  id: `x` @ [1]:145..146 from 0,
 +                  has_question_mark: false
 +                },
-+                op: "gt" @ 147..148,
-+                right: constant int64 1 @ 149..150
++                op: "gt" @ [1]:147..148 from 0,
++                right: constant int64 1 @ [1]:149..150 from 0
 +              }
              }
            ]
-         } @ 122..138,
+         } @ [1]:122..138 from 0,
          let_ids: {
            "0": 1
          }
 -      }
 -    },
 -    where_ir {
--      self: 139..144,
+-      self: [1]:139..144 from 0,
 -      predicate: binary_expr {
 -        left: root_field {
--          id: `x` @ 145..146,
+-          id: `x` @ [1]:145..146 from 0,
 -          has_question_mark: false
 -        },
--        op: "gt" @ 147..148,
--        right: constant int64 1 @ 149..150
+-        op: "gt" @ [1]:147..148 from 0,
+-        right: constant int64 1 @ [1]:149..150 from 0
        }
      },
      GenericIr {
        op: {
          path: [
-           `discard` @ 151..158
+           `discard` @ [1]:151..158 from 0
          ],
          ref: std::discard/op
        },

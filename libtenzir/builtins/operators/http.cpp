@@ -24,6 +24,7 @@
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/tls_options.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -549,7 +550,7 @@ auto spawn_pipeline(operator_control_plane& ctrl, located<pipeline> pipe,
   TENZIR_TRACE("[http] spawning subpipeline");
   const auto handle = ctrl.self().spawn(
     pipeline_executor, std::move(pipe.inner).optimize_if_closed(),
-    std::string{ctrl.definition()}, ha, ha, ctrl.node(), ctrl.has_terminal(),
+    ctrl.definition(), ha, ha, ctrl.node(), ctrl.has_terminal(),
     ctrl.is_hidden(), std::string{ctrl.pipeline_id()});
   handle->link_to(ha);
   ha->attach_functor([handle] {});

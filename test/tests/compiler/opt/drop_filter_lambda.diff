@@ -6,41 +6,41 @@
      from_ir {
        events: [
          record {
-           begin: 5..6,
+           begin: [1]:5..6 from 0,
            items: [
              field {
-               name: `foo` @ 6..9,
+               name: `foo` @ [1]:6..9 from 0,
                expr: record {
-                 begin: 11..12,
+                 begin: [1]:11..12 from 0,
                  items: [
                    field {
-                     name: `bar` @ 12..15,
-                     expr: constant int64 1 @ 17..18
+                     name: `bar` @ [1]:12..15 from 0,
+                     expr: constant int64 1 @ [1]:17..18 from 0
                    }
                  ],
-                 end: 18..19
+                 end: [1]:18..19 from 0
                }
              },
              field {
-               name: `xs` @ 21..23,
+               name: `xs` @ [1]:21..23 from 0,
                expr: list {
-                 begin: 25..26,
+                 begin: [1]:25..26 from 0,
                  items: [
-                   expression constant int64 1 @ 26..27
+                   expression constant int64 1 @ [1]:26..27 from 0
                  ],
-                 end: 27..28
+                 end: [1]:27..28 from 0
                }
              }
            ],
-           end: 28..29
+           end: [1]:28..29 from 0
          }
        ],
-       self: 0..4
+       self: [1]:0..4 from 0
      },
      GenericIr {
        op: {
          path: [
-           `drop` @ 30..34
+           `drop` @ [1]:30..34 from 0
          ],
          ref: std::drop/op
        },
@@ -49,21 +49,21 @@
          field_path {
            expr: field_access {
              left: root_field {
-               id: `foo` @ 35..38,
+               id: `foo` @ [1]:35..38 from 0,
                has_question_mark: false
              },
-             dot: 38..39,
+             dot: [1]:38..39 from 0,
              has_question_mark: false,
-             name: `bar` @ 39..42
+             name: `bar` @ [1]:39..42 from 0
            },
            has_this: false,
            path: [
              {
-               id: `foo` @ 35..38,
+               id: `foo` @ [1]:35..38 from 0,
                has_question_mark: false
              },
              {
-               id: `bar` @ 39..42,
+               id: `bar` @ [1]:39..42 from 0,
                has_question_mark: false
              }
            ]
@@ -78,14 +78,14 @@
        ]
      },
      where_ir {
--      self: 43..48,
-+      self: 0..0,
+-      self: [1]:43..48 from 0,
++      self: [0]:0..0 from 0,
        predicate: unary_expr {
-         op: "not_" @ 49..52,
+         op: "not_" @ [1]:49..52 from 0,
          expr: function_call {
            fn: {
              path: [
-               `is_empty` @ 81..89
+               `is_empty` @ [1]:81..89 from 0
              ],
              ref: std::is_empty/fn
            },
@@ -93,43 +93,43 @@
              function_call {
                fn: {
                  path: [
-                   `where` @ 56..61
+                   `where` @ [1]:56..61 from 0
                  ],
                  ref: std::where/fn
                },
                args: [
                  root_field {
-                   id: `xs` @ 53..55,
+                   id: `xs` @ [1]:53..55 from 0,
                    has_question_mark: false
                  },
                  lambda_expr {
                    params: [
-                     `x` @ 62..63
+                     `x` @ [1]:62..63 from 0
                    ],
-                   arrow: 64..66,
+                   arrow: [1]:64..66 from 0,
                    body: binary_expr {
                      left: root_field {
-                       id: `x` @ 67..68,
+                       id: `x` @ [1]:67..68 from 0,
                        has_question_mark: false
                      },
-                     op: "eq" @ 69..71,
+                     op: "eq" @ [1]:69..71 from 0,
                      right: field_access {
                        left: root_field {
-                         id: `foo` @ 72..75,
+                         id: `foo` @ [1]:72..75 from 0,
                          has_question_mark: false
                        },
-                       dot: 75..76,
+                       dot: [1]:75..76 from 0,
                        has_question_mark: false,
-                       name: `bar` @ 76..79
+                       name: `bar` @ [1]:76..79 from 0
                      }
                    }
                  }
                ],
-               rpar: 79..80,
+               rpar: [1]:79..80 from 0,
                method: true
              }
            ],
-           rpar: 90..91,
+           rpar: [1]:90..91 from 0,
            method: true
          }
        }
@@ -137,7 +137,7 @@
 +    GenericIr {
 +      op: {
 +        path: [
-+          `to_stdout` @ 0..0
++          `to_stdout` @ [1]:91..91 from 0
 +        ],
 +        ref: std::to_stdout/op
 +      },

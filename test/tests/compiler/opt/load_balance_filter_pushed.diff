@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 118..124
+           `export` @ [1]:118..124 from 0
          ],
          ref: std::export/op
        },
@@ -18,11 +18,11 @@
 -        
 +        binary_expr {
 +          left: root_field {
-+            id: `x` @ 154..155,
++            id: `x` @ [1]:154..155 from 0,
 +            has_question_mark: false
 +          },
-+          op: "gt" @ 156..157,
-+          right: constant int64 1 @ 158..159
++          op: "gt" @ [1]:156..157 from 0,
++          right: constant int64 1 @ [1]:158..159 from 0
 +        }
        ],
 -      order: "ordered",
@@ -34,7 +34,7 @@
      GenericIr {
        op: {
          path: [
-           `load_balance` @ 125..137
+           `load_balance` @ [1]:125..137 from 0
          ],
          ref: std::load_balance/op
        },
@@ -43,7 +43,7 @@
          located [
            string "a",
            string "b"
-         ] @ 138..143
+         ] @ [1]:138..143 from 0
        ],
        filter: [
          
@@ -60,20 +60,20 @@
            ],
            operators: [
 -            where_ir {
--              self: 148..153,
+-              self: [1]:148..153 from 0,
 -              predicate: binary_expr {
 -                left: root_field {
--                  id: `x` @ 154..155,
+-                  id: `x` @ [1]:154..155 from 0,
 -                  has_question_mark: false
 -                },
--                op: "gt" @ 156..157,
--                right: constant int64 1 @ 158..159
+-                op: "gt" @ [1]:156..157 from 0,
+-                right: constant int64 1 @ [1]:158..159 from 0
 -              }
 -            },
              GenericIr {
                op: {
                  path: [
-                   `discard` @ 162..169
+                   `discard` @ [1]:162..169 from 0
                  ],
                  ref: std::discard/op
                },
@@ -90,7 +90,7 @@
                ]
              }
            ]
-         } @ 144..171,
+         } @ [1]:144..171 from 0,
          let_ids: {
            "0": 2
          }

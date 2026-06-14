@@ -28,6 +28,7 @@
 #include "tenzir/series_builder.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/si_literals.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -69,8 +70,8 @@ namespace tenzir {
 using namespace tenzir::si_literals;
 
 namespace {
-auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys)
-  -> failure_or<void> {
+auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
+                            SourceMap* source_map) -> failure_or<void> {
   auto package_dirs = std::vector<std::filesystem::path>{};
   for (const auto& dir : config_dirs(sys.config())) {
     package_dirs.emplace_back(dir / "packages");
@@ -197,7 +198,7 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys)
       had_errors = true;
       continue;
     }
-    auto module = build_package_operator_module(pkg, dh);
+    auto module = build_package_operator_module(pkg, dh, source_map);
     if (not module) {
       had_errors = true;
       continue;
@@ -509,7 +510,8 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
 
 auto parse_and_compile(std::string_view source, session ctx)
   -> failure_or<pipeline> {
-  TRY(auto ast, parse(source, ctx));
+  TRY(auto ast,
+      parse_pipeline_with_location_override(source, location::unknown, ctx));
   return compile(std::move(ast), ctx);
 }
 
@@ -2301,18 +2303,39 @@ namespace {
 
 // TODO: failure_or<bool> is bad
 auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
-                  caf::actor_system& sys) -> failure_or<bool> {
+                  caf::actor_system& sys, SourceMap& source_map)
+  -> failure_or<bool> {
+  auto source_location = ast.get_location();
+  auto make_zero_width_location
+    = [](location source_location, uint32_t offset) {
+        if (not source_location) {
+          return location::unknown;
+        }
+        return location{
+          offset,
+          offset,
+          source_location.source_index,
+          source_location.callsite_index,
+        };
+      };
+  auto implicit_source_location
+    = make_zero_width_location(source_location, source_location.begin);
+  auto implicit_sink_location
+    = make_zero_width_location(source_location, source_location.end);
   // Transform the AST into IR.
   auto b_ctx = base_ctx{ctx.dh(), ctx.reg()};
   // (void)b_ctx.system();
-  auto c_ctx = compile_ctx::make_root(b_ctx);
-  TRY(auto ir, std::move(ast).compile(c_ctx));
+  // Compile into the externally owned source map so that the diagnostic
+  // printer can resolve locations into sources registered during compilation,
+  // such as the bodies of user-defined operators.
+  auto root = compile_ctx::make_root(b_ctx, source_map);
+  TRY(auto ir, std::move(ast).compile(root));
   if (cfg.dump_ir) {
     fmt::print("{:#?}\n", ir);
     return not ctx.has_failure();
   }
   // Instantiate the IR.
-  auto sub_ctx = substitute_ctx{c_ctx, nullptr};
+  auto sub_ctx = substitute_ctx{b_ctx, nullptr};
   TRY(ir.substitute(sub_ctx, true));
   if (cfg.dump_inst_ir) {
     fmt::print("{:#?}\n", ir);
@@ -2325,10 +2348,12 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   }
   // Type check the instantiated IR and add implicit sources before sinks.
   // During probing, suppress diagnostics for input types that do not match.
-  auto parse_implicit
-    = [&](std::string_view definition) -> failure_or<ir::pipeline> {
-    TRY(auto ast, parse_pipeline_with_bad_diagnostics(definition, ctx));
-    TRY(auto pipe, std::move(ast).compile(c_ctx));
+  auto parse_implicit = [&](std::string_view definition,
+                            location override) -> failure_or<ir::pipeline> {
+    TRY(auto ast,
+        parse_pipeline_with_location_override(definition, override, ctx));
+    auto implicit_root = compile_ctx::make_root(b_ctx);
+    TRY(auto pipe, std::move(ast).compile(implicit_root));
     TRY(pipe.substitute(sub_ctx, true));
     return pipe;
   };
@@ -2349,7 +2374,8 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     TRY(output, ir.infer_type(tag_v<void>, ctx));
   }
   if (implicit_source) {
-    TRY(auto implicit, parse_implicit(*implicit_source));
+    TRY(auto implicit,
+        parse_implicit(*implicit_source, implicit_source_location));
     ir.lets.insert(ir.lets.begin(), std::move_iterator{implicit.lets.begin()},
                    std::move_iterator{implicit.lets.end()});
     ir.operators.insert(ir.operators.begin(),
@@ -2366,7 +2392,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   if (output->is_not<void>()) {
     auto sink_def = output->is<table_slice>() ? cfg.implicit_events_sink
                                               : cfg.implicit_bytes_sink;
-    TRY(auto implicit, parse_implicit(sink_def));
+    TRY(auto implicit, parse_implicit(sink_def, implicit_sink_location));
     ir.lets.insert(ir.lets.end(), std::move_iterator{implicit.lets.begin()},
                    std::move_iterator{implicit.lets.end()});
     ir.operators.insert(ir.operators.end(),
@@ -2409,19 +2435,20 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
 
 } // namespace
 
-auto exec2(std::string_view source, diagnostic_handler& dh,
-           const exec_config& cfg, caf::actor_system& sys) -> bool {
+auto exec2(Arc<const Source> source, diagnostic_handler& dh,
+           const exec_config& cfg, caf::actor_system& sys,
+           SourceMap& source_map) -> bool {
   auto result = std::invoke([&]() -> failure_or<bool> {
-    TRY(load_packages_for_exec(dh, sys));
+    TRY(load_packages_for_exec(dh, sys, &source_map));
     auto provider = session_provider::make(dh);
     auto ctx = provider.as_session();
-    TRY(validate_utf8(source, ctx));
-    auto tokens = tokenize_permissive(source);
+    TRY(validate_utf8(source->text, ctx));
+    auto tokens = tokenize_permissive(source->text);
     if (cfg.dump_tokens) {
-      return dump_tokens(tokens, source);
+      return dump_tokens(tokens, source->text);
     }
-    TRY(verify_tokens(tokens, ctx));
-    TRY(auto parsed, parse(tokens, source, ctx));
+    TRY(verify_tokens(tokens, *source, ctx));
+    TRY(auto parsed, parse(tokens, *source, ctx));
     if (cfg.dump_ast) {
       fmt::print("{:#?}\n", parsed);
       return not ctx.has_failure();
@@ -2429,7 +2456,7 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
     if ((cfg.neo and not cfg.dump_pipeline) or cfg.dump_ir or cfg.dump_inst_ir
         or cfg.dump_opt_ir) {
       // This new code path will eventually supersede the current one.
-      return exec_with_ir(std::move(parsed), cfg, ctx, sys);
+      return exec_with_ir(std::move(parsed), cfg, ctx, sys, source_map);
     }
     if (cfg.profile) {
       diagnostic::warning("`--profile` is only supported with `--neo`")
@@ -2456,8 +2483,7 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
       pipes = std::move(*split);
     }
     for (auto& pipe : pipes) {
-      auto result
-        = exec_pipeline(std::move(pipe), std::string{source}, ctx, cfg, sys);
+      auto result = exec_pipeline(std::move(pipe), source, ctx, cfg, sys);
       if (not result) {
         if (result.error() != ec::silent) {
           diagnostic::error(result.error()).emit(ctx);

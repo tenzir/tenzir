@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 40..46
+           `export` @ [1]:40..46 from 0
          ],
          ref: std::export/op
        },
@@ -26,7 +26,7 @@
      GenericIr {
        op: {
          path: [
-           `fork` @ 47..51
+           `fork` @ [1]:47..51 from 0
          ],
          ref: std::fork/op
        },
@@ -51,7 +51,7 @@
              GenericIr {
                op: {
                  path: [
-                   `discard` @ 54..61
+                   `discard` @ [1]:54..61 from 0
                  ],
                  ref: std::discard/op
                },
@@ -68,28 +68,28 @@
                ]
              }
            ]
-         } @ 52..63,
+         } @ [1]:52..63 from 0,
          let_ids: {
            
          }
        }
      },
      where_ir {
--      self: 64..69,
-+      self: 0..0,
+-      self: [1]:64..69 from 0,
++      self: [0]:0..0 from 0,
        predicate: binary_expr {
          left: root_field {
-           id: `x` @ 70..71,
+           id: `x` @ [1]:70..71 from 0,
            has_question_mark: false
          },
-         op: "gt" @ 72..73,
-         right: constant int64 1 @ 74..75
+         op: "gt" @ [1]:72..73 from 0,
+         right: constant int64 1 @ [1]:74..75 from 0
        }
      },
      GenericIr {
        op: {
          path: [
-           `discard` @ 76..83
+           `discard` @ [1]:76..83 from 0
          ],
          ref: std::discard/op
        },

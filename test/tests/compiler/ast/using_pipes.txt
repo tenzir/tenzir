@@ -2,7 +2,7 @@
   invocation {
     op: {
       path: [
-        `export` @ 0..6
+        `export` @ [1]:0..6 from 0
       ],
       ref: unresolved
     },
@@ -12,55 +12,55 @@
   },
   assignment {
     left: root_field {
-      id: `foo` @ 9..12,
+      id: `foo` @ [1]:9..12 from 0,
       has_question_mark: false
     },
-    equals: 13..14,
-    right: constant int64 42 @ 15..17
+    equals: [1]:13..14 from 0,
+    right: constant int64 42 @ [1]:15..17 from 0
   },
   invocation {
     op: {
       path: [
-        `set` @ 20..23
+        `set` @ [1]:20..23 from 0
       ],
       ref: unresolved
     },
     args: [
       assignment {
         left: root_field {
-          id: `bar` @ 24..27,
+          id: `bar` @ [1]:24..27 from 0,
           has_question_mark: false
         },
-        equals: 28..29,
-        right: constant int64 43 @ 30..32
+        equals: [1]:28..29 from 0,
+        right: constant int64 43 @ [1]:30..32 from 0
       }
     ]
   },
   invocation {
     op: {
       path: [
-        `foo` @ 35..38
+        `foo` @ [1]:35..38 from 0
       ],
       ref: unresolved
     },
     args: [
       root_field {
-        id: `bar` @ 39..42,
+        id: `bar` @ [1]:39..42 from 0,
         has_question_mark: false
       },
       assignment {
         left: root_field {
-          id: `baz` @ 44..47,
+          id: `baz` @ [1]:44..47 from 0,
           has_question_mark: false
         },
-        equals: 47..48,
+        equals: [1]:47..48 from 0,
         right: root_field {
-          id: `qux` @ 48..51,
+          id: `qux` @ [1]:48..51 from 0,
           has_question_mark: false
         }
       },
       root_field {
-        id: `quux` @ 53..57,
+        id: `quux` @ [1]:53..57 from 0,
         has_question_mark: false
       }
     ]
@@ -68,7 +68,7 @@
   invocation {
     op: {
       path: [
-        `import` @ 60..66
+        `import` @ [1]:60..66 from 0
       ],
       ref: unresolved
     },

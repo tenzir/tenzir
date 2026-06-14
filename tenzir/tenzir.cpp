@@ -23,6 +23,7 @@
 #include "tenzir/scope_linked.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/signal_reflector.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/resolve.hpp"
 
@@ -72,14 +73,14 @@ auto enrich_with_actor(tenzir::diagnostic diag, caf::scheduled_actor* actor)
 
 auto emit_diagnostic(tenzir::diagnostic diag, bool is_server) -> void {
   if (not is_server) {
-    auto dh = make_diagnostic_printer(
-      std::nullopt, tenzir::color_diagnostics::yes, std::cerr);
+    auto dh
+      = make_diagnostic_printer(tenzir::color_diagnostics::yes, std::cerr);
     dh->emit(diag);
   } else {
     auto buffer = std::stringstream{};
     buffer << "internal error\n";
-    auto printer = make_diagnostic_printer(
-      std::nullopt, tenzir::color_diagnostics::no, buffer);
+    auto printer
+      = make_diagnostic_printer(tenzir::color_diagnostics::no, buffer);
     printer->emit(diag);
     auto string = std::move(buffer).str();
     if (not string.empty() and string.back() == '\n') {
@@ -303,11 +304,14 @@ auto main(int argc, char** argv) -> int try {
       TENZIR_ERROR("could not load `tenzir.operators`: invalid record");
       return EXIT_FAILURE;
     }
-    auto dh = make_diagnostic_printer(std::nullopt, color_diagnostics::yes,
-                                      std::cerr);
+    auto dh = make_diagnostic_printer(color_diagnostics::yes, std::cerr);
     auto provider = session_provider::make(*dh);
     auto ctx = provider.as_session();
-    auto udos = std::unordered_map<std::string, ast::pipeline>{};
+    struct config_udo {
+      ast::pipeline definition;
+      Arc<const Source> source;
+    };
+    auto udos = std::unordered_map<std::string, config_udo>{};
     for (auto&& [name, value] : *r) {
       auto* definition = try_as<std::string>(&value);
       if (not definition) {
@@ -316,13 +320,18 @@ auto main(int argc, char** argv) -> int try {
                      name);
         return EXIT_FAILURE;
       }
-      auto pipe = parse_pipeline_with_bad_diagnostics(*definition, ctx);
+      auto source = Source::new_source(
+        *definition, fmt::format("tenzir.operators.{}", name), true);
+      auto pipe = parse(*source, ctx);
       if (not pipe) {
         TENZIR_ERROR("parsing of user-defined operator `{}` failed", name);
         return EXIT_FAILURE;
       }
       TENZIR_ASSERT(not udos.contains(name));
-      udos[name] = std::move(*pipe);
+      udos.emplace(name, config_udo{
+                           .definition = std::move(*pipe),
+                           .source = std::move(source),
+                         });
     }
     // We parse user-defined operators in a loop; if in one iteration not a
     // single operator resolved, we know that the definition is invalid.
@@ -340,7 +349,7 @@ auto main(int argc, char** argv) -> int try {
         // earlier errors, but that it's impossible to form cyclic references.
         // We do not resolve `let` bindings yet in order to delay their
         // evaluation in cases such as `let $t = now()`.
-        if (not resolve_entities(udo.second, resolve_ctx)) {
+        if (not resolve_entities(udo.second.definition, resolve_ctx)) {
           std::ranges::move(std::move(resolve_dh).collect(),
                             std::back_inserter(unresolved_diags));
           continue;
@@ -359,7 +368,7 @@ auto main(int argc, char** argv) -> int try {
         return EXIT_FAILURE;
       }
       {
-        auto to_add = std::vector<std::pair<std::string, ast::pipeline>>{};
+        auto to_add = std::vector<std::pair<std::string, config_udo>>{};
         to_add.reserve(resolved.size());
         for (const auto& name : resolved) {
           auto it = udos.find(name);
@@ -369,9 +378,11 @@ auto main(int argc, char** argv) -> int try {
         auto guard = begin_registry_update();
         auto base = guard.current();
         auto next = base->clone();
-        for (auto& [name, def] : to_add) {
-          next->add(std::string{entity_pkg_cfg}, name,
-                    user_defined_operator{std::move(def), {}, {}});
+        for (auto& [name, udo] : to_add) {
+          next->add(
+            std::string{entity_pkg_cfg}, name,
+            user_defined_operator{
+              std::move(udo.definition), std::move(udo.source), {}, {}});
         }
         guard.publish(std::shared_ptr<const registry>{std::move(next)});
       }
