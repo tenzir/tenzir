@@ -3,3 +3,4 @@ error: quote character `-` conflicts with `null_value="-"`
   |
 6 |   read_tsv quotes="-"
   |                   ^^^ 
+  |

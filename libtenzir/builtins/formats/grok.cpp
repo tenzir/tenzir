@@ -62,15 +62,6 @@ constexpr std::string_view builtin_patterns_strings[] =
 #include "./grok-patterns/patterns.inc"
   ;
 
-auto has_location(diagnostic const& diag) -> bool {
-  for (auto const& annotation : diag.annotations) {
-    if (annotation.source != location::unknown) {
-      return true;
-    }
-  }
-  return false;
-}
-
 enum class capture_type {
   // The three options below (string, int, float)
   // are grok standard options
@@ -792,7 +783,7 @@ public:
       co_return;
     }
     dh_.emplace(ctx.dh(), [loc = args_.operator_location](diagnostic diag) {
-      if (not has_location(diag)) {
+      if (not diag.has_location()) {
         diag.annotations.emplace_back(true, std::string{}, loc);
       }
       return diag;

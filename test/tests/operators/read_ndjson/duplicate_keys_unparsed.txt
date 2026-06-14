@@ -7,4 +7,4 @@
   ],
 }
 warning: ndjson parser: type mismatch between list elements
- = note: field `x`
+  = note: field `x`

@@ -45,19 +45,10 @@ namespace {
 
 constexpr auto arrow_magic_bytes = std::string_view{"ARROW1"};
 
-auto has_location(diagnostic const& diag) -> bool {
-  for (auto const& annotation : diag.annotations) {
-    if (annotation.source != location::unknown) {
-      return true;
-    }
-  }
-  return false;
-}
-
 template <class DiagnosticBuilder, class DiagnosticHandler>
 auto emit_with_location(DiagnosticBuilder&& diag, DiagnosticHandler& dh,
                         location operator_location) -> void {
-  if (operator_location and not has_location(diag.inner())) {
+  if (operator_location and not diag.inner().has_location()) {
     diag.inner().annotations.emplace_back(true, std::string{},
                                           operator_location);
   }

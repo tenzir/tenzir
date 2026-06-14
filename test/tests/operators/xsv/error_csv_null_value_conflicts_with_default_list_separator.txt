@@ -1,5 +1,6 @@
 error: `list_separator` and `null_value` conflict
-  ⋮
+ --> tests/operators/xsv/error_csv_null_value_conflicts_with_default_list_separator.tql:6:23
+  |
 6 |   read_csv null_value=";"
   |                       ^^^ 
   |

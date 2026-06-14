@@ -173,6 +173,10 @@ struct [[nodiscard]] diagnostic : std::exception {
 
   auto modify() && -> diagnostic_builder;
 
+  /// Returns true if any annotation carries a known (non-unknown) source
+  /// location.
+  auto has_location() const -> bool;
+
   /// Resets the locations of primary annotations that originate from a
   /// call-site expansion (i.e. `callsite_index != 0`), leaving only top-level
   /// annotations referencable. Used when serializing diagnostics whose

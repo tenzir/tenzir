@@ -453,6 +453,7 @@ struct ReadXsvArgs {
   // Internal: used in diagnostic messages; set at Describer construction time.
   std::string name = "xsv";
   event_order order = event_order::ordered;
+  location operator_location;
 };
 
 // Handles for args that the validate() callback needs to inspect.
@@ -486,6 +487,7 @@ auto add_read_xsv_args(Describer<ReadXsvArgs, Impls...>& d)
   d.named("merge", &ReadXsvArgs::merge);
   d.named("_batch_timeout", &ReadXsvArgs::batch_timeout);
   d.named("_batch_size", &ReadXsvArgs::batch_size);
+  d.operator_location(&ReadXsvArgs::operator_location);
   return {quotes_arg,   header_arg, schema_arg,
           selector_arg, so_arg,     unflatten_arg};
 }
@@ -1069,6 +1071,10 @@ public:
         d.message = fmt::format("{} parser: {}", opts_.name, d.message);
         d.notes.emplace(d.notes.begin(), diagnostic_note_kind::note,
                         fmt::format("line {}", line_counter_));
+        if (args_.operator_location and not d.has_location()) {
+          d.annotations.emplace_back(true, std::string{},
+                                     args_.operator_location);
+        }
         return d;
       });
     msb_ = multi_series_builder(opts_.builder_options, *dh_);

@@ -263,6 +263,15 @@ diagnostic_note::diagnostic_note(diagnostic_note_kind kind, std::string message)
   trim_and_truncate(this->message);
 }
 
+auto diagnostic::has_location() const -> bool {
+  for (auto const& annotation : annotations) {
+    if (annotation.source != location::unknown) {
+      return true;
+    }
+  }
+  return false;
+}
+
 auto make_diagnostic_printer(SourceMap const& source_map,
                              color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler> {

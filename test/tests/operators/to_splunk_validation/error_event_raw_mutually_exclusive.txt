@@ -3,7 +3,9 @@ error: `event` and `raw` are mutually exclusive
   |
 8 |           raw=message
   |               ^^^^^^^ 
-  ⋮
+  |
+ --> tests/operators/to_splunk_validation/error_event_raw_mutually_exclusive.tql:7:17
+  |
 7 |           event=this,
   |                 ---- 
   |
