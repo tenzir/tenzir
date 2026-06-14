@@ -196,33 +196,22 @@ auto easy_client::ensure_transformations(const tenzir::record_type& schema,
     return &it.value();
   }
   auto qualified_database = Option<std::string_view>{};
+  // When the default database comes from a URI path segment it is a raw
+  // (unquoted) string, so we quote it here before embedding it in SQL.
+  auto quoted_default_database = std::string{};
   if (auto split
       = split_table_name<true>(table_name, args_.table.get_location(), dh_)) {
     qualified_database = split->database;
     if (not qualified_database and args_.default_database) {
-      qualified_database = std::string_view{*args_.default_database};
+      quoted_default_database
+        = quote_identifier_component(*args_.default_database);
+      qualified_database = std::string_view{quoted_default_database};
     }
   } else {
     return failure::promise();
   }
-  if (qualified_database) {
-    TRY(const auto database_existed,
-        remote_check_exists("DATABASE", *qualified_database));
-    TENZIR_TRACE("database exists: {}", database_existed);
-    if (not database_existed) {
-      if (args_.mode.inner == mode::append) {
-        diagnostic::error("mode is `append`, but database `{}` does not exist",
-                          *qualified_database)
-          .primary(args_.mode)
-          .primary(args_.table)
-          .emit(dh_);
-        return failure::promise();
-      }
-      TENZIR_DEBUG("creating database `{}`", *qualified_database);
-      remote_create_database(*qualified_database);
-      TENZIR_DEBUG("created database `{}`", *qualified_database);
-    }
-  }
+  // Check table existence first so we can validate all preconditions before
+  // making any structural changes (e.g., creating a database).
   // Note that technically, we have a ToCToU bug here. The table could be
   // created or deleted in between this, the `get` call below and the potential
   // creation in `insert`.
@@ -252,6 +241,25 @@ auto easy_client::ensure_transformations(const tenzir::record_type& schema,
       .primary(args_.table)
       .emit(dh_);
     return failure::promise();
+  }
+  // All table-level preconditions passed; create database if needed.
+  if (qualified_database) {
+    TRY(const auto database_existed,
+        remote_check_exists("DATABASE", *qualified_database));
+    TENZIR_TRACE("database exists: {}", database_existed);
+    if (not database_existed) {
+      if (args_.mode.inner == mode::append) {
+        diagnostic::error("mode is `append`, but database `{}` does not exist",
+                          *qualified_database)
+          .primary(args_.mode)
+          .primary(args_.table)
+          .emit(dh_);
+        return failure::promise();
+      }
+      TENZIR_DEBUG("creating database `{}`", *qualified_database);
+      remote_create_database(*qualified_database);
+      TENZIR_DEBUG("created database `{}`", *qualified_database);
+    }
   }
   if (table_existed) {
     return remote_fetch_schema_transformations(table_name);

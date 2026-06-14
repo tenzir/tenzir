@@ -266,14 +266,15 @@ auto remove_non_significant_whitespace(std::string_view str) -> std::string {
     if (can_skip and is_space) {
       continue;
     }
-    ret += c;
     const auto is_syntax = syntax_characters.find(c) != std::string_view::npos;
-    can_skip = is_space or is_syntax;
     // Remove space *before* the current syntax token. Handles e.g. `text )`
-    if (is_syntax and i > 0
-        and std::isspace(static_cast<unsigned char>(str[i - 1]))) {
+    // Pop before appending so we remove the trailing space, not `c` itself.
+    if (is_syntax and not ret.empty()
+        and std::isspace(static_cast<unsigned char>(ret.back()))) {
       ret.pop_back();
     }
+    ret += c;
+    can_skip = is_space or is_syntax;
   }
   return ret;
 }

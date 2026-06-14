@@ -121,6 +121,11 @@ auto to_clickhouse_binary_op(ast::binary_op op) -> Option<std::string_view> {
   }
 }
 
+auto is_null_constant(ast::expression const& expr) -> bool {
+  auto const* c = try_as<ast::constant>(expr);
+  return c != nullptr and is<caf::none_t>(c->value);
+}
+
 auto to_clickhouse_sql(ast::expression const& expr) -> Option<std::string> {
   if (auto path = ast::field_path::try_from(expr)) {
     auto has_optional_access
@@ -137,6 +142,23 @@ auto to_clickhouse_sql(ast::expression const& expr) -> Option<std::string> {
       return to_clickhouse_literal(constant.as_data());
     },
     [](ast::binary_expr const& binary) -> Option<std::string> {
+      // Rewrite `field = NULL` / `field != NULL` to `IS NULL` / `IS NOT NULL`
+      // because SQL `= NULL` always evaluates to NULL, never true.
+      auto lhs_null = is_null_constant(binary.left);
+      auto rhs_null = is_null_constant(binary.right);
+      if (lhs_null or rhs_null) {
+        using enum ast::binary_op;
+        if (binary.op.inner != eq and binary.op.inner != neq) {
+          return None{};
+        }
+        auto field = lhs_null ? to_clickhouse_sql(binary.right)
+                              : to_clickhouse_sql(binary.left);
+        if (not field) {
+          return None{};
+        }
+        return fmt::format("({} {})", *field,
+                           binary.op.inner == eq ? "IS NULL" : "IS NOT NULL");
+      }
       auto lhs = to_clickhouse_sql(binary.left);
       auto op = to_clickhouse_binary_op(binary.op.inner);
       auto rhs = to_clickhouse_sql(binary.right);

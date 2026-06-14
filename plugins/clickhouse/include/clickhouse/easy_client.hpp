@@ -148,7 +148,7 @@ inline auto apply_connection_uri(easy_client::arguments& args,
     args.port
       = located<uint64_t>{uint64_t{uri.port_number()}, location::unknown};
   }
-  if (not uri.encoded_user().empty()) {
+  if (uri.has_userinfo()) {
     args.user = std::string{uri.user()};
   }
   if (uri.has_password()) {
