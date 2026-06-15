@@ -175,9 +175,12 @@ public:
 
   auto stop(OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    phase_ = Phase::finished;
-    remaining_repetitions_ = 0;
-    next_index_ = 0;
+    // Without an explicit count, `repeat` replays its input forever. A
+    // graceful stop must end this otherwise infinite replay. With a finite
+    // count, we instead keep draining the remaining repetitions.
+    if (count_ == std::numeric_limits<uint64_t>::max()) {
+      phase_ = Phase::finished;
+    }
     co_return;
   }
 

@@ -48,6 +48,22 @@ Only override `state()` if the operator can terminate early (e.g., `head` stops
 after N rows). Operators that process until end-of-stream do not need to
 override `state()`.
 
+### Graceful shutdown contract
+
+Treat `stop()` and `finalize()` as different phases:
+
+- `stop()` means: stop producing new external work, but keep draining work and
+  input that was already accepted.
+- `finalize()` means: the input stream is exhausted.
+
+For operators with `Input != void`, graceful shutdown must not be treated as
+end-of-input. The executor should call `stop()` when shutdown begins, keep
+processing already accepted input, and call `finalize()` only after upstream has
+signaled end-of-data.
+
+For sources (`Input == void`), there is no upstream end-of-data signal, so a
+`stop()` should probably lead to operator terminating.
+
 ### Avoid Destructors
 
 Avoid defining destructors for operators. Work that needs to be done during a

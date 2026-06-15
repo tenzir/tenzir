@@ -18,6 +18,7 @@
 #include "tenzir/configuration.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/signal_guard.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/element_type.hpp"
 #include "tenzir/exec_pipeline.hpp"
@@ -2042,14 +2043,14 @@ auto run_profiler(Profiler const& profiler, TestExecCtx& exec_ctx,
 
 auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
               DiagHandler& dh, Profiler profiler, bool has_terminal,
-              bool is_hidden) -> Task<failure_or<void>> {
+              bool is_hidden, Notify* graceful_stop) -> Task<failure_or<void>> {
   auto num_ops = chain.size();
   LOGW("spawning plan with {} operators", num_ops);
   auto exec_ctx = TestExecCtx{profiler, has_terminal, is_hidden};
   co_await async_scope([&](AsyncScope& scope) -> Task<void> {
     scope.spawn(run_profiler(profiler, exec_ctx, num_ops));
     LOGW("blocking on pipeline");
-    co_await run_pipeline(std::move(chain), exec_ctx, sys, dh);
+    co_await run_pipeline(std::move(chain), exec_ctx, sys, dh, graceful_stop);
     LOGW("blocking on pipeline done");
     scope.cancel();
   });
@@ -2057,10 +2058,10 @@ auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
 }
 
 auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
-              DiagHandler& dh, Profiler profiler, bool is_hidden)
-  -> Task<failure_or<void>> {
+              DiagHandler& dh, Profiler profiler, bool is_hidden,
+              Notify* graceful_stop) -> Task<failure_or<void>> {
   co_return co_await run_plan(std::move(chain), sys, dh, std::move(profiler),
-                              false, is_hidden);
+                              false, is_hidden, graceful_stop);
 }
 
 auto run_transform(OperatorChain<table_slice, table_slice> chain,
@@ -2221,11 +2222,14 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
   auto cancel_source = folly::CancellationSource{};
   auto diag_handler = ExecDiagHandler{dh, cancel_source};
   auto has_terminal = ::isatty(STDIN_FILENO) == 1;
+  auto graceful_stop = Notify{};
+  auto signal_guard = detail::SignalGuard{graceful_stop, cancel_source,
+                                          std::chrono::seconds{3}};
   auto task = folly::coro::co_invoke([&] -> Task<Option<failure_or<void>>> {
     co_return co_await catch_cancellation(folly::coro::co_withCancellation(
       cancel_source.getToken(),
       run_plan(std::move(chain), sys, diag_handler, std::move(profiler),
-               has_terminal, false)));
+               has_terminal, false, &graceful_stop)));
   });
 #if 0
   TENZIR_DEBUG("running pipeline on a single thread");
@@ -2239,7 +2243,13 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
   LOGI("end blocking");
   TRY(diag_handler.failure());
   if (not result) {
-    panic("pipeline got cancelled without error");
+    // The pipeline was force-cancelled, either by a second signal or because
+    // the grace period after a graceful stop request expired. In-flight data
+    // may have been lost, so we report failure.
+    diagnostic::error("pipeline was aborted before completion")
+      .note("in-flight data may have been lost")
+      .emit(dh);
+    return failure::promise();
   }
   if (result->is_error()) {
     panic("got failure from run_plan but not in diagnostic handler");

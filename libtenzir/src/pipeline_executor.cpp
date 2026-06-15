@@ -412,6 +412,22 @@ auto pipeline_executor(
     [self](atom::resume) -> caf::result<void> {
       return self->state().resume();
     },
+    [self](atom::stop) -> caf::result<void> {
+      // The legacy executor has no graceful drain phase; a stop request is
+      // equivalent to an exit with reason `user_shutdown`.
+      auto reason = caf::error{caf::exit_reason::user_shutdown};
+      if (self->state().start_rp.pending()) {
+        self->state().start_rp.deliver(reason);
+      }
+      if (self->state().is_started) {
+        for (const auto& exec_node : self->state().exec_nodes) {
+          TENZIR_ASSERT(exec_node);
+          self->send_exit(exec_node, reason);
+        }
+      }
+      self->quit(std::move(reason));
+      return {};
+    },
     [self](caf::exit_msg msg) {
       if (self->state().start_rp.pending()) {
         self->state().start_rp.deliver(msg.reason);

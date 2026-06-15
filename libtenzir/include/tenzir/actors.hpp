@@ -428,7 +428,11 @@ using pipeline_executor_actor = typed_actor_fwd<
   // called before the pipeline was started.
   auto(atom::pause)->caf::result<void>,
   // Resume the pipeline execution. No-op if it was not paused.
-  auto(atom::resume)->caf::result<void>>::unwrap;
+  auto(atom::resume)->caf::result<void>,
+  // Request a graceful stop: source operators finish in-flight work and the
+  // pipeline drains and terminates naturally. Idempotent. To force-kill the
+  // pipeline, send an exit message instead.
+  auto(atom::stop)->caf::result<void>>::unwrap;
 
 /// The interface of a PACKAGE LISTENER actor.
 /// Listeners are notified by the package manager in the following order:
