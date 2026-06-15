@@ -225,7 +225,8 @@ struct exec_pipeline_handler_state {
 
 auto exec_pipeline(pipeline pipe, Arc<const Source> definition,
                    diagnostic_handler& dh, const exec_config& cfg,
-                   caf::actor_system& sys) -> caf::expected<void> {
+                   caf::actor_system& sys, SourceMap& source_map)
+  -> caf::expected<void> {
   auto implicit_pipe = add_implicit_source_and_sink(std::move(pipe), dh, cfg);
   if (not implicit_pipe) {
     return std::move(implicit_pipe.error());
@@ -281,7 +282,7 @@ auto exec_pipeline(pipeline pipe, Arc<const Source> definition,
                        .to_error();
           }
           if (dedup.insert(d)) {
-            dh.emit(std::move(d));
+            dh.emit(source_map.enrich(std::move(d)));
           }
         },
         [&](uint64_t, uuid, type&) {
@@ -342,7 +343,8 @@ auto exec_pipeline(Arc<const Source> source, diagnostic_handler& dh,
     return {};
   }
   auto pipe = tql::to_pipeline(std::move(*parsed));
-  return exec_pipeline(std::move(pipe), std::move(source), dh, cfg, sys);
+  return exec_pipeline(std::move(pipe), std::move(source), dh, cfg, sys,
+                       source_map);
 }
 
 } // namespace tenzir

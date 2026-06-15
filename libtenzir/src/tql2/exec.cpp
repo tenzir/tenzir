@@ -2483,7 +2483,8 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
       pipes = std::move(*split);
     }
     for (auto& pipe : pipes) {
-      auto result = exec_pipeline(std::move(pipe), source, ctx, cfg, sys);
+      auto result
+        = exec_pipeline(std::move(pipe), source, ctx, cfg, sys, source_map);
       if (not result) {
         if (result.error() != ec::silent) {
           diagnostic::error(result.error()).emit(ctx);
