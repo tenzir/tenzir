@@ -148,6 +148,11 @@ jobs:
         run: |
           nix_flags=(
             --option extra-sandbox-paths "/tmp/tenzir-ccache?"
+            # Dynamic Tenzir builds fan out into many plugin derivations. Keep
+            # Nix parallelism modest here to avoid GitHub runners getting
+            # OOM-killed mid-build.
+            --option max-jobs 2
+            --option cores 2
             --accept-flake-config
             --print-build-logs
           )
@@ -177,6 +182,8 @@ jobs:
         run: |
           nix_flags=(
             --option extra-sandbox-paths "/tmp/tenzir-ccache?"
+            --option max-jobs 2
+            --option cores 2
             --accept-flake-config
           )
           if [[ -n "${TENZIR_VERSION_SUFFIX}" ]]; then
