@@ -2,4 +2,3 @@ fixtures:
   - node
 retry: 2
 timeout: 60
-skip: "Too racy for arm docker"

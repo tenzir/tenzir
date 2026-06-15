@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ [1]:69..75 from 0
+           `export` @ [1]:75..81 from 0
          ],
          ref: std::export/op
        },
@@ -15,15 +15,7 @@
          
        ],
        filter: [
--        
-+        binary_expr {
-+          left: root_field {
-+            id: `x` @ [1]:93..94 from 0,
-+            has_question_mark: false
-+          },
-+          op: "gt" @ [1]:95..96 from 0,
-+          right: constant int64 1 @ [1]:97..98 from 0
-+        }
+         
        ],
 -      order: "ordered",
 +      order: "unordered",
@@ -34,7 +26,7 @@
      GenericIr {
        op: {
          path: [
-           `parallel` @ [1]:76..84 from 0
+           `parallel` @ [1]:82..90 from 0
          ],
          ref: std::parallel/op
        },
@@ -56,21 +48,22 @@
              
            ],
            operators: [
--            where_ir {
--              self: [1]:87..92 from 0,
--              predicate: binary_expr {
--                left: root_field {
--                  id: `x` @ [1]:93..94 from 0,
--                  has_question_mark: false
--                },
--                op: "gt" @ [1]:95..96 from 0,
--                right: constant int64 1 @ [1]:97..98 from 0
--              }
--            },
+             where_ir {
+-              self: [1]:93..98 from 0,
++              self: [0]:0..0 from 0,
+               predicate: binary_expr {
+                 left: root_field {
+                   id: `x` @ [1]:99..100 from 0,
+                   has_question_mark: false
+                 },
+                 op: "gt" @ [1]:101..102 from 0,
+                 right: constant int64 1 @ [1]:103..104 from 0
+               }
+             },
              GenericIr {
                op: {
                  path: [
-                   `discard` @ [1]:101..108 from 0
+                   `discard` @ [1]:107..114 from 0
                  ],
                  ref: std::discard/op
                },
@@ -87,7 +80,7 @@
                ]
              }
            ]
-         } @ [1]:85..110 from 0,
+         } @ [1]:91..116 from 0,
          let_ids: {
            
          }
