@@ -23,4 +23,4 @@
   resp_ip_bytes: 476,
 }
 warning: zeek_json parser: event did not contain selector field
- = note: selector field `_path` was not found
+  = note: selector field `_path` was not found

@@ -122,11 +122,7 @@ public:
       indent_width = std::max(indent_width, size_t{1});
     }
     auto indent = std::string(indent_width, ' ');
-    struct PrintedSourceLine {
-      SourceId source_index;
-      size_t line_idx;
-    };
-    auto previous_line = std::optional<PrintedSourceLine>{};
+    auto previous_source = std::optional<SourceId>{};
     for (auto& annotation : diag.annotations) {
       if (not annotation.source) {
         TENZIR_VERBOSE("annotation does not have source: {:?}", annotation);
@@ -144,12 +140,14 @@ public:
       }
       auto [line_idx, col] = *lc;
       auto line = line_idx + 1;
-      if (previous_line
-          and previous_line->source_index == annotation.source.source_index
-          and previous_line->line_idx == line_idx) {
+      if (previous_source
+          and *previous_source == annotation.source.source_index) {
+        // Annotations within the same source are separated by a vertical
+        // ellipsis. A new `-->` location block is only emitted when the
+        // annotation refers to a different source.
         fmt::print(stream_, "{} {}{}⋮{}\n", indent, bold, blue, reset);
       } else {
-        if (previous_line) {
+        if (previous_source) {
           fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
         }
         fmt::print(stream_, "{}{}{}-->{} {}:{}:{}\n", indent, bold, blue, reset,
@@ -168,12 +166,9 @@ public:
                  color(pseudo_severity), std::string(col, ' '),
                  std::string(count, symbol(pseudo_severity)), annotation.text,
                  reset);
-      previous_line = PrintedSourceLine{
-        .source_index = annotation.source.source_index,
-        .line_idx = line_idx,
-      };
+      previous_source = annotation.source.source_index;
     }
-    if (previous_line) {
+    if (previous_source) {
       fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
     }
     for (auto& note : diag.notes) {
