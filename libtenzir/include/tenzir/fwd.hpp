@@ -238,6 +238,7 @@ struct legacy_record_type;
 struct legacy_string_type;
 struct legacy_subnet_type;
 struct legacy_time_type;
+struct platform_authentication_result;
 struct location;
 struct measurement;
 struct meta_extractor;
@@ -486,6 +487,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::ast::pipeline))
   TENZIR_ADD_TYPE_ID((tenzir::port))
   TENZIR_ADD_TYPE_ID((tenzir::port_type))
+  TENZIR_ADD_TYPE_ID((tenzir::platform_authentication_result))
   TENZIR_ADD_TYPE_ID((tenzir::predicate))
   TENZIR_ADD_TYPE_ID((tenzir::qualified_record_field))
   TENZIR_ADD_TYPE_ID((tenzir::query_context))
