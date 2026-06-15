@@ -292,7 +292,6 @@ private:
   auto run_query(::clickhouse::ClientOptions options, QueryPlan plan,
                  diagnostic_handler& dh) -> Task<void> {
     try {
-      auto client = ::clickhouse::Client{std::move(options)};
       auto first_schema = Option<type>{};
       auto query = ::clickhouse::Query{plan.query};
       query.SetSetting("max_block_size",
@@ -321,7 +320,10 @@ private:
         runtime_->produce_data(std::move(*slice));
         return not runtime_->should_cancel();
       });
-      client.Select(query);
+      co_await spawn_blocking([&options, &query]() {
+        auto client = ::clickhouse::Client{options};
+        client.Select(query);
+      });
     } catch (const panic_exception&) {
       throw;
     } catch (const ::clickhouse::ServerError& e) {
