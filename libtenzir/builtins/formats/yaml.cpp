@@ -34,8 +34,6 @@
 #include <caf/expected.hpp>
 #include <fmt/format.h>
 
-#include <algorithm>
-#include <cctype>
 #include <string_view>
 
 #include <yaml-cpp/yaml.h>
@@ -529,9 +527,8 @@ public:
   auto read_detection_candidates() const
     -> std::vector<read_detection_candidate> override {
     return {
-      read_detection::candidate("yaml", "read_yaml", "read_yaml",
-                                read_detection::specificity::document,
-                                detect_yaml),
+      read_detection::candidate(
+        "read_yaml", read_detection::specificity::document, detect_yaml),
     };
   }
 
@@ -540,7 +537,7 @@ private:
     namespace rd = read_detection;
     if (not detail::is_valid_utf8(input.bytes)) {
       if (not input.eof and detail::is_valid_utf8_prefix(input.bytes)) {
-        return rd::need_more("partial UTF-8 sequence");
+        return rd::need_more();
       }
       return rd::reject();
     }
@@ -551,7 +548,7 @@ private:
     // Flow-style YAML at the top level is indistinguishable from broken
     // JSON, so input that looks like JSON belongs to the JSON detectors.
     if (bytes.front() == '{' or bytes.front() == '[') {
-      return rd::reject("JSON-shaped input");
+      return rd::reject();
     }
     // Bound the dry run to a handful of complete lines so that a chunk
     // boundary cannot split a token and the probe cost stays constant.
@@ -575,35 +572,22 @@ private:
       }
       document = bytes.substr(0, end);
     }
-    // Run the actual YAML parser on the sampled document. Free-form text
-    // parses as a plain scalar, so only structured roots count as evidence.
-    // Prose can still form a valid mapping because YAML keys may contain
-    // spaces; require bare top-level keys to tell configuration-style
-    // documents apart from free text.
+    // Run the actual YAML parser on the sampled document. `read_yaml` skips
+    // top-level non-map documents, so only maps count as evidence.
     try {
       auto node = YAML::Load(std::string{document});
-      if (node.IsSequence()) {
-        return rd::match("YAML sequence");
-      }
       if (not node.IsMap()) {
-        return rd::reject("YAML scalar");
+        return rd::reject();
       }
       for (auto const& entry : node) {
         if (not entry.first.IsScalar()) {
-          return rd::reject("non-scalar YAML key");
-        }
-        auto const& key = entry.first.Scalar();
-        auto is_space = [](unsigned char ch) {
-          return std::isspace(ch) != 0;
-        };
-        if (key.empty() or std::ranges::any_of(key, is_space)) {
-          return rd::reject("YAML key contains whitespace");
+          return rd::reject();
         }
       }
-      return rd::match("YAML mapping");
+      return rd::match();
     } catch (YAML::Exception const&) {
       // A truncated sample can fail mid-structure; more input may fix it.
-      return input.eof ? rd::reject("invalid YAML") : rd::need_more();
+      return input.eof ? rd::reject() : rd::need_more();
     }
   }
 };

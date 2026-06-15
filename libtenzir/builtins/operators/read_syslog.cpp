@@ -473,9 +473,8 @@ public:
   auto read_detection_candidates() const
     -> std::vector<read_detection_candidate> override {
     return {
-      read_detection::candidate("syslog", "read_syslog", "read_syslog",
-                                read_detection::specificity::grammar,
-                                detect_syslog),
+      read_detection::candidate(
+        "read_syslog", read_detection::specificity::grammar, detect_syslog),
     };
   }
 
@@ -503,24 +502,24 @@ private:
     // free-form text that happens to start with a timestamp; require the
     // prefix for automatic detection and dry-run the actual parsers.
     if (not line.starts_with('<')) {
-      return rd::reject("no syslog PRI prefix");
+      return rd::reject();
     }
     auto const* f = line.begin();
     auto const* const l = line.end();
     if (syslog::message_parser{}.parse(f, l, unused)) {
-      return rd::match("RFC 5424 syslog");
+      return rd::match();
     }
     f = line.begin();
     if (syslog::legacy_message_parser{}.parse(f, l, unused)) {
-      return rd::match("RFC 3164 syslog");
+      return rd::match();
     }
     f = line.begin();
     // The Cisco parser does not support parsing into `unused`.
     auto cisco_msg = syslog::legacy_message{};
     if (syslog::cisco_legacy_message_parser{}.parse(f, l, cisco_msg)) {
-      return rd::match("Cisco syslog");
+      return rd::match();
     }
-    return rd::reject("PRI prefix without syslog grammar");
+    return rd::reject();
   }
 };
 

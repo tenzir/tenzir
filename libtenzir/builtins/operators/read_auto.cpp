@@ -19,8 +19,10 @@
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/plugin.hpp"
+#include "tenzir/variant.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <optional>
 #include <ranges>
 #include <string_view>
@@ -39,27 +41,33 @@ struct ReadAutoArgs {
   location operator_location;
 };
 
-struct Candidate {
-  std::string format_name;
-  std::string pipeline;
-  uint64_t specificity = 0;
-  std::optional<size_t> plugin_candidate;
-  bool live = true;
+struct PluginCandidate {
+  ReadOperatorPlugin const* plugin = nullptr;
+  read_detection_candidate candidate;
 };
 
-auto plugin_detection_candidates()
-  -> const std::vector<read_detection_candidate>& {
+auto plugin_detection_candidates() -> const std::vector<PluginCandidate>& {
   static const auto result = [] {
-    auto result = std::vector<read_detection_candidate>{};
+    auto result = std::vector<PluginCandidate>{};
     for (auto const* plugin : plugins::get<ReadOperatorPlugin>()) {
       auto candidates = plugin->read_detection_candidates();
-      std::move(candidates.begin(), candidates.end(),
-                std::back_inserter(result));
+      for (auto& candidate : candidates) {
+        result.push_back(PluginCandidate{
+          .plugin = plugin,
+          .candidate = std::move(candidate),
+        });
+      }
     }
     return result;
   }();
   return result;
 }
+
+struct indeterminate {};
+
+using selection_result = variant<size_t, failure, indeterminate>;
+
+constexpr auto fallback_candidate = std::numeric_limits<size_t>::max();
 
 class ReadAuto final : public Operator<chunk_ptr, table_slice> {
 public:
@@ -67,30 +75,8 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    auto names = ctx.reg().operator_names();
-    auto strip_tql2_prefix = [](std::string_view name) {
-      constexpr auto prefix = std::string_view{"tql2."};
-      return name.starts_with(prefix) ? name.substr(prefix.size()) : name;
-    };
-    auto operator_available = [&](std::string_view name) {
-      name = strip_tql2_prefix(name);
-      return std::ranges::find(names, name) != names.end();
-    };
-    auto& plugin_candidates = plugin_detection_candidates();
-    for (auto index = size_t{0}; index < plugin_candidates.size(); ++index) {
-      auto& candidate = plugin_candidates[index];
-      candidates_.push_back(Candidate{
-        .format_name = candidate.format_name,
-        .pipeline = candidate.pipeline,
-        .specificity = candidate.specificity,
-        .plugin_candidate = index,
-        .live = not candidate.format_name.empty()
-                and not candidate.operator_name.empty()
-                and not candidate.pipeline.empty() and candidate.specificity > 0
-                and candidate.detect
-                and operator_available(candidate.operator_name),
-      });
-    }
+    TENZIR_UNUSED(ctx);
+    live_candidates_.assign(plugin_detection_candidates().size(), true);
     co_return;
   }
 
@@ -114,9 +100,9 @@ public:
       probe_.append(bytes);
     }
     auto exhausted = probe_.size() >= args_.max_probe_bytes;
-    if (auto selected
-        = select({.eof = false, .done_probing = exhausted}, ctx)) {
-      co_await spawn_selected(*selected, ctx);
+    auto selected = select({.eof = false, .done_probing = exhausted}, ctx);
+    if (auto* index = try_as<size_t>(selected)) {
+      co_await spawn_selected(*index, ctx);
     }
   }
 
@@ -130,10 +116,14 @@ public:
       done_ = true;
       co_return FinalizeBehavior::done;
     }
-    if (auto selected = select({.eof = true, .done_probing = true}, ctx)) {
-      co_await spawn_selected(*selected, ctx);
+    auto selected = select({.eof = true, .done_probing = true}, ctx);
+    if (auto* index = try_as<size_t>(selected)) {
+      co_await spawn_selected(*index, ctx);
       co_await close_selected(ctx);
       co_return FinalizeBehavior::continue_;
+    }
+    if (is<failure>(selected)) {
+      co_return FinalizeBehavior::done;
     }
     done_ = true;
     co_return FinalizeBehavior::done;
@@ -166,24 +156,23 @@ private:
     bool done_probing = false;
   };
 
-  auto select(SelectionInput input, OpCtx& ctx) -> std::optional<size_t> {
+  auto select(SelectionInput input, OpCtx& ctx) -> selection_result {
     auto any_need_more = false;
     auto matches = std::vector<size_t>{};
-    for (auto i = size_t{0}; i < candidates_.size(); ++i) {
-      auto& candidate = candidates_[i];
-      if (not candidate.live) {
+    auto const& candidates = plugin_detection_candidates();
+    TENZIR_ASSERT(live_candidates_.size() == candidates.size());
+    for (auto i = size_t{0}; i < candidates.size(); ++i) {
+      if (not live_candidates_[i]) {
         continue;
       }
-      TENZIR_ASSERT(candidate.plugin_candidate);
-      auto& plugin_candidate
-        = plugin_detection_candidates()[*candidate.plugin_candidate];
+      auto const& plugin_candidate = candidates[i].candidate;
       auto result = plugin_candidate.detect(read_detection_input{
         .bytes = probe_,
         .eof = input.eof,
       });
       switch (result.state) {
         case detection_state::reject:
-          candidate.live = false;
+          live_candidates_[i] = false;
           break;
         case detection_state::need_more:
           any_need_more = true;
@@ -195,12 +184,16 @@ private:
     }
     if (matches.empty()) {
       if (not input.done_probing and any_need_more) {
-        return std::nullopt;
+        return indeterminate{};
       }
-      return fallback(input, ctx);
+      auto result = fallback(input, ctx);
+      if (result.is_error()) {
+        return failure::promise();
+      }
+      return *result;
     }
     auto score = [&](size_t index) {
-      return candidates_[index].specificity;
+      return candidates[index].candidate.specificity;
     };
     std::ranges::sort(matches, [&](size_t lhs, size_t rhs) {
       return score(lhs) > score(rhs);
@@ -209,25 +202,22 @@ private:
       diagnostic::error("read_auto detection is ambiguous")
         .primary(args_.operator_location)
         .note("candidates `{}` and `{}` both matched",
-              candidates_[matches[0]].format_name,
-              candidates_[matches[1]].format_name)
+              candidates[matches[0]].candidate.pipeline,
+              candidates[matches[1]].candidate.pipeline)
         .emit(ctx);
-      return std::nullopt;
+      return failure::promise();
     }
     return matches[0];
   }
 
-  auto fallback(SelectionInput input, OpCtx& ctx) -> std::optional<size_t> {
-    if (not input.done_probing) {
-      return std::nullopt;
-    }
+  auto fallback(SelectionInput input, OpCtx& ctx) -> failure_or<size_t> {
+    TENZIR_ASSERT(input.done_probing);
     if (args_.fallback == "none") {
       diagnostic::error("read_auto could not detect an input format")
         .primary(args_.operator_location)
         .emit(ctx);
-      return std::nullopt;
+      return failure::promise();
     }
-    auto pipeline = std::string{};
     auto valid_utf8 = input.eof ? detail::is_valid_utf8(probe_)
                                 : detail::is_valid_utf8_prefix(probe_);
     if (args_.fallback == "lines") {
@@ -235,47 +225,40 @@ private:
         diagnostic::error("read_auto fallback `lines` requires UTF-8 input")
           .primary(args_.operator_location)
           .emit(ctx);
-        return std::nullopt;
+        return failure::promise();
       }
-      pipeline = "read_lines";
+      fallback_pipeline_ = "read_lines";
     } else {
-      pipeline = valid_utf8 ? "read_all" : "read_all binary=true";
+      fallback_pipeline_ = valid_utf8 ? "read_all" : "read_all binary=true";
     }
-    candidates_.push_back(Candidate{
-      .format_name = fmt::format("fallback.{}", args_.fallback),
-      .pipeline = std::move(pipeline),
-    });
-    return candidates_.size() - 1;
+    return fallback_candidate;
   }
 
   auto spawn_selected(size_t index, OpCtx& ctx) -> Task<void> {
     selected_ = index;
-    auto& candidate = candidates_[index];
+    auto const& pipeline = selected_pipeline(index);
     auto root = compile_ctx::make_root(base_ctx{ctx});
     auto provider = session_provider::make(ctx.dh());
     auto session = provider.as_session();
-    auto ast = parse_pipeline_with_bad_diagnostics(candidate.pipeline, session);
-    if (not ast) {
-      diagnostic::error("failed to parse read-auto candidate `{}`",
-                        candidate.format_name)
-        .primary(args_.operator_location)
-        .emit(ctx);
-      co_return;
-    }
+    auto ast = parse_pipeline_with_bad_diagnostics(pipeline, session);
+    TENZIR_ASSERT(ast);
     auto pipe = std::move(*ast).compile(root);
-    if (not pipe) {
-      diagnostic::error("failed to compile read-auto candidate `{}`",
-                        candidate.format_name)
-        .primary(args_.operator_location)
-        .emit(ctx);
-      co_return;
-    }
+    TENZIR_ASSERT(pipe);
     co_await ctx.spawn_sub<chunk_ptr>(int64_t{0}, std::move(*pipe),
                                       DiagnosticBehavior::Unchanged);
     for (auto& chunk : buffered_) {
       co_await push_to_selected(std::move(chunk), ctx);
     }
     buffered_.clear();
+  }
+
+  auto selected_pipeline(size_t index) const -> std::string const& {
+    if (index == fallback_candidate) {
+      return fallback_pipeline_;
+    }
+    auto const& candidates = plugin_detection_candidates();
+    TENZIR_ASSERT(index < candidates.size());
+    return candidates[index].candidate.pipeline;
   }
 
   auto push_to_selected(chunk_ptr chunk, OpCtx& ctx) -> Task<void> {
@@ -305,9 +288,10 @@ private:
   }
 
   ReadAutoArgs args_;
-  std::vector<Candidate> candidates_;
+  std::vector<bool> live_candidates_;
   std::vector<chunk_ptr> buffered_;
   std::string probe_;
+  std::string fallback_pipeline_;
   std::optional<size_t> selected_;
   bool seen_bytes_ = false;
   bool done_ = false;

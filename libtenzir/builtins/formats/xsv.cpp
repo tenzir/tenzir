@@ -1523,8 +1523,7 @@ public:
       return {};
     }
     return {
-      read_detection::candidate(fmt::format("xsv.{}", Name.str()), name(),
-                                name(), read_detection::specificity::delimited,
+      read_detection::candidate(name(), read_detection::specificity::delimited,
                                 detect_xsv),
     };
   }
@@ -1534,7 +1533,7 @@ private:
     namespace rd = read_detection;
     if (not detail::is_valid_utf8(input.bytes)) {
       if (not input.eof and detail::is_valid_utf8_prefix(input.bytes)) {
-        return rd::need_more("partial UTF-8 sequence");
+        return rd::need_more();
       }
       return rd::reject();
     }
@@ -1566,17 +1565,17 @@ private:
     }
     auto fields = count_fields(sample.complete.front());
     if (fields < 2) {
-      return rd::reject("no field separator in first line");
+      return rd::reject();
     }
     for (auto line : sample.complete) {
       if (count_fields(line) != fields) {
-        return rd::reject("unstable field count");
+        return rd::reject();
       }
     }
     if (sample.complete.size() == 1 and not input.eof) {
-      return rd::need_more("single delimited row");
+      return rd::need_more();
     }
-    return rd::match("stable field counts");
+    return rd::match();
   }
 };
 

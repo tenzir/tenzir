@@ -1206,12 +1206,11 @@ public:
   auto read_detection_candidates() const
     -> std::vector<read_detection_candidate> override {
     return {
-      read_detection::candidate("feather", "read_feather", "read_feather",
-                                read_detection::specificity::magic,
-                                [](read_detection_input input) {
-                                  return read_detection::magic_prefix(
-                                    input, "ARROW1", "Arrow IPC magic");
-                                }),
+      read_detection::candidate(
+        "read_feather", read_detection::specificity::magic,
+        [](read_detection_input input) {
+          return read_detection::magic_prefix(input, "ARROW1");
+        }),
     };
   }
 };

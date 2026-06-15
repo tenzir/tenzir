@@ -10,6 +10,9 @@
 
 #include "tenzir/operator_plugin.hpp"
 
+#include <compare>
+#include <cstdint>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -25,40 +28,82 @@ namespace tenzir::read_detection {
 /// specificity are ambiguous and abort detection. Keeping all rungs in one
 /// place makes the precedence auditable without comparing magic numbers
 /// scattered across reader plugins.
-namespace specificity {
+enum class specificity : uint8_t {
+  /// Exact magic bytes or a distinctive header at the start of the input.
+  magic = 90,
+  /// Format-specific markers inside a generic carrier, e.g., GELF field names
+  /// in a JSON object or the `CEF:` prefix in a text line.
+  dialect = 80,
+  /// Well-formed generic structured data, e.g., the JSON family.
+  structured = 70,
+  /// Line-oriented key-value assignments.
+  keyed = 60,
+  /// Tables with a stable explicit delimiter, e.g., CSV or TSV.
+  delimited = 50,
+  /// Line grammars whose markers also occur in free-form text, e.g., syslog.
+  grammar = 40,
+  /// Whole-document formats that accept a wide range of text, e.g., YAML.
+  document = 30,
+};
 
-/// Exact magic bytes or a distinctive header at the start of the input.
-inline constexpr auto magic = uint64_t{90};
+constexpr auto operator<=>(specificity lhs, specificity rhs) noexcept
+  -> std::strong_ordering {
+  return static_cast<uint8_t>(lhs) <=> static_cast<uint8_t>(rhs);
+}
 
-/// Format-specific markers inside a generic carrier, e.g., GELF field names
-/// in a JSON object or the `CEF:` prefix in a text line.
-inline constexpr auto dialect = uint64_t{80};
+} // namespace tenzir::read_detection
 
-/// Well-formed generic structured data, e.g., the JSON family.
-inline constexpr auto structured = uint64_t{70};
+namespace tenzir {
 
-/// Line-oriented key-value assignments.
-inline constexpr auto keyed = uint64_t{60};
+struct read_detection_input {
+  std::string_view bytes;
+  bool eof = false;
+};
 
-/// Tables with a stable explicit delimiter, e.g., CSV or TSV.
-inline constexpr auto delimited = uint64_t{50};
+struct read_detection_result {
+  enum class result_state {
+    reject,
+    need_more,
+    match,
+  };
 
-/// Line grammars whose markers also occur in free-form text, e.g., syslog.
-inline constexpr auto grammar = uint64_t{40};
+  result_state state = result_state::reject;
+};
 
-/// Whole-document formats that accept a wide range of text, e.g., YAML.
-inline constexpr auto document = uint64_t{30};
+/// A reader that `read_auto` can select when its detector matches the probed
+/// input. The detector must be a pure function of the input that decides
+/// whether the reader is *capable* of consuming the bytes, ideally by running
+/// the reader's actual parser on them. Cross-format precedence is expressed
+/// solely through `specificity`.
+struct read_detection_candidate {
+  read_detection_candidate(
+    std::string pipeline, read_detection::specificity specificity,
+    std::function<read_detection_result(read_detection_input)> detect);
 
-} // namespace specificity
+  std::string pipeline;
+  read_detection::specificity specificity;
+  std::function<read_detection_result(read_detection_input)> detect;
+};
 
-auto reject(std::string reason = {}) -> read_detection_result;
+class ReadOperatorPlugin : public virtual OperatorPlugin {
+public:
+  virtual auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> {
+    return {};
+  }
+};
 
-auto need_more(std::string reason = {}) -> read_detection_result;
+} // namespace tenzir
 
-auto match(std::string reason = {}) -> read_detection_result;
+namespace tenzir::read_detection {
 
-auto candidate(std::string format_name, std::string operator_name,
-               std::string pipeline, uint64_t specificity,
+auto reject() -> read_detection_result;
+
+auto need_more() -> read_detection_result;
+
+auto match() -> read_detection_result;
+
+auto candidate(std::string pipeline, specificity specificity,
                std::function<read_detection_result(read_detection_input)> detect)
   -> read_detection_candidate;
 
@@ -76,18 +121,7 @@ struct line_sample {
 /// @warning The lifetime of the returned substrings is bound to the input.
 auto sample_lines(read_detection_input input, size_t max_lines) -> line_sample;
 
-auto json_object(read_detection_input input) -> read_detection_result;
-
-auto json_array(read_detection_input input) -> read_detection_result;
-
-auto ndjson(read_detection_input input) -> read_detection_result;
-
-auto json_field(read_detection_input input, std::string_view field)
+auto magic_prefix(read_detection_input input, std::string_view magic)
   -> read_detection_result;
-
-auto gelf(read_detection_input input) -> read_detection_result;
-
-auto magic_prefix(read_detection_input input, std::string_view magic,
-                  std::string reason = {}) -> read_detection_result;
 
 } // namespace tenzir::read_detection

@@ -534,10 +534,10 @@ public:
     -> std::vector<read_detection_candidate> override {
     return {
       read_detection::candidate(
-        "leef", "read_leef", "read_leef", read_detection::specificity::dialect,
+        "read_leef", read_detection::specificity::dialect,
         [](read_detection_input input) {
           input.bytes = detail::trim_front(input.bytes);
-          return read_detection::magic_prefix(input, "LEEF:", "LEEF prefix");
+          return read_detection::magic_prefix(input, "LEEF:");
         }),
     };
   }

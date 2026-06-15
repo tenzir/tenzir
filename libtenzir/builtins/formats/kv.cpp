@@ -941,8 +941,8 @@ public:
   auto read_detection_candidates() const
     -> std::vector<read_detection_candidate> override {
     return {
-      read_detection::candidate("kv", "read_kv", "read_kv",
-                                read_detection::specificity::keyed, detect_kv),
+      read_detection::candidate("read_kv", read_detection::specificity::keyed,
+                                detect_kv),
     };
   }
 
@@ -951,7 +951,7 @@ private:
     namespace rd = read_detection;
     if (not detail::is_valid_utf8(input.bytes)) {
       if (not input.eof and detail::is_valid_utf8_prefix(input.bytes)) {
-        return rd::need_more("partial UTF-8 sequence");
+        return rd::need_more();
       }
       return rd::reject();
     }
@@ -988,9 +988,9 @@ private:
       return false;
     };
     if (std::ranges::all_of(sample.complete, has_assignment)) {
-      return rd::match("key-value assignments");
+      return rd::match();
     }
-    return rd::reject("line without key-value assignment");
+    return rd::reject();
   }
 };
 

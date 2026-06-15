@@ -17,7 +17,6 @@
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/plugin_api.hpp"
 
-#include <functional>
 #include <optional>
 
 namespace tenzir {

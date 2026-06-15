@@ -1145,13 +1145,13 @@ public:
       std::memcpy(&raw_magic, input.bytes.data(), sizeof(raw_magic));
       if (normalized_magic_number(raw_magic)
           or raw_magic == pcapng::magic_number) {
-        return read_detection::match("PCAP magic");
+        return read_detection::match();
       }
       return read_detection::reject();
     };
     return {
-      read_detection::candidate("pcap", "read_pcap", "read_pcap",
-                                read_detection::specificity::magic, detect),
+      read_detection::candidate("read_pcap", read_detection::specificity::magic,
+                                detect),
     };
   }
 };

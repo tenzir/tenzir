@@ -1369,13 +1369,13 @@ public:
       auto bytes = detail::trim_front(input.bytes);
       if (bytes.starts_with("#separator") or bytes.starts_with("#fields")
           or bytes.starts_with("#types")) {
-        return read_detection::match("Zeek TSV header");
+        return read_detection::match();
       }
       return bytes.size() < 10 and not input.eof ? read_detection::need_more()
                                                  : read_detection::reject();
     };
     return {
-      read_detection::candidate("zeek.tsv", "read_zeek_tsv", "read_zeek_tsv",
+      read_detection::candidate("read_zeek_tsv",
                                 read_detection::specificity::magic, detect),
     };
   }
