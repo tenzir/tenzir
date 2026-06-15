@@ -46,22 +46,23 @@ public:
     auto field = +(parsers::alnum | parsers::chr{'_'});
     auto current = extractor.inner.begin();
     auto end = extractor.inner.end();
-    auto to_offset = [&](std::string::iterator it, int64_t x = 0) -> uint32_t {
+    auto make_location
+      = [&](std::string::iterator it, uint32_t length) -> tenzir::location {
       if (not extractor.source) {
-        return 0;
+        return tenzir::location::unknown;
       }
-      return detail::narrow_cast<uint32_t>(
-        extractor.source.begin + (it - extractor.inner.begin()) + x);
+      auto offset = detail::narrow_cast<uint32_t>(it - extractor.inner.begin());
+      return extractor.source.subloc(offset, length);
     };
     auto parse_field = [&]() -> projection {
       auto last = current;
       if (not field(current, end, unused)) {
         diagnostic::error("expected field name")
-          .primary(tenzir::location{to_offset(current), to_offset(current, 1)})
+          .primary(make_location(current, 1))
           .throw_();
       }
       return projection{std::string{last, current},
-                        {to_offset(last), to_offset(current)}};
+                        make_location(last, current - last)};
     };
     path.emplace_back(parse_field());
     while (current != end) {
@@ -72,17 +73,15 @@ public:
         ++current;
         if (*current == ']') {
           ++current;
-          path.emplace_back(unnest{}, tenzir::location{to_offset(current, -2),
-                                                       to_offset(current)});
+          path.emplace_back(unnest{}, make_location(current - 2, 2));
         } else {
           diagnostic::error("expected `]`")
-            .primary(
-              tenzir::location{to_offset(current), to_offset(current, 1)})
+            .primary(make_location(current, 1))
             .throw_();
         }
       } else {
         diagnostic::error("expected `.<field>` or `[]`")
-          .primary(tenzir::location{to_offset(current), to_offset(current, 1)})
+          .primary(make_location(current, 1))
           .throw_();
       }
     }
