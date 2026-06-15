@@ -1,5 +1,0 @@
----
-error: true
----
-
-to_amazon_kinesis "stream", batch_timeout=0s

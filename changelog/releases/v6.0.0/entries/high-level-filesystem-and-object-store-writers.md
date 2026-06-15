@@ -2,8 +2,7 @@
 title: High-level filesystem and object store writers
 type: feature
 author: raxyte
-prs:
-  - 6053
+pr: 6053
 created: 2026-04-30T13:00:01.571739Z
 ---
 

@@ -2,8 +2,7 @@
 title: Keyed routing and source mode for `parallel`
 type: feature
 author: jachris
-prs:
-  - 5821
+pr: 5821
 created: 2026-04-30T13:01:14.07634Z
 ---
 

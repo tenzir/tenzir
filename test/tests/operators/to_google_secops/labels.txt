@@ -1,1 +1,0 @@
-{"parent":"projects/PROJECT/locations/us/instances/INSTANCE/logTypes/CUSTOM_DNS","body":{"inlineSource":{"logs":[{"data":"Q1VTVE9NX0ROU19MT0c=","logEntryTime":"2026-01-01T00:00:00Z","collectionTime":"2026-01-01T00:00:01Z","labels":{"env":{"value":"prod","rbacEnabled":false},"tenant":{"value":"acme","rbacEnabled":true}}}]}}}

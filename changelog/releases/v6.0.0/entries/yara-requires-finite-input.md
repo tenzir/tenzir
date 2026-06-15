@@ -2,8 +2,7 @@
 title: '`yara` requires finite input'
 type: breaking
 author: mavam
-prs:
-  - 6035
+pr: 6035
 created: 2026-04-30T13:01:54.70296Z
 ---
 

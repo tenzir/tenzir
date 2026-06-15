@@ -1,0 +1,3 @@
+id: argspkg_failing
+name: Arguments Package unsupported features
+description: Package with operators that accept arguments and options exercising unimplemented features.

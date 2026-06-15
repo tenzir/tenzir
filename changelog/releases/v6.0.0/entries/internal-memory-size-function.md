@@ -4,8 +4,6 @@ type: feature
 authors:
   - IyeOnline
   - codex
-prs:
-  - 6152
 created: 2026-05-08T21:12:04.15977Z
 ---
 

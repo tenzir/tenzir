@@ -2,8 +2,3 @@ error: File "<inline>", line 1
     if True print(1)
             ^^^^^
 SyntaxError: invalid syntax
- --> tests/operators/python/syntax_error.tql:6:1
-  |
-6 | python "if True print(1)"
-  | ^^^^^^ 
-  |

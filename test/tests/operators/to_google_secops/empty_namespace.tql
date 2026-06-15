@@ -4,8 +4,6 @@ from {namespace: "N1", text: "LOG0"},
      {namespace: "N1", text: "LOG3"},
      {namespace: "", text: "LOG4"},
      {namespace: "N2", text: "LOG5"}
-to_google_secops _dry_run=true, mode="raw_log", project="PROJECT", region="us",
-  instance="INSTANCE", log_type="CUSTOM_DNS", log_text=text,
-  log_entry_time=2026-01-01T00:00:00,
-  collection_time=2026-01-01T00:00:01,
+to_google_secops _dry_run =true, region="REGION", customer_id="CUSTOMER",
+  private_key="PRIVATE_KEY", client_email="EMAIL", log_type="CUSTOM_DNS", log_text=text,
   namespace=namespace

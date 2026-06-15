@@ -35,17 +35,6 @@ auto parameter_default_string(const ast::expression& expr)
       return *yaml;
     }
   }
-  if (auto path = ast::field_path::try_from(ast::expression{expr})) {
-    if (path->path().empty()) {
-      return "this";
-    }
-    auto names_range
-      = path->path() | std::views::transform([](const auto& segment) {
-          return segment.id.name;
-        });
-    return fmt::format("{}{}", path->has_this() ? "this." : "",
-                       fmt::join(names_range, "."));
-  }
   return std::nullopt;
 }
 
@@ -302,8 +291,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
         .emit(dh);
       return failure::promise();
     }
-    auto selector = ast::selector::try_from(assignment->left);
-    auto* left = selector ? try_as<ast::field_path>(&*selector) : nullptr;
+    auto* left = try_as<ast::field_path>(assignment->left);
     if ((left == nullptr) or left->has_this() or left->path().size() != 1
         or left->path()[0].has_question_mark) {
       diagnostic::error("invalid argument name")
@@ -467,7 +455,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
 
   auto modified_pipeline = udo.definition;
   return ast::substitute_named_expressions(std::move(modified_pipeline),
-                                           substitutions);
+                                           substitutions, dh);
 }
 
 } // namespace tenzir

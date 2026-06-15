@@ -181,16 +181,11 @@ HttpPool::HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
   }
   auto pool_params = proxygen::coro::HTTPCoroSessionPool::PoolParams{};
   pool_params.connectTimeout = impl_->config.connection_timeout;
-  auto session_params
-    = proxygen::coro::HTTPCoroConnector::defaultSessionParams();
-  if (impl_->config.max_concurrent_streams_per_connection > 0) {
-    session_params.maxConcurrentOutgoingStreams
-      = impl_->config.max_concurrent_streams_per_connection;
-  }
   impl_->pool = SessionPoolPtr{
     std::make_unique<proxygen::coro::HTTPCoroSessionPool>(
       impl_->evb, impl_->url.getHost(), impl_->url.getPort(), pool_params,
-      conn_params, session_params, true)
+      conn_params, proxygen::coro::HTTPCoroConnector::defaultSessionParams(),
+      true)
       .release(),
   };
 }

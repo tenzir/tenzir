@@ -4,8 +4,3 @@ error: Traceback (most recent call last):
   File "tenzir_operator/executor.py", in execute_user_code
     raise RuntimeError(msg)
 RuntimeError: Empty output not allowed
- --> tests/operators/python/empty_output_error.tql:6:1
-  |
-6 | python "self.clear()"
-  | ^^^^^^ 
-  |

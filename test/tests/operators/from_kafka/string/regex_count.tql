@@ -1,8 +1,0 @@
-// Consume two seeded messages from a topic selected by regex.
-from_kafka "^" + env("KAFKA_TOPIC") + "$",
-           count=2,
-           offset="beginning",
-           options={
-             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
-             "group.id": "tenzir-test-from-kafka-regex"
-           }

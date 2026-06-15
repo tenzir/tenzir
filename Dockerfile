@@ -391,8 +391,7 @@ FROM plugins-source AS to_google_secops-plugin
 COPY contrib/tenzir-plugins/to_google_secops ./contrib/tenzir-plugins/to_google_secops
 RUN --mount=target=/ccache,type=cache,from=cache-context \
     cmake -S contrib/tenzir-plugins/to_google_secops -B build-to_google_secops -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
-      -D CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH};/opt/google-cloud-cpp" && \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
     cmake --build build-to_google_secops --parallel && \
     DESTDIR=/plugin/to_google_secops cmake --install build-to_google_secops --component Runtime && \
     rm -rf build-to_google_secops

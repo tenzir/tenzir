@@ -1,2 +1,0 @@
-from {a: 42}
-argspkg::set_field_nested this, "test"

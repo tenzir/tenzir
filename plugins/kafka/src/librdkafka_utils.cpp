@@ -30,7 +30,6 @@
 #include <boost/algorithm/string/trim.hpp>
 #include <fmt/format.h>
 
-#include <atomic>
 #include <chrono>
 #include <string>
 #include <string_view>
@@ -302,16 +301,11 @@ private:
   diagnostic_handler& dh_;
 };
 
-/// Callback that preserves committed offsets during partition rebalance.
+/// Callback that assigns explicit offsets during partition rebalance.
 class rebalance_callback final : public RdKafka::RebalanceCb {
 public:
-  /// Constructs a callback that uses `offset` for uncommitted partitions.
-  rebalance_callback(
-    int64_t offset, std::shared_ptr<Atomic<uint64_t>> assignment_generation,
-    std::shared_ptr<committed_partition_set> committed_partitions)
-    : offset_{offset},
-      assignment_generation_{std::move(assignment_generation)},
-      committed_partitions_{std::move(committed_partitions)} {
+  /// Constructs a callback that assigns `offset` for new partitions.
+  explicit rebalance_callback(int64_t offset) : offset_{offset} {
   }
 
   /// Handles assign/revoke events while preserving cooperative semantics.
@@ -319,7 +313,11 @@ public:
                     std::vector<RdKafka::TopicPartition*>& partitions)
     -> void override {
     if (err == RdKafka::ERR__ASSIGN_PARTITIONS) {
-      apply_start_offsets(partitions);
+      if (offset_ != RdKafka::Topic::OFFSET_INVALID) {
+        for (auto* partition : partitions) {
+          partition->set_offset(offset_);
+        }
+      }
       if (consumer->rebalance_protocol() == "COOPERATIVE") {
         if (auto* e = consumer->incremental_assign(partitions)) {
           auto err_guard = std::unique_ptr<RdKafka::Error>{e};
@@ -332,7 +330,6 @@ public:
                        RdKafka::err2str(assign_err));
         }
       }
-      mark_assignment_changed();
       return;
     }
     if (err == RdKafka::ERR__REVOKE_PARTITIONS) {
@@ -347,7 +344,6 @@ public:
         TENZIR_ERROR("failed to unassign partitions: {}",
                      RdKafka::err2str(unassign_err));
       }
-      mark_assignment_changed();
       return;
     }
     TENZIR_ERROR("rebalancing error: {}", RdKafka::err2str(err));
@@ -356,40 +352,10 @@ public:
       TENZIR_ERROR("failed to unassign partitions: {}",
                    RdKafka::err2str(unassign_err));
     }
-    mark_assignment_changed();
   }
 
 private:
-  auto apply_start_offsets(std::vector<RdKafka::TopicPartition*>& partitions)
-    -> void {
-    if (offset_ == RdKafka::Topic::OFFSET_INVALID) {
-      return;
-    }
-    // The user-provided offset defines where consumption starts, so it wins
-    // until this run has committed its own progress for a partition. After
-    // that, leaving the offset invalid makes librdkafka resume from the
-    // committed offset, which preserves progress across later rebalances.
-    for (auto* partition : partitions) {
-      if (partition == nullptr) {
-        continue;
-      }
-      if (offset_ == RdKafka::Topic::OFFSET_STORED or not committed_partitions_
-          or not committed_partitions_->contains(partition->topic(),
-                                                 partition->partition())) {
-        partition->set_offset(offset_);
-      }
-    }
-  }
-
-  auto mark_assignment_changed() const -> void {
-    if (assignment_generation_) {
-      assignment_generation_->fetch_add(1, std::memory_order_release);
-    }
-  }
-
   int64_t offset_ = RdKafka::Topic::OFFSET_INVALID;
-  std::shared_ptr<Atomic<uint64_t>> assignment_generation_;
-  std::shared_ptr<committed_partition_set> committed_partitions_;
 };
 
 /// Converts one librdkafka conf set result into a typed `caf::error`.
@@ -527,10 +493,7 @@ auto make_consumer_configuration(record const& options,
     return err;
   }
 
-  cfg.assignment_generation = std::make_shared<Atomic<uint64_t>>(0);
-  cfg.committed_partitions = std::make_shared<committed_partition_set>();
-  cfg.rebalance_callback = std::make_shared<rebalance_callback>(
-    offset, cfg.assignment_generation, cfg.committed_partitions);
+  cfg.rebalance_callback = std::make_shared<rebalance_callback>(offset);
   if (auto err = set_conf_callback(*cfg.conf, "rebalance_cb",
                                    cfg.rebalance_callback.get());
       err) {

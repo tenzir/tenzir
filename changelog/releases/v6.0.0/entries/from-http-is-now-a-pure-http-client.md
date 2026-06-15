@@ -2,8 +2,7 @@
 title: '`from_http` is now a pure HTTP client'
 type: breaking
 author: aljazerzen
-prs:
-  - 5953
+pr: 5953
 created: 2026-04-30T13:00:30.348949Z
 ---
 

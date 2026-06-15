@@ -1,9 +1,9 @@
 ---
-description: "Invalid non-selector default for a field parameter"
+description: "Invalid non-null default for a field parameter"
 args:
   named:
     - name: field
       type: field
-      default: 1 + 2
+      default: this.input
 ---
 set marker = "should not load"

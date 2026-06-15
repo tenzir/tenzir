@@ -4,8 +4,7 @@ type: feature
 authors:
   - mavam
   - codex
-prs:
-  - 6181
+pr: 6181
 created: 2026-05-15T06:50:18.449675000Z
 ---
 

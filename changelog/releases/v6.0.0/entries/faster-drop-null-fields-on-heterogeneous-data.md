@@ -5,8 +5,7 @@ authors:
   - jachris
   - mavam
   - codex
-prs:
-  - 5963
+pr: 5963
 created: 2026-03-31T10:34:08.17118Z
 ---
 

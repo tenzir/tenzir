@@ -4,8 +4,6 @@ type: change
 authors:
   - IyeOnline
   - claude
-prs:
-  - 6125
 created: 2026-05-05T16:34:33.815786Z
 ---
 

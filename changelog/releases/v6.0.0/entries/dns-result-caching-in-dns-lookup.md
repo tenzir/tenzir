@@ -2,8 +2,7 @@
 title: DNS result caching in `dns_lookup`
 type: feature
 author: mavam
-prs:
-  - 6034
+pr: 6034
 created: 2026-04-30T13:02:07.277857Z
 ---
 

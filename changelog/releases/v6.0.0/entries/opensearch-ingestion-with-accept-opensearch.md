@@ -2,8 +2,7 @@
 title: OpenSearch ingestion with `accept_opensearch`
 type: breaking
 author: aljazerzen
-prs:
-  - 6066
+pr: 6066
 created: 2026-04-30T12:59:18.006961Z
 ---
 

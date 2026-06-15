@@ -1,5 +1,0 @@
-{
-  wrapped: {
-    name: "Alice",
-  },
-}

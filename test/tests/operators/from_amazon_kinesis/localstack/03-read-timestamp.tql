@@ -1,6 +1,0 @@
-from_amazon_kinesis env("LOCALSTACK_KINESIS_STREAM_INPUT"),
-                    start=2020-01-01T00:00:00Z,
-                    count=3,
-                    exit=true
-this = string(message).parse_json()
-sort id

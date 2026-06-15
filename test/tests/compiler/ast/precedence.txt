@@ -1,8 +1,17 @@
 [
   assignment {
-    left: root_field {
-      id: `foo` @ 0..3,
-      has_question_mark: false
+    left: field_path {
+      expr: root_field {
+        id: `foo` @ 0..3,
+        has_question_mark: false
+      },
+      has_this: false,
+      path: [
+        {
+          id: `foo` @ 0..3,
+          has_question_mark: false
+        }
+      ]
     },
     equals: 4..5,
     right: binary_expr {

@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/arc.hpp>
+#include <tenzir/async/notify.hpp>
 #include <tenzir/box.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/detail/base64.hpp>
@@ -27,7 +27,6 @@
 #include <boost/url/parse.hpp>
 #include <boost/url/url.hpp>
 #include <fmt/core.h>
-#include <folly/coro/BoundedQueue.h>
 
 namespace tenzir::plugins::opensearch2 {
 namespace {
@@ -360,9 +359,7 @@ public:
           if (next_timeout_.is_none()) {
             next_timeout_
               = std::chrono::steady_clock::now() + args_.buffer_timeout.inner;
-            if (not timer_armed_) {
-              arm_flush_timer(ctx);
-            }
+            buffer_ready_->notify_one();
           }
           break;
         }
@@ -371,9 +368,7 @@ public:
           if (builder_.has_contents()) {
             next_timeout_
               = std::chrono::steady_clock::now() + args_.buffer_timeout.inner;
-            if (not timer_armed_) {
-              arm_flush_timer(ctx);
-            }
+            buffer_ready_->notify_one();
           } else {
             next_timeout_ = None{};
           }
@@ -393,23 +388,27 @@ public:
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
     TENZIR_UNUSED(dh);
-    co_return co_await wakeup_queue_->dequeue();
+    if (not next_timeout_) {
+      co_await buffer_ready_->wait();
+    }
+    if (next_timeout_) {
+      co_await sleep_until(*next_timeout_);
+    }
+    co_return {};
   }
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
-    TENZIR_ASSERT(result.try_as<FlushTimeout>());
-    timer_armed_ = false;
-    if (next_timeout_ and std::chrono::steady_clock::now() >= *next_timeout_) {
-      if (builder_.has_contents()) {
-        co_await send_request(ctx);
-      }
-      next_timeout_ = None{};
+    TENZIR_UNUSED(result);
+    if (not next_timeout_) {
+      co_return;
     }
-    if (next_timeout_) {
-      // The timer was armed for a buffer that has since been flushed early;
-      // re-arm it for the buffer that started afterwards.
-      arm_flush_timer(ctx);
+    if (std::chrono::steady_clock::now() < *next_timeout_) {
+      co_return;
     }
+    if (builder_.has_contents()) {
+      co_await send_request(ctx);
+    }
+    next_timeout_ = None{};
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
@@ -427,19 +426,13 @@ public:
   }
 
 private:
-  /// Wakeup marker delivered to `await_task()` through `wakeup_queue_`.
-  struct FlushTimeout {};
+  enum class Lifecycle {
+    running,
+    done,
+  };
 
-  /// Spawns a task that sleeps until the current buffer deadline and then
-  /// enqueues a `FlushTimeout` wakeup.
-  auto arm_flush_timer(OpCtx& ctx) -> void {
-    TENZIR_ASSERT(next_timeout_);
-    timer_armed_ = true;
-    ctx.spawn_task([queue = wakeup_queue_,
-                    deadline = *next_timeout_]() mutable -> Task<void> {
-      co_await sleep_until(deadline);
-      co_await queue->enqueue(Any{FlushTimeout{}});
-    });
+  friend auto inspect(auto& f, Lifecycle& x) {
+    return tenzir::detail::inspect_enum_str(f, x, {"running", "done"});
   }
 
   auto send_request(OpCtx& ctx) -> Task<void> {
@@ -498,15 +491,8 @@ private:
   std::vector<http::Header> headers_;
   MetricsCounter bytes_write_counter_;
   MetricsCounter events_write_counter_;
-  Option<std::chrono::steady_clock::time_point> next_timeout_;
-  /// Whether a flush-timer task is outstanding. Bounds the number of live
-  /// timer tasks to one; a timer that fires for an already-flushed buffer
-  /// re-arms itself for the deadline of the buffer that replaced it.
-  bool timer_armed_ = false;
-  /// Wakeup messages for `await_task()`. Helper tasks enqueue, only the
-  /// operator driver dequeues and updates state; operator members are never
-  /// touched from concurrently running tasks.
-  mutable Arc<folly::coro::BoundedQueue<Any>> wakeup_queue_{std::in_place, 16};
+  mutable Option<std::chrono::steady_clock::time_point> next_timeout_;
+  mutable Box<Notify> buffer_ready_{std::in_place};
 };
 
 class ToOpenSearchPlugin : public virtual OperatorPlugin {

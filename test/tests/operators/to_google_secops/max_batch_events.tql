@@ -1,6 +1,0 @@
-from {text: "LOG_0"}, {text: "LOG_1"}, {text: "LOG_2"}
-to_google_secops _dry_run=true, mode="raw_log", project="PROJECT", region="us",
-  instance="INSTANCE", log_type="CUSTOM_DNS", log_text=text,
-  log_entry_time=2026-01-01T00:00:00,
-  collection_time=2026-01-01T00:00:01,
-  max_batch_events=2

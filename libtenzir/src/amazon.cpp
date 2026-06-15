@@ -151,35 +151,12 @@ auto to_aws_json_result(http::Response response)
   };
 }
 
-auto extract_aws_error_code(std::string const& body) -> std::string {
-  auto json
-    = Aws::Utils::Json::JsonValue{Aws::String{body.c_str(), body.size()}};
-  if (not json.WasParseSuccessful()) {
-    return {};
-  }
-  auto view = json.View();
-  for (auto key : {"__type", "code", "Code"}) {
-    if (view.ValueExists(key)) {
-      auto code = from_aws_string(view.GetString(key));
-      if (auto pos = code.rfind('#'); pos != std::string::npos) {
-        code.erase(0, pos + 1);
-      }
-      return code;
-    }
-  }
-  return {};
-}
-
 auto extract_aws_error_message(std::string const& body) -> std::string {
   auto json
     = Aws::Utils::Json::JsonValue{Aws::String{body.c_str(), body.size()}};
-  if (not json.WasParseSuccessful()) {
-    return body;
-  }
-  auto view = json.View();
   for (auto key : {"message", "Message", "__type"}) {
-    if (view.ValueExists(key)) {
-      auto message = view.GetString(key);
+    if (json.View().ValueExists(key)) {
+      auto message = json.View().GetString(key);
       return {message.c_str(), message.size()};
     }
   }
@@ -215,7 +192,6 @@ SignedHttpClient::SignedHttpClient(SignedHttpClientConfig config)
   pool_config.request_timeout = config.request_timeout;
   pool_config.max_retry_count = config.max_retry_count;
   pool_config.retry_delay = config.retry_delay;
-  pool_config.max_concurrent_streams_per_connection = 1;
   pool_ = HttpPool::make(std::move(config.io_executor), endpoint_,
                          std::move(pool_config));
 }
@@ -240,15 +216,6 @@ auto SignedHttpClient::post(std::string path, std::string body,
                             Aws::Http::HeaderValueCollection headers,
                             std::string_view operation)
   -> Task<Result<http::Response, std::string>> {
-  auto response = co_await raw_post(std::move(path), std::move(body),
-                                    std::move(headers), operation);
-  co_return aws_response(std::move(response), operation);
-}
-
-auto SignedHttpClient::raw_post(std::string path, std::string body,
-                                Aws::Http::HeaderValueCollection headers,
-                                std::string_view operation)
-  -> Task<Result<http::Response, std::string>> {
   auto pool_path = request_path(path);
   auto make_headers
     = [this, path = std::move(path), body = body, headers = std::move(headers),
@@ -258,11 +225,7 @@ auto SignedHttpClient::raw_post(std::string path, std::string body,
   };
   auto response = co_await pool_->post(std::move(pool_path), std::move(body),
                                        std::move(make_headers));
-  if (response.is_err()) {
-    co_return Err{fmt::format("{} request failed: {}", operation,
-                              std::move(response).unwrap_err())};
-  }
-  co_return std::move(response).unwrap();
+  co_return aws_response(std::move(response), operation);
 }
 
 auto SignedHttpClient::post(std::string path, std::string body,

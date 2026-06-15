@@ -1,2 +1,0 @@
-from {name: "Alice"}
-argspkg::field_default_this field=name

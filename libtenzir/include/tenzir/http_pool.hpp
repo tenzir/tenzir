@@ -58,11 +58,6 @@ struct HttpPoolConfig {
   uint32_t max_retry_count = 0;
   /// Base delay between retries when the response does not override it.
   std::chrono::milliseconds retry_delay = std::chrono::seconds{1};
-  /// Maximum concurrent requests per connection, or 0 for the protocol
-  /// default. Set to 1 to disable HTTP/1.1 pipelining so that concurrent
-  /// requests fan out over multiple connections instead of serializing
-  /// head-of-line on a single one.
-  uint32_t max_concurrent_streams_per_connection = 0;
   /// Callback invoked before each retry sleep with a preformatted message.
   std::function<void(std::string_view message)> on_retry;
 };

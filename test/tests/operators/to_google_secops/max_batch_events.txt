@@ -1,2 +1,0 @@
-{"parent":"projects/PROJECT/locations/us/instances/INSTANCE/logTypes/CUSTOM_DNS","body":{"inlineSource":{"logs":[{"data":"TE9HXzA=","logEntryTime":"2026-01-01T00:00:00Z","collectionTime":"2026-01-01T00:00:01Z"},{"data":"TE9HXzE=","logEntryTime":"2026-01-01T00:00:00Z","collectionTime":"2026-01-01T00:00:01Z"}]}}}
-{"parent":"projects/PROJECT/locations/us/instances/INSTANCE/logTypes/CUSTOM_DNS","body":{"inlineSource":{"logs":[{"data":"TE9HXzI=","logEntryTime":"2026-01-01T00:00:00Z","collectionTime":"2026-01-01T00:00:01Z"}]}}}

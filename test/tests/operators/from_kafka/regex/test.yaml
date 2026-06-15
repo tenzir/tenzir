@@ -1,7 +1,0 @@
-suite: from-kafka-regex
-fixtures:
-  - kafka:
-      topic: regex_topic_a
-      extra_topics: regex_topic_b
-      partitions: 1
-      messages: 2

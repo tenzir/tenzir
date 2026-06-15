@@ -1,6 +1,0 @@
-{
-  message: "message-0001",
-}
-{
-  message: "message-0002",
-}

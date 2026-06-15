@@ -1,5 +1,0 @@
----
-error: true
----
-
-from_amazon_kinesis "stream", start="oldest"

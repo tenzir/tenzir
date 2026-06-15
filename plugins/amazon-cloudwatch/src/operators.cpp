@@ -1270,9 +1270,7 @@ auto ToCloudWatch::process(table_slice input, OpCtx& ctx) -> Task<void> {
         }
         if (batch_.empty()) {
           next_timeout_ = std::chrono::steady_clock::now() + batch_timeout_;
-          if (not timer_armed_) {
-            arm_flush_timer(ctx);
-          }
+          buffer_ready_->notify_one();
         }
         batch_.push_back(Event{.timestamp = t, .message = std::move(message)});
         if (batch_.size() >= batch_size_) {
@@ -1325,12 +1323,13 @@ auto ToCloudWatch::flush(OpCtx& ctx) -> Task<void> {
   auto client = client_;
   auto method = method_;
   auto queue = *send_queue_;
-  auto wakeup = wakeup_queue_;
+  auto report_ready = report_ready_;
   auto token = args_.token ? Option<std::string>{token_} : None{};
   ++pending_reports_;
   ctx.spawn_task([client = std::move(client), args = std::move(args), method,
                   token = std::move(token), events = std::move(events),
-                  queue = std::move(queue), wakeup = std::move(wakeup),
+                  queue = std::move(queue),
+                  report_ready = std::move(report_ready),
                   permit = std::move(permit)]() mutable -> Task<void> {
     auto report = ToCloudWatchSendReport{};
     try {
@@ -1347,23 +1346,38 @@ auto ToCloudWatch::flush(OpCtx& ctx) -> Task<void> {
     }
     permit->release();
     co_await queue->enqueue(std::move(report));
-    co_await wakeup->enqueue(Any{ToCloudWatchReportReady{}});
+    report_ready->notify_one();
   });
 }
 
 auto ToCloudWatch::await_task(diagnostic_handler& dh) const -> Task<Any> {
   TENZIR_UNUSED(dh);
-  co_return co_await wakeup_queue_->dequeue();
-}
-
-auto ToCloudWatch::arm_flush_timer(OpCtx& ctx) -> void {
-  TENZIR_ASSERT(next_timeout_);
-  timer_armed_ = true;
-  ctx.spawn_task(
-    [queue = wakeup_queue_, deadline = *next_timeout_]() mutable -> Task<void> {
-      co_await sleep_until(deadline);
-      co_await queue->enqueue(Any{ToCloudWatchFlushTimeout{}});
-    });
+  while (true) {
+    if (not next_timeout_) {
+      auto [ready, report] = co_await folly::coro::collectAnyNoDiscard(
+        buffer_ready_->wait(), report_ready_->wait());
+      if (report.hasValue()) {
+        co_return ToCloudWatchTask{ToCloudWatchReportReady{}};
+      }
+      if (ready.hasValue()) {
+        continue;
+      }
+      co_return Any{};
+    }
+    if (not next_timeout_) {
+      continue;
+    }
+    auto const deadline = *next_timeout_;
+    auto [timeout, report] = co_await folly::coro::collectAnyNoDiscard(
+      sleep_until(deadline), report_ready_->wait());
+    if (report.hasValue()) {
+      co_return ToCloudWatchTask{ToCloudWatchReportReady{}};
+    }
+    if (timeout.hasValue()) {
+      co_return ToCloudWatchTask{ToCloudWatchFlushTimeout{}};
+    }
+    co_return Any{};
+  }
 }
 
 auto ToCloudWatch::handle_send_report(ToCloudWatchSendReport report, OpCtx& ctx)
@@ -1403,20 +1417,21 @@ auto ToCloudWatch::drain_send_reports(OpCtx& ctx) -> void {
 }
 
 auto ToCloudWatch::process_task(Any result, OpCtx& ctx) -> Task<void> {
-  if (result.try_as<ToCloudWatchReportReady>()) {
+  auto* message = result.try_as<ToCloudWatchTask>();
+  if (not message) {
+    co_return;
+  }
+  if (try_as<ToCloudWatchReportReady>(message)) {
     drain_send_reports(ctx);
     co_return;
   }
-  TENZIR_ASSERT(result.try_as<ToCloudWatchFlushTimeout>());
-  timer_armed_ = false;
-  if (next_timeout_ and std::chrono::steady_clock::now() >= *next_timeout_) {
-    co_await flush(ctx);
+  if (not next_timeout_) {
+    co_return;
   }
-  if (not done_ and next_timeout_) {
-    // The timer was armed for a batch that has since been flushed by size;
-    // re-arm it for the batch that started afterwards.
-    arm_flush_timer(ctx);
+  if (std::chrono::steady_clock::now() < *next_timeout_) {
+    co_return;
   }
+  co_await flush(ctx);
 }
 
 auto ToCloudWatch::wait_for_requests(OpCtx& ctx) -> Task<void> {

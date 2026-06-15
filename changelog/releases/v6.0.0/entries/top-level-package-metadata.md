@@ -4,8 +4,7 @@ type: bugfix
 authors:
   - tobim
   - codex
-prs:
-  - 6149
+pr: 6149
 created: 2026-05-08T15:43:35.152192Z
 ---
 

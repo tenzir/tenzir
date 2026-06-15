@@ -2,8 +2,7 @@
 title: Per-event subpipelines with `each`
 type: feature
 author: jachris
-prs:
-  - 5981
+pr: 5981
 created: 2026-04-30T12:56:25.237501Z
 ---
 

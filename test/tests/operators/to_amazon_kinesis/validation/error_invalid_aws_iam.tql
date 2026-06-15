@@ -1,6 +1,0 @@
----
-error: true
----
-
-from {x: 1}
-to_amazon_kinesis "stream", aws_iam={access_key_id: "x"}

@@ -246,8 +246,7 @@ public:
     for (auto& arg : args) {
       if (auto* assignment = try_as<ast::assignment>(arg)) {
         // Named argument.
-        auto selector = ast::selector::try_from(assignment->left);
-        auto* sel = selector ? try_as<ast::field_path>(&*selector) : nullptr;
+        auto* sel = try_as<ast::field_path>(assignment->left);
         if (not sel or sel->has_this() or sel->path().size() != 1
             or sel->path()[0].has_question_mark) {
           emit(diagnostic::error("invalid argument name")

@@ -90,9 +90,6 @@ GO_BUILD_PREREQUISITE_MARKERS = (
 class KafkaOptions:
     mode: str = "plain"
     topic: str = "tenzir_test"
-    # Comma-separated additional topics, each created with the same partition
-    # count and seeded with the same messages as `topic` (plain mode only).
-    extra_topics: str = ""
     partitions: int = 1
     messages: int = 0
     compression: str = "none"
@@ -102,10 +99,6 @@ class KafkaOptions:
     access_key_id: str = "AKIA_TEST_ACCESS_KEY"
     secret_access_key: str = "test-secret-key"
     session_token: str = ""
-
-
-def _parse_extra_topics(spec: str) -> list[str]:
-    return [topic.strip() for topic in spec.split(",") if topic.strip()]
 
 
 def _resolve_project_relative_path(path: str) -> Path:
@@ -600,15 +593,14 @@ def kafka() -> Iterator[dict[str, str]]:
         try:
             container = _start_kafka(runtime, port, opts.image, payload_file)
             _wait_for_kafka(container, KAFKA_STARTUP_TIMEOUT)
-            for topic in [opts.topic, *_parse_extra_topics(opts.extra_topics)]:
-                _create_topic(container, topic, opts.partitions)
-                _seed_topic(
-                    container,
-                    topic,
-                    opts.messages,
-                    compression,
-                    payload_file,
-                )
+            _create_topic(container, opts.topic, opts.partitions)
+            _seed_topic(
+                container,
+                opts.topic,
+                opts.messages,
+                compression,
+                payload_file,
+            )
             bootstrap = f"127.0.0.1:{port}"
             env: dict[str, str] = {
                 "KAFKA_HOST": "127.0.0.1",
@@ -628,10 +620,6 @@ def kafka() -> Iterator[dict[str, str]]:
     if compression != "none":
         raise RuntimeError(
             "kafka fixture option `compression` must be `none` in `aws_iam` mode"
-        )
-    if opts.extra_topics:
-        raise RuntimeError(
-            "kafka fixture option `extra_topics` is not supported in `aws_iam` mode"
         )
     if opts.payload_file:
         raise RuntimeError(

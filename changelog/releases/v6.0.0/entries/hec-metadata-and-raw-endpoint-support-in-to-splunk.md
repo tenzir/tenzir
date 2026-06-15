@@ -2,8 +2,7 @@
 title: HEC metadata and raw endpoint support in `to_splunk`
 type: feature
 author: mavam
-prs:
-  - 6074
+pr: 6074
 created: 2026-04-30T13:02:25.554018Z
 ---
 

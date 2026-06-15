@@ -4,8 +4,6 @@ type: feature
 authors:
   - tobim
   - codex
-prs:
-  - 6221
 created: 2026-05-26T08:14:41.788782Z
 ---
 

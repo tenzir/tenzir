@@ -1276,26 +1276,10 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
       return failure::promise();
     }
     if (is_field_path_type(param) and not is<caf::none_t>(*yaml_data)) {
-      auto invalid_selector = [&] {
-        diagnostic::error("default value for field parameter `{}` must be "
-                          "`null` or a selector",
-                          param.name)
-          .note("default value: {}", *param.default_)
-          .emit(dh);
-        return failure::promise();
-      };
-      const auto* str = try_as<std::string>(&*yaml_data);
-      if (not str) {
-        return invalid_selector();
-      }
-      auto expr = parse_expression_with_bad_diagnostics(*str, ctx);
-      if (expr.is_error()) {
-        return invalid_selector();
-      }
-      if (not ast::selector::try_from(ast::expression{*expr})) {
-        return invalid_selector();
-      }
-      return std::optional<ast::expression>{std::move(*expr)};
+      diagnostic::error("default value for field parameter `{}` must be `null`",
+                        param.name)
+        .emit(dh);
+      return failure::promise();
     }
     materialize_default_value(*yaml_data, value_type);
     auto expr = make_constant_expression(std::move(*yaml_data));

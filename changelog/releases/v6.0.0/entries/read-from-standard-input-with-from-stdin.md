@@ -2,8 +2,7 @@
 title: Read from standard input with `from_stdin`
 type: feature
 author: raxyte
-prs:
-  - 5731
+pr: 5731
 created: 2026-04-30T12:58:15.747791Z
 ---
 

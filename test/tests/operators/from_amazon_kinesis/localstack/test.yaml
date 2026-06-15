@@ -1,8 +1,0 @@
-suite:
-  name: localstack-from-amazon-kinesis
-  mode: sequential
-fixtures: [localstack]
-timeout: 120
-skip:
-  on:
-    - fixture-unavailable

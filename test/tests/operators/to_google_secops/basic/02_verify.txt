@@ -1,72 +1,23 @@
 {
-  path: "/v1/projects/test-project/locations/us/instances/test-instance/logTypes/OKTA/logs:import",
-  payload: {
-    hint: "test-hint",
-    inlineSource: {
-      forwarder: "test-forwarder",
-      logs: [
-        {
-          collectionTime: 2026-01-01T00:00:01Z,
-          data: "b3RoZXIgdHlwZQ==",
-          environmentNamespace: "test-ns",
-          labels: {
-            env: {
-              rbacEnabled: false,
-              value: "test",
-            },
-            tenant: {
-              rbacEnabled: true,
-              value: "acme",
-            },
-          },
-          logEntryTime: 2026-01-01T00:00:00Z,
-        },
-      ],
-      sourceFilename: "test-source.log",
+  customer_id: "test-customer-123",
+  entries: [
+    {
+      log_text: "other type",
     },
-  },
+  ],
+  log_type: "OKTA",
+  namespace: "test-ns",
 }
 {
-  path: "/v1/projects/test-project/locations/us/instances/test-instance/logTypes/WINEVTLOG/logs:import",
-  payload: {
-    hint: "test-hint",
-    inlineSource: {
-      forwarder: "test-forwarder",
-      logs: [
-        {
-          collectionTime: 2026-01-01T00:00:01Z,
-          data: "aGVsbG8gd29ybGQ=",
-          environmentNamespace: "test-ns",
-          labels: {
-            env: {
-              rbacEnabled: false,
-              value: "test",
-            },
-            tenant: {
-              rbacEnabled: true,
-              value: "acme",
-            },
-          },
-          logEntryTime: 2026-01-01T00:00:00Z,
-        },
-        {
-          collectionTime: 2026-01-01T00:00:01Z,
-          data: "c2Vjb25kIGV2ZW50",
-          environmentNamespace: "test-ns",
-          labels: {
-            env: {
-              rbacEnabled: false,
-              value: "test",
-            },
-            tenant: {
-              rbacEnabled: true,
-              value: "acme",
-            },
-          },
-          logEntryTime: 2026-01-01T00:00:00Z,
-        },
-      ],
-      sourceFilename: "test-source.log",
+  customer_id: "test-customer-123",
+  entries: [
+    {
+      log_text: "hello world",
     },
-  },
+    {
+      log_text: "second event",
+    },
+  ],
+  log_type: "WINEVTLOG",
+  namespace: "test-ns",
 }
