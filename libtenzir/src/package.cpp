@@ -653,7 +653,7 @@ auto package_operator::parse(Arc<const Source> source)
       // Skip any leading whitespace that load_tql_with_frontmatter trims.
       auto first_nonspace = body.find_first_not_of(" \t\n\r");
       result.tql_body = first_nonspace == std::string_view::npos
-                          ? std::string_view{}
+                          ? body.substr(body.size())
                           : body.substr(first_nonspace);
     } else {
       result.tql_body = sv;
