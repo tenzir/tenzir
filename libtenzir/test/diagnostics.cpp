@@ -182,9 +182,7 @@ TEST("diagnostic printer - call stack follows the primary annotation") {
   |
 1 | from {}
   | ---- related
-  |
- --> <input>:2:1
-  |
+  ⋮
 2 | outer
   | ^^^^^ called from here
   |
