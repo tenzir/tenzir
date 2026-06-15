@@ -734,39 +734,52 @@ auto node(node_actor::stateful_pointer<node_state> self,
       }
       ps.clear();
       auto& registry = self->state().registry;
-      // Core components are terminated in a second stage, we remove them from
-      // the registry upfront and deal with them later.
+      // Core components are terminated in a second stage, but they must remain
+      // registered while the pipeline manager drains managed pipelines. Those
+      // pipelines may still need to resolve components like `importer` during
+      // graceful shutdown.
       std::vector<caf::actor> core_shutdown_handles;
+      auto core_shutdown_labels = std::vector<std::string_view>{};
+      auto add_core_handle = [&](std::string_view label) {
+        if (std::ranges::find(core_shutdown_labels, label)
+            != core_shutdown_labels.end()) {
+          return;
+        }
+        if (auto actor = registry.find_by_label(label)) {
+          core_shutdown_labels.push_back(label);
+          core_shutdown_handles.push_back(std::move(actor));
+        }
+      };
       // Always shut down the pipeline manager first. This is a must, as
       // otherwise the shutdown of other components can cause dependent
       // pipelines to either complete, stop, or fail, and if the pipeline
       // manager hasn't yet noticed that it's supposed to shutdown it may still
       // want to persist its state afterwards, causing the pipelines to be in
       // the wrong state after restarting.
-      if (auto pm = registry.remove("pipeline-manager")) {
-        core_shutdown_handles.push_back(std::move(pm->actor));
-      }
+      add_core_handle("pipeline-manager");
       for (const auto& name :
            self->state().ordered_components | std::ranges::views::reverse) {
-        if (auto comp = registry.remove(name)) {
-          core_shutdown_handles.push_back(comp->actor);
-        }
+        add_core_handle(name);
       }
       for (const char* name : ordered_core_components) {
-        if (auto comp = registry.remove(name)) {
-          core_shutdown_handles.push_back(comp->actor);
-        }
+        add_core_handle(name);
       }
+      auto is_deferred_component = [&](std::string_view label) {
+        return label == "pipeline-manager" or is_core_component(label)
+               or std::ranges::find(self->state().ordered_components, label)
+                    != self->state().ordered_components.end();
+      };
       std::vector<caf::actor> aux_components;
-      for (const auto& [_, comp] : registry.components()) {
+      for (const auto& [label, comp] : registry.components()) {
         // Ignore remote actors.
         if (comp.actor->node() != self->node()) {
           continue;
         }
+        if (is_deferred_component(label)) {
+          continue;
+        }
         aux_components.push_back(comp.actor);
       }
-      // Drop everything.
-      registry.clear();
       auto core_shutdown_sequence
         = [=, core_shutdown_handles
               = std::move(core_shutdown_handles)]() mutable {
