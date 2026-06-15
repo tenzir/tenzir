@@ -2352,7 +2352,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
                             location override) -> failure_or<ir::pipeline> {
     TRY(auto ast,
         parse_pipeline_with_location_override(definition, override, ctx));
-    auto implicit_root = compile_ctx::make_root(b_ctx);
+    auto implicit_root = compile_ctx::make_root(b_ctx, source_map);
     TRY(auto pipe, std::move(ast).compile(implicit_root));
     TRY(pipe.substitute(sub_ctx, true));
     return pipe;
