@@ -65,16 +65,6 @@ auto plugin_detection_candidates() -> const std::vector<PluginCandidate>& {
   return result;
 }
 
-template <class Session>
-auto parse_reader_pipeline(std::string_view pipeline, Session reader_session)
-  -> failure_or<ast::pipeline> {
-  if constexpr (requires { tenzir::parse(pipeline, reader_session); }) {
-    return tenzir::parse(pipeline, reader_session);
-  } else {
-    return tenzir::parse(pipeline, location::unknown, reader_session);
-  }
-}
-
 struct indeterminate {};
 
 using selection_result = variant<size_t, failure, indeterminate>;
@@ -266,7 +256,7 @@ private:
     auto root = compile_ctx::make_root(base_ctx{ctx});
     auto provider = session_provider::make(ctx.dh());
     auto session = provider.as_session();
-    auto ast = parse_reader_pipeline(pipeline, session);
+    auto ast = tenzir::parse(pipeline, location::unknown, session);
     TENZIR_ASSERT(ast);
     auto pipe = std::move(*ast).compile(root);
     TENZIR_ASSERT(pipe);
