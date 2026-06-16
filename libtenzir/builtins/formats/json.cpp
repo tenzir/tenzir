@@ -76,7 +76,6 @@ enum class json_probe_state {
 struct json_probe_result {
   json_probe_state state = json_probe_state::incomplete;
   simdjson::dom::element_type type = simdjson::dom::element_type::NULL_VALUE;
-  bool array_is_empty_or_first_element_is_object = false;
 };
 
 auto json_error_state(simdjson::error_code error, bool eof)
@@ -88,18 +87,6 @@ auto json_error_state(simdjson::error_code error, bool eof)
     return json_probe_state::incomplete;
   }
   return json_probe_state::invalid;
-}
-
-auto array_is_empty_or_first_element_is_object(simdjson::dom::element element)
-  -> bool {
-  auto array = element.get_array();
-  if (array.error()) {
-    return false;
-  }
-  for (auto const& item : array.value_unsafe()) {
-    return item.type() == simdjson::dom::element_type::OBJECT;
-  }
-  return true;
 }
 
 auto probe_json_document(read_detection_input input) -> json_probe_result {
@@ -122,9 +109,6 @@ auto probe_json_document(read_detection_input input) -> json_probe_result {
   return {
     .state = json_probe_state::complete,
     .type = type,
-    .array_is_empty_or_first_element_is_object
-    = type == simdjson::dom::element_type::ARRAY
-      and array_is_empty_or_first_element_is_object(element),
   };
 }
 
@@ -169,13 +153,14 @@ auto json_stream_error(simdjson::error_code error, bool eof)
            : read_detection::reject();
 }
 
-auto detect_json_object_stream(read_detection_input input)
-  -> read_detection_result {
+template <class Predicate>
+auto detect_json_stream(read_detection_input input, char initial_byte,
+                        Predicate predicate) -> read_detection_result {
   auto view = detail::trim_front(input.bytes);
   if (view.empty()) {
     return input.eof ? read_detection::reject() : read_detection::need_more();
   }
-  if (view.front() != '{') {
+  if (view.front() != initial_byte) {
     return read_detection::reject();
   }
   auto parser = simdjson::ondemand::parser{};
@@ -190,12 +175,9 @@ auto detect_json_object_stream(read_detection_input input)
     if (auto error = doc.error()) {
       return json_stream_error(error, input.eof);
     }
-    auto type = doc.type();
-    if (auto error = type.error()) {
-      return json_stream_error(error, input.eof);
-    }
-    if (type.value_unsafe() != simdjson::ondemand::json_type::object) {
-      return read_detection::reject();
+    auto result = predicate(doc);
+    if (result.state != detection_state::match) {
+      return result;
     }
     ++documents;
   }
@@ -206,20 +188,6 @@ auto detect_json_object_stream(read_detection_input input)
     return input.eof ? read_detection::reject() : read_detection::need_more();
   }
   return read_detection::match();
-}
-
-auto detect_json_array(read_detection_input input) -> read_detection_result {
-  auto probe = probe_json_document(input);
-  if (probe.state == json_probe_state::invalid) {
-    return read_detection::reject();
-  }
-  if (probe.state == json_probe_state::incomplete) {
-    return input.eof ? read_detection::reject() : read_detection::need_more();
-  }
-  return probe.type == simdjson::dom::element_type::ARRAY
-             and probe.array_is_empty_or_first_element_is_object
-           ? read_detection::match()
-           : read_detection::reject();
 }
 
 auto is_complete_json_object(std::string_view line) -> bool {
@@ -287,6 +255,54 @@ auto json_object_lines_have_keys(read_detection_input input,
 
 auto detect_ndjson(read_detection_input input) -> read_detection_result {
   return detect_json_object_lines(input, single_line_json::reject);
+}
+
+auto detect_json_object_stream(read_detection_input input)
+  -> read_detection_result {
+  auto view = detail::trim_front(input.bytes);
+  if (not view.empty() and view.front() != '{') {
+    return read_detection::reject();
+  }
+  if (detect_ndjson(input).state == detection_state::match) {
+    return read_detection::reject();
+  }
+  return detect_json_stream(input, '{', [eof = input.eof](auto& doc) {
+    auto type = doc.type();
+    if (auto error = type.error()) {
+      return json_stream_error(error, eof);
+    }
+    if (type.value_unsafe() != simdjson::ondemand::json_type::object) {
+      return read_detection::reject();
+    }
+    return read_detection::match();
+  });
+}
+
+auto detect_json_array_stream(read_detection_input input)
+  -> read_detection_result {
+  return detect_json_stream(input, '[', [eof = input.eof](auto& doc) {
+    auto array = doc.value_unsafe().get_array();
+    if (auto error = array.error()) {
+      return json_stream_error(error, eof);
+    }
+    auto first_element_is_object = true;
+    for (auto element : array.value_unsafe()) {
+      if (auto error = element.error()) {
+        return json_stream_error(error, eof);
+      }
+      auto type = element.value_unsafe().type();
+      if (auto error = type.error()) {
+        return json_stream_error(error, eof);
+      }
+      first_element_is_object
+        = type.value_unsafe() == simdjson::ondemand::json_type::object;
+      break;
+    }
+    if (not first_element_is_object) {
+      return read_detection::reject();
+    }
+    return read_detection::match();
+  });
 }
 
 auto detect_json_objects(read_detection_input input) -> read_detection_result {
@@ -1887,7 +1903,7 @@ public:
     return {
       read_detection::candidate("read_json arrays_of_objects=true",
                                 read_detection::specificity::structured,
-                                detect_json_array),
+                                detect_json_array_stream),
       read_detection::candidate("read_json",
                                 read_detection::specificity::structured,
                                 detect_json_object_stream),
