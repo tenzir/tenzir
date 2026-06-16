@@ -256,7 +256,7 @@ private:
     auto root = compile_ctx::make_root(base_ctx{ctx});
     auto provider = session_provider::make(ctx.dh());
     auto session = provider.as_session();
-    auto ast = parse_pipeline_with_bad_diagnostics(pipeline, session);
+    auto ast = tenzir::parse_pipeline_with_bad_diagnostics(pipeline, session);
     TENZIR_ASSERT(ast);
     auto pipe = std::move(*ast).compile(root);
     TENZIR_ASSERT(pipe);
