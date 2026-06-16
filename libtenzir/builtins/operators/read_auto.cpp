@@ -157,7 +157,6 @@ private:
   };
 
   auto select(SelectionInput input, OpCtx& ctx) -> selection_result {
-    auto any_need_more = false;
     auto matches = std::vector<size_t>{};
     auto const& candidates = plugin_detection_candidates();
     TENZIR_ASSERT(live_candidates_.size() == candidates.size());
@@ -175,7 +174,6 @@ private:
           live_candidates_[i] = false;
           break;
         case detection_state::need_more:
-          any_need_more = true;
           break;
         case detection_state::match:
           matches.push_back(i);
@@ -183,7 +181,7 @@ private:
       }
     }
     if (matches.empty()) {
-      if (not input.done_probing and any_need_more) {
+      if (not input.done_probing) {
         return indeterminate{};
       }
       auto result = fallback(input, ctx);
