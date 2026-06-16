@@ -691,14 +691,6 @@ struct retryable_http_response : std::runtime_error {
   blob body;
 };
 
-struct auth_retry_response : std::runtime_error {
-  explicit auth_retry_response(std::vector<http::Header> headers)
-    : std::runtime_error{"auth retry"}, headers{std::move(headers)} {
-  }
-
-  std::vector<http::Header> headers;
-};
-
 // Static fetch task that runs on the Proxygen EventBase thread. All
 // results are communicated through the message queue; no operator members
 // are touched from this task.
