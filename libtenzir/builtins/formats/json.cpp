@@ -162,6 +162,52 @@ auto detect_json_object(read_detection_input input) -> read_detection_result {
            : read_detection::reject();
 }
 
+auto json_stream_error(simdjson::error_code error, bool eof)
+  -> read_detection_result {
+  return json_error_state(error, eof) == json_probe_state::incomplete
+           ? read_detection::need_more()
+           : read_detection::reject();
+}
+
+auto detect_json_object_stream(read_detection_input input)
+  -> read_detection_result {
+  auto view = detail::trim_front(input.bytes);
+  if (view.empty()) {
+    return input.eof ? read_detection::reject() : read_detection::need_more();
+  }
+  if (view.front() != '{') {
+    return read_detection::reject();
+  }
+  auto parser = simdjson::ondemand::parser{};
+  auto bytes = simdjson::padded_string{view};
+  auto stream = simdjson::ondemand::document_stream{};
+  if (auto error = parser.iterate_many(bytes, view.size()).get(stream)) {
+    return json_stream_error(error, input.eof);
+  }
+  auto documents = size_t{};
+  for (auto doc_result : stream) {
+    auto doc = doc_result.get_value();
+    if (auto error = doc.error()) {
+      return json_stream_error(error, input.eof);
+    }
+    auto type = doc.type();
+    if (auto error = type.error()) {
+      return json_stream_error(error, input.eof);
+    }
+    if (type.value_unsafe() != simdjson::ondemand::json_type::object) {
+      return read_detection::reject();
+    }
+    ++documents;
+  }
+  if (stream.truncated_bytes() != 0) {
+    return input.eof ? read_detection::reject() : read_detection::need_more();
+  }
+  if (documents == 0) {
+    return input.eof ? read_detection::reject() : read_detection::need_more();
+  }
+  return read_detection::match();
+}
+
 auto detect_json_array(read_detection_input input) -> read_detection_result {
   auto probe = probe_json_document(input);
   if (probe.state == json_probe_state::invalid) {
@@ -1844,7 +1890,7 @@ public:
                                 detect_json_array),
       read_detection::candidate("read_json",
                                 read_detection::specificity::structured,
-                                detect_json_object),
+                                detect_json_object_stream),
     };
   }
 };
