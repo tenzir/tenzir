@@ -17,6 +17,7 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/source.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -567,8 +568,8 @@ struct every_cron_operator final : public operator_base {
       auto pipe = make_pipeline<void>(hdl);
       const auto exec
         = ctrl.self().spawn(pipeline_executor, std::move(pipe),
-                            std::string{ctrl.definition()}, hdl, hdl,
-                            ctrl.node(), ctrl.has_terminal(), ctrl.is_hidden(),
+                            ctrl.definition(), hdl, hdl, ctrl.node(),
+                            ctrl.has_terminal(), ctrl.is_hidden(),
                             std::string{ctrl.pipeline_id()});
       ctrl.self().monitor(exec, [&, exec](const caf::error& err) {
         if (err.valid()) {
@@ -606,8 +607,8 @@ struct every_cron_operator final : public operator_base {
       auto pipe = make_pipeline<table_slice>(hdl);
       const auto exec
         = ctrl.self().spawn(pipeline_executor, std::move(pipe),
-                            std::string{ctrl.definition()}, hdl, hdl,
-                            ctrl.node(), ctrl.has_terminal(), ctrl.is_hidden(),
+                            ctrl.definition(), hdl, hdl, ctrl.node(),
+                            ctrl.has_terminal(), ctrl.is_hidden(),
                             std::string{ctrl.pipeline_id()});
       ctrl.self().monitor(exec, [&, exec](const caf::error& err) {
         TENZIR_TRACE("[every_cron] subpipeline shut down");

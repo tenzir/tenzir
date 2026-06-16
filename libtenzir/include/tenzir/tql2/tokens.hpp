@@ -11,11 +11,24 @@
 #include "tenzir/concept/parseable/string/char_class.hpp"
 #include "tenzir/detail/enum.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/location.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/variant.hpp"
 
+#include <cstdint>
 #include <string_view>
 
 namespace tenzir {
+
+/// Instructs the parser/tokenizer to add a fixed byte offset to all token
+/// positions and use the given source id. This allows parsing a substring while
+/// producing locations that are correct relative to the full source file.
+struct location_offset {
+  SourceId source_id;
+  uint32_t begin_offset;
+};
+
+using source_origin = variant<SourceId, location, location_offset>;
 
 TENZIR_ENUM(
   ///
@@ -52,18 +65,21 @@ struct token {
       = (tenzir::parsers::alpha | '_') >> *continue_ident;
   };
 
-  token(token_kind kind, size_t end) : kind{kind}, end{end} {
+  token(token_kind kind, uint32_t end) : kind{kind}, end{end} {
   }
 
   token_kind kind;
-  size_t end;
+  uint32_t end;
 };
 
 /// Try to tokenize the source. This is a combination of calling:
 /// - validate_utf8
 /// - tokenize_permissive
 /// - verify_tokens
-auto tokenize(std::string_view content, session ctx)
+auto tokenize(std::string_view content, source_origin origin, session ctx)
+  -> failure_or<std::vector<token>>;
+
+auto tokenize(Source const& source, session ctx)
   -> failure_or<std::vector<token>>;
 
 /// Checks that the source is valid UTF-8.
@@ -73,7 +89,10 @@ auto validate_utf8(std::string_view content, session ctx) -> failure_or<void>;
 auto tokenize_permissive(std::string_view content) -> std::vector<token>;
 
 /// Emit errors for error tokens.
-auto verify_tokens(std::span<token const> tokens, session ctx)
-  -> failure_or<void>;
+auto verify_tokens(std::span<token const> tokens, source_origin origin,
+                   session ctx) -> failure_or<void>;
+
+auto verify_tokens(std::span<token const> tokens, Source const& source,
+                   session ctx) -> failure_or<void>;
 
 } // namespace tenzir

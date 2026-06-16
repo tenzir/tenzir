@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {}
+argspkg_invalid_type::invalid_type value="hello"

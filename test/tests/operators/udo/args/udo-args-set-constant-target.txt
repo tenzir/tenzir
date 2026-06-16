@@ -3,4 +3,7 @@ error: left side of `=` must be a field path or metadata reference
   |
 6 | argspkg::set_untyped_target "not-a-field", "test"
   |                             ^^^^^^^^^^^^^ 
+  ⋮
+6 | argspkg::set_untyped_target "not-a-field", "test"
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ called from here
   |

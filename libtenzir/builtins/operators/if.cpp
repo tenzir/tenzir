@@ -14,6 +14,7 @@
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/scope_linked.hpp>
+#include <tenzir/source.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -196,9 +197,10 @@ class branch {
 public:
   [[maybe_unused]] static constexpr auto name = "branch";
 
-  branch(branch_actor::pointer self, std::string definition, node_actor node,
-         shared_diagnostic_handler dh, metrics_receiver_actor metrics_receiver,
-         bool is_hidden, uint64_t operator_index, std::string pipeline_id,
+  branch(branch_actor::pointer self, Arc<const Source> definition,
+         node_actor node, shared_diagnostic_handler dh,
+         metrics_receiver_actor metrics_receiver, bool is_hidden,
+         uint64_t operator_index, std::string pipeline_id,
          ast::expression predicate_expr, located<pipeline> then_pipe,
          std::optional<located<pipeline>> else_pipe)
     : self_{self},
@@ -488,7 +490,7 @@ private:
 
   branch_actor::pointer self_;
 
-  std::string definition_;
+  Arc<const Source> definition_;
 
   node_actor node_;
   shared_diagnostic_handler dh_;
@@ -625,10 +627,10 @@ public:
     // operator in the internal-endif operator before and store it in the
     // registry as long as we do it before yielding for the first time.
     auto branch = scope_linked{ctrl.self().spawn<caf::linked>(
-      caf::actor_from_state<class branch>, std::string{ctrl.definition()},
-      ctrl.node(), ctrl.shared_diagnostics(), ctrl.metrics_receiver(),
-      ctrl.is_hidden(), ctrl.operator_index(), std::string{ctrl.pipeline_id()},
-      predicate_, then_pipe_, else_pipe_)};
+      caf::actor_from_state<class branch>, ctrl.definition(), ctrl.node(),
+      ctrl.shared_diagnostics(), ctrl.metrics_receiver(), ctrl.is_hidden(),
+      ctrl.operator_index(), std::string{ctrl.pipeline_id()}, predicate_,
+      then_pipe_, else_pipe_)};
     ctrl.self().system().registry().put(
       fmt::format("tenzir.branch.{}.{}", id_, ctrl.run_id()), branch.get());
     co_yield {};

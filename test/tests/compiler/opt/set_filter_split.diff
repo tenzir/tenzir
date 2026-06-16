@@ -6,39 +6,39 @@
      from_ir {
        events: [
          record {
-           begin: 5..6,
+           begin: [1]:5..6 from 0,
            items: [
              field {
-               name: `domain` @ 6..12,
-               expr: constant string "tenzir.com" @ 14..26
+               name: `domain` @ [1]:6..12 from 0,
+               expr: constant string "tenzir.com" @ [1]:14..26 from 0
              }
            ],
-           end: 26..27
+           end: [1]:26..27 from 0
          }
        ],
-       self: 0..4
+       self: [1]:0..4 from 0
      },
 +    where_ir {
-+      self: 0..0,
++      self: [0]:0..0 from 0,
 +      predicate: binary_expr {
 +        left: root_field {
-+          id: `domain` @ 56..62,
++          id: `domain` @ [1]:56..62 from 0,
 +          has_question_mark: false
 +        },
-+        op: "eq" @ 63..65,
-+        right: constant string "tenzir.com" @ 66..78
++        op: "eq" @ [1]:63..65 from 0,
++        right: constant string "tenzir.com" @ [1]:66..78 from 0
 +      }
 +    },
      SetIr {
        assignments: [
          {
            left: root_field {
-             id: `resolved` @ 32..40,
+             id: `resolved` @ [1]:32..40 from 0,
              has_question_mark: false
            },
-           equals: 41..42,
+           equals: [1]:41..42 from 0,
            right: root_field {
-             id: `domain` @ 43..49,
+             id: `domain` @ [1]:43..49 from 0,
              has_question_mark: false
            }
          }
@@ -46,32 +46,32 @@
        order: "ordered"
      },
      where_ir {
--      self: 50..55,
+-      self: [1]:50..55 from 0,
 -      predicate: binary_expr {
 -        left: root_field {
--          id: `domain` @ 56..62,
+-          id: `domain` @ [1]:56..62 from 0,
 -          has_question_mark: false
 -        },
--        op: "eq" @ 63..65,
--        right: constant string "tenzir.com" @ 66..78
+-        op: "eq" @ [1]:63..65 from 0,
+-        right: constant string "tenzir.com" @ [1]:66..78 from 0
 -      }
 -    },
 -    where_ir {
--      self: 79..84,
-+      self: 0..0,
+-      self: [1]:79..84 from 0,
++      self: [0]:0..0 from 0,
        predicate: binary_expr {
          left: root_field {
-           id: `resolved` @ 85..93,
+           id: `resolved` @ [1]:85..93 from 0,
            has_question_mark: false
          },
-         op: "neq" @ 94..96,
-         right: constant none_t {} @ 97..101
+         op: "neq" @ [1]:94..96 from 0,
+         right: constant none_t {} @ [1]:97..101 from 0
        }
 +    },
 +    GenericIr {
 +      op: {
 +        path: [
-+          `to_stdout` @ 0..0
++          `to_stdout` @ [1]:101..101 from 0
 +        ],
 +        ref: std::to_stdout/op
 +      },

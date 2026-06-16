@@ -12,6 +12,7 @@
 #include <tenzir/endpoint.hpp>
 #include <tenzir/execution_node.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/source.hpp>
 
 #include <caf/actor_from_state.hpp>
 #include <caf/scoped_actor.hpp>
@@ -53,8 +54,10 @@ public:
     -> caf::result<exec_node_actor> {
     TENZIR_ASSERT(box);
     auto op = std::move(box).unwrap();
+    auto shell_source
+      = Source::new_source(std::move(definition), "<input>", false);
     auto spawn_result = tenzir::spawn_exec_node(
-      self_, std::move(op), input_type, std::move(definition), node_,
+      self_, std::move(op), input_type, std::move(shell_source), node_,
       diagnostic_handler, metrics_receiver, index, false, is_hidden, run_id,
       std::move(pipeline_id));
     if (not spawn_result) {

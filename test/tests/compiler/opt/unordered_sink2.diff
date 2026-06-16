@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 0..6
+           `export` @ [1]:0..6 from 0
          ],
          ref: std::export/op
        },
@@ -26,8 +26,8 @@
      GenericIr {
        op: {
          path: [
--          `sort` @ 7..11
-+          `to_file` @ 28..35
+-          `sort` @ [1]:7..11 from 0
++          `to_file` @ [1]:28..35 from 0
          ],
 -        ref: std::sort/op
 +        ref: std::to_file/op
@@ -36,7 +36,7 @@
 +      desc: "tql2.to_file",
        args: [
 -        expression root_field {
--          id: `x` @ 12..13,
+-          id: `x` @ [1]:12..13 from 0,
 -          has_question_mark: false
 -        }
 +        located {
@@ -44,7 +44,7 @@
 +            chunk: chunk(size=60),
 +            table-offset: 12
 +          }
-+        } @ 36..51
++        } @ [1]:36..51 from 0
        ],
        filter: [
          
@@ -66,7 +66,7 @@
 +            GenericIr {
 +              op: {
 +                path: [
-+                  `write_ndjson` @ 58..70
++                  `write_ndjson` @ [1]:58..70 from 0
 +                ],
 +                ref: std::write_ndjson/op
 +              },
@@ -83,7 +83,7 @@
 +              ]
 +            }
 +          ]
-+        } @ 52..74,
++        } @ [1]:52..74 from 0,
 +        let_ids: {
            
 -        ],
@@ -91,7 +91,7 @@
 -          GenericIr {
 -            op: {
 -              path: [
--                `to_file` @ 28..35
+-                `to_file` @ [1]:28..35 from 0
 -              ],
 -              ref: std::to_file/op
 -            },
@@ -102,7 +102,7 @@
 -                  chunk: chunk(size=60),
 -                  table-offset: 12
 -                }
--              } @ 36..51
+-              } @ [1]:36..51 from 0
 -            ],
 -            filter: [
 -              
@@ -120,7 +120,7 @@
 -                  GenericIr {
 -                    op: {
 -                      path: [
--                        `write_ndjson` @ 58..70
+-                        `write_ndjson` @ [1]:58..70 from 0
 -                      ],
 -                      ref: std::write_ndjson/op
 -                    },
@@ -137,7 +137,7 @@
 -                    ]
 -                  }
 -                ]
--              } @ 52..74,
+-              } @ [1]:52..74 from 0,
 -              let_ids: {
 -                
 -              }
@@ -145,7 +145,7 @@
 -          }
 -        ]
 -      },
--      loc: 14..23
+-      loc: [1]:14..23 from 0
 +        }
 +      }
      }

@@ -16,6 +16,7 @@
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/rebatch.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -734,6 +735,9 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             return {};
           },
           [&](const user_defined_operator& op) -> failure_or<void> {
+            ctx.source_map().add_source(op.source);
+            auto const callid
+              = ctx.source_map().add_call_site(x.op.get_location());
             auto op_name = make_operator_name(x.op);
             auto udo_dh = udo_diagnostic_handler{
               &static_cast<diagnostic_handler&>(ctx), op_name, op};
@@ -753,7 +757,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             auto inv
               = operator_factory_invocation{std::move(x.op), std::move(x.args)};
             TRY(auto substituted, instantiate_user_defined_operator(
-                                    op, inv, sp.as_session(), udo_dh));
+                                    op, inv, sp.as_session(), callid, udo_dh));
             // The body is hygienic: it cannot see outer `let` bindings. Any
             // outer references reach the body only through arguments, which
             // we pre-bound above before substitution copied them in.

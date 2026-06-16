@@ -35,8 +35,8 @@ TEST("sort cmp deduplicates diagnostics from comparator evaluation") {
   auto dh = collecting_diagnostic_handler{};
   auto provider = session_provider::make(dh);
   auto ctx = provider.as_session();
-  auto expr = parse_expression_with_bad_diagnostics(
-    "sort(xs, cmp=(l, r) => missing)", ctx);
+  auto expr = parse_expression_with_location_override(
+    "sort(xs, cmp=(l, r) => missing)", location::unknown, ctx);
   REQUIRE(expr);
   auto resolved = resolve_entities(*expr, ctx);
   REQUIRE(resolved);
@@ -58,7 +58,8 @@ TEST("sort preserves nested list value type metadata") {
   auto dh = collecting_diagnostic_handler{};
   auto provider = session_provider::make(dh);
   auto ctx = provider.as_session();
-  auto expr = parse_expression_with_bad_diagnostics("sort(r)", ctx);
+  auto expr = parse_expression_with_location_override("sort(r)",
+                                                      location::unknown, ctx);
   REQUIRE(expr);
   auto resolved = resolve_entities(*expr, ctx);
   REQUIRE(resolved);

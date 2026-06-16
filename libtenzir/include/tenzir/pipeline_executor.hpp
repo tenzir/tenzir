@@ -12,7 +12,9 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/location.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
@@ -31,8 +33,10 @@ struct pipeline_executor_state {
   /// A handle to the node actor.
   node_actor node = {};
 
-  /// The currently running pipeline.
-  std::string definition;
+  /// The definition of the currently running pipeline; its id matches the
+  /// ids on diagnostic locations produced during parsing. Set on spawn.
+  Option<Arc<const Source>> definition = {};
+  SourceMap source_map = {};
   std::optional<pipeline> pipe = {};
   std::vector<exec_node_actor> exec_nodes = {};
   caf::typed_response_promise<void> start_rp = {};
@@ -83,9 +87,9 @@ struct pipeline_executor_state {
 /// Start a pipeline executor for a given pipeline.
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline pipe, std::string definition, receiver_actor<diagnostic> diagnostics,
-  metrics_receiver_actor metrics, node_actor node, bool has_terminal,
-  bool is_hidden, std::string pipeline_id)
+  pipeline pipe, Arc<const Source> definition,
+  receiver_actor<diagnostic> diagnostics, metrics_receiver_actor metrics,
+  node_actor node, bool has_terminal, bool is_hidden, std::string pipeline_id)
   -> pipeline_executor_actor::behavior_type;
 
 } // namespace tenzir

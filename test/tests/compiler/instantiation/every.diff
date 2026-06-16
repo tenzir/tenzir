@@ -6,14 +6,14 @@
      GenericIr {
        op: {
          path: [
-           `every` @ 0..5
+           `every` @ [1]:0..5 from 0
          ],
          ref: std::every/op
        },
        desc: "tql2.every",
        args: [
--        Incomplete constant duration "1s" @ 6..8
-+        located "1s" @ 6..8
+-        Incomplete constant duration "1s" @ [1]:6..8 from 0
++        located "1s" @ [1]:6..8 from 0
        ],
        filter: [
          
@@ -26,41 +26,41 @@
          pipeline: {
            lets: [
              {
-               ident: `$ts` @ 128..131,
+               ident: `$ts` @ [1]:128..131 from 0,
                expr: binary_expr {
                  left: function_call {
                    fn: {
                      path: [
-                       `now` @ 134..137
+                       `now` @ [1]:134..137 from 0
                      ],
                      ref: std::now/fn
                    },
                    args: [
                      
                    ],
-                   rpar: 138..139,
+                   rpar: [1]:138..139 from 0,
                    method: false
                  },
-                 op: "sub" @ 140..141,
-                 right: constant duration "10min" @ 142..147
+                 op: "sub" @ [1]:140..141 from 0,
+                 right: constant duration "10min" @ [1]:142..147 from 0
                },
                id: 1
              }
            ],
            operators: [
              where_ir {
-               self: 150..155,
+               self: [1]:150..155 from 0,
                predicate: binary_expr {
                  left: root_field {
-                   id: `time` @ 156..160,
+                   id: `time` @ [1]:156..160 from 0,
                    has_question_mark: false
                  },
-                 op: "lt" @ 161..162,
-                 right: dollar_var `$ts` -> 1 @ 163..166
+                 op: "lt" @ [1]:161..162 from 0,
+                 right: dollar_var `$ts` -> 1 @ [1]:163..166 from 0
                }
              }
            ]
-         } @ 9..168,
+         } @ [1]:9..168 from 0,
          let_ids: {
            
          }

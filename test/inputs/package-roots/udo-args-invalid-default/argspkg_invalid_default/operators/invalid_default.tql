@@ -1,0 +1,8 @@
+---
+args:
+  named:
+    - name: field
+      type: field
+      default: a + b
+---
+set marker = "should not load"

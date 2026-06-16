@@ -1,0 +1,3 @@
+id: argspkg_invalid_type
+name: Invalid Type Package
+description: Package with an invalid type annotation in parameter.

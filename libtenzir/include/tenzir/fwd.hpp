@@ -185,6 +185,8 @@ class uuid;
 class wah_bitmap;
 
 class compile_ctx;
+class SourceMap;
+struct Source;
 class substitute_ctx;
 class finalize_ctx;
 

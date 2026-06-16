@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 0..6
+           `export` @ [1]:0..6 from 0
          ],
          ref: std::export/op
        },
@@ -25,7 +25,7 @@
 +    GenericIr {
 +      op: {
 +        path: [
-+          `taste` @ 21..26
++          `taste` @ [1]:21..26 from 0
 +        ],
 +        ref: std::taste/op
 +      },
@@ -42,20 +42,20 @@
 +      ]
 +    },
 +    where_ir {
-+      self: 0..0,
++      self: [0]:0..0 from 0,
 +      predicate: binary_expr {
 +        left: root_field {
-+          id: `x` @ 35..36,
++          id: `x` @ [1]:35..36 from 0,
 +          has_question_mark: false
 +        },
-+        op: "eq" @ 37..39,
-+        right: constant int64 1 @ 40..41
++        op: "eq" @ [1]:37..39 from 0,
++        right: constant int64 1 @ [1]:40..41 from 0
 +      }
 +    },
 +    GenericIr {
 +      op: {
 +        path: [
-+          `to_stdout` @ 0..0
++          `to_stdout` @ [1]:43..43 from 0
 +        ],
 +        ref: std::to_stdout/op
 +      },
@@ -80,7 +80,7 @@
 -          GenericIr {
 -            op: {
 -              path: [
--                `taste` @ 21..26
+-                `taste` @ [1]:21..26 from 0
 -              ],
 -              ref: std::taste/op
 -            },
@@ -97,19 +97,19 @@
 -            ]
 -          },
 -          where_ir {
--            self: 29..34,
+-            self: [1]:29..34 from 0,
 -            predicate: binary_expr {
 -              left: root_field {
--                id: `x` @ 35..36,
+-                id: `x` @ [1]:35..36 from 0,
 -                has_question_mark: false
 -              },
--              op: "eq" @ 37..39,
--              right: constant int64 1 @ 40..41
+-              op: "eq" @ [1]:37..39 from 0,
+-              right: constant int64 1 @ [1]:40..41 from 0
 -            }
 -          }
 -        ]
 -      },
--      loc: 7..16
+-      loc: [1]:7..16 from 0
      }
    ]
  }

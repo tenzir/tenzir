@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 15..21
+           `export` @ [1]:15..21 from 0
          ],
          ref: std::export/op
        },
@@ -17,11 +17,11 @@
        filter: [
 +        binary_expr {
 +          left: root_field {
-+            id: `foo` @ 28..31,
++            id: `foo` @ [1]:28..31 from 0,
 +            has_question_mark: false
 +          },
-+          op: "eq" @ 32..34,
-+          right: constant int64 42 @ 35..39
++          op: "eq" @ [1]:32..34 from 0,
++          right: constant int64 42 @ [1]:35..39 from 0
 +        }
 +      ],
 +      order: "ordered",
@@ -32,7 +32,7 @@
 +    GenericIr {
 +      op: {
 +        path: [
-+          `to_stdout` @ 0..0
++          `to_stdout` @ [1]:39..39 from 0
 +        ],
 +        ref: std::to_stdout/op
 +      },
@@ -49,14 +49,14 @@
        ]
 -    },
 -    where_ir {
--      self: 22..27,
+-      self: [1]:22..27 from 0,
 -      predicate: binary_expr {
 -        left: root_field {
--          id: `foo` @ 28..31,
+-          id: `foo` @ [1]:28..31 from 0,
 -          has_question_mark: false
 -        },
--        op: "eq" @ 32..34,
--        right: constant int64 42 @ 35..39
+-        op: "eq" @ [1]:32..34 from 0,
+-        right: constant int64 42 @ [1]:35..39 from 0
 -      }
      }
    ]

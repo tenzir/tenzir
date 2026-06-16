@@ -33,15 +33,6 @@ namespace {
 
 constexpr auto docs = "https://docs.tenzir.com/formats/kv";
 
-auto has_location(diagnostic const& diag) -> bool {
-  for (auto const& annotation : diag.annotations) {
-    if (annotation.source != location::unknown) {
-      return true;
-    }
-  }
-  return false;
-}
-
 class splitter {
 public:
   splitter() = default;
@@ -523,7 +514,7 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     dh_.emplace(std::in_place, ctx.dh(), [this](diagnostic d) {
-      if (args_.operator_location and not has_location(d)) {
+      if (args_.operator_location and not d.has_location()) {
         d.annotations.emplace_back(true, std::string{},
                                    args_.operator_location);
       }

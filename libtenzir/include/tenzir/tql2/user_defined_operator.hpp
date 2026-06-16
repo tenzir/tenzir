@@ -49,7 +49,8 @@ auto make_operator_name(const ast::entity& entity) -> std::string;
 
 auto instantiate_user_defined_operator(const user_defined_operator& udo,
                                        operator_factory_invocation& inv,
-                                       session ctx, udo_diagnostic_handler& dh)
+                                       session ctx, CallSiteId callsite,
+                                       udo_diagnostic_handler& dh)
   -> failure_or<ast::pipeline>;
 
 } // namespace tenzir

@@ -1,8 +1,8 @@
  {
    lets: [
 -    {
--      ident: `$foo` @ 57..61,
--      expr: constant int64 42 @ 64..66,
+-      ident: `$foo` @ [1]:57..61 from 0,
+-      expr: constant int64 42 @ [1]:64..66 from 0,
 -      id: 1
 -    }
 +    
@@ -11,7 +11,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 68..74
+           `export` @ [1]:68..74 from 0
          ],
          ref: std::export/op
        },
@@ -28,15 +28,15 @@
        ]
      },
      where_ir {
-       self: 75..80,
+       self: [1]:75..80 from 0,
        predicate: binary_expr {
          left: root_field {
-           id: `foo` @ 81..84,
+           id: `foo` @ [1]:81..84 from 0,
            has_question_mark: false
          },
-         op: "eq" @ 85..87,
--        right: dollar_var `$foo` -> 1 @ 88..92
-+        right: constant int64 42 @ 88..92
+         op: "eq" @ [1]:85..87 from 0,
+-        right: dollar_var `$foo` -> 1 @ [1]:88..92 from 0
++        right: constant int64 42 @ [1]:88..92 from 0
        }
      }
    ]

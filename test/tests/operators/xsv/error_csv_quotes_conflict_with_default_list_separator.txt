@@ -3,3 +3,4 @@ error: quote character `;` conflicts with `list_separator=";"`
   |
 6 |   read_csv quotes=";"
   |                   ^^^ 
+  |

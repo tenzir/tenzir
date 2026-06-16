@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 75..81
+           `export` @ [1]:75..81 from 0
          ],
          ref: std::export/op
        },
@@ -26,7 +26,7 @@
      GenericIr {
        op: {
          path: [
-           `parallel` @ 82..90
+           `parallel` @ [1]:82..90 from 0
          ],
          ref: std::parallel/op
        },
@@ -49,21 +49,21 @@
            ],
            operators: [
              where_ir {
--              self: 93..98,
-+              self: 0..0,
+-              self: [1]:93..98 from 0,
++              self: [0]:0..0 from 0,
                predicate: binary_expr {
                  left: root_field {
-                   id: `x` @ 99..100,
+                   id: `x` @ [1]:99..100 from 0,
                    has_question_mark: false
                  },
-                 op: "gt" @ 101..102,
-                 right: constant int64 1 @ 103..104
+                 op: "gt" @ [1]:101..102 from 0,
+                 right: constant int64 1 @ [1]:103..104 from 0
                }
              },
              GenericIr {
                op: {
                  path: [
-                   `discard` @ 107..114
+                   `discard` @ [1]:107..114 from 0
                  ],
                  ref: std::discard/op
                },
@@ -80,7 +80,7 @@
                ]
              }
            ]
-         } @ 91..116,
+         } @ [1]:91..116 from 0,
          let_ids: {
            
          }

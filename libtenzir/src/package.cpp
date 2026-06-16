@@ -13,7 +13,9 @@
 #include "tenzir/detail/load_contents.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/location.hpp"
 #include "tenzir/module.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/registry.hpp"
@@ -448,6 +450,7 @@ auto lower_parameter_type_def(ast::type_def const& def,
       }
       diagnostic::error("invalid type `{}` for parameter `{}` in operator `{}`",
                         *param.type, param.name, op_id)
+        .primary(name.id)
         .note("type aliases are not allowed")
         .emit(dh);
       return failure::promise();
@@ -468,12 +471,14 @@ auto lower_parameter_type_def(ast::type_def const& def,
 
 auto parse_parameter_value_type(package_operator_parameter const& param,
                                 std::string_view op_id, session ctx,
-                                diagnostic_handler& dh)
+                                diagnostic_handler& dh,
+                                source_origin type_origin = location::unknown)
   -> failure_or<std::optional<type>> {
   if (not param.type or is_field_path_type(param)) {
     return std::optional<type>{};
   }
-  auto parsed = parse_type_def_with_bad_diagnostics(*param.type, ctx);
+  auto parsed
+    = parse_type_def_with_location_override(*param.type, type_origin, ctx);
   if (parsed.is_error()) {
     diagnostic::error("invalid type `{}` for parameter `{}` in operator `{}`",
                       *param.type, param.name, op_id)
@@ -563,7 +568,19 @@ auto package_operator::parse(const view<record>& data)
     return {};
   };
   for (const auto& [key, value] : data) {
-    TRY_ASSIGN_STRING_TO_RESULT(definition);
+    if (key == "definition") {
+      const auto* id = try_as<std::string_view>(&value);
+      if (not id) {
+        return diagnostic::error("definition must be a string")
+          .note("invalid package definition")
+          .to_error();
+      }
+      auto src
+        = Source::new_source(std::string{*id}, "<package operator>", false);
+      result.file_source = src;
+      result.tql_body = src->text;
+      continue;
+    }
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
     if (key == "args") {
       if (is<caf::none_t>(value)) {
@@ -606,14 +623,45 @@ auto package_operator::parse(const view<record>& data)
     }
     return unknown_package_key_error("operator", key);
   }
-  REQUIRED_FIELD(definition)
+  if (not result.file_source) {
+    return diagnostic::error("definition must be provided")
+      .note("invalid package definition")
+      .to_error();
+  }
   return result;
 }
 
-auto package_operator::parse(std::string_view input)
+auto package_operator::parse(Arc<const Source> source)
   -> caf::expected<package_operator> {
-  TRY(auto rec, load_tql_with_frontmatter(input));
-  return parse(make_view(rec));
+  auto sv = std::string_view{source->text};
+  TRY(auto rec, load_tql_with_frontmatter(sv));
+  TRY(auto result, parse(make_view(rec)));
+  result.file_source = std::move(source);
+  // Skip optional shebang lines, mirroring load_tql_with_frontmatter.
+  while (sv.starts_with("#!")) {
+    auto n = sv.find('\n');
+    if (n == std::string_view::npos) {
+      break;
+    }
+    sv.remove_prefix(n + 1);
+  }
+  if (sv.starts_with("---\n")) {
+    auto end = sv.find("\n---\n");
+    if (end != std::string_view::npos) {
+      result.frontmatter = sv.substr(4, end - 4);
+      auto body = sv.substr(end + 5); // skip "\n---\n"
+      // Skip any leading whitespace that load_tql_with_frontmatter trims.
+      auto first_nonspace = body.find_first_not_of(" \t\n\r");
+      result.tql_body = first_nonspace == std::string_view::npos
+                          ? body.substr(body.size())
+                          : body.substr(first_nonspace);
+    } else {
+      result.tql_body = sv;
+    }
+  } else {
+    result.tql_body = sv;
+  }
+  return result;
 }
 
 auto package_pipeline::parse(const view<record>& data)
@@ -829,7 +877,14 @@ auto load_package_part(const std::filesystem::path& file, auto& dh)
     diagnostic::error(content.error()).note("trying to load {}", file).emit(dh);
     return failure::promise();
   }
-  auto result = Type::parse(*content);
+  caf::expected<Type> result = caf::make_error(ec::unspecified);
+  if constexpr (std::same_as<Type, package_operator>) {
+    auto source
+      = Source::new_source(std::move(*content), file.generic_string(), false);
+    result = Type::parse(std::move(source));
+  } else {
+    result = Type::parse(*content);
+  }
   if (not result) {
     diagnostic::error("{}", result.error()).note("from file: {}", file).emit(dh);
     return failure::promise();
@@ -1157,7 +1212,7 @@ auto package_operator::to_record() const -> record {
   };
   auto result = record{
     {"description", description},
-    {"definition", definition},
+    {"definition", std::string{tql_body}},
     {"args", std::move(args_record)},
   };
   return result;
@@ -1224,7 +1279,8 @@ auto package::to_record() const -> record {
   return info_record;
 }
 
-auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
+auto build_package_operator_module(const package& pkg, diagnostic_handler& dh,
+                                   SourceMap* source_map)
   -> failure_or<std::unique_ptr<module_def>> {
   auto module = std::make_unique<module_def>();
   auto module_name = package_module_name(pkg.id);
@@ -1260,49 +1316,141 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
     return ast::expression{
       ast::constant{std::move(constant_value), location::unknown}};
   };
-  auto parse_default_expression = [&](const package_operator_parameter& param,
-                                      std::optional<type> const& value_type)
-    -> failure_or<std::optional<ast::expression>> {
-    if (not param.default_) {
-      return std::optional<ast::expression>{};
+  for (const auto& [op_name, op] : pkg.operators) {
+    auto op_id = fmt::format("{}", fmt::join(op_name, "::"));
+    // Use the operator's own source (full .tql file) when available; otherwise
+    // create a source from just the TQL definition string.
+    auto [source, tql_origin]
+      = [&]() -> std::pair<Arc<const Source>, source_origin> {
+      if (op.file_source) {
+        auto tql_off = static_cast<uint32_t>(op.tql_body.data()
+                                             - (*op.file_source)->text.data());
+        return {*op.file_source,
+                location_offset{(*op.file_source)->index, tql_off}};
+      }
+      auto src
+        = Source::new_source(std::string{op.tql_body},
+                             fmt::format("<packages/{}:{}>", pkg.id, op_id),
+                             true);
+      return {src, source_origin{src->index}};
+    }();
+    if (source_map != nullptr) {
+      source_map->add_source(source);
     }
-    auto yaml_data = from_yaml(*param.default_);
-    if (not yaml_data) {
-      diagnostic::error("failed to parse default value for parameter '{}'",
-                        param.name)
-        .note("default value: {}", *param.default_)
-        .note("error: {}", yaml_data.error())
-        .emit(dh);
-      return failure::promise();
-    }
-    if (is_field_path_type(param) and not is<caf::none_t>(*yaml_data)) {
-      auto invalid_selector = [&] {
-        diagnostic::error("default value for field parameter `{}` must be "
-                          "`null` or a selector",
+    // Returns the source_origin for a YAML field value in the frontmatter.
+    // Searches for `key: value`, `key: "value"`, or `key: 'value'` to avoid
+    // false matches in description fields that happen to contain the same text.
+    auto locate_yaml_value
+      = [&](std::string_view key, std::string_view value) -> source_origin {
+      if (not op.file_source or op.frontmatter.empty()) {
+        return location::unknown;
+      }
+      auto fm = op.frontmatter;
+      auto fm_off
+        = static_cast<uint32_t>(fm.data() - (*op.file_source)->text.data());
+      auto search_from = size_t{0};
+      while (search_from < fm.size()) {
+        auto key_pos = fm.find(key, search_from);
+        if (key_pos == std::string_view::npos) {
+          break;
+        }
+        // Reject if key is a suffix of a longer identifier (e.g. "datatype")
+        if (key_pos > 0) {
+          auto prev = static_cast<unsigned char>(fm[key_pos - 1]);
+          if (std::isalnum(prev) || prev == '_' || prev == '-') {
+            search_from = key_pos + 1;
+            continue;
+          }
+        }
+        // Key must be followed immediately by ":"
+        auto after_key = key_pos + key.size();
+        if (after_key >= fm.size() || fm[after_key] != ':') {
+          search_from = key_pos + 1;
+          continue;
+        }
+        // Skip ":" and horizontal whitespace to reach the value start
+        auto val_start = after_key + 1;
+        while (val_start < fm.size()
+               && (fm[val_start] == ' ' || fm[val_start] == '\t')) {
+          ++val_start;
+        }
+        if (val_start >= fm.size()) {
+          search_from = key_pos + 1;
+          continue;
+        }
+        auto source_id = (*op.file_source)->index;
+        // Unquoted: key: value
+        if (fm.substr(val_start).starts_with(value)) {
+          return location_offset{source_id,
+                                 fm_off + static_cast<uint32_t>(val_start)};
+        }
+        // Double-quoted: key: "value"
+        if (fm[val_start] == '"'
+            && fm.substr(val_start + 1).starts_with(value)) {
+          return location_offset{source_id,
+                                 fm_off + static_cast<uint32_t>(val_start + 1)};
+        }
+        // Single-quoted: key: 'value'
+        if (fm[val_start] == '\''
+            && fm.substr(val_start + 1).starts_with(value)) {
+          return location_offset{source_id,
+                                 fm_off + static_cast<uint32_t>(val_start + 1)};
+        }
+        search_from = key_pos + 1;
+      }
+      return location::unknown;
+    };
+    auto parse_default_expression = [&](const package_operator_parameter& param,
+                                        std::optional<type> const& value_type)
+      -> failure_or<std::optional<ast::expression>> {
+      if (not param.default_) {
+        return std::optional<ast::expression>{};
+      }
+      auto yaml_data = from_yaml(*param.default_);
+      if (not yaml_data) {
+        diagnostic::error("failed to parse default value for parameter '{}'",
                           param.name)
           .note("default value: {}", *param.default_)
+          .note("error: {}", yaml_data.error())
           .emit(dh);
         return failure::promise();
-      };
-      const auto* str = try_as<std::string>(&*yaml_data);
-      if (not str) {
-        return invalid_selector();
       }
-      auto expr = parse_expression_with_bad_diagnostics(*str, ctx);
-      if (expr.is_error()) {
-        return invalid_selector();
+      if (is_field_path_type(param) and not is<caf::none_t>(*yaml_data)) {
+        const auto* str = try_as<std::string>(&*yaml_data);
+        auto default_origin = str ? locate_yaml_value("default", *str)
+                                  : source_origin{location::unknown};
+        auto invalid_selector = [&] {
+          auto d = diagnostic::error("default value for field parameter `{}` "
+                                     "must be "
+                                     "`null` or a selector",
+                                     param.name);
+          if (const auto* loff = try_as<location_offset>(&default_origin)) {
+            auto val_end = loff->begin_offset
+                           + static_cast<uint32_t>(str ? str->size() : 0u);
+            d = std::move(d).primary(
+              location{loff->begin_offset, val_end, loff->source_id});
+          }
+          std::move(d).note("default value: {}", *param.default_).emit(dh);
+          return failure::promise();
+        };
+        if (not str) {
+          return invalid_selector();
+        }
+        auto expr
+          = parse_expression_with_location_override(*str, default_origin, ctx);
+        if (expr.is_error()) {
+          return invalid_selector();
+        }
+        if (not ast::selector::try_from(ast::expression{*expr})) {
+          return invalid_selector();
+        }
+        return std::optional<ast::expression>{std::move(*expr)};
       }
-      if (not ast::selector::try_from(ast::expression{*expr})) {
-        return invalid_selector();
-      }
-      return std::optional<ast::expression>{std::move(*expr)};
-    }
-    materialize_default_value(*yaml_data, value_type);
-    auto expr = make_constant_expression(std::move(*yaml_data));
-    return std::optional<ast::expression>{std::move(expr)};
-  };
-  for (const auto& [op_name, op] : pkg.operators) {
-    auto parsed = parse_pipeline_with_bad_diagnostics(op.definition, ctx);
+      materialize_default_value(*yaml_data, value_type);
+      auto expr = make_constant_expression(std::move(*yaml_data));
+      return std::optional<ast::expression>{std::move(expr)};
+    };
+    auto parsed = parse(op.tql_body, tql_origin, ctx);
     if (not parsed) {
       diagnostic::error("failed to parse operator `{}` in package `{}`",
                         fmt::join(op_name, "::"), pkg.id)
@@ -1310,7 +1458,6 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
       return failure::promise();
     }
     auto pipe = std::move(*parsed);
-    auto op_id = fmt::format("{}", fmt::join(op_name, "::"));
     auto start_idx = size_t{0};
     if (op_name.size() - start_idx < 1) {
       diagnostic::error("invalid operator path in package `{}`: {}", pkg.id,
@@ -1323,7 +1470,8 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
     auto* parent = ensure_module(*pkg_mod, head_span);
     auto& set = parent->defs[op_name.back()];
     // Create user_defined_operator with parameter information
-    auto udo = user_defined_operator{std::move(pipe), {}, {}};
+    auto udo
+      = user_defined_operator{std::move(pipe), std::move(source), {}, {}};
     auto seen_names = std::unordered_set<std::string>{};
     seen_names.reserve(op.args.positional.size() + op.args.named.size());
     auto seen_optional_positional = false;
@@ -1335,7 +1483,10 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
           .emit(dh);
         return failure::promise();
       }
-      auto value_type = parse_parameter_value_type(arg, op_id, ctx, dh);
+      auto type_origin = arg.type ? locate_yaml_value("type", *arg.type)
+                                  : source_origin{location::unknown};
+      auto value_type
+        = parse_parameter_value_type(arg, op_id, ctx, dh, type_origin);
       if (value_type.is_error()) {
         return failure::promise();
       }
@@ -1368,7 +1519,10 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh)
           .emit(dh);
         return failure::promise();
       }
-      auto value_type = parse_parameter_value_type(opt, op_id, ctx, dh);
+      auto type_origin = opt.type ? locate_yaml_value("type", *opt.type)
+                                  : source_origin{location::unknown};
+      auto value_type
+        = parse_parameter_value_type(opt, op_id, ctx, dh, type_origin);
       if (value_type.is_error()) {
         return failure::promise();
       }

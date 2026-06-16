@@ -6,11 +6,14 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/location.hpp"
+
 #include <tenzir/detail/env.hpp>
 #include <tenzir/detail/load_contents.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/exec_pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/source.hpp>
 
 #include <iostream>
 #include <unistd.h>
@@ -20,19 +23,19 @@ namespace tenzir::plugins::exec {
 namespace {
 
 void dump_diagnostics_to_stdout(std::span<const diagnostic> diagnostics,
-                                std::string filename, std::string content) {
+                                SourceMap const& source_map) {
   // Replay diagnostics to reconstruct `stderr` on `stdout`.
-  auto printer = make_diagnostic_printer(location_origin{std::move(filename),
-                                                         std::move(content)},
-                                         color_diagnostics::no, std::cout);
+  auto printer
+    = make_diagnostic_printer(source_map, color_diagnostics::no, std::cout);
   for (auto&& diag : diagnostics) {
-    printer->emit(diag);
+    printer->emit(source_map.enrich(diag));
   }
 }
 
-auto exec_command_impl(std::string content, diagnostic_handler& dh,
-                       const exec_config& cfg, caf::actor_system& sys) -> bool {
-  auto result = exec_pipeline(std::move(content), dh, cfg, sys);
+auto exec_command_impl(Arc<const Source> source, diagnostic_handler& dh,
+                       const exec_config& cfg, caf::actor_system& sys,
+                       SourceMap& source_map) -> bool {
+  auto result = exec_pipeline(std::move(source), dh, cfg, sys, source_map);
   if (result) {
     return true;
   }
@@ -59,7 +62,7 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
     }
     if (color_mode != "auto") {
       diagnostic::error("`--color` must be one of `auto`, `always`, `never`")
-        .emit(*make_diagnostic_printer(std::nullopt, color, std::cerr));
+        .emit(*make_diagnostic_printer(color, std::cerr));
       return false;
     }
   }
@@ -107,7 +110,7 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   auto filename = std::string{};
   auto content = std::string{};
   const auto& args = inv.arguments;
-  auto printer = make_diagnostic_printer(std::nullopt, color, std::cerr);
+  auto printer = make_diagnostic_printer(color, std::cerr);
   if (args.size() != 1) {
     printer->emit(diagnostic::error("expected exactly one argument, but got {}",
                                     args.size())
@@ -127,16 +130,20 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
     filename = "<input>";
     content = args[0];
   }
+  auto source
+    = Source::new_source(std::move(content), std::move(filename), false);
+  auto source_map = SourceMap{};
+  source_map.add_source(source);
   if (cfg.dump_diagnostics) {
-    auto diag = collecting_diagnostic_handler{};
-    auto result = exec_command_impl(content, diag, cfg, sys);
-    dump_diagnostics_to_stdout(std::move(diag).collect(), filename,
-                               std::move(content));
+    auto collector = collecting_diagnostic_handler{};
+    auto result
+      = exec_command_impl(std::move(source), collector, cfg, sys, source_map);
+    dump_diagnostics_to_stdout(std::move(collector).collect(), source_map);
     return result;
   }
-  printer = make_diagnostic_printer(location_origin{filename, content}, color,
-                                    std::cerr);
-  return exec_command_impl(std::move(content), *printer, cfg, sys);
+  printer = make_diagnostic_printer(source_map, color, std::cerr);
+  auto enricher = make_enriching_handler(source_map, *printer);
+  return exec_command_impl(std::move(source), *enricher, cfg, sys, source_map);
 }
 
 class plugin final : public virtual command_plugin {

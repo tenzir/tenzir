@@ -1,0 +1,7 @@
+---
+args:
+  named:
+    - name: value
+      type: invalid_kind
+---
+set x = $value

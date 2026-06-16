@@ -50,6 +50,7 @@ struct FromNicArgs {
   Option<located<uint64_t>> snaplen;
   Option<located<std::string>> filter;
   Option<located<ir::pipeline>> parser;
+  location self;
 };
 
 struct CaptureSetup {
@@ -86,13 +87,14 @@ auto make_capture_file_header(int snaplen, int linktype) -> pcap::file_header {
   };
 }
 
-auto make_default_parser_pipeline(diagnostic_handler& dh)
+auto make_default_parser_pipeline(diagnostic_handler& dh, location self)
   -> failure_or<ir::pipeline> {
   auto provider = session_provider::make(dh);
   auto session = provider.as_session();
-  TRY(auto ast, parse("read_pcap", session));
-  auto ctx = compile_ctx::make_root(base_ctx{session.dh(), session.reg()});
-  return std::move(ast).compile(ctx);
+  TRY(auto ast,
+      parse_pipeline_with_location_override("read_pcap", self, session));
+  auto root = compile_ctx::make_root(base_ctx{session.dh(), session.reg()});
+  return std::move(ast).compile(root);
 }
 
 auto lookup_capture_netmask(std::string const& iface) -> bpf_u_int32 {
@@ -330,7 +332,7 @@ public:
     if (args_.parser) {
       parser = args_.parser->inner;
     } else {
-      auto default_parser = make_default_parser_pipeline(ctx.dh());
+      auto default_parser = make_default_parser_pipeline(ctx.dh(), args_.self);
       if (not default_parser) {
         done_ = true;
         co_return;
@@ -502,6 +504,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<FromNicArgs, FromNic>{};
+    d.operator_location(&FromNicArgs::self);
     auto iface = d.positional("iface", &FromNicArgs::iface);
     auto snaplen = d.named("snaplen", &FromNicArgs::snaplen);
     auto filter = d.named("filter", &FromNicArgs::filter);

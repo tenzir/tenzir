@@ -14,6 +14,7 @@
 #include "tenzir/pipeline.hpp"
 #include "tenzir/pipeline_executor.hpp"
 #include "tenzir/scope_linked.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/exec.hpp"
 #include "tenzir/view.hpp"
@@ -322,7 +323,7 @@ private:
 
 auto make_load_balancer(
   load_balancer_actor::stateful_pointer<load_balancer_state> self,
-  std::vector<pipeline> pipes, std::string definition,
+  std::vector<pipeline> pipes, Arc<const Source> definition,
   shared_diagnostic_handler diagnostics, metrics_receiver_actor metrics,
   uint64_t operator_index, bool is_hidden, const node_actor& node,
   std::string pipeline_id) -> load_balancer_actor::behavior_type {
@@ -453,9 +454,9 @@ public:
     // In case of subtle problems around the shutdown logic here, this could
     // potentially be simplified.
     auto load_balancer = scope_linked{ctrl.self().spawn<caf::linked>(
-      make_load_balancer, pipes_, std::string{ctrl.definition()},
-      ctrl.shared_diagnostics(), ctrl.metrics_receiver(), ctrl.operator_index(),
-      ctrl.is_hidden(), ctrl.node(), std::string{ctrl.pipeline_id()})};
+      make_load_balancer, pipes_, ctrl.definition(), ctrl.shared_diagnostics(),
+      ctrl.metrics_receiver(), ctrl.operator_index(), ctrl.is_hidden(),
+      ctrl.node(), std::string{ctrl.pipeline_id()})};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};

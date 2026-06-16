@@ -23,6 +23,7 @@
 #include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/source.hpp"
 #include "tenzir/taxonomies.hpp"
 #include "tenzir/tql2/parser.hpp"
 
@@ -246,7 +247,7 @@ load_symbols2(const detail::stable_set<std::filesystem::path>& module_dirs,
   for (const auto& dir : module_dirs) {
     TENZIR_VERBOSE("loading schemas from {}", dir);
     std::error_code err{};
-    if (! std::filesystem::exists(dir, err)) {
+    if (not std::filesystem::exists(dir, err)) {
       TENZIR_DEBUG("{} skips non-existing directory: {}", __func__, dir);
       continue;
     }
@@ -259,10 +260,13 @@ load_symbols2(const detail::stable_set<std::filesystem::path>& module_dirs,
       TENZIR_DEBUG("loading schema {}", f);
       auto str = detail::load_contents(f);
       TENZIR_ASSERT(str);
-      auto dh = make_diagnostic_printer(location_origin{f, *str},
-                                        color_diagnostics::yes, std::cerr);
+      auto source_map = SourceMap{};
+      auto source = Source::new_source(*str, std::string{f}, true);
+      source_map.add_source(source);
+      auto dh = make_diagnostic_printer(source_map, color_diagnostics::yes,
+                                        std::cerr);
       auto sp = session_provider::make(*dh);
-      auto ast = parse(*str, sp.as_session());
+      auto ast = parse(*source, sp.as_session());
       if (not ast) {
         return ec::silent;
       }
@@ -278,8 +282,6 @@ load_symbols2(const detail::stable_set<std::filesystem::path>& module_dirs,
       if (failed) {
         return ec::silent;
       }
-      ast = parse_pipeline_with_bad_diagnostics(*str, sp.as_session());
-      TENZIR_ASSERT(ast);
       for (auto& stmt : ast->body) {
         auto& t = as<ast::type_stmt>(stmt);
         const auto [_, success]
@@ -293,8 +295,7 @@ load_symbols2(const detail::stable_set<std::filesystem::path>& module_dirs,
       }
     }
   }
-  auto dh
-    = make_diagnostic_printer(std::nullopt, color_diagnostics::yes, std::cerr);
+  auto dh = make_diagnostic_printer(color_diagnostics::yes, std::cerr);
   struct visitor {
     visitor(symbol_map2& res, diagnostic_handler& dh) : res{res}, dh{dh} {
     }

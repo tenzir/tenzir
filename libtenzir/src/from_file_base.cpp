@@ -12,6 +12,7 @@
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/session.hpp>
+#include <tenzir/source.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
@@ -256,7 +257,7 @@ auto from_file_args::handle(session ctx) const -> failure_or<pipeline> {
 from_file_state::from_file_state(
   from_file_actor::pointer self, from_file_args args, std::string plaintext_url,
   event_order order, std::unique_ptr<diagnostic_handler> dh,
-  std::string definition, node_actor node, bool is_hidden,
+  Arc<const Source> definition, node_actor node, bool is_hidden,
   metrics_receiver_actor metrics_receiver, uint64_t operator_index,
   std::string pipeline_id)
   : self_{self},
@@ -297,7 +298,7 @@ from_file_state::from_file_state(
   from_file_actor::pointer self, from_file_args args, std::string expanded,
   std::string path, std::shared_ptr<arrow::fs::FileSystem> fs,
   event_order order, std::unique_ptr<diagnostic_handler> dh,
-  std::string definition, node_actor node, bool is_hidden,
+  Arc<const Source> definition, node_actor node, bool is_hidden,
   metrics_receiver_actor metrics_receiver, uint64_t operator_index,
   std::string pipeline_id)
   : self_{self},

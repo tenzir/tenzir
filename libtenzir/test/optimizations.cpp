@@ -23,7 +23,8 @@ TEST("optimize now") {
   const auto lhs = operand{field_extractor{"x"}};
   const auto op = relational_operator::greater;
   const auto test = [&](std::string_view str, bool pos = false) {
-    auto expr = parse_expression_with_bad_diagnostics(str, s);
+    auto expr
+      = parse_expression_with_location_override(str, location::unknown, s);
     REQUIRE(expr);
     const auto& [legacy, _] = split_legacy_expression(std::move(expr).unwrap());
     const auto t = time::clock::now() + (pos ? days{100} : -days{100});
@@ -51,8 +52,8 @@ TEST("split aligns substring in predicate") {
   auto dh = collecting_diagnostic_handler{};
   auto provider = session_provider::make(dh);
   auto s = session{provider};
-  auto expr
-    = parse_expression_with_bad_diagnostics(R"("needle" in haystack)", s);
+  auto expr = parse_expression_with_location_override(R"("needle" in haystack)",
+                                                      location::unknown, s);
   REQUIRE(expr);
   const auto& [legacy, remainder]
     = split_legacy_expression(std::move(expr).unwrap());

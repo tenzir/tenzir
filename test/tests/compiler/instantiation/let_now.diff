@@ -1,23 +1,23 @@
  {
    lets: [
 -    {
--      ident: `$foo` @ 4..8,
+-      ident: `$foo` @ [1]:4..8 from 0,
 -      expr: binary_expr {
 -        left: function_call {
 -          fn: {
 -            path: [
--              `now` @ 11..14
+-              `now` @ [1]:11..14 from 0
 -            ],
 -            ref: std::now/fn
 -          },
 -          args: [
 -            
 -          ],
--          rpar: 15..16,
+-          rpar: [1]:15..16 from 0,
 -          method: false
 -        },
--        op: "eq" @ 17..19,
--        right: constant time 2100-01-01T00:00:00Z @ 20..30
+-        op: "eq" @ [1]:17..19 from 0,
+-        right: constant time 2100-01-01T00:00:00Z @ [1]:20..30 from 0
 -      },
 -      id: 1
 -    }
@@ -27,7 +27,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 32..38
+           `export` @ [1]:32..38 from 0
          ],
          ref: std::export/op
        },
@@ -44,15 +44,15 @@
        ]
      },
      where_ir {
-       self: 39..44,
+       self: [1]:39..44 from 0,
        predicate: binary_expr {
          left: root_field {
-           id: `foo` @ 45..48,
+           id: `foo` @ [1]:45..48 from 0,
            has_question_mark: false
          },
-         op: "eq" @ 49..51,
--        right: dollar_var `$foo` -> 1 @ 52..56
-+        right: constant bool false @ 52..56
+         op: "eq" @ [1]:49..51 from 0,
+-        right: dollar_var `$foo` -> 1 @ [1]:52..56 from 0
++        right: constant bool false @ [1]:52..56 from 0
        }
      }
    ]

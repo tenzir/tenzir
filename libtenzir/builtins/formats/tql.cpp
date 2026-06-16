@@ -307,8 +307,8 @@ private:
         compact_buffer();
         break;
       }
-      auto parsed
-        = parse_expression_stream_with_bad_diagnostics(view, sp.as_session());
+      auto parsed = parse_expression_stream_with_location_override(
+        view, location::unknown, sp.as_session());
       if (not parsed) {
         buffer_.clear();
         buffer_offset_ = 0;

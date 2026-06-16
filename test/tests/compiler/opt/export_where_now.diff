@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 329..335
+           `export` @ [1]:329..335 from 0
          ],
          ref: std::export/op
        },
@@ -17,11 +17,11 @@
        filter: [
 +        binary_expr {
 +          left: root_field {
-+            id: `bar` @ 342..345,
++            id: `bar` @ [1]:342..345 from 0,
 +            has_question_mark: false
 +          },
-+          op: "eq" @ 346..348,
-+          right: constant bool true @ 349..353
++          op: "eq" @ [1]:346..348 from 0,
++          right: constant bool true @ [1]:349..353 from 0
 +        }
 +      ],
 +      order: "ordered",
@@ -32,7 +32,7 @@
 +    GenericIr {
 +      op: {
 +        path: [
-+          `to_stdout` @ 0..0
++          `to_stdout` @ [1]:353..353 from 0
 +        ],
 +        ref: std::to_stdout/op
 +      },
@@ -49,14 +49,14 @@
        ]
 -    },
 -    where_ir {
--      self: 336..341,
+-      self: [1]:336..341 from 0,
 -      predicate: binary_expr {
 -        left: root_field {
--          id: `bar` @ 342..345,
+-          id: `bar` @ [1]:342..345 from 0,
 -          has_question_mark: false
 -        },
--        op: "eq" @ 346..348,
--        right: constant bool true @ 349..353
+-        op: "eq" @ [1]:346..348 from 0,
+-        right: constant bool true @ [1]:349..353 from 0
 -      }
      }
    ]

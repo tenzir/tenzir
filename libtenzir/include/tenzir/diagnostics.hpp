@@ -19,6 +19,7 @@
 #include <tsl/robin_set.h>
 
 #include <functional>
+#include <vector>
 
 /// Similar to `TENZIR_ASSERT(...)`, but throws a `diagnostic` instead of
 /// aborting. Unlike `TENZIR_ASSERT(...)`, this assertion is always checked,
@@ -171,6 +172,22 @@ struct [[nodiscard]] diagnostic : std::exception {
     -> diagnostic_builder;
 
   auto modify() && -> diagnostic_builder;
+
+  /// Returns true if any annotation carries a known (non-unknown) source
+  /// location.
+  auto has_location() const -> bool;
+
+  /// Resets the locations of primary annotations that originate from a
+  /// call-site expansion (i.e. `callsite_index != 0`), leaving only top-level
+  /// annotations referencable. Used when serializing diagnostics whose
+  /// consumers can only resolve locations in the top-level source.
+  void reset_primary_locations_except_top_callsite() {
+    for (auto& annotation : annotations) {
+      if (annotation.primary and annotation.source.callsite_index != 0) {
+        annotation.source = location::unknown;
+      }
+    }
+  }
 
   /// Wraps the diagnostic in an error object.
   auto to_error() const& -> caf::error {
@@ -472,11 +489,41 @@ struct location_origin {
   std::string source;
 };
 
-// TODO: The optionality of `origin` is a hack until we make the necessary info
-// available in all places where we need it.
-auto make_diagnostic_printer(std::optional<location_origin> origin,
+/// Creates a diagnostic printer that renders source context from
+/// `source_map`. The source registered with id `i` supplies the origin and
+/// source text for locations whose `source_index` equals `i`. An empty
+/// source map disables source-context rendering.
+///
+/// The printer keeps a reference to `source_map`, which must outlive the
+/// returned handler. The map is consulted anew on every emitted diagnostic,
+/// so changes to it are picked up by subsequent emits.
+auto make_diagnostic_printer(SourceMap const& source_map,
                              color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler>;
+
+/// Temporary source maps would dangle; use the overload without a source map
+/// instead.
+auto make_diagnostic_printer(SourceMap&& source_map, color_diagnostics color,
+                             std::ostream& stream)
+  -> std::unique_ptr<diagnostic_handler>
+  = delete;
+
+/// Creates a diagnostic printer without source-context rendering.
+auto make_diagnostic_printer(color_diagnostics color, std::ostream& stream)
+  -> std::unique_ptr<diagnostic_handler>;
+
+/// Creates a diagnostic handler that calls `source_map.enrich()` on every
+/// diagnostic before forwarding it to `inner`. Both `source_map` and `inner`
+/// must outlive the returned handler. The map is consulted on each emit, so
+/// call sites registered after construction are picked up automatically.
+auto make_enriching_handler(const SourceMap& source_map,
+                            diagnostic_handler& inner)
+  -> std::unique_ptr<diagnostic_handler>;
+
+/// Temporary source maps would dangle; use the overload that takes a reference.
+auto make_enriching_handler(SourceMap&& source_map, diagnostic_handler& inner)
+  -> std::unique_ptr<diagnostic_handler>
+  = delete;
 
 // TODO: Return this when emitting an error.
 struct [[nodiscard]] failure {

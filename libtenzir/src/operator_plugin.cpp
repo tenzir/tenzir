@@ -267,10 +267,10 @@ public:
         if (named_found[idx]) {
           emit(diagnostic::error("duplicate named argument `{}`", name)
                  .primary(*named_found[idx])
-                 .primary(arg.get_location()));
+                 .primary(assignment->left.get_location()));
           continue;
         }
-        named_found[idx] = arg.get_location();
+        named_found[idx] = assignment->left.get_location();
         // Store the named argument for later processing.
         result.named_args_.push_back(
           NamedArg{idx, Incomplete{assignment->right}});

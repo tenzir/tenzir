@@ -14,6 +14,7 @@
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/session.hpp>
+#include <tenzir/source.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/exec.hpp>
 #include <tenzir/tql2/parser.hpp>
@@ -129,7 +130,8 @@ auto format_metric(const operator_metric& metric) -> std::string {
 auto add_implicit(std::string_view what, pipeline pipe, diagnostic_handler& dh,
                   std::string_view source) -> caf::expected<pipeline> {
   auto sp = session_provider::make(dh);
-  auto maybe_ast = parse_pipeline_with_bad_diagnostics(source, sp.as_session());
+  auto maybe_ast = parse_pipeline_with_location_override(
+    source, location::unknown, sp.as_session());
   if (not maybe_ast) {
     return caf::make_error(ec::logic_error,
                            fmt::format("failed to parse implicit {}: `{}`",
@@ -221,9 +223,10 @@ struct exec_pipeline_handler_state {
 
 } // namespace
 
-auto exec_pipeline(pipeline pipe, std::string definition,
+auto exec_pipeline(pipeline pipe, Arc<const Source> definition,
                    diagnostic_handler& dh, const exec_config& cfg,
-                   caf::actor_system& sys) -> caf::expected<void> {
+                   caf::actor_system& sys, SourceMap& source_map)
+  -> caf::expected<void> {
   auto implicit_pipe = add_implicit_source_and_sink(std::move(pipe), dh, cfg);
   if (not implicit_pipe) {
     return std::move(implicit_pipe.error());
@@ -243,7 +246,7 @@ auto exec_pipeline(pipeline pipe, std::string definition,
     [&](
       caf::stateful_actor<exec_pipeline_handler_state>* self) -> caf::behavior {
       self->state().executor
-        = self->spawn(pipeline_executor, std::move(pipe), std::move(definition),
+        = self->spawn(pipeline_executor, std::move(pipe), definition,
                       caf::actor_cast<receiver_actor<diagnostic>>(self),
                       caf::actor_cast<metrics_receiver_actor>(self),
                       node_actor{}, true, true, fmt::to_string(uuid::random()));
@@ -279,7 +282,7 @@ auto exec_pipeline(pipeline pipe, std::string definition,
                        .to_error();
           }
           if (dedup.insert(d)) {
-            dh.emit(std::move(d));
+            dh.emit(source_map.enrich(std::move(d)));
           }
         },
         [&](uint64_t, uuid, type&) {
@@ -322,14 +325,14 @@ auto exec_pipeline(pipeline pipe, std::string definition,
   return result;
 }
 
-auto exec_pipeline(std::string content, diagnostic_handler& dh,
-                   const exec_config& cfg, caf::actor_system& sys)
-  -> caf::expected<void> {
+auto exec_pipeline(Arc<const Source> source, diagnostic_handler& dh,
+                   const exec_config& cfg, caf::actor_system& sys,
+                   SourceMap& source_map) -> caf::expected<void> {
   if (not cfg.legacy) {
-    auto success = exec2(std::move(content), dh, cfg, sys);
+    auto success = exec2(source, dh, cfg, sys, source_map);
     return success ? caf::expected<void>{} : ec::silent;
   }
-  auto parsed = tql::parse(content, dh);
+  auto parsed = tql::parse(*source, dh);
   if (not parsed) {
     return ec::silent;
   }
@@ -340,7 +343,8 @@ auto exec_pipeline(std::string content, diagnostic_handler& dh,
     return {};
   }
   auto pipe = tql::to_pipeline(std::move(*parsed));
-  return exec_pipeline(std::move(pipe), std::move(content), dh, cfg, sys);
+  return exec_pipeline(std::move(pipe), std::move(source), dh, cfg, sys,
+                       source_map);
 }
 
 } // namespace tenzir

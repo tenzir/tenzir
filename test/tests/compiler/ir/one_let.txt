@@ -1,8 +1,8 @@
 {
   lets: [
     {
-      ident: `$foo` @ 4..8,
-      expr: constant int64 42 @ 11..13,
+      ident: `$foo` @ [1]:4..8 from 0,
+      expr: constant int64 42 @ [1]:11..13 from 0,
       id: 1
     }
   ],

@@ -6,7 +6,7 @@
      GenericIr {
        op: {
          path: [
-           `export` @ 0..6
+           `export` @ [1]:0..6 from 0
          ],
          ref: std::export/op
        },
@@ -25,7 +25,7 @@
 -    GenericIr {
 -      op: {
 -        path: [
--          `pass` @ 7..11
+-          `pass` @ [1]:7..11 from 0
 -        ],
 -        ref: std::pass/op
 -      },
@@ -45,7 +45,7 @@
      GenericIr {
        op: {
          path: [
-           `discard` @ 12..19
+           `discard` @ [1]:12..19 from 0
          ],
          ref: std::discard/op
        },

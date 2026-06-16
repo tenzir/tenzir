@@ -6,46 +6,46 @@
      from_ir {
        events: [
          record {
-           begin: 5..6,
+           begin: [1]:5..6 from 0,
            items: [
              field {
-               name: `foo` @ 6..9,
+               name: `foo` @ [1]:6..9 from 0,
                expr: record {
-                 begin: 11..12,
+                 begin: [1]:11..12 from 0,
                  items: [
                    field {
-                     name: `bar` @ 12..15,
-                     expr: constant int64 1 @ 17..18
+                     name: `bar` @ [1]:12..15 from 0,
+                     expr: constant int64 1 @ [1]:17..18 from 0
                    }
                  ],
-                 end: 18..19
+                 end: [1]:18..19 from 0
                }
              },
              field {
-               name: `x` @ 21..22,
-               expr: constant int64 1 @ 24..25
+               name: `x` @ [1]:21..22 from 0,
+               expr: constant int64 1 @ [1]:24..25 from 0
              }
            ],
-           end: 25..26
+           end: [1]:25..26 from 0
          }
        ],
-       self: 0..4
+       self: [1]:0..4 from 0
 +    },
 +    where_ir {
-+      self: 0..0,
++      self: [0]:0..0 from 0,
 +      predicate: binary_expr {
 +        left: meta {
 +          kind: "name",
-+          source: 46..51
++          source: [1]:46..51 from 0
 +        },
-+        op: "eq" @ 52..54,
-+        right: constant string "test" @ 55..61
++        op: "eq" @ [1]:52..54 from 0,
++        right: constant string "test" @ [1]:55..61 from 0
 +      }
      },
      GenericIr {
        op: {
          path: [
-           `drop` @ 27..31
+           `drop` @ [1]:27..31 from 0
          ],
          ref: std::drop/op
        },
@@ -54,21 +54,21 @@
          field_path {
            expr: field_access {
              left: root_field {
-               id: `foo` @ 32..35,
+               id: `foo` @ [1]:32..35 from 0,
                has_question_mark: false
              },
-             dot: 35..36,
+             dot: [1]:35..36 from 0,
              has_question_mark: false,
-             name: `bar` @ 36..39
+             name: `bar` @ [1]:36..39 from 0
            },
            has_this: false,
            path: [
              {
-               id: `foo` @ 32..35,
+               id: `foo` @ [1]:32..35 from 0,
                has_question_mark: false
              },
              {
-               id: `bar` @ 36..39,
+               id: `bar` @ [1]:36..39 from 0,
                has_question_mark: false
              }
            ]
@@ -84,20 +84,20 @@
        ]
 -    },
 -    where_ir {
--      self: 40..45,
+-      self: [1]:40..45 from 0,
 -      predicate: binary_expr {
 -        left: meta {
 -          kind: "name",
--          source: 46..51
+-          source: [1]:46..51 from 0
 -        },
--        op: "eq" @ 52..54,
--        right: constant string "test" @ 55..61
+-        op: "eq" @ [1]:52..54 from 0,
+-        right: constant string "test" @ [1]:55..61 from 0
 -      }
      },
      GenericIr {
        op: {
          path: [
-           `discard` @ 62..69
+           `discard` @ [1]:62..69 from 0
          ],
          ref: std::discard/op
        },

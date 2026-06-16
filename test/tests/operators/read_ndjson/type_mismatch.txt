@@ -22,4 +22,4 @@
   community_id: null,
 }
 warning: ndjson parser: input type does not match given schema
- = note: input is `int64`, but the schema expects `time`
+  = note: input is `int64`, but the schema expects `time`
