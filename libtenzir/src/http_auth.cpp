@@ -851,7 +851,8 @@ auto fetch_oauth_authorization(std::string_view name, OpCtx& ctx)
   }
 
   if (not cached_oauth) {
-    diagnostic::error("failed to initialize HTTP auth").primary(location::unknown)
+    diagnostic::error("failed to initialize HTTP auth")
+      .primary(location::unknown)
       .emit(ctx);
     co_return failure::promise();
   }

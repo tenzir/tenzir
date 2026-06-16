@@ -107,8 +107,8 @@ struct RetryWarning {
   std::string message;
 };
 
-using Message = variant<ResponseHeader, ResponseBody, FetchError, FetchDone,
-                        RetryWarning>;
+using Message
+  = variant<ResponseHeader, ResponseBody, FetchError, FetchDone, RetryWarning>;
 using MessageQueue = folly::coro::BoundedQueue<Message>;
 
 // Builds a Proxygen request source, working around a bug in Proxygen's
@@ -703,14 +703,14 @@ struct auth_retry_response : std::runtime_error {
 // results are communicated through the message queue; no operator members
 // are touched from this task.
 auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
-           FetchConfig config, bool buffer_retryable_body,
-           Arc<MessageQueue> mq) -> Task<void> {
+           FetchConfig config, bool buffer_retryable_body, Arc<MessageQueue> mq)
+  -> Task<void> {
   co_return co_await folly::coro::co_withExecutor(
-    evb, folly::coro::co_invoke([evb, url = std::move(url),
-                                 request = std::move(request),
-                                 config = std::move(config),
-                                 buffer_retryable_body,
-                                 mq = std::move(mq)]() mutable -> Task<void> {
+    evb,
+    folly::coro::co_invoke([evb, url = std::move(url),
+                            request = std::move(request),
+                            config = std::move(config), buffer_retryable_body,
+                            mq = std::move(mq)]() mutable -> Task<void> {
       auto result = co_await folly::coro::co_awaitTry([&]() -> Task<void> {
         auto const& host = url.getHost();
         auto const is_secure = url.isSecure();
@@ -1101,7 +1101,7 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-      if (pagination_.next_request) {
+    if (pagination_.next_request) {
       // next page
       auto next = std::move(*pagination_.next_request);
       pagination_.current_url = std::move(next.url);

@@ -52,8 +52,7 @@ struct TestOpCtx final : OpCtx {
     -> Task<failure_or<void>> override {
     resolved_secret_requests += requests.size();
     for (auto& request : requests) {
-      auto const* literal
-        = request.secret.buffer->data_as_literal();
+      auto const* literal = request.secret.buffer->data_as_literal();
       if (not literal) {
         throw std::logic_error{"expected literal secret in test"};
       }
@@ -64,7 +63,8 @@ struct TestOpCtx final : OpCtx {
         value.push_back(std::byte{static_cast<unsigned char>(c)});
       }
       auto resolved = resolved_secret_value{std::move(value), true};
-      if (auto result = request.callback(std::move(resolved)); result.is_error()) {
+      if (auto result = request.callback(std::move(resolved));
+          result.is_error()) {
         co_return failure::promise();
       }
     }
@@ -172,8 +172,7 @@ TEST("fetch_authorization reports missing config") {
   auto config = caf::actor_system_config{};
   auto system = caf::actor_system{config};
   auto ctx = TestOpCtx{system};
-  auto result = folly::coro::blockingWait(
-    fetch_authorization("missing", ctx));
+  auto result = folly::coro::blockingWait(fetch_authorization("missing", ctx));
   CHECK(not result);
 }
 
@@ -181,8 +180,7 @@ TEST("fetch_authorization rejects unknown auth names") {
   auto ts = TestSystem{{make_auth_entry("known", "basic")}};
   auto& system = *ts.system;
   auto ctx = TestOpCtx{system};
-  auto result = folly::coro::blockingWait(
-    fetch_authorization("missing", ctx));
+  auto result = folly::coro::blockingWait(fetch_authorization("missing", ctx));
   CHECK(not result);
 }
 
@@ -200,8 +198,7 @@ TEST("fetch_authorization supports simple auth strategies") {
   auto& system = *ts.system;
   auto ctx = TestOpCtx{system};
   for (auto name : {"basic", "api-key", "bearer-static"}) {
-    auto result = folly::coro::blockingWait(
-      fetch_authorization(name, ctx));
+    auto result = folly::coro::blockingWait(fetch_authorization(name, ctx));
     REQUIRE(result);
   }
 }
@@ -219,7 +216,8 @@ TEST("fetch_authorization authorizes simple strategies") {
   };
   auto& system = *ts.system;
   auto ctx = TestOpCtx{system};
-  auto basic_auth = folly::coro::blockingWait(fetch_authorization("basic", ctx));
+  auto basic_auth
+    = folly::coro::blockingWait(fetch_authorization("basic", ctx));
   REQUIRE(basic_auth);
   CHECK(has_header(basic_auth->headers, "Authorization", "Basic dXNlcjpwYXNz"));
 
@@ -228,8 +226,8 @@ TEST("fetch_authorization authorizes simple strategies") {
   REQUIRE(api_key_auth);
   CHECK(has_header(api_key_auth->headers, "X-Api-Key", "token"));
 
-  auto bearer_auth = folly::coro::blockingWait(
-    fetch_authorization("bearer-static", ctx));
+  auto bearer_auth
+    = folly::coro::blockingWait(fetch_authorization("bearer-static", ctx));
   REQUIRE(bearer_auth);
   CHECK(has_header(bearer_auth->headers, "Authorization", "Bearer token"));
 }

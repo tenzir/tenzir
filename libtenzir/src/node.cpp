@@ -880,8 +880,8 @@ auto node(node_actor::stateful_pointer<node_state> self,
           });
       return rp;
     },
-    [self](atom::resolve, atom::authentication, std::string name)
-      -> caf::result<platform_authentication_result> {
+    [self](atom::resolve, atom::authentication,
+           std::string name) -> caf::result<platform_authentication_result> {
       auto store
         = self->system().registry().get<secret_store_actor>("tenzir.platform");
       if (not store) {

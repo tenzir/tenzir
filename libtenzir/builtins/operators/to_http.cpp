@@ -418,11 +418,10 @@ private:
   auto start_buffered_request_task(OpCtx& ctx) -> void {
     request_started_ = true;
     auto body = buffered_body_.move();
-    ctx.spawn_task(
-      [this, ctx = &ctx, dh = &ctx.dh(), body = std::move(body)]() mutable
-      -> Task<void> {
-        co_await run_buffered_request(*ctx, *dh, std::move(body));
-      });
+    ctx.spawn_task([this, ctx = &ctx, dh = &ctx.dh(),
+                    body = std::move(body)]() mutable -> Task<void> {
+      co_await run_buffered_request(*ctx, *dh, std::move(body));
+    });
   }
 
   auto begin_draining(OpCtx& ctx) -> Task<void> {
@@ -505,9 +504,9 @@ private:
         auto headers = headers_;
         if (auto auth_result = co_await authorize_headers(ctx, headers);
             auth_result.is_error()) {
-          co_yield folly::coro::co_error(folly::make_exception_wrapper<
-                                         std::runtime_error>(
-            "failed to authorize HTTP request"));
+          co_yield folly::coro::co_error(
+            folly::make_exception_wrapper<std::runtime_error>(
+              "failed to authorize HTTP request"));
         }
         auto msg = std::make_unique<proxygen::HTTPMessage>();
         msg->setURL(parsed_url_.makeRelativeURL());
@@ -602,7 +601,8 @@ private:
     std::ignore = response_->send(std::move(response));
   }
 
-  auto try_single_buffered_request(OpCtx& ctx, std::unique_ptr<folly::IOBuf> body)
+  auto
+  try_single_buffered_request(OpCtx& ctx, std::unique_ptr<folly::IOBuf> body)
     -> Task<Result<http::Response, folly::exception_wrapper>> {
     auto attempt_res = co_await async_try(folly::coro::co_withExecutor(
       folly::Executor::KeepAlive<>{evb_},
@@ -627,9 +627,9 @@ private:
           auto headers = headers_;
           if (auto auth_result = co_await authorize_headers(ctx, headers);
               auth_result.is_error()) {
-            co_yield folly::coro::co_error(folly::make_exception_wrapper<
-                                           std::runtime_error>(
-              "failed to authorize HTTP request"));
+            co_yield folly::coro::co_error(
+              folly::make_exception_wrapper<std::runtime_error>(
+                "failed to authorize HTTP request"));
           }
           auto msg = std::make_unique<proxygen::HTTPMessage>();
           msg->setURL(parsed_url_.makeRelativeURL());
