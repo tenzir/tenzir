@@ -381,7 +381,8 @@ auto clone_module(const module_def& src) -> std::unique_ptr<module_def> {
   for (const auto& [k, v] : src.defs) {
     entity_set set{};
     set.fn = v.fn;
-    set.op = v.op; // deep copy of optional operator_def
+    set.op = v.op;
+    set.value = v.value;
     if (v.mod) {
       set.mod = clone_module(*v.mod);
     }
