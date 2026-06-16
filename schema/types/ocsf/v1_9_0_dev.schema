@@ -484,6 +484,20 @@ type _ocsf.v1_9_0_dev.object.classifier_details = record{
   uid: string #recommended,
 }
 
+// The Clipboard object represents an endpoint clipboard and its contents.
+type _ocsf.v1_9_0_dev.object.clipboard = record{
+  contents: list<_ocsf.v1_9_0_dev.object.clipboard_item> #recommended,
+  name: string #optional,
+}
+
+// A piece of data on the system clipboard.
+type _ocsf.v1_9_0_dev.object.clipboard_item = record{
+  binary_data: blob #optional,
+  clipboard_native_type: string #optional,
+  mime_type: string #required,
+  string_data: string #optional,
+}
+
 // The Cloud object describes the cloud computing environment where an event or
 // finding originated. It provides comprehensive context about the cloud
 // infrastructure, including the cloud service provider, account or subscription
@@ -843,6 +857,8 @@ type _ocsf.v1_9_0_dev.object.digital_signature = record{
   created_time_dt: time #optional #profile=datetime,
   developer_uid: string #optional,
   digest: _ocsf.v1_9_0_dev.object.fingerprint #optional,
+  serialization: string #optional,
+  serialization_id: int64 #recommended #enum=e7a0fb42 #sibling=serialization,
   state: string #optional,
   state_id: int64 #optional #enum=70ec1806 #sibling=state,
 }
@@ -874,16 +890,16 @@ type _ocsf.v1_9_0_dev.object.dns_answer = record{
   class: string #recommended,
   flag_ids: list<int64> #recommended #enum=00c1485c #sibling=flags,
   flags: list<string> #optional,
+  hostname: string #recommended,
   packet_uid: int64 #recommended,
   rdata: string #required,
   ttl: int64 #recommended,
   type: string #recommended,
 }
 
-// The DNS query object represents a specific request made to the Domain Name
+// The DNS Query object represents a specific request made to the Domain Name
 // System (DNS) to retrieve information about a domain or perform a DNS
-// operation. This object encapsulates the necessary attributes and methods to
-// construct and send DNS queries, specify the query type (e.g., A, AAAA, MX).
+// operation.
 type _ocsf.v1_9_0_dev.object.dns_query = record{
   class: string #recommended,
   hostname: string #required,
@@ -891,6 +907,28 @@ type _ocsf.v1_9_0_dev.object.dns_query = record{
   opcode_id: int64 #recommended,
   packet_uid: int64 #recommended,
   type: string #recommended,
+}
+
+// The DNS Resource Record object represents a single resource record as defined
+// in RFC 1035. It is used in the Answer, Authority, and Additional sections of
+// a DNS message.
+type _ocsf.v1_9_0_dev.object.dns_resource_record = record{
+  class: string #recommended,
+  hostname: string #recommended,
+  rdata: string #required,
+  ttl: int64 #recommended,
+  type: string #recommended,
+}
+
+// The DNS Section object represents a DNS message section that carries
+// supplementary resource records alongside an optional TSIG record. It is used
+// for both the client Additional section (<code>query_additional</code>) and
+// the server Additional section (<code>response_additional</code>) of a DNS
+// message. A DNS message has at most one TSIG record, which authenticates the
+// entire message.
+type _ocsf.v1_9_0_dev.object.dns_section = record{
+  records: list<_ocsf.v1_9_0_dev.object.dns_resource_record> #required,
+  tsig: _ocsf.v1_9_0_dev.object.tsig #optional,
 }
 
 // The contact information related to a domain registration, e.g., registrant,
@@ -2997,6 +3035,17 @@ type _ocsf.v1_9_0_dev.object.transformation_info = record{
   url_string: string #recommended,
 }
 
+// The TSIG (Transaction Signature) object represents a TSIG resource record as
+// defined in RFC 2845. TSIG uses a shared secret key and one-way hash function
+// to authenticate DNS messages. Per RFC 2845, at most one TSIG record is
+// permitted per DNS message.
+type _ocsf.v1_9_0_dev.object.tsig = record{
+  algorithm: string #recommended,
+  error: string #optional,
+  error_id: int64 #recommended #enum=db57893a #sibling=error,
+  key_name: string #recommended,
+}
+
 // The Unmanned Aerial System object describes the characteristics, Position
 // Location Information (PLI), and other metadata of Unmanned Aerial Systems
 // (UAS) and other unmanned and drone systems used in Remote ID. Remote ID is
@@ -3997,6 +4046,67 @@ type _ocsf.v1_9_0_dev.base_event = record{
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
 }
 
+// Clipboard Activity events report when a process performs an action on a
+// clipboard.
+type _ocsf.v1_9_0_dev.clipboard_activity = record{
+  action: string #optional #profile=security_control,
+  action_id: int64 #recommended #profile=security_control #enum=10af4c36 #sibling=action,
+  activity_id: int64 #required #enum=3ab16722 #sibling=activity_name,
+  activity_name: string #optional,
+  actor: _ocsf.v1_9_0_dev.object.actor #required,
+  api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
+  attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
+  category_name: string #optional,
+  category_uid: int64 #required #enum=81e233a1 #sibling=category_name,
+  class_name: string #optional,
+  class_uid: int64 #required #enum=3d7950b6 #sibling=class_name,
+  clipboard: _ocsf.v1_9_0_dev.object.clipboard #required,
+  cloud: _ocsf.v1_9_0_dev.object.cloud #required #profile=cloud,
+  confidence: string #optional #profile=security_control,
+  confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
+  confidence_score: int64 #optional #profile=security_control,
+  count: int64 #optional,
+  device: _ocsf.v1_9_0_dev.object.device #required,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
+  duration: int64 #optional,
+  end_time: time #epochtime #optional,
+  end_time_dt: time #optional #profile=datetime,
+  enrichments: list<_ocsf.v1_9_0_dev.object.enrichment> #optional,
+  firewall_rule: _ocsf.v1_9_0_dev.object.firewall_rule #optional #profile=security_control,
+  is_alert: bool #recommended #profile=security_control,
+  malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
+  malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
+  message: string #recommended,
+  metadata: _ocsf.v1_9_0_dev.object.metadata #required,
+  observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
+  osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
+  policy: _ocsf.v1_9_0_dev.object.policy #optional #profile=security_control,
+  raw_data: string #optional,
+  raw_data_hash: _ocsf.v1_9_0_dev.object.fingerprint #optional,
+  raw_data_size: int64 #optional,
+  risk_details: string #optional #profile=security_control,
+  risk_level: string #optional #profile=security_control,
+  risk_level_id: int64 #optional #profile=security_control #enum=a3f9a2fa #sibling=risk_level,
+  risk_score: int64 #optional #profile=security_control,
+  severity: string #optional,
+  severity_id: int64 #required #enum=acf27835 #sibling=severity,
+  source_process: _ocsf.v1_9_0_dev.object.process #optional,
+  start_time: time #epochtime #optional,
+  start_time_dt: time #optional #profile=datetime,
+  status: string #recommended,
+  status_code: string #recommended,
+  status_detail: string #recommended,
+  status_id: int64 #recommended #enum=06bb2e5e #sibling=status,
+  time: time #epochtime #required,
+  time_dt: time #optional #profile=datetime,
+  timezone_offset: int64 #recommended,
+  type_name: string #optional,
+  type_uid: int64 #required #enum=7e8b83c1 #sibling=type_name,
+  unmapped: null #variant #must_be_record #optional #nullify_empty_records,
+}
+
 // Cloud Resources Inventory Info events report cloud asset inventory data. This
 // data can be either logged or proactively collected. For example, use this
 // event class when creating an inventory of cloud resource information from a
@@ -4541,6 +4651,65 @@ type _ocsf.v1_9_0_dev.device_config_state_change = record{
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
 }
 
+// Device Power State Activity events report activities related to power state
+// changes of a system.
+type _ocsf.v1_9_0_dev.device_power_state_activity = record{
+  action: string #optional #profile=security_control,
+  action_id: int64 #recommended #profile=security_control #enum=10af4c36 #sibling=action,
+  activity_id: int64 #required #enum=73c3cc1b #sibling=activity_name,
+  activity_name: string #optional,
+  actor: _ocsf.v1_9_0_dev.object.actor #optional,
+  api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
+  attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
+  category_name: string #optional,
+  category_uid: int64 #required #enum=81e233a1 #sibling=category_name,
+  class_name: string #optional,
+  class_uid: int64 #required #enum=04c6e2f7 #sibling=class_name,
+  cloud: _ocsf.v1_9_0_dev.object.cloud #required #profile=cloud,
+  confidence: string #optional #profile=security_control,
+  confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
+  confidence_score: int64 #optional #profile=security_control,
+  count: int64 #optional,
+  device: _ocsf.v1_9_0_dev.object.device #required,
+  disposition: string #optional #profile=security_control,
+  disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
+  duration: int64 #optional,
+  end_time: time #epochtime #optional,
+  end_time_dt: time #optional #profile=datetime,
+  enrichments: list<_ocsf.v1_9_0_dev.object.enrichment> #optional,
+  firewall_rule: _ocsf.v1_9_0_dev.object.firewall_rule #optional #profile=security_control,
+  is_alert: bool #recommended #profile=security_control,
+  malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
+  malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
+  message: string #recommended,
+  metadata: _ocsf.v1_9_0_dev.object.metadata #required,
+  observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
+  osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
+  policy: _ocsf.v1_9_0_dev.object.policy #optional #profile=security_control,
+  raw_data: string #optional,
+  raw_data_hash: _ocsf.v1_9_0_dev.object.fingerprint #optional,
+  raw_data_size: int64 #optional,
+  risk_details: string #optional #profile=security_control,
+  risk_level: string #optional #profile=security_control,
+  risk_level_id: int64 #optional #profile=security_control #enum=a3f9a2fa #sibling=risk_level,
+  risk_score: int64 #optional #profile=security_control,
+  severity: string #optional,
+  severity_id: int64 #required #enum=acf27835 #sibling=severity,
+  start_time: time #epochtime #optional,
+  start_time_dt: time #optional #profile=datetime,
+  status: string #recommended,
+  status_code: string #recommended,
+  status_detail: string #recommended,
+  status_id: int64 #recommended #enum=06bb2e5e #sibling=status,
+  time: time #epochtime #required,
+  time_dt: time #optional #profile=datetime,
+  timezone_offset: int64 #recommended,
+  type_name: string #optional,
+  type_uid: int64 #required #enum=ff6a225f #sibling=type_name,
+  unmapped: null #variant #must_be_record #optional #nullify_empty_records,
+}
+
 // DHCP Activity events report MAC to IP assignment via DHCP from a client or
 // server.
 type _ocsf.v1_9_0_dev.dhcp_activity = record{
@@ -4637,6 +4806,7 @@ type _ocsf.v1_9_0_dev.dns_activity = record{
   app_name: string #optional,
   app_protocol_name: string #optional,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  authority: list<_ocsf.v1_9_0_dev.object.dns_resource_record> #optional,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=b5486cae #sibling=category_name,
@@ -4658,6 +4828,8 @@ type _ocsf.v1_9_0_dev.dns_activity = record{
   end_time_dt: time #optional #profile=datetime,
   enrichments: list<_ocsf.v1_9_0_dev.object.enrichment> #optional,
   firewall_rule: _ocsf.v1_9_0_dev.object.firewall_rule #optional #profile=security_control,
+  flag_ids: list<int64> #recommended #enum=00c1485c #sibling=flags,
+  flags: list<string> #optional,
   is_alert: bool #recommended #profile=security_control,
   ja4_fingerprint_list: list<_ocsf.v1_9_0_dev.object.ja4_fingerprint> #optional,
   load_balancer: _ocsf.v1_9_0_dev.object.load_balancer #recommended #profile=load_balancer,
@@ -4669,6 +4841,8 @@ type _ocsf.v1_9_0_dev.dns_activity = record{
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   observation_point: string #optional,
   observation_point_id: int64 #optional #enum=09c72704 #sibling=observation_point,
+  opcode: string #optional,
+  opcode_id: int64 #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
   packet_list: list<_ocsf.v1_9_0_dev.object.packet> #optional,
   policy: _ocsf.v1_9_0_dev.object.policy #optional #profile=security_control,
@@ -4680,13 +4854,15 @@ type _ocsf.v1_9_0_dev.dns_activity = record{
   proxy_tls: _ocsf.v1_9_0_dev.object.tls #recommended #profile=network_proxy,
   proxy_traffic: _ocsf.v1_9_0_dev.object.network_traffic #recommended #profile=network_proxy,
   query: _ocsf.v1_9_0_dev.object.dns_query #recommended,
+  query_additional: _ocsf.v1_9_0_dev.object.dns_section #optional,
   query_time: time #epochtime #recommended,
   query_time_dt: time #optional #profile=datetime,
   raw_data: string #optional,
   raw_data_hash: _ocsf.v1_9_0_dev.object.fingerprint #optional,
   raw_data_size: int64 #optional,
   rcode: string #recommended,
-  rcode_id: int64 #recommended #enum=1281f60c #sibling=rcode,
+  rcode_id: int64 #recommended #enum=a1d8b50e #sibling=rcode,
+  response_additional: _ocsf.v1_9_0_dev.object.dns_section #optional,
   response_time: time #epochtime #recommended,
   response_time_dt: time #optional #profile=datetime,
   risk_details: string #optional #profile=security_control,
@@ -4707,6 +4883,7 @@ type _ocsf.v1_9_0_dev.dns_activity = record{
   timezone_offset: int64 #recommended,
   tls: _ocsf.v1_9_0_dev.object.tls #optional,
   traffic: _ocsf.v1_9_0_dev.object.network_traffic #optional,
+  transaction_id: int64 #recommended,
   type_name: string #optional,
   type_uid: int64 #required #enum=12c16f6e #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
@@ -5685,6 +5862,7 @@ type _ocsf.v1_9_0_dev.group_management = record{
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
   updated_group: _ocsf.v1_9_0_dev.object.group #recommended,
   user: _ocsf.v1_9_0_dev.object.user #recommended,
+  users: list<_ocsf.v1_9_0_dev.object.user> #recommended,
 }
 
 // HTTP Activity events report HTTP connection and traffic information.
