@@ -24,6 +24,7 @@
 #include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/read_detection.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/to_lines.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -525,7 +526,7 @@ class cef_plugin final : public virtual parser_plugin<cef_parser> {
 };
 
 class read_cef final : public operator_plugin2<parser_adapter<cef_parser>>,
-                       public virtual OperatorPlugin {
+                       public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_cef";
@@ -556,6 +557,18 @@ public:
     return {
       .extensions = {"cef"},
       .mime_types = {"application/x-cef"},
+    };
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate(
+        "read_cef", read_detection::specificity::dialect,
+        [](read_detection_input input) {
+          input.bytes = detail::trim_front(input.bytes);
+          return read_detection::magic_prefix(input, "CEF:");
+        }),
     };
   }
 };

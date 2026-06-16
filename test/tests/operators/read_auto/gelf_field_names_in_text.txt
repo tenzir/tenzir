@@ -1,0 +1,9 @@
+{
+  line: "\"version\"",
+}
+{
+  line: "\"host\"",
+}
+{
+  line: "\"short_message\"",
+}

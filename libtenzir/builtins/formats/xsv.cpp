@@ -13,6 +13,7 @@
 #include "tenzir/async/pusher.hpp"
 #include "tenzir/async/task.hpp"
 #include "tenzir/detail/base64.hpp"
+#include "tenzir/detail/string.hpp"
 #include "tenzir/detail/string_literal.hpp"
 #include "tenzir/detail/to_xsv_sep.hpp"
 #include "tenzir/modules.hpp"
@@ -20,6 +21,7 @@
 #include "tenzir/multi_series_builder_argument_parser.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/parser_interface.hpp"
+#include "tenzir/read_detection.hpp"
 #include "tenzir/to_lines.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -1443,7 +1445,7 @@ template <detail::string_literal Name, detail::string_literal Sep,
           detail::string_literal... mimes>
 class configured_read_xsv_plugin final
   : public operator_plugin2<parser_adapter<xsv_parser>>,
-    public virtual OperatorPlugin {
+    public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return fmt::format("read_{}", Name);
@@ -1510,6 +1512,70 @@ public:
 
   auto read_properties() const -> read_properties_t override {
     return {.extensions = {std::string{Name}}, .mime_types = {mimes...}};
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    // Space-separated tables are indistinguishable from free-form prose:
+    // any text whose lines have stable word counts qualifies. Users must
+    // select `read_ssv` explicitly.
+    if constexpr (std::string_view{Name.str()} == "ssv") {
+      return {};
+    }
+    return {
+      read_detection::candidate(name(), read_detection::specificity::delimited,
+                                detect_xsv),
+    };
+  }
+
+private:
+  static auto detect_xsv(read_detection_input input) -> read_detection_result {
+    namespace rd = read_detection;
+    if (not detail::is_valid_utf8(input.bytes)) {
+      if (not input.eof and detail::is_valid_utf8_prefix(input.bytes)) {
+        return rd::need_more();
+      }
+      return rd::reject();
+    }
+    // Tokenize with the same quoting policy the reader uses so that
+    // detection counts fields exactly like the parser does.
+    auto const quoting = detail::quoting_escaping_policy{
+      .quotes = ReadXsvArgs{}.quotes.inner,
+      .backslashes_escape = true,
+      .doubled_quotes_escape = true,
+    };
+    auto count_fields = [&](std::string_view line) {
+      auto count = size_t{1};
+      while (auto split
+             = quoting.split_at_unquoted(line, std::string_view{Sep.str()})) {
+        ++count;
+        line = split->second;
+      }
+      return count;
+    };
+    // Only complete lines are evidence; a line split at a chunk boundary
+    // would skew the field count.
+    auto sample = rd::sample_lines(input, 3);
+    std::erase_if(sample.complete, [](std::string_view& line) {
+      line = detail::trim_front(line);
+      return line.empty();
+    });
+    if (sample.complete.empty()) {
+      return input.eof ? rd::reject() : rd::need_more();
+    }
+    auto fields = count_fields(sample.complete.front());
+    if (fields < 2) {
+      return rd::reject();
+    }
+    for (auto line : sample.complete) {
+      if (count_fields(line) != fields) {
+        return rd::reject();
+      }
+    }
+    if (sample.complete.size() == 1 and not input.eof) {
+      return rd::need_more();
+    }
+    return rd::match();
   }
 };
 

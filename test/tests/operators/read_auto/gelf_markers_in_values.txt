@@ -1,0 +1,10 @@
+{
+  msg: [
+    "version",
+    "host",
+    "short_message",
+  ],
+}
+{
+  msg: "plain json",
+}

@@ -32,6 +32,7 @@
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/read_detection.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/to_lines.hpp>
@@ -50,6 +51,7 @@
 
 #include <atomic>
 #include <deque>
+#include <initializer_list>
 #include <simdjson.h>
 #include <string_view>
 
@@ -62,6 +64,305 @@ TENZIR_ENUM(split_at, none, newline, null);
 namespace {
 
 using namespace tenzir::json;
+
+using detection_state = read_detection_result::result_state;
+
+enum class json_probe_state {
+  incomplete,
+  invalid,
+  complete,
+};
+
+struct json_probe_result {
+  json_probe_state state = json_probe_state::incomplete;
+  simdjson::dom::element_type type = simdjson::dom::element_type::NULL_VALUE;
+};
+
+auto json_error_state(simdjson::error_code error, bool eof)
+  -> json_probe_state {
+  if (not eof
+      and (error == simdjson::EMPTY or error == simdjson::UNCLOSED_STRING
+           or error == simdjson::TAPE_ERROR
+           or error == simdjson::INCOMPLETE_ARRAY_OR_OBJECT)) {
+    return json_probe_state::incomplete;
+  }
+  return json_probe_state::invalid;
+}
+
+auto probe_json_document(read_detection_input input) -> json_probe_result {
+  auto view = detail::trim_front(input.bytes);
+  if (view.empty()) {
+    return {.state = input.eof ? json_probe_state::invalid
+                               : json_probe_state::incomplete};
+  }
+  if (view.front() != '{' and view.front() != '[') {
+    return {.state = json_probe_state::invalid};
+  }
+  auto parser = simdjson::dom::parser{};
+  auto bytes = std::string{view};
+  auto doc = parser.parse(bytes);
+  if (auto error = doc.error()) {
+    return {.state = json_error_state(error, input.eof)};
+  }
+  auto element = doc.value_unsafe();
+  auto type = element.type();
+  return {
+    .state = json_probe_state::complete,
+    .type = type,
+  };
+}
+
+auto json_object_has_keys(std::string_view input,
+                          std::initializer_list<std::string_view> keys)
+  -> bool {
+  auto parser = simdjson::dom::parser{};
+  auto bytes = std::string{detail::trim_front(input)};
+  auto doc = parser.parse(bytes);
+  if (doc.error()) {
+    return false;
+  }
+  auto object = doc.value_unsafe().get_object();
+  if (object.error()) {
+    return false;
+  }
+  for (auto key : keys) {
+    if (object.value_unsafe().at_key(key).error()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+auto detect_json_object(read_detection_input input) -> read_detection_result {
+  auto probe = probe_json_document(input);
+  if (probe.state == json_probe_state::invalid) {
+    return read_detection::reject();
+  }
+  if (probe.state == json_probe_state::incomplete) {
+    return input.eof ? read_detection::reject() : read_detection::need_more();
+  }
+  return probe.type == simdjson::dom::element_type::OBJECT
+           ? read_detection::match()
+           : read_detection::reject();
+}
+
+auto json_stream_error(simdjson::error_code error, bool eof)
+  -> read_detection_result {
+  return json_error_state(error, eof) == json_probe_state::incomplete
+           ? read_detection::need_more()
+           : read_detection::reject();
+}
+
+template <class Predicate>
+auto detect_json_stream(read_detection_input input, char initial_byte,
+                        Predicate predicate) -> read_detection_result {
+  auto view = detail::trim_front(input.bytes);
+  if (view.empty()) {
+    return input.eof ? read_detection::reject() : read_detection::need_more();
+  }
+  if (view.front() != initial_byte) {
+    return read_detection::reject();
+  }
+  auto parser = simdjson::ondemand::parser{};
+  auto bytes = simdjson::padded_string{view};
+  auto stream = simdjson::ondemand::document_stream{};
+  if (auto error = parser.iterate_many(bytes, view.size()).get(stream)) {
+    return json_stream_error(error, input.eof);
+  }
+  auto documents = size_t{};
+  for (auto doc_result : stream) {
+    auto doc = doc_result.get_value();
+    if (auto error = doc.error()) {
+      return json_stream_error(error, input.eof);
+    }
+    auto result = predicate(doc);
+    if (result.state != detection_state::match) {
+      return result;
+    }
+    ++documents;
+  }
+  if (stream.truncated_bytes() != 0) {
+    return input.eof ? read_detection::reject() : read_detection::need_more();
+  }
+  if (documents == 0) {
+    return input.eof ? read_detection::reject() : read_detection::need_more();
+  }
+  return read_detection::match();
+}
+
+auto is_complete_json_object(std::string_view line) -> bool {
+  return detect_json_object({
+                              .bytes = line,
+                              .eof = true,
+                            })
+           .state
+         == detection_state::match;
+}
+
+enum class single_line_json {
+  accept,
+  reject,
+};
+
+auto detect_json_object_lines(read_detection_input input,
+                              single_line_json single_line)
+  -> read_detection_result {
+  auto sample = read_detection::sample_lines(input, 3);
+  std::erase_if(sample.complete, [](std::string_view& line) {
+    line = detail::trim_front(line);
+    return line.empty();
+  });
+  for (auto line : sample.complete) {
+    if (not is_complete_json_object(line)) {
+      return read_detection::reject();
+    }
+  }
+  auto partial = detail::trim_front(sample.partial);
+  auto partial_is_complete_object = false;
+  if (not partial.empty()) {
+    auto probe = detect_json_object({
+      .bytes = partial,
+      .eof = false,
+    });
+    if (probe.state == detection_state::reject) {
+      return read_detection::reject();
+    }
+    partial_is_complete_object = probe.state == detection_state::match;
+  }
+  if (sample.complete.empty()) {
+    if (single_line == single_line_json::accept
+        and partial_is_complete_object) {
+      return read_detection::match();
+    }
+    return input.eof ? read_detection::reject() : read_detection::need_more();
+  }
+  if (single_line == single_line_json::reject and sample.complete.size() == 1
+      and partial.empty()) {
+    return input.eof ? read_detection::reject() : read_detection::need_more();
+  }
+  return read_detection::match();
+}
+
+auto json_object_lines_have_keys(read_detection_input input,
+                                 std::initializer_list<std::string_view> keys)
+  -> bool {
+  auto sample = read_detection::sample_lines(input, 3);
+  std::erase_if(sample.complete, [](std::string_view& line) {
+    line = detail::trim_front(line);
+    return line.empty();
+  });
+  for (auto line : sample.complete) {
+    if (json_object_has_keys(line, keys)) {
+      return true;
+    }
+  }
+  auto partial = detail::trim_front(sample.partial);
+  if (not partial.empty() and json_object_has_keys(partial, keys)) {
+    return true;
+  }
+  return false;
+}
+
+auto detect_ndjson(read_detection_input input) -> read_detection_result {
+  return detect_json_object_lines(input, single_line_json::reject);
+}
+
+auto detect_json_object_stream(read_detection_input input)
+  -> read_detection_result {
+  auto view = detail::trim_front(input.bytes);
+  if (not view.empty() and view.front() != '{') {
+    return read_detection::reject();
+  }
+  if (detect_ndjson(input).state == detection_state::match) {
+    return read_detection::reject();
+  }
+  return detect_json_stream(input, '{', [eof = input.eof](auto& doc) {
+    auto type = doc.type();
+    if (auto error = type.error()) {
+      return json_stream_error(error, eof);
+    }
+    if (type.value_unsafe() != simdjson::ondemand::json_type::object) {
+      return read_detection::reject();
+    }
+    return read_detection::match();
+  });
+}
+
+auto detect_json_array_stream(read_detection_input input)
+  -> read_detection_result {
+  return detect_json_stream(input, '[', [eof = input.eof](auto& doc) {
+    auto array = doc.value_unsafe().get_array();
+    if (auto error = array.error()) {
+      return json_stream_error(error, eof);
+    }
+    auto first_element_is_object = true;
+    for (auto element : array.value_unsafe()) {
+      if (auto error = element.error()) {
+        return json_stream_error(error, eof);
+      }
+      auto type = element.value_unsafe().type();
+      if (auto error = type.error()) {
+        return json_stream_error(error, eof);
+      }
+      first_element_is_object
+        = type.value_unsafe() == simdjson::ondemand::json_type::object;
+      break;
+    }
+    if (not first_element_is_object) {
+      return read_detection::reject();
+    }
+    return read_detection::match();
+  });
+}
+
+auto detect_json_objects(read_detection_input input) -> read_detection_result {
+  auto object = detect_json_object(input);
+  auto lines = detect_ndjson(input);
+  if (object.state == detection_state::match
+      or lines.state == detection_state::match) {
+    return read_detection::match();
+  }
+  if (object.state == detection_state::need_more
+      or lines.state == detection_state::need_more) {
+    return read_detection::need_more();
+  }
+  return read_detection::reject();
+}
+
+auto first_null_delimited_frame(read_detection_input input)
+  -> read_detection_input {
+  auto end = input.bytes.find('\0');
+  if (end == std::string_view::npos) {
+    return input;
+  }
+  return {
+    .bytes = input.bytes.substr(0, end),
+    .eof = true,
+  };
+}
+
+auto detect_json_field(read_detection_input input, std::string_view key)
+  -> read_detection_result {
+  auto shape = detect_json_object_lines(input, single_line_json::accept);
+  if (shape.state == detection_state::match
+      and json_object_lines_have_keys(input, {key})) {
+    return read_detection::match();
+  }
+  return shape.state == detection_state::need_more ? read_detection::need_more()
+                                                   : read_detection::reject();
+}
+
+auto detect_gelf(read_detection_input input) -> read_detection_result {
+  auto frame = first_null_delimited_frame(input);
+  auto shape = detect_json_objects(frame);
+  if (shape.state == detection_state::match
+      and json_object_has_keys(frame.bytes,
+                               {"version", "host", "short_message"})) {
+    return read_detection::match();
+  }
+  return shape.state == detection_state::need_more ? read_detection::need_more()
+                                                   : read_detection::reject();
+}
 
 inline auto split_at_crlf(generator<chunk_ptr> input)
   -> generator<std::optional<simdjson::padded_string_view>> {
@@ -1574,7 +1875,7 @@ private:
 
 class read_json_plugin final
   : public virtual operator_plugin2<parser_adapter<json_parser>>,
-    public virtual OperatorPlugin {
+    public virtual ReadOperatorPlugin {
 public:
   auto describe() const -> Description override {
     auto d = Describer<ReadJsonArgs, ReadJson>{};
@@ -1606,11 +1907,23 @@ public:
       .mime_types = {"application/json"},
     };
   }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate("read_json arrays_of_objects=true",
+                                read_detection::specificity::structured,
+                                detect_json_array_stream),
+      read_detection::candidate("read_json",
+                                read_detection::specificity::structured,
+                                detect_json_object_stream),
+    };
+  }
 };
 
 class read_ndjson_plugin final
   : public virtual operator_plugin2<parser_adapter<json_parser>>,
-    public virtual OperatorPlugin {
+    public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_ndjson";
@@ -1656,11 +1969,19 @@ public:
       .mime_types = {"application/x-ndjson", "application/ld+json"},
     };
   }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate(
+        "read_ndjson", read_detection::specificity::structured, detect_ndjson),
+    };
+  }
 };
 
 class read_gelf_plugin final
   : public virtual operator_plugin2<parser_adapter<json_parser>>,
-    public virtual OperatorPlugin {
+    public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_gelf";
@@ -1707,13 +2028,21 @@ public:
       .mime_types = {"application/gelf", "application/x-gelf"},
     };
   }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate(
+        "read_gelf", read_detection::specificity::dialect, detect_gelf),
+    };
+  }
 };
 
 template <detail::string_literal Name, detail::string_literal Selector,
           detail::string_literal Prefix, detail::string_literal Separator = "">
 class configured_read_plugin final
   : public virtual operator_plugin2<parser_adapter<json_parser>>,
-    public virtual OperatorPlugin {
+    public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return fmt::format("read_{}", Name);
@@ -1787,6 +2116,28 @@ public:
     }
     if constexpr (std::string_view{Name.str()} == "zeek_json") {
       return {.extensions = {"zeek.json"}};
+    }
+    return {};
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    if constexpr (std::string_view{Name.str()} == "suricata") {
+      return {
+        read_detection::candidate(name(), read_detection::specificity::dialect,
+                                  [](read_detection_input input) {
+                                    return detect_json_field(input,
+                                                             "event_type");
+                                  }),
+      };
+    }
+    if constexpr (std::string_view{Name.str()} == "zeek_json") {
+      return {
+        read_detection::candidate(name(), read_detection::specificity::dialect,
+                                  [](read_detection_input input) {
+                                    return detect_json_field(input, "_path");
+                                  }),
+      };
     }
     return {};
   }

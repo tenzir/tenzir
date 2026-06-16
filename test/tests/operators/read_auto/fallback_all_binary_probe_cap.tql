@@ -1,0 +1,4 @@
+from {data: "61FF".decode_hex()}
+write_all data
+read_auto fallback="all", max_probe_bytes=1
+data = data.encode_hex()

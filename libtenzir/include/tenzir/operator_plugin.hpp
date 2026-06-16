@@ -19,6 +19,7 @@
 #include "tenzir/option.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
+#include <functional>
 #include <mutex>
 #include <span>
 #include <string_view>

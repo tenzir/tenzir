@@ -1,0 +1,9 @@
+{
+  line: "#fields are documented here",
+}
+{
+  line: "#types are documented here",
+}
+{
+  line: "#separator is documented here",
+}

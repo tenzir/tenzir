@@ -16,9 +16,11 @@
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/base64.hpp>
+#include <tenzir/detail/string.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/read_detection.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/to_lines.hpp>
@@ -495,7 +497,7 @@ private:
 
 class read_yaml final
   : public virtual operator_plugin2<parser_adapter<yaml_parser>>,
-    public virtual OperatorPlugin {
+    public virtual ReadOperatorPlugin {
 public:
   auto describe() const -> Description override {
     auto d = Describer<ReadYamlArgs, ReadYaml>{};
@@ -520,6 +522,73 @@ public:
       .extensions = {"yaml", "yml"},
       .mime_types = {"application/yaml", "text/yaml", "text/x-yaml"},
     };
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate(
+        "read_yaml", read_detection::specificity::document, detect_yaml),
+    };
+  }
+
+private:
+  static auto detect_yaml(read_detection_input input) -> read_detection_result {
+    namespace rd = read_detection;
+    if (not detail::is_valid_utf8(input.bytes)) {
+      if (not input.eof and detail::is_valid_utf8_prefix(input.bytes)) {
+        return rd::need_more();
+      }
+      return rd::reject();
+    }
+    auto bytes = detail::trim_front(input.bytes);
+    if (bytes.empty()) {
+      return input.eof ? rd::reject() : rd::need_more();
+    }
+    // Flow-style YAML at the top level is indistinguishable from broken
+    // JSON, so input that looks like JSON belongs to the JSON detectors.
+    if (bytes.front() == '{' or bytes.front() == '[') {
+      return rd::reject();
+    }
+    // Bound the dry run to a handful of complete lines so that a chunk
+    // boundary cannot split a token and the probe cost stays constant.
+    auto end = size_t{0};
+    auto num_lines = size_t{0};
+    constexpr auto max_lines = size_t{8};
+    while (num_lines < max_lines) {
+      auto newline = bytes.find('\n', end);
+      if (newline == std::string_view::npos) {
+        break;
+      }
+      end = newline + 1;
+      ++num_lines;
+    }
+    auto document = bytes;
+    if (num_lines == max_lines) {
+      document = bytes.substr(0, end);
+    } else if (not input.eof) {
+      if (end == 0) {
+        return rd::need_more();
+      }
+      document = bytes.substr(0, end);
+    }
+    // Run the actual YAML parser on the sampled document. `read_yaml` skips
+    // top-level non-map documents, so only maps count as evidence.
+    try {
+      auto node = YAML::Load(std::string{document});
+      if (not node.IsMap()) {
+        return rd::reject();
+      }
+      for (auto const& entry : node) {
+        if (not entry.first.IsScalar()) {
+          return rd::reject();
+        }
+      }
+      return rd::match();
+    } catch (YAML::Exception const&) {
+      // A truncated sample can fail mid-structure; more input may fix it.
+      return input.eof ? rd::reject() : rd::need_more();
+    }
   }
 };
 

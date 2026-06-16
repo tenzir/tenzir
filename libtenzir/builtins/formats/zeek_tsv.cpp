@@ -29,6 +29,7 @@
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin/parser.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/read_detection.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/to_lines.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -1335,9 +1336,59 @@ private:
 using zeek_tsv_parser_adapter = parser_adapter<zeek_tsv_parser>;
 using zeek_tsv_writer_adapter = writer_adapter<zeek_tsv_printer>;
 
+auto is_zeek_separator_header(std::string_view line) -> bool {
+  constexpr auto prefix = std::string_view{"#separator"};
+  if (not line.starts_with(prefix)) {
+    return false;
+  }
+  auto separator = line.substr(prefix.size());
+  if (separator.empty()
+      or detail::ascii_whitespace.find(separator.front())
+           == std::string_view::npos) {
+    return false;
+  }
+  separator = detail::trim_front(separator);
+  if (separator.empty()) {
+    return false;
+  }
+  return detail::byte_unescape(separator).size() == 1;
+}
+
+auto is_zeek_tabular_header(std::string_view line, std::string_view prefix)
+  -> bool {
+  if (not line.starts_with(prefix)) {
+    return false;
+  }
+  auto fields = line.substr(prefix.size());
+  return fields.size() > 1 and fields.front() == '\t';
+}
+
+auto is_zeek_header(std::string_view line) -> bool {
+  line = detail::trim_front(line);
+  return is_zeek_separator_header(line)
+         or is_zeek_tabular_header(line, "#fields")
+         or is_zeek_tabular_header(line, "#types");
+}
+
+auto could_be_zeek_header(std::string_view line) -> bool {
+  line = detail::trim_front(line);
+  auto could_be = [line](std::string_view prefix, char separator) {
+    if (prefix.starts_with(line)) {
+      return true;
+    }
+    if (not line.starts_with(prefix)) {
+      return false;
+    }
+    auto rest = line.substr(prefix.size());
+    return rest.empty() or rest.front() == separator;
+  };
+  return could_be("#separator", ' ') or could_be("#separator", '\t')
+         or could_be("#fields", '\t') or could_be("#types", '\t');
+}
+
 class read_zeek_tsv final
   : public virtual operator_plugin2<zeek_tsv_parser_adapter>,
-    public virtual OperatorPlugin {
+    public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_zeek_tsv";
@@ -1359,6 +1410,33 @@ public:
     return {
       .extensions = {"zeek"},
       .mime_types = {"application/x-zeek"},
+    };
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    auto detect = [](read_detection_input input) {
+      auto sample = read_detection::sample_lines(
+        {
+          .bytes = detail::trim_front(input.bytes),
+          .eof = input.eof,
+        },
+        1);
+      if (not sample.complete.empty()) {
+        return is_zeek_header(sample.complete.front())
+                 ? read_detection::match()
+                 : read_detection::reject();
+      }
+      if (sample.partial.empty()) {
+        return input.eof ? read_detection::reject()
+                         : read_detection::need_more();
+      }
+      return could_be_zeek_header(sample.partial) ? read_detection::need_more()
+                                                  : read_detection::reject();
+    };
+    return {
+      read_detection::candidate("read_zeek_tsv",
+                                read_detection::specificity::magic, detect),
     };
   }
 };
