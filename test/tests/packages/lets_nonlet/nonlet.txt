@@ -1,2 +1,7 @@
 error: `lets.tql` may only contain `let` bindings
+ --> <packages/nonletpkg/lets.tql>:2:1
+  |
+2 | from {x: 1}
+  | ^^^^^^^^^^^ 
+  |
   = note: in package `nonletpkg`

@@ -1,0 +1,3 @@
+id: nonconstpkg
+name: Non-Constant Package
+description: A package whose lets.tql binding is not a constant.

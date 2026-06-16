@@ -1572,12 +1572,11 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh,
   return module;
 }
 
-auto build_package_lets(const package& pkg, diagnostic_handler& dh,
-                        SourceMap* source_map)
-  -> failure_or<std::unique_ptr<module_def>> {
-  auto module = std::make_unique<module_def>();
+auto build_package_lets(const package& pkg, module_def& pkg_mod,
+                        diagnostic_handler& dh, SourceMap* source_map)
+  -> failure_or<void> {
   if (pkg.lets.empty()) {
-    return module;
+    return {};
   }
   auto provider = session_provider::make(dh);
   auto session = provider.as_session();
@@ -1587,22 +1586,25 @@ auto build_package_lets(const package& pkg, diagnostic_handler& dh,
   auto& source_map_ref = source_map != nullptr ? *source_map : local_source_map;
   source_map_ref.add_source(source);
   TRY(auto parsed, parse(pkg.lets, source_origin{source->index}, session));
+  // Reject anything that is not a `let` binding, pointing at the offender.
+  for (const auto& stmt : parsed.body) {
+    if (std::get_if<ast::let_stmt>(&stmt) != nullptr) {
+      continue;
+    }
+    diagnostic::error("`lets.tql` may only contain `let` bindings")
+      .primary(match(stmt, [](const auto& s) {
+        return s.get_location();
+      }))
+      .note("in package `{}`", pkg.id)
+      .emit(dh);
+    return failure::promise();
+  }
   // Compile the bindings with the regular `let` machinery. This resolves names
   // (with proper diagnostics for forward or undeclared references) and binds
   // each `$`-reference to the earlier binding it refers to.
   auto b_ctx = base_ctx{dh, session.reg()};
   auto root = compile_ctx::make_root(b_ctx, source_map_ref);
   TRY(auto ir_pipe, std::move(parsed).compile(root));
-  if (not ir_pipe.operators.empty()) {
-    diagnostic::error("`lets.tql` may only contain `let` bindings")
-      .note("in package `{}`", pkg.id)
-      .emit(dh);
-    return failure::promise();
-  }
-  auto module_name = package_module_name(pkg.id);
-  auto& pkg_entry = module->defs[module_name];
-  pkg_entry.mod = std::make_unique<module_def>();
-  auto* pkg_mod = pkg_entry.mod.get();
   // Evaluate the bindings in order, threading each result through the
   // environment so that later bindings can reference earlier ones. This mirrors
   // `ir::pipeline::substitute`, which we cannot use directly because it discards
@@ -1617,7 +1619,7 @@ auto build_package_lets(const package& pkg, diagnostic_handler& dh,
     if (name.starts_with('$')) {
       name = name.substr(1);
     }
-    pkg_mod->defs[std::string{name}].value = value;
+    pkg_mod.defs[std::string{name}].value = value;
     auto converted = match(
       value,
       [](auto& x) -> ast::constant::kind {
@@ -1628,30 +1630,24 @@ auto build_package_lets(const package& pkg, diagnostic_handler& dh,
       });
     env.try_emplace(let.id, std::move(converted));
   }
-  return module;
+  return {};
 }
 
 auto build_package_module(const package& pkg, diagnostic_handler& dh,
                           SourceMap* source_map)
   -> failure_or<std::unique_ptr<module_def>> {
   TRY(auto module, build_package_operator_module(pkg, dh, source_map));
-  TRY(auto lets_module, build_package_lets(pkg, dh, source_map));
-  // Operators and lets share the package's module path but occupy different
-  // namespaces within an entity set, so merge the value entities into the
-  // operator module rather than replacing it.
+  // Operators and lets live in the same package module but in different
+  // namespaces within an entity set, so add the value entities directly to the
+  // package's submodule instead of building and merging a separate module.
   auto module_name = package_module_name(pkg.id);
-  auto lets_it = lets_module->defs.find(module_name);
-  if (lets_it != lets_module->defs.end() and lets_it->second.mod) {
-    auto& dst = module->defs[module_name].mod;
-    if (not dst) {
-      dst = std::move(lets_it->second.mod);
-    } else {
-      for (auto& [name, set] : lets_it->second.mod->defs) {
-        if (set.value) {
-          dst->defs[name].value = std::move(set.value);
-        }
-      }
-    }
+  auto& pkg_mod = module->defs[module_name].mod;
+  if (not pkg_mod) {
+    pkg_mod = std::make_unique<module_def>();
+  }
+  TRY(build_package_lets(pkg, *pkg_mod, dh, source_map));
+  if (pkg_mod->defs.empty()) {
+    module->defs.erase(module_name);
   }
   return module;
 }

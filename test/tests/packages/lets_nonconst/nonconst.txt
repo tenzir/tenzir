@@ -1,0 +1,6 @@
+error: expected a constant expression
+ --> <packages/nonconstpkg/lets.tql>:1:10
+  |
+1 | let $x = foo
+  |          ^^^ 
+  |
