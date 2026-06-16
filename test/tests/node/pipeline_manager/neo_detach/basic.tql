@@ -1,0 +1,20 @@
+pipeline::detach id="detach-1" {
+  every 1s {
+    from {pipe: "detach-1"}
+  }
+  head 20
+  publish "pipeline-manager-neo-detach"
+}
+
+pipeline::detach id="detach-2" {
+  every 1s {
+    from {pipe: "detach-2"}
+  }
+  head 20
+  publish "pipeline-manager-neo-detach"
+}
+
+subscribe "pipeline-manager-neo-detach"
+deduplicate pipe
+head 2
+sort pipe

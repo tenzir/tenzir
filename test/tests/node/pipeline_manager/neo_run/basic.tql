@@ -1,0 +1,11 @@
+pipeline::run {
+  from {msg: "pipeline-run-imported"}
+  @name = "pipeline-run"
+  import
+}
+
+every 1s {
+  export
+  where @name == "pipeline-run"
+}
+head 1

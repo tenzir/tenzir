@@ -1,0 +1,4 @@
+suite: neo-detach
+runner: tenzir
+fixtures: [node]
+timeout: 120
