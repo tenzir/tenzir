@@ -33,6 +33,8 @@ namespace {
 
 using namespace tenzir::si_literals;
 
+constexpr auto operator_name = std::string_view{"read_auto"};
+
 using detection_state = read_detection_result::result_state;
 
 struct ReadAutoArgs {
@@ -196,9 +198,20 @@ private:
     std::ranges::sort(matches, [&](size_t lhs, size_t rhs) {
       return score(lhs) > score(rhs);
     });
+    if (args_.fallback != "none"
+        and score(matches[0]) == read_detection::specificity::document) {
+      if (not input.done_probing) {
+        return indeterminate{};
+      }
+      auto result = fallback(input, ctx);
+      if (result.is_error()) {
+        return failure::promise();
+      }
+      return *result;
+    }
     if (matches.size() >= 2 and score(matches[0]) == score(matches[1])) {
       diagnostic::error("read_auto detection is ambiguous")
-        .primary(args_.operator_location)
+        .primary(operator_primary())
         .note("candidates `{}` and `{}` both matched",
               candidates[matches[0]].candidate.pipeline,
               candidates[matches[1]].candidate.pipeline)
@@ -212,7 +225,7 @@ private:
     TENZIR_ASSERT(input.done_probing);
     if (args_.fallback == "none") {
       diagnostic::error("read_auto could not detect an input format")
-        .primary(args_.operator_location)
+        .primary(operator_primary())
         .emit(ctx);
       return failure::promise();
     }
@@ -221,7 +234,7 @@ private:
     if (args_.fallback == "lines") {
       if (not valid_utf8) {
         diagnostic::error("read_auto fallback `lines` requires UTF-8 input")
-          .primary(args_.operator_location)
+          .primary(operator_primary())
           .emit(ctx);
         return failure::promise();
       }
@@ -231,6 +244,10 @@ private:
         = input.eof and valid_utf8 ? "read_all" : "read_all binary=true";
     }
     return fallback_candidate;
+  }
+
+  auto operator_primary() const -> location {
+    return args_.operator_location.subloc(0, operator_name.size());
   }
 
   auto spawn_selected(size_t index, OpCtx& ctx) -> Task<void> {

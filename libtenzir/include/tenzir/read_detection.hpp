@@ -43,6 +43,7 @@ enum class specificity : uint8_t {
   /// Line grammars whose markers also occur in free-form text, e.g., syslog.
   grammar = 40,
   /// Whole-document formats that accept a wide range of text, e.g., YAML.
+  /// Explicit `read_auto` fallbacks may take precedence over this rung.
   document = 30,
 };
 
