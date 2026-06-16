@@ -606,6 +606,33 @@ auto find_local_auth_entry(std::string_view name, location loc, OpCtx& ctx)
   co_return found;
 }
 
+} // namespace
+
+auto build_platform_auth_record(std::string_view name,
+                                platform_authentication auth) -> record {
+  auto config = std::move(auth.public_config);
+  for (auto it = config.begin(); it != config.end();) {
+    if (is<caf::none_t>(it->second)) {
+      it = config.erase(it);
+    } else {
+      ++it;
+    }
+  }
+  config["name"] = std::string{name};
+  config["strategy"] = std::move(auth.strategy);
+  // The referenced secrets are *not* resolved here. Storing them as managed
+  // names defers resolution to the per-strategy `resolve_*_auth` path, which
+  // re-resolves through the standalone secret flow on every use — so rotating
+  // a secret on the platform takes effect on the next request, with no auth
+  // cache invalidation needed.
+  for (auto const& [field, secret_name] : auth.secret_field_references) {
+    config[field] = secret::make_managed(secret_name);
+  }
+  return config;
+}
+
+namespace {
+
 auto fetch_platform_auth_entry(std::string_view name, location loc, OpCtx& ctx)
   -> Task<failure_or<located<record>>> {
   auto node = co_await fetch_node(ctx.actor_system(), ctx.dh());
@@ -623,21 +650,10 @@ auto fetch_platform_auth_entry(std::string_view name, location loc, OpCtx& ctx)
     co_return failure::promise();
   }
   auto config = record{};
-  auto references = std::map<std::string, std::string>{};
   auto success = match(
     *result,
-    [&](platform_authentication const& auth) -> bool {
-      config = auth.public_config;
-      for (auto it = config.begin(); it != config.end();) {
-        if (is<caf::none_t>(it->second)) {
-          it = config.erase(it);
-        } else {
-          ++it;
-        }
-      }
-      config["name"] = std::string{name};
-      config["strategy"] = auth.strategy;
-      references = auth.secret_field_references;
+    [&](platform_authentication& auth) -> bool {
+      config = build_platform_auth_record(name, std::move(auth));
       return true;
     },
     [&](secret_resolution_error const& e) -> bool {
@@ -649,14 +665,6 @@ auto fetch_platform_auth_entry(std::string_view name, location loc, OpCtx& ctx)
     });
   if (not success) {
     co_return failure::promise();
-  }
-  // The referenced secrets are *not* resolved here. Storing them as managed
-  // names defers resolution to the per-strategy `resolve_*_auth` path, which
-  // re-resolves through the standalone secret flow on every use — so rotating
-  // a secret on the platform takes effect on the next request, with no auth
-  // cache invalidation needed.
-  for (auto const& [field, secret_name] : references) {
-    config[field] = secret::make_managed(secret_name);
   }
   co_return located{std::move(config), location::unknown};
 }

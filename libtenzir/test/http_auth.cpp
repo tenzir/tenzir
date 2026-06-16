@@ -11,6 +11,7 @@
 #include "tenzir/http_pool.hpp"
 #include "tenzir/secret.hpp"
 #include "tenzir/secret_resolution.hpp"
+#include "tenzir/secret_store.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/registry.hpp"
 
@@ -230,6 +231,84 @@ TEST("fetch_authorization authorizes simple strategies") {
     = folly::coro::blockingWait(fetch_authorization("bearer-static", ctx));
   REQUIRE(bearer_auth);
   CHECK(has_header(bearer_auth->headers, "Authorization", "Bearer token"));
+}
+
+TEST("build_platform_auth_record materializes references as managed secrets") {
+  auto auth = platform_authentication{
+    .strategy = "oauth-client-credentials",
+    .public_config = record{
+      {"client_id", std::string{"my-client-id"}},
+      {"token_url", std::string{"https://example.com/oauth/token"}},
+      {"audience", std::string{"https://example.com/api/"}},
+      {"unused", caf::none},
+    },
+    .secret_field_references = {{"client_secret", "MY_CLIENT_SECRET"}},
+  };
+  auto config = build_platform_auth_record("my-auth", std::move(auth));
+  // Public fields kept verbatim.
+  CHECK_EQUAL(as<std::string>(config["client_id"]), "my-client-id");
+  CHECK_EQUAL(as<std::string>(config["token_url"]),
+              "https://example.com/oauth/token");
+  CHECK_EQUAL(as<std::string>(config["audience"]), "https://example.com/api/");
+  // Injected metadata.
+  CHECK_EQUAL(as<std::string>(config["name"]), "my-auth");
+  CHECK_EQUAL(as<std::string>(config["strategy"]), "oauth-client-credentials");
+  // Null public-config fields are stripped.
+  CHECK(not config.contains("unused"));
+  // Referenced secret becomes a managed-secret reference.
+  auto const* secret_data = try_as<secret>(&config["client_secret"]);
+  REQUIRE(secret_data);
+  auto const* name_buffer = secret_data->buffer->data_as_name();
+  REQUIRE(name_buffer);
+  CHECK_EQUAL(name_buffer->value()->string_view(), "MY_CLIENT_SECRET");
+}
+
+TEST("build_platform_auth_record handles strategies without secrets") {
+  auto auth = platform_authentication{
+    .strategy = "bearer-static",
+    .public_config = {},
+    .secret_field_references = {{"token", "BEARER_TOKEN"}},
+  };
+  auto config = build_platform_auth_record("static", std::move(auth));
+  CHECK_EQUAL(as<std::string>(config["name"]), "static");
+  CHECK_EQUAL(as<std::string>(config["strategy"]), "bearer-static");
+  auto const* token = try_as<secret>(&config["token"]);
+  REQUIRE(token);
+  auto const* name_buffer = token->buffer->data_as_name();
+  REQUIRE(name_buffer);
+  CHECK_EQUAL(name_buffer->value()->string_view(), "BEARER_TOKEN");
+}
+
+TEST("build_platform_auth_record supports api-key shape") {
+  auto auth = platform_authentication{
+    .strategy = "api-key",
+    .public_config = record{{"header_name", std::string{"X-Custom-Key"}}},
+    .secret_field_references = {{"api_key", "API_KEY_SECRET"}},
+  };
+  auto config = build_platform_auth_record("apikey", std::move(auth));
+  CHECK_EQUAL(as<std::string>(config["header_name"]), "X-Custom-Key");
+  CHECK_EQUAL(as<std::string>(config["strategy"]), "api-key");
+  auto const* key = try_as<secret>(&config["api_key"]);
+  REQUIRE(key);
+  auto const* name_buffer = key->buffer->data_as_name();
+  REQUIRE(name_buffer);
+  CHECK_EQUAL(name_buffer->value()->string_view(), "API_KEY_SECRET");
+}
+
+TEST("build_platform_auth_record supports basic shape") {
+  auto auth = platform_authentication{
+    .strategy = "basic",
+    .public_config = record{{"username", std::string{"alice"}}},
+    .secret_field_references = {{"password", "ALICE_PASSWORD"}},
+  };
+  auto config = build_platform_auth_record("basic", std::move(auth));
+  CHECK_EQUAL(as<std::string>(config["username"]), "alice");
+  CHECK_EQUAL(as<std::string>(config["strategy"]), "basic");
+  auto const* password = try_as<secret>(&config["password"]);
+  REQUIRE(password);
+  auto const* name_buffer = password->buffer->data_as_name();
+  REQUIRE(name_buffer);
+  CHECK_EQUAL(name_buffer->value()->string_view(), "ALICE_PASSWORD");
 }
 
 TEST("fetch_authorization caches simple strategies") {
