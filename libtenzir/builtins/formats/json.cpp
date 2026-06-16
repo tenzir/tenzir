@@ -161,7 +161,14 @@ auto is_complete_json_object(std::string_view line) -> bool {
          == detection_state::match;
 }
 
-auto detect_ndjson(read_detection_input input) -> read_detection_result {
+enum class single_line_json {
+  accept,
+  reject,
+};
+
+auto detect_json_object_lines(read_detection_input input,
+                              single_line_json single_line)
+  -> read_detection_result {
   auto sample = read_detection::sample_lines(input, 3);
   std::erase_if(sample.complete, [](std::string_view& line) {
     line = detail::trim_front(line);
@@ -185,10 +192,15 @@ auto detect_ndjson(read_detection_input input) -> read_detection_result {
   if (sample.complete.empty()) {
     return input.eof ? read_detection::reject() : read_detection::need_more();
   }
-  if (sample.complete.size() == 1 and partial.empty()) {
+  if (single_line == single_line_json::reject and sample.complete.size() == 1
+      and partial.empty()) {
     return input.eof ? read_detection::reject() : read_detection::need_more();
   }
   return read_detection::match();
+}
+
+auto detect_ndjson(read_detection_input input) -> read_detection_result {
+  return detect_json_object_lines(input, single_line_json::reject);
 }
 
 auto detect_json_objects(read_detection_input input) -> read_detection_result {
@@ -219,7 +231,7 @@ auto first_null_delimited_frame(read_detection_input input)
 
 auto detect_json_field(read_detection_input input, std::string_view field)
   -> read_detection_result {
-  auto shape = detect_json_objects(input);
+  auto shape = detect_json_object_lines(input, single_line_json::accept);
   if (shape.state == detection_state::match and input.bytes.contains(field)) {
     return read_detection::match();
   }
