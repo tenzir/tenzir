@@ -1,0 +1,3 @@
+from {data: b"a\xff"}
+write_all data
+read_auto fallback="all", max_probe_bytes=1

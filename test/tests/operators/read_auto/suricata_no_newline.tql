@@ -1,0 +1,3 @@
+from {data: "{\"event_type\":\"alert\",\"src_ip\":\"1.2.3.4\"}"}
+write_all data
+read_auto

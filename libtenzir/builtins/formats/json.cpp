@@ -218,6 +218,7 @@ auto detect_json_object_lines(read_detection_input input,
     }
   }
   auto partial = detail::trim_front(sample.partial);
+  auto partial_is_complete_object = false;
   if (not partial.empty()) {
     auto probe = detect_json_object({
       .bytes = partial,
@@ -226,8 +227,13 @@ auto detect_json_object_lines(read_detection_input input,
     if (probe.state == detection_state::reject) {
       return read_detection::reject();
     }
+    partial_is_complete_object = probe.state == detection_state::match;
   }
   if (sample.complete.empty()) {
+    if (single_line == single_line_json::accept
+        and partial_is_complete_object) {
+      return read_detection::match();
+    }
     return input.eof ? read_detection::reject() : read_detection::need_more();
   }
   if (single_line == single_line_json::reject and sample.complete.size() == 1
@@ -249,6 +255,10 @@ auto json_object_lines_have_keys(read_detection_input input,
     if (json_object_has_keys(line, keys)) {
       return true;
     }
+  }
+  auto partial = detail::trim_front(sample.partial);
+  if (not partial.empty() and json_object_has_keys(partial, keys)) {
+    return true;
   }
   return false;
 }

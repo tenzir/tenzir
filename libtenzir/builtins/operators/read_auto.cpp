@@ -227,7 +227,8 @@ private:
       }
       fallback_pipeline_ = "read_lines";
     } else {
-      fallback_pipeline_ = valid_utf8 ? "read_all" : "read_all binary=true";
+      fallback_pipeline_
+        = input.eof and valid_utf8 ? "read_all" : "read_all binary=true";
     }
     return fallback_candidate;
   }
