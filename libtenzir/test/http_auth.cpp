@@ -312,19 +312,24 @@ TEST("build_platform_auth_record supports basic shape") {
 }
 
 TEST("fetch_authorization caches simple strategies") {
-  auto basic = make_auth_entry("basic", "basic");
+  // Use distinct auth entry names so the process-global auth cache
+  // from earlier tests in this suite (e.g. "authorizes simple strategies")
+  // cannot pollute this test if the underlying actor_system pointer is
+  // reused by the allocator across tests.
+  auto basic = make_auth_entry("cache-basic", "basic");
   basic.emplace("username", "user");
   basic.emplace("password", "pass");
-  auto api_key = make_auth_entry("api-key", "api-key");
+  auto api_key = make_auth_entry("cache-api-key", "api-key");
   api_key.emplace("api_key", "token");
-  auto bearer = make_auth_entry("bearer-static", "bearer-static");
+  auto bearer = make_auth_entry("cache-bearer-static", "bearer-static");
   bearer.emplace("token", "token");
   auto ts = TestSystem{
     {std::move(basic), std::move(api_key), std::move(bearer)},
   };
   auto& system = *ts.system;
   auto ctx = TestOpCtx{system};
-  for (auto const name : {"basic", "api-key", "bearer-static"}) {
+  for (auto const name :
+       {"cache-basic", "cache-api-key", "cache-bearer-static"}) {
     auto first = folly::coro::blockingWait(fetch_authorization(name, ctx));
     REQUIRE(first);
     auto second = folly::coro::blockingWait(fetch_authorization(name, ctx));
