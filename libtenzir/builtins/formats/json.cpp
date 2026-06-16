@@ -76,7 +76,7 @@ enum class json_probe_state {
 struct json_probe_result {
   json_probe_state state = json_probe_state::incomplete;
   simdjson::dom::element_type type = simdjson::dom::element_type::NULL_VALUE;
-  bool first_array_element_is_object = false;
+  bool array_is_empty_or_first_element_is_object = false;
 };
 
 auto json_error_state(simdjson::error_code error, bool eof)
@@ -90,7 +90,8 @@ auto json_error_state(simdjson::error_code error, bool eof)
   return json_probe_state::invalid;
 }
 
-auto first_array_element_is_object(simdjson::dom::element element) -> bool {
+auto array_is_empty_or_first_element_is_object(simdjson::dom::element element)
+  -> bool {
   auto array = element.get_array();
   if (array.error()) {
     return false;
@@ -98,7 +99,7 @@ auto first_array_element_is_object(simdjson::dom::element element) -> bool {
   for (auto const& item : array.value_unsafe()) {
     return item.type() == simdjson::dom::element_type::OBJECT;
   }
-  return false;
+  return true;
 }
 
 auto probe_json_document(read_detection_input input) -> json_probe_result {
@@ -121,8 +122,9 @@ auto probe_json_document(read_detection_input input) -> json_probe_result {
   return {
     .state = json_probe_state::complete,
     .type = type,
-    .first_array_element_is_object = type == simdjson::dom::element_type::ARRAY
-                                     and first_array_element_is_object(element),
+    .array_is_empty_or_first_element_is_object
+    = type == simdjson::dom::element_type::ARRAY
+      and array_is_empty_or_first_element_is_object(element),
   };
 }
 
@@ -169,7 +171,7 @@ auto detect_json_array(read_detection_input input) -> read_detection_result {
     return input.eof ? read_detection::reject() : read_detection::need_more();
   }
   return probe.type == simdjson::dom::element_type::ARRAY
-             and probe.first_array_element_is_object
+             and probe.array_is_empty_or_first_element_is_object
            ? read_detection::match()
            : read_detection::reject();
 }

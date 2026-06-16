@@ -1,0 +1,8 @@
+{
+  uid: "foo",
+  msg: "bar",
+}
+{
+  uid: "baz",
+  msg: "qux",
+}
