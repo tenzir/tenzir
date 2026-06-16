@@ -51,6 +51,7 @@
 
 #include <atomic>
 #include <deque>
+#include <initializer_list>
 #include <simdjson.h>
 #include <string_view>
 
@@ -123,6 +124,27 @@ auto probe_json_document(read_detection_input input) -> json_probe_result {
     .first_array_element_is_object = type == simdjson::dom::element_type::ARRAY
                                      and first_array_element_is_object(element),
   };
+}
+
+auto json_object_has_keys(std::string_view input,
+                          std::initializer_list<std::string_view> keys)
+  -> bool {
+  auto parser = simdjson::dom::parser{};
+  auto bytes = std::string{detail::trim_front(input)};
+  auto doc = parser.parse(bytes);
+  if (doc.error()) {
+    return false;
+  }
+  auto object = doc.value_unsafe().get_object();
+  if (object.error()) {
+    return false;
+  }
+  for (auto key : keys) {
+    if (object.value_unsafe().at_key(key).error()) {
+      return false;
+    }
+  }
+  return true;
 }
 
 auto detect_json_object(read_detection_input input) -> read_detection_result {
@@ -199,6 +221,22 @@ auto detect_json_object_lines(read_detection_input input,
   return read_detection::match();
 }
 
+auto json_object_lines_have_keys(read_detection_input input,
+                                 std::initializer_list<std::string_view> keys)
+  -> bool {
+  auto sample = read_detection::sample_lines(input, 3);
+  std::erase_if(sample.complete, [](std::string_view& line) {
+    line = detail::trim_front(line);
+    return line.empty();
+  });
+  for (auto line : sample.complete) {
+    if (json_object_has_keys(line, keys)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 auto detect_ndjson(read_detection_input input) -> read_detection_result {
   return detect_json_object_lines(input, single_line_json::reject);
 }
@@ -229,10 +267,11 @@ auto first_null_delimited_frame(read_detection_input input)
   };
 }
 
-auto detect_json_field(read_detection_input input, std::string_view field)
+auto detect_json_field(read_detection_input input, std::string_view key)
   -> read_detection_result {
   auto shape = detect_json_object_lines(input, single_line_json::accept);
-  if (shape.state == detection_state::match and input.bytes.contains(field)) {
+  if (shape.state == detection_state::match
+      and json_object_lines_have_keys(input, {key})) {
     return read_detection::match();
   }
   return shape.state == detection_state::need_more ? read_detection::need_more()
@@ -243,9 +282,8 @@ auto detect_gelf(read_detection_input input) -> read_detection_result {
   auto frame = first_null_delimited_frame(input);
   auto shape = detect_json_objects(frame);
   if (shape.state == detection_state::match
-      and frame.bytes.contains("\"version\"")
-      and frame.bytes.contains("\"host\"")
-      and frame.bytes.contains("\"short_message\"")) {
+      and json_object_has_keys(frame.bytes,
+                               {"version", "host", "short_message"})) {
     return read_detection::match();
   }
   return shape.state == detection_state::need_more ? read_detection::need_more()
@@ -2015,7 +2053,7 @@ public:
         read_detection::candidate(name(), read_detection::specificity::dialect,
                                   [](read_detection_input input) {
                                     return detect_json_field(input,
-                                                             "\"event_type\"");
+                                                             "event_type");
                                   }),
       };
     }
@@ -2023,8 +2061,7 @@ public:
       return {
         read_detection::candidate(name(), read_detection::specificity::dialect,
                                   [](read_detection_input input) {
-                                    return detect_json_field(input,
-                                                             "\"_path\"");
+                                    return detect_json_field(input, "_path");
                                   }),
       };
     }

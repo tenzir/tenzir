@@ -1,0 +1,4 @@
+{
+  message: "event_type",
+  value: 1,
+}
