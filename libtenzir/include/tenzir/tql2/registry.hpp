@@ -90,9 +90,10 @@ struct entity_set {
   const function_plugin* fn;
   std::optional<operator_def> op;
   std::unique_ptr<module_def> mod;
-  /// The constant value of a package `let` binding (the `let` namespace),
-  /// eagerly const-evaluated when the package is loaded.
-  Option<data> value;
+  /// The definition of a package `let` binding (the `let` namespace). It is
+  /// stored unevaluated and const-evaluated lazily at each reference site,
+  /// where the full registry is available.
+  Option<ast::expression> let_def;
 };
 
 /// A module is a collection of named entities.
@@ -116,7 +117,7 @@ using entity_def
 using entity_ref = variant<std::reference_wrapper<const function_plugin>,
                            std::reference_wrapper<const operator_def>,
                            std::reference_wrapper<const module_def>,
-                           std::reference_wrapper<const data>>;
+                           std::reference_wrapper<const ast::expression>>;
 
 /// The registry holds references to all known entities and can thus be used to
 /// resolve an `entity_path` to an `entity_ref`.

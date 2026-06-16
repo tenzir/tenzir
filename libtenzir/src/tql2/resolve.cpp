@@ -13,12 +13,14 @@
 #include "tenzir/detail/similarity.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/registry.hpp"
 
 #include <tsl/robin_map.h>
 
 #include <algorithm>
 #include <ranges>
+#include <unordered_set>
 
 namespace tenzir {
 
@@ -169,7 +171,7 @@ public:
   }
 
   void visit(ast::pkg_dollar_var& x) {
-    if (x.ref.resolved()) {
+    if (x.value) {
       return;
     }
     // The full path is the module segments followed by the binding name.
@@ -179,29 +181,49 @@ public:
       segments.push_back(segment.name);
     }
     segments.push_back(std::string{x.name_without_dollar()});
-    // Package `let`s live only in the `packages` domain.
-    auto path = entity_path{std::string{"packages"}, std::move(segments),
-                            entity_ns::let};
-    auto result = reg_.try_get(path);
-    if (auto* ref = try_as<entity_ref>(&result)) {
-      auto* value = try_as<std::reference_wrapper<const data>>(ref);
-      TENZIR_ASSERT(value);
-      x.ref = std::move(path);
-      // HACK: cache the value here so it can be folded later. See
-      // `ast::pkg_dollar_var`.
-      x.value = value->get();
-      return;
-    }
     auto display = std::string{};
     for (const auto& segment : x.path) {
       display += segment.name;
       display += "::";
     }
     display += x.id.name;
-    diagnostic::error("package binding `{}` not found", display)
-      .primary(x.get_location())
-      .emit(diag_);
-    result_ = failure::promise();
+    // Package `let`s live only in the `packages` domain.
+    auto path = entity_path{std::string{"packages"}, segments, entity_ns::let};
+    auto result = reg_.try_get(path);
+    auto* ref = try_as<entity_ref>(&result);
+    if (not ref) {
+      diagnostic::error("package binding `{}` not found", display)
+        .primary(x.get_location())
+        .emit(diag_);
+      result_ = failure::promise();
+      return;
+    }
+    auto* def = try_as<std::reference_wrapper<const ast::expression>>(ref);
+    TENZIR_ASSERT(def);
+    // Detect cycles across package `let` references (e.g. `a -> b -> a`).
+    auto key = fmt::format("{}", fmt::join(segments, "::"));
+    if (not resolving_.insert(key).second) {
+      diagnostic::error("cyclic package binding `{}`", display)
+        .primary(x.get_location())
+        .emit(diag_);
+      result_ = failure::promise();
+      return;
+    }
+    // Resolve and const-evaluate the binding's expression here, where the full
+    // registry is available, then cache the result on the node.
+    auto expr = def->get();
+    visit(expr);
+    resolving_.erase(key);
+    if (result_.is_error()) {
+      return;
+    }
+    auto value = const_eval(expr, diag_);
+    if (not value) {
+      result_ = failure::promise();
+      return;
+    }
+    x.ref = std::move(path);
+    x.value = std::move(value).unwrap();
   }
 
   void visit(ast::invocation& x) {
@@ -253,6 +275,8 @@ private:
   diagnostic_handler& diag_;
   context_t context_ = context_t::none;
   failure_or<void> result_;
+  // Package `let` paths currently being resolved, to detect reference cycles.
+  std::unordered_set<std::string> resolving_;
 };
 
 } // namespace

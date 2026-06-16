@@ -7,21 +7,16 @@
 
 #include "tenzir/package.hpp"
 
-#include "tenzir/base_ctx.hpp"
-#include "tenzir/compile_ctx.hpp"
 #include "tenzir/concept/parseable/core.hpp"
 #include "tenzir/concept/parseable/string/char_class.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/load_contents.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
-#include "tenzir/ir.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/source.hpp"
-#include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/ast.hpp"
-#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/registry.hpp"
 #include "tenzir/type.hpp"
@@ -1572,6 +1567,65 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh,
   return module;
 }
 
+namespace {
+
+/// Rewrites bare sibling references (`$a`) inside a package `let` body to
+/// qualified self-references (`<pkg>::$a`) so they resolve through the same
+/// lazy package-let machinery as cross-package references. A binding may only
+/// reference earlier ones; forward or unknown references are errors.
+class sibling_rewriter : public ast::visitor<sibling_rewriter> {
+public:
+  sibling_rewriter(std::string module_name,
+                   const std::unordered_set<std::string>& declared,
+                   const std::unordered_set<std::string>& names,
+                   diagnostic_handler& dh)
+    : module_name_{std::move(module_name)},
+      declared_{declared},
+      names_{names},
+      dh_{dh} {
+  }
+
+  void visit(ast::expression& x) {
+    auto* var = try_as<ast::dollar_var>(x);
+    if (not var) {
+      enter(x);
+      return;
+    }
+    auto name = std::string{var->name_without_dollar()};
+    if (declared_.contains(name)) {
+      auto path = std::vector<ast::identifier>{
+        ast::identifier{module_name_, var->id.location}};
+      x = ast::pkg_dollar_var{std::move(path), var->id};
+      return;
+    }
+    if (names_.contains(name)) {
+      diagnostic::error("`${}` is referenced before it is defined", name)
+        .primary(var->get_location())
+        .emit(dh_);
+    } else {
+      diagnostic::error("unknown variable `${}`", name)
+        .primary(var->get_location())
+        .emit(dh_);
+    }
+    failed = true;
+  }
+
+  template <class T>
+  void visit(T& x) {
+    enter(x);
+  }
+
+  bool failed = false;
+
+private:
+  std::string module_name_;
+  const std::unordered_set<std::string>& declared_;
+  const std::unordered_set<std::string>& names_;
+  diagnostic_handler& dh_;
+};
+
+} // namespace
+
 auto build_package_lets(const package& pkg, module_def& pkg_mod,
                         diagnostic_handler& dh, SourceMap* source_map)
   -> failure_or<void> {
@@ -1582,54 +1636,43 @@ auto build_package_lets(const package& pkg, module_def& pkg_mod,
   auto session = provider.as_session();
   auto source = Source::new_source(
     pkg.lets, fmt::format("<packages/{}/lets.tql>", pkg.id), true);
-  auto local_source_map = SourceMap{};
-  auto& source_map_ref = source_map != nullptr ? *source_map : local_source_map;
-  source_map_ref.add_source(source);
-  TRY(auto parsed, parse(pkg.lets, source_origin{source->index}, session));
-  // Reject anything that is not a `let` binding, pointing at the offender.
-  for (const auto& stmt : parsed.body) {
-    if (std::get_if<ast::let_stmt>(&stmt) != nullptr) {
-      continue;
-    }
-    diagnostic::error("`lets.tql` may only contain `let` bindings")
-      .primary(match(stmt,
-                     [](const auto& s) {
-                       return s.get_location();
-                     }))
-      .note("in package `{}`", pkg.id)
-      .emit(dh);
-    return failure::promise();
+  if (source_map != nullptr) {
+    source_map->add_source(source);
   }
-  // Compile the bindings with the regular `let` machinery. This resolves names
-  // (with proper diagnostics for forward or undeclared references) and binds
-  // each `$`-reference to the earlier binding it refers to.
-  auto b_ctx = base_ctx{dh, session.reg()};
-  auto root = compile_ctx::make_root(b_ctx, source_map_ref);
-  TRY(auto ir_pipe, std::move(parsed).compile(root));
-  // Evaluate the bindings in order, threading each result through the
-  // environment so that later bindings can reference earlier ones. This mirrors
-  // `ir::pipeline::substitute`, which we cannot use directly because it
-  // discards the environment after folding it into operators.
-  auto env = substitute_ctx::env_t{};
-  auto sub_ctx = substitute_ctx{b_ctx, nullptr};
-  for (auto& let : ir_pipe.lets) {
-    TRY(auto remaining, let.expr.substitute(sub_ctx.with_env(&env)));
-    TENZIR_ASSERT(remaining == ast::substitute_result::no_remaining);
-    TRY(auto value, const_eval(let.expr, dh));
-    auto name = std::string_view{let.ident.name};
-    if (name.starts_with('$')) {
-      name = name.substr(1);
+  TRY(auto parsed, parse(pkg.lets, source_origin{source->index}, session));
+  const auto module_name = package_module_name(pkg.id);
+  // Validate that the file contains only `let` bindings and collect the names.
+  auto names = std::unordered_set<std::string>{};
+  for (const auto& stmt : parsed.body) {
+    const auto* let = std::get_if<ast::let_stmt>(&stmt);
+    if (not let) {
+      diagnostic::error("`lets.tql` may only contain `let` bindings")
+        .primary(match(stmt,
+                       [](const auto& s) {
+                         return s.get_location();
+                       }))
+        .note("in package `{}`", pkg.id)
+        .emit(dh);
+      return failure::promise();
     }
-    pkg_mod.defs[std::string{name}].value = value;
-    auto converted = match(
-      value,
-      [](auto& x) -> ast::constant::kind {
-        return std::move(x);
-      },
-      [](pattern&) -> ast::constant::kind {
-        TENZIR_UNREACHABLE();
-      });
-    env.try_emplace(let.id, std::move(converted));
+    names.insert(std::string{let->name_without_dollar()});
+  }
+  // Store each binding's expression unevaluated, rewriting bare sibling
+  // references to qualified self-references. A binding may only reference
+  // earlier ones; the value is const-evaluated lazily at each use site, where
+  // the full registry is available.
+  auto declared = std::unordered_set<std::string>{};
+  for (auto& stmt : parsed.body) {
+    auto* let = std::get_if<ast::let_stmt>(&stmt);
+    TENZIR_ASSERT(let);
+    auto rewriter = sibling_rewriter{module_name, declared, names, dh};
+    rewriter.visit(let->expr);
+    if (rewriter.failed) {
+      return failure::promise();
+    }
+    auto name = std::string{let->name_without_dollar()};
+    pkg_mod.defs[name].let_def = std::move(let->expr);
+    declared.insert(std::move(name));
   }
   return {};
 }

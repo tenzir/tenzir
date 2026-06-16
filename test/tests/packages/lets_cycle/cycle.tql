@@ -1,0 +1,5 @@
+---
+error: true
+---
+// Two package lets referencing each other are caught as a cycle at use.
+from {v: pkga::$x}

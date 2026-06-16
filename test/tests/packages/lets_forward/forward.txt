@@ -1,7 +1,6 @@
-error: unknown variable
+error: `$b` is referenced before it is defined
  --> <packages/fwdpkg/lets.tql>:1:10
   |
 1 | let $a = $b
   |          ^^ 
   |
-  = hint: no variables are available here

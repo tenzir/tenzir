@@ -804,19 +804,10 @@ auto evaluator::eval(ast::constant const& x, ActiveRows const& active)
 auto evaluator::eval(ast::pkg_dollar_var const& x, ActiveRows const& active)
   -> multi_series {
   TENZIR_UNUSED(active);
-  // The value is normally cached at resolve time (see `ast::pkg_dollar_var`).
+  // The value is const-evaluated and cached during resolution (see
+  // `resolve_entities`); evaluation just reads the cached constant.
   if (x.value) {
     return to_series(*x.value);
-  }
-  // Fall back to a registry lookup when the reference was resolved but no value
-  // was cached (e.g. a freshly resolved reference in a context with a registry).
-  if (x.ref.resolved()) {
-    auto ref = ctx_.reg().try_get(x.ref);
-    if (auto* entity = try_as<entity_ref>(&ref)) {
-      if (auto* value = try_as<std::reference_wrapper<const data>>(entity)) {
-        return to_series(value->get());
-      }
-    }
   }
   diagnostic::error("package binding `{}` is unresolved", x.id.name)
     .primary(x.get_location())
