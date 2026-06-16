@@ -1592,9 +1592,10 @@ auto build_package_lets(const package& pkg, module_def& pkg_mod,
       continue;
     }
     diagnostic::error("`lets.tql` may only contain `let` bindings")
-      .primary(match(stmt, [](const auto& s) {
-        return s.get_location();
-      }))
+      .primary(match(stmt,
+                     [](const auto& s) {
+                       return s.get_location();
+                     }))
       .note("in package `{}`", pkg.id)
       .emit(dh);
     return failure::promise();
@@ -1607,8 +1608,8 @@ auto build_package_lets(const package& pkg, module_def& pkg_mod,
   TRY(auto ir_pipe, std::move(parsed).compile(root));
   // Evaluate the bindings in order, threading each result through the
   // environment so that later bindings can reference earlier ones. This mirrors
-  // `ir::pipeline::substitute`, which we cannot use directly because it discards
-  // the environment after folding it into operators.
+  // `ir::pipeline::substitute`, which we cannot use directly because it
+  // discards the environment after folding it into operators.
   auto env = substitute_ctx::env_t{};
   auto sub_ctx = substitute_ctx{b_ctx, nullptr};
   for (auto& let : ir_pipe.lets) {

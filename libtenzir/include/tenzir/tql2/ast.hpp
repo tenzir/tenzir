@@ -238,12 +238,10 @@ struct root_field {
   }
 };
 
-using expression_kinds
-  = detail::type_list<record, list, meta, this_, root_field, pipeline_expr,
-                      constant, field_access, index_expr, binary_expr,
-                      unary_expr, function_call, lambda_expr, underscore,
-                      unpack, assignment, dollar_var, pkg_dollar_var,
-                      format_expr, type_expr>;
+using expression_kinds = detail::type_list<
+  record, list, meta, this_, root_field, pipeline_expr, constant, field_access,
+  index_expr, binary_expr, unary_expr, function_call, lambda_expr, underscore,
+  unpack, assignment, dollar_var, pkg_dollar_var, format_expr, type_expr>;
 
 using expression_kind = detail::tl_apply_t<expression_kinds, variant>;
 
