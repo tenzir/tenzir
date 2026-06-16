@@ -8,6 +8,8 @@
 #include "tenzir/http_auth.hpp"
 
 #include "tenzir/arc.hpp"
+#include "tenzir/async/fetch_node.hpp"
+#include "tenzir/async/mail.hpp"
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/curl.hpp"
@@ -18,7 +20,9 @@
 #include "tenzir/http_pool.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/secret.hpp"
 #include "tenzir/secret_resolution.hpp"
+#include "tenzir/secret_store.hpp"
 #include "tenzir/try.hpp"
 #include "tenzir/type.hpp"
 
@@ -602,16 +606,59 @@ auto find_local_auth_entry(std::string_view name, location loc, OpCtx& ctx)
   co_return found;
 }
 
-auto fetch_platform_auth_entry(std::string_view name, OpCtx& ctx)
+auto fetch_platform_auth_entry(std::string_view name, location loc, OpCtx& ctx)
   -> Task<failure_or<located<record>>> {
-  auto resolved = co_await ctx.resolve_authentication(std::string{name});
-  if (not resolved) {
+  auto node = co_await fetch_node(ctx.actor_system(), ctx.dh());
+  if (not node or not *node) {
     co_return failure::promise();
   }
-  auto rec = std::move(resolved->fields);
-  rec.insert_or_assign("name", std::string{name});
-  rec.insert_or_assign("strategy", std::move(resolved->strategy));
-  co_return located{std::move(rec), location::unknown};
+  // First leg: ask the platform for the authentication's public config and
+  // references to the secrets it depends on. No transport key here — the
+  // payload carries names only.
+  auto result = co_await async_mail(atom::resolve_v, atom::authentication_v,
+                                    std::string{name})
+                  .request(*node);
+  if (not result) {
+    diagnostic::error(result.error()).primary(loc).emit(ctx);
+    co_return failure::promise();
+  }
+  auto config = record{};
+  auto references = std::map<std::string, std::string>{};
+  auto success = match(
+    *result,
+    [&](platform_authentication const& auth) -> bool {
+      config = auth.public_config;
+      for (auto it = config.begin(); it != config.end();) {
+        if (is<caf::none_t>(it->second)) {
+          it = config.erase(it);
+        } else {
+          ++it;
+        }
+      }
+      config["name"] = std::string{name};
+      config["strategy"] = auth.strategy;
+      references = auth.secret_field_references;
+      return true;
+    },
+    [&](secret_resolution_error const& e) -> bool {
+      diagnostic::error("unknown HTTP auth `{}`", name)
+        .primary(loc)
+        .note("{}", e.message)
+        .emit(ctx);
+      return false;
+    });
+  if (not success) {
+    co_return failure::promise();
+  }
+  // The referenced secrets are *not* resolved here. Storing them as managed
+  // names defers resolution to the per-strategy `resolve_*_auth` path, which
+  // re-resolves through the standalone secret flow on every use — so rotating
+  // a secret on the platform takes effect on the next request, with no auth
+  // cache invalidation needed.
+  for (auto const& [field, secret_name] : references) {
+    config[field] = secret::make_managed(secret_name);
+  }
+  co_return located{std::move(config), location::unknown};
 }
 
 auto find_cached_auth_entry(std::string_view name, location loc, OpCtx& ctx)
@@ -631,13 +678,8 @@ auto find_cached_auth_entry(std::string_view name, location loc, OpCtx& ctx)
   if (*local) {
     config = std::move(**local);
   } else {
-    auto platform = co_await fetch_platform_auth_entry(name, ctx);
+    auto platform = co_await fetch_platform_auth_entry(name, loc, ctx);
     if (not platform) {
-      diagnostic::error("unknown HTTP auth `{}`", name)
-        .primary(loc)
-        .note("configure the auth object under `tenzir.auth` or on the "
-              "platform")
-        .emit(ctx);
       co_return failure::promise();
     }
     config = std::move(*platform);
@@ -860,7 +902,7 @@ auto fetch_authorization(std::string_view name, OpCtx& ctx)
   if (not strategy) {
     co_return failure::promise();
   }
-  if (*strategy == "oauth") {
+  if (*strategy == "oauth" or *strategy == "oauth-client-credentials") {
     co_return co_await fetch_oauth_authorization(name, ctx);
   }
   if (*strategy == "basic") {
@@ -893,8 +935,8 @@ auto fetch_authorization(std::string_view name, OpCtx& ctx)
   }
   diagnostic::error("unsupported auth strategy: `{}`", *strategy)
     .primary(cache_entry->config)
-    .hint("supported strategies are `oauth`, `basic`, `api-key`, and "
-          "`bearer-static`")
+    .hint("supported strategies are `oauth-client-credentials`, `oauth`, "
+          "`basic`, `api-key`, and `bearer-static`")
     .emit(ctx.dh());
   co_return failure::promise();
 }

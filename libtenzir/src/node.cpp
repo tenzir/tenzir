@@ -33,7 +33,6 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/posix_filesystem.hpp"
-#include "tenzir/authentication_store.hpp"
 #include "tenzir/secret_store.hpp"
 #include "tenzir/shutdown.hpp"
 #include "tenzir/source.hpp"
@@ -881,27 +880,20 @@ auto node(node_actor::stateful_pointer<node_state> self,
           });
       return rp;
     },
-    [self](atom::resolve_authentication, std::string name,
-           std::string public_key)
-      -> caf::result<authentication_resolution_result> {
-      // Node-local YAML auth entries are resolved by the operator before it
-      // reaches this handler, so we only forward to the platform actor.
+    [self](atom::resolve, atom::authentication, std::string name)
+      -> caf::result<platform_authentication_result> {
       auto store
-        = self->system().registry().get<authentication_store_actor>(
-          "tenzir.platform");
+        = self->system().registry().get<secret_store_actor>("tenzir.platform");
       if (not store) {
-        return authentication_resolution_error{
-          "authentication does not exist locally and no authentication "
-          "store is available"};
+        return secret_resolution_error{"authentication does not exist locally "
+                                       "and no authentication store is "
+                                       "available"};
       }
-      auto rp
-        = self->make_response_promise<authentication_resolution_result>();
-      self
-        ->mail(atom::resolve_authentication_v, std::move(name),
-               std::move(public_key))
+      auto rp = self->make_response_promise<platform_authentication_result>();
+      self->mail(atom::resolve_v, atom::authentication_v, std::move(name))
         .request(store, caf::infinite)
         .then(
-          [rp = rp](authentication_resolution_result r) mutable {
+          [rp = rp](platform_authentication_result r) mutable {
             rp.deliver(std::move(r));
           },
           [rp = rp](caf::error e) mutable {
