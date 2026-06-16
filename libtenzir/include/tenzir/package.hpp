@@ -264,6 +264,10 @@ struct package final {
   package_pipelines_map pipelines;
   package_contexts_map contexts;
   package_examples_list examples;
+  /// Raw contents of the package's `lets.tql` file. Compiled and
+  /// const-evaluated into value entities (the `let` namespace) when the
+  /// package is loaded.
+  std::string lets;
 
   // Packages are kept in the library without a `config`. When installing a
   // package, both the package definition and a config must be available.
@@ -291,7 +295,7 @@ struct package final {
       f.field("categories", x.categories), f.field("inputs", x.inputs),
       f.field("operators", x.operators), f.field("pipelines", x.pipelines),
       f.field("contexts", x.contexts), f.field("examples", x.examples),
-      f.field("config", x.config));
+      f.field("lets", x.lets), f.field("config", x.config));
   }
 };
 
@@ -303,6 +307,20 @@ struct module_def;
 
 auto build_package_operator_module(const package& pkg, diagnostic_handler& dh,
                                    SourceMap* source_map = nullptr)
+  -> failure_or<std::unique_ptr<module_def>>;
+
+/// Compiles and const-evaluates the package's `lets.tql` into value entities,
+/// returning a module containing them under the package's module name. Later
+/// bindings may reference earlier ones.
+auto build_package_lets(const package& pkg, diagnostic_handler& dh,
+                        SourceMap* source_map = nullptr)
+  -> failure_or<std::unique_ptr<module_def>>;
+
+/// Builds the combined registry module for a package: its operators and its
+/// `let` bindings, merged under the package's module name. Operators and lets
+/// occupy different namespaces within an entity set, so they coexist.
+auto build_package_module(const package& pkg, diagnostic_handler& dh,
+                          SourceMap* source_map = nullptr)
   -> failure_or<std::unique_ptr<module_def>>;
 
 auto package_module_name(std::string_view package_id) -> std::string;

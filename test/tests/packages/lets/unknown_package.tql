@@ -1,0 +1,5 @@
+---
+error: true
+---
+// Referencing a binding from a package that is not loaded.
+from {x: nopkg::$threshold}

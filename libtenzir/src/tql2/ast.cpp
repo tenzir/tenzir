@@ -725,6 +725,10 @@ auto ast::expression::is_deterministic(const registry& reg) const -> bool {
         return arg.is_deterministic(reg);
       });
     },
+    [](ast::pkg_dollar_var const&) {
+      // A package `let` reference resolves to a constant value.
+      return true;
+    },
     [](const auto&) {
       return false;
     });

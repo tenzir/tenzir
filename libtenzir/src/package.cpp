@@ -7,16 +7,21 @@
 
 #include "tenzir/package.hpp"
 
+#include "tenzir/base_ctx.hpp"
+#include "tenzir/compile_ctx.hpp"
 #include "tenzir/concept/parseable/core.hpp"
 #include "tenzir/concept/parseable/string/char_class.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/load_contents.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/ir.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/source.hpp"
+#include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/registry.hpp"
 #include "tenzir/type.hpp"
@@ -798,6 +803,7 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
     TRY_ASSIGN_MAP_TO_RESULT(contexts, package_context);
     TRY_ASSIGN_STRUCTURE_TO_RESULT(config, package_config);
     TRY_ASSIGN_LIST_TO_RESULT(examples, package_example);
+    TRY_ASSIGN_STRING_TO_RESULT(lets);
     TRY(check_unknown_package_key("package", key));
   }
   REQUIRED_FIELD(id)
@@ -1112,6 +1118,22 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
       return failure::promise();
     }
   }
+  auto lets_file = dir / "lets.tql";
+  if (std::filesystem::exists(lets_file, ec)) {
+    if (auto contents = detail::load_contents(lets_file)) {
+      parsed_package->lets = std::move(*contents);
+    } else {
+      diagnostic::error("failed to read {}", lets_file)
+        .note("error: {}", contents.error())
+        .emit(dh);
+      had_errors = true;
+    }
+  } else if (ec) {
+    diagnostic::error("{}", ec)
+      .note("while trying to load {}", lets_file)
+      .emit(dh);
+    had_errors = true;
+  }
   if (had_errors) {
     return failure::promise();
   }
@@ -1276,6 +1298,9 @@ auto package::to_record() const -> record {
     inputs_record[input_name] = input.to_record();
   }
   info_record["inputs"] = std::move(inputs_record);
+  if (not lets.empty()) {
+    info_record["lets"] = lets;
+  }
   return info_record;
 }
 
@@ -1543,6 +1568,90 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh,
   if (pkg_mod->defs.empty()) {
     pkg_entry.mod.reset();
     module->defs.erase(module_name);
+  }
+  return module;
+}
+
+auto build_package_lets(const package& pkg, diagnostic_handler& dh,
+                        SourceMap* source_map)
+  -> failure_or<std::unique_ptr<module_def>> {
+  auto module = std::make_unique<module_def>();
+  if (pkg.lets.empty()) {
+    return module;
+  }
+  auto provider = session_provider::make(dh);
+  auto session = provider.as_session();
+  auto source = Source::new_source(
+    pkg.lets, fmt::format("<packages/{}/lets.tql>", pkg.id), true);
+  auto local_source_map = SourceMap{};
+  auto& source_map_ref = source_map != nullptr ? *source_map : local_source_map;
+  source_map_ref.add_source(source);
+  TRY(auto parsed, parse(pkg.lets, source_origin{source->index}, session));
+  // Compile the bindings with the regular `let` machinery. This resolves names
+  // (with proper diagnostics for forward or undeclared references) and binds
+  // each `$`-reference to the earlier binding it refers to.
+  auto b_ctx = base_ctx{dh, session.reg()};
+  auto root = compile_ctx::make_root(b_ctx, source_map_ref);
+  TRY(auto ir_pipe, std::move(parsed).compile(root));
+  if (not ir_pipe.operators.empty()) {
+    diagnostic::error("`lets.tql` may only contain `let` bindings")
+      .note("in package `{}`", pkg.id)
+      .emit(dh);
+    return failure::promise();
+  }
+  auto module_name = package_module_name(pkg.id);
+  auto& pkg_entry = module->defs[module_name];
+  pkg_entry.mod = std::make_unique<module_def>();
+  auto* pkg_mod = pkg_entry.mod.get();
+  // Evaluate the bindings in order, threading each result through the
+  // environment so that later bindings can reference earlier ones. This mirrors
+  // `ir::pipeline::substitute`, which we cannot use directly because it discards
+  // the environment after folding it into operators.
+  auto env = substitute_ctx::env_t{};
+  auto sub_ctx = substitute_ctx{b_ctx, nullptr};
+  for (auto& let : ir_pipe.lets) {
+    TRY(auto remaining, let.expr.substitute(sub_ctx.with_env(&env)));
+    TENZIR_ASSERT(remaining == ast::substitute_result::no_remaining);
+    TRY(auto value, const_eval(let.expr, dh));
+    auto name = std::string_view{let.ident.name};
+    if (name.starts_with('$')) {
+      name = name.substr(1);
+    }
+    pkg_mod->defs[std::string{name}].value = value;
+    auto converted = match(
+      value,
+      [](auto& x) -> ast::constant::kind {
+        return std::move(x);
+      },
+      [](pattern&) -> ast::constant::kind {
+        TENZIR_UNREACHABLE();
+      });
+    env.try_emplace(let.id, std::move(converted));
+  }
+  return module;
+}
+
+auto build_package_module(const package& pkg, diagnostic_handler& dh,
+                          SourceMap* source_map)
+  -> failure_or<std::unique_ptr<module_def>> {
+  TRY(auto module, build_package_operator_module(pkg, dh, source_map));
+  TRY(auto lets_module, build_package_lets(pkg, dh, source_map));
+  // Operators and lets share the package's module path but occupy different
+  // namespaces within an entity set, so merge the value entities into the
+  // operator module rather than replacing it.
+  auto module_name = package_module_name(pkg.id);
+  auto lets_it = lets_module->defs.find(module_name);
+  if (lets_it != lets_module->defs.end() and lets_it->second.mod) {
+    auto& dst = module->defs[module_name].mod;
+    if (not dst) {
+      dst = std::move(lets_it->second.mod);
+    } else {
+      for (auto& [name, set] : lets_it->second.mod->defs) {
+        if (set.value) {
+          dst->defs[name].value = std::move(set.value);
+        }
+      }
+    }
   }
   return module;
 }

@@ -1,0 +1,8 @@
+// Internal use: a package operator referencing the package's own `let`s.
+from {
+  high: letspkg::$high_sev,
+  ports: letspkg::$watched_ports,
+  threshold: letspkg::$threshold,
+  vendor: letspkg::$vendor,
+  defaults: letspkg::$defaults,
+}

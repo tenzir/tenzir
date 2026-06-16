@@ -1,0 +1,6 @@
+error: package binding `letspkg::$nonexistent` not found
+ --> tests/packages/lets/unknown_binding.tql:5:10
+  |
+5 | from {x: letspkg::$nonexistent}
+  |          ^^^^^^^^^^^^^^^^^^^^^ 
+  |

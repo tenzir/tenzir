@@ -55,6 +55,8 @@ public:
             return reg_.function_names();
           case entity_ns::mod:
             return reg_.module_names();
+          case entity_ns::let:
+            return reg_.entity_names(entity_ns::let);
         }
         TENZIR_UNREACHABLE();
       });
@@ -66,6 +68,8 @@ public:
             return "function";
           case entity_ns::mod:
             return "module";
+          case entity_ns::let:
+            return "value";
         }
         TENZIR_UNREACHABLE();
       });
@@ -162,6 +166,42 @@ public:
       return;
     }
     x.ref = std::move(path);
+  }
+
+  void visit(ast::pkg_dollar_var& x) {
+    if (x.ref.resolved()) {
+      return;
+    }
+    // The full path is the module segments followed by the binding name.
+    auto segments = std::vector<std::string>{};
+    segments.reserve(x.path.size() + 1);
+    for (auto& segment : x.path) {
+      segments.push_back(segment.name);
+    }
+    segments.push_back(std::string{x.name_without_dollar()});
+    // Package `let`s live only in the `packages` domain.
+    auto path = entity_path{std::string{"packages"}, std::move(segments),
+                            entity_ns::let};
+    auto result = reg_.try_get(path);
+    if (auto* ref = try_as<entity_ref>(&result)) {
+      auto* value = try_as<std::reference_wrapper<const data>>(ref);
+      TENZIR_ASSERT(value);
+      x.ref = std::move(path);
+      // HACK: cache the value here so it can be folded later. See
+      // `ast::pkg_dollar_var`.
+      x.value = value->get();
+      return;
+    }
+    auto display = std::string{};
+    for (const auto& segment : x.path) {
+      display += segment.name;
+      display += "::";
+    }
+    display += x.id.name;
+    diagnostic::error("package binding `{}` not found", display)
+      .primary(x.get_location())
+      .emit(diag_);
+    result_ = failure::promise();
   }
 
   void visit(ast::invocation& x) {

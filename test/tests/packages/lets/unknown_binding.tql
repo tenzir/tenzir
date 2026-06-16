@@ -1,0 +1,5 @@
+---
+error: true
+---
+// Referencing a binding the package does not define.
+from {x: letspkg::$nonexistent}

@@ -1,0 +1,5 @@
+let $high_sev = 8
+let $watched_ports = [22, 80, 443]
+let $threshold = $high_sev + 1
+let $vendor = "acme"
+let $defaults = {region: "eu", retries: 3}

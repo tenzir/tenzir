@@ -1,0 +1,5 @@
+---
+error: true
+---
+// A lets.tql containing a non-let statement fails to load the package.
+from {x: nonletpkg::$a}

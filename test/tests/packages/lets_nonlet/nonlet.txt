@@ -1,0 +1,2 @@
+error: `lets.tql` may only contain `let` bindings
+  = note: in package `nonletpkg`

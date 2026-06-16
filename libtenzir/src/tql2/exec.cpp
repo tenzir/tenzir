@@ -185,7 +185,7 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
   auto modules = std::vector<std::unique_ptr<module_def>>{};
   modules.reserve(packages_by_id.size());
   for (auto& [id, pkg] : packages_by_id) {
-    if (pkg.operators.empty()) {
+    if (pkg.operators.empty() and pkg.lets.empty()) {
       continue;
     }
     auto normalized = package_module_name(pkg.id);
@@ -199,7 +199,7 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
       had_errors = true;
       continue;
     }
-    auto module = build_package_operator_module(pkg, dh, source_map);
+    auto module = build_package_module(pkg, dh, source_map);
     if (not module) {
       had_errors = true;
       continue;

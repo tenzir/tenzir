@@ -1,0 +1,9 @@
+// External consumer referencing a package's `let` bindings of several types,
+// including one that references an earlier sibling (`threshold = high_sev + 1`).
+from {
+  high: letspkg::$high_sev,
+  ports: letspkg::$watched_ports,
+  threshold: letspkg::$threshold,
+  vendor: letspkg::$vendor,
+  defaults: letspkg::$defaults,
+}

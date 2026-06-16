@@ -46,6 +46,8 @@ void gather_names(const module_def& mod, entity_ns ns, std::string prefix,
           return def.fn != nullptr;
         case entity_ns::mod:
           return def.mod != nullptr;
+        case entity_ns::let:
+          return def.value.is_some();
       }
       TENZIR_UNREACHABLE();
     });
@@ -211,6 +213,11 @@ auto registry::try_get(const entity_path& path) const
         case entity_ns::mod:
           if (set.mod) {
             return *set.mod;
+          }
+          return error{i, true};
+        case entity_ns::let:
+          if (set.value) {
+            return std::cref(*set.value);
           }
           return error{i, true};
       }

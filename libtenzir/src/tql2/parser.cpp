@@ -817,7 +817,18 @@ public:
         .primary(next_location(), "got {}", next_description())
         .throw_();
     }
-    auto entity = parse_entity(ident.as_identifier());
+    // Parse the remaining `::`-separated path. A trailing `$name` segment turns
+    // the whole reference into a package `let` reference (`pkg_dollar_var`),
+    // e.g. `acme::$threshold`; otherwise it is an ordinary entity.
+    auto path = std::vector<ast::identifier>{};
+    path.push_back(ident.as_identifier());
+    while (accept(tk::colon_colon)) {
+      if (auto dollar = accept(tk::dollar_ident)) {
+        return ast::pkg_dollar_var{std::move(path), dollar.as_identifier()};
+      }
+      path.push_back(expect(tk::identifier).as_identifier());
+    }
+    auto entity = ast::entity{std::move(path)};
     if (peek(tk::lpar)) {
       return parse_function_call({}, std::move(entity));
     }

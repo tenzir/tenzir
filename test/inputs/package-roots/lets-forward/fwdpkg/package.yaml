@@ -1,0 +1,3 @@
+id: fwdpkg
+name: Forward Reference Package
+description: A package whose lets.tql references a not-yet-declared binding.

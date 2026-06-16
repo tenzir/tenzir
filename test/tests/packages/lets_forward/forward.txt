@@ -1,0 +1,7 @@
+error: unknown variable
+ --> <packages/fwdpkg/lets.tql>:1:10
+  |
+1 | let $a = $b
+  |          ^^ 
+  |
+  = hint: no variables are available here
