@@ -78,6 +78,21 @@ public:
     return true;
   }
 
+  auto usable_as_operator() const -> Option<Signature> override {
+    // When used as an operator, the event record is passed as the implicit
+    // first argument, leaving only the optional separator as an operator-facing
+    // argument: `… | flatten [separator]` becomes `this = flatten(this, sep)`.
+    return Signature{
+      .arguments = {
+        PositionalArgument{
+          .name = "separator",
+          .optional = true,
+          .value_type = type{string_type{}},
+        },
+      },
+    };
+  }
+
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
