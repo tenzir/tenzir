@@ -56,23 +56,23 @@ struct index_config {
   /// startup time by keeping more requests in flight.
   size_t load_concurrency = 0;
 
-  /// When non-zero, Bloom-filter sketches whose serialized payload exceeds this
-  /// many bytes are not deserialized when loading the catalog at startup. Only
-  /// string and IP fields use Bloom filters; the corresponding fields are still
-  /// registered, but with no synopsis, so the catalog conservatively treats
-  /// predicates on them as candidates (it may return false positives, never
-  /// false negatives). This drastically lowers resident memory and startup cost
-  /// for nodes with very many partitions, at the price of coarser pruning for
-  /// equality predicates on these high-cardinality fields. Numeric and duration
-  /// min/max synopses and time synopses are never deferred, so range pruning
-  /// (e.g. on a timestamp field) is unaffected regardless of the threshold.
-  size_t lazy_sketch_threshold = 0;
+  /// When set, Bloom-filter sketches are not deserialized when loading the
+  /// catalog at startup. Only string and IP fields use Bloom filters; the
+  /// corresponding fields are still registered, but with no synopsis, so the
+  /// catalog conservatively treats predicates on them as candidates (it may
+  /// return false positives, never false negatives). This drastically lowers
+  /// resident memory and startup cost for nodes with very many partitions, at
+  /// the price of coarser pruning for equality predicates on these
+  /// high-cardinality fields. Numeric and duration min/max synopses and time
+  /// synopses are never deferred, so range pruning (e.g. on a timestamp field)
+  /// is unaffected.
+  bool lazy_sketches = false;
 
   /// When set, partition synopses are not verified when read from disk at
   /// startup, and are instead verified once when written. Verification
   /// recursively walks the entire FlatBuffers buffer, faulting in all of its
   /// pages; skipping it on read avoids reading sketch payloads that are never
-  /// decoded (see `lazy_sketch_threshold`) and is the dominant startup cost on
+  /// decoded (see `lazy_sketches`) and is the dominant startup cost on
   /// networked storage. This trades robustness against on-disk corruption for
   /// faster startup, so it should only be enabled when the storage backend is
   /// trusted.

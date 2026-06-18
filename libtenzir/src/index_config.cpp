@@ -140,13 +140,12 @@ caf::error convert(const data& src, index_config& dst) {
   } else {
     return std::move(load_concurrency.error());
   }
-  if (auto lazy_sketch_threshold
-      = try_get<int64_t>(*rec, "lazy-sketch-threshold")) {
-    if (*lazy_sketch_threshold && **lazy_sketch_threshold > 0) {
-      dst.lazy_sketch_threshold = static_cast<size_t>(**lazy_sketch_threshold);
+  if (auto lazy_sketches = try_get<bool>(*rec, "lazy-sketches")) {
+    if (*lazy_sketches) {
+      dst.lazy_sketches = **lazy_sketches;
     }
   } else {
-    return std::move(lazy_sketch_threshold.error());
+    return std::move(lazy_sketches.error());
   }
   if (auto skip_synopsis_verification
       = try_get<bool>(*rec, "skip-synopsis-verification")) {
