@@ -614,6 +614,11 @@ caf::error index_state::load_from_disk() {
   const auto archive_dir = resolve_dir(dir / ".." / "archive");
   const auto lazy_sketch_threshold = synopsis_opts.lazy_sketch_threshold;
   const auto skip_verification = synopsis_opts.skip_synopsis_verification;
+  // `synopsis_files` was scanned from `dir`, but synopses live under
+  // `synopsisdir`. These are the same in the default configuration; when they
+  // differ we must check the actual synopsis path instead of the scan result,
+  // otherwise we would regenerate every synopsis on each startup.
+  const auto synopsis_in_index_dir = synopsisdir == dir;
   // Loads a single partition synopsis from disk. This is invoked concurrently
   // from multiple worker threads below, so it must not touch shared mutable
   // state: it only reads data prepared above (all immutable during the load)
@@ -624,12 +629,16 @@ caf::error index_state::load_from_disk() {
     [&](const uuid& partition_uuid) -> caf::expected<partition_synopsis_pair> {
     auto part_path = partition_path(partition_uuid);
     auto synopsis_path = partition_synopsis_path(partition_uuid);
-    // Generate the external partition synopsis file if it doesn't exist. We
-    // know which `.mdx` files exist from the directory scan above, so this
-    // avoids a stat. When verification is skipped on read, verify the freshly
-    // written synopsis instead.
-    if (not std::binary_search(synopsis_files.begin(), synopsis_files.end(),
-                               partition_uuid)) {
+    // Generate the external partition synopsis file if it doesn't exist. In the
+    // common case the synopsis lives in the scanned index directory, so we can
+    // use the scan result and avoid a stat; otherwise we check the actual path.
+    // When verification is skipped on read, verify the freshly written synopsis.
+    const auto synopsis_exists
+      = synopsis_in_index_dir
+          ? std::binary_search(synopsis_files.begin(), synopsis_files.end(),
+                               partition_uuid)
+          : std::filesystem::exists(synopsis_path);
+    if (not synopsis_exists) {
       if (auto error = extract_partition_synopsis(part_path, synopsis_path,
                                                   skip_verification);
           error.valid()) {
