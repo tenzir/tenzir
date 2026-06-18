@@ -268,7 +268,7 @@ namespace {
 caf::error unpack_(
   const flatbuffers::Vector<flatbuffers::Offset<fbs::synopsis::LegacySynopsis>>&
     synopses,
-  partition_synopsis& ps) {
+  partition_synopsis& ps, size_t lazy_sketch_threshold) {
   for (const auto* synopsis : synopses) {
     if (not synopsis) {
       return caf::make_error(ec::format_error, "synopsis is null");
@@ -280,13 +280,32 @@ caf::error unpack_(
       return error;
     }
     synopsis_ptr ptr;
-    if (auto error = unpack(*synopsis, ptr); error.valid()) {
-      return error;
+    // Optionally skip deserializing large opaque synopses (e.g. Bloom filters).
+    // The serialized payload size is available in O(1) from the flatbuffer
+    // without decoding it. The field is still registered below (with a null
+    // synopsis), which the catalog interprets as "cannot prune" rather than "no
+    // match", so deferring never introduces false negatives. Inline time/bool
+    // synopses and small opaque synopses (min/max) are always decoded.
+    const auto* opaque = synopsis->opaque_synopsis();
+    const auto defer
+      = lazy_sketch_threshold > 0 and opaque != nullptr
+        and opaque->caf_0_18_data() != nullptr
+        and opaque->caf_0_18_data()->size() > lazy_sketch_threshold;
+    if (not defer) {
+      if (auto error = unpack(*synopsis, ptr); error.valid()) {
+        return error;
+      }
     }
     // We mark type-level synopses by using an empty string as name.
     if (qf.is_standalone_type()) {
-      ps.type_synopses_[qf.type()] = std::move(ptr);
+      // A missing type synopsis is handled conservatively by the catalog, so a
+      // deferred (null) one can simply be omitted.
+      if (ptr) {
+        ps.type_synopses_[qf.type()] = std::move(ptr);
+      }
     } else {
+      // The catalog relies on the presence of the field key (even mapped to a
+      // null synopsis) to consider the partition a candidate, so always insert.
       ps.field_synopses_[qf] = std::move(ptr);
     }
   }
@@ -296,7 +315,7 @@ caf::error unpack_(
 } // namespace
 
 caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
-                  partition_synopsis& ps) {
+                  partition_synopsis& ps, size_t lazy_sketch_threshold) {
   if (not x.id_range()) {
     return caf::make_error(ec::format_error, "missing id range");
   }
@@ -321,7 +340,7 @@ caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
   if (not x.synopses()) {
     return caf::make_error(ec::format_error, "missing synopses");
   }
-  return unpack_(*x.synopses(), ps);
+  return unpack_(*x.synopses(), ps, lazy_sketch_threshold);
 }
 
 } // namespace tenzir

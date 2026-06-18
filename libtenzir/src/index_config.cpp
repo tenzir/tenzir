@@ -133,6 +133,21 @@ caf::error convert(const data& src, index_config& dst) {
       dst.rules.push_back(std::move(rule));
     }
   }
+  if (auto load_concurrency = try_get<int64_t>(*rec, "load-concurrency")) {
+    if (*load_concurrency && **load_concurrency > 0) {
+      dst.load_concurrency = static_cast<size_t>(**load_concurrency);
+    }
+  } else {
+    return std::move(load_concurrency.error());
+  }
+  if (auto lazy_sketch_threshold
+      = try_get<int64_t>(*rec, "lazy-sketch-threshold")) {
+    if (*lazy_sketch_threshold && **lazy_sketch_threshold > 0) {
+      dst.lazy_sketch_threshold = static_cast<size_t>(**lazy_sketch_threshold);
+    }
+  } else {
+    return std::move(lazy_sketch_threshold.error());
+  }
   return caf::none;
 }
 
