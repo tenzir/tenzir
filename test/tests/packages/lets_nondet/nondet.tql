@@ -1,0 +1,5 @@
+---
+error: true
+---
+// A non-deterministic let binding is rejected at the use site.
+from {v: nondetpkg::$r}

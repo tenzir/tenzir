@@ -210,7 +210,9 @@ public:
       return;
     }
     // Resolve and const-evaluate the binding's expression here, where the full
-    // registry is available, then cache the result on the node.
+    // registry is available, then cache the result on the node. Const-eval
+    // first, so non-constant bindings (e.g. those referencing input) get a
+    // precise diagnostic at their definition.
     auto expr = def->get();
     visit(expr);
     resolving_.erase(key);
@@ -219,6 +221,17 @@ public:
     }
     auto value = const_eval(expr, diag_);
     if (not value) {
+      result_ = failure::promise();
+      return;
+    }
+    // A package `let` is a compile-time constant; reject bindings that would
+    // evaluate differently each time (e.g. `random()`) so that every reference
+    // yields the same value.
+    if (not expr.is_deterministic(reg_)) {
+      diagnostic::error("package binding `{}` is not a constant", display)
+        .primary(expr.get_location())
+        .note("package `let` bindings must be deterministic")
+        .emit(diag_);
       result_ = failure::promise();
       return;
     }
