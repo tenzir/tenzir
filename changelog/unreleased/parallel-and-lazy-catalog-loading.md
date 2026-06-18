@@ -24,3 +24,16 @@ candidate partitions, but never fewer), trading sketch-based pruning of
 equality predicates on high-cardinality fields for drastically lower resident
 memory and faster startup. Min/max and time synopses are always loaded, so
 range pruning—for example on a timestamp field—is unaffected.
+
+The new `tenzir.index.skip-synopsis-verification` option skips the recursive
+FlatBuffers verification of partition synopses when reading them at startup,
+verifying them once when they are written instead. Verification walks the
+entire buffer and faults in all of its pages—including sketch payloads that are
+never decoded—so skipping it is the dominant startup saving on networked
+storage. It trades robustness against on-disk corruption for speed and should
+only be enabled when the storage backend is trusted.
+
+Loading also avoids a `realpath` and several `stat` calls per partition by
+resolving the base directories once and reusing file sizes gathered during the
+initial directory scan, and it now reports progress periodically for large
+catalogs.

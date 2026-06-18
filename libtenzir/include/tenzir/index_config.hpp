@@ -68,6 +68,16 @@ struct index_config {
   /// unaffected.
   size_t lazy_sketch_threshold = 0;
 
+  /// When set, partition synopses are not verified when read from disk at
+  /// startup, and are instead verified once when written. Verification
+  /// recursively walks the entire FlatBuffers buffer, faulting in all of its
+  /// pages; skipping it on read avoids reading sketch payloads that are never
+  /// decoded (see `lazy_sketch_threshold`) and is the dominant startup cost on
+  /// networked storage. This trades robustness against on-disk corruption for
+  /// faster startup, so it should only be enabled when the storage backend is
+  /// trusted.
+  bool skip_synopsis_verification = false;
+
   template <class Inspector>
   friend auto inspect(Inspector& f, index_config& x) {
     return detail::apply_all(f, x.rules, x.default_fp_rate);

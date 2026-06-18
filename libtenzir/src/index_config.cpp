@@ -148,6 +148,14 @@ caf::error convert(const data& src, index_config& dst) {
   } else {
     return std::move(lazy_sketch_threshold.error());
   }
+  if (auto skip_synopsis_verification
+      = try_get<bool>(*rec, "skip-synopsis-verification")) {
+    if (*skip_synopsis_verification) {
+      dst.skip_synopsis_verification = **skip_synopsis_verification;
+    }
+  } else {
+    return std::move(skip_synopsis_verification.error());
+  }
   return caf::none;
 }
 
