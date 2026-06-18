@@ -280,15 +280,23 @@ caf::error unpack_(
       return error;
     }
     synopsis_ptr ptr;
-    // Optionally skip deserializing large opaque synopses (e.g. Bloom filters).
-    // The serialized payload size is available in O(1) from the flatbuffer
-    // without decoding it. The field is still registered below (with a null
-    // synopsis), which the catalog interprets as "cannot prune" rather than "no
-    // match", so deferring never introduces false negatives. Inline time/bool
-    // synopses and small opaque synopses (min/max) are always decoded.
+    // Optionally skip deserializing Bloom-filter sketches, which dominate the
+    // synopsis size. Only string and IP fields use Bloom filters; numeric and
+    // duration fields use small min/max synopses and time/bool fields use
+    // inline encodings, none of which are ever deferred so that range pruning
+    // is unaffected regardless of the threshold. The field is still registered
+    // below (with a null synopsis), which the catalog interprets as "cannot
+    // prune" rather than "no match", so deferring never introduces false
+    // negatives. The serialized payload size is read in O(1) from the
+    // flatbuffer without decoding it.
+    const auto uses_bloom_filter
+      = lazy_sketch_threshold > 0
+        and match(qf.type(), []<concrete_type T>(const T&) {
+              return detail::is_any_v<T, string_type, ip_type>;
+            });
     const auto* opaque = synopsis->opaque_synopsis();
     const auto defer
-      = lazy_sketch_threshold > 0 and opaque != nullptr
+      = uses_bloom_filter and opaque != nullptr
         and opaque->caf_0_18_data() != nullptr
         and opaque->caf_0_18_data()->size() > lazy_sketch_threshold;
     if (not defer) {

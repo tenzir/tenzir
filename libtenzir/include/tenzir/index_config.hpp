@@ -56,16 +56,16 @@ struct index_config {
   /// startup time by keeping more requests in flight.
   size_t load_concurrency = 0;
 
-  /// When non-zero, opaque partition synopses (most notably Bloom filters)
-  /// whose serialized payload exceeds this many bytes are not deserialized when
-  /// loading the catalog at startup. The corresponding fields are still
+  /// When non-zero, Bloom-filter sketches whose serialized payload exceeds this
+  /// many bytes are not deserialized when loading the catalog at startup. Only
+  /// string and IP fields use Bloom filters; the corresponding fields are still
   /// registered, but with no synopsis, so the catalog conservatively treats
   /// predicates on them as candidates (it may return false positives, never
   /// false negatives). This drastically lowers resident memory and startup cost
   /// for nodes with very many partitions, at the price of coarser pruning for
-  /// equality predicates on high-cardinality fields. Min/max and time synopses
-  /// are always loaded, so range pruning (e.g. on a timestamp field) is
-  /// unaffected.
+  /// equality predicates on these high-cardinality fields. Numeric and duration
+  /// min/max synopses and time synopses are never deferred, so range pruning
+  /// (e.g. on a timestamp field) is unaffected regardless of the threshold.
   size_t lazy_sketch_threshold = 0;
 
   /// When set, partition synopses are not verified when read from disk at
