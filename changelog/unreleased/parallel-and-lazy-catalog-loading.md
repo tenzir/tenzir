@@ -17,13 +17,14 @@ storage (such as NFS), where loading is dominated by I/O latency that overlaps
 across requests.
 
 The new `tenzir.index.lazy-sketch-threshold` option (in bytes, `0` disables it)
-makes the index skip deserializing large opaque synopses—most notably Bloom
-filters—when loading the catalog. The corresponding fields remain registered,
-so the catalog still considers them when answering queries (it may return more
-candidate partitions, but never fewer), trading sketch-based pruning of
-equality predicates on high-cardinality fields for drastically lower resident
-memory and faster startup. Min/max and time synopses are always loaded, so
-range pruning—for example on a timestamp field—is unaffected.
+makes the index skip deserializing Bloom-filter sketches larger than the
+threshold when loading the catalog. Only string and IP fields use Bloom
+filters; the corresponding fields remain registered, so the catalog still
+considers them when answering queries (it may return more candidate partitions,
+but never fewer), trading sketch-based pruning of equality predicates on these
+high-cardinality fields for drastically lower resident memory and faster
+startup. Numeric and duration min/max synopses and time synopses are never
+deferred, so range pruning—for example on a timestamp field—is unaffected.
 
 The new `tenzir.index.skip-synopsis-verification` option skips the recursive
 FlatBuffers verification of partition synopses when reading them at startup,

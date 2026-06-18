@@ -9,10 +9,13 @@
 #include "tenzir/fbs/partition_synopsis.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/qualified_record_field.hpp"
+#include "tenzir/series.hpp"
 #include "tenzir/synopsis_factory.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/type.hpp"
 
+#include <arrow/builder.h>
+#include <caf/settings.hpp>
 #include <flatbuffers/flatbuffers.h>
 
 #include <map>
@@ -22,23 +25,48 @@ using namespace tenzir;
 
 namespace {
 
-// Builds a partition synopsis with one inline (time) and one opaque (int64
-// min/max) field synopsis, packs it, and unpacks it again with the given lazy
-// sketch threshold.
+auto make_string_series(std::vector<std::string> values) -> series {
+  auto builder = arrow::StringBuilder{};
+  for (const auto& value : values) {
+    const auto status = builder.Append(value);
+    TENZIR_ASSERT(status.ok());
+  }
+  auto result = builder.Finish();
+  TENZIR_ASSERT(result.ok());
+  return series{type{string_type{}}, std::move(*result)};
+}
+
+// Builds a partition synopsis with a Bloom-filter (string) field, an opaque
+// min/max (int64) field, and an inline (time) field, packs it, and unpacks it
+// again with the given lazy sketch threshold.
 auto roundtrip(size_t lazy_sketch_threshold) -> partition_synopsis {
   factory<synopsis>::initialize();
   partition_synopsis ps;
-  ps.schema = type{record_type{{"ts", time_type{}}, {"n", int64_type{}}}};
-  const auto ts_field = qualified_record_field{"test", "ts", type{time_type{}}};
+  ps.schema = type{record_type{
+    {"msg", string_type{}}, {"n", int64_type{}}, {"ts", time_type{}}}};
+  const auto msg_field
+    = qualified_record_field{"test", "msg", type{string_type{}}};
   const auto n_field = qualified_record_field{"test", "n", type{int64_type{}}};
-  // A time synopsis is serialized inline (never deferred); an int64 min/max
-  // synopsis is serialized as an opaque blob (deferred above the threshold).
-  ps.field_synopses_[ts_field]
-    = factory<synopsis>::make(type{time_type{}}, caf::settings{});
+  const auto ts_field = qualified_record_field{"test", "ts", type{time_type{}}};
+  // The string synopsis is a Bloom filter (opaque, deferrable); the int64
+  // synopsis is an opaque min/max; the time synopsis is encoded inline.
+  auto string_opts = caf::settings{};
+  string_opts["buffer-input-data"] = true;
+  string_opts["max-partition-size"] = uint64_t{1024};
+  string_opts["string-synopsis-fp-rate"] = 0.01;
+  auto bloom = factory<synopsis>::make(type{string_type{}}, string_opts);
+  REQUIRE_NOT_EQUAL(bloom, nullptr);
+  bloom->add(make_string_series({"alpha", "beta", "gamma"}));
+  ps.field_synopses_[msg_field] = std::move(bloom);
   ps.field_synopses_[n_field]
     = factory<synopsis>::make(type{int64_type{}}, caf::settings{});
-  REQUIRE_NOT_EQUAL(ps.field_synopses_[ts_field], nullptr);
+  ps.field_synopses_[ts_field]
+    = factory<synopsis>::make(type{time_type{}}, caf::settings{});
   REQUIRE_NOT_EQUAL(ps.field_synopses_[n_field], nullptr);
+  REQUIRE_NOT_EQUAL(ps.field_synopses_[ts_field], nullptr);
+  // Materialize buffered synopses, as the partition persist path does before
+  // packing.
+  ps.shrink();
   flatbuffers::FlatBufferBuilder builder;
   auto offset = pack(builder, ps);
   REQUIRE(static_cast<bool>(offset));
@@ -72,20 +100,21 @@ auto field_is_null(const partition_synopsis& ps)
 TEST("lazy sketch threshold of zero loads every synopsis") {
   const auto ps = roundtrip(0);
   const auto fields = field_is_null(ps);
-  REQUIRE_EQUAL(fields.size(), 2u);
-  CHECK(not fields.at("ts"));
+  REQUIRE_EQUAL(fields.size(), 3u);
+  CHECK(not fields.at("msg"));
   CHECK(not fields.at("n"));
+  CHECK(not fields.at("ts"));
 }
 
-TEST("lazy sketch threshold defers opaque synopses but keeps the field keys") {
-  // A threshold of 8 bytes is below the serialized size of the int64 min/max
-  // synopsis, so it is deferred, while the inline time synopsis is unaffected.
+TEST("lazy sketch threshold only defers bloom filters") {
+  // A small threshold defers the Bloom-filter sketch but must never defer the
+  // numeric min/max or the inline time synopsis, regardless of their size --
+  // otherwise range pruning would silently break. All field keys must remain
+  // present so the catalog never drops a partition (a false negative).
   const auto ps = roundtrip(8);
   const auto fields = field_is_null(ps);
-  // Crucially, both field keys are still present: the catalog relies on this to
-  // treat predicates on the deferred field as candidates rather than silently
-  // dropping the partition (which would be a false negative).
-  REQUIRE_EQUAL(fields.size(), 2u);
-  CHECK(not fields.at("ts"));
-  CHECK(fields.at("n"));
+  REQUIRE_EQUAL(fields.size(), 3u);
+  CHECK(fields.at("msg"));    // string Bloom filter: deferred
+  CHECK(not fields.at("n"));  // int64 min/max: always loaded
+  CHECK(not fields.at("ts")); // time: always loaded
 }
