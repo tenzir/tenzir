@@ -19,6 +19,7 @@
 #include "tenzir/fbs/flatbuffer_container.hpp"
 #include "tenzir/fbs/partition.hpp"
 #include "tenzir/fbs/utils.hpp"
+#include "tenzir/flatbuffer.hpp"
 #include "tenzir/ids.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
@@ -46,7 +47,8 @@ namespace tenzir {
 
 namespace {
 
-chunk_ptr serialize_partition_synopsis(const partition_synopsis& synopsis) {
+chunk_ptr
+serialize_partition_synopsis(const partition_synopsis& synopsis, bool verify) {
   flatbuffers::FlatBufferBuilder synopsis_builder;
   const auto ps = pack(synopsis_builder, synopsis);
   if (not ps) {
@@ -58,7 +60,20 @@ chunk_ptr serialize_partition_synopsis(const partition_synopsis& synopsis) {
   ps_builder.add_partition_synopsis(ps->Union());
   auto ps_offset = ps_builder.Finish();
   fbs::FinishPartitionSynopsisBuffer(synopsis_builder, ps_offset);
-  return fbs::release(synopsis_builder);
+  auto chunk = fbs::release(synopsis_builder);
+  // When the index is configured to skip verification on read, the synopsis
+  // must be verified here so that we never persist a buffer that cannot be
+  // read back safely.
+  if (verify and chunk) {
+    if (auto checked
+        = flatbuffer<fbs::PartitionSynopsis>::make(chunk_ptr{chunk});
+        not checked) {
+      TENZIR_ERROR("failed to verify freshly serialized partition synopsis: {}",
+                   checked.error());
+      return {};
+    }
+  }
+  return chunk;
 }
 
 /// Delivers persistance promise
@@ -104,8 +119,9 @@ void serialize(
   // regenerate the synopses as needed. This also means we don't
   // need to handle errors here, since Tenzir can still start
   // correctly (if a bit slower) when the write fails.
-  if (auto ps_chunk
-      = serialize_partition_synopsis(*self->state().data.synopsis)) {
+  if (auto ps_chunk = serialize_partition_synopsis(
+        *self->state().data.synopsis,
+        self->state().synopsis_index_config.skip_synopsis_verification)) {
     self->state().data.synopsis.unshared().sketches_file = {
       .url = fmt::format("file://{}", *self->state().synopsis_path),
       .size = ps_chunk->size(),
