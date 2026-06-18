@@ -53,7 +53,8 @@ auto make_ssl_context_config(TlsConfig const& tls, location primary,
   // collector. Rather than silently misinterpreting the password as a filename,
   // reject it with a clear diagnostic.
   if (auto& password = tls.password) {
-    diagnostic::error("inline `tls.password` is not supported for this operator")
+    diagnostic::error(
+      "inline `tls.password` is not supported for this operator")
       .primary(*password)
       .note("the underlying HTTP server can only read the key password from a "
             "file")
