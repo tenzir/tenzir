@@ -19,3 +19,6 @@ environment variable, never from the configuration file. The `plugins.platform`
 TLS block no longer lists the server-side client-certificate options, because
 the connection to the Tenzir Platform is an outbound client that does not use
 them.
+
+The `tenzir-node --help` output also reported the wrong default for
+`rebuild-interval`. It now shows the actual default of `30min` instead of `2h`.
