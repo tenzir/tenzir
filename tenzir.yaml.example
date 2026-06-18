@@ -406,7 +406,7 @@ tenzir:
       # The definition of the pipeline. Configured pipelines that fail to start
       # cause the node to fail to start.
       definition: |
-        load_tcp "0.0.0.0:34343" { read_suricata schema_only=true }
+        accept_tcp "0.0.0.0:34343" { read_suricata schema_only=true }
         | where event_type != "stats"
         | publish "suricata"
       # Pipelines that encounter an error stop running and show an error state.
