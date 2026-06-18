@@ -49,6 +49,25 @@ struct index_config {
   std::vector<rule> rules = {};
   double default_fp_rate = defaults::fp_rate;
 
+  /// The number of worker threads used to load partition synopses from disk
+  /// when the index starts up. Zero selects a default derived from the hardware
+  /// concurrency. Loading is dominated by I/O latency (especially on networked
+  /// storage such as NFS), so values above the core count can further reduce
+  /// startup time by keeping more requests in flight.
+  size_t load_concurrency = 0;
+
+  /// When non-zero, opaque partition synopses (most notably Bloom filters)
+  /// whose serialized payload exceeds this many bytes are not deserialized when
+  /// loading the catalog at startup. The corresponding fields are still
+  /// registered, but with no synopsis, so the catalog conservatively treats
+  /// predicates on them as candidates (it may return false positives, never
+  /// false negatives). This drastically lowers resident memory and startup cost
+  /// for nodes with very many partitions, at the price of coarser pruning for
+  /// equality predicates on high-cardinality fields. Min/max and time synopses
+  /// are always loaded, so range pruning (e.g. on a timestamp field) is
+  /// unaffected.
+  size_t lazy_sketch_threshold = 0;
+
   template <class Inspector>
   friend auto inspect(Inspector& f, index_config& x) {
     return detail::apply_all(f, x.rules, x.default_fp_rate);

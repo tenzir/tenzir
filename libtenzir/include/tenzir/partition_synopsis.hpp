@@ -94,7 +94,7 @@ struct partition_synopsis final : public caf::ref_counted {
 
   FRIEND_ATTRIBUTE_NODISCARD friend caf::error
   unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis&,
-         partition_synopsis&);
+         partition_synopsis&, size_t lazy_sketch_threshold);
 
   // Returns a raw pointer to a deep copy of this partition synopsis.
   // For use by the `caf::intrusive_cow_ptr`.
@@ -104,6 +104,20 @@ private:
   // Cached memory usage.
   mutable std::atomic<size_t> memusage_ = 0ull;
 };
+
+/// Unpacks a partition synopsis from its FlatBuffers representation.
+/// @param x The serialized partition synopsis.
+/// @param ps The synopsis to populate.
+/// @param lazy_sketch_threshold When non-zero, opaque per-field and per-type
+/// synopses (e.g. Bloom filters) whose serialized payload exceeds this many
+/// bytes are not deserialized. Such fields are still registered with a null
+/// synopsis so that the catalog conservatively treats predicates on them as
+/// candidates (never a false negative), trading sketch-based pruning for much
+/// lower resident memory and faster startup. Min/max, time, and bool synopses,
+/// which are small, are always loaded.
+[[nodiscard]] caf::error
+unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
+       partition_synopsis& ps, size_t lazy_sketch_threshold = 0);
 
 /// Some quantitative information about a partition.
 struct partition_info {

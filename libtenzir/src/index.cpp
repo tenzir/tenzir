@@ -61,6 +61,7 @@
 #include <flatbuffers/flatbuffers.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <ctime>
 #include <deque>
@@ -68,7 +69,9 @@
 #include <memory>
 #include <numeric>
 #include <span>
+#include <thread>
 #include <unistd.h>
+#include <vector>
 
 // clang-format off
 //
@@ -559,93 +562,157 @@ caf::error index_state::load_from_disk() {
     }
     return result;
   }();
-  // Now try to load the partitions - with a progress indicator.
-  for (size_t idx = 0; idx < partition_ids.size(); ++idx) {
-    auto partition_uuid = partition_ids[idx];
-    auto error = [&]() -> caf::error {
-      auto part_path = partition_path(partition_uuid);
-      TENZIR_TRACE("{} unpacks partition {} ({}/{})", *self, partition_uuid,
-                   idx, partition_ids.size());
-      // Generate external partition synopsis file if it doesn't exist.
-      auto synopsis_path = partition_synopsis_path(partition_uuid);
-      if (not exists(synopsis_path)) {
-        if (auto error = extract_partition_synopsis(part_path, synopsis_path);
-            error.valid()) {
-          return error;
-        }
-      }
-      TRY(auto chunk, chunk::mmap(synopsis_path));
-      TRY(const auto ps_flatbuffer,
-          flatbuffer<fbs::PartitionSynopsis>::make(std::move(chunk)));
-      partition_synopsis_ptr ps = caf::make_copy_on_write<partition_synopsis>();
-      if (ps_flatbuffer->partition_synopsis_type()
-          != fbs::partition_synopsis::PartitionSynopsis::legacy) {
-        return caf::make_error(ec::format_error, "invalid partition synopsis "
-                                                 "version");
-      }
-      TENZIR_ASSERT(ps_flatbuffer->partition_synopsis_as_legacy());
-      const auto& synopsis_legacy
-        = *ps_flatbuffer->partition_synopsis_as_legacy();
-      if (auto error = unpack(synopsis_legacy, ps.unshared()); error.valid()) {
+  // Loads a single partition synopsis from disk. This is invoked concurrently
+  // from multiple worker threads below, so it must not touch shared mutable
+  // state: it only reads `store_map` and the (immutable during startup)
+  // synopsis factory, uses a local `std::error_code`, and produces a fresh
+  // synopsis. The result is merged into the shared collections after all
+  // workers have finished.
+  const auto lazy_sketch_threshold = synopsis_opts.lazy_sketch_threshold;
+  auto load_one =
+    [&](const uuid& partition_uuid) -> caf::expected<partition_synopsis_pair> {
+    std::error_code local_err{};
+    auto part_path = partition_path(partition_uuid);
+    // Generate external partition synopsis file if it doesn't exist.
+    auto synopsis_path = partition_synopsis_path(partition_uuid);
+    if (not exists(synopsis_path)) {
+      if (auto error = extract_partition_synopsis(part_path, synopsis_path);
+          error.valid()) {
         return error;
       }
-      // Add partition file sizes.
-      {
-        uint64_t bitmap_file_size = std::filesystem::file_size(part_path, err);
-        if (err) {
-          TENZIR_WARN("failed to get the size of the partition index file at "
-                      "{}: {}",
-                      part_path, err.message());
-          bitmap_file_size = 0u;
+    }
+    TRY(auto chunk, chunk::mmap(synopsis_path));
+    TRY(const auto ps_flatbuffer,
+        flatbuffer<fbs::PartitionSynopsis>::make(std::move(chunk)));
+    partition_synopsis_ptr ps = caf::make_copy_on_write<partition_synopsis>();
+    if (ps_flatbuffer->partition_synopsis_type()
+        != fbs::partition_synopsis::PartitionSynopsis::legacy) {
+      return caf::make_error(ec::format_error, "invalid partition synopsis "
+                                               "version");
+    }
+    TENZIR_ASSERT(ps_flatbuffer->partition_synopsis_as_legacy());
+    const auto& synopsis_legacy
+      = *ps_flatbuffer->partition_synopsis_as_legacy();
+    if (auto error
+        = unpack(synopsis_legacy, ps.unshared(), lazy_sketch_threshold);
+        error.valid()) {
+      return error;
+    }
+    // Add partition file sizes.
+    uint64_t bitmap_file_size
+      = std::filesystem::file_size(part_path, local_err);
+    if (local_err) {
+      TENZIR_WARN("failed to get the size of the partition index file at "
+                  "{}: {}",
+                  part_path, local_err.message());
+      bitmap_file_size = 0u;
+    }
+    if (const auto canonical_part_path = canonical(part_path, local_err);
+        not local_err) {
+      ps.unshared().indexes_file = {
+        .url = fmt::format("file://{}", canonical_part_path),
+        .size = bitmap_file_size,
+      };
+    }
+    if (const auto canonical_synopsis_path
+        = canonical(synopsis_path, local_err);
+        not local_err) {
+      ps.unshared().sketches_file = {
+        .url = fmt::format("file://{}", canonical_synopsis_path),
+        .size = ps_flatbuffer.chunk()->size(),
+      };
+    }
+    auto f = store_map.find(partition_uuid);
+    if (f == store_map.end()) {
+      // For completeness sake we could open the partition and look if the
+      // data is somewhere else entirely, but no known implementation ever
+      // deviated from the default path scheme, so we assume filesystem
+      // corruption here.
+      return diagnostic::error(ec::no_such_file)
+        .note("discarding partition {} due to a missing store file",
+              partition_uuid)
+        .to_error();
+    }
+    auto store_path = f->second;
+    auto store_size = std::filesystem::file_size(store_path, local_err);
+    if (local_err) {
+      TENZIR_WARN("failed to get the size of the partition store file at "
+                  "{}: {}",
+                  store_path, local_err.message());
+      store_size = 0u;
+    }
+    if (const auto canonical_store_path = canonical(store_path, local_err);
+        not local_err) {
+      ps.unshared().store_file = {
+        .url = fmt::format("file://{}", canonical_store_path),
+        .size = store_size,
+      };
+    }
+    return partition_synopsis_pair{partition_uuid, std::move(ps)};
+  };
+  // Load the partitions concurrently. Each partition is independent, so we
+  // distribute them across a pool of worker threads using a shared atomic
+  // cursor. This is particularly effective on networked storage (e.g. NFS),
+  // where loading is dominated by I/O latency that overlaps across requests.
+  // The index actor is detached and blocked here during startup, and no other
+  // actor interacts with this state yet, so using plain threads is safe.
+  const auto num_partitions = partition_ids.size();
+  auto concurrency = synopsis_opts.load_concurrency;
+  if (concurrency == 0) {
+    concurrency = std::max<size_t>(1, std::thread::hardware_concurrency());
+  }
+  concurrency
+    = std::min<size_t>(concurrency, std::max<size_t>(1, num_partitions));
+  TENZIR_VERBOSE("{} loads {} partitions using {} thread(s){}", *self,
+                 num_partitions, concurrency,
+                 lazy_sketch_threshold > 0
+                   ? fmt::format(" (deferring sketches larger than {} bytes)",
+                                 lazy_sketch_threshold)
+                   : std::string{});
+  auto worker_synopses
+    = std::vector<std::vector<partition_synopsis_pair>>(concurrency);
+  std::atomic<size_t> next_index{0};
+  std::atomic<size_t> loaded{0};
+  auto work = [&](size_t worker) {
+    for (auto idx = next_index.fetch_add(1, std::memory_order_relaxed);
+         idx < num_partitions;
+         idx = next_index.fetch_add(1, std::memory_order_relaxed)) {
+      const auto& partition_uuid = partition_ids[idx];
+      try {
+        auto result = load_one(partition_uuid);
+        if (not result) {
+          TENZIR_VERBOSE("{} failed to load partition {}: {}", *self,
+                         partition_uuid, result.error());
+          continue;
         }
-        if (const auto canonical_part_path = canonical(part_path, err);
-            not err) {
-          ps.unshared().indexes_file = {
-            .url = fmt::format("file://{}", canonical_part_path),
-            .size = bitmap_file_size,
-          };
-        }
-        if (const auto canonical_synopsis_path = canonical(synopsis_path, err);
-            not err) {
-          ps.unshared().sketches_file = {
-            .url = fmt::format("file://{}", canonical_synopsis_path),
-            .size = ps_flatbuffer.chunk()->size(),
-          };
-        }
-        auto f = store_map.find(partition_uuid);
-        if (f == store_map.end()) {
-          // For completeness sake we could open the partition and look if the
-          // data is somewhere else entirely, but no known implementation ever
-          // deviated from the default path scheme, so we assume filesystem
-          // corruption here.
-          return diagnostic::error(ec::no_such_file)
-            .note("discarding partition {} due to a missing store file",
-                  partition_uuid)
-            .to_error();
-        }
-        auto store_path = f->second;
-        auto store_size = std::filesystem::file_size(store_path, err);
-        if (err) {
-          TENZIR_WARN("failed to get the size of the partition store file at "
-                      "{}: {}",
-                      store_path, err.message());
-          store_size = 0u;
-        }
-        if (const auto canonical_store_path = canonical(store_path, err);
-            not err) {
-          ps.unshared().store_file = {
-            .url = fmt::format("file://{}", canonical_store_path),
-            .size = store_size,
-          };
-        }
+        worker_synopses[worker].push_back(std::move(*result));
+      } catch (const std::exception& ex) {
+        TENZIR_VERBOSE("{} failed to load partition {}: {}", *self,
+                       partition_uuid, ex.what());
+        continue;
       }
-      persisted_partitions.emplace(partition_uuid);
-      synopses.emplace_back(partition_uuid, std::move(ps));
-      return caf::none;
-    }();
-    if (error.valid()) {
-      TENZIR_VERBOSE("{} failed to load partition {}: {}", *self,
-                     partition_uuid, error);
+      if (const auto n = loaded.fetch_add(1, std::memory_order_relaxed) + 1;
+          n % 100000 == 0) {
+        TENZIR_VERBOSE("{} loaded {}/{} partitions", *self, n, num_partitions);
+      }
+    }
+  };
+  if (concurrency <= 1) {
+    work(0);
+  } else {
+    auto threads = std::vector<std::thread>{};
+    threads.reserve(concurrency);
+    for (size_t worker = 0; worker < concurrency; ++worker) {
+      threads.emplace_back(work, worker);
+    }
+    for (auto& thread : threads) {
+      thread.join();
+    }
+  }
+  for (auto& batch : worker_synopses) {
+    for (auto& pair : batch) {
+      persisted_partitions.emplace(pair.uuid);
+      synopses.push_back(std::move(pair));
     }
   }
   // Recommend the user to run 'tenzir-ctl rebuild' if any partition syopses
