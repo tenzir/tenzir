@@ -268,7 +268,7 @@ namespace {
 caf::error unpack_(
   const flatbuffers::Vector<flatbuffers::Offset<fbs::synopsis::LegacySynopsis>>&
     synopses,
-  partition_synopsis& ps, size_t lazy_sketch_threshold) {
+  partition_synopsis& ps, bool lazy_sketches) {
   for (const auto* synopsis : synopses) {
     if (not synopsis) {
       return caf::make_error(ec::format_error, "synopsis is null");
@@ -284,21 +284,15 @@ caf::error unpack_(
     // synopsis size. Only string and IP fields use Bloom filters; numeric and
     // duration fields use small min/max synopses and time/bool fields use
     // inline encodings, none of which are ever deferred so that range pruning
-    // is unaffected regardless of the threshold. The field is still registered
-    // below (with a null synopsis), which the catalog interprets as "cannot
-    // prune" rather than "no match", so deferring never introduces false
-    // negatives. The serialized payload size is read in O(1) from the
-    // flatbuffer without decoding it.
-    const auto uses_bloom_filter
-      = lazy_sketch_threshold > 0
-        and match(qf.type(), []<concrete_type T>(const T&) {
-              return detail::is_any_v<T, string_type, ip_type>;
-            });
+    // is unaffected. The field is still registered below (with a null
+    // synopsis), which the catalog interprets as "cannot prune" rather than "no
+    // match", so deferring never introduces false negatives.
+    const auto is_bloom_filter
+      = lazy_sketches and match(qf.type(), []<concrete_type T>(const T&) {
+          return detail::is_any_v<T, string_type, ip_type>;
+        });
     const auto* opaque = synopsis->opaque_synopsis();
-    const auto defer
-      = uses_bloom_filter and opaque != nullptr
-        and opaque->caf_0_18_data() != nullptr
-        and opaque->caf_0_18_data()->size() > lazy_sketch_threshold;
+    const auto defer = is_bloom_filter and opaque != nullptr;
     if (not defer) {
       if (auto error = unpack(*synopsis, ptr); error.valid()) {
         return error;
@@ -323,7 +317,7 @@ caf::error unpack_(
 } // namespace
 
 caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
-                  partition_synopsis& ps, size_t lazy_sketch_threshold) {
+                  partition_synopsis& ps, bool lazy_sketches) {
   if (not x.id_range()) {
     return caf::make_error(ec::format_error, "missing id range");
   }
@@ -348,7 +342,7 @@ caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
   if (not x.synopses()) {
     return caf::make_error(ec::format_error, "missing synopses");
   }
-  return unpack_(*x.synopses(), ps, lazy_sketch_threshold);
+  return unpack_(*x.synopses(), ps, lazy_sketches);
 }
 
 } // namespace tenzir

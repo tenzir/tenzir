@@ -16,10 +16,9 @@ threads defaults to the hardware concurrency and can be tuned with
 storage (such as NFS), where loading is dominated by I/O latency that overlaps
 across requests.
 
-The new `tenzir.index.lazy-sketch-threshold` option (in bytes, `0` disables it)
-makes the index skip deserializing Bloom-filter sketches larger than the
-threshold when loading the catalog. Only string and IP fields use Bloom
-filters; the corresponding fields remain registered, so the catalog still
+The new `tenzir.index.lazy-sketches` option makes the index skip deserializing
+Bloom-filter sketches when loading the catalog. Only string and IP fields use
+Bloom filters; the corresponding fields remain registered, so the catalog still
 considers them when answering queries (it may return more candidate partitions,
 but never fewer), trading sketch-based pruning of equality predicates on these
 high-cardinality fields for drastically lower resident memory and faster

@@ -38,8 +38,8 @@ auto make_string_series(std::vector<std::string> values) -> series {
 
 // Builds a partition synopsis with a Bloom-filter (string) field, an opaque
 // min/max (int64) field, and an inline (time) field, packs it, and unpacks it
-// again with the given lazy sketch threshold.
-auto roundtrip(size_t lazy_sketch_threshold) -> partition_synopsis {
+// again with the given lazy-sketch setting.
+auto roundtrip(bool lazy_sketches) -> partition_synopsis {
   factory<synopsis>::initialize();
   partition_synopsis ps;
   ps.schema = type{record_type{
@@ -81,7 +81,7 @@ auto roundtrip(size_t lazy_sketch_threshold) -> partition_synopsis {
   const auto* legacy = fb->partition_synopsis_as_legacy();
   REQUIRE(legacy != nullptr);
   partition_synopsis out;
-  REQUIRE_EQUAL(unpack(*legacy, out, lazy_sketch_threshold), caf::none);
+  REQUIRE_EQUAL(unpack(*legacy, out, lazy_sketches), caf::none);
   return out;
 }
 
@@ -97,8 +97,8 @@ auto field_is_null(const partition_synopsis& ps)
 
 } // namespace
 
-TEST("lazy sketch threshold of zero loads every synopsis") {
-  const auto ps = roundtrip(0);
+TEST("lazy sketches disabled loads every synopsis") {
+  const auto ps = roundtrip(false);
   const auto fields = field_is_null(ps);
   REQUIRE_EQUAL(fields.size(), 3u);
   CHECK(not fields.at("msg"));
@@ -106,12 +106,12 @@ TEST("lazy sketch threshold of zero loads every synopsis") {
   CHECK(not fields.at("ts"));
 }
 
-TEST("lazy sketch threshold only defers bloom filters") {
-  // A small threshold defers the Bloom-filter sketch but must never defer the
-  // numeric min/max or the inline time synopsis, regardless of their size --
-  // otherwise range pruning would silently break. All field keys must remain
-  // present so the catalog never drops a partition (a false negative).
-  const auto ps = roundtrip(8);
+TEST("lazy sketches only defers bloom filters") {
+  // With lazy sketches enabled, only the Bloom-filter sketch is deferred; the
+  // numeric min/max and the inline time synopsis must stay resident, otherwise
+  // range pruning would silently break. All field keys must remain present so
+  // the catalog never drops a partition (a false negative).
+  const auto ps = roundtrip(true);
   const auto fields = field_is_null(ps);
   REQUIRE_EQUAL(fields.size(), 3u);
   CHECK(fields.at("msg"));    // string Bloom filter: deferred

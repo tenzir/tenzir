@@ -612,7 +612,7 @@ caf::error index_state::load_from_disk() {
   const auto index_dir = resolve_dir(dir);
   const auto synopsis_dir = resolve_dir(synopsisdir);
   const auto archive_dir = resolve_dir(dir / ".." / "archive");
-  const auto lazy_sketch_threshold = synopsis_opts.lazy_sketch_threshold;
+  const auto lazy_sketches = synopsis_opts.lazy_sketches;
   const auto skip_verification = synopsis_opts.skip_synopsis_verification;
   // `synopsis_files` was scanned from `dir`, but synopses live under
   // `synopsisdir`. These are the same in the default configuration; when they
@@ -666,8 +666,7 @@ caf::error index_state::load_from_disk() {
     TENZIR_ASSERT(ps_flatbuffer->partition_synopsis_as_legacy());
     const auto& synopsis_legacy
       = *ps_flatbuffer->partition_synopsis_as_legacy();
-    if (auto error
-        = unpack(synopsis_legacy, ps.unshared(), lazy_sketch_threshold);
+    if (auto error = unpack(synopsis_legacy, ps.unshared(), lazy_sketches);
         error.valid()) {
       return error;
     }
@@ -722,11 +721,9 @@ caf::error index_state::load_from_disk() {
   // stay quiet for small ones to avoid log noise.
   const auto report_progress = num_partitions >= size_t{1000};
   const auto progress_step = std::max<size_t>(1, num_partitions / 20);
-  const auto lazy_suffix
-    = lazy_sketch_threshold > 0
-        ? fmt::format(" deferring sketches larger than {} bytes;",
-                      lazy_sketch_threshold)
-        : std::string{};
+  const auto lazy_suffix = lazy_sketches
+                             ? std::string{" deferring Bloom-filter sketches;"}
+                             : std::string{};
   const auto verify_suffix = skip_verification
                                ? std::string{" skipping verification;"}
                                : std::string{};
