@@ -247,6 +247,49 @@ TEST("duplicate record fields to_list with unparsed value") {
   CHECK(not b.has_elements());
 }
 
+TEST("duplicate record fields to_list with only unparsed values") {
+  auto b = data_builder{
+    data_builder::settings{
+      .building_settings={
+        .duplicate_keys = duplicate_keys::to_list,
+      },
+    },
+  };
+  // This mirrors how parsers like `kv` feed values: every value is unparsed.
+  auto* r = b.record();
+  r->field("k")->data_unparsed("1");
+  r->field("k")->data_unparsed("2");
+  r->field("k")->data_unparsed("3");
+
+  const auto rec = safe_as_record(b.materialize());
+  const auto expected = tenzir::record{
+    {"k", tenzir::list{int64_t{1}, int64_t{2}, int64_t{3}}},
+  };
+  CHECK_EQUAL(rec, expected);
+  CHECK(not b.has_elements());
+}
+
+TEST("duplicate record fields to_list with unparsed value then null") {
+  auto b = data_builder{
+    data_builder::settings{
+      .building_settings={
+        .duplicate_keys = duplicate_keys::to_list,
+      },
+    },
+  };
+  auto* r = b.record();
+  r->field("k")->data_unparsed("1");
+  r->field("k")->null();
+  r->field("k")->data_unparsed("3");
+
+  const auto rec = safe_as_record(b.materialize());
+  const auto expected = tenzir::record{
+    {"k", tenzir::list{int64_t{1}, caf::none, int64_t{3}}},
+  };
+  CHECK_EQUAL(rec, expected);
+  CHECK(not b.has_elements());
+}
+
 TEST("signature record empty") {
   auto b = data_builder{};
   (void)b.record();

@@ -437,8 +437,11 @@ auto node_record::field(std::string_view name) -> node_object* {
     }
     case to_list:
     case merge_structural: {
+      // A field counts as a duplicate as soon as it carries a value, regardless
+      // of whether that value is already parsed (`has_value`) or still unparsed.
+      // The latter is the case for parsers like `kv` that defer parsing.
       if (f->is_alive()
-          and f->value_state_ == node_object::value_state_type::has_value) {
+          and f->value_state_ != node_object::value_state_type::null) {
         f->is_repeat_key_list = true;
       }
     }
@@ -641,17 +644,16 @@ auto node_object::null(bool overwrite) -> void {
   }
   TENZIR_ASSERT(is_alive());
   TENZIR_ASSERT(is_repeat_key_list);
-  TENZIR_ASSERT(value_state_ == value_state_type::has_value);
+  TENZIR_ASSERT(value_state_ != value_state_type::null);
   /// The node could already have been upgraded to a list.If it is, we can
   /// just append to it
   if (auto* l = try_as<node_list>(data_)) {
     value_state_ = value_state_type::has_value;
     return l->null();
   }
-  /// If the node isnt already upgraded ot a list, we need to do it
-  auto previous_value = std::move(data_);
+  /// If the node isnt already upgraded ot a list, we need to do it. `list()`
+  /// moves the existing value into the list as the first element.
   auto* l = list();
-  l->data(std::move(previous_value));
   return l->null();
 }
 
@@ -702,7 +704,7 @@ auto node_object::data_unparsed(std::string text, bool overwrite) -> void {
   }
   TENZIR_ASSERT(is_alive());
   TENZIR_ASSERT(is_repeat_key_list);
-  TENZIR_ASSERT(value_state_ == value_state_type::has_value);
+  TENZIR_ASSERT(value_state_ != value_state_type::null);
   /// The node could already have been upgraded to a list. If it is, we can
   /// just append to it
   if (auto* l = try_as<node_list>(data_)) {
@@ -732,7 +734,7 @@ auto node_object::record(bool overwrite) -> node_record* {
   }
   TENZIR_ASSERT(is_alive());
   TENZIR_ASSERT(is_repeat_key_list);
-  TENZIR_ASSERT(value_state_ == value_state_type::has_value);
+  TENZIR_ASSERT(value_state_ != value_state_type::null);
   /// Special case handling to turn data + record -> record
   if (settings_.duplicate_keys == duplicate_keys::merge_structural
       and not is_structural(data_.index())) {
@@ -771,17 +773,25 @@ auto node_object::list(bool overwrite) -> node_list* {
   }
   TENZIR_ASSERT(is_alive());
   TENZIR_ASSERT(is_repeat_key_list);
-  TENZIR_ASSERT(value_state_ == value_state_type::has_value);
+  TENZIR_ASSERT(value_state_ != value_state_type::null);
   /// The node could already have been upgraded to a list.If it is, we can just
   /// append to it
   if (auto* l = try_as<node_list>(data_)) {
     value_state_ = value_state_type::has_value;
     return l->list();
   }
-  /// If the node isnt already upgraded ot a list, we need to do it
+  /// If the node isnt already upgraded ot a list, we need to do it. We preserve
+  /// the existing value as the first element, keeping it unparsed if it was
+  /// unparsed so that it is still parsed later on.
+  const auto previously_unparsed = value_state_ == value_state_type::unparsed;
   auto previous_value = std::move(data_);
   auto& l = data_.emplace<node_list>(settings_);
-  l.data(std::move(previous_value));
+  value_state_ = value_state_type::has_value;
+  if (previously_unparsed) {
+    l.data_unparsed(std::get<std::string>(std::move(previous_value)));
+  } else {
+    l.data(std::move(previous_value));
+  }
   return &l;
 }
 
