@@ -201,7 +201,9 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
       get_or(settings, "tenzir.active-partition-timeout",
              defaults::active_partition_timeout),
       defaults::max_in_mem_partitions, defaults::num_query_supervisors,
-      self->state().dir / "index", std::move(index_config));
+      self->state().dir / "index", std::move(index_config),
+      std::filesystem::path{
+        get_or(settings, "tenzir.external-catalog", std::string{})});
   }();
   TENZIR_ASSERT(index);
   if (auto err

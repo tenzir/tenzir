@@ -301,6 +301,10 @@ struct index_state {
   /// The directory for in-progress partition transforms.
   std::filesystem::path markersdir = {};
 
+  /// Path to a JSON manifest of externally-cataloged partitions whose synopses
+  /// are loaded on demand. Empty when the feature is disabled.
+  std::filesystem::path external_catalog = {};
+
   /// List of actors that wait for the next flush event.
   std::vector<flush_listener_actor> flush_listeners = {};
 
@@ -354,6 +358,8 @@ struct index_state {
 /// @param catalog_dir The directory used by the catalog.
 /// @param index_config The meta-index configuration of the false-positives
 /// rates for the types and fields.
+/// @param external_catalog Path to a JSON manifest of externally-cataloged
+/// partitions whose synopses are loaded on demand, or empty to disable.
 /// @pre `partition_capacity > 0
 //  TODO: Use a settings struct for the various parameters.
 index_actor::behavior_type
@@ -363,6 +369,7 @@ index(index_actor::stateful_pointer<index_state> self,
       size_t max_buffered_events, size_t partition_capacity,
       duration active_partition_timeout, size_t max_inmem_partitions,
       size_t max_concurrent_partition_lookups,
-      const std::filesystem::path& catalog_dir, index_config index_config);
+      const std::filesystem::path& catalog_dir, index_config index_config,
+      std::filesystem::path external_catalog = {});
 
 } // namespace tenzir

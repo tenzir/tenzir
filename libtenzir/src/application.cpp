@@ -59,6 +59,10 @@ void add_root_opts(command& cmd) {
     "?tenzir", "package-dirs", "additional directories containing packages");
   cmd.options.add<std::string>("?tenzir", "state-directory,d",
                                "directory for persistent state");
+  cmd.options.add<std::string>(
+    "?tenzir", "external-catalog",
+    "path to a JSON manifest of externally-cataloged "
+    "partitions whose synopses are loaded on demand");
   cmd.options.add<std::string>("?tenzir", "cache-directory",
                                "directory for runtime state");
   cmd.options.add<std::string>("?tenzir", "log-file", "log filename");
