@@ -48,6 +48,19 @@ auto make_ssl_context_config(TlsConfig const& tls, location primary,
     return failure::promise();
   }
   auto& certfile = *tls.certfile;
+  // wangle's `SSLContextConfig` only accepts a password *file path*, not an
+  // inline secret, and proxygen offers no hook to install a custom password
+  // collector. Rather than silently misinterpreting the password as a filename,
+  // reject it with a clear diagnostic.
+  if (auto& password = tls.password) {
+    diagnostic::error("inline `tls.password` is not supported for this operator")
+      .primary(*password)
+      .note("the underlying HTTP server can only read the key password from a "
+            "file")
+      .hint("use a private key in `tls.keyfile` that is not password-protected")
+      .emit(dh);
+    return failure::promise();
+  }
   auto config = proxygen::coro::HTTPServer::getDefaultTLSConfig();
   if (auto& min = tls.tls_min_version) {
     if (not min->inner.empty()) {
@@ -65,7 +78,7 @@ auto make_ssl_context_config(TlsConfig const& tls, location primary,
   try {
     config.setCertificate(certfile.inner,
                           tls.keyfile ? tls.keyfile->inner : certfile.inner,
-                          tls.password ? tls.password->inner : "");
+                          /*passwordPath=*/"");
   } catch (std::exception const& ex) {
     diagnostic::error("failed to load TLS certificate: {}", ex.what())
       .primary(certfile)
