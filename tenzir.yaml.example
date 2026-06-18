@@ -58,52 +58,49 @@ tenzir:
     # minimum total cache capacity of 64MiB.
     #capacity: 1Gi
 
-  # TLS configuration options globally applies to all operators that support TLS.
-  # Arguments passed to the operator itself will always take precedence over these
-  # configuration values.
+  # A certificate file used as the default for operators accepting a `cacert`
+  # option. This will default to an appropriate directory for the system. For
+  # example:
+  #   - /etc/ssl/certs/ca-bundle.crt on RedHat
+  #   - /etc/ssl/certs/ca-certificates.crt on Ubuntu
+  #cacert:
+
+  # TLS configuration that applies to all operators supporting TLS, such as
+  # from_http, accept_tcp, to_tcp, to_opensearch, from_opensearch, to_splunk,
+  # save_email, and to_fluent_bit. Operators can override these settings
+  # individually via their `tls` option.
   tls:
     # Enable TLS on all operators that support it.
-    #enable: true
+    #enable: false
 
-    # Skip SSL peer verification.
-    skip-peer-verification: false
+    # Disable certificate verification (not recommended for production).
+    #skip-peer-verification: false
 
-    # A certificate file used as the default for operators accepting a `cacert`
-    # option. This will default to an appropriate directory for the system. For
-    # example:
-    #   - /etc/ssl/certs/ca-bundle.crt on RedHat
-    #   - /etc/ssl/certs/ca-certificates.crt on Ubuntu
+    # Path to a CA certificate bundle for server verification.
     #cacert:
 
-    # A certificate file used as the default for operators
+    # Path to a client certificate file.
     #certfile:
 
-    # A key file used as the default for operators
+    # Path to a client private key file.
     #keyfile:
 
-    # A password for the keyfile
+    # Password to decrypt the private key in `keyfile`, if it is encrypted.
     #password:
 
-    # Minimum TLS protocol version to accept/use.
-    # Valid values: "1.0", "1.1", "1.2", "1.3"
-    # Recommended: "1.2" or higher for security.
+    # Minimum TLS protocol version.
+    # Valid values: "1.0", "1.1", "1.2", "1.3".
     #tls-min-version:
 
-    # OpenSSL cipher list to use for TLS connections.
-    # This is a colon-separated string of cipher suites.
-    # Example: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256"
-    # See OpenSSL documentation for cipher list format.
-    #ciphers:
+    # OpenSSL cipher list string.
+    #tls-ciphers:
 
-    # Path to a CA certificate file for validating client certificates (server mode only).
-    # When set along with `tls_require_client_cert`, the server will verify client
-    # certificates against this CA.
-    #client-ca:
+    # Path to a CA certificate for validating client certificates (mTLS).
+    # Only applies to operators that accept incoming connections.
+    #tls-client-ca:
 
-    # Require clients to present valid certificates (server mode only). When enabled,
-    # clients MUST present a certificate signed by the CA specified in `tls-client-ca`,
-    # otherwise the connection will be rejected. This enables mutual TLS (mTLS)
-    # authentication.
+    # Require clients to present valid certificates signed by the client CA
+    # (mTLS). Only applies to operators that accept incoming connections.
     #require-client-cert: false
 
   # The file system path used for persistent state.
@@ -443,8 +440,21 @@ tenzir:
   secrets:
     # my-secret-name: my-secret-value
 
-  # Configure the interval for experimental trimming of unused memory.
-  malloc-trim-interval: 10min
+# Plugin-specific configuration.
+plugins:
+  # TLS settings for the connection from the node to the Tenzir Platform.
+  # These options share the semantics of the corresponding node-level
+  # tenzir.tls settings, but apply only to the node <-> platform connection and
+  # override the matching node-level setting. The node connects to the platform
+  # as an outbound client, so the server-side mTLS options (`tls-client-ca`,
+  # `require-client-cert`) and the `enable` toggle do not apply here.
+  platform:
+    #skip-peer-verification:
+    #cacert:
+    #certfile:
+    #keyfile:
+    #tls-min-version:
+    #tls-ciphers:
 
 # The below settings are internal to CAF, and aren't checked by Tenzir directly.
 # Please be careful when changing these options. Note that some CAF options may
