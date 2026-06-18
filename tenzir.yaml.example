@@ -30,7 +30,7 @@ tenzir:
     # entirely.
     # WARNING: A low retention period may negatively impact the usability of
     # pipeline activity in the Tenzir Platform.
-    #metrics: 7d
+    #metrics: 16d
 
     # How long to keep legacy operator metrics for. Set to 0s to avoid storing
     # these heavy metrics while still making live metrics available.
@@ -356,7 +356,7 @@ tenzir:
     disk-budget-low: 0GiB
 
     # Seconds between successive disk space checks.
-    disk-budget-check-interval: 90
+    disk-budget-check-interval: 60
 
     # When erasing, how many partitions to erase in one go before rechecking
     # the size of the database directory.

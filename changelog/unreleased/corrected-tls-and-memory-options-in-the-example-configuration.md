@@ -1,5 +1,5 @@
 ---
-title: Corrected TLS and memory options in the example configuration
+title: Corrected mismatched defaults and options in the example configuration
 type: bugfix
 authors:
   - Zedoraps
@@ -19,6 +19,10 @@ environment variable, never from the configuration file. The `plugins.platform`
 TLS block no longer lists the server-side client-certificate options, because
 the connection to the Tenzir Platform is an outbound client that does not use
 them.
+
+Two documented defaults were also wrong: `tenzir.retention.metrics` defaults to
+`16d` (not `7d`), and `tenzir.start.disk-budget-check-interval` defaults to `60`
+seconds (not `90`).
 
 The `tenzir-node --help` output also reported the wrong default for
 `rebuild-interval`. It now shows the actual default of `30min` instead of `2h`.
