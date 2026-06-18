@@ -735,14 +735,22 @@ auto node_object::record(bool overwrite) -> node_record* {
   TENZIR_ASSERT(is_alive());
   TENZIR_ASSERT(is_repeat_key_list);
   TENZIR_ASSERT(value_state_ != value_state_type::null);
-  /// Special case handling to turn data + record -> record
+  /// Special case handling to turn data + record -> record. We preserve the
+  /// existing value, keeping it unparsed if it was unparsed so that it is still
+  /// parsed later on.
   if (settings_.duplicate_keys == duplicate_keys::merge_structural
       and not is_structural(data_.index())) {
+    const auto previously_unparsed = value_state_ == value_state_type::unparsed;
     auto previous_value = std::move(data_);
     is_repeat_key_list = false;
     auto& r = data_.emplace<node_record>(settings_);
     r.reserve(2);
-    r.field(settings_.top_key_name_for_records)->data(std::move(previous_value));
+    auto* f = r.field(settings_.top_key_name_for_records);
+    if (previously_unparsed) {
+      f->data_unparsed(std::get<std::string>(std::move(previous_value)));
+    } else {
+      f->data(std::move(previous_value));
+    }
     return &r;
   }
   /// The node could already have been upgraded to a list.If it is, we can just

@@ -290,6 +290,29 @@ TEST("duplicate record fields to_list with unparsed value then null") {
   CHECK(not b.has_elements());
 }
 
+TEST("duplicate record fields merge_structural with unparsed value") {
+  auto b = data_builder{
+    data_builder::settings{
+      .building_settings={
+        .duplicate_keys = duplicate_keys::merge_structural,
+      },
+    },
+  };
+  // This mirrors `kv` with an unflatten separator on `k:1,k.x:2`: the first
+  // value is fed unparsed, then the same top-level key is promoted to a record.
+  // The promoted value must stay unparsed so that it is still parsed to `1`.
+  auto* r = b.record();
+  r->field("k")->data_unparsed("1");
+  r->field("k")->record()->field("x")->data_unparsed("2");
+
+  const auto rec = safe_as_record(b.materialize());
+  const auto expected = tenzir::record{
+    {"k", tenzir::record{{"", int64_t{1}}, {"x", int64_t{2}}}},
+  };
+  CHECK_EQUAL(rec, expected);
+  CHECK(not b.has_elements());
+}
+
 TEST("signature record empty") {
   auto b = data_builder{};
   (void)b.record();
