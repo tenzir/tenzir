@@ -501,9 +501,8 @@ auto evaluator::eval(ast::index_expr const& x, ActiveRows const& active)
         // The `get` function internally creates an `ast::index_expr` and
         // evaluates it. We change the warning when it is used.
         return std::move(diag).hint(
-          x.rbracket != location::unknown
-            ? "use `[…]?` to suppress this warning"
-            : "provide a fallback value to suppress this warning");
+          not x.is_get ? "use `[…]?` to suppress this warning"
+                       : "provide a fallback value to suppress this warning");
       };
       TENZIR_ASSERT(value.length() == index.length());
       if (auto null = value.as<null_type>()) {

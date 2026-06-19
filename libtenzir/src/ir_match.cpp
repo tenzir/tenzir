@@ -441,7 +441,7 @@ auto lower_match_pattern(ast::match_pattern const& pattern,
       if (compare_range_bounds(lower, upper)
           == std::partial_ordering::unordered) {
         diagnostic::error("range pattern bounds are not comparable")
-          .primary(range.dots)
+          .primary(range.get_location())
           .emit(dh);
         return failure::promise();
       }

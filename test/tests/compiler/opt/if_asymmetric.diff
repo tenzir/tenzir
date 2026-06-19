@@ -23,7 +23,6 @@
        ]
      },
      If {
-       if_keyword: [1]:7..9 from 0,
        condition: constant bool true @ [1]:10..14 from 0,
        consequence: {
          lets: [
@@ -38,60 +37,58 @@
                  id: `x` @ [1]:25..26 from 0,
                  has_question_mark: false
                },
-               op: "eq" @ [1]:27..29 from 0,
-               right: constant int64 1 @ [1]:30..31 from 0
+               op: "eq",
+               right: constant int64 1 @ [1]:30..31 from 0,
+               location: [1]:25..31 from 0
              }
            }
          ]
        },
        alternative: {
-         keyword: [1]:34..38 from 0,
-         pipeline: {
-           lets: [
-             
-           ],
-           operators: [
-             GenericIr {
-               op: {
-                 path: [
-                   `write_lines` @ [1]:43..54 from 0
-                 ],
-                 ref: std::write_lines/op
-               },
-               desc: "write_lines",
-               args: [
-                 
+         lets: [
+           
+         ],
+         operators: [
+           GenericIr {
+             op: {
+               path: [
+                 `write_lines` @ [1]:43..54 from 0
                ],
-               filter: [
-                 
-               ],
-               order: "ordered",
-               named_args: [
-                 
-               ]
+               ref: std::write_lines/op
              },
-             GenericIr {
-               op: {
-                 path: [
-                   `read_ndjson` @ [1]:57..68 from 0
-                 ],
-                 ref: std::read_ndjson/op
-               },
-               desc: "read_ndjson",
-               args: [
-                 
+             desc: "write_lines",
+             args: [
+               
+             ],
+             filter: [
+               
+             ],
+             order: "ordered",
+             named_args: [
+               
+             ]
+           },
+           GenericIr {
+             op: {
+               path: [
+                 `read_ndjson` @ [1]:57..68 from 0
                ],
-               filter: [
-                 
-               ],
--              order: "ordered",
-+              order: "unordered",
-               named_args: [
-                 
-               ]
-             }
-           ]
-         }
+               ref: std::read_ndjson/op
+             },
+             desc: "read_ndjson",
+             args: [
+               
+             ],
+             filter: [
+               
+             ],
+-            order: "ordered",
++            order: "unordered",
+             named_args: [
+               
+             ]
+           }
+         ]
        }
      },
      GenericIr {

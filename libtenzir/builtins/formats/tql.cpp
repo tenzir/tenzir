@@ -112,14 +112,14 @@ auto append_list_to_builder(const ast::list& list_expr,
 template <class Generator>
 auto append_unary_to_builder(const ast::unary_expr& unary_expr, Generator& gen,
                              size_t depth) -> append_result {
-  if (unary_expr.op.inner == ast::unary_op::pos) {
+  if (unary_expr.op == ast::unary_op::pos) {
     return append_expression_to_builder(unary_expr.expr, gen, depth + 1);
   }
   auto* constant = try_as<ast::constant>(unary_expr.expr);
   if (not constant) {
     return append_result::unsupported_expression;
   }
-  if (unary_expr.op.inner == ast::unary_op::not_) {
+  if (unary_expr.op == ast::unary_op::not_) {
     auto* value = try_as<bool>(constant->value);
     if (not value) {
       return append_result::unsupported_expression;
@@ -127,7 +127,7 @@ auto append_unary_to_builder(const ast::unary_expr& unary_expr, Generator& gen,
     gen.data(not *value);
     return append_result::success;
   }
-  if (unary_expr.op.inner != ast::unary_op::neg) {
+  if (unary_expr.op != ast::unary_op::neg) {
     return append_result::unsupported_expression;
   }
   return constant->value.match(detail::overload{

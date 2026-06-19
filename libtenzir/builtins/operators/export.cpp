@@ -117,7 +117,7 @@ auto add_remainder(Option<ast::expression>& remainder, ast::expression expr)
   remainder = ast::expression{
     ast::binary_expr{
       std::move(*remainder),
-      {ast::binary_op::and_, location::unknown},
+      ast::binary_op::and_,
       std::move(expr),
     },
   };

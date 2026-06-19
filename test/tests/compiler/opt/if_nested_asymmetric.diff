@@ -23,14 +23,14 @@
        ]
      },
      If {
-       if_keyword: [1]:7..9 from 0,
        condition: binary_expr {
          left: root_field {
            id: `x` @ [1]:10..11 from 0,
            has_question_mark: false
          },
-         op: "eq" @ [1]:12..14 from 0,
-         right: constant int64 1 @ [1]:15..16 from 0
+         op: "eq",
+         right: constant int64 1 @ [1]:15..16 from 0,
+         location: [1]:10..16 from 0
        },
        consequence: {
          lets: [
@@ -45,108 +45,103 @@
                  id: `a` @ [1]:27..28 from 0,
                  has_question_mark: false
                },
-               op: "eq" @ [1]:29..31 from 0,
-               right: constant int64 1 @ [1]:32..33 from 0
+               op: "eq",
+               right: constant int64 1 @ [1]:32..33 from 0,
+               location: [1]:27..33 from 0
              }
            }
          ]
        },
        alternative: {
-         keyword: [1]:36..40 from 0,
-         pipeline: {
-           lets: [
-             
-           ],
-           operators: [
-             If {
-               if_keyword: [1]:41..43 from 0,
-               condition: binary_expr {
-                 left: root_field {
-                   id: `y` @ [1]:44..45 from 0,
-                   has_question_mark: false
-                 },
-                 op: "eq" @ [1]:46..48 from 0,
-                 right: constant int64 2 @ [1]:49..50 from 0
+         lets: [
+           
+         ],
+         operators: [
+           If {
+             condition: binary_expr {
+               left: root_field {
+                 id: `y` @ [1]:44..45 from 0,
+                 has_question_mark: false
                },
-               consequence: {
-                 lets: [
-                   
-                 ],
-                 operators: [
-                   GenericIr {
-                     op: {
-                       path: [
-                         `write_lines` @ [1]:55..66 from 0
-                       ],
-                       ref: std::write_lines/op
-                     },
-                     desc: "write_lines",
-                     args: [
-                       
+               op: "eq",
+               right: constant int64 2 @ [1]:49..50 from 0,
+               location: [1]:44..50 from 0
+             },
+             consequence: {
+               lets: [
+                 
+               ],
+               operators: [
+                 GenericIr {
+                   op: {
+                     path: [
+                       `write_lines` @ [1]:55..66 from 0
                      ],
-                     filter: [
-                       
-                     ],
-                     order: "ordered",
-                     named_args: [
-                       
-                     ]
+                     ref: std::write_lines/op
                    },
-                   GenericIr {
-                     op: {
-                       path: [
-                         `read_ndjson` @ [1]:69..80 from 0
-                       ],
-                       ref: std::read_ndjson/op
-                     },
-                     desc: "read_ndjson",
-                     args: [
-                       
-                     ],
-                     filter: [
-                       
-                     ],
--                    order: "ordered",
-+                    order: "unordered",
-                     named_args: [
-                       
-                     ]
-                   }
-                 ]
-               },
-               alternative: {
-                 keyword: [1]:83..87 from 0,
-                 pipeline: {
-                   lets: [
+                   desc: "write_lines",
+                   args: [
                      
                    ],
-                   operators: [
-                     GenericIr {
-                       op: {
-                         path: [
-                           `head` @ [1]:92..96 from 0
-                         ],
-                         ref: std::head/op
-                       },
-                       desc: "head",
-                       args: [
-                         
-                       ],
-                       filter: [
-                         
-                       ],
--                      order: "ordered",
-+                      order: "unordered",
-                       named_args: [
-                         
-                       ]
-                     }
+                   filter: [
+                     
+                   ],
+                   order: "ordered",
+                   named_args: [
+                     
+                   ]
+                 },
+                 GenericIr {
+                   op: {
+                     path: [
+                       `read_ndjson` @ [1]:69..80 from 0
+                     ],
+                     ref: std::read_ndjson/op
+                   },
+                   desc: "read_ndjson",
+                   args: [
+                     
+                   ],
+                   filter: [
+                     
+                   ],
+-                  order: "ordered",
++                  order: "unordered",
+                   named_args: [
+                     
                    ]
                  }
-               }
+               ]
+             },
+             alternative: {
+               lets: [
+                 
+               ],
+               operators: [
+                 GenericIr {
+                   op: {
+                     path: [
+                       `head` @ [1]:92..96 from 0
+                     ],
+                     ref: std::head/op
+                   },
+                   desc: "head",
+                   args: [
+                     
+                   ],
+                   filter: [
+                     
+                   ],
+-                  order: "ordered",
++                  order: "unordered",
+                   named_args: [
+                     
+                   ]
+                 }
+               ]
              }
-           ]
-         }
+           }
+         ]
        }
      },
      GenericIr {

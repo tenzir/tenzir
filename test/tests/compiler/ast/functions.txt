@@ -4,7 +4,6 @@
       id: `a` @ [1]:0..1 from 0,
       has_question_mark: false
     },
-    equals: [1]:2..3 from 0,
     right: function_call {
       fn: {
         path: [
@@ -15,16 +14,16 @@
       args: [
         
       ],
-      rpar: [1]:6..7 from 0,
-      method: false
-    }
+      method: false,
+      location: [1]:4..7 from 0
+    },
+    location: [1]:0..7 from 0
   },
   assignment {
     left: root_field {
       id: `a` @ [1]:8..9 from 0,
       has_question_mark: false
     },
-    equals: [1]:10..11 from 0,
     right: function_call {
       fn: {
         path: [
@@ -38,16 +37,16 @@
           has_question_mark: false
         }
       ],
-      rpar: [1]:15..16 from 0,
-      method: false
-    }
+      method: false,
+      location: [1]:12..16 from 0
+    },
+    location: [1]:8..16 from 0
   },
   assignment {
     left: root_field {
       id: `a` @ [1]:17..18 from 0,
       has_question_mark: false
     },
-    equals: [1]:19..20 from 0,
     right: function_call {
       fn: {
         path: [
@@ -61,23 +60,23 @@
             id: `c` @ [1]:23..24 from 0,
             has_question_mark: false
           },
-          equals: [1]:24..25 from 0,
           right: root_field {
             id: `d` @ [1]:25..26 from 0,
             has_question_mark: false
-          }
+          },
+          location: [1]:23..26 from 0
         }
       ],
-      rpar: [1]:26..27 from 0,
-      method: false
-    }
+      method: false,
+      location: [1]:21..27 from 0
+    },
+    location: [1]:17..27 from 0
   },
   assignment {
     left: root_field {
       id: `a` @ [1]:28..29 from 0,
       has_question_mark: false
     },
-    equals: [1]:30..31 from 0,
     right: function_call {
       fn: {
         path: [
@@ -95,23 +94,23 @@
             id: `d` @ [1]:37..38 from 0,
             has_question_mark: false
           },
-          equals: [1]:38..39 from 0,
           right: root_field {
             id: `e` @ [1]:39..40 from 0,
             has_question_mark: false
-          }
+          },
+          location: [1]:37..40 from 0
         }
       ],
-      rpar: [1]:40..41 from 0,
-      method: false
-    }
+      method: false,
+      location: [1]:32..41 from 0
+    },
+    location: [1]:28..41 from 0
   },
   assignment {
     left: root_field {
       id: `a` @ [1]:42..43 from 0,
       has_question_mark: false
     },
-    equals: [1]:44..45 from 0,
     right: function_call {
       fn: {
         path: [
@@ -125,11 +124,11 @@
             id: `c` @ [1]:48..49 from 0,
             has_question_mark: false
           },
-          equals: [1]:49..50 from 0,
           right: root_field {
             id: `d` @ [1]:50..51 from 0,
             has_question_mark: false
-          }
+          },
+          location: [1]:48..51 from 0
         },
         root_field {
           id: `e` @ [1]:53..54 from 0,
@@ -140,20 +139,21 @@
             id: `g` @ [1]:56..57 from 0,
             has_question_mark: false
           },
-          equals: [1]:57..58 from 0,
           right: root_field {
             id: `h` @ [1]:58..59 from 0,
             has_question_mark: false
-          }
+          },
+          location: [1]:56..59 from 0
         },
         root_field {
           id: `i` @ [1]:61..62 from 0,
           has_question_mark: false
         }
       ],
-      rpar: [1]:63..64 from 0,
-      method: false
-    }
+      method: false,
+      location: [1]:46..64 from 0
+    },
+    location: [1]:42..64 from 0
   },
   invocation {
     op: {
@@ -176,10 +176,11 @@
             has_question_mark: false
           }
         ],
-        rpar: [1]:73..74 from 0,
-        method: true
+        method: true,
+        location: [1]:69..74 from 0
       }
-    ]
+    ],
+    location: [1]:65..74 from 0
   },
   invocation {
     op: {
@@ -206,10 +207,11 @@
             has_question_mark: false
           }
         ],
-        rpar: [1]:84..85 from 0,
-        method: true
+        method: true,
+        location: [1]:79..85 from 0
       }
-    ]
+    ],
+    location: [1]:75..85 from 0
   },
   invocation {
     op: {
@@ -236,17 +238,18 @@
               id: `c` @ [1]:94..95 from 0,
               has_question_mark: false
             },
-            equals: [1]:95..96 from 0,
             right: root_field {
               id: `d` @ [1]:96..97 from 0,
               has_question_mark: false
-            }
+            },
+            location: [1]:94..97 from 0
           }
         ],
-        rpar: [1]:97..98 from 0,
-        method: true
+        method: true,
+        location: [1]:90..98 from 0
       }
-    ]
+    ],
+    location: [1]:86..98 from 0
   },
   invocation {
     op: {
@@ -277,17 +280,18 @@
               id: `d` @ [1]:110..111 from 0,
               has_question_mark: false
             },
-            equals: [1]:111..112 from 0,
             right: root_field {
               id: `e` @ [1]:112..113 from 0,
               has_question_mark: false
-            }
+            },
+            location: [1]:110..113 from 0
           }
         ],
-        rpar: [1]:113..114 from 0,
-        method: true
+        method: true,
+        location: [1]:103..114 from 0
       }
-    ]
+    ],
+    location: [1]:99..114 from 0
   },
   invocation {
     op: {
@@ -314,11 +318,11 @@
               id: `c` @ [1]:123..124 from 0,
               has_question_mark: false
             },
-            equals: [1]:124..125 from 0,
             right: root_field {
               id: `d` @ [1]:125..126 from 0,
               has_question_mark: false
-            }
+            },
+            location: [1]:123..126 from 0
           },
           root_field {
             id: `e` @ [1]:128..129 from 0,
@@ -329,20 +333,21 @@
               id: `g` @ [1]:131..132 from 0,
               has_question_mark: false
             },
-            equals: [1]:132..133 from 0,
             right: root_field {
               id: `h` @ [1]:133..134 from 0,
               has_question_mark: false
-            }
+            },
+            location: [1]:131..134 from 0
           },
           root_field {
             id: `i` @ [1]:136..137 from 0,
             has_question_mark: false
           }
         ],
-        rpar: [1]:138..139 from 0,
-        method: true
+        method: true,
+        location: [1]:119..139 from 0
       }
-    ]
+    ],
+    location: [1]:115..139 from 0
   }
 ]

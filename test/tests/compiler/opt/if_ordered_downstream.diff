@@ -23,7 +23,6 @@
        ]
      },
      If {
-       if_keyword: [1]:7..9 from 0,
        condition: constant bool true @ [1]:10..14 from 0,
        consequence: {
          lets: [
@@ -52,33 +51,30 @@
          ]
        },
        alternative: {
-         keyword: [1]:26..30 from 0,
-         pipeline: {
-           lets: [
-             
-           ],
-           operators: [
-             GenericIr {
-               op: {
-                 path: [
-                   `head` @ [1]:35..39 from 0
-                 ],
-                 ref: std::head/op
-               },
-               desc: "head",
-               args: [
-                 
+         lets: [
+           
+         ],
+         operators: [
+           GenericIr {
+             op: {
+               path: [
+                 `head` @ [1]:35..39 from 0
                ],
-               filter: [
-                 
-               ],
-               order: "ordered",
-               named_args: [
-                 
-               ]
-             }
-           ]
-         }
+               ref: std::head/op
+             },
+             desc: "head",
+             args: [
+               
+             ],
+             filter: [
+               
+             ],
+             order: "ordered",
+             named_args: [
+               
+             ]
+           }
+         ]
        }
      },
      GenericIr {

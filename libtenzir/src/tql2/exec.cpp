@@ -475,13 +475,13 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
         }
         auto plugin = plugins::find<operator_factory_plugin>("tql2.if");
         TENZIR_ASSERT(plugin);
-        TRY(auto op,
-            plugin->make(
-              operator_factory_invocation{
-                ast::entity{{ast::identifier{std::string{"if"}, x.if_kw}}},
-                std::move(args),
-              },
-              ctx));
+        TRY(auto op, plugin->make(
+                       operator_factory_invocation{
+                         ast::entity{{ast::identifier{std::string{"if"},
+                                                      location::unknown}}},
+                         std::move(args),
+                       },
+                       ctx));
         ops.push_back(std::move(op));
         return {};
       },

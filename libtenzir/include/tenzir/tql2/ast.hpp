@@ -343,20 +343,20 @@ struct selector : variant<meta, field_path> {
 struct unpack {
   unpack() = default;
 
-  unpack(expression expr, location brackets)
-    : expr{std::move(expr)}, brackets{brackets} {
+  unpack(expression expr, location brackets) : expr{std::move(expr)} {
+    location = this->expr.get_location().combine(brackets);
   }
 
   expression expr;
-  location brackets;
+  location location;
 
   friend auto inspect(auto& f, unpack& x) -> bool {
     return f.object(x).fields(f.field("expr", x.expr),
-                              f.field("brackets", x.brackets));
+                              f.field("location", x.location));
   }
 
-  auto get_location() const -> location {
-    return expr.get_location().combine(brackets);
+  auto get_location() const -> struct location {
+    return location;
   }
 };
 
@@ -366,21 +366,24 @@ TENZIR_ENUM(binary_op, add, sub, mul, div, eq, neq, gt, geq, lt, leq, and_, or_,
 struct binary_expr {
   binary_expr() = default;
 
-  binary_expr(expression left, located<binary_op> op, expression right)
+  binary_expr(expression left, binary_op op, expression right)
     : left{std::move(left)}, op{op}, right{std::move(right)} {
+    location = this->left.get_location().combine(this->right);
   }
 
   expression left;
-  located<binary_op> op;
+  binary_op op;
   expression right;
+  location location;
 
   friend auto inspect(auto& f, binary_expr& x) -> bool {
     return f.object(x).fields(f.field("left", x.left), f.field("op", x.op),
-                              f.field("right", x.right));
+                              f.field("right", x.right),
+                              f.field("location", x.location));
   }
 
-  auto get_location() const -> location {
-    return left.get_location().combine(right);
+  auto get_location() const -> struct location {
+    return location;
   }
 };
 
@@ -390,18 +393,21 @@ struct unary_expr {
   unary_expr() = default;
 
   unary_expr(located<unary_op> op, expression expr)
-    : op{op}, expr{std::move(expr)} {
+    : op{op.inner}, expr{std::move(expr)} {
+    location = op.source.combine(this->expr);
   }
 
-  located<unary_op> op;
+  unary_op op;
   expression expr;
+  location location;
 
   friend auto inspect(auto& f, unary_expr& x) -> bool {
-    return f.object(x).fields(f.field("op", x.op), f.field("expr", x.expr));
+    return f.object(x).fields(f.field("op", x.op), f.field("expr", x.expr),
+                              f.field("location", x.location));
   }
 
-  auto get_location() const -> location {
-    return op.source.combine(expr);
+  auto get_location() const -> struct location {
+    return location;
   }
 };
 
@@ -409,24 +415,34 @@ struct lambda_expr {
   lambda_expr() = default;
 
   lambda_expr(identifier param, location arrow, expression body)
-    : params{std::move(param)}, arrow{arrow}, body{std::move(body)} {
+    : params{std::move(param)}, body{std::move(body)} {
+    location = compute_location(arrow);
   }
 
   lambda_expr(std::vector<identifier> params, location arrow, expression body)
-    : params{std::move(params)}, arrow{arrow}, body{std::move(body)} {
+    : params{std::move(params)}, body{std::move(body)} {
+    location = compute_location(arrow);
   }
 
   std::vector<identifier> params;
-  location arrow;
   expression body;
+  location location;
 
   friend auto inspect(auto& f, lambda_expr& x) -> bool {
     return f.object(x).fields(f.field("params", x.params),
-                              f.field("arrow", x.arrow),
-                              f.field("body", x.body));
+                              f.field("body", x.body),
+                              f.field("location", x.location));
   }
 
-  auto is_unary() const -> bool {
+  auto compute_location(struct location arrow) const -> struct location {
+    if (params.empty()) {
+      return arrow.combine(body);
+    }
+    return params.front().get_location().combine(body);
+  }
+
+  auto
+  is_unary() const -> bool {
     return params.size() == 1;
   }
 
@@ -444,11 +460,8 @@ struct lambda_expr {
     return check(field_path::try_from(root_field{params.front(), false}));
   }
 
-  auto get_location() const -> location {
-    if (params.empty()) {
-      return arrow.combine(body);
-    }
-    return params.front().get_location().combine(body);
+  auto get_location() const -> struct location {
+    return location;
   }
 };
 
@@ -456,21 +469,22 @@ struct assignment {
   assignment() = default;
 
   assignment(expression left, location equals, expression right)
-    : left{std::move(left)}, equals{equals}, right{std::move(right)} {
+    : left{std::move(left)}, right{std::move(right)} {
+    location = this->left.get_location().combine(equals).combine(this->right);
   }
 
   expression left;
-  location equals;
   expression right;
+  location location;
 
   friend auto inspect(auto& f, assignment& x) -> bool {
     return f.object(x).fields(f.field("left", x.left),
-                              f.field("equals", x.equals),
-                              f.field("right", x.right));
+                              f.field("right", x.right),
+                              f.field("location", x.location));
   }
 
-  auto get_location() const -> location {
-    return left.get_location().combine(right);
+  auto get_location() const -> struct location {
+    return location;
   }
 };
 
@@ -500,21 +514,22 @@ struct function_call {
 
   function_call(entity fn, std::vector<expression> args, location rpar,
                 bool method)
-    : fn{std::move(fn)}, args(std::move(args)), rpar{rpar}, method{method} {
+    : fn{std::move(fn)}, args(std::move(args)), method{method} {
+    location = compute_location(rpar);
   }
 
   entity fn;
   std::vector<expression> args;
-  location rpar;
   bool method{};
+  location location;
 
   friend auto inspect(auto& f, function_call& x) -> bool {
     return f.object(x).fields(f.field("fn", x.fn), f.field("args", x.args),
-                              f.field("rpar", x.rpar),
-                              f.field("method", x.method));
+                              f.field("method", x.method),
+                              f.field("location", x.location));
   }
 
-  auto get_location() const -> location {
+  auto compute_location(struct location rpar) const -> struct location {
     auto left = location::unknown;
     if (method) {
       TENZIR_ASSERT(not args.empty());
@@ -524,6 +539,11 @@ struct function_call {
     }
     return left.combine(rpar);
   }
+
+  auto
+  get_location() const -> struct location {
+    return location;
+  }
 };
 
 struct field_access {
@@ -532,28 +552,30 @@ struct field_access {
   field_access(expression left, location dot, bool has_question_mark,
                identifier name)
     : left{std::move(left)},
-      dot{dot},
       has_question_mark{has_question_mark},
       name{std::move(name)} {
+    location
+      = this->left.get_location().combine(dot).combine(this->name.location);
   }
 
   expression left;
-  location dot;
   bool has_question_mark = false;
   identifier name;
+  location location;
 
   friend auto inspect(auto& f, field_access& x) -> bool {
-    return f.object(x).fields(f.field("left", x.left), f.field("dot", x.dot),
+    return f.object(x).fields(f.field("left", x.left),
                               f.field("has_question_mark", x.has_question_mark),
-                              f.field("name", x.name));
+                              f.field("name", x.name),
+                              f.field("location", x.location));
   }
 
   auto suppress_warnings() const -> bool {
     return has_question_mark;
   }
 
-  auto get_location() const -> location {
-    return left.get_location().combine(name.location);
+  auto get_location() const -> struct location {
+    return location;
   }
 };
 
@@ -561,47 +583,52 @@ struct index_expr {
   index_expr() = default;
 
   index_expr(expression expr, location lbracket, expression index,
-             location rbracket, bool has_question_mark)
+             location rbracket, bool has_question_mark, bool is_get = false)
     : expr{std::move(expr)},
-      lbracket{lbracket},
       index{std::move(index)},
-      rbracket{rbracket},
-      has_question_mark{has_question_mark} {
+      has_question_mark{has_question_mark},
+      is_get{is_get} {
+    location = this->expr.get_location().combine(lbracket).combine(rbracket);
   }
 
   expression expr;
-  location lbracket;
   expression index;
-  location rbracket;
   bool has_question_mark = false;
+  /// Whether this node was synthesized by the `get` function rather than
+  /// parsed from `[…]` syntax. This changes how warnings are phrased.
+  bool is_get = false;
+  location location;
 
   friend auto inspect(auto& f, index_expr& x) -> bool {
-    return f.object(x).fields(
-      f.field("expr", x.expr), f.field("lbracket", x.lbracket),
-      f.field("index", x.index), f.field("rbracket", x.rbracket),
-      f.field("has_question_mark", x.has_question_mark));
+    return f.object(x).fields(f.field("expr", x.expr),
+                              f.field("index", x.index),
+                              f.field("has_question_mark", x.has_question_mark),
+                              f.field("is_get", x.is_get),
+                              f.field("location", x.location));
   }
 
-  auto get_location() const -> location {
-    return expr.get_location().combine(rbracket);
+  auto get_location() const -> struct location {
+    return location;
   }
 };
 
 struct spread {
   spread() = default;
 
-  spread(location dots, expression expr) : dots{dots}, expr{std::move(expr)} {
+  spread(location dots, expression expr) : expr{std::move(expr)} {
+    location = dots.combine(this->expr);
   }
 
-  location dots;
   expression expr;
+  location location;
 
   friend auto inspect(auto& f, spread& x) -> bool {
-    return f.object(x).fields(f.field("dots", x.dots), f.field("expr", x.expr));
+    return f.object(x).fields(f.field("expr", x.expr),
+                              f.field("location", x.location));
   }
 
-  auto get_location() const -> location {
-    return dots.combine(expr);
+  auto get_location() const -> struct location {
+    return location;
   }
 };
 
@@ -672,20 +699,23 @@ struct invocation {
 
   invocation(entity op, std::vector<expression> args)
     : op{std::move(op)}, args(std::move(args)) {
+    location = this->args.empty()
+                 ? this->op.get_location()
+                 : this->op.get_location().combine(this->args.back());
   }
 
   entity op;
   std::vector<expression> args;
+  location location;
 
-  auto get_location() const -> location {
-    if (args.empty()) {
-      return op.get_location();
-    }
-    return op.get_location().combine(args.back());
+  auto get_location() const -> struct location {
+    return location;
   }
 
-  friend auto inspect(auto& f, invocation& x) -> bool {
-    return f.object(x).fields(f.field("op", x.op), f.field("args", x.args));
+  friend auto
+  inspect(auto& f, invocation& x) -> bool {
+    return f.object(x).fields(f.field("op", x.op), f.field("args", x.args),
+                              f.field("location", x.location));
   }
 };
 
@@ -721,16 +751,17 @@ struct let_stmt {
   let_stmt() = default;
 
   let_stmt(location let, identifier name, expression expr)
-    : let{let}, name{std::move(name)}, expr{std::move(expr)} {
+    : name{std::move(name)}, expr{std::move(expr)} {
+    location = let.combine(this->expr);
   }
 
-  location let;
   identifier name;
   expression expr;
+  location location;
 
   friend auto inspect(auto& f, let_stmt& x) -> bool {
-    return f.object(x).fields(f.field("let", x.let), f.field("name", x.name),
-                              f.field("expr", x.expr));
+    return f.object(x).fields(f.field("name", x.name), f.field("expr", x.expr),
+                              f.field("location", x.location));
   }
 
   auto name_without_dollar() const -> std::string_view {
@@ -738,18 +769,17 @@ struct let_stmt {
     return std::string_view{name.name}.substr(1);
   }
 
-  auto get_location() const -> location {
-    return let.combine(expr);
+  auto get_location() const -> struct location {
+    return location;
   }
 };
 
 struct if_stmt {
   struct else_t {
-    location kw;
     pipeline pipe;
 
     friend auto inspect(auto& f, else_t& x) -> bool {
-      return f.object(x).fields(f.field("kw", x.kw), f.field("pipe", x.pipe));
+      return f.object(x).fields(f.field("pipe", x.pipe));
     }
   };
 
@@ -757,32 +787,34 @@ struct if_stmt {
 
   if_stmt(location if_kw, expression condition, pipeline then,
           std::optional<else_t> else_)
-    : if_kw{if_kw},
-      condition{std::move(condition)},
+    : condition{std::move(condition)},
       then{std::move(then)},
       else_{std::move(else_)} {
+    location = compute_location(if_kw);
   }
 
-  location if_kw;
   expression condition;
   pipeline then;
   std::optional<else_t> else_;
+  location location;
 
   friend auto inspect(auto& f, if_stmt& x) -> bool {
-    return f.object(x).fields(f.field("if_kw", x.if_kw),
-                              f.field("condition", x.condition),
-                              f.field("then", x.then),
-                              f.field("else", x.else_));
+    return f.object(x).fields(f.field("condition", x.condition),
+                              f.field("then", x.then), f.field("else", x.else_),
+                              f.field("location", x.location));
   }
 
-  auto get_location() const -> location {
-    auto result = if_kw.combine(condition);
-    result = result.combine(then);
+  auto compute_location(struct location if_kw) const -> struct location {
+    auto result = if_kw.combine(condition).combine(then);
     if (else_) {
-      result = result.combine(else_->kw);
       result = result.combine(else_->pipe);
     }
     return result;
+  }
+
+  auto
+  get_location() const -> struct location {
+    return location;
   }
 };
 
@@ -813,18 +845,25 @@ struct expression_pattern {
 };
 
 struct range_pattern {
+  range_pattern() = default;
+
+  range_pattern(expression lower, expression upper, location dots)
+    : lower{std::move(lower)}, upper{std::move(upper)} {
+    location = this->lower.get_location().combine(dots).combine(this->upper);
+  }
+
   expression lower;
   expression upper;
-  location dots;
+  location location;
 
   friend auto inspect(auto& f, range_pattern& x) -> bool {
     return f.object(x).fields(f.field("lower", x.lower),
                               f.field("upper", x.upper),
-                              f.field("dots", x.dots));
+                              f.field("location", x.location));
   }
 
-  auto get_location() const -> location {
-    return lower.get_location().combine(upper);
+  auto get_location() const -> struct location {
+    return location;
   }
 };
 

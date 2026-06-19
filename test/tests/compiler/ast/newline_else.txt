@@ -1,6 +1,5 @@
 [
   if_stmt {
-    if_kw: [1]:45..47 from 0,
     condition: root_field {
       id: `x` @ [1]:48..49 from 0,
       has_question_mark: false
@@ -9,10 +8,8 @@
       
     ],
     else: {
-      kw: [1]:53..57 from 0,
       pipe: [
         if_stmt {
-          if_kw: [1]:58..60 from 0,
           condition: root_field {
             id: `y` @ [1]:61..62 from 0,
             has_question_mark: false
@@ -21,13 +18,14 @@
             
           ],
           else: {
-            kw: [1]:66..70 from 0,
             pipe: [
               
             ]
-          }
+          },
+          location: [1]:58..62 from 0
         }
       ]
-    }
+    },
+    location: [1]:45..62 from 0
   }
 ]

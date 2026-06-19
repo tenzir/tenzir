@@ -33,24 +33,26 @@
                   params: [
                     `x` @ [1]:48..49 from 0
                   ],
-                  arrow: [1]:50..52 from 0,
                   body: binary_expr {
                     left: root_field {
                       id: `x` @ [1]:53..54 from 0,
                       has_question_mark: false
                     },
-                    op: "mul" @ [1]:55..56 from 0,
-                    right: constant int64 2 @ [1]:57..58 from 0
-                  }
+                    op: "mul",
+                    right: constant int64 2 @ [1]:57..58 from 0,
+                    location: [1]:53..58 from 0
+                  },
+                  location: [1]:48..58 from 0
                 }
               ],
-              rpar: [1]:58..59 from 0,
-              method: true
+              method: true,
+              location: [1]:34..59 from 0
             }
           }
         ],
         end: [1]:61..62 from 0
       }
-    ]
+    ],
+    location: [1]:21..62 from 0
   }
 ]

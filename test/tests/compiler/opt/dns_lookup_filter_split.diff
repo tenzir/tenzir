@@ -25,8 +25,9 @@
 +          id: `domain` @ [1]:69..75 from 0,
 +          has_question_mark: false
 +        },
-+        op: "eq" @ [1]:76..78 from 0,
-+        right: constant string "tenzir.com" @ [1]:79..91 from 0
++        op: "eq",
++        right: constant string "tenzir.com" @ [1]:79..91 from 0,
++        location: [1]:69..91 from 0
 +      }
      },
      GenericIr {
@@ -73,8 +74,9 @@
 -          id: `domain` @ [1]:69..75 from 0,
 -          has_question_mark: false
 -        },
--        op: "eq" @ [1]:76..78 from 0,
--        right: constant string "tenzir.com" @ [1]:79..91 from 0
+-        op: "eq",
+-        right: constant string "tenzir.com" @ [1]:79..91 from 0,
+-        location: [1]:69..91 from 0
 -      }
 -    },
 -    where_ir {
@@ -85,8 +87,9 @@
            id: `resolved` @ [1]:98..106 from 0,
            has_question_mark: false
          },
-         op: "neq" @ [1]:107..109 from 0,
-         right: constant none_t {} @ [1]:110..114 from 0
+         op: "neq",
+         right: constant none_t {} @ [1]:110..114 from 0,
+         location: [1]:98..114 from 0
        }
 +    },
 +    GenericIr {

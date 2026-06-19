@@ -8,15 +8,16 @@
     },
     args: [
       
-    ]
+    ],
+    location: [1]:0..6 from 0
   },
   assignment {
     left: root_field {
       id: `foo` @ [1]:7..10 from 0,
       has_question_mark: false
     },
-    equals: [1]:11..12 from 0,
-    right: constant int64 42 @ [1]:13..15 from 0
+    right: constant int64 42 @ [1]:13..15 from 0,
+    location: [1]:7..15 from 0
   },
   invocation {
     op: {
@@ -31,10 +32,11 @@
           id: `bar` @ [1]:20..23 from 0,
           has_question_mark: false
         },
-        equals: [1]:24..25 from 0,
-        right: constant int64 43 @ [1]:26..28 from 0
+        right: constant int64 43 @ [1]:26..28 from 0,
+        location: [1]:20..28 from 0
       }
-    ]
+    ],
+    location: [1]:16..28 from 0
   },
   invocation {
     op: {
@@ -53,17 +55,18 @@
           id: `baz` @ [1]:38..41 from 0,
           has_question_mark: false
         },
-        equals: [1]:41..42 from 0,
         right: root_field {
           id: `qux` @ [1]:42..45 from 0,
           has_question_mark: false
-        }
+        },
+        location: [1]:38..45 from 0
       },
       root_field {
         id: `quux` @ [1]:47..51 from 0,
         has_question_mark: false
       }
-    ]
+    ],
+    location: [1]:29..51 from 0
   },
   invocation {
     op: {
@@ -74,6 +77,7 @@
     },
     args: [
       
-    ]
+    ],
+    location: [1]:52..58 from 0
   }
 ]

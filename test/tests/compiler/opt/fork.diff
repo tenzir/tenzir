@@ -82,8 +82,9 @@
            id: `x` @ [1]:70..71 from 0,
            has_question_mark: false
          },
-         op: "gt" @ [1]:72..73 from 0,
-         right: constant int64 1 @ [1]:74..75 from 0
+         op: "gt",
+         right: constant int64 1 @ [1]:74..75 from 0,
+         location: [1]:70..75 from 0
        }
      },
      GenericIr {

@@ -326,24 +326,12 @@ auto make_set_ir(ast::assignment x) -> Box<ir::Operator> {
 }
 
 struct IfArgs {
-  struct Else {
-    location else_keyword;
-    ir::pipeline pipeline;
-
-    friend auto inspect(auto& f, Else& x) -> bool {
-      return f.object(x).fields(f.field("keyword", x.else_keyword),
-                                f.field("pipeline", x.pipeline));
-    }
-  };
-
-  location if_keyword;
   ast::expression condition;
   ir::pipeline consequence;
-  std::optional<Else> alternative;
+  std::optional<ir::pipeline> alternative;
 
   friend auto inspect(auto& f, IfArgs& x) -> bool {
-    return f.object(x).fields(f.field("if_keyword", x.if_keyword),
-                              f.field("condition", x.condition),
+    return f.object(x).fields(f.field("condition", x.condition),
                               f.field("consequence", x.consequence),
                               f.field("alternative", x.alternative));
   }
@@ -360,7 +348,7 @@ public:
     if (not ctx.get_sub(true).is_some()) {
       co_await ctx.spawn_sub<table_slice>(true, args_.consequence);
       if (args_.alternative) {
-        co_await ctx.spawn_sub<table_slice>(false, args_.alternative->pipeline);
+        co_await ctx.spawn_sub<table_slice>(false, *args_.alternative);
       }
     }
   }
@@ -541,7 +529,7 @@ public:
     TRY(args_.condition.substitute(ctx));
     TRY(args_.consequence.substitute(ctx, instantiate));
     if (args_.alternative) {
-      TRY(args_.alternative->pipeline.substitute(ctx, instantiate));
+      TRY(args_.alternative->substitute(ctx, instantiate));
     }
     return {};
   }
@@ -566,7 +554,7 @@ public:
     };
     // Handle downstream filters when there is no explicit `else` branch.
     if (not args_.alternative and not filter.empty()) {
-      args_.alternative.emplace(IfArgs::Else{location{}, ir::pipeline{}});
+      args_.alternative.emplace(ir::pipeline{});
     }
     auto cons_filter
       = outputs_events(args_.consequence) ? filter : ir::optimize_filter{};
@@ -574,11 +562,10 @@ public:
       = optimize_branch(args_.consequence, std::move(cons_filter));
     auto alt_order = order;
     if (args_.alternative) {
-      auto alt_filter = outputs_events(args_.alternative->pipeline)
+      auto alt_filter = outputs_events(*args_.alternative)
                           ? std::move(filter)
                           : ir::optimize_filter{};
-      alt_order
-        = optimize_branch(args_.alternative->pipeline, std::move(alt_filter));
+      alt_order = optimize_branch(*args_.alternative, std::move(alt_filter));
     }
     auto replacement = std::vector<Box<ir::Operator>>{};
     replacement.push_back(std::move(*this).move());
@@ -605,17 +592,17 @@ public:
     TRY(auto then_ty, args_.consequence.infer_type(input, dh));
     auto else_ty = std::optional{input};
     if (args_.alternative) {
-      TRY(else_ty, args_.alternative->pipeline.infer_type(input, dh));
+      TRY(else_ty, args_.alternative->infer_type(input, dh));
     }
     if (then_ty and then_ty->is<chunk_ptr>()) {
       diagnostic::error("branches must not return bytes")
-        .primary(args_.if_keyword)
+        .primary(args_.consequence.operators.back()->main_location())
         .emit(dh);
       return failure::promise();
     }
     if (args_.alternative and else_ty and else_ty->is<chunk_ptr>()) {
       diagnostic::error("branches must not return bytes")
-        .primary(args_.alternative->else_keyword)
+        .primary((*args_.alternative).operators.back()->main_location())
         .emit(dh);
       return failure::promise();
     }
@@ -638,7 +625,8 @@ public:
     diagnostic::error("incompatible branch output types: {} and {}",
                       operator_type_name(*then_ty),
                       operator_type_name(*else_ty))
-      .primary(args_.if_keyword)
+      .primary(args_.consequence.operators.back()->main_location())
+      .secondary((*args_.alternative).operators.back()->main_location())
       .emit(dh);
     return failure::promise();
   }
@@ -791,12 +779,11 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
         TRY(x.condition.bind(ctx));
         TRY(auto then, std::move(x.then).compile(ctx));
         auto args = IfArgs{};
-        args.if_keyword = x.if_kw;
         args.condition = std::move(x.condition);
         args.consequence = std::move(then);
         if (x.else_) {
           TRY(auto pipe, std::move(x.else_->pipe).compile(ctx));
-          args.alternative.emplace(x.else_->kw, std::move(pipe));
+          args.alternative.emplace(std::move(pipe));
         }
         operators.emplace_back(IfIr{std::move(args)});
         return {};

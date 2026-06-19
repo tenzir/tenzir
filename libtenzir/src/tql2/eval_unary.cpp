@@ -130,7 +130,7 @@ struct EvalUnOp<ast::unary_op::neg, duration_type> {
 auto evaluator::eval(ast::unary_expr const& x, ActiveRows const& active)
   -> multi_series {
   auto eval_op = [&]<ast::unary_op Op>() -> multi_series {
-    TENZIR_ASSERT(x.op.inner == Op);
+    TENZIR_ASSERT(x.op == Op);
     auto offset = int64_t{0};
     return map_series(eval(x.expr, active), [&](series v) {
       auto active_slice = active.slice(offset, v.length());
@@ -149,7 +149,7 @@ auto evaluator::eval(ast::unary_expr const& x, ActiveRows const& active)
         } else {
           if (active_slice.as_constant() != false) {
             diagnostic::warning("unary operator `{}` not implemented for `{}`",
-                                x.op.inner, v.type.kind())
+                                x.op, v.type.kind())
               .primary(x)
               .emit(ctx_);
           }
@@ -159,7 +159,7 @@ auto evaluator::eval(ast::unary_expr const& x, ActiveRows const& active)
     });
   };
   using enum ast::unary_op;
-  switch (x.op.inner) {
+  switch (x.op) {
 #define X(op)                                                                  \
   case op:                                                                     \
     return eval_op.operator()<op>()
@@ -170,7 +170,7 @@ auto evaluator::eval(ast::unary_expr const& x, ActiveRows const& active)
     case move: {
       if (ast::field_path::try_from(x.expr)) {
         diagnostic::warning("move is not supported here")
-          .primary(x.op, "has no effect")
+          .primary(x.get_location(), "has no effect")
           .hint("move only works on fields within assignments")
           .emit(ctx_);
       } else {
