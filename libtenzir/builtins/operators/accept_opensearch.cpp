@@ -285,6 +285,7 @@ public:
     }
     auto response = co_await response_signal->recv();
     co_await folly::coro::co_reschedule_on_current_executor;
+    co_await queue_->enqueue(Noop{});
     co_return http_server::make_response(response.status, response.content_type,
                                          std::move(response.body));
   }
