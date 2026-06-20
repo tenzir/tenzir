@@ -37,6 +37,7 @@
 #include <proxygen/lib/http/coro/server/HTTPServer.h>
 #include <proxygen/lib/utils/URL.h>
 
+#include <chrono>
 #include <cstddef>
 #include <cstring>
 #include <limits>
@@ -284,6 +285,7 @@ public:
     }
     auto response = co_await response_signal->recv();
     co_await folly::coro::co_reschedule_on_current_executor;
+    co_await queue_->enqueue(Noop{});
     co_return http_server::make_response(response.status, response.content_type,
                                          std::move(response.body));
   }
@@ -322,6 +324,7 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     auto config = co_await make_config(ctx);
     if (not config) {
+      lifecycle_ = Lifecycle::done;
       co_return;
     }
     auto request_id_gen = Arc<Atomic<uint64_t>>{std::in_place, uint64_t{0}};
@@ -334,15 +337,12 @@ public:
                         std::move(server).unwrap_err())
         .primary(args_.url)
         .emit(ctx);
+      lifecycle_ = Lifecycle::done;
       co_return;
     }
     server_ = Arc<http_server::ScopedServer>::from_non_null(
       std::move(server).unwrap());
-    // When the operator is forcefully stopped (e.g., by `head 1` finishing),
-    // the executor skips `finish_sub` and cancels the operator scope. Catch
-    // that cancellation, reply to already-accepted requests ourselves, then
-    // drain and destroy the server while the proxygen EventBase is still
-    // running.
+    // Forceful cancellation still bypasses the graceful drain path.
     ctx.spawn_task([this]() -> Task<void> {
       co_await catch_cancellation(wait_forever());
       force_stop();
@@ -355,6 +355,7 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "accept_opensearch"},
                          MetricsDirection::read, MetricsVisibility::external_,
                          MetricsUnit::events);
+    lifecycle_ = Lifecycle::running;
     co_return;
   }
 
@@ -392,6 +393,7 @@ public:
                             .is_action = true,
                             .failed = failed,
                           });
+        active_request_count_.fetch_add(1, std::memory_order_relaxed);
       },
       [&](RequestBody msg) -> Task<void> {
         auto response_signal = Option<Arc<ResponseSignal>>{None{}};
@@ -472,6 +474,7 @@ public:
           }
           req = std::move(it->second);
           active_requests_.erase(it);
+          active_request_count_.fetch_sub(1, std::memory_order_relaxed);
         }
         if (req->response_signal->has_sent()) {
           co_return;
@@ -521,30 +524,90 @@ public:
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push, ctx);
-    co_return FinalizeBehavior::done;
+    if (lifecycle_ == Lifecycle::done) {
+      co_return FinalizeBehavior::done;
+    }
+    begin_draining();
+    maybe_finish_draining();
+    co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
+                                            : FinalizeBehavior::continue_;
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    force_stop();
+    begin_draining();
+    maybe_finish_draining();
     co_return;
   }
 
   auto state() -> OperatorState override {
-    return not server_ ? OperatorState::done : OperatorState::normal;
+    maybe_finish_draining();
+    return lifecycle_ == Lifecycle::done ? OperatorState::done
+                                         : OperatorState::normal;
   }
 
 private:
+  enum class Lifecycle {
+    starting,
+    running,
+    draining,
+    done,
+  };
+
   static auto get_max_connections() -> uint64_t {
     return 10;
   }
 
+  static constexpr auto drain_timeout = std::chrono::seconds{5};
+
   void force_stop() {
+    if (lifecycle_ == Lifecycle::done) {
+      return;
+    }
+    lifecycle_ = Lifecycle::done;
+    drain_deadline_ = None{};
     if (server_) {
       (*server_)->server().forceStop();
       // move server to a new thread, where it can call thread join
       std::thread([srv = std::exchange(server_, None{})] {}).detach();
     }
+  }
+
+  auto begin_draining() -> void {
+    if (lifecycle_ != Lifecycle::running) {
+      return;
+    }
+    lifecycle_ = Lifecycle::draining;
+    drain_deadline_ = std::chrono::steady_clock::now() + drain_timeout;
+    if (server_) {
+      (*server_)->server().drain();
+    }
+  }
+
+  auto maybe_finish_draining() -> void {
+    if (lifecycle_ != Lifecycle::draining) {
+      return;
+    }
+    if (drain_deadline_
+        and std::chrono::steady_clock::now() >= *drain_deadline_) {
+      force_stop();
+      return;
+    }
+    if (active_request_count_.load(std::memory_order_relaxed) != 0) {
+      return;
+    }
+    if (active_connections_->available_permits()
+        != detail::narrow<size_t>(get_max_connections())) {
+      return;
+    }
+    if (not message_queue_->empty()) {
+      return;
+    }
+    drain_deadline_ = None{};
+    if (server_) {
+      std::thread([srv = std::exchange(server_, None{})] {}).detach();
+    }
+    lifecycle_ = Lifecycle::done;
   }
 
   auto make_config(OpCtx& ctx) const
@@ -609,6 +672,9 @@ private:
   MetricsCounter bytes_read_counter_;
   MetricsCounter events_read_counter_;
   mutable Arc<MessageQueue> message_queue_{std::in_place, uint32_t{64}};
+  Lifecycle lifecycle_ = Lifecycle::starting;
+  Atomic<uint64_t> active_request_count_ = 0;
+  Option<std::chrono::steady_clock::time_point> drain_deadline_ = None{};
 };
 
 class AcceptOpenSearchPlugin : public virtual OperatorPlugin {

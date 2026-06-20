@@ -38,7 +38,7 @@
 #include <proxygen/lib/http/coro/server/HTTPServer.h>
 #include <proxygen/lib/utils/URL.h>
 
-#include <charconv>
+#include <chrono>
 #include <cstddef>
 #include <limits>
 #include <thread>
@@ -301,6 +301,7 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     auto config = co_await make_config(ctx);
     if (not config) {
+      lifecycle_ = Lifecycle::done;
       co_return;
     }
     auto request_id_gen = Arc<Atomic<uint64_t>>{std::in_place, uint64_t{0}};
@@ -313,15 +314,12 @@ public:
                         std::move(server).unwrap_err())
         .primary(args_.endpoint)
         .emit(ctx);
+      lifecycle_ = Lifecycle::done;
       co_return;
     }
     server_ = Arc<http_server::ScopedServer>::from_non_null(
       std::move(server).unwrap());
-    // When the operator is forcefully stopped (e.g., by `head 1` finishing),
-    // the executor skips `finish_sub` and cancels the operator scope. Catch
-    // that cancellation, reply to already-accepted requests ourselves, then
-    // drain and destroy the server while the proxygen EventBase is still
-    // running.
+    // Forceful cancellation still bypasses the graceful drain path.
     ctx.spawn_task([this]() -> Task<void> {
       co_await catch_cancellation(wait_forever());
       force_stop();
@@ -330,6 +328,7 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "accept_http"},
                          MetricsDirection::read, MetricsVisibility::external_,
                          MetricsUnit::events);
+    lifecycle_ = Lifecycle::running;
     co_return;
   }
 
@@ -473,20 +472,36 @@ public:
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push, ctx);
-    co_return FinalizeBehavior::done;
+    if (lifecycle_ == Lifecycle::done) {
+      co_return FinalizeBehavior::done;
+    }
+    begin_draining();
+    maybe_finish_draining();
+    co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
+                                            : FinalizeBehavior::continue_;
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    force_stop();
+    begin_draining();
+    maybe_finish_draining();
     co_return;
   }
 
   auto state() -> OperatorState override {
-    return not server_ ? OperatorState::done : OperatorState::normal;
+    maybe_finish_draining();
+    return lifecycle_ == Lifecycle::done ? OperatorState::done
+                                         : OperatorState::normal;
   }
 
 private:
+  enum class Lifecycle {
+    starting,
+    running,
+    draining,
+    done,
+  };
+
   struct ActiveRequest {
     RequestMetadata metadata;
     // Non-null only when the request carries a supported Content-Encoding.
@@ -497,14 +512,59 @@ private:
     MetricsCounter bytes_read;
   };
 
+  static constexpr auto drain_timeout = std::chrono::seconds{5};
+
   MetricsCounter events_read_counter_;
+  Lifecycle lifecycle_ = Lifecycle::starting;
+  Option<std::chrono::steady_clock::time_point> drain_deadline_ = None{};
 
   void force_stop() {
+    if (lifecycle_ == Lifecycle::done) {
+      return;
+    }
+    lifecycle_ = Lifecycle::done;
+    drain_deadline_ = None{};
     if (server_) {
       (*server_)->server().forceStop();
       // move server to a new thread, where it can call thread join
       std::thread([srv = std::exchange(server_, None{})] {}).detach();
     }
+  }
+
+  auto begin_draining() -> void {
+    if (lifecycle_ != Lifecycle::running) {
+      return;
+    }
+    lifecycle_ = Lifecycle::draining;
+    drain_deadline_ = std::chrono::steady_clock::now() + drain_timeout;
+    if (server_) {
+      (*server_)->server().drain();
+    }
+  }
+
+  auto maybe_finish_draining() -> void {
+    if (lifecycle_ != Lifecycle::draining) {
+      return;
+    }
+    if (drain_deadline_
+        and std::chrono::steady_clock::now() >= *drain_deadline_) {
+      force_stop();
+      return;
+    }
+    // A connection holds its permit from the moment it is accepted until its
+    // handler returns, i.e. until the response has been sent. While the permit
+    // is held the connection may still have request messages queued or a
+    // request in flight, so a full set of available permits is a sufficient
+    // signal that all accepted work has drained.
+    if (active_connections_->available_permits()
+        != detail::narrow<size_t>(args_.get_max_connections())) {
+      return;
+    }
+    drain_deadline_ = None{};
+    if (server_) {
+      std::thread([srv = std::exchange(server_, None{})] {}).detach();
+    }
+    lifecycle_ = Lifecycle::done;
   }
 
   auto make_config(OpCtx& ctx) const
