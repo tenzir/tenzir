@@ -32,3 +32,8 @@ tenzir:
           {i: 43},
           {s: "str 2", i: 1}
         serve "serve_multi_2"
+    serve_multi_idle:
+      name: serve multi idle
+      definition: |
+        subscribe "serve_multi_idle_topic"
+        serve "serve_multi_idle"

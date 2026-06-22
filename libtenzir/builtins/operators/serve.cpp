@@ -450,7 +450,9 @@ using serve_manager_actor = typed_actor_fwd<
   // access token and the desired number of events.
   auto(atom::get, std::string serve_id, std::string continuation_token,
        uint64_t min_events, duration timeout, uint64_t max_events)
-    ->caf::result<serve_response>>
+    ->caf::result<serve_response>,
+  // Force-deliver whatever is currently buffered for a pending get, if any.
+  auto(atom::flush, std::string serve_id)->caf::result<void>>
   // Conform to the protocol of the COMPONENT PLUGIN actor interface.
   ::extend_with<component_plugin_actor>::unwrap;
 
@@ -767,6 +769,20 @@ struct serve_manager_state {
     return rp;
   }
 
+  auto flush(std::string serve_id) -> caf::result<void> {
+    const auto found = std::ranges::find_if(ops, [&](const auto& op) {
+      return op.serve_id == serve_id;
+    });
+    // Unknown/expired serve, or no request is currently waiting: nothing to do.
+    if (found == ops.end() or found->get_rps.empty()) {
+      return {};
+    }
+    // Deliver immediately with whatever is buffered (possibly empty),
+    // cancelling the pending long-poll timer via try_deliver_results.
+    found->try_deliver_results(/*force_underful=*/true);
+    return {};
+  }
+
   auto status(status_verbosity verbosity) const -> caf::result<record> {
     auto requests = list{};
     requests.reserve(ops.size());
@@ -833,6 +849,9 @@ auto serve_manager(
           .timeout = timeout,
         },
       });
+    },
+    [self](atom::flush, std::string& serve_id) -> caf::result<void> {
+      return self->state().flush(std::move(serve_id));
     },
     [self](atom::status, status_verbosity verbosity,
            duration) -> caf::result<record> {
@@ -1194,6 +1213,15 @@ struct serve_handler_state {
         / request.requests.size();
     auto result_map = std::make_shared<
       std::unordered_map<std::string, serve_response_with_state>>();
+    // Set once the first serve returns events; guards against flushing twice.
+    auto triggered = std::make_shared<bool>(false);
+    // Copy of all serve ids so the flush can target the *other* serves. Must be
+    // a shared copy because `request` is local and the continuations outlive it.
+    auto all_ids = std::make_shared<std::vector<std::string>>();
+    all_ids->reserve(request.requests.size());
+    for (const auto& r : request.requests) {
+      all_ids->push_back(r.serve_id);
+    }
     auto fan = detail::make_fanout_counter(
       request.requests.size(),
       [rp, result_map, schema = request.schema]() mutable {
@@ -1221,13 +1249,26 @@ struct serve_handler_state {
                min_events_per_request, request.timeout, max_events_per_request)
         .request(serve_manager, caf::infinite)
         .then(
-          [fan, id = r.serve_id, result_map](serve_response& result) mutable {
+          [self = self, serve_manager = serve_manager, fan, id = r.serve_id,
+           result_map, triggered,
+           all_ids](serve_response& result) mutable {
+            const auto has_events = rows(std::get<1>(result)) > 0;
             const auto state = std::get<0>(result).empty()
                                  ? serve_state::completed
                                  : serve_state::running;
             const auto [_, success] = result_map->try_emplace(
-              std::move(id), std::move(result), state);
+              id, std::move(result), state);
             TENZIR_ASSERT(success);
+            // As soon as any serve has data, stop waiting on the others: flush
+            // their currently-buffered events instead of long-polling to the
+            // timeout.
+            if (has_events and not std::exchange(*triggered, true)) {
+              for (const auto& other : *all_ids) {
+                if (other != id) {
+                  self->mail(atom::flush_v, other).send(serve_manager);
+                }
+              }
+            }
             fan->receive_success();
           },
           [fan, id = r.serve_id, result_map](caf::error& err) mutable {
