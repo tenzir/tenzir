@@ -348,7 +348,7 @@ struct unpack {
   }
 
   expression expr;
-  location location;
+  tenzir::location location;
 
   friend auto inspect(auto& f, unpack& x) -> bool {
     return f.object(x).fields(f.field("expr", x.expr),
@@ -374,7 +374,7 @@ struct binary_expr {
   expression left;
   binary_op op;
   expression right;
-  location location;
+  tenzir::location location;
 
   friend auto inspect(auto& f, binary_expr& x) -> bool {
     return f.object(x).fields(f.field("left", x.left), f.field("op", x.op),
@@ -399,7 +399,7 @@ struct unary_expr {
 
   unary_op op;
   expression expr;
-  location location;
+  tenzir::location location;
 
   friend auto inspect(auto& f, unary_expr& x) -> bool {
     return f.object(x).fields(f.field("op", x.op), f.field("expr", x.expr),
@@ -426,7 +426,7 @@ struct lambda_expr {
 
   std::vector<identifier> params;
   expression body;
-  location location;
+  tenzir::location location;
 
   friend auto inspect(auto& f, lambda_expr& x) -> bool {
     return f.object(x).fields(f.field("params", x.params),
@@ -475,7 +475,7 @@ struct assignment {
 
   expression left;
   expression right;
-  location location;
+  tenzir::location location;
 
   friend auto inspect(auto& f, assignment& x) -> bool {
     return f.object(x).fields(f.field("left", x.left),
@@ -521,7 +521,7 @@ struct function_call {
   entity fn;
   std::vector<expression> args;
   bool method{};
-  location location;
+  tenzir::location location;
 
   friend auto inspect(auto& f, function_call& x) -> bool {
     return f.object(x).fields(f.field("fn", x.fn), f.field("args", x.args),
@@ -561,7 +561,7 @@ struct field_access {
   expression left;
   bool has_question_mark = false;
   identifier name;
-  location location;
+  tenzir::location location;
 
   friend auto inspect(auto& f, field_access& x) -> bool {
     return f.object(x).fields(f.field("left", x.left),
@@ -597,7 +597,7 @@ struct index_expr {
   /// Whether this node was synthesized by the `get` function rather than
   /// parsed from `[…]` syntax. This changes how warnings are phrased.
   bool is_get = false;
-  location location;
+  tenzir::location location;
 
   friend auto inspect(auto& f, index_expr& x) -> bool {
     return f.object(x).fields(f.field("expr", x.expr),
@@ -615,12 +615,12 @@ struct index_expr {
 struct spread {
   spread() = default;
 
-  spread(location dots, expression expr) : expr{std::move(expr)} {
+  spread(tenzir::location dots, expression expr) : expr{std::move(expr)} {
     location = dots.combine(this->expr);
   }
 
   expression expr;
-  location location;
+  tenzir::location location;
 
   friend auto inspect(auto& f, spread& x) -> bool {
     return f.object(x).fields(f.field("expr", x.expr),
@@ -706,7 +706,7 @@ struct invocation {
 
   entity op;
   std::vector<expression> args;
-  location location;
+  tenzir::location location;
 
   auto get_location() const -> struct location {
     return location;
@@ -750,14 +750,14 @@ auto substitute_named_expressions(
 struct let_stmt {
   let_stmt() = default;
 
-  let_stmt(location let, identifier name, expression expr)
+  let_stmt(tenzir::location let, identifier name, expression expr)
     : name{std::move(name)}, expr{std::move(expr)} {
     location = let.combine(this->expr);
   }
 
   identifier name;
   expression expr;
-  location location;
+  tenzir::location location;
 
   friend auto inspect(auto& f, let_stmt& x) -> bool {
     return f.object(x).fields(f.field("name", x.name), f.field("expr", x.expr),
@@ -785,7 +785,7 @@ struct if_stmt {
 
   if_stmt() = default;
 
-  if_stmt(location if_kw, expression condition, pipeline then,
+  if_stmt(tenzir::location if_kw, expression condition, pipeline then,
           std::optional<else_t> else_)
     : condition{std::move(condition)},
       then{std::move(then)},
@@ -796,7 +796,7 @@ struct if_stmt {
   expression condition;
   pipeline then;
   std::optional<else_t> else_;
-  location location;
+  tenzir::location location;
 
   friend auto inspect(auto& f, if_stmt& x) -> bool {
     return f.object(x).fields(f.field("condition", x.condition),
@@ -854,7 +854,7 @@ struct range_pattern {
 
   expression lower;
   expression upper;
-  location location;
+  tenzir::location location;
 
   friend auto inspect(auto& f, range_pattern& x) -> bool {
     return f.object(x).fields(f.field("lower", x.lower),
