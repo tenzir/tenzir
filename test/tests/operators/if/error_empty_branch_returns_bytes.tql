@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+// An empty branch with bytes input passes the bytes through. Reporting the
+// "must not return bytes" error must not crash on the absent branch operator.
+load_stdin
+if true {}

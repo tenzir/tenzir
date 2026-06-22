@@ -589,6 +589,15 @@ public:
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override {
+    // A branch may be empty (or contain only `let`s), in which case it has no
+    // operator to point at. Fall back to the condition's location, which is
+    // always present.
+    auto branch_location = [&](const ir::pipeline& branch) -> location {
+      if (not branch.operators.empty()) {
+        return branch.operators.back()->main_location();
+      }
+      return args_.condition.get_location();
+    };
     TRY(auto then_ty, args_.consequence.infer_type(input, dh));
     auto else_ty = std::optional{input};
     if (args_.alternative) {
@@ -596,13 +605,13 @@ public:
     }
     if (then_ty and then_ty->is<chunk_ptr>()) {
       diagnostic::error("branches must not return bytes")
-        .primary(args_.consequence.operators.back()->main_location())
+        .primary(branch_location(args_.consequence))
         .emit(dh);
       return failure::promise();
     }
     if (args_.alternative and else_ty and else_ty->is<chunk_ptr>()) {
       diagnostic::error("branches must not return bytes")
-        .primary((*args_.alternative).operators.back()->main_location())
+        .primary(branch_location(*args_.alternative))
         .emit(dh);
       return failure::promise();
     }
@@ -622,12 +631,14 @@ public:
       return then_ty;
     }
     // TODO: Improve diagnostic.
-    diagnostic::error("incompatible branch output types: {} and {}",
-                      operator_type_name(*then_ty),
-                      operator_type_name(*else_ty))
-      .primary(args_.consequence.operators.back()->main_location())
-      .secondary((*args_.alternative).operators.back()->main_location())
-      .emit(dh);
+    auto diag = diagnostic::error("incompatible branch output types: {} and {}",
+                                  operator_type_name(*then_ty),
+                                  operator_type_name(*else_ty))
+                  .primary(branch_location(args_.consequence));
+    if (args_.alternative) {
+      diag = std::move(diag).secondary(branch_location(*args_.alternative));
+    }
+    std::move(diag).emit(dh);
     return failure::promise();
   }
 
