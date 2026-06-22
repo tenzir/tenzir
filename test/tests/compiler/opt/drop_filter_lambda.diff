@@ -52,9 +52,9 @@
                id: `foo` @ [1]:35..38 from 0,
                has_question_mark: false
              },
-             dot: [1]:38..39 from 0,
              has_question_mark: false,
-             name: `bar` @ [1]:39..42 from 0
+             name: `bar` @ [1]:39..42 from 0,
+             location: [1]:35..42 from 0
            },
            has_this: false,
            path: [
@@ -81,7 +81,7 @@
 -      self: [1]:43..48 from 0,
 +      self: [0]:0..0 from 0,
        predicate: unary_expr {
-         op: "not_" @ [1]:49..52 from 0,
+         op: "not_",
          expr: function_call {
            fn: {
              path: [
@@ -106,32 +106,34 @@
                    params: [
                      `x` @ [1]:62..63 from 0
                    ],
-                   arrow: [1]:64..66 from 0,
                    body: binary_expr {
                      left: root_field {
                        id: `x` @ [1]:67..68 from 0,
                        has_question_mark: false
                      },
-                     op: "eq" @ [1]:69..71 from 0,
+                     op: "eq",
                      right: field_access {
                        left: root_field {
                          id: `foo` @ [1]:72..75 from 0,
                          has_question_mark: false
                        },
-                       dot: [1]:75..76 from 0,
                        has_question_mark: false,
-                       name: `bar` @ [1]:76..79 from 0
-                     }
-                   }
+                       name: `bar` @ [1]:76..79 from 0,
+                       location: [1]:72..79 from 0
+                     },
+                     location: [1]:67..79 from 0
+                   },
+                   location: [1]:62..79 from 0
                  }
                ],
-               rpar: [1]:79..80 from 0,
-               method: true
+               method: true,
+               location: [1]:53..80 from 0
              }
            ],
-           rpar: [1]:90..91 from 0,
-           method: true
-         }
+           method: true,
+           location: [1]:53..91 from 0
+         },
+         location: [1]:49..91 from 0
        }
 +    },
 +    GenericIr {

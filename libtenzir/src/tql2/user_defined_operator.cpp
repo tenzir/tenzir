@@ -279,49 +279,53 @@ struct callsite_injector : ast::visitor<callsite_injector> {
   }
 
   auto visit(ast::unpack& x) -> void {
-    visit(x.brackets);
+    visit(x.location);
     enter(x);
   }
 
   auto visit(ast::binary_expr& x) -> void {
-    visit(x.op);
+    visit(x.location);
     enter(x);
   }
 
   auto visit(ast::unary_expr& x) -> void {
-    visit(x.op);
+    visit(x.location);
     enter(x);
   }
 
   auto visit(ast::lambda_expr& x) -> void {
-    visit(x.arrow);
+    visit(x.location);
     enter(x);
   }
 
   auto visit(ast::assignment& x) -> void {
-    visit(x.equals);
+    visit(x.location);
+    enter(x);
+  }
+
+  auto visit(ast::invocation& x) -> void {
+    visit(x.location);
     enter(x);
   }
 
   auto visit(ast::function_call& x) -> void {
-    visit(x.rpar);
+    visit(x.location);
     enter(x);
   }
 
   auto visit(ast::field_access& x) -> void {
-    visit(x.dot);
     visit(x.name);
+    visit(x.location);
     enter(x);
   }
 
   auto visit(ast::index_expr& x) -> void {
-    visit(x.lbracket);
-    visit(x.rbracket);
+    visit(x.location);
     enter(x);
   }
 
   auto visit(ast::spread& x) -> void {
-    visit(x.dots);
+    visit(x.location);
     enter(x);
   }
 
@@ -338,15 +342,12 @@ struct callsite_injector : ast::visitor<callsite_injector> {
   }
 
   auto visit(ast::let_stmt& x) -> void {
-    visit(x.let);
+    visit(x.location);
     enter(x);
   }
 
   auto visit(ast::if_stmt& x) -> void {
-    visit(x.if_kw);
-    if (x.else_) {
-      visit(x.else_->kw);
-    }
+    visit(x.location);
     enter(x);
   }
 
@@ -359,9 +360,9 @@ struct callsite_injector : ast::visitor<callsite_injector> {
         visit(pattern.expr);
       },
       [&](ast::range_pattern& pattern) {
-        visit(pattern.dots);
         visit(pattern.lower);
         visit(pattern.upper);
+        visit(pattern.location);
       });
   }
 

@@ -838,13 +838,15 @@ public:
             location::unknown,
             // We suppress warnings iff there is a fallback value provided.
             fallback.has_value(),
+            // Mark this as synthesized by `get` to adjust warning phrasing.
+            true,
           },
         };
         if (fallback) {
           expr = ast::expression{
             ast::binary_expr{
               std::move(expr),
-              located{ast::binary_op::else_, location::unknown},
+              ast::binary_op::else_,
               std::move(*fallback),
             },
           };

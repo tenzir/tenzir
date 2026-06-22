@@ -38,11 +38,12 @@
                    args: [
                      
                    ],
-                   rpar: [1]:138..139 from 0,
-                   method: false
+                   method: false,
+                   location: [1]:134..139 from 0
                  },
-                 op: "sub" @ [1]:140..141 from 0,
-                 right: constant duration "10min" @ [1]:142..147 from 0
+                 op: "sub",
+                 right: constant duration "10min" @ [1]:142..147 from 0,
+                 location: [1]:134..147 from 0
                },
                id: 1
              }
@@ -55,8 +56,9 @@
                    id: `time` @ [1]:156..160 from 0,
                    has_question_mark: false
                  },
-                 op: "lt" @ [1]:161..162 from 0,
-                 right: dollar_var `$ts` -> 1 @ [1]:163..166 from 0
+                 op: "lt",
+                 right: dollar_var `$ts` -> 1 @ [1]:163..166 from 0,
+                 location: [1]:156..166 from 0
                }
              }
            ]

@@ -38,8 +38,9 @@
 +          kind: "name",
 +          source: [1]:46..51 from 0
 +        },
-+        op: "eq" @ [1]:52..54 from 0,
-+        right: constant string "test" @ [1]:55..61 from 0
++        op: "eq",
++        right: constant string "test" @ [1]:55..61 from 0,
++        location: [1]:46..61 from 0
 +      }
      },
      GenericIr {
@@ -57,9 +58,9 @@
                id: `foo` @ [1]:32..35 from 0,
                has_question_mark: false
              },
-             dot: [1]:35..36 from 0,
              has_question_mark: false,
-             name: `bar` @ [1]:36..39 from 0
+             name: `bar` @ [1]:36..39 from 0,
+             location: [1]:32..39 from 0
            },
            has_this: false,
            path: [
@@ -90,8 +91,9 @@
 -          kind: "name",
 -          source: [1]:46..51 from 0
 -        },
--        op: "eq" @ [1]:52..54 from 0,
--        right: constant string "test" @ [1]:55..61 from 0
+-        op: "eq",
+-        right: constant string "test" @ [1]:55..61 from 0,
+-        location: [1]:46..61 from 0
 -      }
      },
      GenericIr {

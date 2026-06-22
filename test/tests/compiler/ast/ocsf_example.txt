@@ -4,16 +4,16 @@
       id: `activity_name` @ [1]:0..13 from 0,
       has_question_mark: false
     },
-    equals: [1]:14..15 from 0,
-    right: constant string "Launch" @ [1]:16..24 from 0
+    right: constant string "Launch" @ [1]:16..24 from 0,
+    location: [1]:0..24 from 0
   },
   assignment {
     left: root_field {
       id: `activity_id` @ [1]:25..36 from 0,
       has_question_mark: false
     },
-    equals: [1]:37..38 from 0,
-    right: constant int64 1 @ [1]:39..40 from 0
+    right: constant int64 1 @ [1]:39..40 from 0,
+    location: [1]:25..40 from 0
   },
   assignment {
     left: field_access {
@@ -21,11 +21,10 @@
         id: `actor` @ [1]:41..46 from 0,
         has_question_mark: false
       },
-      dot: [1]:46..47 from 0,
       has_question_mark: false,
-      name: `process` @ [1]:47..54 from 0
+      name: `process` @ [1]:47..54 from 0,
+      location: [1]:41..54 from 0
     },
-    equals: [1]:55..56 from 0,
     right: record {
       begin: [1]:57..58 from 0,
       items: [
@@ -59,17 +58,17 @@
                           id: `src` @ [1]:122..125 from 0,
                           has_question_mark: false
                         },
-                        dot: [1]:125..126 from 0,
                         has_question_mark: false,
-                        name: `event_data` @ [1]:126..136 from 0
+                        name: `event_data` @ [1]:126..136 from 0,
+                        location: [1]:122..136 from 0
                       },
-                      dot: [1]:136..137 from 0,
                       has_question_mark: false,
-                      name: `ParentImage` @ [1]:137..148 from 0
+                      name: `ParentImage` @ [1]:137..148 from 0,
+                      location: [1]:122..148 from 0
                     }
                   ],
-                  rpar: [1]:148..149 from 0,
-                  method: false
+                  method: false,
+                  location: [1]:104..149 from 0
                 }
               },
               field {
@@ -90,17 +89,17 @@
                           id: `src` @ [1]:182..185 from 0,
                           has_question_mark: false
                         },
-                        dot: [1]:185..186 from 0,
                         has_question_mark: false,
-                        name: `event_data` @ [1]:186..196 from 0
+                        name: `event_data` @ [1]:186..196 from 0,
+                        location: [1]:182..196 from 0
                       },
-                      dot: [1]:196..197 from 0,
                       has_question_mark: false,
-                      name: `ParentImage` @ [1]:197..208 from 0
+                      name: `ParentImage` @ [1]:197..208 from 0,
+                      location: [1]:182..208 from 0
                     }
                   ],
-                  rpar: [1]:208..209 from 0,
-                  method: false
+                  method: false,
+                  location: [1]:161..209 from 0
                 }
               },
               field {
@@ -131,22 +130,23 @@
                     id: `src` @ [1]:266..269 from 0,
                     has_question_mark: false
                   },
-                  dot: [1]:269..270 from 0,
                   has_question_mark: false,
-                  name: `event_data` @ [1]:270..280 from 0
+                  name: `event_data` @ [1]:270..280 from 0,
+                  location: [1]:266..280 from 0
                 },
-                dot: [1]:280..281 from 0,
                 has_question_mark: false,
-                name: `ParentProcessId` @ [1]:281..296 from 0
+                name: `ParentProcessId` @ [1]:281..296 from 0,
+                location: [1]:266..296 from 0
               }
             ],
-            rpar: [1]:296..297 from 0,
-            method: false
+            method: false,
+            location: [1]:262..297 from 0
           }
         }
       ],
       end: [1]:299..300 from 0
-    }
+    },
+    location: [1]:41..300 from 0
   },
   invocation {
     op: {
@@ -162,13 +162,13 @@
             id: `src` @ [1]:306..309 from 0,
             has_question_mark: false
           },
-          dot: [1]:309..310 from 0,
           has_question_mark: false,
-          name: `event_data` @ [1]:310..320 from 0
+          name: `event_data` @ [1]:310..320 from 0,
+          location: [1]:306..320 from 0
         },
-        dot: [1]:320..321 from 0,
         has_question_mark: false,
-        name: `ParentImage` @ [1]:321..332 from 0
+        name: `ParentImage` @ [1]:321..332 from 0,
+        location: [1]:306..332 from 0
       },
       field_access {
         left: field_access {
@@ -176,15 +176,16 @@
             id: `src` @ [1]:334..337 from 0,
             has_question_mark: false
           },
-          dot: [1]:337..338 from 0,
           has_question_mark: false,
-          name: `event_data` @ [1]:338..348 from 0
+          name: `event_data` @ [1]:338..348 from 0,
+          location: [1]:334..348 from 0
         },
-        dot: [1]:348..349 from 0,
         has_question_mark: false,
-        name: `ParentProcessId` @ [1]:349..364 from 0
+        name: `ParentProcessId` @ [1]:349..364 from 0,
+        location: [1]:334..364 from 0
       }
-    ]
+    ],
+    location: [1]:301..364 from 0
   },
   assignment {
     left: field_access {
@@ -192,11 +193,10 @@
         id: `actor` @ [1]:365..370 from 0,
         has_question_mark: false
       },
-      dot: [1]:370..371 from 0,
       has_question_mark: false,
-      name: `user` @ [1]:371..375 from 0
+      name: `user` @ [1]:371..375 from 0,
+      location: [1]:365..375 from 0
     },
-    equals: [1]:376..377 from 0,
     right: record {
       begin: [1]:378..379 from 0,
       items: [
@@ -216,13 +216,13 @@
                 id: `src` @ [1]:447..450 from 0,
                 has_question_mark: false
               },
-              dot: [1]:450..451 from 0,
               has_question_mark: false,
-              name: `user` @ [1]:451..455 from 0
+              name: `user` @ [1]:451..455 from 0,
+              location: [1]:447..455 from 0
             },
-            dot: [1]:455..456 from 0,
             has_question_mark: false,
-            name: `domain` @ [1]:456..462 from 0
+            name: `domain` @ [1]:456..462 from 0,
+            location: [1]:447..462 from 0
           }
         },
         field {
@@ -233,13 +233,13 @@
                 id: `src` @ [1]:472..475 from 0,
                 has_question_mark: false
               },
-              dot: [1]:475..476 from 0,
               has_question_mark: false,
-              name: `user` @ [1]:476..480 from 0
+              name: `user` @ [1]:476..480 from 0,
+              location: [1]:472..480 from 0
             },
-            dot: [1]:480..481 from 0,
             has_question_mark: false,
-            name: `name` @ [1]:481..485 from 0
+            name: `name` @ [1]:481..485 from 0,
+            location: [1]:472..485 from 0
           }
         },
         field {
@@ -250,18 +250,19 @@
                 id: `src` @ [1]:494..497 from 0,
                 has_question_mark: false
               },
-              dot: [1]:497..498 from 0,
               has_question_mark: false,
-              name: `user` @ [1]:498..502 from 0
+              name: `user` @ [1]:498..502 from 0,
+              location: [1]:494..502 from 0
             },
-            dot: [1]:502..503 from 0,
             has_question_mark: false,
-            name: `identifier` @ [1]:503..513 from 0
+            name: `identifier` @ [1]:503..513 from 0,
+            location: [1]:494..513 from 0
           }
         }
       ],
       end: [1]:515..516 from 0
-    }
+    },
+    location: [1]:365..516 from 0
   },
   invocation {
     op: {
@@ -277,13 +278,13 @@
             id: `src` @ [1]:522..525 from 0,
             has_question_mark: false
           },
-          dot: [1]:525..526 from 0,
           has_question_mark: false,
-          name: `user` @ [1]:526..530 from 0
+          name: `user` @ [1]:526..530 from 0,
+          location: [1]:522..530 from 0
         },
-        dot: [1]:530..531 from 0,
         has_question_mark: false,
-        name: `domain` @ [1]:531..537 from 0
+        name: `domain` @ [1]:531..537 from 0,
+        location: [1]:522..537 from 0
       },
       field_access {
         left: field_access {
@@ -291,13 +292,13 @@
             id: `src` @ [1]:539..542 from 0,
             has_question_mark: false
           },
-          dot: [1]:542..543 from 0,
           has_question_mark: false,
-          name: `user` @ [1]:543..547 from 0
+          name: `user` @ [1]:543..547 from 0,
+          location: [1]:539..547 from 0
         },
-        dot: [1]:547..548 from 0,
         has_question_mark: false,
-        name: `name` @ [1]:548..552 from 0
+        name: `name` @ [1]:548..552 from 0,
+        location: [1]:539..552 from 0
       },
       field_access {
         left: field_access {
@@ -305,30 +306,30 @@
             id: `src` @ [1]:554..557 from 0,
             has_question_mark: false
           },
-          dot: [1]:557..558 from 0,
           has_question_mark: false,
-          name: `user` @ [1]:558..562 from 0
+          name: `user` @ [1]:558..562 from 0,
+          location: [1]:554..562 from 0
         },
-        dot: [1]:562..563 from 0,
         has_question_mark: false,
-        name: `identifier` @ [1]:563..573 from 0
+        name: `identifier` @ [1]:563..573 from 0,
+        location: [1]:554..573 from 0
       }
-    ]
+    ],
+    location: [1]:517..573 from 0
   },
   assignment {
     left: root_field {
       id: `category_name` @ [1]:574..587 from 0,
       has_question_mark: false
     },
-    equals: [1]:588..589 from 0,
-    right: constant string "System Activity" @ [1]:590..607 from 0
+    right: constant string "System Activity" @ [1]:590..607 from 0,
+    location: [1]:574..607 from 0
   },
   assignment {
     left: root_field {
       id: `category_uid` @ [1]:608..620 from 0,
       has_question_mark: false
     },
-    equals: [1]:621..622 from 0,
     right: function_call {
       fn: {
         path: [
@@ -343,24 +344,24 @@
           has_question_mark: false
         }
       ],
-      rpar: [1]:655..656 from 0,
-      method: false
-    }
+      method: false,
+      location: [1]:623..656 from 0
+    },
+    location: [1]:608..656 from 0
   },
   assignment {
     left: root_field {
       id: `class_name` @ [1]:657..667 from 0,
       has_question_mark: false
     },
-    equals: [1]:668..669 from 0,
-    right: constant string "Process Activity" @ [1]:670..688 from 0
+    right: constant string "Process Activity" @ [1]:670..688 from 0,
+    location: [1]:657..688 from 0
   },
   assignment {
     left: root_field {
       id: `class_uid` @ [1]:689..698 from 0,
       has_question_mark: false
     },
-    equals: [1]:699..700 from 0,
     right: function_call {
       fn: {
         path: [
@@ -375,16 +376,16 @@
           has_question_mark: false
         }
       ],
-      rpar: [1]:727..728 from 0,
-      method: false
-    }
+      method: false,
+      location: [1]:701..728 from 0
+    },
+    location: [1]:689..728 from 0
   },
   assignment {
     left: root_field {
       id: `device` @ [1]:729..735 from 0,
       has_question_mark: false
     },
-    equals: [1]:736..737 from 0,
     right: record {
       begin: [1]:738..739 from 0,
       items: [
@@ -395,9 +396,9 @@
               id: `src` @ [1]:752..755 from 0,
               has_question_mark: false
             },
-            dot: [1]:755..756 from 0,
             has_question_mark: false,
-            name: `computer_name` @ [1]:756..769 from 0
+            name: `computer_name` @ [1]:756..769 from 0,
+            location: [1]:752..769 from 0
           }
         },
         field {
@@ -431,7 +432,8 @@
         }
       ],
       end: [1]:881..882 from 0
-    }
+    },
+    location: [1]:729..882 from 0
   },
   invocation {
     op: {
@@ -446,26 +448,26 @@
           id: `src` @ [1]:888..891 from 0,
           has_question_mark: false
         },
-        dot: [1]:891..892 from 0,
         has_question_mark: false,
-        name: `computer_name` @ [1]:892..905 from 0
+        name: `computer_name` @ [1]:892..905 from 0,
+        location: [1]:888..905 from 0
       }
-    ]
+    ],
+    location: [1]:883..905 from 0
   },
   assignment {
     left: root_field {
       id: `message` @ [1]:906..913 from 0,
       has_question_mark: false
     },
-    equals: [1]:914..915 from 0,
-    right: constant string "A new process has been created." @ [1]:916..949 from 0
+    right: constant string "A new process has been created." @ [1]:916..949 from 0,
+    location: [1]:906..949 from 0
   },
   assignment {
     left: root_field {
       id: `metadata` @ [1]:950..958 from 0,
       has_question_mark: false
     },
-    equals: [1]:959..960 from 0,
     right: record {
       begin: [1]:961..962 from 0,
       items: [
@@ -477,13 +479,13 @@
                 id: `src` @ [1]:980..983 from 0,
                 has_question_mark: false
               },
-              dot: [1]:983..984 from 0,
               has_question_mark: false,
-              name: `event_data` @ [1]:984..994 from 0
+              name: `event_data` @ [1]:984..994 from 0,
+              location: [1]:980..994 from 0
             },
-            dot: [1]:994..995 from 0,
             has_question_mark: false,
-            name: `UtcTime` @ [1]:995..1002 from 0
+            name: `UtcTime` @ [1]:995..1002 from 0,
+            location: [1]:980..1002 from 0
           }
         },
         field {
@@ -533,9 +535,9 @@
               id: `src` @ [1]:1158..1161 from 0,
               has_question_mark: false
             },
-            dot: [1]:1161..1162 from 0,
             has_question_mark: false,
-            name: `record_id` @ [1]:1162..1171 from 0
+            name: `record_id` @ [1]:1162..1171 from 0,
+            location: [1]:1158..1171 from 0
           }
         },
         field {
@@ -544,7 +546,8 @@
         }
       ],
       end: [1]:1193..1194 from 0
-    }
+    },
+    location: [1]:950..1194 from 0
   },
   invocation {
     op: {
@@ -560,31 +563,31 @@
             id: `src` @ [1]:1200..1203 from 0,
             has_question_mark: false
           },
-          dot: [1]:1203..1204 from 0,
           has_question_mark: false,
-          name: `event_data` @ [1]:1204..1214 from 0
+          name: `event_data` @ [1]:1204..1214 from 0,
+          location: [1]:1200..1214 from 0
         },
-        dot: [1]:1214..1215 from 0,
         has_question_mark: false,
-        name: `UtcTime` @ [1]:1215..1222 from 0
+        name: `UtcTime` @ [1]:1215..1222 from 0,
+        location: [1]:1200..1222 from 0
       },
       field_access {
         left: root_field {
           id: `src` @ [1]:1224..1227 from 0,
           has_question_mark: false
         },
-        dot: [1]:1227..1228 from 0,
         has_question_mark: false,
-        name: `record_id` @ [1]:1228..1237 from 0
+        name: `record_id` @ [1]:1228..1237 from 0,
+        location: [1]:1224..1237 from 0
       }
-    ]
+    ],
+    location: [1]:1195..1237 from 0
   },
   assignment {
     left: root_field {
       id: `process` @ [1]:1238..1245 from 0,
       has_question_mark: false
     },
-    equals: [1]:1246..1247 from 0,
     right: record {
       begin: [1]:1248..1249 from 0,
       items: [
@@ -596,13 +599,13 @@
                 id: `src` @ [1]:1262..1265 from 0,
                 has_question_mark: false
               },
-              dot: [1]:1265..1266 from 0,
               has_question_mark: false,
-              name: `event_data` @ [1]:1266..1276 from 0
+              name: `event_data` @ [1]:1266..1276 from 0,
+              location: [1]:1262..1276 from 0
             },
-            dot: [1]:1276..1277 from 0,
             has_question_mark: false,
-            name: `CommandLine` @ [1]:1277..1288 from 0
+            name: `CommandLine` @ [1]:1277..1288 from 0,
+            location: [1]:1262..1288 from 0
           }
         },
         field {
@@ -618,13 +621,13 @@
                       id: `src` @ [1]:1310..1313 from 0,
                       has_question_mark: false
                     },
-                    dot: [1]:1313..1314 from 0,
                     has_question_mark: false,
-                    name: `event_data` @ [1]:1314..1324 from 0
+                    name: `event_data` @ [1]:1314..1324 from 0,
+                    location: [1]:1310..1324 from 0
                   },
-                  dot: [1]:1324..1325 from 0,
                   has_question_mark: false,
-                  name: `Image` @ [1]:1325..1330 from 0
+                  name: `Image` @ [1]:1325..1330 from 0,
+                  location: [1]:1310..1330 from 0
                 }
               },
               field {
@@ -645,17 +648,17 @@
                           id: `src` @ [1]:1369..1372 from 0,
                           has_question_mark: false
                         },
-                        dot: [1]:1372..1373 from 0,
                         has_question_mark: false,
-                        name: `event_data` @ [1]:1373..1383 from 0
+                        name: `event_data` @ [1]:1373..1383 from 0,
+                        location: [1]:1369..1383 from 0
                       },
-                      dot: [1]:1383..1384 from 0,
                       has_question_mark: false,
-                      name: `Image` @ [1]:1384..1389 from 0
+                      name: `Image` @ [1]:1384..1389 from 0,
+                      location: [1]:1369..1389 from 0
                     }
                   ],
-                  rpar: [1]:1389..1390 from 0,
-                  method: false
+                  method: false,
+                  location: [1]:1351..1390 from 0
                 }
               },
               field {
@@ -676,17 +679,17 @@
                           id: `src` @ [1]:1423..1426 from 0,
                           has_question_mark: false
                         },
-                        dot: [1]:1426..1427 from 0,
                         has_question_mark: false,
-                        name: `event_data` @ [1]:1427..1437 from 0
+                        name: `event_data` @ [1]:1427..1437 from 0,
+                        location: [1]:1423..1437 from 0
                       },
-                      dot: [1]:1437..1438 from 0,
                       has_question_mark: false,
-                      name: `Image` @ [1]:1438..1443 from 0
+                      name: `Image` @ [1]:1438..1443 from 0,
+                      location: [1]:1423..1443 from 0
                     }
                   ],
-                  rpar: [1]:1443..1444 from 0,
-                  method: false
+                  method: false,
+                  location: [1]:1402..1444 from 0
                 }
               },
               field {
@@ -717,22 +720,23 @@
                     id: `src` @ [1]:1501..1504 from 0,
                     has_question_mark: false
                   },
-                  dot: [1]:1504..1505 from 0,
                   has_question_mark: false,
-                  name: `event_data` @ [1]:1505..1515 from 0
+                  name: `event_data` @ [1]:1505..1515 from 0,
+                  location: [1]:1501..1515 from 0
                 },
-                dot: [1]:1515..1516 from 0,
                 has_question_mark: false,
-                name: `ProcessId` @ [1]:1516..1525 from 0
+                name: `ProcessId` @ [1]:1516..1525 from 0,
+                location: [1]:1501..1525 from 0
               }
             ],
-            rpar: [1]:1525..1526 from 0,
-            method: false
+            method: false,
+            location: [1]:1497..1526 from 0
           }
         }
       ],
       end: [1]:1528..1529 from 0
-    }
+    },
+    location: [1]:1238..1529 from 0
   },
   invocation {
     op: {
@@ -748,13 +752,13 @@
             id: `src` @ [1]:1535..1538 from 0,
             has_question_mark: false
           },
-          dot: [1]:1538..1539 from 0,
           has_question_mark: false,
-          name: `event_data` @ [1]:1539..1549 from 0
+          name: `event_data` @ [1]:1539..1549 from 0,
+          location: [1]:1535..1549 from 0
         },
-        dot: [1]:1549..1550 from 0,
         has_question_mark: false,
-        name: `CommandLine` @ [1]:1550..1561 from 0
+        name: `CommandLine` @ [1]:1550..1561 from 0,
+        location: [1]:1535..1561 from 0
       },
       field_access {
         left: field_access {
@@ -762,13 +766,13 @@
             id: `src` @ [1]:1563..1566 from 0,
             has_question_mark: false
           },
-          dot: [1]:1566..1567 from 0,
           has_question_mark: false,
-          name: `event_data` @ [1]:1567..1577 from 0
+          name: `event_data` @ [1]:1567..1577 from 0,
+          location: [1]:1563..1577 from 0
         },
-        dot: [1]:1577..1578 from 0,
         has_question_mark: false,
-        name: `Image` @ [1]:1578..1583 from 0
+        name: `Image` @ [1]:1578..1583 from 0,
+        location: [1]:1563..1583 from 0
       },
       field_access {
         left: field_access {
@@ -776,54 +780,54 @@
             id: `src` @ [1]:1585..1588 from 0,
             has_question_mark: false
           },
-          dot: [1]:1588..1589 from 0,
           has_question_mark: false,
-          name: `event_data` @ [1]:1589..1599 from 0
+          name: `event_data` @ [1]:1589..1599 from 0,
+          location: [1]:1585..1599 from 0
         },
-        dot: [1]:1599..1600 from 0,
         has_question_mark: false,
-        name: `ProcessId` @ [1]:1600..1609 from 0
+        name: `ProcessId` @ [1]:1600..1609 from 0,
+        location: [1]:1585..1609 from 0
       }
-    ]
+    ],
+    location: [1]:1530..1609 from 0
   },
   assignment {
     left: root_field {
       id: `severity` @ [1]:1610..1618 from 0,
       has_question_mark: false
     },
-    equals: [1]:1619..1620 from 0,
-    right: constant string "Informational" @ [1]:1621..1636 from 0
+    right: constant string "Informational" @ [1]:1621..1636 from 0,
+    location: [1]:1610..1636 from 0
   },
   assignment {
     left: root_field {
       id: `severity_id` @ [1]:1637..1648 from 0,
       has_question_mark: false
     },
-    equals: [1]:1649..1650 from 0,
-    right: constant int64 1 @ [1]:1651..1652 from 0
+    right: constant int64 1 @ [1]:1651..1652 from 0,
+    location: [1]:1637..1652 from 0
   },
   assignment {
     left: root_field {
       id: `status` @ [1]:1653..1659 from 0,
       has_question_mark: false
     },
-    equals: [1]:1660..1661 from 0,
-    right: constant string "Success" @ [1]:1662..1671 from 0
+    right: constant string "Success" @ [1]:1662..1671 from 0,
+    location: [1]:1653..1671 from 0
   },
   assignment {
     left: root_field {
       id: `status_id` @ [1]:1672..1681 from 0,
       has_question_mark: false
     },
-    equals: [1]:1682..1683 from 0,
-    right: constant int64 1 @ [1]:1684..1685 from 0
+    right: constant int64 1 @ [1]:1684..1685 from 0,
+    location: [1]:1672..1685 from 0
   },
   assignment {
     left: root_field {
       id: `time` @ [1]:1686..1690 from 0,
       has_question_mark: false
     },
-    equals: [1]:1691..1692 from 0,
     right: function_call {
       fn: {
         path: [
@@ -854,52 +858,54 @@
                       id: `metadata` @ [1]:1704..1712 from 0,
                       has_question_mark: false
                     },
-                    dot: [1]:1712..1713 from 0,
                     has_question_mark: false,
-                    name: `original_time` @ [1]:1713..1726 from 0
+                    name: `original_time` @ [1]:1713..1726 from 0,
+                    location: [1]:1704..1726 from 0
                   }
                 ],
-                rpar: [1]:1726..1727 from 0,
-                method: false
+                method: false,
+                location: [1]:1699..1727 from 0
               }
             ],
-            rpar: [1]:1738..1739 from 0,
-            method: true
+            method: true,
+            location: [1]:1699..1739 from 0
           },
-          op: "mul" @ [1]:1740..1741 from 0,
-          right: constant int64 1000 @ [1]:1742..1746 from 0
+          op: "mul",
+          right: constant int64 1000 @ [1]:1742..1746 from 0,
+          location: [1]:1699..1746 from 0
         }
       ],
-      rpar: [1]:1746..1747 from 0,
-      method: false
-    }
+      method: false,
+      location: [1]:1693..1747 from 0
+    },
+    location: [1]:1686..1747 from 0
   },
   assignment {
     left: root_field {
       id: `type_name` @ [1]:1748..1757 from 0,
       has_question_mark: false
     },
-    equals: [1]:1758..1759 from 0,
-    right: constant string "Process Activity: Launch" @ [1]:1760..1786 from 0
+    right: constant string "Process Activity: Launch" @ [1]:1760..1786 from 0,
+    location: [1]:1748..1786 from 0
   },
   assignment {
     left: root_field {
       id: `type_uid` @ [1]:1787..1795 from 0,
       has_question_mark: false
     },
-    equals: [1]:1796..1797 from 0,
-    right: constant int64 100701 @ [1]:1798..1804 from 0
+    right: constant int64 100701 @ [1]:1798..1804 from 0,
+    location: [1]:1787..1804 from 0
   },
   assignment {
     left: root_field {
       id: `unmapped` @ [1]:1805..1813 from 0,
       has_question_mark: false
     },
-    equals: [1]:1814..1815 from 0,
     right: root_field {
       id: `src` @ [1]:1816..1819 from 0,
       has_question_mark: false
-    }
+    },
+    location: [1]:1805..1819 from 0
   },
   invocation {
     op: {
@@ -913,6 +919,7 @@
         id: `src` @ [1]:1825..1828 from 0,
         has_question_mark: false
       }
-    ]
+    ],
+    location: [1]:1820..1828 from 0
   }
 ]

@@ -197,7 +197,7 @@ TEST("tql2 parser: deep left-associated or location") {
     end = begin + 1;
     expr = ast::expression{ast::binary_expr{
       std::move(expr),
-      located{ast::binary_op::or_, location{begin - 1, begin}},
+      ast::binary_op::or_,
       ast::expression{ast::constant{false, location{begin, end}}},
     }};
   }

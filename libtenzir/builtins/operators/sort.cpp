@@ -476,7 +476,7 @@ public:
     keys_.reserve(args.exprs.size());
     for (auto& arg : args.exprs) {
       auto* unary = try_as<ast::unary_expr>(arg);
-      if (unary and unary->op.inner == ast::unary_op::neg) {
+      if (unary and unary->op == ast::unary_op::neg) {
         keys_.emplace_back(std::move(unary->expr), true);
       } else {
         keys_.emplace_back(std::move(arg));
@@ -587,7 +587,7 @@ public:
     const auto make_sort_key = [&](const auto& arg) {
       return arg.match(
         [&](const ast::unary_expr& unary) -> sort_expression {
-          if (unary.op.inner == ast::unary_op::neg) {
+          if (unary.op == ast::unary_op::neg) {
             return {unary.expr, true};
           }
           return {unary, false};

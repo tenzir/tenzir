@@ -48,8 +48,9 @@
 +          id: `x` @ [1]:35..36 from 0,
 +          has_question_mark: false
 +        },
-+        op: "eq" @ [1]:37..39 from 0,
-+        right: constant int64 1 @ [1]:40..41 from 0
++        op: "eq",
++        right: constant int64 1 @ [1]:40..41 from 0,
++        location: [1]:35..41 from 0
 +      }
 +    },
 +    GenericIr {
@@ -103,8 +104,9 @@
 -                id: `x` @ [1]:35..36 from 0,
 -                has_question_mark: false
 -              },
--              op: "eq" @ [1]:37..39 from 0,
--              right: constant int64 1 @ [1]:40..41 from 0
+-              op: "eq",
+-              right: constant int64 1 @ [1]:40..41 from 0,
+-              location: [1]:35..41 from 0
 -            }
 -          }
 -        ]

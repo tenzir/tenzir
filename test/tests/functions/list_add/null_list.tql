@@ -1,0 +1,2 @@
+from {x: null}
+x = x.add(42)

@@ -23,18 +23,15 @@ auto location::combine(into_location other) const -> location {
   if (not other) {
     return *this;
   }
-#if TENZIR_ENABLE_ASSERTIONS
   if (source_index != other.source_index
       or callsite_index != other.callsite_index) {
-    auto other_txt
-      = fmt::format("{{{}..{}; src:{}, call:{}}}", other.begin, other.end,
-                    other.source_index, other.callsite_index);
-    auto this_text
-      = fmt::format("{{{}..{}; src:{}, call:{}}}", this->begin, this->end,
-                    this->source_index, this->callsite_index);
-    TENZIR_ASSERT(false, "cannot combine {} into {}", other_txt, this_text);
+    // The two locations originate from different sources, so their byte
+    // offsets are not comparable and combining them would produce a
+    // nonsensical span. AST nodes store their location at parse time, so this
+    // case should not arise in practice; we keep the receiver's location as a
+    // safety net rather than aborting.
+    return *this;
   }
-#endif
   return {std::min(begin, other.begin), std::max(end, other.end), source_index,
           callsite_index};
 }

@@ -720,7 +720,7 @@ auto eval_op_typed(evaluator& self, ast::binary_expr const& x,
     if (active.as_constant() != false) {
       diagnostic::warning("binary operator `{}` not implemented for `{}` and "
                           "`{}`",
-                          x.op.inner, to_string(type_kind::of<L>),
+                          x.op, to_string(type_kind::of<L>),
                           to_string(type_kind::of<R>))
         .primary(x)
         .hint("the result of this expression is `null`")
@@ -751,7 +751,7 @@ auto dispatch_eval_binary(evaluator& self, ast::binary_expr const& x,
 template <ast::binary_op Op>
 auto eval_op(evaluator& self, ast::binary_expr const& x,
              ActiveRows const& active) -> multi_series {
-  TENZIR_ASSERT_EQ(x.op.inner, Op);
+  TENZIR_ASSERT_EQ(x.op, Op);
   auto left = self.eval(x.left, active);
   auto right = self.eval(x.right, active);
   TENZIR_ASSERT_EQ(left.length(), right.length());
@@ -1030,7 +1030,7 @@ auto eval_else(evaluator& self, ast::binary_expr const& x,
   // `null if true else 42` should return `null`, but without this would return
   // `42`.
   if (auto const* binop = try_as<ast::binary_expr>(x.left)) {
-    if (binop->op.inner == ast::binary_op::if_) {
+    if (binop->op == ast::binary_op::if_) {
       return eval_if(self, *binop, x.right, active);
     }
   }
@@ -1091,7 +1091,7 @@ auto eval_else(evaluator& self, ast::binary_expr const& x,
 
 auto evaluator::eval(ast::binary_expr const& x, ActiveRows const& active)
   -> multi_series {
-  switch (x.op.inner) {
+  switch (x.op) {
 #define X(op)                                                                  \
   case ast::binary_op::op:                                                     \
     return eval_op<ast::binary_op::op>(*this, x, active)

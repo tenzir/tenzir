@@ -52,9 +52,9 @@
                ident: `$x` @ [1]:289..291 from 0,
                expr: field_access {
                  left: this_ [1]:294..298 from 0,
-                 dot: [1]:298..299 from 0,
                  has_question_mark: false,
-                 name: `n` @ [1]:299..300 from 0
+                 name: `n` @ [1]:299..300 from 0,
+                 location: [1]:294..300 from 0
                },
                id: 1
              }
@@ -65,8 +65,9 @@
 +              self: [0]:0..0 from 0,
                predicate: binary_expr {
                  left: dollar_var `$x` -> 1 @ [1]:309..311 from 0,
-                 op: "gt" @ [1]:312..313 from 0,
-                 right: constant int64 1 @ [1]:314..315 from 0
+                 op: "gt",
+                 right: constant int64 1 @ [1]:314..315 from 0,
+                 location: [1]:309..315 from 0
                }
              },
              GenericIr {

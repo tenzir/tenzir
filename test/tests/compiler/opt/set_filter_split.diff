@@ -25,8 +25,9 @@
 +          id: `domain` @ [1]:56..62 from 0,
 +          has_question_mark: false
 +        },
-+        op: "eq" @ [1]:63..65 from 0,
-+        right: constant string "tenzir.com" @ [1]:66..78 from 0
++        op: "eq",
++        right: constant string "tenzir.com" @ [1]:66..78 from 0,
++        location: [1]:56..78 from 0
 +      }
 +    },
      SetIr {
@@ -36,11 +37,11 @@
              id: `resolved` @ [1]:32..40 from 0,
              has_question_mark: false
            },
-           equals: [1]:41..42 from 0,
            right: root_field {
              id: `domain` @ [1]:43..49 from 0,
              has_question_mark: false
-           }
+           },
+           location: [1]:32..49 from 0
          }
        ],
        order: "ordered"
@@ -52,8 +53,9 @@
 -          id: `domain` @ [1]:56..62 from 0,
 -          has_question_mark: false
 -        },
--        op: "eq" @ [1]:63..65 from 0,
--        right: constant string "tenzir.com" @ [1]:66..78 from 0
+-        op: "eq",
+-        right: constant string "tenzir.com" @ [1]:66..78 from 0,
+-        location: [1]:56..78 from 0
 -      }
 -    },
 -    where_ir {
@@ -64,8 +66,9 @@
            id: `resolved` @ [1]:85..93 from 0,
            has_question_mark: false
          },
-         op: "neq" @ [1]:94..96 from 0,
-         right: constant none_t {} @ [1]:97..101 from 0
+         op: "neq",
+         right: constant none_t {} @ [1]:97..101 from 0,
+         location: [1]:85..101 from 0
        }
 +    },
 +    GenericIr {

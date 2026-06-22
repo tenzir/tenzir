@@ -38,8 +38,9 @@
 +          id: `x` @ [1]:46..47 from 0,
 +          has_question_mark: false
 +        },
-+        op: "eq" @ [1]:48..50 from 0,
-+        right: constant int64 1 @ [1]:51..52 from 0
++        op: "eq",
++        right: constant int64 1 @ [1]:51..52 from 0,
++        location: [1]:46..52 from 0
 +      }
      },
      GenericIr {
@@ -57,9 +58,9 @@
                id: `foo` @ [1]:32..35 from 0,
                has_question_mark: false
              },
-             dot: [1]:35..36 from 0,
              has_question_mark: false,
-             name: `bar` @ [1]:36..39 from 0
+             name: `bar` @ [1]:36..39 from 0,
+             location: [1]:32..39 from 0
            },
            has_this: false,
            path: [
@@ -89,8 +90,9 @@
 -          id: `x` @ [1]:46..47 from 0,
 -          has_question_mark: false
 -        },
--        op: "eq" @ [1]:48..50 from 0,
--        right: constant int64 1 @ [1]:51..52 from 0
+-        op: "eq",
+-        right: constant int64 1 @ [1]:51..52 from 0,
+-        location: [1]:46..52 from 0
 -      }
 -    },
 -    where_ir {
@@ -101,8 +103,9 @@
            id: `foo` @ [1]:59..62 from 0,
            has_question_mark: false
          },
-         op: "neq" @ [1]:63..65 from 0,
-         right: constant none_t {} @ [1]:66..70 from 0
+         op: "neq",
+         right: constant none_t {} @ [1]:66..70 from 0,
+         location: [1]:59..70 from 0
        }
 +    },
 +    GenericIr {

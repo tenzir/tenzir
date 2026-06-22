@@ -1,0 +1,7 @@
+from {
+  l: [{x: 1}]
+}, {
+  l: [{x: -1}]
+}
+batch
+l = l.add({x: 2.uint()})

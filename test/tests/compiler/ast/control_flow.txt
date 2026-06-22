@@ -8,17 +8,18 @@
     },
     args: [
       
-    ]
+    ],
+    location: [1]:0..1 from 0
   },
   if_stmt {
-    if_kw: [1]:2..4 from 0,
     condition: binary_expr {
       left: root_field {
         id: `b` @ [1]:5..6 from 0,
         has_question_mark: false
       },
-      op: "eq" @ [1]:7..9 from 0,
-      right: constant int64 42 @ [1]:10..12 from 0
+      op: "eq",
+      right: constant int64 42 @ [1]:10..12 from 0,
+      location: [1]:5..12 from 0
     },
     then: [
       invocation {
@@ -33,7 +34,8 @@
             id: `d` @ [1]:19..20 from 0,
             has_question_mark: false
           }
-        ]
+        ],
+        location: [1]:17..20 from 0
       },
       invocation {
         op: {
@@ -48,15 +50,17 @@
               id: `f` @ [1]:25..26 from 0,
               has_question_mark: false
             },
-            equals: [1]:26..27 from 0,
             right: root_field {
               id: `g` @ [1]:27..28 from 0,
               has_question_mark: false
-            }
+            },
+            location: [1]:25..28 from 0
           }
-        ]
+        ],
+        location: [1]:23..28 from 0
       }
-    ]
+    ],
+    location: [1]:2..28 from 0
   },
   invocation {
     op: {
@@ -67,10 +71,10 @@
     },
     args: [
       
-    ]
+    ],
+    location: [1]:31..32 from 0
   },
   if_stmt {
-    if_kw: [1]:33..35 from 0,
     condition: root_field {
       id: `i` @ [1]:36..37 from 0,
       has_question_mark: false
@@ -79,11 +83,11 @@
       
     ],
     else: {
-      kw: [1]:41..45 from 0,
       pipe: [
         
       ]
-    }
+    },
+    location: [1]:33..37 from 0
   },
   invocation {
     op: {
@@ -94,7 +98,8 @@
     },
     args: [
       
-    ]
+    ],
+    location: [1]:49..50 from 0
   },
   match_stmt {
     begin: [1]:51..56 from 0,
@@ -132,7 +137,8 @@
             },
             args: [
               
-            ]
+            ],
+            location: [1]:83..86 from 0
           }
         ]
       }
@@ -164,7 +170,8 @@
             },
             args: [
               
-            ]
+            ],
+            location: [1]:118..121 from 0
           }
         ]
       },
@@ -189,7 +196,8 @@
                 id: `bar` @ [1]:144..147 from 0,
                 has_question_mark: false
               }
-            ]
+            ],
+            location: [1]:140..147 from 0
           },
           invocation {
             op: {
@@ -203,7 +211,8 @@
                 id: `bar` @ [1]:156..159 from 0,
                 has_question_mark: false
               }
-            ]
+            ],
+            location: [1]:152..159 from 0
           }
         ]
       }

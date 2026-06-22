@@ -20,8 +20,9 @@
 +            id: `bar` @ [1]:342..345 from 0,
 +            has_question_mark: false
 +          },
-+          op: "eq" @ [1]:346..348 from 0,
-+          right: constant bool true @ [1]:349..353 from 0
++          op: "eq",
++          right: constant bool true @ [1]:349..353 from 0,
++          location: [1]:342..353 from 0
 +        }
 +      ],
 +      order: "ordered",
@@ -55,8 +56,9 @@
 -          id: `bar` @ [1]:342..345 from 0,
 -          has_question_mark: false
 -        },
--        op: "eq" @ [1]:346..348 from 0,
--        right: constant bool true @ [1]:349..353 from 0
+-        op: "eq",
+-        right: constant bool true @ [1]:349..353 from 0,
+-        location: [1]:342..353 from 0
 -      }
      }
    ]

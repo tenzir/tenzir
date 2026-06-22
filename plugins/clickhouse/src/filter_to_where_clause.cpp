@@ -148,7 +148,7 @@ auto to_clickhouse_sql(ast::expression const& expr) -> Option<std::string> {
       auto rhs_null = is_null_constant(binary.right);
       if (lhs_null or rhs_null) {
         using enum ast::binary_op;
-        if (binary.op.inner != eq and binary.op.inner != neq) {
+        if (binary.op != eq and binary.op != neq) {
           return None{};
         }
         auto field = lhs_null ? to_clickhouse_sql(binary.right)
@@ -157,10 +157,10 @@ auto to_clickhouse_sql(ast::expression const& expr) -> Option<std::string> {
           return None{};
         }
         return fmt::format("({} {})", *field,
-                           binary.op.inner == eq ? "IS NULL" : "IS NOT NULL");
+                           binary.op == eq ? "IS NULL" : "IS NOT NULL");
       }
       auto lhs = to_clickhouse_sql(binary.left);
-      auto op = to_clickhouse_binary_op(binary.op.inner);
+      auto op = to_clickhouse_binary_op(binary.op);
       auto rhs = to_clickhouse_sql(binary.right);
       if (not lhs or not op or not rhs) {
         return None{};
@@ -175,7 +175,7 @@ auto to_clickhouse_sql(ast::expression const& expr) -> Option<std::string> {
 auto collect_conjuncts(ast::expression const& expr,
                        std::vector<ast::expression const*>& result) -> void {
   auto const* binary = try_as<ast::binary_expr>(expr);
-  if (binary == nullptr or binary->op.inner != ast::binary_op::and_) {
+  if (binary == nullptr or binary->op != ast::binary_op::and_) {
     result.push_back(&expr);
     return;
   }

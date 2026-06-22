@@ -46,9 +46,9 @@
                id: `foo` @ [1]:32..35 from 0,
                has_question_mark: false
              },
-             dot: [1]:35..36 from 0,
              has_question_mark: false,
-             name: `bar` @ [1]:36..39 from 0
+             name: `bar` @ [1]:36..39 from 0,
+             location: [1]:32..39 from 0
            },
            has_this: false,
            path: [
@@ -77,7 +77,7 @@
 +      self: [0]:0..0 from 0,
        predicate: binary_expr {
          left: this_ [1]:46..50 from 0,
-         op: "eq" @ [1]:51..53 from 0,
+         op: "eq",
          right: record {
            begin: [1]:54..55 from 0,
            items: [
@@ -97,7 +97,8 @@
              }
            ],
            end: [1]:68..69 from 0
-         }
+         },
+         location: [1]:46..69 from 0
        }
      },
      GenericIr {

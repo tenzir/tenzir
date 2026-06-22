@@ -20,8 +20,9 @@
 +            id: `x` @ [1]:42..43 from 0,
 +            has_question_mark: false
 +          },
-+          op: "eq" @ [1]:44..46 from 0,
-+          right: constant int64 1 @ [1]:47..48 from 0
++          op: "eq",
++          right: constant int64 1 @ [1]:47..48 from 0,
++          location: [1]:42..48 from 0
 +        }
 +      ],
 +      order: "unordered",
@@ -105,8 +106,9 @@
 -                id: `x` @ [1]:42..43 from 0,
 -                has_question_mark: false
 -              },
--              op: "eq" @ [1]:44..46 from 0,
--              right: constant int64 1 @ [1]:47..48 from 0
+-              op: "eq",
+-              right: constant int64 1 @ [1]:47..48 from 0,
+-              location: [1]:42..48 from 0
 -            }
 -          }
 -        ]

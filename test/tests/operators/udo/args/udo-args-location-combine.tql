@@ -1,0 +1,5 @@
+// Regression test: a builtin operator argument inside a UDO body that combines
+// a caller-substituted expression (`$n`) with a body literal (`+ 1`) must not
+// panic when its location is computed. See `location::combine`.
+from {a: 1}, {a: 2}, {a: 3}
+argspkg::forward_count 1
