@@ -1,0 +1,6 @@
+---
+error: true
+---
+// A lets.tql that declares the same binding name twice is rejected, so that a
+// sibling reference cannot be silently rebound to a later definition.
+from {v: duppkg::$b}

@@ -28,6 +28,7 @@
 #include <ranges>
 #include <string_view>
 #include <type_traits>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace tenzir {
@@ -1575,10 +1576,10 @@ namespace {
 /// reference earlier ones; forward or unknown references are errors.
 class sibling_rewriter : public ast::visitor<sibling_rewriter> {
 public:
-  sibling_rewriter(std::string module_name,
-                   const std::unordered_set<std::string>& declared,
-                   const std::unordered_set<std::string>& names,
-                   diagnostic_handler& dh)
+  sibling_rewriter(
+    std::string module_name, const std::unordered_set<std::string>& declared,
+    const std::unordered_map<std::string, tenzir::location>& names,
+    diagnostic_handler& dh)
     : module_name_{std::move(module_name)},
       declared_{declared},
       names_{names},
@@ -1620,7 +1621,7 @@ public:
 private:
   std::string module_name_;
   const std::unordered_set<std::string>& declared_;
-  const std::unordered_set<std::string>& names_;
+  const std::unordered_map<std::string, tenzir::location>& names_;
   diagnostic_handler& dh_;
 };
 
@@ -1642,7 +1643,10 @@ auto build_package_lets(const package& pkg, module_def& pkg_mod,
   TRY(auto parsed, parse(pkg.lets, source_origin{source->index}, session));
   const auto module_name = package_module_name(pkg.id);
   // Validate that the file contains only `let` bindings and collect the names.
-  auto names = std::unordered_set<std::string>{};
+  // Duplicate names are rejected: package `let`s share a single flat registry
+  // namespace, so a repeated name would overwrite the entry a sibling
+  // reference already points to, breaking sequential `let` semantics.
+  auto names = std::unordered_map<std::string, tenzir::location>{};
   for (const auto& stmt : parsed.body) {
     const auto* let = std::get_if<ast::let_stmt>(&stmt);
     if (not let) {
@@ -1655,7 +1659,17 @@ auto build_package_lets(const package& pkg, module_def& pkg_mod,
         .emit(dh);
       return failure::promise();
     }
-    names.insert(std::string{let->name_without_dollar()});
+    auto name = std::string{let->name_without_dollar()};
+    auto [it, inserted]
+      = names.try_emplace(std::move(name), let->name.location);
+    if (not inserted) {
+      diagnostic::error("duplicate package binding `${}`", it->first)
+        .primary(let->name.location)
+        .secondary(it->second, "previously defined here")
+        .note("in package `{}`", pkg.id)
+        .emit(dh);
+      return failure::promise();
+    }
   }
   // Store each binding's expression unevaluated, rewriting bare sibling
   // references to qualified self-references. A binding may only reference
