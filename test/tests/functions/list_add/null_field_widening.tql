@@ -1,0 +1,4 @@
+from {}
+x = null
+x = x.add({a: null, b: 1})
+x = x.add({a: "hello", b: 2})

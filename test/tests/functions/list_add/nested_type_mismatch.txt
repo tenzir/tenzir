@@ -1,0 +1,19 @@
+{
+  l: [
+    {
+      a: "1",
+    },
+    {
+      a: "x",
+    },
+  ],
+}
+warning: `add` may turn conflicting types into string
+ --> tests/functions/list_add/nested_type_mismatch.tql:2:5
+  |
+2 | l = l.add({a: "x"})
+  |     ~ list
+  ⋮
+2 | l = l.add({a: "x"})
+  |           ~~~~~~~~ element
+  |

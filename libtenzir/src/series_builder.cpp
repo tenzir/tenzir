@@ -24,6 +24,7 @@
 
 #include <arrow/api.h>
 
+#include <limits>
 #include <string_view>
 
 /// The implementation of `series_builder` consists of the following components:
@@ -252,6 +253,11 @@ public:
   auto is_protected() const -> bool {
     return protected_;
   }
+
+  /// Returns true if this builder currently holds an `int64` builder that has
+  /// already observed a negative value, and therefore cannot be losslessly
+  /// upgraded to `uint64`.
+  auto is_signed_with_negatives() const -> bool;
 
   void resize(int64_t new_length) {
     auto shrink = new_length < builder_->length();
@@ -976,6 +982,14 @@ private:
   series_builder_impl* root_;
 };
 
+auto dynamic_builder::is_signed_with_negatives() const -> bool {
+  if (auto* int_b
+      = dynamic_cast<detail::typed_builder<int64_type>*>(builder_.get())) {
+    return not int_b->all_non_negative();
+  }
+  return false;
+}
+
 void dynamic_builder::atom(detail::atom_view value) {
   std::visit(
     [&](auto value) {
@@ -999,6 +1013,23 @@ void dynamic_builder::atom(detail::atom_view value) {
                 = dynamic_cast<typed_builder<uint64_type>*>(builder_.get())) {
               uint_b->append(static_cast<uint64_t>(value));
               return;
+            }
+          }
+        }
+        // A `uint64` value that fits into the `int64` range is compatible with
+        // an existing `int64` builder that already contains negatives: cast and
+        // append directly instead of falling into a string conflict. (When all
+        // stored values are non-negative we instead upgrade to `uint64` in
+        // `prepare`, which is lossless and preferred.)
+        if constexpr (std::same_as<atom_type, uint64_type>) {
+          if (value
+              <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+            if (auto* int_b
+                = dynamic_cast<typed_builder<int64_type>*>(builder_.get())) {
+              if (not int_b->all_non_negative()) {
+                int_b->append(static_cast<int64_t>(value));
+                return;
+              }
             }
           }
         }
@@ -1153,6 +1184,21 @@ void detail::field_ref::atom(detail::atom_view value) {
               if (field->kind().template is<uint64_type>()) {
                 field->resize(origin_->length() - 1);
                 field->atom(detail::atom_view{static_cast<uint64_t>(value)});
+                return;
+              }
+            }
+          }
+        }
+        // A `uint64` value that fits into the `int64` range is compatible with
+        // an existing `int64` field that already contains negatives: resize and
+        // append directly instead of falling into a string conflict.
+        if constexpr (std::same_as<atom_type, uint64_type>) {
+          if (value
+              <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+            if (auto* field = builder()) {
+              if (field->is_signed_with_negatives()) {
+                field->resize(origin_->length() - 1);
+                field->atom(detail::atom_view{static_cast<int64_t>(value)});
                 return;
               }
             }

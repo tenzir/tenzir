@@ -548,16 +548,18 @@ TEST("int64 to uint64 upgrade when all non-negative") {
 ])"}});
 }
 
-TEST("int64 to uint64 keeps int64 when negative values present") {
+TEST("int64 absorbs fitting uint64 when negative values present") {
+  // When the builder is already `int64` with negatives, it cannot be upgraded
+  // to `uint64`. However, a `uint64` value that fits into the `int64` range can
+  // be stored losslessly as `int64`, so we keep a single merged series instead
+  // of flushing into two.
   auto b = series_builder{};
   b.data(int64_t{-1});
   b.data(int64_t{2});
   b.data(uint64_t{4});
-  finish_and_check(b, {{2, "int64", R"([
+  finish_and_check(b, {{3, "int64", R"([
   -1,
-  2
-])"},
-                       {1, "uint64", R"([
+  2,
   4
 ])"}});
 }
