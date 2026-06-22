@@ -267,6 +267,7 @@ struct rest_endpoint;
 struct rest_response;
 struct schema_statistics;
 struct secret_resolution_result;
+struct platform_authentication_result;
 struct spawn_arguments;
 struct status;
 struct taxonomies;
@@ -499,6 +500,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::series))
   TENZIR_ADD_TYPE_ID((tenzir::secret))
   TENZIR_ADD_TYPE_ID((tenzir::secret_resolution_result))
+  TENZIR_ADD_TYPE_ID((tenzir::platform_authentication_result))
   TENZIR_ADD_TYPE_ID((tenzir::shared_diagnostic_handler))
   TENZIR_ADD_TYPE_ID((tenzir::subnet))
   TENZIR_ADD_TYPE_ID((tenzir::table_slice))

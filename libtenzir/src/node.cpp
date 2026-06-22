@@ -880,6 +880,27 @@ auto node(node_actor::stateful_pointer<node_state> self,
           });
       return rp;
     },
+    [self](atom::resolve, atom::authentication,
+           std::string name) -> caf::result<platform_authentication_result> {
+      auto store
+        = self->system().registry().get<secret_store_actor>("tenzir.platform");
+      if (not store) {
+        return secret_resolution_error{"authentication does not exist locally "
+                                       "and no authentication store is "
+                                       "available"};
+      }
+      auto rp = self->make_response_promise<platform_authentication_result>();
+      self->mail(atom::resolve_v, atom::authentication_v, std::move(name))
+        .request(store, caf::infinite)
+        .then(
+          [rp = rp](platform_authentication_result r) mutable {
+            rp.deliver(std::move(r));
+          },
+          [rp = rp](caf::error e) mutable {
+            rp.deliver(std::move(e));
+          });
+      return rp;
+    },
   };
 }
 

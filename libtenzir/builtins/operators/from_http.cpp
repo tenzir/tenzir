@@ -19,6 +19,7 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/format_utils.hpp>
 #include <tenzir/http.hpp>
+#include <tenzir/http_auth.hpp>
 #include <tenzir/http_pool.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -73,6 +74,7 @@ struct FromHttpArgs {
   Option<located<std::string>> method;
   Option<located<data>> body;
   Option<located<data>> headers;
+  Option<located<std::string>> auth;
   Option<located<data>> tls;
   Option<located<duration>> timeout;
   Option<ast::field_path> error_field;
@@ -1140,6 +1142,16 @@ private:
         co_return;
       }
     }
+    if (args_.auth) {
+      auto auth = co_await fetch_authorization(args_.auth->inner, ctx);
+      if (not auth) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
+      for (auto const& header : auth->headers) {
+        http::set(request.headers, header.name, header.value);
+      }
+    }
     bytes_read_ = ctx.make_counter(
       MetricsLabel{"host",
                    MetricsLabel::FixedString::truncate(parsed_url.getHost())},
@@ -1268,6 +1280,7 @@ public:
       = d.named("max_retry_count", &FromHttpArgs::max_retry_count);
     auto retry_delay_arg = d.named("retry_delay", &FromHttpArgs::retry_delay);
     auto encode_arg = d.named("encode", &FromHttpArgs::encode);
+    auto auth_arg = d.named("auth", &FromHttpArgs::auth);
     auto server_arg = d.named("server", &FromHttpArgs::server);
     auto parser_arg
       = d.pipeline(&FromHttpArgs::parser, SubOptimize::from_downstream,
@@ -1343,6 +1356,11 @@ public:
             }
           }
         }
+      }
+      if (auto auth = ctx.get(auth_arg); auth and auth->inner.empty()) {
+        diagnostic::error("`auth` must not be empty")
+          .primary(auth->source)
+          .emit(ctx);
       }
       // Validate method when explicitly provided.
       if (auto method = ctx.get(method_arg)) {
