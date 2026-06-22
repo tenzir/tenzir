@@ -249,10 +249,15 @@ auto unwrap_type(::clickhouse::TypeRef type) -> unwrapped_type {
 auto tuple_field_names(::clickhouse::TupleType const& type)
   -> std::vector<std::string> {
   auto names = std::vector<std::string>{};
+  // Unnamed tuples (e.g. `Tuple(UInt8, String)`) expose an empty
+  // `GetItemNames()` while `GetTupleType()` still carries the element types, so
+  // we drive the loop off the tuple arity and synthesize `field0`, `field1`,
+  // ... when names are missing.
+  auto arity = type.GetTupleType().size();
   auto const& item_names = type.GetItemNames();
-  names.reserve(item_names.size());
-  for (auto i = size_t{0}; i < item_names.size(); ++i) {
-    if (not item_names[i].empty()) {
+  names.reserve(arity);
+  for (auto i = size_t{0}; i < arity; ++i) {
+    if (i < item_names.size() and not item_names[i].empty()) {
       names.push_back(item_names[i]);
     } else {
       names.push_back(fmt::format("field{}", i));
