@@ -195,7 +195,7 @@ public:
     auto stash = next_;
     consume_trivia_with_newlines();
     if (auto else_kw = accept(tk::else_)) {
-      alternative.emplace(else_kw.location, ast::pipeline{});
+      alternative.emplace(ast::pipeline{});
       if (peek(tk::if_)) {
         auto body = std::vector<statement>{};
         body.emplace_back(parse_if_stmt());
@@ -532,12 +532,12 @@ public:
       if (auto bin_op = peek_binary_op()) {
         auto new_prec = precedence(*bin_op);
         if (new_prec >= min_prec) {
-          auto location = advance();
+          advance();
           consume_trivia_with_newlines();
           auto right = parse_expression(new_prec + 1, stop_at_if);
           expr = binary_expr{
             std::move(expr),
-            located{*bin_op, location},
+            *bin_op,
             std::move(right),
           };
           if (negate) {
@@ -1428,7 +1428,7 @@ public:
   }
 
   auto peek_identifier(std::string_view name) -> bool {
-    return peek(tk::identifier) && token_string(next_) == name;
+    return peek(tk::identifier) and token_string(next_) == name;
   }
 
   // TODO: Can we get rid of this?

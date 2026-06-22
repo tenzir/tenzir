@@ -22,7 +22,6 @@
        assignments: [
          {
            left: this_ [1]:12..16 from 0,
-           equals: [1]:17..18 from 0,
            right: record {
              begin: [1]:19..20 from 0,
              items: [
@@ -32,7 +31,8 @@
                }
              ],
              end: [1]:24..25 from 0
-           }
+           },
+           location: [1]:12..25 from 0
          }
        ],
 -      order: "ordered"
@@ -46,8 +46,9 @@
            id: `x` @ [1]:32..33 from 0,
            has_question_mark: false
          },
-         op: "eq" @ [1]:34..36 from 0,
-         right: constant int64 2 @ [1]:37..38 from 0
+         op: "eq",
+         right: constant int64 2 @ [1]:37..38 from 0,
+         location: [1]:32..38 from 0
        }
      },
      GenericIr {

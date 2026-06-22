@@ -24,14 +24,14 @@
        ]
      },
      If {
-       if_keyword: [1]:7..9 from 0,
        condition: binary_expr {
          left: root_field {
            id: `x` @ [1]:10..11 from 0,
            has_question_mark: false
          },
-         op: "eq" @ [1]:12..14 from 0,
-         right: constant int64 1 @ [1]:15..16 from 0
+         op: "eq",
+         right: constant int64 1 @ [1]:15..16 from 0,
+         location: [1]:10..16 from 0
        },
        consequence: {
          lets: [
@@ -45,8 +45,9 @@
 +                id: `b` @ [1]:36..37 from 0,
 +                has_question_mark: false
 +              },
-+              op: "eq" @ [1]:38..40 from 0,
-+              right: constant int64 2 @ [1]:41..42 from 0
++              op: "eq",
++              right: constant int64 2 @ [1]:41..42 from 0,
++              location: [1]:36..42 from 0
 +            }
 +          },
            GenericIr {
@@ -91,29 +92,28 @@
 -          id: `b` @ [1]:36..37 from 0,
 -          has_question_mark: false
 -        },
--        op: "eq" @ [1]:38..40 from 0,
--        right: constant int64 2 @ [1]:41..42 from 0
+-        op: "eq",
+-        right: constant int64 2 @ [1]:41..42 from 0,
+-        location: [1]:36..42 from 0
 +      },
 +      alternative: {
-+        keyword: [0]:0..0 from 0,
-+        pipeline: {
-+          lets: [
-+            
-+          ],
-+          operators: [
-+            where_ir {
-+              self: [0]:0..0 from 0,
-+              predicate: binary_expr {
-+                left: root_field {
-+                  id: `b` @ [1]:36..37 from 0,
-+                  has_question_mark: false
-+                },
-+                op: "eq" @ [1]:38..40 from 0,
-+                right: constant int64 2 @ [1]:41..42 from 0
-+              }
++        lets: [
++          
++        ],
++        operators: [
++          where_ir {
++            self: [0]:0..0 from 0,
++            predicate: binary_expr {
++              left: root_field {
++                id: `b` @ [1]:36..37 from 0,
++                has_question_mark: false
++              },
++              op: "eq",
++              right: constant int64 2 @ [1]:41..42 from 0,
++              location: [1]:36..42 from 0
 +            }
-+          ]
-+        }
++          }
++        ]
        }
      },
      GenericIr {

@@ -103,7 +103,7 @@ struct search_id_symbol_table : parser_base<search_id_symbol_table> {
     }
     auto result = std::move(xs[0]);
     for (auto i = size_t{1}; i < xs.size(); ++i) {
-      result = ast::binary_expr{std::move(result), {Op, {}}, std::move(xs[i])};
+      result = ast::binary_expr{std::move(result), Op, std::move(xs[i])};
     }
     return result;
   }
@@ -111,7 +111,7 @@ struct search_id_symbol_table : parser_base<search_id_symbol_table> {
   static void flatten(ast::expression x, ast::binary_op op,
                       std::vector<ast::expression>& result) {
     if (auto* binary = try_as<ast::binary_expr>(x);
-        binary and binary->op.inner == op) {
+        binary and binary->op == op) {
       flatten(std::move(binary->left), op, result);
       flatten(std::move(binary->right), op, result);
       return;
@@ -206,7 +206,7 @@ struct detection_parser : parser_base<detection_parser> {
     auto& [x, xs] = expr;
     auto result = std::move(x);
     for (auto& expr : xs) {
-      result = ast::binary_expr{std::move(result), {Op, {}}, std::move(expr)};
+      result = ast::binary_expr{std::move(result), Op, std::move(expr)};
     }
     return result;
   };
@@ -356,8 +356,7 @@ auto make_regex_expr(ast::expression field, std::string regex)
 
 auto make_binary_expr(ast::expression left, ast::binary_op op,
                       ast::expression right) -> ast::expression {
-  return ast::binary_expr{
-    std::move(left), {op, location::unknown}, std::move(right)};
+  return ast::binary_expr{std::move(left), op, std::move(right)};
 }
 
 } // namespace

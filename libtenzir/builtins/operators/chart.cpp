@@ -113,7 +113,8 @@ auto find_plugins(call_map const& y, session ctx) -> plugins_map {
       result.emplace_back(ptr, call);
       continue;
     }
-    auto wrapped_call = ast::function_call{entity, {call}, call.rpar, false};
+    auto wrapped_call
+      = ast::function_call{entity, {call}, call.get_location(), false};
     TENZIR_ASSERT(resolve_entities(wrapped_call, ctx));
     auto const* ptr
       = dynamic_cast<aggregation_plugin const*>(&ctx.reg().get(wrapped_call));
@@ -243,7 +244,7 @@ auto handle_xlimit(ChartArgs<Ty> const& args, ast::binary_op op,
       return ast::constant{d, loc};
     });
   TRY(auto c, result);
-  auto expr = ast::binary_expr{args.x.inner(), {op, loc}, c};
+  auto expr = ast::binary_expr{args.x.inner(), op, c};
   auto&& [legacy, _] = split_legacy_expression(expr);
   return xlimit{
     std::move(limit),
@@ -658,7 +659,7 @@ private:
     if (prep_->x_min and prep_->x_max) {
       expr = ast::binary_expr{
         prep_->x_min->expr,
-        {ast::binary_op::and_, location::unknown},
+        ast::binary_op::and_,
         prep_->x_max->expr,
       };
     } else if (prep_->x_min) {

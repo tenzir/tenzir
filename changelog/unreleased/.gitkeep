@@ -1,0 +1,5 @@
+# Keep this directory tracked.
+#
+# Release creation moves changelog entries into releases/<version>/entries.
+# Keeping unreleased/ present prevents Git from inferring a directory
+# rename and moving entries from long-lived branches into a release.

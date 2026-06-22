@@ -229,7 +229,8 @@ struct chart_args {
         plugins.emplace_back(ptr, call);
         continue;
       }
-      auto wrapped_call = ast::function_call{entity, {call}, call.rpar, false};
+      auto wrapped_call
+        = ast::function_call{entity, {call}, call.get_location(), false};
       TENZIR_ASSERT(resolve_entities(wrapped_call, ctx));
       const auto* ptr
         = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(wrapped_call));
@@ -628,7 +629,7 @@ public:
       if (args_.x_min and args_.x_max) {
         return ast::binary_expr{
           args_.x_min->expr,
-          {ast::binary_op::and_, location::unknown},
+          ast::binary_op::and_,
           args_.x_max->expr,
         };
       }
@@ -1048,7 +1049,7 @@ class chart_plugin : public virtual operator_factory_plugin {
         return ast::constant{d, loc};
       });
     TRY(auto c, result);
-    auto expr = ast::binary_expr{args.x.inner(), {op, loc}, c};
+    auto expr = ast::binary_expr{args.x.inner(), op, c};
     auto&& [legacy, remainder] = split_legacy_expression(expr);
     return xlimit{
       std::move(limit),

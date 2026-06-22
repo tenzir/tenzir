@@ -28,12 +28,12 @@
        ]
      },
      If {
-       if_keyword: [1]:21..23 from 0,
        condition: binary_expr {
 -        left: dollar_var `$foo` -> 1 @ [1]:24..28 from 0,
 +        left: constant int64 1 @ [1]:24..28 from 0,
-         op: "eq" @ [1]:29..31 from 0,
-         right: constant int64 1 @ [1]:32..33 from 0
+         op: "eq",
+         right: constant int64 1 @ [1]:32..33 from 0,
+         location: [1]:24..33 from 0
        },
        consequence: {
          lets: [
@@ -53,62 +53,65 @@
                    id: `foo` @ [1]:59..62 from 0,
                    has_question_mark: false
                  },
-                 op: "eq" @ [1]:63..65 from 0,
--                right: dollar_var `$foo` -> 1 @ [1]:66..70 from 0
-+                right: constant int64 1 @ [1]:66..70 from 0
+                 op: "eq",
+-                right: dollar_var `$foo` -> 1 @ [1]:66..70 from 0,
++                right: constant int64 1 @ [1]:66..70 from 0,
+                 location: [1]:59..70 from 0
                },
-               op: "and_" @ [1]:71..74 from 0,
+               op: "and_",
                right: binary_expr {
                  left: root_field {
                    id: `bar` @ [1]:75..78 from 0,
                    has_question_mark: false
                  },
-                 op: "eq" @ [1]:79..81 from 0,
--                right: dollar_var `$bar` -> 2 @ [1]:82..86 from 0
-+                right: constant int64 2 @ [1]:82..86 from 0
-               }
+                 op: "eq",
+-                right: dollar_var `$bar` -> 2 @ [1]:82..86 from 0,
++                right: constant int64 2 @ [1]:82..86 from 0,
+                 location: [1]:75..86 from 0
+               },
+               location: [1]:59..86 from 0
              }
            }
          ]
        },
        alternative: {
-         keyword: [1]:89..93 from 0,
-         pipeline: {
-           lets: [
--            {
--              ident: `$bar` @ [1]:102..106 from 0,
--              expr: constant int64 3 @ [1]:109..110 from 0,
--              id: 3
--            }
-+            
-           ],
-           operators: [
-             where_ir {
-               self: [1]:113..118 from 0,
-               predicate: binary_expr {
-                 left: binary_expr {
-                   left: root_field {
-                     id: `foo` @ [1]:119..122 from 0,
-                     has_question_mark: false
-                   },
-                   op: "eq" @ [1]:123..125 from 0,
--                  right: dollar_var `$foo` -> 1 @ [1]:126..130 from 0
-+                  right: constant int64 1 @ [1]:126..130 from 0
+         lets: [
+-          {
+-            ident: `$bar` @ [1]:102..106 from 0,
+-            expr: constant int64 3 @ [1]:109..110 from 0,
+-            id: 3
+-          }
++          
+         ],
+         operators: [
+           where_ir {
+             self: [1]:113..118 from 0,
+             predicate: binary_expr {
+               left: binary_expr {
+                 left: root_field {
+                   id: `foo` @ [1]:119..122 from 0,
+                   has_question_mark: false
                  },
-                 op: "and_" @ [1]:131..134 from 0,
-                 right: binary_expr {
-                   left: root_field {
-                     id: `bar` @ [1]:135..138 from 0,
-                     has_question_mark: false
-                   },
-                   op: "eq" @ [1]:139..141 from 0,
--                  right: dollar_var `$bar` -> 3 @ [1]:142..146 from 0
-+                  right: constant int64 3 @ [1]:142..146 from 0
-                 }
-               }
+                 op: "eq",
+-                right: dollar_var `$foo` -> 1 @ [1]:126..130 from 0,
++                right: constant int64 1 @ [1]:126..130 from 0,
+                 location: [1]:119..130 from 0
+               },
+               op: "and_",
+               right: binary_expr {
+                 left: root_field {
+                   id: `bar` @ [1]:135..138 from 0,
+                   has_question_mark: false
+                 },
+                 op: "eq",
+-                right: dollar_var `$bar` -> 3 @ [1]:142..146 from 0,
++                right: constant int64 3 @ [1]:142..146 from 0,
+                 location: [1]:135..146 from 0
+               },
+               location: [1]:119..146 from 0
              }
-           ]
-         }
+           }
+         ]
        }
      }
    ]

@@ -141,14 +141,14 @@ public:
       lambda_->body = ast::binary_expr{
         ast::binary_expr{
           lambda_->body,
-          located{ast::binary_op::if_, location::unknown},
+          ast::binary_op::if_,
           ast::binary_expr{
             lambda_->unary_param_as_field_path().inner(),
-            located{ast::binary_op::neq, location::unknown},
+            ast::binary_op::neq,
             ast::constant{caf::none, location::unknown},
           },
         },
-        located{ast::binary_op::else_, location::unknown},
+        ast::binary_op::else_,
         ast::constant{false, location::unknown},
       };
     }

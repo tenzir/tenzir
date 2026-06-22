@@ -234,91 +234,15 @@ auto collect_refs(const expression& expr) -> Option<ExprRefs> {
 }
 
 auto expression::get_location() const -> location {
-  auto result = location::unknown;
-  auto stack = std::vector<expression const*>{};
-  stack.reserve(64);
-  stack.push_back(this);
-  while (not stack.empty()) {
-    auto const* current = stack.back();
-    stack.pop_back();
-    TENZIR_ASSERT(current->kind);
-    current->match(
-      [&](record const& x) {
-        result = result.combine(x.get_location());
-      },
-      [&](list const& x) {
-        result = result.combine(x.get_location());
-      },
-      [&](meta const& x) {
-        result = result.combine(x.get_location());
-      },
-      [&](this_ const& x) {
-        result = result.combine(x.get_location());
-      },
-      [&](root_field const& x) {
-        result = result.combine(x.get_location());
-      },
-      [&](pipeline_expr const& x) {
-        result = result.combine(x.get_location());
-      },
-      [&](constant const& x) {
-        result = result.combine(x.get_location());
-      },
-      [&](field_access const& x) {
-        result = result.combine(x.name.location);
-        stack.push_back(&x.left);
-      },
-      [&](index_expr const& x) {
-        result = result.combine(x.rbracket);
-        stack.push_back(&x.expr);
-      },
-      [&](binary_expr const& x) {
-        stack.push_back(&x.right);
-        stack.push_back(&x.left);
-      },
-      [&](unary_expr const& x) {
-        result = result.combine(x.op.source);
-        stack.push_back(&x.expr);
-      },
-      [&](function_call const& x) {
-        result = result.combine(x.rpar);
-        if (x.method) {
-          TENZIR_ASSERT(not x.args.empty());
-          stack.push_back(&x.args[0]);
-        } else {
-          result = result.combine(x.fn.get_location());
-        }
-      },
-      [&](lambda_expr const& x) {
-        if (x.params.empty()) {
-          result = result.combine(x.arrow);
-        } else {
-          result = result.combine(x.params.front().location);
-        }
-        stack.push_back(&x.body);
-      },
-      [&](underscore const& x) {
-        result = result.combine(x.get_location());
-      },
-      [&](unpack const& x) {
-        result = result.combine(x.brackets);
-        stack.push_back(&x.expr);
-      },
-      [&](assignment const& x) {
-        stack.push_back(&x.left);
-        stack.push_back(&x.right);
-      },
-      [&](dollar_var const& x) {
-        result = result.combine(x.get_location());
-      },
-      [&](format_expr const& x) {
-        result = result.combine(x.get_location());
-      },
-      [&](type_expr const& x) {
-        result = result.combine(x.get_location());
-      });
-  }
-  return result;
+  // Each AST node stores its own location, so this is a cheap, non-recursive
+  // lookup. We must not recompute the location by combining sub-locations:
+  // after substitution (e.g. when instantiating user-defined operators), an
+  // expression can contain children from different source files, and combining
+  // their locations is not meaningful.
+  TENZIR_ASSERT(kind);
+  return match([](const auto& x) -> location {
+    return x.get_location();
+  });
 }
 
 expression::expression(expression const& other) {
@@ -511,7 +435,7 @@ auto optimize_now(const ast::expression& left, const relational_operator& rop,
   if (not bexpr) {
     return std::nullopt;
   }
-  const auto op = bexpr->op.inner;
+  const auto op = bexpr->op;
   if (op != ast::binary_op::add and op != ast::binary_op::sub) {
     return std::nullopt;
   }
@@ -540,7 +464,7 @@ auto split_legacy_expression(const ast::expression& x)
   return x.match<std::pair<expression, ast::expression>>(
     [&](const ast::binary_expr& y) {
       auto rel_op = std::invoke([&]() -> std::optional<relational_operator> {
-        switch (y.op.inner) {
+        switch (y.op) {
           case ast::binary_op::add:
           case ast::binary_op::sub:
           case ast::binary_op::mul:
@@ -579,7 +503,7 @@ auto split_legacy_expression(const ast::expression& x)
         }
       };
       if (rel_op) {
-        switch (y.op.inner) {
+        switch (y.op) {
           case ast::binary_op::gt:
           case ast::binary_op::geq:
             if (auto expr = optimize_now(y.left, *rel_op, y.right)) {
@@ -611,7 +535,7 @@ auto split_legacy_expression(const ast::expression& x)
           ast::expression{ast::constant{true, location::unknown}},
         };
       }
-      if (y.op.inner == ast::binary_op::and_) {
+      if (y.op == ast::binary_op::and_) {
         auto [lo, ln] = split_legacy_expression(y.left);
         auto [ro, rn] = split_legacy_expression(y.right);
         auto o = expression{};
@@ -633,7 +557,7 @@ auto split_legacy_expression(const ast::expression& x)
         }
         return std::pair{std::move(o), std::move(n)};
       }
-      if (y.op.inner == ast::binary_op::or_) {
+      if (y.op == ast::binary_op::or_) {
         auto [lo, ln] = split_legacy_expression(y.left);
         auto [ro, rn] = split_legacy_expression(y.right);
         // We have `(lo and ln) or (ro and rn)`, but we cannot easily split this
@@ -646,7 +570,7 @@ auto split_legacy_expression(const ast::expression& x)
       return std::pair{trivially_true_expression(), x};
     },
     [&](const ast::unary_expr& y) {
-      if (y.op.inner == ast::unary_op::not_) {
+      if (y.op == ast::unary_op::not_) {
         auto split = split_legacy_expression(y.expr);
         // TODO: When exactly can we split this?
         if (is_true_literal(split.second)) {

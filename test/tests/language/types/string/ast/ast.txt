@@ -62,11 +62,12 @@
                     id: `a` @ [1]:58..59 from 0,
                     has_question_mark: false
                   },
-                  op: "add" @ [1]:59..60 from 0,
+                  op: "add",
                   right: root_field {
                     id: `b` @ [1]:60..61 from 0,
                     has_question_mark: false
-                  }
+                  },
+                  location: [1]:58..61 from 0
                 }
               ],
               location: [1]:55..63 from 0
@@ -190,6 +191,7 @@
         ],
         end: [1]:204..205 from 0
       }
-    ]
+    ],
+    location: [1]:0..205 from 0
   }
 ]

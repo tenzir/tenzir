@@ -20,8 +20,9 @@
 +            id: `foo` @ [1]:84..87 from 0,
 +            has_question_mark: true
 +          },
-+          op: "eq" @ [1]:89..91 from 0,
-+          right: constant int64 42 @ [1]:92..94 from 0
++          op: "eq",
++          right: constant int64 42 @ [1]:92..94 from 0,
++          location: [1]:84..94 from 0
 +        }
 +      ],
 +      order: "ordered",
@@ -55,8 +56,9 @@
 -          id: `foo` @ [1]:84..87 from 0,
 -          has_question_mark: true
 -        },
--        op: "eq" @ [1]:89..91 from 0,
--        right: constant int64 42 @ [1]:92..94 from 0
+-        op: "eq",
+-        right: constant int64 42 @ [1]:92..94 from 0,
+-        location: [1]:84..94 from 0
 -      }
      }
    ]

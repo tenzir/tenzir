@@ -1,0 +1,9 @@
+---
+description: "Forward a caller expression into a builtin operator argument"
+args:
+  positional:
+    - name: n
+      type: int
+      description: "Base count combined with a body literal"
+---
+head $n + 1

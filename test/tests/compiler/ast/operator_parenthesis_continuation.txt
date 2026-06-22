@@ -12,13 +12,15 @@
           id: `x` @ [1]:7..8 from 0,
           has_question_mark: false
         },
-        op: "or_" @ [1]:9..11 from 0,
+        op: "or_",
         right: root_field {
           id: `y` @ [1]:12..13 from 0,
           has_question_mark: false
-        }
+        },
+        location: [1]:7..13 from 0
       }
-    ]
+    ],
+    location: [1]:0..13 from 0
   },
   invocation {
     op: {
@@ -34,19 +36,22 @@
             id: `x` @ [1]:22..23 from 0,
             has_question_mark: false
           },
-          op: "or_" @ [1]:24..26 from 0,
+          op: "or_",
           right: root_field {
             id: `y` @ [1]:27..28 from 0,
             has_question_mark: false
-          }
+          },
+          location: [1]:22..28 from 0
         },
-        op: "and_" @ [1]:30..33 from 0,
+        op: "and_",
         right: root_field {
           id: `z` @ [1]:34..35 from 0,
           has_question_mark: false
-        }
+        },
+        location: [1]:22..35 from 0
       }
-    ]
+    ],
+    location: [1]:15..35 from 0
   },
   invocation {
     op: {
@@ -70,7 +75,8 @@
         ],
         end: [1]:48..49 from 0
       }
-    ]
+    ],
+    location: [1]:36..49 from 0
   },
   invocation {
     op: {
@@ -82,10 +88,12 @@
     args: [
       binary_expr {
         left: constant int64 1 @ [1]:55..56 from 0,
-        op: "or_" @ [1]:57..59 from 0,
-        right: constant int64 2 @ [1]:60..61 from 0
+        op: "or_",
+        right: constant int64 2 @ [1]:60..61 from 0,
+        location: [1]:55..61 from 0
       },
       constant int64 3 @ [1]:63..64 from 0
-    ]
+    ],
+    location: [1]:50..64 from 0
   }
 ]

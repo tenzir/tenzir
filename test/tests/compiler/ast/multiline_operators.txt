@@ -23,7 +23,8 @@
         id: `e` @ [1]:15..16 from 0,
         has_question_mark: false
       }
-    ]
+    ],
+    location: [1]:0..16 from 0
   },
   invocation {
     op: {
@@ -37,7 +38,8 @@
         id: `g` @ [1]:19..20 from 0,
         has_question_mark: false
       }
-    ]
+    ],
+    location: [1]:17..20 from 0
   },
   invocation {
     op: {
@@ -59,7 +61,8 @@
         id: `k` @ [1]:38..39 from 0,
         has_question_mark: false
       }
-    ]
+    ],
+    location: [1]:21..39 from 0
   },
   invocation {
     op: {
@@ -74,12 +77,14 @@
           id: `m` @ [1]:42..43 from 0,
           has_question_mark: false
         },
-        op: "add" @ [1]:44..45 from 0,
+        op: "add",
         right: root_field {
           id: `n` @ [1]:48..49 from 0,
           has_question_mark: false
-        }
+        },
+        location: [1]:42..49 from 0
       }
-    ]
+    ],
+    location: [1]:40..49 from 0
   }
 ]

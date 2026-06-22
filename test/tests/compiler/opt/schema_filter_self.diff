@@ -25,8 +25,8 @@
              kind: "name",
              source: [1]:12..17 from 0
            },
-           equals: [1]:18..19 from 0,
-           right: constant string "foo" @ [1]:20..25 from 0
+           right: constant string "foo" @ [1]:20..25 from 0,
+           location: [1]:12..25 from 0
          }
        ],
 -      order: "ordered"
@@ -40,8 +40,9 @@
            kind: "name",
            source: [1]:32..37 from 0
          },
-         op: "eq" @ [1]:38..40 from 0,
-         right: constant string "foo" @ [1]:41..46 from 0
+         op: "eq",
+         right: constant string "foo" @ [1]:41..46 from 0,
+         location: [1]:32..46 from 0
        }
      },
      GenericIr {

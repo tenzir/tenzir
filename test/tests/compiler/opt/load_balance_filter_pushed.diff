@@ -21,8 +21,9 @@
 +            id: `x` @ [1]:154..155 from 0,
 +            has_question_mark: false
 +          },
-+          op: "gt" @ [1]:156..157 from 0,
-+          right: constant int64 1 @ [1]:158..159 from 0
++          op: "gt",
++          right: constant int64 1 @ [1]:158..159 from 0,
++          location: [1]:154..159 from 0
 +        }
        ],
 -      order: "ordered",
@@ -66,8 +67,9 @@
 -                  id: `x` @ [1]:154..155 from 0,
 -                  has_question_mark: false
 -                },
--                op: "gt" @ [1]:156..157 from 0,
--                right: constant int64 1 @ [1]:158..159 from 0
+-                op: "gt",
+-                right: constant int64 1 @ [1]:158..159 from 0,
+-                location: [1]:154..159 from 0
 -              }
 -            },
              GenericIr {

@@ -13,11 +13,12 @@
 -          args: [
 -            
 -          ],
--          rpar: [1]:15..16 from 0,
--          method: false
+-          method: false,
+-          location: [1]:11..16 from 0
 -        },
--        op: "eq" @ [1]:17..19 from 0,
--        right: constant time 2100-01-01T00:00:00Z @ [1]:20..30 from 0
+-        op: "eq",
+-        right: constant time 2100-01-01T00:00:00Z @ [1]:20..30 from 0,
+-        location: [1]:11..30 from 0
 -      },
 -      id: 1
 -    }
@@ -50,9 +51,10 @@
            id: `foo` @ [1]:45..48 from 0,
            has_question_mark: false
          },
-         op: "eq" @ [1]:49..51 from 0,
--        right: dollar_var `$foo` -> 1 @ [1]:52..56 from 0
-+        right: constant bool false @ [1]:52..56 from 0
+         op: "eq",
+-        right: dollar_var `$foo` -> 1 @ [1]:52..56 from 0,
++        right: constant bool false @ [1]:52..56 from 0,
+         location: [1]:45..56 from 0
        }
      }
    ]
