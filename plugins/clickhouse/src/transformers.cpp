@@ -344,6 +344,34 @@ X(duration_type, ColumnInt64, "Int64");
 X(ip_type, ColumnIPv6, "IPv6");
 #undef X
 
+/// Tenzir `bool` columns are now created as ClickHouse `Bool`, but tables
+/// created by older Tenzir versions (and any table that stores boolean data as
+/// `UInt8`) describe the column as `UInt8`. This trait lets us keep appending
+/// `bool` values to such legacy columns by sending them as `UInt8`, matching
+/// the column type the server already has.
+struct legacy_bool_trait {
+  constexpr static std::string_view name = "UInt8";
+  using column_type = ColumnUInt8;
+
+  constexpr static auto null_value = std::nullopt;
+
+  static auto clickhouse_typename(bool nullable) -> std::string {
+    if (nullable) {
+      return std::string{"Nullable("}.append(name).append(1, ')');
+    }
+    return std::string{name};
+  }
+
+  template <bool nullable>
+  static auto allocate(size_t n) {
+    using Column_Type
+      = std::conditional_t<nullable, ColumnNullableT<column_type>, column_type>;
+    auto res = std::make_shared<Column_Type>();
+    res->Reserve(n);
+    return res;
+  }
+};
+
 template <>
 struct tenzir_to_clickhouse_trait<time_type> {
   constexpr static std::string_view name = "DateTime64(9)";
@@ -401,10 +429,11 @@ concept convertible_hack = std::same_as<Expected, Actual>
                            or (std::same_as<Expected, int64_type>
                                and std::same_as<Actual, duration_type>);
 
-template <typename T, bool Nullable>
-  requires requires { tenzir_to_clickhouse_trait<T>{}; }
+template <typename T, bool Nullable,
+          typename Traits = tenzir_to_clickhouse_trait<T>>
+  requires requires { Traits{}; }
 struct transformer_from_trait : transformer {
-  using traits = tenzir_to_clickhouse_trait<T>;
+  using traits = Traits;
 
   transformer_from_trait()
     : transformer{traits::clickhouse_typename(Nullable), Nullable} {
@@ -506,12 +535,12 @@ struct transformer_from_trait : transformer {
   }
 };
 
-template <typename T>
+template <typename T, typename Traits = tenzir_to_clickhouse_trait<T>>
 auto make_transformer_impl(bool nullable) -> std::unique_ptr<transformer> {
   if (nullable) {
-    return std::make_unique<transformer_from_trait<T, true>>();
+    return std::make_unique<transformer_from_trait<T, true, Traits>>();
   } else {
-    return std::make_unique<transformer_from_trait<T, false>>();
+    return std::make_unique<transformer_from_trait<T, false, Traits>>();
   }
 }
 
@@ -962,6 +991,16 @@ auto make_functions_from_clickhouse(path_type& path,
   X(ip_type);
   X(subnet_type);
 #undef X
+  // Accept `UInt8` as a legacy boolean target: tables created by older Tenzir
+  // versions stored `bool` columns as `UInt8`. New tables use `Bool` (see
+  // `tenzir_to_clickhouse_trait<bool_type>`), but appends must keep working
+  // against existing `UInt8` columns.
+  if (clickhouse_typename == "UInt8") {
+    return make_transformer_impl<bool_type, legacy_bool_trait>(false);
+  }
+  if (clickhouse_typename == "Nullable(UInt8)") {
+    return make_transformer_impl<bool_type, legacy_bool_trait>(true);
+  }
   if (clickhouse_typename == "Array(UInt8)") {
     return std::make_unique<transformer_blob>();
   }

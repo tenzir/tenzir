@@ -2,4 +2,4 @@
 id	Int64
 name	Nullable(String)
 score	Nullable(Float64)
-active	Nullable(UInt8)
+active	Nullable(Bool)
