@@ -743,7 +743,11 @@ auto ast::expression::is_deterministic(const registry& reg) const -> bool {
       return true;
     },
     [](ast::pipeline_expr const&) {
-      return true;
+      // A pipeline expression is a subpipeline, not a value: it cannot be
+      // const-evaluated. Treating it as deterministic would let it slip into
+      // the const-eval path (e.g. as a package `let` binding), where the
+      // evaluator only warns and yields `null` instead of rejecting it.
+      return false;
     },
     [](ast::constant const&) {
       return true;

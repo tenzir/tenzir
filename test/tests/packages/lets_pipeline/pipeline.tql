@@ -1,0 +1,6 @@
+---
+error: true
+---
+// A package `let` whose value is a pipeline expression is not a constant and is
+// rejected at the use site instead of silently becoming `null`.
+from {v: pipelinepkg::$p}
