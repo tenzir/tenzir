@@ -1,0 +1,6 @@
+{
+  pipe: "detach-1",
+}
+{
+  pipe: "detach-2",
+}
