@@ -16,6 +16,7 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
+#include <tenzir/http_proxy_connect.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
@@ -26,7 +27,6 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/try.hpp>
 
-#include <folly/ScopeGuard.h>
 #include <folly/SocketAddress.h>
 #include <folly/coro/Sleep.h>
 #include <folly/io/IOBuf.h>
@@ -475,6 +475,24 @@ private:
     std::ignore = response_->send(std::move(response));
   }
 
+  auto make_request_message(HttpRequestTargetForm target_form,
+                            Option<proxy_url> const& proxy) const
+    -> std::unique_ptr<proxygen::HTTPMessage> {
+    auto msg = std::make_unique<proxygen::HTTPMessage>();
+    msg->setURL(make_proxy_request_target(parsed_url_, target_form));
+    msg->setMethod(get_method());
+    msg->setSecure(parsed_url_.isSecure());
+    for (auto const& [name, value] : headers_) {
+      msg->getHeaders().add(name, value);
+    }
+    add_forward_proxy_authorization(msg->getHeaders(), target_form, proxy);
+    if (not msg->getHeaders().exists(proxygen::HTTP_HEADER_HOST)) {
+      msg->getHeaders().add(proxygen::HTTP_HEADER_HOST,
+                            parsed_url_.getHostAndPortOmitDefault());
+    }
+    return msg;
+  }
+
   /// Attempts a single HTTP request. On success, moves `body_rx` into the
   /// streaming source (leaving it empty). On connection failure before
   /// the source is created, `body_rx` remains valid for a retry.
@@ -483,44 +501,23 @@ private:
     auto attempt_res = co_await async_try(folly::coro::co_withExecutor(
       folly::Executor::KeepAlive<>{evb_},
       folly::coro::co_invoke([this, &body_rx]() -> Task<http::Response> {
-        // Connect a one-shot session.
-        auto addr = folly::SocketAddress{parsed_url_.getHost(),
-                                         parsed_url_.getPort(), true};
-        auto* session = co_await proxygen::coro::HTTPCoroConnector::connect(
-          evb_, addr, get_connection_timeout(), conn_params_);
-        auto holder = session->acquireKeepAlive();
-        SCOPE_EXIT {
-          if (auto* s = holder.get()) {
-            s->initiateDrain();
-          }
-        };
-        auto reservation = session->reserveRequest();
-        if (reservation.hasException()) {
-          co_yield folly::coro::co_error(std::move(reservation.exception()));
-        }
-        // Build the request message.
-        auto msg = std::make_unique<proxygen::HTTPMessage>();
-        msg->setURL(parsed_url_.makeRelativeURL());
-        msg->setMethod(get_method());
-        msg->setSecure(parsed_url_.isSecure());
-        for (auto const& [name, value] : headers_) {
-          msg->getHeaders().add(name, value);
-        }
-        if (not msg->getHeaders().exists(proxygen::HTTP_HEADER_HOST)) {
-          msg->getHeaders().add(proxygen::HTTP_HEADER_HOST,
-                                parsed_url_.getHostAndPortOmitDefault());
-        }
+        // Create a one-shot request handle, routing through the configured
+        // HTTP proxy when one applies.
+        auto proxy_request = co_await make_http_proxy_request(
+          *evb_, parsed_url_.getHost(), parsed_url_.getPort(), conn_params_,
+          proxygen::coro::HTTPCoroConnector::defaultSessionParams(),
+          get_connection_timeout(), parsed_url_.isSecure());
+        auto msg = make_request_message(proxy_request.target_form(),
+                                        proxy_request.proxy());
         // Create the streaming source. If the request fails before the
         // source starts reading body events, the receiver can still be reused
         // for a retry.
         auto source = StreamingHTTPSource{std::move(msg), std::move(*body_rx)};
         body_rx.reset();
         auto resp = proxygen::coro::HTTPClient::Response{};
-        auto request_result
-          = co_await async_try(proxygen::coro::HTTPClient::request(
-            session, std::move(*reservation), &source,
-            proxygen::coro::HTTPClient::makeDefaultReader(resp),
-            get_timeout()));
+        auto request_result = co_await async_try(proxy_request.send(
+          &source, proxygen::coro::HTTPClient::makeDefaultReader(resp),
+          get_timeout()));
         if (request_result.is_err()) {
           if (auto retry_rx = source.take_receiver_for_retry()) {
             body_rx = std::move(retry_rx);
@@ -597,41 +594,20 @@ private:
       folly::Executor::KeepAlive<>{evb_},
       folly::coro::co_invoke(
         [this, body = std::move(body)]() mutable -> Task<http::Response> {
-          auto addr = folly::SocketAddress{parsed_url_.getHost(),
-                                           parsed_url_.getPort(), true};
-          auto* session = co_await proxygen::coro::HTTPCoroConnector::connect(
-            evb_, addr, get_connection_timeout(), conn_params_);
-          auto holder = session->acquireKeepAlive();
-          SCOPE_EXIT {
-            if (auto* s = holder.get()) {
-              s->initiateDrain();
-            }
-          };
-          auto reservation = session->reserveRequest();
-          if (reservation.hasException()) {
-            co_yield folly::coro::co_error(std::move(reservation.exception()));
-          }
-          // Build the request message. HTTPFixedSource sets Content-Length
-          // automatically from the provided body.
-          auto msg = std::make_unique<proxygen::HTTPMessage>();
-          msg->setURL(parsed_url_.makeRelativeURL());
-          msg->setMethod(get_method());
-          msg->setSecure(parsed_url_.isSecure());
-          for (auto const& [name, value] : headers_) {
-            msg->getHeaders().add(name, value);
-          }
-          if (not msg->getHeaders().exists(proxygen::HTTP_HEADER_HOST)) {
-            msg->getHeaders().add(proxygen::HTTP_HEADER_HOST,
-                                  parsed_url_.getHostAndPortOmitDefault());
-          }
+          // Routes through the configured HTTP proxy when applicable.
+          auto proxy_request = co_await make_http_proxy_request(
+            *evb_, parsed_url_.getHost(), parsed_url_.getPort(), conn_params_,
+            proxygen::coro::HTTPCoroConnector::defaultSessionParams(),
+            get_connection_timeout(), parsed_url_.isSecure());
+          // HTTPFixedSource sets Content-Length automatically from the body.
+          auto msg = make_request_message(proxy_request.target_form(),
+                                          proxy_request.proxy());
           auto source
             = proxygen::coro::HTTPFixedSource{std::move(msg), std::move(body)};
           auto resp = proxygen::coro::HTTPClient::Response{};
-          auto request_result
-            = co_await async_try(proxygen::coro::HTTPClient::request(
-              session, std::move(*reservation), &source,
-              proxygen::coro::HTTPClient::makeDefaultReader(resp),
-              get_timeout()));
+          auto request_result = co_await async_try(proxy_request.send(
+            &source, proxygen::coro::HTTPClient::makeDefaultReader(resp),
+            get_timeout()));
           if (request_result.is_err()) {
             co_yield folly::coro::co_error(
               std::move(request_result).unwrap_err());

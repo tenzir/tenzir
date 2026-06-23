@@ -25,9 +25,9 @@
     hash = "sha256-thFivF7mx6MQnFZkPD6M8Lnm5TmYwwjLS9XC4WfykGg=";
   };
   proxygen = {
-    owner = "facebook";
+    owner = "tenzir";
     repo = "proxygen";
-    rev = "8d14f87d173ef66a30d35a8062b16b3c619bc346";
-    hash = "sha256-1UBh5AL53QJQTzSXfF1cWJjT8bYv4rTb2liqtoxctKo=";
+    rev = "511d6483ffbae72b56f44ed048c27a020275029b";
+    hash = "sha256-eDqPD2uRHsLACM89nflkzAEPyzRyohib4VjMmKrT6M4=";
   };
 }

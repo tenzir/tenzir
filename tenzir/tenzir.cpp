@@ -20,6 +20,7 @@
 #include "tenzir/module.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/proxy_settings.hpp"
 #include "tenzir/scope_linked.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/signal_reflector.hpp"
@@ -112,9 +113,6 @@ auto main(int argc, char** argv) -> int try {
   using namespace tenzir;
   // Ensure the signal handler object file is linked (needed for static builds).
   signal_handlers_anchor();
-#if TENZIR_HAS_AWS_SDK
-  auto aws_sdk = aws_sdk_guard{};
-#endif
   arrow::util::InitializeUTF8();
 #if ARROW_VERSION_MAJOR >= 21
   if (auto status = arrow::compute::Initialize(); not status.ok()) {
@@ -139,6 +137,15 @@ auto main(int argc, char** argv) -> int try {
     fmt::print(stderr, "failed to parse configuration: {}\n", err);
     return EXIT_FAILURE;
   }
+  // Resolve proxy configuration before AWS SDK or plugins initialize. S3 and
+  // other cloud SDKs read proxy environment variables during initialization.
+  if (auto err = initialize_proxy_settings(cfg.content)) {
+    fmt::print(stderr, "failed to initialize proxy settings: {}\n", err);
+    return EXIT_FAILURE;
+  }
+#if TENZIR_HAS_AWS_SDK
+  auto aws_sdk = aws_sdk_guard{};
+#endif
   auto loaded_plugin_paths = plugins::load({TENZIR_BUNDLED_PLUGINS}, cfg);
   if (not loaded_plugin_paths) {
     fmt::print(stderr, "{}\n", loaded_plugin_paths.error());

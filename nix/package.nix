@@ -43,6 +43,7 @@ rec {
     ../test/tests/operators/dns_lookup
 
     # from_http TLS CA lookup failures
+    ../test/tests/operators/from_http/proxy_connect_basic_auth.py
     ../test/tests/operators/from_http/tls_min_version_supported.tql
     ../test/tests/operators/from_http/tls_skip_peer_verification.tql
     ../test/tests/operators/from_http/url_without_scheme.tql

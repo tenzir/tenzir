@@ -20,6 +20,7 @@
 #include <tenzir/format_utils.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
+#include <tenzir/http_proxy_connect.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
@@ -38,7 +39,6 @@
 
 #include <boost/url/parse.hpp>
 #include <boost/url/url.hpp>
-#include <folly/ScopeGuard.h>
 #include <folly/String.h>
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/Retry.h>
@@ -114,13 +114,18 @@ using MessageQueue = folly::coro::BoundedQueue<Message>;
 // evaluated in unspecified order.
 auto build_request_source(proxygen::URL const& url, proxygen::HTTPMethod method,
                           const std::vector<http::Header>& headers,
-                          std::unique_ptr<folly::IOBuf> body_buf)
+                          std::unique_ptr<folly::IOBuf> body_buf,
+                          HttpRequestTargetForm target_form,
+                          Option<proxy_url> const& proxy)
   -> proxygen::coro::HTTPSourceHolder {
+  auto request_target = make_proxy_request_target(url, target_form);
   auto* source = proxygen::coro::HTTPFixedSource::makeFixedRequest(
-    url.makeRelativeURL(), method, std::move(body_buf));
+    std::move(request_target), method, std::move(body_buf));
   for (auto const& [k, v] : headers) {
     source->msg_->getHeaders().add(k, v);
   }
+  add_forward_proxy_authorization(source->msg_->getHeaders(), target_form,
+                                  proxy);
   if (not source->msg_->getHeaders().exists(proxygen::HTTP_HEADER_HOST)) {
     source->msg_->getHeaders().add(proxygen::HTTP_HEADER_HOST,
                                    url.getHostAndPortOmitDefault());
@@ -721,26 +726,14 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
         co_await folly::coro::retryWhen(
           [&]() -> Task<void> {
             emitted_messages = false;
-            // Resolve DNS and establish the TCP connection.
-            auto addresses
-              = co_await proxygen::coro::CoroDNSResolver::resolveHost(
-                evb, host, config.connection_timeout);
-            auto server_addr = std::move(addresses.primary);
-            server_addr.setPort(url.getPort());
-            auto* session = co_await proxygen::coro::HTTPCoroConnector::connect(
-              evb, server_addr, config.connection_timeout, conn_params,
-              sess_params);
-            auto holder = session->acquireKeepAlive();
-            SCOPE_EXIT {
-              if (auto* s = holder.get()) {
-                s->initiateDrain();
-              }
-            };
-            auto reservation = session->reserveRequest();
-            if (reservation.hasException()) {
-              co_yield folly::coro::co_error(
-                std::move(reservation.exception()));
-            }
+            // Establish the TCP connection, routing through the
+            // configured HTTP proxy when one applies to this host.
+            // When no proxy is configured the helper resolves DNS and
+            // calls `HTTPCoroConnector::connect` directly, identical
+            // to the original behaviour.
+            auto proxy_request = co_await make_http_proxy_request(
+              *evb, host, url.getPort(), conn_params, sess_params,
+              config.connection_timeout, is_secure);
             // Build a streaming reader that feeds messages into the queue.
             auto reader = proxygen::coro::HTTPSourceReader{};
             Option<retryable_http_response> retryable_response;
@@ -799,10 +792,10 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
                                                   request.body.size());
             }
             auto req_source = build_request_source(
-              url, request.method, request.headers, std::move(body_buf));
-            co_await proxygen::coro::HTTPClient::request(
-              session, std::move(*reservation), std::move(req_source),
-              std::move(reader), config.request_timeout);
+              url, request.method, request.headers, std::move(body_buf),
+              proxy_request.target_form(), proxy_request.proxy());
+            co_await proxy_request.send(
+              std::move(req_source), std::move(reader), config.request_timeout);
             if (retryable_response) {
               throw std::move(*retryable_response);
             }
