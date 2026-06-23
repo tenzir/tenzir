@@ -77,6 +77,18 @@ TEST("sketch cache erase removes an entry and frees budget") {
   CHECK_EQUAL(cache.used(), 0u);
 }
 
+TEST("sketch cache does not cache an entry larger than the budget") {
+  const auto a = uuid::random();
+  const auto one = make_synopsis()->memusage();
+  REQUIRE_GREATER(one, 0u);
+  // A budget below a single entry must keep the cache empty rather than retain
+  // an oversized entry over budget.
+  auto cache = sketch_cache{one - 1};
+  cache.put(a, make_synopsis());
+  CHECK_EQUAL(cache.peek(a), nullptr);
+  CHECK_EQUAL(cache.used(), 0u);
+}
+
 TEST("sketch cache with zero budget never caches") {
   const auto a = uuid::random();
   auto cache = sketch_cache{0};

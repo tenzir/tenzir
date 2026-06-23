@@ -317,12 +317,19 @@ void sketch_cache::put(const uuid& id, partition_synopsis_ptr synopsis) {
   }
   erase(id);
   const auto bytes = synopsis->memusage();
+  // Never cache an entry that alone exceeds the budget; keeping it would
+  // violate the configured memory cap. The partition simply stays a
+  // conservative candidate.
+  if (bytes > budget_) {
+    return;
+  }
   lru_.push_front(id);
   used_ += bytes;
   entries_.emplace(id, entry{std::move(synopsis), bytes, lru_.begin()});
-  // Evict least-recently-used entries until within budget, but always keep at
-  // least the entry we just inserted.
-  while (used_ > budget_ and lru_.size() > 1) {
+  // Evict least-recently-used entries until within budget. The entry we just
+  // inserted fits (checked above) and is most-recently-used, so eviction only
+  // ever removes older entries.
+  while (used_ > budget_) {
     const auto victim = lru_.back();
     erase(victim);
   }
