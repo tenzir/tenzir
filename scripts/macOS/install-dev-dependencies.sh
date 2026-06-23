@@ -23,6 +23,7 @@ brew install --overwrite \
   glog \
   gnu-sed \
   grpc \
+  icu4c \
   libevent \
   libmaxminddb \
   libpcap \

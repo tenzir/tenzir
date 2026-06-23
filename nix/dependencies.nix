@@ -23,6 +23,7 @@
   nlohmann_json,
   crc32c,
   grpc,
+  icu,
   spdlog,
   simdjson,
   robin-map,
@@ -115,6 +116,7 @@ in
     libevent
     snappy
     google-cloud-cpp-tenzir
+    icu
     nlohmann_json
     crc32c
     grpc

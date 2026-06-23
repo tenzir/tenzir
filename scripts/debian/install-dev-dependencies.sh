@@ -34,6 +34,7 @@ apt-get -y --no-install-recommends install \
   libgoogle-glog-dev \
   libgrpc-dev \
   libgrpc++-dev \
+  libicu-dev \
   libmaxminddb-dev \
   libmimalloc-dev \
   libnats-dev \
