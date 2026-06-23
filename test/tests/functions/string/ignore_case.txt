@@ -1,0 +1,18 @@
+{
+  msg: "Connection ERROR on HOST-01",
+  method: "Get",
+  user: "Aljaž",
+  path: "/API/v1/Users",
+  starts_with: true,
+  starts_with_default: false,
+  ends_with: true,
+  equals: true,
+  equals_default: false,
+  equals_utf8: true,
+  replace: "Connection <R> on HOST-01",
+  replace_max: "xxaA",
+  split: [
+    "/",
+    "/v1/Users",
+  ],
+}

@@ -1,0 +1,15 @@
+from {
+  msg: "Connection ERROR on HOST-01",
+  method: "Get",
+  user: "Aljaž",
+  path: "/API/v1/Users",
+}
+starts_with = method.starts_with("get", ignore_case=true)
+starts_with_default = method.starts_with("get")
+ends_with = path.ends_with("USERS", ignore_case=true)
+equals = equals(method, "GET", ignore_case=true)
+equals_default = equals(method, "GET")
+equals_utf8 = equals(user, "ALJAŽ", ignore_case=true)
+replace = msg.replace("error", "<R>", ignore_case=true)
+replace_max = "aAaA".replace("a", "x", max=2, ignore_case=true)
+split = path.split("api", ignore_case=true)

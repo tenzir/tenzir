@@ -7,12 +7,15 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/detail/string.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/to_string.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/array/array_binary.h>
+#include <arrow/array/builder_binary.h>
+#include <arrow/array/builder_nested.h>
 #include <arrow/compute/api.h>
 #include <arrow/util/utf8.h>
 #include <re2/re2.h>
@@ -27,6 +30,22 @@ namespace {
 
 constexpr auto max_string_size
   = static_cast<size_t>(std::numeric_limits<int32_t>::max());
+
+/// Returns a copy of `array` with each value replaced by its full Unicode case
+/// folding, preserving nulls. Used for case-insensitive comparison.
+auto fold_case(const arrow::StringArray& array)
+  -> std::shared_ptr<arrow::StringArray> {
+  auto b = arrow::StringBuilder{tenzir::arrow_memory_pool()};
+  check(b.Reserve(array.length()));
+  for (auto i = int64_t{0}; i < array.length(); ++i) {
+    if (array.IsNull(i)) {
+      check(b.AppendNull());
+      continue;
+    }
+    check(b.Append(detail::utf8_fold_case(array.Value(i))));
+  }
+  return finish(b);
+}
 
 class starts_or_ends_with : public virtual function_plugin {
 public:
@@ -45,13 +64,15 @@ public:
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto arg_expr = ast::expression{};
+    auto ignore_case = false;
     TRY(argument_parser2::function(name())
           .positional("x", subject_expr, "string")
           .positional("prefix", arg_expr, "string")
+          .named_optional("ignore_case", ignore_case)
           .parse(inv, ctx));
     // TODO: This shows the need for some abstraction.
     return function_use::make([subject_expr = std::move(subject_expr),
-                               arg_expr = std::move(arg_expr),
+                               arg_expr = std::move(arg_expr), ignore_case,
                                this](evaluator eval, session ctx) -> series {
       TENZIR_UNUSED(ctx);
       auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
@@ -62,16 +83,26 @@ public:
         auto f = detail::overload{
           [&](const arrow::StringArray& subject,
               const arrow::StringArray& arg) {
-            for (auto i = int64_t{0}; i < subject.length(); ++i) {
-              if (subject.IsNull(i) or arg.IsNull(i)) {
+            auto subject_lc = std::shared_ptr<arrow::StringArray>{};
+            auto arg_lc = std::shared_ptr<arrow::StringArray>{};
+            const auto* s = &subject;
+            const auto* a = &arg;
+            if (ignore_case) {
+              subject_lc = fold_case(subject);
+              arg_lc = fold_case(arg);
+              s = subject_lc.get();
+              a = arg_lc.get();
+            }
+            for (auto i = int64_t{0}; i < s->length(); ++i) {
+              if (s->IsNull(i) or a->IsNull(i)) {
                 check(b.AppendNull());
                 continue;
               }
               auto result = bool{};
               if (starts_with_) {
-                result = subject.Value(i).starts_with(arg.Value(i));
+                result = s->Value(i).starts_with(a->Value(i));
               } else {
-                result = subject.Value(i).ends_with(arg.Value(i));
+                result = s->Value(i).ends_with(a->Value(i));
               }
               check(b.Append(result));
             }
@@ -578,12 +609,16 @@ public:
     auto pattern = located<std::string>{};
     auto replacement = std::string{};
     auto max_replacements = std::optional<located<int64_t>>{};
-    TRY(argument_parser2::function(name())
-          .positional("x", subject_expr, "string")
-          .positional("pattern", pattern)
-          .positional("replacement", replacement)
-          .named("max", max_replacements)
-          .parse(inv, ctx));
+    auto ignore_case = false;
+    auto parser = argument_parser2::function(name());
+    parser.positional("x", subject_expr, "string")
+      .positional("pattern", pattern)
+      .positional("replacement", replacement)
+      .named("max", max_replacements);
+    if (not regex_) {
+      parser.named_optional("ignore_case", ignore_case);
+    }
+    TRY(parser.parse(inv, ctx));
     if (max_replacements) {
       if (max_replacements->inner < 0) {
         diagnostic::error("`max` must be at least 0, but got {}",
@@ -592,47 +627,77 @@ public:
           .emit(ctx);
       }
     }
-    return function_use::make([this, subject_expr = std::move(subject_expr),
-                               pattern = std::move(pattern),
-                               replacement = std::move(replacement),
-                               max_replacements](evaluator eval, session ctx) {
-      auto result_type = string_type{};
-      auto result_arrow_type
-        = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
-      return map_series(eval(subject_expr), [&](series subject) {
-        auto f = detail::overload{
-          [&](const arrow::StringArray& array) {
-            auto max = max_replacements ? max_replacements->inner : -1;
-            auto options = arrow::compute::ReplaceSubstringOptions(
-              pattern.inner, replacement, max);
-            auto result = arrow::compute::CallFunction(
-              regex_ ? "replace_substring_regex" : "replace_substring", {array},
-              &options);
-            if (not result.ok()) {
-              diagnostic::warning("{}",
-                                  result.status().ToStringWithoutContextLines())
-                .severity(result.status().IsInvalid() ? severity::error
-                                                      : severity::warning)
-                .primary(pattern.source)
+    return function_use::make(
+      [this, subject_expr = std::move(subject_expr),
+       pattern = std::move(pattern), replacement = std::move(replacement),
+       max_replacements, ignore_case](evaluator eval, session ctx) {
+        auto result_type = string_type{};
+        auto result_arrow_type
+          = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
+        return map_series(eval(subject_expr), [&](series subject) {
+          auto f = detail::overload{
+            [&](const arrow::StringArray& array) {
+              auto max = max_replacements ? max_replacements->inner : -1;
+              // Arrow's literal `replace_substring` has no case-insensitive
+              // mode, so we match with full Unicode case folding ourselves and
+              // rebuild the result from the original bytes.
+              if (ignore_case and not regex_ and not pattern.inner.empty()) {
+                auto fp = detail::utf8_fold_case(pattern.inner);
+                auto b = arrow::StringBuilder{tenzir::arrow_memory_pool()};
+                check(b.Reserve(array.length()));
+                for (auto i = int64_t{0}; i < array.length(); ++i) {
+                  if (array.IsNull(i)) {
+                    check(b.AppendNull());
+                    continue;
+                  }
+                  auto v = array.Value(i);
+                  auto out = std::string{};
+                  auto pos = size_t{0};
+                  auto count = int64_t{0};
+                  for (auto [s, e] : detail::utf8_fold_case_find(v, fp)) {
+                    if (max >= 0 and count >= max) {
+                      break;
+                    }
+                    out.append(v.substr(pos, s - pos));
+                    out.append(replacement);
+                    pos = e;
+                    ++count;
+                  }
+                  out.append(v.substr(pos));
+                  check(b.Append(out));
+                }
+                return series{result_type, finish(b)};
+              }
+              auto options = arrow::compute::ReplaceSubstringOptions(
+                pattern.inner, replacement, max);
+              auto result = arrow::compute::CallFunction(
+                regex_ ? "replace_substring_regex" : "replace_substring",
+                {array}, &options);
+              if (not result.ok()) {
+                diagnostic::warning(
+                  "{}", result.status().ToStringWithoutContextLines())
+                  .severity(result.status().IsInvalid() ? severity::error
+                                                        : severity::warning)
+                  .primary(pattern.source)
+                  .emit(ctx);
+                return series::null(result_type, subject.length());
+              }
+              return series{result_type, result.MoveValueUnsafe().make_array()};
+            },
+            [&](const arrow::NullArray& array) {
+              return series::null(result_type, array.length());
+            },
+            [&](const auto&) {
+              diagnostic::warning("`{}` expected `string`, but got `{}`",
+                                  name(), subject.type.kind())
+                .primary(subject_expr)
                 .emit(ctx);
               return series::null(result_type, subject.length());
-            }
-            return series{result_type, result.MoveValueUnsafe().make_array()};
-          },
-          [&](const arrow::NullArray& array) {
-            return series::null(result_type, array.length());
-          },
-          [&](const auto&) {
-            diagnostic::warning("`{}` expected `string`, but got `{}`", name(),
-                                subject.type.kind())
-              .primary(subject_expr)
-              .emit(ctx);
-            return series::null(result_type, subject.length());
-          },
-        };
-        return match(*subject.array, f);
+            },
+          };
+          return match(*subject.array, f);
+        });
       });
-    });
   }
 
 private:
@@ -690,12 +755,16 @@ public:
     auto pattern = located<std::string>{};
     auto reverse = std::optional<location>{};
     auto max_splits = std::optional<located<int64_t>>{};
-    TRY(argument_parser2::function(name())
-          .positional("x", subject_expr, "string")
-          .positional("pattern", pattern)
-          .named("max", max_splits)
-          .named("reverse", reverse)
-          .parse(inv, ctx));
+    auto ignore_case = false;
+    auto parser = argument_parser2::function(name());
+    parser.positional("x", subject_expr, "string")
+      .positional("pattern", pattern)
+      .named("max", max_splits)
+      .named("reverse", reverse);
+    if (not regex_) {
+      parser.named_optional("ignore_case", ignore_case);
+    }
+    TRY(parser.parse(inv, ctx));
     if (max_splits) {
       if (max_splits->inner < 0) {
         diagnostic::error("`max` must be at least 0, but got {}",
@@ -706,12 +775,52 @@ public:
     }
     return function_use::make([this, subject_expr = std::move(subject_expr),
                                pattern = std::move(pattern), max_splits,
-                               reverse](evaluator eval, session ctx) {
+                               reverse,
+                               ignore_case](evaluator eval, session ctx) {
       static const auto result_type = type{list_type{string_type{}}};
       static const auto result_arrow_type = result_type.to_arrow_type();
       return map_series(eval(subject_expr), [&](series subject) {
         auto f = detail::overload{
           [&](const arrow::StringArray& array) {
+            // Arrow's literal `split_pattern` has no case-insensitive mode, so
+            // we match the delimiter with full Unicode case folding ourselves
+            // and split the original bytes.
+            if (ignore_case and not regex_ and not pattern.inner.empty()) {
+              auto fp = detail::utf8_fold_case(pattern.inner);
+              auto max = max_splits ? max_splits->inner : -1;
+              auto value_builder = std::make_shared<arrow::StringBuilder>(
+                tenzir::arrow_memory_pool());
+              auto b = arrow::ListBuilder{tenzir::arrow_memory_pool(),
+                                          value_builder};
+              for (auto i = int64_t{0}; i < array.length(); ++i) {
+                if (array.IsNull(i)) {
+                  check(b.AppendNull());
+                  continue;
+                }
+                check(b.Append());
+                auto v = array.Value(i);
+                auto ranges = detail::utf8_fold_case_find(v, fp);
+                // `max` bounds the number of splits; `reverse` keeps the
+                // rightmost ones. The output order stays left to right.
+                auto first = size_t{0};
+                auto last = ranges.size();
+                if (max >= 0 and ranges.size() > static_cast<size_t>(max)) {
+                  if (reverse.has_value()) {
+                    first = ranges.size() - static_cast<size_t>(max);
+                  } else {
+                    last = static_cast<size_t>(max);
+                  }
+                }
+                auto pos = size_t{0};
+                for (auto k = first; k < last; ++k) {
+                  auto [s, e] = ranges[k];
+                  check(value_builder->Append(v.substr(pos, s - pos)));
+                  pos = e;
+                }
+                check(value_builder->Append(v.substr(pos)));
+              }
+              return series{result_type, finish(b)};
+            }
             auto options = arrow::compute::SplitPatternOptions();
             options.pattern = pattern.inner;
             options.max_splits = max_splits ? max_splits->inner : -1;
@@ -851,6 +960,98 @@ public:
   }
 };
 
+class equals : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "equals";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(function_invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto left_expr = ast::expression{};
+    auto right_expr = ast::expression{};
+    auto ignore_case = false;
+    TRY(argument_parser2::function(name())
+          .positional("x", left_expr, "string")
+          .positional("y", right_expr, "string")
+          .named_optional("ignore_case", ignore_case)
+          .parse(inv, ctx));
+    return function_use::make(
+      [left_expr = std::move(left_expr), right_expr = std::move(right_expr),
+       ignore_case](evaluator eval, session ctx) -> series {
+        auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+        check(b.Reserve(eval.length()));
+        auto warned = false;
+        for (auto [left, right] :
+             split_multi_series(eval(left_expr), eval(right_expr))) {
+          TENZIR_ASSERT(left.length() == right.length());
+          // Three-valued equality consistent with the `==` operator: two nulls
+          // compare equal, a null and a non-null compare unequal.
+          auto append_null_aware = [&](const arrow::Array& l,
+                                       const arrow::Array& r, auto&& equal_at) {
+            for (auto i = int64_t{0}; i < l.length(); ++i) {
+              auto ln = l.IsNull(i);
+              auto rn = r.IsNull(i);
+              if (ln or rn) {
+                check(b.Append(ln and rn));
+                continue;
+              }
+              check(b.Append(equal_at(i)));
+            }
+          };
+          auto f = detail::overload{
+            [&](const arrow::StringArray& l, const arrow::StringArray& r) {
+              auto l_lc = std::shared_ptr<arrow::StringArray>{};
+              auto r_lc = std::shared_ptr<arrow::StringArray>{};
+              const auto* lp = &l;
+              const auto* rp = &r;
+              if (ignore_case) {
+                l_lc = fold_case(l);
+                r_lc = fold_case(r);
+                lp = l_lc.get();
+                rp = r_lc.get();
+              }
+              append_null_aware(l, r, [&](int64_t i) {
+                return lp->Value(i) == rp->Value(i);
+              });
+            },
+            [&](const arrow::NullArray&, const arrow::NullArray&) {
+              check(b.AppendValues(left.length(), true));
+            },
+            [&](const arrow::StringArray& l, const arrow::NullArray&) {
+              for (auto i = int64_t{0}; i < l.length(); ++i) {
+                check(b.Append(l.IsNull(i)));
+              }
+            },
+            [&](const arrow::NullArray&, const arrow::StringArray& r) {
+              for (auto i = int64_t{0}; i < r.length(); ++i) {
+                check(b.Append(r.IsNull(i)));
+              }
+            },
+            [&](const auto&, const auto&) {
+              if (not warned) {
+                warned = true;
+                diagnostic::warning("`equals` expected `string`, but got `{}` "
+                                    "and `{}`",
+                                    left.type.kind(), right.type.kind())
+                  .primary(left_expr)
+                  .primary(right_expr)
+                  .emit(ctx);
+              }
+              check(b.AppendNulls(left.length()));
+            },
+          };
+          match(std::tie(*left.array, *right.array), f);
+        }
+        return series{bool_type{}, finish(b)};
+      });
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::string
@@ -902,3 +1103,4 @@ TENZIR_REGISTER_PLUGIN(string_fn<true>);
 TENZIR_REGISTER_PLUGIN(split_fn{true});
 TENZIR_REGISTER_PLUGIN(split_fn{false});
 TENZIR_REGISTER_PLUGIN(join);
+TENZIR_REGISTER_PLUGIN(equals);

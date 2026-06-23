@@ -1,0 +1,7 @@
+from {rec: {host: "HOST-A"}, tags: ["Foo", "BAR"], scalar: "Hello World"}
+contains_record = contains(rec, "host-a", ignore_case=true)
+contains_list = contains(tags, "bar", ignore_case=true)
+contains_substring = contains(scalar, "WORLD", ignore_case=true)
+contains_exact = contains(tags, "ba", exact=true, ignore_case=true)
+contains_exact_full = contains(tags, "bar", exact=true, ignore_case=true)
+contains_default = contains(scalar, "WORLD")

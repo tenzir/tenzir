@@ -1,0 +1,10 @@
+{
+  equals_ci: true,
+  contains_ci: true,
+  starts_with_ci: true,
+  replace_ci: "Fußweg",
+  split_ci: [
+    "Fuß",
+    "",
+  ],
+}
