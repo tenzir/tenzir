@@ -1,0 +1,3 @@
+id: fwdqpkg
+name: Self-Qualified Forward Package
+description: A package whose lets.tql forward-references a sibling via its own module name.

@@ -1,0 +1,2 @@
+let $a = fwdqpkg::$b
+let $b = 1

@@ -1587,28 +1587,32 @@ public:
   }
 
   void visit(ast::expression& x) {
-    auto* var = try_as<ast::dollar_var>(x);
-    if (not var) {
-      enter(x);
+    if (auto* var = try_as<ast::dollar_var>(x)) {
+      auto name = std::string{var->name_without_dollar()};
+      if (declared_.contains(name)) {
+        // Rewrite the bare sibling reference to its qualified self-reference.
+        auto path = std::vector<ast::identifier>{
+          ast::identifier{module_name_, var->id.location}};
+        x = ast::pkg_dollar_var{std::move(path), var->id};
+        return;
+      }
+      reject_undeclared(name, var->get_location());
       return;
     }
-    auto name = std::string{var->name_without_dollar()};
-    if (declared_.contains(name)) {
-      auto path = std::vector<ast::identifier>{
-        ast::identifier{module_name_, var->id.location}};
-      x = ast::pkg_dollar_var{std::move(path), var->id};
+    if (auto* var = try_as<ast::pkg_dollar_var>(x);
+        var and refers_to_self(*var)) {
+      // A reference spelled with this package's own module name (e.g.
+      // `pkg::$a`) is a sibling reference in disguise, so the same ordering
+      // rules apply; otherwise the qualified spelling could bypass the
+      // forward-reference check. It is already in its final form, so we only
+      // validate it instead of rewriting.
+      auto name = std::string{var->name_without_dollar()};
+      if (not declared_.contains(name)) {
+        reject_undeclared(name, var->get_location());
+      }
       return;
     }
-    if (names_.contains(name)) {
-      diagnostic::error("`${}` is referenced before it is defined", name)
-        .primary(var->get_location())
-        .emit(dh_);
-    } else {
-      diagnostic::error("unknown variable `${}`", name)
-        .primary(var->get_location())
-        .emit(dh_);
-    }
-    failed = true;
+    enter(x);
   }
 
   template <class T>
@@ -1619,6 +1623,23 @@ public:
   bool failed = false;
 
 private:
+  /// Whether `var` refers to a binding in this package's own namespace.
+  auto refers_to_self(const ast::pkg_dollar_var& var) const -> bool {
+    return var.path.size() == 1 and var.path.front().name == module_name_;
+  }
+
+  /// Emits a forward-reference or unknown-variable error for `$name`.
+  void reject_undeclared(const std::string& name, tenzir::location loc) {
+    if (names_.contains(name)) {
+      diagnostic::error("`${}` is referenced before it is defined", name)
+        .primary(loc)
+        .emit(dh_);
+    } else {
+      diagnostic::error("unknown variable `${}`", name).primary(loc).emit(dh_);
+    }
+    failed = true;
+  }
+
   std::string module_name_;
   const std::unordered_set<std::string>& declared_;
   const std::unordered_map<std::string, tenzir::location>& names_;
