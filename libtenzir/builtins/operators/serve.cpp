@@ -1250,14 +1250,13 @@ struct serve_handler_state {
         .request(serve_manager, caf::infinite)
         .then(
           [self = self, serve_manager = serve_manager, fan, id = r.serve_id,
-           result_map, triggered,
-           all_ids](serve_response& result) mutable {
+           result_map, triggered, all_ids](serve_response& result) mutable {
             const auto has_events = rows(std::get<1>(result)) > 0;
             const auto state = std::get<0>(result).empty()
                                  ? serve_state::completed
                                  : serve_state::running;
-            const auto [_, success] = result_map->try_emplace(
-              id, std::move(result), state);
+            const auto [_, success]
+              = result_map->try_emplace(id, std::move(result), state);
             TENZIR_ASSERT(success);
             // As soon as any serve has data, stop waiting on the others: flush
             // their currently-buffered events instead of long-polling to the
