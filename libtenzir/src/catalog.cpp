@@ -9,6 +9,7 @@
 #include "tenzir/catalog.hpp"
 
 #include "tenzir/actors.hpp"
+#include "tenzir/chunk.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/overload.hpp"
@@ -19,6 +20,7 @@
 #include "tenzir/duration_synopsis.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/expression.hpp"
+#include "tenzir/flatbuffer.hpp"
 #include "tenzir/instrumentation.hpp"
 #include "tenzir/int64_synopsis.hpp"
 #include "tenzir/io/read.hpp"
@@ -39,6 +41,7 @@
 #include <caf/detail/set_thread_name.hpp>
 #include <caf/expected.hpp>
 
+#include <filesystem>
 #include <ranges>
 #include <set>
 #include <string_view>
@@ -62,7 +65,7 @@ auto collect_synopses(const catalog_state& state)
   return result;
 }
 
-auto collect_synopses(const catalog_state& state, const expression& filter)
+auto collect_synopses(catalog_state& state, const expression& filter)
   -> caf::expected<std::vector<partition_synopsis_pair>> {
   auto result = std::vector<partition_synopsis_pair>{};
   const auto candidates = state.lookup(filter);
@@ -300,6 +303,97 @@ auto catalog_lookup_result::empty() const noexcept -> bool {
   return candidate_infos.empty();
 }
 
+auto sketch_cache::peek(const uuid& id) const -> partition_synopsis_ptr {
+  const auto it = entries_.find(id);
+  if (it == entries_.end()) {
+    return nullptr;
+  }
+  return it->second.synopsis;
+}
+
+void sketch_cache::put(const uuid& id, partition_synopsis_ptr synopsis) {
+  if (budget_ == 0 or not synopsis) {
+    return;
+  }
+  erase(id);
+  const auto bytes = synopsis->memusage();
+  lru_.push_front(id);
+  used_ += bytes;
+  entries_.emplace(id, entry{std::move(synopsis), bytes, lru_.begin()});
+  // Evict least-recently-used entries until within budget, but always keep at
+  // least the entry we just inserted.
+  while (used_ > budget_ and lru_.size() > 1) {
+    const auto victim = lru_.back();
+    erase(victim);
+  }
+}
+
+void sketch_cache::erase(const uuid& id) {
+  const auto it = entries_.find(id);
+  if (it == entries_.end()) {
+    return;
+  }
+  used_ -= it->second.bytes;
+  lru_.erase(it->second.pos);
+  entries_.erase(it);
+}
+
+auto catalog_state::ensure_sketches_loaded(const uuid& id, const type& schema)
+  -> size_t {
+  if (sketches.budget() == 0) {
+    return 0;
+  }
+  if (sketches.peek(id)) {
+    return 0; // already loaded
+  }
+  const auto type_it = synopses_per_type.find(schema);
+  if (type_it == synopses_per_type.end()) {
+    return 0;
+  }
+  const auto syn_it = type_it->second.find(id);
+  if (syn_it == type_it->second.end()) {
+    return 0;
+  }
+  const auto& resident = syn_it->second;
+  // The sketches live in the partition's `.mdx`; we can only mmap a local file,
+  // so remote stores (e.g. s3://) fall back to the conservative behavior.
+  constexpr auto prefix = std::string_view{"file://"};
+  const auto& url = resident->sketches_file.url;
+  if (not url.starts_with(prefix)) {
+    return 0;
+  }
+  const auto path = std::filesystem::path{url.substr(prefix.size())};
+  auto chunk = chunk::mmap(path);
+  if (not chunk) {
+    TENZIR_DEBUG("{} could not mmap sketches for partition {} at {}: {}", *self,
+                 id, path, chunk.error());
+    return 0;
+  }
+  auto synopsis_fb
+    = tenzir::flatbuffer<fbs::PartitionSynopsis>::make(std::move(*chunk));
+  if (not synopsis_fb) {
+    TENZIR_DEBUG("{} could not read sketches for partition {}: {}", *self, id,
+                 synopsis_fb.error());
+    return 0;
+  }
+  if ((*synopsis_fb)->partition_synopsis_type()
+      != fbs::partition_synopsis::PartitionSynopsis::legacy) {
+    return 0;
+  }
+  auto loaded = caf::make_copy_on_write<partition_synopsis>();
+  // Load fully, i.e. including the deferred Bloom-filter sketches.
+  if (auto error = unpack(*(*synopsis_fb)->partition_synopsis_as_legacy(),
+                          loaded.unshared(), /*lazy_sketches=*/false);
+      error.valid()) {
+    TENZIR_DEBUG("{} could not unpack sketches for partition {}: {}", *self, id,
+                 error);
+    return 0;
+  }
+  const auto bytes = loaded->memusage();
+  sketches.put(id, std::move(loaded));
+  return bytes;
+}
+
 auto catalog_state::initialize(std::vector<partition_synopsis_pair> partitions)
   -> caf::result<atom::ok> {
   auto unsupported_partitions = std::vector<uuid>{};
@@ -346,11 +440,14 @@ auto catalog_state::merge(std::vector<partition_synopsis_pair> partitions)
   for (auto& [id, synopsis] : partitions) {
     auto& entry = synopses_per_type[synopsis->schema][id];
     entry = std::move(synopsis);
+    // Drop any stale loaded sketches for a replaced partition.
+    sketches.erase(id);
   }
   return atom::ok_v;
 }
 
 void catalog_state::erase(const uuid& partition) {
+  sketches.erase(partition);
   for (auto& [type, uuid_synopsis_map] : synopses_per_type) {
     const auto num_erased = uuid_synopsis_map.erase(partition);
     if (num_erased > 0) {
@@ -362,12 +459,9 @@ void catalog_state::erase(const uuid& partition) {
   }
 }
 
-auto catalog_state::lookup(expression expr) const
+auto catalog_state::lookup(expression expr)
   -> caf::expected<catalog_lookup_result> {
   auto start = stopwatch::now();
-  auto total_candidates = catalog_lookup_result{};
-  auto num_candidate_partitions = size_t{0};
-  auto num_candidate_events = size_t{0};
   if (expr == caf::none) {
     expr = trivially_true_expression();
   }
@@ -378,6 +472,9 @@ auto catalog_state::lookup(expression expr) const
                                        "epxression {}: {}",
                                        *self, expr, normalized.error()));
   }
+  // Resolve the expression once per schema; reused across both phases below.
+  auto resolved_per_type = std::vector<std::pair<type, expression>>{};
+  resolved_per_type.reserve(synopses_per_type.size());
   for (const auto& [type, _] : synopses_per_type) {
     auto resolved = resolve(taxonomies, *normalized, type);
     if (not resolved) {
@@ -386,26 +483,66 @@ auto catalog_state::lookup(expression expr) const
                                          "{}",
                                          *self, expr, resolved.error()));
     }
-    auto candidates_per_type = lookup_impl(*resolved, type);
-    if (candidates_per_type.partition_infos.empty()) {
-      continue;
+    resolved_per_type.emplace_back(type, std::move(*resolved));
+  }
+  auto evaluate_all = [&] {
+    auto result = catalog_lookup_result{};
+    for (const auto& [type, resolved] : resolved_per_type) {
+      auto candidates_per_type = lookup_impl(resolved, type);
+      if (candidates_per_type.partition_infos.empty()) {
+        continue;
+      }
+      result.candidate_infos[type] = std::move(candidates_per_type);
     }
-    // Sort partitions by their max import time, returning the most recent
-    // partitions first.
-    std::sort(candidates_per_type.partition_infos.begin(),
-              candidates_per_type.partition_infos.end(),
-              [&](const partition_info& lhs, const partition_info& rhs) {
+    return result;
+  };
+  // Phase 1: prune using the resident synopses. Deferred Bloom-filter sketches
+  // are treated conservatively (their partitions are kept as candidates); the
+  // flag records whether loading them could prune further.
+  encountered_deferred_sketch = false;
+  auto total_candidates = evaluate_all();
+  // Phase 2: if a predicate hit a deferred Bloom filter, load the sketches of
+  // the surviving candidates (bounded by the cache budget) and re-evaluate so
+  // they can prune. Loading is naturally restricted to the partitions that
+  // survived the cheap (time/min-max) pruning of phase 1.
+  if (encountered_deferred_sketch and sketches.budget() > 0) {
+    auto loaded_bytes = size_t{0};
+    auto loaded_any = false;
+    for (const auto& [type, candidates] : total_candidates.candidate_infos) {
+      for (const auto& info : candidates.partition_infos) {
+        // Keep the current query's working set within budget rather than
+        // evicting sketches we just loaded for this same query.
+        if (loaded_bytes >= sketches.budget()) {
+          break;
+        }
+        const auto bytes = ensure_sketches_loaded(info.uuid, type);
+        loaded_bytes += bytes;
+        loaded_any = loaded_any or bytes > 0;
+      }
+      if (loaded_bytes >= sketches.budget()) {
+        break;
+      }
+    }
+    if (loaded_any) {
+      total_candidates = evaluate_all();
+    }
+  }
+  // Sort each schema's partitions by recency and gather statistics.
+  auto num_candidate_partitions = size_t{0};
+  auto num_candidate_events = size_t{0};
+  for (auto& [type, candidates] : total_candidates.candidate_infos) {
+    std::sort(candidates.partition_infos.begin(),
+              candidates.partition_infos.end(),
+              [](const partition_info& lhs, const partition_info& rhs) {
                 return lhs.max_import_time > rhs.max_import_time;
               });
-    num_candidate_partitions += candidates_per_type.partition_infos.size();
+    num_candidate_partitions += candidates.partition_infos.size();
     num_candidate_events
-      += std::transform_reduce(candidates_per_type.partition_infos.begin(),
-                               candidates_per_type.partition_infos.end(),
-                               size_t{0}, std::plus<>{},
-                               [](const auto& partition) {
+      += std::transform_reduce(candidates.partition_infos.begin(),
+                               candidates.partition_infos.end(), size_t{0},
+                               std::plus<>{}, [](const auto& partition) {
                                  return partition.events;
                                });
-    total_candidates.candidate_infos[type] = std::move(candidates_per_type);
   }
   auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
     stopwatch::now() - start);
@@ -499,7 +636,12 @@ auto catalog_state::lookup_impl(const expression& expr,
         // singular type all synopses loops -> relevant anymore? Use type as
         // synopses key
         for (const auto& [part_id, part_syn] : partition_synopses) {
-          for (const auto& [field, syn] : part_syn->field_synopses_) {
+          // Prefer an on-demand-loaded synopsis (with Bloom-filter sketches)
+          // when one is cached; otherwise use the resident synopsis, whose
+          // deferred sketches are null.
+          const auto loaded = sketches.peek(part_id);
+          const auto& effective = loaded ? loaded : part_syn;
+          for (const auto& [field, syn] : effective->field_synopses_) {
             if (match(field)) {
               // We need to prune the type's metadata here by converting it to
               // a concrete type and back, because the type synopses are
@@ -515,24 +657,35 @@ auto catalog_state::lookup_impl(const expression& expr,
                 if (not opt or *opt) {
                   TENZIR_TRACE("{} selects {} at predicate {}",
                                detail::pretty_type_name(this), part_id, x);
-                  result.partition_infos.emplace_back(part_id, *part_syn);
+                  result.partition_infos.emplace_back(part_id, *effective);
                   break;
                 }
                 // The field has no dedicated synopsis. Check if there is one
                 // for the type in general.
-              } else if (auto it = part_syn->type_synopses_.find(cleaned_type);
-                         it != part_syn->type_synopses_.end() and it->second) {
+              } else if (auto it = effective->type_synopses_.find(cleaned_type);
+                         it != effective->type_synopses_.end() and it->second) {
                 auto opt = it->second->lookup(x.op, make_view(rhs));
                 if (not opt or *opt) {
                   TENZIR_TRACE("{} selects {} at predicate {}",
                                detail::pretty_type_name(this), part_id, x);
-                  result.partition_infos.emplace_back(part_id, *part_syn);
+                  result.partition_infos.emplace_back(part_id, *effective);
                   break;
                 }
               } else {
                 // The catalog couldn't rule out this partition, so we have
-                // to include it in the result set.
-                result.partition_infos.emplace_back(part_id, *part_syn);
+                // to include it in the result set. If the missing synopsis is
+                // a deferred Bloom filter (a string or IP field that hasn't
+                // been loaded), record that loading it could prune further.
+                if (not loaded) {
+                  const auto is_bloom_filter = tenzir::match(
+                    field.type(), []<concrete_type T>(const T&) {
+                      return detail::is_any_v<T, string_type, ip_type>;
+                    });
+                  if (is_bloom_filter) {
+                    encountered_deferred_sketch = true;
+                  }
+                }
+                result.partition_infos.emplace_back(part_id, *effective);
                 break;
               }
             }
@@ -710,13 +863,16 @@ auto catalog_state::memusage() const -> size_t {
   return result;
 }
 
-auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
-  -> catalog_actor::behavior_type {
+auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
+             size_t sketch_cache_bytes) -> catalog_actor::behavior_type {
   if (self->getf(caf::local_actor::is_detached_flag)) {
     caf::detail::set_thread_name("tnz.catalog");
   }
   self->state().self = self;
   self->state().taxonomies.concepts = modules::concepts();
+  // Initialize the sketch cache before the request cache below, so that any
+  // queries stashed during startup observe a ready cache once unstashed.
+  self->state().sketches = sketch_cache{sketch_cache_bytes};
   self->state().cache.emplace();
   return {
     [self](atom::start, std::vector<partition_synopsis_pair>& partitions)
