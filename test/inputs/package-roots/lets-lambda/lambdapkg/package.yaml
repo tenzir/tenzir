@@ -1,0 +1,3 @@
+id: lambdapkg
+name: Lambda Binding Package
+description: A package whose lets.tql binding is a lambda, not a value.

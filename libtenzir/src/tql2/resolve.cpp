@@ -26,6 +26,61 @@ namespace tenzir {
 
 namespace {
 
+/// Returns whether `expr` is structurally a constant value, i.e. an expression
+/// kind that can const-evaluate to `data`. Non-value nodes — a subpipeline, a
+/// lambda, the `_` placeholder, a spread, an assignment, or a type expression —
+/// have no value semantics; the evaluator merely warns and yields `null` for
+/// them. Compound literals are values only if all their elements are. This is
+/// distinct from determinism: a lambda is deterministic but is not a value.
+auto is_value_expression(const ast::expression& expr) -> bool {
+  return expr.match(
+    [](const ast::pipeline_expr&) {
+      return false;
+    },
+    [](const ast::lambda_expr&) {
+      return false;
+    },
+    [](const ast::underscore&) {
+      return false;
+    },
+    [](const ast::unpack&) {
+      return false;
+    },
+    [](const ast::assignment&) {
+      return false;
+    },
+    [](const ast::type_expr&) {
+      return false;
+    },
+    [](const ast::record& x) {
+      return std::ranges::all_of(x.items, [](const ast::record::item& item) {
+        return match(
+          item,
+          [](const ast::record::field& f) {
+            return is_value_expression(f.expr);
+          },
+          [](const ast::spread& s) {
+            return is_value_expression(s.expr);
+          });
+      });
+    },
+    [](const ast::list& x) {
+      return std::ranges::all_of(x.items, [](const ast::list::item& item) {
+        return match(
+          item,
+          [](const ast::expression& e) {
+            return is_value_expression(e);
+          },
+          [](const ast::spread& s) {
+            return is_value_expression(s.expr);
+          });
+      });
+    },
+    [](const auto&) {
+      return true;
+    });
+}
+
 class entity_resolver : public ast::visitor<entity_resolver> {
 public:
   explicit entity_resolver(const registry& reg, diagnostic_handler& diag)
@@ -217,16 +272,26 @@ public:
     if (result_.is_error()) {
       return;
     }
-    // A package `let` is a compile-time constant; reject bindings that would
-    // evaluate differently each time (e.g. `random()`) or that are not values
-    // at all (e.g. a pipeline expression). We check this before const-eval so
-    // that non-value nodes never reach the evaluator, which would merely warn
-    // and yield `null`. Input references (e.g. `this`) are deterministic and
-    // still reach const-eval below, where they get a precise diagnostic.
+    // A package `let` is a compile-time constant. Reject bindings that would
+    // evaluate differently each time (e.g. `random()`) so that every reference
+    // yields the same value. Input references (e.g. `this`) are deterministic
+    // and reach const-eval below, where they get a precise diagnostic.
     if (not expr.is_deterministic(reg_)) {
       diagnostic::error("package binding `{}` is not a constant", display)
         .primary(expr.get_location())
         .note("package `let` bindings must be deterministic")
+        .emit(diag_);
+      result_ = failure::promise();
+      return;
+    }
+    // Determinism is not enough: also reject expressions that are not values at
+    // all (a lambda, `_`, a spread, an assignment, or a type). They have no
+    // value semantics, so const-eval would merely warn and yield `null`,
+    // silently turning the binding into `null`.
+    if (not is_value_expression(expr)) {
+      diagnostic::error("package binding `{}` is not a constant", display)
+        .primary(expr.get_location())
+        .note("package `let` bindings must be constant values")
         .emit(diag_);
       result_ = failure::promise();
       return;

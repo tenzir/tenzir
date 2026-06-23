@@ -1,0 +1,7 @@
+error: package binding `underscorepkg::$u` is not a constant
+ --> <packages/underscorepkg/lets.tql>:1:10
+  |
+1 | let $u = _
+  |          ^ 
+  |
+  = note: package `let` bindings must be constant values

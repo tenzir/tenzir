@@ -1,0 +1,3 @@
+id: underscorepkg
+name: Underscore Binding Package
+description: A package whose lets.tql binding is the `_` placeholder, not a value.
