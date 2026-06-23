@@ -23,6 +23,12 @@ if (NOT _MAC_DEPENDENCY_PATHS)
       list(INSERT CMAKE_PREFIX_PATH 0 "${HOMEBREW_PREFIX}/opt/openssl")
       # Find libpcap correctly.
       list(INSERT CMAKE_PREFIX_PATH 0 "${HOMEBREW_PREFIX}/opt/libpcap")
+      # Find ICU correctly. Homebrew installs `icu4c` as a keg-only formula,
+      # so CMake will not discover it through the top-level Homebrew prefix.
+      if (EXISTS "${HOMEBREW_PREFIX}/opt/icu4c")
+        list(INSERT CMAKE_PREFIX_PATH 0 "${HOMEBREW_PREFIX}/opt/icu4c")
+        set(ICU_ROOT "${HOMEBREW_PREFIX}/opt/icu4c")
+      endif ()
       # Find libunwind-headers correctly. The headers must be installed
       # separately; the library is available as under the umbrealla framework
       # System.framework. Directly linking against libunwind at its location
