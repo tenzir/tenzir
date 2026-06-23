@@ -449,6 +449,13 @@ auto catalog_state::initialize(std::vector<partition_synopsis_pair> partitions)
 auto catalog_state::merge(std::vector<partition_synopsis_pair> partitions)
   -> caf::result<atom::ok> {
   for (auto& [id, synopsis] : partitions) {
+    // With lazy sketches, drop the Bloom filters of newly flushed or
+    // transformed partitions too; otherwise ongoing ingest would accumulate
+    // them in resident memory and bypass the bounded sketch cache. They are
+    // reloaded on demand from the partition's `.mdx`.
+    if (lazy_sketches and synopsis) {
+      synopsis.unshared().defer_bloom_filters();
+    }
     auto& entry = synopses_per_type[synopsis->schema][id];
     entry = std::move(synopsis);
     // Drop any stale loaded sketches for a replaced partition.
@@ -885,12 +892,14 @@ auto catalog_state::memusage() const -> size_t {
 }
 
 auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
-             size_t sketch_cache_bytes) -> catalog_actor::behavior_type {
+             size_t sketch_cache_bytes, bool lazy_sketches)
+  -> catalog_actor::behavior_type {
   if (self->getf(caf::local_actor::is_detached_flag)) {
     caf::detail::set_thread_name("tnz.catalog");
   }
   self->state().self = self;
   self->state().taxonomies.concepts = modules::concepts();
+  self->state().lazy_sketches = lazy_sketches;
   // Initialize the sketch cache before the request cache below, so that any
   // queries stashed during startup observe a ready cache once unstashed.
   self->state().sketches = sketch_cache{sketch_cache_bytes};

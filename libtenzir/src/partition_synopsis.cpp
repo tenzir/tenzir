@@ -69,6 +69,28 @@ void partition_synopsis::shrink() {
   }
 }
 
+void partition_synopsis::defer_bloom_filters() {
+  const auto is_bloom_filter = []<concrete_type T>(const T&) {
+    return detail::is_any_v<T, string_type, ip_type>;
+  };
+  auto changed = false;
+  for (auto& [field, synopsis] : field_synopses_) {
+    if (synopsis and match(field.type(), is_bloom_filter)) {
+      // Keep the key (the catalog relies on it) but drop the sketch.
+      synopsis = nullptr;
+      changed = true;
+    }
+  }
+  changed |= std::erase_if(type_synopses_,
+                           [&](const auto& entry) {
+                             return match(entry.first, is_bloom_filter);
+                           })
+             > 0;
+  if (changed) {
+    memusage_ = 0; // Invalidate cached size.
+  }
+}
+
 // TODO: Use a more efficient data structure for rule lookup.
 std::optional<double> get_field_fprate(const index_config& config,
                                        const qualified_record_field& field) {

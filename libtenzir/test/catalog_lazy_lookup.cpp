@@ -136,6 +136,29 @@ TEST("catalog loads deferred bloom filters on demand to prune") {
   CHECK_EQUAL(present->size(), 1u);
 }
 
+TEST("catalog defers bloom filters of merged partitions when lazy") {
+  auto f = fixture{};
+  // A freshly flushed/transformed partition arrives with its full Bloom filter.
+  auto full = read_mdx(f.mdx, /*lazy=*/false);
+  REQUIRE_NOT_EQUAL(full->field_synopses_.at(f.msg), nullptr);
+  auto state = catalog_state{};
+  state.lazy_sketches = true;
+  static_cast<void>(state.merge({{f.id, full}}));
+  // The resident synopsis must not retain the Bloom filter, otherwise ongoing
+  // ingest would grow resident memory unbounded.
+  const auto& stored = state.synopses_per_type.at(f.schema).at(f.id);
+  CHECK_EQUAL(stored->field_synopses_.at(f.msg), nullptr);
+}
+
+TEST("catalog keeps bloom filters of merged partitions when not lazy") {
+  auto f = fixture{};
+  auto full = read_mdx(f.mdx, /*lazy=*/false);
+  auto state = catalog_state{}; // lazy_sketches defaults to false
+  static_cast<void>(state.merge({{f.id, full}}));
+  const auto& stored = state.synopses_per_type.at(f.schema).at(f.id);
+  CHECK_NOT_EQUAL(stored->field_synopses_.at(f.msg), nullptr);
+}
+
 TEST("catalog does not load sketches for non-bloom-answerable predicates") {
   auto f = fixture{};
   auto state = catalog_state{};

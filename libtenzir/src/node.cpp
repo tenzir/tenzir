@@ -161,8 +161,10 @@ auto spawn_catalog(node_actor::stateful_pointer<node_state> self,
                    const caf::settings& settings) -> catalog_actor {
   const auto sketch_cache_bytes = get_or(
     settings, "tenzir.index.sketch-cache-bytes", defaults::sketch_cache_bytes);
-  auto catalog
-    = self->spawn<caf::detached>(tenzir::catalog, sketch_cache_bytes);
+  const auto lazy_sketches
+    = get_or(settings, "tenzir.index.lazy-sketches", false);
+  auto catalog = self->spawn<caf::detached>(tenzir::catalog, sketch_cache_bytes,
+                                            lazy_sketches);
   TENZIR_ASSERT(catalog);
   if (auto err = register_component(self, caf::actor_cast<caf::actor>(catalog),
                                     "catalog");

@@ -47,6 +47,13 @@ struct partition_synopsis final : public caf::ref_counted {
   /// @related buffered_synopsis
   void shrink();
 
+  /// Drops the Bloom-filter sketches (string and IP fields), matching what
+  /// `unpack` does with `lazy_sketches`: field-level sketches are kept as null
+  /// entries and type-level Bloom-filter sketches are removed. Min/max, time,
+  /// and bool synopses are retained. Used to keep newly merged synopses out of
+  /// resident memory when lazy sketches are enabled.
+  void defer_bloom_filters();
+
   /// Estimate the memory footprint of this partition synopsis.
   /// @returns A best-effort estimate of the amount of memory used by this
   ///          synopsis.
