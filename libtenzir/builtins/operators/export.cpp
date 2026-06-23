@@ -333,6 +333,14 @@ public:
 
   auto stop(OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
+    // Retro-only exports drain naturally: the bridge emits an empty slice
+    // once all matching partitions have been read, and `process_task()`
+    // turns that sentinel into `done_`. Only live waits need explicit
+    // teardown, otherwise we would silently drop queued slices and
+    // in-flight partition reads on shutdown.
+    if (not args_.live) {
+      co_return;
+    }
     stopping_ = true;
     if (bridge_) {
       caf::anon_send_exit(bridge_, caf::exit_reason::user_shutdown);
