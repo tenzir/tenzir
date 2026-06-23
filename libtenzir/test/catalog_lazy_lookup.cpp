@@ -136,6 +136,19 @@ TEST("catalog loads deferred bloom filters on demand to prune") {
   CHECK_EQUAL(present->size(), 1u);
 }
 
+TEST("catalog does not load sketches for non-bloom-answerable predicates") {
+  auto f = fixture{};
+  auto state = catalog_state{};
+  state.sketches = sketch_cache{size_t{1} << 20};
+  state.synopses_per_type[f.schema][f.id] = f.resident;
+  // A Bloom filter cannot answer `!=`, so loading its sketch could not prune
+  // the query; the partition stays a candidate and nothing is loaded.
+  auto result = state.lookup(unbox(to<expression>("msg != \"hello\"")));
+  REQUIRE(result);
+  CHECK_EQUAL(result->size(), 1u);
+  CHECK_EQUAL(state.sketches.peek(f.id), nullptr);
+}
+
 TEST("catalog without a sketch budget keeps deferred partitions as "
      "candidates") {
   auto f = fixture{};
