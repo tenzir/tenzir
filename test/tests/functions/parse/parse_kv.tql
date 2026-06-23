@@ -7,5 +7,9 @@ from { input: "surname: John, family_name: Smith, date_of_birth: 1995-05-26"},
   { input: "x:1,y:,z:3"},
   { input: "x:1,y:1,2"},
   { input: "x:1,y:1,2,z:3"},
-  { input: r#"x:,y:"""#}
+  { input: r#"x:,y:"""#},
+  { input: "a:1,a:2,b:3"},
+  { input: "a:1,a:2,a:3"},
+  { input: "k:1,k:"},
+  { input: "k:,k:2"}
 output = input.parse_kv(field_split=r"\s*,\s*", value_split=r"\s*:\s*")

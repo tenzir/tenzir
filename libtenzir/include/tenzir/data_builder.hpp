@@ -762,7 +762,7 @@ auto node_object::data(T data, bool overwrite) -> void {
   /// ... Otherwise we should already be alive and marked as a repeat_key list
   TENZIR_ASSERT(is_alive());
   TENZIR_ASSERT(is_repeat_key_list);
-  TENZIR_ASSERT(value_state_ == value_state_type::has_value);
+  TENZIR_ASSERT(value_state_ != value_state_type::null);
   if (settings_.duplicate_keys == duplicate_keys::merge_structural) {
     if (auto* r = try_as<node_record>(data_)) {
       r->field(settings_.top_key_name_for_records)
