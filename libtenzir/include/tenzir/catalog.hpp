@@ -167,6 +167,12 @@ public:
   /// been loaded for pruning. Bounded by `tenzir.index.sketch-cache-bytes`.
   sketch_cache sketches;
 
+  /// Whether Bloom-filter sketches are deferred (see `tenzir.index.lazy-
+  /// sketches`). When set, newly merged synopses also have their Bloom filters
+  /// dropped so that ongoing ingest does not accumulate them in resident
+  /// memory; they are loaded on demand from disk instead.
+  bool lazy_sketches = false;
+
   /// Set by `lookup_impl` when a predicate matched a partition only because a
   /// Bloom-filter sketch was deferred (null) and could be loaded to prune it.
   /// Drives whether `lookup` performs the on-demand load + re-evaluation.
@@ -184,8 +190,11 @@ public:
 /// @param filesystem Used to move/erase on-disk partition files during
 /// @param sketch_cache_bytes Memory budget for on-demand loading of deferred
 /// Bloom-filter sketches; zero disables on-demand loading.
+/// @param lazy_sketches Whether Bloom-filter sketches are deferred; when set,
+/// merged synopses also have their Bloom filters dropped to keep resident
+/// memory bounded during ongoing ingest.
 auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
-             filesystem_actor filesystem, size_t sketch_cache_bytes = 0)
-  -> catalog_actor::behavior_type;
+             filesystem_actor filesystem, size_t sketch_cache_bytes = 0,
+             bool lazy_sketches = false) -> catalog_actor::behavior_type;
 
 } // namespace tenzir
