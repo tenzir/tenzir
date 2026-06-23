@@ -249,6 +249,10 @@ public:
     }
     auto expected = std::move(result).as<caf::expected<table_slice>>();
     if (not expected) {
+      if (stopping_) {
+        done_ = true;
+        co_return;
+      }
       diagnostic::error(expected.error()).note("from export-bridge").emit(ctx);
       done_ = true;
       co_return;
@@ -327,6 +331,17 @@ public:
     return done_ ? OperatorState::done : OperatorState::normal;
   }
 
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    stopping_ = true;
+    if (bridge_) {
+      caf::anon_send_exit(bridge_, caf::exit_reason::user_shutdown);
+    } else {
+      done_ = true;
+    }
+    co_return;
+  }
+
   auto snapshot(Serde& serde) -> void override {
     serde("done", done_);
   }
@@ -347,6 +362,7 @@ private:
   detail::heterogeneous_string_hashset warned_unsupported_prometheus_schemas_;
   MetricsCounter read_events_counter_;
   metric_handler export_metrics_ = {};
+  bool stopping_ = false;
   bool done_ = false;
 };
 
