@@ -158,8 +158,12 @@ auto spawn_filesystem(node_actor::stateful_pointer<node_state> self)
 }
 
 auto spawn_catalog(node_actor::stateful_pointer<node_state> self,
-                   const filesystem_actor& filesystem) -> catalog_actor {
-  auto catalog = self->spawn<caf::detached>(tenzir::catalog, filesystem);
+                   const filesystem_actor& filesystem,
+                   const caf::settings& settings) -> catalog_actor {
+  const auto sketch_cache_bytes = get_or(
+    settings, "tenzir.index.sketch-cache-bytes", defaults::sketch_cache_bytes);
+  auto catalog
+    = self->spawn<caf::detached>(tenzir::catalog, filesystem, sketch_cache_bytes);
   TENZIR_ASSERT(catalog);
   if (auto err = register_component(self, caf::actor_cast<caf::actor>(catalog),
                                     "catalog");
@@ -294,7 +298,7 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
   // Before we laod any component plugins, we first load all the core components.
   const auto& settings = content(self->system().config());
   const auto filesystem = spawn_filesystem(self);
-  const auto catalog = spawn_catalog(self, filesystem);
+  const auto catalog = spawn_catalog(self, filesystem, settings);
   const auto index = spawn_index(self, settings, filesystem, catalog);
   [[maybe_unused]] const auto importer = spawn_importer(self, index);
   [[maybe_unused]] const auto disk_monitor
