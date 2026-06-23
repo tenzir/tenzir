@@ -675,13 +675,23 @@ auto catalog_state::lookup_impl(const expression& expr,
                 // The catalog couldn't rule out this partition, so we have
                 // to include it in the result set. If the missing synopsis is
                 // a deferred Bloom filter (a string or IP field that hasn't
-                // been loaded), record that loading it could prune further.
+                // been loaded), record that loading it could prune further --
+                // but only if a Bloom filter could actually answer this
+                // predicate. Its `lookup` only prunes equality against a
+                // concrete scalar and `in` against a list (see
+                // `bloom_filter_synopsis::lookup`); for anything else (`!=`,
+                // ranges, `!in`, patterns) loading the sketch would be wasted
+                // I/O that cannot prune the current query.
                 if (not loaded) {
+                  const auto bloom_prunable
+                    = (x.op == relational_operator::equal
+                       and not is<caf::none_t>(rhs) and not is<pattern>(rhs))
+                      or (x.op == relational_operator::in and is<list>(rhs));
                   const auto is_bloom_filter = tenzir::match(
                     field.type(), []<concrete_type T>(const T&) {
                       return detail::is_any_v<T, string_type, ip_type>;
                     });
-                  if (is_bloom_filter) {
+                  if (bloom_prunable and is_bloom_filter) {
                     encountered_deferred_sketch = true;
                   }
                 }
