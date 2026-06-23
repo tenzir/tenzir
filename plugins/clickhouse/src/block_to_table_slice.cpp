@@ -632,7 +632,7 @@ auto build_column(normalized_column const& column,
   auto builder = series_builder{column.output_type};
   auto field = builder_ref{builder};
   for_each_present_row(column, field, [&](size_t row) {
-    append_or_null(time_from_unix_days(int64_t{values.At(row)}), warnings,
+    append_or_null(time_from_unix_days(int64_t{values.RawAt(row)}), warnings,
                    field, path, dh,
                    "Date value is out of range after rescaling to nanoseconds");
   });
@@ -647,8 +647,8 @@ auto build_column(normalized_column const& column,
   auto field = builder_ref{builder};
   for_each_present_row(column, field, [&](size_t row) {
     append_or_null(
-      time_from_unix_days(int64_t{values.At(row)}), warnings, field, path, dh,
-      "Date32 value is out of range after rescaling to nanoseconds");
+      time_from_unix_days(int64_t{values.RawAt(row)}), warnings, field, path,
+      dh, "Date32 value is out of range after rescaling to nanoseconds");
   });
   return builder.finish_assert_one_array();
 }
