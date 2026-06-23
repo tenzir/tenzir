@@ -136,6 +136,29 @@ TEST("catalog loads deferred bloom filters on demand to prune") {
   CHECK_EQUAL(present->size(), 1u);
 }
 
+TEST("catalog prunes more partitions than fit in the sketch cache budget") {
+  auto f = fixture{};
+  // Budget large enough for a single loaded synopsis but not for several.
+  const auto one = read_mdx(f.mdx, /*lazy=*/false)->memusage();
+  REQUIRE_GREATER(one, 0u);
+  auto state = catalog_state{};
+  state.sketches = sketch_cache{one + one / 2};
+  // Three partitions of the same schema, all with deferred sketches on disk.
+  for (auto i = 0; i < 3; ++i) {
+    const auto id = uuid::random();
+    auto resident = read_mdx(f.mdx, /*lazy=*/true);
+    resident.unshared().sketches_file
+      = {.url = fmt::format("file://{}", f.mdx.string()), .size = 0};
+    state.synopses_per_type[f.schema][id] = std::move(resident);
+  }
+  // Even though the cache can hold only one sketch at a time, all three are
+  // pruned because phase 2 loads, checks, and evicts incrementally -- pruning
+  // is not limited by the cache budget.
+  auto absent = state.lookup(unbox(to<expression>("msg == \"absent\"")));
+  REQUIRE(absent);
+  CHECK_EQUAL(absent->size(), 0u);
+}
+
 TEST("catalog defers bloom filters of merged partitions when lazy") {
   auto f = fixture{};
   // A freshly flushed/transformed partition arrives with its full Bloom filter.

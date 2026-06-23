@@ -20,12 +20,13 @@ The new `tenzir.index.lazy-sketches` option defers loading Bloom-filter
 sketches at startup and loads them on demand when a query needs them. Only
 string and IP fields use Bloom filters; deferring them drastically lowers
 resident memory and startup cost for nodes with very many partitions. When a
-predicate would benefit from a deferred sketch, the catalog loads it for the
-surviving candidate partitions and caches it, so equality pruning on these
-high-cardinality fields is preserved. The cache is bounded by
-`tenzir.index.sketch-cache-bytes` (default 1 GiB, least-recently-used
-eviction), keeping resident memory capped regardless of the number of
-partitions. Loading reads the partition's local `.mdx`; on remote stores the
+predicate would benefit from a deferred sketch, the catalog loads and checks
+the surviving candidate partitions one at a time, so equality pruning on these
+high-cardinality fields is preserved no matter how many partitions match —
+only a single sketch is resident at a time. Loaded sketches are kept in a
+memory-bounded LRU cache (`tenzir.index.sketch-cache-bytes`, default 1 GiB) to
+speed up later queries; the budget caps that warm set, not how much can be
+pruned. Loading reads the partition's local `.mdx`; on remote stores the
 partition is conservatively treated as a candidate instead (never a false
 negative). Numeric and duration min/max synopses and time synopses are never
 deferred, so range pruning—for example on a timestamp field—is unaffected.
