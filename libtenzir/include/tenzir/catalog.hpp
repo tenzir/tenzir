@@ -133,7 +133,15 @@ public:
   /// @returns A lookup result of candidate partitions categorized by type.
   auto lookup(expression expr) -> caf::expected<catalog_lookup_result>;
 
-  auto lookup_impl(const expression& expr, const type& schema) const
+  /// Evaluates `expr` against the given partition collection of `schema`.
+  /// The collection is a parameter (rather than always the full per-schema map)
+  /// so the same logic can evaluate a single partition during on-demand sketch
+  /// pruning. This is only sound because the evaluation has no cross-partition
+  /// state: evaluating a set equals the union of evaluating each partition
+  /// alone. Keep it that way.
+  auto lookup_impl(const expression& expr, const type& schema,
+                   const detail::flat_map<uuid, partition_synopsis_ptr>&
+                     partition_synopses) const
     -> catalog_lookup_result::candidate_info;
 
   /// Loads the deferred Bloom-filter sketches of the given partition into the
