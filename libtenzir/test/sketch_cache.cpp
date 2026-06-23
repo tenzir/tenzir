@@ -82,11 +82,15 @@ TEST("sketch cache does not cache an entry larger than the budget") {
   const auto one = make_synopsis()->memusage();
   REQUIRE_GREATER(one, 0u);
   // A budget below a single entry must keep the cache empty rather than retain
-  // an oversized entry over budget.
+  // an oversized entry over budget, and must report zero bytes cached so the
+  // caller doesn't charge its query budget for an uncached sketch.
   auto cache = sketch_cache{one - 1};
-  cache.put(a, make_synopsis());
+  CHECK_EQUAL(cache.put(a, make_synopsis()), 0u);
   CHECK_EQUAL(cache.peek(a), nullptr);
   CHECK_EQUAL(cache.used(), 0u);
+  // A fitting entry reports its cached size.
+  auto ok = sketch_cache{one + 1};
+  CHECK_EQUAL(ok.put(a, make_synopsis()), one);
 }
 
 TEST("sketch cache with zero budget never caches") {

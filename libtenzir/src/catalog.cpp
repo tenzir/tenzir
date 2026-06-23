@@ -311,17 +311,19 @@ auto sketch_cache::peek(const uuid& id) const -> partition_synopsis_ptr {
   return it->second.synopsis;
 }
 
-void sketch_cache::put(const uuid& id, partition_synopsis_ptr synopsis) {
+auto sketch_cache::put(const uuid& id, partition_synopsis_ptr synopsis)
+  -> size_t {
   if (budget_ == 0 or not synopsis) {
-    return;
+    return 0;
   }
   erase(id);
   const auto bytes = synopsis->memusage();
   // Never cache an entry that alone exceeds the budget; keeping it would
   // violate the configured memory cap. The partition simply stays a
-  // conservative candidate.
+  // conservative candidate. Returning zero also keeps the caller from
+  // spending its query budget on a sketch that wasn't cached.
   if (bytes > budget_) {
-    return;
+    return 0;
   }
   lru_.push_front(id);
   used_ += bytes;
@@ -333,6 +335,7 @@ void sketch_cache::put(const uuid& id, partition_synopsis_ptr synopsis) {
     const auto victim = lru_.back();
     erase(victim);
   }
+  return bytes;
 }
 
 void sketch_cache::erase(const uuid& id) {
@@ -396,9 +399,10 @@ auto catalog_state::ensure_sketches_loaded(const uuid& id, const type& schema)
                  error);
     return 0;
   }
-  const auto bytes = loaded->memusage();
-  sketches.put(id, std::move(loaded));
-  return bytes;
+  // Return the bytes actually cached: `put` refuses an entry larger than the
+  // whole budget, and the caller must not spend its query budget on a sketch
+  // that wasn't cached (it would stop loading later, smaller candidates).
+  return sketches.put(id, std::move(loaded));
 }
 
 auto catalog_state::initialize(std::vector<partition_synopsis_pair> partitions)
