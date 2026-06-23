@@ -743,6 +743,7 @@ auto node_object::record(bool overwrite) -> node_record* {
     const auto previously_unparsed = value_state_ == value_state_type::unparsed;
     auto previous_value = std::move(data_);
     is_repeat_key_list = false;
+    value_state_ = value_state_type::has_value;
     auto& r = data_.emplace<node_record>(settings_);
     r.reserve(2);
     auto* f = r.field(settings_.top_key_name_for_records);
