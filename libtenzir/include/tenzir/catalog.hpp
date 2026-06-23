@@ -64,6 +64,14 @@ struct catalog_lookup_result {
 /// cache when a query needs them. Entries are owned solely by the cache and
 /// never alias the resident synopses, so eviction is O(1) and cannot disturb
 /// resident state.
+///
+/// This is intentionally separate from `detail::lru_cache`, which bounds the
+/// *number* of items. Here the bound must be on *memory* (`sketch-cache-bytes`)
+/// because synopsis sizes vary by orders of magnitude, so a count bound would
+/// not cap resident memory — the very problem lazy sketches address. The loader
+/// is also fallible (a failed/remote load leaves the partition deferred) and
+/// reports the bytes actually cached, which the generic factory-on-miss
+/// interface does not express.
 class sketch_cache {
 public:
   sketch_cache() = default;
