@@ -75,8 +75,10 @@ public:
   [[nodiscard]] auto peek(const uuid& id) const -> partition_synopsis_ptr;
 
   /// Inserts a loaded synopsis and marks it most-recently-used, evicting
-  /// least-recently-used entries until the total is within budget.
-  void put(const uuid& id, partition_synopsis_ptr synopsis);
+  /// least-recently-used entries until the total is within budget. Returns the
+  /// number of bytes actually cached, which is zero if the entry alone exceeds
+  /// the budget (it is then not cached at all).
+  auto put(const uuid& id, partition_synopsis_ptr synopsis) -> size_t;
 
   /// Removes `id` from the cache if present (used on erase/merge/replace).
   void erase(const uuid& id);
