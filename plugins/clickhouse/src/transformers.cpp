@@ -13,6 +13,7 @@
 #include "tenzir/view3.hpp"
 
 #include <clickhouse/columns/array.h>
+#include <clickhouse/columns/bool.h>
 #include <clickhouse/columns/date.h>
 #include <clickhouse/columns/ip6.h>
 #include <clickhouse/columns/nullable.h>
@@ -139,12 +140,13 @@ auto transformer_record::create_null_column(size_t n) const
     return nullptr;
   }
   auto columns = std::vector<ColumnRef>(transformations.size());
-  for (const auto& [_, t] : transformations) {
+  for (const auto& [i, kvp] : detail::enumerate(transformations)) {
+    const auto& [_, t] = kvp;
     auto c = t->create_null_column(n);
     if (not c) {
       return nullptr;
     }
-    columns.push_back(std::move(c));
+    columns[i] = std::move(c);
   }
   return std::make_shared<ColumnTuple>(std::move(columns));
 }
@@ -205,6 +207,19 @@ auto transformer_record::create_column(
       return nullptr;
     }
   }
+  for (const auto& [i, kvp] : detail::enumerate(transformations)) {
+    const auto& [k, t] = kvp;
+    if (found_column[i]) {
+      continue;
+    }
+    path.push_back(k);
+    auto this_column = t->create_null_column(array.length() - dropcount);
+    path.pop_back();
+    if (not this_column) {
+      return nullptr;
+    }
+    columns[i] = std::move(this_column);
+  }
   return std::make_shared<ColumnTuple>(std::move(columns));
 }
 
@@ -221,20 +236,45 @@ auto remove_non_significant_whitespace(std::string_view str) -> std::string {
   std::string ret;
   ret.reserve(str.size());
   auto can_skip = false;
+  auto quote = char{};
   constexpr static auto syntax_characters = "(),"sv;
   for (size_t i = 0; i < str.size(); ++i) {
-    const auto is_space = std::isspace(str[i]);
-    if (can_skip and std::isspace(str[i])) {
+    auto c = str[i];
+    if (quote != '\0') {
+      ret += c;
+      can_skip = false;
+      if (c == '\\' and i + 1 < str.size()) {
+        ret += str[++i];
+        continue;
+      }
+      if (c == quote) {
+        if (i + 1 < str.size() and str[i + 1] == quote) {
+          ret += str[++i];
+          continue;
+        }
+        quote = '\0';
+      }
       continue;
     }
-    ret += str[i];
-    const auto is_syntax
-      = syntax_characters.find(str[i]) != std::string_view::npos;
-    can_skip = is_space or is_syntax;
+    if (c == '\'' or c == '"' or c == '`') {
+      ret += c;
+      quote = c;
+      can_skip = false;
+      continue;
+    }
+    const auto is_space = std::isspace(static_cast<unsigned char>(c));
+    if (can_skip and is_space) {
+      continue;
+    }
+    const auto is_syntax = syntax_characters.find(c) != std::string_view::npos;
     // Remove space *before* the current syntax token. Handles e.g. `text )`
-    if (is_syntax and i > 0 and std::isspace(str[i - 1])) {
+    // Pop before appending so we remove the trailing space, not `c` itself.
+    if (is_syntax and not ret.empty()
+        and std::isspace(static_cast<unsigned char>(ret.back()))) {
       ret.pop_back();
     }
+    ret += c;
+    can_skip = is_space or is_syntax;
   }
   return ret;
 }
@@ -295,7 +335,7 @@ struct tenzir_to_clickhouse_trait;
     }                                                                          \
   }
 
-X(bool_type, ColumnUInt8, "UInt8");
+X(bool_type, ColumnBool, "Bool");
 X(int64_type, ColumnInt64, "Int64");
 X(uint64_type, ColumnUInt64, "UInt64");
 X(double_type, ColumnFloat64, "Float64");
@@ -303,6 +343,34 @@ X(string_type, ColumnString, "String");
 X(duration_type, ColumnInt64, "Int64");
 X(ip_type, ColumnIPv6, "IPv6");
 #undef X
+
+/// Tenzir `bool` columns are now created as ClickHouse `Bool`, but tables
+/// created by older Tenzir versions (and any table that stores boolean data as
+/// `UInt8`) describe the column as `UInt8`. This trait lets us keep appending
+/// `bool` values to such legacy columns by sending them as `UInt8`, matching
+/// the column type the server already has.
+struct legacy_bool_trait {
+  constexpr static std::string_view name = "UInt8";
+  using column_type = ColumnUInt8;
+
+  constexpr static auto null_value = std::nullopt;
+
+  static auto clickhouse_typename(bool nullable) -> std::string {
+    if (nullable) {
+      return std::string{"Nullable("}.append(name).append(1, ')');
+    }
+    return std::string{name};
+  }
+
+  template <bool nullable>
+  static auto allocate(size_t n) {
+    using Column_Type
+      = std::conditional_t<nullable, ColumnNullableT<column_type>, column_type>;
+    auto res = std::make_shared<Column_Type>();
+    res->Reserve(n);
+    return res;
+  }
+};
 
 template <>
 struct tenzir_to_clickhouse_trait<time_type> {
@@ -361,10 +429,11 @@ concept convertible_hack = std::same_as<Expected, Actual>
                            or (std::same_as<Expected, int64_type>
                                and std::same_as<Actual, duration_type>);
 
-template <typename T, bool Nullable>
-  requires requires { tenzir_to_clickhouse_trait<T>{}; }
+template <typename T, bool Nullable,
+          typename Traits = tenzir_to_clickhouse_trait<T>>
+  requires requires { Traits{}; }
 struct transformer_from_trait : transformer {
-  using traits = tenzir_to_clickhouse_trait<T>;
+  using traits = Traits;
 
   transformer_from_trait()
     : transformer{traits::clickhouse_typename(Nullable), Nullable} {
@@ -466,12 +535,12 @@ struct transformer_from_trait : transformer {
   }
 };
 
-template <typename T>
+template <typename T, typename Traits = tenzir_to_clickhouse_trait<T>>
 auto make_transformer_impl(bool nullable) -> std::unique_ptr<transformer> {
   if (nullable) {
-    return std::make_unique<transformer_from_trait<T, true>>();
+    return std::make_unique<transformer_from_trait<T, true, Traits>>();
   } else {
-    return std::make_unique<transformer_from_trait<T, false>>();
+    return std::make_unique<transformer_from_trait<T, false, Traits>>();
   }
 }
 
@@ -742,34 +811,21 @@ auto make_record_functions_from_clickhouse(path_type& path,
       .emit(dh);
     return nullptr;
   }
-  auto fields = std::vector<std::pair<std::string_view, std::string_view>>{};
-  auto open_count = 0;
-  size_t part_start_index = 0;
-  const auto add_field = [&](size_t start, size_t size) {
-    const auto part = detail::trim(tuple_elements.substr(start, size));
-    const auto split = part.find(' ');
-    const auto name = part.substr(0, split);
-    const auto type = part.substr(split + 1);
-    fields.emplace_back(name, type);
-  };
-  for (size_t i = 0; i < tuple_elements.size(); ++i) {
-    const auto c = tuple_elements[i];
-    if (c == ')') {
-      TENZIR_ASSERT(open_count > 0);
-      --open_count;
-      continue;
+  auto fields = std::vector<std::pair<std::string, std::string_view>>{};
+  for (auto part : split_top_level_clickhouse_type_arguments(tuple_elements)) {
+    auto split = find_top_level_clickhouse_type_space(part);
+    if (split == std::string_view::npos) {
+      diagnostic::error("ClickHouse column `{}` has malformed tuple element "
+                        "`{}`",
+                        fmt::join(path, "."), part)
+        .emit(dh);
+      return nullptr;
     }
-    if (c == '(') {
-      ++open_count;
-      continue;
-    }
-    if (c == ',' and open_count == 0) {
-      add_field(part_start_index, i - part_start_index);
-      part_start_index = i + 1;
-      continue;
-    }
+    auto name
+      = unquote_identifier_component(detail::trim(part.substr(0, split)));
+    auto type = detail::trim(part.substr(split + 1));
+    fields.emplace_back(std::move(name), type);
   }
-  add_field(part_start_index, clickhouse_typename.npos);
   for (const auto& [k, t] : fields) {
     path.push_back(k);
     auto functions = make_functions_from_clickhouse(path, t, dh);
@@ -880,7 +936,8 @@ auto plain_clickhouse_tuple_elements(path_type& path, const record_type& record,
     } else {
       first = false;
     }
-    fmt::format_to(std::back_inserter(res), "{} {}", k, nested);
+    fmt::format_to(std::back_inserter(res), "{} {}",
+                   quote_identifier_component(k), nested);
   }
   res += ")";
   return res;
@@ -934,6 +991,16 @@ auto make_functions_from_clickhouse(path_type& path,
   X(ip_type);
   X(subnet_type);
 #undef X
+  // Accept `UInt8` as a legacy boolean target: tables created by older Tenzir
+  // versions stored `bool` columns as `UInt8`. New tables use `Bool` (see
+  // `tenzir_to_clickhouse_trait<bool_type>`), but appends must keep working
+  // against existing `UInt8` columns.
+  if (clickhouse_typename == "UInt8") {
+    return make_transformer_impl<bool_type, legacy_bool_trait>(false);
+  }
+  if (clickhouse_typename == "Nullable(UInt8)") {
+    return make_transformer_impl<bool_type, legacy_bool_trait>(true);
+  }
   if (clickhouse_typename == "Array(UInt8)") {
     return std::make_unique<transformer_blob>();
   }

@@ -23,6 +23,23 @@ endif ()
 
 if (clickhouse-cpp_FOUND)
   dependency_summary("clickhouse-cpp" clickhouse-cpp-lib "Dependencies")
+  # The bundled clickhouse-cpp is built with CH_MAP_BOOL_TO_UINT8=OFF so that
+  # ClickHouse `Bool` columns are delivered as a distinct `Type::Bool`. A system
+  # package built with the upstream default (ON) maps `Bool` to `UInt8`, which
+  # silently degrades boolean round-trips in `from_clickhouse` to `uint64`. The
+  # setting is exported as a PUBLIC compile definition, so reject such builds.
+  get_target_property(_clickhouse_cpp_defs clickhouse-cpp-lib
+                      INTERFACE_COMPILE_DEFINITIONS)
+  if (_clickhouse_cpp_defs MATCHES "CH_MAP_BOOL_TO_UINT8=1")
+    message(
+      FATAL_ERROR
+        "The found clickhouse-cpp was built with CH_MAP_BOOL_TO_UINT8=ON, which "
+        "maps ClickHouse `Bool` columns to `UInt8` and breaks boolean "
+        "round-trips in the ClickHouse plugin. Rebuild clickhouse-cpp with "
+        "-DCH_MAP_BOOL_TO_UINT8=OFF, or use the bundled dependency via "
+        "-DTENZIR_ENABLE_BUNDLED_CLICKHOUSE_CPP=ON.")
+  endif ()
+  unset(_clickhouse_cpp_defs)
   if (NOT TARGET lz4::lz4)
     add_library(lz4::lz4 ALIAS LZ4::lz4)
   endif ()
@@ -69,6 +86,9 @@ else ()
   set(DEBUG_DEPENDENCIES
       OFF
       CACHE BOOL "Disable bundled clickhouse-cpp debug helper targets" FORCE)
+  set(CH_MAP_BOOL_TO_UINT8
+      OFF
+      CACHE BOOL "")
   set(_build_shared_libs_before "${BUILD_SHARED_LIBS}")
   set(BUILD_SHARED_LIBS OFF)
   add_subdirectory(aux/clickhouse-cpp)
