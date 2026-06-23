@@ -9,7 +9,6 @@
 #include "clickhouse/arguments.hpp"
 #include "clickhouse/block_to_table_slice.hpp"
 #include "clickhouse/easy_client.hpp"
-#include "clickhouse/filter_to_where_clause.hpp"
 #include "tenzir/arc.hpp"
 #include "tenzir/async.hpp"
 #include "tenzir/async/blocking_executor.hpp"
@@ -45,7 +44,6 @@ struct FromClickhouseArgs {
   Option<located<std::string>> sql;
   Option<located<data>> tls;
   location operator_location;
-  ir::optimize_filter filter;
 };
 
 struct QueryPlan {
@@ -167,22 +165,11 @@ public:
     auto plan = QueryPlan{};
     if (args_.table) {
       auto qualified = std::string{args_.table->inner};
-      auto known = co_await spawn_blocking(
-        [options, qualified]() -> std::unordered_set<std::string> {
-          return fetch_schema(options, qualified);
-        });
-      auto where = filter_to_where_clause(args_.filter, known);
-      local_filter_ = std::move(where.residual_filter);
       plan = {
-        .query = where.predicate.empty()
-                   ? fmt::format("SELECT * FROM {}", qualified)
-                   : fmt::format("SELECT * FROM {} WHERE {}", qualified,
-                                 where.predicate),
+        .query = fmt::format("SELECT * FROM {}", qualified),
         .schema_name = make_schema_name_from_table(args_.table->inner),
       };
     } else {
-      // SQL mode: no pushdown, all filters applied locally.
-      local_filter_ = args_.filter;
       plan = {
         .query = args_.sql->inner,
         .schema_name = "clickhouse.query",
@@ -215,18 +202,13 @@ public:
 
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
+    TENZIR_UNUSED(ctx);
     auto message = std::move(result).as<Message>();
     co_await co_match(
       std::move(message),
       [&](SliceMessage x) -> Task<void> {
         if (runtime_->stop_requested.load(std::memory_order_acquire)) {
           co_return;
-        }
-        for (auto const& expr : local_filter_) {
-          x.slice = filter2(x.slice, expr, ctx, false);
-          if (x.slice.rows() == 0) {
-            co_return;
-          }
         }
         co_await push(std::move(x.slice));
       },
@@ -247,28 +229,6 @@ public:
   }
 
 private:
-  static auto fetch_schema(::clickhouse::ClientOptions const& options,
-                           std::string_view qualified_table)
-    -> std::unordered_set<std::string> {
-    auto columns = std::unordered_set<std::string>{};
-    try {
-      auto client = ::clickhouse::Client{options};
-      auto query = ::clickhouse::Query{
-        fmt::format("DESCRIBE TABLE {} SETTINGS describe_compact_output=1",
-                    qualified_table)};
-      query.OnData([&](::clickhouse::Block const& block) {
-        for (size_t i = 0; i < block.GetRowCount(); ++i) {
-          columns.insert(
-            std::string{block[0]->As<::clickhouse::ColumnString>()->At(i)});
-        }
-      });
-      client.Execute(query);
-    } catch (std::exception const&) {
-      return {};
-    }
-    return columns;
-  }
-
   static auto split_validated_table_name(std::string_view table)
     -> split_table_name_result {
     if (auto split = table_name_quoting.split_at_unquoted(table, '.')) {
@@ -347,7 +307,6 @@ private:
 
   FromClickhouseArgs args_;
   mutable Arc<RuntimeState> runtime_ = Arc<RuntimeState>{std::in_place};
-  ir::optimize_filter local_filter_;
   bool tls_enabled_ = false;
   bool saw_done_msg_ = false;
 };
@@ -412,7 +371,7 @@ public:
       }
       return {};
     });
-    return d.optimize_filter(&FromClickhouseArgs::filter);
+    return d.without_optimize();
   }
 };
 
