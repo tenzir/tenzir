@@ -4,6 +4,8 @@ type: feature
 authors:
   - IyeOnline
   - claude
+prs:
+  - 6381
 created: 2026-06-24T17:05:29.099901Z
 ---
 
