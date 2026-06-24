@@ -609,11 +609,12 @@ struct transformer_blob : transformer {
   }
 };
 
-/// Sends data to a ClickHouse `JSON` column by serializing each row's value to
+/// Sends data to a ClickHouse `JSON` column by serializing each row's record to
 /// JSON text. We only support sending to an existing JSON column; we never
-/// create one (there is no Tenzir `json` type). Any Tenzir type is accepted and
-/// serialized as-is; null/absent rows become `{}` (ClickHouse rejects empty
-/// strings for JSON but accepts the empty object).
+/// create one (there is no Tenzir `json` type). ClickHouse `JSON` columns only
+/// accept objects at the top level, so non-record columns are written as empty
+/// objects with a warning. Null/absent rows also become `{}` (ClickHouse
+/// rejects empty strings for JSON but accepts the empty object).
 struct transformer_json : transformer {
   json_printer2 printer = json_printer2{json_printer_options{
     .style = no_style(),
@@ -644,10 +645,25 @@ struct transformer_json : transformer {
                      const arrow::Array& array, dropmask_cref dropmask,
                      int64_t dropcount, tenzir::diagnostic_handler& dh)
     -> ::clickhouse::ColumnRef override {
-    TENZIR_UNUSED(path, type, dh);
     auto column = std::make_shared<ColumnJSON>();
     column->Reserve(array.length() - dropcount);
-
+    // ClickHouse `JSON` columns only accept JSON objects at the top level. A
+    // record maps to an object; anything else (scalars, lists) would be
+    // rejected by the server, so we substitute empty objects and warn.
+    if (not type.kind().is<record_type>() and not type.kind().is<null_type>()) {
+      diagnostic::warning("cannot write `{}` into a ClickHouse JSON column",
+                          fmt::join(path, "."))
+        .note("expected a record, but got `{}`", type.kind())
+        .note("values will be written as empty objects (`{}`)")
+        .emit(dh);
+      for (int64_t i = 0; i < array.length(); ++i) {
+        if (dropmask[i]) {
+          continue;
+        }
+        column->Append(std::string_view{"{}"});
+      }
+      return column;
+    }
     for (int64_t i = 0; i < array.length(); ++i) {
       if (dropmask[i]) {
         continue;
