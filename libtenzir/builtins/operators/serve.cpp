@@ -1354,9 +1354,22 @@ struct serve_manager_state {
         ops.erase(found);
       }
     };
-    if (err.valid()) {
+    // A pipeline that exited with a genuine error is removed right away. A
+    // pipeline that finished cleanly (no error, or a regular user_shutdown)
+    // keeps its last result set available for `retention_time`, so a client
+    // that lost or cancelled the response to its final poll can still retry and
+    // re-fetch it.
+    if (err.valid() and err != caf::exit_reason::user_shutdown) {
       delete_serve();
       return;
+    }
+    // Answer any in-flight poll immediately with a completion response instead
+    // of making it wait for the long-poll timeout or the retention timer.
+    if (not found->get_rps.empty()) {
+      found->delayed_attempt.dispose();
+      for (auto&& get_rp : std::exchange(found->get_rps, {})) {
+        get_rp.deliver(serve_response{std::string{}, std::vector<table_slice>{}});
+      }
     }
     detail::weak_run_delayed(self, defaults::api::serve::retention_time,
                              delete_serve);
@@ -1456,21 +1469,33 @@ struct serve_manager_state {
     if (found == ops.end()) {
       const auto expired_id = expired_ids.find(request.serve_id);
       if (expired_id != expired_ids.end()) {
-        if (expired_id->second == ec::diagnostic) {
-          return expired_id->second;
+        const auto& err = expired_id->second;
+        if (err == ec::diagnostic) {
+          return err;
+        }
+        // A pipeline that completed cleanly (no error or a regular
+        // user_shutdown) is reported as completed, not as an internal error: a
+        // client may retry its final poll after losing or cancelling the
+        // response, even past the retention window.
+        if (not err.valid() or err == caf::exit_reason::user_shutdown) {
+          return std::make_tuple(std::string{}, std::vector<table_slice>{});
         }
         return caf::make_error(
           ec::logic_error,
           fmt::format("{} got request for events with expired serve id {}; the "
                       "pipeline serving this data is no longer available: {}",
-                      *self, request.serve_id, expired_id->second));
+                      *self, request.serve_id, err));
       }
       return caf::make_error(ec::invalid_argument,
                              fmt::format("{} got request for events with "
                                          "unknown serve id {}",
                                          *self, request.serve_id));
     }
-    if (not found->continuation_token.empty()
+    // Re-fetch of the most recently delivered batch: the client retried with
+    // the previous (non-empty) continuation token because the response was lost
+    // or its poll was cancelled. This also covers the final batch of a
+    // completed pipeline, whose current continuation token is now empty.
+    if (not request.continuation_token.empty()
         and found->last_continuation_token == request.continuation_token) {
       return std::make_tuple(
         found->continuation_token,

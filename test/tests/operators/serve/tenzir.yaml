@@ -61,3 +61,8 @@ tenzir:
           {i: 43},
           {s: "str 2", i: 1}
         serve "multiserve_2"
+    serve_retry:
+      name: serve retry
+      definition: |
+        from {n: 1}, {n: 2}, {n: 3}, {n: 4}
+        serve "serve_retry"
