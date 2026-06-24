@@ -51,6 +51,26 @@ constexpr inline std::string_view ascii_whitespace = " \t\r\n\f\v";
   return ascii_isalpha(c) or ascii_isdigit(c);
 }
 
+/// Returns the full Unicode case folding of `input`.
+///
+/// Unlike lowercasing, full case folding maps characters so that
+/// case-insensitive comparison works across scripts, e.g. the German "ß"
+/// folds to "ss", so "STRASSE" and "straße" fold to the same string. Use this
+/// for case-insensitive string comparison rather than `ascii_tolower`.
+[[nodiscard]] auto utf8_fold_case(std::string_view input) -> std::string;
+
+/// Finds all non-overlapping, left-to-right occurrences of `folded_pattern`
+/// within `input` using full Unicode case folding, and returns their byte
+/// ranges `[start, end)` in `input`.
+///
+/// `folded_pattern` must already be case-folded (see `utf8_fold_case`). Matches
+/// are aligned to code point boundaries in `input`, so a pattern of `"s"` does
+/// not match half of a `"ß"` (which folds to `"ss"`). An empty pattern yields
+/// no matches.
+[[nodiscard]] auto
+utf8_fold_case_find(std::string_view input, std::string_view folded_pattern)
+  -> std::vector<std::pair<size_t, size_t>>;
+
 /// Returns a copy of `input` with ASCII bytes folded to lowercase.
 [[nodiscard]] inline auto ascii_tolower(std::string_view input) -> std::string {
   auto result = std::string{input};

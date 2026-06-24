@@ -156,6 +156,13 @@ find_package(
 find_package(re2 REQUIRED)
 provide_find_module(re2)
 
+# -- ICU (Unicode case folding) ------------------------------------------------
+
+find_package(
+  ICU
+  COMPONENTS uc data
+  REQUIRED)
+
 # -- reproc --------------------------------------------------------------------
 
 find_package(reproc++ REQUIRED)
@@ -531,6 +538,14 @@ dependency_summary("Boost" Boost::headers "Dependencies")
 target_link_libraries(libtenzir PUBLIC re2::re2)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(re2 REQUIRED)")
 dependency_summary("re2" re2::re2 "Dependencies")
+
+# Link against ICU for Unicode case folding. The `data` component carries
+# ICU's data symbols (`icudt*_dat`) that `libicuuc.a` references, which the
+# static link requires.
+target_link_libraries(libtenzir PRIVATE ICU::uc ICU::data)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+       "\nfind_package(ICU COMPONENTS uc data REQUIRED)")
+dependency_summary("ICU" ICU::uc "Dependencies")
 
 # Link against folly.
 if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)

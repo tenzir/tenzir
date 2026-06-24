@@ -10,15 +10,105 @@
 
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/escapers.hpp"
+#include "tenzir/detail/narrow.hpp"
+
+#include <unicode/ucasemap.h>
+#include <unicode/utypes.h>
 
 #include <algorithm>
 #include <cstring>
 #include <simdjson.h>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace tenzir {
 namespace detail {
+
+auto utf8_fold_case(std::string_view input) -> std::string {
+  if (input.empty()) {
+    return {};
+  }
+  auto status = U_ZERO_ERROR;
+  auto* csm = ucasemap_open("", 0, &status);
+  if (U_FAILURE(status)) {
+    return std::string{input};
+  }
+  const auto src_length = narrow_cast<int32_t>(input.size());
+  auto result = std::string{};
+  // Full case folding can grow the string (e.g. "ß" -> "ss"), so size up front
+  // and retry once if the initial buffer is too small.
+  result.resize(input.size());
+  auto dest_length = ucasemap_utf8FoldCase(csm, result.data(),
+                                           narrow_cast<int32_t>(result.size()),
+                                           input.data(), src_length, &status);
+  if (status == U_BUFFER_OVERFLOW_ERROR) {
+    status = U_ZERO_ERROR;
+    result.resize(narrow_cast<size_t>(dest_length));
+    dest_length = ucasemap_utf8FoldCase(csm, result.data(),
+                                        narrow_cast<int32_t>(result.size()),
+                                        input.data(), src_length, &status);
+  }
+  ucasemap_close(csm);
+  if (U_FAILURE(status)) {
+    return std::string{input};
+  }
+  result.resize(narrow_cast<size_t>(dest_length));
+  return result;
+}
+
+auto utf8_fold_case_find(std::string_view input,
+                         std::string_view folded_pattern)
+  -> std::vector<std::pair<size_t, size_t>> {
+  auto result = std::vector<std::pair<size_t, size_t>>{};
+  if (folded_pattern.empty() or input.empty()) {
+    return result;
+  }
+  // Decompose `input` into its code points, recording each one's byte range and
+  // its full case folding. Folding per code point matches folding the whole
+  // string for Unicode's default full case folding, while letting us map match
+  // boundaries back to the original byte offsets.
+  struct code_point {
+    size_t start;
+    size_t end;
+    std::string folded;
+  };
+  auto cps = std::vector<code_point>{};
+  for (size_t i = 0; i < input.size();) {
+    auto j = i + 1;
+    while (j < input.size()
+           and (static_cast<unsigned char>(input[j]) & 0xC0) == 0x80) {
+      ++j;
+    }
+    cps.push_back({i, j, utf8_fold_case(input.substr(i, j - i))});
+    i = j;
+  }
+  for (size_t i = 0; i < cps.size();) {
+    auto acc = std::string{};
+    auto matched_end = std::string_view::npos;
+    auto next = i;
+    for (auto j = i; j < cps.size(); ++j) {
+      acc += cps[j].folded;
+      if (acc.size() > folded_pattern.size()
+          or folded_pattern.compare(0, acc.size(), acc) != 0) {
+        // The accumulated folding overshoots or diverges from the pattern.
+        break;
+      }
+      if (acc.size() == folded_pattern.size()) {
+        matched_end = cps[j].end;
+        next = j + 1;
+        break;
+      }
+    }
+    if (matched_end != std::string_view::npos) {
+      result.emplace_back(cps[i].start, matched_end);
+      i = next;
+    } else {
+      ++i;
+    }
+  }
+  return result;
+}
 
 auto quoting_escaping_policy::basic_unescape_operation(
   std::string_view::iterator begin, std::string_view::iterator end,

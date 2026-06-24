@@ -1,0 +1,16 @@
+{
+  rec: {
+    host: "HOST-A",
+  },
+  tags: [
+    "Foo",
+    "BAR",
+  ],
+  scalar: "Hello World",
+  contains_record: true,
+  contains_list: true,
+  contains_substring: true,
+  contains_exact: false,
+  contains_exact_full: true,
+  contains_default: false,
+}

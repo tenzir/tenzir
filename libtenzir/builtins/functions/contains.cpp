@@ -8,12 +8,14 @@
 
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/detail/string.hpp"
 #include "tenzir/multi_series.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/view.hpp"
 #include "tenzir/view3.hpp"
 
+#include <arrow/array/builder_binary.h>
 #include <arrow/array/builder_primitive.h>
 #include <arrow/array/data.h>
 #include <arrow/array/util.h>
@@ -28,6 +30,22 @@
 namespace tenzir::plugins::contains {
 
 namespace {
+
+/// Returns a copy of `array` with each value replaced by its full Unicode case
+/// folding, preserving nulls. Used for case-insensitive comparison.
+auto fold_case(const arrow::StringArray& array)
+  -> std::shared_ptr<arrow::StringArray> {
+  auto b = arrow::StringBuilder{tenzir::arrow_memory_pool()};
+  check(b.Reserve(array.length()));
+  for (auto i = int64_t{0}; i < array.length(); ++i) {
+    if (array.IsNull(i)) {
+      check(b.AppendNull());
+      continue;
+    }
+    check(b.Append(detail::utf8_fold_case(array.Value(i))));
+  }
+  return std::static_pointer_cast<arrow::StringArray>(finish(b));
+}
 
 auto comparable(const type& x, const type& y) -> bool {
   return match(std::tie(x, y), []<typename X, typename Y>(const X&, const Y&) {
@@ -66,9 +84,26 @@ auto equals(data_view3 l, const data& r, bool exact) -> bool {
 }
 
 auto contains(const series& input, const type& what_type, const data& what,
-              bool exact, std::vector<bool>& b) -> void {
+              bool exact, bool ignore_case, std::vector<bool>& b) -> void {
   TENZIR_ASSERT(std::cmp_equal(input.length(), b.size()));
   if (comparable(input.type, what_type)) {
+    // For case-insensitive string comparison we lower the column once and
+    // compare against the already-lowered needle. `what` is lowered by the
+    // caller when `ignore_case` is set.
+    if (ignore_case) {
+      if (auto ss = input.as<string_type>(); ss and is<std::string>(what)) {
+        const auto& needle = as<std::string>(what);
+        auto lowered = fold_case(*ss->array);
+        for (auto i = int64_t{0}; i < lowered->length(); ++i) {
+          if (lowered->IsNull(i)) {
+            continue;
+          }
+          auto v = lowered->Value(i);
+          b[i] = b[i] or (exact ? v == needle : v.contains(needle));
+        }
+        return;
+      }
+    }
     for (const auto& [i, val] : detail::enumerate(input.values())) {
       b[i] = b[i] or equals(val, what, exact);
     }
@@ -76,7 +111,7 @@ auto contains(const series& input, const type& what_type, const data& what,
   }
   if (const auto rs = input.as<record_type>()) {
     for (const auto& field : rs->fields()) {
-      contains(field.data, what_type, what, exact, b);
+      contains(field.data, what_type, what, exact, ignore_case, b);
     }
     return;
   }
@@ -84,7 +119,7 @@ auto contains(const series& input, const type& what_type, const data& what,
     auto b_ = std::vector<bool>{};
     b_.resize(ls->array->values()->length());
     contains({ls->type.value_type(), ls->array->values()}, what_type, what,
-             exact, b_);
+             exact, ignore_case, b_);
     auto curr = b_.begin();
     for (auto i = int64_t{}; i < ls->length(); ++i) {
       auto begin = curr;
@@ -108,10 +143,12 @@ class plugin final : public function_plugin {
     auto input = ast::expression{};
     auto target = located<data>{};
     auto exact = false;
+    auto ignore_case = false;
     TRY(argument_parser2::function(name())
           .positional("input", input, "any")
           .positional("target", target)
           .named_optional("exact", exact)
+          .named_optional("ignore_case", ignore_case)
           .parse(inv, ctx));
     if (is<record>(target.inner) or is<list>(target.inner)) {
       diagnostic::error("`target` cannot be a list or a record")
@@ -119,21 +156,24 @@ class plugin final : public function_plugin {
         .emit(ctx);
       return failure::promise();
     }
-    return function_use::make([in = std::move(input),
-                               what = std::move(target.inner),
-                               exact](evaluator eval, session) -> multi_series {
-      const auto what_type = type::infer(what).value();
-      auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
-      check(b.Reserve(eval.length()));
-      auto result = std::vector<bool>{};
-      for (const auto& s : eval(in)) {
-        result.resize(detail::narrow<size_t>(s.length()));
-        contains(s, what_type, what, exact, result);
-        check(b.AppendValues(result));
-        result.clear();
-      }
-      return series{bool_type{}, finish(b)};
-    });
+    if (ignore_case and is<std::string>(target.inner)) {
+      target.inner = detail::utf8_fold_case(as<std::string>(target.inner));
+    }
+    return function_use::make(
+      [in = std::move(input), what = std::move(target.inner), exact,
+       ignore_case](evaluator eval, session) -> multi_series {
+        const auto what_type = type::infer(what).value();
+        auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+        check(b.Reserve(eval.length()));
+        auto result = std::vector<bool>{};
+        for (const auto& s : eval(in)) {
+          result.resize(detail::narrow<size_t>(s.length()));
+          contains(s, what_type, what, exact, ignore_case, result);
+          check(b.AppendValues(result));
+          result.clear();
+        }
+        return series{bool_type{}, finish(b)};
+      });
   }
 };
 

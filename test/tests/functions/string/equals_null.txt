@@ -1,0 +1,24 @@
+{
+  a: "AB",
+  b: null,
+  equals_ci: false,
+  equals_cs: false,
+}
+{
+  a: null,
+  b: null,
+  equals_ci: true,
+  equals_cs: true,
+}
+{
+  a: "ab",
+  b: "AB",
+  equals_ci: true,
+  equals_cs: false,
+}
+{
+  a: "ab",
+  b: "ab",
+  equals_ci: true,
+  equals_cs: true,
+}

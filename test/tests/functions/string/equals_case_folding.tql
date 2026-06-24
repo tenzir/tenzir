@@ -1,0 +1,9 @@
+// Full Unicode case folding: German "ß" folds to "ss", so "STRASSE" and
+// "straße" must compare equal under `ignore_case`.
+from {
+  equals_ci: equals("STRASSE", "straße", ignore_case=true),
+  contains_ci: contains("STRASSE", "straße", ignore_case=true),
+  starts_with_ci: "STRASSE".starts_with("straße", ignore_case=true),
+  replace_ci: "Fußstraße".replace("STRASSE", "weg", ignore_case=true),
+  split_ci: "Fußstraße".split("STRASSE", ignore_case=true),
+}

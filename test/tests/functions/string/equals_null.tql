@@ -1,0 +1,6 @@
+from {a: "AB", b: null},
+  {a: null, b: null},
+  {a: "ab", b: "AB"},
+  {a: "ab", b: "ab"}
+equals_ci = equals(a, b, ignore_case=true)
+equals_cs = equals(a, b)

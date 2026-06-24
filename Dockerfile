@@ -225,6 +225,7 @@ RUN apt-get update && \
       libgoogle-glog0v6 \
       libgrpc++1.51 \
       libhttp-parser2.9 \
+      libicu76 \
       libmaxminddb0 \
       libmimalloc3 \
       libnats3.10 \
