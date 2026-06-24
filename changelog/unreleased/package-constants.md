@@ -3,6 +3,8 @@ title: Package constants
 type: feature
 authors:
   - jachris
+prs:
+  - 6363
 created: 2026-06-16T13:51:38.873991Z
 ---
 
