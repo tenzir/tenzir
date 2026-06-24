@@ -1790,6 +1790,18 @@ index(index_actor::stateful_pointer<index_state> self,
               old_partition_ids.emplace_back(partition.uuid);
             }
             auto apsv = std::move(transform_result.output_partitions);
+            // Point each output synopsis at its final `.mdx` path (the marker
+            // is renamed there before the merge below). With lazy sketches the
+            // catalog drops the Bloom filters on merge and reloads them on
+            // demand from this path, so it must be set or pruning would be
+            // lost for transformed/rebuilt partitions until the next restart.
+            for (auto& aps : apsv) {
+              if (aps.synopsis) {
+                aps.synopsis.unshared().sketches_file.url = fmt::format(
+                  "file://{}",
+                  self->state().partition_synopsis_path(aps.uuid).string());
+              }
+            }
             std::vector<uuid> new_partition_ids;
             new_partition_ids.reserve(apsv.size());
             for (auto const& [uuid, _] : apsv) {
