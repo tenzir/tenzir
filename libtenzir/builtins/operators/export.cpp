@@ -249,6 +249,10 @@ public:
     }
     auto expected = std::move(result).as<caf::expected<table_slice>>();
     if (not expected) {
+      if (stopping_) {
+        done_ = true;
+        co_return;
+      }
       diagnostic::error(expected.error()).note("from export-bridge").emit(ctx);
       done_ = true;
       co_return;
@@ -327,6 +331,28 @@ public:
     return done_ ? OperatorState::done : OperatorState::normal;
   }
 
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    // Only force the bridge down for a pure live wait. The bridge has no
+    // separate "stop accepting new live events" protocol, so when retro is
+    // also enabled we cannot tell whether the retro backlog has drained
+    // yet. Tearing down here would drop queued slices and in-flight
+    // partition reads. Pure retro exports also drain naturally via the
+    // bridge's empty-slice sentinel, so the only case that genuinely needs
+    // forced teardown is `live=true retro=false`, where the bridge would
+    // otherwise wait indefinitely.
+    if (not args_.live or args_.retro) {
+      co_return;
+    }
+    stopping_ = true;
+    if (bridge_) {
+      caf::anon_send_exit(bridge_, caf::exit_reason::user_shutdown);
+    } else {
+      done_ = true;
+    }
+    co_return;
+  }
+
   auto snapshot(Serde& serde) -> void override {
     serde("done", done_);
   }
@@ -347,6 +373,7 @@ private:
   detail::heterogeneous_string_hashset warned_unsupported_prometheus_schemas_;
   MetricsCounter read_events_counter_;
   metric_handler export_metrics_ = {};
+  bool stopping_ = false;
   bool done_ = false;
 };
 
