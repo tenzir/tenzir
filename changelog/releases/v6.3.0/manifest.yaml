@@ -1,0 +1,11 @@
+created: 2026-06-24
+title: Tenzir v6.3.0
+intro: >-
+  Tenzir now drains in-flight data before stopping pipelines or shutting down a node,
+  so you no longer lose events on shutdown. This release also improves diagnostics
+  from user-defined operators with call-site annotations that trace errors back to
+  the top-level pipeline, and adds a from_clickhouse source operator for reading directly
+  from ClickHouse.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.2.0
