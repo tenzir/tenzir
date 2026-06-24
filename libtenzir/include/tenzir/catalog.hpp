@@ -24,6 +24,7 @@
 #include <caf/typed_event_based_actor.hpp>
 
 #include <list>
+#include <unordered_set>
 #include <vector>
 
 namespace tenzir {
@@ -148,9 +149,14 @@ public:
   /// pruning. This is only sound because the evaluation has no cross-partition
   /// state: evaluating a set equals the union of evaluating each partition
   /// alone. Keep it that way.
-  auto lookup_impl(const expression& expr, const type& schema,
-                   const detail::flat_map<uuid, partition_synopsis_ptr>&
-                     partition_synopses) const
+  /// @param deferred_sketch_partitions Receives the ids of partitions kept only
+  /// because a Bloom-filter sketch was deferred and could prune them if loaded.
+  /// `lookup` uses this to restrict on-demand loading to exactly those
+  /// candidates instead of every surviving candidate in every schema.
+  auto lookup_impl(
+    const expression& expr, const type& schema,
+    const detail::flat_map<uuid, partition_synopsis_ptr>& partition_synopses,
+    std::unordered_set<uuid>& deferred_sketch_partitions) const
     -> catalog_lookup_result::candidate_info;
 
   /// Loads the deferred Bloom-filter sketches of the given partition into the
@@ -188,11 +194,6 @@ public:
   /// dropped so that ongoing ingest does not accumulate them in resident
   /// memory; they are loaded on demand from disk instead.
   bool lazy_sketches = false;
-
-  /// Set by `lookup_impl` when a predicate matched a partition only because a
-  /// Bloom-filter sketch was deferred (null) and could be loaded to prune it.
-  /// Drives whether `lookup` performs the on-demand load + re-evaluation.
-  mutable bool encountered_deferred_sketch = false;
 
   std::optional<detail::request_cache> cache;
 

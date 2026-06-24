@@ -220,6 +220,9 @@ size_t partition_synopsis::memusage() const {
 
 partition_synopsis* partition_synopsis::copy() const {
   auto result = std::make_unique<partition_synopsis>();
+  result->store_file = store_file;
+  result->indexes_file = indexes_file;
+  result->sketches_file = sketches_file;
   result->events = events;
   result->min_import_time = min_import_time;
   result->max_import_time = max_import_time;

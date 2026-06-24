@@ -173,6 +173,10 @@ TEST("catalog defers bloom filters of merged partitions when lazy") {
   // ingest would grow resident memory unbounded.
   const auto& stored = state.synopses_per_type.at(f.schema).at(f.id);
   CHECK_EQUAL(stored->field_synopses_.at(f.msg), nullptr);
+  // Deferring here COW-copies the synopsis (the test still holds a reference),
+  // so the copy must preserve the sketch URL -- otherwise the deferred sketch
+  // could never be reloaded.
+  CHECK(stored->sketches_file.url.starts_with("file://"));
 }
 
 TEST("catalog keeps bloom filters of merged partitions when not lazy") {
