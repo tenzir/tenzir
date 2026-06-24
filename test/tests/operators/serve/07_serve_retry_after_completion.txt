@@ -1,0 +1,6 @@
+first-events: [1, 2]
+first-state: running
+final-events: [3, 4]
+final-state: completed
+retry-events: [3, 4]
+retry-state: completed
