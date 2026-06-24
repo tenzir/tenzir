@@ -41,6 +41,7 @@
 #include <caf/detail/set_thread_name.hpp>
 #include <caf/expected.hpp>
 
+#include <algorithm>
 #include <filesystem>
 #include <ranges>
 #include <set>
@@ -452,8 +453,10 @@ auto catalog_state::merge(std::vector<partition_synopsis_pair> partitions)
     // With lazy sketches, drop the Bloom filters of newly flushed or
     // transformed partitions too; otherwise ongoing ingest would accumulate
     // them in resident memory and bypass the bounded sketch cache. They are
-    // reloaded on demand from the partition's `.mdx`.
-    if (lazy_sketches and synopsis) {
+    // reloaded on demand from the partition's `.mdx`, so only defer when that
+    // file is locally loadable -- never strip sketches we could not reload.
+    if (lazy_sketches and synopsis
+        and synopsis->sketches_file.url.starts_with("file://")) {
       synopsis.unshared().defer_bloom_filters();
     }
     auto& entry = synopses_per_type[synopsis->schema][id];
@@ -708,24 +711,40 @@ auto catalog_state::lookup_impl(
               } else {
                 // The catalog couldn't rule out this partition, so we have
                 // to include it in the result set. If the missing synopsis is
-                // a deferred Bloom filter (a string or IP field that hasn't
-                // been loaded), record that loading it could prune further --
-                // but only if a Bloom filter could actually answer this
-                // predicate. Its `lookup` only prunes equality against a
-                // concrete scalar and `in` against a list (see
-                // `bloom_filter_synopsis::lookup`); for anything else (`!=`,
-                // ranges, `!in`, patterns) loading the sketch would be wasted
-                // I/O that cannot prune the current query.
+                // a deferred Bloom filter, record that loading it could prune
+                // further -- but only if the Bloom filter could actually answer
+                // this predicate. `bloom_filter_synopsis::lookup` only hashes
+                // literal values of the field type: it prunes `equal` against a
+                // literal and `in` against a list of literals. For anything
+                // else (`!=`, ranges, patterns, subnets/patterns inside an `in`
+                // list, type mismatches) it returns nullopt or silently skips
+                // the element, so loading the sketch could not prune -- or
+                // worse, could prune a partition exact evaluation would keep.
                 if (not loaded) {
-                  const auto bloom_prunable
-                    = (x.op == relational_operator::equal
-                       and not is<caf::none_t>(rhs) and not is<pattern>(rhs))
-                      or (x.op == relational_operator::in and is<list>(rhs));
-                  const auto is_bloom_filter = tenzir::match(
-                    field.type(), []<concrete_type T>(const T&) {
-                      return detail::is_any_v<T, string_type, ip_type>;
-                    });
-                  if (bloom_prunable and is_bloom_filter) {
+                  // True iff `value` is a literal a Bloom filter on this field
+                  // type can hash (string -> string, IP -> ip).
+                  const auto is_bloom_literal = [&](const data& value) {
+                    return tenzir::match(
+                      field.type(), [&]<concrete_type T>(const T&) {
+                        if constexpr (std::is_same_v<T, string_type>) {
+                          return is<std::string>(value);
+                        } else if constexpr (std::is_same_v<T, ip_type>) {
+                          return is<ip>(value);
+                        } else {
+                          return false;
+                        }
+                      });
+                  };
+                  auto bloom_prunable = false;
+                  if (x.op == relational_operator::equal) {
+                    bloom_prunable = is_bloom_literal(rhs);
+                  } else if (x.op == relational_operator::in) {
+                    if (const auto* xs = try_as<list>(&rhs)) {
+                      bloom_prunable
+                        = std::ranges::all_of(*xs, is_bloom_literal);
+                    }
+                  }
+                  if (bloom_prunable) {
                     encountered_deferred_sketch = true;
                   }
                 }

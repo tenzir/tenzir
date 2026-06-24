@@ -161,8 +161,10 @@ TEST("catalog prunes more partitions than fit in the sketch cache budget") {
 
 TEST("catalog defers bloom filters of merged partitions when lazy") {
   auto f = fixture{};
-  // A freshly flushed/transformed partition arrives with its full Bloom filter.
+  // A freshly flushed/transformed partition arrives with its full Bloom filter
+  // and a loadable sketch path.
   auto full = read_mdx(f.mdx, /*lazy=*/false);
+  full.unshared().sketches_file.url = fmt::format("file://{}", f.mdx.string());
   REQUIRE_NOT_EQUAL(full->field_synopses_.at(f.msg), nullptr);
   auto state = catalog_state{};
   state.lazy_sketches = true;
@@ -176,7 +178,21 @@ TEST("catalog defers bloom filters of merged partitions when lazy") {
 TEST("catalog keeps bloom filters of merged partitions when not lazy") {
   auto f = fixture{};
   auto full = read_mdx(f.mdx, /*lazy=*/false);
+  full.unshared().sketches_file.url = fmt::format("file://{}", f.mdx.string());
   auto state = catalog_state{}; // lazy_sketches defaults to false
+  static_cast<void>(state.merge({{f.id, full}}));
+  const auto& stored = state.synopses_per_type.at(f.schema).at(f.id);
+  CHECK_NOT_EQUAL(stored->field_synopses_.at(f.msg), nullptr);
+}
+
+TEST("catalog keeps merged bloom filters without a loadable sketch path") {
+  auto f = fixture{};
+  // No `sketches_file.url`: the sketches could not be reloaded, so they must
+  // not be deferred even with lazy sketches enabled.
+  auto full = read_mdx(f.mdx, /*lazy=*/false);
+  REQUIRE(full->sketches_file.url.empty());
+  auto state = catalog_state{};
+  state.lazy_sketches = true;
   static_cast<void>(state.merge({{f.id, full}}));
   const auto& stored = state.synopses_per_type.at(f.schema).at(f.id);
   CHECK_NOT_EQUAL(stored->field_synopses_.at(f.msg), nullptr);
