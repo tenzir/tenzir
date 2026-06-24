@@ -2223,8 +2223,15 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
   auto diag_handler = ExecDiagHandler{dh, cancel_source};
   auto has_terminal = ::isatty(STDIN_FILENO) == 1;
   auto graceful_stop = Notify{};
-  auto signal_guard = detail::SignalGuard{graceful_stop, cancel_source,
-                                          std::chrono::seconds{3}};
+  // The grace period bounds how long a pipeline may drain after a graceful
+  // stop request before it is force-cancelled. A non-positive value disables
+  // the timeout, letting the pipeline drain indefinitely.
+  auto grace
+    = caf::get_or(caf::content(sys.config()), "tenzir.shutdown-grace-period",
+                  caf::timespan{std::chrono::seconds{3}});
+  auto signal_guard = detail::SignalGuard{
+    graceful_stop, cancel_source,
+    std::chrono::duration_cast<std::chrono::milliseconds>(grace)};
   auto task = folly::coro::co_invoke([&] -> Task<Option<failure_or<void>>> {
     co_return co_await catch_cancellation(folly::coro::co_withCancellation(
       cancel_source.getToken(),

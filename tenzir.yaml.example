@@ -24,6 +24,12 @@ tenzir:
   # without retries.
   connection-retry-delay: 3s
 
+  # How long pipelines may drain in-flight data on node shutdown before they
+  # are force-killed. Set to 0s (or any non-positive value) to wait
+  # indefinitely, in which case pipelines are never force-killed and the node
+  # quits only once they have drained on their own.
+  shutdown-grace-period: 3min
+
   # URL of an HTTP/HTTPS proxy used for outbound `http://` targets. The URL
   # must include an explicit port, and may carry Basic-auth userinfo
   # (`http://user:pw@proxy.example.com:3128`). If unset,

@@ -33,6 +33,10 @@ namespace tenzir::detail {
 /// is fired so the pipeline can drain. On a second signal (or after the
 /// grace period) the `cancel_source` is triggered to force-cancel.
 ///
+/// A non-positive grace period means the pipeline is allowed to drain
+/// indefinitely: it is never force-cancelled on a timeout, only by a
+/// second signal.
+///
 /// The destructor joins the thread and restores the original handlers.
 class SignalGuard {
 public:
@@ -96,10 +100,13 @@ private:
     fmt::print(stderr, "\rinitiating graceful shutdown... "
                        "(repeat to terminate immediately)\n");
     graceful_stop_->notify_one();
-    // Wait for second signal, grace-period timeout, or normal completion.
+    // Wait for second signal, grace-period timeout, or normal completion. A
+    // non-positive grace period waits indefinitely (timeout -1), so the
+    // pipeline is only force-cancelled by a second signal, never by a timeout.
     pfds[0].revents = 0;
     pfds[1].revents = 0;
-    rc = ::poll(pfds.data(), pfds.size(), grace_ms);
+    auto timeout = grace_ms > 0 ? grace_ms : -1;
+    rc = ::poll(pfds.data(), pfds.size(), timeout);
     if (rc > 0 and (pfds[1].revents & POLLIN)) {
       return; // Pipeline finished on its own.
     }
