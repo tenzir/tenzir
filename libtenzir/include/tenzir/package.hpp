@@ -309,8 +309,9 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh,
                                    SourceMap* source_map = nullptr)
   -> failure_or<std::unique_ptr<module_def>>;
 
-/// Compiles and const-evaluates the package's `constants.tql`, adding each binding
-/// as a value entity to `pkg_mod`. Later bindings may reference earlier ones.
+/// Compiles and const-evaluates the package's `constants.tql`, adding each
+/// binding as a value entity to `pkg_mod`. Later bindings may reference earlier
+/// ones.
 auto build_package_lets(const package& pkg, module_def& pkg_mod,
                         diagnostic_handler& dh, SourceMap* source_map = nullptr)
   -> failure_or<void>;
