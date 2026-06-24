@@ -1,0 +1,18 @@
+{
+  syslog: "May  5 18:16:21",
+  time_only: "14:30:45",
+  syslog_default: 1970-05-05T18:16:21Z,
+  time_only_default: 1970-01-01T14:30:45Z,
+}
+warning: `parse_time` parsed a timestamp without a year as 1970; this is deprecated and will become an error in a future release
+ --> tests/functions/time/parse_time_missing_reference_deprecated.tql:6:18
+  |
+6 | syslog_default = syslog.parse_time("%b %e %H:%M:%S")
+  |                  ~~~~~~ 
+  |
+warning: `parse_time` parsed a timestamp without a year as 1970; this is deprecated and will become an error in a future release
+ --> tests/functions/time/parse_time_missing_reference_deprecated.tql:7:21
+  |
+7 | time_only_default = time_only.parse_time("%H:%M:%S")
+  |                     ~~~~~~~~~ 
+  |
