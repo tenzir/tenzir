@@ -251,17 +251,6 @@ inline constexpr std::chrono::milliseconds node_connection_timeout
 inline constexpr std::chrono::milliseconds scheduler_timeout
   = std::chrono::minutes{15};
 
-/// The period to wait until a shutdown sequence finishes cleanly. After the
-/// elapses, the shutdown procedure escalates into a "hard kill".
-/// @relates shutdown_kill_timeout
-inline constexpr std::chrono::milliseconds shutdown_grace_period
-  = std::chrono::minutes{3};
-
-/// Time to wait until receiving a DOWN from a killed actor.
-/// @relates shutdown_grace_period
-inline constexpr std::chrono::seconds shutdown_kill_timeout
-  = std::chrono::minutes{1};
-
 /// The allowed false positive rate for a synopsis.
 inline constexpr double fp_rate = 0.01;
 
