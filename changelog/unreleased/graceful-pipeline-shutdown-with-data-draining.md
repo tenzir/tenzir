@@ -12,5 +12,7 @@ graceful stop signal and can finish outstanding work before the pipeline
 shuts down.
 
 A configurable grace period (`tenzir.shutdown-grace-period`, default
-30 seconds) bounds how long the system waits. After the grace period
-expires, remaining pipelines are force-killed.
+3 minutes) bounds how long the system waits. After the grace period
+expires, remaining pipelines are force-killed. Setting the grace period
+to `0s` (or any non-positive value) waits indefinitely, so pipelines are
+never force-killed and drain fully before the node quits.
