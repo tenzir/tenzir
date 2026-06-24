@@ -1114,19 +1114,19 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
       return failure::promise();
     }
   }
-  auto lets_file = dir / "lets.tql";
-  if (std::filesystem::exists(lets_file, ec)) {
-    if (auto contents = detail::load_contents(lets_file)) {
+  auto constants_file = dir / "constants.tql";
+  if (std::filesystem::exists(constants_file, ec)) {
+    if (auto contents = detail::load_contents(constants_file)) {
       parsed_package->lets = std::move(*contents);
     } else {
-      diagnostic::error("failed to read {}", lets_file)
+      diagnostic::error("failed to read {}", constants_file)
         .note("error: {}", contents.error())
         .emit(dh);
       had_errors = true;
     }
   } else if (ec) {
     diagnostic::error("{}", ec)
-      .note("while trying to load {}", lets_file)
+      .note("while trying to load {}", constants_file)
       .emit(dh);
     had_errors = true;
   }
@@ -1657,7 +1657,7 @@ auto build_package_lets(const package& pkg, module_def& pkg_mod,
   auto provider = session_provider::make(dh);
   auto session = provider.as_session();
   auto source = Source::new_source(
-    pkg.lets, fmt::format("<packages/{}/lets.tql>", pkg.id), true);
+    pkg.lets, fmt::format("<packages/{}/constants.tql>", pkg.id), true);
   if (source_map != nullptr) {
     source_map->add_source(source);
   }
@@ -1671,7 +1671,7 @@ auto build_package_lets(const package& pkg, module_def& pkg_mod,
   for (const auto& stmt : parsed.body) {
     const auto* let = std::get_if<ast::let_stmt>(&stmt);
     if (not let) {
-      diagnostic::error("`lets.tql` may only contain `let` bindings")
+      diagnostic::error("`constants.tql` may only contain `let` bindings")
         .primary(match(stmt,
                        [](const auto& s) {
                          return s.get_location();

@@ -1,5 +1,5 @@
 error: `$b` is referenced before it is defined
- --> <packages/fwdqpkg/lets.tql>:1:10
+ --> <packages/fwdqpkg/constants.tql>:1:10
   |
 1 | let $a = fwdqpkg::$b
   |          ^^^^^^^^^^^ 

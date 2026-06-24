@@ -1,5 +1,5 @@
 error: expected a constant expression
- --> <packages/nonconstpkg/lets.tql>:1:10
+ --> <packages/nonconstpkg/constants.tql>:1:10
   |
 1 | let $x = foo
   |          ^^^ 

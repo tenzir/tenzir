@@ -1,5 +1,5 @@
-error: `lets.tql` may only contain `let` bindings
- --> <packages/nonletpkg/lets.tql>:2:1
+error: `constants.tql` may only contain `let` bindings
+ --> <packages/nonletpkg/constants.tql>:2:1
   |
 2 | from {x: 1}
   | ^^^^^^^^^^^ 

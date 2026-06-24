@@ -264,7 +264,7 @@ struct package final {
   package_pipelines_map pipelines;
   package_contexts_map contexts;
   package_examples_list examples;
-  /// Raw contents of the package's `lets.tql` file. Compiled and
+  /// Raw contents of the package's `constants.tql` file. Compiled and
   /// const-evaluated into value entities (the `let` namespace) when the
   /// package is loaded.
   std::string lets;
@@ -309,7 +309,7 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh,
                                    SourceMap* source_map = nullptr)
   -> failure_or<std::unique_ptr<module_def>>;
 
-/// Compiles and const-evaluates the package's `lets.tql`, adding each binding
+/// Compiles and const-evaluates the package's `constants.tql`, adding each binding
 /// as a value entity to `pkg_mod`. Later bindings may reference earlier ones.
 auto build_package_lets(const package& pkg, module_def& pkg_mod,
                         diagnostic_handler& dh, SourceMap* source_map = nullptr)

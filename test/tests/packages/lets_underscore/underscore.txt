@@ -1,5 +1,5 @@
 error: package binding `underscorepkg::$u` is not a constant
- --> <packages/underscorepkg/lets.tql>:1:10
+ --> <packages/underscorepkg/constants.tql>:1:10
   |
 1 | let $u = _
   |          ^ 
