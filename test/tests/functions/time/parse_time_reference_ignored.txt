@@ -1,0 +1,22 @@
+{
+  full_date: "2024-06-15",
+  week_date: "2024 22 1",
+  full_date_reference_ignored: 2024-06-15T00:00:00Z,
+  week_date_reference_ignored: 2024-06-03T00:00:00Z,
+}
+warning: `parse_time` ignores `reference` because the format includes a complete date
+ --> tests/functions/time/parse_time_reference_ignored.tql:8:13
+  |
+7 |   "%Y-%m-%d",
+  |   ---------- 
+8 |   reference=2026-06-24T00:00:00Z,
+  |             ~~~~~~~~~~~~~~~~~~~~ 
+  |
+warning: `parse_time` ignores `reference` because the format includes a complete date
+  --> tests/functions/time/parse_time_reference_ignored.tql:12:13
+   |
+11 |   "%Y %U %w",
+   |   ---------- 
+12 |   reference=2024-01-01T00:00:00Z,
+   |             ~~~~~~~~~~~~~~~~~~~~ 
+   |
