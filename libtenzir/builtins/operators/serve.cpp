@@ -58,6 +58,7 @@
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
+#include <tenzir/detail/stable_map.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/node.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -88,6 +89,10 @@ namespace {
 
 constexpr auto serve_endpoint_id = 0;
 constexpr auto serve_multi_endpoint_id = 1;
+constexpr auto multiserve_endpoint_id = 2;
+constexpr auto multiserve_add_endpoint_id = 3;
+constexpr auto multiserve_remove_endpoint_id = 4;
+constexpr auto multiserve_status_endpoint_id = 5;
 
 constexpr auto serve_spec = R"_(
 /serve:
@@ -432,10 +437,503 @@ constexpr auto serve_multi_spec = R"_(
                   example: "Invalid arguments"
                   description: The error message.
     )_";
+constexpr auto multiserve_spec = R"_(
+/multiserve:
+  post:
+    tags:
+      - Pipeline output
+    operationId: pollMultiserve
+    summary: Create or poll a multiserve session
+    description: "Creates a new multiserve session or polls an existing one. Omit `multiserve_id` to create a session; `serve_ids` is only honored on creation. By default, the endpoint uses long polling (`timeout: 5s`) and returns as soon as at least one member has an event available (`min_events: 1`)."
+    requestBody:
+      description: Multiserve creation or poll request.
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              multiserve_id:
+                type: string
+                example: "f7a1b2c3"
+                description: The identifier of an existing multiserve session. Omit this field to create a new session.
+              serve_ids:
+                type: array
+                description: "The members to seed a new session with. Only honored when creating a session. Each item is either a bare string (the serve id) or an object with a `serve_id` and an optional `schema` override."
+                items:
+                  type: object
+                  required: [serve_id]
+                  properties:
+                    serve_id:
+                      type: string
+                      example: "query-1"
+                      description: The output stream identifier returned when the pipeline was launched.
+                    schema:
+                      type: string
+                      enum: [legacy, exact, never]
+                      example: "exact"
+                      description: The schema representation to include for this member. Overrides the request-level default.
+              max_events:
+                type: integer
+                minimum: 0
+                example: 1024
+                default: 1024
+                description: The maximum number of events to return across all members. The limit is split evenly across members and rounded up when necessary.
+              min_events:
+                type: integer
+                minimum: 0
+                example: 1
+                default: 1
+                description: The minimum number of events to wait for across all members before returning. The limit is split evenly across members and rounded up when necessary.
+              timeout:
+                type: string
+                example: "200ms"
+                default: "5s"
+                description: The maximum time to spend on the request. Reaching the timeout returns the available events and is not an error. The timeout must not be greater than 10 seconds.
+              schema:
+                type: string
+                enum: [legacy, exact, never]
+                example: "exact"
+                default: "legacy"
+                description: The default schema representation to include for members without their own override. Use `exact` for a representation that matches Tenzir's type system exactly, and `never` to omit schema definitions.
+          example:
+            serve_ids:
+              - "query-1"
+              - serve_id: "query-2"
+                schema: exact
+            max_events: 1024
+            min_events: 1
+            timeout: "5s"
+            schema: exact
+    responses:
+      200:
+        description: The response contains the session identifier and one result entry for each member.
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - multiserve_id
+                - results
+              properties:
+                multiserve_id:
+                  type: string
+                  description: The identifier of the multiserve session.
+                  example: "f7a1b2c3"
+                results:
+                  type: object
+                  description: The per-member results, keyed by serve id.
+                  additionalProperties:
+                    type: object
+                    required:
+                      - next_continuation_token
+                      - state
+                      - events
+                    properties:
+                      next_continuation_token:
+                        type: string
+                        nullable: true
+                        description: The token to use when reading the next batch. The value is `null` when the pipeline reached a terminal state.
+                        example: "340ce2j"
+                      state:
+                        type: string
+                        enum: [running, completed, failed]
+                        description: The pipeline state at the time of the request.
+                        example: "running"
+                      schemas:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            schema_id:
+                              type: string
+                              description: The unique schema identifier.
+                            definition:
+                              description: The schema definition in JSON format.
+                        description: The schemas for the returned events. This field is omitted when the request sets `schema` to `never`.
+                      events:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            schema_id:
+                              type: string
+                              description: The unique schema identifier.
+                            data:
+                              type: object
+                              description: The event data in JSON format.
+                        description: The returned events.
+            example:
+              multiserve_id: "f7a1b2c3"
+              results:
+                query-1:
+                  next_continuation_token: "340ce2j"
+                  state: running
+                  schemas: []
+                  events:
+                    - schema_id: c631d301e4b18f4
+                      data:
+                        timestamp: "2023-04-26T12:00:00Z"
+                        schema: "zeek.conn"
+                        events: 50
+                query-2:
+                  next_continuation_token: null
+                  state: completed
+                  schemas: []
+                  events: []
+      400:
+        description: The request body is invalid.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [error]
+              properties:
+                error:
+                  type: string
+                  example: "Invalid arguments"
+                  description: The error message.
+      404:
+        description: No multiserve session with the given identifier exists.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [error]
+              properties:
+                error:
+                  type: string
+                  example: "unknown multiserve_id"
+                  description: The error message.
+    )_";
+constexpr auto multiserve_add_spec = R"_(
+/multiserve/add:
+  post:
+    tags:
+      - Pipeline output
+    operationId: addMultiserveMember
+    summary: Add a member to a multiserve session
+    description: "Adds an output stream as a member of an existing multiserve session."
+    requestBody:
+      description: Multiserve add request.
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [multiserve_id, serve_id]
+            properties:
+              multiserve_id:
+                type: string
+                example: "f7a1b2c3"
+                description: The identifier of the multiserve session.
+              serve_id:
+                type: string
+                example: "query-3"
+                description: The output stream identifier to add as a member.
+              schema:
+                type: string
+                enum: [legacy, exact, never]
+                example: "exact"
+                description: The schema representation to include for this member. Overrides the session default.
+          example:
+            multiserve_id: "f7a1b2c3"
+            serve_id: "query-3"
+            schema: exact
+    responses:
+      200:
+        description: The member was added. The response lists the session's members.
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - multiserve_id
+                - members
+              properties:
+                multiserve_id:
+                  type: string
+                  description: The identifier of the multiserve session.
+                  example: "f7a1b2c3"
+                members:
+                  type: array
+                  description: The members of the multiserve session.
+                  items:
+                    type: object
+                    required:
+                      - serve_id
+                    properties:
+                      serve_id:
+                        type: string
+                        description: The output stream identifier.
+                        example: "query-3"
+                      continuation_token:
+                        type: string
+                        nullable: true
+                        description: The next continuation token for this member. The value is `null` before the first poll and after completion.
+                        example: "340ce2j"
+                      schema:
+                        type: string
+                        enum: [legacy, exact, never]
+                        nullable: true
+                        description: The member's schema override, or `null` when it uses the session default.
+                        example: "exact"
+            example:
+              multiserve_id: "f7a1b2c3"
+              members:
+                - serve_id: "query-1"
+                  continuation_token: "340ce2j"
+                  schema: null
+                - serve_id: "query-3"
+                  continuation_token: null
+                  schema: exact
+      400:
+        description: The request body is invalid.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [error]
+              properties:
+                error:
+                  type: string
+                  example: "Invalid arguments"
+                  description: The error message.
+      404:
+        description: No multiserve session with the given identifier exists.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [error]
+              properties:
+                error:
+                  type: string
+                  example: "unknown multiserve_id"
+                  description: The error message.
+    )_";
+constexpr auto multiserve_remove_spec = R"_(
+/multiserve/remove:
+  post:
+    tags:
+      - Pipeline output
+    operationId: removeMultiserveMember
+    summary: Remove a member from a multiserve session
+    description: "Removes an output stream from an existing multiserve session."
+    requestBody:
+      description: Multiserve remove request.
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [multiserve_id, serve_id]
+            properties:
+              multiserve_id:
+                type: string
+                example: "f7a1b2c3"
+                description: The identifier of the multiserve session.
+              serve_id:
+                type: string
+                example: "query-3"
+                description: The output stream identifier to remove.
+          example:
+            multiserve_id: "f7a1b2c3"
+            serve_id: "query-3"
+    responses:
+      200:
+        description: The member was removed. The response lists the session's remaining members.
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - multiserve_id
+                - members
+              properties:
+                multiserve_id:
+                  type: string
+                  description: The identifier of the multiserve session.
+                  example: "f7a1b2c3"
+                members:
+                  type: array
+                  description: The remaining members of the multiserve session.
+                  items:
+                    type: object
+                    required:
+                      - serve_id
+                    properties:
+                      serve_id:
+                        type: string
+                        description: The output stream identifier.
+                        example: "query-1"
+                      continuation_token:
+                        type: string
+                        nullable: true
+                        description: The next continuation token for this member. The value is `null` before the first poll and after completion.
+                        example: "340ce2j"
+                      schema:
+                        type: string
+                        enum: [legacy, exact, never]
+                        nullable: true
+                        description: The member's schema override, or `null` when it uses the session default.
+                        example: "exact"
+            example:
+              multiserve_id: "f7a1b2c3"
+              members:
+                - serve_id: "query-1"
+                  continuation_token: "340ce2j"
+                  schema: null
+      400:
+        description: The request body is invalid.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [error]
+              properties:
+                error:
+                  type: string
+                  example: "Invalid arguments"
+                  description: The error message.
+      404:
+        description: No multiserve session with the given identifier exists.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [error]
+              properties:
+                error:
+                  type: string
+                  example: "unknown multiserve_id"
+                  description: The error message.
+    )_";
+constexpr auto multiserve_status_spec = R"_(
+/multiserve/status:
+  post:
+    tags:
+      - Pipeline output
+    operationId: getMultiserveStatus
+    summary: Inspect a multiserve session
+    description: "Reports the members, continuation tokens, and schema overrides of an existing multiserve session."
+    requestBody:
+      description: Multiserve status request.
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [multiserve_id]
+            properties:
+              multiserve_id:
+                type: string
+                example: "f7a1b2c3"
+                description: The identifier of the multiserve session.
+          example:
+            multiserve_id: "f7a1b2c3"
+    responses:
+      200:
+        description: The response lists the session's members.
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - multiserve_id
+                - members
+              properties:
+                multiserve_id:
+                  type: string
+                  description: The identifier of the multiserve session.
+                  example: "f7a1b2c3"
+                members:
+                  type: array
+                  description: The members of the multiserve session.
+                  items:
+                    type: object
+                    required:
+                      - serve_id
+                    properties:
+                      serve_id:
+                        type: string
+                        description: The output stream identifier.
+                        example: "query-1"
+                      continuation_token:
+                        type: string
+                        nullable: true
+                        description: The next continuation token for this member. The value is `null` before the first poll and after completion.
+                        example: "340ce2j"
+                      schema:
+                        type: string
+                        enum: [legacy, exact, never]
+                        nullable: true
+                        description: The member's schema override, or `null` when it uses the session default.
+                        example: "exact"
+            example:
+              multiserve_id: "f7a1b2c3"
+              members:
+                - serve_id: "query-1"
+                  continuation_token: "340ce2j"
+                  schema: null
+                - serve_id: "query-2"
+                  continuation_token: null
+                  schema: exact
+      400:
+        description: The request body is invalid.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [error]
+              properties:
+                error:
+                  type: string
+                  example: "Invalid arguments"
+                  description: The error message.
+      404:
+        description: No multiserve session with the given identifier exists.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [error]
+              properties:
+                error:
+                  type: string
+                  example: "unknown multiserve_id"
+                  description: The error message.
+    )_";
 
 // -- serve manager -----------------------------------------------------------
 
 using serve_response = std::tuple<std::string, std::vector<table_slice>>;
+
+/// Convert a schema override into a string token carried across the actor
+/// boundary. Empty string means "unset/use the poll-time default".
+auto schema_to_token(std::optional<enum schema> s) -> std::string {
+  return s ? std::string{to_string(*s)} : std::string{};
+}
+
+/// Convert a schema token back into a schema override. Empty means unset; an
+/// unparseable token (should not happen, validated at the handler) falls back
+/// to unset.
+auto token_to_schema(std::string_view s) -> std::optional<enum schema> {
+  if (s.empty()) {
+    return std::nullopt;
+  }
+  return from_string<enum schema>(s);
+}
+
+/// One member's outcome from a multiserve get: serve_id, the serve response
+/// (next token + slices), the derived state as a string token (e.g.
+/// "running"/"completed"/"failed"), and the member's schema override as a
+/// string token ("" = use the poll-time default). The two trailing tokens are
+/// strings because they cross the actor boundary, which requires CAF-registered
+/// message types.
+using multiserve_member_result
+  = std::tuple<std::string, serve_response, std::string, std::string>;
+using multiserve_get_response = std::vector<multiserve_member_result>;
 
 using serve_manager_actor = typed_actor_fwd<
   // Register a new serve operator.
@@ -452,7 +950,27 @@ using serve_manager_actor = typed_actor_fwd<
        uint64_t min_events, duration timeout, uint64_t max_events)
     ->caf::result<serve_response>,
   // Force-deliver whatever is currently buffered for a pending get, if any.
-  auto(atom::flush, std::string serve_id)->caf::result<void>>
+  auto(atom::flush, std::string serve_id)->caf::result<void>,
+  // Create a new multiserve session (optionally seeded with members), return
+  // its id. Each member is (serve_id, schema-token); "" = unset/use default.
+  auto(atom::create, std::vector<std::tuple<std::string, std::string>> members)
+    ->caf::result<std::string>,
+  // Add a member to a multiserve session; returns the post-mutation member
+  // record. `schema` is a schema token ("" = unset/use default).
+  auto(atom::add, std::string multiserve_id, std::string serve_id,
+       std::string schema)
+    ->caf::result<record>,
+  // Remove a member from a multiserve session; returns the post-mutation
+  // member record.
+  auto(atom::remove, std::string multiserve_id, std::string serve_id)
+    ->caf::result<record>,
+  // Poll a multiserve session: fan out to each member's serve buffer and
+  // return per-member results.
+  auto(atom::get, std::string multiserve_id, uint64_t min_events,
+       duration timeout, uint64_t max_events)
+    ->caf::result<multiserve_get_response>,
+  // Report a multiserve session's members, tokens, and schemas.
+  auto(atom::status, std::string multiserve_id)->caf::result<record>>
   // Conform to the protocol of the COMPONENT PLUGIN actor interface.
   ::extend_with<component_plugin_actor>::unwrap;
 
@@ -562,6 +1080,8 @@ struct managed_serve_operator {
   }
 };
 
+auto round_up_to_multiple(size_t numToRound, size_t multiple) -> size_t;
+
 struct serve_manager_state {
   static constexpr auto name = "serve-manager";
 
@@ -574,6 +1094,235 @@ struct serve_manager_state {
   /// corresponding error messages. This exists only for returning better error
   /// messages to the user.
   std::unordered_map<std::string, caf::error> expired_ids = {};
+
+  /// One member of a multiserve session.
+  struct multiserve_member {
+    /// The last token the server holds; empty means unset/null.
+    std::string continuation_token = {};
+    /// Per-member schema override; nullopt means use the poll default.
+    std::optional<enum schema> schema = {};
+  };
+
+  /// A multiserve session: a named, ordered set of serve members.
+  struct multiserve_session {
+    std::string id = {};
+    detail::stable_map<std::string, multiserve_member> members = {};
+    /// Guards against concurrent polls on the same session.
+    bool get_in_flight = false;
+    /// Last time the session was touched, for idle expiry.
+    time last_access = {};
+  };
+
+  /// The multiserve sessions currently observed by the serve-manager.
+  std::unordered_map<std::string, multiserve_session> multiserve_sessions = {};
+
+  /// Build the member record returned by create/add/remove/status.
+  auto multiserve_members_record(const multiserve_session& session) const
+    -> record {
+    auto members = list{};
+    members.reserve(session.members.size());
+    for (const auto& [serve_id, member] : session.members) {
+      auto& entry = as<record>(members.emplace_back(record{}));
+      entry.emplace("serve_id", serve_id);
+      entry.emplace("continuation_token", member.continuation_token.empty()
+                                            ? data{}
+                                            : member.continuation_token);
+      entry.emplace("schema", member.schema
+                                ? data{fmt::to_string(*member.schema)}
+                                : data{});
+    }
+    return record{
+      {"multiserve_id", session.id},
+      {"members", std::move(members)},
+    };
+  }
+
+  /// Look up a session, returning the unknown-session error if absent.
+  auto find_multiserve_session(const std::string& multiserve_id)
+    -> caf::expected<multiserve_session*> {
+    const auto found = multiserve_sessions.find(multiserve_id);
+    if (found == multiserve_sessions.end()) {
+      return caf::make_error(ec::lookup_error,
+                             fmt::format("unknown multiserve session: {}",
+                                         multiserve_id));
+    }
+    return &found->second;
+  }
+
+  auto
+  multiserve_create(std::vector<std::tuple<std::string, std::string>> members)
+    -> caf::result<std::string> {
+    auto id = fmt::to_string(uuid::random());
+    auto session = multiserve_session{.id = id};
+    for (auto& [serve_id, schema_token] : members) {
+      auto [it, inserted] = session.members.try_emplace(std::move(serve_id));
+      if (auto schema = token_to_schema(schema_token)) {
+        it->second.schema = schema;
+      }
+    }
+    session.last_access = time::clock::now();
+    multiserve_sessions.emplace(id, std::move(session));
+    return id;
+  }
+
+  auto multiserve_add(std::string multiserve_id, std::string serve_id,
+                      std::string schema_token) -> caf::result<record> {
+    auto maybe_session = find_multiserve_session(multiserve_id);
+    if (not maybe_session) {
+      return maybe_session.error();
+    }
+    auto& session = **maybe_session;
+    auto [it, inserted] = session.members.try_emplace(std::move(serve_id));
+    // Explicit schema updates even on repeat add; tokens are left untouched.
+    if (auto schema = token_to_schema(schema_token)) {
+      it->second.schema = schema;
+    }
+    session.last_access = time::clock::now();
+    return multiserve_members_record(session);
+  }
+
+  auto multiserve_remove(std::string multiserve_id, std::string serve_id)
+    -> caf::result<record> {
+    auto maybe_session = find_multiserve_session(multiserve_id);
+    if (not maybe_session) {
+      return maybe_session.error();
+    }
+    auto& session = **maybe_session;
+    session.members.erase(serve_id);
+    session.last_access = time::clock::now();
+    return multiserve_members_record(session);
+  }
+
+  auto multiserve_status(std::string multiserve_id) -> caf::result<record> {
+    auto maybe_session = find_multiserve_session(multiserve_id);
+    if (not maybe_session) {
+      return maybe_session.error();
+    }
+    auto& session = **maybe_session;
+    session.last_access = time::clock::now();
+    return multiserve_members_record(session);
+  }
+
+  auto multiserve_get(std::string multiserve_id, uint64_t min_events,
+                      duration timeout, uint64_t max_events)
+    -> caf::result<multiserve_get_response> {
+    auto maybe_session = find_multiserve_session(multiserve_id);
+    if (not maybe_session) {
+      return maybe_session.error();
+    }
+    auto& session = **maybe_session;
+    session.last_access = time::clock::now();
+    // Concurrency guard: only one poll may be in flight per session.
+    if (session.get_in_flight) {
+      return caf::make_error(ec::logic_error,
+                             fmt::format("a poll is already in flight for "
+                                         "multiserve session: {}",
+                                         multiserve_id));
+    }
+    // Snapshot the current members; membership changes take effect next poll.
+    auto snapshot = std::vector<
+      std::tuple<std::string, std::string, std::optional<enum schema>>>{};
+    snapshot.reserve(session.members.size());
+    for (const auto& [serve_id, member] : session.members) {
+      snapshot.emplace_back(serve_id, member.continuation_token, member.schema);
+    }
+    // Empty member set: deliver an empty response immediately.
+    if (snapshot.empty()) {
+      return multiserve_get_response{};
+    }
+    session.get_in_flight = true;
+    const auto n = snapshot.size();
+    const auto min_per = round_up_to_multiple(min_events, n) / n;
+    const auto max_per = round_up_to_multiple(max_events, n) / n;
+    auto rp = self->make_response_promise<multiserve_get_response>();
+    // Result container keyed by serve_id; ordered back into snapshot order on
+    // delivery.
+    auto results = std::make_shared<
+      std::unordered_map<std::string, multiserve_member_result>>();
+    auto order = std::make_shared<std::vector<std::string>>();
+    order->reserve(n);
+    for (const auto& [serve_id, token, schema] : snapshot) {
+      order->push_back(serve_id);
+    }
+    auto fan = detail::make_fanout_counter(
+      n,
+      [this, rp, results, order, multiserve_id]() mutable {
+        // Re-find the session: it may have expired during the poll.
+        const auto found = multiserve_sessions.find(multiserve_id);
+        if (found != multiserve_sessions.end()) {
+          found->second.get_in_flight = false;
+          found->second.last_access = time::clock::now();
+        }
+        auto response = multiserve_get_response{};
+        response.reserve(order->size());
+        for (auto& serve_id : *order) {
+          auto it = results->find(serve_id);
+          if (it != results->end()) {
+            response.push_back(std::move(it->second));
+          }
+        }
+        rp.deliver(std::move(response));
+      },
+      [this, rp, multiserve_id](caf::error e) mutable {
+        // Members resolve via receive_success, so this should not fire; still
+        // clear the guard and surface the error if it ever does.
+        const auto found = multiserve_sessions.find(multiserve_id);
+        if (found != multiserve_sessions.end()) {
+          found->second.get_in_flight = false;
+        }
+        rp.deliver(std::move(e));
+      });
+    for (const auto& [serve_id, token, member_schema] : snapshot) {
+      self->mail(atom::get_v, serve_id, token, min_per, timeout, max_per)
+        .request(static_cast<serve_manager_actor>(self), caf::infinite)
+        .then(
+          [this, fan, results, multiserve_id, serve_id = serve_id,
+           member_schema](serve_response& r) mutable {
+            const auto& next_token = std::get<0>(r);
+            const auto state = next_token.empty() ? serve_state::completed
+                                                  : serve_state::running;
+            // Write the new token back into the live session, if still present.
+            const auto found = multiserve_sessions.find(multiserve_id);
+            if (found != multiserve_sessions.end()) {
+              const auto member = found->second.members.find(serve_id);
+              if (member != found->second.members.end()) {
+                member->second.continuation_token = next_token;
+              }
+            }
+            results->insert_or_assign(
+              serve_id, multiserve_member_result{
+                          serve_id, std::move(r), std::string{to_string(state)},
+                          schema_to_token(member_schema)});
+            fan->receive_success();
+          },
+          [fan, results, serve_id = serve_id,
+           member_schema](caf::error& e) mutable {
+            // Error isolation: one member's failure never aborts the poll.
+            const auto state = e == caf::exit_reason::user_shutdown
+                                 ? serve_state::completed
+                                 : serve_state::failed;
+            results->insert_or_assign(
+              serve_id,
+              multiserve_member_result{serve_id, serve_response{},
+                                       std::string{to_string(state)},
+                                       schema_to_token(member_schema)});
+            fan->receive_success();
+          });
+    }
+    return rp;
+  }
+
+  /// Drop sessions idle beyond the configured timeout; never drops a session
+  /// with a poll in flight.
+  auto sweep_idle_multiserve_sessions() -> void {
+    const auto now = time::clock::now();
+    std::erase_if(multiserve_sessions, [&](const auto& entry) {
+      const auto& session = entry.second;
+      return not session.get_in_flight
+             and now - session.last_access
+                   > defaults::api::multiserve::idle_timeout;
+    });
+  }
 
   auto handle_down_msg(const caf::actor_addr& source, const caf::error& err)
     -> void {
@@ -822,6 +1571,16 @@ auto serve_manager(
   serve_manager_actor::stateful_pointer<serve_manager_state> self)
   -> serve_manager_actor::behavior_type {
   self->state().self = self;
+  // Periodically drop idle multiserve sessions.
+  detail::weak_run_delayed_loop(
+    self,
+    std::chrono::duration_cast<std::chrono::minutes>(
+      defaults::api::multiserve::idle_timeout)
+      / 2,
+    [self] {
+      self->state().sweep_idle_multiserve_sessions();
+    },
+    /*run_immediately=*/false);
   return {
     [self](atom::start, std::string& serve_id, uint64_t buffer_size,
            caf::actor& watched) -> caf::result<void> {
@@ -856,6 +1615,30 @@ auto serve_manager(
     [self](atom::status, status_verbosity verbosity,
            duration) -> caf::result<record> {
       return self->state().status(verbosity);
+    },
+    [self](atom::create,
+           std::vector<std::tuple<std::string, std::string>>& members)
+      -> caf::result<std::string> {
+      return self->state().multiserve_create(std::move(members));
+    },
+    [self](atom::add, std::string& multiserve_id, std::string& serve_id,
+           std::string& schema) -> caf::result<record> {
+      return self->state().multiserve_add(
+        std::move(multiserve_id), std::move(serve_id), std::move(schema));
+    },
+    [self](atom::remove, std::string& multiserve_id,
+           std::string& serve_id) -> caf::result<record> {
+      return self->state().multiserve_remove(std::move(multiserve_id),
+                                             std::move(serve_id));
+    },
+    [self](atom::get, std::string& multiserve_id, uint64_t min_events,
+           duration timeout,
+           uint64_t max_events) -> caf::result<multiserve_get_response> {
+      return self->state().multiserve_get(std::move(multiserve_id), min_events,
+                                          timeout, max_events);
+    },
+    [self](atom::status, std::string& multiserve_id) -> caf::result<record> {
+      return self->state().multiserve_status(std::move(multiserve_id));
     },
   };
 }
@@ -1293,6 +2076,315 @@ struct serve_handler_state {
     return rp;
   }
 
+  /// Reads an optional string parameter, returning a parse_error on type
+  /// mismatch.
+  static auto try_get_string(const tenzir::record& params, std::string_view key)
+    -> std::variant<std::optional<std::string>, parse_error> {
+    auto value = try_get<std::string>(params, key);
+    if (not value) {
+      return parse_error{
+        .message = fmt::format("failed to read {} parameter", key),
+        .detail = caf::make_error(ec::invalid_argument,
+                                  fmt::format("{}; got parameters {}",
+                                              value.error(), params))};
+    }
+    if (*value) {
+      return std::optional<std::string>{std::move(**value)};
+    }
+    return std::optional<std::string>{};
+  }
+
+  /// Reads an optional per-request schema parameter and converts it.
+  static auto try_get_schema(const tenzir::record& params)
+    -> std::variant<std::optional<enum schema>, parse_error> {
+    auto schema = try_get<std::string>(params, "schema");
+    if (not schema) {
+      return parse_error{
+        .message = "failed to read schema parameter",
+        .detail = caf::make_error(ec::invalid_argument,
+                                  fmt::format("{}; got params {}",
+                                              schema.error(), params))};
+    }
+    if (not *schema) {
+      return std::optional<enum schema>{};
+    }
+    auto opt = from_string<enum schema>(**schema);
+    if (not opt) {
+      return parse_error{.message = "invalid schema parameter",
+                         .detail
+                         = caf::make_error(ec::invalid_argument,
+                                           fmt::format("got `{}`", **schema))};
+    }
+    return std::optional<enum schema>{*opt};
+  }
+
+  /// Reads the optional `serve_ids` list, where each element is either a bare
+  /// string (serve_id) or a record `{serve_id: string, schema?: string}`.
+  static auto normalize_serve_ids(const tenzir::record& params) -> std::variant<
+    std::vector<std::tuple<std::string, std::optional<enum schema>>>,
+    parse_error> {
+    auto members
+      = std::vector<std::tuple<std::string, std::optional<enum schema>>>{};
+    auto it = params.find("serve_ids");
+    if (it == params.end()) {
+      return members;
+    }
+    auto* const l = try_as<tenzir::list>(it->second);
+    if (not l) {
+      return parse_error{
+        .message = "expected `serve_ids` to be a list",
+        .detail = caf::make_error(ec::invalid_argument),
+      };
+    }
+    members.reserve(l->size());
+    for (const auto& e : *l) {
+      // A bare string is shorthand for a member without a schema override.
+      if (const auto* str = try_as<std::string>(e)) {
+        members.emplace_back(*str, std::nullopt);
+        continue;
+      }
+      const auto* r = try_as<tenzir::record>(e);
+      if (not r) {
+        return parse_error{
+          .message = "expected `serve_ids` elements to be strings or records",
+          .detail = caf::make_error(ec::invalid_argument),
+        };
+      }
+      auto serve_id = try_get_only<std::string>(*r, "serve_id");
+      if (not serve_id or not *serve_id) {
+        return parse_error{
+          .message = "`serve_ids` record must contain a `serve_id` string",
+          .detail = caf::make_error(ec::invalid_argument,
+                                    fmt::format("got element {}", e)),
+        };
+      }
+      auto schema = try_get_schema(*r);
+      if (auto* err = try_as<parse_error>(schema)) {
+        return std::move(*err);
+      }
+      members.emplace_back(**serve_id,
+                           std::get<std::optional<enum schema>>(schema));
+    }
+    return members;
+  }
+
+  /// Serializes a `record` into a JSON rest_response.
+  static auto record_response(const record& r) -> rest_response {
+    auto json = to_json(data{r}, {.oneline = true});
+    TENZIR_ASSERT(json);
+    return rest_response::from_json_string(std::move(*json));
+  }
+
+  /// Maps a serve-manager error onto an HTTP status code.
+  static auto multiserve_error(const caf::error& err) -> rest_response {
+    auto code = err == ec::lookup_error  ? 404
+                : err == ec::logic_error ? 409
+                                         : 400;
+    return rest_response::make_error(code, fmt::to_string(err), {});
+  }
+
+  /// Handles a request to the stateful `/multiserve` endpoint: creates a new
+  /// session when `multiserve_id` is absent, then polls it.
+  auto handle_multiserve(tenzir::record params) const
+    -> caf::result<rest_response> {
+    auto meta = try_extract_request_meta(params);
+    if (auto* err = try_as<parse_error>(meta)) {
+      return rest_response::make_error(400, std::move(err->message),
+                                       std::move(err->detail));
+    }
+    auto& request = as<request_meta>(meta);
+    const auto default_schema = request.schema;
+    auto maybe_id = try_get_string(params, "multiserve_id");
+    if (auto* err = try_as<parse_error>(maybe_id)) {
+      return rest_response::make_error(400, std::move(err->message),
+                                       std::move(err->detail));
+    }
+    auto& id = std::get<std::optional<std::string>>(maybe_id);
+    // Builds the `{multiserve_id, results}` response from per-member results.
+    auto make_response = [default_schema](
+                           const std::string& multiserve_id,
+                           const multiserve_get_response& results) {
+      auto json_text
+        = fmt::format(R"({{"multiserve_id":"{}","results":{{)", multiserve_id);
+      auto first = true;
+      for (const auto& member : results) {
+        const auto& [serve_id, response, state_token, schema_token] = member;
+        const auto& [next_token, slices] = response;
+        if (not first) {
+          json_text += ',';
+        }
+        first = false;
+        // Tokens always come from values we produced, so parsing succeeds.
+        const auto state
+          = from_string<serve_state>(state_token).value_or(serve_state::running);
+        const auto effective
+          = token_to_schema(schema_token).value_or(default_schema);
+        json_text += "\"" + serve_id + "\":";
+        json_text += create_response(next_token, slices, state, effective);
+      }
+      json_text += "}}";
+      return rest_response::from_json_string(json_text);
+    };
+    auto rp = self->make_response_promise<rest_response>();
+    if (not id) {
+      // No id: create a fresh session from `serve_ids`, then poll it.
+      auto members = normalize_serve_ids(params);
+      if (auto* err = try_as<parse_error>(members)) {
+        return rest_response::make_error(400, std::move(err->message),
+                                         std::move(err->detail));
+      }
+      // Map the internal (serve_id, optional<schema>) members to the
+      // (serve_id, schema-token) form carried across the actor boundary.
+      auto member_tokens = std::vector<std::tuple<std::string, std::string>>{};
+      auto& parsed_members = std::get<
+        std::vector<std::tuple<std::string, std::optional<enum schema>>>>(
+        members);
+      member_tokens.reserve(parsed_members.size());
+      for (auto& [serve_id, schema] : parsed_members) {
+        member_tokens.emplace_back(std::move(serve_id),
+                                   schema_to_token(schema));
+      }
+      self->mail(atom::create_v, std::move(member_tokens))
+        .request(serve_manager, caf::infinite)
+        .then(
+          [this, rp, request, make_response](std::string& new_id) mutable {
+            self
+              ->mail(atom::get_v, new_id, request.min_events, request.timeout,
+                     request.max_events)
+              .request(serve_manager, caf::infinite)
+              .then(
+                [rp, new_id,
+                 make_response](multiserve_get_response& results) mutable {
+                  rp.deliver(make_response(new_id, results));
+                },
+                [rp](const caf::error& err) mutable {
+                  rp.deliver(multiserve_error(err));
+                });
+          },
+          [rp](const caf::error& err) mutable {
+            rp.deliver(multiserve_error(err));
+          });
+      return rp;
+    }
+    // Existing id: poll only. `serve_ids` is ignored.
+    self
+      ->mail(atom::get_v, *id, request.min_events, request.timeout,
+             request.max_events)
+      .request(serve_manager, caf::infinite)
+      .then(
+        [rp, id = *id,
+         make_response](multiserve_get_response& results) mutable {
+          rp.deliver(make_response(id, results));
+        },
+        [rp](const caf::error& err) mutable {
+          rp.deliver(multiserve_error(err));
+        });
+    return rp;
+  }
+
+  /// Handles a request to `/multiserve/add`.
+  auto handle_multiserve_add(tenzir::record params) const
+    -> caf::result<rest_response> {
+    auto maybe_id = try_get_string(params, "multiserve_id");
+    if (auto* err = try_as<parse_error>(maybe_id)) {
+      return rest_response::make_error(400, std::move(err->message),
+                                       std::move(err->detail));
+    }
+    auto& id = std::get<std::optional<std::string>>(maybe_id);
+    if (not id) {
+      return rest_response::make_error(400, "multiserve_id must be specified",
+                                       {});
+    }
+    auto maybe_serve_id = try_get_string(params, "serve_id");
+    if (auto* err = try_as<parse_error>(maybe_serve_id)) {
+      return rest_response::make_error(400, std::move(err->message),
+                                       std::move(err->detail));
+    }
+    auto& serve_id = std::get<std::optional<std::string>>(maybe_serve_id);
+    if (not serve_id) {
+      return rest_response::make_error(400, "serve_id must be specified", {});
+    }
+    auto schema = try_get_schema(params);
+    if (auto* err = try_as<parse_error>(schema)) {
+      return rest_response::make_error(400, std::move(err->message),
+                                       std::move(err->detail));
+    }
+    auto rp = self->make_response_promise<rest_response>();
+    self
+      ->mail(atom::add_v, std::move(*id), std::move(*serve_id),
+             schema_to_token(std::get<std::optional<enum schema>>(schema)))
+      .request(serve_manager, caf::infinite)
+      .then(
+        [rp](record& result) mutable {
+          rp.deliver(record_response(result));
+        },
+        [rp](const caf::error& err) mutable {
+          rp.deliver(multiserve_error(err));
+        });
+    return rp;
+  }
+
+  /// Handles a request to `/multiserve/remove`.
+  auto handle_multiserve_remove(tenzir::record params) const
+    -> caf::result<rest_response> {
+    auto maybe_id = try_get_string(params, "multiserve_id");
+    if (auto* err = try_as<parse_error>(maybe_id)) {
+      return rest_response::make_error(400, std::move(err->message),
+                                       std::move(err->detail));
+    }
+    auto& id = std::get<std::optional<std::string>>(maybe_id);
+    if (not id) {
+      return rest_response::make_error(400, "multiserve_id must be specified",
+                                       {});
+    }
+    auto maybe_serve_id = try_get_string(params, "serve_id");
+    if (auto* err = try_as<parse_error>(maybe_serve_id)) {
+      return rest_response::make_error(400, std::move(err->message),
+                                       std::move(err->detail));
+    }
+    auto& serve_id = std::get<std::optional<std::string>>(maybe_serve_id);
+    if (not serve_id) {
+      return rest_response::make_error(400, "serve_id must be specified", {});
+    }
+    auto rp = self->make_response_promise<rest_response>();
+    self->mail(atom::remove_v, std::move(*id), std::move(*serve_id))
+      .request(serve_manager, caf::infinite)
+      .then(
+        [rp](record& result) mutable {
+          rp.deliver(record_response(result));
+        },
+        [rp](const caf::error& err) mutable {
+          rp.deliver(multiserve_error(err));
+        });
+    return rp;
+  }
+
+  /// Handles a request to `/multiserve/status`.
+  auto handle_multiserve_status(tenzir::record params) const
+    -> caf::result<rest_response> {
+    auto maybe_id = try_get_string(params, "multiserve_id");
+    if (auto* err = try_as<parse_error>(maybe_id)) {
+      return rest_response::make_error(400, std::move(err->message),
+                                       std::move(err->detail));
+    }
+    auto& id = std::get<std::optional<std::string>>(maybe_id);
+    if (not id) {
+      return rest_response::make_error(400, "multiserve_id must be specified",
+                                       {});
+    }
+    auto rp = self->make_response_promise<rest_response>();
+    self->mail(atom::status_v, std::move(*id))
+      .request(serve_manager, caf::infinite)
+      .then(
+        [rp](record& result) mutable {
+          rp.deliver(record_response(result));
+        },
+        [rp](const caf::error& err) mutable {
+          rp.deliver(multiserve_error(err));
+        });
+    return rp;
+  }
+
   auto http_request(uint64_t endpoint_id, tenzir::record params) const
     -> caf::result<rest_response> {
     switch (endpoint_id) {
@@ -1300,6 +2392,14 @@ struct serve_handler_state {
         return handle_single_request(std::move(params));
       case serve_multi_endpoint_id:
         return handle_multi_request(std::move(params));
+      case multiserve_endpoint_id:
+        return handle_multiserve(std::move(params));
+      case multiserve_add_endpoint_id:
+        return handle_multiserve_add(std::move(params));
+      case multiserve_remove_endpoint_id:
+        return handle_multiserve_remove(std::move(params));
+      case multiserve_status_endpoint_id:
+        return handle_multiserve_status(std::move(params));
     }
     TENZIR_UNREACHABLE();
   }
@@ -1588,12 +2688,44 @@ public:
     TENZIR_ASSERT(maybe_serve_multi,
                   fmt::to_string(maybe_serve_multi.error()).c_str());
     TENZIR_ASSERT(is<record>(*maybe_serve_multi));
+    auto maybe_multiserve = from_yaml(multiserve_spec);
+    TENZIR_ASSERT(maybe_multiserve,
+                  fmt::to_string(maybe_multiserve.error()).c_str());
+    TENZIR_ASSERT(is<record>(*maybe_multiserve));
+    auto maybe_multiserve_add = from_yaml(multiserve_add_spec);
+    TENZIR_ASSERT(maybe_multiserve_add,
+                  fmt::to_string(maybe_multiserve_add.error()).c_str());
+    TENZIR_ASSERT(is<record>(*maybe_multiserve_add));
+    auto maybe_multiserve_remove = from_yaml(multiserve_remove_spec);
+    TENZIR_ASSERT(maybe_multiserve_remove,
+                  fmt::to_string(maybe_multiserve_remove.error()).c_str());
+    TENZIR_ASSERT(is<record>(*maybe_multiserve_remove));
+    auto maybe_multiserve_status = from_yaml(multiserve_status_spec);
+    TENZIR_ASSERT(maybe_multiserve_status,
+                  fmt::to_string(maybe_multiserve_status.error()).c_str());
+    TENZIR_ASSERT(is<record>(*maybe_multiserve_status));
     auto res = record{};
     for (auto& [k, v] : as<record>(*maybe_serve)) {
       const auto [_, success] = res.try_emplace(std::move(k), std::move(v));
       TENZIR_ASSERT(success);
     }
     for (auto& [k, v] : as<record>(*maybe_serve_multi)) {
+      const auto [_, success] = res.try_emplace(std::move(k), std::move(v));
+      TENZIR_ASSERT(success);
+    }
+    for (auto& [k, v] : as<record>(*maybe_multiserve)) {
+      const auto [_, success] = res.try_emplace(std::move(k), std::move(v));
+      TENZIR_ASSERT(success);
+    }
+    for (auto& [k, v] : as<record>(*maybe_multiserve_add)) {
+      const auto [_, success] = res.try_emplace(std::move(k), std::move(v));
+      TENZIR_ASSERT(success);
+    }
+    for (auto& [k, v] : as<record>(*maybe_multiserve_remove)) {
+      const auto [_, success] = res.try_emplace(std::move(k), std::move(v));
+      TENZIR_ASSERT(success);
+    }
+    for (auto& [k, v] : as<record>(*maybe_multiserve_status)) {
       const auto [_, success] = res.try_emplace(std::move(k), std::move(v));
       TENZIR_ASSERT(success);
     }
@@ -1632,6 +2764,59 @@ public:
           {"min_events", uint64_type{}},
           {"timeout", duration_type{}},
           {"schema", string_type{}},
+        },
+        .version = api_version::v0,
+        .content_type = http_content_type::json,
+      },
+      {
+        .endpoint_id = multiserve_endpoint_id,
+        .method = http_method::post,
+        .path = "/multiserve",
+        .params = record_type{
+          {"multiserve_id", string_type{}},
+          {"serve_ids", list_type{
+            record_type{
+              {"serve_id", string_type{}},
+              {"schema", string_type{}},
+            },
+          }},
+          {"max_events", uint64_type{}},
+          {"min_events", uint64_type{}},
+          {"timeout", duration_type{}},
+          {"schema", string_type{}},
+        },
+        .version = api_version::v0,
+        .content_type = http_content_type::json,
+      },
+      {
+        .endpoint_id = multiserve_add_endpoint_id,
+        .method = http_method::post,
+        .path = "/multiserve/add",
+        .params = record_type{
+          {"multiserve_id", type{string_type{}, {{"required"}}}},
+          {"serve_id", type{string_type{}, {{"required"}}}},
+          {"schema", string_type{}},
+        },
+        .version = api_version::v0,
+        .content_type = http_content_type::json,
+      },
+      {
+        .endpoint_id = multiserve_remove_endpoint_id,
+        .method = http_method::post,
+        .path = "/multiserve/remove",
+        .params = record_type{
+          {"multiserve_id", type{string_type{}, {{"required"}}}},
+          {"serve_id", type{string_type{}, {{"required"}}}},
+        },
+        .version = api_version::v0,
+        .content_type = http_content_type::json,
+      },
+      {
+        .endpoint_id = multiserve_status_endpoint_id,
+        .method = http_method::post,
+        .path = "/multiserve/status",
+        .params = record_type{
+          {"multiserve_id", type{string_type{}, {{"required"}}}},
         },
         .version = api_version::v0,
         .content_type = http_content_type::json,
