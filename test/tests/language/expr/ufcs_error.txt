@@ -4,7 +4,7 @@ error: expected additional positional argument `prefix`
 6 |   x: "abc".starts_with(),
   |            ^^^^^^^^^^^ 
   |
-  = usage: starts_with(x:string, prefix:string)
+  = usage: starts_with(x:string, prefix:string, [ignore_case=bool])
   = docs: https://docs.tenzir.com/reference/functions/starts_with
 
 error: expected additional positional argument `prefix`
@@ -13,5 +13,5 @@ error: expected additional positional argument `prefix`
 7 |   y: starts_with("abc"),
   |      ^^^^^^^^^^^ 
   |
-  = usage: starts_with(x:string, prefix:string)
+  = usage: starts_with(x:string, prefix:string, [ignore_case=bool])
   = docs: https://docs.tenzir.com/reference/functions/starts_with
