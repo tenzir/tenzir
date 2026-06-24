@@ -9,6 +9,7 @@
 #include "clickhouse/transformers.hpp"
 
 #include "clickhouse/arguments.hpp"
+#include "tenzir/concept/printable/tenzir/json2.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/view3.hpp"
 
@@ -16,6 +17,7 @@
 #include <clickhouse/columns/bool.h>
 #include <clickhouse/columns/date.h>
 #include <clickhouse/columns/ip6.h>
+#include <clickhouse/columns/json.h>
 #include <clickhouse/columns/nullable.h>
 #include <clickhouse/columns/numeric.h>
 #include <clickhouse/columns/string.h>
@@ -607,6 +609,63 @@ struct transformer_blob : transformer {
   }
 };
 
+/// Sends data to a ClickHouse `JSON` column by serializing each row's value to
+/// JSON text. We only support sending to an existing JSON column; we never
+/// create one (there is no Tenzir `json` type). Any Tenzir type is accepted and
+/// serialized as-is; null/absent rows become `{}` (ClickHouse rejects empty
+/// strings for JSON but accepts the empty object).
+struct transformer_json : transformer {
+  json_printer2 printer = json_printer2{json_printer_options{
+    .style = no_style(),
+    .oneline = true,
+  }};
+
+  transformer_json() : transformer("JSON", /*nullable=*/true) {
+  }
+
+  auto update_dropmask(path_type& path, const tenzir::type& type,
+                       const arrow::Array& array, dropmask_ref dropmask,
+                       tenzir::diagnostic_handler& dh) -> drop override {
+    TENZIR_UNUSED(path, type, array, dropmask, dh);
+    // A JSON column accepts any value, so we never drop rows.
+    return drop::none;
+  }
+
+  auto create_null_column(size_t n) const -> ::clickhouse::ColumnRef override {
+    auto column = std::make_shared<ColumnJSON>();
+    column->Reserve(n);
+    for (size_t i = 0; i < n; ++i) {
+      column->Append(std::string_view{"{}"});
+    }
+    return column;
+  }
+
+  auto create_column(path_type& path, const tenzir::type& type,
+                     const arrow::Array& array, dropmask_cref dropmask,
+                     int64_t dropcount, tenzir::diagnostic_handler& dh)
+    -> ::clickhouse::ColumnRef override {
+    TENZIR_UNUSED(path, type, dh);
+    auto column = std::make_shared<ColumnJSON>();
+    column->Reserve(array.length() - dropcount);
+
+    for (int64_t i = 0; i < array.length(); ++i) {
+      if (dropmask[i]) {
+        continue;
+      }
+      auto v = view_at(array, i);
+      if (is<caf::none_t>(v)) {
+        column->Append(std::string_view{"{}"});
+        continue;
+      }
+      printer.load_new(v);
+      auto bytes = printer.bytes();
+      column->Append(std::string_view{
+        reinterpret_cast<const char*>(bytes.data()), bytes.size()});
+    }
+    return column;
+  }
+};
+
 struct transformer_array : transformer {
   std::unique_ptr<transformer> data_transform;
   dropmask_type my_mask;
@@ -1003,6 +1062,10 @@ auto make_functions_from_clickhouse(path_type& path,
   }
   if (clickhouse_typename == "Array(UInt8)") {
     return std::make_unique<transformer_blob>();
+  }
+  if (clickhouse_typename == "JSON"
+      or clickhouse_typename.starts_with("JSON(")) {
+    return std::make_unique<transformer_json>();
   }
   if (clickhouse_typename.starts_with("Tuple(")) {
     return make_record_functions_from_clickhouse(path, clickhouse_typename, dh);
