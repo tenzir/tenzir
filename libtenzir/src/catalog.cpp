@@ -506,34 +506,38 @@ auto catalog_state::lookup(expression expr)
     }
     resolved_per_type.emplace_back(type, std::move(*resolved));
   }
-  auto evaluate_all = [&] {
-    auto result = catalog_lookup_result{};
-    for (const auto& [type, resolved] : resolved_per_type) {
-      auto candidates_per_type
-        = lookup_impl(resolved, type, synopses_per_type.at(type));
-      if (candidates_per_type.partition_infos.empty()) {
-        continue;
-      }
-      result.candidate_infos[type] = std::move(candidates_per_type);
-    }
-    return result;
-  };
   // Phase 1: prune using the resident synopses. Deferred Bloom-filter sketches
-  // are treated conservatively (their partitions are kept as candidates); the
-  // flag records whether loading them could prune further.
-  encountered_deferred_sketch = false;
-  auto total_candidates = evaluate_all();
-  // Phase 2: if a predicate hit a deferred Bloom filter, prune on the go. For
-  // each surviving candidate we load its sketches and re-evaluate that single
+  // are treated conservatively (their partitions are kept as candidates);
+  // `deferred_per_type` collects, per schema, the ids of partitions that were
+  // kept only because such a sketch could prune them if loaded.
+  auto deferred_per_type = std::unordered_map<type, std::unordered_set<uuid>>{};
+  auto total_candidates = catalog_lookup_result{};
+  for (const auto& [type, resolved] : resolved_per_type) {
+    auto& deferred = deferred_per_type[type];
+    auto candidates_per_type
+      = lookup_impl(resolved, type, synopses_per_type.at(type), deferred);
+    if (candidates_per_type.partition_infos.empty()) {
+      continue;
+    }
+    total_candidates.candidate_infos[type] = std::move(candidates_per_type);
+  }
+  // Phase 2: prune on the go. For each candidate that was kept only because of
+  // a deferred Bloom filter, load its sketches and re-evaluate that single
   // partition, dropping it if its now-visible Bloom filter rules it out. Only
   // one partition's sketches need to be resident at a time, so pruning is not
   // limited by the cache budget (which only governs how many sketches stay
   // warm for later queries); the candidate set is already narrowed by the
-  // cheap time/min-max pruning of phase 1.
-  if (encountered_deferred_sketch and sketches.budget() > 0) {
+  // cheap time/min-max pruning of phase 1. Restricting to `deferred` ids avoids
+  // loading sketches for candidates a Bloom filter cannot prune (e.g. those
+  // matched only by a `#schema` or other branch of a disjunction).
+  if (sketches.budget() > 0) {
     for (const auto& [type, resolved] : resolved_per_type) {
       auto candidate_it = total_candidates.candidate_infos.find(type);
       if (candidate_it == total_candidates.candidate_infos.end()) {
+        continue;
+      }
+      const auto& deferred = deferred_per_type[type];
+      if (deferred.empty()) {
         continue;
       }
       const auto& partition_synopses = synopses_per_type.at(type);
@@ -541,20 +545,28 @@ auto catalog_state::lookup(expression expr)
       auto kept = std::vector<partition_info>{};
       kept.reserve(partition_infos.size());
       for (auto& info : partition_infos) {
-        ensure_sketches_loaded(info.uuid, type);
         const auto resident = partition_synopses.find(info.uuid);
-        // If the sketches could not be loaded (remote/oversized/missing), keep
-        // the partition as a conservative candidate.
-        if (not sketches.peek(info.uuid)
+        // Only candidates kept because of a deferred Bloom filter are worth
+        // loading; everything else stays as-is.
+        if (not deferred.contains(info.uuid)
             or resident == partition_synopses.end()) {
           kept.push_back(std::move(info));
           continue;
         }
+        ensure_sketches_loaded(info.uuid, type);
+        // If the sketches could not be loaded (remote/oversized/missing), keep
+        // the partition as a conservative candidate.
+        if (not sketches.peek(info.uuid)) {
+          kept.push_back(std::move(info));
+          continue;
+        }
         // Re-evaluate this single partition; `lookup_impl` picks up its loaded
-        // sketches via the cache.
+        // sketches via the cache. The throwaway deferred set is unused here.
         auto single = detail::flat_map<uuid, partition_synopsis_ptr>{};
         single[resident->first] = resident->second;
-        if (not lookup_impl(resolved, type, single).partition_infos.empty()) {
+        auto ignored = std::unordered_set<uuid>{};
+        if (not lookup_impl(resolved, type, single, ignored)
+                  .partition_infos.empty()) {
           kept.push_back(std::move(info));
         }
       }
@@ -594,7 +606,8 @@ auto catalog_state::lookup(expression expr)
 
 auto catalog_state::lookup_impl(
   const expression& expr, const type& schema,
-  const detail::flat_map<uuid, partition_synopsis_ptr>& partition_synopses) const
+  const detail::flat_map<uuid, partition_synopsis_ptr>& partition_synopses,
+  std::unordered_set<uuid>& deferred_sketch_partitions) const
   -> catalog_lookup_result::candidate_info {
   TENZIR_ASSERT(not is<caf::none_t>(expr));
   // The partition UUIDs must be sorted, otherwise the invariants of the
@@ -618,13 +631,15 @@ auto catalog_state::lookup_impl(
     [&](const conjunction& x) -> catalog_lookup_result::candidate_info {
       TENZIR_ASSERT(not x.empty());
       auto i = x.begin();
-      auto result = lookup_impl(*i, schema, partition_synopses);
+      auto result = lookup_impl(*i, schema, partition_synopses,
+                                deferred_sketch_partitions);
       if (not result.partition_infos.empty()) {
         for (++i; i != x.end(); ++i) {
           // TODO: A conjunction means that we can restrict the lookup to the
           // remaining candidates. This could be achived by passing the `result`
           // set to `lookup` along with the child expression.
-          auto xs = lookup_impl(*i, schema, partition_synopses);
+          auto xs = lookup_impl(*i, schema, partition_synopses,
+                                deferred_sketch_partitions);
           if (xs.partition_infos.empty()) {
             return xs; // short-circuit
           }
@@ -640,7 +655,8 @@ auto catalog_state::lookup_impl(
       for (const auto& op : x) {
         // TODO: A disjunction means that we can restrict the lookup to the
         // set of partitions that are outside of the current result set.
-        auto xs = lookup_impl(op, schema, partition_synopses);
+        auto xs = lookup_impl(op, schema, partition_synopses,
+                              deferred_sketch_partitions);
         if (xs.partition_infos.size() == partition_synopses.size()) {
           return xs; // short-circuit
         }
@@ -745,7 +761,7 @@ auto catalog_state::lookup_impl(
                     }
                   }
                   if (bloom_prunable) {
-                    encountered_deferred_sketch = true;
+                    deferred_sketch_partitions.insert(part_id);
                   }
                 }
                 result.partition_infos.emplace_back(part_id, *effective);
