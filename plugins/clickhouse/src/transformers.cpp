@@ -665,14 +665,17 @@ struct transformer_json : transformer {
         if (dropmask[i]) {
           continue;
         }
+        auto v = view_at(array, i);
+        if (is<caf::none_t>(v)) {
+          // A null row becomes SQL NULL for a nullable column and `{}` for a
+          // plain one; check this before substituting unsupported values so
+          // nulls are not silently turned into empty objects.
+          append(std::nullopt);
+          continue;
+        }
         if (unsupported) {
           // Non-record value: write an explicit empty object, not NULL.
           append(std::string_view{"{}"});
-          continue;
-        }
-        auto v = view_at(array, i);
-        if (is<caf::none_t>(v)) {
-          append(std::nullopt);
           continue;
         }
         printer.load_new(v);
