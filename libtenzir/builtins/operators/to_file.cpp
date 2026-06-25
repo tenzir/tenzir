@@ -18,7 +18,12 @@ namespace tenzir::plugins::to_file {
 namespace {
 
 struct ToFileArgs : ToArrowFsArgs {
+  /// Size of the userspace write buffer used when `real_time` is not set.
+  /// Coalesces the per-slice chunks into ~1 MiB writes for throughput.
+  static constexpr int64_t default_buffer_size = int64_t{1} << 20;
+
   Option<location> append;
+  Option<location> real_time;
 };
 
 class ToFileOperator final : public ToArrowFsOperator {
@@ -31,6 +36,15 @@ public:
 protected:
   auto append() const -> Option<location> override {
     return args_.append;
+  }
+
+  auto write_buffer_size() const -> Option<int64_t> override {
+    // `real_time` opts out of buffering: each chunk is written straight
+    // through so readers observe it without waiting for a flush.
+    if (args_.real_time) {
+      return {};
+    }
+    return ToFileArgs::default_buffer_size;
   }
 
   auto resolve_url(OpCtx& ctx) -> Task<failure_or<std::string>> override {
@@ -83,6 +97,7 @@ public:
     auto d = Describer<ToFileArgs, ToFileOperator>{};
     ToArrowFsArgs::describe_to(d);
     d.named("append", &ToFileArgs::append);
+    d.named("real_time", &ToFileArgs::real_time);
     return d.invariant_order_filter();
   }
 };

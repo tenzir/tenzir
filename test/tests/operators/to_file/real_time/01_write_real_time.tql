@@ -1,0 +1,10 @@
+// Write 500 events with `real_time=true`. This opts out of the default
+// write buffering, so every chunk is written straight through. The file
+// on disk after the pipeline completes is identical to the buffered path;
+// this exercises the unbuffered write path end to end.
+from {msg: "hello"}
+repeat 500
+enumerate x
+to_file env("FILE_ROOT") + "/out/real_time.json", real_time=true {
+  write_ndjson
+}

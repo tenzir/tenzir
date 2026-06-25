@@ -26,6 +26,7 @@
 #include <arrow/array/array_primitive.h>
 #include <arrow/filesystem/filesystem.h>
 #include <arrow/filesystem/path_util.h>
+#include <arrow/io/buffered.h>
 #include <arrow/io/interfaces.h>
 #include <arrow/util/bit_util.h>
 #include <folly/CancellationToken.h>
@@ -929,12 +930,19 @@ auto ToArrowFsOperator::open_stream(Partition& part,
       co_return failure::promise();
     }
   }
-  auto result = co_await spawn_blocking([fs = fs_, path, append = append()] {
-    if (append) {
-      return fs->OpenAppendStream(path);
-    }
-    return fs->OpenOutputStream(path);
-  });
+  auto result = co_await spawn_blocking(
+    [fs = fs_, path, append = append(), buffer_size = write_buffer_size()]
+    -> arrow::Result<std::shared_ptr<arrow::io::OutputStream>> {
+      auto stream
+        = append ? fs->OpenAppendStream(path) : fs->OpenOutputStream(path);
+      if (not stream.ok() or not buffer_size) {
+        return stream;
+      }
+      // Coalesce the per-slice chunks into fewer, larger writes. Large
+      // chunks bypass the buffer, so this only batches small writes.
+      return arrow::io::BufferedOutputStream::Create(
+        *buffer_size, arrow_memory_pool(), stream.MoveValueUnsafe());
+    });
   if (not result.ok()) {
     diagnostic::error("failed to open output stream `{}`: {}", path,
                       result.status().ToString())

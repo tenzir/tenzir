@@ -1,0 +1,5 @@
+// Read back and verify all 500 events landed in the file.
+from_file env("FILE_ROOT") + "/out/real_time.json" {
+  read_ndjson
+}
+summarize count=count(x), min_x=min(x), max_x=max(x)

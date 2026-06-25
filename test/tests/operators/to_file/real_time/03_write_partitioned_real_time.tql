@@ -1,0 +1,11 @@
+// `real_time` composes with partitioning and rotation. Each partition opens
+// its own unbuffered stream; the per-partition files are flushed on close.
+from {region: "us"},
+     {region: "eu"},
+     {region: "ap"}
+repeat 200
+enumerate id
+to_file env("FILE_ROOT") + "/out/real_time_partitioned/**/events_{uuid}.json",
+        partition_by=[region], real_time=true {
+  write_ndjson
+}

@@ -487,6 +487,18 @@ protected:
     return {};
   }
 
+  /// Size in bytes of the userspace buffer wrapped around each output stream,
+  /// or `None` to write every chunk straight through to the backend. Buffering
+  /// coalesces the per-slice chunks the subpipeline emits into fewer, larger
+  /// writes, trading write latency for throughput. The buffer is flushed on
+  /// snapshot, on rotation, and on close, so buffered bytes are durable at
+  /// every checkpoint. Operators whose backend streams already buffer
+  /// internally (e.g. S3/GCS/Azure multipart uploads) should leave this unset.
+  /// Defaults to unbuffered.
+  virtual auto write_buffer_size() const -> Option<int64_t> {
+    return {};
+  }
+
   auto filesystem() const -> FileSystemPtr const& {
     return fs_;
   }
