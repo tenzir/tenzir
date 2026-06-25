@@ -1,6 +1,0 @@
----
-error: true
----
-// A package `let` whose value is a lambda is not a constant value and is
-// rejected instead of silently becoming `null`.
-from {f: lambdapkg::$f}

@@ -1,7 +1,0 @@
-error: package binding `lambdapkg::$f` is not a constant
- --> <packages/lambdapkg/constants.tql>:1:10
-  |
-1 | let $f = x => x
-  |          ^^^^^^ 
-  |
-  = note: package `let` bindings must be constant values

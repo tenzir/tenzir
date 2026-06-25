@@ -1,3 +1,0 @@
-id: underscorepkg
-name: Underscore Binding Package
-description: A package whose constants.tql binding is the `_` placeholder, not a value.

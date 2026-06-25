@@ -1,3 +1,0 @@
-id: lambdapkg
-name: Lambda Binding Package
-description: A package whose constants.tql binding is a lambda, not a value.
