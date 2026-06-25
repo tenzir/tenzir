@@ -267,6 +267,53 @@ inline auto validate_table_name(std::string_view table, location table_loc,
   return true;
 }
 
+// `json=` accepts either a single field selector or a list of field selectors.
+// Extracts the validated, de-duplicated set of top-level column names that
+// should be created as ClickHouse `JSON` columns. The caller must ensure the
+// expression was actually provided (i.e. `expr.kind` is set).
+inline auto
+parse_json_field_argument(const ast::expression& expr, diagnostic_handler& dh)
+  -> failure_or<std::vector<located<std::string>>> {
+  auto result = std::vector<located<std::string>>{};
+  auto add = [&](const ast::expression& e) -> failure_or<void> {
+    auto sel = ast::field_path::try_from(e);
+    if (not sel or sel->has_this() or sel->path().size() != 1) {
+      diagnostic::error("`json` expects a top-level field")
+        .primary(e.get_location())
+        .emit(dh);
+      return failure::promise();
+    }
+    const auto name = std::string{sel->path().front().id.name};
+    if (not validate_identifier(name)) {
+      emit_invalid_identifier<true>("json", name, sel->get_location(), dh);
+      return failure::promise();
+    }
+    for (const auto& existing : result) {
+      if (existing.inner == name) {
+        // De-duplicate silently.
+        return {};
+      }
+    }
+    result.push_back({name, sel->get_location()});
+    return {};
+  };
+  if (const auto* list = try_as<ast::list>(expr)) {
+    for (const auto& item : list->items) {
+      const auto* item_expr = try_as<ast::expression>(item);
+      if (not item_expr) {
+        diagnostic::error("`json` expects a field")
+          .primary(into_location(item))
+          .emit(dh);
+        return failure::promise();
+      }
+      TRY(add(*item_expr));
+    }
+  } else {
+    TRY(add(expr));
+  }
+  return result;
+}
+
 struct operator_arguments {
   tenzir::location operator_location;
   Option<located<secret>> uri = None{};

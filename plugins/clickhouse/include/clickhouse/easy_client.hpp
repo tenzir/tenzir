@@ -46,6 +46,9 @@ public:
     ast::expression table = {};
     located<enum mode> mode = located{mode::create_append, operator_location};
     Option<located<std::string>> primary = None{};
+    // Top-level columns to create as ClickHouse `JSON` columns (only used when
+    // creating a table). Empty for the legacy operator.
+    std::vector<located<std::string>> json = {};
     location operator_location;
 
     auto make_options() const -> ::clickhouse::ClientOptions {

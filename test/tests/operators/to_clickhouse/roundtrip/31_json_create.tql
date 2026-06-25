@@ -1,0 +1,13 @@
+// Create a table whose `payload` and `extra` columns are forced to ClickHouse
+// `JSON` via the `json` argument. `extra` is absent from the input but must
+// still be created as a `JSON` column.
+from {id: 0, payload: {a: 1, b: [2, 3]}},
+     {id: 1, payload: {a: 5}}
+to_clickhouse table="test_json_create",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              primary=id,
+              json=[payload, extra],
+              mode="create"
