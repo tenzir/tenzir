@@ -1,0 +1,8 @@
+{
+  id: "serve_multi_1",
+  has_schemas: true,
+}
+{
+  id: "serve_multi_2",
+  has_schemas: false,
+}
