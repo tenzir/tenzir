@@ -353,8 +353,9 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d
-      = Describer<ToAmqpArgs, ToAmqp>{ToAmqpArgs{.plugin_config = config_}};
+    auto args = ToAmqpArgs{};
+    args.plugin_config = config_;
+    auto d = Describer<ToAmqpArgs, ToAmqp>{std::move(args)};
     d.positional("url", &ToAmqpArgs::url);
     d.named_optional("message", &ToAmqpArgs::message, "blob|string");
     auto channel_arg = d.named("channel", &ToAmqpArgs::channel);

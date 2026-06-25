@@ -407,8 +407,9 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromAmqpArgs, FromAmqp>{
-      FromAmqpArgs{.plugin_config = config_}};
+    auto args = FromAmqpArgs{};
+    args.plugin_config = config_;
+    auto d = Describer<FromAmqpArgs, FromAmqp>{std::move(args)};
     d.positional("url", &FromAmqpArgs::url);
     auto channel_arg = d.named("channel", &FromAmqpArgs::channel);
     d.named("exchange", &FromAmqpArgs::exchange);
