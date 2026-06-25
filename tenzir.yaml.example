@@ -6,6 +6,8 @@
 tenzir:
   # The token that is offered when connecting to the Tenzir Platform.
   # It is used to identify the node and assign it to the correct workspace.
+  # Platform tokens may include the control endpoint. In that case,
+  # `platform-control-endpoint` is only needed to override the token value.
   # This setting is ignored in the open-source edition of Tenzir, which does
   # not contain the platform plugin.
   token: tnz_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
