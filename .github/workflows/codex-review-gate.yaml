@@ -1,8 +1,13 @@
 # Periodically sweeps open PRs and applies the `ci-ready` label to PRs where
 # the Codex review has no open issues, i.e., either Codex left a 👍 reaction
 # (its "no comments" verdict) or all review threads it opened are resolved.
-# The signal must apply to the current head: a review must reference the head
-# commit, and a reaction must postdate the time the head was pushed.
+# A review carries the head's commit id, so it pins to that head. A 👍 does
+# not, but Codex removes the 👍 when it begins a review and only re-adds it if
+# that head is clean. So a 👍 that postdates the push is a verdict on the
+# current head (proceed at once), while a 👍 that survived the push was never
+# removed, meaning Codex skipped re-reviewing it (proceed after a short head
+# start -- nothing is coming). While a review is in flight the 👍 is absent,
+# so neither fires and we wait for it to land or for the grace fail-safe.
 #
 # The label is only ever added, never removed: delaying the build is a CI
 # cost optimization, while merge safety comes from the `Tenzir CI` commit
@@ -52,7 +57,14 @@ jobs:
           gh label create "$LABEL" --force --color 2EA44F \
             --description "Unlocks the CI build; applied when the Codex review is clean"
 
-          # Heads pushed before this without a Codex verdict unlock the build.
+          # Codex removes the 👍 when it starts a review, so a 👍 still present
+          # this long after a push means Codex skipped the re-review (it never
+          # engaged); trust its standing verdict instead of waiting the grace.
+          # The head start gives Codex time to remove the 👍 if it is going to
+          # review, so this is not read while a review is merely pending.
+          headstart_cutoff=$(date -u -d '5 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
+          # Fail-safe for a Codex that engaged but stalled, or never weighs in
+          # at all (down/out of tokens): heads pushed before this unlock anyway.
           grace_cutoff=$(date -u -d '30 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
 
           process_pr() {
@@ -60,7 +72,7 @@ jobs:
             # so fallible commands abort explicitly via `|| return`.
             local pr=$1
             local head_sha pushed thumb reviewed unresolved verdict clean
-            local has_label
+            local has_label decision
             # The label is sticky, so labeled PRs need no further checks.
             has_label=$(gh api "repos/$GH_REPO/issues/$pr" \
               --jq "[.labels[].name] | any(. == \"$LABEL\")") || return
@@ -122,30 +134,51 @@ jobs:
                      | select((.comments.nodes[0].author.login // "")
                               | startswith("chatgpt-codex-connector"))]
                     | length') || return
-            # Codex's verdict applies to the current head if it reviewed that
-            # commit or its 👍 reaction postdates the last push. ISO-8601
-            # timestamps compare lexicographically.
+            # Does Codex's verdict apply to the current head? A review carries
+            # the head's commit id, so it does. A 👍 has no commit binding,
+            # but Codex removes it when it begins a review and re-adds it only
+            # if the head is clean, so a 👍 that postdates the push is a fresh
+            # verdict on this head.
             verdict=false
-            if [[ "$reviewed" -gt 0 ]] \
-               || [[ -n "$thumb" && "$thumb" > "$pushed" ]]; then
+            if [[ "$reviewed" -gt 0 || ( -n "$thumb" && "$thumb" > "$pushed" ) ]]; then
               verdict=true
             fi
             clean=false
+            decision=wait
             if [[ "$verdict" == true && "$unresolved" -eq 0 ]]; then
               clean=true
-            elif [[ "$verdict" == false && "$pushed" < "$grace_cutoff" ]]; then
-              # Fail-safe: no verdict within the grace period means Codex is
-              # down or out of tokens, so unlock the build. Unresolved
-              # threads from earlier heads still block the merge.
+              decision=head-verdict
+            elif [[ -n "$thumb" && "$unresolved" -eq 0 \
+                    && "$pushed" < "$headstart_cutoff" ]]; then
+              # A 👍 still present a head start after the push was never
+              # removed, so Codex skipped re-reviewing this commit. While a
+              # review is actually in flight the 👍 is absent and this branch
+              # cannot fire, so trusting it does not race Codex -- it only
+              # avoids waiting out the full grace for a review that is not
+              # coming. (A clean re-review re-adds a 👍 that postdates the push
+              # and is caught above; new issues open threads, caught here.)
               clean=true
-              echo "PR #$pr: no Codex verdict within grace period"
+              decision=skip-headstart
+            elif [[ "$verdict" == false && "$pushed" < "$grace_cutoff" ]]; then
+              # Fail-safe: the 👍 is absent (Codex mid-review or stalled) or
+              # never existed (Codex down). After the grace, unlock anyway so a
+              # slow or stuck Codex cannot hold up CI; unresolved threads from
+              # earlier heads still block the merge.
+              clean=true
+              decision=grace
             fi
+            # Audit: one structured line per decision. The `skip-headstart`
+            # path rests on Codex removing the 👍 when it reviews; cross-check
+            # it after the fact against whether Codex later posted a review for
+            # this head (a review landing just after means it was in flight,
+            # not skipped, and the head start was too short).
+            echo "PR #$pr: decision=$decision clean=$clean head=${head_sha:0:9}" \
+              "pushed=$pushed thumb=${thumb:-none} reviewed=$reviewed" \
+              "unresolved=$unresolved headstart=$headstart_cutoff"
             if [[ "$clean" == true ]]; then
               gh api -X POST "repos/$GH_REPO/issues/$pr/labels" \
                 -f "labels[]=$LABEL" --silent || return
               echo "PR #$pr: added $LABEL"
-            else
-              echo "PR #$pr: not clean"
             fi
           }
 
