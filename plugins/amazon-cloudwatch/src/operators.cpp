@@ -434,18 +434,18 @@ auto cloudwatch_warning(ToCloudWatchDiagnosticPrimary primary,
                         std::vector<std::string> notes = {})
   -> ToCloudWatchDiagnostic {
   return {
-    .severity = ToCloudWatchDiagnosticSeverity::warning,
-    .primary = primary,
-    .message = std::move(message),
-    .notes = std::move(notes),
+    ToCloudWatchDiagnosticSeverity::warning,
+    primary,
+    std::move(message),
+    std::move(notes),
   };
 }
 
 auto cloudwatch_error(std::string message) -> ToCloudWatchDiagnostic {
   return {
-    .severity = ToCloudWatchDiagnosticSeverity::error,
-    .primary = ToCloudWatchDiagnosticPrimary::operator_,
-    .message = std::move(message),
+    ToCloudWatchDiagnosticSeverity::error,
+    ToCloudWatchDiagnosticPrimary::operator_,
+    std::move(message),
   };
 }
 
@@ -608,15 +608,12 @@ auto accepted_http_metrics(ToMethod method, std::string const& body,
 auto parse_filter_log_events_response(std::string const& body,
                                       std::string const& log_group,
                                       std::string const& previous_token)
-  -> SourcePage {
+  -> SourceResult {
   auto parser = simdjson::dom::parser{};
   auto doc = parser.parse(body);
   if (doc.error()) {
-    return SourcePage{.error
-                      = fmt::format("failed to parse CloudWatch Logs "
-                                    "response: {}",
-                                    simdjson::error_message(doc.error())),
-                      .done = true};
+    return Err{fmt::format("failed to parse CloudWatch Logs response: {}",
+                           simdjson::error_message(doc.error()))};
   }
   auto page = SourcePage{};
   page.next_token = string_from_json(doc.value(), "nextToken");
@@ -645,15 +642,12 @@ auto parse_get_log_events_response(std::string const& body,
                                    std::string const& log_group,
                                    std::string const& log_stream,
                                    std::string const& previous_token,
-                                   bool from_start) -> SourcePage {
+                                   bool from_start) -> SourceResult {
   auto parser = simdjson::dom::parser{};
   auto doc = parser.parse(body);
   if (doc.error()) {
-    return SourcePage{.error
-                      = fmt::format("failed to parse CloudWatch Logs "
-                                    "response: {}",
-                                    simdjson::error_message(doc.error())),
-                      .done = true};
+    return Err{fmt::format("failed to parse CloudWatch Logs response: {}",
+                           simdjson::error_message(doc.error()))};
   }
   auto page = SourcePage{};
   page.next_token = string_from_json(
@@ -938,7 +932,7 @@ auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
                        MetricsDirection::read, MetricsVisibility::external_,
                        MetricsUnit::events);
   if (mode_ == FromMode::live) {
-    auto queue = Arc<folly::coro::BoundedQueue<SourcePage, false, true>>{
+    auto queue = Arc<folly::coro::BoundedQueue<SourceResult, false, true>>{
       std::in_place,
       live_tail_queue_capacity,
     };
@@ -998,7 +992,7 @@ auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
                 };
                 request.GetEventStreamDecoder().Pump(bytes);
                 for (auto& page : pending_pages) {
-                  co_await queue->enqueue(std::move(page));
+                  co_await queue->enqueue(SourceResult{std::move(page)});
                 }
                 pending_pages.clear();
                 if (session_expired) {
@@ -1006,10 +1000,8 @@ auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
                 }
                 if (not pending_error.empty()) {
                   stream_error = true;
-                  co_await queue->enqueue(SourcePage{
-                    .error = std::exchange(pending_error, {}),
-                    .done = true,
-                  });
+                  co_await queue->enqueue(
+                    SourceResult{Err{std::exchange(pending_error, {})}});
                   co_return true;
                 }
                 co_return false;
@@ -1038,10 +1030,8 @@ auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
                 }
               }
               if (not terminal_error.empty()) {
-                co_await queue->enqueue(SourcePage{
-                  .error = std::move(terminal_error),
-                  .done = true,
-                });
+                co_await queue->enqueue(
+                  SourceResult{Err{std::move(terminal_error)}});
                 co_return;
               }
               if (stream_error) {
@@ -1074,8 +1064,7 @@ auto FromCloudWatch::await_task(diagnostic_handler& dh) const -> Task<Any> {
     }
     auto response = co_await client_->api_call("FilterLogEvents", request);
     if (response.is_err()) {
-      co_return SourcePage{.error = std::move(response).unwrap_err(),
-                           .done = true};
+      co_return SourceResult{Err{std::move(response).unwrap_err()}};
     }
     auto http_response = std::move(response).unwrap();
     co_return parse_filter_log_events_response(
@@ -1088,8 +1077,7 @@ auto FromCloudWatch::await_task(diagnostic_handler& dh) const -> Task<Any> {
   }
   auto response = co_await client_->api_call("GetLogEvents", request);
   if (response.is_err()) {
-    co_return SourcePage{.error = std::move(response).unwrap_err(),
-                         .done = true};
+    co_return SourceResult{Err{std::move(response).unwrap_err()}};
   }
   auto http_response = std::move(response).unwrap();
   co_return parse_get_log_events_response(http_response.body,
@@ -1100,14 +1088,15 @@ auto FromCloudWatch::await_task(diagnostic_handler& dh) const -> Task<Any> {
 
 auto FromCloudWatch::process_task(Any result, Push<table_slice>& push,
                                   OpCtx& ctx) -> Task<void> {
-  auto page = std::move(result).as<SourcePage>();
-  if (not page.error.empty()) {
-    diagnostic::error("{}", page.error)
+  auto outcome = std::move(result).as<SourceResult>();
+  if (outcome.is_err()) {
+    diagnostic::error("{}", outcome.unwrap_err())
       .primary(args_.operator_location)
       .emit(ctx);
     done_ = true;
     co_return;
   }
+  auto page = std::move(outcome).unwrap();
   next_token_ = std::move(page.next_token);
   done_ = page.done;
   if (args_.count) {
@@ -1143,7 +1132,9 @@ auto FromCloudWatch::stop(OpCtx& ctx) -> Task<void> {
   TENZIR_UNUSED(ctx);
   live_cancel_.requestCancellation();
   if (live_queue_) {
-    std::ignore = (*live_queue_)->try_enqueue(SourcePage{.done = true});
+    auto page = SourcePage{};
+    page.done = true;
+    std::ignore = (*live_queue_)->try_enqueue(SourceResult{std::move(page)});
   }
   done_ = true;
   co_return;

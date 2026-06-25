@@ -14,6 +14,7 @@
 #include <tenzir/async/semaphore.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/pipeline_metrics.hpp>
+#include <tenzir/result.hpp>
 #include <tenzir/tql2/ast.hpp>
 
 #include <folly/CancellationToken.h>
@@ -81,12 +82,16 @@ struct CloudWatchEvent {
   Option<std::string> event_id;
 };
 
+/// A page of events read from CloudWatch Logs.
 struct SourcePage {
   std::vector<CloudWatchEvent> events;
   std::string next_token;
-  std::string error;
+  /// Whether this is the final page; no further reads should follow.
   bool done = false;
 };
+
+/// The outcome of a source read: either a page of events or a failure message.
+using SourceResult = Result<SourcePage, std::string>;
 
 enum class ToCloudWatchDiagnosticSeverity {
   warning,
@@ -99,6 +104,17 @@ enum class ToCloudWatchDiagnosticPrimary {
 };
 
 struct ToCloudWatchDiagnostic {
+  ToCloudWatchDiagnostic() = default;
+  ToCloudWatchDiagnostic(ToCloudWatchDiagnosticSeverity severity,
+                         ToCloudWatchDiagnosticPrimary primary,
+                         std::string message,
+                         std::vector<std::string> notes = {})
+    : severity{severity},
+      primary{primary},
+      message{std::move(message)},
+      notes{std::move(notes)} {
+  }
+
   ToCloudWatchDiagnosticSeverity severity
     = ToCloudWatchDiagnosticSeverity::warning;
   ToCloudWatchDiagnosticPrimary primary
@@ -138,7 +154,7 @@ private:
   FromMode mode_ = FromMode::live;
   std::shared_ptr<amazon::SignedHttpClient> client_;
   folly::CancellationSource live_cancel_;
-  mutable Option<Arc<folly::coro::BoundedQueue<SourcePage, false, true>>>
+  mutable Option<Arc<folly::coro::BoundedQueue<SourceResult, false, true>>>
     live_queue_;
   std::string next_token_;
   uint64_t emitted_ = 0;
