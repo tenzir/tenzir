@@ -693,6 +693,37 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
     auto result = match(
       std::move(stmt),
       [&](ast::invocation x) -> failure_or<void> {
+        if (x.op.ref.ns() == entity_ns::fn) {
+          // A function that opted in via `usable_as_operator()` was used in
+          // operator position. Verify its arguments against the declared
+          // signature, then desugar `… | f(args)` into `this = f(this, args)`,
+          // reusing the `set` machinery; the function must return a record.
+          auto ref = ctx.reg().get(x.op.ref);
+          auto* fn = try_as<std::reference_wrapper<const function_plugin>>(ref);
+          TENZIR_ASSERT(fn);
+          auto sig = fn->get().usable_as_operator();
+          TENZIR_ASSERT(sig.is_some());
+          auto sp = session_provider::make(ctx);
+          auto sess = sp.as_session();
+          TRY(sig.unwrap().verify(x, sess));
+          // Inject the current event as the first positional argument.
+          auto loc = x.op.get_location();
+          auto args = std::vector<ast::expression>{};
+          args.reserve(x.args.size() + 1);
+          args.emplace_back(ast::this_{loc});
+          for (auto& arg : x.args) {
+            args.push_back(std::move(arg));
+          }
+          auto call = ast::function_call{std::move(x.op), std::move(args), loc,
+                                         /*method*/ false};
+          auto assignment = ast::assignment{ast::this_{loc}, location::unknown,
+                                            ast::expression{std::move(call)}};
+          TRY(assignment.left.bind(ctx));
+          TRY(resolve_assignment_left(assignment, ctx));
+          TRY(assignment.right.bind(ctx));
+          operators.push_back(make_set_ir(std::move(assignment)));
+          return {};
+        }
         auto& op = ctx.reg().get(x);
         return match(
           op.inner(),
