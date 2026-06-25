@@ -602,6 +602,16 @@ struct serve_manager_state {
   /// messages to the user.
   std::unordered_map<std::string, caf::error> expired_ids = {};
 
+  // Distinguishes a genuine pipeline failure from a clean teardown. A failing
+  // pipeline propagates a diagnostic; a pipeline that merely finished -- by
+  // exhausting its input, a user shutdown, or the executor tearing down its
+  // now-unreachable nodes (`exit_reason::unreachable`) -- does not. Only
+  // genuine failures are surfaced as errors; clean completions are retained so
+  // a client can retry its final poll.
+  static auto is_pipeline_failure(const caf::error& err) -> bool {
+    return err == ec::diagnostic or err.context().match_elements<diagnostic>();
+  }
+
   auto handle_down_msg(const caf::actor_addr& source, const caf::error& err)
     -> void {
     const auto found = std::ranges::find_if(ops, [&](const auto& op) {
@@ -637,12 +647,11 @@ struct serve_manager_state {
         ops.erase(found);
       }
     };
-    // A pipeline that exited with a genuine error is removed right away. A
-    // pipeline that finished cleanly (no error, or a regular user_shutdown)
-    // keeps its last result set available for `retention_time`, so a client
-    // that lost or cancelled the response to its final poll can still retry and
-    // re-fetch it.
-    if (err.valid() and err != caf::exit_reason::user_shutdown) {
+    // A pipeline that failed with a diagnostic is removed right away. A
+    // pipeline that finished cleanly keeps its last result set available for
+    // `retention_time`, so a client that lost or cancelled the response to its
+    // final poll can still retry and re-fetch it.
+    if (is_pipeline_failure(err)) {
       delete_serve();
       return;
     }
@@ -829,21 +838,14 @@ struct serve_manager_state {
       const auto expired_id = expired_ids.find(request.serve_id);
       if (expired_id != expired_ids.end()) {
         const auto& err = expired_id->second;
-        if (err == ec::diagnostic) {
+        // A pipeline that failed with a diagnostic surfaces that error. One
+        // that completed cleanly is reported as completed, not as an internal
+        // error: a client may retry its final poll after losing or cancelling
+        // the response, even past the retention window.
+        if (is_pipeline_failure(err)) {
           return err;
         }
-        // A pipeline that completed cleanly (no error or a regular
-        // user_shutdown) is reported as completed, not as an internal error: a
-        // client may retry its final poll after losing or cancelling the
-        // response, even past the retention window.
-        if (not err.valid() or err == caf::exit_reason::user_shutdown) {
-          return std::make_tuple(std::string{}, std::vector<table_slice>{});
-        }
-        return caf::make_error(
-          ec::logic_error,
-          fmt::format("{} got request for events with expired serve id {}; the "
-                      "pipeline serving this data is no longer available: {}",
-                      *self, request.serve_id, err));
+        return std::make_tuple(std::string{}, std::vector<table_slice>{});
       }
       return caf::make_error(ec::invalid_argument,
                              fmt::format("{} got request for events with "
