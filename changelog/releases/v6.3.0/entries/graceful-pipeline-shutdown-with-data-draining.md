@@ -3,6 +3,8 @@ title: Graceful pipeline shutdown with data draining
 type: feature
 authors:
   - aljazerzen
+prs:
+  - 6215
 created: 2026-05-21T19:28:37.839505Z
 ---
 

@@ -51,7 +51,7 @@ String functions now accept an `ignore_case` argument for case-insensitive match
 
 The new `equals(x, y, ignore_case=false)` function performs string equality with optional case folding, covering the case-insensitive equivalent of the `==` operator.
 
-*By @aljazerzen.*
+*By @aljazerzen in #6378.*
 
 ### Configure an HTTP proxy for outbound operators
 
@@ -69,7 +69,7 @@ Caveat: the GCS default credential chain first probes the metadata server at `me
 
 The proxy URL lives plaintext in YAML; promotion to a `secret` is deferred.
 
-*By @raxyte.*
+*By @raxyte in #6222.*
 
 ### Graceful pipeline shutdown with data draining
 
@@ -77,7 +77,7 @@ Stopping a pipeline or shutting down the node now drains in-flight data before t
 
 A configurable grace period (`tenzir.shutdown-grace-period`, default 3 minutes) bounds how long the system waits. After the grace period expires, remaining pipelines are force-killed. Setting the grace period to `0s` (or any non-positive value) waits indefinitely, so pipelines are never force-killed and drain fully before the node quits.
 
-*By @aljazerzen.*
+*By @aljazerzen in #6215.*
 
 ### New `from_clickhouse` source operator
 
@@ -99,7 +99,7 @@ from_clickhouse sql="SELECT * FROM events WHERE severity >= 3 ORDER BY time DESC
 
 The `pipeline::detach` and `pipeline::add` operators are available again on the new executor.
 
-:::note Prefer the `tenzir-test` `suite` feature with `mode: parallel` for coordinating background pipelines in tests. :::
+> **Note:** Prefer the `tenzir-test` `suite` feature with `mode: parallel` for coordinating background pipelines in tests.
 
 *By @IyeOnline in #6364.*
 
@@ -125,7 +125,7 @@ Conditional expressions such as `x if y else z` are now significantly more effic
 
 The `bloom-filter` context no longer matches `null` values when the filter was populated with empty strings. Now null values no longer match the context.
 
-*By @IyeOnline and @claude.*
+*By @IyeOnline and @claude in #6252.*
 
 ### Crash fix for list.add with null-typed record fields
 
@@ -137,4 +137,4 @@ The `bloom-filter` context no longer matches `null` values when the filter was p
 
 `parse_kv` and `read_kv` now upgrade a field to a list of values when a key occurs more than once in a single event, as documented. Previously, a repeated key silently kept only its last value.
 
-*By @lava.*
+*By @lava in #6369.*
