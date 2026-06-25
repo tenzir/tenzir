@@ -14,7 +14,9 @@
 # status and required conversation resolution. Applying the label manually
 # unlocks the build without waiting for Codex. As a fail-safe, a PR whose
 # head has no Codex verdict 30 minutes after the push is treated as clean,
-# so that an unavailable Codex does not hold up CI.
+# so that an unavailable Codex does not hold up CI. Draft PRs are skipped
+# outright, since Codex does not review them and there is thus no verdict to
+# wait for; marking a PR ready, or labeling it by hand, opts it back in.
 #
 # This needs to be a cron sweep because GitHub emits no webhook events for
 # reactions. The label is applied with a GitHub App token so that it can
@@ -72,7 +74,7 @@ jobs:
             # so fallible commands abort explicitly via `|| return`.
             local pr=$1
             local head_sha pushed thumb reviewed unresolved verdict clean
-            local has_label decision
+            local has_label decision is_draft
             # The label is sticky, so labeled PRs need no further checks.
             has_label=$(gh api "repos/$GH_REPO/issues/$pr" \
               --jq "[.labels[].name] | any(. == \"$LABEL\")") || return
@@ -82,6 +84,18 @@ jobs:
             fi
             head_sha=$(gh api "repos/$GH_REPO/pulls/$pr" --jq .head.sha) \
               || return
+            # Codex does not review drafts, so a draft has no verdict to wait
+            # for; the grace fail-safe below would otherwise mistake that for
+            # an unavailable Codex and unlock it. Skip drafts: marking the PR
+            # ready routes it through the normal flow, and the label can still
+            # be applied by hand to force a draft build. This also stops a
+            # grace-labelled draft from later being marked ready and building
+            # on its sticky label without any Codex review.
+            is_draft=$(gh api "repos/$GH_REPO/pulls/$pr" --jq .draft) || return
+            if [[ "$is_draft" == true ]]; then
+              echo "PR #$pr: draft, not eligible for auto-unlock"
+              return
+            fi
             # The head commit's committer timestamp can predate the time it
             # was pushed to the PR, e.g., for pre-existing local commits, so
             # prefer the creation time of the earliest workflow run for the
