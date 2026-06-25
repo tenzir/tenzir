@@ -22,5 +22,14 @@ to_clickhouse table="events", mode="append"
 Absent values are written as `{}`. A null value becomes `{}` for a plain `JSON`
 column and SQL `NULL` for a `Nullable(JSON)` column. Because ClickHouse `JSON`
 columns only accept objects, non-record values are written as `{}` and a warning
-is emitted. Tenzir does not create `JSON` columns itself; the column must already
-exist in the target table.
+is emitted.
+
+When creating a table, the new `json` argument selects top-level fields to create
+as `JSON` columns instead of the inferred type. It accepts a single field or a
+list of fields, and the columns are created even if the field is absent from the
+first event used for creation:
+
+```tql
+from {id: 0, payload: {a: 1, b: [2, 3]}}
+to_clickhouse table="events", primary=id, json=[payload, raw]
+```
