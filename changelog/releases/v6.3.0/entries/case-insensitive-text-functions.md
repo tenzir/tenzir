@@ -3,6 +3,8 @@ title: Case-insensitive text functions
 type: feature
 authors:
   - aljazerzen
+prs:
+  - 6378
 created: 2026-06-22T00:00:00.000000Z
 ---
 

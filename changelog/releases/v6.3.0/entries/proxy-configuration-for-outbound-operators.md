@@ -3,6 +3,8 @@ title: Configure an HTTP proxy for outbound operators
 type: feature
 authors:
   - raxyte
+prs:
+  - 6222
 created: 2026-05-25T00:00:00.000000Z
 ---
 

@@ -4,6 +4,8 @@ type: bugfix
 authors:
   - IyeOnline
   - claude
+prs:
+  - 6252
 created: 2026-06-03T14:20:38.490452Z
 ---
 
