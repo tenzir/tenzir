@@ -1,8 +1,4 @@
 {
-  id: "serve_multi_1",
-  has_schemas: true,
-}
-{
-  id: "serve_multi_2",
-  has_schemas: false,
+  a_has_schemas: true,
+  b_has_schemas: false,
 }

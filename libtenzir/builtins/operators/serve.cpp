@@ -1814,26 +1814,29 @@ struct serve_handler_state {
   };
 
   // Parses and validates an optional `schema` parameter, returning nullopt when
-  // it is absent.
+  // it is absent or null. A null value is treated as unset because TQL list
+  // unification fills an omitted per-request `schema` with null when a sibling
+  // request specifies one.
   static auto try_extract_schema(const tenzir::record& params)
     -> std::variant<std::optional<enum schema>, parse_error> {
-    auto schema = try_get<std::string>(params, "schema");
-    if (not schema) {
-      auto detail_msg
-        = fmt::format("{}; got params {}", schema.error(), params);
-      return parse_error{.message = "failed to read schema parameter",
-                         .detail = caf::make_error(ec::invalid_argument,
-                                                   std::move(detail_msg))};
-    }
-    if (not *schema) {
+    const auto it = params.find("schema");
+    if (it == params.end() or is<caf::none_t>(it->second)) {
       return std::optional<enum schema>{};
     }
-    auto opt = from_string<enum schema>(**schema);
+    const auto* str = try_as<std::string>(&it->second);
+    if (not str) {
+      return parse_error{
+        .message = "failed to read schema parameter",
+        .detail = caf::make_error(
+          ec::invalid_argument,
+          fmt::format("expected a string, got params {}", params))};
+    }
+    auto opt = from_string<enum schema>(*str);
     if (not opt) {
       return parse_error{.message = "invalid schema parameter",
                          .detail
                          = caf::make_error(ec::invalid_argument,
-                                           fmt::format("got `{}`", **schema))};
+                                           fmt::format("got `{}`", *str))};
     }
     return std::optional<enum schema>{*opt};
   }
@@ -1858,17 +1861,20 @@ struct serve_handler_state {
                                   fmt::format("got parameters {}", params))};
     }
     result.serve_id = std::move(**serve_id);
-    auto continuation_token
-      = try_get<std::string>(params, "continuation_token");
-    if (not continuation_token) {
-      return parse_error{.message = "failed to read continuation_token",
-                         .detail = caf::make_error(
-                           ec::invalid_argument,
-                           fmt::format("{}; got parameters {}",
-                                       continuation_token.error(), params))};
-    }
-    if (*continuation_token) {
-      result.continuation_token = std::move(**continuation_token);
+    // Treat both an absent key and an explicit null as unset: TQL list
+    // unification fills an omitted per-request `continuation_token` with null
+    // when a sibling request specifies one.
+    if (const auto it = params.find("continuation_token");
+        it != params.end() and not is<caf::none_t>(it->second)) {
+      const auto* str = try_as<std::string>(&it->second);
+      if (not str) {
+        return parse_error{
+          .message = "failed to read continuation_token",
+          .detail = caf::make_error(
+            ec::invalid_argument,
+            fmt::format("expected a string, got parameters {}", params))};
+      }
+      result.continuation_token = *str;
     }
     auto schema = try_extract_schema(params);
     if (auto* err = try_as<parse_error>(schema)) {
