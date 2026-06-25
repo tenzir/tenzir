@@ -61,22 +61,6 @@ tenzir:
           {i: 43},
           {s: "str 2", i: 1}
         serve "serve_multi_schema_b"
-    multiserve_1:
-      name: multiserve 1
-      definition: |
-        from {s: "Hello World 1"},
-          {s: "Hiya 1"},
-          {i: 42},
-          {s: "str 1", i: 0}
-        serve "multiserve_1"
-    multiserve_2:
-      name: multiserve 2
-      definition: |
-        from {s: "Hello World 2"},
-          {s: "Hiya 2"},
-          {i: 43},
-          {s: "str 2", i: 1}
-        serve "multiserve_2"
     serve_retry:
       name: serve retry
       definition: |
