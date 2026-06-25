@@ -185,13 +185,6 @@ inline constexpr std::chrono::seconds max_timeout = std::chrono::seconds{10};
 
 } // namespace serve
 
-namespace multiserve {
-
-/// The duration after which an idle multiserve session is dropped.
-inline constexpr std::chrono::hours idle_timeout = std::chrono::hours{1};
-
-} // namespace multiserve
-
 } // namespace api
 
 // -- constants for the entire system ------------------------------------------

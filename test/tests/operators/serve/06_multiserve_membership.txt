@@ -1,5 +1,0 @@
-create-results-keys: ['multiserve_1', 'multiserve_2']
-status-after-create: [{'serve_id': 'multiserve_1', 'schema': None}, {'serve_id': 'multiserve_2', 'schema': 'never'}]
-members-after-add: [{'serve_id': 'multiserve_1', 'schema': None}, {'serve_id': 'multiserve_2', 'schema': 'never'}, {'serve_id': 'multiserve_3', 'schema': 'exact'}]
-members-after-remove: [{'serve_id': 'multiserve_2', 'schema': 'never'}, {'serve_id': 'multiserve_3', 'schema': 'exact'}]
-unknown-id-is-error: True
