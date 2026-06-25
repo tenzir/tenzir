@@ -335,6 +335,26 @@ auto easy_client::insert(const table_slice& slice, std::string_view table_name,
                   dropcount);
     block.AppendColumn(std::string{k}, std::move(this_column));
   }
+  // Materialize the columns that exist in the target table but are absent from
+  // the input. They are guaranteed nullable here (non-nullable missing columns
+  // already returned above), so they are written as explicit nulls (`{}` for a
+  // plain JSON column). Without this the block would be missing these columns,
+  // and a slice mapping to no target column at all would yield a zero-column
+  // block that trips the row-count assertion below.
+  for (const auto& [i, kvp] :
+       detail::enumerate(transformations->transformations)) {
+    if (transformations->found_column[i]) {
+      continue;
+    }
+    auto this_column = kvp.second->create_null_column(slice.rows() - dropcount);
+    if (not this_column) {
+      diagnostic::warning("failed to add column `{}` to ClickHouse table",
+                          kvp.first)
+        .emit(dh_);
+      return {};
+    }
+    block.AppendColumn(std::string{kvp.first}, std::move(this_column));
+  }
   TENZIR_ASSERT(block.GetRowCount() == slice.rows() - dropcount,
                 "wrong row count for final block `{} != {} - {}`",
                 block.GetRowCount(), slice.rows(), dropcount);
