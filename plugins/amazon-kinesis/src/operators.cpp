@@ -15,9 +15,11 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/multi_series_builder.hpp>
+#include <tenzir/result.hpp>
 #include <tenzir/tql2/entity_path.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/uuid.hpp>
+#include <tenzir/variant.hpp>
 
 #include <arrow/array/array_binary.h>
 #include <aws/core/utils/Array.h>
@@ -67,23 +69,45 @@ struct ReadRecord {
   duration behind_latest = {};
 };
 
-struct ReadResult {
+/// A successful `GetRecords` response for a shard.
+struct ShardPage {
   std::vector<ReadRecord> records;
-  std::string shard_id;
   std::string next_iterator;
   std::string next_sequence_number;
   /// How far this response lags behind the tip of the shard; zero means the
   /// read is caught up with the stream.
   duration behind_latest = {};
   bool shard_closed = false;
-  bool iterator_expired = false;
-  bool throttled = false;
-  /// Whether the shard loop finished because it reached the tip in exit mode.
-  bool caught_up = false;
-  std::string error;
 };
 
+/// The shard iterator expired and must be recreated before reading again.
+struct IteratorExpired {};
+
+/// The read was throttled and should be retried after a backoff.
+struct Throttled {};
+
+/// The outcome of a single `read_from_shard` call.
+using ShardRead
+  = variant<ShardPage, IteratorExpired, Throttled, KinesisApiError>;
+
+/// A shard's progress reported from its loop to the operator's main task.
+struct ShardUpdate {
+  std::string shard_id;
+  std::vector<ReadRecord> records;
+  std::string next_sequence_number;
+  bool shard_closed = false;
+  /// Whether the shard loop finished because it reached the tip in exit mode.
+  bool caught_up = false;
+};
+
+/// What a shard loop hands to `process_task`: either progress or a failure.
+using ShardReport = Result<ShardUpdate, KinesisApiError>;
+
 struct ShardInfo {
+  ShardInfo() = default;
+  explicit ShardInfo(std::string id) : id{std::move(id)} {
+  }
+
   std::string id;
   std::vector<std::string> parents;
 };
@@ -105,15 +129,15 @@ auto kinesis_api_call(amazon::SignedHttpClient& client,
   auto response = co_await client.raw_post("/", std::move(body),
                                            std::move(headers), operation);
   if (response.is_err()) {
-    co_return Err{KinesisApiError{.message = std::move(response).unwrap_err()}};
+    co_return Err{KinesisApiError{std::move(response).unwrap_err()}};
   }
   auto http_response = std::move(response).unwrap();
   if (not http_response.is_status_success()) {
     co_return Err{KinesisApiError{
-      .message = fmt::format(
-        "{} returned HTTP {}: {}", operation, http_response.status_code,
-        amazon::extract_aws_error_message(http_response.body)),
-      .code = amazon::extract_aws_error_code(http_response.body),
+      fmt::format("{} returned HTTP {}: {}", operation,
+                  http_response.status_code,
+                  amazon::extract_aws_error_message(http_response.body)),
+      amazon::extract_aws_error_code(http_response.body),
     }};
   }
   co_return amazon::to_aws_json_result(std::move(http_response));
@@ -181,7 +205,7 @@ auto list_shards(amazon::SignedHttpClient& client, std::string_view stream,
     auto page
       = Aws::Kinesis::Model::ListShardsResult{std::move(aws_result).unwrap()};
     for (const auto& shard : page.GetShards()) {
-      auto info = ShardInfo{.id = amazon::from_aws_string(shard.GetShardId())};
+      auto info = ShardInfo{amazon::from_aws_string(shard.GetShardId())};
       if (shard.ParentShardIdHasBeenSet()) {
         info.parents.push_back(
           amazon::from_aws_string(shard.GetParentShardId()));
@@ -199,7 +223,7 @@ auto list_shards(amazon::SignedHttpClient& client, std::string_view stream,
 
 auto read_from_shard(amazon::SignedHttpClient& client, std::string_view stream,
                      std::string_view shard_id, std::string iterator, int limit)
-  -> Task<ReadResult> {
+  -> Task<ShardRead> {
   auto request = Aws::Kinesis::Model::GetRecordsRequest{};
   request.SetShardIterator(Aws::String{iterator.data(), iterator.size()});
   request.SetLimit(limit);
@@ -207,18 +231,16 @@ auto read_from_shard(amazon::SignedHttpClient& client, std::string_view stream,
   if (aws_result.is_err()) {
     auto error = std::move(aws_result).unwrap_err();
     if (is_error(error, "ExpiredIteratorException")) {
-      co_return {.shard_id = std::string{shard_id}, .iterator_expired = true};
+      co_return IteratorExpired{};
     }
     if (is_error(error, "ProvisionedThroughputExceededException")) {
-      co_return {.shard_id = std::string{shard_id}, .throttled = true};
+      co_return Throttled{};
     }
-    co_return {.shard_id = std::string{shard_id},
-               .error = std::move(error.message)};
+    co_return std::move(error);
   }
   auto result
     = Aws::Kinesis::Model::GetRecordsResult{std::move(aws_result).unwrap()};
-  auto output = ReadResult{};
-  output.shard_id = std::string{shard_id};
+  auto output = ShardPage{};
   output.next_iterator = amazon::from_aws_string(result.GetNextShardIterator());
   output.shard_closed = output.next_iterator.empty();
   output.behind_latest
@@ -497,8 +519,10 @@ auto FromAmazonKinesis::start(OpCtx& ctx) -> Task<void> {
     auto infos = std::move(shard_infos).unwrap();
     shards_.reserve(infos.size());
     for (auto& info : infos) {
-      shards_.push_back(ShardState{.id = std::move(info.id),
-                                   .parents = std::move(info.parents)});
+      auto shard = ShardState{};
+      shard.id = std::move(info.id);
+      shard.parents = std::move(info.parents);
+      shards_.push_back(std::move(shard));
     }
   }
   if (shards_.empty() and args_.exit) {
@@ -570,47 +594,53 @@ auto FromAmazonKinesis::shard_loop(ShardState shard) -> Task<void> {
     if (iterator.empty()) {
       auto created = co_await recreate_shard_iterator(shard);
       if (created.is_err()) {
-        auto result = ReadResult{};
-        result.shard_id = shard.id;
-        result.error = std::move(created).unwrap_err().message;
-        co_await results_->enqueue(Any{std::move(result)});
+        co_await results_->enqueue(
+          Any{ShardReport{Err{std::move(created).unwrap_err()}}});
         co_return;
       }
       iterator = std::move(created).unwrap();
       if (iterator.empty()) {
-        auto result = ReadResult{};
-        result.shard_id = shard.id;
-        result.shard_closed = true;
-        co_await results_->enqueue(Any{std::move(result)});
+        auto update = ShardUpdate{};
+        update.shard_id = shard.id;
+        update.shard_closed = true;
+        co_await results_->enqueue(Any{ShardReport{std::move(update)}});
         co_return;
       }
     }
-    auto result = co_await read_from_shard(
-      *client_, args_.stream.inner, shard.id, iterator, records_per_call_);
-    if (result.throttled) {
+    auto read = co_await read_from_shard(*client_, args_.stream.inner, shard.id,
+                                         iterator, records_per_call_);
+    if (try_as<Throttled>(read)) {
       co_await folly::coro::sleep(
         std::chrono::duration_cast<folly::HighResDuration>(throttle_backoff));
       continue;
     }
-    if (result.iterator_expired) {
+    if (try_as<IteratorExpired>(read)) {
       iterator.clear();
       continue;
     }
-    iterator = result.next_iterator;
-    if (not result.next_sequence_number.empty()) {
-      shard.next_sequence_number = result.next_sequence_number;
+    if (auto* error = try_as<KinesisApiError>(read)) {
+      co_await results_->enqueue(Any{ShardReport{Err{std::move(*error)}}});
+      co_return;
+    }
+    auto& page = as<ShardPage>(read);
+    iterator = page.next_iterator;
+    if (not page.next_sequence_number.empty()) {
+      shard.next_sequence_number = page.next_sequence_number;
     }
     // In exit mode, a shard is finished once it reaches the tip of the
     // stream; the loop ends and reports this completion as its final result.
     // An empty response alone is not enough: sparse streams can return empty
     // batches with records still ahead.
-    result.caught_up = args_.exit and result.behind_latest == duration::zero();
-    const auto failed = not result.error.empty();
-    const auto closed = result.shard_closed;
-    const auto finished = result.caught_up;
-    const auto idle = result.records.empty();
-    co_await results_->enqueue(Any{std::move(result)});
-    if (failed or closed or finished) {
+    auto update = ShardUpdate{};
+    update.shard_id = shard.id;
+    update.next_sequence_number = std::move(page.next_sequence_number);
+    update.shard_closed = page.shard_closed;
+    update.caught_up = args_.exit and page.behind_latest == duration::zero();
+    update.records = std::move(page.records);
+    const auto terminal = update.shard_closed or update.caught_up;
+    const auto idle = update.records.empty();
+    co_await results_->enqueue(Any{ShardReport{std::move(update)}});
+    if (terminal) {
       co_return;
     }
     if (idle) {
@@ -671,9 +701,11 @@ auto FromAmazonKinesis::discover_new_shards(OpCtx& ctx) -> Task<void> {
       if (latest and not descends_from_tracked) {
         continue;
       }
-      shards_.push_back(ShardState{.id = std::move(info.id),
-                                   .parents = std::move(info.parents),
-                                   .trim_horizon_start = true});
+      auto shard = ShardState{};
+      shard.id = std::move(info.id);
+      shard.parents = std::move(info.parents);
+      shard.trim_horizon_start = true;
+      shards_.push_back(std::move(shard));
       added = true;
     }
   }
@@ -686,12 +718,15 @@ auto FromAmazonKinesis::await_task(diagnostic_handler& dh) const -> Task<Any> {
 
 auto FromAmazonKinesis::process_task(Any result, Push<table_slice>& push,
                                      OpCtx& ctx) -> Task<void> {
-  auto batch = std::move(result).as<ReadResult>();
-  if (not batch.error.empty()) {
-    diagnostic::error("{}", batch.error).primary(args_.stream.source).emit(ctx);
+  auto report = std::move(result).as<ShardReport>();
+  if (report.is_err()) {
+    diagnostic::error("{}", report.unwrap_err().message)
+      .primary(args_.stream.source)
+      .emit(ctx);
     done_ = true;
     co_return;
   }
+  auto batch = std::move(report).unwrap();
   if (auto it = std::ranges::find(shards_, batch.shard_id, &ShardState::id);
       it != shards_.end()) {
     it->closed = batch.shard_closed;

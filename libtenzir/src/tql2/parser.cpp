@@ -532,7 +532,7 @@ public:
       if (auto bin_op = peek_binary_op()) {
         auto new_prec = precedence(*bin_op);
         if (new_prec >= min_prec) {
-          advance();
+          (void)advance();
           consume_trivia_with_newlines();
           auto right = parse_expression(new_prec + 1, stop_at_if);
           expr = binary_expr{

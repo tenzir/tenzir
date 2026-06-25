@@ -28,6 +28,11 @@
 namespace tenzir::plugins::amazon_kinesis {
 
 struct KinesisApiError {
+  KinesisApiError() = default;
+  explicit KinesisApiError(std::string message, std::string code = {})
+    : message{std::move(message)}, code{std::move(code)} {
+  }
+
   std::string message;
   std::string code;
 };

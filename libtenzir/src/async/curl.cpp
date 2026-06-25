@@ -77,6 +77,26 @@ auto curl_perform_failure(curl::multi::code code) -> CurlPerformResult {
                             .response_code = response_code(easy)};
 }
 
+/// A wake-up deferred by a state transition: built while holding the lock and
+/// run by the caller after releasing it. An empty `Wakeup` means the state did
+/// not change and there is nothing to do.
+class [[nodiscard]] Wakeup {
+public:
+  Wakeup() = default;
+  explicit Wakeup(std::function<void()> action) : action_{std::move(action)} {
+  }
+
+  /// Runs the deferred wake-up, if any. Safe to call when empty.
+  auto run() -> void {
+    if (action_) {
+      action_();
+    }
+  }
+
+private:
+  std::function<void()> action_;
+};
+
 class UploadStream {
 public:
   explicit UploadStream(size_t capacity) : capacity_{capacity} {
@@ -108,15 +128,15 @@ public:
   }
 
   auto close() -> void {
-    wakeup(transition_to_closed());
+    transition_to_closed().run();
   }
 
   auto abort() -> void {
-    wakeup(transition_to_aborted());
+    transition_to_aborted().run();
   }
 
   auto terminate() -> void {
-    wakeup(transition_to_terminated());
+    transition_to_terminated().run();
   }
 
   auto wait_until_ready() -> Task<bool> {
@@ -192,11 +212,6 @@ private:
     aborted_terminated,
   };
 
-  struct Transition {
-    bool changed = false;
-    std::function<void()> resume;
-  };
-
   auto is_aborted_state() const -> bool {
     return state_ == State::aborted or state_ == State::aborted_terminated;
   }
@@ -209,42 +224,41 @@ private:
     return resume_callback_;
   }
 
-  auto transition_to_closed() -> Transition {
+  auto make_wakeup(std::function<void()> resume) -> Wakeup {
+    return Wakeup{[this, resume = std::move(resume)] {
+      data_ready_.notify_one();
+      space_available_.notify_one();
+      if (resume) {
+        resume();
+      }
+    }};
+  }
+
+  auto transition_to_closed() -> Wakeup {
     auto lock = std::lock_guard{mutex_};
     if (state_ != State::open) {
       return {};
     }
     state_ = State::closed;
-    return {.changed = true, .resume = take_resume_callback()};
+    return make_wakeup(take_resume_callback());
   }
 
-  auto transition_to_aborted() -> Transition {
+  auto transition_to_aborted() -> Wakeup {
     auto lock = std::lock_guard{mutex_};
     if (is_aborted_state() or state_ == State::terminated) {
       return {};
     }
     state_ = State::aborted;
-    return {.changed = true, .resume = take_resume_callback()};
+    return make_wakeup(take_resume_callback());
   }
 
-  auto transition_to_terminated() -> Transition {
+  auto transition_to_terminated() -> Wakeup {
     auto lock = std::lock_guard{mutex_};
     if (state_ == State::terminated or state_ == State::aborted_terminated) {
       return {};
     }
     state_ = is_aborted_state() ? State::aborted_terminated : State::terminated;
-    return {.changed = true, .resume = take_resume_callback()};
-  }
-
-  auto wakeup(Transition transition) -> void {
-    if (not transition.changed) {
-      return;
-    }
-    data_ready_.notify_one();
-    space_available_.notify_one();
-    if (transition.resume) {
-      transition.resume();
-    }
+    return make_wakeup(take_resume_callback());
   }
 
   mutable std::mutex mutex_;
@@ -292,20 +306,11 @@ public:
   }
 
   auto abort() -> void {
-    auto transition = transition_to_aborted();
-    if (not transition.changed) {
-      return;
-    }
-    data_available_.notify_one();
-    if (transition.resume) {
-      transition.resume();
-    }
+    transition_to_aborted().run();
   }
 
   auto close() -> void {
-    if (transition_to_closed().changed) {
-      data_available_.notify_one();
-    }
+    transition_to_closed().run();
   }
 
   auto is_aborted() const -> bool {
@@ -339,11 +344,6 @@ private:
     aborted,
   };
 
-  struct Transition {
-    bool changed = false;
-    std::function<void()> resume;
-  };
-
   auto take_resume_callback() -> std::function<void()> {
     if (not paused_) {
       return {};
@@ -352,23 +352,30 @@ private:
     return resume_callback_;
   }
 
-  auto transition_to_closed() -> Transition {
+  auto transition_to_closed() -> Wakeup {
     auto lock = std::lock_guard{mutex_};
     if (state_ != State::open) {
       return {};
     }
     state_ = State::closed;
-    return {.changed = true};
+    return Wakeup{[this] {
+      data_available_.notify_one();
+    }};
   }
 
-  auto transition_to_aborted() -> Transition {
+  auto transition_to_aborted() -> Wakeup {
     auto lock = std::lock_guard{mutex_};
     if (state_ == State::aborted) {
       return {};
     }
     state_ = State::aborted;
     buffered_.clear();
-    return {.changed = true, .resume = take_resume_callback()};
+    return Wakeup{[this, resume = take_resume_callback()] {
+      data_available_.notify_one();
+      if (resume) {
+        resume();
+      }
+    }};
   }
 
   mutable std::mutex mutex_;
