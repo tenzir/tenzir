@@ -45,6 +45,22 @@ tenzir:
       definition: |
         subscribe "serve_multi_idle_topic"
         serve "serve_multi_idle"
+    serve_multi_schema_a:
+      name: serve multi schema a
+      definition: |
+        from {s: "Hello World 1"},
+          {s: "Hiya 1"},
+          {i: 42},
+          {s: "str 1", i: 0}
+        serve "serve_multi_schema_a"
+    serve_multi_schema_b:
+      name: serve multi schema b
+      definition: |
+        from {s: "Hello World 2"},
+          {s: "Hiya 2"},
+          {i: 43},
+          {s: "str 2", i: 1}
+        serve "serve_multi_schema_b"
     multiserve_1:
       name: multiserve 1
       definition: |
