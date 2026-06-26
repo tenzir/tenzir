@@ -291,8 +291,8 @@ struct secret_resolver {
   auto operator()(const fbs::data::SecretName& l) -> ret_t {
     const auto it = requested.find(detail::secrets::deref(l.value()).str());
     TENZIR_ASSERT(it != requested.end());
-    censor.add(it->second.value);
-    return resolved_secret_value{it->second.value, false};
+    censor.add(*it->second.value);
+    return resolved_secret_value{*it->second.value, false};
   }
 
   auto operator()(const fbs::data::SecretConcatenation& concat) -> ret_t {
