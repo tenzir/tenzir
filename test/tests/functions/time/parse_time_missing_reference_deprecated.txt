@@ -10,6 +10,7 @@ warning: `parse_time` parsed a timestamp without a year as 1970; this is depreca
 6 | syslog_default = syslog.parse_time("%b %e %H:%M:%S")
   |                  ~~~~~~ 
   |
+
 warning: `parse_time` parsed a timestamp without a year as 1970; this is deprecated and will become an error in a future release
  --> tests/functions/time/parse_time_missing_reference_deprecated.tql:7:21
   |
