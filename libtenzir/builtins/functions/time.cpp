@@ -699,7 +699,9 @@ public:
                   = needs_year or needs_month or needs_day;
                 const auto has_week_date = parsed_date_fields.week_number
                                            and parsed_date_fields.weekday;
-                if (reference and has_week_date) {
+                if (reference
+                    and (has_week_date
+                         or (needs_year and parsed_date_fields.ordinal_day))) {
                   unsupported_reference = true;
                   b->UnsafeAppendNull();
                   continue;

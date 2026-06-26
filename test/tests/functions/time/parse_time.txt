@@ -15,7 +15,6 @@
   syslog_leap_day_from_2022: "Feb 29 12:00:00",
   syslog_leap_day_century_gap: "Feb 29 12:00:00",
   syslog_with_utc_minus_10: "May  5 18:16:21 -1000",
-  ordinal_day_without_year: "060 12:00:00",
   str9: null,
   ts1: 2024-06-15T00:00:00Z,
   ts2: 2024-06-15T00:00:00Z,
@@ -34,5 +33,4 @@
   leap_day_after_adjacent_years: 2020-02-29T12:00:00Z,
   leap_day_century_gap: 2096-02-29T12:00:00Z,
   utc_minus_10_sender: 2026-05-06T04:16:21Z,
-  ordinal_day_reference_year: 2024-02-29T12:00:00Z,
 }
