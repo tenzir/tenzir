@@ -1,0 +1,12 @@
+{
+  b: 2,
+}
+warning: field `a` may only be dropped once
+ --> tests/operators/drop/consecutive_duplicate.tql:5:6
+  |
+5 | drop a
+  |      ~ 
+  ⋮
+6 | drop a
+  |      ~ 
+  |

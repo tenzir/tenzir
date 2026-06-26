@@ -1,0 +1,3 @@
+from {r: {foo: 1}, key: "foo", x: 0}
+x = 1
+y = r[key]

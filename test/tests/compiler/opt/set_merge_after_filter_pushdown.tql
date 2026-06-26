@@ -1,0 +1,4 @@
+from {a: 0, keep: true}
+a = 1
+where keep == true
+b = 2
