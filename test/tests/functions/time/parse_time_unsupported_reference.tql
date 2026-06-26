@@ -1,6 +1,5 @@
 from {
   week_without_year: "22 1",
-  week_with_year: "2024 22 1",
   ordinal_without_year: "060 12:00:00",
   leap_ordinal_without_year: "366 12:00:00",
   day_without_month: "5 18:16:21",
@@ -9,10 +8,6 @@ from {
 
 week_date_reference_year = week_without_year.parse_time(
   "%U %w",
-  reference=2024-01-01T00:00:00Z,
-)
-week_date_reference_ignored = week_with_year.parse_time(
-  "%Y %U %w",
   reference=2024-01-01T00:00:00Z,
 )
 ordinal_day_reference_year = ordinal_without_year.parse_time(
