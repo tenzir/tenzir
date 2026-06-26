@@ -699,6 +699,11 @@ public:
                   = needs_year or needs_month or needs_day;
                 const auto has_week_date = parsed_date_fields.week_number
                                            and parsed_date_fields.weekday;
+                if (reference and has_week_date) {
+                  unsupported_reference = true;
+                  b->UnsafeAppendNull();
+                  continue;
+                }
                 if (needs_reference) {
                   if (reference_array) {
                     if (not reference_array->array->IsValid(i)) {
@@ -714,8 +719,7 @@ public:
                       b->UnsafeAppendNull();
                       continue;
                     }
-                    if ((needs_month != needs_day)
-                        or (needs_year and has_week_date)) {
+                    if (needs_month != needs_day) {
                       unsupported_reference = true;
                       b->UnsafeAppendNull();
                       continue;
