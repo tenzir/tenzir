@@ -664,6 +664,7 @@ public:
               auto reference_ignored = false;
               auto missing_reference = false;
               auto deprecated_missing_reference = false;
+              auto unsupported_reference = false;
               auto b = time_type::make_arrow_builder(arrow_memory_pool());
               check(b->Reserve(array.length()));
               auto nul_terminated = std::string{};
@@ -696,6 +697,8 @@ public:
                 const auto needs_day = not parsed_date_fields.day;
                 const auto needs_reference
                   = needs_year or needs_month or needs_day;
+                const auto has_week_date = parsed_date_fields.week_number
+                                           and parsed_date_fields.weekday;
                 if (needs_reference) {
                   if (reference_array) {
                     if (not reference_array->array->IsValid(i)) {
@@ -708,6 +711,12 @@ public:
                     const auto ref_tm = as_tm(ref);
                     if (not ref_tm) {
                       error = true;
+                      b->UnsafeAppendNull();
+                      continue;
+                    }
+                    if ((needs_month != needs_day)
+                        or (needs_year and has_week_date)) {
+                      unsupported_reference = true;
                       b->UnsafeAppendNull();
                       continue;
                     }
@@ -793,6 +802,13 @@ public:
                 diagnostic::warning("`parse_time` cannot fill missing date "
                                     "fields because `reference` is null")
                   .primary(*reference)
+                  .emit(ctx);
+              }
+              if (unsupported_reference) {
+                diagnostic::warning("`parse_time` cannot fill unsupported date "
+                                    "fields from `reference`")
+                  .primary(*reference)
+                  .secondary(format)
                   .emit(ctx);
               }
               if (deprecated_missing_reference) {

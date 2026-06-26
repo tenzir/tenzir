@@ -8,8 +8,6 @@ from {
   str8: "Saturday, June 15, 2024",
   syslog_without_year: "May  5 18:16:21",
   time_without_date: "14:30:45",
-  day_without_month: "5 18:16:21",
-  month_without_day: "May 18:16:21",
   date_without_time: "May 5",
   syslog_dec_before_feb: "Dec 31 23:59:59",
   syslog_jan_after_dec: "Jan  1 00:00:01",
@@ -49,14 +47,6 @@ roundtrip_with_now = syslog_without_year.parse_time("%b %e %H:%M:%S", reference=
 // `reference` fills missing date fields, but not missing time fields.
 time_only_reference_date = time_without_date.parse_time(
   "%H:%M:%S",
-  reference=2026-06-24T00:00:00Z,
-)
-day_only_reference_date = day_without_month.parse_time(
-  "%e %H:%M:%S",
-  reference=2026-06-24T00:00:00Z,
-)
-month_only_reference_date = month_without_day.parse_time(
-  "%b %H:%M:%S",
   reference=2026-06-24T00:00:00Z,
 )
 date_only_reference_keeps_time_defaults = date_without_time.parse_time(
