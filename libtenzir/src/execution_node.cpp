@@ -459,7 +459,7 @@ struct exec_node_state {
     max_backoff
       = demand_settings.max_backoff
           ? *demand_settings.max_backoff
-          : read_config("min-backoff", min_backoff, max_backoff, false);
+          : read_config("max-backoff", min_backoff, max_backoff, false);
     backoff_rate = demand_settings.backoff_rate
                      ? *demand_settings.backoff_rate
                      : read_config("backoff-rate", 1.0, backoff_rate, false);
