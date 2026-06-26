@@ -1,0 +1,7 @@
+error: package binding `nondetpkg::$r` is not a constant
+ --> <packages/nondetpkg/constants.tql>:1:10
+  |
+1 | let $r = random()
+  |          ^^^^^^^^ 
+  |
+  = note: package `let` bindings must be deterministic

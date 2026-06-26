@@ -1,0 +1,14 @@
+{
+  high: 8,
+  ports: [
+    22,
+    80,
+    443,
+  ],
+  threshold: 9,
+  vendor: "acme",
+  defaults: {
+    region: "eu",
+    retries: 3,
+  },
+}

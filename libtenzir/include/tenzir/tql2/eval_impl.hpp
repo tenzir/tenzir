@@ -90,6 +90,9 @@ public:
   auto eval(ast::format_expr const& x, ActiveRows const& active)
     -> multi_series;
 
+  auto eval(ast::pkg_dollar_var const& x, ActiveRows const& active)
+    -> multi_series;
+
   template <class T>
     requires(detail::tl_contains<ast::expression_kinds, T>::value)
   auto eval(T const& x, ActiveRows const& active) -> multi_series {

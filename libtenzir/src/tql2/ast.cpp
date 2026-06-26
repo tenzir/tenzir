@@ -706,27 +706,108 @@ auto ast::expression::substitute(
 }
 
 auto ast::expression::is_deterministic(const registry& reg) const -> bool {
-  // TODO: Handle other cases.
   return match(
-    [](const ast::constant&) {
+    [&](ast::record const& x) {
+      return std::ranges::all_of(x.items, [&](ast::record::item const& item) {
+        return tenzir::match(
+          item,
+          [&](ast::record::field const& f) {
+            return f.expr.is_deterministic(reg);
+          },
+          [&](ast::spread const& s) {
+            return s.expr.is_deterministic(reg);
+          });
+      });
+    },
+    [&](ast::list const& x) {
+      return std::ranges::all_of(x.items, [&](ast::list::item const& item) {
+        return tenzir::match(
+          item,
+          [&](ast::expression const& e) {
+            return e.is_deterministic(reg);
+          },
+          [&](ast::spread const& s) {
+            return s.expr.is_deterministic(reg);
+          });
+      });
+    },
+    // References to the input are deterministic: the same input always yields
+    // the same value.
+    [](ast::meta const&) {
       return true;
     },
-    [&](const ast::unary_expr& x) {
-      return x.expr.is_deterministic(reg);
+    [](ast::this_ const&) {
+      return true;
     },
-    [&](const ast::binary_expr& x) {
+    [](ast::root_field const&) {
+      return true;
+    },
+    [](ast::pipeline_expr const&) {
+      // A pipeline expression is a subpipeline, not a value: it cannot be
+      // const-evaluated. Treating it as deterministic would let it slip into
+      // the const-eval path (e.g. as a package `let` binding), where the
+      // evaluator only warns and yields `null` instead of rejecting it.
+      return false;
+    },
+    [](ast::constant const&) {
+      return true;
+    },
+    [&](ast::field_access const& x) {
+      return x.left.is_deterministic(reg);
+    },
+    [&](ast::index_expr const& x) {
+      return x.expr.is_deterministic(reg) and x.index.is_deterministic(reg);
+    },
+    [&](ast::binary_expr const& x) {
       return x.left.is_deterministic(reg) and x.right.is_deterministic(reg);
     },
-    [&](const ast::function_call& x) {
+    [&](ast::unary_expr const& x) {
+      return x.expr.is_deterministic(reg);
+    },
+    [&](ast::function_call const& x) {
       if (not reg.get(x).is_deterministic()) {
         return false;
       }
-      return std::ranges::all_of(x.args, [&](auto& arg) {
+      return std::ranges::all_of(x.args, [&](ast::expression const& arg) {
         return arg.is_deterministic(reg);
       });
     },
-    [](const auto&) {
+    [&](ast::lambda_expr const& x) {
+      return x.body.is_deterministic(reg);
+    },
+    [](ast::underscore const&) {
+      return true;
+    },
+    [&](ast::unpack const& x) {
+      return x.expr.is_deterministic(reg);
+    },
+    [&](ast::assignment const& x) {
+      return x.left.is_deterministic(reg) and x.right.is_deterministic(reg);
+    },
+    [](ast::dollar_var const&) {
+      // A pipeline `let` is not yet bound to a value at this point, so we
+      // cannot treat it as deterministic.
       return false;
+    },
+    [](ast::pkg_dollar_var const&) {
+      // A package `let` reference resolves to a constant value.
+      return true;
+    },
+    [&](ast::format_expr const& x) {
+      return std::ranges::all_of(
+        x.segments, [&](ast::format_expr::segment const& segment) {
+          return tenzir::match(
+            segment,
+            [](std::string const&) {
+              return true;
+            },
+            [&](ast::format_expr::replacement const& r) {
+              return r.expr.is_deterministic(reg);
+            });
+        });
+    },
+    [](ast::type_expr const&) {
+      return true;
     });
 }
 

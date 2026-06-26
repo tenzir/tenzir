@@ -1,0 +1,7 @@
+error: package binding `pipelinepkg::$p` is not a constant
+ --> <packages/pipelinepkg/constants.tql>:1:10
+  |
+1 | let $p = { from {x: 1} }
+  |          ^^^^^^^^^^^^^^^ 
+  |
+  = note: package `let` bindings must be deterministic

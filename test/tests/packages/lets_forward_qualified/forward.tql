@@ -1,0 +1,7 @@
+---
+error: true
+---
+// A self-qualified forward reference (`fwdqpkg::$b` before `$b` is defined) is
+// rejected the same way as the bare `$b` spelling, so ordering does not depend
+// on spelling.
+from {x: fwdqpkg::$a}

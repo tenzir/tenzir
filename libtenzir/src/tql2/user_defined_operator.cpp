@@ -278,6 +278,13 @@ struct callsite_injector : ast::visitor<callsite_injector> {
     visit(x.id);
   }
 
+  auto visit(ast::pkg_dollar_var& x) -> void {
+    for (auto& segment : x.path) {
+      visit(segment);
+    }
+    visit(x.id);
+  }
+
   auto visit(ast::unpack& x) -> void {
     visit(x.location);
     enter(x);

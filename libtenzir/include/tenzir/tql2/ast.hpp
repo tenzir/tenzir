@@ -117,6 +117,53 @@ struct dollar_var {
   let_id let;
 };
 
+/// A reference to a `let` binding exported by a package, written as a
+/// path-qualified `$`-variable, e.g. `acme::$threshold`.
+///
+/// Unlike `dollar_var`, this is a *path-based* reference resolved against the
+/// registry (in the value namespace of the `packages` domain), not a dynamic
+/// binding bound in a lexical scope. It is resolved by `resolve_entities` and
+/// is invisible to the binder and the dynamic-var substitution pass.
+struct pkg_dollar_var {
+  pkg_dollar_var() = default;
+
+  pkg_dollar_var(std::vector<identifier> path, identifier id)
+    : path{std::move(path)}, id{std::move(id)} {
+  }
+
+  auto name_without_dollar() const -> std::string_view {
+    TENZIR_ASSERT(id.name.starts_with("$"));
+    return std::string_view{id.name}.substr(1);
+  }
+
+  auto get_location() const -> tenzir::location {
+    if (path.empty()) {
+      return id.location;
+    }
+    return path.front().location.combine(id.location);
+  }
+
+  friend auto inspect(auto& f, pkg_dollar_var& x) -> bool {
+    return f.object(x).fields(f.field("path", x.path), f.field("id", x.id),
+                              f.field("ref", x.ref), f.field("value", x.value));
+  }
+
+  /// The leading module segments of the path, e.g. `[acme]` for `acme::$x`.
+  std::vector<identifier> path;
+  /// The `$name` leaf, including the leading `$`.
+  identifier id;
+  /// The resolved value entity, filled in by `resolve_entities`.
+  entity_path ref;
+  /// HACK: The constant value, cached at resolve time. Many `const_eval`/`eval`
+  /// sites only carry a `diagnostic_handler` and fall back to the *global*
+  /// registry snapshot (`session_provider::make`), which may differ from the
+  /// registry this reference was resolved against. Caching the value keeps
+  /// resolution and evaluation consistent and lets it survive serialization to
+  /// nodes that do not have the package. Remove once the resolve-time registry
+  /// is threaded through all evaluation contexts.
+  Option<data> value;
+};
+
 struct null {};
 
 struct constant {
@@ -191,11 +238,10 @@ struct root_field {
   }
 };
 
-using expression_kinds
-  = detail::type_list<record, list, meta, this_, root_field, pipeline_expr,
-                      constant, field_access, index_expr, binary_expr,
-                      unary_expr, function_call, lambda_expr, underscore,
-                      unpack, assignment, dollar_var, format_expr, type_expr>;
+using expression_kinds = detail::type_list<
+  record, list, meta, this_, root_field, pipeline_expr, constant, field_access,
+  index_expr, binary_expr, unary_expr, function_call, lambda_expr, underscore,
+  unpack, assignment, dollar_var, pkg_dollar_var, format_expr, type_expr>;
 
 using expression_kind = detail::tl_apply_t<expression_kinds, variant>;
 
@@ -1390,6 +1436,13 @@ protected:
   }
 
   void enter(ast::dollar_var& x) {
+    TENZIR_UNUSED(x);
+  }
+
+  void enter(ast::pkg_dollar_var& x) {
+    // Treated as an opaque leaf, like `dollar_var`: generic visitors (binder,
+    // substitutor) must not descend into or rewrite it. It is resolved only by
+    // `resolve_entities`.
     TENZIR_UNUSED(x);
   }
 

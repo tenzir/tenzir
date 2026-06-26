@@ -1,0 +1,3 @@
+id: pkgb
+name: Package B
+description: Part of a cross-package let cycle (pkga -> pkgb -> pkga).

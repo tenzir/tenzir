@@ -1,0 +1,10 @@
+error: duplicate package binding `$a`
+ --> <packages/duppkg/constants.tql>:3:5
+  |
+3 | let $a = 2
+  |     ^^ 
+  ⋮
+1 | let $a = 1
+  |     -- previously defined here
+  |
+  = note: in package `duppkg`

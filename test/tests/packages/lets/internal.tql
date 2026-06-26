@@ -1,0 +1,2 @@
+// A package operator referencing the package's own `let` bindings.
+letspkg::check

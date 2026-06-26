@@ -1,0 +1,3 @@
+id: fwdpkg
+name: Forward Reference Package
+description: A package whose constants.tql references a not-yet-declared binding.

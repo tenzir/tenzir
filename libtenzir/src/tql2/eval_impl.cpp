@@ -801,6 +801,20 @@ auto evaluator::eval(ast::constant const& x, ActiveRows const& active)
   return to_series(x.as_data());
 }
 
+auto evaluator::eval(ast::pkg_dollar_var const& x, ActiveRows const& active)
+  -> multi_series {
+  TENZIR_UNUSED(active);
+  // The value is const-evaluated and cached during resolution (see
+  // `resolve_entities`); evaluation just reads the cached constant.
+  if (x.value) {
+    return to_series(*x.value);
+  }
+  diagnostic::error("package binding `{}` is unresolved", x.id.name)
+    .primary(x.get_location())
+    .emit(ctx_);
+  return series::null(null_type{}, length_);
+}
+
 auto evaluator::eval(ast::format_expr const& x, ActiveRows const& active)
   -> multi_series {
   auto cols = std::vector<variant<std::string, multi_series>>{};

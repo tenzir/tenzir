@@ -1,0 +1,5 @@
+---
+error: true
+---
+// A let binding that is not a constant fails to load the package.
+from {y: nonconstpkg::$x}

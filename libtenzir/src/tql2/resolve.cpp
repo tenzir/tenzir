@@ -13,12 +13,14 @@
 #include "tenzir/detail/similarity.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/registry.hpp"
 
 #include <tsl/robin_map.h>
 
 #include <algorithm>
 #include <ranges>
+#include <unordered_set>
 
 namespace tenzir {
 
@@ -55,6 +57,8 @@ public:
             return reg_.function_names();
           case entity_ns::mod:
             return reg_.module_names();
+          case entity_ns::let:
+            return reg_.entity_names(entity_ns::let);
         }
         TENZIR_UNREACHABLE();
       });
@@ -66,6 +70,8 @@ public:
             return "function";
           case entity_ns::mod:
             return "module";
+          case entity_ns::let:
+            return "value";
         }
         TENZIR_UNREACHABLE();
       });
@@ -164,6 +170,78 @@ public:
     x.ref = std::move(path);
   }
 
+  void visit(ast::pkg_dollar_var& x) {
+    if (x.value) {
+      return;
+    }
+    // The full path is the module segments followed by the binding name.
+    auto segments = std::vector<std::string>{};
+    segments.reserve(x.path.size() + 1);
+    for (auto& segment : x.path) {
+      segments.push_back(segment.name);
+    }
+    segments.push_back(std::string{x.name_without_dollar()});
+    auto display = std::string{};
+    for (const auto& segment : x.path) {
+      display += segment.name;
+      display += "::";
+    }
+    display += x.id.name;
+    // Package `let`s live only in the `packages` domain.
+    auto path = entity_path{std::string{"packages"}, segments, entity_ns::let};
+    auto result = reg_.try_get(path);
+    auto* ref = try_as<entity_ref>(&result);
+    if (not ref) {
+      diagnostic::error("package binding `{}` not found", display)
+        .primary(x.get_location())
+        .emit(diag_);
+      result_ = failure::promise();
+      return;
+    }
+    auto* def = try_as<std::reference_wrapper<const ast::expression>>(ref);
+    TENZIR_ASSERT(def);
+    // Detect cycles across package `let` references (e.g. `a -> b -> a`).
+    auto key = fmt::format("{}", fmt::join(segments, "::"));
+    if (not resolving_.insert(key).second) {
+      diagnostic::error("cyclic package binding `{}`", display)
+        .primary(x.get_location())
+        .emit(diag_);
+      result_ = failure::promise();
+      return;
+    }
+    // Resolve the binding's expression here, where the full registry is
+    // available, then cache the constant result on the node.
+    auto expr = def->get();
+    visit(expr);
+    resolving_.erase(key);
+    if (result_.is_error()) {
+      return;
+    }
+    // A package `let` is a compile-time constant. Reject bindings that would
+    // evaluate differently each time (e.g. `random()`) so that every reference
+    // yields the same value. Input references (e.g. `this`) are deterministic
+    // and reach const-eval below, where they get a precise diagnostic.
+    if (not expr.is_deterministic(reg_)) {
+      diagnostic::error("package binding `{}` is not a constant", display)
+        .primary(expr.get_location())
+        .note("package `let` bindings must be deterministic")
+        .emit(diag_);
+      result_ = failure::promise();
+      return;
+    }
+    // Non-value bindings (a lambda, `_`, a spread, an assignment) are not
+    // rejected here: like pipeline `let` bindings, they reach const-eval, which
+    // merely warns and yields `null`. Stricter structural checking is deferred
+    // to a later change.
+    auto value = const_eval(expr, diag_);
+    if (not value) {
+      result_ = failure::promise();
+      return;
+    }
+    x.ref = std::move(path);
+    x.value = std::move(value).unwrap();
+  }
+
   void visit(ast::invocation& x) {
     auto prev = std::exchange(context_, context_t::op_name);
     visit(x.op);
@@ -213,6 +291,8 @@ private:
   diagnostic_handler& diag_;
   context_t context_ = context_t::none;
   failure_or<void> result_;
+  // Package `let` paths currently being resolved, to detect reference cycles.
+  std::unordered_set<std::string> resolving_;
 };
 
 } // namespace

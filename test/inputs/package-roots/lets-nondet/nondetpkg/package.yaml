@@ -1,0 +1,3 @@
+id: nondetpkg
+name: Non-Deterministic Package
+description: A package whose constants.tql binding is not deterministic.

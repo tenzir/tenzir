@@ -1,0 +1,3 @@
+id: pipelinepkg
+name: Pipeline Expression Package
+description: A package whose constants.tql binding is a pipeline expression, not a value.

@@ -1,0 +1,6 @@
+error: package binding `nopkg::$threshold` not found
+ --> tests/packages/lets/unknown_package.tql:5:10
+  |
+5 | from {x: nopkg::$threshold}
+  |          ^^^^^^^^^^^^^^^^^ 
+  |

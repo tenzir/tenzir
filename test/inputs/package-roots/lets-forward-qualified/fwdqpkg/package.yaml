@@ -1,0 +1,3 @@
+id: fwdqpkg
+name: Self-Qualified Forward Package
+description: A package whose constants.tql forward-references a sibling via its own module name.

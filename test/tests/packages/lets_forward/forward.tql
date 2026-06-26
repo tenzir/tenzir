@@ -1,0 +1,5 @@
+---
+error: true
+---
+// A constants.tql with a forward reference fails to load the package.
+from {x: fwdpkg::$a}

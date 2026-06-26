@@ -24,7 +24,10 @@ inline constexpr std::string_view entity_pkg_std = "std";
 inline constexpr std::string_view entity_pkg_cfg = "cfg";
 
 /// Models the available entity namespaces.
-TENZIR_ENUM(entity_ns, op, fn, mod);
+///
+/// `let` holds constant values exported by packages (package `let` bindings),
+/// referenced via a path-qualified `$`-variable, e.g. `acme::$threshold`.
+TENZIR_ENUM(entity_ns, op, fn, mod, let);
 
 /// Every entity is identified by a combination of three things:
 /// - The package where the lookup is started.

@@ -1,0 +1,6 @@
+error: cyclic package binding `pkga::$x`
+ --> <packages/pkgb/constants.tql>:1:10
+  |
+1 | let $y = pkga::$x
+  |          ^^^^^^^^ 
+  |

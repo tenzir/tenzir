@@ -1,0 +1,6 @@
+error: `$b` is referenced before it is defined
+ --> <packages/fwdpkg/constants.tql>:1:10
+  |
+1 | let $a = $b
+  |          ^^ 
+  |

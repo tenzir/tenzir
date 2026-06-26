@@ -1,0 +1,3 @@
+id: nonletpkg
+name: Non-Let Package
+description: A package whose constants.tql contains a non-let statement.

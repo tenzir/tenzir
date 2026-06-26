@@ -1,0 +1,3 @@
+id: duppkg
+name: Duplicate Binding Package
+description: A package whose constants.tql declares the same binding name twice.

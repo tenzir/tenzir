@@ -28,6 +28,7 @@
 #include <ranges>
 #include <string_view>
 #include <type_traits>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace tenzir {
@@ -798,6 +799,7 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
     TRY_ASSIGN_MAP_TO_RESULT(contexts, package_context);
     TRY_ASSIGN_STRUCTURE_TO_RESULT(config, package_config);
     TRY_ASSIGN_LIST_TO_RESULT(examples, package_example);
+    TRY_ASSIGN_STRING_TO_RESULT(lets);
     TRY(check_unknown_package_key("package", key));
   }
   REQUIRED_FIELD(id)
@@ -1112,6 +1114,22 @@ auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
       return failure::promise();
     }
   }
+  auto constants_file = dir / "constants.tql";
+  if (std::filesystem::exists(constants_file, ec)) {
+    if (auto contents = detail::load_contents(constants_file)) {
+      parsed_package->lets = std::move(*contents);
+    } else {
+      diagnostic::error("failed to read {}", constants_file)
+        .note("error: {}", contents.error())
+        .emit(dh);
+      had_errors = true;
+    }
+  } else if (ec) {
+    diagnostic::error("{}", ec)
+      .note("while trying to load {}", constants_file)
+      .emit(dh);
+    had_errors = true;
+  }
   if (had_errors) {
     return failure::promise();
   }
@@ -1276,6 +1294,9 @@ auto package::to_record() const -> record {
     inputs_record[input_name] = input.to_record();
   }
   info_record["inputs"] = std::move(inputs_record);
+  if (not lets.empty()) {
+    info_record["lets"] = lets;
+  }
   return info_record;
 }
 
@@ -1542,6 +1563,169 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh,
   }
   if (pkg_mod->defs.empty()) {
     pkg_entry.mod.reset();
+    module->defs.erase(module_name);
+  }
+  return module;
+}
+
+namespace {
+
+/// Rewrites bare sibling references (`$a`) inside a package `let` body to
+/// qualified self-references (`<pkg>::$a`) so they resolve through the same
+/// lazy package-let machinery as cross-package references. A binding may only
+/// reference earlier ones; forward or unknown references are errors.
+class sibling_rewriter : public ast::visitor<sibling_rewriter> {
+public:
+  sibling_rewriter(
+    std::string module_name, const std::unordered_set<std::string>& declared,
+    const std::unordered_map<std::string, tenzir::location>& names,
+    diagnostic_handler& dh)
+    : module_name_{std::move(module_name)},
+      declared_{declared},
+      names_{names},
+      dh_{dh} {
+  }
+
+  void visit(ast::expression& x) {
+    if (auto* var = try_as<ast::dollar_var>(x)) {
+      auto name = std::string{var->name_without_dollar()};
+      if (declared_.contains(name)) {
+        // Rewrite the bare sibling reference to its qualified self-reference.
+        auto path = std::vector<ast::identifier>{
+          ast::identifier{module_name_, var->id.location}};
+        x = ast::pkg_dollar_var{std::move(path), var->id};
+        return;
+      }
+      reject_undeclared(name, var->get_location());
+      return;
+    }
+    if (auto* var = try_as<ast::pkg_dollar_var>(x);
+        var and refers_to_self(*var)) {
+      // A reference spelled with this package's own module name (e.g.
+      // `pkg::$a`) is a sibling reference in disguise, so the same ordering
+      // rules apply; otherwise the qualified spelling could bypass the
+      // forward-reference check. It is already in its final form, so we only
+      // validate it instead of rewriting.
+      auto name = std::string{var->name_without_dollar()};
+      if (not declared_.contains(name)) {
+        reject_undeclared(name, var->get_location());
+      }
+      return;
+    }
+    enter(x);
+  }
+
+  template <class T>
+  void visit(T& x) {
+    enter(x);
+  }
+
+  bool failed = false;
+
+private:
+  /// Whether `var` refers to a binding in this package's own namespace.
+  auto refers_to_self(const ast::pkg_dollar_var& var) const -> bool {
+    return var.path.size() == 1 and var.path.front().name == module_name_;
+  }
+
+  /// Emits a forward-reference or unknown-variable error for `$name`.
+  void reject_undeclared(const std::string& name, tenzir::location loc) {
+    if (names_.contains(name)) {
+      diagnostic::error("`${}` is referenced before it is defined", name)
+        .primary(loc)
+        .emit(dh_);
+    } else {
+      diagnostic::error("unknown variable `${}`", name).primary(loc).emit(dh_);
+    }
+    failed = true;
+  }
+
+  std::string module_name_;
+  const std::unordered_set<std::string>& declared_;
+  const std::unordered_map<std::string, tenzir::location>& names_;
+  diagnostic_handler& dh_;
+};
+
+} // namespace
+
+auto build_package_lets(const package& pkg, module_def& pkg_mod,
+                        diagnostic_handler& dh, SourceMap* source_map)
+  -> failure_or<void> {
+  if (pkg.lets.empty()) {
+    return {};
+  }
+  auto provider = session_provider::make(dh);
+  auto session = provider.as_session();
+  auto source = Source::new_source(
+    pkg.lets, fmt::format("<packages/{}/constants.tql>", pkg.id), true);
+  if (source_map != nullptr) {
+    source_map->add_source(source);
+  }
+  TRY(auto parsed, parse(pkg.lets, source_origin{source->index}, session));
+  const auto module_name = package_module_name(pkg.id);
+  // Validate that the file contains only `let` bindings and collect the names.
+  // Duplicate names are rejected: package `let`s share a single flat registry
+  // namespace, so a repeated name would overwrite the entry a sibling
+  // reference already points to, breaking sequential `let` semantics.
+  auto names = std::unordered_map<std::string, tenzir::location>{};
+  for (const auto& stmt : parsed.body) {
+    const auto* let = std::get_if<ast::let_stmt>(&stmt);
+    if (not let) {
+      diagnostic::error("`constants.tql` may only contain `let` bindings")
+        .primary(match(stmt,
+                       [](const auto& s) {
+                         return s.get_location();
+                       }))
+        .note("in package `{}`", pkg.id)
+        .emit(dh);
+      return failure::promise();
+    }
+    auto name = std::string{let->name_without_dollar()};
+    auto [it, inserted]
+      = names.try_emplace(std::move(name), let->name.location);
+    if (not inserted) {
+      diagnostic::error("duplicate package binding `${}`", it->first)
+        .primary(let->name.location)
+        .secondary(it->second, "previously defined here")
+        .note("in package `{}`", pkg.id)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  // Store each binding's expression unevaluated, rewriting bare sibling
+  // references to qualified self-references. A binding may only reference
+  // earlier ones; the value is const-evaluated lazily at each use site, where
+  // the full registry is available.
+  auto declared = std::unordered_set<std::string>{};
+  for (auto& stmt : parsed.body) {
+    auto* let = std::get_if<ast::let_stmt>(&stmt);
+    TENZIR_ASSERT(let);
+    auto rewriter = sibling_rewriter{module_name, declared, names, dh};
+    rewriter.visit(let->expr);
+    if (rewriter.failed) {
+      return failure::promise();
+    }
+    auto name = std::string{let->name_without_dollar()};
+    pkg_mod.defs[name].let_def = std::move(let->expr);
+    declared.insert(std::move(name));
+  }
+  return {};
+}
+
+auto build_package_module(const package& pkg, diagnostic_handler& dh,
+                          SourceMap* source_map)
+  -> failure_or<std::unique_ptr<module_def>> {
+  TRY(auto module, build_package_operator_module(pkg, dh, source_map));
+  // Operators and lets live in the same package module but in different
+  // namespaces within an entity set, so add the value entities directly to the
+  // package's submodule instead of building and merging a separate module.
+  auto module_name = package_module_name(pkg.id);
+  auto& pkg_mod = module->defs[module_name].mod;
+  if (not pkg_mod) {
+    pkg_mod = std::make_unique<module_def>();
+  }
+  TRY(build_package_lets(pkg, *pkg_mod, dh, source_map));
+  if (pkg_mod->defs.empty()) {
     module->defs.erase(module_name);
   }
   return module;

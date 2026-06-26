@@ -46,6 +46,8 @@ void gather_names(const module_def& mod, entity_ns ns, std::string prefix,
           return def.fn != nullptr;
         case entity_ns::mod:
           return def.mod != nullptr;
+        case entity_ns::let:
+          return def.let_def.is_some();
       }
       TENZIR_UNREACHABLE();
     });
@@ -213,6 +215,11 @@ auto registry::try_get(const entity_path& path) const
             return *set.mod;
           }
           return error{i, true};
+        case entity_ns::let:
+          if (set.let_def) {
+            return std::cref(*set.let_def);
+          }
+          return error{i, true};
       }
       TENZIR_UNREACHABLE();
     }
@@ -374,7 +381,8 @@ auto clone_module(const module_def& src) -> std::unique_ptr<module_def> {
   for (const auto& [k, v] : src.defs) {
     entity_set set{};
     set.fn = v.fn;
-    set.op = v.op; // deep copy of optional operator_def
+    set.op = v.op;
+    set.let_def = v.let_def;
     if (v.mod) {
       set.mod = clone_module(*v.mod);
     }

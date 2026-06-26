@@ -8,7 +8,9 @@
 
 #pragma once
 
+#include "tenzir/data.hpp"
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/tql2/plugin_api.hpp"
 #include "tenzir/type.hpp"
 
@@ -21,7 +23,9 @@ struct module_def;
 
 /// Operators defined in the user's config.
 struct user_defined_operator {
-  /// Definition with resolved entities, but without resolved `let`s.
+  /// Definition where entities are unresolved and $-vars are not bound yet.
+  /// Variables for UDO inputs will be replaced with syntactic substitution and
+  /// then entities and other $-vars are resolved during compilation.
   ast::pipeline definition;
   Arc<const Source> source;
 
@@ -86,6 +90,10 @@ struct entity_set {
   const function_plugin* fn;
   std::optional<operator_def> op;
   std::unique_ptr<module_def> mod;
+  /// The definition of a package `let` binding (the `let` namespace). It is
+  /// stored unevaluated and const-evaluated lazily at each reference site,
+  /// where the full registry is available.
+  Option<ast::expression> let_def;
 };
 
 /// A module is a collection of named entities.
@@ -108,7 +116,8 @@ using entity_def
 /// Reference to any entity, including modules.
 using entity_ref = variant<std::reference_wrapper<const function_plugin>,
                            std::reference_wrapper<const operator_def>,
-                           std::reference_wrapper<const module_def>>;
+                           std::reference_wrapper<const module_def>,
+                           std::reference_wrapper<const ast::expression>>;
 
 /// The registry holds references to all known entities and can thus be used to
 /// resolve an `entity_path` to an `entity_ref`.
