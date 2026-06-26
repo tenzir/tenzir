@@ -1,0 +1,23 @@
+from {
+  full_date: "2024-06-15",
+  padded_year_date: "2024-06-15",
+  ordinal_with_year: "2024 060 12:00:00",
+  week_with_year: "2024 22 1",
+}
+
+full_date_reference_ignored = full_date.parse_time(
+  "%Y-%m-%d",
+  reference=2026-06-24T00:00:00Z,
+)
+padded_year_reference_ignored = padded_year_date.parse_time(
+  "%4Y-%m-%d",
+  reference=2026-06-24T00:00:00Z,
+)
+ordinal_reference_ignored = ordinal_with_year.parse_time(
+  "%Y %j %H:%M:%S",
+  reference=2026-06-24T00:00:00Z,
+)
+week_date_reference_ignored = week_with_year.parse_time(
+  "%Y %U %w",
+  reference=2024-01-01T00:00:00Z,
+)

@@ -15,7 +15,11 @@
 
 #include <arrow/compute/api.h>
 
+#include <cerrno>
 #include <chrono>
+#include <ctime>
+#include <optional>
+#include <string_view>
 
 namespace tenzir::plugins::time_ {
 
@@ -25,6 +29,184 @@ TENZIR_ENUM(ymd_subtype, year, month, day);
 TENZIR_ENUM(hms_subtype, hour, minute, second);
 
 namespace {
+
+struct date_fields {
+  bool year = false;
+  bool month = false;
+  bool day = false;
+  bool ordinal_day = false;
+  bool week_number = false;
+  bool weekday = false;
+};
+
+auto mark_date_field(date_fields& fields, char specifier) {
+  switch (specifier) {
+    default:
+      break;
+    case 'Y':
+    case 'y':
+    case 'C':
+    case 'G':
+    case 'g':
+      fields.year = true;
+      break;
+    case 'b':
+    case 'B':
+    case 'h':
+    case 'm':
+      fields.month = true;
+      break;
+    case 'd':
+    case 'e':
+      fields.day = true;
+      break;
+    case 'a':
+    case 'A':
+    case 'u':
+    case 'w':
+      fields.weekday = true;
+      break;
+    case 'U':
+    case 'V':
+    case 'W':
+      fields.week_number = true;
+      break;
+    case 'c':
+    case 'D':
+    case 'F':
+    case 's':
+    case 'x':
+      fields.year = true;
+      fields.month = true;
+      fields.day = true;
+      break;
+    case 'j':
+      fields.ordinal_day = true;
+      fields.month = true;
+      fields.day = true;
+      break;
+  }
+}
+
+auto parse_date_fields(std::string_view format) -> date_fields {
+  auto result = date_fields{};
+  for (auto i = size_t{0}; i < format.size(); ++i) {
+    if (format[i] != '%' or ++i == format.size()) {
+      continue;
+    }
+    if (format[i] == '%') {
+      continue;
+    }
+    while (format[i] == '-' or format[i] == '_' or format[i] == '0'
+           or format[i] == '^' or format[i] == '#'
+           or (format[i] >= '0' and format[i] <= '9')) {
+      if (++i == format.size()) {
+        break;
+      }
+    }
+    if (i == format.size()) {
+      break;
+    }
+    if ((format[i] == 'E' or format[i] == 'O') and i + 1 < format.size()) {
+      ++i;
+    }
+    mark_date_field(result, format[i]);
+  }
+  if (result.week_number and result.weekday) {
+    result.month = true;
+    result.day = true;
+  }
+  return result;
+}
+
+auto fields_match(const std::tm& lhs, const std::tm& rhs) -> bool {
+  return lhs.tm_mon == rhs.tm_mon and lhs.tm_mday == rhs.tm_mday
+         and lhs.tm_hour == rhs.tm_hour and lhs.tm_min == rhs.tm_min
+         and lhs.tm_sec == rhs.tm_sec;
+}
+
+auto as_tm(time value) -> std::optional<std::tm> {
+  auto reference_time = std::chrono::system_clock::to_time_t(
+    std::chrono::time_point_cast<std::chrono::system_clock::duration>(value));
+  auto reference_tm = std::tm{};
+  if (gmtime_r(&reference_time, &reference_tm) == nullptr) {
+    return std::nullopt;
+  }
+  return reference_tm;
+}
+
+auto apply_ordinal_day(std::tm& tm) -> bool {
+  const auto ordinal_day = tm.tm_yday;
+  auto candidate = tm;
+  candidate.tm_mon = 0;
+  candidate.tm_mday = ordinal_day + 1;
+  errno = 0;
+  const auto parsed = timegm(&candidate);
+  if (parsed == -1 and errno != 0) {
+    return false;
+  }
+  auto normalized = std::tm{};
+  if (gmtime_r(&parsed, &normalized) == nullptr) {
+    return false;
+  }
+  if (normalized.tm_year != tm.tm_year or normalized.tm_yday != ordinal_day
+      or normalized.tm_hour != tm.tm_hour or normalized.tm_min != tm.tm_min
+      or normalized.tm_sec != tm.tm_sec) {
+    return false;
+  }
+  tm.tm_mon = normalized.tm_mon;
+  tm.tm_mday = normalized.tm_mday;
+  return true;
+}
+
+auto resolve_missing_year(std::tm& tm, time reference, long offset) -> bool {
+  const auto reference_tm = as_tm(reference);
+  if (not reference_tm) {
+    return false;
+  }
+  const auto reference_year = reference_tm->tm_year + 1900;
+  auto best_year = std::optional<int>{};
+  auto best_delta = std::optional<duration>{};
+  auto search = [&](int radius) {
+    best_year = std::nullopt;
+    best_delta = std::nullopt;
+    for (auto year = reference_year - radius; year <= reference_year + radius;
+         ++year) {
+      auto candidate = tm;
+      candidate.tm_year = year - 1900;
+      const auto original = candidate;
+      errno = 0;
+      const auto parsed = timegm(&candidate);
+      if (parsed == -1 and errno != 0) {
+        continue;
+      }
+      auto normalized = std::tm{};
+      if (gmtime_r(&parsed, &normalized) == nullptr) {
+        continue;
+      }
+      if (not fields_match(original, normalized)) {
+        continue;
+      }
+      const auto candidate_time = time::clock::from_time_t(parsed - offset);
+      const auto delta = candidate_time > reference
+                           ? candidate_time - reference
+                           : reference - candidate_time;
+      if (not best_delta or delta < *best_delta) {
+        best_year = year;
+        best_delta = delta;
+      }
+    }
+  };
+  search(1);
+  if (not best_year) {
+    search(4);
+  }
+  if (not best_year) {
+    return false;
+  }
+  tm.tm_year = *best_year - 1900;
+  return true;
+}
 
 class time_ final : public function_plugin {
 public:
@@ -455,31 +637,50 @@ public:
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto format = located<std::string>{};
+    auto reference = std::optional<ast::expression>{};
     TRY(argument_parser2::function(name())
           .positional("input", subject_expr, "string")
           .positional("format", format)
+          .named("reference", reference, "time")
           .parse(inv, ctx));
-    return function_use::make(
-      [fn = inv.call.fn.get_location(), subject_expr = std::move(subject_expr),
-       format = std::move(format)](evaluator eval, session ctx) {
-        const auto result_type = time_type{};
-        const auto cast_to = arrow::timestamp(arrow::TimeUnit::NANO);
-        return map_series(eval(subject_expr), [&](series subject) {
+    return function_use::make([fn = inv.call.fn.get_location(),
+                               subject_expr = std::move(subject_expr),
+                               format = std::move(format),
+                               reference = std::move(reference)](evaluator eval,
+                                                                 session ctx) {
+      const auto result_type = time_type{};
+      const auto parsed_date_fields = parse_date_fields(format.inner);
+      auto null_reference = series::null(null_type{}, eval.length());
+      auto references = reference ? eval(*reference)
+                                  : multi_series{std::move(null_reference)};
+      return map_series(
+        eval(subject_expr), std::move(references),
+        [&](series subject, series reference_series) {
           return match(
             *subject.array,
             [&](const arrow::StringArray& array) {
               auto error = false;
+              auto reference_type_error = false;
+              auto reference_ignored = false;
+              auto missing_reference = false;
+              auto deprecated_missing_reference = false;
+              auto unsupported_reference = false;
               auto b = time_type::make_arrow_builder(arrow_memory_pool());
               check(b->Reserve(array.length()));
               auto nul_terminated = std::string{};
-              for (const auto& str : array) {
-                if (not str) {
+              const auto reference_array = reference_series.as<time_type>();
+              for (auto i = int64_t{0}; i < array.length(); ++i) {
+                if (array.IsNull(i)) {
                   b->UnsafeAppendNull();
                   continue;
                 }
+                const auto str = array.GetView(i);
                 auto tm = std::tm{};
-                nul_terminated = str.value();
-                // Set the default day and year to match UNIX epoch.
+                nul_terminated = str;
+                // Start from the UNIX epoch. The format scanner below decides
+                // which date fields are missing; using extreme sentinels here
+                // breaks platform `strptime` implementations for some formats.
+                tm.tm_mon = 0;
                 tm.tm_mday = 1;
                 tm.tm_year = 70;
                 tm.tm_isdst = -1;
@@ -491,6 +692,85 @@ public:
                   continue;
                 }
                 const auto offset = tm.tm_gmtoff;
+                const auto needs_year = not parsed_date_fields.year;
+                const auto needs_month = not parsed_date_fields.month;
+                const auto needs_day = not parsed_date_fields.day;
+                const auto needs_reference
+                  = needs_year or needs_month or needs_day;
+                const auto has_week_date = parsed_date_fields.week_number
+                                           and parsed_date_fields.weekday;
+                if (reference
+                    and ((has_week_date and needs_year)
+                         or (needs_year and parsed_date_fields.ordinal_day))) {
+                  unsupported_reference = true;
+                  b->UnsafeAppendNull();
+                  continue;
+                }
+                if (needs_reference) {
+                  if (reference_array) {
+                    if (not reference_array->array->IsValid(i)) {
+                      missing_reference = true;
+                      b->UnsafeAppendNull();
+                      continue;
+                    }
+                    const auto ref
+                      = *view_at<time_type>(*reference_array->array, i);
+                    const auto ref_tm = as_tm(ref);
+                    if (not ref_tm) {
+                      error = true;
+                      b->UnsafeAppendNull();
+                      continue;
+                    }
+                    if (needs_month != needs_day) {
+                      unsupported_reference = true;
+                      b->UnsafeAppendNull();
+                      continue;
+                    }
+                    if (needs_month) {
+                      tm.tm_mon = ref_tm->tm_mon;
+                    }
+                    if (needs_day) {
+                      tm.tm_mday = ref_tm->tm_mday;
+                    }
+                    if (needs_year) {
+                      if (parsed_date_fields.ordinal_day or needs_month
+                          or needs_day) {
+                        tm.tm_year = ref_tm->tm_year;
+                      } else if (not resolve_missing_year(tm, ref, offset)) {
+                        error = true;
+                        b->UnsafeAppendNull();
+                        continue;
+                      }
+                    }
+                  } else if (not reference) {
+                    if (needs_year) {
+                      deprecated_missing_reference = true;
+                      tm.tm_year = 70;
+                    }
+                    if (needs_month) {
+                      tm.tm_mon = 0;
+                    }
+                    if (needs_day) {
+                      tm.tm_mday = 1;
+                    }
+                  } else if (is<null_type>(reference_series.type)) {
+                    missing_reference = true;
+                    b->UnsafeAppendNull();
+                    continue;
+                  } else {
+                    reference_type_error = true;
+                    b->UnsafeAppendNull();
+                    continue;
+                  }
+                } else if (reference) {
+                  reference_ignored = true;
+                }
+                if (parsed_date_fields.ordinal_day
+                    and not apply_ordinal_day(tm)) {
+                  error = true;
+                  b->UnsafeAppendNull();
+                  continue;
+                }
                 errno = 0;
                 auto parsed = timegm(&tm);
                 if (parsed == -1 and errno != 0) {
@@ -509,6 +789,41 @@ public:
                   .secondary(format)
                   .emit(ctx);
               }
+              if (reference_type_error) {
+                diagnostic::warning("`parse_time` expected `reference` to be "
+                                    "`time`, but got `{}`",
+                                    reference_series.type.kind())
+                  .primary(*reference)
+                  .emit(ctx);
+              }
+              if (reference_ignored) {
+                diagnostic::warning(
+                  "`parse_time` ignores `reference` "
+                  "because the format includes a complete date")
+                  .primary(*reference)
+                  .secondary(format)
+                  .emit(ctx);
+              }
+              if (missing_reference) {
+                diagnostic::warning("`parse_time` cannot fill missing date "
+                                    "fields because `reference` is null")
+                  .primary(*reference)
+                  .emit(ctx);
+              }
+              if (unsupported_reference) {
+                diagnostic::warning("`parse_time` cannot fill unsupported date "
+                                    "fields from `reference`")
+                  .primary(*reference)
+                  .secondary(format)
+                  .emit(ctx);
+              }
+              if (deprecated_missing_reference) {
+                diagnostic::warning("`parse_time` parsed a timestamp without "
+                                    "a year as 1970; this is deprecated and "
+                                    "will become an error in a future release")
+                  .primary(subject_expr)
+                  .emit(ctx);
+              }
               return series{time_type{}, finish(*b)};
             },
             [&](const arrow::NullArray& array) {
@@ -523,7 +838,7 @@ public:
               return series::null(result_type, subject.length());
             });
         });
-      });
+    });
   }
 };
 } // namespace
