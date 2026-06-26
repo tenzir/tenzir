@@ -102,6 +102,8 @@ let
         # Temporarily only on Linux.
         pkgs.pandoc
         pkgs.gdb
+        # Broken on macOS in the pinned Nixpkgs revision.
+        pkgs.wrangler
       ]
       ++ lib.optionals (pkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf") [
         pkgs.mold
