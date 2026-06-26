@@ -1,5 +1,6 @@
 from {
   full_date: "2024-06-15",
+  padded_year_date: "2024-06-15",
   week_date: "2024 22 1",
 }
 
@@ -10,4 +11,8 @@ full_date_reference_ignored = full_date.parse_time(
 week_date_reference_ignored = week_date.parse_time(
   "%Y %U %w",
   reference=2024-01-01T00:00:00Z,
+)
+padded_year_reference_ignored = padded_year_date.parse_time(
+  "%4Y-%m-%d",
+  reference=2026-06-24T00:00:00Z,
 )

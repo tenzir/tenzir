@@ -18,7 +18,6 @@
 #include <cerrno>
 #include <chrono>
 #include <ctime>
-#include <limits>
 #include <optional>
 #include <string_view>
 
@@ -31,13 +30,13 @@ TENZIR_ENUM(hms_subtype, hour, minute, second);
 
 namespace {
 
-constexpr auto missing_year = std::numeric_limits<int>::min();
-constexpr auto missing_date_field = std::numeric_limits<int>::min();
-
 struct date_fields {
   bool year = false;
   bool month = false;
   bool day = false;
+  bool ordinal_day = false;
+  bool week_number = false;
+  bool weekday = false;
 };
 
 auto mark_date_field(date_fields& fields, char specifier) {
@@ -61,6 +60,17 @@ auto mark_date_field(date_fields& fields, char specifier) {
     case 'e':
       fields.day = true;
       break;
+    case 'a':
+    case 'A':
+    case 'u':
+    case 'w':
+      fields.weekday = true;
+      break;
+    case 'U':
+    case 'V':
+    case 'W':
+      fields.week_number = true;
+      break;
     case 'c':
     case 'D':
     case 'F':
@@ -71,6 +81,7 @@ auto mark_date_field(date_fields& fields, char specifier) {
       fields.day = true;
       break;
     case 'j':
+      fields.ordinal_day = true;
       fields.month = true;
       fields.day = true;
       break;
@@ -86,10 +97,24 @@ auto parse_date_fields(std::string_view format) -> date_fields {
     if (format[i] == '%') {
       continue;
     }
+    while (format[i] == '-' or format[i] == '_' or format[i] == '0'
+           or format[i] == '^' or format[i] == '#'
+           or (format[i] >= '0' and format[i] <= '9')) {
+      if (++i == format.size()) {
+        break;
+      }
+    }
+    if (i == format.size()) {
+      break;
+    }
     if ((format[i] == 'E' or format[i] == 'O') and i + 1 < format.size()) {
       ++i;
     }
     mark_date_field(result, format[i]);
+  }
+  if (result.week_number and result.weekday) {
+    result.month = true;
+    result.day = true;
   }
   return result;
 }
@@ -108,6 +133,30 @@ auto as_tm(time value) -> std::optional<std::tm> {
     return std::nullopt;
   }
   return reference_tm;
+}
+
+auto apply_ordinal_day(std::tm& tm) -> bool {
+  const auto ordinal_day = tm.tm_yday;
+  auto candidate = tm;
+  candidate.tm_mon = 0;
+  candidate.tm_mday = ordinal_day + 1;
+  errno = 0;
+  const auto parsed = timegm(&candidate);
+  if (parsed == -1 and errno != 0) {
+    return false;
+  }
+  auto normalized = std::tm{};
+  if (gmtime_r(&parsed, &normalized) == nullptr) {
+    return false;
+  }
+  if (normalized.tm_year != tm.tm_year or normalized.tm_yday != ordinal_day
+      or normalized.tm_hour != tm.tm_hour or normalized.tm_min != tm.tm_min
+      or normalized.tm_sec != tm.tm_sec) {
+    return false;
+  }
+  tm.tm_mon = normalized.tm_mon;
+  tm.tm_mday = normalized.tm_mday;
+  return true;
 }
 
 auto resolve_missing_year(std::tm& tm, time reference, long offset) -> bool {
@@ -627,11 +676,12 @@ public:
                 const auto str = array.GetView(i);
                 auto tm = std::tm{};
                 nul_terminated = str;
-                // Mark date fields as missing so `reference` can fill only
-                // fields that `strptime` did not parse or derive.
-                tm.tm_mon = missing_date_field;
-                tm.tm_mday = missing_date_field;
-                tm.tm_year = missing_year;
+                // Start from the UNIX epoch. The format scanner below decides
+                // which date fields are missing; using extreme sentinels here
+                // breaks platform `strptime` implementations for some formats.
+                tm.tm_mon = 0;
+                tm.tm_mday = 1;
+                tm.tm_year = 70;
                 tm.tm_isdst = -1;
                 auto res
                   = strptime(nul_terminated.c_str(), format.inner.c_str(), &tm);
@@ -642,8 +692,8 @@ public:
                 }
                 const auto offset = tm.tm_gmtoff;
                 const auto needs_year = not parsed_date_fields.year;
-                const auto needs_month = tm.tm_mon == missing_date_field;
-                const auto needs_day = tm.tm_mday == missing_date_field;
+                const auto needs_month = not parsed_date_fields.month;
+                const auto needs_day = not parsed_date_fields.day;
                 const auto needs_reference
                   = needs_year or needs_month or needs_day;
                 if (needs_reference) {
@@ -668,7 +718,8 @@ public:
                       tm.tm_mday = ref_tm->tm_mday;
                     }
                     if (needs_year) {
-                      if (needs_month or needs_day) {
+                      if (parsed_date_fields.ordinal_day or needs_month
+                          or needs_day) {
                         tm.tm_year = ref_tm->tm_year;
                       } else if (not resolve_missing_year(tm, ref, offset)) {
                         error = true;
@@ -698,6 +749,12 @@ public:
                   }
                 } else if (reference) {
                   reference_ignored = true;
+                }
+                if (parsed_date_fields.ordinal_day
+                    and not apply_ordinal_day(tm)) {
+                  error = true;
+                  b->UnsafeAppendNull();
+                  continue;
                 }
                 errno = 0;
                 auto parsed = timegm(&tm);

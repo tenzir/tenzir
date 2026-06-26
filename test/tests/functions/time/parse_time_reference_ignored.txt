@@ -1,22 +1,37 @@
 {
   full_date: "2024-06-15",
+  padded_year_date: "2024-06-15",
   week_date: "2024 22 1",
   full_date_reference_ignored: 2024-06-15T00:00:00Z,
   week_date_reference_ignored: 2024-06-03T00:00:00Z,
+  padded_year_reference_ignored: 2024-06-15T00:00:00Z,
 }
 warning: `parse_time` ignores `reference` because the format includes a complete date
- --> tests/functions/time/parse_time_reference_ignored.tql:8:13
+ --> tests/functions/time/parse_time_reference_ignored.tql:9:13
   |
-7 |   "%Y-%m-%d",
-  |   ---------- 
-8 |   reference=2026-06-24T00:00:00Z,
+9 |   reference=2026-06-24T00:00:00Z,
   |             ~~~~~~~~~~~~~~~~~~~~ 
+  ⋮
+8 |   "%Y-%m-%d",
+  |   ---------- 
   |
+
 warning: `parse_time` ignores `reference` because the format includes a complete date
-  --> tests/functions/time/parse_time_reference_ignored.tql:12:13
+  --> tests/functions/time/parse_time_reference_ignored.tql:13:13
    |
-11 |   "%Y %U %w",
-   |   ---------- 
-12 |   reference=2024-01-01T00:00:00Z,
+13 |   reference=2024-01-01T00:00:00Z,
    |             ~~~~~~~~~~~~~~~~~~~~ 
+   ⋮
+12 |   "%Y %U %w",
+   |   ---------- 
+   |
+
+warning: `parse_time` ignores `reference` because the format includes a complete date
+  --> tests/functions/time/parse_time_reference_ignored.tql:17:13
+   |
+17 |   reference=2026-06-24T00:00:00Z,
+   |             ~~~~~~~~~~~~~~~~~~~~ 
+   ⋮
+16 |   "%4Y-%m-%d",
+   |   ----------- 
    |
