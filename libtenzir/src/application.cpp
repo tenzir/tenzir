@@ -97,7 +97,7 @@ void add_root_opts(command& cmd) {
                             "forcibly flushed (default: 30s)");
   cmd.options.add<duration>("?tenzir", "rebuild-interval",
                             "timespan after which an automatic rebuild is "
-                            "triggered (default: 2h)");
+                            "triggered (default: 30min)");
 }
 
 auto make_start_command() {
