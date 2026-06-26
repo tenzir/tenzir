@@ -1,0 +1,9 @@
+// A non-record value cannot be stored in a JSON object column, so it is written
+// as an empty object and a warning is emitted.
+from {id: 3, payload: 42}
+to_clickhouse table="test_json",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

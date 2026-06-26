@@ -148,17 +148,55 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
         ? unquote_identifier_component(args_.primary->inner)
         : args_.primary->inner;
   auto path = path_type{};
+  // Build the top-level column list. Fields named in `json` become ClickHouse
+  // `JSON` columns regardless of their inferred type; all other fields map as
+  // usual. This intentionally diverges from `plain_clickhouse_tuple_elements`,
+  // which is also used for nested records and `from_clickhouse`.
   /// TODO: This should really be merged with the transformer itself. Its an
   /// (almost) duplicate of `make_record_functions_from_clickhouse`
+  const auto json_index = [&](std::string_view name) -> Option<size_t> {
+    for (size_t i = 0; i < args_.json.size(); ++i) {
+      if (args_.json[i].inner == name) {
+        return i;
+      }
+    }
+    return None{};
+  };
+  auto json_seen = std::vector<bool>(args_.json.size(), false);
+  auto clickhouse_columns = std::string{"("};
+  auto first = true;
+  const auto append_column = [&](std::string_view name, std::string_view type) {
+    if (not first) {
+      clickhouse_columns += ", ";
+    } else {
+      first = false;
+    }
+    fmt::format_to(std::back_inserter(clickhouse_columns), "{} {}",
+                   quote_identifier_component(name), type);
+  };
   for (auto [k, t] : schema.fields()) {
     const auto is_primary = k == primary_name;
+    primary_found |= is_primary;
+    if (auto idx = json_index(k)) {
+      json_seen[*idx] = true;
+      append_column(k, "JSON");
+      continue;
+    }
     path.push_back(k);
     TRY(auto clickhouse_typename,
         type_to_clickhouse_typename(path, t, not is_primary, dh_));
-    TENZIR_ASSERT(not clickhouse_typename.empty());
     path.pop_back();
-    primary_found |= is_primary;
+    TENZIR_ASSERT(not clickhouse_typename.empty());
+    append_column(k, clickhouse_typename);
   }
+  // `json` columns absent from the first slice are still created, as plain
+  // `JSON` columns.
+  for (size_t i = 0; i < args_.json.size(); ++i) {
+    if (not json_seen[i]) {
+      append_column(args_.json[i].inner, "JSON");
+    }
+  }
+  clickhouse_columns += ")";
   if (not primary_found) {
     diagnostic::error(
       "cannot create table: primary key does not exist in input")
@@ -168,8 +206,6 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
     return failure::promise();
   }
   constexpr static std::string_view engine = "MergeTree";
-  TRY(auto clickhouse_columns,
-      plain_clickhouse_tuple_elements(path, schema, dh_, primary_name));
   const auto creation_modifier
     = args_.mode.inner == mode::create_append ? "IF NOT EXISTS" : "";
   auto query_text
@@ -334,6 +370,14 @@ auto easy_client::insert(const table_slice& slice, std::string_view table_name,
                   fmt::join(path, "."), this_column->Size(), slice.rows(),
                   dropcount);
     block.AppendColumn(std::string{k}, std::move(this_column));
+  }
+  // If no input column maps to a target column, the native block has no columns
+  // and cannot carry any rows -- there is nothing to insert, so skip the slice.
+  // Omitted columns are intentionally not materialized: ClickHouse fills them
+  // from their defaults (e.g. `{}` for a plain JSON column, or a `DEFAULT`
+  // expression), which an explicit value would override.
+  if (block.GetColumnCount() == 0) {
+    return {};
   }
   TENZIR_ASSERT(block.GetRowCount() == slice.rows() - dropcount,
                 "wrong row count for final block `{} != {} - {}`",

@@ -1,0 +1,10 @@
+// Append into a Nullable(JSON) column: a record and an explicit null. The null
+// is stored as SQL NULL rather than an empty object.
+from {id: 0, payload: {a: 1, b: [2, 3]}},
+     {id: 1, payload: null}
+to_clickhouse table="test_json_nullable",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"
