@@ -1,37 +1,49 @@
 {
   week_without_year: "22 1",
+  week_with_year: "2024 22 1",
   day_without_month: "5 18:16:21",
   month_with_invalid_reference_day: "Feb 12:00:00",
   week_date_reference_year: null,
+  week_date_reference_ignored: null,
   invalid_reference_completed_date: null,
   day_without_month_reference: null,
 }
 warning: `parse_time` cannot fill unsupported date fields from `reference`
- --> tests/functions/time/parse_time_unsupported_reference.tql:9:13
-  |
-9 |   reference=2024-01-01T00:00:00Z,
-  |             ~~~~~~~~~~~~~~~~~~~~ 
-  ⋮
-8 |   "%U %w",
-  |   ------- 
-  |
-
-warning: `parse_time` cannot fill unsupported date fields from `reference`
-  --> tests/functions/time/parse_time_unsupported_reference.tql:13:13
+  --> tests/functions/time/parse_time_unsupported_reference.tql:10:13
    |
-13 |   reference=2026-01-31T00:00:00Z,
+10 |   reference=2024-01-01T00:00:00Z,
    |             ~~~~~~~~~~~~~~~~~~~~ 
    ⋮
-12 |   "%b %H:%M:%S",
+ 9 |   "%U %w",
+   |   ------- 
+   |
+
+warning: `parse_time` cannot fill unsupported date fields from `reference`
+  --> tests/functions/time/parse_time_unsupported_reference.tql:14:13
+   |
+14 |   reference=2024-01-01T00:00:00Z,
+   |             ~~~~~~~~~~~~~~~~~~~~ 
+   ⋮
+13 |   "%Y %U %w",
+   |   ---------- 
+   |
+
+warning: `parse_time` cannot fill unsupported date fields from `reference`
+  --> tests/functions/time/parse_time_unsupported_reference.tql:18:13
+   |
+18 |   reference=2026-01-31T00:00:00Z,
+   |             ~~~~~~~~~~~~~~~~~~~~ 
+   ⋮
+17 |   "%b %H:%M:%S",
    |   ------------- 
    |
 
 warning: `parse_time` cannot fill unsupported date fields from `reference`
-  --> tests/functions/time/parse_time_unsupported_reference.tql:17:13
+  --> tests/functions/time/parse_time_unsupported_reference.tql:22:13
    |
-17 |   reference=2026-06-24T00:00:00Z,
+22 |   reference=2026-06-24T00:00:00Z,
    |             ~~~~~~~~~~~~~~~~~~~~ 
    ⋮
-16 |   "%e %H:%M:%S",
+21 |   "%e %H:%M:%S",
    |   ------------- 
    |
