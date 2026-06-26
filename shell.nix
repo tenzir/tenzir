@@ -95,7 +95,6 @@ let
         pkgs.openssl
         pkgs.just
         test-deps.tenzir-test
-        pkgs.wrangler
         pkgs.yara
       ]
       ++ clang-shims
@@ -132,7 +131,7 @@ pkgs.mkShell (
     env.NIX_CFLAGS_COMPILE = "-isystem ${deps-prefix}/include";
     env.NIX_LDFLAGS = "-L${deps-prefix}/lib -rpath ${deps-prefix}/lib";
     env.LDFLAGS =
-      if (pkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf") then "-fuse-ld=mold" else null;
+      if (pkgs.stdenv.hostPlatform.parsed.kernel.execFormat.name == "elf") then "-fuse-ld=mold" else "";
     # uv is provided in the tools-prefix above.
     env.TENZIR_ENABLE_BUNDLED_UV = "OFF";
 

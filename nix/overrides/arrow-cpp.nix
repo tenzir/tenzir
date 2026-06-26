@@ -82,6 +82,7 @@ arrow-cpp.overrideAttrs (orig: {
     ) "-L${lib.getDev iconv}/lib -liconv -framework SystemConfiguration";
     GTEST_FILTER =
       (orig.env.GTEST_FILTER or "")
-      + ":StructArray.Validate:EncryptedBloomFilterReader.ReadEncryptedBloomFilter";
+      + ":StructArray.Validate:EncryptedBloomFilterReader.ReadEncryptedBloomFilter"
+      + ":TestAzuriteGeneric.Empty";
   };
 })
