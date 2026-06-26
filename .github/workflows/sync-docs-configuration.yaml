@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "tenzir.yaml.example"
+      - tenzir.yaml.example
   workflow_dispatch:
 
 jobs:
