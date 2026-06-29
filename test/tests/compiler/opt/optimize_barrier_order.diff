@@ -1,0 +1,64 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ [1]:0..6 from 0
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+-      args: [
+-        
+-      ],
+-      filter: [
+-        
+-      ],
+-      order: "ordered",
+-      named_args: [
+-        
+-      ]
+-    },
+-    GenericIr {
+-      op: {
+-        path: [
+-          `optimize_barrier` @ [1]:7..23 from 0
+-        ],
+-        ref: std::optimize_barrier/op
+-      },
+-      desc: "optimize_barrier",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `discard` @ [1]:24..31 from 0
+         ],
+         ref: std::discard/op
+       },
+       desc: "discard",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }
