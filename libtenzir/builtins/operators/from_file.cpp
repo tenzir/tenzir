@@ -45,12 +45,24 @@ protected:
       expanded = "./" + expanded;
     }
     expanded = std::filesystem::weakly_canonical(expanded);
+    // `UriFromAbsolutePath` percent-encodes characters that are illegal in a
+    // URI (e.g. a space in a parent directory name), which a manual `file://`
+    // prefix would not. `Uri::path()` decodes them again in `make_filesystem`.
+    auto uri_string = arrow::util::UriFromAbsolutePath(expanded);
+    if (not uri_string.ok()) {
+      diagnostic::error("failed to construct file URI")
+        .primary(args_.url)
+        .note(uri_string.status().ToStringWithoutContextLines())
+        .emit(ctx);
+      co_return failure::promise();
+    }
     auto uri = arrow::util::Uri{};
-    auto status = uri.Parse(fmt::format("file://{}", expanded));
+    auto status = uri.Parse(*uri_string);
     if (not status.ok()) {
       diagnostic::error("failed to parse path as URI")
         .primary(args_.url)
         .note(status.ToStringWithoutContextLines())
+        .note("full URI: `{}`", *uri_string)
         .emit(ctx);
       co_return failure::promise();
     }
