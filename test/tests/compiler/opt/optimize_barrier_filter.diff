@@ -23,8 +23,6 @@
        ]
      },
      OptimizeBarrierIr {
--      sealed: false,
-+      sealed: true,
        loc: [1]:7..23 from 0
      },
      where_ir {

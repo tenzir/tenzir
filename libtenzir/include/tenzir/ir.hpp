@@ -10,6 +10,7 @@
 
 #include "tenzir/async/fwd.hpp"
 #include "tenzir/element_type.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/tql2/ast.hpp"
 
 #include <concepts>
@@ -75,7 +76,11 @@ public:
   /// The implementation may assume that the operator was previously
   /// instantiated, i.e., `substitute` was called with `instantiate == true`.
   /// However, other methods such as `optimize` may be called in between.
-  virtual auto spawn(element_type_tag input) && -> AnyOperator = 0;
+  ///
+  /// Returns `None` if the operator has no runtime representation and shall be
+  /// elided when the pipeline is spawned. Such operators exist only in the IR,
+  /// for example to act as optimization barriers.
+  virtual auto spawn(element_type_tag input) && -> Option<AnyOperator> = 0;
 
   /// Return the "main location" of the operator.
   ///
@@ -196,7 +201,7 @@ public:
   auto substitute(substitute_ctx ctx, bool instantiate)
     -> failure_or<void> override;
 
-  auto spawn(element_type_tag input) && -> AnyOperator override;
+  auto spawn(element_type_tag input) && -> Option<AnyOperator> override;
 
   auto optimize(optimize_filter filter,
                 event_order order) && -> optimize_result override;

@@ -69,7 +69,7 @@ public:
     };
   }
 
-  auto spawn(element_type_tag) && -> AnyOperator override {
+  auto spawn(element_type_tag) && -> Option<AnyOperator> override {
     panic("Cannot spawn unordered. It should have been optimized away.");
   }
 

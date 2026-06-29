@@ -6,54 +6,87 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/operator_plugin.hpp>
-#include <tenzir/panic.hpp>
+#include <tenzir/async.hpp>
+#include <tenzir/compile_ctx.hpp>
+#include <tenzir/ir.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/substitute_ctx.hpp>
+#include <tenzir/tql2/ast.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::optimize_reorder {
 
 namespace {
 
-struct OptimizeReorderArgs {};
-
-template <class T>
-class OptimizeReorder final : public Operator<T, T> {
+/// Relaxes the ordering requirement for upstream operators, allowing them to
+/// produce events in any order.
+class OptimizeReorderIr final : public ir::Operator {
 public:
-  explicit OptimizeReorder(OptimizeReorderArgs /*args*/) {
+  OptimizeReorderIr() = default;
+
+  explicit OptimizeReorderIr(location loc) : loc_{loc} {
   }
 
-  // This operator only exists in the IR and removes itself during optimization,
-  // so it is never spawned.
-  auto start(OpCtx&) -> Task<void> override {
-    panic("optimize_reorder must be removed during optimization");
+  auto name() const -> std::string override {
+    return "OptimizeReorderIr";
   }
 
-  auto process(T, Push<T>&, OpCtx&) -> Task<void> override {
-    panic("optimize_reorder must be removed during optimization");
+  auto main_location() const -> location override {
+    return loc_;
   }
+
+  auto substitute(substitute_ctx, bool) -> failure_or<void> override {
+    return {};
+  }
+
+  auto infer_type(element_type_tag input, diagnostic_handler&) const
+    -> failure_or<std::optional<element_type_tag>> override {
+    return input;
+  }
+
+  auto optimize(ir::optimize_filter filter,
+                event_order /*order*/) && -> ir::optimize_result override {
+    // Relax the upstream ordering requirement and forward the downstream filter
+    // unchanged. The operator keeps itself in the IR and is elided in `spawn()`.
+    auto replacement = std::vector<Box<ir::Operator>>{};
+    replacement.push_back(std::move(*this).move());
+    return {
+      std::move(filter),
+      event_order::unordered,
+      ir::pipeline{{}, std::move(replacement)},
+    };
+  }
+
+  auto spawn(element_type_tag) && -> Option<AnyOperator> override {
+    // IR-only: contributes no runtime operator.
+    return None{};
+  }
+
+  friend auto inspect(auto& f, OptimizeReorderIr& x) -> bool {
+    return f.object(x).fields(f.field("loc", x.loc_));
+  }
+
+private:
+  location loc_;
 };
 
-class plugin final : public virtual OperatorPlugin {
+class plugin final : public virtual operator_compiler_plugin {
 public:
   auto name() const -> std::string override {
     return "optimize_reorder";
   }
 
-  auto describe() const -> Description override {
-    auto d = Describer<OptimizeReorderArgs, OptimizeReorder<table_slice>,
-                       OptimizeReorder<chunk_ptr>>{};
-    // Tell upstream that it may produce events in any order, while remaining
-    // a transparent pass-through for everything else: filters continue to flow
-    // upstream and the operator removes itself.
-    return d.optimize([](DescribeCtx&, event_order,
-                         ir::optimize_filter filter) -> Optimization {
-      return {
-        .order = event_order::unordered,
-        .filter_upstream = std::move(filter),
-        .drop = true,
-      };
-    });
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<ir::CompileResult> override {
+    auto loc = inv.op.get_location();
+    if (not inv.args.empty()) {
+      diagnostic::error("`optimize_reorder` does not accept arguments")
+        .primary(loc)
+        .emit(ctx);
+      return failure::promise();
+    }
+    return OptimizeReorderIr{loc};
   }
 };
 
@@ -62,3 +95,6 @@ public:
 } // namespace tenzir::plugins::optimize_reorder
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::optimize_reorder::plugin)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::inspection_plugin<
+    tenzir::ir::Operator, tenzir::plugins::optimize_reorder::OptimizeReorderIr>)

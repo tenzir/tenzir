@@ -249,7 +249,7 @@ auto ir::SetIr::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::SetIr::spawn(element_type_tag input) && -> AnyOperator {
+auto ir::SetIr::spawn(element_type_tag input) && -> Option<AnyOperator> {
   TENZIR_ASSERT(input.is<table_slice>());
   return Set{std::move(assignments_), order_};
 }
@@ -576,7 +576,7 @@ public:
     };
   }
 
-  auto spawn(element_type_tag input) && -> AnyOperator override {
+  auto spawn(element_type_tag input) && -> Option<AnyOperator> override {
     TENZIR_ASSERT(input.is<table_slice>());
     auto dh = null_diagnostic_handler{};
     auto output = infer_type(input, dh);
@@ -884,7 +884,9 @@ auto ir::pipeline::spawn(element_type_tag input) && -> std::vector<AnyOperator> 
     auto output = op->infer_type(input, dh);
     TENZIR_ASSERT(output);
     TENZIR_ASSERT(*output);
-    result.push_back(std::move(*op).spawn(input));
+    if (auto spawned = std::move(*op).spawn(input)) {
+      result.push_back(std::move(*spawned));
+    }
     input = **output;
   }
   return result;

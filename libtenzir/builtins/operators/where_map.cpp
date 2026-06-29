@@ -876,7 +876,7 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) && -> AnyOperator override {
+  auto spawn(element_type_tag input) && -> Option<AnyOperator> override {
     TENZIR_ASSERT(input.is<table_slice>());
     return Where{std::move(predicate_)};
   }

@@ -18,29 +18,13 @@
          
        ],
 -      order: "ordered",
--      named_args: [
--        
--      ]
--    },
--    GenericIr {
--      op: {
--        path: [
--          `optimize_reorder` @ [1]:7..23 from 0
--        ],
--        ref: std::optimize_reorder/op
--      },
--      desc: "optimize_reorder",
--      args: [
--        
--      ],
--      filter: [
--        
--      ],
--      order: "ordered",
 +      order: "unordered",
        named_args: [
          
        ]
+     },
+     OptimizeReorderIr {
+       loc: [1]:7..23 from 0
      },
      GenericIr {
        op: {

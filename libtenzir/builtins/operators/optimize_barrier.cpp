@@ -6,16 +6,14 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/async.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/ir.hpp>
-#include <tenzir/panic.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/plugin.hpp>
-
-#include <utility>
 
 namespace tenzir::plugins::optimize_barrier {
 
@@ -23,19 +21,6 @@ namespace {
 
 /// An optimization barrier that prevents downstream filters and ordering
 /// relaxations from being pushed into upstream operators.
-///
-/// This is an IR-only operator: it has no runtime representation and removes
-/// itself before the pipeline is spawned, so it adds no operator (and thus no
-/// channel) to the running pipeline.
-///
-/// The barrier cannot simply drop itself on the first optimization pass like,
-/// for example, `optimize_reorder` does. Order relaxation is sticky because
-/// `weaker_event_order` keeps the most relaxed requirement seen on any pass, so
-/// a one-shot hint survives. Tightening the order back to `ordered` is not
-/// sticky: a later pass would relax it again. The execution path optimizes the
-/// IR twice (once in `exec.cpp` and once inside `ir::pipeline::spawn()`), so
-/// the barrier must stay present while it can still be re-optimized and only
-/// remove itself on the pass that immediately precedes spawning.
 class OptimizeBarrierIr final : public ir::Operator {
 public:
   OptimizeBarrierIr() = default;
@@ -62,14 +47,10 @@ public:
 
   auto optimize(ir::optimize_filter filter,
                 event_order /*order*/) && -> ir::optimize_result override {
-    // Pin the downstream filter right after the barrier and request the
-    // strictest ordering from upstream. Keep the barrier itself until the pass
-    // that precedes spawning, then drop it.
+    // Keep the barrier itself, pin the downstream filter right after it, and
+    // request the strictest ordering from upstream.
     auto replacement = std::vector<Box<ir::Operator>>{};
-    const auto drop = std::exchange(sealed_, true);
-    if (not drop) {
-      replacement.push_back(std::move(*this).move());
-    }
+    replacement.push_back(std::move(*this).move());
     for (auto& expr : filter) {
       replacement.push_back(make_where_ir(std::move(expr)));
     }
@@ -80,17 +61,16 @@ public:
     };
   }
 
-  auto spawn(element_type_tag) && -> AnyOperator override {
-    panic("optimize_barrier must be optimized away before spawning");
+  auto spawn(element_type_tag) && -> Option<AnyOperator> override {
+    // IR-only: contributes no runtime operator.
+    return None{};
   }
 
   friend auto inspect(auto& f, OptimizeBarrierIr& x) -> bool {
-    return f.object(x).fields(f.field("sealed", x.sealed_),
-                              f.field("loc", x.loc_));
+    return f.object(x).fields(f.field("loc", x.loc_));
   }
 
 private:
-  bool sealed_ = false;
   location loc_;
 };
 
