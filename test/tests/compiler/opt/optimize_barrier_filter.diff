@@ -22,24 +22,10 @@
          
        ]
      },
-     GenericIr {
-       op: {
-         path: [
-           `optimize_barrier` @ [1]:7..23 from 0
-         ],
-         ref: std::optimize_barrier/op
-       },
-       desc: "optimize_barrier",
-       args: [
-         
-       ],
-       filter: [
-         
-       ],
-       order: "ordered",
-       named_args: [
-         
-       ]
+     OptimizeBarrierIr {
+-      sealed: false,
++      sealed: true,
+       loc: [1]:7..23 from 0
      },
      where_ir {
 -      self: [1]:24..29 from 0,
