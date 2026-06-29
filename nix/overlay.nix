@@ -78,8 +78,20 @@ in
   ngtcp2 = callFunction ./overrides/ngtcp2.nix { inherit (prevPkgs) ngtcp2; };
   # The upstream package builds without any exporters; enable the OTLP/HTTP
   # exporter so we can actually emit telemetry. It only pulls in curl, which we
-  # already depend on.
-  opentelemetry-cpp = prevPkgs.opentelemetry-cpp.override { enableHttp = true; };
+  # already depend on. We only need the libraries, so disable tests, examples,
+  # and functional tests: the singleton tests build shared objects (impossible
+  # under the static musl toolchain) and the OTLP/HTTP examples link curl
+  # statically without its transitive deps (nghttp2, ngtcp2, libpsl).
+  opentelemetry-cpp =
+    (prevPkgs.opentelemetry-cpp.override { enableHttp = true; }).overrideAttrs
+      (old: {
+        doCheck = false;
+        cmakeFlags = (old.cmakeFlags or [ ]) ++ [
+          "-DBUILD_TESTING:BOOL=OFF"
+          "-DWITH_EXAMPLES:BOOL=OFF"
+          "-DWITH_FUNC_TESTS:BOOL=OFF"
+        ];
+      });
   protobufc = callFunction ./overrides/protobufc.nix { inherit (prevPkgs) protobufc; };
   rabbitmq-c = callFunction ./overrides/rabbitmq-c.nix { inherit (prevPkgs) rabbitmq-c; };
   restinio = callFunction ./overrides/restinio.nix { inherit (prevPkgs) restinio; };
