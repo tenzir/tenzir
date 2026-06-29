@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/application.hpp"
+#include "tenzir/async_secret_resolution.hpp"
 #include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/default_configuration.hpp"
 #include "tenzir/detail/posix.hpp"
@@ -124,6 +125,10 @@ auto main(int argc, char** argv) -> int try {
   // Some Folly builds use strict mode, even though that is not the default. In
   // that case, we need to call `folly::Init` before using its singletons.
   auto folly_init = tenzir::folly_init_guard{argv};
+  // Setup a guard that cancels the process local secret cache cleanup task.
+  auto secret_cache_guard = detail::scope_guard([]() noexcept {
+    SecretCache::cancel_source.requestCancellation();
+  });
   // Tweak CAF parameters in case we're running a client command.
   const auto is_server = is_server_from_app_path(argv[0]);
   // Mask SIGINT and SIGTERM so we can handle those in a dedicated thread.
