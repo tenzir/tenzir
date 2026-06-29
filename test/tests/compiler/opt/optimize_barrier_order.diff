@@ -11,25 +11,6 @@
          ref: std::export/op
        },
        desc: "export",
--      args: [
--        
--      ],
--      filter: [
--        
--      ],
--      order: "ordered",
--      named_args: [
--        
--      ]
--    },
--    GenericIr {
--      op: {
--        path: [
--          `optimize_barrier` @ [1]:7..23 from 0
--        ],
--        ref: std::optimize_barrier/op
--      },
--      desc: "optimize_barrier",
        args: [
          
        ],
@@ -37,6 +18,26 @@
          
        ],
        order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `optimize_barrier` @ [1]:7..23 from 0
+         ],
+         ref: std::optimize_barrier/op
+       },
+       desc: "optimize_barrier",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
        named_args: [
          
        ]
