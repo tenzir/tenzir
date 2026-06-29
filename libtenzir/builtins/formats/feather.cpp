@@ -36,6 +36,7 @@
 #include <arrow/util/key_value_metadata.h>
 #include <caf/expected.hpp>
 
+#include <chrono>
 #include <optional>
 #include <queue>
 #include <string_view>
@@ -162,6 +163,10 @@ auto wrap_record_batch(const table_slice& slice)
   auto new_rb
     = arrow::RecordBatch::Make(schema, rb->num_rows(), {time_col, event_array});
   return new_rb;
+}
+
+auto import_time_hour(time import_time) {
+  return std::chrono::floor<std::chrono::hours>(import_time);
 }
 
 /// Decode an Arrow IPC file.
@@ -382,9 +387,20 @@ private:
   void rebatch() const {
     auto result = std::vector<table_slice>{};
     auto pending = std::vector<table_slice>{};
+    auto flush_pending = [&] {
+      if (not pending.empty()) {
+        result.push_back(concatenate(std::move(pending)));
+        pending = {};
+      }
+    };
     // Note: We move the slices of down below in order to directly release their
     // memory once they are rebatched.
     for (auto& slice : slices_) {
+      if (not pending.empty()
+          and import_time_hour(pending.back().import_time())
+                != import_time_hour(slice.import_time())) {
+        flush_pending();
+      }
       // If current slice is exactly target size and we have no pending slices,
       // keep it as-is.
       if (pending.empty()
@@ -402,12 +418,12 @@ private:
         pending = std::move(rhs);
       }
     }
-    // Handle any remaining pending slices.
-    if (pending.empty()) {
+    flush_pending();
+    if (result.empty()
+        or result.back().rows() == defaults::import::table_slice_size) {
       rebatch_batches_ = 0;
       rebatch_rows_ = 0;
     } else {
-      result.push_back(concatenate(std::move(pending)));
       rebatch_batches_ = 1;
       rebatch_rows_ = result.back().rows();
     }
