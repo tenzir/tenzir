@@ -11,12 +11,12 @@
   day_without_month_reference: null,
 }
 warning: `parse_time` cannot fill unsupported date fields from `reference`
-  --> tests/functions/time/parse_time_unsupported_reference.tql:12:13
+  --> tests/functions/time/parse_time_unsupported_reference.tql:11:13
    |
-12 |   reference=2024-01-01T00:00:00Z,
+11 |   reference=2024-01-01T00:00:00Z,
    |             ~~~~~~~~~~~~~~~~~~~~ 
    ⋮
-11 |   "%U %w",
+10 |   "%U %w",
    |   ------- 
    |
 
