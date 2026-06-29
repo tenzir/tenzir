@@ -51,12 +51,16 @@ tenzir:
   # everything; CIDR entries match IP-literal hosts only; `localhost` and
   # IPv4/IPv6 loopback addresses always bypass.
   # Falls back to `TENZIR_NO_PROXY`, `NO_PROXY`, or `no_proxy` from the
-  # environment when unset, in that order.
+  # environment when unset, in that order. An explicitly empty
+  # `TENZIR_NO_PROXY` or configured `no-proxy` value disables fallback to the
+  # generic `NO_PROXY` / `no_proxy` environment variables.
+  # Lowercase aliases exist only for the generic proxy variables; the
+  # `TENZIR_*` names are uppercase-only.
   #
-  # Note on cloud schemes: `from_s3` / `to_s3` apply the proxy to
-  # every request because the `s3://bucket/...` URI host is the
-  # bucket name rather than the real S3 endpoint, so a `no-proxy`
-  # match against the URI host would not reflect user intent.
+  # Note on cloud schemes: for normal `s3://bucket/...` URLs, `from_s3` /
+  # `to_s3` select the proxy from the request scheme because the URI host is
+  # the bucket name rather than the real S3 endpoint. When `endpoint_override`
+  # is set, Tenzir can apply `no-proxy` to the override host.
   # `from_google_cloud_storage` and `from_azure_blob_storage` route
   # through libcurl-backed SDKs that pick up the proxy from the
   # `HTTPS_PROXY` / `NO_PROXY` environment mirror and therefore *do*
@@ -70,7 +74,7 @@ tenzir:
     # entirely.
     # WARNING: A low retention period may negatively impact the usability of
     # pipeline activity in the Tenzir Platform.
-    #metrics: 7d
+    #metrics: 16d
 
     # How long to keep legacy operator metrics for. Set to 0s to avoid storing
     # these heavy metrics while still making live metrics available.
@@ -98,52 +102,48 @@ tenzir:
     # minimum total cache capacity of 64MiB.
     #capacity: 1Gi
 
-  # TLS configuration options globally applies to all operators that support TLS.
-  # Arguments passed to the operator itself will always take precedence over these
-  # configuration values.
+  # A certificate file used as the default for operators accepting a `cacert`
+  # option. This will default to an appropriate directory for the system. For
+  # example:
+  #   - /etc/ssl/certs/ca-bundle.crt on RedHat
+  #   - /etc/ssl/certs/ca-certificates.crt on Ubuntu
+  #cacert:
+
+  # TLS configuration that applies to operators supporting node-level TLS, such
+  # as from_http, to_opensearch, from_opensearch, to_splunk, and save_email.
+  # Operators can override these settings individually via their `tls` option.
   tls:
     # Enable TLS on all operators that support it.
-    #enable: true
+    #enable: false
 
-    # Skip SSL peer verification.
+    # Disable certificate verification (not recommended for production).
     skip-peer-verification: false
 
-    # A certificate file used as the default for operators accepting a `cacert`
-    # option. This will default to an appropriate directory for the system. For
-    # example:
-    #   - /etc/ssl/certs/ca-bundle.crt on RedHat
-    #   - /etc/ssl/certs/ca-certificates.crt on Ubuntu
+    # Path to a CA certificate bundle for server verification.
     #cacert:
 
-    # A certificate file used as the default for operators
+    # Path to a client certificate file.
     #certfile:
 
-    # A key file used as the default for operators
+    # Path to a client private key file.
     #keyfile:
 
-    # A password for the keyfile
+    # Password to decrypt the private key in `keyfile`, if it is encrypted.
     #password:
 
-    # Minimum TLS protocol version to accept/use.
-    # Valid values: "1.0", "1.1", "1.2", "1.3"
-    # Recommended: "1.2" or higher for security.
+    # Minimum TLS protocol version.
+    # Valid values: "1.0", "1.1", "1.2", "1.3".
     #tls-min-version:
 
-    # OpenSSL cipher list to use for TLS connections.
-    # This is a colon-separated string of cipher suites.
-    # Example: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256"
-    # See OpenSSL documentation for cipher list format.
-    #ciphers:
+    # OpenSSL cipher list string.
+    #tls-ciphers:
 
-    # Path to a CA certificate file for validating client certificates (server mode only).
-    # When set along with `tls_require_client_cert`, the server will verify client
-    # certificates against this CA.
-    #client-ca:
+    # Path to a CA certificate for validating client certificates (mTLS).
+    # Only applies to operators that accept incoming connections.
+    #tls-client-ca:
 
-    # Require clients to present valid certificates (server mode only). When enabled,
-    # clients MUST present a certificate signed by the CA specified in `tls-client-ca`,
-    # otherwise the connection will be rejected. This enables mutual TLS (mTLS)
-    # authentication.
+    # Require clients to present valid certificates signed by the client CA
+    # (mTLS). Only applies to operators that accept incoming connections.
     #require-client-cert: false
 
   # The file system path used for persistent state.
@@ -399,7 +399,7 @@ tenzir:
     disk-budget-low: 0GiB
 
     # Seconds between successive disk space checks.
-    disk-budget-check-interval: 90
+    disk-budget-check-interval: 60
 
     # When erasing, how many partitions to erase in one go before rechecking
     # the size of the database directory.
@@ -449,7 +449,7 @@ tenzir:
       # The definition of the pipeline. Configured pipelines that fail to start
       # cause the node to fail to start.
       definition: |
-        load_tcp "0.0.0.0:34343" { read_suricata schema_only=true }
+        accept_tcp "0.0.0.0:34343" { read_suricata schema_only=true }
         | where event_type != "stats"
         | publish "suricata"
       # Pipelines that encounter an error stop running and show an error state.
@@ -483,8 +483,22 @@ tenzir:
   secrets:
     # my-secret-name: my-secret-value
 
-  # Configure the interval for experimental trimming of unused memory.
-  malloc-trim-interval: 10min
+# Plugin-specific configuration.
+#plugins:
+#  # TLS settings for the connection from the node to the Tenzir Platform.
+#  # These options share the semantics of the corresponding node-level
+#  # tenzir.tls settings, but apply only to the node <-> platform connection and
+#  # override the matching node-level setting. The node connects to the platform
+#  # as an outbound client, so the server-side mTLS options (`tls-client-ca`,
+#  # `require-client-cert`) and the `enable` toggle do not apply here.
+#  platform:
+#    # Supported TLS overrides:
+#    #skip-peer-verification:
+#    #cacert:
+#    #certfile:
+#    #keyfile:
+#    #tls-min-version:
+#    #tls-ciphers:
 
 # The below settings are internal to CAF, and aren't checked by Tenzir directly.
 # Please be careful when changing these options. Note that some CAF options may

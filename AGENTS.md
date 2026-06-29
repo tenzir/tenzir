@@ -143,6 +143,9 @@ When changing existing behavior or adding user-facing functionality, update
 Skip this process for internal refactorings that do not affect the user-facing
 TQL surface or command line tools.
 
+When resolving docs conflicts in `.docs/tenzir.yaml.example`, also update the
+source `tenzir.yaml.example` here so the next sync does not undo the resolution.
+
 ## C++ development
 
 Read the relevant references below before writing, reviewing, or reasoning
