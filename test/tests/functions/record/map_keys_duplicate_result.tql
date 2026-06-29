@@ -1,0 +1,7 @@
+from {
+  request: {
+    A: "first",
+    B: "second",
+  },
+}
+request = request.map_keys(key => "same")

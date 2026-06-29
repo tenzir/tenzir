@@ -1,0 +1,6 @@
+from {
+  request: {
+    Host: "domain.gent",
+  },
+}
+request = request.map_keys(key => null)

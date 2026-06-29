@@ -1,0 +1,13 @@
+{
+  request: {
+    A: "first",
+    B: "second",
+  },
+}
+warning: `map_keys` kept conflicting fields
+ --> tests/functions/record/map_keys_duplicate_result.tql:7:35
+  |
+7 | request = request.map_keys(key => "same")
+  |                                   ~~~~~~ 
+  |
+  = note: kept fields: `A`, `B`
