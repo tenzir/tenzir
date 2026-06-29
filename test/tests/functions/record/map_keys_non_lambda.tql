@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+from {
+  request: {
+    Host: "domain.gent",
+  },
+}
+request = request.map_keys(null)

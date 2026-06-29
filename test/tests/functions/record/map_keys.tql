@@ -1,0 +1,8 @@
+from {
+  request: {
+    "Cache-Control": "no-cache, no-store",
+    Pragma: "no-cache",
+    Host: "domain.gent",
+  },
+}
+request = request.map_keys(key => key.to_lower())

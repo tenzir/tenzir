@@ -1,0 +1,12 @@
+{
+  request: {
+    Host: "domain.gent",
+  },
+}
+warning: kept fields with non-string results
+ --> tests/functions/record/map_keys_null_result.tql:6:35
+  |
+6 | request = request.map_keys(key => null)
+  |                                   ~~~~ 
+  |
+  = note: kept fields: `Host`
