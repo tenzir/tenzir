@@ -1,0 +1,61 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ [1]:0..6 from 0
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     OptimizeBarrierIr {
+       loc: [1]:7..23 from 0
+     },
+     where_ir {
+-      self: [1]:24..29 from 0,
++      self: [0]:0..0 from 0,
+       predicate: binary_expr {
+         left: root_field {
+           id: `foo` @ [1]:30..33 from 0,
+           has_question_mark: false
+         },
+         op: "eq",
+         right: constant int64 42 @ [1]:37..39 from 0,
+         location: [1]:30..39 from 0
+       }
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ [1]:39..39 from 0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }
