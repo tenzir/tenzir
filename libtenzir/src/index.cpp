@@ -61,6 +61,7 @@
 #include <flatbuffers/flatbuffers.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <ctime>
 #include <deque>
@@ -68,7 +69,10 @@
 #include <memory>
 #include <numeric>
 #include <span>
+#include <thread>
 #include <unistd.h>
+#include <unordered_map>
+#include <vector>
 
 // clang-format off
 //
@@ -185,9 +189,10 @@ store_path_for_partition(const std::filesystem::path& base_path,
   return std::nullopt;
 }
 
-caf::error extract_partition_synopsis(
-  const std::filesystem::path& partition_path,
-  const std::filesystem::path& partition_synopsis_path) {
+caf::error
+extract_partition_synopsis(const std::filesystem::path& partition_path,
+                           const std::filesystem::path& partition_synopsis_path,
+                           bool verify) {
   // Use blocking operations here since this is part of the startup.
   auto chunk = chunk::mmap(partition_path);
   if (not chunk) {
@@ -226,6 +231,19 @@ caf::error extract_partition_synopsis(
   auto flatbuffer = ps_builder.Finish();
   fbs::FinishPartitionSynopsisBuffer(builder, flatbuffer);
   auto chunk_out = fbs::release(builder);
+  // Verify the freshly built buffer when callers intend to read it back
+  // without verification, so a corrupt synopsis is caught at the source.
+  if (verify) {
+    if (auto checked = tenzir::flatbuffer<fbs::PartitionSynopsis>::make(
+          chunk_ptr{chunk_out});
+        not checked) {
+      return caf::make_error(
+        ec::format_error,
+        fmt::format("refusing to write malformed partition "
+                    "synopsis to {}: {}",
+                    partition_synopsis_path, checked.error()));
+    }
+  }
   return io::save(partition_synopsis_path,
                   std::span{chunk_out->data(), chunk_out->size()});
 }
@@ -499,6 +517,9 @@ caf::error index_state::load_from_disk() {
   auto oversized_partition_ids = std::vector<uuid>{};
   auto synopsis_files = std::vector<uuid>{};
   auto synopses = std::vector<partition_synopsis_pair>{};
+  // Partition index file sizes captured during the scan so that the load below
+  // does not need an additional stat per partition.
+  auto partition_index_sizes = std::unordered_map<uuid, uint64_t>{};
   for (const auto& entry : dir_iter) {
     const auto stem = entry.path().stem();
     tenzir::uuid partition_uuid{};
@@ -508,10 +529,12 @@ caf::error index_state::load_from_disk() {
     }
     auto ext = entry.path().extension();
     if (ext.empty()) {
+      auto size_err = std::error_code{};
+      const auto file_size = entry.file_size(size_err);
       // Newer partitions are not limited to FLATBUFFERS_MAX_BUFFER_SIZE,
       // this is only a problem for older ones that still have `fbs::Partition`
       // as root type.
-      if (entry.file_size() >= FLATBUFFERS_MAX_BUFFER_SIZE
+      if (not size_err and file_size >= FLATBUFFERS_MAX_BUFFER_SIZE
           and test_file_identifier(entry, fbs::PartitionIdentifier())) {
         auto store_path
           = dir / ".." / "archive" / fmt::format("{:u}.store", partition_uuid);
@@ -524,6 +547,8 @@ caf::error index_state::load_from_disk() {
         }
       } else {
         partition_ids.push_back(partition_uuid);
+        partition_index_sizes.emplace(partition_uuid,
+                                      size_err ? uint64_t{0} : file_size);
       }
     } else if (ext == std::filesystem::path{".mdx"}) {
       synopsis_files.push_back(partition_uuid);
@@ -542,9 +567,14 @@ caf::error index_state::load_from_disk() {
     std::filesystem::remove(dir / fmt::format("{}.mdx", orphan), err);
   }
   // We build an in-memory representation of the archive folder for quicker
-  // lookup when we add file paths to the in-memory synopsis.
+  // lookup when we add file paths and sizes to the in-memory synopsis. Sizes
+  // are captured here so the load below needs no additional stat per store.
+  struct store_info {
+    std::filesystem::path path = {};
+    uint64_t size = 0;
+  };
   const auto store_map = [&] {
-    auto result = std::map<uuid, std::filesystem::path>{};
+    auto result = std::map<uuid, store_info>{};
     auto store_path = dir / ".." / "archive";
     if (not std::filesystem::is_directory(store_path, err)) {
       return result;
@@ -555,98 +585,212 @@ caf::error index_state::load_from_disk() {
       if (not parsers::uuid(store_file.path().stem().string(), store_uuid)) {
         continue;
       }
-      result.emplace(store_uuid, store_file.path());
+      auto size_err = std::error_code{};
+      const auto size = store_file.file_size(size_err);
+      result.emplace(store_uuid, store_info{store_file.path(),
+                                            size_err ? uint64_t{0} : size});
     }
     return result;
   }();
-  // Now try to load the partitions - with a progress indicator.
-  for (size_t idx = 0; idx < partition_ids.size(); ++idx) {
-    auto partition_uuid = partition_ids[idx];
-    auto error = [&]() -> caf::error {
-      auto part_path = partition_path(partition_uuid);
-      TENZIR_TRACE("{} unpacks partition {} ({}/{})", *self, partition_uuid,
-                   idx, partition_ids.size());
-      // Generate external partition synopsis file if it doesn't exist.
-      auto synopsis_path = partition_synopsis_path(partition_uuid);
-      if (not exists(synopsis_path)) {
-        if (auto error = extract_partition_synopsis(part_path, synopsis_path);
-            error.valid()) {
-          return error;
-        }
-      }
-      TRY(auto chunk, chunk::mmap(synopsis_path));
-      TRY(const auto ps_flatbuffer,
-          flatbuffer<fbs::PartitionSynopsis>::make(std::move(chunk)));
-      partition_synopsis_ptr ps = caf::make_copy_on_write<partition_synopsis>();
-      if (ps_flatbuffer->partition_synopsis_type()
-          != fbs::partition_synopsis::PartitionSynopsis::legacy) {
-        return caf::make_error(ec::format_error, "invalid partition synopsis "
-                                                 "version");
-      }
-      TENZIR_ASSERT(ps_flatbuffer->partition_synopsis_as_legacy());
-      const auto& synopsis_legacy
-        = *ps_flatbuffer->partition_synopsis_as_legacy();
-      if (auto error = unpack(synopsis_legacy, ps.unshared()); error.valid()) {
+  // Resolve the base directories once instead of paying a `canonical()` (a
+  // symlink-resolving `realpath`, i.e. several stats) per partition; the
+  // per-partition file names are appended to the resolved base. This matters
+  // on networked storage where each such call is a round-trip.
+  auto resolve_dir
+    = [](const std::filesystem::path& p) -> std::filesystem::path {
+    std::error_code ec{};
+    if (auto result = std::filesystem::canonical(p, ec); not ec) {
+      return result;
+    }
+    ec.clear();
+    if (auto result = std::filesystem::absolute(p, ec); not ec) {
+      return result.lexically_normal();
+    }
+    return p.lexically_normal();
+  };
+  const auto index_dir = resolve_dir(dir);
+  const auto synopsis_dir = resolve_dir(synopsisdir);
+  const auto archive_dir = resolve_dir(dir / ".." / "archive");
+  const auto lazy_sketches = synopsis_opts.lazy_sketches;
+  const auto skip_verification = synopsis_opts.skip_synopsis_verification;
+  // `synopsis_files` was scanned from `dir`, but synopses live under
+  // `synopsisdir`. These are the same in the default configuration; when they
+  // differ we must check the actual synopsis path instead of the scan result,
+  // otherwise we would regenerate every synopsis on each startup.
+  const auto synopsis_in_index_dir = synopsisdir == dir;
+  // Loads a single partition synopsis from disk. This is invoked concurrently
+  // from multiple worker threads below, so it must not touch shared mutable
+  // state: it only reads data prepared above (all immutable during the load)
+  // and the (post-initialization, immutable) synopsis factory, and produces a
+  // fresh synopsis. Results are merged into the shared collections after all
+  // workers have finished.
+  auto load_one =
+    [&](const uuid& partition_uuid) -> caf::expected<partition_synopsis_pair> {
+    auto part_path = partition_path(partition_uuid);
+    auto synopsis_path = partition_synopsis_path(partition_uuid);
+    // Generate the external partition synopsis file if it doesn't exist. In the
+    // common case the synopsis lives in the scanned index directory, so we can
+    // use the scan result and avoid a stat; otherwise we check the actual path.
+    // When verification is skipped on read, verify the freshly written synopsis.
+    const auto synopsis_exists
+      = synopsis_in_index_dir
+          ? std::binary_search(synopsis_files.begin(), synopsis_files.end(),
+                               partition_uuid)
+          : std::filesystem::exists(synopsis_path);
+    if (not synopsis_exists) {
+      if (auto error = extract_partition_synopsis(part_path, synopsis_path,
+                                                  skip_verification);
+          error.valid()) {
         return error;
       }
-      // Add partition file sizes.
-      {
-        uint64_t bitmap_file_size = std::filesystem::file_size(part_path, err);
-        if (err) {
-          TENZIR_WARN("failed to get the size of the partition index file at "
-                      "{}: {}",
-                      part_path, err.message());
-          bitmap_file_size = 0u;
-        }
-        if (const auto canonical_part_path = canonical(part_path, err);
-            not err) {
-          ps.unshared().indexes_file = {
-            .url = fmt::format("file://{}", canonical_part_path),
-            .size = bitmap_file_size,
-          };
-        }
-        if (const auto canonical_synopsis_path = canonical(synopsis_path, err);
-            not err) {
-          ps.unshared().sketches_file = {
-            .url = fmt::format("file://{}", canonical_synopsis_path),
-            .size = ps_flatbuffer.chunk()->size(),
-          };
-        }
-        auto f = store_map.find(partition_uuid);
-        if (f == store_map.end()) {
-          // For completeness sake we could open the partition and look if the
-          // data is somewhere else entirely, but no known implementation ever
-          // deviated from the default path scheme, so we assume filesystem
-          // corruption here.
-          return diagnostic::error(ec::no_such_file)
-            .note("discarding partition {} due to a missing store file",
-                  partition_uuid)
-            .to_error();
-        }
-        auto store_path = f->second;
-        auto store_size = std::filesystem::file_size(store_path, err);
-        if (err) {
-          TENZIR_WARN("failed to get the size of the partition store file at "
-                      "{}: {}",
-                      store_path, err.message());
-          store_size = 0u;
-        }
-        if (const auto canonical_store_path = canonical(store_path, err);
-            not err) {
-          ps.unshared().store_file = {
-            .url = fmt::format("file://{}", canonical_store_path),
-            .size = store_size,
-          };
-        }
-      }
-      persisted_partitions.emplace(partition_uuid);
-      synopses.emplace_back(partition_uuid, std::move(ps));
-      return caf::none;
-    }();
-    if (error.valid()) {
-      TENZIR_VERBOSE("{} failed to load partition {}: {}", *self,
-                     partition_uuid, error);
     }
+    TRY(auto chunk, chunk::mmap(synopsis_path));
+    // Skipping verification avoids faulting in the entire buffer (including
+    // sketch payloads that are never decoded); it is only safe because such
+    // synopses are verified when written.
+    auto maybe_flatbuffer
+      = skip_verification
+          ? flatbuffer<fbs::PartitionSynopsis>::make_unsafe(std::move(chunk))
+          : flatbuffer<fbs::PartitionSynopsis>::make(std::move(chunk));
+    if (not maybe_flatbuffer) {
+      return std::move(maybe_flatbuffer.error());
+    }
+    const auto ps_flatbuffer = std::move(*maybe_flatbuffer);
+    partition_synopsis_ptr ps = caf::make_copy_on_write<partition_synopsis>();
+    if (ps_flatbuffer->partition_synopsis_type()
+        != fbs::partition_synopsis::PartitionSynopsis::legacy) {
+      return caf::make_error(ec::format_error, "invalid partition synopsis "
+                                               "version");
+    }
+    TENZIR_ASSERT(ps_flatbuffer->partition_synopsis_as_legacy());
+    const auto& synopsis_legacy
+      = *ps_flatbuffer->partition_synopsis_as_legacy();
+    if (auto error = unpack(synopsis_legacy, ps.unshared(), lazy_sketches);
+        error.valid()) {
+      return error;
+    }
+    // Attach file locations and sizes. Sizes were captured during the
+    // directory scans above and URLs are built from the pre-resolved base
+    // directories, so this needs no further filesystem access.
+    if (const auto it = partition_index_sizes.find(partition_uuid);
+        it != partition_index_sizes.end()) {
+      ps.unshared().indexes_file = {
+        .url
+        = fmt::format("file://{}", (index_dir / part_path.filename()).string()),
+        .size = it->second,
+      };
+    }
+    ps.unshared().sketches_file = {
+      .url = fmt::format("file://{}",
+                         (synopsis_dir / synopsis_path.filename()).string()),
+      .size = ps_flatbuffer.chunk()->size(),
+    };
+    auto f = store_map.find(partition_uuid);
+    if (f == store_map.end()) {
+      // For completeness sake we could open the partition and look if the
+      // data is somewhere else entirely, but no known implementation ever
+      // deviated from the default path scheme, so we assume filesystem
+      // corruption here.
+      return diagnostic::error(ec::no_such_file)
+        .note("discarding partition {} due to a missing store file",
+              partition_uuid)
+        .to_error();
+    }
+    ps.unshared().store_file = {
+      .url = fmt::format("file://{}",
+                         (archive_dir / f->second.path.filename()).string()),
+      .size = f->second.size,
+    };
+    return partition_synopsis_pair{partition_uuid, std::move(ps)};
+  };
+  // Load the partitions concurrently. Each partition is independent, so we
+  // distribute them across a pool of worker threads using a shared atomic
+  // cursor. This is particularly effective on networked storage (e.g. NFS),
+  // where loading is dominated by I/O latency that overlaps across requests.
+  // The index actor is detached and blocked here during startup, and no other
+  // actor interacts with this state yet, so using plain threads is safe.
+  const auto num_partitions = partition_ids.size();
+  auto concurrency = synopsis_opts.load_concurrency;
+  if (concurrency == 0) {
+    concurrency = std::max<size_t>(1, std::thread::hardware_concurrency());
+  }
+  concurrency
+    = std::min<size_t>(concurrency, std::max<size_t>(1, num_partitions));
+  // Report progress for large loads so operators can see startup advancing;
+  // stay quiet for small ones to avoid log noise.
+  const auto report_progress = num_partitions >= size_t{1000};
+  const auto progress_step = std::max<size_t>(1, num_partitions / 20);
+  const auto lazy_suffix = lazy_sketches
+                             ? std::string{" deferring Bloom-filter sketches;"}
+                             : std::string{};
+  const auto verify_suffix = skip_verification
+                               ? std::string{" skipping verification;"}
+                               : std::string{};
+  if (report_progress) {
+    TENZIR_INFO("{} loads {} partition synopses using {} thread(s);{}{}", *self,
+                num_partitions, concurrency, lazy_suffix, verify_suffix);
+  } else {
+    TENZIR_VERBOSE("{} loads {} partition synopses using {} thread(s);{}{}",
+                   *self, num_partitions, concurrency, lazy_suffix,
+                   verify_suffix);
+  }
+  const auto load_start = std::chrono::steady_clock::now();
+  auto worker_synopses
+    = std::vector<std::vector<partition_synopsis_pair>>(concurrency);
+  std::atomic<size_t> next_index{0};
+  std::atomic<size_t> loaded{0};
+  auto work = [&](size_t worker) {
+    for (auto idx = next_index.fetch_add(1, std::memory_order_relaxed);
+         idx < num_partitions;
+         idx = next_index.fetch_add(1, std::memory_order_relaxed)) {
+      const auto& partition_uuid = partition_ids[idx];
+      try {
+        auto result = load_one(partition_uuid);
+        if (not result) {
+          TENZIR_VERBOSE("{} failed to load partition {}: {}", *self,
+                         partition_uuid, result.error());
+          continue;
+        }
+        worker_synopses[worker].push_back(std::move(*result));
+      } catch (const std::exception& ex) {
+        TENZIR_VERBOSE("{} failed to load partition {}: {}", *self,
+                       partition_uuid, ex.what());
+        continue;
+      }
+      if (const auto n = loaded.fetch_add(1, std::memory_order_relaxed) + 1;
+          report_progress and n % progress_step == 0) {
+        TENZIR_INFO("{} loaded {}/{} partition synopses ({}%)", *self, n,
+                    num_partitions, n * 100 / num_partitions);
+      }
+    }
+  };
+  if (concurrency <= 1) {
+    work(0);
+  } else {
+    auto threads = std::vector<std::thread>{};
+    threads.reserve(concurrency);
+    for (size_t worker = 0; worker < concurrency; ++worker) {
+      threads.emplace_back(work, worker);
+    }
+    for (auto& thread : threads) {
+      thread.join();
+    }
+  }
+  for (auto& batch : worker_synopses) {
+    for (auto& pair : batch) {
+      persisted_partitions.emplace(pair.uuid);
+      synopses.push_back(std::move(pair));
+    }
+  }
+  const auto load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                         std::chrono::steady_clock::now() - load_start)
+                         .count();
+  if (report_progress) {
+    TENZIR_INFO("{} loaded {} partition synopses in {} ms", *self,
+                synopses.size(), load_ms);
+  } else {
+    TENZIR_VERBOSE("{} loaded {} partition synopses in {} ms", *self,
+                   synopses.size(), load_ms);
   }
   // Recommend the user to run 'tenzir-ctl rebuild' if any partition syopses
   // are outdated. We need to nudge them a bit so we can drop support for older
@@ -1645,6 +1789,18 @@ index(index_actor::stateful_pointer<index_state> self,
               old_partition_ids.emplace_back(partition.uuid);
             }
             auto apsv = std::move(transform_result.output_partitions);
+            // Point each output synopsis at its final `.mdx` path (the marker
+            // is renamed there before the merge below). With lazy sketches the
+            // catalog drops the Bloom filters on merge and reloads them on
+            // demand from this path, so it must be set or pruning would be
+            // lost for transformed/rebuilt partitions until the next restart.
+            for (auto& aps : apsv) {
+              if (aps.synopsis) {
+                aps.synopsis.unshared().sketches_file.url = fmt::format(
+                  "file://{}",
+                  self->state().partition_synopsis_path(aps.uuid).string());
+              }
+            }
             std::vector<uuid> new_partition_ids;
             new_partition_ids.reserve(apsv.size());
             for (auto const& [uuid, _] : apsv) {
