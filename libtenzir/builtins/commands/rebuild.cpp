@@ -525,9 +525,12 @@ struct rebuilder_state {
     auto rp = self->make_response_promise<void>();
     auto dh = null_diagnostic_handler{};
     auto provider = session_provider::make(dh);
+    auto pipeline = schema.name().starts_with("suricata")
+                      ? fmt::format("where timestamp? != null | batch {}",
+                                    desired_batch_size)
+                      : fmt::format("batch {}", desired_batch_size);
     auto rebatch = parse_pipeline_with_location_override(
-      fmt::format("batch {}", desired_batch_size), location::unknown,
-      provider.as_session());
+      pipeline, location::unknown, provider.as_session());
     TENZIR_ASSERT(rebatch);
     // We sort the selected partitions from old to new so the rebuild transform
     // sees the batches (and events) in the order they arrived. This prevents
