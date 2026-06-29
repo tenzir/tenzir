@@ -9,6 +9,7 @@
 #include "clickhouse/transformers.hpp"
 
 #include "clickhouse/arguments.hpp"
+#include "tenzir/concept/printable/tenzir/json2.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/view3.hpp"
 
@@ -16,6 +17,7 @@
 #include <clickhouse/columns/bool.h>
 #include <clickhouse/columns/date.h>
 #include <clickhouse/columns/ip6.h>
+#include <clickhouse/columns/json.h>
 #include <clickhouse/columns/nullable.h>
 #include <clickhouse/columns/numeric.h>
 #include <clickhouse/columns/string.h>
@@ -607,6 +609,106 @@ struct transformer_blob : transformer {
   }
 };
 
+/// Sends data to a ClickHouse `JSON` column by serializing each row's record to
+/// JSON text. We only support sending to an existing JSON column; we never
+/// create one (there is no Tenzir `json` type). ClickHouse `JSON` columns only
+/// accept objects at the top level, so non-record columns are written as empty
+/// objects with a warning. Absent rows become `{}`; null rows become `{}` for a
+/// plain `JSON` column and SQL `NULL` for a `Nullable(JSON)` column (ClickHouse
+/// rejects empty strings for JSON but accepts the empty object).
+struct transformer_json : transformer {
+  bool nullable;
+  json_printer2 printer = json_printer2{json_printer_options{
+    .style = no_style(),
+    .oneline = true,
+  }};
+
+  explicit transformer_json(bool nullable)
+    : transformer(nullable ? "Nullable(JSON)" : "JSON", /*nullable=*/true),
+      nullable{nullable} {
+  }
+
+  auto update_dropmask(path_type& path, const tenzir::type& type,
+                       const arrow::Array& array, dropmask_ref dropmask,
+                       tenzir::diagnostic_handler& dh) -> drop override {
+    TENZIR_UNUSED(path, type, array, dropmask, dh);
+    // A JSON column accepts any value, so we never drop rows.
+    return drop::none;
+  }
+
+  auto create_null_column(size_t n) const -> ::clickhouse::ColumnRef override {
+    return build(n, [n](auto&& append) {
+      for (size_t i = 0; i < n; ++i) {
+        append(std::nullopt);
+      }
+    });
+  }
+
+  auto create_column(path_type& path, const tenzir::type& type,
+                     const arrow::Array& array, dropmask_cref dropmask,
+                     int64_t dropcount, tenzir::diagnostic_handler& dh)
+    -> ::clickhouse::ColumnRef override {
+    // ClickHouse `JSON` columns only accept JSON objects at the top level. A
+    // record maps to an object; anything else (scalars, lists) would be
+    // rejected by the server, so we substitute empty objects and warn.
+    const auto unsupported
+      = not type.kind().is<record_type>() and not type.kind().is<null_type>();
+    if (unsupported) {
+      diagnostic::warning("cannot write `{}` into a ClickHouse JSON column",
+                          fmt::join(path, "."))
+        .note("expected a record, but got `{}`", type.kind())
+        .note("values will be written as empty objects (`{}`)")
+        .emit(dh);
+    }
+    return build(array.length() - dropcount, [&](auto&& append) {
+      for (int64_t i = 0; i < array.length(); ++i) {
+        if (dropmask[i]) {
+          continue;
+        }
+        auto v = view_at(array, i);
+        if (is<caf::none_t>(v)) {
+          // A null row becomes SQL NULL for a nullable column and `{}` for a
+          // plain one; check this before substituting unsupported values so
+          // nulls are not silently turned into empty objects.
+          append(std::nullopt);
+          continue;
+        }
+        if (unsupported) {
+          // Non-record value: write an explicit empty object, not NULL.
+          append(std::string_view{"{}"});
+          continue;
+        }
+        printer.load_new(v);
+        auto bytes = printer.bytes();
+        append(std::string_view{reinterpret_cast<const char*>(bytes.data()),
+                                bytes.size()});
+      }
+    });
+  }
+
+private:
+  /// Allocates a plain or nullable `ColumnJSON` (depending on `nullable`),
+  /// reserves `n` rows, and invokes `fill` with an `append` callback. The
+  /// callback takes an optional JSON string: `std::nullopt` becomes `{}` for a
+  /// plain column and SQL `NULL` for a nullable one.
+  auto build(size_t n, auto&& fill) const -> ::clickhouse::ColumnRef {
+    if (nullable) {
+      auto column = std::make_shared<ColumnNullableT<ColumnJSON>>();
+      column->Reserve(n);
+      fill([&](std::optional<std::string_view> v) {
+        column->Append(v);
+      });
+      return column;
+    }
+    auto column = std::make_shared<ColumnJSON>();
+    column->Reserve(n);
+    fill([&](std::optional<std::string_view> v) {
+      column->Append(v.value_or(std::string_view{"{}"}));
+    });
+    return column;
+  }
+};
+
 struct transformer_array : transformer {
   std::unique_ptr<transformer> data_transform;
   dropmask_type my_mask;
@@ -1003,6 +1105,14 @@ auto make_functions_from_clickhouse(path_type& path,
   }
   if (clickhouse_typename == "Array(UInt8)") {
     return std::make_unique<transformer_blob>();
+  }
+  if (clickhouse_typename == "JSON"
+      or clickhouse_typename.starts_with("JSON(")) {
+    return std::make_unique<transformer_json>(/*nullable=*/false);
+  }
+  if (clickhouse_typename == "Nullable(JSON)"
+      or clickhouse_typename.starts_with("Nullable(JSON(")) {
+    return std::make_unique<transformer_json>(/*nullable=*/true);
   }
   if (clickhouse_typename.starts_with("Tuple(")) {
     return make_record_functions_from_clickhouse(path, clickhouse_typename, dh);

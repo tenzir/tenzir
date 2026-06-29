@@ -212,6 +212,9 @@ struct ToClickhouseArgs {
   Option<located<data>> tls;
   location operator_location;
   uint64_t jobs = 1;
+  // A single field or list of fields to create as `JSON` columns. Unset when
+  // `kind` is null.
+  ast::expression json = {};
 };
 
 class ToClickhouse final : public Operator<table_slice, void> {
@@ -248,6 +251,14 @@ public:
       primary = {args_.primary->path().front().id.name,
                  args_.primary->get_location()};
     }
+    auto json_columns = std::vector<located<std::string>>{};
+    if (args_.json.kind) {
+      // The `json` argument was already validated during parsing, so
+      // re-extracting the column names here cannot fail.
+      auto parsed = parse_json_field_argument(args_.json, dh);
+      TENZIR_ASSERT(parsed);
+      json_columns = std::move(*parsed);
+    }
     auto ssl_opts = tls_options::from_optional(args_.tls);
     auto ssl = ssl_opts.resolve(ctx.actor_system().config(), dh);
     if (not ssl) {
@@ -269,6 +280,7 @@ public:
       .table = args_.table,
       .mode = {*mode_val, args_.mode.source},
       .primary = std::move(primary),
+      .json = std::move(json_columns),
       .operator_location = args_.operator_location,
     };
     auto uri = std::string{};
@@ -480,13 +492,15 @@ public:
     auto mode_arg = d.named_optional("mode", &ToClickhouseArgs::mode);
 
     auto primary_arg = d.named("primary", &ToClickhouseArgs::primary, "field");
+    auto json_arg
+      = d.named_optional("json", &ToClickhouseArgs::json, "field|list<field>");
     auto jobs_arg = d.named_optional("_jobs", &ToClickhouseArgs::jobs);
     auto tls_validate
       = tls_options{}.add_to_describer(d, &ToClickhouseArgs::tls);
     d.operator_location(&ToClickhouseArgs::operator_location);
     d.validate(
       [uri_arg, host_arg, table_arg, mode_arg, port_arg, user_arg, password_arg,
-       primary_arg, jobs_arg,
+       primary_arg, json_arg, jobs_arg,
        tls_validate = std::move(tls_validate)](DescribeCtx& ctx) -> Empty {
         tls_validate(ctx);
         auto has_uri = ctx.get(uri_arg).has_value();
@@ -561,9 +575,33 @@ public:
             .primary(ctx.get_location(mode_arg).value_or(location::unknown))
             .emit(ctx);
         }
+        if (auto json = ctx.get(json_arg)) {
+          // `json` only takes effect when creating a table.
+          if (mode_enum == mode::append) {
+            diagnostic::error("`json` cannot be used with `mode = \"append\"`")
+              .primary(json->get_location())
+              .primary(ctx.get_location(mode_arg).value_or(location::unknown))
+              .note("`json` only applies when creating a table")
+              .emit(ctx);
+          }
+          if (auto columns = parse_json_field_argument(*json, ctx)) {
+            if (auto primary = ctx.get(primary_arg)) {
+              const auto primary_name
+                = std::string{primary->path().front().id.name};
+              for (const auto& column : *columns) {
+                if (column.inner == primary_name) {
+                  diagnostic::error("a `JSON` column cannot be the primary key")
+                    .primary(column.source)
+                    .primary(primary->get_location())
+                    .emit(ctx);
+                }
+              }
+            }
+          }
+        }
         return {};
       });
-    return d.unordered();
+    return d.without_optimize();
   }
 };
 

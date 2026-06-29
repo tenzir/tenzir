@@ -1,0 +1,10 @@
+// Append rows with structured values into the existing JSON column.
+from {id: 0, payload: {a: 1, b: [2, 3], c: "x"}},
+     {id: 1, payload: {a: 5, b: [], c: null}},
+     {id: 2, payload: null}
+to_clickhouse table="test_json",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"
