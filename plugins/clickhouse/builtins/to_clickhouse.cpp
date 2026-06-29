@@ -580,6 +580,7 @@ public:
           if (mode_enum == mode::append) {
             diagnostic::error("`json` cannot be used with `mode = \"append\"`")
               .primary(json->get_location())
+              .primary(ctx.get_location(mode_arg).value_or(location::unknown))
               .note("`json` only applies when creating a table")
               .emit(ctx);
           }
@@ -591,6 +592,7 @@ public:
                 if (column.inner == primary_name) {
                   diagnostic::error("a `JSON` column cannot be the primary key")
                     .primary(column.source)
+                    .primary(primary->get_location())
                     .emit(ctx);
                 }
               }
@@ -599,7 +601,7 @@ public:
         }
         return {};
       });
-    return d.unordered();
+    return d.without_optimize();
   }
 };
 
