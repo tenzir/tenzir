@@ -1,0 +1,12 @@
+// Create a table with `LowCardinality` columns over string and numeric types.
+from {id: 0, name: "alpha", code: 7, score: 1.5},
+     {id: 1, name: "beta", code: 7, score: 2.5},
+     {id: 2, name: "alpha", code: 9, score: 1.5}
+to_clickhouse table="test_low_cardinality",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              primary=id,
+              mode="create",
+              low_cardinality=[name, code, score]

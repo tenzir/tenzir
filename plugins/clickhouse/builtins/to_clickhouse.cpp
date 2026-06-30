@@ -215,6 +215,9 @@ struct ToClickhouseArgs {
   // A single field or list of fields to create as `JSON` columns. Unset when
   // `kind` is null.
   ast::expression json = {};
+  // A single field or list of fields to create as `LowCardinality(<inner>)`
+  // columns. Unset when `kind` is null.
+  ast::expression low_cardinality = {};
 };
 
 class ToClickhouse final : public Operator<table_slice, void> {
@@ -259,6 +262,15 @@ public:
       TENZIR_ASSERT(parsed);
       json_columns = std::move(*parsed);
     }
+    auto low_cardinality_columns = std::vector<located<std::string>>{};
+    if (args_.low_cardinality.kind) {
+      // The `low_cardinality` argument was already validated during parsing, so
+      // re-extracting the column names here cannot fail.
+      auto parsed = parse_field_list_argument(args_.low_cardinality, dh,
+                                              "low_cardinality");
+      TENZIR_ASSERT(parsed);
+      low_cardinality_columns = std::move(*parsed);
+    }
     auto ssl_opts = tls_options::from_optional(args_.tls);
     auto ssl = ssl_opts.resolve(ctx.actor_system().config(), dh);
     if (not ssl) {
@@ -281,6 +293,7 @@ public:
       .mode = {*mode_val, args_.mode.source},
       .primary = std::move(primary),
       .json = std::move(json_columns),
+      .low_cardinality = std::move(low_cardinality_columns),
       .operator_location = args_.operator_location,
     };
     auto uri = std::string{};
@@ -494,13 +507,16 @@ public:
     auto primary_arg = d.named("primary", &ToClickhouseArgs::primary, "field");
     auto json_arg
       = d.named_optional("json", &ToClickhouseArgs::json, "field|list<field>");
+    auto low_cardinality_arg
+      = d.named_optional("low_cardinality", &ToClickhouseArgs::low_cardinality,
+                         "field|list<field>");
     auto jobs_arg = d.named_optional("_jobs", &ToClickhouseArgs::jobs);
     auto tls_validate
       = tls_options{}.add_to_describer(d, &ToClickhouseArgs::tls);
     d.operator_location(&ToClickhouseArgs::operator_location);
     d.validate(
       [uri_arg, host_arg, table_arg, mode_arg, port_arg, user_arg, password_arg,
-       primary_arg, json_arg, jobs_arg,
+       primary_arg, json_arg, low_cardinality_arg, jobs_arg,
        tls_validate = std::move(tls_validate)](DescribeCtx& ctx) -> Empty {
         tls_validate(ctx);
         auto has_uri = ctx.get(uri_arg).has_value();
@@ -594,6 +610,37 @@ public:
                     .primary(column.source)
                     .primary(primary->get_location())
                     .emit(ctx);
+                }
+              }
+            }
+          }
+        }
+        if (auto low_cardinality = ctx.get(low_cardinality_arg)) {
+          // `low_cardinality` only takes effect when creating a table.
+          if (mode_enum == mode::append) {
+            diagnostic::error(
+              "`low_cardinality` cannot be used with `mode = \"append\"`")
+              .primary(low_cardinality->get_location())
+              .primary(ctx.get_location(mode_arg).value_or(location::unknown))
+              .note("`low_cardinality` only applies when creating a table")
+              .emit(ctx);
+          }
+          if (auto columns = parse_field_list_argument(*low_cardinality, ctx,
+                                                       "low_cardinality")) {
+            // A column cannot be both a `JSON` and a `LowCardinality` column.
+            if (auto json = ctx.get(json_arg)) {
+              if (auto json_columns = parse_json_field_argument(*json, ctx)) {
+                for (const auto& lc : *columns) {
+                  for (const auto& jc : *json_columns) {
+                    if (lc.inner == jc.inner) {
+                      diagnostic::error("column `{}` cannot be both `json` and "
+                                        "`low_cardinality`",
+                                        lc.inner)
+                        .primary(lc.source)
+                        .primary(jc.source)
+                        .emit(ctx);
+                    }
+                  }
                 }
               }
             }

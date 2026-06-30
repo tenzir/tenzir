@@ -163,6 +163,21 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
     return None{};
   };
   auto json_seen = std::vector<bool>(args_.json.size(), false);
+  // Fields named in `low_cardinality` are wrapped as `LowCardinality(<inner>)`,
+  // where the inner type is the normally inferred type. Unlike `json`, the
+  // inner type cannot be synthesized for absent fields, so every listed column
+  // must be present in the first event (enforced after the loop below).
+  const auto low_cardinality_index
+    = [&](std::string_view name) -> Option<size_t> {
+    for (size_t i = 0; i < args_.low_cardinality.size(); ++i) {
+      if (args_.low_cardinality[i].inner == name) {
+        return i;
+      }
+    }
+    return None{};
+  };
+  auto low_cardinality_seen
+    = std::vector<bool>(args_.low_cardinality.size(), false);
   auto clickhouse_columns = std::string{"("};
   auto first = true;
   const auto append_column = [&](std::string_view name, std::string_view type) {
@@ -187,6 +202,21 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
         type_to_clickhouse_typename(path, t, not is_primary, dh_));
     path.pop_back();
     TENZIR_ASSERT(not clickhouse_typename.empty());
+    if (auto idx = low_cardinality_index(k)) {
+      low_cardinality_seen[*idx] = true;
+      // `LowCardinality` can only wrap scalar types, not `Tuple`/`Array`.
+      if (clickhouse_typename.starts_with("Tuple(")
+          or clickhouse_typename.starts_with("Array(")) {
+        diagnostic::error("column `{}` cannot be a `LowCardinality` column", k)
+          .primary(args_.low_cardinality[*idx])
+          .note("`LowCardinality` cannot wrap the inferred type `{}`",
+                clickhouse_typename)
+          .emit(dh_);
+        return failure::promise();
+      }
+      clickhouse_typename
+        = fmt::format("LowCardinality({})", clickhouse_typename);
+    }
     append_column(k, clickhouse_typename);
   }
   // `json` columns absent from the first slice are still created, as plain
@@ -194,6 +224,20 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
   for (size_t i = 0; i < args_.json.size(); ++i) {
     if (not json_seen[i]) {
       append_column(args_.json[i].inner, "JSON");
+    }
+  }
+  // `low_cardinality` columns must be present in the first event: their inner
+  // type is inferred from the data and cannot be synthesized when missing.
+  for (size_t i = 0; i < args_.low_cardinality.size(); ++i) {
+    if (not low_cardinality_seen[i]) {
+      diagnostic::error("`low_cardinality` column `{}` is missing from the "
+                        "first event",
+                        args_.low_cardinality[i].inner)
+        .primary(args_.low_cardinality[i])
+        .note("the column's inner type cannot be inferred when creating the "
+              "table")
+        .emit(dh_);
+      return failure::promise();
     }
   }
   clickhouse_columns += ")";
@@ -220,6 +264,12 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
   // server's default max_query_size (256 KiB). Remove the limit for this
   // statement, as the query text is derived from the inferred schema.
   query.SetSetting("max_query_size", {"0", QuerySettingsField::IMPORTANT});
+  // ClickHouse rejects `LowCardinality` over fixed-size types (numerics, dates)
+  // unless this setting is enabled. `LowCardinality(String)` is always allowed.
+  if (not args_.low_cardinality.empty()) {
+    query.SetSetting("allow_suspicious_low_cardinality_types",
+                     {"1", QuerySettingsField::IMPORTANT});
+  }
   client_.Execute(query);
   return remote_fetch_schema_transformations(table_name);
 }

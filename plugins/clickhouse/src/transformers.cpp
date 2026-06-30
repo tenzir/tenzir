@@ -709,6 +709,149 @@ private:
   }
 };
 
+/// Sends Tenzir `time` values to a ClickHouse `DateTime64(N[, 'tz'])` column of
+/// arbitrary scale `N`. The built-in `time_type` trait only handles the
+/// canonical `DateTime64(9)` (no timezone) that `to_clickhouse` creates itself;
+/// this transformer lets us append to pre-existing tables whose column uses a
+/// different scale or carries a timezone. We build a column with the table's
+/// exact scale and timezone so the inserted block type matches the target
+/// column and no server-side conversion is required. Nanosecond values are
+/// divided down to the column's tick unit (`10^(9-N)`), truncating
+/// sub-precision just as a server-side scale conversion would.
+struct transformer_datetime64 : transformer {
+  size_t scale;
+  Option<std::string> timezone;
+  bool nullable;
+  int64_t divisor;
+
+  static auto type_name(size_t scale, const Option<std::string>& tz,
+                        bool nullable) -> std::string {
+    auto inner = fmt::format("DateTime64({}", scale);
+    if (tz) {
+      fmt::format_to(std::back_inserter(inner), ",'{}'", *tz);
+    }
+    inner += ')';
+    if (nullable) {
+      return fmt::format("Nullable({})", inner);
+    }
+    return inner;
+  }
+
+  transformer_datetime64(size_t scale, Option<std::string> tz, bool nullable)
+    : transformer{type_name(scale, tz, nullable), nullable},
+      scale{scale},
+      timezone{std::move(tz)},
+      nullable{nullable},
+      divisor{[&] {
+        auto d = int64_t{1};
+        for (auto i = scale; i < 9; ++i) {
+          d *= 10;
+        }
+        return d;
+      }()} {
+  }
+
+  auto update_dropmask(path_type& path, const tenzir::type& type,
+                       const arrow::Array& array, dropmask_ref dropmask,
+                       tenzir::diagnostic_handler& dh) -> drop override {
+    if (nullable) {
+      return drop::none;
+    }
+    if (not type.kind().is<time_type>()) {
+      diagnostic::warning("incompatible type for column `{}`",
+                          fmt::join(path, "."))
+        .note("expected `{}`, got `{}`", type_kind{tag_v<time_type>},
+              type.kind())
+        .emit(dh);
+      return drop::all;
+    }
+    if (not array.null_bitmap() or array.null_count() == 0) {
+      return drop::none;
+    }
+    if (array.null_count() == array.length()) {
+      return drop::all;
+    }
+    for (int64_t i = 0; i < array.length(); ++i) {
+      if (array.IsNull(i)) {
+        dropmask[i] = true;
+      }
+    }
+    return drop::some;
+  }
+
+  auto create_null_column(size_t n) const -> ::clickhouse::ColumnRef override {
+    if (not nullable) {
+      return nullptr;
+    }
+    return build(n, [n](auto&& append) {
+      for (size_t i = 0; i < n; ++i) {
+        append(std::nullopt);
+      }
+    });
+  }
+
+  auto create_column(path_type& path, const tenzir::type& type,
+                     const arrow::Array& array, dropmask_cref dropmask,
+                     int64_t dropcount, tenzir::diagnostic_handler& dh)
+    -> ::clickhouse::ColumnRef override {
+    const auto n = array.length() - dropcount;
+    if (type.kind().is<null_type>()) {
+      return create_null_column(n);
+    }
+    if (not type.kind().is<time_type>()) {
+      diagnostic::warning("incompatible type for column `{}`",
+                          fmt::join(path, "."))
+        .note("expected `{}`, got `{}`", type_kind{tag_v<time_type>},
+              type.kind())
+        .emit(dh);
+      return nullptr;
+    }
+    const auto& cast_array = as<type_to_arrow_array_t<time_type>>(array);
+    return build(n, [&](auto&& append) {
+      for (int64_t i = 0; i < cast_array.length(); ++i) {
+        if (dropmask[i]) {
+          continue;
+        }
+        auto v = view_at(cast_array, i);
+        if (not v) {
+          append(std::nullopt);
+          continue;
+        }
+        append(value_transform(*v) / divisor);
+      }
+    });
+  }
+
+private:
+  /// Allocates a plain or nullable `ColumnDateTime64` with the configured scale
+  /// and timezone, reserves `n` rows, and invokes `fill` with an `append`
+  /// callback taking an optional tick value. For a plain column a
+  /// `std::nullopt` cannot legitimately occur (null rows are dropped) but is
+  /// written as 0 defensively.
+  auto build(size_t n, auto&& fill) const -> ::clickhouse::ColumnRef {
+    if (nullable) {
+      auto column
+        = timezone
+            ? std::make_shared<ColumnNullableT<ColumnDateTime64>>(scale,
+                                                                  *timezone)
+            : std::make_shared<ColumnNullableT<ColumnDateTime64>>(scale);
+      column->Reserve(n);
+      fill([&](std::optional<int64_t> v) {
+        column->Append(v);
+      });
+      return column;
+    }
+    auto column = timezone
+                    ? std::make_shared<ColumnDateTime64>(scale, *timezone)
+                    : std::make_shared<ColumnDateTime64>(scale);
+    column->Reserve(n);
+    fill([&](std::optional<int64_t> v) {
+      column->Append(v.value_or(0));
+    });
+    return column;
+  }
+};
+
 struct transformer_array : transformer {
   std::unique_ptr<transformer> data_transform;
   dropmask_type my_mask;
@@ -1113,6 +1256,53 @@ auto make_functions_from_clickhouse(path_type& path,
   if (clickhouse_typename == "Nullable(JSON)"
       or clickhouse_typename.starts_with("Nullable(JSON(")) {
     return std::make_unique<transformer_json>(/*nullable=*/true);
+  }
+  // `LowCardinality(X)` is a storage optimization that does not change the
+  // logical type. ClickHouse's native INSERT path transparently wraps a plain
+  // inner column into `LowCardinality`, so we strip the wrapper and recurse on
+  // the inner type, sending the plain column.
+  if (auto inner
+      = unwrap_clickhouse_type_call(clickhouse_typename, "LowCardinality")) {
+    return make_functions_from_clickhouse(path, *inner, dh);
+  }
+  // `DateTime64(N[, 'tz'])` of any scale/timezone (other than the canonical
+  // `DateTime64(9)` already handled above). We build a column matching the
+  // table's exact scale and timezone.
+  const auto strip_quotes = [](std::string_view s) -> std::string {
+    if (s.size() >= 2 and s.front() == '\'' and s.back() == '\'') {
+      return std::string{s.substr(1, s.size() - 2)};
+    }
+    return std::string{s};
+  };
+  const auto make_datetime64
+    = [&](std::string_view tn, bool nullable) -> std::unique_ptr<transformer> {
+    auto inner = unwrap_clickhouse_type_call(tn, "DateTime64");
+    if (not inner) {
+      return nullptr;
+    }
+    auto parts = split_top_level_clickhouse_type_arguments(*inner);
+    auto scale = size_t{0};
+    if (parts.empty() or not parse_clickhouse_size(parts[0], scale)
+        or scale > 9) {
+      return nullptr;
+    }
+    auto timezone = Option<std::string>{};
+    if (parts.size() > 1) {
+      timezone = strip_quotes(parts[1]);
+    }
+    return std::make_unique<transformer_datetime64>(scale, std::move(timezone),
+                                                    nullable);
+  };
+  if (auto t = make_datetime64(clickhouse_typename, false)) {
+    return t;
+  }
+  if (is_nullable) {
+    auto bare = clickhouse_typename;
+    bare.remove_prefix("Nullable("sv.size());
+    bare.remove_suffix(1);
+    if (auto t = make_datetime64(bare, true)) {
+      return t;
+    }
   }
   if (clickhouse_typename.starts_with("Tuple(")) {
     return make_record_functions_from_clickhouse(path, clickhouse_typename, dh);

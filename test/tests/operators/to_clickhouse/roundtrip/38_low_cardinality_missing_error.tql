@@ -1,0 +1,15 @@
+---
+error: true
+---
+
+// A `low_cardinality` column absent from the first event cannot be created:
+// its inner type cannot be inferred.
+from {id: 0, name: "alpha"}
+to_clickhouse table="test_lc_missing",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              primary=id,
+              mode="create",
+              low_cardinality=absent
