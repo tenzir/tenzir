@@ -9,32 +9,20 @@ prs:
 created: 2026-06-30T08:45:33.215753Z
 ---
 
-The `to_clickhouse` operator can now append to existing tables whose columns use
-`LowCardinality(...)` or a `DateTime64` of any scale and timezone. Previously,
-both were rejected with an `unsupported ClickHouse type` error even though the
-data could be written without loss.
+The `to_clickhouse` operator now supports more ClickHouse column types.
 
-`LowCardinality` columns accept the plain inner value (for example, a `string`
-into `LowCardinality(String)`), and `DateTime64(N[, 'tz'])` columns accept Tenzir
-`time` values, truncated to the column's precision:
+When appending to an existing table, it can now write to `LowCardinality(String)`
+columns and to `DateTime64(N[, 'tz'])` columns of any scale and timezone.
+Previously both were rejected with an `unsupported ClickHouse type` error even
+though the data could be written without loss. A `string` is written into a
+`LowCardinality(String)` column (the server adds the `LowCardinality` wrapper),
+and `time` values are written into `DateTime64(N)` columns, truncated to the
+column's precision. This also covers the nullable forms
+`LowCardinality(Nullable(String))` and `Nullable(DateTime64(N))`.
 
-```tql
-// Table: CREATE TABLE events (
-//   id Int64,
-//   name LowCardinality(String),
-//   ts DateTime64(3, 'UTC')
-// ) ENGINE = MergeTree ORDER BY id
-from {id: 0, name: "alpha", ts: 2024-01-01T12:00:00.123456Z}
-to_clickhouse table="events", host="localhost", mode="append"
-// stored as name="alpha", ts="2024-01-01 12:00:00.123"
-```
-
-This also covers nullable and nested forms such as
-`LowCardinality(Nullable(String))` and `Nullable(DateTime64(6))`.
-
-The new `low_cardinality=` argument lets `to_clickhouse` *create*
-`LowCardinality(String)` columns, analogous to `json=`. Listed fields are
-created as `LowCardinality` instead of plain `String`:
+The new `low_cardinality=` argument creates `LowCardinality(String)` columns,
+analogous to `json=`. Listed fields are created as `LowCardinality` instead of
+plain `String`:
 
 ```tql
 from {id: 0, name: "alpha"}
@@ -42,6 +30,9 @@ to_clickhouse table="events", primary=id, mode="create", low_cardinality=name
 // creates `name` as LowCardinality(Nullable(String))
 ```
 
-Unlike `json`, every listed field must be present in the first event (its inner
-type is inferred from the data). `low_cardinality` is only supported for string
-columns.
+Every listed field must be present in the first event, because its inner type is
+inferred from the data.
+
+`LowCardinality` support is limited to string inner types: the bundled ClickHouse
+client library does not support `LowCardinality` over numeric or other fixed-size
+types.
