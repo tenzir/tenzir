@@ -495,6 +495,9 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
   while (true) {
     auto required_size
       = detail::narrow_cast<size_t>(stream_decoder.next_required_size());
+    if (required_size == 0) {
+      co_return;
+    }
     auto payload = byte_reader(required_size);
     if (not payload) {
       co_yield {};
