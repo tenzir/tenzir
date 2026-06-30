@@ -1,0 +1,14 @@
+// `ocsf::derive` used as a function derives the sibling string of an enum in
+// expression position, returning the transformed record as a value.
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 1001,
+  activity_id: 1,
+}
+derived = ocsf::derive(this)
+this = {
+  activity_id: derived.activity_id,
+  activity_name: derived.activity_name,
+}

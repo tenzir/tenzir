@@ -1,0 +1,5 @@
+{
+  class_uid: 1001,
+  activity_id: 1,
+  activity_name: null,
+}

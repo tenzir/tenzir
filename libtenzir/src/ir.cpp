@@ -8,6 +8,7 @@
 
 #include "tenzir/ir.hpp"
 
+#include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/async.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
@@ -217,6 +218,63 @@ private:
   std::vector<ast::field_path> moved_fields_;
 };
 
+/// Exec operator for a function used in operator position. Evaluates the
+/// `this`-injected function call per slice and emits the resulting record
+/// series parts as events, preserving each part's own schema name and dropping
+/// `null_type` parts (which is how the function signals dropped events).
+class FunctionAsOperator final : public Operator<table_slice, table_slice> {
+public:
+  FunctionAsOperator(ast::expression call, event_order order)
+    : call_{std::move(call)}, order_{order} {
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> {
+    auto slice = std::move(input);
+    if (slice.rows() == 0) {
+      co_return;
+    }
+    auto result = eval(call_, slice, ctx);
+    TENZIR_ASSERT(result.length() == detail::narrow<int64_t>(slice.rows()));
+    auto results = std::vector<table_slice>{};
+    for (const auto& part : result.parts()) {
+      const auto length = part.length();
+      if (length == 0) {
+        continue;
+      }
+      if (part.type.kind().is<null_type>()) {
+        // A `null_type` part stands in for dropped events.
+        continue;
+      }
+      if (not part.type.kind().is<record_type>()) {
+        diagnostic::warning("function used as operator must return a `record`, "
+                            "but got `{}`",
+                            part.type.kind())
+          .emit(ctx);
+        continue;
+      }
+      auto out = table_slice{
+        record_batch_from_struct_array(part.type.to_arrow_schema(),
+                                       as<arrow::StructArray>(*part.array)),
+        part.type,
+      };
+      out.import_time(slice.import_time());
+      results.push_back(std::move(out));
+    }
+    if (order_ != event_order::ordered) {
+      std::ranges::stable_sort(results, std::ranges::less{},
+                               &table_slice::schema);
+    }
+    for (auto& out : rebatch(std::move(results))) {
+      co_await push(std::move(out));
+    }
+  }
+
+private:
+  ast::expression call_;
+  event_order order_{};
+};
+
 } // namespace
 
 ir::SetIr::SetIr() : order_{event_order::ordered} {
@@ -324,6 +382,81 @@ auto make_set_ir(ast::assignment x) -> Box<ir::Operator> {
   assignments.push_back(std::move(x));
   return ir::SetIr{std::move(assignments)};
 }
+
+} // namespace
+
+ir::FunctionAsOperatorIr::FunctionAsOperatorIr()
+  : order_{event_order::ordered} {
+}
+
+ir::FunctionAsOperatorIr::FunctionAsOperatorIr(ast::expression call)
+  : call_{std::move(call)}, order_{event_order::ordered} {
+}
+
+auto ir::FunctionAsOperatorIr::name() const -> std::string {
+  return "FunctionAsOperatorIr";
+}
+
+auto ir::FunctionAsOperatorIr::copy() const -> Box<ir::Operator> {
+  return FunctionAsOperatorIr{*this};
+}
+
+auto ir::FunctionAsOperatorIr::move() && -> Box<ir::Operator> {
+  return FunctionAsOperatorIr{std::move(*this)};
+}
+
+auto ir::FunctionAsOperatorIr::substitute(substitute_ctx ctx, bool instantiate)
+  -> failure_or<void> {
+  (void)instantiate;
+  TRY(call_.substitute(ctx));
+  return {};
+}
+
+auto ir::FunctionAsOperatorIr::spawn(
+  element_type_tag input) && -> Option<AnyOperator> {
+  TENZIR_ASSERT(input.is<table_slice>());
+  return FunctionAsOperator{std::move(call_), order_};
+}
+
+auto ir::FunctionAsOperatorIr::optimize(
+  ir::optimize_filter filter, event_order order) && -> ir::optimize_result {
+  order_ = weaker_event_order(order_, order);
+  // The function fully rewrites the event and may drop rows, so we cannot push
+  // any predicate upstream through it. Keep the whole filter downstream.
+  auto ops = std::vector<Box<ir::Operator>>{};
+  ops.reserve(1 + filter.size());
+  ops.emplace_back(ir::FunctionAsOperatorIr{std::move(*this)});
+  for (auto& expr : filter) {
+    ops.push_back(make_where_ir(expr));
+  }
+  return {
+    {},
+    order_,
+    ir::pipeline{{}, std::move(ops)},
+  };
+}
+
+auto ir::FunctionAsOperatorIr::infer_type(element_type_tag input,
+                                          diagnostic_handler& dh) const
+  -> failure_or<std::optional<element_type_tag>> {
+  if (input.is_not<table_slice>()) {
+    diagnostic::error("this operator expected events").emit(dh);
+    return failure::promise();
+  }
+  return input;
+}
+
+namespace ir {
+
+template <class Inspector>
+auto inspect(Inspector& f, FunctionAsOperatorIr& x) -> bool {
+  return f.object(x).fields(f.field("call", x.call_),
+                            f.field("order", x.order_));
+}
+
+} // namespace ir
+
+namespace {
 
 struct IfArgs {
   ast::expression condition;
@@ -475,6 +608,10 @@ private:
 auto make_set_ir(std::vector<ast::assignment> assignments)
   -> Box<ir::Operator> {
   return ir::SetIr{std::move(assignments)};
+}
+
+auto make_function_as_operator_ir(ast::expression call) -> Box<ir::Operator> {
+  return ir::FunctionAsOperatorIr{std::move(call)};
 }
 
 auto combine_branch_types(std::optional<element_type_tag> lhs,
@@ -656,6 +793,7 @@ auto register_plugins_somewhat_hackily = std::invoke([]() {
   auto x = std::initializer_list<plugin*>{
     new inspection_plugin<ir::Operator, IfIr>{},
     new inspection_plugin<ir::Operator, ir::SetIr>{},
+    new inspection_plugin<ir::Operator, ir::FunctionAsOperatorIr>{},
     make_match_ir_inspection_plugin(),
   };
   for (auto y : x) {
@@ -696,8 +834,10 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
         if (x.op.ref.ns() == entity_ns::fn) {
           // A function that opted in via `usable_as_operator()` was used in
           // operator position. Verify its arguments against the declared
-          // signature, then desugar `… | f(args)` into `this = f(this, args)`,
-          // reusing the `set` machinery; the function must return a record.
+          // signature, then compile `… | f(args)` into a dedicated operator
+          // that evaluates `f(this, args)` per slice. The function must return
+          // a record; it may rename the event's schema and drop events (by
+          // returning `null` rows).
           auto ref = ctx.reg().get(x.op.ref);
           auto* fn = try_as<std::reference_wrapper<const function_plugin>>(ref);
           TENZIR_ASSERT(fn);
@@ -714,14 +854,10 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
           for (auto& arg : x.args) {
             args.push_back(std::move(arg));
           }
-          auto call = ast::function_call{std::move(x.op), std::move(args), loc,
-                                         /*method*/ false};
-          auto assignment = ast::assignment{ast::this_{loc}, location::unknown,
-                                            ast::expression{std::move(call)}};
-          TRY(assignment.left.bind(ctx));
-          TRY(resolve_assignment_left(assignment, ctx));
-          TRY(assignment.right.bind(ctx));
-          operators.push_back(make_set_ir(std::move(assignment)));
+          auto call = ast::expression{ast::function_call{
+            std::move(x.op), std::move(args), loc, /*method*/ false}};
+          TRY(call.bind(ctx));
+          operators.push_back(make_function_as_operator_ir(std::move(call)));
           return {};
         }
         auto& op = ctx.reg().get(x);

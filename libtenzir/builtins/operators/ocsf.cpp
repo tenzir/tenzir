@@ -13,7 +13,6 @@
 #include "tenzir/detail/string.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/ocsf_enums.hpp"
-#include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -87,6 +86,17 @@ auto make_string_list_function(std::shared_ptr<arrow::ListArray> list) -> auto {
   };
 }
 
+/// Materializes a record series as a single-schema table slice so that the
+/// existing slice-based OCSF logic can run over it.
+auto record_series_to_slice(const basic_series<record_type>& rec)
+  -> table_slice {
+  auto schema = type{rec.type};
+  return table_slice{
+    record_batch_from_struct_array(schema.to_arrow_schema(), *rec.array),
+    std::move(schema),
+  };
+}
+
 class caster {
 public:
   caster(location self, diagnostic_handler& dh, string_list profiles,
@@ -102,19 +112,14 @@ public:
   }
 
   auto cast(const table_slice& slice, const type& ty, std::string_view name)
-    -> table_slice {
+    -> series {
     auto array = check(to_record_batch(slice)->ToStructArray());
     TENZIR_ASSERT(array);
     auto result
       = cast(series{slice.schema(),
                     std::static_pointer_cast<arrow::Array>(std::move(array))},
              ty, value_path{});
-    auto schema = type{name, result.type};
-    return table_slice{
-      record_batch_from_struct_array(schema.to_arrow_schema(),
-                                     as<arrow::StructArray>(*result.array)),
-      std::move(schema),
-    };
+    return series{type{name, result.type}, std::move(result.array)};
   }
 
 private:
@@ -560,13 +565,8 @@ public:
     : drop_optional_{drop_optional}, drop_recommended_{drop_recommended} {
   }
 
-  auto trim(const table_slice& slice, const type& ty) -> table_slice {
-    auto result = trim(series{slice}, ty);
-    return table_slice{
-      record_batch_from_struct_array(result.type.to_arrow_schema(),
-                                     as<arrow::StructArray>(*result.array)),
-      std::move(result.type),
-    };
+  auto trim(const table_slice& slice, const type& ty) -> series {
+    return trim(series{slice}, ty);
   }
 
 private:
@@ -708,15 +708,14 @@ auto get_ocsf_schema(std::optional<std::string_view> version,
 
 auto process_trim_slice(const table_slice& slice, location self,
                         diagnostic_handler& dh, bool drop_optional,
-                        bool drop_recommended) -> std::vector<table_slice> {
-  auto result = std::vector<table_slice>{};
+                        bool drop_recommended) -> std::vector<series> {
+  auto result = std::vector<series>{};
   if (slice.rows() == 0) {
-    result.emplace_back();
     return result;
   }
   auto metadata = extract_metadata(slice, self, dh);
   if (not metadata) {
-    result.emplace_back();
+    result.push_back(series::null(null_type{}, slice.rows()));
     return result;
   }
   auto& version_array = metadata->version_array;
@@ -733,7 +732,7 @@ auto process_trim_slice(const table_slice& slice, location self,
   auto process = [&]() {
     auto schema = get_ocsf_schema(version, class_uid, self, dh);
     if (not schema) {
-      result.emplace_back();
+      result.push_back(series::null(null_type{}, end - begin));
       return;
     }
     result.push_back(trimmer{drop_optional, drop_recommended}.trim(
@@ -755,20 +754,19 @@ auto process_trim_slice(const table_slice& slice, location self,
 }
 
 auto process_derive_slice(const table_slice& slice, location self,
-                          diagnostic_handler& dh) -> std::vector<table_slice>;
+                          diagnostic_handler& dh) -> std::vector<series>;
 
 auto process_cast_slice(const table_slice& slice, location self,
                         diagnostic_handler& dh, bool preserve_variants,
                         bool null_fill, bool timestamp_to_ms)
-  -> std::vector<table_slice> {
-  auto result = std::vector<table_slice>{};
+  -> std::vector<series> {
+  auto result = std::vector<series>{};
   if (slice.rows() == 0) {
-    result.emplace_back();
     return result;
   }
   auto metadata = extract_metadata(slice, self, dh);
   if (not metadata) {
-    result.emplace_back();
+    result.push_back(series::null(null_type{}, slice.rows()));
     return result;
   }
   auto& version_array = metadata->version_array;
@@ -882,7 +880,7 @@ auto process_cast_slice(const table_slice& slice, location self,
   auto process = [&]() {
     auto schema = get_ocsf_schema(version, class_uid, self, dh);
     if (not schema) {
-      result.emplace_back();
+      result.push_back(series::null(null_type{}, end - begin));
       return;
     }
     auto extension = schema->type.attribute("extension");
@@ -892,7 +890,7 @@ auto process_cast_slice(const table_slice& slice, location self,
                           schema->class_name, *extension)
         .primary(self)
         .emit(dh);
-      result.emplace_back();
+      result.push_back(series::null(null_type{}, end - begin));
       return;
     }
     auto type_name = "ocsf." + schema->mangled_class_name;
@@ -921,61 +919,13 @@ auto process_cast_slice(const table_slice& slice, location self,
   return result;
 }
 
-class trim_operator final : public crtp_operator<trim_operator> {
-public:
-  trim_operator() = default;
-
-  trim_operator(struct location self, bool drop_optional, bool drop_recommended)
-    : self_{self},
-      drop_optional_{drop_optional},
-      drop_recommended_{drop_recommended} {
-  }
-
-  auto name() const -> std::string override {
-    return "ocsf::trim";
-  }
-
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    for (auto&& slice : input) {
-      auto output = process_trim_slice(slice, self_, ctrl.diagnostics(),
-                                       drop_optional_, drop_recommended_);
-      for (auto&& out : output) {
-        co_yield std::move(out);
-      }
-    }
-  }
-
-  auto optimize(expression const&, event_order) const
-    -> optimize_result override {
-    return do_not_optimize(*this);
-  }
-
-  friend auto inspect(auto& f, trim_operator& x) -> bool {
-    return f.object(x).fields(f.field("self", x.self_),
-                              f.field("drop_optional", x.drop_optional_),
-                              f.field("drop_recommended", x.drop_recommended_));
-  }
-
-private:
-  struct location self_;
-  bool drop_optional_{};
-  bool drop_recommended_{};
-};
-
 class deriver {
 public:
   deriver(location self, diagnostic_handler& dh) : self_{self}, dh_{dh} {
   }
 
-  auto derive(const table_slice& slice, const type& ty) -> table_slice {
-    auto result = derive(series{slice}, ty, value_path{});
-    return table_slice{
-      record_batch_from_struct_array(result.type.to_arrow_schema(),
-                                     as<arrow::StructArray>(*result.array)),
-      std::move(result.type),
-    };
+  auto derive(const table_slice& slice, const type& ty) -> series {
+    return derive(series{slice}, ty, value_path{});
   }
 
 private:
@@ -1539,15 +1489,14 @@ private:
 };
 
 auto process_derive_slice(const table_slice& slice, location self,
-                          diagnostic_handler& dh) -> std::vector<table_slice> {
-  auto result = std::vector<table_slice>{};
+                          diagnostic_handler& dh) -> std::vector<series> {
+  auto result = std::vector<series>{};
   if (slice.rows() == 0) {
-    result.emplace_back();
     return result;
   }
   auto metadata = extract_metadata(slice, self, dh);
   if (not metadata) {
-    result.emplace_back();
+    result.push_back(series::null(null_type{}, slice.rows()));
     return result;
   }
   auto& version_array = metadata->version_array;
@@ -1562,7 +1511,7 @@ auto process_derive_slice(const table_slice& slice, location self,
   auto process = [&]() {
     auto schema = get_ocsf_schema(version, class_uid, self, dh);
     if (not schema) {
-      result.emplace_back();
+      result.push_back(series::null(null_type{}, end - begin));
       return;
     }
     result.push_back(
@@ -1583,261 +1532,197 @@ auto process_derive_slice(const table_slice& slice, location self,
   return result;
 }
 
-class derive_operator final : public crtp_operator<derive_operator> {
-public:
-  derive_operator() = default;
-
-  derive_operator(struct location self) : self_{self} {
-  }
-
-  auto name() const -> std::string override {
-    return "ocsf::derive";
-  }
-
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    for (auto&& slice : input) {
-      auto output = process_derive_slice(slice, self_, ctrl.diagnostics());
-      for (auto&& out : output) {
-        co_yield std::move(out);
-      }
+/// Runs a slice-based OCSF transform over an evaluated record series, returning
+/// the resulting parts: a record series per `(version, class_uid, …)` group
+/// (renamed for `cast`), and a `null` part for any group whose events are
+/// dropped. The total length is preserved so the result is valid both as an
+/// expression value and, via `usable_as_operator()`, in operator position
+/// (where the bridge skips the `null` parts, dropping those events).
+template <class Process>
+auto run_ocsf_function(const ast::expression& expr, std::string_view name,
+                       function_use::evaluator eval, session ctx,
+                       Process process) -> multi_series {
+  return map_series(eval(expr), [&](series s) -> multi_series {
+    if (s.length() == 0) {
+      return s;
     }
-  }
-
-  auto optimize(expression const&, event_order) const
-    -> optimize_result override {
-    return do_not_optimize(*this);
-  }
-
-  friend auto inspect(auto& f, derive_operator& x) -> bool {
-    return f.object(x).fields(f.field("self", x.self_));
-  }
-
-private:
-  struct location self_;
-};
-
-class cast_operator final : public crtp_operator<cast_operator> {
-public:
-  cast_operator() = default;
-
-  cast_operator(struct location self, bool preserve_variants, bool null_fill,
-                bool timestamp_to_ms)
-    : self_{self},
-      preserve_variants_{preserve_variants},
-      null_fill_{null_fill},
-      timestamp_to_ms_{timestamp_to_ms} {
-  }
-
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    for (auto&& slice : input) {
-      auto output
-        = process_cast_slice(slice, self_, ctrl.diagnostics(),
-                             preserve_variants_, null_fill_, timestamp_to_ms_);
-      for (auto&& out : output) {
-        co_yield std::move(out);
-      }
+    auto rec = s.as<record_type>();
+    if (not rec) {
+      diagnostic::warning("`{}` expected `record`, but got `{}`", name,
+                          s.type.kind())
+        .primary(expr)
+        .emit(ctx);
+      return series::null(null_type{}, s.length());
     }
-  }
+    auto slice = record_series_to_slice(*rec);
+    return multi_series{process(slice, expr.get_location(), ctx)};
+  });
+}
 
-  auto optimize(expression const&, event_order) const
-    -> optimize_result override {
-    return do_not_optimize(*this);
-  }
-
+class cast_plugin final : public virtual function_plugin {
+public:
   auto name() const -> std::string override {
     return "ocsf::cast";
   }
 
-  friend auto inspect(auto& f, cast_operator& x) -> bool {
-    return f.object(x).fields(f.field("self_", x.self_),
-                              f.field("preserve_variants_",
-                                      x.preserve_variants_),
-                              f.field("null_fill_", x.null_fill_),
-                              f.field("timestamp_to_ms_", x.timestamp_to_ms_));
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
-private:
-  struct location self_;
-  bool preserve_variants_{};
-  bool null_fill_{};
-  bool timestamp_to_ms_{};
+  auto usable_as_operator() const -> Option<Signature> override {
+    return Signature{
+      .arguments = {
+        NamedArgument{.name = "encode_variants",
+                      .value_type = type{bool_type{}}},
+        NamedArgument{.name = "null_fill", .value_type = type{bool_type{}}},
+        NamedArgument{.name = "timestamp_to_ms",
+                      .value_type = type{bool_type{}}},
+      },
+    };
+  }
+
+  auto make_function(function_invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    auto encode_variants = false;
+    auto null_fill = false;
+    auto timestamp_to_ms = false;
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "record")
+          .named("encode_variants", encode_variants)
+          .named("null_fill", null_fill)
+          .named("timestamp_to_ms", timestamp_to_ms)
+          .parse(inv, ctx));
+    return function_use::make(
+      [expr = std::move(expr), encode_variants, null_fill,
+       timestamp_to_ms](evaluator eval, session ctx) -> multi_series {
+        return run_ocsf_function(
+          expr, "ocsf::cast", eval, ctx,
+          [&](const table_slice& slice, location loc, diagnostic_handler& dh) {
+            return process_cast_slice(slice, loc, dh, not encode_variants,
+                                      null_fill, timestamp_to_ms);
+          });
+      });
+  }
 };
 
-struct CastArgs {
-  bool encode_variants = false;
-  bool null_fill = false;
-  bool timestamp_to_ms = false;
-  location operator_location;
-};
-
-class Cast final : public Operator<table_slice, table_slice> {
+class trim_plugin final : public virtual function_plugin {
 public:
-  explicit Cast(CastArgs args) : args_{std::move(args)} {
+  auto name() const -> std::string override {
+    return "ocsf::trim";
   }
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    auto output = process_cast_slice(input, args_.operator_location, ctx.dh(),
-                                     not args_.encode_variants, args_.null_fill,
-                                     args_.timestamp_to_ms);
-    for (auto&& out : output) {
-      if (out.rows() == 0) {
-        continue;
-      }
-      co_await push(std::move(out));
-    }
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
-private:
-  CastArgs args_;
+  auto usable_as_operator() const -> Option<Signature> override {
+    return Signature{
+      .arguments = {
+        NamedArgument{.name = "drop_optional", .value_type = type{bool_type{}}},
+        NamedArgument{.name = "drop_recommended",
+                      .value_type = type{bool_type{}}},
+      },
+    };
+  }
+
+  auto make_function(function_invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    // TODO: Consider using a more intelligent default that is not simply based
+    // on attributes being optional.
+    auto drop_optional = true;
+    auto drop_recommended = false;
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "record")
+          .named("drop_optional", drop_optional)
+          .named("drop_recommended", drop_recommended)
+          .parse(inv, ctx));
+    return function_use::make(
+      [expr = std::move(expr), drop_optional,
+       drop_recommended](evaluator eval, session ctx) -> multi_series {
+        return run_ocsf_function(
+          expr, "ocsf::trim", eval, ctx,
+          [&](const table_slice& slice, location loc, diagnostic_handler& dh) {
+            return process_trim_slice(slice, loc, dh, drop_optional,
+                                      drop_recommended);
+          });
+      });
+  }
 };
 
-struct TrimArgs {
-  bool drop_optional = true;
-  bool drop_recommended = false;
-  location operator_location;
-};
-
-class Trim final : public Operator<table_slice, table_slice> {
+class derive_plugin final : public virtual function_plugin {
 public:
-  explicit Trim(TrimArgs args) : args_{std::move(args)} {
+  auto name() const -> std::string override {
+    return "ocsf::derive";
   }
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    auto output
-      = process_trim_slice(input, args_.operator_location, ctx.dh(),
-                           args_.drop_optional, args_.drop_recommended);
-    for (auto&& out : output) {
-      if (out.rows() == 0) {
-        continue;
-      }
-      co_await push(std::move(out));
-    }
+  auto is_deterministic() const -> bool override {
+    return true;
   }
 
-private:
-  TrimArgs args_;
+  auto usable_as_operator() const -> Option<Signature> override {
+    return Signature{};
+  }
+
+  auto make_function(function_invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "record")
+          .parse(inv, ctx));
+    return function_use::make(
+      [expr = std::move(expr)](evaluator eval, session ctx) -> multi_series {
+        return run_ocsf_function(expr, "ocsf::derive", eval, ctx,
+                                 [&](const table_slice& slice, location loc,
+                                     diagnostic_handler& dh) {
+                                   return process_derive_slice(slice, loc, dh);
+                                 });
+      });
+  }
 };
 
-struct DeriveArgs {
-  location operator_location;
-};
-
-class Derive final : public Operator<table_slice, table_slice> {
-public:
-  explicit Derive(DeriveArgs args) : args_{std::move(args)} {
-  }
-
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    auto output
-      = process_derive_slice(input, args_.operator_location, ctx.dh());
-    for (auto&& out : output) {
-      if (out.rows() == 0) {
-        continue;
-      }
-      co_await push(std::move(out));
-    }
-  }
-
-private:
-  DeriveArgs args_;
-};
-
-class apply_plugin final : public operator_factory_plugin {
+class apply_plugin final : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "ocsf::apply";
   }
 
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto usable_as_operator() const -> Option<Signature> override {
+    return Signature{
+      .arguments = {
+        NamedArgument{.name = "preserve_variants",
+                      .value_type = type{bool_type{}}},
+      },
+    };
+  }
+
+  auto make_function(function_invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
     auto preserve_variants = false;
-    argument_parser2::operator_(name())
-      .named("preserve_variants", preserve_variants)
-      .parse(inv, ctx)
-      .ignore();
+    TRY(argument_parser2::function(name())
+          .positional("x", expr, "record")
+          .named("preserve_variants", preserve_variants)
+          .parse(inv, ctx));
     diagnostic::warning("`ocsf::apply` is deprecated")
-      .primary(inv.self.get_location())
+      .primary(expr)
       .hint("consider using `ocsf::cast` instead")
       .emit(ctx);
-    return std::make_unique<cast_operator>(inv.self.get_location(),
-                                           preserve_variants, true, false);
-  }
-};
-
-class cast_plugin final : public virtual operator_plugin2<cast_operator>,
-                          public virtual OperatorPlugin {
-public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto encode_variants = false;
-    auto timestamp_to_ms = false;
-    auto null_fill = false;
-    TRY(argument_parser2::operator_(name())
-          .named("encode_variants", encode_variants)
-          .named("null_fill", null_fill)
-          .named("timestamp_to_ms", timestamp_to_ms)
-          .parse(inv, ctx));
-    return std::make_unique<cast_operator>(
-      inv.self.get_location(), not encode_variants, null_fill, timestamp_to_ms);
-  }
-
-  auto describe() const -> Description override {
-    auto d = Describer<CastArgs, Cast>{};
-    d.named("encode_variants", &CastArgs::encode_variants);
-    d.named("null_fill", &CastArgs::null_fill);
-    d.named("timestamp_to_ms", &CastArgs::timestamp_to_ms);
-    d.operator_location(&CastArgs::operator_location);
-    return d.invariant_order();
-  }
-};
-
-class trim_plugin final : public virtual operator_plugin2<trim_operator>,
-                          public virtual OperatorPlugin {
-public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    // TODO: Consider using a more intelligent default that is not simply
-    // based on attributes being optional.
-    auto drop_optional = true;
-    auto drop_recommended = false;
-    argument_parser2::operator_(name())
-      .named("drop_optional", drop_optional)
-      .named("drop_recommended", drop_recommended)
-      .parse(inv, ctx)
-      .ignore();
-    return std::make_unique<trim_operator>(inv.self.get_location(),
-                                           drop_optional, drop_recommended);
-  }
-
-  auto describe() const -> Description override {
-    auto d = Describer<TrimArgs, Trim>{};
-    d.named("drop_optional", &TrimArgs::drop_optional);
-    d.named("drop_recommended", &TrimArgs::drop_recommended);
-    d.operator_location(&TrimArgs::operator_location);
-    return d.invariant_order();
-  }
-};
-
-class derive_plugin final : public virtual operator_plugin2<derive_operator>,
-                            public virtual OperatorPlugin {
-public:
-  auto make(operator_factory_invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    argument_parser2::operator_(name()).parse(inv, ctx).ignore();
-    return std::make_unique<derive_operator>(inv.self.get_location());
-  }
-
-  auto describe() const -> Description override {
-    auto d = Describer<DeriveArgs, Derive>{};
-    d.operator_location(&DeriveArgs::operator_location);
-    return d.invariant_order();
+    return function_use::make([expr = std::move(expr), preserve_variants](
+                                evaluator eval, session ctx) -> multi_series {
+      return run_ocsf_function(
+        expr, "ocsf::apply", eval, ctx,
+        [&](const table_slice& slice, location loc, diagnostic_handler& dh) {
+          return process_cast_slice(slice, loc, dh, preserve_variants,
+                                    /*null_fill*/ true,
+                                    /*timestamp_to_ms*/ false);
+        });
+    });
   }
 };
 
