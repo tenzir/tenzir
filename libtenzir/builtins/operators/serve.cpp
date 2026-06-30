@@ -1324,7 +1324,9 @@ public:
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (input.rows() == 0) {
+    if (input.rows() == 0 or stopped_) {
+      // Once graceful shutdown began we drop any further input instead of
+      // buffering it for the client.
       co_return;
     }
     auto result = co_await async_mail(atom::put_v, args_.id, std::move(input))
@@ -1334,6 +1336,15 @@ public:
         .note("failed to buffer events at serve-manager")
         .emit(ctx);
     }
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    // On graceful shutdown we stop buffering input for the client. Any input
+    // accepted after this point is dropped instead of being forwarded to the
+    // serve-manager.
+    TENZIR_UNUSED(ctx);
+    stopped_ = true;
+    co_return;
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
@@ -1352,6 +1363,7 @@ private:
   ServeArgs args_;
   serve_manager_actor serve_manager_;
   caf::actor lifetime_actor_;
+  bool stopped_ = false;
 };
 
 // -- serve operator ----------------------------------------------------------
