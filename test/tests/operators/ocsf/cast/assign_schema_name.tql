@@ -1,0 +1,16 @@
+// Regression: assigning a named `ocsf::cast` result to `this` must rename the
+// event's schema to the OCSF class, rather than keeping the input schema name.
+// This mirrors the common pattern of casting a nested record and replacing the
+// event with the result.
+from {
+  metadata: {
+    version: "1.8.0",
+  },
+  class_uid: 4001,
+}
+this = {
+  ocsf: this,
+  _meta: 42,
+}
+this = ocsf.ocsf::cast(null_fill=true)
+select name = @name

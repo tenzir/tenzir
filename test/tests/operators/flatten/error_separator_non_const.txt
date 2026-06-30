@@ -1,0 +1,6 @@
+error: argument `separator` must be a constant
+ --> tests/operators/flatten/error_separator_non_const.tql:6:9
+  |
+6 | flatten s
+  |         ^ 
+  |

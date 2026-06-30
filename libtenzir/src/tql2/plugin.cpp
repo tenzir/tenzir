@@ -149,37 +149,41 @@ auto function_plugin::function_name() const -> std::string {
 
 namespace {
 
-/// Type-check a single constant argument against its declared type. Arguments
-/// that are unconstrained or not statically evaluable are accepted; the latter
-/// are verified at runtime when the function is instantiated.
-auto verify_argument_type(std::string_view name,
-                          const std::optional<type>& value_type,
-                          const ast::expression& expr, session ctx)
+/// Verify a single operator-position argument. When a function is used as an
+/// operator, its operator-facing arguments are parsed by `argument_parser2`
+/// inside `make_function`, which requires compile-time constants; a non-const
+/// argument would compile here but fail during per-slice evaluation and silently
+/// drop events. We therefore reject any argument that is not statically
+/// evaluable, and additionally type-check those that carry a declared type.
+auto verify_argument(std::string_view name,
+                     const std::optional<type>& value_type,
+                     const ast::expression& expr, session ctx)
   -> failure_or<void> {
-  if (not value_type) {
-    return {};
-  }
   auto value = try_const_eval(expr, ctx);
   if (not value) {
-    return {};
+    diagnostic::error("argument `{}` must be a constant", name)
+      .primary(expr)
+      .emit(ctx);
+    return failure::promise();
   }
-  if (type_check(*value_type, *value)) {
-    return {};
+  if (value_type and not type_check(*value_type, *value)) {
+    auto actual = type::infer(*value);
+    auto actual_str
+      = actual ? fmt::format("{}", *actual) : std::string{"unknown"};
+    diagnostic::error("argument `{}` must be of type `{}` (got `{}`)", name,
+                      fmt::format("{}", *value_type), actual_str)
+      .primary(expr)
+      .emit(ctx);
+    return failure::promise();
   }
-  auto actual = type::infer(*value);
-  auto actual_str
-    = actual ? fmt::format("{}", *actual) : std::string{"unknown"};
-  diagnostic::error("argument `{}` must be of type `{}` (got `{}`)", name,
-                    fmt::format("{}", *value_type), actual_str)
-    .primary(expr)
-    .emit(ctx);
-  return failure::promise();
+  return {};
 }
 
 } // namespace
 
-auto function_plugin::Signature::verify(const ast::invocation& inv,
-                                        session ctx) const -> failure_or<void> {
+auto function_plugin::Signature::verify(std::span<const ast::expression> args,
+                                        location op_loc, session ctx) const
+  -> failure_or<void> {
   using PositionalArgument = function_plugin::PositionalArgument;
   using NamedArgument = function_plugin::NamedArgument;
   auto result = failure_or<void>{};
@@ -200,7 +204,7 @@ auto function_plugin::Signature::verify(const ast::invocation& inv,
   }
   auto seen = std::unordered_set<std::string>{};
   auto positional_idx = size_t{0};
-  for (const auto& arg : inv.args) {
+  for (const auto& arg : args) {
     const auto* assignment = try_as<ast::assignment>(arg);
     if (assignment) {
       // Named argument: `name=value`.
@@ -239,7 +243,7 @@ auto function_plugin::Signature::verify(const ast::invocation& inv,
         fail();
         continue;
       }
-      if (verify_argument_type(name, (*it)->value_type, assignment->right, ctx)
+      if (verify_argument(name, (*it)->value_type, assignment->right, ctx)
             .is_error()) {
         fail();
       }
@@ -255,7 +259,7 @@ auto function_plugin::Signature::verify(const ast::invocation& inv,
     }
     const auto* positional = positionals[positional_idx];
     ++positional_idx;
-    if (verify_argument_type(positional->name, positional->value_type, arg, ctx)
+    if (verify_argument(positional->name, positional->value_type, arg, ctx)
           .is_error()) {
       fail();
     }
@@ -265,7 +269,7 @@ auto function_plugin::Signature::verify(const ast::invocation& inv,
     if (not positionals[i]->optional) {
       diagnostic::error("expected additional positional argument `{}`",
                         positionals[i]->name)
-        .primary(inv.op)
+        .primary(op_loc)
         .emit(ctx);
       fail();
     }
@@ -274,7 +278,7 @@ auto function_plugin::Signature::verify(const ast::invocation& inv,
   for (const auto* named : nameds) {
     if (named->required and not seen.contains(named->name)) {
       diagnostic::error("required argument `{}` was not provided", named->name)
-        .primary(inv.op)
+        .primary(op_loc)
         .emit(ctx);
       fail();
     }

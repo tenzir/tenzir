@@ -8,6 +8,7 @@
 
 #include "tenzir/ir.hpp"
 
+#include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/async.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
@@ -217,6 +218,63 @@ private:
   std::vector<ast::field_path> moved_fields_;
 };
 
+/// Exec operator for a function used in operator position. Evaluates the
+/// `this`-injected function call per slice and emits the resulting record
+/// series parts as events, preserving each part's own schema name and dropping
+/// `null_type` parts (which is how the function signals dropped events).
+class FunctionAsOperator final : public Operator<table_slice, table_slice> {
+public:
+  FunctionAsOperator(ast::expression call, event_order order)
+    : call_{std::move(call)}, order_{order} {
+  }
+
+  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> {
+    auto slice = std::move(input);
+    if (slice.rows() == 0) {
+      co_return;
+    }
+    auto result = eval(call_, slice, ctx);
+    TENZIR_ASSERT(result.length() == detail::narrow<int64_t>(slice.rows()));
+    auto results = std::vector<table_slice>{};
+    for (const auto& part : result.parts()) {
+      const auto length = part.length();
+      if (length == 0) {
+        continue;
+      }
+      if (part.type.kind().is<null_type>()) {
+        // A `null_type` part stands in for dropped events.
+        continue;
+      }
+      if (not part.type.kind().is<record_type>()) {
+        diagnostic::warning("function used as operator must return a `record`, "
+                            "but got `{}`",
+                            part.type.kind())
+          .emit(ctx);
+        continue;
+      }
+      auto out = table_slice{
+        record_batch_from_struct_array(part.type.to_arrow_schema(),
+                                       as<arrow::StructArray>(*part.array)),
+        part.type,
+      };
+      out.import_time(slice.import_time());
+      results.push_back(std::move(out));
+    }
+    if (order_ != event_order::ordered) {
+      std::ranges::stable_sort(results, std::ranges::less{},
+                               &table_slice::schema);
+    }
+    for (auto& out : rebatch(std::move(results))) {
+      co_await push(std::move(out));
+    }
+  }
+
+private:
+  ast::expression call_;
+  event_order order_{};
+};
+
 } // namespace
 
 ir::SetIr::SetIr() : order_{event_order::ordered} {
@@ -324,6 +382,110 @@ auto make_set_ir(ast::assignment x) -> Box<ir::Operator> {
   assignments.push_back(std::move(x));
   return ir::SetIr{std::move(assignments)};
 }
+
+} // namespace
+
+ir::FunctionAsOperatorIr::FunctionAsOperatorIr()
+  : order_{event_order::ordered} {
+}
+
+ir::FunctionAsOperatorIr::FunctionAsOperatorIr(ast::expression call)
+  : call_{std::move(call)}, order_{event_order::ordered} {
+}
+
+auto ir::FunctionAsOperatorIr::name() const -> std::string {
+  return "FunctionAsOperatorIr";
+}
+
+auto ir::FunctionAsOperatorIr::copy() const -> Box<ir::Operator> {
+  return FunctionAsOperatorIr{*this};
+}
+
+auto ir::FunctionAsOperatorIr::move() && -> Box<ir::Operator> {
+  return FunctionAsOperatorIr{std::move(*this)};
+}
+
+auto ir::FunctionAsOperatorIr::substitute(substitute_ctx ctx, bool instantiate)
+  -> failure_or<void> {
+  TRY(call_.substitute(ctx));
+  if (not instantiate) {
+    // `let` bindings are only fully resolved to constants during
+    // instantiation, so we defer signature verification until then.
+    return {};
+  }
+  auto* call = try_as<ast::function_call>(call_);
+  if (not call) {
+    return {};
+  }
+  // Re-derive the signature from the registry (rather than storing it on the
+  // node) so that nothing extra needs to be serialized between compilation and
+  // substitution. We now verify the operator-facing arguments, which exclude
+  // the leading injected `this`, against the declared signature.
+  auto sp = session_provider::make(ctx);
+  auto sess = sp.as_session();
+  auto ref = sess.reg().get(call->fn.ref);
+  auto* fn = try_as<std::reference_wrapper<const function_plugin>>(ref);
+  TENZIR_ASSERT(fn);
+  auto sig = fn->get().usable_as_operator();
+  TENZIR_ASSERT(sig.is_some());
+  TENZIR_ASSERT(not call->args.empty());
+  auto op_args = std::span<const ast::expression>{call->args}.subspan(1);
+  TRY(sig.unwrap().verify(op_args, call->fn.get_location(), sess));
+  return {};
+}
+
+auto ir::FunctionAsOperatorIr::spawn(
+  element_type_tag input) && -> Option<AnyOperator> {
+  TENZIR_ASSERT(input.is<table_slice>());
+  // Name the operator after the function so that metrics and profiling have a
+  // meaningful, non-empty name.
+  auto name = std::string{"function"};
+  if (auto* call = try_as<ast::function_call>(call_)) {
+    name = make_operator_name(call->fn);
+  }
+  return FunctionAsOperator{std::move(call_), order_}.with_name(
+    std::move(name));
+}
+
+auto ir::FunctionAsOperatorIr::optimize(
+  ir::optimize_filter filter, event_order order) && -> ir::optimize_result {
+  order_ = weaker_event_order(order_, order);
+  // The function fully rewrites the event and may drop rows, so we cannot push
+  // any predicate upstream through it. Keep the whole filter downstream.
+  auto ops = std::vector<Box<ir::Operator>>{};
+  ops.reserve(1 + filter.size());
+  ops.emplace_back(ir::FunctionAsOperatorIr{std::move(*this)});
+  for (auto& expr : filter) {
+    ops.push_back(make_where_ir(expr));
+  }
+  return {
+    {},
+    order_,
+    ir::pipeline{{}, std::move(ops)},
+  };
+}
+
+auto ir::FunctionAsOperatorIr::infer_type(element_type_tag input,
+                                          diagnostic_handler& dh) const
+  -> failure_or<std::optional<element_type_tag>> {
+  if (input.is_not<table_slice>()) {
+    diagnostic::error("this operator expected events").emit(dh);
+    return failure::promise();
+  }
+  return input;
+}
+
+namespace ir {
+
+template <class Inspector>
+auto inspect(Inspector& f, FunctionAsOperatorIr& x) -> bool {
+  return f.object(x).fields(f.field("call", x.call_),
+                            f.field("order", x.order_));
+}
+
+} // namespace ir
+
+namespace {
 
 struct IfArgs {
   ast::expression condition;
@@ -475,6 +637,10 @@ private:
 auto make_set_ir(std::vector<ast::assignment> assignments)
   -> Box<ir::Operator> {
   return ir::SetIr{std::move(assignments)};
+}
+
+auto make_function_as_operator_ir(ast::expression call) -> Box<ir::Operator> {
+  return ir::FunctionAsOperatorIr{std::move(call)};
 }
 
 auto combine_branch_types(std::optional<element_type_tag> lhs,
@@ -656,6 +822,7 @@ auto register_plugins_somewhat_hackily = std::invoke([]() {
   auto x = std::initializer_list<plugin*>{
     new inspection_plugin<ir::Operator, IfIr>{},
     new inspection_plugin<ir::Operator, ir::SetIr>{},
+    new inspection_plugin<ir::Operator, ir::FunctionAsOperatorIr>{},
     make_match_ir_inspection_plugin(),
   };
   for (auto y : x) {
@@ -693,19 +860,18 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
     auto result = match(
       std::move(stmt),
       [&](ast::invocation x) -> failure_or<void> {
-        if (x.op.ref.ns() == entity_ns::fn) {
-          // A function that opted in via `usable_as_operator()` was used in
-          // operator position. Verify its arguments against the declared
-          // signature, then desugar `… | f(args)` into `this = f(this, args)`,
-          // reusing the `set` machinery; the function must return a record.
-          auto ref = ctx.reg().get(x.op.ref);
-          auto* fn = try_as<std::reference_wrapper<const function_plugin>>(ref);
-          TENZIR_ASSERT(fn);
-          auto sig = fn->get().usable_as_operator();
-          TENZIR_ASSERT(sig.is_some());
-          auto sp = session_provider::make(ctx);
-          auto sess = sp.as_session();
-          TRY(sig.unwrap().verify(x, sess));
+        // Compiles a function that opted in via `usable_as_operator()` and is
+        // used in operator position. Verifies its arguments against the
+        // declared signature, then compiles `… | f(args)` into a dedicated
+        // operator that evaluates `f(this, args)` per slice. The function must
+        // return a record; it may rename the event's schema and drop events (by
+        // returning `null` rows).
+        auto compile_fn_as_operator
+          = [&](const function_plugin& fn) -> failure_or<void> {
+          TENZIR_ASSERT(fn.usable_as_operator().is_some());
+          // The signature is verified later in `FunctionAsOperatorIr::
+          // substitute`, once `let` bindings have been substituted, so that
+          // `let`-bound constants pass the constant check.
           // Inject the current event as the first positional argument.
           auto loc = x.op.get_location();
           auto args = std::vector<ast::expression>{};
@@ -714,36 +880,47 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
           for (auto& arg : x.args) {
             args.push_back(std::move(arg));
           }
-          auto call = ast::function_call{std::move(x.op), std::move(args), loc,
-                                         /*method*/ false};
-          auto assignment = ast::assignment{ast::this_{loc}, location::unknown,
-                                            ast::expression{std::move(call)}};
-          TRY(assignment.left.bind(ctx));
-          TRY(resolve_assignment_left(assignment, ctx));
-          TRY(assignment.right.bind(ctx));
-          operators.push_back(make_set_ir(std::move(assignment)));
+          auto call = ast::expression{ast::function_call{
+            std::move(x.op), std::move(args), loc, /*method*/ false}};
+          TRY(call.bind(ctx));
+          operators.push_back(make_function_as_operator_ir(std::move(call)));
           return {};
+        };
+        if (x.op.ref.ns() == entity_ns::fn) {
+          auto ref = ctx.reg().get(x.op.ref);
+          auto* fn = try_as<std::reference_wrapper<const function_plugin>>(ref);
+          TENZIR_ASSERT(fn);
+          return compile_fn_as_operator(fn->get());
         }
         auto& op = ctx.reg().get(x);
         return match(
           op.inner(),
           [&](const native_operator& op) -> failure_or<void> {
             if (not op.ir_plugin) {
-// FIXME: Decider whether to make a hard cut or not.
-#if 0
-              TENZIR_ASSERT(op.factory_plugin);
-              for (auto& x : x.args) {
-                // TODO: This doesn't work for operators which take
-                // subpipelines... Should we just disallow subpipelines here?
-                TRY(x.bind(ctx));
+              // The operator only provides an old-executor implementation
+              // (`factory_plugin`, no `ir_plugin`). If a function of the same
+              // name opted into operator position, fall back to the
+              // function-as-operator bridge so it remains runnable on the new
+              // executor via its function form.
+              auto fn_path = entity_path{
+                x.op.ref.pkg(),
+                std::vector<std::string>{x.op.ref.segments().begin(),
+                                         x.op.ref.segments().end()},
+                entity_ns::fn};
+              auto fn_result = ctx.reg().try_get(fn_path);
+              if (auto* ref = try_as<entity_ref>(fn_result)) {
+                if (auto* fn
+                    = try_as<std::reference_wrapper<const function_plugin>>(
+                      *ref);
+                    fn and fn->get().usable_as_operator().is_some()) {
+                  // Repoint the entity to the function namespace so the
+                  // compiled call resolves and names itself as the function,
+                  // matching the direct function-in-operator-position path
+                  // above.
+                  x.op.ref = std::move(fn_path);
+                  return compile_fn_as_operator(fn->get());
+                }
               }
-              operators.emplace_back(
-                legacy_ir{op.factory_plugin, std::move(x))};
-              // TODO: Empty substitution?
-              TRY(operators.back()->substitute(substitute_ctx{ctx, nullptr},
-                                               false));
-              return {};
-#else
               diagnostic::error(
                 "This operator is not available in Tenzir Node v6")
                 .primary(x.op)
@@ -751,7 +928,6 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
                 .hint("see https://tenzir.com/docs/guides/tenzir-v6-migration")
                 .emit(ctx);
               return failure::promise();
-#endif
             }
             // If there is a pipeline argument, we can't resolve `let`s in there
             // because the operator might introduce its own bindings. Thus, we

@@ -1,0 +1,7 @@
+// In expression position, an event that the operator would drop (here: missing
+// `metadata`) instead yields `null`, because a function cannot drop rows. The
+// same `null` is what the operator form skips to drop the event.
+from {
+  class_uid: 1001,
+}
+casted = ocsf::cast(this)

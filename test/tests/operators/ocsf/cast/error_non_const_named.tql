@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {class_uid: 1, metadata: {version: "1.5.0"}, flag: true}
+ocsf::cast null_fill=flag

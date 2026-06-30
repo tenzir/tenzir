@@ -1,0 +1,11 @@
+// Regression: `ocsf::trim` used as an operator preserves the input schema name
+// rather than emitting an empty name.
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 1001,
+  activity_id: 1,
+}
+ocsf::trim
+select name = @name

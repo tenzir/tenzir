@@ -20,6 +20,7 @@
 #include "tenzir/variant.hpp"
 
 #include <optional>
+#include <span>
 
 namespace tenzir {
 
@@ -183,13 +184,19 @@ public:
   struct Signature {
     std::vector<Argument> arguments;
 
-    /// Verify the arguments of an operator-position invocation against this
-    /// signature. Performs structural checks (positional arity, unknown /
-    /// duplicate / missing-required named arguments) and, for arguments that
-    /// are constant and carry a declared `value_type`, a type check. Emits
-    /// diagnostics and returns failure on any error.
-    auto verify(const ast::invocation& inv, session ctx) const
-      -> failure_or<void>;
+    /// Verify the operator-facing arguments of an operator-position invocation
+    /// against this signature. The arguments exclude the implicit leading
+    /// `this`; `op_loc` is the location of the operator name, used for
+    /// diagnostics about missing arguments. Performs structural checks
+    /// (positional arity, unknown / duplicate / missing-required named
+    /// arguments) and, for arguments that are constant and carry a declared
+    /// `value_type`, a type check. Emits diagnostics and returns failure on any
+    /// error.
+    ///
+    /// This must run after `let` bindings have been substituted, so that
+    /// `let`-bound constants pass the constant check.
+    auto verify(std::span<const ast::expression> args, location op_loc,
+                session ctx) const -> failure_or<void>;
   };
 
   virtual auto make_function(function_invocation inv, session ctx) const

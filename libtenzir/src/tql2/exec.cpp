@@ -429,6 +429,18 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
   for (auto& stmt : pipe.body) {
     auto result = stmt.match(
       [&](ast::invocation& x) -> failure_or<void> {
+        if (x.op.ref.ns() == entity_ns::fn) {
+          // The resolver may bind an operator-position name to a function that
+          // opted in via `usable_as_operator()`. Only the IR executor knows how
+          // to execute a function as an operator.
+          diagnostic::error("`{}` cannot be used as an operator here",
+                            fmt::join(x.op.ref.segments(), "::"))
+            .primary(x.op)
+            .note("using a function as an operator requires the `--neo` "
+                  "executor")
+            .emit(ctx);
+          return failure::promise();
+        }
         // TODO: Where do we check that this succeeds?
         TRY(auto op, ctx.reg().get(x).make(
                        operator_factory_invocation{

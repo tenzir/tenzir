@@ -1,0 +1,6 @@
+error: argument `null_fill` must be a constant
+ --> tests/operators/ocsf/cast/error_non_const_named.tql:6:22
+  |
+6 | ocsf::cast null_fill=flag
+  |                      ^^^^ 
+  |
