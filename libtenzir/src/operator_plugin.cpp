@@ -18,6 +18,7 @@
 #include "tenzir/tql2/eval.hpp"
 
 #include <algorithm>
+#include <iterator>
 #include <map>
 #include <ranges>
 
@@ -63,6 +64,10 @@ public:
   auto operator->() const -> const Description* {
     TENZIR_ASSERT(desc_);
     return desc_.get();
+  }
+
+  auto origin() const -> std::string_view {
+    return origin_;
   }
 
   template <class Inspector>
@@ -698,11 +703,32 @@ public:
             ir::pipeline{{}, std::move(replacement)}};
   }
 
+  auto try_merge_successor(ir::Operator& successor) -> bool override {
+    auto* other = dynamic_cast<GenericIr*>(&successor);
+    if (other == nullptr or not can_merge_drop() or not other->can_merge_drop()) {
+      return false;
+    }
+    args_.insert(args_.end(), std::move_iterator{other->args_.begin()},
+                 std::move_iterator{other->args_.end()});
+    order_ = weaker_event_order(order_, other->order_);
+    return true;
+  }
+
   auto main_location() const -> location override {
     return op_.get_location();
   }
 
 private:
+  auto can_merge_drop() const -> bool {
+    if (desc_.origin() != "tql2.drop" or not named_args_.empty() or pipeline_
+        or not filter_.empty()) {
+      return false;
+    }
+    return std::ranges::all_of(args_, [](const Arg& arg) {
+      return is<ast::field_path>(arg);
+    });
+  }
+
   friend auto inspect(auto& f, GenericIr& x) -> bool {
     return f.object(x).fields(
       f.field("op", x.op_), f.field("desc", x.desc_), f.field("args", x.args_),

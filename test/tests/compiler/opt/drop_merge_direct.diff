@@ -1,0 +1,112 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     from_ir {
+       events: [
+         record {
+           begin: 5..6,
+           items: [
+             field {
+               name: `a` @ 6..7,
+               expr: constant int64 1 @ 9..10
+             },
+             field {
+               name: `b` @ 12..13,
+               expr: constant int64 2 @ 15..16
+             },
+             field {
+               name: `c` @ 18..19,
+               expr: constant int64 3 @ 21..22
+             }
+           ],
+           end: 22..23
+         }
+       ],
+       self: 0..4
+     },
+     GenericIr {
+       op: {
+         path: [
+           `drop` @ 24..28
+         ],
+         ref: std::drop/op
+       },
+       desc: "tql2.drop",
+       args: [
+         field_path {
+           expr: root_field {
+             id: `a` @ 29..30,
+             has_question_mark: false
+           },
+           has_this: false,
+           path: [
+             {
+               id: `a` @ 29..30,
+               has_question_mark: false
+             }
+           ]
+-        }
+-      ],
+-      filter: [
+-        
+-      ],
+-      order: "ordered",
+-      named_args: [
+-        
+-      ]
+-    },
+-    GenericIr {
+-      op: {
+-        path: [
+-          `drop` @ 31..35
+-        ],
+-        ref: std::drop/op
+-      },
+-      desc: "tql2.drop",
+-      args: [
++        },
+         field_path {
+           expr: root_field {
+             id: `b` @ 36..37,
+             has_question_mark: false
+           },
+           has_this: false,
+           path: [
+             {
+               id: `b` @ 36..37,
+               has_question_mark: false
+             }
+           ]
+         }
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ 0..0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }

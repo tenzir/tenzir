@@ -1,0 +1,114 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     from_ir {
+       events: [
+         record {
+           begin: 5..6,
+           items: [
+             field {
+               name: `r` @ 6..7,
+               expr: record {
+                 begin: 9..10,
+                 items: [
+                   field {
+                     name: `foo` @ 10..13,
+                     expr: constant int64 1 @ 15..16
+                   }
+                 ],
+                 end: 16..17
+               }
+             },
+             field {
+               name: `key` @ 19..22,
+               expr: constant string "foo" @ 24..29
+             },
+             field {
+               name: `x` @ 31..32,
+               expr: constant int64 0 @ 34..35
+             }
+           ],
+           end: 35..36
+         }
+       ],
+       self: 0..4
+     },
+     SetIr {
+       assignments: [
+         {
+           left: field_path {
+             expr: root_field {
+               id: `x` @ 37..38,
+               has_question_mark: false
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `x` @ 37..38,
+                 has_question_mark: false
+               }
+             ]
+           },
+           equals: 39..40,
+           right: constant int64 1 @ 41..42
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: field_path {
+             expr: root_field {
+               id: `y` @ 43..44,
+               has_question_mark: false
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `y` @ 43..44,
+                 has_question_mark: false
+               }
+             ]
+           },
+           equals: 45..46,
+           right: index_expr {
+             expr: root_field {
+               id: `r` @ 47..48,
+               has_question_mark: false
+             },
+             lbracket: 48..49,
+             index: root_field {
+               id: `key` @ 49..52,
+               has_question_mark: false
+             },
+             rbracket: 52..53,
+             has_question_mark: false
+           }
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ 0..0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }

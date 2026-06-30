@@ -1,0 +1,6 @@
+from {
+  a: 1,
+  b: 2,
+}
+drop a
+drop a

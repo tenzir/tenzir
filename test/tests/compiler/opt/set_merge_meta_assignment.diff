@@ -1,0 +1,76 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     from_ir {
+       events: [
+         record {
+           begin: 5..6,
+           items: [
+             field {
+               name: `x` @ 6..7,
+               expr: constant int64 0 @ 9..10
+             }
+           ],
+           end: 10..11
+         }
+       ],
+       self: 0..4
+     },
+     SetIr {
+       assignments: [
+         {
+           left: meta {
+             kind: "name",
+             source: 12..17
+           },
+           equals: 18..19,
+           right: constant string "foo" @ 20..25
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: field_path {
+             expr: root_field {
+               id: `y` @ 26..27,
+               has_question_mark: false
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `y` @ 26..27,
+                 has_question_mark: false
+               }
+             ]
+           },
+           equals: 28..29,
+           right: constant int64 1 @ 30..31
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ 0..0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }
