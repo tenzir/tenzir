@@ -267,25 +267,28 @@ inline auto validate_table_name(std::string_view table, location table_loc,
   return true;
 }
 
-// `json=` accepts either a single field selector or a list of field selectors.
-// Extracts the validated, de-duplicated set of top-level column names that
-// should be created as ClickHouse `JSON` columns. The caller must ensure the
-// expression was actually provided (i.e. `expr.kind` is set).
+// `json=` and `low_cardinality=` each accept either a single field selector or
+// a list of field selectors. Extracts the validated, de-duplicated set of
+// top-level column names. `argument_name` selects the argument named in
+// diagnostics. The caller must ensure the expression was actually provided
+// (i.e. `expr.kind` is set).
 inline auto
-parse_json_field_argument(const ast::expression& expr, diagnostic_handler& dh)
+parse_field_list_argument(const ast::expression& expr, diagnostic_handler& dh,
+                          std::string_view argument_name = "json")
   -> failure_or<std::vector<located<std::string>>> {
   auto result = std::vector<located<std::string>>{};
   auto add = [&](const ast::expression& e) -> failure_or<void> {
     auto sel = ast::field_path::try_from(e);
     if (not sel or sel->has_this() or sel->path().size() != 1) {
-      diagnostic::error("`json` expects a top-level field")
+      diagnostic::error("`{}` expects a top-level field", argument_name)
         .primary(e.get_location())
         .emit(dh);
       return failure::promise();
     }
     const auto name = std::string{sel->path().front().id.name};
     if (not validate_identifier(name)) {
-      emit_invalid_identifier<true>("json", name, sel->get_location(), dh);
+      emit_invalid_identifier<true>(argument_name, name, sel->get_location(),
+                                    dh);
       return failure::promise();
     }
     for (const auto& existing : result) {
@@ -301,7 +304,7 @@ parse_json_field_argument(const ast::expression& expr, diagnostic_handler& dh)
     for (const auto& item : list->items) {
       const auto* item_expr = try_as<ast::expression>(item);
       if (not item_expr) {
-        diagnostic::error("`json` expects a field")
+        diagnostic::error("`{}` expects a field", argument_name)
           .primary(into_location(item))
           .emit(dh);
         return failure::promise();
@@ -312,6 +315,13 @@ parse_json_field_argument(const ast::expression& expr, diagnostic_handler& dh)
     TRY(add(expr));
   }
   return result;
+}
+
+// Backwards-compatible alias for the `json=` argument.
+inline auto
+parse_json_field_argument(const ast::expression& expr, diagnostic_handler& dh)
+  -> failure_or<std::vector<located<std::string>>> {
+  return parse_field_list_argument(expr, dh, "json");
 }
 
 struct operator_arguments {

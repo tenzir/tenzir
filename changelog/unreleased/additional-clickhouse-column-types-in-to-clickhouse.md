@@ -31,3 +31,17 @@ to_clickhouse table="events", host="localhost", mode="append"
 
 This also covers nullable and nested forms such as
 `LowCardinality(Nullable(String))` and `Nullable(DateTime64(6))`.
+
+The new `low_cardinality=` argument lets `to_clickhouse` *create*
+`LowCardinality(String)` columns, analogous to `json=`. Listed fields are
+created as `LowCardinality` instead of plain `String`:
+
+```tql
+from {id: 0, name: "alpha"}
+to_clickhouse table="events", primary=id, mode="create", low_cardinality=name
+// creates `name` as LowCardinality(Nullable(String))
+```
+
+Unlike `json`, every listed field must be present in the first event (its inner
+type is inferred from the data). `low_cardinality` is only supported for string
+columns.

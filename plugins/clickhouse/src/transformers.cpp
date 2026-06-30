@@ -1260,9 +1260,18 @@ auto make_functions_from_clickhouse(path_type& path,
   // `LowCardinality(X)` is a storage optimization that does not change the
   // logical type. ClickHouse's native INSERT path transparently wraps a plain
   // inner column into `LowCardinality`, so we strip the wrapper and recurse on
-  // the inner type, sending the plain column.
+  // the inner type, sending the plain column. The clickhouse-cpp client only
+  // supports this for `String`; it rejects or mishandles fixed-size inner types
+  // such as numerics, so we reject those here with a clear error.
   if (auto inner
       = unwrap_clickhouse_type_call(clickhouse_typename, "LowCardinality")) {
+    if (*inner != "String" and *inner != "Nullable(String)") {
+      diagnostic::error("ClickHouse column `{}` has unsupported type `{}`",
+                        fmt::join(path, "."), clickhouse_typename)
+        .note("`LowCardinality` is only supported for `String` columns")
+        .emit(dh);
+      return nullptr;
+    }
     return make_functions_from_clickhouse(path, *inner, dh);
   }
   // `DateTime64(N[, 'tz'])` of any scale/timezone (other than the canonical
