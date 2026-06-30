@@ -1,0 +1,22 @@
+// Combines a serve that has events (serve_multi_partial) with one that is
+// running but produces no events (serve_multi_idle). The endpoint must return
+// the available events alongside an empty, still-running entry for the idle
+// serve instead of waiting for it.
+api "/serve-multi", {
+  requests: [
+    {serve_id: "serve_multi_partial"},
+    {serve_id: "serve_multi_idle"},
+  ],
+  timeout: 10s,
+  min_events: 8,
+  max_events: 8,
+  schema: "never",
+}
+this = {
+  idle_state: serve_multi_idle.state,
+  idle_event_count: serve_multi_idle.events.length(),
+  data_event_count: serve_multi_partial.events.length(),
+}
+to_stdout {
+  write_tql
+}
