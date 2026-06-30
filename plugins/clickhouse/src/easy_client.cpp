@@ -204,15 +204,13 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
     TENZIR_ASSERT(not clickhouse_typename.empty());
     if (auto idx = low_cardinality_index(k)) {
       low_cardinality_seen[*idx] = true;
-      // The clickhouse-cpp client only supports `LowCardinality` over `String`;
-      // it rejects or mishandles fixed-size inner types such as numerics.
-      if (clickhouse_typename != "String"
-          and clickhouse_typename != "Nullable(String)") {
+      // `LowCardinality` can only wrap scalar types, not `Tuple`/`Array`.
+      if (clickhouse_typename.starts_with("Tuple(")
+          or clickhouse_typename.starts_with("Array(")) {
         diagnostic::error("column `{}` cannot be a `LowCardinality` column", k)
           .primary(args_.low_cardinality[*idx])
-          .note("`LowCardinality` is only supported for `string` columns, but "
-                "`{}` has the ClickHouse type `{}`",
-                k, clickhouse_typename)
+          .note("`LowCardinality` cannot wrap the inferred type `{}`",
+                clickhouse_typename)
           .emit(dh_);
         return failure::promise();
       }
@@ -266,6 +264,12 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
   // server's default max_query_size (256 KiB). Remove the limit for this
   // statement, as the query text is derived from the inferred schema.
   query.SetSetting("max_query_size", {"0", QuerySettingsField::IMPORTANT});
+  // ClickHouse rejects `LowCardinality` over fixed-size types (numerics, dates)
+  // unless this setting is enabled. `LowCardinality(String)` is always allowed.
+  if (not args_.low_cardinality.empty()) {
+    query.SetSetting("allow_suspicious_low_cardinality_types",
+                     {"1", QuerySettingsField::IMPORTANT});
+  }
   client_.Execute(query);
   return remote_fetch_schema_transformations(table_name);
 }

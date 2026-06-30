@@ -15,7 +15,7 @@ let
 in
 stdenv.mkDerivation {
   pname = "clickhouse-cpp";
-  version = "2.6.1-unstable-2026-06-03";
+  version = "2.6.1-unstable-2026-06-30";
 
   outputs = [
     "out"
@@ -23,11 +23,13 @@ stdenv.mkDerivation {
     #"dev"
   ];
 
+  # Temporary fork pin: adds general LowCardinality support (any inner type, not
+  # just String/FixedString). Track upstreaming and switch back once merged.
   src = fetchFromGitHub {
-    owner = "ClickHouse";
+    owner = "IyeOnline";
     repo = "clickhouse-cpp";
-    rev = "3f6bc3f0252c659672dde6bd44a9880f88be9201";
-    hash = "sha256-mxm9AimUlKRlGw0isj5pQxZSEhflrjIkCXP2ZSWKbZ0=";
+    rev = "e0d9d9f072e7550dd332f2ecbf129c360645e2a3";
+    hash = "sha256-aUB8+gWYc0LWbdNwJh4btBgAX32avm1VcMQTlMxGooU=";
   };
 
   nativeBuildInputs = [
