@@ -572,8 +572,7 @@ auto node(node_actor::stateful_pointer<node_state> self,
                                          params.error());
       }
       auto rp = self->make_response_promise<rest_response>();
-      auto deliver = [rp, self, desc, params, endpoint,
-                      request_id = std::move(request_id),
+      auto deliver = [rp, self, desc, params, endpoint, request_id,
                       start_time = std::chrono::steady_clock::now()](
                        caf::expected<rest_response> response) mutable {
         auto it = self->state().api_metrics_builders.find(desc.canonical_path);
@@ -618,6 +617,9 @@ auto node(node_actor::stateful_pointer<node_state> self,
       // not interfere with the typed api metrics.
       if (not desc.traceparent.empty()) {
         (*params)["traceparent"] = desc.traceparent;
+      }
+      if (not request_id.empty()) {
+        (*params)["request_id"] = request_id;
       }
       self->mail(atom::http_request_v, endpoint.endpoint_id, *params)
         .request(handler, caf::infinite)
