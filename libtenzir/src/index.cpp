@@ -30,6 +30,7 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/external_catalog.hpp"
 #include "tenzir/fbs/index.hpp"
 #include "tenzir/fbs/partition.hpp"
 #include "tenzir/fbs/partition_transform.hpp"
@@ -378,11 +379,62 @@ caf::error index_state::load_from_disk() {
   // We dont use the filesystem actor here because this function is only
   // called once during startup, when no other actors exist yet.
   std::error_code err{};
+  // Load externally-cataloged partitions (pruning metadata only). We do not
+  // read their .mdx files here; the catalog loads them on demand during lookup.
+  // The partition files themselves are expected to live under the index
+  // directory and are loaded through the regular query path.
+  auto external = std::vector<external_partition>{};
+  if (not external_catalog.empty()) {
+    auto parsed = load_external_catalog(external_catalog);
+    if (not parsed) {
+      return std::move(parsed.error());
+    }
+    external = std::move(*parsed);
+    TENZIR_VERBOSE("{} loaded {} externally-cataloged partitions from {}",
+                   *self, external.size(), external_catalog);
+  }
+  // Builds a synopsis from a manifest entry and registers the partition so it
+  // can be queried through the regular path. The synopsis carries the
+  // manifest's min/max type synopses plus a `field -> nullptr` mapping for
+  // every leaf, so the catalog can prune exactly as it would for a partition
+  // loaded from disk, without ever reading the `.mdx`.
+  auto make_external_synopsis
+    = [this](external_partition& e) -> partition_synopsis_pair {
+    auto ps = caf::make_copy_on_write<partition_synopsis>();
+    auto& u = ps.unshared();
+    u.schema = e.schema;
+    u.events = e.events;
+    u.min_import_time = e.min_import_time;
+    u.max_import_time = e.max_import_time;
+    u.version = e.version;
+    // The catalog relies on a `field -> nullptr` mapping for every leaf field
+    // during lookup; see partition_synopsis::add().
+    if (const auto* rt = try_as<record_type>(&e.schema)) {
+      for (const auto& leaf : rt->leaves()) {
+        u.field_synopses_.emplace(qualified_record_field{e.schema, leaf.index},
+                                  nullptr);
+      }
+    }
+    // Install the min/max type synopses from the manifest.
+    for (auto& syn : e.synopses) {
+      if (auto s = make_min_max_synopsis(syn.field_type, syn.min, syn.max)) {
+        u.type_synopses_[syn.field_type] = std::move(s);
+      }
+    }
+    persisted_partitions.emplace(e.id);
+    return partition_synopsis_pair{e.id, std::move(ps)};
+  };
   auto const file_exists = std::filesystem::exists(dir, err);
   if (not file_exists) {
-    TENZIR_VERBOSE("{} found no prior state, starting with a clean slate",
-                   *self);
-    self->mail(atom::start_v, std::vector<partition_synopsis_pair>{})
+    TENZIR_VERBOSE("{} found no prior state, starting with {} externally-"
+                   "cataloged partitions",
+                   *self, external.size());
+    auto synopses = std::vector<partition_synopsis_pair>{};
+    synopses.reserve(external.size());
+    for (auto& e : external) {
+      synopses.push_back(make_external_synopsis(e));
+    }
+    self->mail(atom::start_v, std::move(synopses))
       .request(catalog, caf::infinite)
       .then([](atom::ok) {},
             [this](caf::error err) {
@@ -390,6 +442,14 @@ caf::error index_state::load_from_disk() {
             });
     return caf::none;
   }
+  // The sorted set of externally-cataloged partition ids, used to exclude them
+  // from the regular full-synopsis load and from orphan cleanup.
+  auto external_ids = std::vector<uuid>{};
+  external_ids.reserve(external.size());
+  for (const auto& e : external) {
+    external_ids.push_back(e.id);
+  }
+  std::sort(external_ids.begin(), external_ids.end());
   // Start by finishing up any in-progress transforms.
   if (std::filesystem::is_directory(markersdir, err)) {
     auto error = [&]() -> caf::error {
@@ -508,6 +568,12 @@ caf::error index_state::load_from_disk() {
     }
     auto ext = entry.path().extension();
     if (ext.empty()) {
+      // Externally-cataloged partitions are loaded lazily from the manifest, so
+      // we skip them in the regular full-synopsis load.
+      if (std::binary_search(external_ids.begin(), external_ids.end(),
+                             partition_uuid)) {
+        continue;
+      }
       // Newer partitions are not limited to FLATBUFFERS_MAX_BUFFER_SIZE,
       // this is only a problem for older ones that still have `fbs::Partition`
       // as root type.
@@ -531,9 +597,14 @@ caf::error index_state::load_from_disk() {
   }
   std::sort(partition_ids.begin(), partition_ids.end());
   std::sort(synopsis_files.begin(), synopsis_files.end());
+  // Treat both regular and externally-cataloged partitions as known, so we
+  // don't delete synopsis files that belong to externally-cataloged partitions.
+  auto known_ids = partition_ids;
+  known_ids.insert(known_ids.end(), external_ids.begin(), external_ids.end());
+  std::sort(known_ids.begin(), known_ids.end());
   auto orphans = std::vector<uuid>{};
   std::set_difference(synopsis_files.begin(), synopsis_files.end(),
-                      partition_ids.begin(), partition_ids.end(),
+                      known_ids.begin(), known_ids.end(),
                       std::back_inserter(orphans));
   // Do a bit of housekeeping. MDX files without matching partitions shouldn't
   // be there in the first place.
@@ -647,6 +718,10 @@ caf::error index_state::load_from_disk() {
       TENZIR_VERBOSE("{} failed to load partition {}: {}", *self,
                      partition_uuid, error);
     }
+  }
+  // Append the synopses for externally-cataloged partitions.
+  for (auto& e : external) {
+    synopses.push_back(make_external_synopsis(e));
   }
   // Recommend the user to run 'tenzir-ctl rebuild' if any partition syopses
   // are outdated. We need to nudge them a bit so we can drop support for older
@@ -1167,7 +1242,8 @@ index(index_actor::stateful_pointer<index_state> self,
       size_t max_buffered_events, size_t partition_capacity,
       duration active_partition_timeout, size_t max_inmem_partitions,
       size_t max_concurrent_partition_lookups,
-      const std::filesystem::path& catalog_dir, index_config index_config) {
+      const std::filesystem::path& catalog_dir, index_config index_config,
+      std::filesystem::path external_catalog) {
   TENZIR_TRACE("index {} {} {} {} {} {} {} {} {}", TENZIR_ARG(self->id()),
                TENZIR_ARG(filesystem), TENZIR_ARG(dir),
                TENZIR_ARG(partition_capacity),
@@ -1208,6 +1284,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state().dir = dir;
   self->state().synopsisdir = catalog_dir;
   self->state().markersdir = dir / "markers";
+  self->state().external_catalog = std::move(external_catalog);
   self->state().partition_capacity = partition_capacity;
   self->state().max_buffered_events = max_buffered_events;
   self->state().active_partition_timeout = active_partition_timeout;
