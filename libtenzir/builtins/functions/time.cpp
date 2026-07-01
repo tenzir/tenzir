@@ -212,6 +212,41 @@ auto resolve_missing_year(std::tm& tm, time reference, long offset) -> bool {
   return true;
 }
 
+auto resolve_missing_date(std::tm& tm, const std::tm& reference_tm,
+                          time reference, long offset) -> bool {
+  auto best = std::optional<std::tm>{};
+  auto best_delta = std::optional<duration>{};
+  // Try the reference date and its neighbors so that times of day shortly
+  // before or after the reference resolve to the closest instant instead of
+  // up to a day away. `timegm` normalizes day 0 and day 32 across month and
+  // year boundaries.
+  for (auto day_shift = -1; day_shift <= 1; ++day_shift) {
+    auto candidate = tm;
+    candidate.tm_year = reference_tm.tm_year;
+    candidate.tm_mon = reference_tm.tm_mon;
+    candidate.tm_mday = reference_tm.tm_mday + day_shift;
+    errno = 0;
+    const auto parsed = timegm(&candidate);
+    if (parsed == -1 and errno != 0) {
+      continue;
+    }
+    const auto candidate_time = time::clock::from_time_t(parsed - offset);
+    const auto delta = candidate_time > reference ? candidate_time - reference
+                                                  : reference - candidate_time;
+    if (not best_delta or delta < *best_delta) {
+      best = candidate;
+      best_delta = delta;
+    }
+  }
+  if (not best) {
+    return false;
+  }
+  tm.tm_year = best->tm_year;
+  tm.tm_mon = best->tm_mon;
+  tm.tm_mday = best->tm_mday;
+  return true;
+}
+
 class time_ final : public function_plugin {
 public:
   auto name() const -> std::string override {
@@ -735,16 +770,13 @@ public:
                       b->UnsafeAppendNull();
                       continue;
                     }
-                    if (needs_month) {
-                      tm.tm_mon = ref_tm->tm_mon;
-                    }
-                    if (needs_day) {
-                      tm.tm_mday = ref_tm->tm_mday;
-                    }
-                    if (parsed_date_fields.ordinal_day or needs_month
-                        or needs_day) {
-                      tm.tm_year = ref_tm->tm_year;
-                    } else if (not resolve_missing_year(tm, ref, offset)) {
+                    // The guard above leaves two cases: the format has no
+                    // date fields at all, or only the year is missing.
+                    const auto resolved
+                      = needs_month
+                          ? resolve_missing_date(tm, *ref_tm, ref, offset)
+                          : resolve_missing_year(tm, ref, offset);
+                    if (not resolved) {
                       error = true;
                       b->UnsafeAppendNull();
                       continue;
