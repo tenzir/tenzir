@@ -47,6 +47,7 @@
 // multiple times. We should revisit this in the future.
 
 #include "tenzir/async.hpp"
+#include "tenzir/async/channel.hpp"
 #include "tenzir/async/mail.hpp"
 #include "tenzir/detail/fanout_counter.hpp"
 
@@ -1366,6 +1367,16 @@ public:
             },
           };
         });
+    // The `put` request to the serve-manager applies backpressure by
+    // withholding its response until the client has drained the buffer. We must
+    // not block the operator's main loop on such a request, because otherwise a
+    // graceful shutdown (which is delivered as a control message on that same
+    // loop) could not interrupt it. Instead, we run each `put` in a background
+    // task and report completion through this channel, applying backpressure
+    // via `state()` by admitting only one in-flight `put` at a time.
+    auto [tx, rx] = channel<std::monostate>(1);
+    put_done_tx_ = std::make_shared<Sender<std::monostate>>(std::move(tx));
+    put_done_rx_ = std::make_shared<Receiver<std::monostate>>(std::move(rx));
     auto result = co_await async_mail(atom::start_v, args_.id,
                                       args_.buffer_size, lifetime_actor_)
                     .request(serve_manager_);
@@ -1383,19 +1394,56 @@ public:
       // buffering it for the client.
       co_return;
     }
-    auto result = co_await async_mail(atom::put_v, args_.id, std::move(input))
-                    .request(serve_manager_);
-    if (not result) {
-      diagnostic::error(result.error())
-        .note("failed to buffer events at serve-manager")
-        .emit(ctx);
+    // Forward the slice in a background task so that the main loop stays
+    // responsive to control messages while the serve-manager throttles us.
+    put_in_flight_ = true;
+    ctx.spawn_task([serve_manager = serve_manager_, id = args_.id,
+                    slice = std::move(input), tx = put_done_tx_,
+                    dh = &ctx.dh()]() mutable -> Task<void> {
+      auto result = co_await async_mail(atom::put_v, id, std::move(slice))
+                      .request(serve_manager);
+      if (not result) {
+        diagnostic::error(result.error())
+          .note("failed to buffer events at serve-manager")
+          .emit(*dh);
+      }
+      co_await tx->send(std::monostate{});
+    });
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    // Wait for the completion of an in-flight `put`. When there is none, this
+    // blocks until the next one completes.
+    auto msg = co_await put_done_rx_->recv();
+    if (not msg) {
+      co_await wait_forever();
     }
+    co_return {};
+  }
+
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(result, ctx);
+    put_in_flight_ = false;
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    // While a `put` is in flight, we do not admit further input. Once we are
+    // stopping, we accept and drop input so the pipeline can drain to
+    // end-of-input quickly.
+    if (stopped_) {
+      return OperatorState::normal;
+    }
+    return put_in_flight_ ? OperatorState::blocked : OperatorState::normal;
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
-    // On graceful shutdown we stop buffering input for the client. Any input
-    // accepted after this point is dropped instead of being forwarded to the
-    // serve-manager.
+    // On graceful shutdown we do not wait for the buffered data to be drained
+    // to the client. Instead, we tell the serve-manager to drop all data and
+    // release any pending `put` request so that the operator can shut down
+    // immediately.
     stopped_ = true;
     auto result
       = co_await async_mail(atom::stop_v, args_.id).request(serve_manager_);
@@ -1408,6 +1456,10 @@ public:
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    if (stopped_) {
+      // We already dropped all data during `stop()`.
+      co_return FinalizeBehavior::done;
+    }
     auto result
       = co_await async_mail(atom::shutdown_v, args_.id).request(serve_manager_);
     if (not result) {
@@ -1422,6 +1474,9 @@ private:
   ServeArgs args_;
   serve_manager_actor serve_manager_;
   caf::actor lifetime_actor_;
+  std::shared_ptr<Sender<std::monostate>> put_done_tx_;
+  std::shared_ptr<Receiver<std::monostate>> put_done_rx_;
+  bool put_in_flight_ = false;
   bool stopped_ = false;
 };
 
