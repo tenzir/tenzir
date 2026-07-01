@@ -190,6 +190,14 @@ public:
     server_ = std::make_unique<folly::coro::ServerSocket>(
       std::move(socket), address_, listen_backlog);
     tcp_metrics_ = make_metric_handler(ctx, tcp_metrics_type());
+    bytes_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "serve_tcp"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "serve_tcp"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::events);
     accept_loop_started_ = true;
     ctx.spawn_task([this, &ctx]() -> Task<void> {
       auto notify_finished = detail::scope_guard{[this, &ctx]() noexcept {
@@ -271,10 +279,18 @@ public:
       co_return;
     }
     auto& pipeline = as<SubHandle<table_slice>>(*sub);
+    // Count events at ingress: the number of rows accepted for serving. Egress
+    // event attribution is not possible here because the printer subpipeline
+    // is opaque, its output chunks carry no row count, and a single event may
+    // even span multiple chunks. Bytes, in contrast, are counted at egress in
+    // `broadcast_payload()` where per-client writes are exactly known.
+    auto const rows = input.rows();
     auto result = co_await pipeline.push(std::move(input));
     if (result.is_err()) {
       co_await request_stop();
+      co_return;
     }
+    events_counter_.add(rows);
   }
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
@@ -407,6 +423,9 @@ private:
     for (size_t i = 0; i < clients_.size();) {
       auto ok = co_await write_to_client(clients_[i], data);
       if (ok) {
+        // Count bytes per successful client write so the egress metric reflects
+        // the actual fan-out: each connected client is counted separately.
+        bytes_counter_.add(data.size());
         ++i;
         continue;
       }
@@ -496,6 +515,8 @@ private:
   Box<folly::CancellationSource> accept_cancel_{std::in_place};
   std::vector<Client> clients_;
   metric_handler tcp_metrics_ = {};
+  MetricsCounter bytes_counter_;
+  MetricsCounter events_counter_;
   bool accept_loop_started_ = false;
   Lifecycle lifecycle_ = Lifecycle::running;
 };
