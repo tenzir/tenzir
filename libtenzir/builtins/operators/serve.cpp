@@ -444,6 +444,9 @@ using serve_manager_actor = typed_actor_fwd<
     ->caf::result<void>,
   // Deregister a serve operator, waiting until it completed.
   auto(atom::stop, std::string serve_id)->caf::result<void>,
+  // Drop all buffered data and complete immediately, without waiting for the
+  // data to be drained to the client.
+  auto(atom::shutdown, std::string serve_id)->caf::result<void>,
   // Put additional slices into the buffer for the given access token.
   auto(atom::put, std::string serve_id, table_slice)->caf::result<void>,
   // Get slices from the buffer for the given access token, returning the next
@@ -665,6 +668,48 @@ struct serve_manager_state {
     return found->stop_rp;
   }
 
+  auto drop(std::string serve_id) -> caf::result<void> {
+    const auto found
+      = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
+          return op.serve_id == serve_id;
+        });
+    if (found == ops.end()) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("{} received request to drop for "
+                                         "unknown serve id {}",
+                                         *self, escape_operator_arg(serve_id)));
+    }
+    TENZIR_DEBUG("{} drops all buffered data for serve id {}", *self,
+                 escape_operator_arg(serve_id));
+    // Drop all buffered data and mark the operator as done so that subsequent
+    // requests observe a terminal state instead of waiting for a drain that
+    // will never happen.
+    found->buffer.clear();
+    found->done = true;
+    found->requested = 0;
+    found->delayed_attempt.dispose();
+    // Release the pipeline if we throttled it, so that the pending `put`
+    // request in the operator completes and the operator can shut down.
+    if (found->put_rp.pending()) {
+      found->put_rp.deliver();
+    }
+    // Complete any in-flight get requests with a terminal response. We keep the
+    // last continuation token acceptable so that a client polling with the
+    // previously advertised token still observes a completed response instead
+    // of an error.
+    found->last_continuation_token
+      = std::exchange(found->continuation_token, {});
+    for (auto&& get_rp : std::exchange(found->get_rps, {})) {
+      get_rp.deliver(
+        std::make_tuple(std::string{}, std::vector<table_slice>{}));
+    }
+    // Unblock a pending stop request, if any.
+    if (found->stop_rp.pending()) {
+      found->stop_rp.deliver();
+    }
+    return {};
+  }
+
   auto put(std::string serve_id, table_slice slice) -> caf::result<void> {
     const auto found
       = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
@@ -726,6 +771,12 @@ struct serve_manager_state {
         split(found->last_results, request.max_events).first);
     }
     if (found->continuation_token != request.continuation_token) {
+      // If the operator already reached a terminal state, e.g., because it was
+      // dropped on graceful shutdown, we report completion instead of an error
+      // for a client that polls with the previously advertised token.
+      if (found->done) {
+        return std::make_tuple(std::string{}, std::vector<table_slice>{});
+      }
       return caf::make_error(
         ec::invalid_argument,
         fmt::format("{} got request for events with unknown continuation token "
@@ -814,6 +865,9 @@ auto serve_manager(
     },
     [self](atom::stop, std::string& serve_id) -> caf::result<void> {
       return self->state().stop(std::move(serve_id));
+    },
+    [self](atom::shutdown, std::string& serve_id) -> caf::result<void> {
+      return self->state().drop(std::move(serve_id));
     },
     [self](atom::put, std::string& serve_id,
            table_slice& slice) -> caf::result<void> {
@@ -1342,9 +1396,14 @@ public:
     // On graceful shutdown we stop buffering input for the client. Any input
     // accepted after this point is dropped instead of being forwarded to the
     // serve-manager.
-    TENZIR_UNUSED(ctx);
     stopped_ = true;
-    co_return;
+    auto result
+      = co_await async_mail(atom::shutdown_v, args_.id).request(serve_manager_);
+    if (not result) {
+      diagnostic::error(result.error())
+        .note("failed to stop serve-manager")
+        .emit(ctx);
+    }
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
@@ -1354,7 +1413,6 @@ public:
       diagnostic::error(result.error())
         .note("failed to deregister at serve-manager")
         .emit(ctx);
-      co_return FinalizeBehavior::done;
     }
     co_return FinalizeBehavior::done;
   }
