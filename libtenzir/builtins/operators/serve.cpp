@@ -1300,6 +1300,14 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await OperatorBase::start(ctx);
+    bytes_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "serve"},
+                         MetricsDirection::write, MetricsVisibility::internal_,
+                         MetricsUnit::bytes);
+    events_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "serve"},
+                         MetricsDirection::write, MetricsVisibility::internal_,
+                         MetricsUnit::events);
     serve_manager_ = ctx.actor_system().registry().get<serve_manager_actor>(
       "tenzir.serve-manager");
     lifetime_actor_
@@ -1329,13 +1337,18 @@ public:
       // buffering it for the client.
       co_return;
     }
+    auto const rows = input.rows();
+    auto const bytes = input.approx_bytes();
     auto result = co_await async_mail(atom::put_v, args_.id, std::move(input))
                     .request(serve_manager_);
     if (not result) {
       diagnostic::error(result.error())
         .note("failed to buffer events at serve-manager")
         .emit(ctx);
+      co_return;
     }
+    bytes_counter_.add(bytes);
+    events_counter_.add(rows);
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
@@ -1364,6 +1377,8 @@ private:
   serve_manager_actor serve_manager_;
   caf::actor lifetime_actor_;
   bool stopped_ = false;
+  MetricsCounter bytes_counter_;
+  MetricsCounter events_counter_;
 };
 
 // -- serve operator ----------------------------------------------------------
