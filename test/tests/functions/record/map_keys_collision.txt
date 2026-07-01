@@ -1,0 +1,13 @@
+{
+  request: {
+    Host: "upper",
+    host: "lower",
+  },
+}
+warning: `map_keys` kept conflicting fields
+ --> tests/functions/record/map_keys_collision.tql:7:35
+  |
+7 | request = request.map_keys(key => key.to_lower())
+  |                                   ~~~~~~~~~~~~~~ 
+  |
+  = note: kept fields: `Host`
