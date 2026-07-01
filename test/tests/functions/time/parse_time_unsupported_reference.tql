@@ -2,6 +2,9 @@ from {
   week_without_year: "22 1",
   ordinal_without_year: "060 12:00:00",
   leap_ordinal_without_year: "366 12:00:00",
+  year_without_date: "2023",
+  weekday_without_date: "Monday 12:00:00",
+  week_without_date: "22 12:00:00",
   day_without_month: "5 18:16:21",
   month_with_invalid_reference_day: "Feb 12:00:00",
 }
@@ -21,6 +24,18 @@ leap_ordinal_reference_year = leap_ordinal_without_year.parse_time(
 invalid_reference_completed_date = month_with_invalid_reference_day.parse_time(
   "%b %H:%M:%S",
   reference=2026-01-31T00:00:00Z,
+)
+invalid_reference_date_for_year = year_without_date.parse_time(
+  "%Y",
+  reference=2024-02-29T00:00:00Z,
+)
+weekday_without_date_reference = weekday_without_date.parse_time(
+  "%A %H:%M:%S",
+  reference=2026-06-24T00:00:00Z,
+)
+week_without_date_reference = week_without_date.parse_time(
+  "%U %H:%M:%S",
+  reference=2026-06-24T00:00:00Z,
 )
 day_without_month_reference = day_without_month.parse_time(
   "%e %H:%M:%S",
