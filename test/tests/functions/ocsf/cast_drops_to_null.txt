@@ -1,0 +1,10 @@
+{
+  class_uid: 1001,
+  casted: null,
+}
+warning: dropping events where `metadata` does not exist
+ --> tests/functions/ocsf/cast_drops_to_null.tql:7:21
+  |
+7 | casted = ocsf::cast(this)
+  |                     ~~~~ 
+  |

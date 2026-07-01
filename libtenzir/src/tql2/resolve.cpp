@@ -14,6 +14,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/plugin.hpp"
 #include "tenzir/tql2/registry.hpp"
 
 #include <tsl/robin_map.h>
@@ -133,6 +134,41 @@ public:
         target_ns == entity_ns::op ? "operators" : "functions");
       std::move(builder).emit(diag_);
     };
+    // For operator invocations, a name may resolve either to an operator or to
+    // a function that opted in via `usable_as_operator()`. We search both
+    // namespaces interleaved by package tier (cfg -> std -> packages), trying
+    // the operator namespace before the function namespace within each tier.
+    // This way operators win within a tier, but an eligible function from an
+    // earlier tier (e.g. a builtin) outranks an operator from a later tier
+    // (e.g. an installed package). On success we resolve directly; on failure
+    // we fall through to the operator "not found" reporting below.
+    if (context_ == context_t::op_name) {
+      auto segments = std::vector<std::string>{};
+      segments.reserve(x.path.size());
+      for (auto& segment : x.path) {
+        segments.push_back(segment.name);
+      }
+      for (auto pkg : {std::string{entity_pkg_cfg}, std::string{entity_pkg_std},
+                       std::string{"packages"}}) {
+        for (auto ns : {entity_ns::op, entity_ns::fn}) {
+          auto path = entity_path{pkg, segments, ns};
+          auto result = reg_.try_get(path);
+          auto* ref = try_as<entity_ref>(result);
+          if (not ref) {
+            continue;
+          }
+          if (ns == entity_ns::fn) {
+            auto* fn
+              = try_as<std::reference_wrapper<const function_plugin>>(*ref);
+            if (not fn or fn->get().usable_as_operator().is_none()) {
+              continue;
+            }
+          }
+          x.ref = std::move(path);
+          return;
+        }
+      }
+    }
     // Because there currently is no way to bring additional entities into the
     // scope, we can directly dispatch to the registry.
     auto pkg = std::invoke([&]() -> std::optional<entity_pkg> {
