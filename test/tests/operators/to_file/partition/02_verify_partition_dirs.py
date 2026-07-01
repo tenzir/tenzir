@@ -23,6 +23,9 @@ def main() -> None:
                 for line in fh:
                     line = line.strip()
                     if line:
+                        event = json.loads(line)
+                        assert "id" in event, event
+                        assert "region" not in event, event
                         count += 1
         totals[d.name] = count
 
