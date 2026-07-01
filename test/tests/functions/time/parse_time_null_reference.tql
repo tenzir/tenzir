@@ -1,0 +1,8 @@
+from {
+  x: "May  5 18:16:21",
+}
+
+x = x.parse_time(
+  "%b %e %H:%M:%S",
+  reference=null,
+)

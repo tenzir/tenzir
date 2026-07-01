@@ -3,10 +3,22 @@ from {
   str2: "06/15/2024",
   str3: "15.06.2024",
   str4: "2024-06-15 14:30:45",
-  str5: "14:30:45",
   str6: "June 15, 2024",
   str7: "20240615",
   str8: "Saturday, June 15, 2024",
+  syslog_without_year: "May  5 18:16:21",
+  syslog_with_weekday: "Tue May  5 18:16:21",
+  syslog_with_weekday_nearest_match: "Mon May  5 18:16:21",
+  time_without_date: "14:30:45",
+  time_before_midnight: "23:59:58",
+  time_after_midnight: "00:00:02",
+  date_without_time: "May 5",
+  syslog_dec_before_feb: "Dec 31 23:59:59",
+  syslog_jan_after_dec: "Jan  1 00:00:01",
+  syslog_leap_day: "Feb 29 12:00:00",
+  syslog_leap_day_from_2022: "Feb 29 12:00:00",
+  syslog_leap_day_century_gap: "Feb 29 12:00:00",
+  syslog_with_utc_minus_10: "May  5 18:16:21 -1000",
   str9: null
 }
 
@@ -20,9 +32,6 @@ ts3 = str3.parse_time("%d.%m.%Y")
 // Parse date and time
 ts4 = str4.parse_time("%Y-%m-%d %H:%M:%S")
 
-// Parse time only (date defaults to 1970-01-01)
-ts5 = str5.parse_time("%H:%M:%S")
-
 // Parse with month name
 ts6 = str6.parse_time("%B %d, %Y")
 
@@ -34,3 +43,84 @@ ts8 = str8.parse_time("%A, %B %d, %Y")
 
 // Null handling
 ts9 = str9.parse_time("%Y-%m-%d")
+
+// `reference` can be dynamic.
+roundtrip_with_now = syslog_without_year.parse_time("%b %e %H:%M:%S", reference=now()).format_time("%b %e %H:%M:%S")
+
+// A weekday prefix is accepted for BSD-style timestamps but does not constrain
+// the year chosen from `reference`.
+weekday_calendar_date = syslog_with_weekday.parse_time(
+  "%a %b %e %H:%M:%S",
+  reference=2026-06-24T00:00:00Z,
+)
+
+weekday_calendar_date_ignores_weekday = syslog_with_weekday_nearest_match.parse_time(
+  "%a %b %e %H:%M:%S",
+  reference=2026-06-24T00:00:00Z,
+)
+
+// `reference` fills missing date fields, but not missing time fields. When
+// the format has no date fields at all, `parse_time` picks the day that
+// places the parsed time of day closest to the reference: 14:30:45 on June 23
+// is 9.5 hours before the reference, while June 24 would be 14.5 hours after.
+time_only_reference_date = time_without_date.parse_time(
+  "%H:%M:%S",
+  reference=2026-06-24T00:00:00Z,
+)
+
+// Times shortly before or after midnight resolve to the adjacent day instead
+// of almost a full day away.
+midnight_previous_day = time_before_midnight.parse_time(
+  "%H:%M:%S",
+  reference=2026-06-24T00:00:02Z,
+)
+midnight_next_day = time_after_midnight.parse_time(
+  "%H:%M:%S",
+  reference=2026-06-23T23:59:58Z,
+)
+date_only_reference_keeps_time_defaults = date_without_time.parse_time(
+  "%b %e",
+  reference=2026-06-24T13:37:42Z,
+)
+
+// Dec 31 is 31 days + 1 second before 2026-02-01, and much farther away in
+// 2026 or 2027.
+dec_closest_to_feb = syslog_dec_before_feb.parse_time(
+  "%b %e %H:%M:%S",
+  reference=2026-02-01T00:00:00Z,
+)
+
+// Jan 1, 2027 is 1 day + 1 second after 2026-12-31, closer than Jan 1 in 2026
+// or 2025.
+jan_closest_to_dec = syslog_jan_after_dec.parse_time(
+  "%b %e %H:%M:%S",
+  reference=2026-12-31T00:00:00Z,
+)
+
+// 2022-02-29 and 2023-02-29 are invalid, so 2024 is the closest valid year.
+leap_day_closest_valid_year = syslog_leap_day.parse_time(
+  "%b %e %H:%M:%S",
+  reference=2023-03-01T00:00:00Z,
+)
+
+// If all adjacent years are invalid for Feb 29, expand to the closest valid
+// leap year.
+leap_day_after_adjacent_years = syslog_leap_day_from_2022.parse_time(
+  "%b %e %H:%M:%S",
+  reference=2022-03-01T00:00:00Z,
+)
+
+// Century years like 2100 are not leap years unless divisible by 400. The
+// closest valid leap years can be four years away; ties pick the earlier year.
+leap_day_century_gap = syslog_leap_day_century_gap.parse_time(
+  "%b %e %H:%M:%S",
+  reference=2100-03-01T00:00:00Z,
+)
+
+// BSD syslog timestamps don't include a timezone. If the sender timezone is
+// known, include it in the input and parse it with %z. UTC-10 converts local
+// May 5 18:16:21 to May 6 04:16:21Z.
+utc_minus_10_sender = syslog_with_utc_minus_10.parse_time(
+  "%b %e %H:%M:%S %z",
+  reference=2026-05-06T00:00:00Z,
+)
