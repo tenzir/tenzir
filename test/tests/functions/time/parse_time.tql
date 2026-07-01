@@ -45,15 +45,14 @@ ts9 = str9.parse_time("%Y-%m-%d")
 // `reference` can be dynamic.
 roundtrip_with_now = syslog_without_year.parse_time("%b %e %H:%M:%S", reference=now()).format_time("%b %e %H:%M:%S")
 
-// A weekday prefix can constrain the year chosen for BSD-style timestamps.
+// A weekday prefix is accepted for BSD-style timestamps but does not constrain
+// the year chosen from `reference`.
 weekday_calendar_date = syslog_with_weekday.parse_time(
   "%a %b %e %H:%M:%S",
   reference=2026-06-24T00:00:00Z,
 )
 
-// May 5 is a Monday in 2025 and a Tuesday in 2026, so the weekday constrains
-// the nearest valid year.
-weekday_calendar_date_nearest_match = syslog_with_weekday_nearest_match.parse_time(
+weekday_calendar_date_ignores_weekday = syslog_with_weekday_nearest_match.parse_time(
   "%a %b %e %H:%M:%S",
   reference=2026-06-24T00:00:00Z,
 )
