@@ -1,0 +1,9 @@
+error: `max_events` must not be less than `min_events`
+ --> tests/operators/assert_throughput/invalid_range.tql:6:44
+  |
+6 | assert_throughput 3, within=1s, max_events=2
+  |                                            ^ 
+  ⋮
+6 | assert_throughput 3, within=1s, max_events=2
+  |                   - `min_events`
+  |

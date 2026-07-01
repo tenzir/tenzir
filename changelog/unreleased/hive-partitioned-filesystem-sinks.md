@@ -1,6 +1,6 @@
 ---
 title: Hive-partitioned filesystem sinks drop partition columns
-type: breaking
+type: change
 authors:
   - raxyte
 prs:

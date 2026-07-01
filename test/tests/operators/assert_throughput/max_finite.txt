@@ -1,0 +1,7 @@
+error: exceeded maximum throughput requirement
+ --> tests/operators/assert_throughput/max_finite.tql:6:44
+  |
+6 | assert_throughput 1, within=1h, max_events=2, retries=0
+  |                                            ^ 
+  |
+  = note: observed 3 events, expected at most 2
