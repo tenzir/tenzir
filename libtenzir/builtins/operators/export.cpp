@@ -333,15 +333,14 @@ public:
 
   auto stop(OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    // Only force the bridge down for a pure live wait. The bridge has no
-    // separate "stop accepting new live events" protocol, so when retro is
-    // also enabled we cannot tell whether the retro backlog has drained
-    // yet. Tearing down here would drop queued slices and in-flight
-    // partition reads. Pure retro exports also drain naturally via the
-    // bridge's empty-slice sentinel, so the only case that genuinely needs
-    // forced teardown is `live=true retro=false`, where the bridge would
-    // otherwise wait indefinitely.
-    if (not args_.live or args_.retro) {
+    // Pure retro exports drain naturally via the bridge's empty-slice
+    // sentinel, so they don't need forced teardown.
+    // For any live export (`live=true`, with or without `retro`) the bridge
+    // enters an indefinite live-wait after the retro backlog is consumed and
+    // will never send the sentinel on its own. Kill it so the pipeline can
+    // terminate. In-flight retro reads that haven't been pushed downstream
+    // yet may be dropped, which is acceptable under stop() semantics.
+    if (not args_.live) {
       co_return;
     }
     stopping_ = true;
