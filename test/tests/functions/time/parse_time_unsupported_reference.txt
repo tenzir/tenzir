@@ -5,6 +5,7 @@
   year_without_date: "2023",
   weekday_without_date: "Monday 12:00:00",
   week_without_date: "22 12:00:00",
+  iso_week_date: "2024 22 1",
   day_without_month: "5 18:16:21",
   month_with_invalid_reference_day: "Feb 12:00:00",
   week_date_reference_year: null,
@@ -14,84 +15,95 @@
   invalid_reference_date_for_year: null,
   weekday_without_date_reference: null,
   week_without_date_reference: null,
+  iso_week_date_reference: null,
   day_without_month_reference: null,
 }
 warning: `parse_time` cannot fill unsupported date fields from `reference`
-  --> tests/functions/time/parse_time_unsupported_reference.tql:14:13
+  --> tests/functions/time/parse_time_unsupported_reference.tql:15:13
    |
-14 |   reference=2024-01-01T00:00:00Z,
+15 |   reference=2024-01-01T00:00:00Z,
    |             ~~~~~~~~~~~~~~~~~~~~ 
    ⋮
-13 |   "%U %w",
+14 |   "%U %w",
    |   ------- 
    |
 
 warning: `parse_time` cannot fill unsupported date fields from `reference`
-  --> tests/functions/time/parse_time_unsupported_reference.tql:18:13
+  --> tests/functions/time/parse_time_unsupported_reference.tql:19:13
    |
-18 |   reference=2024-01-01T00:00:00Z,
+19 |   reference=2024-01-01T00:00:00Z,
    |             ~~~~~~~~~~~~~~~~~~~~ 
    ⋮
-17 |   "%j %H:%M:%S",
+18 |   "%j %H:%M:%S",
    |   ------------- 
    |
 
 warning: `parse_time` cannot fill unsupported date fields from `reference`
-  --> tests/functions/time/parse_time_unsupported_reference.tql:22:13
+  --> tests/functions/time/parse_time_unsupported_reference.tql:23:13
    |
-22 |   reference=2023-12-31T00:00:00Z,
+23 |   reference=2023-12-31T00:00:00Z,
    |             ~~~~~~~~~~~~~~~~~~~~ 
    ⋮
-21 |   "%j %H:%M:%S",
+22 |   "%j %H:%M:%S",
    |   ------------- 
    |
 
 warning: `parse_time` cannot fill unsupported date fields from `reference`
-  --> tests/functions/time/parse_time_unsupported_reference.tql:26:13
+  --> tests/functions/time/parse_time_unsupported_reference.tql:27:13
    |
-26 |   reference=2026-01-31T00:00:00Z,
+27 |   reference=2026-01-31T00:00:00Z,
    |             ~~~~~~~~~~~~~~~~~~~~ 
    ⋮
-25 |   "%b %H:%M:%S",
+26 |   "%b %H:%M:%S",
    |   ------------- 
    |
 
 warning: `parse_time` cannot fill unsupported date fields from `reference`
-  --> tests/functions/time/parse_time_unsupported_reference.tql:30:13
+  --> tests/functions/time/parse_time_unsupported_reference.tql:31:13
    |
-30 |   reference=2024-02-29T00:00:00Z,
+31 |   reference=2024-02-29T00:00:00Z,
    |             ~~~~~~~~~~~~~~~~~~~~ 
    ⋮
-29 |   "%Y",
+30 |   "%Y",
    |   ---- 
    |
 
 warning: `parse_time` cannot fill unsupported date fields from `reference`
-  --> tests/functions/time/parse_time_unsupported_reference.tql:34:13
+  --> tests/functions/time/parse_time_unsupported_reference.tql:35:13
    |
-34 |   reference=2026-06-24T00:00:00Z,
+35 |   reference=2026-06-24T00:00:00Z,
    |             ~~~~~~~~~~~~~~~~~~~~ 
    ⋮
-33 |   "%A %H:%M:%S",
+34 |   "%A %H:%M:%S",
    |   ------------- 
    |
 
 warning: `parse_time` cannot fill unsupported date fields from `reference`
-  --> tests/functions/time/parse_time_unsupported_reference.tql:38:13
+  --> tests/functions/time/parse_time_unsupported_reference.tql:39:13
    |
-38 |   reference=2026-06-24T00:00:00Z,
+39 |   reference=2026-06-24T00:00:00Z,
    |             ~~~~~~~~~~~~~~~~~~~~ 
    ⋮
-37 |   "%U %H:%M:%S",
+38 |   "%U %H:%M:%S",
    |   ------------- 
    |
 
 warning: `parse_time` cannot fill unsupported date fields from `reference`
-  --> tests/functions/time/parse_time_unsupported_reference.tql:42:13
+  --> tests/functions/time/parse_time_unsupported_reference.tql:43:13
    |
-42 |   reference=2026-06-24T00:00:00Z,
+43 |   reference=2026-01-01T00:00:00Z,
    |             ~~~~~~~~~~~~~~~~~~~~ 
    ⋮
-41 |   "%e %H:%M:%S",
+42 |   "%G %V %u",
+   |   ---------- 
+   |
+
+warning: `parse_time` cannot fill unsupported date fields from `reference`
+  --> tests/functions/time/parse_time_unsupported_reference.tql:47:13
+   |
+47 |   reference=2026-06-24T00:00:00Z,
+   |             ~~~~~~~~~~~~~~~~~~~~ 
+   ⋮
+46 |   "%e %H:%M:%S",
    |   ------------- 
    |

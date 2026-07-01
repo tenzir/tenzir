@@ -36,6 +36,7 @@ struct date_fields {
   bool day = false;
   bool ordinal_day = false;
   bool week_number = false;
+  bool iso_week_number = false;
   bool weekday = false;
 };
 
@@ -67,9 +68,12 @@ auto mark_date_field(date_fields& fields, char specifier) {
       fields.weekday = true;
       break;
     case 'U':
-    case 'V':
     case 'W':
       fields.week_number = true;
+      break;
+    case 'V':
+      fields.week_number = true;
+      fields.iso_week_number = true;
       break;
     case 'c':
     case 'D':
@@ -119,12 +123,10 @@ auto parse_date_fields(std::string_view format) -> date_fields {
   return result;
 }
 
-auto fields_match(const std::tm& lhs, const std::tm& rhs,
-                  bool include_weekday = false) -> bool {
+auto fields_match(const std::tm& lhs, const std::tm& rhs) -> bool {
   return lhs.tm_mon == rhs.tm_mon and lhs.tm_mday == rhs.tm_mday
          and lhs.tm_hour == rhs.tm_hour and lhs.tm_min == rhs.tm_min
-         and lhs.tm_sec == rhs.tm_sec
-         and (not include_weekday or lhs.tm_wday == rhs.tm_wday);
+         and lhs.tm_sec == rhs.tm_sec;
 }
 
 auto as_tm(time value) -> std::optional<std::tm> {
@@ -161,8 +163,7 @@ auto apply_ordinal_day(std::tm& tm) -> bool {
   return true;
 }
 
-auto resolve_missing_year(std::tm& tm, time reference, long offset,
-                          bool include_weekday) -> bool {
+auto resolve_missing_year(std::tm& tm, time reference, long offset) -> bool {
   const auto reference_tm = as_tm(reference);
   if (not reference_tm) {
     return false;
@@ -187,7 +188,7 @@ auto resolve_missing_year(std::tm& tm, time reference, long offset,
       if (gmtime_r(&parsed, &normalized) == nullptr) {
         continue;
       }
-      if (not fields_match(original, normalized, include_weekday)) {
+      if (not fields_match(original, normalized)) {
         continue;
       }
       const auto candidate_time = time::clock::from_time_t(parsed - offset);
@@ -677,6 +678,11 @@ public:
                   b->UnsafeAppendNull();
                   continue;
                 }
+                if (reference and parsed_date_fields.iso_week_number) {
+                  unsupported_reference = true;
+                  b->UnsafeAppendNull();
+                  continue;
+                }
                 const auto str = array.GetView(i);
                 auto tm = std::tm{};
                 nul_terminated = str;
@@ -738,8 +744,7 @@ public:
                     if (parsed_date_fields.ordinal_day or needs_month
                         or needs_day) {
                       tm.tm_year = ref_tm->tm_year;
-                    } else if (not resolve_missing_year(
-                                 tm, ref, offset, parsed_date_fields.weekday)) {
+                    } else if (not resolve_missing_year(tm, ref, offset)) {
                       error = true;
                       b->UnsafeAppendNull();
                       continue;
