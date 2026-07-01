@@ -17,6 +17,7 @@
 #include <caf/net/ssl/context.hpp>
 #include <curl/curl.h>
 #include <folly/io/async/SSLContext.h>
+#include <folly/ssl/PasswordCollector.h>
 #include <openssl/ssl.h>
 
 #include <algorithm>
@@ -38,11 +39,12 @@ tls_options::tls_options(located<data> tls_val, options opts)
 namespace {
 
 // Valid keys for the tls record (snake_case, no tls_ prefix)
-constexpr std::array<std::string_view, 8> valid_tls_record_keys = {
+constexpr std::array<std::string_view, 9> valid_tls_record_keys = {
   "skip_peer_verification",
   "cacert",
   "certfile",
   "keyfile",
+  "password",
   "min_version",
   "ciphers",
   "client_ca",
@@ -54,6 +56,28 @@ enum class tls_version {
   v1_1,
   v1_2,
   v1_3,
+};
+
+// A password collector that hands OpenSSL an in-memory password instead of
+// reading it from a file. folly only ships `PasswordInFile`, but our `password`
+// option carries the secret inline.
+class inline_password_collector final : public folly::ssl::PasswordCollector {
+public:
+  explicit inline_password_collector(std::string password)
+    : password_{std::move(password)} {
+  }
+
+  void getPassword(std::string& password, int /*size*/) const override {
+    password = password_;
+  }
+
+  auto describe() const -> const std::string& override {
+    static const auto description = std::string{"inline TLS key password"};
+    return description;
+  }
+
+private:
+  std::string password_;
 };
 
 auto parse_tls_version(std::string_view version) -> caf::expected<tls_version> {
@@ -806,6 +830,24 @@ auto TlsConfig::make_folly_ssl_context(diagnostic_handler& dh,
       return failure::promise();
     }
   }
+  // When acting as a server that requires client certificates, load the client
+  // CA so presented certificates can be validated, and advertise it in the
+  // `CertificateRequest` sent to clients. This mirrors the asio and http_server
+  // paths; without it, `require-client-cert` is silently not enforced.
+  if (require_cert and tls_client_ca) {
+    TRY(auto path, resolve_regular_file(*tls_client_ca, "client_ca", dh));
+    try {
+      ctx->loadTrustedCertificates(path.c_str());
+    } catch (std::exception const& ex) {
+      diagnostic::error("failed to load client CA certificate: {}", ex.what())
+        .primary(*tls_client_ca)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (auto* names = SSL_load_client_CA_file(path.c_str())) {
+      SSL_CTX_set_client_CA_list(ctx->getSSLCtx(), names);
+    }
+  }
   // Load certificate chain.
   if (certfile) {
     TRY(auto path, resolve_regular_file(*certfile, "certfile", dh));
@@ -817,6 +859,12 @@ auto TlsConfig::make_folly_ssl_context(diagnostic_handler& dh,
         .emit(dh);
       return failure::promise();
     }
+  }
+  // Apply the private key password, if any, before loading the key. OpenSSL
+  // queries this collector when the key file is encrypted.
+  if (password) {
+    ctx->passwordCollector(
+      std::make_shared<inline_password_collector>(password->inner));
   }
   // Load private key. If `keyfile` is omitted, try reading it from `certfile`.
   if (auto& private_key_file = keyfile ? keyfile : certfile) {
@@ -852,8 +900,18 @@ auto TlsConfig::make_folly_ssl_context(diagnostic_handler& dh,
       return failure::promise();
     }
   }
-  // Set verification mode.
-  if (skip_verify) {
+  // Set verification mode. Requiring a client certificate takes precedence over
+  // `skip_peer_verification`: a server that demands mTLS must reject clients
+  // that present no certificate (`SSL_VERIFY_FAIL_IF_NO_PEER_CERT`).
+  if (require_cert) {
+    ctx->setVerificationOption(
+      folly::SSLContext::SSLVerifyPeerEnum::VERIFY_REQ_CLIENT_CERT);
+    if (not cacert and not tls_client_ca
+        and SSL_CTX_set_default_verify_paths(ctx->getSSLCtx()) != 1) {
+      diagnostic::error("failed to enable default verify paths").emit(dh);
+      return failure::promise();
+    }
+  } else if (skip_verify) {
     ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::NO_VERIFY);
   } else {
     ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::VERIFY);
