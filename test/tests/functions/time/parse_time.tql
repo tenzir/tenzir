@@ -7,6 +7,8 @@ from {
   str7: "20240615",
   str8: "Saturday, June 15, 2024",
   syslog_without_year: "May  5 18:16:21",
+  syslog_with_weekday: "Tue May  5 18:16:21",
+  syslog_with_weekday_nearest_match: "Mon May  5 18:16:21",
   time_without_date: "14:30:45",
   date_without_time: "May 5",
   syslog_dec_before_feb: "Dec 31 23:59:59",
@@ -42,6 +44,19 @@ ts9 = str9.parse_time("%Y-%m-%d")
 
 // `reference` can be dynamic.
 roundtrip_with_now = syslog_without_year.parse_time("%b %e %H:%M:%S", reference=now()).format_time("%b %e %H:%M:%S")
+
+// A weekday prefix can constrain the year chosen for BSD-style timestamps.
+weekday_calendar_date = syslog_with_weekday.parse_time(
+  "%a %b %e %H:%M:%S",
+  reference=2026-06-24T00:00:00Z,
+)
+
+// May 5 is a Monday in 2025 and a Tuesday in 2026, so the weekday constrains
+// the nearest valid year.
+weekday_calendar_date_nearest_match = syslog_with_weekday_nearest_match.parse_time(
+  "%a %b %e %H:%M:%S",
+  reference=2026-06-24T00:00:00Z,
+)
 
 // `reference` fills missing date fields, but not missing time fields.
 time_only_reference_date = time_without_date.parse_time(
