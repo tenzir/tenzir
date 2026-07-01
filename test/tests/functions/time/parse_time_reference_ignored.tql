@@ -2,6 +2,7 @@ from {
   full_date: "2024-06-15",
   padded_year_date: "2024-06-15",
   ordinal_with_year: "2024 060 12:00:00",
+  iso_week_decorated: "2024-06-15 24",
 }
 
 full_date_reference_ignored = full_date.parse_time(
@@ -14,5 +15,12 @@ padded_year_reference_ignored = padded_year_date.parse_time(
 )
 ordinal_reference_ignored = ordinal_with_year.parse_time(
   "%Y %j %H:%M:%S",
+  reference=2026-06-24T00:00:00Z,
+)
+
+// ISO week fields next to a complete calendar date are decorative: the
+// complete date wins and `reference` is ignored instead of rejected.
+iso_week_decorated_reference_ignored = iso_week_decorated.parse_time(
+  "%Y-%m-%d %V",
   reference=2026-06-24T00:00:00Z,
 )

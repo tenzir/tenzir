@@ -38,6 +38,7 @@ struct date_fields {
   bool week_number = false;
   bool iso_week_number = false;
   bool weekday = false;
+  bool complete_calendar_date = false;
 };
 
 auto mark_date_field(date_fields& fields, char specifier) {
@@ -116,6 +117,9 @@ auto parse_date_fields(std::string_view format) -> date_fields {
     }
     mark_date_field(result, format[i]);
   }
+  // Record calendar completeness before week-based inference: a date derived
+  // from week number and weekday is not a calendar date.
+  result.complete_calendar_date = result.year and result.month and result.day;
   if (result.week_number and result.weekday) {
     result.month = true;
     result.day = true;
@@ -713,7 +717,8 @@ public:
                   b->UnsafeAppendNull();
                   continue;
                 }
-                if (reference and parsed_date_fields.iso_week_number) {
+                if (reference and parsed_date_fields.iso_week_number
+                    and not parsed_date_fields.complete_calendar_date) {
                   unsupported_reference = true;
                   b->UnsafeAppendNull();
                   continue;
