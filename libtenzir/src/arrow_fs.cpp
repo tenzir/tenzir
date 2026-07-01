@@ -21,6 +21,7 @@
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/set.hpp"
 #include "tenzir/view3.hpp"
 
 #include <arrow/array/array_primitive.h>
@@ -748,7 +749,8 @@ auto ToArrowFsOperator::process(table_slice input, OpCtx& ctx) -> Task<void> {
         .emit(ctx.dh());
       co_return;
     }
-    auto slice = filter(input, arrow::BooleanArray{rows, bitmap});
+    auto without_partitions = drop(input, fields, ctx, false);
+    auto slice = filter(without_partitions, arrow::BooleanArray{rows, bitmap});
     auto const slice_rows = slice.rows();
     // `push` runs without the guard. If it suspends on a full input
     // channel and we still hold the guard, `process_sub` on the draining

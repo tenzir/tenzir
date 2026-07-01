@@ -1,6 +1,7 @@
 # runner: python
 """Verify multi-field hive partitioning creates correct directory structure."""
 
+import json
 import os
 from pathlib import Path
 
@@ -19,7 +20,15 @@ def main() -> None:
             count = 0
             for f in tier_dir.glob("*.json"):
                 with open(f) as fh:
-                    count += sum(1 for line in fh if line.strip())
+                    for line in fh:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        event = json.loads(line)
+                        assert "id" in event, event
+                        assert "region" not in event, event
+                        assert "tier" not in event, event
+                        count += 1
             partitions.append(
                 f"{region_dir.name}/{tier_dir.name}: files={n_files} rows={count}"
             )
