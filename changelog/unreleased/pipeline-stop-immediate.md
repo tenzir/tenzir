@@ -3,6 +3,8 @@ title: Pipelines acknowledge stop requests while draining
 type: bugfix
 authors:
   - aljazerzen
+prs:
+  - 6392
 created: 2026-06-29T08:15:20.200606Z
 ---
 
