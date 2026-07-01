@@ -697,10 +697,10 @@ public:
                 const auto needs_day = not parsed_date_fields.day;
                 const auto needs_reference
                   = needs_year or needs_month or needs_day;
-                const auto has_week_date = parsed_date_fields.week_number
-                                           and parsed_date_fields.weekday;
                 if (reference
-                    and ((has_week_date and needs_year)
+                    and (((parsed_date_fields.week_number
+                           or parsed_date_fields.weekday)
+                          and needs_year)
                          or (needs_year and parsed_date_fields.ordinal_day))) {
                   unsupported_reference = true;
                   b->UnsafeAppendNull();
@@ -721,7 +721,7 @@ public:
                       b->UnsafeAppendNull();
                       continue;
                     }
-                    if (needs_month != needs_day) {
+                    if (not needs_year or needs_month != needs_day) {
                       unsupported_reference = true;
                       b->UnsafeAppendNull();
                       continue;
@@ -732,15 +732,13 @@ public:
                     if (needs_day) {
                       tm.tm_mday = ref_tm->tm_mday;
                     }
-                    if (needs_year) {
-                      if (parsed_date_fields.ordinal_day or needs_month
-                          or needs_day) {
-                        tm.tm_year = ref_tm->tm_year;
-                      } else if (not resolve_missing_year(tm, ref, offset)) {
-                        error = true;
-                        b->UnsafeAppendNull();
-                        continue;
-                      }
+                    if (parsed_date_fields.ordinal_day or needs_month
+                        or needs_day) {
+                      tm.tm_year = ref_tm->tm_year;
+                    } else if (not resolve_missing_year(tm, ref, offset)) {
+                      error = true;
+                      b->UnsafeAppendNull();
+                      continue;
                     }
                   } else if (not reference) {
                     if (needs_year) {
