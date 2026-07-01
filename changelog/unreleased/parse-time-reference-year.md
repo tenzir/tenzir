@@ -19,8 +19,10 @@ timestamp = timestamp.parse_time("%b %e %H:%M:%S", reference=now())
 When the input contains month and day but no year, `parse_time` chooses the year
 that places the parsed timestamp closest to the reference time.
 
-When the input contains no date fields, `parse_time` uses the date from
-`reference`. Other incomplete date formats return null and emit a warning.
+When the input contains no date fields, `parse_time` chooses the date that
+places the parsed time of day closest to the reference time, so times shortly
+before or after midnight resolve to the adjacent day. Other incomplete date
+formats return null and emit a warning.
 
 Without `reference`, year-less formats keep the previous default year of 1970
 for now, but emit a deprecation warning because this will become an error in a

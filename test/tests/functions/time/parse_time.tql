@@ -10,6 +10,8 @@ from {
   syslog_with_weekday: "Tue May  5 18:16:21",
   syslog_with_weekday_nearest_match: "Mon May  5 18:16:21",
   time_without_date: "14:30:45",
+  time_before_midnight: "23:59:58",
+  time_after_midnight: "00:00:02",
   date_without_time: "May 5",
   syslog_dec_before_feb: "Dec 31 23:59:59",
   syslog_jan_after_dec: "Jan  1 00:00:01",
@@ -57,10 +59,24 @@ weekday_calendar_date_ignores_weekday = syslog_with_weekday_nearest_match.parse_
   reference=2026-06-24T00:00:00Z,
 )
 
-// `reference` fills missing date fields, but not missing time fields.
+// `reference` fills missing date fields, but not missing time fields. When
+// the format has no date fields at all, `parse_time` picks the day that
+// places the parsed time of day closest to the reference: 14:30:45 on June 23
+// is 9.5 hours before the reference, while June 24 would be 14.5 hours after.
 time_only_reference_date = time_without_date.parse_time(
   "%H:%M:%S",
   reference=2026-06-24T00:00:00Z,
+)
+
+// Times shortly before or after midnight resolve to the adjacent day instead
+// of almost a full day away.
+midnight_previous_day = time_before_midnight.parse_time(
+  "%H:%M:%S",
+  reference=2026-06-24T00:00:02Z,
+)
+midnight_next_day = time_after_midnight.parse_time(
+  "%H:%M:%S",
+  reference=2026-06-23T23:59:58Z,
 )
 date_only_reference_keeps_time_defaults = date_without_time.parse_time(
   "%b %e",
