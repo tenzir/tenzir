@@ -442,10 +442,10 @@ using serve_manager_actor = typed_actor_fwd<
   auto(atom::start, std::string serve_id, uint64_t buffer_size,
        caf::actor watched)
     ->caf::result<void>,
-  // Deregister a serve operator, waiting until it completed.
-  auto(atom::stop, std::string serve_id)->caf::result<void>,
   // Drop all buffered data and complete immediately, without waiting for the
   // data to be drained to the client.
+  auto(atom::stop, std::string serve_id)->caf::result<void>,
+  // Deregister a serve operator, waiting until it completed.
   auto(atom::shutdown, std::string serve_id)->caf::result<void>,
   // Put additional slices into the buffer for the given access token.
   auto(atom::put, std::string serve_id, table_slice)->caf::result<void>,
@@ -647,7 +647,7 @@ struct serve_manager_state {
     return {};
   }
 
-  auto stop(std::string serve_id) -> caf::result<void> {
+  auto finalize(std::string serve_id) -> caf::result<void> {
     const auto found
       = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
           return op.serve_id == serve_id;
@@ -668,7 +668,7 @@ struct serve_manager_state {
     return found->stop_rp;
   }
 
-  auto drop(std::string serve_id) -> caf::result<void> {
+  auto stop(std::string serve_id) -> caf::result<void> {
     const auto found
       = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
           return op.serve_id == serve_id;
@@ -864,10 +864,10 @@ auto serve_manager(
                                  std::move(watched));
     },
     [self](atom::stop, std::string& serve_id) -> caf::result<void> {
-      return self->state().stop(std::move(serve_id));
+      return self->state().finalize(std::move(serve_id));
     },
     [self](atom::shutdown, std::string& serve_id) -> caf::result<void> {
-      return self->state().drop(std::move(serve_id));
+      return self->state().stop(std::move(serve_id));
     },
     [self](atom::put, std::string& serve_id,
            table_slice& slice) -> caf::result<void> {
@@ -1398,7 +1398,8 @@ public:
     // serve-manager.
     stopped_ = true;
     auto result
-      = co_await async_mail(atom::shutdown_v, args_.id).request(serve_manager_);
+      = co_await async_mail(atom::stop_v, args_.id).request(serve_manager_);
+    co_return;
     if (not result) {
       diagnostic::error(result.error())
         .note("failed to stop serve-manager")
@@ -1408,7 +1409,7 @@ public:
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     auto result
-      = co_await async_mail(atom::stop_v, args_.id).request(serve_manager_);
+      = co_await async_mail(atom::shutdown_v, args_.id).request(serve_manager_);
     if (not result) {
       diagnostic::error(result.error())
         .note("failed to deregister at serve-manager")
@@ -1483,7 +1484,7 @@ public:
     //  Wait until all events were fetched.
     ctrl.set_waiting(true);
     ctrl.self()
-      .mail(atom::stop_v, serve_id_)
+      .mail(atom::shutdown_v, serve_id_)
       .request(serve_manager, caf::infinite)
       .then(
         [&]() {
