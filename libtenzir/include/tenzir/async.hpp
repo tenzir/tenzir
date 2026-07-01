@@ -455,8 +455,25 @@ public:
     co_return;
   }
 
+  /// The user-facing name of this operator, used for metrics and profiling.
+  auto name() const -> std::string_view {
+    return name_;
+  }
+
+  /// Sets the user-facing name of this operator and returns it, so that it can
+  /// be chained at construction, e.g. `IfSink{...}.with_name("if")`. Called by
+  /// the spawning machinery with `Description::name`.
+  template <class Self>
+  auto with_name(this Self&& self, std::string name) -> Self {
+    self.name_ = std::move(name);
+    return std::forward<Self>(self);
+  }
+
 protected:
   ~OperatorBase() = default;
+
+private:
+  std::string name_;
 };
 
 template <class Input, class Output>

@@ -16,6 +16,7 @@
 #include "tenzir/async/select_set.hpp"
 #include "tenzir/async_secret_resolution.hpp"
 #include "tenzir/co_match.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
@@ -25,7 +26,6 @@
 #include <folly/OperationCancelled.h>
 #include <folly/coro/BoundedQueue.h>
 
-#include <chrono>
 #include <mutex>
 
 // TODO: Why does this not report line numbers correctly?
@@ -38,12 +38,6 @@ namespace tenzir {
 
 // Forward declaration to avoid including registry.hpp.
 auto global_registry() -> std::shared_ptr<const registry>;
-
-namespace {
-
-auto demangle_op_type(std::type_info const& type) -> std::string;
-
-} // namespace
 
 /// Transforms a `Push<OperatorMsg<T>>` into a `Push<T>`.
 template <class T>
@@ -112,11 +106,14 @@ public:
   }
 };
 
+namespace {
 auto make_identity_operator(element_type_tag input) -> AnyOperator {
   return match(input, []<class Input>(tag<Input>) -> AnyOperator {
-    return Box<Operator<Input, Input>>{IdentityOperator<Input>{}};
+    return Box<Operator<Input, Input>>{
+      IdentityOperator<Input>{}.with_name("pass")};
   });
 }
+}; // namespace
 
 /// An message transported from a subpipeline to the parent pipeline.
 ///
@@ -1016,8 +1013,8 @@ private:
   auto io_executor() -> folly::Executor::KeepAlive<folly::IOExecutor> override {
     if (not io_executor_) {
       auto& op = base_op();
-      io_executor_
-        = exec_ctx_.make_io_executor(id_, demangle_op_type(typeid(op)));
+      TENZIR_ASSERT(not op.name().empty());
+      io_executor_ = exec_ctx_.make_io_executor(id_, std::string{op.name()});
     }
     return io_executor_;
   }
@@ -1691,21 +1688,6 @@ auto run_operator(Box<Operator<Input, Output>> op,
   co_return;
 }
 
-/// Demangle a C++ type name and strip the namespace prefix.
-auto demangle_op_type(std::type_info const& type) -> std::string {
-  auto demangled = folly::demangle(type);
-  auto result = std::string{demangled};
-  // Strip namespace prefix, keeping only the class name.
-  // Only look before '<' to avoid matching '::' inside template arguments.
-  auto tpl = result.find('<');
-  auto prefix = tpl != std::string::npos ? result.substr(0, tpl) : result;
-  auto pos = prefix.rfind("::");
-  if (pos != std::string::npos) {
-    result = result.substr(pos + 2);
-  }
-  return result;
-}
-
 } // namespace
 
 class ChainRunner {
@@ -1766,8 +1748,9 @@ private:
           Option<Sender<FromControl>>{std::move(from_control_sender)},
           std::move(to_control_receiver),
         });
-        auto executor = exec_ctx_.make_executor(id_.op(index),
-                                                demangle_op_type(typeid(*op)));
+        TENZIR_ASSERT(not op->name().empty());
+        auto executor
+          = exec_ctx_.make_executor(id_.op(index), std::string{op->name()});
         auto task = run_operator(std::move(op), std::move(input),
                                  std::move(output_sender),
                                  std::move(from_control_receiver),

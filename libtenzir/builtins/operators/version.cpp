@@ -212,7 +212,7 @@ public:
   }
   auto spawn(element_type_tag input) && -> Option<AnyOperator> override {
     TENZIR_ASSERT(input.is<void>());
-    return Version{};
+    return Version{}.with_name("version");
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const

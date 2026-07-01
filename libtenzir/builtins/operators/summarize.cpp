@@ -996,7 +996,7 @@ public:
 
   auto spawn(element_type_tag input) && -> Option<AnyOperator> override {
     TENZIR_ASSERT(input.is<table_slice>());
-    return Summarize{std::move(cfg_)};
+    return Summarize{std::move(cfg_)}.with_name("summarize");
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
