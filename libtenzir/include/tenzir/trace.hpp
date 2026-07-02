@@ -18,8 +18,8 @@
 
 namespace tenzir {
 
-/// Returns the global "tenzir" tracer. Spans created from it are no-ops unless a
-/// tracer provider was installed via `initialize_opentelemetry`.
+/// Returns the global "tenzir" tracer. Spans created from it are no-ops unless
+/// a tracer provider was installed via `initialize_opentelemetry`.
 auto otel_tracer()
   -> opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>;
 

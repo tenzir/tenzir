@@ -67,8 +67,8 @@ auto initialize_opentelemetry(const caf::settings& config)
     {"service.name", "tenzir"},
     {"service.version", version::version},
   });
-  current_provider = trace_sdk::TracerProviderFactory::Create(
-    std::move(processor), resource);
+  current_provider
+    = trace_sdk::TracerProviderFactory::Create(std::move(processor), resource);
   trace_api::Provider::SetTracerProvider(
     std::shared_ptr<trace_api::TracerProvider>{current_provider});
   TENZIR_INFO("initialized OpenTelemetry tracing with OTLP/HTTP endpoint {}",

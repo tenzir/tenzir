@@ -58,13 +58,11 @@ private:
 
 } // namespace
 
-auto otel_tracer()
-  -> opentelemetry::nostd::shared_ptr<otel_trace::Tracer> {
+auto otel_tracer() -> opentelemetry::nostd::shared_ptr<otel_trace::Tracer> {
   return otel_trace::Provider::GetTracerProvider()->GetTracer("tenzir");
 }
 
-auto extract_trace_context(std::string_view traceparent)
-  -> otel_ctx::Context {
+auto extract_trace_context(std::string_view traceparent) -> otel_ctx::Context {
   auto current = otel_ctx::RuntimeContext::GetCurrent();
   if (traceparent.empty()) {
     return current;
