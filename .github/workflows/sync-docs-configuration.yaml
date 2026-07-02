@@ -19,12 +19,12 @@ jobs:
         with:
           app-id: ${{ vars.TENZIR_GITHUB_APP_ID }}
           private-key: ${{ secrets.TENZIR_GITHUB_APP_PRIVATE_KEY }}
-          repositories: docs
+          repositories: content
 
       - name: Trigger docs sync workflow
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          gh workflow run sync-node-configuration.yaml \
-            --repo tenzir/docs \
+          gh workflow run sync-node-configuration.yml \
+            --repo tenzir/content \
             --field source_ref="${{ github.sha }}"

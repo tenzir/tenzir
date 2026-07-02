@@ -755,14 +755,14 @@ jobs:
         with:
           app-id: ${{ vars.TENZIR_GITHUB_APP_ID }}
           private-key: ${{ secrets.TENZIR_GITHUB_APP_PRIVATE_KEY }}
-          repositories: docs
+          repositories: content
 
       - name: Trigger docs OpenAPI regeneration
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          gh workflow run generate-openapi-node.yaml \
-            --repo tenzir/docs \
+          gh workflow run update-node-openapi.yml \
+            --repo tenzir/content \
             --field tenzir_docker_tag="${{ github.sha }}"
 
   regression-tests:
