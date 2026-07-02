@@ -221,6 +221,7 @@ public:
       producer_->poll(0);
       produced_since_poll_ = 0;
     }
+    CO_TRY(check_delivery(ctx));
     co_return {};
   }
 
@@ -231,6 +232,11 @@ public:
       auto result = producer_->flush(0);
       const auto pending = producer_->outq_len();
       if (result == RdKafka::ERR_NO_ERROR and pending == 0) {
+        // All messages have been acknowledged; surface any delivery failure
+        // observed while draining (e.g. a broker-side "message too large").
+        if (dh) {
+          emit_delivery_error(*dh);
+        }
         co_return;
       }
       if (result != RdKafka::ERR_NO_ERROR
@@ -280,6 +286,7 @@ private:
           if (produced_since_poll_ >= producer_poll_interval) {
             producer_->poll(0);
             produced_since_poll_ = 0;
+            CO_TRY(check_delivery(ctx));
           }
           co_return {};
         }
@@ -333,6 +340,49 @@ private:
     return std::move(out).hint(
       "verify bootstrap broker reachability and that "
       "`security.protocol`/`sasl.mechanism` match broker requirements");
+  }
+
+  /// Builds the diagnostic for one asynchronous delivery failure.
+  auto make_delivery_diagnostic(kafka_delivery_failure const& failure) const
+    -> diagnostic_builder {
+    auto out = diagnostic::error("failed to deliver Kafka message to `{}`: {}",
+                                 topic_, failure.error_string)
+                 .note("message.size={} bytes", failure.message_size);
+    if (failure.error_code == RdKafka::ERR_MSG_SIZE_TOO_LARGE) {
+      // A size rejection is not a connectivity problem, so the connection and
+      // auth notes would only add noise; the hint says exactly what to change.
+      return std::move(out).hint(
+        "raise `message.max.bytes` on the client and the broker's "
+        "`message.max.bytes` / topic `max.message.bytes`, or reduce the event "
+        "size");
+    }
+    out = add_connection_and_auth_notes(std::move(out));
+    return add_connectivity_hint(std::move(out));
+  }
+
+  /// Emits a fatal diagnostic if a delivery failure was recorded. Used on the
+  /// processing path where failures must abort the pipeline.
+  auto check_delivery(OpCtx& ctx) -> failure_or<void> {
+    if (not cfg_.delivery_state) {
+      return {};
+    }
+    auto failure = cfg_.delivery_state->take();
+    if (not failure) {
+      return {};
+    }
+    make_delivery_diagnostic(*failure).emit(ctx);
+    return failure::promise();
+  }
+
+  /// Emits a fatal diagnostic if a delivery failure was recorded. Used during
+  /// teardown, where there is no `failure_or` to propagate.
+  auto emit_delivery_error(diagnostic_handler& dh) -> void {
+    if (not cfg_.delivery_state) {
+      return;
+    }
+    if (auto failure = cfg_.delivery_state->take()) {
+      make_delivery_diagnostic(*failure).emit(dh);
+    }
   }
 
   std::string topic_;
