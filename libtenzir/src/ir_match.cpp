@@ -512,9 +512,9 @@ public:
     auto output = infer_type(input, dh);
     TENZIR_ASSERT(output and *output);
     if ((**output).is<void>()) {
-      return MatchSink{std::move(args_)};
+      return MatchSink{std::move(args_)}.with_name("match");
     }
-    return Match{std::move(args_)};
+    return Match{std::move(args_)}.with_name("match");
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const

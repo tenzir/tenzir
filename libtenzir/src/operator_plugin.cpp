@@ -462,10 +462,16 @@ public:
     if (desc_->set_order) {
       (*desc_->set_order)(args, order_);
     }
-    if (spawner) {
-      return match(*spawner, [&](auto& spawner) -> AnyOperator {
-        return spawner(std::move(args));
+    auto with_name = [&](AnyOperator op) -> AnyOperator {
+      match(op, [&](auto& op) {
+        op->with_name(desc_->name);
       });
+      return op;
+    };
+    if (spawner) {
+      return with_name(match(*spawner, [&](auto& spawner) -> AnyOperator {
+        return spawner(std::move(args));
+      }));
     }
     for (auto& spawn : desc_->spawns) {
       auto result = match(
@@ -478,7 +484,7 @@ public:
           return std::nullopt;
         });
       if (result) {
-        return std::move(*result);
+        return with_name(std::move(*result));
       }
     }
     TENZIR_UNREACHABLE();

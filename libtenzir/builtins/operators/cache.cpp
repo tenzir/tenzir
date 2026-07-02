@@ -1391,15 +1391,15 @@ public:
     args.write_timeout = write_timeout_value_;
     if (*mode_value_ == "write") {
       TENZIR_ASSERT(input.is<table_slice>());
-      return WriteCacheSink{std::move(args)};
+      return WriteCacheSink{std::move(args)}.with_name("cache");
     }
     if (*mode_value_ == "read") {
       TENZIR_ASSERT(input.is<void>());
-      return ReadCacheSource{std::move(args)};
+      return ReadCacheSource{std::move(args)}.with_name("cache");
     }
     TENZIR_ASSERT(*mode_value_ == "readwrite");
     TENZIR_ASSERT(input.is<table_slice>());
-    return CacheReadwrite{std::move(args)};
+    return CacheReadwrite{std::move(args)}.with_name("cache");
   }
 
   auto main_location() const -> location override {

@@ -251,7 +251,7 @@ auto ir::SetIr::substitute(substitute_ctx ctx, bool instantiate)
 
 auto ir::SetIr::spawn(element_type_tag input) && -> Option<AnyOperator> {
   TENZIR_ASSERT(input.is<table_slice>());
-  return Set{std::move(assignments_), order_};
+  return Set{std::move(assignments_), order_}.with_name("set");
 }
 
 namespace {
@@ -582,9 +582,9 @@ public:
     auto output = infer_type(input, dh);
     TENZIR_ASSERT(output and *output);
     if ((**output).is<void>()) {
-      return IfSink{std::move(args_)};
+      return IfSink{std::move(args_)}.with_name("if");
     }
-    return If{std::move(args_)};
+    return If{std::move(args_)}.with_name("if");
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const

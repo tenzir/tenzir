@@ -878,7 +878,7 @@ public:
 
   auto spawn(element_type_tag input) && -> Option<AnyOperator> override {
     TENZIR_ASSERT(input.is<table_slice>());
-    return Where{std::move(predicate_)};
+    return Where{std::move(predicate_)}.with_name("where");
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
