@@ -436,11 +436,6 @@ def cmd_build(args: argparse.Namespace) -> int:
     # Update the tenzir-plugins submodule source info.
     _ = run(["nix/update-plugins.sh"])
 
-    version_env = [
-        name
-        for name in ["TENZIR_VERSION_SUFFIX", "TENZIR_VERSION_BUILD_METADATA"]
-        if os.environ.get(name)
-    ]
     cmd = [
         "nix",
         "--option",
@@ -450,8 +445,6 @@ def cmd_build(args: argparse.Namespace) -> int:
         "--print-build-logs",
         "build",
     ]
-    if version_env:
-        cmd += ["--impure"]
     cmd += [
         f".#{args.attribute}^package",
         "--no-link",
@@ -1114,11 +1107,6 @@ def cmd_push(args: argparse.Namespace) -> int:
         notice("No registries or tags specified, skipping image push")
         return 0
 
-    version_env = [
-        name
-        for name in ["TENZIR_VERSION_SUFFIX", "TENZIR_VERSION_BUILD_METADATA"]
-        if os.environ.get(name)
-    ]
     tag_suffix = "-slim" if "-static" in args.attribute else ""
     arch_suffix = f"-{args.arch}" if args.arch else ""
 
@@ -1142,7 +1130,6 @@ def cmd_push(args: argparse.Namespace) -> int:
                         "--accept-flake-config",
                         "run",
                     ]
-                    + (["--impure"] if version_env else [])
                     + [
                         f".#{args.attribute}.asImage.{repo}.copyTo",
                         "--",

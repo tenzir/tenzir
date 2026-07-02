@@ -804,8 +804,6 @@ jobs:
       arch: aarch64
       attribute: tenzir-static
       build-version: ${{ needs.configure.outputs.build-version }}
-      version-suffix: ${{ needs.configure.outputs.tenzir-version-suffix }}
-      version-build-metadata: ${{ needs.configure.outputs.tenzir-version-build-metadata }}
     secrets: inherit
 
   tenzir-static-x86_64-linux:
@@ -819,8 +817,6 @@ jobs:
       arch: x86_64
       attribute: tenzir-static
       build-version: ${{ needs.configure.outputs.build-version }}
-      version-suffix: ${{ needs.configure.outputs.tenzir-version-suffix }}
-      version-build-metadata: ${{ needs.configure.outputs.tenzir-version-build-metadata }}
     secrets: inherit
 
   tenzir-static-arm64-darwin:
@@ -834,8 +830,6 @@ jobs:
       arch: arm64
       attribute: tenzir-static
       build-version: ${{ needs.configure.outputs.build-version }}
-      version-suffix: ${{ needs.configure.outputs.tenzir-version-suffix }}
-      version-build-metadata: ${{ needs.configure.outputs.tenzir-version-build-metadata }}
       notarize_macos: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
     secrets: inherit
 
