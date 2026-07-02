@@ -864,10 +864,10 @@ auto serve_manager(
                                  std::move(watched));
     },
     [self](atom::stop, std::string& serve_id) -> caf::result<void> {
-      return self->state().finalize(std::move(serve_id));
+      return self->state().stop(std::move(serve_id));
     },
     [self](atom::shutdown, std::string& serve_id) -> caf::result<void> {
-      return self->state().stop(std::move(serve_id));
+      return self->state().finalize(std::move(serve_id));
     },
     [self](atom::put, std::string& serve_id,
            table_slice& slice) -> caf::result<void> {
@@ -1399,12 +1399,12 @@ public:
     stopped_ = true;
     auto result
       = co_await async_mail(atom::stop_v, args_.id).request(serve_manager_);
-    co_return;
     if (not result) {
       diagnostic::error(result.error())
         .note("failed to stop serve-manager")
         .emit(ctx);
     }
+    co_return;
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
