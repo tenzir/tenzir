@@ -94,6 +94,10 @@ class KafkaOptions:
     # count and seeded with the same messages as `topic` (plain mode only).
     extra_topics: str = ""
     partitions: int = 1
+    # Per-topic `max.message.bytes` applied to `topic` and any `extra_topics`
+    # (plain mode only). 0 leaves the broker default. Used to exercise
+    # broker-side "message too large" delivery rejections.
+    max_message_bytes: int = 0
     messages: int = 0
     compression: str = "none"
     payload_file: str = ""
@@ -223,23 +227,31 @@ def _wait_for_kafka(container: ManagedContainer, timeout: float) -> None:
     logger.info("Kafka is ready")
 
 
-def _create_topic(container: ManagedContainer, topic: str, partitions: int) -> None:
+def _create_topic(
+    container: ManagedContainer,
+    topic: str,
+    partitions: int,
+    max_message_bytes: int = 0,
+) -> None:
     """Create topic for tests."""
-    result = container.exec(
-        [
-            "/opt/kafka/bin/kafka-topics.sh",
-            "--bootstrap-server",
-            "localhost:9092",
-            "--create",
-            "--if-not-exists",
-            "--topic",
-            topic,
-            "--partitions",
-            str(partitions),
-            "--replication-factor",
-            "1",
-        ],
-    )
+    args = [
+        "/opt/kafka/bin/kafka-topics.sh",
+        "--bootstrap-server",
+        "localhost:9092",
+        "--create",
+        "--if-not-exists",
+        "--topic",
+        topic,
+        "--partitions",
+        str(partitions),
+        "--replication-factor",
+        "1",
+    ]
+    # A small per-topic size cap lets tests exercise broker-side delivery
+    # rejections (RD_KAFKA_RESP_ERR_MSG_SIZE_TOO_LARGE) with tiny payloads.
+    if max_message_bytes > 0:
+        args.extend(["--config", f"max.message.bytes={max_message_bytes}"])
+    result = container.exec(args)
     if result.returncode != 0:
         raise RuntimeError(f"Failed to create topic: {result.stderr}")
 
@@ -601,7 +613,9 @@ def kafka() -> Iterator[dict[str, str]]:
             container = _start_kafka(runtime, port, opts.image, payload_file)
             _wait_for_kafka(container, KAFKA_STARTUP_TIMEOUT)
             for topic in [opts.topic, *_parse_extra_topics(opts.extra_topics)]:
-                _create_topic(container, topic, opts.partitions)
+                _create_topic(
+                    container, topic, opts.partitions, opts.max_message_bytes
+                )
                 _seed_topic(
                     container,
                     topic,
