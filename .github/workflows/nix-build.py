@@ -435,6 +435,21 @@ def cmd_build(args: argparse.Namespace) -> int:
     """Build the Nix package and output the package directory."""
     # Update the tenzir-plugins submodule source info.
     _ = run(["nix/update-plugins.sh"])
+    diff_result = run(
+        [
+            "git",
+            "diff",
+            "--exit-code",
+            "--",
+            "nix/tenzir/plugins/source.json",
+            "nix/tenzir/plugins/names.nix",
+        ],
+        check=False,
+    )
+    if diff_result.returncode != 0:
+        print(diff_result.stdout)
+        error("nix/update-plugins.sh changed generated plugin source files")
+        return diff_result.returncode
 
     cmd = [
         "nix",
