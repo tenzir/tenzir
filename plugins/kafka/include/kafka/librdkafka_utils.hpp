@@ -18,6 +18,7 @@
 #include <caf/expected.hpp>
 #include <librdkafka/rdkafkacpp.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -72,11 +73,65 @@ struct consumer_configuration {
   std::string oauth_background_setup_note;
 };
 
+/// One recorded producer message-delivery failure.
+struct kafka_delivery_failure {
+  RdKafka::ErrorCode error_code = RdKafka::ERR_NO_ERROR;
+  std::string error_string;
+  std::string topic;
+  size_t message_size = 0;
+};
+
+/// Thread-safe collector for librdkafka producer delivery-report failures.
+///
+/// librdkafka invokes the delivery-report callback once per produced message
+/// from whichever thread services `poll()`/`flush()`, and producers created
+/// from a copied configuration share one instance, so all access is
+/// synchronized. Only the first failure is retained; `take()` returns it
+/// exactly once so a single diagnostic is emitted no matter how many workers
+/// observe it.
+class kafka_delivery_report_state {
+public:
+  /// Records the outcome of one delivery report. Successful deliveries and
+  /// failures after the first are ignored.
+  auto record(RdKafka::Message const& message) -> void {
+    if (message.err() == RdKafka::ERR_NO_ERROR) {
+      return;
+    }
+    auto guard = std::scoped_lock{mutex_};
+    if (failure_) {
+      return;
+    }
+    failure_ = kafka_delivery_failure{
+      message.err(),
+      RdKafka::err2str(message.err()),
+      message.topic_name(),
+      message.len(),
+    };
+  }
+
+  /// Returns the first recorded failure exactly once, then nothing.
+  auto take() -> std::optional<kafka_delivery_failure> {
+    auto guard = std::scoped_lock{mutex_};
+    if (not failure_ or reported_) {
+      return std::nullopt;
+    }
+    reported_ = true;
+    return failure_;
+  }
+
+private:
+  mutable std::mutex mutex_;
+  bool reported_ = false;
+  std::optional<kafka_delivery_failure> failure_;
+};
+
 /// Owns librdkafka producer config and callback objects with shared lifetime.
 struct producer_configuration {
   std::shared_ptr<RdKafka::Conf> conf;
   std::shared_ptr<RdKafka::OAuthBearerTokenRefreshCb> oauth_callback;
   std::shared_ptr<RdKafka::EventCb> event_callback;
+  std::shared_ptr<RdKafka::DeliveryReportCb> delivery_callback;
+  std::shared_ptr<kafka_delivery_report_state> delivery_state;
 };
 
 /// Returns one librdkafka config value or a diagnostic placeholder.

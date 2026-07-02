@@ -217,6 +217,38 @@ auto configuration::error_callback::event_cb(RdKafka::Event& event) -> void {
   }
 }
 
+auto configuration::delivery_callback::dr_cb(RdKafka::Message& message)
+  -> void {
+  if (message.err() == RdKafka::ERR_NO_ERROR) {
+    return;
+  }
+  auto lock = std::scoped_lock{mutex_};
+  if (failed_) {
+    return;
+  }
+  failed_ = true;
+  code_ = message.err();
+  topic_ = message.topic_name();
+  size_ = message.len();
+}
+
+auto configuration::delivery_callback::take_error() -> caf::error {
+  auto lock = std::scoped_lock{mutex_};
+  if (not failed_ or reported_) {
+    return {};
+  }
+  reported_ = true;
+  auto msg = fmt::format("failed to deliver Kafka message to topic `{}`: {} "
+                         "(message size: {} bytes)",
+                         topic_, RdKafka::err2str(code_), size_);
+  if (code_ == RdKafka::ERR_MSG_SIZE_TOO_LARGE) {
+    msg += "; raise `message.max.bytes` on the client and the broker's "
+           "`message.max.bytes` / topic `max.message.bytes`, or reduce the "
+           "event size";
+  }
+  return caf::make_error(ec::unspecified, std::move(msg));
+}
+
 auto configuration::make(const record& options,
                          std::optional<aws_iam_options> aws,
                          std::optional<resolved_aws_credentials> creds,
@@ -290,6 +322,25 @@ auto configuration::set(const record& options) -> caf::error {
     }
   }
   return {};
+}
+
+auto configuration::enable_delivery_reports() -> caf::error {
+  delivery_callback_ = std::make_shared<delivery_callback>();
+  auto errstr = std::string{};
+  conf_->set("dr_cb", delivery_callback_.get(), errstr);
+  if (not errstr.empty()) {
+    return caf::make_error(
+      ec::unspecified,
+      fmt::format("failed to set delivery report callback: {}", errstr));
+  }
+  return {};
+}
+
+auto configuration::take_delivery_error() -> caf::error {
+  if (not delivery_callback_) {
+    return {};
+  }
+  return delivery_callback_->take_error();
 }
 
 auto configuration::set_rebalance_cb(int64_t offset) -> caf::error {
