@@ -1119,7 +1119,7 @@ jobs:
         with:
           name: tenzir
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
-          pushFilter: "(tenzir-ee|tenzir-plugins-source)"
+          pushFilter: "(tenzir-ee|tenzir-plugins-source|tenzir-plugins\\.tar\\.gz)"
       - name: Install workspace dependencies
         working-directory: python
         run: |
@@ -1186,7 +1186,7 @@ jobs:
         with:
           name: tenzir
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
-          pushFilter: "(tenzir-ee|tenzir-plugins-source)"
+          pushFilter: "(tenzir-ee|tenzir-plugins-source|tenzir-plugins\\.tar\\.gz)"
       - name: Download signed tarball (macOS)
         if: runner.os == 'macOS'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0

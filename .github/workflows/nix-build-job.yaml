@@ -75,7 +75,7 @@ jobs:
         with:
           name: tenzir
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
-          pushFilter: "(tenzir-ee|tenzir-plugins-source)"
+          pushFilter: "(tenzir-ee|tenzir-plugins-source|tenzir-plugins\\.tar\\.gz)"
       - name: Prepare ccache directory
         run: |
           sudo mkdir -p /tmp/tenzir-ccache
