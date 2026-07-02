@@ -60,6 +60,8 @@ let
         "plugins/yara"
       ];
 
+      tenzirPluginNames = import ./plugins/names.nix;
+
       pythonDeps = import ../python-dependencies.nix;
       py3 =
         let
@@ -72,9 +74,7 @@ let
           ]
         );
 
-      allPluginSrcs = builtins.mapAttrs (
-        name: type: if type == "directory" then "${tenzir-plugins-source}/${name}" else null
-      ) (lib.filterAttrs (_: type: type == "directory") (builtins.readDir tenzir-plugins-source));
+      allPluginSrcs = lib.genAttrs tenzirPluginNames (name: "${tenzir-plugins-source}/${name}");
 
       withTenzirPluginsStatic =
         { prevLayer }:
