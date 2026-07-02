@@ -349,6 +349,14 @@ public:
     }
     server_ = Arc<http_server::ScopedServer>::from_non_null(
       std::move(server).unwrap());
+    bytes_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "serve_http"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::bytes);
+    events_counter_
+      = ctx.make_counter(MetricsLabel{"operator", "serve_http"},
+                         MetricsDirection::write, MetricsVisibility::external_,
+                         MetricsUnit::events);
     ctx.spawn_task([this]() -> Task<void> {
       co_await catch_cancellation(wait_forever());
       co_await force_stop();
@@ -369,10 +377,18 @@ public:
       co_return;
     }
     auto& pipeline = as<SubHandle<table_slice>>(*sub);
+    // Count events at ingress: the number of rows accepted for serving. Egress
+    // event attribution is not possible here because the printer subpipeline
+    // is opaque, its output chunks carry no row count, and a single event may
+    // even span multiple chunks. Bytes, in contrast, are counted at egress in
+    // `broadcast_payload()` where per-client writes are exactly known.
+    auto const rows = input.rows();
     auto result = co_await pipeline.push(std::move(input));
     if (result.is_err()) {
       co_await force_stop();
+      co_return;
     }
+    events_counter_.add(rows);
     co_return;
   }
 
@@ -543,13 +559,19 @@ private:
         if (client->closing()) {
           continue;
         }
-        join.add([client, chunk, content_type]() mutable -> Task<bool> {
-          co_return co_await folly::coro::co_withExecutor(
+        join.add([this, client, chunk, content_type]() mutable -> Task<bool> {
+          auto const ok = co_await folly::coro::co_withExecutor(
             client->evb(),
             folly::coro::co_invoke(
               [client, chunk, content_type]() mutable -> Task<bool> {
                 co_return co_await client->write_payload(chunk, content_type);
               }));
+          if (ok) {
+            // Count bytes per successful client write so the egress metric
+            // reflects the actual fan-out to each connected client.
+            bytes_counter_.add(chunk->size());
+          }
+          co_return ok;
         });
       }
       // wait for all; the slowest client determines progress.
@@ -621,6 +643,8 @@ private:
   Option<Arc<http_server::ScopedServer>> server_;
   Arc<Semaphore> active_connections_;
   std::vector<Arc<Client>> clients_;
+  MetricsCounter bytes_counter_;
+  MetricsCounter events_counter_;
   // --- state ---
   Lifecycle lifecycle_ = Lifecycle::running;
 };
