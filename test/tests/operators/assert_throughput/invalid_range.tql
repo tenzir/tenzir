@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {x: 1}
+assert_throughput 3, within=1s, max_events=2

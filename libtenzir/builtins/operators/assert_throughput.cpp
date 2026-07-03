@@ -25,27 +25,35 @@ public:
 
   assert_throughput_operator(located<uint64_t> min_events,
                              located<duration> within,
+                             Option<located<uint64_t>> max_events,
                              std::optional<located<uint64_t>> retries)
-    : min_events_{min_events}, within_{within}, retries_{retries} {
+    : min_events_{min_events},
+      within_{within},
+      max_events_{max_events},
+      retries_{retries} {
   }
 
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto num_events = size_t{0};
-    auto num_failed = size_t{0};
+    auto num_events = uint64_t{0};
+    auto num_failed = uint64_t{0};
     auto check = [&] {
-      if (num_events >= min_events_.inner) {
+      auto max_exceeded = max_events_ and num_events > max_events_->inner;
+      if (num_events >= min_events_.inner and not max_exceeded) {
         num_events = 0;
         num_failed = 0;
         return;
       }
       ++num_failed;
       diagnostic::warning(
-        "assertion failure: failed to meet throughput requirements {}",
-        num_failed == 1 ? "once" : fmt::format("{} times", num_failed))
-        .note("at {:.2f}% of the expected throughput",
-              num_events * 100.0 / min_events_.inner)
+        "assertion failure: {}{}",
+        max_exceeded ? "exceeded maximum throughput requirement"
+                     : "failed to meet minimum throughput requirement",
+        num_failed > 1 ? fmt::format(" {} times", num_failed) : "")
+        .note("observed {} events, expected {} {}", num_events,
+              max_exceeded ? "at most" : "at least",
+              max_exceeded ? max_events_->inner : min_events_.inner)
         .compose([&](diagnostic_builder dh) {
           if (not retries_) {
             return dh;
@@ -57,6 +65,7 @@ public:
             .severity(severity::error)
             .primary(*retries_, "exceeded number of retries");
         })
+        .primary(max_exceeded ? *max_events_ : min_events_)
         .emit(ctrl.diagnostics());
     };
     detail::weak_run_delayed_loop(&ctrl.self(), within_.inner, std::move(check),
@@ -84,61 +93,70 @@ public:
   friend auto inspect(auto& f, assert_throughput_operator& x) -> bool {
     return f.object(x).fields(f.field("min_events", x.min_events_),
                               f.field("within", x.within_),
+                              f.field("max_events", x.max_events_),
                               f.field("retries", x.retries_));
   }
 
 private:
   located<uint64_t> min_events_ = {};
   located<duration> within_ = {};
+  Option<located<uint64_t>> max_events_ = {};
   std::optional<located<uint64_t>> retries_ = {};
 };
 
-struct AssertThroughptArgs final {
+struct AssertThroughputArgs final {
   located<uint64_t> min_events;
+  Option<located<uint64_t>> max_events;
   duration within;
   Option<uint64_t> retries;
 };
 
+auto emit_failure(AssertThroughputArgs const& args, uint64_t count,
+                  bool max_exceeded, std::atomic<uint64_t>& num_failed,
+                  diagnostic_handler& dh) -> void {
+  auto failed = num_failed.fetch_add(1) + 1;
+  auto sev = args.retries and failed > *args.retries ? severity::error
+                                                     : severity::warning;
+  diagnostic::builder(sev, "{}{}",
+                      max_exceeded
+                        ? "exceeded maximum throughput requirement"
+                        : "failed to meet minimum throughput requirement",
+                      failed > 1 ? fmt::format(" {} times", failed) : "")
+    .note("observed {} events, expected {} {}", count,
+          max_exceeded ? "at most" : "at least",
+          max_exceeded ? args.max_events->inner : args.min_events.inner)
+    .primary(max_exceeded ? *args.max_events : args.min_events)
+    .emit(dh);
+}
+
 class AssertThroughput final : public Operator<table_slice, table_slice> {
 public:
-  AssertThroughput(AssertThroughptArgs args) : args_{args} {
+  AssertThroughput(AssertThroughputArgs args) : args_{args} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await Operator<table_slice, table_slice>::start(ctx);
     // Spawn a timer task with absolute scheduling to avoid cumulative drift.
-    ctx.spawn_task(
-      [args = args_, events = num_events_, &dh = ctx.dh()] -> Task<void> {
-        auto num_failed = uint64_t{0};
-        auto deadline = std::chrono::steady_clock::now();
-        while (true) {
-          deadline += args.within;
-          auto now = std::chrono::steady_clock::now();
-          auto remaining = deadline - now;
-          if (remaining > duration::zero()) {
-            co_await folly::coro::sleep(
-              duration_cast<folly::HighResDuration>(remaining));
-          }
-          auto count = events->exchange(0);
-          if (count >= args.min_events.inner) {
-            num_failed = 0;
-            continue;
-          }
-          ++num_failed;
-          auto sev = args.retries and num_failed > *args.retries
-                       ? severity::error
-                       : severity::warning;
-          auto const throughput = count * 100.0 / args.min_events.inner;
-          auto msg = std::string{"failed to meet throughput requirements"};
-          if (num_failed > 1) {
-            msg += fmt::format(" {} times", num_failed);
-          }
-          diagnostic::builder(sev, "{}", std::move(msg))
-            .note("at {:.2f}% of the expected throughput", throughput)
-            .primary(args.min_events)
-            .emit(dh);
+    ctx.spawn_task([args = args_, events = num_events_, failures = num_failed_,
+                    &dh = ctx.dh()] -> Task<void> {
+      auto deadline = std::chrono::steady_clock::now();
+      while (true) {
+        deadline += args.within;
+        auto now = std::chrono::steady_clock::now();
+        auto remaining = deadline - now;
+        if (remaining > duration::zero()) {
+          co_await folly::coro::sleep(
+            duration_cast<folly::HighResDuration>(remaining));
         }
-      });
+        auto count = events->exchange(0);
+        auto max_exceeded = args.max_events and count > args.max_events->inner;
+        if (count >= args.min_events.inner and not max_exceeded) {
+          failures->store(0);
+          continue;
+        }
+        emit_failure(args, count, max_exceeded, *failures, dh);
+      }
+    });
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx&)
@@ -147,9 +165,20 @@ public:
     co_await push(std::move(input));
   }
 
+  auto finalize(Push<table_slice>&, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    auto count = num_events_->exchange(0);
+    if (args_.max_events and count > args_.max_events->inner) {
+      emit_failure(args_, count, true, *num_failed_, ctx.dh());
+    }
+    co_return FinalizeBehavior::done;
+  }
+
 private:
-  AssertThroughptArgs args_;
+  AssertThroughputArgs args_;
   std::shared_ptr<std::atomic<uint64_t>> num_events_
+    = std::make_shared<std::atomic<uint64_t>>(0);
+  std::shared_ptr<std::atomic<uint64_t>> num_failed_
     = std::make_shared<std::atomic<uint64_t>>(0);
 };
 
@@ -161,22 +190,41 @@ public:
     -> failure_or<operator_ptr> override {
     auto min_events = located<uint64_t>{};
     auto within = located<duration>{};
+    auto max_events = Option<located<uint64_t>>{};
     auto retries = std::optional<located<uint64_t>>{};
     auto parser = argument_parser2::operator_("assert_throughput");
     parser.positional("min_events", min_events);
+    parser.named("max_events", max_events);
     parser.named("retries", retries);
     parser.named("within", within);
     TRY(parser.parse(inv, ctx));
+    if (max_events and max_events->inner < min_events.inner) {
+      diagnostic::error("`max_events` must not be less than `min_events`")
+        .primary(*max_events)
+        .secondary(min_events, "`min_events`")
+        .emit(ctx);
+      return failure::promise();
+    }
     return std::make_unique<assert_throughput_operator>(min_events, within,
-                                                        retries);
+                                                        max_events, retries);
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<AssertThroughptArgs, AssertThroughput>{};
-    d.positional("min_events", &AssertThroughptArgs::min_events);
-    auto within = d.named("within", &AssertThroughptArgs::within);
-    d.named("retries", &AssertThroughptArgs::retries);
-    d.validate([within](DescribeCtx& ctx) -> Empty {
+    auto d = Describer<AssertThroughputArgs, AssertThroughput>{};
+    auto min_events
+      = d.positional("min_events", &AssertThroughputArgs::min_events);
+    auto max_events = d.named("max_events", &AssertThroughputArgs::max_events);
+    auto within = d.named("within", &AssertThroughputArgs::within);
+    d.named("retries", &AssertThroughputArgs::retries);
+    d.validate([min_events, max_events, within](DescribeCtx& ctx) -> Empty {
+      TRY(auto min, ctx.get(min_events));
+      auto max = ctx.get(max_events);
+      if (max and max->inner < min.inner) {
+        diagnostic::error("`max_events` must not be less than `min_events`")
+          .primary(*max)
+          .secondary(min, "`min_events`")
+          .emit(ctx);
+      }
       TRY(auto value, ctx.get(within));
       if (value <= duration::zero()) {
         diagnostic::error("`within` must be a positive duration")
