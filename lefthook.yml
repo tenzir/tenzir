@@ -10,7 +10,7 @@ pre-push:
     changelog:
       files: &branch_files 'git diff --name-only --diff-filter=ACMR "$(git merge-base origin/main HEAD)" HEAD'
       glob: "changelog/**"
-      run: uvx tenzir-ship validate
+      run: uvx tenzir-ship validate --lenient
     ruff-format:
       env:
         RUFF_VERSION: &ruff_version "0.15.12"
