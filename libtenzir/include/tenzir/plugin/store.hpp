@@ -13,6 +13,7 @@
 #include "tenzir/uuid.hpp"
 
 #include <caf/expected.hpp>
+#include <caf/message_priority.hpp>
 
 #include <cstddef>
 #include <memory>
@@ -56,10 +57,11 @@ public:
   /// partition that uses this partition as a store backend.
   /// @param fs The actor handle of a filesystem.
   /// @param header The store header as found in the partition flatbuffer.
+  /// @param priority The priority for requests to the filesystem actor.
   /// @returns A new store actor.
   [[nodiscard]] virtual auto
-  make_store(filesystem_actor fs, std::span<const std::byte> header) const
-    -> caf::expected<store_actor>
+  make_store(filesystem_actor fs, std::span<const std::byte> header,
+             caf::message_priority priority) const -> caf::expected<store_actor>
     = 0;
 };
 
@@ -83,7 +85,8 @@ private:
     -> caf::expected<builder_and_header> final;
 
   [[nodiscard]] auto
-  make_store(filesystem_actor fs, std::span<const std::byte> header) const
+  make_store(filesystem_actor fs, std::span<const std::byte> header,
+             caf::message_priority priority) const
     -> caf::expected<store_actor> final;
 };
 

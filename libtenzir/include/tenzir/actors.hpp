@@ -362,11 +362,17 @@ struct export_mode {
   bool live = false;
   bool internal = false;
   uint64_t parallel = 3;
+  bool high_priority = false;
 
   export_mode() = default;
 
-  export_mode(bool retro_, bool live_, bool internal_, uint64_t parallel_)
-    : retro{retro_}, live{live_}, internal{internal_}, parallel{parallel_} {
+  export_mode(bool retro_, bool live_, bool internal_, uint64_t parallel_,
+              bool high_priority_ = false)
+    : retro{retro_},
+      live{live_},
+      internal{internal_},
+      parallel{parallel_},
+      high_priority{high_priority_} {
     TENZIR_ASSERT(live or retro);
   }
 
@@ -374,7 +380,8 @@ struct export_mode {
     return f.object(x).fields(f.field("retro", x.retro),
                               f.field("live", x.live),
                               f.field("internal", x.internal),
-                              f.field("parallel", x.parallel));
+                              f.field("parallel", x.parallel),
+                              f.field("high_priority", x.high_priority));
   }
 };
 

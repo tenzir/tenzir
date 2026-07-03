@@ -114,9 +114,11 @@ struct bridge_state {
     // TODO: We may want to monitor the spawned partitions to be able to return
     // better diagnostics. As-is, we only get a caf::sec::request_receiver_down
     // if they quit, but not their actual error message.
-    const auto partition = self->spawn(
-      passive_partition, info.uuid, filesystem,
-      std::filesystem::path{fmt::format("index/{:l}", info.uuid)});
+    const auto partition
+      = self->spawn(passive_partition, info.uuid, filesystem,
+                    std::filesystem::path{fmt::format("index/{:l}", info.uuid)},
+                    mode.high_priority ? caf::message_priority::high
+                                       : caf::message_priority::normal);
     self->mail(atom::query_v, std::move(ctx))
       .request(partition, caf::infinite)
       .then(

@@ -234,73 +234,81 @@ passive_partition_state::initialize_from_chunk(const tenzir::chunk_ptr& chunk) {
 
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  filesystem_actor filesystem, const std::filesystem::path& path) {
+  filesystem_actor filesystem, const std::filesystem::path& path,
+  caf::message_priority priority) {
   auto id_string = fmt::to_string(id);
   self->state().self = self;
   self->state().path = path;
   self->state().filesystem = std::move(filesystem);
+  self->state().priority = priority;
   TENZIR_TRACEPOINT(passive_partition_spawned, id_string.c_str());
   // We send a "read" to the fs actor and upon receiving the result deserialize
   // the flatbuffer and switch to the "normal" partition behavior for responding
   // to queries.
-  self->mail(atom::mmap_v, path)
-    .request(self->state().filesystem, caf::infinite)
-    .then(
-      [=](chunk_ptr chunk) {
-        TENZIR_TRACE("{} {}", *self, TENZIR_ARG(chunk));
-        TENZIR_TRACEPOINT(passive_partition_loaded, id_string.c_str());
-        TENZIR_ASSERT(not self->state().partition_chunk);
-        if (auto err = self->state().initialize_from_chunk(chunk);
-            err.valid()) {
-          TENZIR_ERROR("{} failed to initialize passive partition from file "
-                       "{}: "
-                       "{}",
-                       *self, path, err);
-          self->quit();
-          return;
-        }
-        if (self->state().id != id) {
-          TENZIR_ERROR("unexpected ID for passive partition: expected {}, got "
-                       "{}",
-                       id, self->state().id);
-          self->quit();
-          return;
-        }
-        const auto* plugin
-          = plugins::find<store_actor_plugin>(self->state().store_id);
-        if (not plugin) {
-          auto error = caf::make_error(ec::format_error,
-                                       "encountered unhandled store backend");
-          TENZIR_ERROR("{} encountered unknown store backend '{}'", *self,
-                       self->state().store_id);
-          self->quit(std::move(error));
-          return;
-        }
-        auto store = plugin->make_store(self->state().filesystem,
-                                        self->state().store_header);
-        if (not store) {
-          TENZIR_ERROR("{} failed to spawn store: {}", *self, store.error());
-          self->quit(caf::make_error(ec::system_error, "failed to spawn "
-                                                       "store"));
-          return;
-        }
-        self->state().store = *store;
-        self->monitor(self->state().store, [=](caf::error err) {
-          TENZIR_ERROR("{} shuts down after DOWN from {} store: {}", *self,
-                       self->state().store_id, err);
-          self->quit(std::move(err));
-        });
-        // Delegate all deferred evaluations now that we have the partition chunk.
-        delegate_deferred_requests(self->state());
-      },
-      [=](caf::error err) {
-        // This error is nicely printed at the export operator as a warning. No
-        // need to print it as an error here already.
-        TENZIR_WARN("{} failed to load partition: {}", *self, err);
-        deliver_error_to_deferred_requests(self->state(), err);
-        // Quit the partition.
-        self->quit(std::move(err));
-      });
+  auto on_chunk = [=](chunk_ptr chunk) {
+    TENZIR_TRACE("{} {}", *self, TENZIR_ARG(chunk));
+    TENZIR_TRACEPOINT(passive_partition_loaded, id_string.c_str());
+    TENZIR_ASSERT(not self->state().partition_chunk);
+    if (auto err = self->state().initialize_from_chunk(chunk); err.valid()) {
+      TENZIR_ERROR("{} failed to initialize passive partition from file "
+                   "{}: "
+                   "{}",
+                   *self, path, err);
+      self->quit();
+      return;
+    }
+    if (self->state().id != id) {
+      TENZIR_ERROR("unexpected ID for passive partition: expected {}, got "
+                   "{}",
+                   id, self->state().id);
+      self->quit();
+      return;
+    }
+    const auto* plugin
+      = plugins::find<store_actor_plugin>(self->state().store_id);
+    if (not plugin) {
+      auto error = caf::make_error(ec::format_error,
+                                   "encountered unhandled store backend");
+      TENZIR_ERROR("{} encountered unknown store backend '{}'", *self,
+                   self->state().store_id);
+      self->quit(std::move(error));
+      return;
+    }
+    auto store = plugin->make_store(self->state().filesystem,
+                                    self->state().store_header, priority);
+    if (not store) {
+      TENZIR_ERROR("{} failed to spawn store: {}", *self, store.error());
+      self->quit(caf::make_error(ec::system_error, "failed to spawn "
+                                                   "store"));
+      return;
+    }
+    self->state().store = *store;
+    self->monitor(self->state().store, [=](caf::error err) {
+      TENZIR_ERROR("{} shuts down after DOWN from {} store: {}", *self,
+                   self->state().store_id, err);
+      self->quit(std::move(err));
+    });
+    // Delegate all deferred evaluations now that we have the partition chunk.
+    delegate_deferred_requests(self->state());
+  };
+  auto on_error = [=](caf::error err) {
+    // This error is nicely printed at the export operator as a warning. No
+    // need to print it as an error here already.
+    TENZIR_WARN("{} failed to load partition: {}", *self, err);
+    deliver_error_to_deferred_requests(self->state(), err);
+    // Quit the partition.
+    self->quit(std::move(err));
+  };
+  if (priority == caf::message_priority::high) {
+    self->mail(atom::mmap_v, path)
+      .urgent()
+      .request(self->state().filesystem, caf::infinite)
+      .then(std::move(on_chunk), std::move(on_error));
+  } else {
+    self->mail(atom::mmap_v, path)
+      .request(self->state().filesystem, caf::infinite)
+      .then(std::move(on_chunk), std::move(on_error));
+  }
   return {
     [self](atom::query,
            tenzir::query_context query_context) -> caf::result<uint64_t> {
