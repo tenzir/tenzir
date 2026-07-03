@@ -276,6 +276,11 @@ install(
   COMPONENT Development
   OPTIONAL)
 install(
+  FILES "${CMAKE_CURRENT_BINARY_DIR}/wangle/wangle/generated/wangle/wangle-config.h"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/wangle"
+  COMPONENT Development
+  OPTIONAL)
+install(
   DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/proxygen/generated/proxygen"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
   COMPONENT Development
