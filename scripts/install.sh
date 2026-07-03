@@ -163,7 +163,7 @@ else
     echo "  1. Use Docker"
     echo "  2. Build from source"
     echo
-    echo "Visit ${bold}https://docs.tenzir.com${normal} for further instructions."
+    echo "Visit ${bold}https://tenzir.com/docs${normal} for further instructions."
     exit 1
   fi
 fi
@@ -343,6 +343,6 @@ if [ -z "${open_source}" ]; then
   echo "  - Explore your node and manage pipelines at" \
     "${bold}https://app.tenzir.com${normal}"
 fi
-echo "  - Follow the guides at ${bold}https://docs.tenzir.com${normal}"
+echo "  - Follow the guides at ${bold}https://tenzir.com/docs${normal}"
 echo "  - Swing by our friendly Discord at" \
   "${bold}https://discord.tenzir.com${normal}"

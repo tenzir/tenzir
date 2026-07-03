@@ -320,7 +320,7 @@ public:
     auto speed = std::optional<located<double>>{};
     auto start = std::optional<time>{};
     auto field = located<std::string>{};
-    auto parser = argument_parser{"delay", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"delay", "https://tenzir.com/docs/"
                                            "operators/delay"};
     parser.add("--speed", speed, "<factor>");
     parser.add("--start", start, "<time>");

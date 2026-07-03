@@ -440,7 +440,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{name(), fmt::format("https://docs.tenzir.com/"
+    auto parser = argument_parser{name(), fmt::format("https://tenzir.com/docs/"
                                                       "operators/{}",
                                                       name())};
     parser.parse(p);

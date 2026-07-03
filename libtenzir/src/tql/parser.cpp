@@ -381,7 +381,7 @@ private:
     if (not plugin) {
       diagnostic::error("no such operator: `{}`", ident.name)
         .primary(ident.source)
-        .docs("https://docs.tenzir.com/operators")
+        .docs("https://tenzir.com/docs/operators")
         .throw_();
     }
     try {

@@ -82,7 +82,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     configuration attributes{};
-    auto docs = fmt::format("https://docs.tenzir.com/operators/{}", name());
+    auto docs = fmt::format("https://tenzir.com/docs/operators/{}", name());
     while (not p.at_end()) {
       auto key = p.accept_shell_arg();
       if (not key) {

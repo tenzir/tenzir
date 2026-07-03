@@ -12,7 +12,7 @@ building modular pipelines that process structured event data.
 - `.github/` - GitHub configuration and CI/CD workflows
 - `changelog/` - Changelog entries and release metadata
   - Managed with the `tenzir-ship` framework
-  - Reference: https://docs.tenzir.com/reference/ship-framework.md
+  - Reference: https://tenzir.com/docs/reference/ship-framework.md
 - `cmake/` - CMake build system modules and utilities
   - Various CMake modules for dependencies
   - TenzirConfig.cmake.in - CMake configuration template

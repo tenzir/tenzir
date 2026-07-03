@@ -5,4 +5,4 @@ error: expected a lambda
   |             ^^^^ 
   |
   = usage: where(list:list, predicate:any => bool)
-  = docs: https://docs.tenzir.com/reference/functions/where
+  = docs: https://tenzir.com/docs/reference/functions/where

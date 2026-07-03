@@ -2,7 +2,7 @@ created: 2026-06-01
 title: Tenzir Node v6.0.0
 intro: >-
   Tenzir v6 ships with a rewritten execution engine that unlocks faster, more capable,
-  and more scalable pipelines. Refer to the migration guide at https://docs.tenzir.com/guides/tenzir-v6-migration
+  and more scalable pipelines. Refer to the migration guide at https://tenzir.com/docs/guides/tenzir-v6-migration
   before upgrading.
 source:
   mode: promote-prerelease

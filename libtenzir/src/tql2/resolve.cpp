@@ -129,7 +129,7 @@ public:
         builder = std::move(builder).hint("did you mean `{}`?", *suggestion);
       }
       builder = std::move(builder).docs(
-        "https://docs.tenzir.com/reference/{}",
+        "https://tenzir.com/docs/reference/{}",
         target_ns == entity_ns::op ? "operators" : "functions");
       std::move(builder).emit(diag_);
     };

@@ -4,4 +4,4 @@ error: operator does not accept void
 5 | discard | discard
   | ^^^^^^^ 
   |
-  = docs: https://docs.tenzir.com/reference/operators/discard
+  = docs: https://tenzir.com/docs/reference/operators/discard

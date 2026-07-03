@@ -166,13 +166,13 @@ throw_loader_not_found(located<std::string_view> x, bool use_uri_schemes) {
     diagnostic::error("loader for `{}` scheme could not be found", x.inner)
       .primary(x.source)
       .hint("must be one of {}", fmt::join(available, ", "))
-      .docs("https://docs.tenzir.com/connectors")
+      .docs("https://tenzir.com/docs/connectors")
       .throw_();
   }
   diagnostic::error("loader `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
-    .docs("https://docs.tenzir.com/connectors")
+    .docs("https://tenzir.com/docs/connectors")
     .throw_();
 }
 
@@ -184,7 +184,7 @@ throw_loader_not_found(located<std::string_view> x, bool use_uri_schemes) {
   diagnostic::error("parser `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
-    .docs("https://docs.tenzir.com/formats")
+    .docs("https://tenzir.com/docs/formats")
     .throw_();
 }
 
@@ -217,7 +217,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "from <loader> <args>... [read <parser> <args>...]";
-    auto docs = "https://docs.tenzir.com/operators/from";
+    auto docs = "https://tenzir.com/docs/operators/from";
     if (const auto peek_tcp = p.peek_shell_arg();
         peek_tcp
         and (peek_tcp->inner == "tcp"
@@ -277,7 +277,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "load <loader> <args>...";
-    auto docs = "https://docs.tenzir.com/operators/load";
+    auto docs = "https://tenzir.com/docs/operators/load";
     auto [loader, _] = get_loader(p, usage, docs);
     TENZIR_DIAG_ASSERT(loader);
     return std::make_unique<load_operator>(std::move(loader));
@@ -292,7 +292,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "read <parser> <args>...";
-    auto docs = "https://docs.tenzir.com/operators/read";
+    auto docs = "https://tenzir.com/docs/operators/read";
     auto name = p.accept_shell_arg();
     if (not name) {
       diagnostic::error("expected parser name")

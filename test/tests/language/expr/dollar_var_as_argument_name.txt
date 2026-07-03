@@ -5,4 +5,4 @@ error: invalid argument name
   |      ^^^^ 
   |
   = usage: head [count:int]
-  = docs: https://docs.tenzir.com/reference/operators/head
+  = docs: https://tenzir.com/docs/reference/operators/head

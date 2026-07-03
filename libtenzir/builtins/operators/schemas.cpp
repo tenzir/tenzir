@@ -141,7 +141,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"schemas", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"schemas", "https://tenzir.com/docs/"
                                              "operators/schemas"};
     parser.parse(p);
     return std::make_unique<schemas_operator>();

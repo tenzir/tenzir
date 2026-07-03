@@ -58,7 +58,7 @@ public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto usage = "set <path>=<expr>...";
-    auto docs = "https://docs.tenzir.com/reference/operators/set";
+    auto docs = "https://tenzir.com/docs/reference/operators/set";
     auto assignments = std::vector<ast::assignment>{};
     for (auto& arg : inv.args) {
       arg.match(
@@ -81,7 +81,7 @@ public:
   auto compile(ast::invocation inv, compile_ctx ctx) const
     -> failure_or<ir::CompileResult> override {
     auto usage = "set <path>=<expr>...";
-    auto docs = "https://docs.tenzir.com/reference/operators/set";
+    auto docs = "https://tenzir.com/docs/reference/operators/set";
     auto assignments = std::vector<ast::assignment>{};
     for (auto& arg : inv.args) {
       auto* assignment = try_as<ast::assignment>(arg);

@@ -267,7 +267,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"batch", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"batch", "https://tenzir.com/docs/"
                                            "operators/batch"};
     auto limit = std::optional<located<uint64_t>>{};
     auto timeout = std::optional<located<duration>>{};

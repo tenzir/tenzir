@@ -297,7 +297,7 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser = argument_parser{
       "import",
-      "https://docs.tenzir.com/operators/import",
+      "https://tenzir.com/docs/operators/import",
     };
     parser.parse(p);
     return std::make_unique<import_operator>();

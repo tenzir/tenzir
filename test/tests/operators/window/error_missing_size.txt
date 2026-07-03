@@ -5,4 +5,4 @@ error: required argument `size` was not provided
   | ^^^^^^ 
   |
   = usage: window size=duration, on=time, [every=duration, tolerance=duration, idle_timeout=duration]
-  = docs: https://docs.tenzir.com/reference/operators/window
+  = docs: https://tenzir.com/docs/reference/operators/window

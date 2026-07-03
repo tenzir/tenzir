@@ -227,7 +227,7 @@ public:
     auto endpoint = std::string{};
     auto request_body = std::optional<std::string>{};
     auto parser
-      = argument_parser{"api", "https://docs.tenzir.com/operators/api"};
+      = argument_parser{"api", "https://tenzir.com/docs/operators/api"};
     parser.add(endpoint, "<command>");
     parser.add(request_body, "<request-body>");
     parser.parse(p);
@@ -252,7 +252,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ApiArgs, Api>{"https://docs.tenzir.com/operators/api"};
+    auto d = Describer<ApiArgs, Api>{"https://tenzir.com/docs/operators/api"};
     d.positional("endpoint", &ApiArgs::endpoint);
     d.positional("request_body", &ApiArgs::request_body);
     return d.without_optimize();

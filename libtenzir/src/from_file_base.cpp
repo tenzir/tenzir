@@ -532,7 +532,7 @@ auto from_file_state::make_pipeline(std::string_view path)
   TRY(auto compression_and_format,
       get_compression_and_format<true>(
         located<std::string_view>{path, args_.url.source}, nullptr,
-        "https://docs.tenzir.com/reference/operators/from_file", parse_dh));
+        "https://tenzir.com/docs/reference/operators/from_file", parse_dh));
   const auto& format = compression_and_format.format.get();
   const auto* compression = compression_and_format.compression;
   auto provider = session_provider::make(parse_dh);

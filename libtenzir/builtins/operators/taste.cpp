@@ -104,7 +104,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"taste", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"taste", "https://tenzir.com/docs/"
                                            "operators/taste"};
     auto count = std::optional<uint64_t>{};
     parser.add(count, "<limit>");

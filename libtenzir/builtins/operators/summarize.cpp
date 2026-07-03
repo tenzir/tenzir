@@ -613,7 +613,7 @@ auto build_config(std::vector<ast::expression> exprs, session ctx)
       diagnostic::error("function does not support aggregations")
         .primary(call.fn)
         .hint("if you want to group by this, use assignment before")
-        .docs("https://docs.tenzir.com/operators/summarize")
+        .docs("https://tenzir.com/docs/operators/summarize")
         .emit(ctx);
       failed = true;
       return;

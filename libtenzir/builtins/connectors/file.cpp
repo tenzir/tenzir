@@ -462,7 +462,7 @@ public:
   auto parse_loader(parser_interface& p) const
     -> std::unique_ptr<plugin_loader> override {
     auto args = loader_args{};
-    auto parser = argument_parser{"file", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"file", "https://tenzir.com/docs/"
                                           "connectors/file"};
     parser.add(args.path, "<path>");
     parser.add("-f,--follow", args.follow);
@@ -498,7 +498,7 @@ public:
   auto parse_saver(parser_interface& p) const
     -> std::unique_ptr<plugin_saver> override {
     auto args = saver_args{};
-    auto parser = argument_parser{"file", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"file", "https://tenzir.com/docs/"
                                           "connectors/file"};
     parser.add(args.path, "<path>");
     parser.add("-a,--append", args.append);
@@ -728,7 +728,7 @@ public:
     -> std::unique_ptr<plugin_loader> override {
     auto args = file::loader_args{};
     args.path.inner = "-";
-    auto parser = argument_parser{"stdin", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"stdin", "https://tenzir.com/docs/"
                                            "connectors/stdin"};
     parser.add("-t,--timeout", args.timeout, "<duration>");
     parser.parse(p);
@@ -749,7 +749,7 @@ public:
     -> std::unique_ptr<plugin_saver> override {
     auto args = file::saver_args{};
     args.path.inner = "-";
-    auto parser = argument_parser{name(), "https://docs.tenzir.com/"
+    auto parser = argument_parser{name(), "https://tenzir.com/docs/"
                                           "connectors/stdout"};
     parser.parse(p);
     return std::make_unique<file::file_saver>(std::move(args));

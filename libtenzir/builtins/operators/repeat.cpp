@@ -240,7 +240,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto repetitions = std::optional<uint64_t>{};
-    auto parser = argument_parser{"repeat", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"repeat", "https://tenzir.com/docs/"
                                             "operators/repeat"};
     parser.add(repetitions, "<count>");
     parser.parse(p);

@@ -5,4 +5,4 @@ error: required subpipeline was not provided
   | ^^^^^^ 
   |
   = usage: to_ftp url:string, [tls=record]
-  = docs: https://docs.tenzir.com/reference/operators/to_ftp
+  = docs: https://tenzir.com/docs/reference/operators/to_ftp

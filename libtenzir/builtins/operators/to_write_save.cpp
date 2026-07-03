@@ -36,7 +36,7 @@ namespace {
   diagnostic::error("printer `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
-    .docs("https://docs.tenzir.com/formats")
+    .docs("https://tenzir.com/docs/formats")
     .throw_();
 }
 
@@ -56,13 +56,13 @@ throw_saver_not_found(located<std::string_view> x, bool use_uri_schemes) {
     diagnostic::error("saver for `{}` scheme could not be found", x.inner)
       .primary(x.source)
       .hint("must be one of {}", fmt::join(available, ", "))
-      .docs("https://docs.tenzir.com/connectors")
+      .docs("https://tenzir.com/docs/connectors")
       .throw_();
   }
   diagnostic::error("saver `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
-    .docs("https://docs.tenzir.com/connectors")
+    .docs("https://tenzir.com/docs/connectors")
     .throw_();
 }
 
@@ -179,7 +179,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "write <printer> <args>...";
-    auto docs = "https://docs.tenzir.com/operators/write";
+    auto docs = "https://tenzir.com/docs/operators/write";
     auto name = p.accept_shell_arg();
     if (not name) {
       diagnostic::error("expected printer name")
@@ -293,7 +293,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "save <saver> <args>...";
-    auto docs = "https://docs.tenzir.com/operators/save";
+    auto docs = "https://tenzir.com/docs/operators/save";
     auto [saver, _] = get_saver(p, usage, docs);
     TENZIR_DIAG_ASSERT(saver);
     return std::make_unique<save_operator>(std::move(saver));
@@ -392,7 +392,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "to <saver> <args>... [write <printer> <args>...]";
-    auto docs = "https://docs.tenzir.com/operators/to";
+    auto docs = "https://tenzir.com/docs/operators/to";
     auto q = until_keyword_parser{"write", p};
     auto [saver, saver_path] = get_saver(q, usage, docs);
     TENZIR_DIAG_ASSERT(saver);

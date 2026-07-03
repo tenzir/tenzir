@@ -34,7 +34,7 @@ namespace tenzir::plugins::kv {
 
 namespace {
 
-constexpr auto docs = "https://docs.tenzir.com/formats/kv";
+constexpr auto docs = "https://tenzir.com/docs/formats/kv";
 
 class splitter {
 public:

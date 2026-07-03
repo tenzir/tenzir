@@ -141,7 +141,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"fields", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"fields", "https://tenzir.com/docs/"
                                             "operators/fields"};
     parser.parse(p);
     return std::make_unique<fields_operator>();

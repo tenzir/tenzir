@@ -500,7 +500,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"export", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"export", "https://tenzir.com/docs/"
                                             "operators/export"};
     auto retro = false;
     auto live = false;
@@ -601,7 +601,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"diagnostics", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"diagnostics", "https://tenzir.com/docs/"
                                                  "operators/diagnostics"};
     auto live = false;
     auto retro = false;
@@ -713,7 +713,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"metrics", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"metrics", "https://tenzir.com/docs/"
                                              "operators/metrics"};
     auto name = std::optional<std::string>{};
     auto live = false;

@@ -31,7 +31,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://tenzir.com"
-Documentation = "https://docs.tenzir.com/reference/python-api"
+Documentation = "https://tenzir.com/docs/reference/python-api"
 Repository = "https://github.com/tenzir/tenzir"
 
 [project.scripts]

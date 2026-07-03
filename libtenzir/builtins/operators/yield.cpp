@@ -34,7 +34,7 @@ public:
   yield_operator() = default;
 
   explicit yield_operator(parser_interface& p) {
-    auto parser = argument_parser{"yield", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"yield", "https://tenzir.com/docs/"
                                            "operators/yield"};
     auto extractor = located<std::string>{};
     // TODO: This assumes that the given extractor can be parsed as a shell-like

@@ -5,4 +5,4 @@ error: expected exactly 1 positional argument
   | ^^^^^ 
   |
   = usage: every interval:duration
-  = docs: https://docs.tenzir.com/reference/operators/every
+  = docs: https://tenzir.com/docs/reference/operators/every

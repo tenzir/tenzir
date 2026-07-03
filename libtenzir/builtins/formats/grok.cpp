@@ -675,7 +675,7 @@ public:
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto parser
-      = argument_parser{"grok", "https://docs.tenzir.com/operators/grok"};
+      = argument_parser{"grok", "https://tenzir.com/docs/operators/grok"};
     auto pattern_definitions = std::optional<located<std::string>>{};
     auto raw_pattern = located<std::string>{};
     auto indexed_captures = false;

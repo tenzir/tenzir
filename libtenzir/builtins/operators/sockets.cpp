@@ -114,7 +114,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"sockets", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"sockets", "https://tenzir.com/docs/"
                                              "operators/sockets"};
     parser.parse(p);
     return std::make_unique<sockets_operator>();

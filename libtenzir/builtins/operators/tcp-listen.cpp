@@ -620,7 +620,7 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     // tcp_listen <endpoint> [<args...>] read [<op_args...>]
     auto parser
-      = argument_parser{"tcp-listen", "https://docs.tenzir.com/connectors/tcp"};
+      = argument_parser{"tcp-listen", "https://tenzir.com/docs/connectors/tcp"};
     auto q = until_keyword_parser{"read", p};
     auto args = tcp_listen_args{};
     auto endpoint = located<std::string>{};

@@ -5,4 +5,4 @@ error: required subpipeline was not provided
   | ^^^^^^^^^^^ 
   |
   = usage: accept_http endpoint:string, [responses=record, max_request_size=int, max_connections=int, tls=record]
-  = docs: https://docs.tenzir.com/reference/operators/accept_http
+  = docs: https://tenzir.com/docs/reference/operators/accept_http

@@ -249,7 +249,7 @@ auto pipeline_executor_state::start() -> caf::result<void> {
     }
     abort_start(
       diagnostic::error("expected pipeline to end with a sink{}", suffix)
-        .docs("https://docs.tenzir.com/reference/operators")
+        .docs("https://tenzir.com/docs/reference/operators")
         .done());
     return start_rp;
   }

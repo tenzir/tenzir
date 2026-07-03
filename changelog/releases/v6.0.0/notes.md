@@ -1,4 +1,4 @@
-Tenzir v6 ships with a rewritten execution engine that unlocks faster, more capable, and more scalable pipelines. Refer to the migration guide at https://docs.tenzir.com/guides/tenzir-v6-migration before upgrading.
+Tenzir v6 ships with a rewritten execution engine that unlocks faster, more capable, and more scalable pipelines. Refer to the migration guide at https://tenzir.com/docs/guides/tenzir-v6-migration before upgrading.
 
 ## 💥 Breaking changes
 
@@ -52,7 +52,7 @@ from_http "https://api.example.com/status" {
 }
 ```
 
-Additionally, the `url` and `headers` arguments are now resolved as [secrets](https://docs.tenzir.com/explanations/secrets), so you can pass secret names instead of hardcoding tokens or sensitive URLs.
+Additionally, the `url` and `headers` arguments are now resolved as [secrets](https://tenzir.com/docs/explanations/secrets), so you can pass secret names instead of hardcoding tokens or sensitive URLs.
 
 *By @aljazerzen in #5953.*
 
