@@ -3,6 +3,8 @@ title: Add ingress/egress metrics to more operators
 type: feature
 authors:
   - IyeOnline
+prs:
+  - 6401
 created: 2026-07-01T00:00:00.000000Z
 ---
 
