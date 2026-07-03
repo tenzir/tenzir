@@ -8,7 +8,7 @@ building modular pipelines that process structured event data.
 ### Project structure
 
 - `.agents/` - Agent-facing reference material
-- `.docs/` - Optional local clone of the `tenzir/docs` repository
+- `.docs/` - Optional local clone of the `tenzir/content` repository
 - `.github/` - GitHub configuration and CI/CD workflows
 - `changelog/` - Changelog entries and release metadata
   - Managed with the `tenzir-ship` framework
@@ -134,17 +134,18 @@ tenzir-unit-test
 ### Update documentation
 
 User-facing documentation lives in the git-ignored `.docs/` directory, which is
-an optional clone of the `tenzir/docs` repository.
+an optional clone of the `tenzir/content` repository.
 
 When changing existing behavior or adding user-facing functionality, update
-`.docs/`, create a topic branch there, and open a companion PR against
-`tenzir/docs`.
+`.docs/website/src/content/docs/`, create a topic branch there, and open a
+companion PR against `tenzir/content`.
 
 Skip this process for internal refactorings that do not affect the user-facing
 TQL surface or command line tools.
 
-When resolving docs conflicts in `.docs/tenzir.yaml.example`, also update the
-source `tenzir.yaml.example` here so the next sync does not undo the resolution.
+When resolving docs conflicts in `.docs/website/src/assets/tenzir.yaml.example`,
+also update the source `tenzir.yaml.example` here so the next sync does not undo
+the resolution.
 
 ## C++ development
 
