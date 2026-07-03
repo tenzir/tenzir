@@ -749,9 +749,10 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
                   co_return proxygen::coro::HTTPSourceReader::Continue;
                 }
                 auto hdrs = std::vector<http::Header>{};
-                msg->getHeaders().forEach([&](std::string& k, std::string& v) {
-                  hdrs.emplace_back(k, v);
-                });
+                msg->getHeaders().forEach(
+                  [&](const std::string& k, const std::string& v) {
+                    hdrs.emplace_back(k, v);
+                  });
                 auto status = msg->getStatusCode();
                 if (http::is_retryable_http_status(status)) {
                   auto retry_after = http::parse_retry_after(

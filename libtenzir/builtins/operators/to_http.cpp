@@ -143,14 +143,14 @@ public:
     co_return event;
   }
 
-  void
-  stopReading(folly::Optional<const proxygen::coro::HTTPErrorCode>) override {
+  void stopReading(
+    folly::Optional<const proxygen::coro::HTTPErrorCode>) noexcept override {
     if (heapAllocated_) {
       delete this;
     }
   }
 
-  void setReadTimeout(std::chrono::milliseconds) override {
+  void setReadTimeout(std::chrono::milliseconds) noexcept override {
   }
 
   auto body_started() const -> bool {
