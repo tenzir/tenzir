@@ -334,7 +334,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto args = operator_args{};
-    auto parser = argument_parser{name(), "https://docs.tenzir.com/operators/"
+    auto parser = argument_parser{name(), "https://tenzir.com/docs/operators/"
                                           "velociraptor"};
     auto org_id = std::optional<located<std::string>>{};
     auto request_name = std::optional<located<std::string>>{};

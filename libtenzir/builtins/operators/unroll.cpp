@@ -529,7 +529,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"unroll", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"unroll", "https://tenzir.com/docs/"
                                             "operators/unroll"};
     auto field = located<std::string>{};
     parser.add(field, "<field>");

@@ -73,7 +73,7 @@ struct xsv_printer_options {
 
   static auto try_parse_printer_options(parser_interface& p)
     -> xsv_printer_options {
-    auto parser = argument_parser{"xsv", "https://docs.tenzir.com/formats/xsv"};
+    auto parser = argument_parser{"xsv", "https://tenzir.com/docs/formats/xsv"};
     auto field_sep_str = located<std::string>{};
     auto list_sep_str = located<std::string>{};
     auto null_value = located<std::string>{};
@@ -1317,7 +1317,7 @@ public:
     // const auto is_parser = true;
     // auto options = xsv_options::try_parse(p, "xsv", is_parser);
     auto parser = argument_parser{
-      name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
+      name(), fmt::format("https://tenzir.com/docs/formats/{}", name())};
     auto opt_parser = xsv_common_parser_options_parser{name()};
     opt_parser.add_to_parser(parser);
     parser.parse(p);
@@ -1348,7 +1348,7 @@ public:
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{
-      name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
+      name(), fmt::format("https://tenzir.com/docs/formats/{}", name())};
     auto opt_parser = xsv_common_parser_options_parser{
       name(),
       std::string{Sep},

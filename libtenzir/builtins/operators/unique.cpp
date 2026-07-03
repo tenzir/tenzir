@@ -29,7 +29,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"unique", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"unique", "https://tenzir.com/docs/"
                                             "operators/unique"};
     parser.parse(p);
     auto result

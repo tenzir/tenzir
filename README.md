@@ -1,6 +1,6 @@
 <div align="center">
 
-<a href="https://docs.tenzir.com">
+<a href="https://tenzir.com/docs">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./assets/tenzir-white.svg">
   <source media="(prefers-color-scheme: light)" srcset="./assets/tenzir-black.svg">
@@ -26,7 +26,7 @@ execute detections and run analytics in-stream.
 
 ## Get Started
 
-Check out [our documentation](https://docs.tenzir.com/) where your find
+Check out [our documentation](https://tenzir.com/docs/) where your find
 tutorials that walk your through the first steps, how-to guides to solve a
 specific problem, explanations of key concepts, and an in-depth reference of the
 nitty-gritty technical details.

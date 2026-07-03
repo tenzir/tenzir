@@ -80,7 +80,7 @@ public:
       std::move(d)
         .modify()
         .usage("print <input> <printer> <args>...")
-        .docs("https://docs.tenzir.com/operators/print")
+        .docs("https://tenzir.com/docs/operators/print")
         .throw_();
     }
   }

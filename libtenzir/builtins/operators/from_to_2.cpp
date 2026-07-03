@@ -206,7 +206,7 @@ class from_plugin2 final : public virtual operator_factory_plugin,
                            public virtual operator_compiler_plugin {
 public:
   constexpr static auto docs
-    = "https://docs.tenzir.com/reference/operators/from";
+    = "https://tenzir.com/docs/reference/operators/from";
   auto name() const -> std::string override {
     return "tql2.from";
   }
@@ -281,7 +281,7 @@ public:
 
 class to_plugin2 final : public virtual operator_factory_plugin {
 public:
-  constexpr static auto docs = "https://docs.tenzir.com/reference/operators/to";
+  constexpr static auto docs = "https://tenzir.com/docs/reference/operators/to";
   auto name() const -> std::string override {
     return "tql2.to";
   }

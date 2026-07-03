@@ -509,7 +509,7 @@ private:
 class cef_plugin final : public virtual parser_plugin<cef_parser> {
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
-    auto parser = argument_parser{"cef", "https://docs.tenzir.com/formats/cef"};
+    auto parser = argument_parser{"cef", "https://tenzir.com/docs/formats/cef"};
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
     parser.parse(p);

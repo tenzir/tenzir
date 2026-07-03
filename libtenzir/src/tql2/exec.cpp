@@ -304,7 +304,7 @@ public:
     // this, but putting everything here was easy to do. We should reconsider
     // this strategy when introducing a second operator that can modify the
     // constant environment.
-    const auto* docs = "https://docs.tenzir.com/tql2/operators/load_balance";
+    const auto* docs = "https://tenzir.com/docs/tql2/operators/load_balance";
     const auto* usage = "load_balance over:list { … }";
     auto emit = [&](diagnostic_builder d) {
       if (d.inner().severity == severity::error) {

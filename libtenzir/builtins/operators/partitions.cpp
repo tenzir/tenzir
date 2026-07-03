@@ -253,7 +253,7 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser = argument_parser{
       "partitions",
-      "https://docs.tenzir.com/operators/partitions",
+      "https://tenzir.com/docs/operators/partitions",
     };
     auto expr = std::optional<located<tenzir::expression>>{};
     auto experimental_include_ranges = std::optional<location>{};

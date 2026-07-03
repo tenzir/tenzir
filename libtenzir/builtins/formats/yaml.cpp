@@ -335,7 +335,7 @@ class yaml_plugin final : public virtual parser_plugin<yaml_parser>,
 
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
-    auto parser = argument_parser{"yaml", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"yaml", "https://tenzir.com/docs/"
                                           "formats/yaml"};
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
@@ -353,7 +353,7 @@ class yaml_plugin final : public virtual parser_plugin<yaml_parser>,
 
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> override {
-    auto parser = argument_parser{"yaml", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"yaml", "https://tenzir.com/docs/"
                                           "formats/yaml"};
     parser.parse(p);
     return std::make_unique<yaml_printer>();

@@ -187,7 +187,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"openapi", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"openapi", "https://tenzir.com/docs/"
                                              "operators/openapi"};
     parser.parse(p);
     return std::make_unique<openapi_operator>();

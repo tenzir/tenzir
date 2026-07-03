@@ -281,7 +281,7 @@ public:
     auto str = std::optional<located<std::string>>{};
     auto args = operator_args{};
     auto parser
-      = argument_parser{"sample", "https://docs.tenzir.com/operators/sample"};
+      = argument_parser{"sample", "https://tenzir.com/docs/operators/sample"};
     parser.add("--period", args.period, "<period>");
     parser.add("--mode", str, "<string>");
     parser.add("--min-events", args.min_events, "<uint>");

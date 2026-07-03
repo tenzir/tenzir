@@ -584,7 +584,7 @@ public:
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{
-      name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
+      name(), fmt::format("https://tenzir.com/docs/formats/{}", name())};
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
     parser.parse(p);

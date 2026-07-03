@@ -476,7 +476,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"files", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"files", "https://tenzir.com/docs/"
                                            "operators/files"};
     auto args = files_args{};
     parser.add(args.path, "<path>");

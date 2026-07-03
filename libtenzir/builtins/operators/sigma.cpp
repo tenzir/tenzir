@@ -879,7 +879,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"sigma", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"sigma", "https://tenzir.com/docs/"
                                            "reference/operators"};
     auto refresh_interval = duration{std::chrono::seconds{5}};
     auto refresh_interval_arg = std::optional<located<std::string>>{};

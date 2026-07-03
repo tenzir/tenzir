@@ -64,7 +64,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"unflatten", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"unflatten", "https://tenzir.com/docs/"
                                                "operators/unflatten"};
     auto sep = std::optional<located<std::string>>{};
     parser.add(sep, "<separator>");

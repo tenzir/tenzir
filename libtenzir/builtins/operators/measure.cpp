@@ -236,7 +236,7 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     bool real_time = false;
     bool cumulative = false;
-    auto parser = argument_parser{"measure", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"measure", "https://tenzir.com/docs/"
                                              "operators/measure"};
     parser.add("--real-time", real_time);
     parser.add("--cumulative", cumulative);

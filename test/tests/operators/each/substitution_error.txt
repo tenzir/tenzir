@@ -4,4 +4,4 @@ error: expected positive integer, got `-1`
 7 |   head $this.limit
   |        ^^^^^^^^^^^ 
   |
-  = docs: https://docs.tenzir.com/reference/operators/head
+  = docs: https://tenzir.com/docs/reference/operators/head

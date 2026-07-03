@@ -717,7 +717,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
                 "This operator is not available in Tenzir Node v6")
                 .primary(x.op)
                 .hint("{}", get_porting_hint(x.op))
-                .hint("see https://docs.tenzir.com/guides/tenzir-v6-migration")
+                .hint("see https://tenzir.com/docs/guides/tenzir-v6-migration")
                 .emit(ctx);
               return failure::promise();
 #endif

@@ -1485,7 +1485,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"cache", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"cache", "https://tenzir.com/docs/"
                                            "operators/cache"};
     auto id = located<std::string>{};
     auto mode = std::optional<located<std::string>>{};

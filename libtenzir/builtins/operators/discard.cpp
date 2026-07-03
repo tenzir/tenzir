@@ -112,7 +112,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"discard", "https://docs.tenzir.com/"
+    auto parser = argument_parser{"discard", "https://tenzir.com/docs/"
                                              "operators/discard"};
     parser.parse(p);
     return std::make_unique<discard_operator>();

@@ -1057,7 +1057,7 @@ public:
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto parser
-      = argument_parser{name(), "https://docs.tenzir.com/formats/json"};
+      = argument_parser{name(), "https://tenzir.com/docs/formats/json"};
     auto args = parser_args{"json"};
     multi_series_builder_argument_parser msb_parser{
       {.default_schema_name = "tenzir.json"},
@@ -1141,7 +1141,7 @@ public:
     -> std::unique_ptr<plugin_printer> override {
     auto args = printer_args{};
     auto parser
-      = argument_parser{name(), "https://docs.tenzir.com/formats/json"};
+      = argument_parser{name(), "https://tenzir.com/docs/formats/json"};
     // We try to follow 'jq' option naming.
     parser.add("-c,--compact-output", args.compact_output);
     parser.add("-C,--color-output", args.color_output);
@@ -1165,7 +1165,7 @@ public:
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{
-      name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
+      name(), fmt::format("https://tenzir.com/docs/formats/{}", name())};
     auto msb_parser = multi_series_builder_argument_parser{
       multi_series_builder::settings_type{.default_schema_name = "gelf"},
       multi_series_builder::policy_default{},
@@ -1198,7 +1198,7 @@ public:
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{
-      name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
+      name(), fmt::format("https://tenzir.com/docs/formats/{}", name())};
     auto args = parser_args{std::string{Name.str()}};
     auto msb_parser = multi_series_builder_argument_parser{
       multi_series_builder::settings_type{

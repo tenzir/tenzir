@@ -1079,7 +1079,7 @@ public:
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{
-      name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
+      name(), fmt::format("https://tenzir.com/docs/formats/{}", name())};
     auto args = parser_args{};
     parser.add("-e,--emit-file-headers", args.emit_file_headers);
     parser.parse(p);
@@ -1089,7 +1089,7 @@ public:
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> override {
     auto parser = argument_parser{
-      name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
+      name(), fmt::format("https://tenzir.com/docs/formats/{}", name())};
     auto args = printer_args{};
     parser.parse(p);
     return std::make_unique<pcap_printer>(std::move(args));

@@ -33,5 +33,5 @@ from_http "https://api.example.com/status" {
 ```
 
 Additionally, the `url` and `headers` arguments are now resolved as
-[secrets](https://docs.tenzir.com/explanations/secrets), so you can pass
+[secrets](https://tenzir.com/docs/explanations/secrets), so you can pass
 secret names instead of hardcoding tokens or sensitive URLs.

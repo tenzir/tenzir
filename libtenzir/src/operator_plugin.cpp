@@ -777,7 +777,7 @@ auto OperatorPlugin::describe_shared() const
            pos = docs_path.find("::")) {
         docs_path.replace(pos, 2, "/");
       }
-      desc->docs = "https://docs.tenzir.com/reference/operators/" + docs_path;
+      desc->docs = "https://tenzir.com/docs/reference/operators/" + docs_path;
     }
     cached_desc_ = std::move(desc);
   });
