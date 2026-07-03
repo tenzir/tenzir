@@ -351,11 +351,12 @@ auto catalog_state::merge(std::vector<partition_synopsis_pair> partitions)
 }
 
 void catalog_state::erase(const uuid& partition) {
-  for (auto& [type, uuid_synopsis_map] : synopses_per_type) {
-    const auto num_erased = uuid_synopsis_map.erase(partition);
+  for (auto it = synopses_per_type.begin(); it != synopses_per_type.end();
+       ++it) {
+    const auto num_erased = it->second.erase(partition);
     if (num_erased > 0) {
-      if (uuid_synopsis_map.empty()) {
-        synopses_per_type.erase(type);
+      if (it->second.empty()) {
+        synopses_per_type.erase(it);
       }
       return;
     }
@@ -421,7 +422,9 @@ auto catalog_state::lookup_impl(const expression& expr,
   -> catalog_lookup_result::candidate_info {
   TENZIR_ASSERT(not is<caf::none_t>(expr));
   auto synopsis_map_per_type_it = synopses_per_type.find(schema);
-  TENZIR_ASSERT(synopsis_map_per_type_it != synopses_per_type.end());
+  if (synopsis_map_per_type_it == synopses_per_type.end()) {
+    return {};
+  }
   const auto& partition_synopses = synopsis_map_per_type_it->second;
   // The partition UUIDs must be sorted, otherwise the invariants of the
   // inplace union and intersection algorithms are violated, leading to
