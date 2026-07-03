@@ -66,6 +66,12 @@ public:
     return None{};
   }
 
+  auto is_transparent() const -> bool override {
+    // Elided at spawn time; imposes no distribution requirement and does not
+    // break a parallelizable region.
+    return true;
+  }
+
   friend auto inspect(auto& f, OptimizeBarrierIr& x) -> bool {
     return f.object(x).fields(f.field("loc", x.loc_));
   }

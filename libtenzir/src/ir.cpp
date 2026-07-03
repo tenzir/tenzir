@@ -306,6 +306,12 @@ auto ir::SetIr::infer_type(element_type_tag input, diagnostic_handler& dh) const
   return input;
 }
 
+auto ir::SetIr::required_distribution() const -> Distribution {
+  // `set`/`select` are stateless and row-local: each output row depends only on
+  // its own input row, so any subset of events can be processed independently.
+  return AnyDistribution{};
+}
+
 namespace ir {
 
 template <class Inspector>
@@ -585,6 +591,19 @@ public:
       return IfSink{std::move(args_)}.with_name("if");
     }
     return If{std::move(args_)}.with_name("if");
+  }
+
+  auto required_distribution() const -> Distribution override {
+    // `if`'s own work is per-event (condition evaluation and slice
+    // partitioning), so it imposes no requirement on its own. Its requirement
+    // is derived from its branches: it can promise `Any` only if every operator
+    // in both branches can consume `Any`. A missing `else` branch is an
+    // identity passthrough, which requires nothing.
+    auto result = args_.consequence.required_distribution();
+    if (args_.alternative) {
+      result = meet(result, args_.alternative->required_distribution());
+    }
+    return result;
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
@@ -982,6 +1001,23 @@ auto operator_compiler_plugin::operator_name() const -> std::string {
 ir::pipeline::pipeline(std::vector<let> lets,
                        std::vector<Box<Operator>> operators)
   : lets{std::move(lets)}, operators{std::move(operators)} {
+}
+
+auto ir::pipeline::required_distribution() const -> Distribution {
+  // Start from the least restrictive requirement and fold in each operator.
+  // Transparent operators (elided at spawn) impose no requirement.
+  auto result = Distribution{AnyDistribution{}};
+  for (const auto& op : operators) {
+    if (op->is_transparent()) {
+      continue;
+    }
+    result = meet(result, op->required_distribution());
+    if (is<SingleDistribution>(result)) {
+      // `Single` is the top of the lattice; nothing can relax it.
+      break;
+    }
+  }
+  return result;
 }
 
 } // namespace tenzir

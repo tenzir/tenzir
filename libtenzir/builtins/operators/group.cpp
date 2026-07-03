@@ -168,9 +168,18 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<GroupArgs>{};
-    d.positional("over", &GroupArgs::over, "expr");
+    auto over = d.positional("over", &GroupArgs::over, "expr");
     auto pipe = d.pipeline(&GroupArgs::pipe, SubOptimize::from_downstream,
                            {{"group", &GroupArgs::let}});
+    // `group` is a per-key exchange: all events for a key must be observed by a
+    // single instance, so it requires a hash distribution over its key.
+    d.distribution([over](DescribeCtx& ctx) -> Distribution {
+      auto keys = std::vector<ast::expression>{};
+      if (auto key = ctx.get(over)) {
+        keys.push_back(std::move(*key));
+      }
+      return HashDistribution{std::move(keys)};
+    });
     d.spawner([pipe]<class Input>(DescribeCtx& ctx)
                 -> failure_or<Option<SpawnWith<GroupArgs, Input>>> {
       if constexpr (std::same_as<Input, table_slice>) {

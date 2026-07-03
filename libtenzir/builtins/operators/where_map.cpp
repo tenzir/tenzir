@@ -898,6 +898,12 @@ public:
     return ir::optimize_result{std::move(filter), order, {}};
   }
 
+  auto required_distribution() const -> Distribution override {
+    // `where` is a stateless, row-local filter: each event is kept or dropped
+    // based only on itself, so any subset of events works.
+    return AnyDistribution{};
+  }
+
   friend auto inspect(auto& f, where_ir& x) -> bool {
     return f.object(x).fields(f.field("self", x.self_),
                               f.field("predicate", x.predicate_));

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/async/fwd.hpp"
+#include "tenzir/distribution.hpp"
 #include "tenzir/element_type.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -82,6 +83,28 @@ public:
   /// for example to act as optimization barriers.
   virtual auto spawn(element_type_tag input) && -> Option<AnyOperator> = 0;
 
+  /// Return the input distribution this operator requires from its upstream
+  /// edge, used by the implicit parallelization planner.
+  ///
+  /// The default is the conservative `SingleDistribution`: an operator sees the
+  /// full stream in one instance unless it explicitly opts into a weaker
+  /// requirement.
+  ///
+  /// Subpipeline hosts (e.g. `if`) fold this from their child pipelines via
+  /// `meet`.
+  virtual auto required_distribution() const -> Distribution {
+    return SingleDistribution{};
+  }
+
+  /// Return whether this operator is elided at spawn time (`spawn()` returns
+  /// `None`), for example an optimization barrier.
+  ///
+  /// Transparent operators impose no distribution requirement and do not break
+  /// a parallelizable region: the planner skips them entirely.
+  virtual auto is_transparent() const -> bool {
+    return false;
+  }
+
   /// Return the "main location" of the operator.
   ///
   /// Typically, this is the operator name. If there is no operator name, for
@@ -142,6 +165,15 @@ struct pipeline {
   /// @see Operator
   auto
   optimize(optimize_filter filter, event_order order) && -> optimize_result;
+
+  /// Folds the input distribution requirements of all contained operators.
+  ///
+  /// Returns the `meet` of every non-transparent operator's
+  /// `required_distribution()`, i.e. the strongest requirement any operator in
+  /// the pipeline imposes. An empty (or fully transparent) pipeline requires
+  /// `AnyDistribution`. Subpipeline hosts use this to derive their own
+  /// requirement from their child pipelines.
+  auto required_distribution() const -> Distribution;
 };
 
 struct CompileResult {
@@ -208,6 +240,8 @@ public:
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<std::optional<element_type_tag>> override;
+
+  auto required_distribution() const -> Distribution override;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, SetIr& x) -> bool;

@@ -490,6 +490,16 @@ public:
     TENZIR_UNREACHABLE();
   }
 
+  auto required_distribution() const -> Distribution override {
+    if (desc_->distribution_fn) {
+      auto noop_dh = null_diagnostic_handler{};
+      auto ctx = DescribeCtx{args_,  named_args_,     pipeline_,
+                             *desc_, main_location(), noop_dh};
+      return (*desc_->distribution_fn)(ctx);
+    }
+    return desc_->distribution.value_or(SingleDistribution{});
+  }
+
   auto substitute(substitute_ctx ctx, bool instantiate)
     -> failure_or<void> override {
     // Helper to substitute an argument using its setter.

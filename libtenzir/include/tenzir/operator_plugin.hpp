@@ -183,6 +183,14 @@ struct Description {
   std::vector<Named> named;
   std::optional<Validator> validator;
   std::optional<Optimizer> optimizer;
+  /// The input distribution this operator requires from its upstream edge, used
+  /// by the implicit parallelization planner. Absent means the conservative
+  /// `SingleDistribution` default.
+  std::optional<Distribution> distribution;
+  /// A per-instance requirement derived from the bound arguments (e.g. a hash
+  /// key expression, or a subpipeline host folding its children). Takes
+  /// precedence over `distribution` when set.
+  std::optional<std::function<auto(DescribeCtx&)->Distribution>> distribution_fn;
   std::optional<Setter<ir::optimize_filter>> set_filter;
   std::optional<Setter<location>> set_operator_location;
   std::optional<Setter<event_order>> set_order;
@@ -1061,6 +1069,29 @@ public:
         .filter_self = std::move(filter),
       };
     });
+  }
+
+  /// Declares the input distribution this operator requires from its upstream
+  /// edge, used by the implicit parallelization planner. Call before the
+  /// terminal describer method (e.g. `invariant_order()`).
+  auto distribution(Distribution dist) -> void {
+    desc_.distribution = std::move(dist);
+  }
+
+  /// Declares a per-instance requirement derived from the bound arguments, for
+  /// operators whose distribution depends on their input (e.g. a hash key) or
+  /// on their child pipelines (subpipeline hosts folding via `meet`).
+  template <class F>
+    requires std::invocable<F&, DescribeCtx&>
+  auto distribution(F fn) -> void {
+    desc_.distribution_fn = std::move(fn);
+  }
+
+  /// Declares that the operator is stateless and row-local: it can run at any
+  /// parallelism degree because any subset of events can be processed
+  /// independently. Shorthand for `distribution(AnyDistribution{})`.
+  auto distribution_any() -> void {
+    desc_.distribution = AnyDistribution{};
   }
 
   /// Declares that the operator can always consume unordered upstream input.

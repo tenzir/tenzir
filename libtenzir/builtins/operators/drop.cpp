@@ -234,6 +234,8 @@ public:
       }
       return {};
     });
+    // `drop` removes fields row-locally, so any subset of events works.
+    d.distribution_any();
     return d.optimize([=](DescribeCtx& ctx, event_order order,
                           ir::optimize_filter filter) -> Optimization {
       auto touched_fields = std::vector<ast::field_path>{};

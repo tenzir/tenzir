@@ -342,6 +342,15 @@ public:
       }
       return {};
     });
+    // `fork` mirrors its input into a sub while passing it through unchanged,
+    // so its own work is per-event. Its requirement is derived from the child
+    // pipeline: it can consume `Any` only if the child can.
+    d.distribution([pipe](DescribeCtx& ctx) -> Distribution {
+      if (auto p = ctx.get(pipe)) {
+        return p->inner.required_distribution();
+      }
+      return AnyDistribution{};
+    });
     return d.invariant_order();
   }
 };
