@@ -72,6 +72,30 @@ def _delete_pipeline(base_url: str, pipeline_id: str) -> None:
         raise AssertionError(f"unexpected delete status {status} for {pipeline_id}")
 
 
+def _wait_for_pipeline_state(
+    base_url: str,
+    pipeline_id: str,
+    expected_state: str,
+) -> dict[str, Any]:
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        status, body = _post_api(base_url, "/pipeline/list")
+        assert status == 200, body
+        pipelines = body.get("pipelines")
+        assert isinstance(pipelines, list), body
+        for pipeline in pipelines:
+            if (
+                isinstance(pipeline, dict)
+                and pipeline.get("id") == pipeline_id
+                and pipeline.get("state") == expected_state
+            ):
+                return pipeline
+        time.sleep(0.1)
+    raise AssertionError(
+        f"pipeline {pipeline_id} did not reach state {expected_state!r}"
+    )
+
+
 def _wait_for_server(base_url: str, process: subprocess.Popen[str]) -> None:
     deadline = time.time() + 20
     last_status: int | None = None
@@ -275,11 +299,46 @@ def _check_update_parse_compatibility(base_url: str) -> None:
             _delete_pipeline(base_url, created_id)
 
 
+def _check_update_running_pipeline_reports_stopping(base_url: str) -> None:
+    definition = "//neo\nevery 1s { from {} }\ndiscard"
+    updated_definition = "//neo\nevery 1s { from {x: 1} }\ndiscard"
+    created_id = ""
+    try:
+        status, body = _post_api(
+            base_url,
+            "/pipeline/create",
+            {
+                "definition": definition,
+                "name": "update-running-state",
+                "autostart": {"created": True},
+            },
+        )
+        assert status == 200, body
+        created_id = str(body.get("id", ""))
+        assert created_id, body
+        _wait_for_pipeline_state(base_url, created_id, "running")
+
+        status, body = _post_api(
+            base_url,
+            "/pipeline/update",
+            {"id": created_id, "definition": updated_definition},
+        )
+        assert status == 200, body
+        pipeline = body.get("pipeline", {})
+        assert pipeline.get("definition") == updated_definition, body
+        assert pipeline.get("state") in ("stopping", "stopped"), body
+        print("update-running-pipeline-reports-stopping: ok")
+    finally:
+        if created_id:
+            _delete_pipeline(base_url, created_id)
+
+
 def main() -> None:
     with _running_web_server() as base_url:
         _check_launch_compile_diagnostics(base_url)
         _check_sink_id_escaping(base_url)
         _check_update_parse_compatibility(base_url)
+        _check_update_running_pipeline_reports_stopping(base_url)
 
 
 if __name__ == "__main__":
