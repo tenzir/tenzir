@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arc.hpp>
+#include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_time_utils.hpp>
 #include <tenzir/arrow_utils.hpp>
@@ -37,6 +38,7 @@
 #include <tenzir/type.hpp>
 
 #include <arrow/compute/api_scalar.h>
+#include <arrow/compute/api_vector.h>
 #include <arrow/record_batch.h>
 #include <arrow/type.h>
 #include <caf/expected.hpp>
@@ -252,40 +254,81 @@ public:
         key.emplace_back(group.view3_at(row));
       }
     };
-    auto update_group = [&](bucket2& group, int64_t begin, int64_t end) {
-      for (auto&& aggr : group.aggregations) {
-        aggr->update(subslice(slice, begin, end), ctx);
-      }
+    // Collect the row ranges of every group in this slice first, then update
+    // each group's aggregations exactly once. Aggregation instances evaluate
+    // their argument expression on every update() call, so the number of
+    // updates must be proportional to the number of *distinct groups* per
+    // slice rather than the number of group-key transitions. The latter
+    // degenerates to one transition per row for interleaved inputs, which
+    // makes per-transition updates prohibitively expensive.
+    struct slice_group {
+      group_by_key key;
+      std::vector<std::pair<int64_t, int64_t>> runs;
     };
-    auto find_or_create_group = [&](const group_by_key_view& key) -> bucket2* {
-      auto it = groups_.find(key);
-      if (it == groups_.end()) {
-        it = groups_.emplace_hint(it, materialize(key), make_bucket(ctx));
+    auto slice_groups = std::vector<slice_group>{};
+    auto seen = group_map<size_t>{};
+    auto find_or_add = [&](const group_by_key& key) -> size_t {
+      auto it = seen.find(key);
+      if (it == seen.end()) {
+        it = seen.emplace_hint(it, key, slice_groups.size());
+        slice_groups.push_back({key, {}});
       }
-      return &it.value();
+      return it->second;
     };
     auto total_rows = detail::narrow<int64_t>(slice.rows());
-    // Seed the first group before entering the loop.
     fill_key(0);
-    find_or_create_group(key);
-    // Track the current group by its materialized key rather than a raw
-    // pointer. tsl::robin_map invalidates all pointers and iterators on
-    // rehash, so holding &it.value() across an emplace would dangle.
-    // Re-looking up by key only at group-transition points costs one extra
-    // hash lookup per transition but avoids over-reserving capacity for
-    // low-cardinality inputs (e.g. no group-by).
     auto current_key = materialize(key);
+    auto current_index = find_or_add(current_key);
     auto current_begin = int64_t{0};
     for (auto row = int64_t{1}; row < total_rows; ++row) {
       fill_key(row);
-      find_or_create_group(key);
-      if (not group_by_key_equal{}(key, current_key)) {
-        update_group(groups_.find(current_key).value(), current_begin, row);
-        current_key = materialize(key);
-        current_begin = row;
+      // Comparing against the current run's key avoids hashing and probing
+      // for every row; a hash lookup happens only at run transitions.
+      if (group_by_key_equal{}(key, current_key)) {
+        continue;
+      }
+      slice_groups[current_index].runs.emplace_back(current_begin, row);
+      current_key = materialize(key);
+      current_index = find_or_add(current_key);
+      current_begin = row;
+    }
+    slice_groups[current_index].runs.emplace_back(current_begin, total_rows);
+    // Apply the collected rows group by group. Groups are created in
+    // first-seen order, matching the previous behavior.
+    for (auto& sg : slice_groups) {
+      auto it = groups_.find(sg.key);
+      if (it == groups_.end()) {
+        it = groups_.emplace_hint(it, std::move(sg.key), make_bucket(ctx));
+      }
+      auto rows = std::invoke([&]() -> table_slice {
+        if (sg.runs.size() == 1) {
+          // A single contiguous run needs no gather; slice it zero-copy.
+          const auto [begin, end] = sg.runs.front();
+          return subslice(slice, begin, end);
+        }
+        auto num_rows = int64_t{0};
+        for (const auto [begin, end] : sg.runs) {
+          num_rows += end - begin;
+        }
+        auto b = arrow::Int64Builder{arrow_memory_pool()};
+        check(b.Reserve(num_rows));
+        for (const auto [begin, end] : sg.runs) {
+          for (auto row = begin; row < end; ++row) {
+            b.UnsafeAppend(row);
+          }
+        }
+        auto gathered = table_slice{
+          check(arrow::compute::Take(to_record_batch(slice), tenzir::finish(b)))
+            .record_batch(),
+          slice.schema(),
+        };
+        gathered.import_time(slice.import_time());
+        return gathered;
+      });
+      for (auto& aggr : it.value().aggregations) {
+        aggr->update(rows, ctx);
       }
     }
-    update_group(groups_.find(current_key).value(), current_begin, total_rows);
   }
 
   auto flush(session ctx) -> std::vector<table_slice> {
