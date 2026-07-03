@@ -22,11 +22,7 @@ mvfst.overrideAttrs (orig: {
       hash
       ;
   };
-  patches =
-    (builtins.filter (x: (builtins.match ".*-glog-0\.7\.patch$" "${x}") == null) orig.patches)
-    ++ [
-      ./mvfst-fix-header-regex.patch
-    ];
+  patches = builtins.filter (x: (builtins.match ".*-glog-0\.7\.patch$" "${x}") == null) orig.patches;
   postPatch = ''
     # Keep upstream install hook, but the DSR directory does not exist in all
     # mvfst snapshots.
