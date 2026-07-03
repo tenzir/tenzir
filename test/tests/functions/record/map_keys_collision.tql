@@ -1,0 +1,7 @@
+from {
+  request: {
+    Host: "upper",
+    host: "lower",
+  },
+}
+request = request.map_keys(key => key.to_lower())

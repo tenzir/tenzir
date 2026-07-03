@@ -1,0 +1,8 @@
+error: expected a lambda
+  --> tests/functions/record/map_keys_non_lambda.tql:10:28
+   |
+10 | request = request.map_keys(null)
+   |                            ^^^^ 
+   |
+   = usage: map_keys(x:record, function:string => string)
+   = docs: https://docs.tenzir.com/reference/functions/map_keys

@@ -1,0 +1,7 @@
+{
+  request: {
+    "cache-control": "no-cache, no-store",
+    pragma: "no-cache",
+    host: "domain.gent",
+  },
+}
