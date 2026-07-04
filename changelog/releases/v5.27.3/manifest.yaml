@@ -1,5 +1,5 @@
 created: 2026-03-03
-title: Tenzir Node v5.27.3
+title: "JSON and CEF parser fixes"
 intro: >-
   This release fixes a crash that could occur when reading JSON data. It also improves
   CEF parsing to handle non-conforming unescaped equals characters.

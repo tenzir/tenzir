@@ -1,5 +1,5 @@
 created: 2026-03-06
-title: Tenzir Node v5.28.0
+title: "Check Point syslog parsing"
 intro: >-
   This release adds support for parsing Check Point syslog structured-data dialects
   that deviate from RFC 5424, improving out-of-the-box interoperability with Check

@@ -1,5 +1,5 @@
 created: 2026-02-27
-title: Tenzir Node v5.27.2
+title: "HMAC and slicing fixes"
 intro: >-
   This release adds the hmac function for computing Hash-based Message Authentication
   Codes over strings and blobs. It also fixes an assertion failure in array slicing

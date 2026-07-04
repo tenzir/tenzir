@@ -1,5 +1,5 @@
 created: 2026-06-24
-title: Tenzir v6.3.0
+title: "Graceful pipeline shutdown"
 intro: >-
   Tenzir now drains in-flight data before stopping pipelines or shutting down a node,
   so you no longer lose events on shutdown. This release also improves diagnostics

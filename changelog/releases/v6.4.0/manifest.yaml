@@ -1,5 +1,5 @@
 created: 2026-06-29
-title: Tenzir v6.4.0
+title: "Package constants and ClickHouse JSON"
 intro: >-
   Packages can now define reusable constants that any pipeline can reference, and
   the to_clickhouse operator supports native ClickHouse JSON columns. Nodes can also

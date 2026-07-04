@@ -1,5 +1,5 @@
 created: 2026-07-03
-title: Tenzir v6.5.0
+title: "Reliability fixes and faster summarize"
 intro: >-
   This release resolves several node reliability issues and improves summarize throughput
   on interleaved-key inputs. It also adds the map_keys function and changes hive-partitioned
