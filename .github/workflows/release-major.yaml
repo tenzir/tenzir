@@ -21,8 +21,11 @@ on:
         type: string
       title:
         description: |
-          User-facing release title (auto-generated if omitted)
-        required: false
+          User-facing release title
+
+          The title should be a short headline that captures the main theme of
+          the release. Do not use the version number as the title.
+        required: true
         type: string
 
 jobs:

@@ -36,8 +36,11 @@ on:
         type: string
       title:
         description: |
-          User-facing release title (auto-generated if omitted)
-        required: false
+          User-facing release title
+
+          The title should be a short headline that captures the main theme of
+          the release. Do not use the version number as the title.
+        required: true
         type: string
   workflow_call:
     inputs:
@@ -56,9 +59,8 @@ on:
         required: true
         type: string
       title:
-        description: User-facing release title (auto-generated if omitted)
-        required: false
-        default: ""
+        description: User-facing release title
+        required: true
         type: string
 
 jobs:
@@ -72,6 +74,7 @@ jobs:
           TENZIR_GITHUB_APP_ID: ${{ vars.TENZIR_GITHUB_APP_ID }}
           TENZIR_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TENZIR_GITHUB_APP_PRIVATE_KEY }}
           TENZIR_BOT_GPG_SIGNING_KEY: ${{ secrets.TENZIR_BOT_GPG_SIGNING_KEY }}
+          RELEASE_TITLE: ${{ inputs.title }}
         run: |
           if [ -z "$TENZIR_GITHUB_APP_ID" ]; then
             echo "::error::Repository variable 'TENZIR_GITHUB_APP_ID' must be set for release runs."
@@ -85,6 +88,11 @@ jobs:
 
           if [ -z "$TENZIR_BOT_GPG_SIGNING_KEY" ]; then
             echo "::error::Repository secret 'TENZIR_BOT_GPG_SIGNING_KEY' must be set for release runs."
+            exit 1
+          fi
+
+          if [ -z "$(printf '%s' "$RELEASE_TITLE" | tr -d '[:space:]')" ]; then
+            echo "::error::Release runs must provide a user-facing title. Do not use the version number as the title."
             exit 1
           fi
 
