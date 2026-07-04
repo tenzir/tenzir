@@ -1,5 +1,5 @@
 created: 2026-06-09
-title: Tenzir v6.1.0
+title: "Event-time windowing"
 intro: "This release introduces the `window` operator for event-time windowing, which\
   \ groups streaming events into configurable time windows driven by event timestamps\
   \ rather than wall-clock time. It also adds several new operators \u2014 `ai::prompt`\

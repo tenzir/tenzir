@@ -1,5 +1,5 @@
 created: 2026-01-27
-title: Tenzir Node v5.25.0
+title: "Periodic summarize and AWS IAM"
 intro: >-
   This release adds periodic emission to the summarize operator, enabling real-time
   streaming analytics with configurable intervals and accumulation modes. It also
