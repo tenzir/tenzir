@@ -47,3 +47,7 @@
 	path = libtenzir/aux/facebook/proxygen
 	url = https://github.com/tenzir/proxygen
 	shallow = true
+[submodule "plugins/iceberg/aux/iceberg-cpp"]
+	path = plugins/iceberg/aux/iceberg-cpp
+	url = https://github.com/apache/iceberg-cpp
+	shallow = true
