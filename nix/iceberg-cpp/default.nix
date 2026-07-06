@@ -6,6 +6,7 @@
   cmake,
   ninja,
   arrow-cpp,
+  aws-sdk-cpp-tenzir,
   croaring,
   libcpr,
   nlohmann_json,
@@ -40,15 +41,35 @@ stdenv.mkDerivation {
   ];
 
   buildInputs = [
-    libcpr
     curl
     openssl
   ];
 
+  # Two upstream fixes:
+  # - The installed CMake config records the system Avro dependency as
+  #   `Avro`, but avro-cpp installs `avro-cpp-config.cmake`.
+  # - EnsureS3Initialized() fails (and caches the failure) when the host
+  #   application already initialized Arrow's S3 subsystem, which Tenzir's
+  #   s3 plugin always does.
+  postPatch = ''
+    substituteInPlace cmake_modules/IcebergThirdpartyToolchain.cmake \
+      --replace-fail \
+        "list(APPEND ICEBERG_SYSTEM_DEPENDENCIES Avro)" \
+        "list(APPEND ICEBERG_SYSTEM_DEPENDENCIES avro-cpp)"
+    substituteInPlace src/iceberg/arrow/s3/arrow_s3_file_io.cc \
+      --replace-fail \
+        "auto options = ::arrow::fs::S3GlobalOptions::Defaults();" \
+        "if (::arrow::fs::IsS3Initialized()) { return ::arrow::Status::OK(); } auto options = ::arrow::fs::S3GlobalOptions::Defaults();"
+  '';
+
+  # The static libraries surface all of these through find_dependency() in
+  # the installed iceberg-config.cmake, so downstream consumers need them.
   propagatedBuildInputs = [
     arrow-cpp
     avro-cpp
+    aws-sdk-cpp-tenzir
     croaring
+    libcpr
     nanoarrow
     nlohmann_json
     spdlog
@@ -62,13 +83,20 @@ stdenv.mkDerivation {
     "-DICEBERG_BUILD_TESTS=OFF"
     "-DICEBERG_BUILD_BUNDLE=ON"
     "-DICEBERG_BUILD_REST=ON"
-    # S3 FileIO arrives with Phase 1 of the to_iceberg operator; it needs
-    # AWSSDK wiring that is not part of the Phase 0 spike.
-    "-DICEBERG_S3=OFF"
+    "-DICEBERG_S3=ON"
+    "-DICEBERG_SIGV4=ON"
     "-DICEBERG_BUNDLE_AWSSDK=OFF"
     "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
     "-DCMAKE_COMPILE_WARNING_AS_ERROR=OFF"
   ];
+
+  # Upstream's header install list misses these two, but the installed
+  # rest_catalog.h includes session_catalog.h.
+  postInstall = ''
+    install -m 644 -Dt $out/include/iceberg/catalog \
+      ../src/iceberg/catalog/session_catalog.h \
+      ../src/iceberg/catalog/session_context.h
+  '';
 
   meta = {
     description = "C++ implementation of Apache Iceberg";

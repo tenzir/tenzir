@@ -41,13 +41,11 @@ else ()
   set(ICEBERG_BUILD_REST
       ON
       CACHE BOOL "")
-  # S3 FileIO support arrives with Phase 1; it requires an Arrow build with
-  # ARROW_S3 and the AWS SDK, which the Phase 0 spike does not need yet.
   set(ICEBERG_S3
-      OFF
+      ON
       CACHE BOOL "")
-  set(ICEBERG_BUNDLE_AWSSDK
-      OFF
+  set(ICEBERG_SIGV4
+      ON
       CACHE BOOL "")
 
   set(_build_shared_libs_before "${BUILD_SHARED_LIBS}")
