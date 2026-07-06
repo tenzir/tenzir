@@ -1,0 +1,14 @@
+# Worktrunk/Claude worktree allowlist for ignored files.
+#
+# Entries must also be ignored by git. Keep this to reusable, non-secret state
+# that is safe to copy from another Tenzir worktree.
+
+# CMake/Ninja build trees and install prefixes. `scripts/worktree-graft.py`
+# fixes copied build metadata after Worktrunk performs a CoW copy.
+/build*/
+/install/
+/nix/build/
+
+# Local tool caches that are safe to warm from another worktree.
+/.cache/
+/.clangd/
