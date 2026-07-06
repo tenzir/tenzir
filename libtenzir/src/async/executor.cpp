@@ -145,35 +145,46 @@ auto StagedChains::num_operators() const -> size_t {
 auto spawn_staged(ir::pipeline pipe, const plan_result& plan,
                   element_type_tag input, diagnostic_handler& dh)
   -> Option<StagedChains> {
-  TENZIR_ASSERT(not plan.stages.empty());
   // Distribute the IR operators over the planned stages. Plan indices refer
   // to non-transparent operators; transparent operators attach to the stage
-  // of the next non-transparent operator so they never break a region.
-  auto stage_irs = std::vector<ir::pipeline>(plan.stages.size());
-  auto stage_index = size_t{0};
-  auto visible_index = size_t{0};
-  auto pending = std::vector<Box<ir::Operator>>{};
-  for (auto& op : pipe.operators) {
-    if (op->is_transparent()) {
-      pending.push_back(std::move(op));
-      continue;
+  // of the next non-transparent operator so they never break a region. A
+  // pipeline without non-transparent operators forms a single serial stage.
+  auto stage_irs = std::vector<ir::pipeline>{};
+  if (plan.stages.empty()) {
+    stage_irs.push_back(std::move(pipe));
+  } else {
+    stage_irs.resize(plan.stages.size());
+    auto stage_index = size_t{0};
+    auto visible_index = size_t{0};
+    auto pending = std::vector<Box<ir::Operator>>{};
+    for (auto& op : pipe.operators) {
+      if (op->is_transparent()) {
+        pending.push_back(std::move(op));
+        continue;
+      }
+      while (visible_index >= plan.stages[stage_index].end) {
+        stage_index += 1;
+        TENZIR_ASSERT(stage_index < plan.stages.size());
+      }
+      auto& ops = stage_irs[stage_index].operators;
+      ops.insert(ops.end(), std::move_iterator{pending.begin()},
+                 std::move_iterator{pending.end()});
+      pending.clear();
+      ops.push_back(std::move(op));
+      visible_index += 1;
     }
-    while (visible_index >= plan.stages[stage_index].end) {
-      stage_index += 1;
-      TENZIR_ASSERT(stage_index < plan.stages.size());
-    }
-    auto& ops = stage_irs[stage_index].operators;
-    ops.insert(ops.end(), std::move_iterator{pending.begin()},
-               std::move_iterator{pending.end()});
-    pending.clear();
-    ops.push_back(std::move(op));
-    visible_index += 1;
+    auto& last_ops = stage_irs.back().operators;
+    last_ops.insert(last_ops.end(), std::move_iterator{pending.begin()},
+                    std::move_iterator{pending.end()});
   }
-  auto& last_ops = stage_irs.back().operators;
-  last_ops.insert(last_ops.end(), std::move_iterator{pending.begin()},
-                  std::move_iterator{pending.end()});
-  // Spawn every stage, widened stages once per lane.
-  auto result = StagedChains{};
+  // Determine each stage's boundary types and effective degree.
+  struct StageInfo {
+    element_type_tag input;
+    element_type_tag output;
+    size_t degree;
+  };
+  auto infos = std::vector<StageInfo>{};
+  infos.reserve(stage_irs.size());
   auto current = input;
   for (auto s = size_t{0}; s < stage_irs.size(); ++s) {
     auto inferred = stage_irs[s].infer_type(current, dh);
@@ -183,27 +194,51 @@ auto spawn_staged(ir::pipeline pipe, const plan_result& plan,
       return None{};
     }
     auto output = **inferred;
-    auto degree = plan.stages[s].degree;
+    auto degree = plan.stages.empty() ? size_t{1} : plan.stages[s].degree;
     // Only event edges can be widened; everything else stays serial.
     if (degree > 1
         and not(current.is<table_slice>() and output.is<table_slice>())) {
       degree = 1;
     }
-    auto stage = StagedStage{{}, current, output};
-    for (auto lane = size_t{0}; lane < degree; ++lane) {
+    infos.push_back(StageInfo{current, output, degree});
+    current = output;
+  }
+  // Coalesce adjacent serial stages: a stage boundary is only needed where
+  // the parallelism degree changes, so consecutive degree-1 stages merge into
+  // one chain. In particular, a plan that widens nothing collapses into a
+  // single stage, which reproduces flat execution.
+  auto merged_irs = std::vector<ir::pipeline>{};
+  auto merged_infos = std::vector<StageInfo>{};
+  for (auto s = size_t{0}; s < stage_irs.size(); ++s) {
+    if (not merged_infos.empty() and merged_infos.back().degree == 1
+        and infos[s].degree == 1) {
+      auto& ops = merged_irs.back().operators;
+      ops.insert(ops.end(), std::move_iterator{stage_irs[s].operators.begin()},
+                 std::move_iterator{stage_irs[s].operators.end()});
+      merged_infos.back().output = infos[s].output;
+      continue;
+    }
+    merged_irs.push_back(std::move(stage_irs[s]));
+    merged_infos.push_back(infos[s]);
+  }
+  // Spawn every stage, widened stages once per lane.
+  auto result = StagedChains{};
+  for (auto s = size_t{0}; s < merged_irs.size(); ++s) {
+    const auto& info = merged_infos[s];
+    auto stage = StagedStage{{}, info.input, info.output};
+    for (auto lane = size_t{0}; lane < info.degree; ++lane) {
       // Copy the stage IR for every lane but the last; the pipeline is fully
       // instantiated at this point, so copies spawn independent instances.
       auto lane_ir
-        = lane + 1 == degree ? std::move(stage_irs[s]) : stage_irs[s];
-      auto ops = std::move(lane_ir).spawn(current);
+        = lane + 1 == info.degree ? std::move(merged_irs[s]) : merged_irs[s];
+      auto ops = std::move(lane_ir).spawn(info.input);
       if (ops.empty()) {
-        TENZIR_ASSERT(current == output);
-        ops.push_back(make_identity_operator(current));
+        TENZIR_ASSERT(info.input == info.output);
+        ops.push_back(make_identity_operator(info.input));
       }
       stage.lanes.push_back(std::move(ops));
     }
     result.stages.push_back(std::move(stage));
-    current = output;
   }
   return result;
 }
@@ -933,37 +968,34 @@ private:
     // we know that this cannot fail.
     TENZIR_ASSERT(output);
     TENZIR_ASSERT(*output);
-    // Implicit parallelization: when enabled and the plan widens a stage,
-    // spawn the pipeline as staged lane chains instead of one flat chain.
+    // Spawn the pipeline as staged lane chains. Without implicit
+    // parallelization (the default), the plan collapses into a single stage
+    // that reproduces flat execution. Fused subpipelines keep the flat chain
+    // because they share their host operator's execution context.
     auto staged = Option<StagedChains>{};
-    if (not fused) {
-      auto parallelism
-        = caf::get_or(caf::content(sys_.config()),
-                      "tenzir.implicit-parallelism", uint64_t{1});
-      if (parallelism > 1) {
-        auto opts = plan_options{
-          .degree = parallelism,
-          .min_region_size = 1,
-          .allow_reordering = true,
-          .checkpointing = exec_ctx_.checkpoint_settings().is_some(),
-        };
-        auto plan = plan_stages(pipe, opts);
-        if (plan.parallelized()) {
-          staged = spawn_staged(std::move(pipe), plan, input, *sub_dh);
-          if (not staged) {
-            // A diagnostic was emitted; wait for teardown as above.
-            co_await wait_forever();
-            TENZIR_UNREACHABLE();
-          }
-        }
-      }
-    }
     auto spawned = std::vector<AnyOperator>{};
-    if (not staged) {
+    if (fused) {
       spawned = std::move(pipe).spawn(input);
       if (spawned.empty()) {
         TENZIR_ASSERT(**output == input);
         spawned.push_back(make_identity_operator(input));
+      }
+    } else {
+      auto parallelism
+        = caf::get_or(caf::content(sys_.config()),
+                      "tenzir.implicit-parallelism", uint64_t{1});
+      auto opts = plan_options{
+        .degree = parallelism,
+        .min_region_size = 1,
+        .allow_reordering = true,
+        .checkpointing = exec_ctx_.checkpoint_settings().is_some(),
+      };
+      auto plan = plan_stages(pipe, opts);
+      staged = spawn_staged(std::move(pipe), plan, input, *sub_dh);
+      if (not staged) {
+        // A diagnostic was emitted; wait for teardown as above.
+        co_await wait_forever();
+        TENZIR_UNREACHABLE();
       }
     }
     auto num_ops = staged ? staged->num_operators() : spawned.size();
@@ -987,20 +1019,14 @@ private:
               std::move(to_control_sender), std::move(sub_id), exec_ctx_, sys_,
               *sub_dh);
           }
+          TENZIR_ASSERT(fused);
           auto chain
             = OperatorChain<In, Out>::try_from(std::move(spawned)).unwrap();
-          if (fused) {
-            return run_chain_fused(std::move(chain), std::move(pull_upstream),
-                                   std::move(push_downstream),
-                                   std::move(from_control_receiver),
-                                   std::move(to_control_sender),
-                                   std::move(sub_id), exec_ctx_, sys_, *sub_dh);
-          }
-          return run_chain(std::move(chain), std::move(pull_upstream),
-                           std::move(push_downstream),
-                           std::move(from_control_receiver),
-                           std::move(to_control_sender), std::move(sub_id),
-                           exec_ctx_, sys_, *sub_dh);
+          return run_chain_fused(std::move(chain), std::move(pull_upstream),
+                                 std::move(push_downstream),
+                                 std::move(from_control_receiver),
+                                 std::move(to_control_sender),
+                                 std::move(sub_id), exec_ctx_, sys_, *sub_dh);
         });
         return {
           std::move(runner),
@@ -2350,8 +2376,11 @@ private:
       TENZIR_ASSERT(inputs_[s].size() == stage.lanes.size());
       TENZIR_ASSERT(outputs_[s].size() == stage.lanes.size());
       // All lanes of a stage share one `PipeId` so their operators contribute
-      // to the same metrics and profile identity.
-      auto stage_id = PipeId{fmt::format("{}/stage/{}", id_.value, s)};
+      // to the same metrics and profile identity. A single-stage plan keeps
+      // the pipeline's own id so its operator and channel ids are identical
+      // to flat execution.
+      auto stage_id
+        = n == 1 ? id_ : PipeId{fmt::format("{}/stage/{}", id_.value, s)};
       for (auto lane = size_t{0}; lane < stage.lanes.size(); ++lane) {
         auto [fc_sender, fc_receiver] = channel<FromControl>(16);
         auto [tc_sender, tc_receiver] = channel<ToControl>(16);
@@ -2749,13 +2778,6 @@ auto run_pipeline_impl(PlanT pipeline, ExecCtx& exec_ctx,
 }
 
 } // namespace
-
-auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
-                  caf::actor_system& sys, DiagHandler& dh,
-                  Notify* graceful_stop) -> Task<void> {
-  return run_pipeline_impl(std::move(pipeline), exec_ctx, sys, dh,
-                           graceful_stop);
-}
 
 auto run_pipeline(StagedChains staged, ExecCtx& exec_ctx,
                   caf::actor_system& sys, DiagHandler& dh,

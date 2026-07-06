@@ -277,11 +277,6 @@ public:
   virtual auto failure() -> failure_or<void> = 0;
 };
 
-/// Run a closed pipeline without external control.
-auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
-                  caf::actor_system& sys, DiagHandler& dh,
-                  Notify* graceful_stop = nullptr) -> Task<void>;
-
 /// Run a right-open pipeline without external control.
 template <class Output>
   requires(not std::same_as<Output, void>)
@@ -355,6 +350,9 @@ auto run_staged(StagedChains staged,
                 caf::actor_system& sys, DiagHandler& dh) -> Task<void>;
 
 /// Run a closed staged pipeline without external control.
+///
+/// A plan that widens nothing is a single stage and reproduces flat
+/// execution; see `spawn_staged`.
 auto run_pipeline(StagedChains staged, ExecCtx& exec_ctx,
                   caf::actor_system& sys, DiagHandler& dh,
                   Notify* graceful_stop = nullptr) -> Task<void>;

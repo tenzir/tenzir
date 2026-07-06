@@ -2055,53 +2055,25 @@ auto run_profiler(Profiler const& profiler, TestExecCtx& exec_ctx,
 
 } // namespace
 
-auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
-              DiagHandler& dh, Profiler profiler, bool has_terminal,
-              bool is_hidden, Notify* graceful_stop) -> Task<failure_or<void>> {
-  auto num_ops = chain.size();
-  LOGW("spawning plan with {} operators", num_ops);
+auto run_plan(StagedChains staged, caf::actor_system& sys, DiagHandler& dh,
+              Profiler profiler, bool has_terminal, bool is_hidden,
+              Notify* graceful_stop) -> Task<failure_or<void>> {
+  auto num_ops = staged.num_operators();
+  LOGW("spawning staged plan with {} operators", num_ops);
   auto exec_ctx = TestExecCtx{profiler, has_terminal, is_hidden};
   co_await async_scope([&](AsyncScope& scope) -> Task<void> {
     scope.spawn(run_profiler(profiler, exec_ctx, num_ops));
-    LOGW("blocking on pipeline");
-    co_await run_pipeline(std::move(chain), exec_ctx, sys, dh, graceful_stop);
-    LOGW("blocking on pipeline done");
+    co_await run_pipeline(std::move(staged), exec_ctx, sys, dh, graceful_stop);
     scope.cancel();
   });
   co_return dh.failure();
 }
 
-auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
-              DiagHandler& dh, Profiler profiler, bool is_hidden,
-              Notify* graceful_stop) -> Task<failure_or<void>> {
-  co_return co_await run_plan(std::move(chain), sys, dh, std::move(profiler),
-                              false, is_hidden, graceful_stop);
-}
-
-namespace {
-
-// Defined below, next to the other pipeline drivers.
-auto run_plan_staged_impl(StagedChains staged, caf::actor_system& sys,
-                          DiagHandler& dh, Profiler profiler, bool has_terminal,
-                          bool is_hidden, Notify* graceful_stop)
-  -> Task<failure_or<void>>;
-
-} // namespace
-
-auto run_plan(StagedChains staged, caf::actor_system& sys, DiagHandler& dh,
-              Profiler profiler, bool has_terminal, bool is_hidden,
-              Notify* graceful_stop) -> Task<failure_or<void>> {
-  co_return co_await run_plan_staged_impl(std::move(staged), sys, dh,
-                                          std::move(profiler), has_terminal,
-                                          is_hidden, graceful_stop);
-}
-
 auto run_plan(StagedChains staged, caf::actor_system& sys, DiagHandler& dh,
               Profiler profiler, bool is_hidden, Notify* graceful_stop)
   -> Task<failure_or<void>> {
-  co_return co_await run_plan_staged_impl(std::move(staged), sys, dh,
-                                          std::move(profiler), false, is_hidden,
-                                          graceful_stop);
+  co_return co_await run_plan(std::move(staged), sys, dh, std::move(profiler),
+                              false, is_hidden, graceful_stop);
 }
 
 auto run_transform(OperatorChain<table_slice, table_slice> chain,
@@ -2251,23 +2223,7 @@ private:
   failure_or<void> failure_;
 };
 
-auto run_plan_staged_impl(StagedChains staged, caf::actor_system& sys,
-                          DiagHandler& dh, Profiler profiler, bool has_terminal,
-                          bool is_hidden, Notify* graceful_stop)
-  -> Task<failure_or<void>> {
-  auto num_ops = staged.num_operators();
-  LOGW("spawning staged plan with {} operators", num_ops);
-  auto exec_ctx = TestExecCtx{profiler, has_terminal, is_hidden};
-  co_await async_scope([&](AsyncScope& scope) -> Task<void> {
-    scope.spawn(run_profiler(profiler, exec_ctx, num_ops));
-    co_await run_pipeline(std::move(staged), exec_ctx, sys, dh, graceful_stop);
-    scope.cancel();
-  });
-  co_return dh.failure();
-}
-
-template <class PlanT>
-auto run_plan_blocking(PlanT chain, caf::actor_system& sys,
+auto run_plan_blocking(StagedChains chain, caf::actor_system& sys,
                        diagnostic_handler& dh,
                        std::optional<std::string> const& profile_path)
   -> failure_or<void> {
@@ -2493,39 +2449,27 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     fmt::print("{:#?}\n", ir);
     return not ctx.has_failure();
   }
-  // Implicit parallelization: when enabled and the plan widens a stage, run
-  // the pipeline as staged lane chains connected by exchanges.
+  // Plan and spawn the pipeline as staged lane chains. Without implicit
+  // parallelization (the default), the plan collapses into a single stage
+  // that reproduces flat execution.
   auto parallelism = caf::get_or(caf::content(sys.config()),
                                  "tenzir.implicit-parallelism", uint64_t{1});
-  if (parallelism > 1) {
-    auto opts = plan_options{
-      .degree = parallelism,
-      .min_region_size = 1,
-      // Opting into implicit parallelism accepts reordering within stateless
-      // regions.
-      .allow_reordering = true,
-      .checkpointing = false,
-    };
-    auto plan = plan_stages(ir, opts);
-    if (plan.parallelized()) {
-      auto staged = spawn_staged(std::move(ir), plan, tag_v<void>, ctx);
-      if (ctx.has_failure() or not staged) {
-        return false;
-      }
-      TRY(run_plan_blocking(std::move(*staged), sys, ctx, cfg.profile));
-      return true;
-    }
-  }
-  // Spawn operators from the IR.
-  auto spawned = std::move(ir).spawn(tag_v<void>);
+  auto opts = plan_options{
+    .degree = parallelism,
+    .min_region_size = 1,
+    // Opting into implicit parallelism accepts reordering within stateless
+    // regions.
+    .allow_reordering = true,
+    .checkpointing = false,
+  };
+  auto plan = plan_stages(ir, opts);
+  auto staged = spawn_staged(std::move(ir), plan, tag_v<void>, ctx);
   // Do not proceed to execution if there has been an error.
-  if (ctx.has_failure()) {
+  if (ctx.has_failure() or not staged) {
     return false;
   }
-  auto chain = OperatorChain<void, void>::try_from(std::move(spawned))
-                 .expect("we already checked the type");
   // Start the actual execution.
-  TRY(run_plan_blocking(std::move(chain), sys, ctx, cfg.profile));
+  TRY(run_plan_blocking(std::move(*staged), sys, ctx, cfg.profile));
   return true;
 }
 
