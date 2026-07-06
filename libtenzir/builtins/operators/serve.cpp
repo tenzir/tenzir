@@ -48,6 +48,7 @@
 
 #include "tenzir/async.hpp"
 #include "tenzir/async/mail.hpp"
+#include "tenzir/box.hpp"
 #include "tenzir/detail/fanout_counter.hpp"
 
 #include <tenzir/actors.hpp>
@@ -76,6 +77,7 @@
 #include <caf/send.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
+#include <folly/coro/BoundedQueue.h>
 
 #include <sstream>
 
@@ -444,9 +446,10 @@ using serve_manager_actor = typed_actor_fwd<
     ->caf::result<void>,
   // Drop all buffered data and complete immediately, without waiting for the
   // data to be drained to the client.
-  auto(atom::stop, std::string serve_id)->caf::result<void>,
+  auto(atom::stop, std::string serve_id, caf::actor source)->caf::result<void>,
   // Deregister a serve operator, waiting until it completed.
-  auto(atom::shutdown, std::string serve_id)->caf::result<void>,
+  auto(atom::shutdown, std::string serve_id, caf::actor source)
+    ->caf::result<void>,
   // Put additional slices into the buffer for the given access token.
   auto(atom::put, std::string serve_id, table_slice)->caf::result<void>,
   // Get slices from the buffer for the given access token, returning the next
@@ -536,15 +539,27 @@ struct managed_serve_operator {
     TENZIR_DEBUG("clearing continuation token");
     last_continuation_token = std::exchange(continuation_token, {});
     last_results = results;
-    if (stop_rp.pending() and buffer.empty()) {
+    // Emit the terminal response (null continuation token) once the source is
+    // gone and the buffer is drained. `stop_rp.pending()` covers the case
+    // where a client drains the buffer before finalization; `done` covers the
+    // case where finalization already happened without a waiter and a late
+    // client drains the retained buffer afterwards.
+    if ((stop_rp.pending() or done) and buffer.empty()) {
       TENZIR_ASSERT(not put_rp.pending());
       TENZIR_DEBUG("serve for id {} is done", escape_operator_arg(serve_id));
-      continuation_token.clear();
+      // Mark the operator done so that a client re-polling with the empty
+      // continuation token before the lifetime actor's DOWN is processed
+      // observes a completed state instead of queuing a request that hangs.
+      // Note: `continuation_token` was already cleared by the `std::exchange`
+      // above.
+      done = true;
       for (auto&& get_rp : std::exchange(get_rps, {})) {
         TENZIR_ASSERT(get_rp.pending());
         get_rp.deliver(std::make_tuple(std::string{}, results));
       }
-      stop_rp.deliver();
+      if (stop_rp.pending()) {
+        stop_rp.deliver();
+      }
       return true;
     }
     // If we throttled the serve operator, then we can continue its operation
@@ -581,7 +596,12 @@ struct serve_manager_state {
     const auto found = std::ranges::find_if(ops, [&](const auto& op) {
       return op.source == source;
     });
-    TENZIR_ASSERT(found != ops.end());
+    if (found == ops.end()) {
+      // The entry may already be gone, e.g., because it was removed on an
+      // earlier error path.
+      TENZIR_DEBUG("{} received DOWN for an unknown serve operator", *self);
+      return;
+    }
     if (not found->continuation_token.empty()) {
       TENZIR_DEBUG("{} received premature DOWN for serve id {} with "
                    "continuation "
@@ -620,13 +640,16 @@ struct serve_manager_state {
       return op.serve_id == serve_id;
     });
     if (found != ops.end()) {
-      if (not found->done) {
-        return caf::make_error(
-          ec::invalid_argument,
-          fmt::format("{} received duplicate serve id {}", *self,
-                      escape_operator_arg(found->serve_id)));
-      }
-      ops.erase(found);
+      // Reject any serve id that is still registered, even one that is `done`
+      // but lingering for the retention window. Replacing a live entry would
+      // let a stale `stop`/`shutdown` from the previous operator resolve
+      // against the new entry, so we require serve ids to be unique among
+      // registered operators. A serve id may be reused only once its entry
+      // has been fully removed.
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("{} received duplicate serve id {}",
+                                         *self,
+                                         escape_operator_arg(found->serve_id)));
     }
     if (not watched) {
       return caf::make_error(ec::invalid_argument,
@@ -647,16 +670,20 @@ struct serve_manager_state {
     return {};
   }
 
-  auto finalize(std::string serve_id) -> caf::result<void> {
+  auto finalize(std::string serve_id, caf::actor source) -> caf::result<void> {
+    const auto source_addr = source ? source->address() : caf::actor_addr{};
     const auto found
       = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
-          return op.serve_id == serve_id;
+          return op.serve_id == serve_id
+                 and (not source_addr or op.source == source_addr);
         });
     if (found == ops.end()) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("{} received request to despawn for "
-                                         "unknown serve id {}",
-                                         *self, escape_operator_arg(serve_id)));
+      // The entry was already removed, e.g., because the operator's DOWN was
+      // processed first. Treat the request as a no-op so the operator can
+      // finish instead of surfacing a spurious error.
+      TENZIR_DEBUG("{} ignores despawn request for unknown serve id {}", *self,
+                   escape_operator_arg(serve_id));
+      return {};
     }
     if (found->stop_rp.pending()) {
       return caf::make_error(ec::logic_error,
@@ -665,19 +692,45 @@ struct serve_manager_state {
                                          *self, escape_operator_arg(serve_id)));
     }
     found->stop_rp = self->make_response_promise<void>();
+    if (not found->get_rps.empty()) {
+      // A client is already waiting: deliver the results to it. This pages
+      // through the buffer across successive requests and delivers the stop
+      // promise once the buffer is fully drained.
+      const auto delivered = found->try_deliver_results(false);
+      TENZIR_ASSERT(delivered);
+      return found->stop_rp;
+    }
+    // No client is waiting. Complete finalization immediately instead of
+    // blocking until a client polls, which may never happen (e.g., a pipeline
+    // ending in `serve` whose client already disconnected, or a hidden
+    // pipeline during shutdown). We mark the entry done and, if rows remain,
+    // retain them as the final page so that a poll within the retention window
+    // can still fetch them.
+    TENZIR_ASSERT(not found->put_rp.pending());
+    found->delayed_attempt.dispose();
+    found->requested = 0;
+    // Mark the entry done and resolve immediately. The buffer is kept intact:
+    // `get()` pages through it across successive polls even though the source
+    // is gone, and reports completion only once it is fully drained. The
+    // entry survives for the retention window (see `handle_down_msg`).
+    found->done = true;
+    found->stop_rp.deliver();
     return found->stop_rp;
   }
 
-  auto stop(std::string serve_id) -> caf::result<void> {
+  auto stop(std::string serve_id, caf::actor source) -> caf::result<void> {
+    const auto source_addr = source ? source->address() : caf::actor_addr{};
     const auto found
       = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
-          return op.serve_id == serve_id;
+          return op.serve_id == serve_id
+                 and (not source_addr or op.source == source_addr);
         });
     if (found == ops.end()) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("{} received request to drop for "
-                                         "unknown serve id {}",
-                                         *self, escape_operator_arg(serve_id)));
+      // The entry was already removed, e.g., because the operator's DOWN was
+      // processed first. Treat the request as a no-op.
+      TENZIR_DEBUG("{} ignores drop request for unknown serve id {}", *self,
+                   escape_operator_arg(serve_id));
+      return {};
     }
     TENZIR_DEBUG("{} drops all buffered data for serve id {}", *self,
                  escape_operator_arg(serve_id));
@@ -783,14 +836,16 @@ struct serve_manager_state {
                     "{} for serve id {}",
                     *self, request.continuation_token, request.serve_id));
     }
-    if (found->done) {
+    if (found->done and found->buffer.empty()) {
       return std::make_tuple(std::string{}, std::vector<table_slice>{});
     }
     auto rp = self->make_response_promise<serve_response>();
     found->get_rps.push_back(rp);
     found->requested = request.max_events;
     found->min_events = request.min_events;
-    const auto delivered = found->try_deliver_results(false);
+    // Once the source is gone, no more data will arrive, so deliver whatever
+    // remains buffered immediately rather than waiting for `min_events`.
+    const auto delivered = found->try_deliver_results(found->done);
     if (delivered) {
       return rp;
     }
@@ -863,11 +918,13 @@ auto serve_manager(
       return self->state().start(std::move(serve_id), buffer_size,
                                  std::move(watched));
     },
-    [self](atom::stop, std::string& serve_id) -> caf::result<void> {
-      return self->state().stop(std::move(serve_id));
+    [self](atom::stop, std::string& serve_id,
+           caf::actor& source) -> caf::result<void> {
+      return self->state().stop(std::move(serve_id), std::move(source));
     },
-    [self](atom::shutdown, std::string& serve_id) -> caf::result<void> {
-      return self->state().finalize(std::move(serve_id));
+    [self](atom::shutdown, std::string& serve_id,
+           caf::actor& source) -> caf::result<void> {
+      return self->state().finalize(std::move(serve_id), std::move(source));
     },
     [self](atom::put, std::string& serve_id,
            table_slice& slice) -> caf::result<void> {
@@ -1352,6 +1409,11 @@ public:
   explicit ServeImpl(ServeArgs args) : args_{std::move(args)} {
   }
 
+  ServeImpl(ServeImpl&&) = default;
+  auto operator=(ServeImpl&&) -> ServeImpl& = default;
+  ServeImpl(const ServeImpl&) = delete;
+  auto operator=(const ServeImpl&) -> ServeImpl& = delete;
+
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await OperatorBase::start(ctx);
     bytes_counter_
@@ -1365,12 +1427,17 @@ public:
     serve_manager_ = ctx.actor_system().registry().get<serve_manager_actor>(
       "tenzir.serve-manager");
     lifetime_actor_
-      = ctx.actor_system().spawn<caf::hidden>([](caf::event_based_actor*) {
+      = ctx.actor_system().spawn<caf::hidden>([](caf::event_based_actor* self) {
           return caf::behavior{
-            []() {
-              // Dummy handler because CAF immediately kills actors who return
-              // an empty behavior.
-              return;
+            [self](atom::done) {
+              // Quit cleanly so the serve-manager's down handler takes the
+              // retention path instead of treating this as a failure.
+              self->quit();
+            },
+            [self](caf::error& reason) {
+              // Quit with the given failure reason so the serve-manager
+              // expires the serve id and reports the failure to clients.
+              self->quit(std::move(reason));
             },
           };
         });
@@ -1393,16 +1460,59 @@ public:
     }
     auto const rows = input.rows();
     auto const bytes = input.approx_bytes();
-    auto result = co_await async_mail(atom::put_v, args_.id, std::move(input))
-                    .request(serve_manager_);
-    if (not result) {
-      diagnostic::error(result.error())
+    // Send the `put` without blocking the operator's main loop on the
+    // serve-manager's response. When the manager throttles us it keeps the
+    // response pending until a client drains the buffer. Awaiting that here
+    // would stall the main loop and, critically, prevent a concurrent
+    // graceful-stop signal from being delivered -- yet that signal is the only
+    // way the serve-manager learns to drop its buffer and release the pending
+    // `put`. That circular wait made stopped pipelines with a full buffer and
+    // no draining client hang forever.
+    //
+    // Instead we report `blocked` from `state()` until the `put` resolves,
+    // which applies the same one-slice-at-a-time backpressure as before
+    // without stalling control-message processing. While blocked, the executor
+    // withholds further input and the end-of-input signal, so at most one
+    // `put` is ever in flight and `finalize()` cannot run before it completes.
+    blocked_ = true;
+    ctx.spawn_task([this, id = args_.id, input = std::move(input), rows,
+                    bytes]() mutable -> Task<void> {
+      auto result = co_await async_mail(atom::put_v, id, std::move(input))
+                      .request(serve_manager_);
+      co_await put_queue_->enqueue(PutDone{std::move(result), rows, bytes});
+    });
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    co_return co_await put_queue_->dequeue();
+  }
+
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    auto* done = result.try_as<PutDone>();
+    if (not done) {
+      co_return;
+    }
+    // The in-flight `put` completed; unblock so the executor resumes feeding
+    // input (or delivers the end-of-input signal it withheld while blocked).
+    blocked_ = false;
+    if (not done->result) {
+      diagnostic::error(done->result.error())
         .note("failed to buffer events at serve-manager")
         .emit(ctx);
       co_return;
     }
-    bytes_counter_.add(bytes);
-    events_counter_.add(rows);
+    bytes_counter_.add(done->bytes);
+    events_counter_.add(done->rows);
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    // Apply backpressure without blocking the main loop: while a `put` is in
+    // flight we do not want more input, but control messages (graceful stop)
+    // must still be processed.
+    return blocked_ ? OperatorState::blocked : OperatorState::normal;
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
@@ -1410,8 +1520,8 @@ public:
     // accepted after this point is dropped instead of being forwarded to the
     // serve-manager.
     stopped_ = true;
-    auto result
-      = co_await async_mail(atom::stop_v, args_.id).request(serve_manager_);
+    auto result = co_await async_mail(atom::stop_v, args_.id, lifetime_actor_)
+                    .request(serve_manager_);
     if (not result) {
       diagnostic::error(result.error())
         .note("failed to stop serve-manager")
@@ -1422,7 +1532,15 @@ public:
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     auto result
-      = co_await async_mail(atom::shutdown_v, args_.id).request(serve_manager_);
+      = co_await async_mail(atom::shutdown_v, args_.id, lifetime_actor_)
+          .request(serve_manager_);
+    // Terminate the lifetime actor cleanly. The serve-manager then keeps the
+    // final result set available for the retention time so that a client can
+    // still fetch it. Letting the actor die from its handle being dropped
+    // would surface as an `unreachable` error at the serve-manager, which
+    // deletes the serve id immediately and breaks late client requests.
+    caf::anon_mail(atom::done_v).send(lifetime_actor_);
+    lifetime_actor_ = nullptr;
     if (not result) {
       diagnostic::error(result.error())
         .note("failed to deregister at serve-manager")
@@ -1431,11 +1549,38 @@ public:
     co_return FinalizeBehavior::done;
   }
 
+  ~ServeImpl() override {
+    if (lifetime_actor_) {
+      // We did not reach `finalize`, e.g., because the pipeline was
+      // force-killed. Signal a failure to the serve-manager so it expires the
+      // serve id right away. Use a diagnostic error rather than
+      // `user_shutdown`: the `/serve` endpoint maps `user_shutdown` to a
+      // successful completion, which would hide that the pipeline was aborted
+      // before all results were delivered.
+      caf::anon_mail(diagnostic::error("serve pipeline was aborted before all "
+                                       "results were delivered")
+                       .to_error())
+        .send(lifetime_actor_);
+    }
+  }
+
 private:
+  /// The result of an in-flight `put`, handed from the background task that
+  /// awaits the serve-manager response back to the operator's main loop via
+  /// `await_task()` / `process_task()`.
+  struct PutDone {
+    caf::expected<void> result;
+    uint64_t rows = {};
+    uint64_t bytes = {};
+  };
+
   ServeArgs args_;
   serve_manager_actor serve_manager_;
   caf::actor lifetime_actor_;
   bool stopped_ = false;
+  /// Whether a `put` is currently in flight; drives `state()` backpressure.
+  bool blocked_ = false;
+  mutable Box<folly::coro::BoundedQueue<PutDone>> put_queue_{std::in_place, 1};
   MetricsCounter bytes_counter_;
   MetricsCounter events_counter_;
 };
@@ -1499,7 +1644,8 @@ public:
     //  Wait until all events were fetched.
     ctrl.set_waiting(true);
     ctrl.self()
-      .mail(atom::shutdown_v, serve_id_)
+      .mail(atom::shutdown_v, serve_id_,
+            caf::actor_cast<caf::actor>(&ctrl.self()))
       .request(serve_manager, caf::infinite)
       .then(
         [&]() {

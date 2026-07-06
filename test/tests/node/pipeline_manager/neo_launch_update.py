@@ -482,6 +482,49 @@ def _check_hidden_diagnostics_stop_terminates_serve(base_url: str) -> None:
             _delete_pipeline(base_url, created_id)
 
 
+def _check_full_buffer_stop_terminates_serve(base_url: str) -> None:
+    # Regression test: a pipeline ending in `serve` whose buffer is full (the
+    # operator is throttled inside its `put`) and that has no client draining
+    # it must still stop promptly. Previously the operator blocked its own main
+    # loop awaiting the throttling `put`, so the graceful-stop signal was never
+    # delivered, the serve-manager never dropped its buffer, and the pipeline
+    # hung until the shutdown watchdog force-killed it.
+    created_id = ""
+    try:
+        status, body = _post_api(
+            base_url,
+            "/pipeline/launch",
+            {
+                # Produce far more than the default serve buffer (1024 events)
+                # so the operator gets throttled with no client draining it.
+                "definition": ("//neo\nfrom {x: 1}\nrepeat 100000\n"),
+                "name": "neo-full-buffer-stop",
+                "hidden": True,
+                "serve_id": "neo-full-buffer-stop",
+                "ttl": "60s",
+                "autostart": {"created": True},
+            },
+        )
+        assert status == 200, body
+        created_id = str(body.get("id", ""))
+        assert created_id, body
+        _wait_for_pipeline_state(base_url, created_id, "running")
+        # Give the pipeline a moment to fill the serve buffer and throttle,
+        # without ever polling `/serve`.
+        time.sleep(1.0)
+        status, body = _post_api(
+            base_url,
+            "/pipeline/update",
+            {"id": created_id, "action": "stop"},
+        )
+        assert status == 200, body
+        _wait_for_pipeline_stopped_or_deleted(base_url, created_id, timeout=10)
+        print("full-buffer-stop-terminates-serve: ok")
+    finally:
+        if created_id:
+            _delete_pipeline(base_url, created_id)
+
+
 def main() -> None:
     with _running_web_server() as base_url:
         _check_launch_compile_diagnostics(base_url)
@@ -489,6 +532,7 @@ def main() -> None:
         _check_update_parse_compatibility(base_url)
         _check_every_stop_terminates_serve(base_url)
         _check_hidden_diagnostics_stop_terminates_serve(base_url)
+        _check_full_buffer_stop_terminates_serve(base_url)
 
 
 if __name__ == "__main__":
