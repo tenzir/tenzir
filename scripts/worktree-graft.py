@@ -578,9 +578,13 @@ def resolve_source_worktree(
         return Path(source)
 
     if hook_context:
+        # Keep this aligned with `wt step copy-ignored`, which defaults to the
+        # primary worktree as its source. If this picked the base worktree first,
+        # creating a branch from another feature worktree would copy ignored
+        # files from primary but then repair paths as if they came from base.
         for candidate in (
-            hook_context.base_worktree_path,
             hook_context.primary_worktree_path,
+            hook_context.base_worktree_path,
         ):
             if (
                 candidate
@@ -876,8 +880,10 @@ def fix_ninja_log(
 def fix_ninja_deps(ninja_deps_path: Path, src_str: str, dst_str: str) -> None:
     """Fix paths in .ninja_deps binary file.
 
-    Format: header line + 4-byte version + records
-    Each record: 4-byte length + [string + null + padding + 4-byte ID]
+    Format: header line + 4-byte version + mixed records. Path records store
+    the path bytes, 0-3 NUL padding bytes, and a 4-byte checksum. Dependency
+    records set the high bit of the size field and contain integer IDs and an
+    mtime; copy them unchanged.
     """
     if not ninja_deps_path.exists():
         return
@@ -900,37 +906,42 @@ def fix_ninja_deps(ninja_deps_path: Path, src_str: str, dst_str: str) -> None:
         return
 
     while i + 4 <= len(content):
-        # Read record length (includes string + null + padding + 4-byte ID)
-        rec_len = int.from_bytes(content[i : i + 4], "little")
+        raw_rec_len = int.from_bytes(content[i : i + 4], "little")
+        is_dependency_record = (raw_rec_len & 0x80000000) != 0
+        rec_len = raw_rec_len & 0x7FFFFFFF
         if rec_len < 4 or i + 4 + rec_len > len(content):
             result.extend(content[i:])
             break
 
-        # Record data is rec_len bytes: string + null + padding + 4-byte ID
         rec_data = content[i + 4 : i + 4 + rec_len]
-        str_part = rec_data[:-4]  # Everything except the 4-byte ID
-        rec_id = rec_data[-4:]  # Last 4 bytes are the ID
-
-        # Find null terminator in string part
-        null_pos = str_part.find(b"\x00")
-        if null_pos == -1:
+        if is_dependency_record:
             result.extend(content[i : i + 4 + rec_len])
             i += 4 + rec_len
             continue
-        old_str = str_part[:null_pos]
-        new_str = replace_path_once_bytes(old_str, src_bytes, dst_bytes)
 
-        if new_str != old_str:
+        # Path records contain path bytes, up to three NUL padding bytes, and a
+        # 4-byte checksum. There is no required NUL terminator when the path is
+        # already 4-byte aligned.
+        path_with_padding = rec_data[:-4]
+        checksum = rec_data[-4:]
+        padding_len = 0
+        while (
+            padding_len < 3
+            and padding_len < len(path_with_padding)
+            and path_with_padding[-(padding_len + 1)] == 0
+        ):
+            padding_len += 1
+        old_path = path_with_padding[: len(path_with_padding) - padding_len]
+        new_path = replace_path_once_bytes(old_path, src_bytes, dst_bytes)
+
+        if new_path != old_path:
             changed = True
-            new_str_padded_len = (
-                (len(new_str) + 1) + 3
-            ) & ~3  # +1 for null, align to 4
-            new_rec_len = new_str_padded_len + 4  # +4 for ID
+            new_padding_len = (-len(new_path)) % 4
+            new_rec_len = len(new_path) + new_padding_len + 4
             result.extend(new_rec_len.to_bytes(4, "little"))
-            result.extend(new_str)
-            result.append(0)
-            result.extend(b"\x00" * (new_str_padded_len - len(new_str) - 1))
-            result.extend(rec_id)
+            result.extend(new_path)
+            result.extend(b"\x00" * new_padding_len)
+            result.extend(checksum)
         else:
             result.extend(content[i : i + 4 + rec_len])
         i += 4 + rec_len
