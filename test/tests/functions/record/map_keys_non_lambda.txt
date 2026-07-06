@@ -5,4 +5,4 @@ error: expected a lambda
    |                            ^^^^ 
    |
    = usage: map_keys(x:record, function:string => string)
-   = docs: https://docs.tenzir.com/reference/functions/map_keys
+   = docs: https://tenzir.com/docs/reference/functions/map_keys
