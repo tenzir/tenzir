@@ -1,0 +1,19 @@
+// Functional coverage for the `where` operator over the shape that surfaced a
+// production SIGSEGV: `.map()` over lists that are empty in some rows, record
+// indexing, and a binary comparison, with empty (`[]`) lists mixed into the
+// batch. The actual crash required a zero-row slice reaching the binary-op
+// evaluator, which this single-source pipeline does not produce; the reliable
+// regression guard for that is the unit test
+// `eval_zero_row_null_array.cpp` plus the `series_builder` unit test for
+// `finish_assert_one_array` on an empty builder. This case keeps the
+// user-facing operator chain exercised end-to-end.
+from \
+  {answers: [{type: "A"}], code: "NOERROR"}, \
+  {answers: [], code: "SERVFAIL"}, \
+  {answers: [{type: "AAAA"}], code: "NOERROR"}, \
+  {answers: [], code: "NXDOMAIN"}
+batch
+rcodes = {NOERROR: {id: 0}, SERVFAIL: {id: 2}, NXDOMAIN: {id: 3}}
+types = answers.map(a => a.type?)
+rcode_id = rcodes[code]?.id?
+where rcode_id != 0 or types[0]? == "A"

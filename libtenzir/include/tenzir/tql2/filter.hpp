@@ -23,6 +23,7 @@ inline auto filter2(const table_slice& slice, const ast::expression& expr,
   check(mask_builder.Reserve(detail::narrow_cast<int64_t>(slice.rows())));
   auto warned = false;
   for (auto& part : eval(expr, slice, dh)) {
+    TENZIR_ASSERT(part.array);
     auto array = try_as<arrow::BooleanArray>(&*part.array);
     if (not array) {
       diagnostic::warning("expected `bool`, got `{}`", part.type.kind())
