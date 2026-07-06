@@ -14,7 +14,7 @@ Usage as a worktrunk pre-start hook in `.config/wt.toml`:
 
 What it does:
   - Copies tracked file timestamps (preserves build cache validity)
-  - Copies submodules with their .git directories (avoids network fetches)
+  - Copies populated submodules with their .git directories (avoids network fetches)
   - Copies or fixes CMake build directories and repairs embedded paths
   - Fixes ninja build files (.ninja_log hashes, .ninja_deps paths)
 
@@ -402,9 +402,7 @@ def validate_worktrees(source: Path, target: Path) -> str | None:
 class SubmoduleInfo:
     """Information about a submodule."""
 
-    name: str
     path: str
-    url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -479,34 +477,13 @@ def get_submodule_info(worktree_path: Path) -> list[SubmoduleInfo]:
     if result.returncode != 0 or not result.stdout.strip():
         return []
 
-    # Build map of submodule name -> path
-    submodule_paths: dict[str, str] = {}
+    submodule_paths: list[str] = []
     for line in result.stdout.strip().split("\n"):
         # Format: submodule.<name>.path <path>
-        key, path = line.split(maxsplit=1)
-        # Strip "submodule." prefix and ".path" suffix to handle names with dots
-        name = key[len("submodule.") : -len(".path")]
-        submodule_paths[name] = path
+        _, path = line.split(maxsplit=1)
+        submodule_paths.append(path)
 
-    # Get submodule URLs
-    url_result = run_git(
-        ["config", "--file", ".gitmodules", "--get-regexp", r"^submodule\..*\.url$"],
-        cwd=worktree_path,
-    )
-    submodule_urls: dict[str, str] = {}
-    if url_result.returncode == 0:
-        for line in url_result.stdout.strip().split("\n"):
-            if not line.strip():
-                continue
-            key, url = line.split(maxsplit=1)
-            # Strip "submodule." prefix and ".url" suffix
-            name = key[len("submodule.") : -len(".url")]
-            submodule_urls[name] = url
-
-    return [
-        SubmoduleInfo(name=name, path=path, url=submodule_urls.get(name))
-        for name, path in submodule_paths.items()
-    ]
+    return [SubmoduleInfo(path=path) for path in submodule_paths]
 
 
 def get_git_modules_dir(worktree_path: Path) -> Path | None:
@@ -1008,14 +985,13 @@ class TimestampTask(Task):
 
 
 class SubmoduleTask(Task):
-    """Copy submodules from source to target worktree."""
+    """Copy populated submodules from source to target worktree."""
 
     name = "submodules"
     description = "copying submodules"
 
     def __init__(self) -> None:
         self._submodules_to_copy: list[tuple[str, Path, Path]] = []
-        self._submodules_to_init: list[tuple[str, str]] = []
         self._git_modules_dir: Path | None = None
 
     def should_run(self, source: Path, target: Path) -> bool:
@@ -1029,32 +1005,31 @@ class SubmoduleTask(Task):
             ("submodules_update", "updating submodules"),
         ]
 
+    @staticmethod
+    def _has_entries(path: Path) -> bool:
+        try:
+            return path.is_dir() and any(path.iterdir())
+        except OSError:
+            return False
+
     def _prepare(self, source: Path, target: Path) -> None:
         """Prepare submodule lists for copying."""
         self._submodules_to_copy = []
-        self._submodules_to_init = []
         self._git_modules_dir = get_git_modules_dir(source)
-
-        def has_entries(path: Path) -> bool:
-            try:
-                return path.is_dir() and any(path.iterdir())
-            except OSError:
-                return False
 
         for info in get_submodule_info(target):
             src = source / info.path
             dst = target / info.path
-            src_populated = has_entries(src)
-            dst_empty = not has_entries(dst)
+            src_populated = self._has_entries(src)
+            dst_empty = not self._has_entries(dst)
 
             if src_populated and dst_empty:
                 self._submodules_to_copy.append((info.path, src, dst))
-            elif not src_populated and info.url:
-                # Submodule not initialized in source - will need to clone
+            elif not src_populated:
                 _LOGGER.debug(
-                    f"Will clone {info.path} (name={info.name}) from {info.url}"
+                    f"Skipping unpopulated submodule {info.path}; "
+                    "run `git submodule update --init` explicitly if needed"
                 )
-                self._submodules_to_init.append((info.path, info.url))
 
     def run(self, source: Path, target: Path, spinner: Spinner) -> None:
         self._prepare(source, target)
@@ -1063,7 +1038,6 @@ class SubmoduleTask(Task):
 
         spinner.start_task("submodules_update")
         self._update_submodule_commits(target)
-        self._clone_missing_submodules(target)
         spinner.complete_task("submodules_update")
 
     def _copy_submodules(self, source: Path) -> None:
@@ -1171,7 +1145,7 @@ class SubmoduleTask(Task):
             commit = parts[2]
             path = path_bytes.decode(errors="surrogateescape")
             submodule_dir = target / path
-            if not submodule_dir.exists():
+            if not self._has_entries(submodule_dir):
                 continue
             checkout_result = run_git(
                 ["checkout", "--detach", "--quiet", commit],
@@ -1183,70 +1157,6 @@ class SubmoduleTask(Task):
                     f"Failed to checkout submodule {path} at {commit}: "
                     f"{_stderr_text(checkout_result.stderr).strip()}"
                 )
-
-    def _clone_missing_submodules(self, target: Path) -> None:
-        """Clone submodules that weren't initialized in source."""
-        for submodule_path, url in self._submodules_to_init:
-            _LOGGER.debug(f"Cloning submodule {submodule_path} from {url}")
-            submodule_dir = target / submodule_path
-
-            # Get expected commit for this submodule
-            commit_result = run_git(
-                ["ls-tree", "HEAD", submodule_path],
-                cwd=target,
-            )
-            if commit_result.returncode != 0:
-                _LOGGER.debug(f"  ls-tree failed for {submodule_path}")
-                continue
-            parts = commit_result.stdout.split()
-            if len(parts) < 3 or parts[1] != "commit":
-                _LOGGER.debug(f"  not a commit entry: {commit_result.stdout}")
-                continue
-            commit = parts[2]
-            _LOGGER.debug(f"  target commit: {commit}")
-
-            # Clone and checkout
-            if submodule_dir.exists():
-                shutil.rmtree(submodule_dir)
-            clone_result = run_git(
-                ["clone", url, str(submodule_dir)],
-                cwd=target,
-            )
-            if clone_result.returncode != 0:
-                _LOGGER.debug(f"  clone failed: {clone_result.stderr}")
-                continue
-
-            # Fetch the specific commit if not on default branch
-            fetch_result = run_git(
-                ["fetch", "origin", commit],
-                cwd=submodule_dir,
-                retry_on_index_lock=True,
-            )
-            if fetch_result.returncode != 0:
-                _LOGGER.debug(
-                    f"  fetch failed for {submodule_path}@{commit}: "
-                    f"{_stderr_text(fetch_result.stderr).strip()}"
-                )
-
-            checkout_result = run_git(
-                ["checkout", "--detach", "--quiet", commit],
-                cwd=submodule_dir,
-                retry_on_index_lock=True,
-            )
-            if checkout_result.returncode != 0:
-                _LOGGER.warning(
-                    f"Failed to checkout cloned submodule {submodule_path} at {commit}: "
-                    f"{_stderr_text(checkout_result.stderr).strip()}"
-                )
-                continue
-
-            # Make all .git files writable (git pack files are read-only)
-            git_dir = submodule_dir / ".git"
-            if git_dir.is_dir():
-                for f in git_dir.rglob("*"):
-                    if f.is_file():
-                        with contextlib.suppress(OSError):
-                            f.chmod(f.stat().st_mode | 0o200)
 
 
 class BuildTask(Task):
