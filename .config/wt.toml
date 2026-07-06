@@ -1,0 +1,11 @@
+# Worktrunk project configuration for Tenzir.
+#
+# New worktrees get a warm local build/cache state first, then the graft helper
+# repairs metadata that embeds source-worktree paths (CMake, Ninja, mtimes, and
+# submodules). Keep the copied files intentionally narrow in `.worktreeinclude`.
+
+[[pre-start]]
+warm-build-state = "wt step copy-ignored"
+
+[[pre-start]]
+repair-worktree-metadata = "scripts/worktree-graft.py {{ worktree_path }}"
