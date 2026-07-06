@@ -1,0 +1,7 @@
+// A heterogeneous stream evolves the schema mid-pipeline: the second event
+// adds a field to the list element struct and a new top-level column. The
+// data file that is already open rotates so that it never receives batches
+// of the evolved schema.
+from {id: 3, time: 2026-01-01T00:00:02Z, items: [{name: "x"}]},
+  {id: 4, time: 2026-01-01T00:00:03Z, items: [{name: "y", score: 1.5}], region: "eu"}
+to_iceberg "evolvens.events", catalog=env("ICEBERG_REST_URI")

@@ -3,7 +3,7 @@
 Native Apache Iceberg output for Tenzir, built on
 [apache/iceberg-cpp](https://github.com/apache/iceberg-cpp) (TNZ-774).
 
-## Status: Phase 2 (table creation + schema derivation)
+## Status: Phase 3 (continuous schema evolution)
 
 The plugin provides the `to_iceberg` operator: it writes events into an
 Apache Iceberg table through a REST catalog, creating the table from the
@@ -15,6 +15,16 @@ to `long`. When the schema has a top-level `time` timestamp, created tables
 register it as the default sort order and keep full column metrics for it
 (all other columns store only counts, keeping manifests small for wide event
 schemas).
+
+Heterogeneous streams evolve the table continuously: fields the table does
+not have yet — at any nesting depth, including list elements — commit a
+metadata-only schema update before any data file carries them, so Parquet
+files are only ever stamped with catalog-confirmed field IDs. Existing
+columns are never modified; type conflicts null-fill with a warning, and
+unrepresentable fields are dropped with a warning. Snapshot commits are
+verified against the committed metadata (tagged via the `tenzir.commit-id`
+summary property) and retried on top of concurrent updates, so racing
+writers on the same table lose no data.
 
 Layout:
 
@@ -29,8 +39,8 @@ Layout:
   (re-pinned to the voted 0.4.0 release before the operator goes stable).
 
 See `to_iceberg-plan.md` on the `feat/to-iceberg-operator-plan` branch for
-the full plan; continuous schema evolution (Phase 3) and hidden partitioning
-(Phase 4) are next.
+the full plan; hidden partitioning (Phase 4) and exactly-once delivery
+(Phase 5) are next.
 
 ## Trying the spike
 

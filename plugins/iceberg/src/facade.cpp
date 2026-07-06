@@ -27,12 +27,16 @@
 #include <iceberg/partition_spec.h>
 #include <iceberg/schema.h>
 #include <iceberg/schema_field.h>
+#include <iceberg/snapshot.h>
 #include <iceberg/sort_order.h>
 #include <iceberg/table.h>
 #include <iceberg/table_identifier.h>
+#include <iceberg/table_metadata.h>
+#include <iceberg/transaction.h>
 #include <iceberg/transform.h>
 #include <iceberg/type.h>
 #include <iceberg/update/fast_append.h>
+#include <iceberg/update/update_schema.h>
 
 #include <algorithm>
 #include <filesystem>
@@ -188,6 +192,88 @@ auto derive_type(const tenzir::type& ty, int32_t& next_id,
     [&](const secret_type&) -> std::shared_ptr<ice::Type> {
       return drop("refusing to persist secrets");
     });
+}
+
+/// A column to add during schema evolution: the canonical dotted path of the
+/// parent struct (empty for top-level columns) plus the new field's name and
+/// type. Field IDs inside `type` are placeholders; the schema update assigns
+/// fresh ones and the catalog confirms them on commit.
+struct SchemaAddition {
+  std::string parent;
+  std::string name;
+  std::shared_ptr<ice::Type> type;
+};
+
+auto find_field(std::span<const ice::SchemaField> fields, std::string_view name)
+  -> const ice::SchemaField* {
+  for (const auto& field : fields) {
+    if (field.name() == name) {
+      return &field;
+    }
+  }
+  return nullptr;
+}
+
+auto diff_schema(const record_type& want,
+                 std::span<const ice::SchemaField> have,
+                 const std::string& path,
+                 std::vector<SchemaAddition>& additions,
+                 std::vector<std::string>& dropped) -> void;
+
+/// Recurses into nested types that exist on both sides. Shape or type
+/// conflicts stay untouched; the operator null-fills them at write time with
+/// a warning.
+auto diff_nested(const tenzir::type& want, const ice::Type& have,
+                 const std::string& path,
+                 std::vector<SchemaAddition>& additions,
+                 std::vector<std::string>& dropped) -> void {
+  match(
+    want,
+    [&](const record_type& t) {
+      if (have.type_id() == ice::TypeId::kStruct) {
+        diff_schema(t, static_cast<const ice::StructType&>(have).fields(),
+                    path, additions, dropped);
+      }
+    },
+    [&](const list_type& t) {
+      if (have.type_id() == ice::TypeId::kList) {
+        const auto& element = static_cast<const ice::ListType&>(have).element();
+        // `element` is the canonical path step for list elements; the schema
+        // update resolves it to the element struct when used as a parent.
+        diff_nested(t.value_type(), *element.type(), path + ".element",
+                    additions, dropped);
+      }
+    },
+    [](const auto&) {});
+}
+
+/// Collects fields of `want` that are missing from the existing fields,
+/// recursing into records and lists of records present on both sides. `path`
+/// is the canonical dotted name of the enclosing struct, empty at the root.
+auto diff_schema(const record_type& want,
+                 std::span<const ice::SchemaField> have,
+                 const std::string& path,
+                 std::vector<SchemaAddition>& additions,
+                 std::vector<std::string>& dropped) -> void {
+  for (const auto& field : want.fields()) {
+    auto field_path = path.empty()
+                        ? std::string{field.name}
+                        : fmt::format("{}.{}", path, field.name);
+    const auto* existing = find_field(have, field.name);
+    if (not existing) {
+      auto next_id = int32_t{0};
+      auto field_type = derive_type(field.type, next_id, field_path, dropped);
+      if (field_type) {
+        additions.push_back(SchemaAddition{
+          .parent = path,
+          .name = std::string{field.name},
+          .type = std::move(field_type),
+        });
+      }
+      continue;
+    }
+    diff_nested(field.type, *existing->type(), field_path, additions, dropped);
+  }
 }
 
 // Mirrors iceberg-cpp's own Iceberg-to-Arrow mapping (schema_internal.cc) for
@@ -439,6 +525,49 @@ auto Table::export_arrow_schema(ArrowSchema* out) const -> Result<void> {
   return {};
 }
 
+auto Table::evolve_schema(const record_type& schema,
+                          std::vector<std::string>& dropped_fields)
+  -> Result<std::optional<Table>> {
+  auto current = impl_->table->schema();
+  if (not current.has_value()) {
+    return std::unexpected{translate_error(current.error())};
+  }
+  auto additions = std::vector<SchemaAddition>{};
+  diff_schema(schema, (*current)->fields(), "", additions, dropped_fields);
+  if (additions.empty()) {
+    return std::optional<Table>{};
+  }
+  // A schema update is not retryable after a conflicting commit: replaying
+  // it against refreshed metadata could apply a different evolution than
+  // authored. The caller reloads the table and re-derives the diff instead.
+  auto transaction
+    = ice::Transaction::Make(impl_->table, ice::TransactionKind::kUpdate);
+  if (not transaction.has_value()) {
+    return std::unexpected{translate_error(transaction.error())};
+  }
+  auto update = (*transaction)->NewUpdateSchema();
+  if (not update.has_value()) {
+    return std::unexpected{translate_error(update.error())};
+  }
+  for (auto& addition : additions) {
+    if (addition.parent.empty()) {
+      (*update)->AddColumn(addition.name, std::move(addition.type));
+    } else {
+      (*update)->AddColumn(std::optional<std::string_view>{addition.parent},
+                           addition.name, std::move(addition.type));
+    }
+  }
+  if (auto status = (*update)->Commit(); not status.has_value()) {
+    return std::unexpected{translate_error(status.error())};
+  }
+  auto committed = (*transaction)->Commit();
+  if (not committed.has_value()) {
+    return std::unexpected{translate_error(committed.error())};
+  }
+  return Table{
+    std::make_shared<Impl>(Impl{.table = std::move(*committed)})};
+}
+
 auto Table::new_file_writer() -> Result<FileWriter> {
   auto schema = impl_->table->schema();
   if (not schema.has_value()) {
@@ -482,15 +611,46 @@ auto Table::new_file_writer() -> Result<FileWriter> {
     FileWriter::Impl{.writer = std::move(*writer)})};
 }
 
-auto Table::commit_append(std::span<DataFile> files) -> Result<void> {
-  auto append = impl_->table->NewFastAppend();
+auto Table::commit_append(std::span<DataFile> files) -> Result<Table> {
+  auto transaction
+    = ice::Transaction::Make(impl_->table, ice::TransactionKind::kUpdate);
+  if (not transaction.has_value()) {
+    return std::unexpected{translate_error(transaction.error())};
+  }
+  auto append = (*transaction)->NewFastAppend();
   if (not append.has_value()) {
     return std::unexpected{translate_error(append.error())};
   }
+  // Tag the snapshot so the commit can be verified below: iceberg-cpp's
+  // internal retry after a conflicting commit can report success without the
+  // snapshot landing, which would silently drop the files.
+  auto commit_id = fmt::to_string(uuid::random());
+  (*append)->Set("tenzir.commit-id", commit_id);
   for (const auto& file : files) {
     (*append)->AppendFile(file.impl_->file);
   }
-  return translate((*append)->Commit());
+  if (auto status = (*append)->Commit(); not status.has_value()) {
+    return std::unexpected{translate_error(status.error())};
+  }
+  auto committed = (*transaction)->Commit();
+  if (not committed.has_value()) {
+    return std::unexpected{translate_error(committed.error())};
+  }
+  const auto& snapshots = (*committed)->metadata()->snapshots;
+  const auto landed
+    = std::ranges::any_of(snapshots, [&](const auto& snapshot) {
+        auto it = snapshot->summary.find("tenzir.commit-id");
+        return it != snapshot->summary.end() and it->second == commit_id;
+      });
+  if (not landed) {
+    return std::unexpected{Error{
+      Error::Kind::conflict,
+      "the appended snapshot is missing from the committed table metadata "
+      "(a concurrent update won the race)",
+    }};
+  }
+  return Table{
+    std::make_shared<Impl>(Impl{.table = std::move(*committed)})};
 }
 
 auto FileWriter::write(ArrowArray* batch) -> Result<void> {

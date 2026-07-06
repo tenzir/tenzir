@@ -1,4 +1,0 @@
-// Nested drift: unknown fields at any depth are dropped with a
-// path-qualified warning, missing fields are null-filled.
-from {id: 4, time: 2026-01-01T00:00:03Z, meta: {level: "info", surprise: 1}, brand_new: "x"}
-to_iceberg "createns.events", catalog=env("ICEBERG_REST_URI")

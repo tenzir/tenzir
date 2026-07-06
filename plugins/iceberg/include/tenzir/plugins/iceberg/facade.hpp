@@ -155,11 +155,30 @@ public:
   /// schema uses types the plugin cannot map (e.g. uuid, map, decimal).
   auto export_arrow_schema(ArrowSchema* out) const -> Result<void>;
 
+  /// Adds columns for fields of `schema` that the table does not have yet,
+  /// recursing into nested records and lists of records (a metadata-only
+  /// schema-update commit). Existing columns are never modified; fields whose
+  /// type conflicts with an existing column stay untouched, and fields that
+  /// cannot be represented are skipped and reported in `dropped_fields` as
+  /// `path: reason` strings. Returns the updated table, or `std::nullopt`
+  /// when the table already covers every representable field. An error of
+  /// kind `conflict` means a concurrent writer updated the table; callers
+  /// should reload the table and retry against the fresh schema.
+  auto evolve_schema(const record_type& schema,
+                     std::vector<std::string>& dropped_fields)
+    -> Result<std::optional<Table>>;
+
   /// Opens a writer for a new data file in the table's data location.
   auto new_file_writer() -> Result<FileWriter>;
 
-  /// Commits the given data files as one new snapshot (FastAppend).
-  auto commit_append(std::span<DataFile> files) -> Result<void>;
+  /// Commits the given data files as one new snapshot (FastAppend) and
+  /// returns the refreshed table. Callers must route subsequent writers and
+  /// commits through the returned handle; a stale handle loses the race
+  /// against its own previous snapshot. The commit is verified to have taken
+  /// effect: an error of kind `conflict` means a concurrent update won the
+  /// race and the snapshot did not land; callers should reload the table and
+  /// retry with the same files.
+  auto commit_append(std::span<DataFile> files) -> Result<Table>;
 
 private:
   struct Impl;

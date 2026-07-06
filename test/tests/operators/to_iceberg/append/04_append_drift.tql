@@ -1,6 +1,6 @@
-// Events whose shape drifts from the table schema: `extra` does not exist in
-// the table and is dropped with a warning; `message` is missing and lands as
+// Events whose shape drifts from the table schema: `extra` does not exist
+// in the table and evolves the schema; `message` is missing and lands as
 // null.
-from {id: 3, ts: 2026-01-01T00:00:03Z, extra: "dropped"},
-     {id: 4, ts: 2026-01-01T00:00:04Z, extra: "dropped"}
+from {id: 3, ts: 2026-01-01T00:00:03Z, extra: "evolved"},
+     {id: 4, ts: 2026-01-01T00:00:04Z, extra: "evolved"}
 to_iceberg "testns.events", catalog=env("ICEBERG_REST_URI")

@@ -1,0 +1,14 @@
+table {
+  1: id: optional long
+  2: time: optional timestamptz
+  3: meta: optional struct<4: level: optional string, 6: tags: optional list<string>>
+  5: severity: optional long
+  8: net: optional struct<9: src_ip: optional string>
+  10: items: optional list<struct<12: name: optional string, 13: score: optional double>>
+  14: region: optional string
+}
+rows: 4
+1 None None
+2 None None
+3 [{'name': 'x', 'score': None}] None
+4 [{'name': 'y', 'score': 1.5}] eu

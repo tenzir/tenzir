@@ -216,6 +216,10 @@ public:
         co_return;
       }
     }
+    co_await ensure_schema(input, ctx);
+    if (done_) {
+      co_return;
+    }
     auto batch = project(std::move(input), ctx);
     if (not batch) {
       co_return;
@@ -364,6 +368,82 @@ private:
     set_table(std::move(*table), ctx);
   }
 
+  /// Evolves the table schema to cover fields the table does not have yet
+  /// (a metadata-only commit). Runs once per distinct input schema. The
+  /// schema commit lands at the catalog *before* any data file carries the
+  /// new columns, so Parquet files are only ever stamped with field IDs the
+  /// catalog has confirmed. When a concurrent writer updates the table
+  /// underneath us, the commit conflicts; we reload the table and re-derive
+  /// the diff against their changes.
+  auto ensure_schema(const table_slice& input, OpCtx& ctx) -> Task<void> {
+    auto fingerprint = input.schema().make_fingerprint();
+    if (evolved_schemas_.contains(fingerprint)) {
+      co_return;
+    }
+    // Evolution retries run against a local handle so that the operator's
+    // projection target and open data file stay untouched unless the table
+    // schema actually changes.
+    auto current = *table_;
+    for (auto attempt = 1;; ++attempt) {
+      auto dropped = std::make_shared<std::vector<std::string>>();
+      auto evolved = co_await spawn_blocking(
+        [table = current, ty = input.schema(), dropped]() mutable {
+          return table.evolve_schema(as<record_type>(ty), *dropped);
+        });
+      for (const auto& reason : *dropped) {
+        warn_once(fmt::format("cannot represent column in Iceberg: {}",
+                              reason),
+                  ctx);
+      }
+      if (evolved) {
+        if (*evolved) {
+          // The projection target changes: the open data file stays valid
+          // under the old schema, but must not receive new-schema batches.
+          // Committing it refreshes the table handle, which then already
+          // carries the evolved schema; without an open file we adopt the
+          // schema-update response directly.
+          if (writer_) {
+            co_await rotate(ctx);
+          } else {
+            set_table(std::move(**evolved), ctx);
+          }
+          if (done_) {
+            co_return;
+          }
+        }
+        evolved_schemas_.insert(std::move(fingerprint));
+        co_return;
+      }
+      if (evolved.error().kind != Error::Kind::conflict
+          or attempt >= commit_max_attempts) {
+        fail(evolved.error(),
+             fmt::format("failed to evolve schema of Iceberg table `{}`",
+                         args_.table_id.inner),
+             ctx);
+        co_return;
+      }
+      diagnostic::warning("conflicting schema update (attempt {}/{}): {}",
+                          attempt, commit_max_attempts,
+                          evolved.error().message)
+        .primary(args_.operator_location)
+        .emit(ctx.dh());
+      // A concurrent writer updated the table between our load and the
+      // schema commit; re-derive the diff against their changes.
+      auto reloaded = co_await spawn_blocking(
+        [catalog = *catalog_, ns = ns_, name = table_name_]() mutable {
+          return catalog.load_table(ns, name);
+        });
+      if (not reloaded) {
+        fail(reloaded.error(),
+             fmt::format("failed to reload Iceberg table `{}`",
+                         args_.table_id.inner),
+             ctx);
+        co_return;
+      }
+      current = std::move(*reloaded);
+    }
+  }
+
   /// Converts Tenzir-specific extension arrays into their Iceberg
   /// representation: ip, subnet, and enumeration become strings. Returns
   /// nullptr for arrays that must not be written.
@@ -437,8 +517,7 @@ private:
         for (const auto& field : struct_source->struct_type()->fields()) {
           if (not used.contains(field->name())) {
             warn_once(fmt::format("column `{}.{}` does not exist in the "
-                                  "table and will be dropped; schema "
-                                  "evolution arrives with a future release",
+                                  "table and will be dropped",
                                   path, field->name()),
                       ctx);
           }
@@ -518,8 +597,7 @@ private:
     for (const auto& field : batch->schema()->fields()) {
       if (not used.contains(field->name())) {
         warn_once(fmt::format("column `{}` does not exist in the table and "
-                              "will be dropped; schema evolution arrives with "
-                              "a future release",
+                              "will be dropped",
                               field->name()),
                   ctx);
       }
@@ -535,8 +613,11 @@ private:
     return result.MoveValueUnsafe();
   }
 
-  /// Closes the current data file and commits it as one FastAppend snapshot,
-  /// retrying transient failures with exponential backoff.
+  /// Closes the current data file and commits it as one FastAppend snapshot.
+  /// Transient failures retry with exponential backoff; a conflicting
+  /// concurrent update reloads the table and retries the commit with the
+  /// same file. On success, the table handle is replaced with the refreshed
+  /// one so that the next commit does not race against our own snapshot.
   auto rotate(OpCtx& ctx) -> Task<void> {
     if (not writer_ or done_) {
       co_return;
@@ -561,17 +642,35 @@ private:
             return table.commit_append(files);
           });
       if (result) {
-        break;
+        set_table(std::move(*result), ctx);
+        co_return;
       }
-      if (result.error().kind != Error::Kind::transient
-          or attempt >= commit_max_attempts) {
+      if (attempt >= commit_max_attempts
+          or (result.error().kind != Error::Kind::transient
+              and result.error().kind != Error::Kind::conflict)) {
         fail(result.error(), "failed to commit snapshot", ctx);
         co_return;
       }
-      diagnostic::warning("transient commit failure (attempt {}/{}): {}",
-                          attempt, commit_max_attempts, result.error().message)
+      diagnostic::warning("commit failure (attempt {}/{}): {}", attempt,
+                          commit_max_attempts, result.error().message)
         .primary(args_.operator_location)
         .emit(ctx.dh());
+      if (result.error().kind == Error::Kind::conflict) {
+        // A concurrent update won the race; commit again on top of it.
+        auto reloaded = co_await spawn_blocking(
+          [catalog = *catalog_, ns = ns_, name = table_name_]() mutable {
+            return catalog.load_table(ns, name);
+          });
+        if (not reloaded) {
+          fail(reloaded.error(), "failed to reload Iceberg table", ctx);
+          co_return;
+        }
+        set_table(std::move(*reloaded), ctx);
+        if (done_) {
+          co_return;
+        }
+        continue;
+      }
       co_await sleep_for(backoff);
       backoff *= 2;
     }
@@ -621,6 +720,8 @@ private:
   folly::CancellationSource rotation_cancel_;
   bool done_ = false;
   std::unordered_set<std::string> warned_;
+  /// Fingerprints of input schemas the table schema is known to cover.
+  std::unordered_set<std::string> evolved_schemas_;
   MetricsCounter events_counter_;
   MetricsCounter bytes_counter_;
   mutable Box<folly::coro::UnboundedQueue<Message>> control_queue_{
