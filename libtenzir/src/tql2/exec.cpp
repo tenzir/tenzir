@@ -1269,7 +1269,11 @@ void write_profile(
         continue;
       }
       auto sep = ch.name.find(" -> ");
-      TENZIR_ASSERT(sep != std::string::npos);
+      if (sep == std::string::npos) {
+        // Exchange-internal channels (scatter/gather lanes of a parallelized
+        // stage) have no operator endpoints.
+        continue;
+      }
       auto sender = ch.name.substr(0, sep);
       auto receiver = ch.name.substr(sep + 4);
       add_op(sender);
@@ -1728,8 +1732,10 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
     Option<size_t> task_count;
   };
   auto set = []<class T>(Option<T>& field, T value) {
-    TENZIR_ASSERT(field.is_none());
-    field = value;
+    // Lanes of a parallelized (or fused) stage share operator ids, so the
+    // same logical operator can appear once per lane; accumulate the
+    // contributions into a single entry.
+    field = field.unwrap_or_default() + value;
   };
   auto ops = std::unordered_map<OpId, OpStats>{};
   auto is_child_of = [](OpId const& child, OpId const& parent) -> bool {
@@ -1743,7 +1749,12 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
   // attributed to the child operator, not the parent.
   for (auto const& prof : channel_profiles) {
     auto sep = prof.id.value.find(" -> ");
-    TENZIR_ASSERT(sep != std::string::npos);
+    if (sep == std::string::npos) {
+      // Exchange-internal channels (scatter/gather lanes of a parallelized
+      // stage) have no operator endpoints; their traffic is accounted for by
+      // the adjacent lane channels.
+      continue;
+    }
     auto sender = OpId{prof.id.value.substr(0, sep)};
     auto receiver = OpId{prof.id.value.substr(sep + 4)};
     // Skip the "_" side of boundary channels, and skip the parent side of
