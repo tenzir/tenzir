@@ -113,7 +113,7 @@ auto make_request_metadata(proxygen::HTTPMessage const& request)
   -> RequestMetadata {
   auto result = RequestMetadata{};
   result.client_ip = std::string{request.getClientIP()};
-  request.getHeaders().forEach([&](std::string& k, std::string& v) {
+  request.getHeaders().forEach([&](const std::string& k, const std::string& v) {
     result.headers.emplace_back(k, v);
   });
   for (auto const& [k, v] : request.getQueryParams()) {
