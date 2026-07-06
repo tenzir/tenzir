@@ -92,6 +92,15 @@ auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
               DiagHandler& dh, Profiler profiler, bool is_hidden,
               Notify* graceful_stop = nullptr) -> Task<failure_or<void>>;
 
+/// Run a closed staged pipeline (implicit parallelization).
+auto run_plan(StagedChains staged, caf::actor_system& sys, DiagHandler& dh,
+              Profiler profiler, bool has_terminal, bool is_hidden,
+              Notify* graceful_stop = nullptr) -> Task<failure_or<void>>;
+
+auto run_plan(StagedChains staged, caf::actor_system& sys, DiagHandler& dh,
+              Profiler profiler, bool is_hidden,
+              Notify* graceful_stop = nullptr) -> Task<failure_or<void>>;
+
 /// Feeds input into a transform pipeline.
 using TransformFeeder
   = std::function<Task<void>(Push<OperatorMsg<table_slice>>&)>;

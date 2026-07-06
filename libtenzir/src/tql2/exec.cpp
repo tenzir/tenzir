@@ -2078,6 +2078,32 @@ auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
                               false, is_hidden, graceful_stop);
 }
 
+namespace {
+
+// Defined below, next to the other pipeline drivers.
+auto run_plan_staged_impl(StagedChains staged, caf::actor_system& sys,
+                          DiagHandler& dh, Profiler profiler, bool has_terminal,
+                          bool is_hidden, Notify* graceful_stop)
+  -> Task<failure_or<void>>;
+
+} // namespace
+
+auto run_plan(StagedChains staged, caf::actor_system& sys, DiagHandler& dh,
+              Profiler profiler, bool has_terminal, bool is_hidden,
+              Notify* graceful_stop) -> Task<failure_or<void>> {
+  co_return co_await run_plan_staged_impl(std::move(staged), sys, dh,
+                                          std::move(profiler), has_terminal,
+                                          is_hidden, graceful_stop);
+}
+
+auto run_plan(StagedChains staged, caf::actor_system& sys, DiagHandler& dh,
+              Profiler profiler, bool is_hidden, Notify* graceful_stop)
+  -> Task<failure_or<void>> {
+  co_return co_await run_plan_staged_impl(std::move(staged), sys, dh,
+                                          std::move(profiler), false, is_hidden,
+                                          graceful_stop);
+}
+
 auto run_transform(OperatorChain<table_slice, table_slice> chain,
                    caf::actor_system& sys, DiagHandler& dh, Profiler profiler,
                    bool is_hidden, TransformFeeder feed_input,
@@ -2225,10 +2251,10 @@ private:
   failure_or<void> failure_;
 };
 
-/// The staged counterpart of the public `run_plan`.
-auto run_plan(StagedChains staged, caf::actor_system& sys, DiagHandler& dh,
-              Profiler profiler, bool has_terminal, bool is_hidden,
-              Notify* graceful_stop) -> Task<failure_or<void>> {
+auto run_plan_staged_impl(StagedChains staged, caf::actor_system& sys,
+                          DiagHandler& dh, Profiler profiler, bool has_terminal,
+                          bool is_hidden, Notify* graceful_stop)
+  -> Task<failure_or<void>> {
   auto num_ops = staged.num_operators();
   LOGW("spawning staged plan with {} operators", num_ops);
   auto exec_ctx = TestExecCtx{profiler, has_terminal, is_hidden};
