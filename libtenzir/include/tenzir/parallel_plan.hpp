@@ -54,7 +54,7 @@ struct planned_stage {
   Distribution distribution = SingleDistribution{};
 };
 
-/// The physical stage layout for a pipeline.
+/// The planned stage layout for a pipeline.
 struct plan_result {
   std::vector<planned_stage> stages;
 

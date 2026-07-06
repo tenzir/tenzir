@@ -37,24 +37,24 @@ enum class edge_kind {
 auto classify_edge(size_t upstream_degree, size_t downstream_degree)
   -> edge_kind;
 
-/// The physical execution layout of a linear operator chain.
+/// The parallelized execution layout of a linear operator chain.
 ///
-/// A `PhysicalPlan` partitions the chain's operators into consecutive stages,
-/// each running at a fixed parallelism degree. The plan also classifies the
-/// exchange on each inter-stage edge and on the edges to the external source
-/// and sink (both of which are width 1).
+/// A `ParallelizationPlan` partitions the chain's operators into consecutive
+/// stages, each running at a fixed parallelism degree. The plan also classifies
+/// the exchange on each inter-stage edge and on the edges to the external
+/// source and sink (both of which are width 1).
 ///
 /// The degenerate `flat` plan places every operator in a single serial stage;
 /// it reproduces the pre-parallelization topology exactly.
-class PhysicalPlan {
+class ParallelizationPlan {
 public:
   /// Builds the degenerate plan: one serial stage covering all operators.
-  static auto flat(size_t num_operators) -> PhysicalPlan;
+  static auto flat(size_t num_operators) -> ParallelizationPlan;
 
   /// Builds a plan from a planner result.
   ///
   /// The stages must be contiguous and cover `[0, num_operators)`.
-  static auto from_plan(plan_result plan) -> PhysicalPlan;
+  static auto from_plan(plan_result plan) -> ParallelizationPlan;
 
   /// Returns the stages in chain order.
   auto stages() const -> std::span<const planned_stage> {
@@ -98,7 +98,8 @@ public:
   auto edge_out_of(size_t stage) const -> edge_kind;
 
 private:
-  explicit PhysicalPlan(std::vector<planned_stage> stages, size_t num_operators)
+  explicit ParallelizationPlan(std::vector<planned_stage> stages,
+                               size_t num_operators)
     : stages_{std::move(stages)}, num_operators_{num_operators} {
   }
 

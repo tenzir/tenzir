@@ -20,7 +20,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
-#include "tenzir/physical_plan.hpp"
+#include "tenzir/parallelization_plan.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/substitute_ctx.hpp"
 

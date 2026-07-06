@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/physical_plan.hpp"
+#include "tenzir/parallelization_plan.hpp"
 
 #include "tenzir/test/test.hpp"
 
@@ -24,8 +24,9 @@ auto stage(size_t begin, size_t end, size_t degree,
   };
 }
 
-auto plan_of(std::vector<planned_stage> stages) -> PhysicalPlan {
-  return PhysicalPlan::from_plan(plan_result{.stages = std::move(stages)});
+auto plan_of(std::vector<planned_stage> stages) -> ParallelizationPlan {
+  return ParallelizationPlan::from_plan(
+    plan_result{.stages = std::move(stages)});
 }
 
 } // namespace
@@ -40,7 +41,7 @@ TEST("classify edge covers every width combination") {
 }
 
 TEST("flat plan is a single serial stage") {
-  auto plan = PhysicalPlan::flat(3);
+  auto plan = ParallelizationPlan::flat(3);
   check_eq(plan.num_operators(), size_t{3});
   check_eq(plan.num_stages(), size_t{1});
   check(not plan.parallelized());
@@ -56,7 +57,7 @@ TEST("flat plan is a single serial stage") {
 }
 
 TEST("flat plan with no operators has no stages") {
-  auto plan = PhysicalPlan::flat(0);
+  auto plan = ParallelizationPlan::flat(0);
   check_eq(plan.num_operators(), size_t{0});
   check_eq(plan.num_stages(), size_t{0});
   check(not plan.parallelized());

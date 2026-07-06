@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/physical_plan.hpp"
+#include "tenzir/parallelization_plan.hpp"
 
 #include "tenzir/detail/assert.hpp"
 
@@ -33,7 +33,7 @@ auto classify_edge(size_t upstream_degree, size_t downstream_degree)
   return edge_kind::pinch;
 }
 
-auto PhysicalPlan::flat(size_t num_operators) -> PhysicalPlan {
+auto ParallelizationPlan::flat(size_t num_operators) -> ParallelizationPlan {
   auto stages = std::vector<planned_stage>{};
   if (num_operators > 0) {
     stages.push_back({
@@ -43,10 +43,10 @@ auto PhysicalPlan::flat(size_t num_operators) -> PhysicalPlan {
       .distribution = SingleDistribution{},
     });
   }
-  return PhysicalPlan{std::move(stages), num_operators};
+  return ParallelizationPlan{std::move(stages), num_operators};
 }
 
-auto PhysicalPlan::from_plan(plan_result plan) -> PhysicalPlan {
+auto ParallelizationPlan::from_plan(plan_result plan) -> ParallelizationPlan {
   auto num_operators = size_t{0};
   auto expected = size_t{0};
   for (const auto& stage : plan.stages) {
@@ -57,16 +57,16 @@ auto PhysicalPlan::from_plan(plan_result plan) -> PhysicalPlan {
     expected = stage.end;
     num_operators = stage.end;
   }
-  return PhysicalPlan{std::move(plan.stages), num_operators};
+  return ParallelizationPlan{std::move(plan.stages), num_operators};
 }
 
-auto PhysicalPlan::parallelized() const -> bool {
+auto ParallelizationPlan::parallelized() const -> bool {
   return std::ranges::any_of(stages_, [](const planned_stage& stage) {
     return stage.degree > 1;
   });
 }
 
-auto PhysicalPlan::max_degree() const -> size_t {
+auto ParallelizationPlan::max_degree() const -> size_t {
   auto result = size_t{1};
   for (const auto& stage : stages_) {
     result = std::max(result, stage.degree);
@@ -74,7 +74,7 @@ auto PhysicalPlan::max_degree() const -> size_t {
   return result;
 }
 
-auto PhysicalPlan::stage_of(size_t op) const -> size_t {
+auto ParallelizationPlan::stage_of(size_t op) const -> size_t {
   TENZIR_ASSERT(op < num_operators_);
   for (auto i = size_t{0}; i < stages_.size(); ++i) {
     if (op >= stages_[i].begin and op < stages_[i].end) {
@@ -84,13 +84,13 @@ auto PhysicalPlan::stage_of(size_t op) const -> size_t {
   TENZIR_UNREACHABLE();
 }
 
-auto PhysicalPlan::edge_into(size_t stage) const -> edge_kind {
+auto ParallelizationPlan::edge_into(size_t stage) const -> edge_kind {
   TENZIR_ASSERT(stage < stages_.size());
   auto upstream = stage == 0 ? size_t{1} : stages_[stage - 1].degree;
   return classify_edge(upstream, stages_[stage].degree);
 }
 
-auto PhysicalPlan::edge_out_of(size_t stage) const -> edge_kind {
+auto ParallelizationPlan::edge_out_of(size_t stage) const -> edge_kind {
   TENZIR_ASSERT(stage < stages_.size());
   auto downstream
     = stage + 1 == stages_.size() ? size_t{1} : stages_[stage + 1].degree;
