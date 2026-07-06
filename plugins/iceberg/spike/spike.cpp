@@ -106,15 +106,14 @@ auto main(int argc, char** argv) -> int {
     {"ts", tenzir::time_type{}},
   };
   auto dropped = std::vector<std::string>{};
-  auto table
-    = catalog->create_table(ns, table_name, schema, {.sort_column = "ts"},
-                            dropped);
+  auto table = catalog->create_table(ns, table_name, schema,
+                                     {.sort_column = "ts"}, dropped);
   if (not table) {
     return fail(table.error(), "table creation");
   }
   fmt::print("table: created {}.{} at {}\n", argv[3], table_name,
              table->location());
-  auto writer = table->new_file_writer();
+  auto writer = table->new_file_writer({});
   if (not writer) {
     return fail(writer.error(), "writer creation");
   }

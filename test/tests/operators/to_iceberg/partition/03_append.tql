@@ -1,0 +1,5 @@
+// Append without `partition_by`: the existing table's partition spec
+// governs the fanout.
+from {class_uid: 1001, time: 2026-01-03T09:00:00Z, msg: "e"},
+     {class_uid: 4001, time: 2026-01-01T12:00:00Z, msg: "f"}
+to_iceberg "partns.events", catalog=env("ICEBERG_REST_URI"), mode="append"

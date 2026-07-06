@@ -9,22 +9,28 @@
 #include "tenzir/plugins/iceberg/facade.hpp"
 
 #include <tenzir/detail/assert.hpp>
+#include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/string.hpp>
 #include <tenzir/uuid.hpp>
 
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <iceberg/arrow/arrow_register.h>
 #include <iceberg/avro/avro_register.h>
 #include <iceberg/catalog.h>
 #include <iceberg/catalog/rest/catalog_properties.h>
 #include <iceberg/catalog/rest/rest_catalog.h>
 #include <iceberg/data/data_writer.h>
+#include <iceberg/expression/literal.h>
 #include <iceberg/file_io_registry.h>
 #include <iceberg/location_provider.h>
 #include <iceberg/manifest/manifest_entry.h>
 #include <iceberg/parquet/parquet_register.h>
+#include <iceberg/partition_field.h>
 #include <iceberg/partition_spec.h>
+#include <iceberg/row/partition_values.h>
 #include <iceberg/schema.h>
 #include <iceberg/schema_field.h>
 #include <iceberg/snapshot.h>
@@ -155,8 +161,7 @@ auto derive_type(const tenzir::type& ty, int32_t& next_id,
     },
     [&](const list_type& t) -> std::shared_ptr<ice::Type> {
       auto element_id = next_id++;
-      auto element
-        = derive_type(t.value_type(), next_id, path + "[]", dropped);
+      auto element = derive_type(t.value_type(), next_id, path + "[]", dropped);
       if (not element) {
         return nullptr;
       }
@@ -167,16 +172,14 @@ auto derive_type(const tenzir::type& ty, int32_t& next_id,
       auto fields = std::vector<ice::SchemaField>{};
       for (const auto& field : t.fields()) {
         auto field_id = next_id++;
-        auto field_path
-          = path.empty() ? std::string{field.name}
-                         : fmt::format("{}.{}", path, field.name);
-        auto field_type
-          = derive_type(field.type, next_id, field_path, dropped);
+        auto field_path = path.empty() ? std::string{field.name}
+                                       : fmt::format("{}.{}", path, field.name);
+        auto field_type = derive_type(field.type, next_id, field_path, dropped);
         if (not field_type) {
           continue;
         }
-        fields.push_back(ice::SchemaField::MakeOptional(
-          field_id, field.name, std::move(field_type)));
+        fields.push_back(ice::SchemaField::MakeOptional(field_id, field.name,
+                                                        std::move(field_type)));
       }
       if (fields.empty()) {
         return drop("record has no representable fields");
@@ -231,8 +234,8 @@ auto diff_nested(const tenzir::type& want, const ice::Type& have,
     want,
     [&](const record_type& t) {
       if (have.type_id() == ice::TypeId::kStruct) {
-        diff_schema(t, static_cast<const ice::StructType&>(have).fields(),
-                    path, additions, dropped);
+        diff_schema(t, static_cast<const ice::StructType&>(have).fields(), path,
+                    additions, dropped);
       }
     },
     [&](const list_type& t) {
@@ -256,9 +259,8 @@ auto diff_schema(const record_type& want,
                  std::vector<SchemaAddition>& additions,
                  std::vector<std::string>& dropped) -> void {
   for (const auto& field : want.fields()) {
-    auto field_path = path.empty()
-                        ? std::string{field.name}
-                        : fmt::format("{}.{}", path, field.name);
+    auto field_path = path.empty() ? std::string{field.name}
+                                   : fmt::format("{}.{}", path, field.name);
     const auto* existing = find_field(have, field.name);
     if (not existing) {
       auto next_id = int32_t{0};
@@ -313,8 +315,7 @@ auto to_arrow_type(const ice::Type& type)
         if (not child.has_value()) {
           return std::unexpected{Error{
             child.error().kind,
-            fmt::format("field `{}`: {}", field.name(),
-                        child.error().message),
+            fmt::format("field `{}`: {}", field.name(), child.error().message),
           }};
         }
         fields.push_back(arrow::field(std::string{field.name()},
@@ -352,6 +353,163 @@ auto make_identifier(std::span<const std::string> ns, std::string_view name)
   };
 }
 
+auto to_ice_transform(const PartitionField& field)
+  -> std::shared_ptr<ice::Transform> {
+  switch (field.transform) {
+    case PartitionTransform::identity:
+      return ice::Transform::Identity();
+    case PartitionTransform::year:
+      return ice::Transform::Year();
+    case PartitionTransform::month:
+      return ice::Transform::Month();
+    case PartitionTransform::day:
+      return ice::Transform::Day();
+    case PartitionTransform::hour:
+      return ice::Transform::Hour();
+    case PartitionTransform::bucket:
+      return ice::Transform::Bucket(
+        detail::narrow_cast<int32_t>(field.parameter.value_or(0)));
+    case PartitionTransform::truncate:
+      return ice::Transform::Truncate(
+        detail::narrow_cast<int32_t>(field.parameter.value_or(0)));
+  }
+  TENZIR_UNREACHABLE();
+}
+
+/// Renders one partition spec field as `transform(source)` for diagnostics,
+/// e.g. `bucket[16](class_uid)`.
+auto render_partition_field(std::string_view source,
+                            const ice::Transform& transform) -> std::string {
+  return fmt::format("{}({})", transform.ToString(), source);
+}
+
+/// Whether the facade can read partition source values of this type out of
+/// an Arrow array (see `literal_from_arrow`).
+auto supports_partition_source(ice::TypeId id) -> bool {
+  switch (id) {
+    case ice::TypeId::kBoolean:
+    case ice::TypeId::kInt:
+    case ice::TypeId::kLong:
+    case ice::TypeId::kFloat:
+    case ice::TypeId::kDouble:
+    case ice::TypeId::kDate:
+    case ice::TypeId::kTime:
+    case ice::TypeId::kTimestamp:
+    case ice::TypeId::kTimestampTz:
+    case ice::TypeId::kString:
+    case ice::TypeId::kBinary:
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// Reads one non-null value out of an Arrow array. The array's Arrow type is
+/// the one `to_arrow_type` derives for the Iceberg type, so the casts below
+/// hold by construction.
+auto literal_from_arrow(ice::TypeId id, const arrow::Array& array, int64_t row)
+  -> ice::Literal {
+  switch (id) {
+    case ice::TypeId::kBoolean:
+      return ice::Literal::Boolean(
+        static_cast<const arrow::BooleanArray&>(array).Value(row));
+    case ice::TypeId::kInt:
+      return ice::Literal::Int(
+        static_cast<const arrow::Int32Array&>(array).Value(row));
+    case ice::TypeId::kLong:
+      return ice::Literal::Long(
+        static_cast<const arrow::Int64Array&>(array).Value(row));
+    case ice::TypeId::kFloat:
+      return ice::Literal::Float(
+        static_cast<const arrow::FloatArray&>(array).Value(row));
+    case ice::TypeId::kDouble:
+      return ice::Literal::Double(
+        static_cast<const arrow::DoubleArray&>(array).Value(row));
+    case ice::TypeId::kDate:
+      return ice::Literal::Date(
+        static_cast<const arrow::Date32Array&>(array).Value(row));
+    case ice::TypeId::kTime:
+      return ice::Literal::Time(
+        static_cast<const arrow::Time64Array&>(array).Value(row));
+    case ice::TypeId::kTimestamp:
+      return ice::Literal::Timestamp(
+        static_cast<const arrow::TimestampArray&>(array).Value(row));
+    case ice::TypeId::kTimestampTz:
+      return ice::Literal::TimestampTz(
+        static_cast<const arrow::TimestampArray&>(array).Value(row));
+    case ice::TypeId::kString: {
+      auto view = static_cast<const arrow::StringArray&>(array).GetView(row);
+      return ice::Literal::String(std::string{view});
+    }
+    case ice::TypeId::kBinary: {
+      auto view = static_cast<const arrow::BinaryArray&>(array).GetView(row);
+      const auto* data = reinterpret_cast<const uint8_t*>(view.data());
+      return ice::Literal::Binary({data, data + view.size()});
+    }
+    default:
+      TENZIR_UNREACHABLE();
+  }
+}
+
+/// One partition spec field bound against the table schema, ready to compute
+/// partition values.
+struct BoundPartitionField {
+  /// Path of the source column, one entry per struct level.
+  std::vector<std::string> segments;
+  std::shared_ptr<ice::PrimitiveType> source_type;
+  std::shared_ptr<ice::Transform> transform;
+  std::shared_ptr<ice::TransformFunction> function;
+};
+
+/// A partition source column located within one batch: the leaf array plus
+/// the enclosing struct arrays whose validity masks the leaf (an Arrow child
+/// array holds unspecified values where an ancestor is null).
+struct PartitionColumn {
+  std::vector<std::shared_ptr<arrow::Array>> ancestors;
+  std::shared_ptr<arrow::Array> leaf;
+
+  auto is_null(int64_t row) const -> bool {
+    if (leaf->IsNull(row)) {
+      return true;
+    }
+    return std::ranges::any_of(ancestors, [&](const auto& ancestor) {
+      return ancestor->IsNull(row);
+    });
+  }
+};
+
+auto resolve_partition_column(const std::shared_ptr<arrow::StructArray>& batch,
+                              std::span<const std::string> segments)
+  -> Result<PartitionColumn> {
+  auto column = PartitionColumn{};
+  auto current = std::static_pointer_cast<arrow::Array>(batch);
+  for (const auto& segment : segments) {
+    auto struct_array = std::dynamic_pointer_cast<arrow::StructArray>(current);
+    if (not struct_array) {
+      return std::unexpected{Error{
+        Error::Kind::permanent,
+        fmt::format("partition source column `{}` does not resolve to a "
+                    "struct field",
+                    fmt::join(segments, ".")),
+      }};
+    }
+    auto child = struct_array->GetFieldByName(segment);
+    if (not child) {
+      return std::unexpected{Error{
+        Error::Kind::permanent,
+        fmt::format("partition source column `{}` is missing from the batch",
+                    fmt::join(segments, ".")),
+      }};
+    }
+    if (struct_array != batch) {
+      column.ancestors.push_back(std::move(current));
+    }
+    current = std::move(child);
+  }
+  column.leaf = std::move(current);
+  return column;
+}
+
 } // namespace
 
 struct Catalog::Impl {
@@ -360,7 +518,99 @@ struct Catalog::Impl {
 
 struct Table::Impl {
   std::shared_ptr<ice::Table> table;
+  /// The bound default partition spec, built on first use. Not synchronized;
+  /// the operator serializes all facade calls per table handle.
+  std::optional<std::vector<BoundPartitionField>> partitioning;
+
+  /// Returns the bound partitioning, building it on first use.
+  auto ensure_partitioning() -> Result<std::span<const BoundPartitionField>>;
 };
+
+struct PartitionTuple::Impl {
+  std::vector<ice::Literal> values;
+};
+
+namespace {
+
+/// Binds the table's default partition spec against its schema. Returns one
+/// entry per partition field; empty for unpartitioned tables.
+auto bind_partitioning(ice::Table& table)
+  -> Result<std::vector<BoundPartitionField>> {
+  auto spec = table.spec();
+  if (not spec.has_value()) {
+    return std::unexpected{translate_error(spec.error())};
+  }
+  auto schema = table.schema();
+  if (not schema.has_value()) {
+    return std::unexpected{translate_error(schema.error())};
+  }
+  auto result = std::vector<BoundPartitionField>{};
+  result.reserve((*spec)->fields().size());
+  for (const auto& field : (*spec)->fields()) {
+    auto name = (*schema)->FindColumnNameById(field.source_id());
+    if (not name.has_value()) {
+      return std::unexpected{translate_error(name.error())};
+    }
+    if (not *name) {
+      return std::unexpected{Error{
+        Error::Kind::permanent,
+        fmt::format("partition field `{}` references unknown column {}",
+                    field.name(), field.source_id()),
+      }};
+    }
+    auto source = (*schema)->FindFieldById(field.source_id());
+    if (not source.has_value()) {
+      return std::unexpected{translate_error(source.error())};
+    }
+    TENZIR_ASSERT(*source);
+    auto source_type
+      = std::dynamic_pointer_cast<ice::PrimitiveType>((*source)->get().type());
+    if (not source_type
+        or not supports_partition_source(source_type->type_id())) {
+      return std::unexpected{Error{
+        Error::Kind::permanent,
+        fmt::format("cannot compute partition field `{}`: unsupported source "
+                    "column type `{}`",
+                    render_partition_field(**name, *field.transform()),
+                    ice::ToString((*source)->get().type()->type_id())),
+      }};
+    }
+    auto function = field.transform()->Bind(source_type);
+    if (not function.has_value()) {
+      return std::unexpected{Error{
+        Error::Kind::permanent,
+        fmt::format("cannot compute partition field `{}`: {}",
+                    render_partition_field(**name, *field.transform()),
+                    function.error().message),
+      }};
+    }
+    auto segments = std::vector<std::string>{};
+    for (const auto part : detail::split(**name, ".")) {
+      segments.emplace_back(part);
+    }
+    result.push_back(BoundPartitionField{
+      .segments = std::move(segments),
+      .source_type = std::move(source_type),
+      .transform = field.transform(),
+      .function = std::move(*function),
+    });
+  }
+  return result;
+}
+
+} // namespace
+
+auto Table::Impl::ensure_partitioning()
+  -> Result<std::span<const BoundPartitionField>> {
+  if (not partitioning) {
+    auto bound = bind_partitioning(*table);
+    if (not bound.has_value()) {
+      return std::unexpected{bound.error()};
+    }
+    partitioning = std::move(*bound);
+  }
+  return std::span{*partitioning};
+}
 
 struct FileWriter::Impl {
   std::unique_ptr<ice::DataWriter> writer;
@@ -380,6 +630,13 @@ FileWriter::FileWriter(std::shared_ptr<Impl> impl) : impl_{std::move(impl)} {
 }
 
 DataFile::DataFile(std::shared_ptr<Impl> impl) : impl_{std::move(impl)} {
+}
+
+PartitionTuple::PartitionTuple() : impl_{std::make_shared<Impl>()} {
+}
+
+PartitionTuple::PartitionTuple(std::shared_ptr<Impl> impl)
+  : impl_{std::move(impl)} {
 }
 
 auto Catalog::open(CatalogConfig config) -> Result<Catalog> {
@@ -425,8 +682,8 @@ auto Catalog::load_table(std::span<const std::string> ns, std::string_view name)
   if (not table.has_value()) {
     return std::unexpected{translate_error(table.error())};
   }
-  return Table{
-    std::make_shared<Table::Impl>(Table::Impl{.table = std::move(*table)})};
+  return Table{std::make_shared<Table::Impl>(
+    Table::Impl{.table = std::move(*table), .partitioning = {}})};
 }
 
 auto Catalog::create_table(std::span<const std::string> ns,
@@ -439,8 +696,8 @@ auto Catalog::create_table(std::span<const std::string> ns,
   auto sort_source_id = std::optional<int32_t>{};
   for (const auto& field : schema.fields()) {
     auto field_id = next_id++;
-    auto field_type = derive_type(field.type, next_id,
-                                  std::string{field.name}, dropped_fields);
+    auto field_type = derive_type(field.type, next_id, std::string{field.name},
+                                  dropped_fields);
     if (not field_type) {
       continue;
     }
@@ -458,6 +715,62 @@ auto Catalog::create_table(std::span<const std::string> ns,
     }};
   }
   auto iceberg_schema = std::make_shared<ice::Schema>(std::move(fields));
+  auto spec = ice::PartitionSpec::Unpartitioned();
+  if (not options.partition_by.empty()) {
+    auto spec_fields = std::vector<ice::PartitionField>{};
+    spec_fields.reserve(options.partition_by.size());
+    auto next_field_id = ice::PartitionSpec::kLegacyPartitionDataIdStart;
+    for (const auto& field : options.partition_by) {
+      auto found = iceberg_schema->FindFieldByName(field.source);
+      if (not found.has_value()) {
+        return std::unexpected{translate_error(found.error())};
+      }
+      if (not *found) {
+        return std::unexpected{Error{
+          Error::Kind::permanent,
+          fmt::format("partition column `{}` does not exist in the table "
+                      "schema",
+                      field.source),
+        }};
+      }
+      const auto& source = (*found)->get();
+      auto transform = to_ice_transform(field);
+      auto rendered = render_partition_field(field.source, *transform);
+      auto source_type
+        = std::dynamic_pointer_cast<ice::PrimitiveType>(source.type());
+      if (not source_type
+          or not supports_partition_source(source_type->type_id())) {
+        return std::unexpected{Error{
+          Error::Kind::permanent,
+          fmt::format("cannot partition by `{}`: unsupported source column "
+                      "type `{}`",
+                      rendered, ice::ToString(source.type()->type_id())),
+        }};
+      }
+      if (auto bound = transform->Bind(source_type); not bound.has_value()) {
+        return std::unexpected{Error{
+          Error::Kind::permanent,
+          fmt::format("cannot partition by `{}`: {}", rendered,
+                      bound.error().message),
+        }};
+      }
+      auto partition_name = transform->GeneratePartitionName(field.source);
+      if (not partition_name.has_value()) {
+        return std::unexpected{translate_error(partition_name.error())};
+      }
+      spec_fields.emplace_back(source.field_id(), next_field_id++,
+                               std::move(*partition_name),
+                               std::move(transform));
+    }
+    auto made = ice::PartitionSpec::Make(*iceberg_schema,
+                                         ice::PartitionSpec::kInitialSpecId,
+                                         std::move(spec_fields),
+                                         /*allow_missing_fields=*/false);
+    if (not made.has_value()) {
+      return std::unexpected{translate_error(made.error())};
+    }
+    spec = std::move(*made);
+  }
   auto sort_order = ice::SortOrder::Unsorted();
   auto properties = std::unordered_map<std::string, std::string>{
     // Wide event schemas make per-column min/max bounds in manifests
@@ -468,8 +781,7 @@ auto Catalog::create_table(std::span<const std::string> ns,
     auto made = ice::SortOrder::Make(
       *iceberg_schema, /*sort_id=*/1,
       {ice::SortField{*sort_source_id, ice::Transform::Identity(),
-                      ice::SortDirection::kAscending,
-                      ice::NullOrder::kFirst}});
+                      ice::SortDirection::kAscending, ice::NullOrder::kFirst}});
     if (made.has_value()) {
       sort_order = std::move(*made);
       // Full stats on the sort column keep time-range pruning effective.
@@ -482,15 +794,15 @@ auto Catalog::create_table(std::span<const std::string> ns,
                     *options.sort_column, made.error().message));
     }
   }
-  auto table = impl_->catalog->CreateTable(
-    make_identifier(ns, name), iceberg_schema,
-    ice::PartitionSpec::Unpartitioned(), std::move(sort_order),
-    /*location=*/"", properties);
+  auto table
+    = impl_->catalog->CreateTable(make_identifier(ns, name), iceberg_schema,
+                                  spec, std::move(sort_order),
+                                  /*location=*/"", properties);
   if (not table.has_value()) {
     return std::unexpected{translate_error(table.error())};
   }
-  return Table{
-    std::make_shared<Table::Impl>(Table::Impl{.table = std::move(*table)})};
+  return Table{std::make_shared<Table::Impl>(
+    Table::Impl{.table = std::move(*table), .partitioning = {}})};
 }
 
 auto Table::location() const -> std::string {
@@ -564,21 +876,204 @@ auto Table::evolve_schema(const record_type& schema,
   if (not committed.has_value()) {
     return std::unexpected{translate_error(committed.error())};
   }
-  return Table{
-    std::make_shared<Impl>(Impl{.table = std::move(*committed)})};
+  return Table{std::make_shared<Impl>(
+    Impl{.table = std::move(*committed), .partitioning = {}})};
 }
 
-auto Table::new_file_writer() -> Result<FileWriter> {
+auto Table::validate_partitioning() -> Result<void> {
+  auto bound = impl_->ensure_partitioning();
+  if (not bound.has_value()) {
+    return std::unexpected{bound.error()};
+  }
+  return {};
+}
+
+auto Table::check_partition_spec(std::span<const PartitionField> fields)
+  -> Result<void> {
+  auto spec = impl_->table->spec();
+  if (not spec.has_value()) {
+    return std::unexpected{translate_error(spec.error())};
+  }
   auto schema = impl_->table->schema();
   if (not schema.has_value()) {
     return std::unexpected{translate_error(schema.error())};
+  }
+  auto render_table_spec = [&]() -> std::string {
+    auto rendered = std::vector<std::string>{};
+    for (const auto& field : (*spec)->fields()) {
+      auto name = (*schema)->FindColumnNameById(field.source_id());
+      auto source = name.has_value() and *name
+                      ? std::string{**name}
+                      : fmt::format("#{}", field.source_id());
+      rendered.push_back(render_partition_field(source, *field.transform()));
+    }
+    return fmt::format("[{}]", fmt::join(rendered, ", "));
+  };
+  auto render_requested = [&]() -> std::string {
+    auto rendered = std::vector<std::string>{};
+    for (const auto& field : fields) {
+      rendered.push_back(
+        render_partition_field(field.source, *to_ice_transform(field)));
+    }
+    return fmt::format("[{}]", fmt::join(rendered, ", "));
+  };
+  auto mismatch = [&]() -> Result<void> {
+    return std::unexpected{Error{
+      Error::Kind::permanent,
+      fmt::format("the table is partitioned by {}, but `partition_by` "
+                  "requests {}",
+                  render_table_spec(), render_requested()),
+    }};
+  };
+  if ((*spec)->fields().size() != fields.size()) {
+    return mismatch();
+  }
+  for (size_t i = 0; i < fields.size(); ++i) {
+    const auto& have = (*spec)->fields()[i];
+    const auto& want = fields[i];
+    auto found = (*schema)->FindFieldByName(want.source);
+    if (not found.has_value()) {
+      return std::unexpected{translate_error(found.error())};
+    }
+    if (not *found or (*found)->get().field_id() != have.source_id()
+        or *to_ice_transform(want) != *have.transform()) {
+      return mismatch();
+    }
+  }
+  return {};
+}
+
+auto Table::split_by_partition(ArrowArray* batch)
+  -> Result<std::vector<PartitionGroup>> {
+  auto bound = impl_->ensure_partitioning();
+  if (not bound.has_value()) {
+    return std::unexpected{bound.error()};
+  }
+  auto schema = impl_->table->schema();
+  if (not schema.has_value()) {
+    return std::unexpected{translate_error(schema.error())};
+  }
+  // The batch matches the table schema by construction (the operator
+  // projects onto the schema this facade exports), so its Arrow type is the
+  // one we derive ourselves.
+  auto arrow_type = to_arrow_type(**schema);
+  if (not arrow_type.has_value()) {
+    return std::unexpected{arrow_type.error()};
+  }
+  auto imported = arrow::ImportArray(batch, std::move(*arrow_type));
+  if (not imported.ok()) {
+    return std::unexpected{Error{
+      Error::Kind::permanent,
+      fmt::format("failed to import batch: {}", imported.status().ToString()),
+    }};
+  }
+  auto struct_batch = std::dynamic_pointer_cast<arrow::StructArray>(*imported);
+  TENZIR_ASSERT(struct_batch);
+  auto groups = std::vector<PartitionGroup>{};
+  if (bound->empty()) {
+    groups.push_back(PartitionGroup{
+      .key = {},
+      .path = {},
+      .rows = {},
+      .partition = PartitionTuple{std::make_shared<PartitionTuple::Impl>()},
+    });
+    return groups;
+  }
+  auto spec = impl_->table->spec();
+  if (not spec.has_value()) {
+    return std::unexpected{translate_error(spec.error())};
+  }
+  auto columns = std::vector<PartitionColumn>{};
+  columns.reserve(bound->size());
+  for (const auto& field : *bound) {
+    auto column = resolve_partition_column(struct_batch, field.segments);
+    if (not column.has_value()) {
+      return std::unexpected{column.error()};
+    }
+    columns.push_back(std::move(*column));
+  }
+  auto group_by_key = std::unordered_map<std::string, size_t>{};
+  auto key = std::string{};
+  auto values = std::vector<ice::Literal>{};
+  for (auto row = int64_t{0}; row < struct_batch->length(); ++row) {
+    key.clear();
+    values.clear();
+    for (size_t i = 0; i < bound->size(); ++i) {
+      const auto& field = (*bound)[i];
+      auto value = columns[i].is_null(row)
+                     ? ice::Literal::Null(field.source_type)
+                     : literal_from_arrow(field.source_type->type_id(),
+                                          *columns[i].leaf, row);
+      auto transformed = field.function->Transform(value);
+      if (not transformed.has_value()) {
+        return std::unexpected{translate_error(transformed.error())};
+      }
+      // The key encoding distinguishes null from any value and is
+      // length-prefixed so that string values cannot collide across field
+      // boundaries.
+      if (transformed->IsNull()) {
+        key += "|n";
+      } else {
+        auto human = field.transform->ToHumanString(*transformed);
+        if (not human.has_value()) {
+          return std::unexpected{translate_error(human.error())};
+        }
+        key += fmt::format("|v{}:{}", human->size(), *human);
+      }
+      values.push_back(std::move(*transformed));
+    }
+    auto [it, inserted] = group_by_key.try_emplace(key, groups.size());
+    if (inserted) {
+      auto path = (*spec)->PartitionPath(ice::PartitionValues{values});
+      if (not path.has_value()) {
+        return std::unexpected{translate_error(path.error())};
+      }
+      groups.push_back(PartitionGroup{
+        .key = key,
+        .path = std::move(*path),
+        .rows = {},
+        .partition = PartitionTuple{std::make_shared<PartitionTuple::Impl>(
+          PartitionTuple::Impl{.values = std::move(values)})},
+      });
+      values = {};
+    }
+    groups[it->second].rows.push_back(row);
+  }
+  // A single group covers every row; the empty convention saves the caller
+  // from materializing the trivial index vector.
+  if (groups.size() == 1) {
+    groups.front().rows.clear();
+  }
+  return groups;
+}
+
+auto Table::new_file_writer(const PartitionTuple& partition)
+  -> Result<FileWriter> {
+  auto schema = impl_->table->schema();
+  if (not schema.has_value()) {
+    return std::unexpected{translate_error(schema.error())};
+  }
+  auto spec = impl_->table->spec();
+  if (not spec.has_value()) {
+    return std::unexpected{translate_error(spec.error())};
   }
   auto location_provider = impl_->table->location_provider();
   if (not location_provider.has_value()) {
     return std::unexpected{translate_error(location_provider.error())};
   }
-  auto path = (*location_provider)
-                ->NewDataLocation(fmt::format("{}.parquet", uuid::random()));
+  auto values = ice::PartitionValues{partition.impl_->values};
+  auto filename = fmt::format("{}.parquet", uuid::random());
+  auto path = std::string{};
+  if ((*spec)->fields().empty()) {
+    path = (*location_provider)->NewDataLocation(filename);
+  } else {
+    auto located
+      = (*location_provider)->NewDataLocation(**spec, values, filename);
+    if (not located.has_value()) {
+      return std::unexpected{translate_error(located.error())};
+    }
+    path = std::move(*located);
+  }
   // Arrow's local filesystem does not create parent directories on write;
   // object stores have no such concept. Only relevant for file:// tables.
   if (constexpr auto file_scheme = std::string_view{"file://"};
@@ -597,8 +1092,8 @@ auto Table::new_file_writer() -> Result<FileWriter> {
   auto writer = ice::DataWriter::Make(ice::DataWriterOptions{
     .path = std::move(path),
     .schema = std::move(*schema),
-    .spec = ice::PartitionSpec::Unpartitioned(),
-    .partition = {},
+    .spec = std::move(*spec),
+    .partition = std::move(values),
     .format = ice::FileFormatType::kParquet,
     .io = impl_->table->io(),
     .sort_order_id = std::nullopt,
@@ -637,11 +1132,10 @@ auto Table::commit_append(std::span<DataFile> files) -> Result<Table> {
     return std::unexpected{translate_error(committed.error())};
   }
   const auto& snapshots = (*committed)->metadata()->snapshots;
-  const auto landed
-    = std::ranges::any_of(snapshots, [&](const auto& snapshot) {
-        auto it = snapshot->summary.find("tenzir.commit-id");
-        return it != snapshot->summary.end() and it->second == commit_id;
-      });
+  const auto landed = std::ranges::any_of(snapshots, [&](const auto& snapshot) {
+    auto it = snapshot->summary.find("tenzir.commit-id");
+    return it != snapshot->summary.end() and it->second == commit_id;
+  });
   if (not landed) {
     return std::unexpected{Error{
       Error::Kind::conflict,
@@ -649,8 +1143,8 @@ auto Table::commit_append(std::span<DataFile> files) -> Result<Table> {
       "(a concurrent update won the race)",
     }};
   }
-  return Table{
-    std::make_shared<Impl>(Impl{.table = std::move(*committed)})};
+  return Table{std::make_shared<Impl>(
+    Impl{.table = std::move(*committed), .partitioning = {}})};
 }
 
 auto FileWriter::write(ArrowArray* batch) -> Result<void> {

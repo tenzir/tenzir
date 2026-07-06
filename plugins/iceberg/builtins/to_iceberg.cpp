@@ -25,10 +25,12 @@
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
 #include <arrow/compute/api_scalar.h>
+#include <arrow/compute/api_vector.h>
 #include <arrow/compute/cast.h>
 #include <folly/coro/UnboundedQueue.h>
 
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -40,6 +42,11 @@ constexpr auto default_max_size = uint64_t{512} * 1024 * 1024;
 constexpr auto default_timeout = std::chrono::minutes{15};
 constexpr auto commit_max_attempts = 5;
 constexpr auto commit_initial_backoff = std::chrono::milliseconds{250};
+/// Every open partition holds an open Parquet writer with its own row-group
+/// buffer, so memory scales with this cap. When exceeded, the largest open
+/// file closes early: it frees the most buffered bytes, and it is the file
+/// that was going to rotate soonest anyway.
+constexpr auto max_open_partitions = size_t{64};
 
 TENZIR_ENUM(mode, create_append, create, append);
 
@@ -56,6 +63,7 @@ struct ToIcebergArgs {
   Option<located<secret>> s3_endpoint;
   Option<located<bool>> s3_path_style;
   Option<located<secret>> token;
+  Option<ast::expression> partition_by;
   Option<located<uint64_t>> max_size;
   Option<located<duration>> timeout;
   location operator_location;
@@ -73,12 +81,161 @@ auto split_table_id(std::string_view table_id)
   return {std::move(ns), std::string{parts.back()}};
 }
 
+/// The partition transforms addressable from `partition_by`, by their
+/// Iceberg names. These are matched symbolically and never evaluated, so
+/// they do not collide with TQL functions of the same name (`day` the
+/// transform truncates to a day, `day()` the function extracts the day of
+/// the month).
+constexpr auto partition_transforms
+  = std::array<std::pair<std::string_view, PartitionTransform>, 6>{{
+    {"year", PartitionTransform::year},
+    {"month", PartitionTransform::month},
+    {"day", PartitionTransform::day},
+    {"hour", PartitionTransform::hour},
+    {"bucket", PartitionTransform::bucket},
+    {"truncate", PartitionTransform::truncate},
+  }};
+
+auto has_parameter(PartitionTransform transform) -> bool {
+  return transform == PartitionTransform::bucket
+         or transform == PartitionTransform::truncate;
+}
+
+/// Extracts the dotted path of a field expression, e.g. `metadata.version`.
+auto parse_partition_source(const ast::expression& expr, diagnostic_handler& dh)
+  -> failure_or<std::string> {
+  auto path = ast::field_path::try_from(expr);
+  if (not path or path->path().empty()) {
+    diagnostic::error("expected a field").primary(expr).emit(dh);
+    return failure::promise();
+  }
+  auto segments = std::vector<std::string_view>{};
+  segments.reserve(path->path().size());
+  for (const auto& segment : path->path()) {
+    segments.push_back(segment.id.name);
+  }
+  return fmt::to_string(fmt::join(segments, "."));
+}
+
+/// Parses one element of `partition_by`: either a bare field (identity
+/// transform) or a symbolic transform call like `day(time)` or
+/// `bucket(class_uid, 16)`.
+auto parse_partition_field(const ast::expression& expr, diagnostic_handler& dh)
+  -> failure_or<PartitionField> {
+  const auto* call = try_as<ast::function_call>(expr);
+  if (not call) {
+    TRY(auto source, parse_partition_source(expr, dh));
+    return PartitionField{
+      .source = std::move(source),
+      .transform = PartitionTransform::identity,
+      .parameter = {},
+    };
+  }
+  auto transform = std::optional<PartitionTransform>{};
+  if (call->fn.path.size() == 1) {
+    for (const auto& [name, candidate] : partition_transforms) {
+      if (call->fn.path[0].name == name) {
+        transform = candidate;
+        break;
+      }
+    }
+  }
+  if (not transform) {
+    diagnostic::error("unknown partition transform")
+      .primary(call->fn.get_location())
+      .note("supported transforms are `year`, `month`, `day`, `hour`, "
+            "`bucket`, and `truncate`")
+      .emit(dh);
+    return failure::promise();
+  }
+  const auto arity = has_parameter(*transform) ? size_t{2} : size_t{1};
+  if (call->args.size() != arity) {
+    diagnostic::error("`{}` expects exactly {} argument{}",
+                      call->fn.path[0].name, arity, arity == 1 ? "" : "s")
+      .primary(expr)
+      .emit(dh);
+    return failure::promise();
+  }
+  TRY(auto source, parse_partition_source(call->args[0], dh));
+  auto parameter = std::optional<int64_t>{};
+  if (has_parameter(*transform)) {
+    const auto* constant = try_as<ast::constant>(call->args[1]);
+    auto value = std::optional<int64_t>{};
+    if (constant) {
+      match(
+        constant->value,
+        [&](int64_t x) {
+          value = x;
+        },
+        [&](uint64_t x) {
+          if (std::cmp_less_equal(x, std::numeric_limits<int64_t>::max())) {
+            value = static_cast<int64_t>(x);
+          }
+        },
+        [](const auto&) {});
+    }
+    if (not value or *value <= 0
+        or *value > std::numeric_limits<int32_t>::max()) {
+      diagnostic::error("`{}` expects a positive integer",
+                        call->fn.path[0].name)
+        .primary(call->args[1])
+        .emit(dh);
+      return failure::promise();
+    }
+    parameter = *value;
+  }
+  return PartitionField{
+    .source = std::move(source),
+    .transform = *transform,
+    .parameter = parameter,
+  };
+}
+
+/// Parses the `partition_by` argument: a list of partition fields.
+auto parse_partition_by(const ast::expression& expr, diagnostic_handler& dh)
+  -> failure_or<std::vector<PartitionField>> {
+  const auto* list = try_as<ast::list>(expr);
+  if (not list) {
+    diagnostic::error("`partition_by` expects a list of fields or partition "
+                      "transforms, e.g. `[class_uid, day(time)]`")
+      .primary(expr)
+      .emit(dh);
+    return failure::promise();
+  }
+  auto result = std::vector<PartitionField>{};
+  result.reserve(list->items.size());
+  for (const auto& item : list->items) {
+    const auto* item_expr = try_as<ast::expression>(item);
+    if (not item_expr) {
+      diagnostic::error("expected a field or a partition transform")
+        .primary(into_location(item))
+        .emit(dh);
+      return failure::promise();
+    }
+    TRY(auto field, parse_partition_field(*item_expr, dh));
+    result.push_back(std::move(field));
+  }
+  return result;
+}
+
 class ToIceberg final : public Operator<table_slice, void> {
 public:
   struct RotateRequested {
+    /// The `PartitionGroup::key` of the open partition to rotate.
+    std::string partition;
     int64_t generation;
   };
   using Message = variant<RotateRequested>;
+
+  /// An open data file accepting one partition's rows.
+  struct PartitionWriter {
+    FileWriter writer;
+    /// The human-readable partition path, for diagnostics.
+    std::string path;
+    int64_t bytes = 0;
+    int64_t generation = 0;
+    folly::CancellationSource timer_cancel;
+  };
 
   explicit ToIceberg(ToIcebergArgs args) : args_{std::move(args)} {
   }
@@ -153,6 +310,14 @@ public:
     }
     mode_ = args_.mode ? *from_string<enum mode>(args_.mode->inner)
                        : mode::create_append;
+    if (args_.partition_by) {
+      auto parsed = parse_partition_by(*args_.partition_by, dh);
+      if (parsed.is_error()) {
+        done_ = true;
+        co_return;
+      }
+      partition_fields_ = std::move(*parsed);
+    }
     std::tie(ns_, table_name_) = split_table_id(args_.table_id.inner);
     auto catalog
       = co_await spawn_blocking([config = std::move(config)]() mutable {
@@ -183,6 +348,25 @@ public:
         co_return;
       }
       set_table(std::move(*table), ctx);
+      if (done_ or not args_.partition_by) {
+        co_return;
+      }
+      // The existing table's partition spec governs the fanout; a supplied
+      // `partition_by` must match it so that the user's expectation and
+      // reality do not diverge silently.
+      auto checked = co_await spawn_blocking(
+        [table = *table_, fields = partition_fields_]() mutable {
+          return table.check_partition_spec(fields);
+        });
+      if (not checked) {
+        diagnostic::error("{}", checked.error().message)
+          .primary(args_.partition_by->get_location())
+          .note("the partition spec of an existing table cannot be changed "
+                "by this operator; drop `partition_by` to append to the "
+                "table as-is")
+          .emit(dh);
+        done_ = true;
+      }
       co_return;
     }
     if (table.error().kind != Error::Kind::not_found) {
@@ -224,21 +408,9 @@ public:
     if (not batch) {
       co_return;
     }
-    if (not writer_) {
-      auto writer = co_await spawn_blocking([table = *table_]() mutable {
-        return table.new_file_writer();
-      });
-      if (not writer) {
-        fail(writer.error(), "failed to open data file writer", ctx);
-        co_return;
-      }
-      writer_ = std::move(*writer);
-      arm_rotation_timer(ctx);
-    }
-    const auto rows = (*batch)->length();
-    auto written = co_await spawn_blocking(
-      [writer = *writer_, batch
-                          = std::move(*batch)]() mutable -> Result<int64_t> {
+    auto groups = co_await spawn_blocking(
+      [table = *table_,
+       batch = *batch]() mutable -> Result<std::vector<PartitionGroup>> {
         auto c_array = ArrowArray{};
         if (auto status = arrow::ExportArray(*batch, &c_array);
             not status.ok()) {
@@ -247,24 +419,17 @@ public:
             fmt::format("failed to export batch: {}", status.ToString()),
           }};
         }
-        if (auto result = writer.write(&c_array); not result) {
-          return std::unexpected{result.error()};
-        }
-        return writer.bytes_written();
+        return table.split_by_partition(&c_array);
       });
-    if (not written) {
-      fail(written.error(), "failed to write data file", ctx);
+    if (not groups) {
+      fail(groups.error(), "failed to compute partition values", ctx);
       co_return;
     }
-    events_counter_.add(rows);
-    if (*written > file_bytes_) {
-      bytes_counter_.add(*written - file_bytes_);
-    }
-    file_bytes_ = *written;
-    const auto max_size
-      = args_.max_size ? args_.max_size->inner : default_max_size;
-    if (std::cmp_greater_equal(file_bytes_, max_size)) {
-      co_await rotate(ctx);
+    for (const auto& group : *groups) {
+      co_await write_partition(group, *batch, ctx);
+      if (done_) {
+        co_return;
+      }
     }
   }
 
@@ -276,8 +441,13 @@ public:
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
     auto msg = std::move(result).as<Message>();
     co_await co_match(msg, [&](RotateRequested& r) -> Task<void> {
-      if (r.generation == writer_generation_ and writer_) {
-        co_await rotate(ctx);
+      auto it = writers_.find(r.partition);
+      if (it == writers_.end() or it->second.generation != r.generation) {
+        co_return;
+      }
+      co_await close_partition(r.partition, ctx);
+      if (not done_) {
+        co_await commit_pending(ctx);
       }
     });
   }
@@ -286,11 +456,11 @@ public:
     // Flush and commit so that a checkpoint acknowledges only data that is
     // visible in the table. Delivery stays at-least-once: a crash between
     // commit and checkpoint yields duplicates on restart, never data loss.
-    co_await rotate(ctx);
+    co_await rotate_all(ctx);
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    co_await rotate(ctx);
+    co_await rotate_all(ctx);
     co_return FinalizeBehavior::done;
   }
 
@@ -301,6 +471,14 @@ public:
 private:
   /// Imports the table's Arrow schema and makes `table` the write target.
   auto set_table(Table table, OpCtx& ctx) -> void {
+    if (auto result = table.validate_partitioning(); not result) {
+      diagnostic::error("cannot write to partitioned Iceberg table `{}`: {}",
+                        args_.table_id.inner, result.error().message)
+        .primary(args_.table_id.source)
+        .emit(ctx.dh());
+      done_ = true;
+      return;
+    }
     auto c_schema = ArrowSchema{};
     if (auto result = table.export_arrow_schema(&c_schema); not result) {
       diagnostic::error("failed to map Iceberg table schema: {}",
@@ -328,6 +506,7 @@ private:
   auto ensure_table(const table_slice& input, OpCtx& ctx) -> Task<void> {
     const auto& schema = as<record_type>(input.schema());
     auto options = CreateTableOptions{};
+    options.partition_by = partition_fields_;
     for (const auto& field : schema.fields()) {
       if (field.name == default_sort_column and is<time_type>(field.type)) {
         options.sort_column = std::string{default_sort_column};
@@ -336,10 +515,10 @@ private:
     }
     auto dropped = std::make_shared<std::vector<std::string>>();
     auto table = co_await spawn_blocking(
-      [catalog = *catalog_, ns = ns_, name = table_name_,
-       ty = input.schema(), options = std::move(options), dropped,
-       fall_back_to_load = mode_ == mode::create_append]() mutable
-      -> Result<Table> {
+      [catalog = *catalog_, ns = ns_, name = table_name_, ty = input.schema(),
+       options = std::move(options), dropped,
+       fall_back_to_load
+       = mode_ == mode::create_append]() mutable -> Result<Table> {
         if (auto result = catalog.ensure_namespace(ns); not result) {
           return std::unexpected{result.error()};
         }
@@ -391,19 +570,18 @@ private:
           return table.evolve_schema(as<record_type>(ty), *dropped);
         });
       for (const auto& reason : *dropped) {
-        warn_once(fmt::format("cannot represent column in Iceberg: {}",
-                              reason),
+        warn_once(fmt::format("cannot represent column in Iceberg: {}", reason),
                   ctx);
       }
       if (evolved) {
         if (*evolved) {
-          // The projection target changes: the open data file stays valid
-          // under the old schema, but must not receive new-schema batches.
-          // Committing it refreshes the table handle, which then already
-          // carries the evolved schema; without an open file we adopt the
+          // The projection target changes: open data files stay valid under
+          // the old schema, but must not receive new-schema batches.
+          // Committing them refreshes the table handle, which then already
+          // carries the evolved schema; without open files we adopt the
           // schema-update response directly.
-          if (writer_) {
-            co_await rotate(ctx);
+          if (not writers_.empty()) {
+            co_await rotate_all(ctx);
           } else {
             set_table(std::move(**evolved), ctx);
           }
@@ -423,8 +601,7 @@ private:
         co_return;
       }
       diagnostic::warning("conflicting schema update (attempt {}/{}): {}",
-                          attempt, commit_max_attempts,
-                          evolved.error().message)
+                          attempt, commit_max_attempts, evolved.error().message)
         .primary(args_.operator_location)
         .emit(ctx.dh());
       // A concurrent writer updated the table between our load and the
@@ -457,8 +634,8 @@ private:
       ty,
       [&](const enumeration_type& t) -> std::shared_ptr<arrow::Array> {
         return resolve_enumerations(
-                 t, std::static_pointer_cast<enumeration_type::array_type>(
-                      array))
+                 t,
+                 std::static_pointer_cast<enumeration_type::array_type>(array))
           .second;
       },
       [&](const concepts::one_of<ip_type, subnet_type> auto&)
@@ -527,8 +704,7 @@ private:
         auto bitmap = std::shared_ptr<arrow::Buffer>{};
         auto null_count = struct_source->null_count();
         if (null_count > 0) {
-          auto valid
-            = check(arrow::compute::IsValid(struct_source)).array();
+          auto valid = check(arrow::compute::IsValid(struct_source)).array();
           bitmap = valid->buffers[1];
         }
         return check(arrow::StructArray::Make(children, target_fields,
@@ -591,8 +767,8 @@ private:
       if (column) {
         used.insert(field->name());
       }
-      arrays.push_back(project_column(std::move(column), field, field->name(),
-                                      rows, ctx));
+      arrays.push_back(
+        project_column(std::move(column), field, field->name(), rows, ctx));
     }
     for (const auto& field : batch->schema()->fields()) {
       if (not used.contains(field->name())) {
@@ -613,35 +789,157 @@ private:
     return result.MoveValueUnsafe();
   }
 
-  /// Closes the current data file and commits it as one FastAppend snapshot.
-  /// Transient failures retry with exponential backoff; a conflicting
-  /// concurrent update reloads the table and retries the commit with the
-  /// same file. On success, the table handle is replaced with the refreshed
-  /// one so that the next commit does not race against our own snapshot.
-  auto rotate(OpCtx& ctx) -> Task<void> {
-    if (not writer_ or done_) {
+  /// Writes one partition group of a projected batch to the partition's
+  /// open data file, opening it (and evicting the largest open file when at
+  /// the partition cap) as needed. Rotates and commits when the file
+  /// reaches `max_size`.
+  auto write_partition(const PartitionGroup& group,
+                       const std::shared_ptr<arrow::StructArray>& batch,
+                       OpCtx& ctx) -> Task<void> {
+    auto sub = std::static_pointer_cast<arrow::Array>(batch);
+    if (not group.rows.empty()) {
+      auto builder = arrow::Int64Builder{};
+      check(builder.AppendValues(group.rows));
+      auto indices = check(builder.Finish());
+      auto taken = arrow::compute::Take(sub, indices);
+      if (not taken.ok()) {
+        diagnostic::error("failed to split batch: {}",
+                          taken.status().ToString())
+          .primary(args_.operator_location)
+          .emit(ctx.dh());
+        done_ = true;
+        co_return;
+      }
+      sub = taken->make_array();
+    }
+    auto it = writers_.find(group.key);
+    if (it == writers_.end()) {
+      if (writers_.size() >= max_open_partitions) {
+        warn_once(fmt::format("exceeded {} open partitions; closing the "
+                              "largest "
+                              "data file early, which may produce small files",
+                              max_open_partitions),
+                  ctx);
+        auto victim = std::ranges::max_element(writers_, std::less{},
+                                               [](const auto& entry) {
+                                                 return entry.second.bytes;
+                                               });
+        co_await close_partition(victim->first, ctx);
+        if (done_) {
+          co_return;
+        }
+      }
+      auto writer = co_await spawn_blocking(
+        [table = *table_, partition = group.partition]() mutable {
+          return table.new_file_writer(partition);
+        });
+      if (not writer) {
+        fail(writer.error(), "failed to open data file writer", ctx);
+        co_return;
+      }
+      it = writers_
+             .try_emplace(group.key,
+                          PartitionWriter{
+                            .writer = std::move(*writer),
+                            .path = group.path,
+                            .bytes = 0,
+                            .generation = ++writer_generation_,
+                            .timer_cancel = {},
+                          })
+             .first;
+      arm_rotation_timer(group.key, it->second, ctx);
+    }
+    auto& partition_writer = it->second;
+    const auto rows = sub->length();
+    auto written = co_await spawn_blocking(
+      [writer = partition_writer.writer,
+       sub = std::move(sub)]() mutable -> Result<int64_t> {
+        auto c_array = ArrowArray{};
+        if (auto status = arrow::ExportArray(*sub, &c_array); not status.ok()) {
+          return std::unexpected{Error{
+            Error::Kind::permanent,
+            fmt::format("failed to export batch: {}", status.ToString()),
+          }};
+        }
+        if (auto result = writer.write(&c_array); not result) {
+          return std::unexpected{result.error()};
+        }
+        return writer.bytes_written();
+      });
+    if (not written) {
+      fail(written.error(), "failed to write data file", ctx);
       co_return;
     }
-    auto writer = std::move(*writer_);
-    writer_ = None{};
-    file_bytes_ = 0;
-    ++writer_generation_;
-    rotation_cancel_.requestCancellation();
-    auto file = co_await spawn_blocking([writer]() mutable {
-      return writer.finish();
-    });
+    events_counter_.add(rows);
+    if (*written > partition_writer.bytes) {
+      bytes_counter_.add(*written - partition_writer.bytes);
+    }
+    partition_writer.bytes = *written;
+    const auto max_size
+      = args_.max_size ? args_.max_size->inner : default_max_size;
+    if (std::cmp_greater_equal(partition_writer.bytes, max_size)) {
+      co_await close_partition(group.key, ctx);
+      if (not done_) {
+        co_await commit_pending(ctx);
+      }
+    }
+  }
+
+  /// Closes the given partition's open data file and stages it for the next
+  /// commit. Does not commit itself, so an eviction cascade under high
+  /// partition cardinality cannot turn into a commit storm.
+  auto close_partition(const std::string& key, OpCtx& ctx) -> Task<void> {
+    auto node = writers_.extract(key);
+    if (node.empty() or done_) {
+      co_return;
+    }
+    auto& partition_writer = node.mapped();
+    partition_writer.timer_cancel.requestCancellation();
+    auto file
+      = co_await spawn_blocking([writer = partition_writer.writer]() mutable {
+          return writer.finish();
+        });
     if (not file) {
       fail(file.error(), "failed to finalize data file", ctx);
       co_return;
     }
+    pending_files_.push_back(std::move(*file));
+  }
+
+  /// Closes all open data files and commits everything pending as one
+  /// FastAppend snapshot.
+  auto rotate_all(OpCtx& ctx) -> Task<void> {
+    auto keys = std::vector<std::string>{};
+    keys.reserve(writers_.size());
+    for (const auto& [key, unused] : writers_) {
+      keys.push_back(key);
+    }
+    for (const auto& key : keys) {
+      co_await close_partition(key, ctx);
+      if (done_) {
+        co_return;
+      }
+    }
+    co_await commit_pending(ctx);
+  }
+
+  /// Commits all pending data files as one FastAppend snapshot. Transient
+  /// failures retry with exponential backoff; a conflicting concurrent
+  /// update reloads the table and retries the commit with the same files.
+  /// On success, the table handle is replaced with the refreshed one so
+  /// that the next commit does not race against our own snapshot.
+  auto commit_pending(OpCtx& ctx) -> Task<void> {
+    if (pending_files_.empty() or done_) {
+      co_return;
+    }
     auto backoff = duration{commit_initial_backoff};
     for (auto attempt = 1;; ++attempt) {
-      auto result
-        = co_await spawn_blocking([table = *table_, file = *file]() mutable {
-            auto files = std::vector<DataFile>{std::move(file)};
-            return table.commit_append(files);
-          });
+      auto result = co_await spawn_blocking(
+        [table = *table_, files = pending_files_]() mutable {
+          return table.commit_append(files);
+        });
       if (result) {
+        pending_files_.clear();
         set_table(std::move(*result), ctx);
         co_return;
       }
@@ -676,20 +974,20 @@ private:
     }
   }
 
-  /// Spawns a timer that requests rotation of the current file after
-  /// `timeout`. Cancelled when the file rotates for another reason.
-  auto arm_rotation_timer(OpCtx& ctx) -> void {
-    rotation_cancel_ = folly::CancellationSource{};
+  /// Spawns a timer that requests rotation of the partition's open file
+  /// after `timeout`. Cancelled when the file rotates for another reason.
+  auto arm_rotation_timer(const std::string& key, PartitionWriter& writer,
+                          OpCtx& ctx) -> void {
     const auto timeout
       = args_.timeout ? args_.timeout->inner : duration{default_timeout};
-    std::ignore
-      = ctx.spawn_task([this, generation = writer_generation_, timeout,
-                        token = rotation_cancel_.getToken()]() -> Task<void> {
-          auto merged = folly::cancellation_token_merge(
-            co_await folly::coro::co_current_cancellation_token, token);
-          co_await folly::coro::co_withCancellation(merged, sleep_for(timeout));
-          control_queue_->enqueue(RotateRequested{generation});
-        });
+    std::ignore = ctx.spawn_task(
+      [this, key, generation = writer.generation, timeout,
+       token = writer.timer_cancel.getToken()]() -> Task<void> {
+        auto merged = folly::cancellation_token_merge(
+          co_await folly::coro::co_current_cancellation_token, token);
+        co_await folly::coro::co_withCancellation(merged, sleep_for(timeout));
+        control_queue_->enqueue(RotateRequested{key, generation});
+      });
   }
 
   auto fail(const Error& error, std::string_view what, OpCtx& ctx) -> void {
@@ -714,10 +1012,13 @@ private:
   Option<Catalog> catalog_;
   Option<Table> table_;
   std::shared_ptr<arrow::Schema> target_schema_;
-  Option<FileWriter> writer_;
-  int64_t file_bytes_ = 0;
+  /// The parsed `partition_by` argument; empty when not partitioning.
+  std::vector<PartitionField> partition_fields_;
+  /// Open data files, keyed by `PartitionGroup::key`.
+  std::unordered_map<std::string, PartitionWriter> writers_;
+  /// Closed data files that the next commit picks up.
+  std::vector<DataFile> pending_files_;
   int64_t writer_generation_ = 0;
-  folly::CancellationSource rotation_cancel_;
   bool done_ = false;
   std::unordered_set<std::string> warned_;
   /// Fingerprints of input schemas the table schema is known to cover.
@@ -727,6 +1028,39 @@ private:
   mutable Box<folly::coro::UnboundedQueue<Message>> control_queue_{
     std::in_place,
   };
+};
+
+/// Registers `bucket` and `truncate` as function names so that the symbolic
+/// partition transforms in `partition_by` resolve. Unlike `day` and friends,
+/// which are ordinary TQL functions that `partition_by` merely reinterprets,
+/// these two have no evaluatable semantics; using them anywhere else fails
+/// at compile time.
+class PartitionTransformPlugin final : public virtual function_plugin {
+public:
+  explicit PartitionTransformPlugin(std::string name) : name_{std::move(name)} {
+  }
+
+  auto name() const -> std::string override {
+    return name_;
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(function_invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    diagnostic::error("`{}` is an Iceberg partition transform and can only "
+                      "be used in the `partition_by` argument of "
+                      "`to_iceberg`",
+                      name_)
+      .primary(inv.call.fn.get_location())
+      .emit(ctx);
+    return failure::promise();
+  }
+
+private:
+  std::string name_;
 };
 
 class ToIcebergPlugin final : public virtual OperatorPlugin {
@@ -746,6 +1080,8 @@ public:
     auto path_style_arg
       = d.named("s3_path_style", &ToIcebergArgs::s3_path_style);
     d.named("token", &ToIcebergArgs::token);
+    auto partition_by_arg
+      = d.named("partition_by", &ToIcebergArgs::partition_by, "list<any>");
     auto max_size_arg = d.named("max_size", &ToIcebergArgs::max_size);
     auto timeout_arg = d.named("timeout", &ToIcebergArgs::timeout);
     d.operator_location(&ToIcebergArgs::operator_location);
@@ -769,6 +1105,9 @@ public:
             .primary(mode_opt->source, "got `{}`", mode_opt->inner)
             .emit(ctx);
         }
+      }
+      if (auto partition_by = ctx.get(partition_by_arg)) {
+        parse_partition_by(*partition_by, ctx).ignore();
       }
       if (auto max_size = ctx.get(max_size_arg)) {
         if (max_size->inner == 0) {
@@ -800,3 +1139,7 @@ public:
 } // namespace tenzir::plugins::iceberg
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::iceberg::ToIcebergPlugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::iceberg::PartitionTransformPlugin{"buck"
+                                                                          "et"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::iceberg::PartitionTransformPlugin{
+  "truncate"})

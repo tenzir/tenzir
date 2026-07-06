@@ -52,8 +52,35 @@ struct Error {
 template <class T>
 using Result = std::expected<T, Error>;
 
+/// A partition transform per the Iceberg spec. Transform computation stays
+/// inside the facade (iceberg-cpp implements the spec's semantics, notably
+/// bucket's Murmur3 hash); this enum only describes a spec symbolically.
+enum class PartitionTransform {
+  identity,
+  year,
+  month,
+  day,
+  hour,
+  bucket,
+  truncate,
+};
+
+/// One field of a partition spec: a transform over a source column.
+struct PartitionField {
+  /// Dotted path of the source column in the table schema.
+  std::string source;
+  PartitionTransform transform = PartitionTransform::identity;
+  /// Bucket count or truncate width; unused for the other transforms.
+  std::optional<int64_t> parameter;
+};
+
 /// Options for creating a new table.
 struct CreateTableOptions {
+  /// Partition spec fields, in order. Empty for an unpartitioned table.
+  /// Source columns must exist in the created schema and support the
+  /// transform (e.g. temporal transforms need a timestamp source).
+  std::vector<PartitionField> partition_by;
+
   /// Name of a top-level column to register as the table's default sort
   /// order (identity transform, ascending, nulls first). Ignored unless the
   /// column exists and derives to a timestamp. Data files written by this
@@ -92,10 +119,10 @@ public:
   /// strings; timestamps map to microsecond timestamptz; durations and
   /// unsigned integers map to long. Fields that cannot be represented are
   /// skipped and reported in `dropped_fields` as `path: reason` strings.
-  auto create_table(std::span<const std::string> ns, std::string_view name,
-                    const record_type& schema,
-                    const CreateTableOptions& options,
-                    std::vector<std::string>& dropped_fields) -> Result<Table>;
+  auto
+  create_table(std::span<const std::string> ns, std::string_view name,
+               const record_type& schema, const CreateTableOptions& options,
+               std::vector<std::string>& dropped_fields) -> Result<Table>;
 
 private:
   struct Impl;
@@ -103,6 +130,39 @@ private:
   // Not Arc<T>: its converting constructor's constraints require a complete
   // type, which defeats the pimpl that keeps iceberg-cpp out of this header.
   std::shared_ptr<Impl> impl_;
+};
+
+/// Opaque handle to the partition tuple shared by a group of rows.
+class PartitionTuple {
+public:
+  /// The empty tuple, for writing into unpartitioned tables.
+  PartitionTuple();
+
+  friend class Table;
+
+private:
+  struct Impl;
+  explicit PartitionTuple(std::shared_ptr<Impl> impl);
+  // Not Arc<T>: its converting constructor's constraints require a complete
+  // type, which defeats the pimpl that keeps iceberg-cpp out of this header.
+  std::shared_ptr<Impl> impl_;
+};
+
+/// Rows of one batch that share a partition tuple.
+struct PartitionGroup {
+  /// An opaque key that uniquely identifies the partition tuple, stable
+  /// across batches. Unlike `path`, distinct tuples never collide (the
+  /// human-readable rendering maps e.g. a null and the string "null" to the
+  /// same text).
+  std::string key;
+  /// The human-readable partition path, e.g. `class_uid=1001/time_day=
+  /// 2026-07-06`; empty for unpartitioned tables.
+  std::string path;
+  /// Row indices of the batch that belong to this partition. An empty vector
+  /// means the group covers every row of the batch.
+  std::vector<int64_t> rows;
+  /// The partition tuple to open a file writer with.
+  PartitionTuple partition;
 };
 
 /// Opaque handle to a written-but-uncommitted data file.
@@ -168,8 +228,27 @@ public:
                      std::vector<std::string>& dropped_fields)
     -> Result<std::optional<Table>>;
 
-  /// Opens a writer for a new data file in the table's data location.
-  auto new_file_writer() -> Result<FileWriter>;
+  /// Checks that this operator can compute the table's partition spec:
+  /// every source column resolves and its transform is supported. Fails with
+  /// a permanent error otherwise (e.g. an unknown future transform).
+  auto validate_partitioning() -> Result<void>;
+
+  /// Checks that the table's partition spec matches `fields` exactly
+  /// (source, transform, and parameter, in order). Fails with a permanent
+  /// error describing both specs otherwise.
+  auto check_partition_spec(std::span<const PartitionField> fields)
+    -> Result<void>;
+
+  /// Splits a batch matching the table schema into per-partition row groups
+  /// by evaluating the partition spec's transforms. Returns exactly one
+  /// group, covering all rows, for unpartitioned tables. Ownership of the
+  /// Arrow array is transferred.
+  auto split_by_partition(ArrowArray* batch)
+    -> Result<std::vector<PartitionGroup>>;
+
+  /// Opens a writer for a new data file of the given partition in the
+  /// table's data location.
+  auto new_file_writer(const PartitionTuple& partition) -> Result<FileWriter>;
 
   /// Commits the given data files as one new snapshot (FastAppend) and
   /// returns the refreshed table. Callers must route subsequent writers and

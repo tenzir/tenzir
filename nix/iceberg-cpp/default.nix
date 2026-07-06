@@ -45,12 +45,16 @@ stdenv.mkDerivation {
     openssl
   ];
 
-  # Two upstream fixes:
+  # Three upstream fixes:
   # - The installed CMake config records the system Avro dependency as
   #   `Avro`, but avro-cpp installs `avro-cpp-config.cmake`.
   # - EnsureS3Initialized() fails (and caches the failure) when the host
   #   application already initialized Arrow's S3 subsystem, which Tenzir's
   #   s3 plugin always does.
+  # - PartitionSummary::Update casts every partition value to the partition
+  #   field type, but LiteralCaster::CastTo refuses null literals, so any
+  #   data file with a null partition value fails to commit. The stats
+  #   themselves handle null fine (contains_null); feed it directly.
   postPatch = ''
     substituteInPlace cmake_modules/IcebergThirdpartyToolchain.cmake \
       --replace-fail \
@@ -60,6 +64,16 @@ stdenv.mkDerivation {
       --replace-fail \
         "auto options = ::arrow::fs::S3GlobalOptions::Defaults();" \
         "if (::arrow::fs::IsS3Initialized()) { return ::arrow::Status::OK(); } auto options = ::arrow::fs::S3GlobalOptions::Defaults();"
+    substituteInPlace src/iceberg/partition_summary.cc \
+      --replace-fail \
+        "ICEBERG_ASSIGN_OR_RAISE(auto val, partition_values.ValueAt(i));" \
+        "ICEBERG_ASSIGN_OR_RAISE(auto val, partition_values.ValueAt(i));
+    if (val.get().IsNull()) {
+      ICEBERG_RETURN_UNEXPECTED(
+          field_stats_[i].Update(Literal::Null(internal::checked_pointer_cast<PrimitiveType>(
+              field_stats_[i].type()))));
+      continue;
+    }"
   '';
 
   # The static libraries surface all of these through find_dependency() in

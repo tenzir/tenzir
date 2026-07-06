@@ -3,7 +3,7 @@
 Native Apache Iceberg output for Tenzir, built on
 [apache/iceberg-cpp](https://github.com/apache/iceberg-cpp) (TNZ-774).
 
-## Status: Phase 3 (continuous schema evolution)
+## Status: Phase 4 (hidden partitioning)
 
 The plugin provides the `to_iceberg` operator: it writes events into an
 Apache Iceberg table through a REST catalog, creating the table from the
@@ -26,6 +26,22 @@ verified against the committed metadata (tagged via the `tenzir.commit-id`
 summary property) and retried on top of concurrent updates, so racing
 writers on the same table lose no data.
 
+Tables partition via Iceberg's hidden partitioning:
+`partition_by=[class_uid, day(time)]` takes a list of symbolic partition
+expressions — a field path (possibly nested) for the identity transform, or
+one of `year(f)`, `month(f)`, `day(f)`, `hour(f)`, `bucket(f, n)`, and
+`truncate(f, w)`. The names mirror the Iceberg transform vocabulary and are
+matched symbolically, never evaluated as TQL functions. When the operator
+creates the table, `partition_by` defines the partition spec; when the
+table already exists, the table's own spec governs the fanout (with or
+without `partition_by` — if given, it must match). Transform values are
+computed by iceberg-cpp itself (bucket's Murmur3 hash stays upstream),
+batches split into per-partition row groups, and each open partition holds
+one streaming Parquet writer with its own size/timeout rotation. At most 64
+partitions stay open at once; beyond that, the largest open file closes
+early and rides along with the next commit. Checkpoints and finalization
+commit everything open as a single FastAppend snapshot.
+
 Layout:
 
 - `builtins/to_iceberg.cpp`: the operator.
@@ -39,8 +55,7 @@ Layout:
   (re-pinned to the voted 0.4.0 release before the operator goes stable).
 
 See `to_iceberg-plan.md` on the `feat/to-iceberg-operator-plan` branch for
-the full plan; hidden partitioning (Phase 4) and exactly-once delivery
-(Phase 5) are next.
+the full plan; exactly-once delivery (Phase 5) is next.
 
 ## Trying the spike
 
