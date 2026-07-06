@@ -2214,7 +2214,23 @@ private:
   failure_or<void> failure_;
 };
 
-auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
+/// The staged counterpart of the public `run_plan`.
+auto run_plan(StagedChains staged, caf::actor_system& sys, DiagHandler& dh,
+              Profiler profiler, bool has_terminal, bool is_hidden,
+              Notify* graceful_stop) -> Task<failure_or<void>> {
+  auto num_ops = staged.num_operators();
+  LOGW("spawning staged plan with {} operators", num_ops);
+  auto exec_ctx = TestExecCtx{profiler, has_terminal, is_hidden};
+  co_await async_scope([&](AsyncScope& scope) -> Task<void> {
+    scope.spawn(run_profiler(profiler, exec_ctx, num_ops));
+    co_await run_pipeline(std::move(staged), exec_ctx, sys, dh, graceful_stop);
+    scope.cancel();
+  });
+  co_return dh.failure();
+}
+
+template <class PlanT>
+auto run_plan_blocking(PlanT chain, caf::actor_system& sys,
                        diagnostic_handler& dh,
                        std::optional<std::string> const& profile_path)
   -> failure_or<void> {
@@ -2439,6 +2455,29 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   if (cfg.dump_opt_ir) {
     fmt::print("{:#?}\n", ir);
     return not ctx.has_failure();
+  }
+  // Implicit parallelization: when enabled and the plan widens a stage, run
+  // the pipeline as staged lane chains connected by exchanges.
+  auto parallelism = caf::get_or(caf::content(sys.config()),
+                                 "tenzir.implicit-parallelism", uint64_t{1});
+  if (parallelism > 1) {
+    auto opts = plan_options{
+      .degree = parallelism,
+      .min_region_size = 1,
+      // Opting into implicit parallelism accepts reordering within stateless
+      // regions.
+      .allow_reordering = true,
+      .checkpointing = false,
+    };
+    auto plan = plan_stages(ir, opts);
+    if (plan.parallelized()) {
+      auto staged = spawn_staged(std::move(ir), plan, tag_v<void>, ctx);
+      if (ctx.has_failure() or not staged) {
+        return false;
+      }
+      TRY(run_plan_blocking(std::move(*staged), sys, ctx, cfg.profile));
+      return true;
+    }
   }
   // Spawn operators from the IR.
   auto spawned = std::move(ir).spawn(tag_v<void>);

@@ -1,0 +1,7 @@
+// Round-robin scattering reorders rows across lanes; sorting after the
+// gather restores a deterministic order and proves every row survives the
+// exchange exactly once.
+from {x: 3}, {x: 1}, {x: 4}, {x: 2}, {x: 8}, {x: 6}, {x: 7}, {x: 5}
+where x != 9
+y = x
+sort y

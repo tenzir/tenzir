@@ -1,0 +1,8 @@
+// `head` downstream of a widened region exercises the no-more-input path:
+// the staged runner hard-stops earlier stages and cancels the exchanges
+// feeding them without losing the rows `head` already accepted.
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}, {x: 5}, {x: 6}, {x: 7}, {x: 8}
+where x > 0
+y = x + 1
+head 3
+summarize n=count()

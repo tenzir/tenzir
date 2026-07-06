@@ -9,6 +9,7 @@
 #include "tenzir/async/executor.hpp"
 
 #include "tenzir/arc.hpp"
+#include "tenzir/async/exchange.hpp"
 #include "tenzir/async/fetch_node.hpp"
 #include "tenzir/async/join_set.hpp"
 #include "tenzir/async/log.hpp"
@@ -19,9 +20,12 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/physical_plan.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/substitute_ctx.hpp"
 
+#include <caf/actor_system_config.hpp>
+#include <caf/settings.hpp>
 #include <folly/Demangle.h>
 #include <folly/OperationCancelled.h>
 #include <folly/coro/BoundedQueue.h>
@@ -127,6 +131,82 @@ auto make_identity_operator(element_type_tag input) -> AnyOperator {
   });
 }
 }; // namespace
+
+auto StagedChains::num_operators() const -> size_t {
+  auto result = size_t{0};
+  for (const auto& stage : stages) {
+    for (const auto& lane : stage.lanes) {
+      result += lane.size();
+    }
+  }
+  return result;
+}
+
+auto spawn_staged(ir::pipeline pipe, const plan_result& plan,
+                  element_type_tag input, diagnostic_handler& dh)
+  -> Option<StagedChains> {
+  TENZIR_ASSERT(not plan.stages.empty());
+  // Distribute the IR operators over the planned stages. Plan indices refer
+  // to non-transparent operators; transparent operators attach to the stage
+  // of the next non-transparent operator so they never break a region.
+  auto stage_irs = std::vector<ir::pipeline>(plan.stages.size());
+  auto stage_index = size_t{0};
+  auto visible_index = size_t{0};
+  auto pending = std::vector<Box<ir::Operator>>{};
+  for (auto& op : pipe.operators) {
+    if (op->is_transparent()) {
+      pending.push_back(std::move(op));
+      continue;
+    }
+    while (visible_index >= plan.stages[stage_index].end) {
+      stage_index += 1;
+      TENZIR_ASSERT(stage_index < plan.stages.size());
+    }
+    auto& ops = stage_irs[stage_index].operators;
+    ops.insert(ops.end(), std::move_iterator{pending.begin()},
+               std::move_iterator{pending.end()});
+    pending.clear();
+    ops.push_back(std::move(op));
+    visible_index += 1;
+  }
+  auto& last_ops = stage_irs.back().operators;
+  last_ops.insert(last_ops.end(), std::move_iterator{pending.begin()},
+                  std::move_iterator{pending.end()});
+  // Spawn every stage, widened stages once per lane.
+  auto result = StagedChains{};
+  auto current = input;
+  for (auto s = size_t{0}; s < stage_irs.size(); ++s) {
+    auto inferred = stage_irs[s].infer_type(current, dh);
+    if (not inferred or not *inferred) {
+      // The pipeline was already fully type-checked; this is unreachable in
+      // practice, but we fail gracefully regardless.
+      return None{};
+    }
+    auto output = **inferred;
+    auto degree = plan.stages[s].degree;
+    // Only event edges can be widened; everything else stays serial.
+    if (degree > 1
+        and not(current.is<table_slice>() and output.is<table_slice>())) {
+      degree = 1;
+    }
+    auto stage = StagedStage{{}, current, output};
+    for (auto lane = size_t{0}; lane < degree; ++lane) {
+      // Copy the stage IR for every lane but the last; the pipeline is fully
+      // instantiated at this point, so copies spawn independent instances.
+      auto lane_ir
+        = lane + 1 == degree ? std::move(stage_irs[s]) : stage_irs[s];
+      auto ops = std::move(lane_ir).spawn(current);
+      if (ops.empty()) {
+        TENZIR_ASSERT(current == output);
+        ops.push_back(make_identity_operator(current));
+      }
+      stage.lanes.push_back(std::move(ops));
+    }
+    result.stages.push_back(std::move(stage));
+    current = output;
+  }
+  return result;
+}
 
 /// An message transported from a subpipeline to the parent pipeline.
 ///
@@ -853,11 +933,40 @@ private:
     // we know that this cannot fail.
     TENZIR_ASSERT(output);
     TENZIR_ASSERT(*output);
-    auto spawned = std::move(pipe).spawn(input);
-    if (spawned.empty()) {
-      TENZIR_ASSERT(**output == input);
-      spawned.push_back(make_identity_operator(input));
+    // Implicit parallelization: when enabled and the plan widens a stage,
+    // spawn the pipeline as staged lane chains instead of one flat chain.
+    auto staged = Option<StagedChains>{};
+    if (not fused) {
+      auto parallelism
+        = caf::get_or(caf::content(sys_.config()),
+                      "tenzir.implicit-parallelism", uint64_t{1});
+      if (parallelism > 1) {
+        auto opts = plan_options{
+          .degree = parallelism,
+          .min_region_size = 1,
+          .allow_reordering = true,
+          .checkpointing = exec_ctx_.checkpoint_settings().is_some(),
+        };
+        auto plan = plan_stages(pipe, opts);
+        if (plan.parallelized()) {
+          staged = spawn_staged(std::move(pipe), plan, input, *sub_dh);
+          if (not staged) {
+            // A diagnostic was emitted; wait for teardown as above.
+            co_await wait_forever();
+            TENZIR_UNREACHABLE();
+          }
+        }
+      }
     }
+    auto spawned = std::vector<AnyOperator>{};
+    if (not staged) {
+      spawned = std::move(pipe).spawn(input);
+      if (spawned.empty()) {
+        TENZIR_ASSERT(**output == input);
+        spawned.push_back(make_identity_operator(input));
+      }
+    }
+    auto num_ops = staged ? staged->num_operators() : spawned.size();
     auto [from_control_sender, from_control_receiver]
       = channel<FromControl>(16);
     auto [to_control_sender, to_control_receiver] = channel<ToControl>(16);
@@ -865,25 +974,34 @@ private:
       std::tie(input, **output),
       [&]<class In, class Out>(
         tag<In>, tag<Out>) -> std::tuple<Task<void>, AnyOpPush, AnyOpPull> {
-        auto chain
-          = OperatorChain<In, Out>::try_from(std::move(spawned)).unwrap();
         auto [push_upstream, pull_upstream]
           = exec_ctx_.make_channel<In>(id_.to(sub_id.op(0)));
-        // We already checked for non-empty chain above.
-        TENZIR_ASSERT(chain.size() > 0);
+        TENZIR_ASSERT(num_ops > 0);
         auto [push_downstream, pull_downstream]
-          = exec_ctx_.make_channel<Out>(sub_id.op(chain.size() - 1).to(id_));
-        auto runner
-          = fused ? run_chain_fused(std::move(chain), std::move(pull_upstream),
-                                    std::move(push_downstream),
-                                    std::move(from_control_receiver),
-                                    std::move(to_control_sender),
-                                    std::move(sub_id), exec_ctx_, sys_, *sub_dh)
-                  : run_chain(std::move(chain), std::move(pull_upstream),
-                              std::move(push_downstream),
-                              std::move(from_control_receiver),
-                              std::move(to_control_sender), std::move(sub_id),
-                              exec_ctx_, sys_, *sub_dh);
+          = exec_ctx_.make_channel<Out>(sub_id.op(num_ops - 1).to(id_));
+        auto runner = std::invoke([&]() -> Task<void> {
+          if (staged) {
+            return run_staged<In, Out>(
+              std::move(*staged), std::move(pull_upstream),
+              std::move(push_downstream), std::move(from_control_receiver),
+              std::move(to_control_sender), std::move(sub_id), exec_ctx_, sys_,
+              *sub_dh);
+          }
+          auto chain
+            = OperatorChain<In, Out>::try_from(std::move(spawned)).unwrap();
+          if (fused) {
+            return run_chain_fused(std::move(chain), std::move(pull_upstream),
+                                   std::move(push_downstream),
+                                   std::move(from_control_receiver),
+                                   std::move(to_control_sender),
+                                   std::move(sub_id), exec_ctx_, sys_, *sub_dh);
+          }
+          return run_chain(std::move(chain), std::move(pull_upstream),
+                           std::move(push_downstream),
+                           std::move(from_control_receiver),
+                           std::move(to_control_sender), std::move(sub_id),
+                           exec_ctx_, sys_, *sub_dh);
+        });
         return {
           std::move(runner),
           AnyOpPush{std::move(push_upstream)},
@@ -2014,6 +2132,453 @@ run_chain(OperatorChain<table_slice, chunk_ptr> chain,
           PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
   -> Task<void>;
 
+namespace {
+
+/// Forwards messages from `from` into `to` until `from` drains.
+template <class T>
+auto forward_msgs(Box<Pull<OperatorMsg<T>>> from, Box<Push<OperatorMsg<T>>> to)
+  -> Task<void> {
+  while (auto msg = co_await (*from)()) {
+    co_await (*to)(std::move(*msg));
+  }
+}
+
+} // namespace
+
+/// Runs the lane chains of a staged pipeline and the exchanges between them.
+///
+/// Data plane: stage `s` connects to stage `s + 1` according to the edge
+/// classification of their widths (`classify_edge`): a direct channel,
+/// per-lane channels, a scatter, a gather, or a gather-then-scatter pinch.
+/// The external endpoints (width 1) are scattered/gathered when the adjacent
+/// stage is widened.
+///
+/// Control plane: every lane chain runs as its own `ChainRunner` with private
+/// control channels. Control messages from the parent are broadcast to every
+/// chain; `ready_for_shutdown` is aggregated and reported upward once all
+/// chains are ready; `no_more_input` from a chain hard-stops every chain in
+/// earlier stages, cancels the exchange tasks feeding them, and propagates
+/// upward. All lanes of a stage share one `PipeId` so their operators
+/// contribute to the same metrics identity, mirroring fused subpipelines.
+class StagedRunner {
+public:
+  StagedRunner(StagedChains staged, AnyOpPull pull_upstream,
+               AnyOpPush push_downstream, Receiver<FromControl> from_control,
+               Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
+               caf::actor_system& sys, DiagHandler& dh)
+    : staged_{std::move(staged)},
+      pull_upstream_{std::move(pull_upstream)},
+      push_downstream_{std::move(push_downstream)},
+      from_control_{std::move(from_control)},
+      to_control_{std::move(to_control)},
+      id_{std::move(id)},
+      exec_ctx_{exec_ctx},
+      sys_{sys},
+      dh_{dh} {
+  }
+
+  auto run_to_completion() && -> Task<void> {
+    auto guard = detail::scope_guard{[&] noexcept {
+      LOGI("returning from staged runner {}", id_);
+    }};
+    co_await driver_.activate([&] -> Task<void> {
+      wire_stages();
+      spawn_chains();
+      co_await run_until_shutdown();
+    });
+  }
+
+private:
+  struct ExchangeDone {};
+
+  auto degree(size_t stage) const -> size_t {
+    return staged_.stages[stage].lanes.size();
+  }
+
+  /// Adds an exchange task governed by the cancellation source of `edge`.
+  auto add_exchange(size_t edge, Task<void> task) -> void {
+    driver_.add(
+      [task = std::move(task),
+       token = edge_cancel_[edge].getToken()]() mutable -> Task<ExchangeDone> {
+        co_await catch_cancellation(
+          folly::coro::co_withCancellation(std::move(token), std::move(task)));
+        co_return ExchangeDone{};
+      });
+  }
+
+  auto wire_stages() -> void {
+    const auto n = staged_.stages.size();
+    inputs_.resize(n);
+    outputs_.resize(n);
+    // Every edge gets its own cancellation source. Note that constructing the
+    // vector with a size would copy one shared source into every slot.
+    edge_cancel_.reserve(n + 1);
+    for (auto i = size_t{0}; i < n + 1; ++i) {
+      edge_cancel_.emplace_back();
+    }
+    // Source edge (index 0): the external input (width 1) feeds stage 0.
+    if (degree(0) == 1) {
+      inputs_[0].push_back(std::move(pull_upstream_));
+    } else {
+      match(staged_.stages.front().input, [&]<class T>(tag<T>) {
+        if constexpr (std::same_as<T, void>) {
+          // `spawn_staged` degrades non-event boundaries to a single lane.
+          TENZIR_UNREACHABLE();
+        } else {
+          auto pull = std::move(as<Box<Pull<OperatorMsg<T>>>>(pull_upstream_));
+          auto [scatter, pulls] = make_scatter<T>(
+            degree(0), RoundRobinAdaptive{},
+            [this](ChannelId cid) {
+              return exec_ctx_.make_channel<T>(std::move(cid));
+            },
+            ChannelId{fmt::format("{}/exchange/0", id_.value)});
+          add_exchange(0, forward_msgs<T>(std::move(pull), std::move(scatter)));
+          for (auto& p : pulls) {
+            inputs_[0].emplace_back(std::move(p));
+          }
+        }
+      });
+    }
+    // Internal edges: edge `s + 1` connects stage `s` to stage `s + 1`.
+    for (auto s = size_t{0}; s + 1 < n; ++s) {
+      wire_internal_edge(s);
+    }
+    // Sink edge (index n): the last stage feeds the external output (width 1).
+    auto last = n - 1;
+    if (degree(last) == 1) {
+      outputs_[last].push_back(std::move(push_downstream_));
+    } else {
+      match(staged_.stages.back().output, [&]<class T>(tag<T>) {
+        if constexpr (std::same_as<T, void>) {
+          TENZIR_UNREACHABLE();
+        } else {
+          auto push
+            = std::move(as<Box<Push<OperatorMsg<T>>>>(push_downstream_));
+          auto parts = make_gather<T>(
+            degree(last),
+            [this](ChannelId cid) {
+              return exec_ctx_.make_channel<T>(std::move(cid));
+            },
+            ChannelId{fmt::format("{}/exchange/{}", id_.value, n)});
+          for (auto& p : parts.lanes) {
+            outputs_[last].emplace_back(std::move(p));
+          }
+          add_exchange(n, std::move(parts.merger));
+          add_exchange(n,
+                       forward_msgs<T>(std::move(parts.pull), std::move(push)));
+        }
+      });
+    }
+  }
+
+  auto wire_internal_edge(size_t s) -> void {
+    const auto edge = s + 1;
+    const auto up = degree(s);
+    const auto down = degree(s + 1);
+    const auto kind = classify_edge(up, down);
+    auto edge_id = ChannelId{fmt::format("{}/exchange/{}", id_.value, edge)};
+    match(staged_.stages[s].output, [&]<class T>(tag<T>) {
+      if constexpr (std::same_as<T, void>) {
+        // `void` edges carry only signals and are never widened.
+        TENZIR_ASSERT(kind == edge_kind::direct);
+        auto pair = exec_ctx_.make_channel<void>(std::move(edge_id));
+        outputs_[s].emplace_back(std::move(pair.push));
+        inputs_[s + 1].emplace_back(std::move(pair.pull));
+      } else {
+        auto factory = [this](ChannelId cid) {
+          return exec_ctx_.make_channel<T>(std::move(cid));
+        };
+        switch (kind) {
+          case edge_kind::direct: {
+            auto pair = exec_ctx_.make_channel<T>(std::move(edge_id));
+            outputs_[s].emplace_back(std::move(pair.push));
+            inputs_[s + 1].emplace_back(std::move(pair.pull));
+            break;
+          }
+          case edge_kind::parallel: {
+            for (auto lane = size_t{0}; lane < up; ++lane) {
+              auto pair = exec_ctx_.make_channel<T>(
+                ChannelId{fmt::format("{}#lane/{}", edge_id.value, lane)});
+              outputs_[s].emplace_back(std::move(pair.push));
+              inputs_[s + 1].emplace_back(std::move(pair.pull));
+            }
+            break;
+          }
+          case edge_kind::scatter: {
+            auto [scatter, pulls]
+              = make_scatter<T>(down, RoundRobinAdaptive{}, factory, edge_id);
+            // The scatter is owned by the single upstream lane as its output.
+            outputs_[s].emplace_back(std::move(scatter));
+            for (auto& p : pulls) {
+              inputs_[s + 1].emplace_back(std::move(p));
+            }
+            break;
+          }
+          case edge_kind::gather: {
+            auto parts = make_gather<T>(up, factory, edge_id);
+            for (auto& p : parts.lanes) {
+              outputs_[s].emplace_back(std::move(p));
+            }
+            inputs_[s + 1].emplace_back(std::move(parts.pull));
+            add_exchange(edge, std::move(parts.merger));
+            break;
+          }
+          case edge_kind::pinch: {
+            auto parts = make_gather<T>(up, factory, edge_id);
+            auto [scatter, pulls]
+              = make_scatter<T>(down, RoundRobinAdaptive{}, factory, edge_id);
+            for (auto& p : parts.lanes) {
+              outputs_[s].emplace_back(std::move(p));
+            }
+            for (auto& p : pulls) {
+              inputs_[s + 1].emplace_back(std::move(p));
+            }
+            add_exchange(edge, std::move(parts.merger));
+            add_exchange(edge, forward_msgs<T>(std::move(parts.pull),
+                                               std::move(scatter)));
+            break;
+          }
+        }
+      }
+    });
+  }
+
+  auto spawn_chains() -> void {
+    const auto n = staged_.stages.size();
+    for (auto s = size_t{0}; s < n; ++s) {
+      auto& stage = staged_.stages[s];
+      TENZIR_ASSERT(inputs_[s].size() == stage.lanes.size());
+      TENZIR_ASSERT(outputs_[s].size() == stage.lanes.size());
+      // All lanes of a stage share one `PipeId` so their operators contribute
+      // to the same metrics and profile identity.
+      auto stage_id = PipeId{fmt::format("{}/stage/{}", id_.value, s)};
+      for (auto lane = size_t{0}; lane < stage.lanes.size(); ++lane) {
+        auto [fc_sender, fc_receiver] = channel<FromControl>(16);
+        auto [tc_sender, tc_receiver] = channel<ToControl>(16);
+        auto index = chains_.size();
+        chains_.push_back(Chain{
+          s,
+          Option<Sender<FromControl>>{std::move(fc_sender)},
+          std::move(tc_receiver),
+        });
+        driver_.add([ops = std::move(stage.lanes[lane]),
+                     pull = std::move(inputs_[s][lane]),
+                     push = std::move(outputs_[s][lane]),
+                     fc = std::move(fc_receiver), tc = std::move(tc_sender),
+                     stage_id, index,
+                     this]() mutable -> Task<std::pair<size_t, Terminated>> {
+          co_await ChainRunner{std::move(ops),
+                               std::move(pull),
+                               std::move(push),
+                               std::move(fc),
+                               std::move(tc),
+                               stage_id,
+                               exec_ctx_,
+                               sys_,
+                               dh_}
+            .run_to_completion();
+          co_return {index, Terminated{}};
+        });
+      }
+    }
+    for (auto index = size_t{0}; index < chains_.size(); ++index) {
+      add_control_read(index);
+    }
+  }
+
+  auto add_control_read(size_t index) -> void {
+    driver_.add([this, index]() -> Task<std::pair<size_t, Option<ToControl>>> {
+      co_return {index, co_await chains_[index].to_control.recv()};
+    });
+  }
+
+  auto run_until_shutdown() -> Task<void> {
+    auto ready = size_t{0};
+    driver_.add(from_control_.recv());
+    while (auto next = co_await driver_.next()) {
+      co_await co_match(
+        std::move(*next),
+        [&](Option<FromControl> msg) -> Task<void> {
+          if (not msg) {
+            co_return;
+          }
+          if (is<HardStop>(*msg)) {
+            // A hard stop tears down the data plane; blocked exchange tasks
+            // would otherwise never observe the chains dying.
+            for (auto& cancel : edge_cancel_) {
+              cancel.requestCancellation();
+            }
+          }
+          for (auto& chain : chains_) {
+            if (chain.sender) {
+              co_await chain.sender->send(*msg);
+            }
+          }
+          driver_.add(from_control_.recv());
+        },
+        [&](std::pair<size_t, Terminated> event) -> Task<void> {
+          LOGW("staged runner {} chain {} terminated", id_, event.first);
+          co_return;
+        },
+        [&](ExchangeDone) -> Task<void> {
+          co_return;
+        },
+        [&](std::pair<size_t, Option<ToControl>> event) -> Task<void> {
+          auto [index, msg] = std::move(event);
+          if (not msg) {
+            co_return;
+          }
+          switch (*msg) {
+            case ToControl::ready_for_shutdown: {
+              // No further control messages may be sent to this chain.
+              chains_[index].sender = None{};
+              ready += 1;
+              if (ready == chains_.size()) {
+                co_await to_control_.send(ToControl::ready_for_shutdown);
+              }
+              break;
+            }
+            case ToControl::no_more_input: {
+              // Everything upstream of this chain's stage can stop: hard-stop
+              // earlier chains and cancel the exchanges feeding this stage.
+              auto stage = chains_[index].stage;
+              for (auto& chain : chains_) {
+                if (chain.stage < stage and chain.sender) {
+                  co_await chain.sender->send(HardStop{});
+                }
+              }
+              for (auto edge = size_t{0}; edge <= stage; ++edge) {
+                edge_cancel_[edge].requestCancellation();
+              }
+              co_await to_control_.send(ToControl::no_more_input);
+              break;
+            }
+            case ToControl::checkpoint_begin:
+            case ToControl::checkpoint_done:
+              // Checkpointing disables widening, so a staged plan is fully
+              // serial whenever these arrive; nothing to align here.
+              break;
+          }
+          add_control_read(index);
+        });
+    }
+    TENZIR_ASSERT(ready == chains_.size());
+  }
+
+  StagedChains staged_;
+  AnyOpPull pull_upstream_;
+  AnyOpPush push_downstream_;
+  Receiver<FromControl> from_control_;
+  Sender<ToControl> to_control_;
+  PipeId id_;
+  ExecCtx& exec_ctx_;
+  caf::actor_system& sys_;
+  DiagHandler& dh_;
+
+  struct Chain {
+    size_t stage;
+    Option<Sender<FromControl>> sender;
+    Receiver<ToControl> to_control;
+  };
+  std::vector<Chain> chains_;
+  std::vector<std::vector<AnyOpPull>> inputs_;
+  std::vector<std::vector<AnyOpPush>> outputs_;
+  std::vector<folly::CancellationSource> edge_cancel_;
+
+  JoinSet<variant<Option<FromControl>, std::pair<size_t, Terminated>,
+                  std::pair<size_t, Option<ToControl>>, ExchangeDone>>
+    driver_;
+};
+
+template <class Input, class Output>
+auto run_staged(StagedChains staged,
+                Box<Pull<OperatorMsg<Input>>> pull_upstream,
+                Box<Push<OperatorMsg<Output>>> push_downstream,
+                Receiver<FromControl> from_control,
+                Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
+                caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
+  TENZIR_ASSERT(not staged.stages.empty());
+  co_await folly::coro::co_safe_point;
+  co_await StagedRunner{
+    std::move(staged),
+    AnyOpPull{std::move(pull_upstream)},
+    AnyOpPush{std::move(push_downstream)},
+    std::move(from_control),
+    std::move(to_control),
+    std::move(id),
+    exec_ctx,
+    sys,
+    dh,
+  }
+    .run_to_completion();
+}
+
+template auto
+run_staged(StagedChains staged, Box<Pull<OperatorMsg<void>>> pull_upstream,
+           Box<Push<OperatorMsg<table_slice>>> push_downstream,
+           Receiver<FromControl> from_control, Sender<ToControl> to_control,
+           PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
+           DiagHandler& dh) -> Task<void>;
+
+template auto
+run_staged(StagedChains staged, Box<Pull<OperatorMsg<chunk_ptr>>> pull_upstream,
+           Box<Push<OperatorMsg<table_slice>>> push_downstream,
+           Receiver<FromControl> from_control, Sender<ToControl> to_control,
+           PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
+           DiagHandler& dh) -> Task<void>;
+
+template auto
+run_staged(StagedChains staged,
+           Box<Pull<OperatorMsg<table_slice>>> pull_upstream,
+           Box<Push<OperatorMsg<table_slice>>> push_downstream,
+           Receiver<FromControl> from_control, Sender<ToControl> to_control,
+           PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
+           DiagHandler& dh) -> Task<void>;
+
+template auto
+run_staged(StagedChains staged, Box<Pull<OperatorMsg<void>>> pull_upstream,
+           Box<Push<OperatorMsg<void>>> push_downstream,
+           Receiver<FromControl> from_control, Sender<ToControl> to_control,
+           PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
+           DiagHandler& dh) -> Task<void>;
+
+template auto
+run_staged(StagedChains staged,
+           Box<Pull<OperatorMsg<table_slice>>> pull_upstream,
+           Box<Push<OperatorMsg<void>>> push_downstream,
+           Receiver<FromControl> from_control, Sender<ToControl> to_control,
+           PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
+           DiagHandler& dh) -> Task<void>;
+
+template auto
+run_staged(StagedChains staged, Box<Pull<OperatorMsg<chunk_ptr>>> pull_upstream,
+           Box<Push<OperatorMsg<void>>> push_downstream,
+           Receiver<FromControl> from_control, Sender<ToControl> to_control,
+           PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
+           DiagHandler& dh) -> Task<void>;
+
+template auto
+run_staged(StagedChains staged, Box<Pull<OperatorMsg<void>>> pull_upstream,
+           Box<Push<OperatorMsg<chunk_ptr>>> push_downstream,
+           Receiver<FromControl> from_control, Sender<ToControl> to_control,
+           PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
+           DiagHandler& dh) -> Task<void>;
+
+template auto
+run_staged(StagedChains staged, Box<Pull<OperatorMsg<chunk_ptr>>> pull_upstream,
+           Box<Push<OperatorMsg<chunk_ptr>>> push_downstream,
+           Receiver<FromControl> from_control, Sender<ToControl> to_control,
+           PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
+           DiagHandler& dh) -> Task<void>;
+
+template auto
+run_staged(StagedChains staged,
+           Box<Pull<OperatorMsg<table_slice>>> pull_upstream,
+           Box<Push<OperatorMsg<chunk_ptr>>> push_downstream,
+           Receiver<FromControl> from_control, Sender<ToControl> to_control,
+           PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
+           DiagHandler& dh) -> Task<void>;
+
 /// Run a potentially-open pipeline without external control.
 template <class Output>
   requires(not std::same_as<Output, void>)
@@ -2036,14 +2601,25 @@ auto new_pipe_id() -> PipeId {
 
 struct GracefulStopRequested {};
 
-auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
-                  caf::actor_system& sys, DiagHandler& dh,
-                  Notify* graceful_stop) -> Task<void> {
+namespace {
+
+template <class PlanT>
+auto run_pipeline_impl(PlanT pipeline, ExecCtx& exec_ctx,
+                       caf::actor_system& sys, DiagHandler& dh,
+                       Notify* graceful_stop) -> Task<void> {
+  constexpr auto staged = std::same_as<PlanT, StagedChains>;
   auto id = new_pipe_id();
+  auto num_ops = size_t{0};
+  if constexpr (staged) {
+    num_ops = pipeline.num_operators();
+  } else {
+    num_ops = pipeline.size();
+  }
+  TENZIR_ASSERT(num_ops > 0);
   auto [push_input, pull_input]
     = exec_ctx.make_channel<void>(ChannelId::first(id.op(0)));
   auto [push_output, pull_output]
-    = exec_ctx.make_channel<void>(ChannelId::last(id.op(pipeline.size() - 1)));
+    = exec_ctx.make_channel<void>(ChannelId::last(id.op(num_ops - 1)));
   auto result = co_await async_try([&]() -> Task<void> {
     auto [from_control_sender_raw, from_control_receiver]
       = channel<FromControl>(16);
@@ -2056,10 +2632,18 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
     LOGV("creating pipeline queue scope");
     co_await driver.activate([&] -> Task<void> {
       driver.add([&] -> Task<Terminated> {
-        co_await run_chain(std::move(pipeline), std::move(pull_input),
-                           std::move(push_output),
-                           std::move(from_control_receiver),
-                           std::move(to_control_sender), id, exec_ctx, sys, dh);
+        if constexpr (staged) {
+          co_await run_staged<void, void>(
+            std::move(pipeline), std::move(pull_input), std::move(push_output),
+            std::move(from_control_receiver), std::move(to_control_sender), id,
+            exec_ctx, sys, dh);
+        } else {
+          co_await run_chain(std::move(pipeline), std::move(pull_input),
+                             std::move(push_output),
+                             std::move(from_control_receiver),
+                             std::move(to_control_sender), id, exec_ctx, sys,
+                             dh);
+        }
         co_return Terminated{};
       });
       driver.add(pull_output());
@@ -2155,12 +2739,28 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
     co_return;
   }
   auto exception = std::move(result).unwrap_err();
-  if (exception.is_compatible_with<panic_exception>()) {
-    dh.emit(to_diagnostic(*exception.get_exception<panic_exception>()));
+  if (exception.template is_compatible_with<panic_exception>()) {
+    dh.emit(
+      to_diagnostic(*exception.template get_exception<panic_exception>()));
     co_return;
   }
   diagnostic::error("uncaught exception in pipeline: {}", exception.what())
     .emit(dh);
+}
+
+} // namespace
+
+auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
+                  caf::actor_system& sys, DiagHandler& dh,
+                  Notify* graceful_stop) -> Task<void> {
+  return run_pipeline_impl(std::move(pipeline), exec_ctx, sys, dh,
+                           graceful_stop);
+}
+
+auto run_pipeline(StagedChains staged, ExecCtx& exec_ctx,
+                  caf::actor_system& sys, DiagHandler& dh,
+                  Notify* graceful_stop) -> Task<void> {
+  return run_pipeline_impl(std::move(staged), exec_ctx, sys, dh, graceful_stop);
 }
 
 } // namespace tenzir

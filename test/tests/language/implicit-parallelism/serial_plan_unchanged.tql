@@ -1,0 +1,4 @@
+// A pipeline without a stateless region stays serial even when implicit
+// parallelism is enabled.
+from {x: 1}, {x: 2}
+summarize n=count()

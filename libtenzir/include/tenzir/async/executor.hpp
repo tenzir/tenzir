@@ -16,6 +16,7 @@
 #include "tenzir/async/generator.hpp"
 #include "tenzir/async/notify.hpp"
 #include "tenzir/async/signal.hpp"
+#include "tenzir/parallel_plan.hpp"
 #include "tenzir/result.hpp"
 
 #include <folly/Executor.h>
@@ -303,6 +304,60 @@ auto run_chain(OperatorChain<Input, Output> chain,
                Receiver<FromControl> from_control, Sender<ToControl> to_control,
                PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
                DiagHandler& dh) -> Task<void>;
+
+/// One stage of a staged pipeline.
+struct StagedStage {
+  /// The lanes of this stage. Every lane is an independently spawned instance
+  /// of the same operator sub-chain. Serial stages have exactly one lane.
+  std::vector<std::vector<AnyOperator>> lanes;
+  /// The element type entering the stage.
+  element_type_tag input;
+  /// The element type leaving the stage.
+  element_type_tag output;
+};
+
+/// A pipeline split into consecutive stages of parallel lane chains.
+///
+/// Produced by `spawn_staged` from an IR pipeline and a parallelization plan,
+/// and consumed by `run_staged`, which wires scatter/gather exchanges between
+/// stages of different widths.
+struct StagedChains {
+  std::vector<StagedStage> stages;
+
+  /// Returns the total number of spawned operators across all lanes.
+  auto num_operators() const -> size_t;
+};
+
+/// Splits an instantiated IR pipeline into staged lane chains.
+///
+/// Plan stage indices refer to the pipeline's non-transparent operators;
+/// transparent operators attach to the stage of the next non-transparent
+/// operator. Widened stages are spawned once per lane from copies of the
+/// stage's IR, which is valid because the pipeline is fully instantiated.
+/// Stages whose boundary types are not events are degraded to a single lane.
+///
+/// Returns `None` if a stage fails to spawn; diagnostics go to `dh`.
+auto spawn_staged(ir::pipeline pipe, const plan_result& plan,
+                  element_type_tag input, diagnostic_handler& dh)
+  -> Option<StagedChains>;
+
+/// Run a staged pipeline with external control.
+///
+/// The staged counterpart of `run_chain`: every lane chain runs as its own
+/// chain runner, stages are connected by exchanges according to their widths,
+/// and control messages are fanned out to (and aggregated from) all lanes.
+template <class Input, class Output>
+auto run_staged(StagedChains staged,
+                Box<Pull<OperatorMsg<Input>>> pull_upstream,
+                Box<Push<OperatorMsg<Output>>> push_downstream,
+                Receiver<FromControl> from_control,
+                Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
+                caf::actor_system& sys, DiagHandler& dh) -> Task<void>;
+
+/// Run a closed staged pipeline without external control.
+auto run_pipeline(StagedChains staged, ExecCtx& exec_ctx,
+                  caf::actor_system& sys, DiagHandler& dh,
+                  Notify* graceful_stop = nullptr) -> Task<void>;
 
 } // namespace tenzir
 

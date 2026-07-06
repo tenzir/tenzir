@@ -1,0 +1,7 @@
+// The stateless `where` + assignment region widens to four lanes; the
+// aggregation downstream of the gather is order-insensitive, so the result
+// must match serial execution exactly.
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}, {x: 5}, {x: 6}, {x: 7}, {x: 8}
+where x != 4
+y = x * x
+summarize total=sum(y), n=count()
