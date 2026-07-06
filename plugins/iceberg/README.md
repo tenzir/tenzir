@@ -3,10 +3,22 @@
 Native Apache Iceberg output for Tenzir, built on
 [apache/iceberg-cpp](https://github.com/apache/iceberg-cpp) (TNZ-774).
 
-## Status: Phase 0 (spike + skeleton)
+## Status: Phase 2 (table creation + schema derivation)
 
-The plugin currently contains:
+The plugin provides the `to_iceberg` operator: it writes events into an
+Apache Iceberg table through a REST catalog, creating the table from the
+first arriving events when it does not exist (`mode` is one of
+`create_append` (default), `create`, or `append`). Schema derivation maps
+records to nested structs, ip/subnet/enumeration columns to strings,
+timestamps to microsecond `timestamptz`, and durations and unsigned integers
+to `long`. When the schema has a top-level `time` timestamp, created tables
+register it as the default sort order and keep full column metrics for it
+(all other columns store only counts, keeping manifests small for wide event
+schemas).
 
+Layout:
+
+- `builtins/to_iceberg.cpp`: the operator.
 - `src/facade.cpp` + `include/tenzir/plugins/iceberg/facade.hpp`: the only
   code that talks to iceberg-cpp. The library is pre-1.0; keeping all usage
   behind this interface isolates API churn.
@@ -16,8 +28,9 @@ The plugin currently contains:
 - `aux/iceberg-cpp`: bundled dependency, pinned to a `main` commit
   (re-pinned to the voted 0.4.0 release before the operator goes stable).
 
-The `to_iceberg` operator lands in Phase 1. See `to_iceberg-plan.md` on the
-`feat/to-iceberg-operator-plan` branch for the full plan.
+See `to_iceberg-plan.md` on the `feat/to-iceberg-operator-plan` branch for
+the full plan; continuous schema evolution (Phase 3) and hidden partitioning
+(Phase 4) are next.
 
 ## Trying the spike
 

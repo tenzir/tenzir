@@ -100,12 +100,15 @@ auto main(int argc, char** argv) -> int {
   if (auto result = catalog->ensure_namespace(ns); not result) {
     return fail(result.error(), "namespace creation");
   }
-  const auto columns = std::vector<ColumnSpec>{
-    {.name = "id", .kind = ColumnSpec::Kind::int64, .required = false},
-    {.name = "message", .kind = ColumnSpec::Kind::string, .required = false},
-    {.name = "ts", .kind = ColumnSpec::Kind::timestamp, .required = false},
+  const auto schema = tenzir::record_type{
+    {"id", tenzir::int64_type{}},
+    {"message", tenzir::string_type{}},
+    {"ts", tenzir::time_type{}},
   };
-  auto table = catalog->create_table(ns, table_name, columns);
+  auto dropped = std::vector<std::string>{};
+  auto table
+    = catalog->create_table(ns, table_name, schema, {.sort_column = "ts"},
+                            dropped);
   if (not table) {
     return fail(table.error(), "table creation");
   }

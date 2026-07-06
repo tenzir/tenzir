@@ -1,0 +1,13 @@
+warning: column `meta.surprise` does not exist in the table and will be dropped; schema evolution arrives with a future release
+ --> tests/operators/to_iceberg/create/05_nested_drift.tql:4:1
+  |
+4 | to_iceberg "createns.events", catalog=env("ICEBERG_REST_URI")
+  | ~~~~~~~~~~ 
+  |
+
+warning: column `brand_new` does not exist in the table and will be dropped; schema evolution arrives with a future release
+ --> tests/operators/to_iceberg/create/05_nested_drift.tql:4:1
+  |
+4 | to_iceberg "createns.events", catalog=env("ICEBERG_REST_URI")
+  | ~~~~~~~~~~ 
+  |

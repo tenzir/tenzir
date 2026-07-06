@@ -13,11 +13,15 @@
 
 #pragma once
 
+#include <tenzir/type.hpp>
+
 #include <expected>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 struct ArrowArray;
 struct ArrowSchema;
@@ -33,7 +37,11 @@ struct Error {
     /// Concurrent table update; handled by iceberg-cpp's rebase-retry, only
     /// surfaced when that gives up.
     conflict,
-    /// Do not retry (auth rejected, missing table, invalid schema).
+    /// The referenced table or namespace does not exist.
+    not_found,
+    /// The table or namespace to create already exists.
+    already_exists,
+    /// Do not retry (auth rejected, invalid schema).
     permanent,
   };
 
@@ -44,21 +52,14 @@ struct Error {
 template <class T>
 using Result = std::expected<T, Error>;
 
-/// Minimal column model for Phase 0 table creation. Phase 2 replaces this
-/// with the full Tenzir-type → Iceberg-schema derivation.
-struct ColumnSpec {
-  enum class Kind {
-    boolean,
-    int64,
-    double_,
-    string,
-    /// Microsecond precision, UTC ("timestamptz" in Iceberg terms).
-    timestamp,
-  };
-
-  std::string name;
-  Kind kind = Kind::string;
-  bool required = false;
+/// Options for creating a new table.
+struct CreateTableOptions {
+  /// Name of a top-level column to register as the table's default sort
+  /// order (identity transform, ascending, nulls first). Ignored unless the
+  /// column exists and derives to a timestamp. Data files written by this
+  /// plugin do not claim the sort order until in-file sorting lands; the
+  /// registration informs other writers and compaction jobs.
+  std::optional<std::string> sort_column;
 };
 
 struct CatalogConfig {
@@ -86,8 +87,15 @@ public:
   auto load_table(std::span<const std::string> ns, std::string_view name)
     -> Result<Table>;
 
+  /// Creates a table whose schema derives from a Tenzir record type. Records
+  /// map to nested structs; ip, subnet, and enumeration columns map to
+  /// strings; timestamps map to microsecond timestamptz; durations and
+  /// unsigned integers map to long. Fields that cannot be represented are
+  /// skipped and reported in `dropped_fields` as `path: reason` strings.
   auto create_table(std::span<const std::string> ns, std::string_view name,
-                    std::span<const ColumnSpec> columns) -> Result<Table>;
+                    const record_type& schema,
+                    const CreateTableOptions& options,
+                    std::vector<std::string>& dropped_fields) -> Result<Table>;
 
 private:
   struct Impl;
@@ -143,8 +151,8 @@ public:
 
   /// Exports the table's schema as an Arrow schema; the caller assumes
   /// ownership of `out`. Writers must be fed arrays matching this schema
-  /// exactly. Fails when the table schema uses types the plugin cannot map
-  /// yet (nested types arrive with schema derivation in a later phase).
+  /// exactly, including nested structs and lists. Fails when the table
+  /// schema uses types the plugin cannot map (e.g. uuid, map, decimal).
   auto export_arrow_schema(ArrowSchema* out) const -> Result<void>;
 
   /// Opens a writer for a new data file in the table's data location.

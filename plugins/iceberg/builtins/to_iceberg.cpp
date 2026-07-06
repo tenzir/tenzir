@@ -9,18 +9,22 @@
 #include "tenzir/plugins/iceberg/facade.hpp"
 
 #include <tenzir/any.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/aws_iam.hpp>
 #include <tenzir/co_match.hpp>
+#include <tenzir/detail/enum.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/table_slice.hpp>
+#include <tenzir/to_string.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
+#include <arrow/compute/api_scalar.h>
 #include <arrow/compute/cast.h>
 #include <folly/coro/UnboundedQueue.h>
 
@@ -36,6 +40,12 @@ constexpr auto default_max_size = uint64_t{512} * 1024 * 1024;
 constexpr auto default_timeout = std::chrono::minutes{15};
 constexpr auto commit_max_attempts = 5;
 constexpr auto commit_initial_backoff = std::chrono::milliseconds{250};
+
+TENZIR_ENUM(mode, create_append, create, append);
+
+/// The column that becomes the table's registered sort order when a created
+/// table has a matching top-level timestamp (the OCSF event time convention).
+constexpr auto default_sort_column = std::string_view{"time"};
 
 struct ToIcebergArgs {
   located<std::string> table_id;
@@ -141,54 +151,70 @@ public:
         = not args_.s3_path_style or args_.s3_path_style->inner;
       config.properties["s3.path-style-access"] = path_style ? "true" : "false";
     }
-    auto [ns, name] = split_table_id(args_.table_id.inner);
+    mode_ = args_.mode ? *from_string<enum mode>(args_.mode->inner)
+                       : mode::create_append;
+    std::tie(ns_, table_name_) = split_table_id(args_.table_id.inner);
+    auto catalog
+      = co_await spawn_blocking([config = std::move(config)]() mutable {
+          return Catalog::open(std::move(config));
+        });
+    if (not catalog) {
+      diagnostic::error("failed to open Iceberg catalog: {}",
+                        catalog.error().message)
+        .primary(args_.catalog.source)
+        .emit(dh);
+      done_ = true;
+      co_return;
+    }
+    catalog_ = std::move(*catalog);
     auto table = co_await spawn_blocking(
-      [config = std::move(config), ns = std::move(ns),
-       name = std::move(name)]() mutable -> Result<Table> {
-        auto catalog = Catalog::open(std::move(config));
-        if (not catalog) {
-          return std::unexpected{catalog.error()};
-        }
-        return catalog->load_table(ns, name);
+      [catalog = *catalog_, ns = ns_, name = table_name_]() mutable {
+        return catalog.load_table(ns, name);
       });
-    if (not table) {
-      auto diag = diagnostic::error("failed to open Iceberg table `{}`: {}",
-                                    args_.table_id.inner, table.error().message)
-                    .primary(args_.table_id.source);
-      if (table.error().kind == Error::Kind::permanent) {
-        diag = std::move(diag).note(
-          "`to_iceberg` only appends to existing tables; table creation "
-          "arrives with a future release");
+    if (table) {
+      if (mode_ == mode::create) {
+        diagnostic::error("Iceberg table `{}` already exists",
+                          args_.table_id.inner)
+          .primary(args_.table_id.source)
+          .note("use `mode=\"create_append\"` or `mode=\"append\"` to write "
+                "into an existing table")
+          .emit(dh);
+        done_ = true;
+        co_return;
       }
-      std::move(diag).emit(dh);
-      done_ = true;
+      set_table(std::move(*table), ctx);
       co_return;
     }
-    auto c_schema = ArrowSchema{};
-    if (auto result = table->export_arrow_schema(&c_schema); not result) {
-      diagnostic::error("failed to map Iceberg table schema: {}",
-                        result.error().message)
+    if (table.error().kind != Error::Kind::not_found) {
+      diagnostic::error("failed to open Iceberg table `{}`: {}",
+                        args_.table_id.inner, table.error().message)
         .primary(args_.table_id.source)
         .emit(dh);
       done_ = true;
       co_return;
     }
-    auto imported = arrow::ImportSchema(&c_schema);
-    if (not imported.ok()) {
-      diagnostic::error("failed to import Iceberg table schema: {}",
-                        imported.status().ToString())
+    if (mode_ == mode::append) {
+      diagnostic::error("Iceberg table `{}` does not exist",
+                        args_.table_id.inner)
         .primary(args_.table_id.source)
+        .note("use `mode=\"create_append\"` to create missing tables")
         .emit(dh);
       done_ = true;
       co_return;
     }
-    table_ = std::move(*table);
-    target_schema_ = imported.MoveValueUnsafe();
+    // The table is created from the schema of the first arriving events; see
+    // `ensure_table`.
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
     if (done_ or input.rows() == 0) {
       co_return;
+    }
+    if (not table_) {
+      co_await ensure_table(input, ctx);
+      if (done_) {
+        co_return;
+      }
     }
     auto batch = project(std::move(input), ctx);
     if (not batch) {
@@ -269,12 +295,213 @@ public:
   }
 
 private:
-  /// Reorders and casts a slice's columns to the table schema. Missing
-  /// columns are null-filled; unknown columns are dropped with a one-time
-  /// warning per input schema.
+  /// Imports the table's Arrow schema and makes `table` the write target.
+  auto set_table(Table table, OpCtx& ctx) -> void {
+    auto c_schema = ArrowSchema{};
+    if (auto result = table.export_arrow_schema(&c_schema); not result) {
+      diagnostic::error("failed to map Iceberg table schema: {}",
+                        result.error().message)
+        .primary(args_.table_id.source)
+        .emit(ctx.dh());
+      done_ = true;
+      return;
+    }
+    auto imported = arrow::ImportSchema(&c_schema);
+    if (not imported.ok()) {
+      diagnostic::error("failed to import Iceberg table schema: {}",
+                        imported.status().ToString())
+        .primary(args_.table_id.source)
+        .emit(ctx.dh());
+      done_ = true;
+      return;
+    }
+    table_ = std::move(table);
+    target_schema_ = imported.MoveValueUnsafe();
+  }
+
+  /// Creates the table from the schema of the first arriving events. Only
+  /// reached in the create modes when the table did not exist at start.
+  auto ensure_table(const table_slice& input, OpCtx& ctx) -> Task<void> {
+    const auto& schema = as<record_type>(input.schema());
+    auto options = CreateTableOptions{};
+    for (const auto& field : schema.fields()) {
+      if (field.name == default_sort_column and is<time_type>(field.type)) {
+        options.sort_column = std::string{default_sort_column};
+        break;
+      }
+    }
+    auto dropped = std::make_shared<std::vector<std::string>>();
+    auto table = co_await spawn_blocking(
+      [catalog = *catalog_, ns = ns_, name = table_name_,
+       ty = input.schema(), options = std::move(options), dropped,
+       fall_back_to_load = mode_ == mode::create_append]() mutable
+      -> Result<Table> {
+        if (auto result = catalog.ensure_namespace(ns); not result) {
+          return std::unexpected{result.error()};
+        }
+        auto created = catalog.create_table(ns, name, as<record_type>(ty),
+                                            options, *dropped);
+        if (not created and fall_back_to_load
+            and created.error().kind == Error::Kind::already_exists) {
+          // Another writer won the race between our existence check and the
+          // creation; appending to their table is exactly what this mode
+          // promises.
+          return catalog.load_table(ns, name);
+        }
+        return created;
+      });
+    for (const auto& reason : *dropped) {
+      warn_once(fmt::format("cannot represent column in Iceberg: {}", reason),
+                ctx);
+    }
+    if (not table) {
+      fail(table.error(),
+           fmt::format("failed to create Iceberg table `{}`",
+                       args_.table_id.inner),
+           ctx);
+      co_return;
+    }
+    set_table(std::move(*table), ctx);
+  }
+
+  /// Converts Tenzir-specific extension arrays into their Iceberg
+  /// representation: ip, subnet, and enumeration become strings. Returns
+  /// nullptr for arrays that must not be written.
+  auto normalize(std::shared_ptr<arrow::Array> array, OpCtx& ctx)
+    -> std::shared_ptr<arrow::Array> {
+    if (array->type()->id() != arrow::Type::EXTENSION) {
+      return array;
+    }
+    auto ty = type::from_arrow(*array->type());
+    return match(
+      ty,
+      [&](const enumeration_type& t) -> std::shared_ptr<arrow::Array> {
+        return resolve_enumerations(
+                 t, std::static_pointer_cast<enumeration_type::array_type>(
+                      array))
+          .second;
+      },
+      [&](const concepts::one_of<ip_type, subnet_type> auto&)
+        -> std::shared_ptr<arrow::Array> {
+        return to_string(multi_series{series{ty, array}},
+                         args_.operator_location, ctx.dh())
+          .array;
+      },
+      [&](const auto&) -> std::shared_ptr<arrow::Array> {
+        return nullptr;
+      });
+  }
+
+  /// Recursively projects a source column onto a field of the table schema.
+  /// Missing and unrepresentable data is null-filled with a one-time
+  /// warning; nested structs project field-by-field so that records written
+  /// into struct columns line up by name, not by position.
+  auto project_column(std::shared_ptr<arrow::Array> source,
+                      const std::shared_ptr<arrow::Field>& target,
+                      const std::string& path, int64_t rows, OpCtx& ctx)
+    -> std::shared_ptr<arrow::Array> {
+    auto null_column = [&] {
+      return check(arrow::MakeArrayOfNull(target->type(), rows));
+    };
+    if (source) {
+      source = normalize(std::move(source), ctx);
+    }
+    if (not source) {
+      return null_column();
+    }
+    switch (target->type()->id()) {
+      case arrow::Type::STRUCT: {
+        auto struct_source
+          = std::dynamic_pointer_cast<arrow::StructArray>(source);
+        if (not struct_source) {
+          warn_once(fmt::format("column `{}` has type `{}` but the table "
+                                "expects `{}`; writing nulls instead",
+                                path, source->type()->ToString(),
+                                target->type()->ToString()),
+                    ctx);
+          return null_column();
+        }
+        const auto& target_fields = target->type()->fields();
+        auto children = arrow::ArrayVector{};
+        children.reserve(target_fields.size());
+        auto used = std::unordered_set<std::string>{};
+        for (const auto& field : target_fields) {
+          auto child = struct_source->GetFieldByName(field->name());
+          if (child) {
+            used.insert(field->name());
+          }
+          children.push_back(project_column(
+            std::move(child), field, fmt::format("{}.{}", path, field->name()),
+            rows, ctx));
+        }
+        for (const auto& field : struct_source->struct_type()->fields()) {
+          if (not used.contains(field->name())) {
+            warn_once(fmt::format("column `{}.{}` does not exist in the "
+                                  "table and will be dropped; schema "
+                                  "evolution arrives with a future release",
+                                  path, field->name()),
+                      ctx);
+          }
+        }
+        // A fresh validity bitmap sidesteps offset bookkeeping for sliced
+        // source arrays.
+        auto bitmap = std::shared_ptr<arrow::Buffer>{};
+        auto null_count = struct_source->null_count();
+        if (null_count > 0) {
+          auto valid
+            = check(arrow::compute::IsValid(struct_source)).array();
+          bitmap = valid->buffers[1];
+        }
+        return check(arrow::StructArray::Make(children, target_fields,
+                                              std::move(bitmap), null_count));
+      }
+      case arrow::Type::LIST: {
+        auto list_source = std::dynamic_pointer_cast<arrow::ListArray>(source);
+        if (not list_source) {
+          warn_once(fmt::format("column `{}` has type `{}` but the table "
+                                "expects `{}`; writing nulls instead",
+                                path, source->type()->ToString(),
+                                target->type()->ToString()),
+                    ctx);
+          return null_column();
+        }
+        // The values child covers the array's entire buffer range, so the
+        // original offsets remain valid for the converted values.
+        const auto& element = target->type()->field(0);
+        auto values
+          = project_column(list_source->values(), element, path + "[]",
+                           list_source->values()->length(), ctx);
+        return std::make_shared<arrow::ListArray>(
+          arrow::list(element), list_source->length(),
+          list_source->data()->buffers[1], std::move(values),
+          list_source->null_bitmap(), list_source->data()->null_count,
+          list_source->offset());
+      }
+      default: {
+        if (source->type()->Equals(target->type())) {
+          return source;
+        }
+        auto options = arrow::compute::CastOptions::Safe(target->type());
+        options.allow_time_truncate = true;
+        auto cast = arrow::compute::Cast(source, options);
+        if (not cast.ok()) {
+          warn_once(fmt::format("column `{}` has type `{}` but the table "
+                                "expects `{}`; writing nulls instead",
+                                path, source->type()->ToString(),
+                                target->type()->ToString()),
+                    ctx);
+          return null_column();
+        }
+        return cast->make_array();
+      }
+    }
+  }
+
+  /// Reorders, converts, and casts a slice's columns to the table schema,
+  /// recursing into nested records. Missing columns are null-filled; unknown
+  /// columns are dropped with a one-time warning per input schema.
   auto project(table_slice input, OpCtx& ctx)
     -> Option<std::shared_ptr<arrow::StructArray>> {
-    input = resolve_enumerations(std::move(input));
     const auto rows = detail::narrow_cast<int64_t>(input.rows());
     auto batch = to_record_batch(input);
     auto arrays = arrow::ArrayVector{};
@@ -285,33 +512,8 @@ private:
       if (column) {
         used.insert(field->name());
       }
-      if (column and not column->type()->Equals(field->type())) {
-        auto options = arrow::compute::CastOptions::Safe(field->type());
-        options.allow_time_truncate = true;
-        auto cast = arrow::compute::Cast(column, options);
-        if (cast.ok()) {
-          column = cast->make_array();
-        } else {
-          warn_once(fmt::format("column `{}` has type `{}` but the table "
-                                "expects `{}`; writing nulls instead",
-                                field->name(), column->type()->ToString(),
-                                field->type()->ToString()),
-                    ctx);
-          column = nullptr;
-        }
-      }
-      if (not column) {
-        auto nulls = arrow::MakeArrayOfNull(field->type(), rows);
-        if (not nulls.ok()) {
-          diagnostic::error("failed to allocate null column: {}",
-                            nulls.status().ToString())
-            .emit(ctx.dh());
-          done_ = true;
-          return None{};
-        }
-        column = nulls.MoveValueUnsafe();
-      }
-      arrays.push_back(std::move(column));
+      arrays.push_back(project_column(std::move(column), field, field->name(),
+                                      rows, ctx));
     }
     for (const auto& field : batch->schema()->fields()) {
       if (not used.contains(field->name())) {
@@ -407,6 +609,10 @@ private:
   }
 
   ToIcebergArgs args_;
+  enum mode mode_ = mode::create_append;
+  std::vector<std::string> ns_;
+  std::string table_name_;
+  Option<Catalog> catalog_;
   Option<Table> table_;
   std::shared_ptr<arrow::Schema> target_schema_;
   Option<FileWriter> writer_;
@@ -455,11 +661,11 @@ public:
             .emit(ctx);
         }
       }
-      if (auto mode = ctx.get(mode_arg)) {
-        if (mode->inner != "append") {
-          diagnostic::error("only `mode=\"append\"` is supported; table "
-                            "creation arrives with a future release")
-            .primary(mode->source, "got `{}`", mode->inner)
+      if (auto mode_opt = ctx.get(mode_arg)) {
+        if (not from_string<enum mode>(mode_opt->inner)) {
+          diagnostic::error(
+            "`mode` must be one of `create`, `append`, or `create_append`")
+            .primary(mode_opt->source, "got `{}`", mode_opt->inner)
             .emit(ctx);
         }
       }

@@ -30,6 +30,7 @@
 #include <iceberg/sort_order.h>
 #include <iceberg/table.h>
 #include <iceberg/table_identifier.h>
+#include <iceberg/transform.h>
 #include <iceberg/type.h>
 #include <iceberg/update/fast_append.h>
 
@@ -58,6 +59,13 @@ auto translate_error(const ice::Error& error) -> Error {
     case ice::ErrorKind::kCommitFailed:
     case ice::ErrorKind::kCommitStateUnknown:
       kind = Error::Kind::conflict;
+      break;
+    case ice::ErrorKind::kNoSuchTable:
+    case ice::ErrorKind::kNoSuchNamespace:
+      kind = Error::Kind::not_found;
+      break;
+    case ice::ErrorKind::kAlreadyExists:
+      kind = Error::Kind::already_exists;
       break;
     default:
       kind = Error::Kind::permanent;
@@ -89,20 +97,97 @@ auto ensure_registered() -> void {
   });
 }
 
-auto to_iceberg_type(ColumnSpec::Kind kind) -> std::shared_ptr<ice::Type> {
-  switch (kind) {
-    case ColumnSpec::Kind::boolean:
+/// Derives the Iceberg type for a Tenzir type, assigning field IDs to nested
+/// fields in pre-order from `next_id`. The catalog assigns the authoritative
+/// IDs on commit; these are only the initial proposal. Returns nullptr for
+/// types that cannot be represented; callers drop the enclosing field and
+/// record the reason in `dropped`.
+auto derive_type(const tenzir::type& ty, int32_t& next_id,
+                 const std::string& path, std::vector<std::string>& dropped)
+  -> std::shared_ptr<ice::Type> {
+  auto drop = [&](std::string_view reason) -> std::shared_ptr<ice::Type> {
+    dropped.push_back(fmt::format("{}: {}", path, reason));
+    return nullptr;
+  };
+  return match(
+    ty,
+    [](const bool_type&) -> std::shared_ptr<ice::Type> {
       return ice::boolean();
-    case ColumnSpec::Kind::int64:
+    },
+    [](const int64_type&) -> std::shared_ptr<ice::Type> {
       return ice::int64();
-    case ColumnSpec::Kind::double_:
+    },
+    [](const uint64_type&) -> std::shared_ptr<ice::Type> {
+      // Iceberg has no unsigned integers; values above 2^63-1 turn into
+      // nulls with a warning on write.
+      return ice::int64();
+    },
+    [](const double_type&) -> std::shared_ptr<ice::Type> {
       return ice::float64();
-    case ColumnSpec::Kind::string:
-      return ice::string();
-    case ColumnSpec::Kind::timestamp:
+    },
+    [](const duration_type&) -> std::shared_ptr<ice::Type> {
+      // Iceberg has no duration type; stored as nanosecond counts.
+      return ice::int64();
+    },
+    [](const time_type&) -> std::shared_ptr<ice::Type> {
+      // Iceberg timestamps are microsecond; nanoseconds are a separate v3
+      // type with far weaker ecosystem support, so we truncate on write.
       return ice::timestamp_tz();
-  }
-  TENZIR_UNREACHABLE();
+    },
+    [](const string_type&) -> std::shared_ptr<ice::Type> {
+      return ice::string();
+    },
+    [](const ip_type&) -> std::shared_ptr<ice::Type> {
+      return ice::string();
+    },
+    [](const subnet_type&) -> std::shared_ptr<ice::Type> {
+      return ice::string();
+    },
+    [](const enumeration_type&) -> std::shared_ptr<ice::Type> {
+      return ice::string();
+    },
+    [](const blob_type&) -> std::shared_ptr<ice::Type> {
+      return ice::binary();
+    },
+    [&](const list_type& t) -> std::shared_ptr<ice::Type> {
+      auto element_id = next_id++;
+      auto element
+        = derive_type(t.value_type(), next_id, path + "[]", dropped);
+      if (not element) {
+        return nullptr;
+      }
+      return std::make_shared<ice::ListType>(ice::SchemaField::MakeOptional(
+        element_id, "element", std::move(element)));
+    },
+    [&](const record_type& t) -> std::shared_ptr<ice::Type> {
+      auto fields = std::vector<ice::SchemaField>{};
+      for (const auto& field : t.fields()) {
+        auto field_id = next_id++;
+        auto field_path
+          = path.empty() ? std::string{field.name}
+                         : fmt::format("{}.{}", path, field.name);
+        auto field_type
+          = derive_type(field.type, next_id, field_path, dropped);
+        if (not field_type) {
+          continue;
+        }
+        fields.push_back(ice::SchemaField::MakeOptional(
+          field_id, field.name, std::move(field_type)));
+      }
+      if (fields.empty()) {
+        return drop("record has no representable fields");
+      }
+      return std::make_shared<ice::StructType>(std::move(fields));
+    },
+    [&](const null_type&) -> std::shared_ptr<ice::Type> {
+      return drop("cannot represent a column whose values are all null");
+    },
+    [&](const map_type&) -> std::shared_ptr<ice::Type> {
+      return drop("cannot represent legacy map columns");
+    },
+    [&](const secret_type&) -> std::shared_ptr<ice::Type> {
+      return drop("refusing to persist secrets");
+    });
 }
 
 // Mirrors iceberg-cpp's own Iceberg-to-Arrow mapping (schema_internal.cc) for
@@ -133,6 +218,37 @@ auto to_arrow_type(const ice::Type& type)
       return arrow::utf8();
     case ice::TypeId::kBinary:
       return arrow::binary();
+    case ice::TypeId::kStruct: {
+      const auto& struct_type = static_cast<const ice::StructType&>(type);
+      auto fields = std::vector<std::shared_ptr<arrow::Field>>{};
+      fields.reserve(struct_type.fields().size());
+      for (const auto& field : struct_type.fields()) {
+        auto child = to_arrow_type(*field.type());
+        if (not child.has_value()) {
+          return std::unexpected{Error{
+            child.error().kind,
+            fmt::format("field `{}`: {}", field.name(),
+                        child.error().message),
+          }};
+        }
+        fields.push_back(arrow::field(std::string{field.name()},
+                                      std::move(*child), field.optional()));
+      }
+      return arrow::struct_(std::move(fields));
+    }
+    case ice::TypeId::kList: {
+      const auto& list_type = static_cast<const ice::ListType&>(type);
+      const auto& element = list_type.element();
+      auto child = to_arrow_type(*element.type());
+      if (not child.has_value()) {
+        return std::unexpected{Error{
+          child.error().kind,
+          fmt::format("list element: {}", child.error().message),
+        }};
+      }
+      return arrow::list(
+        arrow::field("element", std::move(*child), element.optional()));
+    }
     default:
       return std::unexpected{Error{
         Error::Kind::permanent,
@@ -228,28 +344,62 @@ auto Catalog::load_table(std::span<const std::string> ns, std::string_view name)
 }
 
 auto Catalog::create_table(std::span<const std::string> ns,
-                           std::string_view name,
-                           std::span<const ColumnSpec> columns)
+                           std::string_view name, const record_type& schema,
+                           const CreateTableOptions& options,
+                           std::vector<std::string>& dropped_fields)
   -> Result<Table> {
+  auto next_id = int32_t{1};
   auto fields = std::vector<ice::SchemaField>{};
-  fields.reserve(columns.size());
-  for (auto field_id = int32_t{1}; const auto& column : columns) {
-    // The catalog assigns the authoritative field IDs on commit; these are
-    // only the initial proposal.
-    if (column.required) {
-      fields.push_back(ice::SchemaField::MakeRequired(
-        field_id, column.name, to_iceberg_type(column.kind)));
-    } else {
-      fields.push_back(ice::SchemaField::MakeOptional(
-        field_id, column.name, to_iceberg_type(column.kind)));
+  auto sort_source_id = std::optional<int32_t>{};
+  for (const auto& field : schema.fields()) {
+    auto field_id = next_id++;
+    auto field_type = derive_type(field.type, next_id,
+                                  std::string{field.name}, dropped_fields);
+    if (not field_type) {
+      continue;
     }
-    ++field_id;
+    if (options.sort_column and field.name == *options.sort_column
+        and field_type->type_id() == ice::TypeId::kTimestampTz) {
+      sort_source_id = field_id;
+    }
+    fields.push_back(
+      ice::SchemaField::MakeOptional(field_id, field.name, field_type));
   }
-  auto schema = std::make_shared<ice::Schema>(std::move(fields));
-  auto table = impl_->catalog->CreateTable(make_identifier(ns, name), schema,
-                                           ice::PartitionSpec::Unpartitioned(),
-                                           ice::SortOrder::Unsorted(),
-                                           /*location=*/"", /*properties=*/{});
+  if (fields.empty()) {
+    return std::unexpected{Error{
+      Error::Kind::permanent,
+      "the schema has no columns that are representable in Iceberg",
+    }};
+  }
+  auto iceberg_schema = std::make_shared<ice::Schema>(std::move(fields));
+  auto sort_order = ice::SortOrder::Unsorted();
+  auto properties = std::unordered_map<std::string, std::string>{
+    // Wide event schemas make per-column min/max bounds in manifests
+    // expensive; keep only counts by default.
+    {"write.metadata.metrics.default", "counts"},
+  };
+  if (sort_source_id) {
+    auto made = ice::SortOrder::Make(
+      *iceberg_schema, /*sort_id=*/1,
+      {ice::SortField{*sort_source_id, ice::Transform::Identity(),
+                      ice::SortDirection::kAscending,
+                      ice::NullOrder::kFirst}});
+    if (made.has_value()) {
+      sort_order = std::move(*made);
+      // Full stats on the sort column keep time-range pruning effective.
+      properties[fmt::format("write.metadata.metrics.column.{}",
+                             *options.sort_column)]
+        = "full";
+    } else {
+      dropped_fields.push_back(
+        fmt::format("{}: failed to register sort order: {}",
+                    *options.sort_column, made.error().message));
+    }
+  }
+  auto table = impl_->catalog->CreateTable(
+    make_identifier(ns, name), iceberg_schema,
+    ice::PartitionSpec::Unpartitioned(), std::move(sort_order),
+    /*location=*/"", properties);
   if (not table.has_value()) {
     return std::unexpected{translate_error(table.error())};
   }
@@ -323,7 +473,7 @@ auto Table::new_file_writer() -> Result<FileWriter> {
     .format = ice::FileFormatType::kParquet,
     .io = impl_->table->io(),
     .sort_order_id = std::nullopt,
-    .properties = {},
+    .properties = impl_->table->properties().configs(),
   });
   if (not writer.has_value()) {
     return std::unexpected{translate_error(writer.error())};
