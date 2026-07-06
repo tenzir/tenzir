@@ -120,6 +120,9 @@ public:
   /// Arrow array is transferred.
   auto write(ArrowArray* batch) -> Result<void>;
 
+  /// Number of bytes already written to the open file.
+  auto bytes_written() -> Result<int64_t>;
+
   /// Flushes and closes the file, returning the handle to commit.
   auto finish() -> Result<DataFile>;
 
@@ -137,6 +140,12 @@ public:
 
   /// The table's base location as reported by the catalog.
   auto location() const -> std::string;
+
+  /// Exports the table's schema as an Arrow schema; the caller assumes
+  /// ownership of `out`. Writers must be fed arrays matching this schema
+  /// exactly. Fails when the table schema uses types the plugin cannot map
+  /// yet (nested types arrive with schema derivation in a later phase).
+  auto export_arrow_schema(ArrowSchema* out) const -> Result<void>;
 
   /// Opens a writer for a new data file in the table's data location.
   auto new_file_writer() -> Result<FileWriter>;

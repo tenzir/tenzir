@@ -11,6 +11,8 @@
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/uuid.hpp>
 
+#include <arrow/api.h>
+#include <arrow/c/bridge.h>
 #include <fmt/format.h>
 #include <iceberg/arrow/arrow_register.h>
 #include <iceberg/avro/avro_register.h>
@@ -101,6 +103,43 @@ auto to_iceberg_type(ColumnSpec::Kind kind) -> std::shared_ptr<ice::Type> {
       return ice::timestamp_tz();
   }
   TENZIR_UNREACHABLE();
+}
+
+// Mirrors iceberg-cpp's own Iceberg-to-Arrow mapping (schema_internal.cc) for
+// the types the operator supports; the parquet writer imports input arrays
+// against exactly these Arrow types.
+auto to_arrow_type(const ice::Type& type)
+  -> Result<std::shared_ptr<arrow::DataType>> {
+  switch (type.type_id()) {
+    case ice::TypeId::kBoolean:
+      return arrow::boolean();
+    case ice::TypeId::kInt:
+      return arrow::int32();
+    case ice::TypeId::kLong:
+      return arrow::int64();
+    case ice::TypeId::kFloat:
+      return arrow::float32();
+    case ice::TypeId::kDouble:
+      return arrow::float64();
+    case ice::TypeId::kDate:
+      return arrow::date32();
+    case ice::TypeId::kTime:
+      return arrow::time64(arrow::TimeUnit::MICRO);
+    case ice::TypeId::kTimestamp:
+      return arrow::timestamp(arrow::TimeUnit::MICRO);
+    case ice::TypeId::kTimestampTz:
+      return arrow::timestamp(arrow::TimeUnit::MICRO, "UTC");
+    case ice::TypeId::kString:
+      return arrow::utf8();
+    case ice::TypeId::kBinary:
+      return arrow::binary();
+    default:
+      return std::unexpected{Error{
+        Error::Kind::permanent,
+        fmt::format("unsupported Iceberg type `{}`",
+                    ice::ToString(type.type_id())),
+      }};
+  }
 }
 
 auto make_identifier(std::span<const std::string> ns, std::string_view name)
@@ -222,6 +261,34 @@ auto Table::location() const -> std::string {
   return std::string{impl_->table->location()};
 }
 
+auto Table::export_arrow_schema(ArrowSchema* out) const -> Result<void> {
+  auto schema = impl_->table->schema();
+  if (not schema.has_value()) {
+    return std::unexpected{translate_error(schema.error())};
+  }
+  auto fields = std::vector<std::shared_ptr<arrow::Field>>{};
+  fields.reserve((*schema)->fields().size());
+  for (const auto& field : (*schema)->fields()) {
+    auto type = to_arrow_type(*field.type());
+    if (not type.has_value()) {
+      return std::unexpected{Error{
+        type.error().kind,
+        fmt::format("column `{}`: {}", field.name(), type.error().message),
+      }};
+    }
+    fields.push_back(arrow::field(std::string{field.name()}, std::move(*type),
+                                  field.optional()));
+  }
+  auto status = arrow::ExportSchema(*arrow::schema(std::move(fields)), out);
+  if (not status.ok()) {
+    return std::unexpected{Error{
+      Error::Kind::permanent,
+      fmt::format("failed to export arrow schema: {}", status.ToString()),
+    }};
+  }
+  return {};
+}
+
 auto Table::new_file_writer() -> Result<FileWriter> {
   auto schema = impl_->table->schema();
   if (not schema.has_value()) {
@@ -278,6 +345,10 @@ auto Table::commit_append(std::span<DataFile> files) -> Result<void> {
 
 auto FileWriter::write(ArrowArray* batch) -> Result<void> {
   return translate(impl_->writer->Write(batch));
+}
+
+auto FileWriter::bytes_written() -> Result<int64_t> {
+  return translate(impl_->writer->Length());
 }
 
 auto FileWriter::finish() -> Result<DataFile> {

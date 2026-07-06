@@ -35,3 +35,14 @@ iceberg-spike http://localhost:8181 "" spikens events
 # Verify with PyIceberg.
 uvx --with 'pyiceberg[pyarrow]' python plugins/iceberg/spike/verify_spike.py
 ```
+
+## ASAN builds
+
+Debug presets build Tenzir with AddressSanitizer, but the iceberg-cpp
+libraries from the dev shell are uninstrumented. Mixing the two triggers
+false-positive `container-overflow` reports from libc++'s container
+annotations when iceberg-cpp parses table metadata. Run ASAN builds with:
+
+```sh
+export ASAN_OPTIONS=detect_container_overflow=0
+```

@@ -1,0 +1,6 @@
+warning: column `extra` does not exist in the table and will be dropped; schema evolution arrives with a future release
+ --> tests/operators/to_iceberg/append/04_append_drift.tql:6:1
+  |
+6 | to_iceberg "testns.events", catalog=env("ICEBERG_REST_URI")
+  | ~~~~~~~~~~ 
+  |

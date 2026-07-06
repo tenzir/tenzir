@@ -1,0 +1,10 @@
+table {
+  1: id: optional long
+  2: message: optional string
+  3: ts: optional timestamptz
+}
+snapshots: 1
+operation: append
+0 zero 2026-01-01T00:00:00+00:00
+1 one 2026-01-01T00:00:01+00:00
+2 two 2026-01-01T00:00:02+00:00
