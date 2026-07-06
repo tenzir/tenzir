@@ -34,19 +34,6 @@ auto map_awaitable(SemiAwaitable&& awaitable, F&& f) -> Task<
   co_return std::invoke(f, co_await std::forward<SemiAwaitable>(awaitable));
 }
 
-// TODO: This might not be cancellation safe?
-template <class... SemiAwaitable>
-auto select_into_variant(SemiAwaitable&&... awaitable)
-  -> Task<variant<folly::coro::semi_await_result_t<SemiAwaitable>...>> {
-  using result_t = variant<folly::coro::semi_await_result_t<SemiAwaitable>...>;
-  auto [_, result] = co_await folly::coro::collectAny(
-    map_awaitable(std::forward<SemiAwaitable>(awaitable), []<class T>(T&& x) {
-      return result_t{std::forward<T>(x)};
-    })...);
-  TENZIR_ASSERT(result.hasValue());
-  co_return std::move(*result);
-}
-
 /// A sequence of operators with the given input and output.
 template <class Input, class Output>
 class OperatorChain {
