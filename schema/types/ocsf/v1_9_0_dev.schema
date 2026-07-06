@@ -555,6 +555,18 @@ type _ocsf.v1_9_0_dev.object.container = record{
   uid: string #recommended,
 }
 
+// The CPU information object contains attributes describing a physical CPU
+// package installed in the device.
+type _ocsf.v1_9_0_dev.object.cpu_info = record{
+  cores: int64 #optional,
+  cpu_architecture: string #optional,
+  cpu_architecture_id: int64 #optional #enum=fc23d3f1 #sibling=cpu_architecture,
+  cpu_bits: int64 #optional,
+  model: string #recommended,
+  speed_mhz: int64 #optional,
+  vendor_name: string #recommended,
+}
+
 // The Common Vulnerabilities and Exposures (CVE) object represents publicly
 // disclosed cybersecurity vulnerabilities defined in CVE Program catalog (<a
 // target='_blank' href='https://cve.mitre.org/'>CVE</a>). There is one CVE
@@ -829,11 +841,13 @@ type _ocsf.v1_9_0_dev.object.device_hw_info = record{
   bios_manufacturer: string #optional,
   bios_ver: string #optional,
   chassis: string #optional,
+  cores: int64 #optional,
   cpu_architecture: string #optional,
   cpu_architecture_id: int64 #optional #enum=fc23d3f1 #sibling=cpu_architecture,
   cpu_bits: int64 #optional,
   cpu_cores: int64 #optional,
   cpu_count: int64 #optional,
+  cpu_info_list: list<_ocsf.v1_9_0_dev.object.cpu_info> #optional,
   cpu_speed: int64 #optional,
   cpu_type: string #optional,
   desktop_display: _ocsf.v1_9_0_dev.object.display #optional,
@@ -1829,7 +1843,9 @@ type _ocsf.v1_9_0_dev.object.message_context = record{
   application: _ocsf.v1_9_0_dev.object.application #recommended,
   completion_tokens: int64 #optional,
   name: string #recommended,
+  prompt_text: string #optional,
   prompt_tokens: int64 #optional,
+  response_text: string #optional,
   service: _ocsf.v1_9_0_dev.object.service #recommended,
   total_tokens: int64 #optional,
   uid: string #recommended,
