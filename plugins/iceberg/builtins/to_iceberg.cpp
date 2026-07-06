@@ -21,6 +21,7 @@
 #include <tenzir/table_slice.hpp>
 #include <tenzir/to_string.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/uuid.hpp>
 
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
@@ -237,10 +238,29 @@ public:
     folly::CancellationSource timer_cancel;
   };
 
+  /// A closed data file staged for a later commit, together with its
+  /// checkpoint-persistable form. The latter is computed at close time
+  /// because `snapshot` runs synchronously.
+  struct StagedFile {
+    DataFile file;
+    SerializedDataFile serialized;
+  };
+
   explicit ToIceberg(ToIcebergArgs args) : args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    // A non-empty writer id this early means `snapshot` ran with restored
+    // checkpoint state before `start`; commits then align with checkpoints
+    // from the beginning.
+    const auto restored = not writer_id_.empty();
+    if (not restored) {
+      writer_id_ = fmt::to_string(uuid::random());
+    }
+    checkpointing_ = restored;
+    if (done_) {
+      co_return;
+    }
     auto& dh = ctx.dh();
     events_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_iceberg"},
@@ -337,7 +357,9 @@ public:
         return catalog.load_table(ns, name);
       });
     if (table) {
-      if (mode_ == mode::create) {
+      // After a restore, an existing table is our own previous work, not a
+      // conflict; `mode="create"` resumes by appending.
+      if (mode_ == mode::create and not restored) {
         diagnostic::error("Iceberg table `{}` already exists",
                           args_.table_id.inner)
           .primary(args_.table_id.source)
@@ -348,30 +370,43 @@ public:
         co_return;
       }
       set_table(std::move(*table), ctx);
-      if (done_ or not args_.partition_by) {
+      if (done_) {
         co_return;
       }
-      // The existing table's partition spec governs the fanout; a supplied
-      // `partition_by` must match it so that the user's expectation and
-      // reality do not diverge silently.
-      auto checked = co_await spawn_blocking(
-        [table = *table_, fields = partition_fields_]() mutable {
-          return table.check_partition_spec(fields);
-        });
-      if (not checked) {
-        diagnostic::error("{}", checked.error().message)
-          .primary(args_.partition_by->get_location())
-          .note("the partition spec of an existing table cannot be changed "
-                "by this operator; drop `partition_by` to append to the "
-                "table as-is")
-          .emit(dh);
-        done_ = true;
+      if (args_.partition_by) {
+        // The existing table's partition spec governs the fanout; a supplied
+        // `partition_by` must match it so that the user's expectation and
+        // reality do not diverge silently.
+        auto checked = co_await spawn_blocking(
+          [table = *table_, fields = partition_fields_]() mutable {
+            return table.check_partition_spec(fields);
+          });
+        if (not checked) {
+          diagnostic::error("{}", checked.error().message)
+            .primary(args_.partition_by->get_location())
+            .note("the partition spec of an existing table cannot be changed "
+                  "by this operator; drop `partition_by` to append to the "
+                  "table as-is")
+            .emit(dh);
+          done_ = true;
+          co_return;
+        }
       }
+      co_await reconcile(ctx);
       co_return;
     }
     if (table.error().kind != Error::Kind::not_found) {
       diagnostic::error("failed to open Iceberg table `{}`: {}",
                         args_.table_id.inner, table.error().message)
+        .primary(args_.table_id.source)
+        .emit(dh);
+      done_ = true;
+      co_return;
+    }
+    if (not epoch_snapshot_.empty()) {
+      diagnostic::error("Iceberg table `{}` no longer exists, but the "
+                        "checkpoint references {} uncommitted data files",
+                        args_.table_id.inner, epoch_snapshot_.size())
         .primary(args_.table_id.source)
         .emit(dh);
       done_ = true;
@@ -446,21 +481,65 @@ public:
         co_return;
       }
       co_await close_partition(r.partition, ctx);
-      if (not done_) {
-        co_await commit_pending(ctx);
+      if (not done_ and not checkpointing_) {
+        co_await commit_staged(pending_files_, ctx);
       }
     });
   }
 
+  auto snapshot(Serde& serde) -> void override {
+    serde("writer_id", writer_id_);
+    serde("commit_seq", commit_seq_);
+    serde("files", epoch_snapshot_);
+    serde("done", done_);
+  }
+
   auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
-    // Flush and commit so that a checkpoint acknowledges only data that is
-    // visible in the table. Delivery stays at-least-once: a crash between
-    // commit and checkpoint yields duplicates on restart, never data loss.
-    co_await rotate_all(ctx);
+    // The first checkpoint switches commits from per-rotation to
+    // checkpoint-aligned: files close here, their handles persist in
+    // `snapshot`, and `post_commit` appends them once the checkpoint is
+    // durable. Committing before durability would duplicate the data when a
+    // crash replays input from the previous checkpoint.
+    checkpointing_ = true;
+    co_await close_all(ctx);
+    if (done_) {
+      co_return;
+    }
+    for (auto& staged : pending_files_) {
+      epoch_snapshot_.push_back(staged.serialized);
+      epoch_files_.push_back(std::move(staged));
+    }
+    pending_files_.clear();
+  }
+
+  auto post_commit(OpCtx& ctx) -> Task<void> override {
+    // The checkpoint carrying `epoch_snapshot_` is durable, so this commit
+    // is the acknowledgment: a crash from here on restores a checkpoint that
+    // knows these files, and `reconcile` settles whether the commit landed.
+    // Files closed after `snapshot` stay in `pending_files_` for the next
+    // epoch; committing them now would make data visible that a restored
+    // checkpoint knows nothing about.
+    co_await commit_staged(epoch_files_, ctx);
+    if (not done_) {
+      epoch_snapshot_.clear();
+    }
   }
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    co_await rotate_all(ctx);
+    co_await close_all(ctx);
+    if (done_) {
+      co_return FinalizeBehavior::done;
+    }
+    // The last checkpoint's files commit under their persisted sequence
+    // number; folding newer files into that commit would break restart
+    // reconciliation, which trusts the checkpoint to describe the tagged
+    // snapshot exactly.
+    co_await commit_staged(epoch_files_, ctx);
+    if (done_) {
+      co_return FinalizeBehavior::done;
+    }
+    epoch_snapshot_.clear();
+    co_await commit_staged(pending_files_, ctx);
     co_return FinalizeBehavior::done;
   }
 
@@ -576,17 +655,21 @@ private:
       if (evolved) {
         if (*evolved) {
           // The projection target changes: open data files stay valid under
-          // the old schema, but must not receive new-schema batches.
-          // Committing them refreshes the table handle, which then already
-          // carries the evolved schema; without open files we adopt the
-          // schema-update response directly.
-          if (not writers_.empty()) {
-            co_await rotate_all(ctx);
-          } else {
-            set_table(std::move(**evolved), ctx);
-          }
+          // the old schema, but must not receive new-schema batches. Close
+          // them, then adopt the evolved schema from the update response.
+          co_await close_all(ctx);
           if (done_) {
             co_return;
+          }
+          set_table(std::move(**evolved), ctx);
+          if (done_) {
+            co_return;
+          }
+          if (not checkpointing_) {
+            co_await commit_staged(pending_files_, ctx);
+            if (done_) {
+              co_return;
+            }
           }
         }
         evolved_schemas_.insert(std::move(fingerprint));
@@ -879,8 +962,8 @@ private:
       = args_.max_size ? args_.max_size->inner : default_max_size;
     if (std::cmp_greater_equal(partition_writer.bytes, max_size)) {
       co_await close_partition(group.key, ctx);
-      if (not done_) {
-        co_await commit_pending(ctx);
+      if (not done_ and not checkpointing_) {
+        co_await commit_staged(pending_files_, ctx);
       }
     }
   }
@@ -903,12 +986,19 @@ private:
       fail(file.error(), "failed to finalize data file", ctx);
       co_return;
     }
-    pending_files_.push_back(std::move(*file));
+    auto serialized = file->serialize();
+    if (not serialized) {
+      fail(serialized.error(), "failed to persist data file handle", ctx);
+      co_return;
+    }
+    pending_files_.push_back(StagedFile{
+      .file = std::move(*file),
+      .serialized = std::move(*serialized),
+    });
   }
 
-  /// Closes all open data files and commits everything pending as one
-  /// FastAppend snapshot.
-  auto rotate_all(OpCtx& ctx) -> Task<void> {
+  /// Closes all open data files, staging them for the next commit.
+  auto close_all(OpCtx& ctx) -> Task<void> {
     auto keys = std::vector<std::string>{};
     keys.reserve(writers_.size());
     for (const auto& [key, unused] : writers_) {
@@ -920,26 +1010,70 @@ private:
         co_return;
       }
     }
-    co_await commit_pending(ctx);
   }
 
-  /// Commits all pending data files as one FastAppend snapshot. Transient
-  /// failures retry with exponential backoff; a conflicting concurrent
-  /// update reloads the table and retries the commit with the same files.
-  /// On success, the table handle is replaced with the refreshed one so
-  /// that the next commit does not race against our own snapshot.
-  auto commit_pending(OpCtx& ctx) -> Task<void> {
-    if (pending_files_.empty() or done_) {
+  /// Settles data files restored from a checkpoint: the previous incarnation
+  /// uploaded them and persisted their handles, but may or may not have
+  /// committed them before it stopped. The commit tag decides: if the table
+  /// has the tagged snapshot, the files are already visible and dropped
+  /// here; otherwise they commit now, under the same sequence number.
+  /// Upstream replays everything after the checkpoint, so either way no row
+  /// is lost or duplicated.
+  auto reconcile(OpCtx& ctx) -> Task<void> {
+    if (epoch_snapshot_.empty()) {
       co_return;
     }
+    if (table_->has_commit(CommitTag{writer_id_, commit_seq_})) {
+      epoch_snapshot_.clear();
+      commit_seq_ += 1;
+      co_return;
+    }
+    for (const auto& serialized : epoch_snapshot_) {
+      auto file = DataFile::deserialize(serialized);
+      if (not file) {
+        fail(file.error(), "failed to restore data file from checkpoint", ctx);
+        co_return;
+      }
+      epoch_files_.push_back(StagedFile{
+        .file = std::move(*file),
+        .serialized = serialized,
+      });
+    }
+    co_await commit_staged(epoch_files_, ctx);
+    if (not done_) {
+      epoch_snapshot_.clear();
+    }
+  }
+
+  /// Commits the given staged files as one FastAppend snapshot tagged with
+  /// the current commit sequence, clearing them and advancing the sequence
+  /// on success. Transient failures retry with exponential backoff; a
+  /// conflicting concurrent update reloads the table and retries the commit
+  /// with the same files, unless the reloaded table shows the tagged
+  /// snapshot after all (a commit whose success got lost) — appending again
+  /// would duplicate the rows. On success, the table handle is replaced with
+  /// the refreshed one so that the next commit does not race against our own
+  /// snapshot.
+  auto commit_staged(std::vector<StagedFile>& staged, OpCtx& ctx)
+    -> Task<void> {
+    if (staged.empty() or done_) {
+      co_return;
+    }
+    auto files = std::vector<DataFile>{};
+    files.reserve(staged.size());
+    for (const auto& entry : staged) {
+      files.push_back(entry.file);
+    }
+    const auto tag = CommitTag{writer_id_, commit_seq_};
     auto backoff = duration{commit_initial_backoff};
     for (auto attempt = 1;; ++attempt) {
-      auto result = co_await spawn_blocking(
-        [table = *table_, files = pending_files_]() mutable {
-          return table.commit_append(files);
-        });
+      auto result
+        = co_await spawn_blocking([table = *table_, files, tag]() mutable {
+            return table.commit_append(files, tag);
+          });
       if (result) {
-        pending_files_.clear();
+        staged.clear();
+        commit_seq_ += 1;
         set_table(std::move(*result), ctx);
         co_return;
       }
@@ -963,8 +1097,13 @@ private:
           fail(reloaded.error(), "failed to reload Iceberg table", ctx);
           co_return;
         }
+        const auto landed = reloaded->has_commit(tag);
+        if (landed) {
+          staged.clear();
+          commit_seq_ += 1;
+        }
         set_table(std::move(*reloaded), ctx);
-        if (done_) {
+        if (done_ or landed) {
           co_return;
         }
         continue;
@@ -1016,8 +1155,25 @@ private:
   std::vector<PartitionField> partition_fields_;
   /// Open data files, keyed by `PartitionGroup::key`.
   std::unordered_map<std::string, PartitionWriter> writers_;
-  /// Closed data files that the next commit picks up.
-  std::vector<DataFile> pending_files_;
+  /// Closed data files not yet assigned to a checkpoint; the next commit
+  /// picks them up.
+  std::vector<StagedFile> pending_files_;
+  /// Closed data files frozen into the last checkpoint, awaiting the
+  /// post-checkpoint commit.
+  std::vector<StagedFile> epoch_files_;
+  /// The checkpoint-persistable mirror of `epoch_files_`, kept in lockstep;
+  /// after a restart, it holds the restored handles until `reconcile`
+  /// settles them.
+  std::vector<SerializedDataFile> epoch_snapshot_;
+  /// Identifies this pipeline's commits across restarts.
+  std::string writer_id_;
+  /// Sequence number of the next commit; each value commits at most once.
+  uint64_t commit_seq_ = 0;
+  /// Whether checkpoints drive commits. Without checkpoints, every rotation
+  /// commits directly (there is no replay to guard against); the first
+  /// checkpoint switches to one commit per checkpoint, which `post_commit`
+  /// issues after the checkpoint is durable.
+  bool checkpointing_ = false;
   int64_t writer_generation_ = 0;
   bool done_ = false;
   std::unordered_set<std::string> warned_;

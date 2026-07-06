@@ -3,7 +3,7 @@
 Native Apache Iceberg output for Tenzir, built on
 [apache/iceberg-cpp](https://github.com/apache/iceberg-cpp) (TNZ-774).
 
-## Status: Phase 4 (hidden partitioning)
+## Status: Phase 5 (delivery semantics)
 
 The plugin provides the `to_iceberg` operator: it writes events into an
 Apache Iceberg table through a REST catalog, creating the table from the
@@ -39,8 +39,26 @@ computed by iceberg-cpp itself (bucket's Murmur3 hash stays upstream),
 batches split into per-partition row groups, and each open partition holds
 one streaming Parquet writer with its own size/timeout rotation. At most 64
 partitions stay open at once; beyond that, the largest open file closes
-early and rides along with the next commit. Checkpoints and finalization
-commit everything open as a single FastAppend snapshot.
+early and rides along with the next commit.
+
+Delivery follows the pipeline's checkpointing. Without checkpoints, every
+rotation commits a FastAppend snapshot directly (at-least-once: a crash can
+lose uncommitted buffers, never committed data). Once checkpoints flow,
+commits align with them: a checkpoint closes all open data files, persists
+their handles together with a writer id and a commit sequence number, and
+the commit happens only after the checkpoint is durable — one tagged
+FastAppend per checkpoint, so the checkpoint acknowledges exactly the data
+that becomes visible. On restart, the operator reconciles: if the table's
+snapshot history carries the persisted writer/sequence tag (the
+`tenzir.writer-id` and `tenzir.commit-seq` summary properties), the restored
+files already committed and are dropped; otherwise they commit now, under
+the same sequence number. Upstream replays everything after the checkpoint,
+so no row is lost or duplicated — exactly-once, modulo the end-of-stream
+window where `finalize` must commit without a following checkpoint. Data
+files written but never checkpointed remain invisible orphans for table
+maintenance to collect. Note that the executor's checkpoint coordinator is
+not wired up yet; until it is, pipelines run in the per-rotation commit
+mode.
 
 Layout:
 
@@ -55,7 +73,7 @@ Layout:
   (re-pinned to the voted 0.4.0 release before the operator goes stable).
 
 See `to_iceberg-plan.md` on the `feat/to-iceberg-operator-plan` branch for
-the full plan; exactly-once delivery (Phase 5) is next.
+the full plan.
 
 ## Trying the spike
 

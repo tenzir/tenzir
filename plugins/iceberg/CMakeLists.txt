@@ -11,6 +11,7 @@ TenzirRegisterPlugin(
   TARGET iceberg
   ENTRYPOINT src/plugin.cpp
   SOURCES GLOB src/*.cpp
+  TEST_SOURCES GLOB "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp"
   BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp"
   INCLUDE_DIRECTORIES include)
 

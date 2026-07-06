@@ -57,6 +57,10 @@ namespace {
 // global namespace throughout this file.
 namespace ice = ::iceberg;
 
+/// Snapshot summary properties keying exactly-once deduplication.
+constexpr auto writer_id_property = std::string_view{"tenzir.writer-id"};
+constexpr auto commit_seq_property = std::string_view{"tenzir.commit-seq"};
+
 auto translate_error(const ice::Error& error) -> Error {
   auto kind = Error::Kind::permanent;
   switch (error.kind) {
@@ -402,6 +406,75 @@ auto supports_partition_source(ice::TypeId id) -> bool {
     default:
       return false;
   }
+}
+
+/// Maps a partition value's type to its stable checkpoint tag. All supported
+/// types are parameter-free, so the tag alone round-trips the type.
+auto to_literal_type(ice::TypeId id) -> Result<LiteralType> {
+  switch (id) {
+    case ice::TypeId::kBoolean:
+      return LiteralType::boolean;
+    case ice::TypeId::kInt:
+      return LiteralType::int32;
+    case ice::TypeId::kLong:
+      return LiteralType::int64;
+    case ice::TypeId::kFloat:
+      return LiteralType::float32;
+    case ice::TypeId::kDouble:
+      return LiteralType::float64;
+    case ice::TypeId::kDate:
+      return LiteralType::date;
+    case ice::TypeId::kTime:
+      return LiteralType::time;
+    case ice::TypeId::kTimestamp:
+      return LiteralType::timestamp;
+    case ice::TypeId::kTimestampTz:
+      return LiteralType::timestamp_tz;
+    case ice::TypeId::kString:
+      return LiteralType::string;
+    case ice::TypeId::kBinary:
+      return LiteralType::binary;
+    default:
+      return std::unexpected{Error{
+        Error::Kind::permanent,
+        fmt::format("cannot persist a partition value of type `{}`",
+                    ice::ToString(id)),
+      }};
+  }
+}
+
+/// Rebuilds the primitive type of a checkpoint-persisted partition value
+/// from its stable type tag.
+auto from_literal_type(int32_t type)
+  -> Result<std::shared_ptr<ice::PrimitiveType>> {
+  switch (static_cast<LiteralType>(type)) {
+    case LiteralType::boolean:
+      return ice::boolean();
+    case LiteralType::int32:
+      return ice::int32();
+    case LiteralType::int64:
+      return ice::int64();
+    case LiteralType::float32:
+      return ice::float32();
+    case LiteralType::float64:
+      return ice::float64();
+    case LiteralType::date:
+      return ice::date();
+    case LiteralType::time:
+      return ice::time();
+    case LiteralType::timestamp:
+      return ice::timestamp();
+    case LiteralType::timestamp_tz:
+      return ice::timestamp_tz();
+    case LiteralType::string:
+      return ice::string();
+    case LiteralType::binary:
+      return ice::binary();
+  }
+  return std::unexpected{Error{
+    Error::Kind::permanent,
+    fmt::format("cannot restore a partition value of type tag {}", type),
+  }};
 }
 
 /// Reads one non-null value out of an Arrow array. The array's Arrow type is
@@ -1106,7 +1179,113 @@ auto Table::new_file_writer(const PartitionTuple& partition)
     FileWriter::Impl{.writer = std::move(*writer)})};
 }
 
-auto Table::commit_append(std::span<DataFile> files) -> Result<Table> {
+auto DataFile::serialize() const -> Result<SerializedDataFile> {
+  const auto& file = *impl_->file;
+  // The remaining DataFile fields describe delete files, deletion vectors,
+  // encryption, and commit-time row lineage; this plugin's writers produce
+  // none of them, and silently dropping a set field would corrupt the table.
+  if (file.content != ice::DataFile::Content::kData
+      or file.file_format != ice::FileFormatType::kParquet
+      or not file.equality_ids.empty() or not file.key_metadata.empty()
+      or file.first_row_id or file.referenced_data_file or file.content_offset
+      or file.content_size_in_bytes) {
+    return std::unexpected{Error{
+      Error::Kind::permanent,
+      fmt::format("cannot persist data file {}: unsupported content",
+                  file.file_path),
+    }};
+  }
+  auto result = SerializedDataFile{
+    .path = file.file_path,
+    .record_count = file.record_count,
+    .file_size = file.file_size_in_bytes,
+    .spec_id = file.partition_spec_id,
+    .partition = {},
+    .column_sizes = file.column_sizes,
+    .value_counts = file.value_counts,
+    .null_value_counts = file.null_value_counts,
+    .nan_value_counts = file.nan_value_counts,
+    .lower_bounds = file.lower_bounds,
+    .upper_bounds = file.upper_bounds,
+    .split_offsets = file.split_offsets,
+    .sort_order_id = file.sort_order_id,
+  };
+  result.partition.reserve(file.partition.values().size());
+  for (const auto& literal : file.partition.values()) {
+    auto type = to_literal_type(literal.type()->type_id());
+    if (not type.has_value()) {
+      return std::unexpected{type.error()};
+    }
+    auto serialized = SerializedLiteral{
+      .type = static_cast<int32_t>(*type),
+      .is_null = literal.IsNull(),
+      .value = {},
+    };
+    if (not serialized.is_null) {
+      auto bytes = literal.Serialize();
+      if (not bytes.has_value()) {
+        return std::unexpected{translate_error(bytes.error())};
+      }
+      serialized.value = std::move(*bytes);
+    }
+    result.partition.push_back(std::move(serialized));
+  }
+  return result;
+}
+
+auto DataFile::deserialize(const SerializedDataFile& serialized)
+  -> Result<DataFile> {
+  auto values = std::vector<ice::Literal>{};
+  values.reserve(serialized.partition.size());
+  for (const auto& literal : serialized.partition) {
+    auto type = from_literal_type(literal.type);
+    if (not type.has_value()) {
+      return std::unexpected{type.error()};
+    }
+    if (literal.is_null) {
+      values.push_back(ice::Literal::Null(std::move(*type)));
+      continue;
+    }
+    auto restored = ice::Literal::Deserialize(literal.value, std::move(*type));
+    if (not restored.has_value()) {
+      return std::unexpected{translate_error(restored.error())};
+    }
+    values.push_back(std::move(*restored));
+  }
+  auto file = std::make_shared<ice::DataFile>();
+  file->content = ice::DataFile::Content::kData;
+  file->file_path = serialized.path;
+  file->file_format = ice::FileFormatType::kParquet;
+  file->partition = ice::PartitionValues{std::move(values)};
+  file->record_count = serialized.record_count;
+  file->file_size_in_bytes = serialized.file_size;
+  file->column_sizes = serialized.column_sizes;
+  file->value_counts = serialized.value_counts;
+  file->null_value_counts = serialized.null_value_counts;
+  file->nan_value_counts = serialized.nan_value_counts;
+  file->lower_bounds = serialized.lower_bounds;
+  file->upper_bounds = serialized.upper_bounds;
+  file->split_offsets = serialized.split_offsets;
+  file->sort_order_id = serialized.sort_order_id;
+  file->partition_spec_id = serialized.spec_id;
+  return DataFile{
+    std::make_shared<Impl>(Impl{.file = std::move(file)}),
+  };
+}
+
+auto Table::has_commit(const CommitTag& tag) const -> bool {
+  const auto& snapshots = impl_->table->metadata()->snapshots;
+  const auto sequence = fmt::to_string(tag.sequence);
+  return std::ranges::any_of(snapshots, [&](const auto& snapshot) {
+    auto writer = snapshot->summary.find(std::string{writer_id_property});
+    auto seq = snapshot->summary.find(std::string{commit_seq_property});
+    return writer != snapshot->summary.end() and seq != snapshot->summary.end()
+           and writer->second == tag.writer_id and seq->second == sequence;
+  });
+}
+
+auto Table::commit_append(std::span<DataFile> files, const CommitTag& tag)
+  -> Result<Table> {
   auto transaction
     = ice::Transaction::Make(impl_->table, ice::TransactionKind::kUpdate);
   if (not transaction.has_value()) {
@@ -1121,6 +1300,11 @@ auto Table::commit_append(std::span<DataFile> files) -> Result<Table> {
   // snapshot landing, which would silently drop the files.
   auto commit_id = fmt::to_string(uuid::random());
   (*append)->Set("tenzir.commit-id", commit_id);
+  // The writer/sequence pair keys exactly-once deduplication: a restarted
+  // operator searches the snapshot history for it (see `has_commit`).
+  (*append)->Set(std::string{writer_id_property}, tag.writer_id);
+  (*append)->Set(std::string{commit_seq_property},
+                 fmt::to_string(tag.sequence));
   for (const auto& file : files) {
     (*append)->AppendFile(file.impl_->file);
   }

@@ -135,7 +135,8 @@ auto main(int argc, char** argv) -> int {
     return fail(data_file.error(), "data file finish");
   }
   auto files = std::vector<DataFile>{std::move(*data_file)};
-  if (auto result = table->commit_append(files); not result) {
+  auto tag = CommitTag{.writer_id = "iceberg-spike", .sequence = 0};
+  if (auto result = table->commit_append(files, tag); not result) {
     return fail(result.error(), "fast-append commit");
   }
   fmt::print("commit: appended {} rows to {}.{}\n", batch->length(), argv[3],

@@ -15,7 +15,9 @@
 
 #include <tenzir/type.hpp>
 
+#include <cstdint>
 #include <expected>
+#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -165,11 +167,111 @@ struct PartitionGroup {
   PartitionTuple partition;
 };
 
+/// Stable type tags for checkpoint-persisted partition values, covering the
+/// result types of the supported transforms over the supported source
+/// types. Deliberately not iceberg-cpp's own type ids: their enumerator
+/// values are unpinned and may shift between library versions, while these
+/// values persist across restarts, including upgrades.
+enum class LiteralType : int32_t {
+  boolean = 1,
+  int32 = 2,
+  int64 = 3,
+  float32 = 4,
+  float64 = 5,
+  date = 6,
+  time = 7,
+  timestamp = 8,
+  timestamp_tz = 9,
+  string = 10,
+  binary = 11,
+};
+
+/// One partition value in checkpoint-persistable form: a stable type tag
+/// (a `LiteralType` value) plus the Iceberg spec's binary single-value
+/// serialization. Null values carry the type only.
+struct SerializedLiteral {
+  int32_t type = 0;
+  bool is_null = true;
+  std::vector<uint8_t> value;
+
+  friend auto operator==(const SerializedLiteral&, const SerializedLiteral&)
+    -> bool
+    = default;
+
+  friend auto inspect(auto& f, SerializedLiteral& x) -> bool {
+    return f.object(x).fields(f.field("type", x.type),
+                              f.field("is_null", x.is_null),
+                              f.field("value", x.value));
+  }
+};
+
+/// A written-but-uncommitted data file in checkpoint-persistable form, so
+/// that a restarted operator can commit files its previous incarnation
+/// uploaded but did not get to commit. Covers exactly what this plugin's
+/// writers produce (plain Parquet data files); delete files and encryption
+/// metadata are not representable.
+struct SerializedDataFile {
+  /// Full URI of the file in the table's data location.
+  std::string path;
+  int64_t record_count = 0;
+  int64_t file_size = 0;
+  /// The partition spec the partition values belong to.
+  std::optional<int32_t> spec_id;
+  std::vector<SerializedLiteral> partition;
+  std::map<int32_t, int64_t> column_sizes;
+  std::map<int32_t, int64_t> value_counts;
+  std::map<int32_t, int64_t> null_value_counts;
+  std::map<int32_t, int64_t> nan_value_counts;
+  std::map<int32_t, std::vector<uint8_t>> lower_bounds;
+  std::map<int32_t, std::vector<uint8_t>> upper_bounds;
+  std::vector<int64_t> split_offsets;
+  std::optional<int32_t> sort_order_id;
+
+  friend auto operator==(const SerializedDataFile&, const SerializedDataFile&)
+    -> bool
+    = default;
+
+  friend auto inspect(auto& f, SerializedDataFile& x) -> bool {
+    return f.object(x).fields(f.field("path", x.path),
+                              f.field("record_count", x.record_count),
+                              f.field("file_size", x.file_size),
+                              f.field("spec_id", x.spec_id),
+                              f.field("partition", x.partition),
+                              f.field("column_sizes", x.column_sizes),
+                              f.field("value_counts", x.value_counts),
+                              f.field("null_value_counts", x.null_value_counts),
+                              f.field("nan_value_counts", x.nan_value_counts),
+                              f.field("lower_bounds", x.lower_bounds),
+                              f.field("upper_bounds", x.upper_bounds),
+                              f.field("split_offsets", x.split_offsets),
+                              f.field("sort_order_id", x.sort_order_id));
+  }
+};
+
+/// Identifies one commit of one writer for exactly-once deduplication. Both
+/// parts are stamped into the snapshot summary; a restarted operator searches
+/// the table's snapshot history for the pair to decide whether the data files
+/// restored from its checkpoint already committed before the crash.
+struct CommitTag {
+  /// Random id minted once per pipeline, stable across restarts.
+  std::string writer_id;
+  /// Strictly increasing per writer; each value commits at most once.
+  uint64_t sequence = 0;
+};
+
 /// Opaque handle to a written-but-uncommitted data file.
 class DataFile {
 public:
   friend class FileWriter;
   friend class Table;
+
+  /// Converts the handle into its checkpoint-persistable form. Fails for
+  /// files this plugin's writers cannot have produced.
+  auto serialize() const -> Result<SerializedDataFile>;
+
+  /// Restores a handle from its checkpoint-persistable form.
+  static auto deserialize(const SerializedDataFile& serialized)
+    -> Result<DataFile>;
 
 private:
   struct Impl;
@@ -250,14 +352,21 @@ public:
   /// table's data location.
   auto new_file_writer(const PartitionTuple& partition) -> Result<FileWriter>;
 
-  /// Commits the given data files as one new snapshot (FastAppend) and
-  /// returns the refreshed table. Callers must route subsequent writers and
-  /// commits through the returned handle; a stale handle loses the race
-  /// against its own previous snapshot. The commit is verified to have taken
-  /// effect: an error of kind `conflict` means a concurrent update won the
-  /// race and the snapshot did not land; callers should reload the table and
-  /// retry with the same files.
-  auto commit_append(std::span<DataFile> files) -> Result<Table>;
+  /// Commits the given data files as one new snapshot (FastAppend) tagged
+  /// with the commit tag, and returns the refreshed table. Callers must
+  /// route subsequent writers and commits through the returned handle; a
+  /// stale handle loses the race against its own previous snapshot. The
+  /// commit is verified to have taken effect: an error of kind `conflict`
+  /// means a concurrent update won the race and the snapshot did not land;
+  /// callers should reload the table, check `has_commit` (the retried commit
+  /// may have landed after all), and otherwise retry with the same files.
+  auto commit_append(std::span<DataFile> files, const CommitTag& tag)
+    -> Result<Table>;
+
+  /// Whether the table has a snapshot carrying the given commit tag. Reads
+  /// this handle's metadata; load or reload the table first for a current
+  /// answer.
+  auto has_commit(const CommitTag& tag) const -> bool;
 
 private:
   struct Impl;
