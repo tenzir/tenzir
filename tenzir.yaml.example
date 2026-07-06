@@ -32,6 +32,14 @@ tenzir:
   # quits only once they have drained on their own.
   shutdown-grace-period: 3min
 
+  # The target parallelism degree for implicit parallelization of stateless
+  # pipeline regions, e.g., consecutive `where`, `set`, `select`, and `drop`
+  # operators. Values above 1 split event streams row-wise across that many
+  # parallel lanes and merge them again at the end of the region, which may
+  # reorder events within the region. The default of 1 disables implicit
+  # parallelization. Checkpointed pipelines always run serially.
+  #implicit-parallelism: 1
+
   # URL of an HTTP/HTTPS proxy used for outbound `http://` targets. The URL
   # must include an explicit port, and may carry Basic-auth userinfo
   # (`http://user:pw@proxy.example.com:3128`). If unset,
