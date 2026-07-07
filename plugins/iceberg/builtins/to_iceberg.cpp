@@ -102,6 +102,31 @@ auto has_parameter(PartitionTransform transform) -> bool {
          or transform == PartitionTransform::truncate;
 }
 
+/// Casts `source` to the target type of `options`, collecting the pieces
+/// into `out`. Arrow casts are all-or-nothing per array, so a single bad
+/// value would fail the whole column; this bisects around the rows the cast
+/// kernel rejects (numeric overflow, unparsable strings) in
+/// O(failures * log rows) casts and nulls only those.
+auto cast_valid_rows(const std::shared_ptr<arrow::Array>& source,
+                     const arrow::compute::CastOptions& options,
+                     std::vector<std::shared_ptr<arrow::Array>>& out,
+                     int64_t& failures) -> void {
+  auto cast = arrow::compute::Cast(source, options);
+  if (cast.ok()) {
+    out.push_back(cast->make_array());
+    return;
+  }
+  if (source->length() == 1) {
+    failures += 1;
+    out.push_back(
+      check(arrow::MakeArrayOfNull(options.to_type.GetSharedPtr(), 1)));
+    return;
+  }
+  const auto half = source->length() / 2;
+  cast_valid_rows(source->Slice(0, half), options, out, failures);
+  cast_valid_rows(source->Slice(half), options, out, failures);
+}
+
 /// Extracts the dotted path of a field expression, e.g. `metadata.version`.
 auto parse_partition_source(const ast::expression& expr, diagnostic_handler& dh)
   -> failure_or<std::string> {
@@ -820,10 +845,7 @@ private:
         if (source->type()->Equals(target->type())) {
           return source;
         }
-        auto options = arrow::compute::CastOptions::Safe(target->type());
-        options.allow_time_truncate = true;
-        auto cast = arrow::compute::Cast(source, options);
-        if (not cast.ok()) {
+        if (not arrow::compute::CanCast(*source->type(), *target->type())) {
           warn_once(fmt::format("column `{}` has type `{}` but the table "
                                 "expects `{}`; writing nulls instead",
                                 path, source->type()->ToString(),
@@ -831,7 +853,24 @@ private:
                     ctx);
           return null_column();
         }
-        return cast->make_array();
+        auto options = arrow::compute::CastOptions::Safe(target->type());
+        options.allow_time_truncate = true;
+        auto cast = arrow::compute::Cast(source, options);
+        if (cast.ok()) {
+          return cast->make_array();
+        }
+        // The cast exists but some values cannot convert, e.g. numeric
+        // overflow or unparsable strings; null only the offending rows.
+        auto pieces = std::vector<std::shared_ptr<arrow::Array>>{};
+        auto failures = int64_t{0};
+        cast_valid_rows(source, options, pieces, failures);
+        warn_once(fmt::format("column `{}` has `{}` values that cannot "
+                              "convert to the table's `{}`; writing nulls "
+                              "for those rows",
+                              path, source->type()->ToString(),
+                              target->type()->ToString()),
+                  ctx);
+        return check(arrow::Concatenate(pieces));
       }
     }
   }
