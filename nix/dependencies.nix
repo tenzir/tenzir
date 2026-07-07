@@ -29,6 +29,8 @@
   robin-map,
   libunwind,
   xxhash,
+  onnxruntime,
+  sentencepiece,
   rabbitmq-c,
   libnats-c,
   yaml-cpp,
@@ -87,6 +89,8 @@ in
     libpcap
     libunwind
     libnats-c
+    onnxruntime
+    sentencepiece
     rabbitmq-c
     rdkafka
     cyrus_sasl
