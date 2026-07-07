@@ -914,9 +914,6 @@ public:
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (input.rows() == 0) {
-      co_return;
-    }
     if (not announced_) {
       // Pass monitor=false because the sender is a short-lived companion actor
       // that would trigger premature mark_done when destroyed.
@@ -1085,9 +1082,6 @@ public:
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(push);
-    if (input.rows() == 0) {
-      co_return;
-    }
     if (not announced_) {
       // Pass monitor=false because the sender is a short-lived companion actor
       // that would trigger premature mark_done when destroyed.

@@ -385,9 +385,6 @@ public:
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
     TENZIR_ASSERT(msb_);
-    if (not input or input->size() == 0) {
-      co_return;
-    }
     auto& dh = **dh_;
     auto const* begin = reinterpret_cast<char const*>(input->data());
     auto const* const end = begin + input->size();

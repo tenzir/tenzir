@@ -368,7 +368,7 @@ public:
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (failed_ or not input or input->size() == 0) {
+    if (failed_) {
       co_return;
     }
     append(as_bytes(input));
@@ -790,7 +790,7 @@ public:
 
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (failed_ or input.rows() == 0) {
+    if (failed_) {
       co_return;
     }
     if (input.schema().name() == "pcap.file_header") {

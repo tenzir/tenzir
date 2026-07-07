@@ -396,9 +396,6 @@ public:
     -> Task<void> override {
     TENZIR_ASSERT(msb_);
     TENZIR_ASSERT(dh_);
-    if (not input or input->size() == 0) {
-      co_return;
-    }
     auto& dh = **dh_;
     auto ready = series_builder::YieldReadyResult{};
     auto const* begin = reinterpret_cast<char const*>(input->data());

@@ -316,7 +316,7 @@ public:
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> override {
-    if (not chunk or chunk->size() == 0 or lifecycle_ == Lifecycle::done) {
+    if (lifecycle_ == Lifecycle::done) {
       co_return;
     }
     if (is_buffer_all()) {

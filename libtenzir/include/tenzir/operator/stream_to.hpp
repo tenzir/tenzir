@@ -82,9 +82,6 @@ public:
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> override {
-    if (not chunk or chunk->size() == 0) {
-      co_return;
-    }
     if (lifecycle_ == Lifecycle::done) {
       co_return;
     }

@@ -240,9 +240,6 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (input.rows() == 0) {
-      co_return;
-    }
     if (not start_time_) {
       start_time_ = std::chrono::steady_clock::now();
     }

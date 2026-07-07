@@ -276,7 +276,7 @@ public:
 
   auto process(table_slice input, Push<table_slice>&, OpCtx& ctx)
     -> Task<void> override {
-    if (input.rows() == 0 or not prep_) {
+    if (not prep_) {
       co_return;
     }
     auto slice = filter_input(std::move(input), ctx.dh());

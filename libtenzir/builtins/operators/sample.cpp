@@ -79,8 +79,7 @@ public:
       offset_ = 0;
       count_ = 0;
     }
-    if (input.rows() == 0
-        or (args_.max_samples and *args_.max_samples <= count_)) {
+    if (args_.max_samples and *args_.max_samples <= count_) {
       co_return;
     }
     count_ += input.rows();

@@ -372,9 +372,6 @@ public:
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (not input or input->size() == 0) {
-      co_return;
-    }
     if (args_.jobs > 0) {
       co_await process_parallel(std::move(input));
     } else {
@@ -782,9 +779,6 @@ public:
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (input.rows() == 0) {
-      co_return;
-    }
     if (args_.jobs > 0) {
       co_await write_input_queue_->enqueue(std::move(input));
       co_return;

@@ -913,9 +913,6 @@ public:
         .emit(provider_->as_session());
     }
     co_await flush_until(steady_clock::now(), push);
-    if (input.rows() == 0) {
-      co_return;
-    }
     if (impl_->cfg().frequency and not next_flush_) {
       arm_timer();
     }

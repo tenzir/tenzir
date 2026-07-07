@@ -220,11 +220,6 @@ public:
 
   auto process(chunk_ptr input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (not input or input->size() == 0) {
-      // Forward empty chunks as boundary markers.
-      co_await push(std::move(input));
-      co_return;
-    }
     in_buffer_.consume(std::move(input));
     // Feed all buffered input into the compressor.
     while (in_buffer_.size() > 0) {
@@ -308,11 +303,6 @@ public:
 
   auto process(chunk_ptr input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (not input or input->size() == 0) {
-      // Forward empty chunks as boundary markers.
-      co_await push(std::move(input));
-      co_return;
-    }
     received_input_ = true;
     in_buffer_.consume(std::move(input));
     // If the previous process() call ended with a finished decompressor

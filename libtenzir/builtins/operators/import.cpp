@@ -90,9 +90,6 @@ public:
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (input.rows() == 0) {
-      co_return;
-    }
     auto has_secrets = false;
     std::tie(has_secrets, input) = replace_secrets(std::move(input));
     if (has_secrets) {

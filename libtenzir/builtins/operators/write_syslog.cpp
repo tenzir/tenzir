@@ -49,10 +49,6 @@ public:
 
   auto process(table_slice slice, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (slice.rows() == 0) {
-      co_await push({});
-      co_return;
-    }
     auto& dh = ctx.dh();
     auto facility = detail::eval_as<uint64_type>(
       "facility", args_.facility, slice, dh, [&, warned = false] mutable {

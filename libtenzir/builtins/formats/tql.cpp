@@ -232,7 +232,7 @@ public:
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (done_ or not input or input->size() == 0) {
+    if (done_) {
       co_return;
     }
     // Append new data to buffer

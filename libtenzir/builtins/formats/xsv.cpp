@@ -882,9 +882,6 @@ public:
     if (failed_) {
       co_return;
     }
-    if (input.rows() == 0) {
-      co_return;
-    }
     if (not args_.no_header) {
       if (not schema_) {
         schema_ = input.schema();
@@ -1100,9 +1097,6 @@ public:
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
     if (not msb_) {
-      co_return;
-    }
-    if (not input or input->size() == 0) {
       co_return;
     }
     auto& dh = *dh_;

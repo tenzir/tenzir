@@ -143,9 +143,6 @@ public:
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (input.rows() == 0) {
-      co_return;
-    }
     // for ordered batching, on schema change, push the current buffer
     if (order_ == event_order::ordered and not buffers_.empty()
         and buffers_.begin()->first != input.schema()) {

@@ -117,9 +117,6 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (input.rows() == 0) {
-      co_return;
-    }
     // eval
     auto s = eval(selector_, input, ctx.dh());
     // validate type
