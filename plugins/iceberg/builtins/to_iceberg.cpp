@@ -28,6 +28,7 @@
 #include <arrow/compute/api_scalar.h>
 #include <arrow/compute/api_vector.h>
 #include <arrow/compute/cast.h>
+#include <arrow/util/byte_size.h>
 #include <folly/coro/UnboundedQueue.h>
 
 #include <string>
@@ -43,11 +44,22 @@ constexpr auto default_max_size = uint64_t{512} * 1024 * 1024;
 constexpr auto default_timeout = std::chrono::minutes{15};
 constexpr auto commit_max_attempts = 5;
 constexpr auto commit_initial_backoff = std::chrono::milliseconds{250};
-/// Every open partition holds an open Parquet writer with its own row-group
-/// buffer, so memory scales with this cap. When exceeded, the largest open
-/// file closes early: it frees the most buffered bytes, and it is the file
-/// that was going to rotate soonest anyway.
-constexpr auto max_open_partitions = size_t{64};
+/// Total in-memory bytes buffered across all partitions before the largest
+/// buffer closes into a data file early. The budget, not the partition
+/// count, bounds memory: with N partitions buffering, the size floor of
+/// early-closed files degrades gracefully as budget/N instead of cliffing
+/// at a fixed writer cap.
+constexpr auto default_buffer_size = uint64_t{1024} * 1024 * 1024;
+/// A partition graduates from buffering batches to a streaming Parquet
+/// writer once it accumulates this much data; hot partitions stream while
+/// cold ones only hold cheap Arrow buffers.
+constexpr auto stream_threshold = uint64_t{64} * 1024 * 1024;
+/// Every streaming writer holds Parquet row-group encoder state, so their
+/// count is capped separately from buffering partitions. When exceeded, the
+/// largest open file closes early: it frees the most encoder state, and it
+/// is the file that was going to rotate soonest anyway. Every file it
+/// produces already carries at least `stream_threshold` bytes.
+constexpr auto max_streaming_writers = size_t{64};
 
 TENZIR_ENUM(mode, create_append, create, append);
 
@@ -66,6 +78,7 @@ struct ToIcebergArgs {
   Option<located<secret>> token;
   Option<ast::expression> partition_by;
   Option<located<uint64_t>> max_size;
+  Option<located<uint64_t>> buffer_size;
   Option<located<duration>> timeout;
   location operator_location;
 };
@@ -253,11 +266,23 @@ public:
   };
   using Message = variant<RotateRequested>;
 
-  /// An open data file accepting one partition's rows.
-  struct PartitionWriter {
-    FileWriter writer;
+  /// Rows accumulating toward one partition's next data file. A partition
+  /// starts out buffering Arrow batches in memory — cheap to hold, so any
+  /// number of partitions may buffer under the shared `buffer_size` budget —
+  /// and graduates to a streaming Parquet writer once it accumulates
+  /// `stream_threshold` bytes.
+  struct OpenPartition {
+    /// Buffered batches, before graduation; empty once `writer` is engaged.
+    std::vector<std::shared_ptr<arrow::Array>> buffered;
+    int64_t buffered_bytes = 0;
+    /// The streaming writer, once the partition graduates.
+    Option<FileWriter> writer;
+    /// The partition tuple, for opening the data file at graduation or
+    /// close.
+    PartitionTuple partition;
     /// The human-readable partition path, for diagnostics.
     std::string path;
+    /// Bytes written to the open data file; 0 while buffering.
     int64_t bytes = 0;
     int64_t generation = 0;
     folly::CancellationSource timer_cancel;
@@ -501,8 +526,8 @@ public:
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
     auto msg = std::move(result).as<Message>();
     co_await co_match(msg, [&](RotateRequested& r) -> Task<void> {
-      auto it = writers_.find(r.partition);
-      if (it == writers_.end() or it->second.generation != r.generation) {
+      auto it = partitions_.find(r.partition);
+      if (it == partitions_.end() or it->second.generation != r.generation) {
         co_return;
       }
       co_await close_partition(r.partition, ctx);
@@ -656,9 +681,9 @@ private:
   /// input widen where the spec allows it (a metadata-only commit). Runs
   /// once per distinct input schema. The schema commit lands at the catalog
   /// *before* any data file carries the new columns, so Parquet files are
-  /// only ever stamped with field IDs the catalog has confirmed. When a concurrent writer updates the table
-  /// underneath us, the commit conflicts; we reload the table and re-derive
-  /// the diff against their changes.
+  /// only ever stamped with field IDs the catalog has confirmed. When a
+  /// concurrent writer updates the table underneath us, the commit conflicts;
+  /// we reload the table and re-derive the diff against their changes.
   auto ensure_schema(const table_slice& input, OpCtx& ctx) -> Task<void> {
     auto fingerprint = input.schema().make_fingerprint();
     if (evolved_schemas_.contains(fingerprint)) {
@@ -912,10 +937,10 @@ private:
     return result.MoveValueUnsafe();
   }
 
-  /// Writes one partition group of a projected batch to the partition's
-  /// open data file, opening it (and evicting the largest open file when at
-  /// the partition cap) as needed. Rotates and commits when the file
-  /// reaches `max_size`.
+  /// Buffers one partition group of a projected batch, graduating the
+  /// partition to a streaming writer at `stream_threshold`. Rotates and
+  /// commits when the open file reaches `max_size`, and closes the largest
+  /// buffers early when the shared buffer budget runs over.
   auto write_partition(const PartitionGroup& group,
                        const std::shared_ptr<arrow::StructArray>& batch,
                        OpCtx& ctx) -> Task<void> {
@@ -935,35 +960,15 @@ private:
       }
       sub = taken->make_array();
     }
-    auto it = writers_.find(group.key);
-    if (it == writers_.end()) {
-      if (writers_.size() >= max_open_partitions) {
-        warn_once(fmt::format("exceeded {} open partitions; closing the "
-                              "largest "
-                              "data file early, which may produce small files",
-                              max_open_partitions),
-                  ctx);
-        auto victim = std::ranges::max_element(writers_, std::less{},
-                                               [](const auto& entry) {
-                                                 return entry.second.bytes;
-                                               });
-        co_await close_partition(victim->first, ctx);
-        if (done_) {
-          co_return;
-        }
-      }
-      auto writer = co_await spawn_blocking(
-        [table = *table_, partition = group.partition]() mutable {
-          return table.new_file_writer(partition);
-        });
-      if (not writer) {
-        fail(writer.error(), "failed to open data file writer", ctx);
-        co_return;
-      }
-      it = writers_
+    auto it = partitions_.find(group.key);
+    if (it == partitions_.end()) {
+      it = partitions_
              .try_emplace(group.key,
-                          PartitionWriter{
-                            .writer = std::move(*writer),
+                          OpenPartition{
+                            .buffered = {},
+                            .buffered_bytes = 0,
+                            .writer = {},
+                            .partition = group.partition,
                             .path = group.path,
                             .bytes = 0,
                             .generation = ++writer_generation_,
@@ -972,20 +977,67 @@ private:
              .first;
       arm_rotation_timer(group.key, it->second, ctx);
     }
-    auto& partition_writer = it->second;
-    const auto rows = sub->length();
-    auto written = co_await spawn_blocking(
-      [writer = partition_writer.writer,
-       sub = std::move(sub)]() mutable -> Result<int64_t> {
-        auto c_array = ArrowArray{};
-        if (auto status = arrow::ExportArray(*sub, &c_array); not status.ok()) {
-          return std::unexpected{Error{
-            Error::Kind::permanent,
-            fmt::format("failed to export batch: {}", status.ToString()),
-          }};
+    auto& partition = it->second;
+    events_counter_.add(sub->length());
+    const auto max_size
+      = args_.max_size ? args_.max_size->inner : default_max_size;
+    if (partition.writer) {
+      auto pieces = std::vector<std::shared_ptr<arrow::Array>>{};
+      pieces.push_back(std::move(sub));
+      co_await stream_into(partition, std::move(pieces), ctx);
+      if (done_) {
+        co_return;
+      }
+    } else {
+      const auto sub_bytes
+        = static_cast<int64_t>(arrow::util::TotalBufferSize(*sub->data()));
+      partition.buffered.push_back(std::move(sub));
+      partition.buffered_bytes += sub_bytes;
+      total_buffered_ += sub_bytes;
+      if (std::cmp_greater_equal(partition.buffered_bytes,
+                                 std::min(stream_threshold, max_size))) {
+        co_await graduate(partition, ctx);
+        if (done_) {
+          co_return;
         }
-        if (auto result = writer.write(&c_array); not result) {
-          return std::unexpected{result.error()};
+      }
+    }
+    if (partition.writer
+        and std::cmp_greater_equal(partition.bytes, max_size)) {
+      co_await close_partition(group.key, ctx);
+      if (done_) {
+        co_return;
+      }
+      if (not checkpointing_) {
+        co_await commit_staged(pending_files_, ctx);
+        if (done_) {
+          co_return;
+        }
+      }
+    }
+    co_await enforce_buffer_budget(ctx);
+  }
+
+  /// Appends batches to the partition's streaming writer, tracking written
+  /// bytes.
+  auto stream_into(OpenPartition& partition,
+                   std::vector<std::shared_ptr<arrow::Array>> pieces,
+                   OpCtx& ctx) -> Task<void> {
+    auto written = co_await spawn_blocking(
+      [writer = *partition.writer,
+       pieces = std::move(pieces)]() mutable -> Result<int64_t> {
+        for (const auto& piece : pieces) {
+          auto c_array = ArrowArray{};
+          if (auto status = arrow::ExportArray(*piece, &c_array);
+              not status.ok()) {
+            return std::unexpected{Error{
+              Error::Kind::permanent,
+              fmt::format("failed to export batch: {}", status.ToString()),
+            }};
+          }
+          if (auto result = writer.write(&c_array); not result) {
+            return std::unexpected{result.error()};
+          }
         }
         return writer.bytes_written();
       });
@@ -993,35 +1045,131 @@ private:
       fail(written.error(), "failed to write data file", ctx);
       co_return;
     }
-    events_counter_.add(rows);
-    if (*written > partition_writer.bytes) {
-      bytes_counter_.add(*written - partition_writer.bytes);
+    if (*written > partition.bytes) {
+      bytes_counter_.add(*written - partition.bytes);
     }
-    partition_writer.bytes = *written;
-    const auto max_size
-      = args_.max_size ? args_.max_size->inner : default_max_size;
-    if (std::cmp_greater_equal(partition_writer.bytes, max_size)) {
-      co_await close_partition(group.key, ctx);
-      if (not done_ and not checkpointing_) {
-        co_await commit_staged(pending_files_, ctx);
+    partition.bytes = *written;
+  }
+
+  /// Opens the partition's data file and streams the buffered batches into
+  /// it. Only streaming writers hold Parquet encoder state, so at the cap
+  /// the largest open file closes first: it frees the most encoder state,
+  /// and it is the file that was going to rotate soonest anyway.
+  auto graduate(OpenPartition& partition, OpCtx& ctx) -> Task<void> {
+    if (streaming_count_ >= max_streaming_writers) {
+      warn_once(fmt::format("exceeded {} streaming partition writers; "
+                            "closing the largest data file early",
+                            max_streaming_writers),
+                ctx);
+      auto victim = partitions_.end();
+      for (auto it = partitions_.begin(); it != partitions_.end(); ++it) {
+        if (it->second.writer
+            and (victim == partitions_.end()
+                 or it->second.bytes > victim->second.bytes)) {
+          victim = it;
+        }
+      }
+      TENZIR_ASSERT(victim != partitions_.end());
+      co_await close_partition(victim->first, ctx);
+      if (done_) {
+        co_return;
+      }
+    }
+    auto writer = co_await spawn_blocking(
+      [table = *table_, partition = partition.partition]() mutable {
+        return table.new_file_writer(partition);
+      });
+    if (not writer) {
+      fail(writer.error(), "failed to open data file writer", ctx);
+      co_return;
+    }
+    partition.writer = std::move(*writer);
+    streaming_count_ += 1;
+    total_buffered_ -= partition.buffered_bytes;
+    partition.buffered_bytes = 0;
+    co_await stream_into(partition, std::move(partition.buffered), ctx);
+    partition.buffered = {};
+  }
+
+  /// Closes the largest buffering partitions into data files until the
+  /// total buffered bytes fit the budget again. Closed buffers ride along
+  /// with the next commit, so high partition cardinality cannot cause a
+  /// commit storm; the size floor of the resulting files degrades as
+  /// budget divided by the number of buffering partitions.
+  auto enforce_buffer_budget(OpCtx& ctx) -> Task<void> {
+    const auto budget
+      = args_.buffer_size ? args_.buffer_size->inner : default_buffer_size;
+    while (std::cmp_greater(total_buffered_, budget)) {
+      auto victim = partitions_.end();
+      for (auto it = partitions_.begin(); it != partitions_.end(); ++it) {
+        if (not it->second.writer
+            and (victim == partitions_.end()
+                 or it->second.buffered_bytes
+                      > victim->second.buffered_bytes)) {
+          victim = it;
+        }
+      }
+      if (victim == partitions_.end()) {
+        co_return;
+      }
+      warn_once(fmt::format("buffered partition data exceeds `buffer_size` "
+                            "({} bytes); closing the largest buffer early, "
+                            "which may produce small files",
+                            budget),
+                ctx);
+      co_await close_partition(victim->first, ctx);
+      if (done_) {
+        co_return;
       }
     }
   }
 
-  /// Closes the given partition's open data file and stages it for the next
-  /// commit. Does not commit itself, so an eviction cascade under high
-  /// partition cardinality cannot turn into a commit storm.
+  /// Closes the given partition into a data file and stages it for the next
+  /// commit: a buffering partition opens, writes, and finalizes its file in
+  /// one step, a streaming partition finishes its open writer. Does not
+  /// commit itself, so an eviction cascade under high partition cardinality
+  /// cannot turn into a commit storm.
   auto close_partition(const std::string& key, OpCtx& ctx) -> Task<void> {
-    auto node = writers_.extract(key);
+    auto node = partitions_.extract(key);
     if (node.empty() or done_) {
       co_return;
     }
-    auto& partition_writer = node.mapped();
-    partition_writer.timer_cancel.requestCancellation();
-    auto file
-      = co_await spawn_blocking([writer = partition_writer.writer]() mutable {
-          return writer.finish();
+    auto& partition = node.mapped();
+    partition.timer_cancel.requestCancellation();
+    auto closed = Option<Result<DataFile>>{};
+    if (partition.writer) {
+      streaming_count_ -= 1;
+      closed = co_await spawn_blocking([writer = *partition.writer]() mutable {
+        return writer.finish();
+      });
+    } else {
+      // The one-shot writer never outlives this call, so it does not count
+      // against the streaming cap.
+      total_buffered_ -= partition.buffered_bytes;
+      closed = co_await spawn_blocking(
+        [table = *table_, tuple = partition.partition,
+         pieces = std::move(partition.buffered)]() mutable -> Result<DataFile> {
+          auto writer = table.new_file_writer(tuple);
+          if (not writer) {
+            return std::unexpected{writer.error()};
+          }
+          for (const auto& piece : pieces) {
+            auto c_array = ArrowArray{};
+            if (auto status = arrow::ExportArray(*piece, &c_array);
+                not status.ok()) {
+              return std::unexpected{Error{
+                Error::Kind::permanent,
+                fmt::format("failed to export batch: {}", status.ToString()),
+              }};
+            }
+            if (auto result = writer->write(&c_array); not result) {
+              return std::unexpected{result.error()};
+            }
+          }
+          return writer->finish();
         });
+    }
+    auto& file = *closed;
     if (not file) {
       fail(file.error(), "failed to finalize data file", ctx);
       co_return;
@@ -1031,17 +1179,21 @@ private:
       fail(serialized.error(), "failed to persist data file handle", ctx);
       co_return;
     }
+    if (not partition.writer) {
+      bytes_counter_.add(serialized->file_size);
+    }
     pending_files_.push_back(StagedFile{
       .file = std::move(*file),
       .serialized = std::move(*serialized),
     });
   }
 
-  /// Closes all open data files, staging them for the next commit.
+  /// Closes all open partitions into data files, staging them for the next
+  /// commit.
   auto close_all(OpCtx& ctx) -> Task<void> {
     auto keys = std::vector<std::string>{};
-    keys.reserve(writers_.size());
-    for (const auto& [key, unused] : writers_) {
+    keys.reserve(partitions_.size());
+    for (const auto& [key, unused] : partitions_) {
       keys.push_back(key);
     }
     for (const auto& key : keys) {
@@ -1153,15 +1305,15 @@ private:
     }
   }
 
-  /// Spawns a timer that requests rotation of the partition's open file
-  /// after `timeout`. Cancelled when the file rotates for another reason.
-  auto arm_rotation_timer(const std::string& key, PartitionWriter& writer,
+  /// Spawns a timer that requests rotation of the partition after
+  /// `timeout`. Cancelled when the partition closes for another reason.
+  auto arm_rotation_timer(const std::string& key, OpenPartition& partition,
                           OpCtx& ctx) -> void {
     const auto timeout
       = args_.timeout ? args_.timeout->inner : duration{default_timeout};
     std::ignore = ctx.spawn_task(
-      [this, key, generation = writer.generation, timeout,
-       token = writer.timer_cancel.getToken()]() -> Task<void> {
+      [this, key, generation = partition.generation, timeout,
+       token = partition.timer_cancel.getToken()]() -> Task<void> {
         auto merged = folly::cancellation_token_merge(
           co_await folly::coro::co_current_cancellation_token, token);
         co_await folly::coro::co_withCancellation(merged, sleep_for(timeout));
@@ -1193,8 +1345,14 @@ private:
   std::shared_ptr<arrow::Schema> target_schema_;
   /// The parsed `partition_by` argument; empty when not partitioning.
   std::vector<PartitionField> partition_fields_;
-  /// Open data files, keyed by `PartitionGroup::key`.
-  std::unordered_map<std::string, PartitionWriter> writers_;
+  /// Open partitions, keyed by `PartitionGroup::key`.
+  std::unordered_map<std::string, OpenPartition> partitions_;
+  /// Total bytes buffered across all buffering partitions; bounded by the
+  /// `buffer_size` budget.
+  int64_t total_buffered_ = 0;
+  /// Number of partitions holding a streaming writer; bounded by
+  /// `max_streaming_writers`.
+  size_t streaming_count_ = 0;
   /// Closed data files not yet assigned to a checkpoint; the next commit
   /// picks them up.
   std::vector<StagedFile> pending_files_;
@@ -1279,6 +1437,7 @@ public:
     auto partition_by_arg
       = d.named("partition_by", &ToIcebergArgs::partition_by, "list<any>");
     auto max_size_arg = d.named("max_size", &ToIcebergArgs::max_size);
+    auto buffer_size_arg = d.named("buffer_size", &ToIcebergArgs::buffer_size);
     auto timeout_arg = d.named("timeout", &ToIcebergArgs::timeout);
     d.operator_location(&ToIcebergArgs::operator_location);
     d.validate([=](DescribeCtx& ctx) -> Empty {
@@ -1309,6 +1468,13 @@ public:
         if (max_size->inner == 0) {
           diagnostic::error("`max_size` must be a positive number")
             .primary(max_size->source)
+            .emit(ctx);
+        }
+      }
+      if (auto buffer_size = ctx.get(buffer_size_arg)) {
+        if (buffer_size->inner == 0) {
+          diagnostic::error("`buffer_size` must be a positive number")
+            .primary(buffer_size->source)
             .emit(ctx);
         }
       }
