@@ -1,0 +1,9 @@
+---
+timeout: 60
+---
+
+// threshold above the fixture score (0.9526) yields empty span lists; the
+// result lands in the custom `into` field.
+from {m: "alice visited berlin"}
+ai::entities field=m, model="inputs/gliner", labels=["name"], threshold=0.99,
+             into=pii

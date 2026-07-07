@@ -1,0 +1,7 @@
+---
+timeout: 60
+---
+
+// Null inputs yield null results; non-string inputs warn once and yield null.
+from {m: "ping"}, {m: null}, {m: 42}
+ai::entities field=m, model="inputs/gliner", labels=["word"]

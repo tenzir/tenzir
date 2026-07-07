@@ -1,0 +1,9 @@
+{
+  "model_type": "gliner",
+  "span_mode": "markerV0",
+  "max_width": 12,
+  "max_len": 2048,
+  "ent_token": "<<ENT>>",
+  "sep_token": "<<SEP>>",
+  "words_splitter_type": "whitespace"
+}
