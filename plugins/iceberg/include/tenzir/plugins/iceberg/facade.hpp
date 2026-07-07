@@ -319,8 +319,9 @@ public:
 
   /// Adds columns for fields of `schema` that the table does not have yet,
   /// recursing into nested records and lists of records (a metadata-only
-  /// schema-update commit). Existing columns are never modified; fields whose
-  /// type conflicts with an existing column stay untouched, and fields that
+  /// schema-update commit). Existing columns whose type must widen to hold
+  /// the incoming values are promoted where the spec allows it (int to long,
+  /// float to double); other type conflicts stay untouched, and fields that
   /// cannot be represented are skipped and reported in `dropped_fields` as
   /// `path: reason` strings. Returns the updated table, or `std::nullopt`
   /// when the table already covers every representable field. An error of

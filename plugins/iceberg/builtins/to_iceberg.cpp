@@ -626,11 +626,12 @@ private:
     set_table(std::move(*table), ctx);
   }
 
-  /// Evolves the table schema to cover fields the table does not have yet
-  /// (a metadata-only commit). Runs once per distinct input schema. The
-  /// schema commit lands at the catalog *before* any data file carries the
-  /// new columns, so Parquet files are only ever stamped with field IDs the
-  /// catalog has confirmed. When a concurrent writer updates the table
+  /// Evolves the table schema to cover the input: fields the table does not
+  /// have yet become new columns, and existing columns too narrow for the
+  /// input widen where the spec allows it (a metadata-only commit). Runs
+  /// once per distinct input schema. The schema commit lands at the catalog
+  /// *before* any data file carries the new columns, so Parquet files are
+  /// only ever stamped with field IDs the catalog has confirmed. When a concurrent writer updates the table
   /// underneath us, the commit conflicts; we reload the table and re-derive
   /// the diff against their changes.
   auto ensure_schema(const table_slice& input, OpCtx& ctx) -> Task<void> {

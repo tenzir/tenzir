@@ -211,6 +211,41 @@ struct SchemaAddition {
   std::shared_ptr<ice::Type> type;
 };
 
+/// An existing column to widen during schema evolution: the canonical dotted
+/// path of the column plus the promoted type. Only the spec's legal type
+/// promotions appear here; they are metadata-only and keep old data files
+/// readable.
+struct SchemaPromotion {
+  std::string path;
+  std::shared_ptr<ice::PrimitiveType> type;
+};
+
+/// Returns the widened Iceberg type when the table's existing column type can
+/// legally promote to cover the incoming Tenzir type, and nullptr otherwise.
+/// Widening the table beats casting the data down: an `int` column receiving
+/// Tenzir's int64 promotes to `long`, so no value can overflow at write time.
+/// Only int → long and float → double are reachable; Tenzir types never derive
+/// to the spec's other promotion source types.
+auto promoted_type(const tenzir::type& want, const ice::Type& have)
+  -> std::shared_ptr<ice::PrimitiveType> {
+  switch (have.type_id()) {
+    case ice::TypeId::kInt:
+      // duration and uint64 derive to long as well; see `derive_type`.
+      if (is<int64_type>(want) or is<uint64_type>(want)
+          or is<duration_type>(want)) {
+        return ice::int64();
+      }
+      return nullptr;
+    case ice::TypeId::kFloat:
+      if (is<double_type>(want)) {
+        return ice::float64();
+      }
+      return nullptr;
+    default:
+      return nullptr;
+  }
+}
+
 auto find_field(std::span<const ice::SchemaField> fields, std::string_view name)
   -> const ice::SchemaField* {
   for (const auto& field : fields) {
@@ -225,21 +260,23 @@ auto diff_schema(const record_type& want,
                  std::span<const ice::SchemaField> have,
                  const std::string& path,
                  std::vector<SchemaAddition>& additions,
+                 std::vector<SchemaPromotion>& promotions,
                  std::vector<std::string>& dropped) -> void;
 
-/// Recurses into nested types that exist on both sides. Shape or type
-/// conflicts stay untouched; the operator null-fills them at write time with
-/// a warning.
+/// Recurses into nested types that exist on both sides. Shape conflicts and
+/// type conflicts beyond the legal promotions stay untouched; the operator
+/// null-fills them at write time with a warning.
 auto diff_nested(const tenzir::type& want, const ice::Type& have,
                  const std::string& path,
                  std::vector<SchemaAddition>& additions,
+                 std::vector<SchemaPromotion>& promotions,
                  std::vector<std::string>& dropped) -> void {
   match(
     want,
     [&](const record_type& t) {
       if (have.type_id() == ice::TypeId::kStruct) {
         diff_schema(t, static_cast<const ice::StructType&>(have).fields(), path,
-                    additions, dropped);
+                    additions, promotions, dropped);
       }
     },
     [&](const list_type& t) {
@@ -248,19 +285,28 @@ auto diff_nested(const tenzir::type& want, const ice::Type& have,
         // `element` is the canonical path step for list elements; the schema
         // update resolves it to the element struct when used as a parent.
         diff_nested(t.value_type(), *element.type(), path + ".element",
-                    additions, dropped);
+                    additions, promotions, dropped);
       }
     },
-    [](const auto&) {});
+    [&](const auto&) {
+      if (auto promoted = promoted_type(want, have)) {
+        promotions.push_back(SchemaPromotion{
+          .path = path,
+          .type = std::move(promoted),
+        });
+      }
+    });
 }
 
-/// Collects fields of `want` that are missing from the existing fields,
+/// Collects fields of `want` that are missing from the existing fields and
+/// existing columns whose type must widen to hold the incoming values,
 /// recursing into records and lists of records present on both sides. `path`
 /// is the canonical dotted name of the enclosing struct, empty at the root.
 auto diff_schema(const record_type& want,
                  std::span<const ice::SchemaField> have,
                  const std::string& path,
                  std::vector<SchemaAddition>& additions,
+                 std::vector<SchemaPromotion>& promotions,
                  std::vector<std::string>& dropped) -> void {
   for (const auto& field : want.fields()) {
     auto field_path = path.empty() ? std::string{field.name}
@@ -278,7 +324,8 @@ auto diff_schema(const record_type& want,
       }
       continue;
     }
-    diff_nested(field.type, *existing->type(), field_path, additions, dropped);
+    diff_nested(field.type, *existing->type(), field_path, additions,
+                promotions, dropped);
   }
 }
 
@@ -918,8 +965,10 @@ auto Table::evolve_schema(const record_type& schema,
     return std::unexpected{translate_error(current.error())};
   }
   auto additions = std::vector<SchemaAddition>{};
-  diff_schema(schema, (*current)->fields(), "", additions, dropped_fields);
-  if (additions.empty()) {
+  auto promotions = std::vector<SchemaPromotion>{};
+  diff_schema(schema, (*current)->fields(), "", additions, promotions,
+              dropped_fields);
+  if (additions.empty() and promotions.empty()) {
     return std::optional<Table>{};
   }
   // A schema update is not retryable after a conflicting commit: replaying
@@ -941,6 +990,9 @@ auto Table::evolve_schema(const record_type& schema,
       (*update)->AddColumn(std::optional<std::string_view>{addition.parent},
                            addition.name, std::move(addition.type));
     }
+  }
+  for (auto& promotion : promotions) {
+    (*update)->UpdateColumn(promotion.path, std::move(promotion.type));
   }
   if (auto status = (*update)->Commit(); not status.has_value()) {
     return std::unexpected{translate_error(status.error())};
