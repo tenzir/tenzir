@@ -18,6 +18,16 @@ ai::entities field=message,
 Output: `pii` is a list of records `{text, label, start, end, score}` with
 UTF-8 byte offsets into the input string.
 
+Events are processed in batches of `batch_size` (default: 16) per inference
+call; inference runs on the blocking thread pool so pipeline scheduling is
+never stalled.
+
+## Metrics
+
+The operator emits `tenzir.metrics.ai_entities` records with `events`,
+`chars`, `entities`, `truncated`, `errors` counters and the cumulative
+`inference_time` per interval.
+
 ## Model setup
 
 Download a span-level GLiNER v1 model directory. The recommended model is

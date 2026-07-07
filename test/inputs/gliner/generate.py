@@ -50,35 +50,39 @@ spm.SentencePieceTrainer.train(
 # --- ONNX graph -------------------------------------------------------------
 i64, f32, b8 = TensorProto.INT64, TensorProto.FLOAT, TensorProto.BOOL
 inputs = [
-    helper.make_tensor_value_info("input_ids", i64, [1, "seq"]),
-    helper.make_tensor_value_info("attention_mask", i64, [1, "seq"]),
-    helper.make_tensor_value_info("words_mask", i64, [1, "seq"]),
-    helper.make_tensor_value_info("text_lengths", i64, [1, 1]),
-    helper.make_tensor_value_info("span_idx", i64, [1, "spans", 2]),
-    helper.make_tensor_value_info("span_mask", b8, [1, "spans"]),
+    helper.make_tensor_value_info("input_ids", i64, ["batch", "seq"]),
+    helper.make_tensor_value_info("attention_mask", i64, ["batch", "seq"]),
+    helper.make_tensor_value_info("words_mask", i64, ["batch", "seq"]),
+    helper.make_tensor_value_info("text_lengths", i64, ["batch", 1]),
+    helper.make_tensor_value_info("span_idx", i64, ["batch", "spans", 2]),
+    helper.make_tensor_value_info("span_mask", b8, ["batch", "spans"]),
 ]
 output = helper.make_tensor_value_info(
-    "logits", f32, [1, "words", MAX_WIDTH, "classes"]
+    "logits", f32, ["batch", "words", MAX_WIDTH, "classes"]
 )
 base = helper.make_tensor(
     "base_values", f32, [1, 1, MAX_WIDTH, 1], [HIGH] + [LOW] * (MAX_WIDTH - 1)
 )
-one = helper.make_tensor("const_one", i64, [1], [1])
-width = helper.make_tensor("const_width", i64, [1], [MAX_WIDTH])
-ent = helper.make_tensor("const_ent", i64, [], [ENT_ID])
 nodes = [
-    # T: (1,1) -> (1,)
-    helper.make_node("Reshape", ["text_lengths", "neg_one"], ["t_vec"]),
-    # C: count <<ENT>> occurrences in input_ids.
-    helper.make_node("Equal", ["input_ids", "ent_bcast"], ["is_ent"]),
+    # B: Shape(input_ids)[0:1]
+    helper.make_node("Shape", ["input_ids"], ["ids_shape"]),
+    helper.make_node("Slice", ["ids_shape", "zero", "one_v", "zero"], ["b_vec"]),
+    # T: Shape(span_idx)[1:2] / MAX_WIDTH (spans = words * MAX_WIDTH)
+    helper.make_node("Shape", ["span_idx"], ["span_shape"]),
+    helper.make_node("Slice", ["span_shape", "one_v", "two_v", "zero"], ["s_vec"]),
+    helper.make_node("Div", ["s_vec", "width_v"], ["t_vec"]),
+    # C: count <<ENT>> occurrences in the first row (the labels prompt is
+    # identical across the batch).
+    helper.make_node("Slice", ["input_ids", "zero", "one_v", "zero"], ["row0"]),
+    helper.make_node("Equal", ["row0", "ent_scalar"], ["is_ent"]),
     helper.make_node("Cast", ["is_ent"], ["is_ent_i64"], to=i64),
     helper.make_node(
-        "ReduceSum", ["is_ent_i64"], ["c_vec"], keepdims=0, noop_with_empty_axes=0
+        "ReduceSum", ["is_ent_i64"], ["c_raw"], keepdims=0, noop_with_empty_axes=0
     ),
-    helper.make_node("Reshape", ["c_vec", "neg_one"], ["c_vec1"]),
-    # target shape (1, T, 12, C)
+    helper.make_node("Reshape", ["c_raw", "neg_one"], ["c_vec"]),
+    # target shape (B, T, MAX_WIDTH, C)
     helper.make_node(
-        "Concat", ["const_one", "t_vec", "const_width", "c_vec1"], ["shape"], axis=0
+        "Concat", ["b_vec", "t_vec", "width_v", "c_vec"], ["shape"], axis=0
     ),
     helper.make_node("Expand", ["base_values", "shape"], ["logits"]),
 ]
@@ -89,10 +93,12 @@ graph = helper.make_graph(
     [output],
     initializer=[
         base,
-        one,
-        width,
+        helper.make_tensor("zero", i64, [1], [0]),
+        helper.make_tensor("one_v", i64, [1], [1]),
+        helper.make_tensor("two_v", i64, [1], [2]),
+        helper.make_tensor("width_v", i64, [1], [MAX_WIDTH]),
         helper.make_tensor("neg_one", i64, [1], [-1]),
-        helper.make_tensor("ent_bcast", i64, [], [ENT_ID]),
+        helper.make_tensor("ent_scalar", i64, [], [ENT_ID]),
     ],
 )
 model = helper.make_model(

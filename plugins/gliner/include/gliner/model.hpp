@@ -54,6 +54,12 @@ public:
   auto detect(std::string_view text, std::span<const std::string> labels,
               double threshold) -> caf::expected<DetectResult>;
 
+  /// Runs entity detection for a batch of texts in a single inference call.
+  /// Returns one result per input text, in order.
+  auto detect_batch(std::span<const std::string_view> texts,
+                    std::span<const std::string> labels, double threshold)
+    -> caf::expected<std::vector<DetectResult>>;
+
 private:
   struct Impl;
   explicit Model(std::unique_ptr<Impl> impl);

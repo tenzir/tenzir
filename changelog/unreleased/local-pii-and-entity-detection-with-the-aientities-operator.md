@@ -23,7 +23,9 @@ ai::entities field=message,
 The operator writes a list of `{text, label, start, end, score}` records with
 UTF-8 byte offsets into the field given by `into` (default: `ai.entities`).
 Labels are zero-shot: pass any entity types as plain strings, and tune
-sensitivity with `threshold` (default: `0.5`).
+sensitivity with `threshold` (default: `0.5`). Events are processed in
+batches (tunable via `batch_size`, default: `16`), and the operator reports
+throughput and latency via `tenzir.metrics.ai_entities` metrics.
 
 Point `model` at a directory containing a span-level GLiNER ONNX model. We
 recommend
