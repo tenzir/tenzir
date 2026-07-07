@@ -1,0 +1,10 @@
+// Append rows that omit the non-nullable `n` column. Its type (`String`) is
+// supported, but the column has a DEFAULT, so it may be omitted entirely and
+// ClickHouse fills the default instead of the event being dropped.
+from {id: 1}, {id: 2}
+to_clickhouse table="test_supported_default",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

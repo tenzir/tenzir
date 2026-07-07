@@ -1,0 +1,3 @@
+total=2
+default_n=2
+ok

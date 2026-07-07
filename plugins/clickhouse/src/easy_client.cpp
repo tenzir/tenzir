@@ -104,8 +104,12 @@ auto easy_client::remote_create_database(std::string_view database_name)
 auto easy_client::remote_fetch_schema_transformations(
   std::string_view table_name) -> failure_or<transformer_record*> {
   TENZIR_ASSERT_EXPENSIVE(not transformations_.contains(table_name));
-  auto query = Query{fmt::format("DESCRIBE TABLE {} "
-                                 "SETTINGS describe_compact_output=1",
+  // We deliberately do not use `describe_compact_output=1` here: the full
+  // output additionally reports each column's `default_type` (block[2]) and
+  // `default_expression` (block[3]), which we use to tolerate columns whose
+  // type we cannot represent as long as they have a default value.
+  auto query = Query{fmt::format("DESCRIBE TABLE {}  "
+                                 "SETTINGS describe_compact_output = 0",
                                  table_name)};
   auto transformations = transformer_record{};
   bool failed = false;
@@ -115,13 +119,49 @@ auto easy_client::remote_fetch_schema_transformations(
       auto name = block[0]->As<ColumnString>()->At(i);
       auto type_str = remove_non_significant_whitespace(
         block[1]->As<ColumnString>()->At(i));
+      // A non-empty `default_type` (`DEFAULT`/`MATERIALIZED`/`ALIAS`/
+      // `EPHEMERAL`) means the column is omittable: ClickHouse fills it in when
+      // we do not send it.
+      auto has_default = false;
+      auto is_generated = false;
+      if (block.GetColumnCount() >= 3) {
+        if (auto default_type = block[2]->As<ColumnString>()) {
+          const auto kind = default_type->At(i);
+          has_default = not kind.empty();
+          // `MATERIALIZED`/`ALIAS` columns are computed by ClickHouse, which
+          // rejects explicit values for them. They are never part of an insert.
+          is_generated = kind == "MATERIALIZED" or kind == "ALIAS";
+        }
+      }
+      // Generated columns are never sent, so we neither build nor store a
+      // transformer for them (none of its behavior would ever be used). We only
+      // remember the name to warn if the input provides a value.
+      if (is_generated) {
+        transformations.generated_columns.insert(std::string{name});
+        continue;
+      }
       path.push_back(name);
-      auto functions = make_functions_from_clickhouse(path, type_str, dh_);
+      // Collect diagnostics separately so we can suppress the "unsupported
+      // type" error when a default lets us tolerate the column.
+      auto collector = collecting_diagnostic_handler{};
+      auto functions
+        = make_functions_from_clickhouse(path, type_str, collector);
+      if (not functions and has_default) {
+        // Tolerate the unsupported column: it has a default and will be filled
+        // by ClickHouse as long as we never send it.
+        functions = make_default_only_transformer(std::string{type_str});
+      } else {
+        std::move(collector).forward_to(dh_);
+      }
       path.pop_back();
       if (not functions) {
         failed = true;
         return;
       }
+      // Preserve the omittable bit for supported transformers too, so the
+      // missing-column check below treats a defaulted column as optional and
+      // lets ClickHouse fill the default when the input omits it.
+      functions->has_default = has_default;
       transformations.transformations.try_emplace(std::string{name},
                                                   std::move(functions));
     }
@@ -365,6 +405,17 @@ auto easy_client::insert(const table_slice& slice, std::string_view table_name,
   for (const auto& [k, t, arr] : columns_of(slice)) {
     auto [trafo, idx] = transformations->transfrom_and_index_for(k);
     if (not trafo) {
+      if (transformations->generated_columns.contains(k)) {
+        // `MATERIALIZED`/`ALIAS` columns are computed by ClickHouse and reject
+        // explicit values. Ignore the provided value rather than sending it.
+        diagnostic::warning("column `{}` is a generated ClickHouse column and "
+                            "cannot be written",
+                            k)
+          .note("the provided value is ignored; ClickHouse computes the column")
+          .primary(args_.operator_location)
+          .emit(dh_);
+        continue;
+      }
       diagnostic::warning("column `{}` does not exist in the ClickHouse table",
                           k)
         .note("column will be dropped")
@@ -386,7 +437,9 @@ auto easy_client::insert(const table_slice& slice, std::string_view table_name,
     if (transformations->found_column[i]) {
       continue;
     }
-    if (kvp.second->clickhouse_nullable) {
+    // A nullable column or one with a ClickHouse default may be omitted
+    // entirely: the server fills it in, so its absence is not a reason to drop.
+    if (kvp.second->clickhouse_nullable or kvp.second->has_default) {
       continue;
     }
     diagnostic::warning(
@@ -400,6 +453,7 @@ auto easy_client::insert(const table_slice& slice, std::string_view table_name,
   for (const auto& [k, t, arr] : columns_of(slice)) {
     const auto [trafo, out_idx] = transformations->transfrom_and_index_for(k);
     if (not trafo) {
+      // Includes generated columns (not in the map); already reported above.
       continue;
     }
     path.push_back(k);
@@ -418,11 +472,19 @@ auto easy_client::insert(const table_slice& slice, std::string_view table_name,
     block.AppendColumn(std::string{k}, std::move(this_column));
   }
   // If no input column maps to a target column, the native block has no columns
-  // and cannot carry any rows -- there is nothing to insert, so skip the slice.
-  // Omitted columns are intentionally not materialized: ClickHouse fills them
-  // from their defaults (e.g. `{}` for a plain JSON column, or a `DEFAULT`
-  // expression), which an explicit value would override.
+  // and cannot carry any rows. We cannot materialize an all-defaults insert
+  // here: the clickhouse-cpp client would emit `INSERT INTO <t> () VALUES`,
+  // which is a syntax error. Rather than silently report success while writing
+  // nothing, warn that the surviving events are dropped.
   if (block.GetColumnCount() == 0) {
+    if (const auto rows = slice.rows() - dropcount; rows > 0) {
+      diagnostic::warning("no input column maps to a column in ClickHouse "
+                          "table "
+                          "`{}`",
+                          resolved_table_name)
+        .note("{} event(s) will be dropped", rows)
+        .emit(dh_);
+    }
     return {};
   }
   TENZIR_ASSERT(block.GetRowCount() == slice.rows() - dropcount,

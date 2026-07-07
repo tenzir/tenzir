@@ -1,0 +1,7 @@
+error: ClickHouse column `tag` has unsupported ClickHouse type `IPv4`
+ --> tests/operators/to_clickhouse/roundtrip/45_default_column_no_default_error.tql:8:1
+  |
+8 | to_clickhouse table="test_no_default_col",
+  | ^^^^^^^^^^^^^ 
+  |
+  = hint: use `IPv6` instead

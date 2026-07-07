@@ -54,6 +54,18 @@ void emit_missing_column_warning(const path_type& path,
     .note("column `{}` is missing", fmt::join(path, "."))
     .emit(dh);
 }
+
+/// Emitted when a non-nullable ClickHouse column receives `null` values. Such
+/// rows cannot be written and are dropped from the slice; `easy_client::insert`
+/// relies on the drop having been reported here.
+void emit_null_in_non_nullable_warning(const path_type& path,
+                                       diagnostic_handler& dh) {
+  diagnostic::warning("column `{}` contains `null`, but the ClickHouse column "
+                      "is not nullable",
+                      fmt::join(path, "."))
+    .note("affected events will be dropped")
+    .emit(dh);
+}
 } // namespace
 
 transformer_record::transformer_record(std::string clickhouse_typename,
@@ -91,6 +103,9 @@ auto transformer_record::update_dropmask(
   /// Update the dropmask based of the record itself. If we are here, we know
   /// that we cannot null every subcolumn, so a "top level" null requires us
   /// to drop the event.
+  if (array.null_count() > 0) {
+    emit_null_in_non_nullable_warning(path, dh);
+  }
   for (int64_t i = 0; i < array.length(); ++i) {
     if (array.IsNull(i)) {
       dropmask[i] = true;
@@ -472,6 +487,7 @@ struct transformer_from_trait : transformer {
     if (array.null_count() == 0) {
       return drop::none;
     }
+    emit_null_in_non_nullable_warning(path, dh);
     if (array.null_count() == array.length()) {
       return drop::all;
     }
@@ -768,6 +784,7 @@ struct transformer_datetime64 : transformer {
     if (not array.null_bitmap() or array.null_count() == 0) {
       return drop::none;
     }
+    emit_null_in_non_nullable_warning(path, dh);
     if (array.null_count() == array.length()) {
       return drop::all;
     }
@@ -1036,6 +1053,53 @@ struct transformer_array : transformer {
     }
     return std::make_shared<ColumnArray>(std::move(clickhouse_columns),
                                          std::move(clickhouse_offsets));
+  }
+};
+
+/// Transformer for an existing ClickHouse column whose type we cannot represent
+/// but which has a default value. It is only ever created at the top level (in
+/// `remote_fetch_schema_transformations`), because column defaults are a
+/// top-level concept in ClickHouse; it is never nested inside a `Tuple`/`Array`.
+///
+/// It reports itself as nullable so that, when the column is absent from the
+/// input, `easy_client::insert`'s missing-column check skips it and ClickHouse
+/// fills the default. `update_dropmask` is only ever invoked when the input
+/// *does* contain the column -- and since we cannot convert an unsupported
+/// type, its mere invocation means the event must be dropped.
+struct transformer_default_only : transformer {
+  explicit transformer_default_only(std::string clickhouse_typename)
+    : transformer{std::move(clickhouse_typename),
+                  /*clickhouse_nullable=*/true} {
+  }
+
+  auto update_dropmask(path_type& path, const tenzir::type& type,
+                       const arrow::Array& array, dropmask_ref dropmask,
+                       tenzir::diagnostic_handler& dh) -> drop override {
+    TENZIR_UNUSED(type, array, dropmask);
+    diagnostic::warning("column `{}` has an unsupported ClickHouse type `{}` "
+                        "and cannot be "
+                        "written",
+                        fmt::join(path, "."), clickhouse_typename)
+      .note("the column has a default value and must be omitted from the input")
+      .note("event will be dropped")
+      .emit(dh);
+    return drop::all;
+  }
+
+  auto create_null_column(size_t n) const -> ::clickhouse::ColumnRef override {
+    // Unreachable: an absent column is never materialized at the top level.
+    TENZIR_UNUSED(n);
+    return nullptr;
+  }
+
+  auto create_column(path_type& path, const tenzir::type& type,
+                     const arrow::Array& array, dropmask_cref dropmask,
+                     int64_t dropcount, tenzir::diagnostic_handler& dh)
+    -> ::clickhouse::ColumnRef override {
+    // Unreachable: if the column is present, `update_dropmask` returned
+    // `drop::all` and `insert` skips the slice before creating any columns.
+    TENZIR_UNUSED(path, type, array, dropmask, dropcount, dh);
+    return nullptr;
   }
 };
 
@@ -1321,6 +1385,12 @@ auto make_functions_from_clickhouse(path_type& path,
   }
   emit_unsupported_clickhouse_type_diagnostic(path, clickhouse_typename, dh);
   return nullptr;
+}
+
+auto make_default_only_transformer(std::string clickhouse_typename)
+  -> std::unique_ptr<transformer> {
+  return std::make_unique<transformer_default_only>(
+    std::move(clickhouse_typename));
 }
 
 } // namespace tenzir::plugins::clickhouse

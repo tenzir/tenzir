@@ -1,0 +1,8 @@
+// Providing the defaulted `n` column writes the given value as usual.
+from {id: 3, n: "x"}
+to_clickhouse table="test_supported_default",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

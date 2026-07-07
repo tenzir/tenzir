@@ -1,0 +1,9 @@
+// Providing the unsupported-typed `tag` column in the input cannot be honored:
+// the event is dropped with a warning (its row is not inserted).
+from {id: 10, tag: "9.9.9.9"}, {id: 11, tag: "8.8.8.8"}
+to_clickhouse table="test_default_col",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

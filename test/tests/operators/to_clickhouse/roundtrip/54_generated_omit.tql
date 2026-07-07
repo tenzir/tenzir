@@ -1,0 +1,9 @@
+// Omitting the generated `m` (MATERIALIZED) and `al` (ALIAS) columns lets
+// ClickHouse compute them; the append succeeds without warnings.
+from {id: 10}
+to_clickhouse table="test_generated",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"
