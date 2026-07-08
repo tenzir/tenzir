@@ -49,9 +49,6 @@ public:
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (not input or input->size() == 0) {
-      co_return;
-    }
     append(input);
     while (true) {
       if (state_ == State::magic) {
@@ -274,9 +271,6 @@ public:
 
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (input.rows() == 0) {
-      co_return;
-    }
     auto payload = serialize(std::move(input), ctx.dh());
     if (not payload) {
       co_return;

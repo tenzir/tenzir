@@ -61,9 +61,6 @@ public:
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (not input or input->size() == 0) {
-      co_return;
-    }
     buffer_.append(reinterpret_cast<char const*>(input->data()), input->size());
     match_and_consume(/*has_finished=*/false, ctx);
     co_await pusher_.push(builder_.yield_ready(type_name), push);

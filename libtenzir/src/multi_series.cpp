@@ -54,6 +54,7 @@ auto split_multi_series(std::span<const multi_series> input,
     // Split everything to the shortest length.
     for (auto i = size_t{0}; i < input.size(); ++i) {
       auto& [part, start] = positions[i];
+      TENZIR_ASSERT(input[i].part(part).array);
       output[i] = input[i].part(part).slice(start, start + shortest_length);
       // Adjust the position.
       auto length = input[i].part(part).length() - start;

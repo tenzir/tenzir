@@ -47,7 +47,20 @@ public:
   }
 
   virtual auto operator()(T output) -> Task<void> override {
-    return push_(std::move(output));
+    // Never forward empty output downstream. Zero-row slices and null/empty
+    // chunks carry no data, and evaluating expressions over an empty slice has
+    // historically crashed. Dropping here means no operator ever receives an
+    // empty batch.
+    if constexpr (std::same_as<T, table_slice>) {
+      if (output.rows() == 0) {
+        co_return;
+      }
+    } else if constexpr (std::same_as<T, chunk_ptr>) {
+      if (not output or output->size() == 0) {
+        co_return;
+      }
+    }
+    co_await push_(std::move(output));
   }
 
 private:

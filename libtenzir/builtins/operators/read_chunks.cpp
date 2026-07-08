@@ -27,9 +27,6 @@ public:
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
-    if (input->size() == 0) {
-      co_return;
-    }
     builder_.record().field("data", as_bytes(input));
     co_await pusher_.push(builder_.yield_ready(type_name), push);
   }

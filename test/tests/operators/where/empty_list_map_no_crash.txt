@@ -1,0 +1,57 @@
+{
+  answers: [
+    {
+      type: "A",
+    },
+  ],
+  code: "NOERROR",
+  rcodes: {
+    NOERROR: {
+      id: 0,
+    },
+    SERVFAIL: {
+      id: 2,
+    },
+    NXDOMAIN: {
+      id: 3,
+    },
+  },
+  types: [
+    "A",
+  ],
+  rcode_id: 0,
+}
+{
+  answers: [],
+  code: "SERVFAIL",
+  rcodes: {
+    NOERROR: {
+      id: 0,
+    },
+    SERVFAIL: {
+      id: 2,
+    },
+    NXDOMAIN: {
+      id: 3,
+    },
+  },
+  types: [],
+  rcode_id: 2,
+}
+{
+  answers: [],
+  code: "NXDOMAIN",
+  rcodes: {
+    NOERROR: {
+      id: 0,
+    },
+    SERVFAIL: {
+      id: 2,
+    },
+    NXDOMAIN: {
+      id: 3,
+    },
+  },
+  types: [],
+  rcode_id: 3,
+}

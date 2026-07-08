@@ -294,7 +294,7 @@ public:
   }
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
-    if (lifecycle_ != Lifecycle::running or not chunk or chunk->size() == 0) {
+    if (lifecycle_ != Lifecycle::running) {
       co_return;
     }
     co_await message_queue_->enqueue(Payload{std::move(chunk)});

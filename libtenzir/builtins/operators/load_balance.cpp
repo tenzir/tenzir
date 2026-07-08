@@ -229,9 +229,6 @@ public:
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    if (input.rows() == 0) {
-      co_return;
-    }
     auto const rows = input.rows();
     while (active_workers_ > 0) {
       auto worker = select_worker();

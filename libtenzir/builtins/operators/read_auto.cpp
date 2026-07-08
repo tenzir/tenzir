@@ -88,9 +88,6 @@ public:
       co_await push_to_selected(std::move(input), ctx);
       co_return;
     }
-    if (input->size() == 0) {
-      co_return;
-    }
     seen_bytes_ = true;
     buffered_.push_back(input);
     if (probe_.size() < args_.max_probe_bytes) {

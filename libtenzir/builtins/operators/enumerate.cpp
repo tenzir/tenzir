@@ -129,9 +129,6 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (input.rows() == 0) {
-      co_return;
-    }
     auto builder = int64_type::make_arrow_builder(arrow_memory_pool());
     check(builder->Reserve(detail::narrow_cast<int64_t>(input.rows())));
     if (args_.group) {
