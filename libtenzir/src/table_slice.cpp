@@ -625,7 +625,7 @@ auto table_slice::try_from(
     return std::unexpected(valid.error());
   }
   auto valid_schema
-    = create_schema_if_not_exist(record_batch, std::move(schema));
+    = create_schema_if_not_exist(converted_batch, std::move(schema));
   auto builder = flatbuffers::FlatBufferBuilder{};
   return create_table_slice(converted_batch, builder, std::move(valid_schema),
                             serialize);
