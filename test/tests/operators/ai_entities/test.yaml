@@ -1,0 +1,5 @@
+suite: ai-entities
+requires:
+  operators: [ai::entities]
+skip:
+  on: capability-unavailable

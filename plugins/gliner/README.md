@@ -57,6 +57,9 @@ score lower.
 ONNX Runtime and SentencePiece. The plugin disables itself with a warning
 when either is missing. Both are provided by the Nix devshell.
 
+Static builds do not include this plugin: neither ONNX Runtime nor
+SentencePiece currently build in `pkgsStatic`.
+
 ## ASan note
 
 In sanitizer builds, set `ASAN_OPTIONS=detect_container_overflow=0` when
