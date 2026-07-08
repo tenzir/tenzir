@@ -1,0 +1,6 @@
+error: `connect_timeout` must be positive
+ --> tests/operators/to_splunk_validation/s2s_connect_timeout_zero.tql:7:27
+  |
+7 |           connect_timeout=0s
+  |                           ^^ 
+  |

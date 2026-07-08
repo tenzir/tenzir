@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from {message: "hello"}
+to_splunk "https://127.0.0.1:9997",
+          mode="s2s"

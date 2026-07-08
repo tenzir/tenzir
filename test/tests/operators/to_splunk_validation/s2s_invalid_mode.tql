@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+to_splunk "127.0.0.1:9997",
+          mode="tcp"

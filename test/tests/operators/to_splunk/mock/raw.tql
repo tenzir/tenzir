@@ -1,0 +1,17 @@
+---
+assertions:
+  fixtures:
+    splunk_s2s_mock:
+      count: 2
+      events:
+        - "MetaData:Sourcetype": "sourcetype::linux_secure"
+          "_raw": "Jul  8 12:00:00 host sshd[1]: Accepted publickey for alice"
+        - "_raw": "Jul  8 12:00:01 host sshd[2]: Failed password for bob"
+---
+
+from {line: "Jul  8 12:00:00 host sshd[1]: Accepted publickey for alice"},
+     {line: "Jul  8 12:00:01 host sshd[2]: Failed password for bob"}
+to_splunk env("SPLUNK_S2S_MOCK_URL"),
+          mode="s2s",
+          raw=line,
+          sourcetype="linux_secure"

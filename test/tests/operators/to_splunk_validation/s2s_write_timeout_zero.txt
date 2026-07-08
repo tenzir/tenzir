@@ -1,0 +1,6 @@
+error: `write_timeout` must be positive
+ --> tests/operators/to_splunk_validation/s2s_write_timeout_zero.tql:7:25
+  |
+7 |           write_timeout=0s
+  |                         ^^ 
+  |

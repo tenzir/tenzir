@@ -1,0 +1,6 @@
+error: `batch_size` must be positive
+ --> tests/operators/to_splunk_validation/s2s_batch_size_zero.tql:7:22
+  |
+7 |           batch_size=0
+  |                      ^ 
+  |

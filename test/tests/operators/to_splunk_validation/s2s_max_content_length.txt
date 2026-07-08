@@ -1,0 +1,6 @@
+error: `max_content_length` is not supported with `mode="s2s"`
+ --> tests/operators/to_splunk_validation/s2s_max_content_length.tql:7:30
+  |
+7 |           max_content_length=1000
+  |                              ^^^^ 
+  |

@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+to_splunk "127.0.0.1:9997",
+          mode="s2s",
+          connect_timeout=0s

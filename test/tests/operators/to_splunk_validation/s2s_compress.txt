@@ -1,0 +1,6 @@
+error: `compress` is not supported with `mode="s2s"`
+ --> tests/operators/to_splunk_validation/s2s_compress.tql:7:20
+  |
+7 |           compress=true
+  |                    ^^^^ 
+  |

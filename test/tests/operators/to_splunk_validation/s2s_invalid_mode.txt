@@ -1,0 +1,6 @@
+error: `mode` must be `"hec"` or `"s2s"`
+ --> tests/operators/to_splunk_validation/s2s_invalid_mode.tql:6:16
+  |
+6 |           mode="tcp"
+  |                ^^^^^ 
+  |

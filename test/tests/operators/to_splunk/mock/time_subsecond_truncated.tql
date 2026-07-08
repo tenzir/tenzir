@@ -1,0 +1,15 @@
+---
+assertions:
+  fixtures:
+    splunk_s2s_mock:
+      count: 1
+      events:
+        - "_time": "1767225600"
+---
+
+// S2S ignores fractional `_time` values, so sub-second precision is truncated
+// to whole epoch seconds.
+from {message: "subsecond-event", ts: 2026-01-01T00:00:00.987654}
+to_splunk env("SPLUNK_S2S_MOCK_URL"),
+          mode="s2s",
+          time=ts

@@ -1,0 +1,13 @@
+---
+assertions:
+  fixtures:
+    splunk_s2s_mock:
+      count: 1
+      events:
+        - "_meta": "user::alice code::200 tags::a tags::b"
+---
+
+from {message: "fields-event"}
+to_splunk env("SPLUNK_S2S_MOCK_URL"),
+          mode="s2s",
+          fields={user: "alice", code: "200", tags: ["a", "b"]}

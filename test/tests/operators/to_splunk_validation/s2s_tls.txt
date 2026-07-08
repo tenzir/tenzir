@@ -1,0 +1,6 @@
+error: `tls` is not yet supported with `mode="s2s"`
+ --> tests/operators/to_splunk_validation/s2s_tls.tql:8:15
+  |
+8 |           tls=true
+  |               ^^^^ 
+  |

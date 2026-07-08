@@ -1,0 +1,26 @@
+---
+assertions:
+  fixtures:
+    splunk_s2s_mock:
+      count: 2
+      contains:
+        - hello-s2s
+        - world-s2s
+      events:
+        - "_MetaData:Index": main
+          "MetaData:Host": "host::edge-01"
+          "MetaData:Source": "source::tenzir-test"
+          "MetaData:Sourcetype": "sourcetype::tenzir:test:s2s"
+          "_done": "_done"
+          "_raw": '{"message":"hello-s2s","seq":1}'
+        - "_raw": '{"message":"world-s2s","seq":2}'
+---
+
+from {message: "hello-s2s", seq: 1},
+     {message: "world-s2s", seq: 2}
+to_splunk env("SPLUNK_S2S_MOCK_URL"),
+          mode="s2s",
+          index="main",
+          host="edge-01",
+          source="tenzir-test",
+          sourcetype="tenzir:test:s2s"

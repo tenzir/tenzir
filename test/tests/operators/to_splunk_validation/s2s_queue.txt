@@ -1,0 +1,6 @@
+error: `queue` is not supported with `mode="s2s"`
+ --> tests/operators/to_splunk_validation/s2s_queue.tql:7:17
+  |
+7 |           queue="indexing"
+  |                 ^^^^^^^^^^ 
+  |

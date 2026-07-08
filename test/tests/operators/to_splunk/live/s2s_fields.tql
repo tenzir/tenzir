@@ -1,0 +1,17 @@
+---
+assertions:
+  fixtures:
+    splunk:
+      count: 1
+      search: 'search index="main" source="tenzir-test-s2s-fields" tenant::acme wins::regionals'
+      contains:
+        - s2s-fields-event
+---
+
+from {message: "s2s-fields-event", tenant_id: "acme", win: "regionals"}
+to_splunk env("SPLUNK_S2S_URL"),
+          mode="s2s",
+          event={message: message},
+          fields={tenant: tenant_id, wins: [win]},
+          source="tenzir-test-s2s-fields",
+          index=env("SPLUNK_INDEX")

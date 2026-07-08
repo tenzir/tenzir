@@ -1,0 +1,6 @@
+error: `hec_token` is required
+ --> tests/operators/to_splunk_validation/error_missing_hec_token.tql:5:1
+  |
+5 | to_splunk "https://127.0.0.1:8088"
+  | ^^^^^^^^^ 
+  |

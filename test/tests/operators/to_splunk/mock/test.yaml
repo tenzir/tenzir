@@ -1,0 +1,2 @@
+fixtures: [splunk_s2s_mock]
+timeout: 60

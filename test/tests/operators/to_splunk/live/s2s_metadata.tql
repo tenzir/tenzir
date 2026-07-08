@@ -1,0 +1,22 @@
+---
+assertions:
+  fixtures:
+    splunk:
+      count: 2
+      host: tenzir-s2s-host
+      source: tenzir-test-s2s-metadata
+      sourcetype: tenzir:test:s2s:metadata
+      contains:
+        - alpha-s2s-metadata
+        - beta-s2s-metadata
+---
+
+from {message: "alpha-s2s-metadata", metadata: "ignored", seq: 1},
+     {message: "beta-s2s-metadata", metadata: "ignored", seq: 2}
+to_splunk env("SPLUNK_S2S_URL"),
+          mode="s2s",
+          event={message: message, seq: seq},
+          host="tenzir-s2s-host",
+          source="tenzir-test-s2s-metadata",
+          sourcetype="tenzir:test:s2s:metadata",
+          index=env("SPLUNK_INDEX")

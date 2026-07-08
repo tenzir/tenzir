@@ -10,6 +10,8 @@ Environment variables yielded:
 - SPLUNK_MGMT_URL: HTTPS management API base URL.
 - SPLUNK_ADMIN_USER: Management API username.
 - SPLUNK_ADMIN_PASSWORD: Management API password.
+- SPLUNK_S2S_URL: `<host>:<port>` endpoint of the cooked (S2S) TCP receiver.
+- SPLUNK_S2S_PORT: host port of the cooked (S2S) TCP receiver.
 
 Assertions payload accepted under ``assertions.fixtures.splunk``:
 - count: optional number of search results expected.
@@ -118,6 +120,7 @@ def _start_splunk(
     web_port: int,
     hec_port: int,
     mgmt_port: int,
+    s2s_port: int,
     defaults_path: Path,
 ) -> ManagedContainer:
     container_name = f"tenzir-test-splunk-{uuid.uuid4().hex[:8]}"
@@ -133,6 +136,8 @@ def _start_splunk(
         f"{hec_port}:8088",
         "-p",
         f"{mgmt_port}:8089",
+        "-p",
+        f"{s2s_port}:9997",
         "-v",
         f"{defaults_path}:/tmp/defaults/default.yml:ro",
         "-e",
@@ -196,6 +201,47 @@ def _wait_for_splunk(web_port: int, hec_port: int, mgmt_port: int) -> None:
     except ContainerReadinessTimeout as exc:
         raise RuntimeError(str(exc)) from exc
     logger.info("Splunk is ready")
+
+
+def _enable_s2s_receiver(mgmt_port: int) -> None:
+    """Enables the cooked (S2S) TCP input on container port 9997.
+
+    Uses the REST API; the in-container `splunk enable listen` CLI fails with
+    permission errors under `docker exec`. The splunk/splunk image usually
+    provisions a `splunktcp://9997` input already, in which case creating it
+    fails with "already exists" and we only ensure that it is enabled.
+    """
+
+    def _post(url: str, params: dict[str, str]) -> None:
+        request = urllib.request.Request(
+            url,
+            data=urllib.parse.urlencode(params).encode(),
+            headers={
+                "Authorization": _basic_auth_header(),
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            method="POST",
+        )
+        _urlopen(request, timeout=10)
+
+    base_url = f"https://127.0.0.1:{mgmt_port}/services/data/inputs/tcp/cooked"
+    try:
+        _post(base_url, {"name": "9997", "disabled": "0"})
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        if "already exists" not in detail and exc.code != 409:
+            raise RuntimeError(
+                f"failed to enable Splunk S2S receiver: HTTP {exc.code}: {detail}"
+            ) from exc
+        try:
+            _post(f"{base_url}/9997", {"disabled": "0"})
+        except urllib.error.HTTPError as update_exc:
+            update_detail = update_exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(
+                "failed to enable existing Splunk S2S receiver: "
+                f"HTTP {update_exc.code}: {update_detail}"
+            ) from update_exc
+    logger.info("Splunk S2S (cooked) receiver enabled on port 9997")
 
 
 def _quote_search_value(value: str) -> str:
@@ -322,6 +368,7 @@ def splunk() -> FixtureHandle:
     hec_port = find_free_port()
     mgmt_port = find_free_port()
     web_port = find_free_port()
+    s2s_port = find_free_port()
     container: ManagedContainer | None = None
     temp_dir = Path(tempfile.mkdtemp(prefix="splunk-fixture-"))
     defaults_path = temp_dir / "default.yml"
@@ -345,9 +392,11 @@ def splunk() -> FixtureHandle:
             web_port=web_port,
             hec_port=hec_port,
             mgmt_port=mgmt_port,
+            s2s_port=s2s_port,
             defaults_path=defaults_path,
         )
         _wait_for_splunk(web_port, hec_port, mgmt_port)
+        _enable_s2s_receiver(mgmt_port)
     except Exception:
         if container is not None:
             _stop_splunk(container)
@@ -383,6 +432,8 @@ def splunk() -> FixtureHandle:
             "SPLUNK_MGMT_URL": f"https://127.0.0.1:{mgmt_port}",
             "SPLUNK_ADMIN_USER": SPLUNK_USER,
             "SPLUNK_ADMIN_PASSWORD": SPLUNK_PASSWORD,
+            "SPLUNK_S2S_URL": f"127.0.0.1:{s2s_port}",
+            "SPLUNK_S2S_PORT": str(s2s_port),
         },
         teardown=_teardown,
         hooks={"assert_test": _assert_test},

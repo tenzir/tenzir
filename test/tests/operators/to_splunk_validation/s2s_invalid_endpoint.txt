@@ -1,0 +1,7 @@
+error: invalid S2S endpoint
+ --> tests/operators/to_splunk_validation/s2s_invalid_endpoint.tql:6:11
+  |
+6 | to_splunk "https://127.0.0.1:9997",
+  |           ^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |
+  = hint: syntax: <host>:<port> (no URL scheme)

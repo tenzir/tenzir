@@ -28,6 +28,7 @@ from . import openai_responses  # noqa: F401
 from . import s3  # noqa: F401
 from . import sentinelone  # noqa: F401
 from . import splunk  # noqa: F401
+from . import splunk_s2s_mock  # noqa: F401
 from . import platform_ws  # noqa: F401
 from . import prometheus  # noqa: F401
 from . import prometheus_remote_write_mock  # noqa: F401
@@ -75,6 +76,7 @@ __all__ = [
     "s3_proxy",
     "sentinelone",
     "splunk",
+    "splunk_s2s_mock",
     "tcp",
     "uds",
     "udp",

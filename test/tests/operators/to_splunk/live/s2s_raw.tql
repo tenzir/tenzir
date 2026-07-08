@@ -1,0 +1,22 @@
+---
+assertions:
+  fixtures:
+    splunk:
+      count: 2
+      source: tenzir-test-s2s-raw
+      sourcetype: tenzir:test:s2s:raw
+      contains:
+        - s2s-raw-alpha
+        - s2s-raw-beta
+---
+
+from {message: "s2s-raw-alpha"},
+     {message: "s2s-raw-beta"}
+timestamp = now().format_time("%Y-%m-%d %H:%M:%S")
+message = timestamp + " " + message
+to_splunk env("SPLUNK_S2S_URL"),
+          mode="s2s",
+          raw=message,
+          source="tenzir-test-s2s-raw",
+          sourcetype="tenzir:test:s2s:raw",
+          index=env("SPLUNK_INDEX")

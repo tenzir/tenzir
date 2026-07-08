@@ -1,0 +1,13 @@
+---
+assertions:
+  fixtures:
+    splunk_s2s_mock:
+      count: 1
+      events:
+        - "_raw": '{"message":"with-nulls","missing":null}'
+---
+
+from {message: "with-nulls", missing: null}
+to_splunk env("SPLUNK_S2S_MOCK_URL"),
+          mode="s2s",
+          include_nulls=true

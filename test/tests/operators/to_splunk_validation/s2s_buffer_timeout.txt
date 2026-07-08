@@ -1,0 +1,6 @@
+error: `buffer_timeout` is not supported with `mode="s2s"`
+ --> tests/operators/to_splunk_validation/s2s_buffer_timeout.tql:7:26
+  |
+7 |           buffer_timeout=5s
+  |                          ^^ 
+  |

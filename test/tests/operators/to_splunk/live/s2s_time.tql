@@ -1,0 +1,20 @@
+---
+assertions:
+  fixtures:
+    splunk:
+      count: 1
+      source: tenzir-test-s2s-time
+      sourcetype: tenzir:test:s2s:time
+      earliest_time: "1735689599"
+      latest_time: "1735689601"
+      contains:
+        - s2s-time-event
+---
+
+from {message: "s2s-time-event", ts: 2025-01-01T00:00:00Z}
+to_splunk env("SPLUNK_S2S_URL"),
+          mode="s2s",
+          time=ts,
+          source="tenzir-test-s2s-time",
+          sourcetype="tenzir:test:s2s:time",
+          index=env("SPLUNK_INDEX")

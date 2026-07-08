@@ -1,0 +1,19 @@
+---
+assertions:
+  fixtures:
+    splunk:
+      count: 2
+      source: tenzir-test-s2s-basic
+      sourcetype: tenzir:test:s2s:basic
+      contains:
+        - hello-s2s-basic
+        - world-s2s-basic
+---
+
+from {message: "hello-s2s-basic", seq: 1},
+     {message: "world-s2s-basic", seq: 2}
+to_splunk env("SPLUNK_S2S_URL"),
+          mode="s2s",
+          source="tenzir-test-s2s-basic",
+          sourcetype="tenzir:test:s2s:basic",
+          index=env("SPLUNK_INDEX")

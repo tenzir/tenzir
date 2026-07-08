@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {message: "hello"}
+to_splunk "127.0.0.1:9997",
+          mode="s2s",
+          tls=true

@@ -1,0 +1,14 @@
+---
+assertions:
+  fixtures:
+    splunk_s2s_mock:
+      count: 1
+      events:
+        - "_time": "1767225600"
+---
+
+from {message: "timed-event", ts: 2026-01-01T00:00:00}
+to_splunk env("SPLUNK_S2S_MOCK_URL"),
+          mode="s2s",
+          event={message: message},
+          time=ts

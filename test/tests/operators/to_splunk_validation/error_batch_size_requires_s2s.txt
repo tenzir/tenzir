@@ -1,0 +1,6 @@
+error: `batch_size` requires `mode="s2s"`
+ --> tests/operators/to_splunk_validation/error_batch_size_requires_s2s.tql:7:22
+  |
+7 |           batch_size=100
+  |                      ^^^ 
+  |
