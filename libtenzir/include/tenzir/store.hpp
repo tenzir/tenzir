@@ -16,6 +16,7 @@
 #include "tenzir/table_slice.hpp"
 #include "tenzir/uuid.hpp"
 
+#include <caf/message_priority.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <variant>
@@ -131,11 +132,13 @@ struct default_passive_store_state {
 /// @param filesystem A handle to the filesystem actor.
 /// @param path The path to load the store from.
 /// @param store_type The unique store identifier of the used store plugin.
+/// @param priority The priority for requests to the filesystem actor.
 default_passive_store_actor::behavior_type default_passive_store(
   default_passive_store_actor::stateful_pointer<default_passive_store_state>
     self,
   std::unique_ptr<passive_store> store, filesystem_actor filesystem,
-  std::filesystem::path path, std::string store_type);
+  std::filesystem::path path, std::string store_type,
+  caf::message_priority priority);
 
 /// The state of the default active store actor implementation.
 struct default_active_store_state {

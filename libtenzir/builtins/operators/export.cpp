@@ -65,6 +65,7 @@ struct ExportArgs {
   bool retro = false;
   bool internal = false;
   uint64_t parallel = 3;
+  bool high_priority = true;
   /// The filter pushed down by `describer.optimize_filter`.
   ir::optimize_filter filter;
   /// Setting for a special filter added by the `diagnostics` or `metrics`
@@ -221,8 +222,9 @@ public:
     auto expr = legacy_clauses.size() == 1
                   ? std::move(legacy_clauses[0])
                   : expression{conjunction{std::move(legacy_clauses)}};
-    auto mode = export_mode{args_.live ? args_.retro : true, args_.live,
-                            args_.internal, args_.parallel};
+    auto mode
+      = export_mode{args_.live ? args_.retro : true, args_.live, args_.internal,
+                    args_.parallel, args_.high_priority};
     auto result
       = co_await async_mail(atom::spawn_v, std::move(expr), mode).request(*node);
     if (not result) {
@@ -482,10 +484,15 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<ExportArgs, Export>{};
+    auto d = Describer<ExportArgs, Export>{ExportArgs{
+      .filter = {},
+      .special_filter = export_special_filter::none,
+      .metrics_name = {},
+    }};
     d.named("live", &ExportArgs::live);
     d.named("retro", &ExportArgs::retro);
     d.named("internal", &ExportArgs::internal);
+    d.named("_high_priority", &ExportArgs::high_priority);
     auto parallel = d.named_optional("parallel", &ExportArgs::parallel);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto value, ctx.get(parallel));
@@ -528,7 +535,7 @@ public:
           data{internal},
         },
       },
-      export_mode{retro, live, internal, parallel ? parallel->inner : 3});
+      export_mode{retro, live, internal, parallel ? parallel->inner : 3, true});
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -562,7 +569,7 @@ public:
           data{internal},
         },
       },
-      export_mode{retro, live, internal, parallel ? parallel->inner : 3});
+      export_mode{retro, live, internal, parallel ? parallel->inner : 3, true});
   }
 };
 
@@ -587,6 +594,7 @@ public:
     }};
     d.named("live", &ExportArgs::live);
     d.named("retro", &ExportArgs::retro);
+    d.named("_high_priority", &ExportArgs::high_priority);
     auto parallel = d.named_optional("parallel", &ExportArgs::parallel);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto value, ctx.get(parallel));
@@ -661,7 +669,7 @@ public:
           },
         },
       },
-      export_mode{retro, live, internal, parallel ? parallel->inner : 3});
+      export_mode{retro, live, internal, parallel ? parallel->inner : 3, true});
   }
 };
 
@@ -687,6 +695,7 @@ public:
     auto name = d.positional("name", &ExportArgs::metrics_name);
     d.named("live", &ExportArgs::live);
     d.named("retro", &ExportArgs::retro);
+    d.named("_high_priority", &ExportArgs::high_priority);
     auto shape
       = d.named_optional("shape", &ExportArgs::shape, "raw|prometheus");
     auto parallel = d.named_optional("parallel", &ExportArgs::parallel);
@@ -795,7 +804,7 @@ public:
           },
         },
       },
-      export_mode{retro, live, internal, parallel ? parallel->inner : 3});
+      export_mode{retro, live, internal, parallel ? parallel->inner : 3, true});
   }
 };
 

@@ -353,7 +353,8 @@ private:
                                 "'{}' for partition {}",
                                 partition_state.store_id, partition.uuid);
     }
-    auto store = plugin->make_store(filesystem_, partition_state.store_header);
+    auto store = plugin->make_store(filesystem_, partition_state.store_header,
+                                    caf::message_priority::normal);
     if (not store) {
       co_return std::move(store.error());
     }

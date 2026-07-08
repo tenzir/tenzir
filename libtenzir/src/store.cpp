@@ -156,7 +156,8 @@ default_passive_store_actor::behavior_type default_passive_store(
   default_passive_store_actor::stateful_pointer<default_passive_store_state>
     self,
   std::unique_ptr<passive_store> store, filesystem_actor filesystem,
-  std::filesystem::path path, std::string store_type) {
+  std::filesystem::path path, std::string store_type,
+  caf::message_priority priority) {
   // Configure our actor state.
   self->state().self = self;
   self->state().filesystem = std::move(filesystem);
@@ -164,18 +165,25 @@ default_passive_store_actor::behavior_type default_passive_store(
   self->state().path = std::move(path);
   self->state().store_type = std::move(store_type);
   // Load data from disk.
-  self->mail(atom::mmap_v, self->state().path)
-    .request(self->state().filesystem, caf::infinite)
-    .await(
-      [self](chunk_ptr& chunk) {
-        auto load_error = self->state().store->load(std::move(chunk));
-        if (load_error.valid()) {
-          self->quit(std::move(load_error));
-        }
-      },
-      [self](caf::error& error) {
-        self->quit(std::move(error));
-      });
+  auto on_chunk = [self](chunk_ptr& chunk) {
+    auto load_error = self->state().store->load(std::move(chunk));
+    if (load_error.valid()) {
+      self->quit(std::move(load_error));
+    }
+  };
+  auto on_error = [self](caf::error& error) {
+    self->quit(std::move(error));
+  };
+  if (priority == caf::message_priority::high) {
+    self->mail(atom::mmap_v, self->state().path)
+      .urgent()
+      .request(self->state().filesystem, caf::infinite)
+      .await(std::move(on_chunk), std::move(on_error));
+  } else {
+    self->mail(atom::mmap_v, self->state().path)
+      .request(self->state().filesystem, caf::infinite)
+      .await(std::move(on_chunk), std::move(on_error));
+  }
   return {
     [self](atom::query,
            const query_context& query_context) -> caf::result<uint64_t> {
