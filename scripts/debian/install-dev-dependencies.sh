@@ -44,7 +44,6 @@ apt-get -y --no-install-recommends install \
   librabbitmq-dev \
   libre2-dev \
   libreproc-dev \
-  libsentencepiece-dev \
   libspdlog-dev \
   libssl-dev \
   libsqlite3-dev \
