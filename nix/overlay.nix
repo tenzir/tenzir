@@ -38,6 +38,14 @@ in
     }
   );
 
+  onnxruntime = prevPkgs.onnxruntime.override (
+    lib.optionalAttrs isStatic {
+      # We only need the C++ library; the Python bindings pull in python3,
+      # which is marked broken in pkgsStatic.
+      pythonSupport = false;
+    }
+  );
+
   # Extra Packages.
   arrow-adbc-cpp = prevPkgs.callPackage ./arrow-adbc-cpp { };
   arrow-adbc-go = prevPkgs.callPackage ./arrow-adbc-go { };
