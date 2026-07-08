@@ -1,0 +1,13 @@
+---
+error: true
+---
+
+// A column with an unsupported ClickHouse type and NO default is still rejected
+// with an error: there is no way to omit it.
+from {id: 0}
+to_clickhouse table="test_no_default_col",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

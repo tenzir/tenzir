@@ -1,0 +1,10 @@
+// The input event shares no column with the target table, whose columns all
+// have defaults. An all-defaults native insert is not expressible, so the row
+// is dropped with a warning rather than silently reported as success.
+from {foo: 1}
+to_clickhouse table="test_all_default",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

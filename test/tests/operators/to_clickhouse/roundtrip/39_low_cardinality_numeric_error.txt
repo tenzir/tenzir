@@ -1,0 +1,7 @@
+error: column `code` cannot be a `LowCardinality` column
+  --> tests/operators/to_clickhouse/roundtrip/39_low_cardinality_numeric_error.tql:15:31
+   |
+15 |               low_cardinality=code
+   |                               ^^^^ 
+   |
+   = note: `LowCardinality` is only supported for `string` columns, but `code` has the ClickHouse type `Nullable(Int64)`

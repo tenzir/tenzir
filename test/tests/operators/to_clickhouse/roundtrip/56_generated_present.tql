@@ -1,0 +1,10 @@
+// Providing values for the generated `m` (MATERIALIZED) and `al` (ALIAS)
+// columns is not allowed by ClickHouse. The operator ignores the provided
+// values with a warning and lets ClickHouse compute the columns.
+from {id: 20, m: 999, al: 999}
+to_clickhouse table="test_generated",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

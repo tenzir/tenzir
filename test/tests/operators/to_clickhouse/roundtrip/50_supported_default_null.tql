@@ -1,0 +1,10 @@
+// A typed `null` for the non-nullable `n` column cannot be written. The default
+// only applies when the column is omitted entirely (slice level), not per row,
+// so this event is dropped with a warning.
+from {id: 5, n: string(null)}
+to_clickhouse table="test_supported_default",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

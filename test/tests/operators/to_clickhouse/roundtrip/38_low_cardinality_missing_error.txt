@@ -1,0 +1,7 @@
+error: `low_cardinality` column `absent` is missing from the first event
+  --> tests/operators/to_clickhouse/roundtrip/38_low_cardinality_missing_error.tql:15:31
+   |
+15 |               low_cardinality=absent
+   |                               ^^^^^^ 
+   |
+   = note: the column's inner type cannot be inferred when creating the table

@@ -1,0 +1,8 @@
+warning: column `tag` has an unsupported ClickHouse type `IPv4` and cannot be written
+ --> tests/operators/to_clickhouse/roundtrip/43_default_column_present.tql:4:1
+  |
+4 | to_clickhouse table="test_default_col",
+  | ~~~~~~~~~~~~~ 
+  |
+  = note: the column has a default value and must be omitted from the input
+  = note: event will be dropped

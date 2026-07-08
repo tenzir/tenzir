@@ -1,0 +1,14 @@
+warning: column `foo` does not exist in the ClickHouse table
+ --> tests/operators/to_clickhouse/roundtrip/52_all_default_no_match.tql:5:1
+  |
+5 | to_clickhouse table="test_all_default",
+  | ~~~~~~~~~~~~~ 
+  |
+  = note: column will be dropped
+warning: no input column maps to a column in ClickHouse table `test_all_default`
+ --> tests/operators/to_clickhouse/roundtrip/52_all_default_no_match.tql:5:1
+  |
+5 | to_clickhouse table="test_all_default",
+  | ~~~~~~~~~~~~~ 
+  |
+  = note: 1 event(s) will be dropped

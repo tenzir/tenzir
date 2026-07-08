@@ -104,8 +104,12 @@ auto easy_client::remote_create_database(std::string_view database_name)
 auto easy_client::remote_fetch_schema_transformations(
   std::string_view table_name) -> failure_or<transformer_record*> {
   TENZIR_ASSERT_EXPENSIVE(not transformations_.contains(table_name));
-  auto query = Query{fmt::format("DESCRIBE TABLE {} "
-                                 "SETTINGS describe_compact_output=1",
+  // We deliberately do not use `describe_compact_output=1` here: the full
+  // output additionally reports each column's `default_type` (block[2]) and
+  // `default_expression` (block[3]), which we use to tolerate columns whose
+  // type we cannot represent as long as they have a default value.
+  auto query = Query{fmt::format("DESCRIBE TABLE {}  "
+                                 "SETTINGS describe_compact_output = 0",
                                  table_name)};
   auto transformations = transformer_record{};
   bool failed = false;
@@ -115,13 +119,49 @@ auto easy_client::remote_fetch_schema_transformations(
       auto name = block[0]->As<ColumnString>()->At(i);
       auto type_str = remove_non_significant_whitespace(
         block[1]->As<ColumnString>()->At(i));
+      // A non-empty `default_type` (`DEFAULT`/`MATERIALIZED`/`ALIAS`/
+      // `EPHEMERAL`) means the column is omittable: ClickHouse fills it in when
+      // we do not send it.
+      auto has_default = false;
+      auto is_generated = false;
+      if (block.GetColumnCount() >= 3) {
+        if (auto default_type = block[2]->As<ColumnString>()) {
+          const auto kind = default_type->At(i);
+          has_default = not kind.empty();
+          // `MATERIALIZED`/`ALIAS` columns are computed by ClickHouse, which
+          // rejects explicit values for them. They are never part of an insert.
+          is_generated = kind == "MATERIALIZED" or kind == "ALIAS";
+        }
+      }
+      // Generated columns are never sent, so we neither build nor store a
+      // transformer for them (none of its behavior would ever be used). We only
+      // remember the name to warn if the input provides a value.
+      if (is_generated) {
+        transformations.generated_columns.insert(std::string{name});
+        continue;
+      }
       path.push_back(name);
-      auto functions = make_functions_from_clickhouse(path, type_str, dh_);
+      // Collect diagnostics separately so we can suppress the "unsupported
+      // type" error when a default lets us tolerate the column.
+      auto collector = collecting_diagnostic_handler{};
+      auto functions
+        = make_functions_from_clickhouse(path, type_str, collector);
+      if (not functions and has_default) {
+        // Tolerate the unsupported column: it has a default and will be filled
+        // by ClickHouse as long as we never send it.
+        functions = make_default_only_transformer(std::string{type_str});
+      } else {
+        std::move(collector).forward_to(dh_);
+      }
       path.pop_back();
       if (not functions) {
         failed = true;
         return;
       }
+      // Preserve the omittable bit for supported transformers too, so the
+      // missing-column check below treats a defaulted column as optional and
+      // lets ClickHouse fill the default when the input omits it.
+      functions->has_default = has_default;
       transformations.transformations.try_emplace(std::string{name},
                                                   std::move(functions));
     }
@@ -155,14 +195,18 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
   /// TODO: This should really be merged with the transformer itself. Its an
   /// (almost) duplicate of `make_record_functions_from_clickhouse`
   const auto json_index = [&](std::string_view name) -> Option<size_t> {
-    for (size_t i = 0; i < args_.json.size(); ++i) {
-      if (args_.json[i].inner == name) {
-        return i;
-      }
-    }
-    return None{};
+    return index_of(args_.json, name);
   };
   auto json_seen = std::vector<bool>(args_.json.size(), false);
+  // Fields named in `low_cardinality` are wrapped as `LowCardinality(<inner>)`,
+  // where the inner type is the normally inferred type. Unlike `json`, the
+  // inner type cannot be synthesized for absent fields, so every listed column
+  // must be present in the first event (enforced after the loop below).
+  const auto low_cardinality_index = [&](std::string_view name) {
+    return index_of(args_.low_cardinality, name);
+  };
+  auto low_cardinality_seen
+    = std::vector<bool>(args_.low_cardinality.size(), false);
   auto clickhouse_columns = std::string{"("};
   auto first = true;
   const auto append_column = [&](std::string_view name, std::string_view type) {
@@ -187,6 +231,20 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
         type_to_clickhouse_typename(path, t, not is_primary, dh_));
     path.pop_back();
     TENZIR_ASSERT(not clickhouse_typename.empty());
+    if (auto idx = low_cardinality_index(k)) {
+      low_cardinality_seen[*idx] = true;
+      if (not is_lowcardinality_supported_inner(clickhouse_typename)) {
+        diagnostic::error("column `{}` cannot be a `LowCardinality` column", k)
+          .primary(args_.low_cardinality[*idx])
+          .note("`LowCardinality` is only supported for `string` columns, but "
+                "`{}` has the ClickHouse type `{}`",
+                k, clickhouse_typename)
+          .emit(dh_);
+        return failure::promise();
+      }
+      clickhouse_typename
+        = fmt::format("LowCardinality({})", clickhouse_typename);
+    }
     append_column(k, clickhouse_typename);
   }
   // `json` columns absent from the first slice are still created, as plain
@@ -194,6 +252,20 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
   for (size_t i = 0; i < args_.json.size(); ++i) {
     if (not json_seen[i]) {
       append_column(args_.json[i].inner, "JSON");
+    }
+  }
+  // `low_cardinality` columns must be present in the first event: their inner
+  // type is inferred from the data and cannot be synthesized when missing.
+  for (size_t i = 0; i < args_.low_cardinality.size(); ++i) {
+    if (not low_cardinality_seen[i]) {
+      diagnostic::error("`low_cardinality` column `{}` is missing from the "
+                        "first event",
+                        args_.low_cardinality[i].inner)
+        .primary(args_.low_cardinality[i])
+        .note("the column's inner type cannot be inferred when creating the "
+              "table")
+        .emit(dh_);
+      return failure::promise();
     }
   }
   clickhouse_columns += ")";
@@ -319,6 +391,17 @@ auto easy_client::insert(const table_slice& slice, std::string_view table_name,
   for (const auto& [k, t, arr] : columns_of(slice)) {
     auto [trafo, idx] = transformations->transfrom_and_index_for(k);
     if (not trafo) {
+      if (transformations->generated_columns.contains(k)) {
+        // `MATERIALIZED`/`ALIAS` columns are computed by ClickHouse and reject
+        // explicit values. Ignore the provided value rather than sending it.
+        diagnostic::warning("column `{}` is a generated ClickHouse column and "
+                            "cannot be written",
+                            k)
+          .note("the provided value is ignored; ClickHouse computes the column")
+          .primary(args_.operator_location)
+          .emit(dh_);
+        continue;
+      }
       diagnostic::warning("column `{}` does not exist in the ClickHouse table",
                           k)
         .note("column will be dropped")
@@ -340,7 +423,9 @@ auto easy_client::insert(const table_slice& slice, std::string_view table_name,
     if (transformations->found_column[i]) {
       continue;
     }
-    if (kvp.second->clickhouse_nullable) {
+    // A nullable column or one with a ClickHouse default may be omitted
+    // entirely: the server fills it in, so its absence is not a reason to drop.
+    if (kvp.second->clickhouse_nullable or kvp.second->has_default) {
       continue;
     }
     diagnostic::warning(
@@ -354,6 +439,7 @@ auto easy_client::insert(const table_slice& slice, std::string_view table_name,
   for (const auto& [k, t, arr] : columns_of(slice)) {
     const auto [trafo, out_idx] = transformations->transfrom_and_index_for(k);
     if (not trafo) {
+      // Includes generated columns (not in the map); already reported above.
       continue;
     }
     path.push_back(k);
@@ -372,11 +458,21 @@ auto easy_client::insert(const table_slice& slice, std::string_view table_name,
     block.AppendColumn(std::string{k}, std::move(this_column));
   }
   // If no input column maps to a target column, the native block has no columns
-  // and cannot carry any rows -- there is nothing to insert, so skip the slice.
-  // Omitted columns are intentionally not materialized: ClickHouse fills them
-  // from their defaults (e.g. `{}` for a plain JSON column, or a `DEFAULT`
-  // expression), which an explicit value would override.
+  // and cannot carry any rows. We cannot materialize an all-defaults insert
+  // here: the clickhouse-cpp client would emit `INSERT INTO <t> () VALUES`,
+  // which is a syntax error. Rather than silently report success while writing
+  // nothing, warn that the surviving events are dropped.
   if (block.GetColumnCount() == 0) {
+    if (const auto rows = slice.rows() - dropcount; rows > 0) {
+      diagnostic::warning("no input column maps to a column in ClickHouse "
+                          "table "
+                          "`{}`",
+                          resolved_table_name)
+        .note("{} event(s) will be dropped", rows)
+        .note("the ClickHouse client cannot insert rows that consist only of "
+              "default columns (it would emit `INSERT INTO ... () VALUES`)")
+        .emit(dh_);
+    }
     return {};
   }
   TENZIR_ASSERT(block.GetRowCount() == slice.rows() - dropcount,

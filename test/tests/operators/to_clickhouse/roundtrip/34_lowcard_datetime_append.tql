@@ -1,0 +1,12 @@
+// Append a plain `string` into a `LowCardinality(String)` column (the server
+// adds the LowCardinality wrapper) and a nanosecond `time` into a
+// `DateTime64(3, 'UTC')` column (truncated to milliseconds).
+from {id: 0, name: "alpha", ts: 2024-01-01T12:00:00.123456Z},
+     {id: 1, name: "beta", ts: 2024-06-15T08:30:00Z},
+     {id: 2, name: "alpha", ts: 2024-12-31T23:59:59.999999999Z}
+to_clickhouse table="test_lc_dt",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

@@ -49,6 +49,10 @@ public:
     // Top-level columns to create as ClickHouse `JSON` columns (only used when
     // creating a table). Empty for the legacy operator.
     std::vector<located<std::string>> json = {};
+    // Top-level columns to create as `LowCardinality(<inner>)` columns (only
+    // used when creating a table). The inner type is inferred from the first
+    // event, so every listed column must be present in it.
+    std::vector<located<std::string>> low_cardinality = {};
     location operator_location;
 
     auto make_options() const -> ::clickhouse::ClientOptions {
