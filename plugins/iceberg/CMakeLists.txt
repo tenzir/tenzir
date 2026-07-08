@@ -15,6 +15,20 @@ TenzirRegisterPlugin(
   BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp"
   INCLUDE_DIRECTORIES include)
 
+# Google catalog authentication mints OAuth2 tokens through google-cloud-cpp,
+# the same dependency the gcs plugin uses (and that arrow's GcsFileSystem
+# links anyway).
+find_package(google_cloud_cpp_storage REQUIRED CONFIG)
+dependency_summary("google-cloud-cpp" google-cloud-cpp::storage "Dependencies")
+target_link_libraries(iceberg PUBLIC google-cloud-cpp::storage)
+
+# The data plane for gs:// table locations uses arrow's GcsFileSystem.
+find_package(Arrow REQUIRED CONFIG)
+if (NOT ARROW_GCS)
+  message(FATAL_ERROR "The iceberg plugin requires Arrow with GCS support;"
+                      " rebuild Arrow with ARROW_GCS=ON.")
+endif ()
+
 option(TENZIR_ENABLE_BUNDLED_ICEBERG_CPP "Always use the bundled iceberg-cpp"
        "${TENZIR_ENABLE_BUNDLED_DEPENDENCIES}")
 if (NOT TENZIR_ENABLE_BUNDLED_ICEBERG_CPP)

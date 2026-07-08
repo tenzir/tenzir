@@ -105,11 +105,16 @@ stdenv.mkDerivation {
   ];
 
   # Upstream's header install list misses these two, but the installed
-  # rest_catalog.h includes session_catalog.h.
+  # rest_catalog.h includes session_catalog.h. arrow_io_internal.h is
+  # excluded as internal, but its ArrowFileSystemFileIO is bundle-exported
+  # and Tenzir's iceberg plugin wraps it around Arrow's GcsFileSystem to
+  # back gs:// table locations until upstream grows a native GCS FileIO.
   postInstall = ''
     install -m 644 -Dt $out/include/iceberg/catalog \
       ../src/iceberg/catalog/session_catalog.h \
       ../src/iceberg/catalog/session_context.h
+    install -m 644 -Dt $out/include/iceberg/arrow \
+      ../src/iceberg/arrow/arrow_io_internal.h
   '';
 
   meta = {

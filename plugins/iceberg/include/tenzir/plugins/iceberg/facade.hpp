@@ -100,6 +100,16 @@ struct CatalogConfig {
   std::string name = "tenzir";
   /// Additional catalog and FileIO properties (auth, "s3.endpoint", ...).
   std::unordered_map<std::string, std::string> properties;
+  /// Authenticate catalog requests with Google OAuth2 bearer tokens, minted
+  /// from `gcp_credentials_json` or from Application Default Credentials
+  /// when empty. Tokens refresh automatically before they expire. Unless
+  /// `properties` configures S3 access, the same credentials also back
+  /// `gs://` table locations through a native GCS filesystem.
+  bool gcp_auth = false;
+  /// Google service-account key JSON.
+  std::string gcp_credentials_json;
+  /// Project id for the `x-goog-user-project` header; empty omits it.
+  std::string gcp_user_project;
 };
 
 class Table;

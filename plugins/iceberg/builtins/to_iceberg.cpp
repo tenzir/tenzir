@@ -76,6 +76,9 @@ struct ToIcebergArgs {
   Option<located<secret>> s3_endpoint;
   Option<located<bool>> s3_path_style;
   Option<located<secret>> token;
+  Option<located<bool>> gcp_auth;
+  Option<located<secret>> gcp_service_account_key;
+  Option<located<std::string>> gcp_project;
   Option<ast::expression> partition_by;
   Option<located<uint64_t>> max_size;
   Option<located<uint64_t>> buffer_size;
@@ -338,6 +341,11 @@ public:
     if (args_.token) {
       requests.push_back(make_secret_request("token", *args_.token, token, dh));
     }
+    if (args_.gcp_service_account_key) {
+      requests.push_back(make_secret_request("gcp_service_account_key",
+                                             *args_.gcp_service_account_key,
+                                             config.gcp_credentials_json, dh));
+    }
     if (not co_await ctx.resolve_secrets(std::move(requests))) {
       done_ = true;
       co_return;
@@ -354,6 +362,11 @@ public:
     if (not token.empty()) {
       config.properties["rest.auth.type"] = "oauth2";
       config.properties["token"] = std::move(token);
+    }
+    config.gcp_auth = (args_.gcp_auth and args_.gcp_auth->inner)
+                      or static_cast<bool>(args_.gcp_service_account_key);
+    if (args_.gcp_project) {
+      config.gcp_user_project = args_.gcp_project->inner;
     }
     if (auth->credentials) {
       const auto& creds = *auth->credentials;
@@ -1433,7 +1446,11 @@ public:
     auto endpoint_arg = d.named("s3_endpoint", &ToIcebergArgs::s3_endpoint);
     auto path_style_arg
       = d.named("s3_path_style", &ToIcebergArgs::s3_path_style);
-    d.named("token", &ToIcebergArgs::token);
+    auto token_arg = d.named("token", &ToIcebergArgs::token);
+    auto gcp_auth_arg = d.named("gcp_auth", &ToIcebergArgs::gcp_auth);
+    auto gcp_key_arg = d.named("gcp_service_account_key",
+                               &ToIcebergArgs::gcp_service_account_key);
+    auto gcp_project_arg = d.named("gcp_project", &ToIcebergArgs::gcp_project);
     auto partition_by_arg
       = d.named("partition_by", &ToIcebergArgs::partition_by, "list<any>");
     auto max_size_arg = d.named("max_size", &ToIcebergArgs::max_size);
@@ -1488,6 +1505,29 @@ public:
       if (ctx.get(path_style_arg) and not ctx.get(endpoint_arg)) {
         diagnostic::error("`s3_path_style` requires `s3_endpoint`")
           .primary(*ctx.get_location(path_style_arg))
+          .emit(ctx);
+      }
+      const auto gcp_auth_opt = ctx.get(gcp_auth_arg);
+      const auto uses_gcp = (gcp_auth_opt and gcp_auth_opt->inner)
+                            or static_cast<bool>(ctx.get(gcp_key_arg));
+      if (ctx.get(token_arg) and uses_gcp) {
+        diagnostic::error("`token` cannot be combined with Google "
+                          "authentication")
+          .primary(*ctx.get_location(token_arg))
+          .note("`gcp_auth` and `gcp_service_account_key` mint and refresh "
+                "tokens automatically")
+          .emit(ctx);
+      }
+      if (gcp_auth_opt and not gcp_auth_opt->inner and ctx.get(gcp_key_arg)) {
+        diagnostic::error("`gcp_service_account_key` requires `gcp_auth` to "
+                          "be enabled")
+          .primary(gcp_auth_opt->source)
+          .emit(ctx);
+      }
+      if (ctx.get(gcp_project_arg) and not uses_gcp) {
+        diagnostic::error("`gcp_project` requires `gcp_auth` or "
+                          "`gcp_service_account_key`")
+          .primary(*ctx.get_location(gcp_project_arg))
           .emit(ctx);
       }
       return {};

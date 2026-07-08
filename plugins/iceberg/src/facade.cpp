@@ -15,12 +15,20 @@
 
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
+#include <arrow/filesystem/gcsfs.h>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
+#include <google/cloud/storage/oauth2/google_credentials.h>
+#include <iceberg/arrow/arrow_io_internal.h>
 #include <iceberg/arrow/arrow_register.h>
 #include <iceberg/avro/avro_register.h>
 #include <iceberg/catalog.h>
+#include <iceberg/catalog/rest/auth/auth_manager.h>
+#include <iceberg/catalog/rest/auth/auth_managers.h>
+#include <iceberg/catalog/rest/auth/auth_properties.h>
+#include <iceberg/catalog/rest/auth/auth_session.h>
 #include <iceberg/catalog/rest/catalog_properties.h>
+#include <iceberg/catalog/rest/http_request.h>
 #include <iceberg/catalog/rest/rest_catalog.h>
 #include <iceberg/data/data_writer.h>
 #include <iceberg/expression/literal.h>
@@ -47,6 +55,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <mutex>
+#include <set>
 #include <system_error>
 
 namespace tenzir::plugins::iceberg {
@@ -60,6 +69,91 @@ namespace ice = ::iceberg;
 /// Snapshot summary properties keying exactly-once deduplication.
 constexpr auto writer_id_property = std::string_view{"tenzir.writer-id"};
 constexpr auto commit_seq_property = std::string_view{"tenzir.commit-seq"};
+
+/// Catalog property carrying the service-account key JSON into the "gcp"
+/// auth manager and the GCS FileIO; the property map is how iceberg-cpp
+/// hands configuration to registered auth managers and FileIO factories.
+constexpr auto gcp_credentials_property = std::string_view{"gcp."
+                                                           "credentials-json"};
+constexpr auto gcp_auth_type = std::string_view{"gcp"};
+
+/// Stamps a catalog request with a Google OAuth2 bearer token.
+/// google-cloud-cpp caches the token and refreshes it before its ~1h expiry,
+/// so long-running pipelines outlive individual tokens.
+class GcpAuthSession final : public ice::rest::auth::AuthSession {
+public:
+  explicit GcpAuthSession(
+    std::shared_ptr<google::cloud::storage::oauth2::Credentials> credentials)
+    : credentials_{std::move(credentials)} {
+  }
+
+  auto Authenticate(ice::rest::HttpRequest request)
+    -> ice::Result<ice::rest::HttpRequest> override {
+    auto header = credentials_->AuthorizationHeader();
+    if (not header.ok()) {
+      return ice::AuthenticationFailed("failed to obtain a Google access "
+                                       "token: {}",
+                                       header.status().message());
+    }
+    const auto pos = header->find(": ");
+    if (pos == std::string::npos) {
+      return ice::AuthenticationFailed("malformed authorization header from "
+                                       "Google credentials");
+    }
+    request.headers[header->substr(0, pos)] = header->substr(pos + 2);
+    return request;
+  }
+
+private:
+  std::shared_ptr<google::cloud::storage::oauth2::Credentials> credentials_;
+};
+
+/// Authenticates against Google-hosted catalogs (BigLake / Lakehouse for
+/// Apache Iceberg): a service-account key when configured, Application
+/// Default Credentials otherwise (GOOGLE_APPLICATION_CREDENTIALS, the gcloud
+/// ADC file, or the GCE/GKE metadata server).
+class GcpAuthManager final : public ice::rest::auth::AuthManager {
+public:
+  auto
+  CatalogSession(ice::rest::HttpClient& client,
+                 const std::unordered_map<std::string, std::string>& properties)
+    -> ice::Result<std::shared_ptr<ice::rest::auth::AuthSession>> override {
+    (void)client;
+    auto credentials
+      = std::shared_ptr<google::cloud::storage::oauth2::Credentials>{};
+    const auto key = properties.find(std::string{gcp_credentials_property});
+    if (key != properties.end() and not key->second.empty()) {
+      // The storage module's default token scope is devstorage-only, which
+      // Google's catalog rejects with ACCESS_TOKEN_SCOPE_INSUFFICIENT;
+      // request the cloud-platform scope explicitly.
+      auto made = google::cloud::storage::oauth2::
+        CreateServiceAccountCredentialsFromJsonContents(
+          key->second,
+          std::set<std::string>{"https://www.googleapis.com/auth/"
+                                "cloud-platform"},
+          {});
+      if (not made.ok()) {
+        return ice::AuthenticationFailed("invalid Google service account "
+                                         "key: {}",
+                                         made.status().message());
+      }
+      credentials = *std::move(made);
+    } else {
+      // Authorized-user ADC and metadata-server tokens carry the
+      // cloud-platform scope already; a GOOGLE_APPLICATION_CREDENTIALS
+      // service-account key gets the storage-only default scope and cannot
+      // reach the catalog — pass such keys via `gcp_service_account_key`.
+      auto made = google::cloud::storage::oauth2::GoogleDefaultCredentials();
+      if (not made.ok()) {
+        return ice::AuthenticationFailed("no Google Application Default "
+                                         "Credentials: {}",
+                                         made.status().message());
+      }
+      credentials = *std::move(made);
+    }
+    return std::make_shared<GcpAuthSession>(std::move(credentials));
+  }
+};
 
 auto translate_error(const ice::Error& error) -> Error {
   auto kind = Error::Kind::permanent;
@@ -100,6 +194,37 @@ auto translate(ice::Result<T> result) -> Result<T> {
   }
 }
 
+/// The S3 FileIO under a Tenzir-owned registry name. iceberg-cpp
+/// cross-checks its *builtin* FileIO names against the warehouse URI scheme,
+/// rejecting e.g. a `gs://` warehouse served through S3-compatible access
+/// (GCS interop HMAC credentials + `s3.endpoint`); custom names skip that
+/// check while the FileIO itself strips foreign schemes off object paths.
+constexpr auto s3_file_io = std::string_view{"tenzir-arrow-s3"};
+
+/// A native GCS FileIO; iceberg-cpp has no `gs://` builtin, so `gs://`
+/// table locations are backed by Arrow's GcsFileSystem here, authenticated
+/// like the catalog: with the service-account key when configured,
+/// Application Default Credentials otherwise. This keeps one credential for
+/// both planes and avoids the S3-interop path (HMAC keys plus checksum
+/// incompatibilities between aws-sdk-cpp 1.11+ and GCS).
+constexpr auto gcs_file_io = std::string_view{"tenzir-arrow-gcs"};
+
+auto make_gcs_file_io(
+  const std::unordered_map<std::string, std::string>& properties)
+  -> ice::Result<std::unique_ptr<ice::FileIO>> {
+  auto options = arrow::fs::GcsOptions::Defaults();
+  const auto key = properties.find(std::string{gcp_credentials_property});
+  if (key != properties.end() and not key->second.empty()) {
+    options = arrow::fs::GcsOptions::FromServiceAccountCredentials(key->second);
+  }
+  auto fs = arrow::fs::GcsFileSystem::Make(options);
+  if (not fs.ok()) {
+    return ice::IOError("failed to create the GCS filesystem: {}",
+                        fs.status().ToString());
+  }
+  return std::make_unique<ice::arrow::ArrowFileSystemFileIO>(*std::move(fs));
+}
+
 auto ensure_registered() -> void {
   // The bundle's self-registration lives in static initializers that the
   // linker may drop when linking the static archives, so register explicitly.
@@ -108,6 +233,19 @@ auto ensure_registered() -> void {
     ice::arrow::RegisterAll();
     ice::parquet::RegisterAll();
     ice::avro::RegisterAll();
+    ice::rest::auth::AuthManagers::Register(
+      gcp_auth_type,
+      [](std::string_view, const std::unordered_map<std::string, std::string>&)
+        -> ice::Result<std::unique_ptr<ice::rest::auth::AuthManager>> {
+        return std::make_unique<GcpAuthManager>();
+      });
+    ice::FileIORegistry::Register(
+      std::string{s3_file_io},
+      [](const std::unordered_map<std::string, std::string>& properties) {
+        return ice::FileIORegistry::Load(
+          std::string{ice::FileIORegistry::kArrowS3FileIO}, properties);
+      });
+    ice::FileIORegistry::Register(std::string{gcs_file_io}, make_gcs_file_io);
   });
 }
 
@@ -761,16 +899,38 @@ PartitionTuple::PartitionTuple(std::shared_ptr<Impl> impl)
 
 auto Catalog::open(CatalogConfig config) -> Result<Catalog> {
   ensure_registered();
+  if (config.gcp_auth) {
+    config.properties[ice::rest::auth::AuthProperties::kAuthType]
+      = std::string{gcp_auth_type};
+    if (not config.gcp_credentials_json.empty()) {
+      config.properties[std::string{gcp_credentials_property}]
+        = std::move(config.gcp_credentials_json);
+    }
+    if (not config.gcp_user_project.empty()) {
+      // Google's catalog bills request quota against this project; without
+      // the header, end-user credentials are often rejected.
+      config.properties["header.x-goog-user-project"]
+        = std::move(config.gcp_user_project);
+    }
+  }
   auto properties = ice::rest::RestCatalogProperties::default_properties();
   properties.Set(ice::rest::RestCatalogProperties::kUri, config.uri)
     .Set(ice::rest::RestCatalogProperties::kName, config.name)
     .Set(ice::rest::RestCatalogProperties::kWarehouse, config.warehouse);
+  // Explicit S3 settings win so that S3-compatible access to non-S3 stores
+  // (e.g. GCS interop with HMAC keys) keeps working; without them, Google
+  // authentication implies the native GCS data plane.
   const auto uses_s3 = std::ranges::any_of(config.properties, [](auto& entry) {
     return entry.first.starts_with("s3.");
   });
+  auto io_impl = std::string_view{ice::FileIORegistry::kArrowLocalFileIO};
+  if (uses_s3) {
+    io_impl = s3_file_io;
+  } else if (config.gcp_auth) {
+    io_impl = gcs_file_io;
+  }
   properties.Set(ice::rest::RestCatalogProperties::kIOImpl,
-                 std::string{uses_s3 ? ice::FileIORegistry::kArrowS3FileIO
-                                     : ice::FileIORegistry::kArrowLocalFileIO});
+                 std::string{io_impl});
   for (const auto& [key, value] : config.properties) {
     properties.mutable_configs()[key] = value;
   }
