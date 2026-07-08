@@ -55,3 +55,11 @@ dependency_summary("sentencepiece" "${SENTENCEPIECE_LIBRARY}" "Dependencies")
 target_include_directories(gliner PRIVATE "${SENTENCEPIECE_INCLUDE_DIR}")
 target_link_libraries(gliner PUBLIC onnxruntime::onnxruntime
                                     "${SENTENCEPIECE_LIBRARY}")
+
+# A static sentencepiece built against the system protobuf (as in the Docker
+# images) needs its transitive dependency spelled out for standalone
+# executables such as the unit test binary.
+if (SENTENCEPIECE_LIBRARY MATCHES "\\.a$")
+  find_package(Protobuf REQUIRED)
+  target_link_libraries(gliner PUBLIC protobuf::libprotobuf)
+endif ()
