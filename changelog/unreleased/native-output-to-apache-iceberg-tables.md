@@ -41,7 +41,10 @@ top of concurrent updates. Partitions buffer in memory under a shared
 cardinality degrades file sizes gracefully instead of thrashing open
 writers. S3 and S3-compatible object stores are supported
 via `aws_iam`, `s3_endpoint`, and `s3_path_style`; catalogs taking bearer
-tokens authenticate via `token`.
+tokens authenticate via `token`. Google-hosted catalogs (BigLake) work with
+one credential for both the catalog and `gs://` storage: pass a
+service-account key via `gcp_service_account_key`, or set `gcp_auth=true` to
+use Application Default Credentials.
 
 The operator ships as experimental: delivery is at-least-once, upgrading to
 exactly-once automatically once pipeline checkpointing lands.
