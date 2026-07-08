@@ -44,6 +44,12 @@ TenzirRegisterPlugin(
   TEST_SOURCES GLOB "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp"
   INCLUDE_DIRECTORIES include)
 
+# The sentencepiece header aliases absl::string_view to std::string_view and
+# clashes with the real Abseil from the shared plugin precompiled header, so
+# the tokenizer translation unit opts out of the PCH (see tokenizer.cpp).
+set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/src/tokenizer.cpp"
+                            PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+
 dependency_summary("onnxruntime" onnxruntime::onnxruntime "Dependencies")
 dependency_summary("sentencepiece" "${SENTENCEPIECE_LIBRARY}" "Dependencies")
 target_include_directories(gliner PRIVATE "${SENTENCEPIECE_INCLUDE_DIR}")

@@ -20,6 +20,7 @@
 #include "gliner/model.hpp"
 
 #include "gliner/detail.hpp"
+#include "gliner/tokenizer.hpp"
 
 #include <tenzir/detail/assert.hpp>
 
@@ -35,7 +36,6 @@
 #include <fstream>
 #include <onnxruntime_cxx_api.h>
 #include <ranges>
-#include <sentencepiece_processor.h>
 #include <simdjson.h>
 #include <sstream>
 
@@ -117,7 +117,7 @@ auto read_file(const std::filesystem::path& path)
 struct Model::Impl {
   Ort::Env env{ORT_LOGGING_LEVEL_ERROR, "tenzir-gliner"};
   std::unique_ptr<Ort::Session> session;
-  sentencepiece::SentencePieceProcessor sp;
+  std::unique_ptr<Tokenizer> tokenizer;
   int64_t ent_token_id = 0;
   int64_t sep_token_id = 0;
   int64_t cls_id = 1;
@@ -169,13 +169,15 @@ auto Model::make(const std::filesystem::path& dir)
                                        "span-level GLiNER v1 model",
                                        fmt::join(actual_inputs, ", ")));
   }
-  auto status = impl->sp.Load((dir / "spm.model").string());
-  if (not status.ok()) {
+  auto [tokenizer, tokenizer_error]
+    = Tokenizer::make((dir / "spm.model").string());
+  if (not tokenizer) {
     return caf::make_error(caf::sec::runtime_error,
                            fmt::format("failed to load {}: {}",
                                        (dir / "spm.model").string(),
-                                       status.ToString()));
+                                       tokenizer_error));
   }
+  impl->tokenizer = std::move(tokenizer);
   auto config_json = read_file(dir / "gliner_config.json");
   if (not config_json) {
     return std::move(config_json.error());
@@ -273,7 +275,7 @@ auto Model::detect_batch(std::span<const std::string_view> texts,
   for (const auto& label : labels) {
     prompt_ids.push_back(impl_->ent_token_id);
     subwords.clear();
-    impl_->sp.Encode(label, &subwords).IgnoreError();
+    impl_->tokenizer->encode(label, subwords);
     prompt_ids.insert(prompt_ids.end(), subwords.begin(), subwords.end());
   }
   prompt_ids.push_back(impl_->sep_token_id);
@@ -287,7 +289,7 @@ auto Model::detect_batch(std::span<const std::string_view> texts,
     auto word_counter = int64_t{0};
     for (const auto& word : words) {
       subwords.clear();
-      impl_->sp.Encode(word.text, &subwords).IgnoreError();
+      impl_->tokenizer->encode(word.text, subwords);
       ++word_counter;
       auto first = true;
       for (auto id : subwords) {
