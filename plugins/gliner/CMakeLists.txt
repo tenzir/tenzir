@@ -11,6 +11,21 @@ find_package(Tenzir REQUIRED)
 
 find_package(onnxruntime QUIET CONFIG)
 if (NOT onnxruntime_FOUND)
+  # The official ONNX Runtime release tarballs ship no CMake package
+  # configuration, only include/ and lib/ trees.
+  find_path(ONNXRUNTIME_INCLUDE_DIR onnxruntime_cxx_api.h
+            PATH_SUFFIXES onnxruntime)
+  find_library(ONNXRUNTIME_LIBRARY onnxruntime)
+  if (ONNXRUNTIME_INCLUDE_DIR AND ONNXRUNTIME_LIBRARY)
+    add_library(onnxruntime::onnxruntime SHARED IMPORTED)
+    set_target_properties(
+      onnxruntime::onnxruntime
+      PROPERTIES IMPORTED_LOCATION "${ONNXRUNTIME_LIBRARY}"
+                 INTERFACE_INCLUDE_DIRECTORIES "${ONNXRUNTIME_INCLUDE_DIR}")
+    set(onnxruntime_FOUND TRUE)
+  endif ()
+endif ()
+if (NOT onnxruntime_FOUND)
   message(WARNING "Disabling gliner plugin (ONNX Runtime not found)")
   return()
 endif ()

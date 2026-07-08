@@ -59,6 +59,13 @@ FROM build-base AS rdkafka-package
 COPY scripts/debian/build-rdkafka-package.sh .
 RUN ./build-rdkafka-package.sh
 
+# -- onnxruntime-package --------------------------------------------------------
+
+FROM build-base AS onnxruntime-package
+
+COPY scripts/debian/build-onnxruntime-package.sh .
+RUN ./build-onnxruntime-package.sh
+
 # -- fluent-bit-package --------------------------------------------------------
 
 FROM build-base AS fluent-bit-package
@@ -94,6 +101,7 @@ COPY --from=jemalloc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=arrow-adbc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=rdkafka-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=onnxruntime-package /tmp/*.deb /tmp/custom-packages/
 
 COPY ./scripts/debian/install-dev-dependencies.sh ./scripts/debian/
 RUN ./scripts/debian/install-dev-dependencies.sh && \
@@ -199,6 +207,7 @@ COPY --from=jemalloc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=arrow-adbc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=rdkafka-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=onnxruntime-package /tmp/*.deb /tmp/custom-packages/
 
 RUN apt-get update && \
     apt-get -y --no-install-recommends install \
@@ -234,6 +243,7 @@ RUN apt-get update && \
       librabbitmq4 \
       libre2-11 \
       libreproc++14 \
+      libsentencepiece0 \
       libspdlog1.15 \
       libunwind8 \
       libxxhash-dev \
