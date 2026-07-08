@@ -247,26 +247,40 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
   TENZIR_ASSERT(importer);
   self->state().importer_address = importer->address();
   self->state().unpersisted_events.emplace();
-  self
-    ->mail(atom::get_v, caf::actor_cast<receiver_actor<table_slice>>(self),
-           self->state().mode.internal,
-           /*live=*/self->state().mode.live,
-           /*recent=*/self->state().mode.retro)
-    .request(importer, caf::infinite)
-    .await(
-      [self, mode](std::vector<table_slice>& unpersisted_events) {
+  auto on_subscribed
+    = [self, mode](std::vector<table_slice>& unpersisted_events) {
         TENZIR_DEBUG("{} subscribed to importer", *self);
         if (mode.retro) {
           TENZIR_ASSERT(self->state().unpersisted_events);
           TENZIR_ASSERT(self->state().unpersisted_events->empty());
           *self->state().unpersisted_events = std::move(unpersisted_events);
         }
-      },
-      [self](const caf::error& err) {
-        self->quit(diagnostic::error(err)
-                     .note("{} failed to subscribe to importer", *self)
-                     .to_error());
-      });
+      };
+  auto on_subscribe_error = [self](const caf::error& err) {
+    self->quit(diagnostic::error(err)
+                 .note("{} failed to subscribe to importer", *self)
+                 .to_error());
+  };
+  auto subscribe = [&](auto mailer) {
+    std::move(mailer)
+      .request(importer, caf::infinite)
+      .await(std::move(on_subscribed), std::move(on_subscribe_error));
+  };
+  if (self->state().mode.high_priority) {
+    subscribe(self
+                ->mail(atom::get_v,
+                       caf::actor_cast<receiver_actor<table_slice>>(self),
+                       self->state().mode.internal,
+                       /*live=*/self->state().mode.live,
+                       /*recent=*/self->state().mode.retro)
+                .urgent());
+  } else {
+    subscribe(self->mail(atom::get_v,
+                         caf::actor_cast<receiver_actor<table_slice>>(self),
+                         self->state().mode.internal,
+                         /*live=*/self->state().mode.live,
+                         /*recent=*/self->state().mode.retro));
+  }
   // If we're retro, then we can query the catalog immediately.
   if (mode.retro) {
     const auto catalog
@@ -278,58 +292,62 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
     TENZIR_DEBUG("export operator starts catalog lookup with id {} and "
                  "expression {}",
                  query_context.id, self->state().expr);
-    self->mail(atom::candidates_v, query_context)
-      .request(catalog, caf::infinite)
-      .then(
-        [self, query_context](catalog_lookup_result& result) {
-          self->state().checked_candidates = true;
-          auto max_import_time = time::min();
-          for (auto& [type, info] : result.candidate_infos) {
-            if (info.partition_infos.empty()) {
-              continue;
-            }
-            const auto* bound_expr = self->state().bind_expr(type, info.exp);
-            if (not bound_expr) {
-              // failing to bind is not an error.
-              continue;
-            }
-            auto ctx = query_context;
-            ctx.expr = *bound_expr;
-            for (auto& partition_info : info.partition_infos) {
-              max_import_time
-                = std::max(max_import_time, partition_info.max_import_time);
-              self->state().queued_partitions.emplace(std::move(partition_info),
-                                                      ctx);
-            }
-            while (self->state().open_partitions
-                   < self->state().mode.parallel) {
-              ++self->state().open_partitions;
-              detail::weak_run_delayed(self, duration::zero(), [self] {
-                self->state().pop_partition();
-              });
-            }
-          }
-          TENZIR_ASSERT(self->state().unpersisted_events);
-          for (auto& slice : *self->state().unpersisted_events) {
-            if (slice.import_time() > max_import_time) {
-              self->state().add_events(std::move(slice),
-                                       event_source::unpersisted,
-                                       caf::typed_response_promise<void>{});
-            }
-          }
-          self->state().unpersisted_events.reset();
-          // In case we get zero partitions back from the catalog we need to
-          // already signal that we're done here.
-          if (self->state().buffer_rp.pending() and self->state().is_done()) {
-            self->state().buffer_rp.deliver(table_slice{});
-          }
-        },
-        [self](const caf::error& err) {
-          self->quit(
-            diagnostic::error(err)
-              .note("{} failed to retrieve candidates from catalog", *self)
-              .to_error());
-        });
+    auto on_candidates = [self, query_context](catalog_lookup_result& result) {
+      self->state().checked_candidates = true;
+      auto max_import_time = time::min();
+      for (auto& [type, info] : result.candidate_infos) {
+        if (info.partition_infos.empty()) {
+          continue;
+        }
+        const auto* bound_expr = self->state().bind_expr(type, info.exp);
+        if (not bound_expr) {
+          // failing to bind is not an error.
+          continue;
+        }
+        auto ctx = query_context;
+        ctx.expr = *bound_expr;
+        for (auto& partition_info : info.partition_infos) {
+          max_import_time
+            = std::max(max_import_time, partition_info.max_import_time);
+          self->state().queued_partitions.emplace(std::move(partition_info),
+                                                  ctx);
+        }
+        while (self->state().open_partitions < self->state().mode.parallel) {
+          ++self->state().open_partitions;
+          detail::weak_run_delayed(self, duration::zero(), [self] {
+            self->state().pop_partition();
+          });
+        }
+      }
+      TENZIR_ASSERT(self->state().unpersisted_events);
+      for (auto& slice : *self->state().unpersisted_events) {
+        if (slice.import_time() > max_import_time) {
+          self->state().add_events(std::move(slice), event_source::unpersisted,
+                                   caf::typed_response_promise<void>{});
+        }
+      }
+      self->state().unpersisted_events.reset();
+      // In case we get zero partitions back from the catalog we need to
+      // already signal that we're done here.
+      if (self->state().buffer_rp.pending() and self->state().is_done()) {
+        self->state().buffer_rp.deliver(table_slice{});
+      }
+    };
+    auto on_candidates_error = [self](const caf::error& err) {
+      self->quit(diagnostic::error(err)
+                   .note("{} failed to retrieve candidates from catalog", *self)
+                   .to_error());
+    };
+    auto lookup = [&](auto mailer) {
+      std::move(mailer)
+        .request(catalog, caf::infinite)
+        .then(std::move(on_candidates), std::move(on_candidates_error));
+    };
+    if (self->state().mode.high_priority) {
+      lookup(self->mail(atom::candidates_v, query_context).urgent());
+    } else {
+      lookup(self->mail(atom::candidates_v, query_context));
+    }
   }
   return {
     [self](table_slice& slice) -> caf::result<void> {
