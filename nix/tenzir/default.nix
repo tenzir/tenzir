@@ -19,8 +19,6 @@ let
       extraPlugins ? [ ],
       symlinkJoin,
       extraCmakeFlags ? [ ],
-      tenzirVersionSuffix ? "",
-      tenzirVersionBuildMetadata ? null,
       python3,
       uv,
       uv-bin,
@@ -62,6 +60,8 @@ let
         "plugins/yara"
       ];
 
+      tenzirPluginNames = import ./plugins/names.nix;
+
       pythonDeps = import ../python-dependencies.nix;
       py3 =
         let
@@ -74,9 +74,7 @@ let
           ]
         );
 
-      allPluginSrcs = builtins.mapAttrs (
-        name: type: if type == "directory" then "${tenzir-plugins-source}/${name}" else null
-      ) (lib.filterAttrs (_: type: type == "directory") (builtins.readDir tenzir-plugins-source));
+      allPluginSrcs = lib.genAttrs tenzirPluginNames (name: "${tenzir-plugins-source}/${name}");
 
       withTenzirPluginsStatic =
         { prevLayer }:
@@ -254,18 +252,8 @@ let
           ++ extraCmakeFlags;
 
           preConfigure = ''
-            ${
-              if tenzirVersionBuildMetadata == null then
-                ''
-                  version_build_metadata="N$(basename $out | cut -d'-' -f 1)"
-                ''
-              else
-                ''
-                  version_build_metadata=${lib.escapeShellArg tenzirVersionBuildMetadata}
-                ''
-            }
-            version_suffix=${lib.escapeShellArg tenzirVersionSuffix}
-            cmakeFlagsArray+=("-DTENZIR_VERSION_SUFFIX=$version_suffix")
+            version_build_metadata="N$(basename $out | cut -d'-' -f 1)"
+            cmakeFlagsArray+=("-DTENZIR_VERSION_SUFFIX=$version_build_metadata")
             cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=$version_build_metadata")
           '';
 

@@ -804,8 +804,6 @@ jobs:
       arch: aarch64
       attribute: tenzir-static
       build-version: ${{ needs.configure.outputs.build-version }}
-      version-suffix: ${{ needs.configure.outputs.tenzir-version-suffix }}
-      version-build-metadata: ${{ needs.configure.outputs.tenzir-version-build-metadata }}
     secrets: inherit
 
   tenzir-static-x86_64-linux:
@@ -819,8 +817,6 @@ jobs:
       arch: x86_64
       attribute: tenzir-static
       build-version: ${{ needs.configure.outputs.build-version }}
-      version-suffix: ${{ needs.configure.outputs.tenzir-version-suffix }}
-      version-build-metadata: ${{ needs.configure.outputs.tenzir-version-build-metadata }}
     secrets: inherit
 
   tenzir-static-arm64-darwin:
@@ -834,8 +830,6 @@ jobs:
       arch: arm64
       attribute: tenzir-static
       build-version: ${{ needs.configure.outputs.build-version }}
-      version-suffix: ${{ needs.configure.outputs.tenzir-version-suffix }}
-      version-build-metadata: ${{ needs.configure.outputs.tenzir-version-build-metadata }}
       notarize_macos: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
     secrets: inherit
 
@@ -1125,7 +1119,7 @@ jobs:
         with:
           name: tenzir
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
-          pushFilter: "(tenzir-ee|tenzir-plugins-source)"
+          pushFilter: "(tenzir-ee|tenzir-plugins-source|tenzir-plugins\\.tar\\.gz)"
       - name: Install workspace dependencies
         working-directory: python
         run: |
@@ -1192,7 +1186,7 @@ jobs:
         with:
           name: tenzir
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
-          pushFilter: "(tenzir-ee|tenzir-plugins-source)"
+          pushFilter: "(tenzir-ee|tenzir-plugins-source|tenzir-plugins\\.tar\\.gz)"
       - name: Download signed tarball (macOS)
         if: runner.os == 'macOS'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0

@@ -1,0 +1,18 @@
+[
+  "compaction"
+  "context"
+  "from_microsoft_sql"
+  "from_sentinelone_data_lake"
+  "microsoft_graph"
+  "packages"
+  "pipeline-manager"
+  "platform"
+  "snowflake"
+  "to_amazon_security_lake"
+  "to_azure_log_analytics"
+  "to_google_cloud_logging"
+  "to_google_secops"
+  "to_sentinelone_data_lake"
+  "to_splunk"
+  "vast"
+]
