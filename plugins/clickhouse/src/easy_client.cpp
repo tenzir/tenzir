@@ -195,26 +195,15 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
   /// TODO: This should really be merged with the transformer itself. Its an
   /// (almost) duplicate of `make_record_functions_from_clickhouse`
   const auto json_index = [&](std::string_view name) -> Option<size_t> {
-    for (size_t i = 0; i < args_.json.size(); ++i) {
-      if (args_.json[i].inner == name) {
-        return i;
-      }
-    }
-    return None{};
+    return index_of(args_.json, name);
   };
   auto json_seen = std::vector<bool>(args_.json.size(), false);
   // Fields named in `low_cardinality` are wrapped as `LowCardinality(<inner>)`,
   // where the inner type is the normally inferred type. Unlike `json`, the
   // inner type cannot be synthesized for absent fields, so every listed column
   // must be present in the first event (enforced after the loop below).
-  const auto low_cardinality_index
-    = [&](std::string_view name) -> Option<size_t> {
-    for (size_t i = 0; i < args_.low_cardinality.size(); ++i) {
-      if (args_.low_cardinality[i].inner == name) {
-        return i;
-      }
-    }
-    return None{};
+  const auto low_cardinality_index = [&](std::string_view name) {
+    return index_of(args_.low_cardinality, name);
   };
   auto low_cardinality_seen
     = std::vector<bool>(args_.low_cardinality.size(), false);
@@ -244,10 +233,7 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
     TENZIR_ASSERT(not clickhouse_typename.empty());
     if (auto idx = low_cardinality_index(k)) {
       low_cardinality_seen[*idx] = true;
-      // The clickhouse-cpp client only supports `LowCardinality` over `String`;
-      // it rejects or mishandles fixed-size inner types such as numerics.
-      if (clickhouse_typename != "String"
-          and clickhouse_typename != "Nullable(String)") {
+      if (not is_lowcardinality_supported_inner(clickhouse_typename)) {
         diagnostic::error("column `{}` cannot be a `LowCardinality` column", k)
           .primary(args_.low_cardinality[*idx])
           .note("`LowCardinality` is only supported for `string` columns, but "
@@ -483,6 +469,8 @@ auto easy_client::insert(const table_slice& slice, std::string_view table_name,
                           "`{}`",
                           resolved_table_name)
         .note("{} event(s) will be dropped", rows)
+        .note("the ClickHouse client cannot insert rows that consist only of "
+              "default columns (it would emit `INSERT INTO ... () VALUES`)")
         .emit(dh_);
     }
     return {};

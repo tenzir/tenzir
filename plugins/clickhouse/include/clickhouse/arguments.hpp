@@ -23,6 +23,7 @@
 #include <cctype>
 #include <charconv>
 #include <limits>
+#include <span>
 #include <vector>
 
 namespace tenzir::plugins::clickhouse {
@@ -203,6 +204,27 @@ unwrap_clickhouse_type_call(std::string_view text, std::string_view name)
     return None{};
   }
   return text.substr(name.size() + 1, text.size() - name.size() - 2);
+}
+
+/// Returns the index of the first entry in `columns` whose `.inner` equals
+/// `name`, or `None` if absent. Used to look up a field name in the `json=` and
+/// `low_cardinality=` argument lists.
+inline auto index_of(std::span<const located<std::string>> columns,
+                     std::string_view name) -> Option<size_t> {
+  for (size_t i = 0; i < columns.size(); ++i) {
+    if (columns[i].inner == name) {
+      return i;
+    }
+  }
+  return None{};
+}
+
+/// The clickhouse-cpp client only supports `LowCardinality` over `String` (and
+/// its nullable form); it rejects or mishandles fixed-size inner types such as
+/// numerics. Both the create-table path (`remote_create_table`) and the
+/// append path (`make_functions_from_clickhouse`) gate on this same invariant.
+inline auto is_lowcardinality_supported_inner(std::string_view inner) -> bool {
+  return inner == "String" or inner == "Nullable(String)";
 }
 
 inline auto parse_clickhouse_size(std::string_view text, size_t& result)

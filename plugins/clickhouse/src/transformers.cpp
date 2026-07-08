@@ -66,6 +66,54 @@ void emit_null_in_non_nullable_warning(const path_type& path,
     .note("affected events will be dropped")
     .emit(dh);
 }
+
+/// Applies the standard null-drop policy for a non-nullable *leaf* column: no
+/// nulls (or no null bitmap) yields `drop::none`; an all-null array yields
+/// `drop::all`; otherwise the null rows are marked in `dropmask` and
+/// `drop::some` is returned. `easy_client::insert` relies on this drop having
+/// been reported. Not for record columns, which reconstruct from nested values
+/// and thus do not short-circuit to `drop::all` on a top-level null.
+///
+/// The warning is emitted at most once, and only when this column introduces a
+/// null for a row not *already* dropped upstream. A null nested record marks
+/// its rows dropped before recursing into its children (see
+/// `transformer_record::update_dropmask`), so a null that merely mirrors the
+/// parent's null does not warn again here; only a genuinely leaf-level null in
+/// an otherwise-present row does.
+auto apply_null_dropmask(const arrow::Array& array, dropmask_ref dropmask,
+                         const path_type& path, diagnostic_handler& dh)
+  -> transformer::drop {
+  if (not array.null_bitmap() or array.null_count() == 0) {
+    return transformer::drop::none;
+  }
+  if (array.null_count() == array.length()) {
+    // Report only if the caller has not already dropped every row upstream.
+    auto newly_dropped = false;
+    for (int64_t i = 0; i < array.length(); ++i) {
+      if (not dropmask[i]) {
+        newly_dropped = true;
+        break;
+      }
+    }
+    if (newly_dropped) {
+      emit_null_in_non_nullable_warning(path, dh);
+    }
+    return transformer::drop::all;
+  }
+  auto newly_dropped = false;
+  for (int64_t i = 0; i < array.length(); ++i) {
+    if (array.IsNull(i)) {
+      if (not dropmask[i]) {
+        newly_dropped = true;
+      }
+      dropmask[i] = true;
+    }
+  }
+  if (newly_dropped) {
+    emit_null_in_non_nullable_warning(path, dh);
+  }
+  return transformer::drop::some;
+}
 } // namespace
 
 transformer_record::transformer_record(std::string clickhouse_typename,
@@ -481,22 +529,7 @@ struct transformer_from_trait : transformer {
     if (not correct_type) {
       return drop::all;
     }
-    if (not array.null_bitmap()) {
-      return drop::none;
-    }
-    if (array.null_count() == 0) {
-      return drop::none;
-    }
-    emit_null_in_non_nullable_warning(path, dh);
-    if (array.null_count() == array.length()) {
-      return drop::all;
-    }
-    for (int64_t i = 0; i < array.length(); ++i) {
-      if (array.IsNull(i)) {
-        dropmask[i] = true;
-      }
-    }
-    return drop::some;
+    return apply_null_dropmask(array, dropmask, path, dh);
   }
 
   virtual auto create_null_column(size_t n) const
@@ -732,8 +765,9 @@ private:
 /// different scale or carries a timezone. We build a column with the table's
 /// exact scale and timezone so the inserted block type matches the target
 /// column and no server-side conversion is required. Nanosecond values are
-/// divided down to the column's tick unit (`10^(9-N)`), truncating
-/// sub-precision just as a server-side scale conversion would.
+/// divided down to the column's tick unit (`10^(9-N)`), flooring toward
+/// negative infinity just as a server-side scale conversion would (so
+/// pre-epoch, sub-tick values round down rather than toward zero).
 struct transformer_datetime64 : transformer {
   size_t scale;
   Option<std::string> timezone;
@@ -770,10 +804,12 @@ struct transformer_datetime64 : transformer {
   auto update_dropmask(path_type& path, const tenzir::type& type,
                        const arrow::Array& array, dropmask_ref dropmask,
                        tenzir::diagnostic_handler& dh) -> drop override {
-    if (nullable) {
-      return drop::none;
-    }
-    if (not type.kind().is<time_type>()) {
+    // Validate the input type up front for both the nullable and non-nullable
+    // case, so a mismatch produces the targeted "incompatible type" diagnostic
+    // here rather than a generic "failed to add column" from `create_column`.
+    // A `null_type` input is accepted: it is materialized via
+    // `create_null_column` (nullable) or dropped as all-null (non-nullable).
+    if (not type.kind().is<time_type>() and not type.kind().is<null_type>()) {
       diagnostic::warning("incompatible type for column `{}`",
                           fmt::join(path, "."))
         .note("expected `{}`, got `{}`", type_kind{tag_v<time_type>},
@@ -781,19 +817,10 @@ struct transformer_datetime64 : transformer {
         .emit(dh);
       return drop::all;
     }
-    if (not array.null_bitmap() or array.null_count() == 0) {
+    if (nullable) {
       return drop::none;
     }
-    emit_null_in_non_nullable_warning(path, dh);
-    if (array.null_count() == array.length()) {
-      return drop::all;
-    }
-    for (int64_t i = 0; i < array.length(); ++i) {
-      if (array.IsNull(i)) {
-        dropmask[i] = true;
-      }
-    }
-    return drop::some;
+    return apply_null_dropmask(array, dropmask, path, dh);
   }
 
   auto create_null_column(size_t n) const -> ::clickhouse::ColumnRef override {
@@ -834,12 +861,24 @@ struct transformer_datetime64 : transformer {
           append(std::nullopt);
           continue;
         }
-        append(value_transform(*v) / divisor);
+        append(to_ticks(value_transform(*v)));
       }
     });
   }
 
 private:
+  /// Converts a nanosecond timestamp to the column's tick unit, flooring toward
+  /// negative infinity to match ClickHouse's server-side scale conversion.
+  /// Integer division alone truncates toward zero, which would round pre-epoch
+  /// (negative) sub-tick values up. `divisor` is always positive.
+  auto to_ticks(int64_t nanos) const -> int64_t {
+    auto q = nanos / divisor;
+    if (nanos % divisor != 0 and nanos < 0) {
+      --q;
+    }
+    return q;
+  }
+
   /// Allocates a plain or nullable `ColumnDateTime64` with the configured scale
   /// and timezone, reserves `n` rows, and invokes `fill` with an `append`
   /// callback taking an optional tick value. For a plain column a
@@ -1329,7 +1368,7 @@ auto make_functions_from_clickhouse(path_type& path,
   // such as numerics, so we reject those here with a clear error.
   if (auto inner
       = unwrap_clickhouse_type_call(clickhouse_typename, "LowCardinality")) {
-    if (*inner != "String" and *inner != "Nullable(String)") {
+    if (not is_lowcardinality_supported_inner(*inner)) {
       diagnostic::error("ClickHouse column `{}` has unsupported type `{}`",
                         fmt::join(path, "."), clickhouse_typename)
         .note("`LowCardinality` is only supported for `String` columns")
