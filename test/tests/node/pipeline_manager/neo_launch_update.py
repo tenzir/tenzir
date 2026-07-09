@@ -9,13 +9,14 @@ import shlex
 import shutil
 import socket
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 API_PREFIX = "/api/v0"
 
@@ -232,6 +233,51 @@ def _check_sink_id_escaping(base_url: str) -> None:
             _delete_pipeline(base_url, created_id)
 
 
+def _wait_for_pipeline_state(
+    base_url: str,
+    pipeline_id: str,
+    expected_state: str,
+    *,
+    timeout: float = 10,
+) -> dict[str, Any]:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        # Query the pipeline directly instead of using /pipeline/list, as the
+        # latter omits hidden pipelines.
+        status, body = _post_api(base_url, "/pipeline/update", {"id": pipeline_id})
+        assert status == 200, body
+        pipeline = body.get("pipeline")
+        assert isinstance(pipeline, dict), body
+        if pipeline.get("state") == expected_state:
+            return pipeline
+        time.sleep(0.1)
+    raise AssertionError(
+        f"pipeline {pipeline_id} did not reach state {expected_state!r} within {timeout}s"
+    )
+
+
+def _wait_for_pipeline_stopped_or_deleted(
+    base_url: str,
+    pipeline_id: str,
+    *,
+    timeout: float = 10,
+) -> None:
+    # Hidden pipelines are automatically deleted once they stop, so a
+    # successful stop manifests either as the `stopped` state or as the
+    # pipeline no longer existing.
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        status, body = _post_api(base_url, "/pipeline/update", {"id": pipeline_id})
+        pipeline = body.get("pipeline")
+        if status != 200 or not isinstance(pipeline, dict):
+            # The pipeline no longer exists.
+            return
+        if pipeline.get("state") == "stopped":
+            return
+        time.sleep(0.1)
+    raise AssertionError(f"pipeline {pipeline_id} did not stop within {timeout}s")
+
+
 def _check_update_parse_compatibility(base_url: str) -> None:
     legacy_definition = "from {x: 1} | discard"
     legacy_updated_definition = "from {x: 2} | discard"
@@ -275,11 +321,218 @@ def _check_update_parse_compatibility(base_url: str) -> None:
             _delete_pipeline(base_url, created_id)
 
 
+class _ServeResult(NamedTuple):
+    status: int
+    body: dict[str, Any]
+
+
+@contextmanager
+def _background_serve_request(
+    base_url: str, serve_id: str
+) -> Iterator[tuple[threading.Event, list[_ServeResult], list[BaseException]]]:
+    """Poll `/serve` on a background thread.
+
+    Yields `(done_event, results, errors)`. After the context exits, exactly
+    one of `results` or `errors` will be populated (once `done_event` is set).
+    """
+    done = threading.Event()
+    results: list[_ServeResult] = []
+    errors: list[BaseException] = []
+
+    def worker() -> None:
+        try:
+            status, response = _post_api(
+                base_url,
+                "/serve",
+                {
+                    "serve_id": serve_id,
+                    "timeout": "10s",
+                    "min_events": 1,
+                    "max_events": 1,
+                    "schema": "never",
+                },
+            )
+            results.append(_ServeResult(status, response))
+        except BaseException as exc:  # pragma: no cover - surfaced below
+            errors.append(exc)
+        finally:
+            done.set()
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    try:
+        yield done, results, errors
+    finally:
+        thread.join(timeout=0)
+
+
+def _assert_serve_completed_after_stop(
+    base_url: str,
+    created_id: str,
+    serve_id: str,
+    done: threading.Event,
+    results: list[_ServeResult],
+    errors: list[BaseException],
+) -> dict[str, Any]:
+    """Stop `created_id` and assert the background `/serve` completes cleanly."""
+    time.sleep(0.5)
+    assert not done.is_set(), "serve returned before pipeline stop"
+    status, body = _post_api(
+        base_url,
+        "/pipeline/update",
+        {"id": created_id, "action": "stop"},
+    )
+    assert status == 200, body
+    assert done.wait(5), "serve did not terminate promptly after stop"
+    assert not errors, errors
+    assert len(results) == 1, results
+    result = results[0]
+    assert result.status == 200, result
+    assert isinstance(result.body, dict), result
+    assert result.body.get("state") == "completed", result.body
+    _wait_for_pipeline_stopped_or_deleted(base_url, created_id)
+    return result.body
+
+
+def _check_every_stop_terminates_serve(base_url: str) -> None:
+    created_id = ""
+    try:
+        status, body = _post_api(
+            base_url,
+            "/pipeline/launch",
+            {
+                "definition": (
+                    "//neo\n"
+                    "every 500ms {\n"
+                    "  pipeline::list\n"
+                    "  where not hidden\n"
+                    "  sort id\n"
+                    "  summarize pipelines = this.collect()\n"
+                    # Discard all events so that the long-polling /serve
+                    # request below stays blocked until the pipeline stops.
+                    "  where false\n"
+                    "}\n"
+                ),
+                "name": "neo-every-stop",
+                "hidden": True,
+                "serve_id": "neo-every-stop",
+                "ttl": "60s",
+                "autostart": {"created": True},
+            },
+        )
+        assert status == 200, body
+        created_id = str(body.get("id", ""))
+        assert created_id, body
+        _wait_for_pipeline_state(base_url, created_id, "running")
+        with _background_serve_request(base_url, "neo-every-stop") as (
+            done,
+            results,
+            errors,
+        ):
+            _assert_serve_completed_after_stop(
+                base_url, created_id, "neo-every-stop", done, results, errors
+            )
+        print("every-stop-terminates-serve: ok")
+    finally:
+        if created_id:
+            _delete_pipeline(base_url, created_id)
+
+
+def _check_hidden_diagnostics_stop_terminates_serve(base_url: str) -> None:
+    created_id = ""
+    try:
+        status, body = _post_api(
+            base_url,
+            "/pipeline/launch",
+            {
+                "definition": (
+                    "//neo\n"
+                    'diagnostics live=true, retro=true | where pipeline_id == "'
+                    '00000000-0000-0000-0000-000000000000"'
+                ),
+                "name": "neo-hidden-diagnostics-stop",
+                "hidden": True,
+                "serve_id": "neo-hidden-diagnostics-stop",
+                "ttl": "60s",
+                "autostart": {"created": True},
+            },
+        )
+        assert status == 200, body
+        created_id = str(body.get("id", ""))
+        assert created_id, body
+        _wait_for_pipeline_state(base_url, created_id, "running")
+        with _background_serve_request(base_url, "neo-hidden-diagnostics-stop") as (
+            done,
+            results,
+            errors,
+        ):
+            response = _assert_serve_completed_after_stop(
+                base_url,
+                created_id,
+                "neo-hidden-diagnostics-stop",
+                done,
+                results,
+                errors,
+            )
+        events = response.get("events")
+        assert isinstance(events, list) and not events, response
+        print("hidden-diagnostics-stop-terminates-serve: ok")
+    finally:
+        if created_id:
+            _delete_pipeline(base_url, created_id)
+
+
+def _check_full_buffer_stop_terminates_serve(base_url: str) -> None:
+    # Regression test: a pipeline ending in `serve` whose buffer is full (the
+    # operator is throttled inside its `put`) and that has no client draining
+    # it must still stop promptly. Previously the operator blocked its own main
+    # loop awaiting the throttling `put`, so the graceful-stop signal was never
+    # delivered, the serve-manager never dropped its buffer, and the pipeline
+    # hung until the shutdown watchdog force-killed it.
+    created_id = ""
+    try:
+        status, body = _post_api(
+            base_url,
+            "/pipeline/launch",
+            {
+                # Produce far more than the default serve buffer (1024 events)
+                # so the operator gets throttled with no client draining it.
+                "definition": ("//neo\nfrom {x: 1}\nrepeat 100000\n"),
+                "name": "neo-full-buffer-stop",
+                "hidden": True,
+                "serve_id": "neo-full-buffer-stop",
+                "ttl": "60s",
+                "autostart": {"created": True},
+            },
+        )
+        assert status == 200, body
+        created_id = str(body.get("id", ""))
+        assert created_id, body
+        _wait_for_pipeline_state(base_url, created_id, "running")
+        # Give the pipeline a moment to fill the serve buffer and throttle,
+        # without ever polling `/serve`.
+        time.sleep(1.0)
+        status, body = _post_api(
+            base_url,
+            "/pipeline/update",
+            {"id": created_id, "action": "stop"},
+        )
+        assert status == 200, body
+        _wait_for_pipeline_stopped_or_deleted(base_url, created_id, timeout=10)
+        print("full-buffer-stop-terminates-serve: ok")
+    finally:
+        if created_id:
+            _delete_pipeline(base_url, created_id)
+
+
 def main() -> None:
     with _running_web_server() as base_url:
         _check_launch_compile_diagnostics(base_url)
         _check_sink_id_escaping(base_url)
         _check_update_parse_compatibility(base_url)
+        _check_every_stop_terminates_serve(base_url)
+        _check_hidden_diagnostics_stop_terminates_serve(base_url)
+        _check_full_buffer_stop_terminates_serve(base_url)
 
 
 if __name__ == "__main__":

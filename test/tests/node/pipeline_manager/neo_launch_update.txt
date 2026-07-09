@@ -1,3 +1,6 @@
 neo-launch-compile-diagnostics: ok
 neo-launch-sink-id-escaping: ok
 update-accepts-legacy-and-neo-definitions: ok
+every-stop-terminates-serve: ok
+hidden-diagnostics-stop-terminates-serve: ok
+full-buffer-stop-terminates-serve: ok
