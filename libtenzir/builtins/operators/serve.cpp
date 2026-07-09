@@ -91,6 +91,11 @@ namespace {
 constexpr auto serve_endpoint_id = 0;
 constexpr auto serve_multi_endpoint_id = 1;
 
+/// The well-known continuation token of the first page. Generated tokens are
+/// v4 UUIDs, so the nil UUID cannot collide with them.
+constexpr auto initial_continuation_token
+  = "00000000-0000-0000-0000-000000000000";
+
 constexpr auto serve_spec = R"_(
 /serve:
   post:
@@ -279,7 +284,7 @@ constexpr auto serve_multi_spec = R"_(
                 minItems: 1
                 items:
                   type: object
-                  required: [serve_id]
+                  required: [serve_id, continuation_token]
                   properties:
                     serve_id:
                       type: string
@@ -288,7 +293,7 @@ constexpr auto serve_multi_spec = R"_(
                     continuation_token:
                       type: string
                       example: "340ce2j"
-                      description: The continuation token from the previous response for this output stream. Omit this field for the initial request.
+                      description: The continuation token from the previous response for this output stream. Pass `00000000-0000-0000-0000-000000000000` for the initial request.
                     schema:
                       type: string
                       enum: [legacy, exact, never]
@@ -320,6 +325,7 @@ constexpr auto serve_multi_spec = R"_(
           example:
             requests:
               - serve_id: "query-1"
+                continuation_token: "00000000-0000-0000-0000-000000000000"
               - serve_id: "query-2"
                 continuation_token: "340ce2j"
                 schema: never
@@ -623,7 +629,8 @@ struct serve_manager_state {
       TENZIR_DEBUG("{} received DOWN for an unknown serve operator", *self);
       return;
     }
-    if (not found->continuation_token.empty()) {
+    if (not found->continuation_token.empty()
+        and found->continuation_token != initial_continuation_token) {
       TENZIR_DEBUG("{} received premature DOWN for serve id {} with "
                    "continuation "
                    "token {}",
@@ -695,7 +702,7 @@ struct serve_manager_state {
     ops.push_back({
       .source = addr,
       .serve_id = serve_id,
-      .continuation_token = "",
+      .continuation_token = initial_continuation_token,
       .buffer_size = buffer_size,
     });
     self->monitor(std::move(watched), [this, addr](const caf::error& err) {
@@ -830,6 +837,11 @@ struct serve_manager_state {
   }
 
   auto get(single_serve_request request) -> caf::result<serve_response> {
+    // /serve allows omitting the continuation token for the first request;
+    // /serve-multi requires it and rejects empty tokens at parse time.
+    if (request.continuation_token.empty()) {
+      request.continuation_token = initial_continuation_token;
+    }
     const auto found
       = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
           return op.serve_id == request.serve_id;
@@ -853,14 +865,22 @@ struct serve_manager_state {
                                          *self, request.serve_id));
     }
     // Re-fetch of the most recently delivered batch: the client retried with
-    // the previous (non-empty) continuation token because the response was lost
-    // or its poll was cancelled. This also covers the final batch of a
-    // completed pipeline, whose current continuation token is now empty.
-    if (not request.continuation_token.empty()
-        and found->last_continuation_token == request.continuation_token) {
+    // the token of its previous request because the response was lost or its
+    // poll was cancelled. This covers the first page (whose token is the
+    // well-known initial token) and the final batch of a completed pipeline.
+    // `last_continuation_token` stays empty until the first delivery, and the
+    // request token is never empty here, so a fresh serve cannot match.
+    if (found->last_continuation_token == request.continuation_token) {
       return std::make_tuple(
         found->continuation_token,
         split(found->last_results, request.max_events).first);
+    }
+    // A first-page request against a serve that completed past its first page:
+    // report completion instead of an unknown-token error. An empty current
+    // token means the final batch was already delivered.
+    if (request.continuation_token == initial_continuation_token
+        and (found->done or found->continuation_token.empty())) {
+      return std::make_tuple(std::string{}, std::vector<table_slice>{});
     }
     if (found->continuation_token != request.continuation_token) {
       // If the operator already reached a terminal state, e.g., because it was
@@ -1217,6 +1237,15 @@ struct serve_handler_state {
         return std::move(*err);
       }
       auto& new_request = as<request_base>(parsed);
+      if (new_request.continuation_token.empty()) {
+        return parse_error{
+          .message = fmt::format("missing `continuation_token` for serve id "
+                                 "`{}`; pass `{}` for the initial request",
+                                 new_request.serve_id,
+                                 initial_continuation_token),
+          .detail = caf::make_error(ec::invalid_argument),
+        };
+      }
       const auto is_duplicate = std::ranges::contains(
         requests, new_request.serve_id, &request_base::serve_id);
       if (is_duplicate) {

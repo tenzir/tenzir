@@ -8,8 +8,15 @@
 // omits it. That null must be treated as "unset" rather than rejected.
 api "/serve-multi", {
   requests: [
-    {serve_id: "serve_multi_schema_a", schema: "exact"},
-    {serve_id: "serve_multi_schema_b"},
+    {
+      serve_id: "serve_multi_schema_a",
+      continuation_token: "00000000-0000-0000-0000-000000000000",
+      schema: "exact",
+    },
+    {
+      serve_id: "serve_multi_schema_b",
+      continuation_token: "00000000-0000-0000-0000-000000000000",
+    },
   ],
   timeout: 5s,
   min_events: 8,

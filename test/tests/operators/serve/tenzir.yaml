@@ -66,3 +66,18 @@ tenzir:
       definition: |
         from {n: 1}, {n: 2}, {n: 3}, {n: 4}
         serve "serve_retry"
+    serve_multi_retry_a:
+      name: serve multi retry a
+      definition: |
+        from {n: 1}, {n: 2}, {n: 3}, {n: 4}
+        serve "serve_multi_retry_a"
+    serve_multi_retry_b:
+      name: serve multi retry b
+      definition: |
+        from {n: 5}, {n: 6}, {n: 7}, {n: 8}
+        serve "serve_multi_retry_b"
+    serve_first_page:
+      name: serve first page
+      definition: |
+        from {n: 1}, {n: 2}, {n: 3}, {n: 4}
+        serve "serve_first_page"

@@ -4,8 +4,14 @@
 // serve instead of waiting for it.
 api "/serve-multi", {
   requests: [
-    {serve_id: "serve_multi_partial"},
-    {serve_id: "serve_multi_idle"},
+    {
+      serve_id: "serve_multi_partial",
+      continuation_token: "00000000-0000-0000-0000-000000000000",
+    },
+    {
+      serve_id: "serve_multi_idle",
+      continuation_token: "00000000-0000-0000-0000-000000000000",
+    },
   ],
   timeout: 10s,
   min_events: 8,
