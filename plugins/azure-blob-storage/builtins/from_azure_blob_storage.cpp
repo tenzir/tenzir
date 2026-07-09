@@ -143,10 +143,11 @@ struct FromAzureBlobStorageArgs : FromArrowFsArgs {
   Option<located<secret>> account_key;
 };
 
-class FromAzureBlobStorageOperator final : public FromArrowFsOperator {
+class FromAzureBlobStorageOperator final
+  : public FromArrowFsOperator<table_slice> {
 public:
   explicit FromAzureBlobStorageOperator(FromAzureBlobStorageArgs args)
-    : FromArrowFsOperator{static_cast<FromArrowFsArgs&>(args)},
+    : FromArrowFsOperator<table_slice>{static_cast<FromArrowFsArgs&>(args)},
       args_{std::move(args)} {
   }
 

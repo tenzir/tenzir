@@ -6,10 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/tql2/eval2.hpp"
-
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/eval2.hpp"
 #include "tenzir2/assert.hpp"
 #include "tenzir2/type_system/array/access.hpp"
 #include "tenzir2/type_system/array/record.hpp"
@@ -81,15 +80,14 @@ auto assign_data(std::span<tenzir::ast::field_path::segment const> path,
   // else, we overwrite it with an implicit record (mirroring the legacy
   // `tenzir::assign` behavior) and warn.
   return access::transform(
-    std::move(input),
-    [&]<typename T>(array_<T>&& arr) -> array_<data> {
+    std::move(input), [&]<typename T>(array_<T>&& arr) -> array_<data> {
       if constexpr (std::same_as<T, record>) {
         return assign(path, std::move(right), std::move(arr), dh);
       } else {
         if constexpr (not std::same_as<T, null>) {
-          tenzir::diagnostic::warning(
-            "implicit record for `{}` field overwrites existing value",
-            path[0].id.name)
+          tenzir::diagnostic::warning("implicit record for `{}` field "
+                                      "overwrites existing value",
+                                      path[0].id.name)
             .primary(path[0].id)
             .hint("if this is intentional, drop the parent field first")
             .emit(dh);

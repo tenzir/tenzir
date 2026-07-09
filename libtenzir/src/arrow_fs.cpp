@@ -20,6 +20,7 @@
 #include "tenzir/glob.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/table_slice.hpp"
+#include "tenzir2/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/set.hpp"
 #include "tenzir/view3.hpp"
@@ -76,7 +77,9 @@ constexpr auto extract_root_path(glob const& glob_, std::string const& expanded)
 
 } // namespace
 
-auto FromArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, tenzir2::TableSlice>
+auto FromArrowFsOperator<Output>::start(OpCtx& ctx) -> Task<void> {
   co_await OperatorBase::start(ctx);
   auto resolved = co_await resolve_url(ctx);
   if (not resolved) {
@@ -107,12 +110,17 @@ auto FromArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
   }
 }
 
-auto FromArrowFsOperator::await_task(diagnostic_handler&) const -> Task<Any> {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, tenzir2::TableSlice>
+auto FromArrowFsOperator<Output>::await_task(diagnostic_handler&) const
+  -> Task<Any> {
   co_return co_await results_->dequeue();
 }
 
-auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
-                                       OpCtx& ctx) -> Task<void> {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, tenzir2::TableSlice>
+auto FromArrowFsOperator<Output>::process_task(Any result, Push<Output>&,
+                                               OpCtx& ctx) -> Task<void> {
   auto msg = result.as<AwaitResult>();
   co_await co_match(
     msg,
@@ -256,28 +264,42 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
     });
 }
 
-auto FromArrowFsOperator::process_sub(SubKeyView key, table_slice slice,
-                                      Push<table_slice>& push, OpCtx& ctx)
+template <class Output>
+  requires concepts::one_of<Output, table_slice, tenzir2::TableSlice>
+auto FromArrowFsOperator<Output>::process_sub(SubKeyView key, Output slice,
+                                              Push<Output>& push, OpCtx& ctx)
   -> Task<void> {
   TENZIR_UNUSED(key, ctx);
-  auto const rows = slice.rows();
+  auto const rows = [&] -> uint64_t {
+    if constexpr (std::same_as<Output, table_slice>) {
+      return slice.rows();
+    } else {
+      return static_cast<uint64_t>(slice.data_.length());
+    }
+  }();
   co_await push(std::move(slice));
   events_read_counter_.add(rows);
 }
 
-auto FromArrowFsOperator::finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
-  -> Task<void> {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, tenzir2::TableSlice>
+auto FromArrowFsOperator<Output>::finish_sub(SubKeyView key, Push<Output>&,
+                                             OpCtx&) -> Task<void> {
   results_->force_enqueue(SubFinished{as<uint64_t>(key)});
   co_return;
 }
 
-auto FromArrowFsOperator::finalize(Push<table_slice>&, OpCtx& ctx)
+template <class Output>
+  requires concepts::one_of<Output, table_slice, tenzir2::TableSlice>
+auto FromArrowFsOperator<Output>::finalize(Push<Output>&, OpCtx& ctx)
   -> Task<FinalizeBehavior> {
   co_await cleanup_files(ctx.dh());
   co_return FinalizeBehavior::done;
 }
 
-auto FromArrowFsOperator::state() -> OperatorState {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, tenzir2::TableSlice>
+auto FromArrowFsOperator<Output>::state() -> OperatorState {
   if (base_args_.watch) {
     return OperatorState::normal;
   }
@@ -295,7 +317,9 @@ auto FromArrowFsOperator::state() -> OperatorState {
   return OperatorState::done;
 }
 
-auto FromArrowFsOperator::snapshot(Serde& serde) -> void {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, tenzir2::TableSlice>
+auto FromArrowFsOperator<Output>::snapshot(Serde& serde) -> void {
   serde("scan_complete_", scan_complete_);
   serde("pending_", pending_);
   serde("processing_", processing_);
@@ -304,8 +328,10 @@ auto FromArrowFsOperator::snapshot(Serde& serde) -> void {
   serde("previous_", previous_);
 }
 
-auto FromArrowFsOperator::cleanup_file(std::string path,
-                                       diagnostic_handler& dh) const
+template <class Output>
+  requires concepts::one_of<Output, table_slice, tenzir2::TableSlice>
+auto FromArrowFsOperator<Output>::cleanup_file(std::string path,
+                                               diagnostic_handler& dh) const
   -> Task<void> {
   if (base_args_.remove) {
     co_await remove_file(path, dh);
@@ -349,7 +375,10 @@ auto FromArrowFsOperator::cleanup_file(std::string path,
   }
 }
 
-auto FromArrowFsOperator::cleanup_files(diagnostic_handler& dh) -> Task<void> {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, tenzir2::TableSlice>
+auto FromArrowFsOperator<Output>::cleanup_files(diagnostic_handler& dh)
+  -> Task<void> {
   // PERF: We could probably batch these calls.
   auto tasks = std::vector<Task<void>>{};
   for (auto& path : cleanup_pending_) {
@@ -359,11 +388,15 @@ auto FromArrowFsOperator::cleanup_files(diagnostic_handler& dh) -> Task<void> {
   cleanup_pending_.clear();
 }
 
-auto FromArrowFsOperator::post_commit(OpCtx& ctx) -> Task<void> {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, tenzir2::TableSlice>
+auto FromArrowFsOperator<Output>::post_commit(OpCtx& ctx) -> Task<void> {
   co_await cleanup_files(ctx.dh());
 }
 
-auto FromArrowFsOperator::restore(OpCtx& ctx) -> Task<void> {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, tenzir2::TableSlice>
+auto FromArrowFsOperator<Output>::restore(OpCtx& ctx) -> Task<void> {
   // TODO: Parallelize this.
   for (const auto& [index, slot] : detail::enumerate(processing_)) {
     if (not slot) {
@@ -451,7 +484,9 @@ auto FromArrowFsOperator::restore(OpCtx& ctx) -> Task<void> {
   pending_ = std::move(restored);
 }
 
-auto FromArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, tenzir2::TableSlice>
+auto FromArrowFsOperator<Output>::spawn_scan_task(OpCtx& ctx) -> void {
   ctx.spawn_task([this, &dh = ctx.dh()]() -> Task<void> {
     while (true) {
       auto start = std::chrono::steady_clock::now();
@@ -557,7 +592,10 @@ auto FromArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
   });
 }
 
-auto FromArrowFsOperator::start_job_in_slot(size_t slot, OpCtx& ctx) -> void {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, tenzir2::TableSlice>
+auto FromArrowFsOperator<Output>::start_job_in_slot(size_t slot, OpCtx& ctx)
+  -> void {
   if (pending_.empty()) {
     return;
   }
@@ -573,7 +611,9 @@ auto FromArrowFsOperator::start_job_in_slot(size_t slot, OpCtx& ctx) -> void {
                });
 }
 
-auto FromArrowFsOperator::find_free_slot() const -> Option<size_t> {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, tenzir2::TableSlice>
+auto FromArrowFsOperator<Output>::find_free_slot() const -> Option<size_t> {
   for (auto i = size_t{0}; i < max_jobs; ++i) {
     if (not processing_[i]) {
       return i;
@@ -582,7 +622,9 @@ auto FromArrowFsOperator::find_free_slot() const -> Option<size_t> {
   return std::nullopt;
 }
 
-auto FromArrowFsOperator::find_slot_by_job(uint64_t job_id) const
+template <class Output>
+  requires concepts::one_of<Output, table_slice, tenzir2::TableSlice>
+auto FromArrowFsOperator<Output>::find_slot_by_job(uint64_t job_id) const
   -> Option<size_t> {
   for (auto i = size_t{0}; i < max_jobs; ++i) {
     if (processing_[i] and processing_[i]->job_id == job_id) {
@@ -592,7 +634,9 @@ auto FromArrowFsOperator::find_slot_by_job(uint64_t job_id) const
   return std::nullopt;
 }
 
-auto FromArrowFsOperator::is_globbing() const -> bool {
+template <class Output>
+  requires concepts::one_of<Output, table_slice, tenzir2::TableSlice>
+auto FromArrowFsOperator<Output>::is_globbing() const -> bool {
   return glob_.size() != 1 or not is<std::string>(glob_[0]);
 }
 
@@ -966,5 +1010,8 @@ auto ToArrowFsOperator::close_stream(Partition& part,
       .emit(dh);
   }
 }
+
+template class FromArrowFsOperator<table_slice>;
+template class FromArrowFsOperator<tenzir2::TableSlice>;
 
 } // namespace tenzir

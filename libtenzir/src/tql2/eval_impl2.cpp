@@ -83,7 +83,11 @@ auto evaluator::eval(tenzir::ast::record const& x,
   }
 
   if (not needs_keys) {
-    return array_<::tenzir2::record>{std::move(names), std::move(arrays)};
+    // Pass explicit slicing so an empty record (no fields) still carries the
+    // correct row count; otherwise the constructor cannot infer the length.
+    return array_<::tenzir2::record>{
+      std::move(names), std::move(arrays), {}, {},
+      memory::detail::slice_info{0, static_cast<std::ptrdiff_t>(length_)}};
   }
 
   // Build per-row key mapping. Uniform columns (field exprs and uniform
@@ -351,12 +355,10 @@ auto evaluator::eval(tenzir::ast::assignment const& x,
   TENZIR_UNUSED(active);
 }
 
-auto data_to_data2(const ::tenzir::data& d) -> ::tenzir2::data;
-
 auto evaluator::eval(tenzir::ast::constant const& x,
                      tenzir::ActiveRows const& active) -> array_<data> {
   TENZIR_UNUSED(active);
-  return to_array(data_to_data2(x.as_data()));
+  return to_array(x.as_data());
 }
 
 auto evaluator::eval(tenzir::ast::format_expr const& x,
@@ -412,6 +414,91 @@ auto evaluator::eval(tenzir::ast::expression const& x,
 auto evaluator::to_array(data const& x) const -> array_<data> {
   TENZIR_UNUSED(x);
   TENZIR_TODO();
+}
+auto evaluator::to_array(::tenzir::data const& x) const -> array_<data> {
+  auto builder = array_builder_<data>{memory::default_resource()};
+  // Appends exactly one element for the legacy value `d` to the builder `b`.
+  auto append_one = [](auto&& self, array_builder_<data>& b,
+                       ::tenzir::data const& d) -> void {
+    match(
+      d,
+      [&](caf::none_t) {
+        b.null();
+      },
+      [&](bool v) {
+        b.data(v);
+      },
+      [&](int64_t v) {
+        b.data(v);
+      },
+      [&](uint64_t v) {
+        b.data(v);
+      },
+      [&](double v) {
+        b.data(v);
+      },
+      [&](tenzir::duration v) {
+        b.data(::tenzir2::duration{
+          std::chrono::duration_cast<::tenzir2::duration::base>(v)});
+      },
+      [&](tenzir::time v) {
+        b.data(::tenzir2::time{
+          std::chrono::time_point_cast<::tenzir2::time::base::duration>(v)});
+      },
+      [&](std::string const& v) {
+        b.data<std::string>(v);
+      },
+      [&](tenzir::ip v) {
+        b.data(::tenzir2::ip{static_cast<std::array<std::byte, 16>>(v)});
+      },
+      [&](tenzir::subnet v) {
+        b.data(::tenzir2::subnet{
+          ::tenzir2::ip{static_cast<std::array<std::byte, 16>>(v.network())},
+          v.length()});
+      },
+      [&](tenzir::list const& v) {
+        auto row = b.list();
+        auto& elems = row.value_builder();
+        for (auto const& e : v) {
+          self(self, elems, e);
+        }
+      },
+      [&](tenzir::record const& v) {
+        auto row = b.record();
+        for (auto const& [k, val] : v) {
+          self(self, row.field(k), val);
+        }
+      },
+      // No `tenzir2` equivalent yet.
+      [&](tenzir::pattern const&) {
+        TENZIR_TODO();
+      },
+      [&](tenzir::enumeration) {
+        TENZIR_TODO();
+      },
+      [&](tenzir::map const&) {
+        TENZIR_TODO();
+      },
+      [&](tenzir::blob const&) {
+        TENZIR_TODO();
+      },
+      [&](tenzir::secret const&) {
+        TENZIR_TODO();
+      });
+  };
+  append_one(append_one, builder, x);
+  // Broadcast the single value across all rows.
+  builder.repeat_last(length_ - 1);
+  return builder.finish();
+}
+
+auto eval(tenzir::ast::expression const& expr, TableSlice const& input,
+          tenzir::diagnostic_handler& dh) -> array_<data> {
+  return tenzir::trace_panic(expr, [&] -> array_<data> {
+    // TODO: Do not create a new session here.
+    auto sp = tenzir::session_provider::make(dh);
+    return evaluator{input, sp.as_session()}.eval(expr, {});
+  });
 }
 
 } // namespace tenzir2

@@ -91,6 +91,7 @@ public:
     -> array_<data>;
 
   auto to_array(data const& x) const -> array_<data>;
+  auto to_array(::tenzir::data const& x) const -> array_<data>;
 
   auto input_or_throw(tenzir::into_location location) -> TableSlice const& {
     if (input_.data_.length() == 0) {

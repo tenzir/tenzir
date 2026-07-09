@@ -139,12 +139,14 @@ using AnySpawn
             Spawn<table_slice, void>, Spawn<chunk_ptr, void>,
             Spawn<chunk_ptr, tenzir2::TableSlice>,
             Spawn<tenzir2::TableSlice, tenzir2::TableSlice>,
-            Spawn<tenzir2::TableSlice, chunk_ptr>>;
+            Spawn<tenzir2::TableSlice, chunk_ptr>,
+            Spawn<void, tenzir2::TableSlice>>;
 
 template <class Args, class Input>
 using SpawnWith
   = variant<SpawnFn<Args, Input, void>, SpawnFn<Args, Input, chunk_ptr>,
-            SpawnFn<Args, Input, table_slice>>;
+            SpawnFn<Args, Input, table_slice>,
+            SpawnFn<Args, Input, tenzir2::TableSlice>>;
 
 // FIXME: Do we need this?
 class Empty {
@@ -968,10 +970,20 @@ public:
               spawn,
               [&]<class Output>(
                 SpawnFn<Args, Input, Output>& spawn) -> AnySpawn {
-                return [spawn = std::move(spawn)](
-                         Any args) -> Box<Operator<Input, Output>> {
-                  return spawn(args.as<Args>());
-                };
+                // `SpawnWith` offers a `tenzir2::TableSlice` output for every
+                // input, but only some `Input`/`Output` combinations have a
+                // matching `AnySpawn` (and `AnyOperator`) alternative. The ones
+                // that don't cannot be produced here, so guard the construction
+                // to keep the visitor well-formed for all variant alternatives.
+                if constexpr (detail::tl_contains_v<AnySpawn::types,
+                                                    Spawn<Input, Output>>) {
+                  return [spawn = std::move(spawn)](
+                           Any args) -> Box<Operator<Input, Output>> {
+                    return spawn(args.as<Args>());
+                  };
+                } else {
+                  TENZIR_UNREACHABLE();
+                }
               });
           }
         });
@@ -1095,7 +1107,9 @@ private:
 
 } // namespace _::operator_plugin
 
+using _::operator_plugin::AnySpawn;
 using _::operator_plugin::Argument;
+using _::operator_plugin::ArgumentType;
 using _::operator_plugin::DescribeCtx;
 using _::operator_plugin::Describer;
 using _::operator_plugin::Description;

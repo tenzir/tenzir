@@ -130,10 +130,11 @@ struct FromGoogleCloudStorageArgs : FromArrowFsArgs {
   bool anonymous = false;
 };
 
-class FromGoogleCloudStorageOperator final : public FromArrowFsOperator {
+class FromGoogleCloudStorageOperator final
+  : public FromArrowFsOperator<table_slice> {
 public:
   explicit FromGoogleCloudStorageOperator(FromGoogleCloudStorageArgs args)
-    : FromArrowFsOperator{static_cast<FromArrowFsArgs&>(args)},
+    : FromArrowFsOperator<table_slice>{static_cast<FromArrowFsArgs&>(args)},
       args_{std::move(args)} {
   }
 

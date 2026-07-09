@@ -509,9 +509,9 @@ using AnyOperator = variant<
   Box<Operator<void, table_slice>>, Box<Operator<chunk_ptr, chunk_ptr>>,
   Box<Operator<chunk_ptr, table_slice>>, Box<Operator<table_slice, chunk_ptr>>,
   Box<Operator<table_slice, table_slice>>, Box<Operator<table_slice, void>>,
-  Box<Operator<chunk_ptr, void>>,
-  Box<Operator<chunk_ptr, tenzir2::TableSlice>>,
+  Box<Operator<chunk_ptr, void>>, Box<Operator<chunk_ptr, tenzir2::TableSlice>>,
   Box<Operator<tenzir2::TableSlice, tenzir2::TableSlice>>,
-  Box<Operator<tenzir2::TableSlice, chunk_ptr>>>;
+  Box<Operator<tenzir2::TableSlice, chunk_ptr>>,
+  Box<Operator<void, tenzir2::TableSlice>>>;
 
 } // namespace tenzir

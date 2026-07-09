@@ -10,10 +10,9 @@
 
 #include "tenzir/concept/printable/core/printer.hpp"
 
+#include <fmt/format.h>
 #include <tenzir2/type_system/array/array.hpp>
 #include <tenzir2/variant_traits.hpp>
-
-#include <fmt/format.h>
 
 #include <cmath>
 #include <format>
@@ -71,21 +70,18 @@ private:
                              T, tenzir2::array_row_view_<std::string>>) {
         // `*row` is a `std::string_view`.
         builder_.escape_and_append_with_quotes(*row);
-      } else if constexpr (std::same_as<T,
-                                        tenzir2::array_row_view_<tenzir2::ip>>
-                           or std::same_as<
-                             T, tenzir2::array_row_view_<tenzir2::subnet>>
-                           or std::same_as<
-                             T, tenzir2::array_row_view_<tenzir2::time>>
-                           or std::same_as<
-                             T, tenzir2::array_row_view_<tenzir2::duration>>) {
+      } else if constexpr (
+        std::same_as<T, tenzir2::array_row_view_<tenzir2::ip>>
+        or std::same_as<T, tenzir2::array_row_view_<tenzir2::subnet>>
+        or std::same_as<T, tenzir2::array_row_view_<tenzir2::time>>
+        or std::same_as<T, tenzir2::array_row_view_<tenzir2::duration>>) {
         // These `tenzir2` types provide `std::formatter` (not `fmt::formatter`)
         // specializations, so use `std::format` here.
         builder_.append('"');
         builder_.append_raw(std::format("{}", *row));
         builder_.append('"');
-      } else if constexpr (std::same_as<T,
-                                        tenzir2::array_row_view_<tenzir2::list>>) {
+      } else if constexpr (std::same_as<
+                             T, tenzir2::array_row_view_<tenzir2::list>>) {
         builder_.start_array();
         auto first = true;
         for (auto element : *row) {

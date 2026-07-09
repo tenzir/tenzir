@@ -231,7 +231,16 @@ struct MakeFilesystemResult {
 ///   - Job queue management (concurrent file processing)
 ///   - Subpipeline spawning per file
 ///   - File cleanup (remove/rename after processing)
-class FromArrowFsOperator : public Operator<void, table_slice> {
+///
+/// The operator relays the slices produced by its subpipeline unchanged, so
+/// its output element type equals the subpipeline's output. It is therefore
+/// templated on `Output`, constrained to the two table slice representations
+/// (`table_slice` and the experimental `tenzir2::TableSlice`). The `from_file`
+/// (and friends) plugin picks the right instantiation by inferring the
+/// subpipeline's output type at compile time; see the operator's `describe()`.
+template <class Output>
+  requires concepts::one_of<Output, table_slice, tenzir2::TableSlice>
+class FromArrowFsOperator : public Operator<void, Output> {
 public:
   explicit FromArrowFsOperator(FromArrowFsArgs args)
     : base_args_{std::move(args)} {
@@ -239,13 +248,13 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> final;
   auto await_task(diagnostic_handler& dh) const -> Task<Any> final;
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+  auto process_task(Any result, Push<Output>& push, OpCtx& ctx)
     -> Task<void> final;
-  auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
+  auto process_sub(SubKeyView key, Output slice, Push<Output>& push,
                    OpCtx& ctx) -> Task<void> final;
-  auto finish_sub(SubKeyView key, Push<table_slice>& push, OpCtx& ctx)
+  auto finish_sub(SubKeyView key, Push<Output>& push, OpCtx& ctx)
     -> Task<void> final;
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+  auto finalize(Push<Output>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> final;
   auto state() -> OperatorState final;
   auto snapshot(Serde& serde) -> void final;

@@ -23,10 +23,13 @@ struct FromFileArgs : FromArrowFsArgs {
   Option<location> mmap;
 };
 
-class FromFileOperator final : public FromArrowFsOperator {
+template <class Output>
+class FromFileOperator final : public FromArrowFsOperator<Output> {
 public:
+  using FromArrowFsOperator<Output>::filesystem;
+
   explicit FromFileOperator(FromFileArgs args)
-    : FromArrowFsOperator{static_cast<FromArrowFsArgs&>(args)},
+    : FromArrowFsOperator<Output>{static_cast<FromArrowFsArgs&>(args)},
       args_{std::move(args)} {
   }
 
@@ -103,9 +106,51 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromFileArgs, FromFileOperator>{};
+    // `from_file` relays the slices produced by its subpipeline unchanged, so
+    // its output element type equals the subpipeline's output. We register both
+    // instantiations as implementations and use a custom spawner that inspects
+    // the subpipeline to pick the matching one. The subpipeline is fed bytes
+    // (`chunk_ptr`), so we infer its output for that input.
+    auto d = Describer<FromFileArgs, FromFileOperator<table_slice>,
+                       FromFileOperator<tenzir2::TableSlice>>{};
     FromArrowFsArgs::describe_to(d);
     d.named("mmap", &FromFileArgs::mmap);
+    auto pipe_arg = Argument<FromFileArgs, located<ir::pipeline>>{
+      ArgumentType::pipeline, 0};
+    d.spawner([pipe_arg]<class Input>(DescribeCtx& ctx)
+                -> failure_or<Option<SpawnWith<FromFileArgs, Input>>> {
+      // Only customize the source case; other inputs fall through to the
+      // generic "does not accept" handling.
+      if constexpr (not std::same_as<Input, void>) {
+        return {};
+      } else {
+        auto pipe = ctx.get(pipe_arg);
+        if (not pipe) {
+          // Subpipeline not yet available (still being resolved); defer.
+          return {};
+        }
+        TRY(auto output, pipe->inner.infer_type(tag_v<chunk_ptr>, ctx));
+        return match(
+          output,
+          [](tag<tenzir2::TableSlice>)
+            -> Option<SpawnWith<FromFileArgs, Input>> {
+            return SpawnWith<FromFileArgs, void>{
+              [](
+                FromFileArgs args) -> Box<Operator<void, tenzir2::TableSlice>> {
+                return FromFileOperator<tenzir2::TableSlice>{std::move(args)};
+              }};
+          },
+          [](auto) -> Option<SpawnWith<FromFileArgs, Input>> {
+            // Default to `table_slice` for the classic slice type and for a
+            // `void`/`chunk_ptr` subpipeline output (the latter is rejected by
+            // the shared validator with a clear diagnostic).
+            return SpawnWith<FromFileArgs, void>{
+              [](FromFileArgs args) -> Box<Operator<void, table_slice>> {
+                return FromFileOperator<table_slice>{std::move(args)};
+              }};
+          });
+      }
+    });
     return d.without_optimize();
   }
 };

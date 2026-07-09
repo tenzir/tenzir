@@ -145,8 +145,8 @@ auto parse_value(auto&& val, tenzir2::array_builder_<tenzir2::data>& out,
           diagnostic::warning("failed to parse a JSON object value").emit(dh);
           continue;
         }
-        parse_value(value.value_unsafe(),
-                    row.field(key.value_unsafe()), dh, depth + 1);
+        parse_value(value.value_unsafe(), row.field(key.value_unsafe()), dh,
+                    depth + 1);
       }
       return;
     }
@@ -190,8 +190,7 @@ public:
     TENZIR_UNUSED(push);
     auto& dh = ctx.dh();
     if (not buffer_.view().empty()) {
-      diagnostic::error("read_json2: input ended with incomplete JSON")
-        .emit(dh);
+      diagnostic::error("read_json2: input ended with incomplete JSON").emit(dh);
     }
     co_return FinalizeBehavior::done;
   }
