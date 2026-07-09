@@ -20,6 +20,11 @@ namespace tenzir {
 /// A multi-use notification primitive for coroutines.
 ///
 /// Cancellation contract: A cancelled `wait()` never consumes a notification.
+///
+/// Wakeup contract: Each notification wakes exactly one `wait()`, even if
+/// multiple waiters are suspended. When a state change must be observed by
+/// all waiters (for example, a closed flag), each woken waiter has to cascade
+/// by calling `notify_one()` before returning.
 class Notify {
 public:
   Notify() = default;

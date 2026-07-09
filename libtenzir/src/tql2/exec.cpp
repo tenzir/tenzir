@@ -844,6 +844,9 @@ public:
     auto lock = co_await mutex_.lock();
     while (lock->queue.empty()) {
       if (sender_closed_.load(std::memory_order::acquire)) {
+        // Cascade to the next blocked receiver: `close_sender()` only posts a
+        // single notification, but every receiver must observe the closure.
+        notify_receive_.notify_one();
         co_return None{};
       }
       lock.unlock();
