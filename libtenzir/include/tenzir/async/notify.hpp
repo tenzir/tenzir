@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/async/task.hpp"
+#include "tenzir/atomic.hpp"
 
 #include <folly/CancellationToken.h>
 #include <folly/coro/Baton.h>
@@ -17,20 +18,21 @@
 namespace tenzir {
 
 /// A multi-use notification primitive for coroutines.
+///
+/// Cancellation contract: A cancelled `wait()` never consumes a notification.
 class Notify {
 public:
   Notify() = default;
   ~Notify() = default;
   Notify(Notify const&) = delete;
   auto operator=(Notify const&) -> Notify& = delete;
-  Notify(Notify&& other) noexcept : baton_{other.baton_.ready()} {
+  Notify(Notify&& other) noexcept
+    : notified_{other.notified_.exchange(false, std::memory_order_relaxed)} {
   }
   auto operator=(Notify&& other) noexcept -> Notify& {
-    if (other.baton_.ready()) {
-      baton_.post();
-    } else {
-      baton_.reset();
-    }
+    notified_.store(other.notified_.exchange(false, std::memory_order_relaxed),
+                    std::memory_order_relaxed);
+    baton_.reset();
     return *this;
   }
 
@@ -38,27 +40,36 @@ public:
   ///
   /// Multiple calls to this function don't stack.
   void notify_one() {
+    notified_.store(true, std::memory_order_release);
     baton_.post();
   }
 
   /// Wait for a notification. Returns immediately if already notified.
+  ///
+  /// If the wait is cancelled, it throws without consuming a notification.
   auto wait() -> Task<void> {
     auto& token = co_await folly::coro::co_current_cancellation_token;
-    auto callback = folly::CancellationCallback{token, [&]() noexcept {
-                                                  baton_.post();
-                                                }};
-    co_await baton_;
-    if (token.isCancellationRequested()) {
-      co_yield folly::coro::co_stopped_may_throw;
+    // The loop is needed because a posted baton might get left behind in a
+    // previous iteration.
+    while (true) {
+      if (token.isCancellationRequested()) {
+        co_yield folly::coro::co_stopped_may_throw;
+      }
+      if (notified_.exchange(false, std::memory_order_acquire)) {
+        co_return;
+      }
+      // Block until `notify_one()` posts the baton, or the cancellation
+      // callback posts it to unblock us
+      auto callback = folly::CancellationCallback{token, [this]() noexcept {
+                                                    baton_.post();
+                                                  }};
+      co_await baton_;
+      baton_.reset();
     }
-    // This races with other calls to `notify_one()`. However, that is okay, as
-    // we only guarantee that the notification is eventually consumed. We can
-    // thus pretend that we waited a bit longer here, the second notification
-    // arrived (which gets ignored), and only then we consume the first one.
-    baton_.reset();
   }
 
 private:
+  Atomic<bool> notified_ = false;
   folly::coro::Baton baton_;
 };
 
