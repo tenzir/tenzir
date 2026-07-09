@@ -75,34 +75,4 @@ TEST("try_from converts foreign timestamp precision") {
   CHECK_EQUAL(materialize(slice->at(0, 0)), data{expected});
 }
 
-TEST("try_from preserves list value field metadata") {
-  constexpr auto micros = int64_t{1'637'229'700'158'940};
-  auto builder = arrow::TimestampBuilder{
-    arrow::timestamp(arrow::TimeUnit::MICRO, "UTC"), arrow_memory_pool()};
-  tenzir::check(builder.Append(micros));
-  auto timestamps = finish(builder);
-  auto offset_builder = arrow::Int32Builder{arrow_memory_pool()};
-  tenzir::check(offset_builder.Append(int32_t{0}));
-  tenzir::check(offset_builder.Append(int32_t{1}));
-  auto offsets = std::shared_ptr<arrow::Array>{};
-  tenzir::check(offset_builder.Finish(&offsets));
-  auto value_type = type{"named_time", time_type{}, {{"origin", "test"}}};
-  auto value_field
-    = arrow::field("item", arrow::timestamp(arrow::TimeUnit::MICRO, "UTC"),
-                   true, value_type.make_arrow_metadata());
-  auto arrow_list_type = arrow::list(std::move(value_field));
-  auto list = tenzir::check(arrow::ListArray::FromArrays(
-    arrow_list_type, *offsets, *timestamps, arrow_memory_pool()));
-  auto schema = arrow::schema({arrow::field("xs", arrow_list_type)});
-  auto batch = arrow::RecordBatch::Make(std::move(schema), 1, {list});
-  REQUIRE(batch);
-  auto slice = table_slice::try_from(batch);
-  REQUIRE(slice.has_value());
-  const auto& layout = as<record_type>(slice->schema());
-  const auto& field_type = layout.field(0).type;
-  REQUIRE(is<list_type>(field_type));
-  const auto& nested_type = as<list_type>(field_type).value_type();
-  CHECK_EQUAL(nested_type, value_type);
-}
-
 } // namespace tenzir

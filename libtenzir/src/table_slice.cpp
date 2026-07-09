@@ -328,13 +328,9 @@ auto upgrade_arrays(const std::shared_ptr<arrow::Array>& array)
     case arrow::Type::LIST: {
       auto list_array = std::static_pointer_cast<arrow::ListArray>(array);
       auto values = upgrade_arrays(list_array->values());
-      auto value_field
-        = list_array->list_type()->value_field()->WithType(values->type());
-      auto arrow_list_type = arrow::list(std::move(value_field));
       return check(arrow::ListArray::FromArrays(
-        std::move(arrow_list_type), *list_array->offsets(), *values,
-        arrow_memory_pool(), list_array->null_bitmap(),
-        list_array->data()->null_count));
+        *list_array->offsets(), *values, arrow_memory_pool(),
+        list_array->null_bitmap(), list_array->data()->null_count));
     }
     default: {
       if (auto target = target_type_for(*array->type())) {
