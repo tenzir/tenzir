@@ -130,12 +130,16 @@ using SpawnFn = std::function<auto(Args)->Box<Operator<Input, Output>>>;
 template <class Input, class Output>
 using Spawn = SpawnFn<Any, Input, Output>;
 
-// Variant for different operator spawn functions (matches AnyOperator).
+// Variant for different operator spawn functions. Must stay in lockstep with
+// `AnyOperator` (async.hpp / async/fwd.hpp).
 using AnySpawn
   = variant<Spawn<void, void>, Spawn<void, chunk_ptr>, Spawn<void, table_slice>,
             Spawn<chunk_ptr, chunk_ptr>, Spawn<chunk_ptr, table_slice>,
             Spawn<table_slice, chunk_ptr>, Spawn<table_slice, table_slice>,
-            Spawn<table_slice, void>, Spawn<chunk_ptr, void>>;
+            Spawn<table_slice, void>, Spawn<chunk_ptr, void>,
+            Spawn<chunk_ptr, tenzir2::TableSlice>,
+            Spawn<tenzir2::TableSlice, tenzir2::TableSlice>,
+            Spawn<tenzir2::TableSlice, chunk_ptr>>;
 
 template <class Args, class Input>
 using SpawnWith
@@ -950,9 +954,10 @@ public:
                       DescribeCtx& ctx) -> failure_or<Option<AnySpawn>> {
       return match(
         input, [&]<class Input>(tag<Input>) -> failure_or<Option<AnySpawn>> {
-          // The `describe()`-based plugin machinery only supports the classic
-          // element types. Operators over `tenzir2::TableSlice` are spawned via
-          // dedicated IR operators, not through this path.
+          // Custom `.spawner(...)` callbacks operate on the classic element
+          // types only. Operators over `tenzir2::TableSlice` reach the executor
+          // through the template `impl<>` path (which populates `spawns`
+          // directly), not through a custom spawner.
           if constexpr (std::same_as<Input, tenzir2::TableSlice>) {
             return Option<AnySpawn>{};
           } else {
