@@ -9,11 +9,13 @@
 #pragma once
 
 #include "tenzir/atoms.hpp"
+#include "tenzir/data.hpp"
 #include "tenzir/variant.hpp"
 
 #include <caf/error.hpp>
 #include <caf/typed_actor.hpp>
 
+#include <map>
 #include <string>
 
 namespace tenzir {
@@ -48,11 +50,34 @@ struct secret_resolution_result
   using super::super;
 };
 
+struct platform_authentication {
+  std::string strategy;
+  record public_config;
+  std::map<std::string, std::string> encrypted_secret_fields;
+
+  friend auto inspect(auto& f, platform_authentication& x) {
+    return f.object(x).fields(f.field("strategy", x.strategy),
+                              f.field("public_config", x.public_config),
+                              f.field("encrypted_secret_fields",
+                                      x.encrypted_secret_fields));
+  }
+};
+
+struct platform_authentication_result
+  : variant<platform_authentication, secret_resolution_error> {
+  using super = variant<platform_authentication, secret_resolution_error>;
+  using super::super;
+};
+
 struct secret_store_actor_traits {
   using signatures = caf::type_list<
     /// Resolve a secret.
     auto(atom::resolve, std::string name, std::string public_key)
-      ->caf::result<secret_resolution_result>>;
+      ->caf::result<secret_resolution_result>,
+    /// Resolve a platform-managed authentication.
+    auto(atom::resolve, atom::authentication, std::string name,
+         std::string public_key)
+      ->caf::result<platform_authentication_result>>;
 };
 
 using secret_store_actor = caf::typed_actor<secret_store_actor_traits>;
