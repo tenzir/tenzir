@@ -56,6 +56,7 @@
 #include "tenzir/result.hpp"
 #include "tenzir/secret_resolution.hpp"
 #include "tenzir/table_slice.hpp"
+#include "tenzir2/table_slice.hpp"
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
@@ -106,7 +107,8 @@ private:
 };
 
 using AnySubHandle
-  = variant<SubHandle<void>, SubHandle<chunk_ptr>, SubHandle<table_slice>>;
+  = variant<SubHandle<void>, SubHandle<chunk_ptr>, SubHandle<table_slice>,
+            SubHandle<tenzir2::TableSlice>>;
 
 enum class DiagnosticBehavior {
   /// Forward diagnostics to the parent unchanged.
@@ -316,6 +318,18 @@ public:
     }
   }
 
+  /// Process `tenzir2::TableSlice` output from a subpipeline in a *thread-safe*
+  /// way.
+  virtual auto process_sub(SubKeyView key, tenzir2::TableSlice slice,
+                           Push<Output>& push, OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(key, ctx);
+    if constexpr (std::same_as<Output, tenzir2::TableSlice>) {
+      co_await push(std::move(slice));
+    } else {
+      panic("subpipeline result handling is not implemented for this operator");
+    }
+  }
+
   /// Process byte output from a spawned subpipeline in a *thread-safe* way.
   virtual auto process_sub(SubKeyView key, chunk_ptr chunk, Push<Output>& push,
                            OpCtx& ctx) -> Task<void> {
@@ -363,6 +377,12 @@ public:
 
   virtual auto process_sub(SubKeyView key, table_slice slice, OpCtx& ctx)
     -> Task<void> {
+    TENZIR_UNUSED(key, slice, ctx);
+    TENZIR_UNREACHABLE();
+  }
+
+  virtual auto process_sub(SubKeyView key, tenzir2::TableSlice slice,
+                           OpCtx& ctx) -> Task<void> {
     TENZIR_UNUSED(key, slice, ctx);
     TENZIR_UNREACHABLE();
   }
@@ -489,6 +509,7 @@ using AnyOperator = variant<
   Box<Operator<void, table_slice>>, Box<Operator<chunk_ptr, chunk_ptr>>,
   Box<Operator<chunk_ptr, table_slice>>, Box<Operator<table_slice, chunk_ptr>>,
   Box<Operator<table_slice, table_slice>>, Box<Operator<table_slice, void>>,
-  Box<Operator<chunk_ptr, void>>>;
+  Box<Operator<chunk_ptr, void>>,
+  Box<Operator<tenzir2::TableSlice, tenzir2::TableSlice>>>;
 
 } // namespace tenzir

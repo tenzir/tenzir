@@ -19,6 +19,7 @@
 #include "tenzir2/variant.hpp"
 
 #include <optional>
+#include <span>
 
 namespace tenzir2 {
 
@@ -75,5 +76,23 @@ auto resolve(tenzir::ast::field_path const& sel, TableSlice const& slice)
 
 auto resolve(tenzir::ast::field_path const& sel, type_<data> ty)
   -> variant<tenzir::offset, resolve_error>;
+
+/// Wraps `value` in a chain of single-field records described by `path`.
+///
+/// For example, `["foo", "bar"]` with `value` yields the erased array for
+/// `{foo: {bar: value}}`. An empty `path` returns `value` unchanged.
+auto consume_path(std::span<tenzir::ast::field_path::segment const> path,
+                  array_<data> value) -> array_<data>;
+
+/// Returns a copy of `input` with the field described by `path` set to `right`.
+///
+/// Intermediate segments descend into nested records, creating them as needed.
+/// A missing leaf (or intermediate) field is appended. `right` must have the
+/// same length as `input`. This is the `tenzir2` counterpart of the legacy
+/// `tenzir::assign`; it currently supports plain field paths only (no metadata
+/// selectors, no `move`, no `?`-optional semantics).
+auto assign(std::span<tenzir::ast::field_path::segment const> path,
+            array_<data> right, array_<record> input,
+            tenzir::diagnostic_handler& dh) -> array_<record>;
 
 } // namespace tenzir2

@@ -47,12 +47,12 @@ public:
 
   static auto try_from(std::vector<AnyOperator> operators)
     -> Result<OperatorChain<Input, Output>, std::vector<AnyOperator>> {
-    auto input = operator_type{tag_v<Input>};
+    auto input = element_type_tag{tag_v<Input>};
     for (auto& op : operators) {
       auto next
         = match(op,
                 [&]<class In, class Out>(
-                  Box<Operator<In, Out>>&) -> std::optional<operator_type> {
+                  Box<Operator<In, Out>>&) -> std::optional<element_type_tag> {
                   if (not input.is<In>()) {
                     return std::nullopt;
                   }
@@ -203,6 +203,8 @@ public:
       return make_void(std::move(id));
     } else if constexpr (std::same_as<T, table_slice>) {
       return make_events(std::move(id));
+    } else if constexpr (std::same_as<T, tenzir2::TableSlice>) {
+      return make_events2(std::move(id));
     } else if constexpr (std::same_as<T, chunk_ptr>) {
       return make_bytes(std::move(id));
     } else {
@@ -216,6 +218,8 @@ public:
       return make_fused_void(std::move(id));
     } else if constexpr (std::same_as<T, table_slice>) {
       return make_fused_events(std::move(id));
+    } else if constexpr (std::same_as<T, tenzir2::TableSlice>) {
+      return make_fused_events2(std::move(id));
     } else if constexpr (std::same_as<T, chunk_ptr>) {
       return make_fused_bytes(std::move(id));
     } else {
@@ -258,12 +262,20 @@ protected:
   virtual auto make_events(ChannelId id) -> PushPull<OperatorMsg<table_slice>>
     = 0;
 
+  virtual auto make_events2(ChannelId id)
+    -> PushPull<OperatorMsg<tenzir2::TableSlice>>
+    = 0;
+
   virtual auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> = 0;
 
   virtual auto make_fused_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;
 
   virtual auto make_fused_events(ChannelId id)
     -> PushPull<OperatorMsg<table_slice>>
+    = 0;
+
+  virtual auto make_fused_events2(ChannelId id)
+    -> PushPull<OperatorMsg<tenzir2::TableSlice>>
     = 0;
 
   virtual auto make_fused_bytes(ChannelId id)

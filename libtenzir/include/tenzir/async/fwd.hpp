@@ -8,6 +8,12 @@
 
 #include "tenzir/fwd.hpp"
 
+namespace tenzir2 {
+
+struct TableSlice;
+
+} // namespace tenzir2
+
 namespace tenzir {
 
 template <class T>
@@ -21,6 +27,7 @@ using AnyOperator = variant<
   Box<Operator<void, table_slice>>, Box<Operator<chunk_ptr, chunk_ptr>>,
   Box<Operator<chunk_ptr, table_slice>>, Box<Operator<table_slice, chunk_ptr>>,
   Box<Operator<table_slice, table_slice>>, Box<Operator<table_slice, void>>,
-  Box<Operator<chunk_ptr, void>>>;
+  Box<Operator<chunk_ptr, void>>,
+  Box<Operator<tenzir2::TableSlice, tenzir2::TableSlice>>>;
 
 } // namespace tenzir

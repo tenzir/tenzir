@@ -260,6 +260,13 @@ struct strict : public virtual operator_plugin2<strict_operator>,
           return [](StrictArgs args) {
             return StrictOp<Input, void>{std::move(args)};
           };
+        },
+        [&](tag<tenzir2::TableSlice>)
+          -> failure_or<Option<SpawnWith<StrictArgs, Input>>> {
+          diagnostic::error("`strict` does not support `events2` subpipelines")
+            .primary(p.source)
+            .emit(ctx);
+          return failure::promise();
         });
     });
     return d.without_optimize();

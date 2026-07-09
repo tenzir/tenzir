@@ -155,7 +155,11 @@ constexpr auto variant_get(V&& v) -> decltype(auto) {
   using traits = variant_traits<std::remove_cvref_t<V>>;
   if constexpr (std::is_reference_v<decltype(traits::template get<I>(v))>) {
     // We call `as_mutable` here because `forward_like` never removes `const`.
-    return std::forward_like<V>(as_mutable(traits::template get<I>(v)));
+    // Qualify the call so ADL does not also consider `tenzir2::as_mutable` when
+    // the variant alternative is a `tenzir2`-associated type (e.g. a
+    // `tenzir2::TableSlice`), which would make the call ambiguous.
+    return std::forward_like<V>(
+      tenzir::as_mutable(traits::template get<I>(v)));
   } else {
     return traits::template get<I>(v);
   }

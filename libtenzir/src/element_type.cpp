@@ -24,6 +24,9 @@ auto formatter<tenzir::element_type_tag>::format(
     },
     [&](tenzir::tag<tenzir::table_slice>) {
       return fmt::format_to(ctx.out(), "events");
+    },
+    [&](tenzir::tag<tenzir2::TableSlice>) {
+      return fmt::format_to(ctx.out(), "events2");
     });
 }
 

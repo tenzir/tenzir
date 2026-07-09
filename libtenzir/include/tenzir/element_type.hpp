@@ -10,10 +10,17 @@
 
 #include <tenzir/tag.hpp>
 
+namespace tenzir2 {
+
+struct TableSlice;
+
+} // namespace tenzir2
+
 namespace tenzir {
 
 /// Describes the input or output type of an operator.
-struct element_type_tag : tag_variant<void, table_slice, chunk_ptr> {
+struct element_type_tag
+  : tag_variant<void, table_slice, chunk_ptr, tenzir2::TableSlice> {
   using tag_variant::tag_variant;
 };
 

@@ -19,6 +19,7 @@
 #include "tenzir/source.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/eval2.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/set.hpp"
@@ -217,6 +218,51 @@ private:
   std::vector<ast::field_path> moved_fields_;
 };
 
+/// `set` operator over the experimental `tenzir2::TableSlice` model.
+///
+/// This is the `tenzir2` counterpart to `Set`. It supports assigning plain
+/// (possibly nested) field paths via `tenzir2::assign`. It does not yet support
+/// metadata selectors (`@name`), the `move` keyword, or `?`-optional path
+/// semantics, since the `tenzir2` type system lacks that machinery.
+class Set2 final : public Operator<tenzir2::TableSlice, tenzir2::TableSlice> {
+public:
+  Set2(std::vector<ast::assignment> assignments, event_order order)
+    : assignments_{std::move(assignments)}, order_{order} {
+  }
+
+  auto process(tenzir2::TableSlice input, Push<tenzir2::TableSlice>& push,
+               OpCtx& ctx) -> Task<void> override {
+    // Start from a copy of the input record; `input` must stay intact because
+    // every right-hand side is evaluated against the original input, so that
+    // side effects from preceding assignments are not reflected.
+    auto record = input.data_;
+    for (const auto& assignment : assignments_) {
+      auto path = ast::field_path::try_from(assignment.left);
+      if (not path or path->path().empty()) {
+        diagnostic::error("`set` over `tenzir2` events only supports assigning "
+                          "field paths")
+          .primary(assignment.left)
+          .emit(ctx);
+        co_return;
+      }
+      auto value = tenzir2::eval(assignment.right, input, ctx);
+      record = tenzir2::assign(path->path(), std::move(value),
+                               std::move(record), ctx);
+    }
+    auto result = tenzir2::TableSlice{
+      input.name_,
+      input.ingest_time_,
+      input.provenance_token_,
+      std::move(record),
+    };
+    co_await push(std::move(result));
+  }
+
+private:
+  std::vector<ast::assignment> assignments_;
+  event_order order_{};
+};
+
 } // namespace
 
 ir::SetIr::SetIr() : order_{event_order::ordered} {
@@ -250,6 +296,9 @@ auto ir::SetIr::substitute(substitute_ctx ctx, bool instantiate)
 }
 
 auto ir::SetIr::spawn(element_type_tag input) const -> AnyOperator {
+  if (input.is<tenzir2::TableSlice>()) {
+    return Set2{assignments_, order_}.with_name("set");
+  }
   TENZIR_ASSERT(input.is<table_slice>());
   return Set{assignments_, order_}.with_name("set");
 }
@@ -299,7 +348,7 @@ auto ir::SetIr::optimize(ir::optimize_filter filter,
 
 auto ir::SetIr::infer_type(element_type_tag input, diagnostic_handler& dh) const
   -> failure_or<element_type_tag> {
-  if (input.is_not<table_slice>()) {
+  if (input.none_of<table_slice, tenzir2::TableSlice>()) {
     diagnostic::error("set operator expected events").emit(dh);
     return failure::promise();
   }
@@ -497,7 +546,7 @@ auto combine_branch_types(std::optional<element_type_tag> lhs,
     return lhs;
   }
   diagnostic::error("incompatible branch output types: {} and {}",
-                    operator_type_name(*lhs), operator_type_name(*rhs))
+                    fmt::to_string(*lhs), fmt::to_string(*rhs))
     .primary(primary)
     .emit(dh);
   return failure::promise();
@@ -626,8 +675,8 @@ public:
     }
     // TODO: Improve diagnostic.
     auto diag = diagnostic::error("incompatible branch output types: {} and {}",
-                                  operator_type_name(then_ty),
-                                  operator_type_name(else_ty))
+                                  fmt::to_string(then_ty),
+                                  fmt::to_string(else_ty))
                   .primary(branch_location(args_.consequence));
     if (args_.alternative) {
       diag = std::move(diag).secondary(branch_location(*args_.alternative));

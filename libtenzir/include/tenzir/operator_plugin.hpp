@@ -950,17 +950,25 @@ public:
                       DescribeCtx& ctx) -> failure_or<Option<AnySpawn>> {
       return match(
         input, [&]<class Input>(tag<Input>) -> failure_or<Option<AnySpawn>> {
-          auto result = spawner.template operator()<Input>(ctx);
-          TRY(auto option, std::move(result));
-          TRY(auto spawn, std::move(option));
-          return match(
-            spawn,
-            [&]<class Output>(SpawnFn<Args, Input, Output>& spawn) -> AnySpawn {
-              return [spawn = std::move(spawn)](
-                       Any args) -> Box<Operator<Input, Output>> {
-                return spawn(args.as<Args>());
-              };
-            });
+          // The `describe()`-based plugin machinery only supports the classic
+          // element types. Operators over `tenzir2::TableSlice` are spawned via
+          // dedicated IR operators, not through this path.
+          if constexpr (std::same_as<Input, tenzir2::TableSlice>) {
+            return Option<AnySpawn>{};
+          } else {
+            auto result = spawner.template operator()<Input>(ctx);
+            TRY(auto option, std::move(result));
+            TRY(auto spawn, std::move(option));
+            return match(
+              spawn,
+              [&]<class Output>(
+                SpawnFn<Args, Input, Output>& spawn) -> AnySpawn {
+                return [spawn = std::move(spawn)](
+                         Any args) -> Box<Operator<Input, Output>> {
+                  return spawn(args.as<Args>());
+                };
+              });
+          }
         });
     };
   }

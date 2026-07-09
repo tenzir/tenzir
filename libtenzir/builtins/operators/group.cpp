@@ -195,6 +195,13 @@ public:
               .primary(pipe.source)
               .emit(ctx);
             return failure::promise();
+          },
+          [&](tag<tenzir2::TableSlice>)
+            -> failure_or<Option<SpawnWith<GroupArgs, Input>>> {
+            diagnostic::error("subpipeline must not produce events2")
+              .primary(pipe.source)
+              .emit(ctx);
+            return failure::promise();
           });
       } else {
         return {};

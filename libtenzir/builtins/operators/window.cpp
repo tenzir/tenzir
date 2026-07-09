@@ -559,6 +559,13 @@ public:
               .primary(p.source)
               .emit(ctx);
             return failure::promise();
+          },
+          [&](tag<tenzir2::TableSlice>)
+            -> failure_or<Option<SpawnWith<WindowArgs, Input>>> {
+            diagnostic::error("subpipeline must not produce events2")
+              .primary(p.source)
+              .emit(ctx);
+            return failure::promise();
           });
       } else {
         return {};

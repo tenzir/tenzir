@@ -545,6 +545,10 @@ auto count_bytes(const OperatorMsg<T>& item) -> size_t {
     [](const table_slice& slice) -> size_t {
       return slice.total_buffer_size();
     },
+    [](const tenzir2::TableSlice&) -> size_t {
+      // TODO: `tenzir2` has no approximate-byte accounting yet.
+      return 0;
+    },
     [](const chunk_ptr& chunk) -> size_t {
       return chunk ? chunk->size() : 0;
     },
@@ -560,6 +564,9 @@ auto count_events(const OperatorMsg<T>& item) -> size_t {
     item,
     [](const table_slice& slice) -> size_t {
       return slice.rows();
+    },
+    [](const tenzir2::TableSlice& slice) -> size_t {
+      return static_cast<size_t>(slice.data_.length());
     },
     [](const chunk_ptr&) -> size_t {
       return 0;
@@ -1076,6 +1083,12 @@ protected:
     return make_profiled_channel<table_slice>(std::move(id), events_limit);
   }
 
+  auto make_events2(ChannelId id)
+    -> PushPull<OperatorMsg<tenzir2::TableSlice>> override {
+    return make_profiled_channel<tenzir2::TableSlice>(std::move(id),
+                                                      events_limit);
+  }
+
   auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> override {
     return make_profiled_channel<chunk_ptr>(std::move(id), bytes_limit);
   }
@@ -1087,6 +1100,11 @@ protected:
   auto make_fused_events(ChannelId id)
     -> PushPull<OperatorMsg<table_slice>> override {
     return make_profiled_fused_channel<table_slice>(std::move(id));
+  }
+
+  auto make_fused_events2(ChannelId id)
+    -> PushPull<OperatorMsg<tenzir2::TableSlice>> override {
+    return make_profiled_fused_channel<tenzir2::TableSlice>(std::move(id));
   }
 
   auto make_fused_bytes(ChannelId id)
@@ -2323,7 +2341,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     // TODO: This is a problem with the implicit sink config.
     if (not output->is<void>()) {
       diagnostic::error("last operator must close pipeline, but it returns {}",
-                        operator_type_name(*output))
+                        fmt::to_string(*output))
         // TODO: This location will be unknown.
         .primary(ir.operators.back()->main_location())
         .emit(ctx);

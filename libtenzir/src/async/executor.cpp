@@ -55,6 +55,10 @@ public:
       if (output.rows() == 0) {
         co_return;
       }
+    } else if constexpr (std::same_as<T, tenzir2::TableSlice>) {
+      if (output.data_.length() == 0) {
+        co_return;
+      }
     } else if constexpr (std::same_as<T, chunk_ptr>) {
       if (not output or output->size() == 0) {
         co_return;
@@ -71,7 +75,8 @@ template <class T>
 OpPushWrapper(Box<Push<OperatorMsg<T>>>&) -> OpPushWrapper<T>;
 
 /// A type-erased stream message: either data or a signal.
-struct AnyOperatorMsg : variant<table_slice, chunk_ptr, Signal> {
+struct AnyOperatorMsg
+  : variant<table_slice, chunk_ptr, tenzir2::TableSlice, Signal> {
   using variant::variant;
 
   template <class T>
@@ -85,12 +90,14 @@ struct AnyOperatorMsg : variant<table_slice, chunk_ptr, Signal> {
 /// Type-erased pull.
 using AnyOpPull
   = variant<Box<Pull<OperatorMsg<void>>>, Box<Pull<OperatorMsg<chunk_ptr>>>,
-            Box<Pull<OperatorMsg<table_slice>>>>;
+            Box<Pull<OperatorMsg<table_slice>>>,
+            Box<Pull<OperatorMsg<tenzir2::TableSlice>>>>;
 
 /// Type-erased push.
 using AnyOpPush
   = variant<Box<Push<OperatorMsg<void>>>, Box<Push<OperatorMsg<chunk_ptr>>>,
-            Box<Push<OperatorMsg<table_slice>>>>;
+            Box<Push<OperatorMsg<table_slice>>>,
+            Box<Push<OperatorMsg<tenzir2::TableSlice>>>>;
 
 // Wraps an `Any` but without the implicit construction from values.
 struct ExplicitAny {
@@ -214,12 +221,15 @@ auto SubHandle<Input>::close() -> Task<void>
 
 template class SubHandle<chunk_ptr>;
 template class SubHandle<table_slice>;
+template class SubHandle<tenzir2::TableSlice>;
 // Explicit instantiation of member template `push` (not covered by template
 // class).
 template auto SubHandle<chunk_ptr>::push(chunk_ptr)
   -> Task<Result<void, chunk_ptr>>;
 template auto SubHandle<table_slice>::push(table_slice)
   -> Task<Result<void, table_slice>>;
+template auto SubHandle<tenzir2::TableSlice>::push(tenzir2::TableSlice)
+  -> Task<Result<void, tenzir2::TableSlice>>;
 
 class MutexDiagnosticHandler final : public diagnostic_handler {
 public:
@@ -368,6 +378,11 @@ protected:
     return inner_.make_fused_channel<table_slice>(std::move(id));
   }
 
+  auto make_events2(ChannelId id)
+    -> PushPull<OperatorMsg<tenzir2::TableSlice>> override {
+    return inner_.make_fused_channel<tenzir2::TableSlice>(std::move(id));
+  }
+
   auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> override {
     return inner_.make_fused_channel<chunk_ptr>(std::move(id));
   }
@@ -379,6 +394,11 @@ protected:
   auto make_fused_events(ChannelId id)
     -> PushPull<OperatorMsg<table_slice>> override {
     return inner_.make_fused_channel<table_slice>(std::move(id));
+  }
+
+  auto make_fused_events2(ChannelId id)
+    -> PushPull<OperatorMsg<tenzir2::TableSlice>> override {
+    return inner_.make_fused_channel<tenzir2::TableSlice>(std::move(id));
   }
 
   auto make_fused_bytes(ChannelId id)
@@ -936,6 +956,9 @@ private:
                 [&](table_slice output) -> Task<void> {
                   co_await call_process_sub(make_view(key), std::move(output));
                 },
+                [&](tenzir2::TableSlice output) -> Task<void> {
+                  co_await call_process_sub(make_view(key), std::move(output));
+                },
                 [&](Signal signal) -> Task<void> {
                   co_await co_match(
                     signal,
@@ -1115,6 +1138,21 @@ private:
   }
 
   auto call_process_sub(SubKeyView key, table_slice slice) -> Task<void> {
+    auto& ctx_ref = static_cast<OpCtx&>(*this);
+    co_await co_match(
+      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+        if constexpr (std::same_as<Out, void>) {
+          co_await op->process_sub(key, std::move(slice), ctx_ref);
+        } else {
+          auto& push = as<Box<Push<OperatorMsg<Out>>>>(push_downstream_);
+          auto wrapper = OpPushWrapper{push};
+          co_await op->process_sub(key, std::move(slice), wrapper, ctx_ref);
+        }
+      });
+  }
+
+  auto call_process_sub(SubKeyView key, tenzir2::TableSlice slice)
+    -> Task<void> {
     auto& ctx_ref = static_cast<OpCtx&>(*this);
     co_await co_match(
       op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
@@ -1308,6 +1346,13 @@ private:
     co_await co_match(
       std::move(*message),
       [&](table_slice input) -> Task<void> {
+        LOGV("got input in {}", op_name());
+        if (phase_ != Phase::running) {
+          co_return;
+        }
+        co_await call_process(std::move(input));
+      },
+      [&](tenzir2::TableSlice input) -> Task<void> {
         LOGV("got input in {}", op_name());
         if (phase_ != Phase::running) {
           co_return;
@@ -1928,6 +1973,14 @@ template auto
 drive_chain(OperatorChain<table_slice, table_slice> chain,
             Box<Pull<OperatorMsg<table_slice>>> pull_upstream,
             Box<Push<OperatorMsg<table_slice>>> push_downstream,
+            Receiver<FromControl> from_control, Sender<ToControl> to_control,
+            PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
+            DiagHandler& dh, bool fused) -> Task<void>;
+
+template auto
+drive_chain(OperatorChain<tenzir2::TableSlice, tenzir2::TableSlice> chain,
+            Box<Pull<OperatorMsg<tenzir2::TableSlice>>> pull_upstream,
+            Box<Push<OperatorMsg<tenzir2::TableSlice>>> push_downstream,
             Receiver<FromControl> from_control, Sender<ToControl> to_control,
             PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
             DiagHandler& dh, bool fused) -> Task<void>;
