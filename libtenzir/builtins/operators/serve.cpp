@@ -1239,10 +1239,10 @@ struct serve_handler_state {
       auto& new_request = as<request_base>(parsed);
       if (new_request.continuation_token.empty()) {
         return parse_error{
-          .message = fmt::format("missing `continuation_token` for serve id "
-                                 "`{}`; pass `{}` for the initial request",
-                                 new_request.serve_id,
-                                 initial_continuation_token),
+          .message
+          = fmt::format("missing `continuation_token` for serve id "
+                        "`{}`; pass `{}` for the initial request",
+                        new_request.serve_id, initial_continuation_token),
           .detail = caf::make_error(ec::invalid_argument),
         };
       }

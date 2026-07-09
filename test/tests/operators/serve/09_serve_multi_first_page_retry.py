@@ -144,9 +144,7 @@ def _drain(api: str, serve_id: str, token: str | None) -> tuple[list[int], str]:
 def main() -> None:
     proc, api = start_web_server(os.environ)
     try:
-        initial = [
-            {"serve_id": s, "continuation_token": NIL_TOKEN} for s in STREAMS
-        ]
+        initial = [{"serve_id": s, "continuation_token": NIL_TOKEN} for s in STREAMS]
         # 1. The initial poll addresses the first page with the nil UUID.
         status, first = _multi(api, initial, 4, 4)
         assert status == 200, f"initial poll failed ({status}): {first}"
@@ -159,12 +157,9 @@ def main() -> None:
         # 2. Re-sending the identical request replays the cached first page.
         status, retry = _multi(api, initial, 4, 4)
         assert status == 200, f"retry poll failed ({status}): {retry}"
-        events_match = all(
-            _payloads(retry[s]) == _payloads(first[s]) for s in STREAMS
-        )
+        events_match = all(_payloads(retry[s]) == _payloads(first[s]) for s in STREAMS)
         tokens_match = all(
-            retry[s]["next_continuation_token"]
-            == first[s]["next_continuation_token"]
+            retry[s]["next_continuation_token"] == first[s]["next_continuation_token"]
             for s in STREAMS
         )
         print(f"retry-events-match: {events_match}")
