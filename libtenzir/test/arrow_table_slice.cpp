@@ -53,4 +53,26 @@ TEST("record batch from struct array preserves row nulls") {
   CHECK(b->IsNull(1));
 }
 
+TEST("try_from converts foreign timestamp precision") {
+  // Batches from files written by other systems commonly carry
+  // non-nanosecond timestamps: Spark defaults to microseconds and Iceberg
+  // mandates them. try_from must convert both the data and the derived
+  // schema to Tenzir's nanosecond time type.
+  constexpr auto micros = int64_t{1'637'229'700'158'940};
+  auto builder = arrow::TimestampBuilder{
+    arrow::timestamp(arrow::TimeUnit::MICRO, "UTC"), arrow_memory_pool()};
+  tenzir::check(builder.Append(micros));
+  auto timestamps = finish(builder);
+  auto schema = arrow::schema(
+    {arrow::field("ts", arrow::timestamp(arrow::TimeUnit::MICRO, "UTC"))});
+  auto batch = arrow::RecordBatch::Make(std::move(schema), 1, {timestamps});
+  REQUIRE(batch);
+  auto slice = table_slice::try_from(batch);
+  REQUIRE(slice.has_value());
+  const auto& layout = as<record_type>(slice->schema());
+  CHECK_EQUAL(layout.field(0).type, type{time_type{}});
+  const auto expected = time{} + std::chrono::microseconds{micros};
+  CHECK_EQUAL(materialize(slice->at(0, 0)), data{expected});
+}
+
 } // namespace tenzir
