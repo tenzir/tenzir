@@ -512,6 +512,7 @@ using AnyOperator = variant<
   Box<Operator<chunk_ptr, void>>, Box<Operator<chunk_ptr, tenzir2::TableSlice>>,
   Box<Operator<tenzir2::TableSlice, tenzir2::TableSlice>>,
   Box<Operator<tenzir2::TableSlice, chunk_ptr>>,
+  Box<Operator<tenzir2::TableSlice, void>>,
   Box<Operator<void, tenzir2::TableSlice>>>;
 
 } // namespace tenzir

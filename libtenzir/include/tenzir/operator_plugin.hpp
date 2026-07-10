@@ -140,7 +140,7 @@ using AnySpawn
             Spawn<chunk_ptr, tenzir2::TableSlice>,
             Spawn<tenzir2::TableSlice, tenzir2::TableSlice>,
             Spawn<tenzir2::TableSlice, chunk_ptr>,
-            Spawn<void, tenzir2::TableSlice>>;
+            Spawn<tenzir2::TableSlice, void>, Spawn<void, tenzir2::TableSlice>>;
 
 template <class Args, class Input>
 using SpawnWith
