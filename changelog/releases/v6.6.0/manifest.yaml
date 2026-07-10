@@ -1,0 +1,10 @@
+created: 2026-07-10
+title: Expanded ClickHouse type support
+intro: >-
+  This release significantly expands the `to_clickhouse` operator, which now handles
+  LowCardinality and DateTime64 columns, tolerates columns with default values, and
+  warns instead of silently dropping events. It also fixes a crash on empty event
+  batches and makes pipeline shutdown more reliable.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.5.0
