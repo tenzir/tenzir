@@ -3,10 +3,10 @@
   g: "a",
 }
 {
-  total: 3,
+  total: 4,
   g: "a",
 }
 {
-  total: 4,
-  g: "a",
+  total: 3,
+  g: "b",
 }

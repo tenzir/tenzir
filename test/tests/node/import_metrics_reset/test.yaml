@@ -1,0 +1,4 @@
+suite: import-metrics-reset
+runner: tenzir
+fixtures: [node]
+timeout: 60

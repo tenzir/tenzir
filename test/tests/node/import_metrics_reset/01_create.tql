@@ -1,0 +1,5 @@
+api "/pipeline/create", {
+  id: "00000000-0000-0000-0000-000000000731",
+  definition: "// neo: false\nfrom {ts: 0ms.from_epoch(), g: \"a\"}, {ts: 90ms.from_epoch(), g: \"a\"}, {ts: 360ms.from_epoch(), g: \"b\"}, {ts: 660ms.from_epoch(), g: \"a\"}\ndelay ts\nsummarize g, events=count(), last_seen=max(ts), options={frequency: 300ms, mode: \"reset\"}\n@name = \"tnz731.passive_dns\"\nimport",
+}
+discard

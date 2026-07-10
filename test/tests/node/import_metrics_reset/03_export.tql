@@ -1,0 +1,14 @@
+// Reset aggregates make stale rows look inactive. Before the fix, export still
+// contains five rows even though only three have a non-null `last_seen`.
+every 250ms {
+  export
+  where @name == "tnz731.passive_dns"
+  active = 1 if last_seen != null else 0
+  summarize \
+    exported_events=count(),
+    active_events=sum(active),
+    groups=collect(g)
+}
+where active_events == 3
+head 1
+groups = sort(groups)

@@ -1,0 +1,11 @@
+// Before the fix, the three summarize emissions contain 1, 2, and 2 rows, so
+// import metrics report five events instead of three.
+every 250ms {
+  metrics "import"
+  where schema == "tnz731.passive_dns"
+  summarize imported_events=sum(events), batch_sizes=collect(events)
+  imported_events = imported_events if imported_events != null else 0
+}
+where imported_events >= 3
+head 1
+batch_sizes = sort(batch_sizes)

@@ -1,0 +1,9 @@
+{
+  exported_events: 3,
+  active_events: 3,
+  groups: [
+    "a",
+    "a",
+    "b",
+  ],
+}
