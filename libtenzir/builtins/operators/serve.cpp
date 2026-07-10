@@ -1077,7 +1077,7 @@ struct serve_handler_state {
                          = caf::make_error(ec::invalid_argument,
                                            fmt::format("got `{}`", *str))};
     }
-    return std::optional<enum schema>{*opt};
+    return *opt;
   }
 
   // Extracts `serve_id`, `continuation_token`, and the optional per-request
@@ -1456,8 +1456,9 @@ struct serve_handler_state {
           [self = self, serve_manager = serve_manager, fan, id = r.serve_id,
            result_map, triggered, all_ids,
            effective_schema](serve_response& result) mutable {
-            const auto has_events = rows(std::get<1>(result)) > 0;
-            const auto state = std::get<0>(result).empty()
+            auto& [continuation_token, data] = result;
+            const auto has_events = rows(data) > 0;
+            const auto state = continuation_token.empty()
                                  ? serve_state::completed
                                  : serve_state::running;
             const auto [_, success] = result_map->try_emplace(
@@ -1952,7 +1953,7 @@ public:
           {"requests", type{list_type{
             record_type{
               {"serve_id", type{string_type{}, {{"required"}}}},
-              {"continuation_token", string_type{}},
+              {"continuation_token", type{ string_type{}, {{"required"}}}},
               {"schema", string_type{}},
             },
           },{{"required"}}}},
