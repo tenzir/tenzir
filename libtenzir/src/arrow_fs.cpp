@@ -20,10 +20,10 @@
 #include "tenzir/glob.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/table_slice.hpp"
-#include "tenzir2/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/set.hpp"
 #include "tenzir/view3.hpp"
+#include "tenzir2/table_slice.hpp"
 
 #include <arrow/array/array_primitive.h>
 #include <arrow/filesystem/filesystem.h>

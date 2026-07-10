@@ -158,8 +158,7 @@ constexpr auto variant_get(V&& v) -> decltype(auto) {
     // Qualify the call so ADL does not also consider `tenzir2::as_mutable` when
     // the variant alternative is a `tenzir2`-associated type (e.g. a
     // `tenzir2::TableSlice`), which would make the call ambiguous.
-    return std::forward_like<V>(
-      tenzir::as_mutable(traits::template get<I>(v)));
+    return std::forward_like<V>(tenzir::as_mutable(traits::template get<I>(v)));
   } else {
     return traits::template get<I>(v);
   }

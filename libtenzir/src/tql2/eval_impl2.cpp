@@ -86,7 +86,10 @@ auto evaluator::eval(tenzir::ast::record const& x,
     // Pass explicit slicing so an empty record (no fields) still carries the
     // correct row count; otherwise the constructor cannot infer the length.
     return array_<::tenzir2::record>{
-      std::move(names), std::move(arrays), {}, {},
+      std::move(names),
+      std::move(arrays),
+      {},
+      {},
       memory::detail::slice_info{0, static_cast<std::ptrdiff_t>(length_)}};
   }
 

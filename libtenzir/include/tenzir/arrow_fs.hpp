@@ -250,12 +250,11 @@ public:
   auto await_task(diagnostic_handler& dh) const -> Task<Any> final;
   auto process_task(Any result, Push<Output>& push, OpCtx& ctx)
     -> Task<void> final;
-  auto process_sub(SubKeyView key, Output slice, Push<Output>& push,
-                   OpCtx& ctx) -> Task<void> final;
+  auto process_sub(SubKeyView key, Output slice, Push<Output>& push, OpCtx& ctx)
+    -> Task<void> final;
   auto finish_sub(SubKeyView key, Push<Output>& push, OpCtx& ctx)
     -> Task<void> final;
-  auto finalize(Push<Output>& push, OpCtx& ctx)
-    -> Task<FinalizeBehavior> final;
+  auto finalize(Push<Output>& push, OpCtx& ctx) -> Task<FinalizeBehavior> final;
   auto state() -> OperatorState final;
   auto snapshot(Serde& serde) -> void final;
   auto post_commit(OpCtx& ctx) -> Task<void> final;
