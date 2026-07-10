@@ -1,0 +1,7 @@
+error: `fork_merge` expects at least one pipeline argument
+ --> tests/operators/fork_merge/error_no_pipeline.tql:6:1
+  |
+6 | fork_merge
+  | ^^^^^^^^^^ 
+  |
+  = hint: provide branches as `fork_merge { … }, { … }`

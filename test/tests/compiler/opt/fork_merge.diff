@@ -1,0 +1,141 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ [1]:72..78 from 0
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     fork_merge_ir {
+       keyword: [1]:79..89 from 0,
+       locations: [
+         [1]:90..98 from 0,
+         [1]:100..108 from 0
+       ],
+       branches: [
+         {
+           lets: [
+             
+           ],
+           operators: [
+-            GenericIr {
+-              op: {
+-                path: [
+-                  `pass` @ [1]:92..96 from 0
+-                ],
+-                ref: std::pass/op
+-              },
+-              desc: "pass",
+-              args: [
+-                
+-              ],
+-              filter: [
+-                
+-              ],
+-              order: "ordered",
+-              named_args: [
+-                
+-              ]
++            where_ir {
++              self: [0]:0..0 from 0,
++              predicate: binary_expr {
++                left: root_field {
++                  id: `x` @ [1]:115..116 from 0,
++                  has_question_mark: false
++                },
++                op: "gt",
++                right: constant int64 1 @ [1]:119..120 from 0,
++                location: [1]:115..120 from 0
++              }
+             }
+           ]
+         },
+         {
+           lets: [
+             
+           ],
+           operators: [
+-            GenericIr {
+-              op: {
+-                path: [
+-                  `pass` @ [1]:102..106 from 0
+-                ],
+-                ref: std::pass/op
+-              },
+-              desc: "pass",
+-              args: [
+-                
+-              ],
+-              filter: [
+-                
+-              ],
+-              order: "ordered",
+-              named_args: [
+-                
+-              ]
++            where_ir {
++              self: [0]:0..0 from 0,
++              predicate: binary_expr {
++                left: root_field {
++                  id: `x` @ [1]:115..116 from 0,
++                  has_question_mark: false
++                },
++                op: "gt",
++                right: constant int64 1 @ [1]:119..120 from 0,
++                location: [1]:115..120 from 0
++              }
+             }
+           ]
+         }
+       ]
+-    },
+-    where_ir {
+-      self: [1]:109..114 from 0,
+-      predicate: binary_expr {
+-        left: root_field {
+-          id: `x` @ [1]:115..116 from 0,
+-          has_question_mark: false
+-        },
+-        op: "gt",
+-        right: constant int64 1 @ [1]:119..120 from 0,
+-        location: [1]:115..120 from 0
+-      }
+     },
+     GenericIr {
+       op: {
+         path: [
+           `discard` @ [1]:121..128 from 0
+         ],
+         ref: std::discard/op
+       },
+       desc: "discard",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }
