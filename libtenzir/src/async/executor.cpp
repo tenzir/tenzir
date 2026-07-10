@@ -1997,6 +1997,30 @@ auto new_pipe_id() -> PipeId {
 
 struct GracefulStopRequested {};
 
+namespace {
+
+/// Local version of `to_diagnostic` for the backend-rewrite panic exception.
+///
+/// Unlike `tenzir::panic_exception`, `tenzir2::detail::panic_exception` carries
+/// neither a captured stack trace nor a source span, so the resulting
+/// diagnostic has no primary location and no stack frames.
+auto to_diagnostic(const tenzir2::detail::panic_exception& e) -> diagnostic {
+  auto note = std::string{
+    "this is a bug, we would appreciate a report - thank you!\n"
+    "=> "
+    "https://github.com/orgs/tenzir/discussions/new?category=bug-reports\n\n",
+  };
+  fmt::format_to(std::back_inserter(note), "version: v{}\n",
+                 tenzir::version::version);
+  fmt::format_to(std::back_inserter(note), "source: {}:{}\n",
+                 e.location.file_name(), e.location.line());
+  return diagnostic::error("unexpected internal error: {}", e.message)
+    .note(std::move(note))
+    .done();
+}
+
+} // namespace
+
 auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
                   caf::actor_system& sys, DiagHandler& dh,
                   Notify* graceful_stop) -> Task<void> {
@@ -2119,6 +2143,11 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
   auto exception = std::move(result).unwrap_err();
   if (exception.is_compatible_with<panic_exception>()) {
     dh.emit(to_diagnostic(*exception.get_exception<panic_exception>()));
+    co_return;
+  }
+  if (exception.is_compatible_with<tenzir2::detail::panic_exception>()) {
+    dh.emit(to_diagnostic(
+      *exception.get_exception<tenzir2::detail::panic_exception>()));
     co_return;
   }
   diagnostic::error("uncaught exception in pipeline: {}", exception.what())
