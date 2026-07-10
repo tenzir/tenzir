@@ -24,6 +24,7 @@
 #include <folly/coro/Synchronized.h>
 #include <folly/executors/GlobalExecutor.h>
 
+#include <functional>
 #include <span>
 
 namespace tenzir {
@@ -276,33 +277,49 @@ public:
   virtual auto failure() -> failure_or<void> = 0;
 };
 
-/// Run a closed pipeline without external control.
+/// Drives an already-wired chain to completion. The caller owns all IO: the
+/// upstream/downstream endpoints and the control channels. Higher-level
+/// entry points (`run_pipeline`, `run_bounded_pipeline`) create that plumbing
+/// and then call this primitive.
+///
+/// When `fused` is set, the chain runs with fused channels: each input is fully
+/// processed through the entire chain before the next input is pulled.
+template <class Input, class Output>
+auto drive_chain(OperatorChain<Input, Output> chain,
+                 Box<Pull<OperatorMsg<Input>>> pull_upstream,
+                 Box<Push<OperatorMsg<Output>>> push_downstream,
+                 Receiver<FromControl> from_control,
+                 Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
+                 caf::actor_system& sys, DiagHandler& dh, bool fused = false)
+  -> Task<void>;
+
+/// Runs a closed pipeline without external control. Creates the input/output
+/// channels and the control channels, then drives the chain, handling graceful
+/// stop and control messages.
 auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
                   caf::actor_system& sys, DiagHandler& dh,
                   Notify* graceful_stop = nullptr) -> Task<void>;
 
-/// Run a right-open pipeline without external control.
-template <class Output>
-  requires(not std::same_as<Output, void>)
-auto run_pipeline(OperatorChain<void, Output> pipeline, caf::actor_system& sys,
-                  DiagHandler& dh) -> AsyncGenerator<Output>;
+/// Feeds input into a bounded pipeline.
+using PipelineFeeder
+  = std::function<Task<void>(Push<OperatorMsg<table_slice>>&)>;
 
-/// Run an open pipeline without external control.
-template <class Input, class Output>
-  requires(not std::same_as<Output, void> and not std::same_as<Input, void>)
-auto run_pipeline_with_input(AsyncGenerator<Input> input,
-                             OperatorChain<Input, Output> pipeline,
-                             caf::actor_system& sys, DiagHandler& dh)
-  -> AsyncGenerator<Output>;
+/// Drains output from a bounded pipeline.
+using PipelineDrainer
+  = std::function<Task<void>(Pull<OperatorMsg<table_slice>>&)>;
 
-/// Run a pipeline with external control.
-template <class Input, class Output>
-auto run_chain(OperatorChain<Input, Output> chain,
-               Box<Pull<OperatorMsg<Input>>> pull_upstream,
-               Box<Push<OperatorMsg<Output>>> push_downstream,
-               Receiver<FromControl> from_control, Sender<ToControl> to_control,
-               PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
-               DiagHandler& dh) -> Task<void>;
+/// Runs a bounded `table_slice -> table_slice` chain with caller-provided IO.
+///
+/// Creates the input/output channels and drives the chain. The feeder receives
+/// the input push endpoint and should push all input slices followed by an
+/// `EndOfData` signal; the drainer receives the output pull endpoint and can
+/// process transformed slices incrementally. Unlike `run_pipeline`, there is no
+/// external controller: the only control signal acted on is `no_more_input`,
+/// which cancels the feeder.
+auto run_bounded_pipeline(OperatorChain<table_slice, table_slice> chain,
+                          ExecCtx& exec_ctx, caf::actor_system& sys,
+                          DiagHandler& dh, PipelineFeeder feed_input,
+                          PipelineDrainer drain_output) -> Task<void>;
 
 } // namespace tenzir
 
