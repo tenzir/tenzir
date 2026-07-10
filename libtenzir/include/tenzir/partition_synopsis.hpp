@@ -219,6 +219,10 @@ struct partition_synopsis_pair {
 struct partition_transformer_result {
   std::vector<partition_info> input_partitions;
   std::vector<partition_synopsis_pair> output_partitions;
+  /// Partitions that were selected as input but whose on-disk state no longer
+  /// existed when the transformer tried to load them. Their data is not part
+  /// of the output partitions, and callers must not retry them.
+  std::vector<partition_info> skipped_partitions;
   bool input_complete = true;
 
   template <class Inspector>
@@ -227,6 +231,7 @@ struct partition_transformer_result {
       .pretty_name("tenzir.partition-transformer-result")
       .fields(f.field("input-partitions", x.input_partitions),
               f.field("output-partitions", x.output_partitions),
+              f.field("skipped-partitions", x.skipped_partitions),
               f.field("input-complete", x.input_complete));
   }
 };
@@ -234,6 +239,10 @@ struct partition_transformer_result {
 struct partition_apply_result {
   std::vector<partition_info> input_partitions;
   std::vector<partition_info> output_partitions;
+  /// Partitions that were selected as input but whose on-disk state no longer
+  /// existed when the transformer tried to load them. Their data is not part
+  /// of the output partitions, and callers must not retry them.
+  std::vector<partition_info> skipped_partitions;
   bool input_complete = true;
 
   template <class Inspector>
@@ -242,6 +251,7 @@ struct partition_apply_result {
       .pretty_name("tenzir.partition-apply-result")
       .fields(f.field("input-partitions", x.input_partitions),
               f.field("output-partitions", x.output_partitions),
+              f.field("skipped-partitions", x.skipped_partitions),
               f.field("input-complete", x.input_complete));
   }
 };

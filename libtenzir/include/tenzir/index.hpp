@@ -15,7 +15,6 @@
 #include "tenzir/catalog.hpp"
 #include "tenzir/detail/lru_cache.hpp"
 #include "tenzir/detail/stable_set.hpp"
-#include "tenzir/fbs/index.hpp"
 #include "tenzir/importer.hpp"
 #include "tenzir/plugin_fwd.hpp"
 #include "tenzir/query_context.hpp"
@@ -67,13 +66,6 @@ caf::error
 extract_partition_synopsis(const std::filesystem::path& partition_path,
                            const std::filesystem::path& partition_synopsis_path,
                            bool verify = false);
-
-/// Flatbuffer integration. Note that this is only one-way, restoring
-/// the index state needs additional runtime information.
-// TODO: Pull out the persisted part of the state into a separate struct
-// that can be packed and unpacked.
-caf::expected<flatbuffers::Offset<fbs::Index>>
-pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 
 /// The state of the active partition.
 struct active_partition_info {
@@ -137,9 +129,6 @@ struct index_state {
 
   // -- persistence ------------------------------------------------------------
 
-  [[nodiscard]] std::filesystem::path
-  index_filename(const std::filesystem::path& basename = {}) const;
-
   /// The path to a partition transform finalize marker.
   [[nodiscard]] std::filesystem::path marker_path(const uuid& id) const;
 
@@ -178,8 +167,6 @@ struct index_state {
   transformer_partition_synopsis_path_template() const;
 
   caf::error load_from_disk();
-
-  void flush_to_disk();
 
   // -- inbound path -----------------------------------------------------------
 
@@ -259,9 +246,6 @@ struct index_state {
   /// Uses the `partition_factory` to load new partitions as needed, and evicts
   /// old entries when the size exceeds `max_inmem_partitions`.
   detail::lru_cache<uuid, partition_actor, partition_factory> inmem_partitions;
-
-  /// The set of partitions that exist on disk.
-  std::unordered_set<uuid> persisted_partitions = {};
 
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity = {};

@@ -30,7 +30,6 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/error.hpp"
-#include "tenzir/fbs/index.hpp"
 #include "tenzir/fbs/partition.hpp"
 #include "tenzir/fbs/partition_transform.hpp"
 #include "tenzir/fbs/utils.hpp"
@@ -248,42 +247,6 @@ extract_partition_synopsis(const std::filesystem::path& partition_path,
                   std::span{chunk_out->data(), chunk_out->size()});
 }
 
-caf::expected<flatbuffers::Offset<fbs::Index>>
-pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
-  TENZIR_DEBUG("index persists {} uuids of definitely persisted and {}"
-               "uuids of maybe persisted partitions",
-               state.persisted_partitions.size(), state.unpersisted.size());
-  std::vector<flatbuffers::Offset<fbs::LegacyUUID>> partition_offsets;
-  for (const auto& uuid : state.persisted_partitions) {
-    if (auto uuid_fb = pack(builder, uuid)) {
-      partition_offsets.push_back(*uuid_fb);
-    } else {
-      return uuid_fb.error();
-    }
-  }
-  // We don't know if these will make it to disk before the index and the rest
-  // of the system is shut down (in case of a hard/dirty shutdown), so we just
-  // store everything and throw out the missing partitions when loading the
-  // index.
-  for (const auto& kv : state.unpersisted) {
-    if (auto uuid_fb = pack(builder, kv.first)) {
-      partition_offsets.push_back(*uuid_fb);
-    } else {
-      return uuid_fb.error();
-    }
-  }
-  auto partitions = builder.CreateVector(partition_offsets);
-  fbs::index::v0Builder v0_builder(builder);
-  v0_builder.add_partitions(partitions);
-  auto index_v0 = v0_builder.Finish();
-  fbs::IndexBuilder index_builder(builder);
-  index_builder.add_index_type(tenzir::fbs::index::Index::v0);
-  index_builder.add_index(index_v0.Union());
-  auto index = index_builder.Finish();
-  fbs::FinishIndexBuffer(builder, index);
-  return index;
-}
-
 tenzir::chunk_ptr create_marker(const std::vector<tenzir::uuid>& in,
                                 const std::vector<tenzir::uuid>& out,
                                 keep_original_partition keep) {
@@ -323,13 +286,6 @@ filesystem_actor& partition_factory::filesystem() {
 
 partition_actor partition_factory::operator()(const uuid& id) const {
   // Load partition from disk.
-  if (state_.persisted_partitions.find(id)
-      == state_.persisted_partitions.end()) {
-    TENZIR_WARN("{} did not find partition {} in it's internal state, but "
-                "tries "
-                "to load it regardless",
-                *state_.self, id);
-  }
   const auto path = state_.partition_path(id);
   TENZIR_TRACE("{} loads partition {} for path {}", *state_.self, id, path);
   materializations_++;
@@ -348,11 +304,6 @@ index_state::index_state(index_actor::pointer self)
 }
 
 // -- persistence --------------------------------------------------------------
-
-std::filesystem::path
-index_state::index_filename(const std::filesystem::path& basename) const {
-  return basename / dir / "index.bin";
-}
 
 std::filesystem::path index_state::marker_path(const uuid& id) const {
   return markersdir / fmt::format("{:l}.marker", id);
@@ -779,7 +730,6 @@ caf::error index_state::load_from_disk() {
   }
   for (auto& batch : worker_synopses) {
     for (auto& pair : batch) {
-      persisted_partitions.emplace(pair.uuid);
       synopses.push_back(std::move(pair));
     }
   }
@@ -826,26 +776,6 @@ caf::error index_state::load_from_disk() {
   return caf::none;
 }
 
-/// Persists the state to disk.
-void index_state::flush_to_disk() {
-  auto builder = flatbuffers::FlatBufferBuilder{};
-  auto index = pack(builder, *this);
-  if (not index) {
-    TENZIR_WARN("{} failed to pack index: {}", *self, index.error());
-    return;
-  }
-  auto chunk = fbs::release(builder);
-  self->mail(atom::write_v, index_filename(), chunk)
-    .request(filesystem, caf::infinite)
-    .then(
-      [this](atom::ok) {
-        TENZIR_DEBUG("{} successfully persisted index state", *self);
-      },
-      [this](const caf::error& err) {
-        TENZIR_WARN("{} failed to persist index state: {}", *self, render(err));
-      });
-}
-
 // -- inbound path -----------------------------------------------------------
 
 void index_state::handle_slice(table_slice x) {
@@ -867,7 +797,6 @@ void index_state::handle_slice(table_slice x) {
                  *self, schema, active_partition->second.events,
                  partition_capacity, x.rows());
     decommission_active_partition(schema, {});
-    flush_to_disk();
     auto part = create_active_partition(schema);
     if (not part) {
       self->quit(caf::make_error(ec::logic_error,
@@ -892,7 +821,6 @@ void index_state::handle_slice(table_slice x) {
                  *self, schema, active_partition->second.events,
                  partition_capacity, x.rows());
     decommission_active_partition(schema, {});
-    flush_to_disk();
   }
   // When the total number of events in active partitions exceeds the configured
   // limit, we flush the largest partition repeatedly until we are below it.
@@ -913,7 +841,6 @@ void index_state::handle_slice(table_slice x) {
                    *self, max->first, max->second.events, partition_capacity,
                    buffered_events, max_buffered_events);
     decommission_active_partition(max->first, {});
-    flush_to_disk();
   }
 }
 
@@ -950,7 +877,6 @@ index_state::create_active_partition(const type& schema) {
                     *self, id, schema, data{active_partition_timeout}, err);
       }
     });
-    flush_to_disk();
   });
   TENZIR_TRACE("{} created new partition {}", *self, id);
   return active_partition;
@@ -1004,7 +930,6 @@ void index_state::decommission_active_partition(
                 self->mail(atom::update_v, partition_synopsis_pair{id, ps})
                   .send(listener);
               }
-              persisted_partitions.emplace(id);
               retire_partition(id, caf::exit_reason::normal);
               if (completion) {
                 completion(caf::none);
@@ -1186,8 +1111,10 @@ auto index_state::schedule_lookups() -> size_t {
       if (not part) {
         if (auto it = unpersisted.find(partition_id); it != unpersisted.end()) {
           part = it->second.actor;
-        } else if (auto it = persisted_partitions.find(partition_id);
-                   it != persisted_partitions.end()) {
+        } else {
+          // The partition was a catalog candidate, so it must be on disk. If
+          // it was erased in the meantime the spawned partition fails and the
+          // query completes with an error for it.
           part = inmem_partitions.get_or_load(partition_id);
         }
       }
@@ -1296,8 +1223,6 @@ std::size_t index_state::memusage() const {
   for (const auto& [id, partition] : unpersisted) {
     usage += sizeof(id) + as_bytes(partition.schema).size() + sizeof(partition);
   }
-  usage += persisted_partitions.size()
-           * sizeof(decltype(persisted_partitions)::value_type);
   usage += pending_queries.memusage();
   usage += calculate_usage(flush_listeners);
   usage += calculate_usage(partition_creation_listeners);
@@ -1508,15 +1433,26 @@ index(index_actor::stateful_pointer<index_state> self,
       auto rp = self->make_response_promise<atom::done>();
       auto path = self->state().partition_path(partition_id);
       auto synopsis_path = self->state().partition_synopsis_path(partition_id);
-      if (not self->state().persisted_partitions.contains(partition_id)) {
-        std::error_code err{};
-        const auto file_exists = std::filesystem::exists(path, err);
-        if (not file_exists) {
-          rp.deliver(caf::make_error(
-            ec::logic_error, fmt::format("unknown partition for path {}: {}",
-                                         path, err.message())));
-          return rp;
-        }
+      auto err = std::error_code{};
+      if (not std::filesystem::exists(path, err)) {
+        // The partition is not on disk. Erase it from the catalog anyway so
+        // that a stale entry cannot outlive its data, but report the failure
+        // to the caller.
+        self->mail(atom::erase_v, partition_id)
+          .urgent()
+          .request(self->state().catalog, caf::infinite)
+          .then(
+            [self, partition_id, path, err, rp](atom::ok) mutable {
+              self->state().pending_queries.mark_partition_erased(partition_id);
+              rp.deliver(caf::make_error(
+                ec::logic_error, fmt::format("unknown partition for path {}: "
+                                             "{}",
+                                             path, err.message())));
+            },
+            [rp](caf::error& e) mutable {
+              rp.deliver(std::move(e));
+            });
+        return rp;
       }
       self->mail(atom::erase_v, partition_id)
         .urgent()
@@ -1525,7 +1461,6 @@ index(index_actor::stateful_pointer<index_state> self,
           [self, partition_id, path, synopsis_path, rp](atom::ok) mutable {
             TENZIR_DEBUG("{} erased partition {} from catalog", *self,
                          partition_id);
-            self->state().persisted_partitions.erase(partition_id);
             // We don't remove the partition from the queue directly because the
             // query API requires clients to keep track of the number of
             // candidate partitions. Removing the partition from the queue
@@ -1644,6 +1579,9 @@ index(index_actor::stateful_pointer<index_state> self,
       // TODO: It would probably be more efficient to implement the
       // handler for multiple ids directly as opposed to dispatching
       // onto the single-id erase handler.
+      if (partition_ids.empty()) {
+        return atom::done_v;
+      }
       auto rp = self->make_response_promise<atom::done>();
       auto fanout_counter = detail::make_fanout_counter(
         partition_ids.size(),
@@ -1678,14 +1616,6 @@ index(index_actor::stateful_pointer<index_state> self,
       TENZIR_ASSERT(self->state().store_actor_plugin);
       auto input_partitions = std::vector<partition_info>{};
       input_partitions.reserve(selected_partitions.size());
-      std::erase_if(selected_partitions, [&](const auto& entry) {
-        if (self->state().persisted_partitions.contains(entry.uuid)) {
-          return false;
-        }
-        TENZIR_WARN("{} skips unknown partition {} for pipeline {:?}", *self,
-                    entry.uuid, pipe);
-        return true;
-      });
       auto corrected_partitions = catalog_lookup_result{};
       for (const auto& partition : selected_partitions) {
         if (self->state()
@@ -1821,7 +1751,30 @@ index(index_actor::stateful_pointer<index_state> self,
             }
             auto transformed_input_partitions
               = std::move(transform_result.input_partitions);
+            auto skipped_partitions
+              = std::move(transform_result.skipped_partitions);
             auto input_complete = transform_result.input_complete;
+            // Partitions whose on-disk state vanished mid-transform were
+            // usually erased through the regular erase path already, but a
+            // stale catalog entry would get selected again on every future
+            // run, so we proactively erase them from the catalog.
+            if (not skipped_partitions.empty()) {
+              auto skipped_ids = std::vector<uuid>{};
+              skipped_ids.reserve(skipped_partitions.size());
+              for (const auto& partition : skipped_partitions) {
+                skipped_ids.push_back(partition.uuid);
+              }
+              self->mail(atom::erase_v, std::move(skipped_ids))
+                .request(static_cast<index_actor>(self), caf::infinite)
+                .then([](atom::done) { /* nop */ },
+                      [self](const caf::error& e) {
+                        // The partition data is already gone, so failing to
+                        // erase the leftovers is expected.
+                        TENZIR_DEBUG("{} failed to clean up vanished "
+                                     "partitions: {}",
+                                     *self, e);
+                      });
+            }
             // Record in-progress marker.
             auto marker_chunk
               = create_marker(old_partition_ids, new_partition_ids, keep);
@@ -1857,20 +1810,15 @@ index(index_actor::stateful_pointer<index_state> self,
                             self->mail(atom::merge_v, apsv)
                               .request(self->state().catalog, caf::infinite)
                               .then(
-                                [self, deliver, transformed_input_partitions,
-                                 result, input_complete,
-                                 apsv](atom::ok) mutable {
-                                  // Update index statistics and list of
-                                  // persisted partitions.
-                                  for (auto const& aps : apsv) {
-                                    self->state().persisted_partitions.emplace(
-                                      aps.uuid);
-                                  }
-                                  self->state().flush_to_disk();
+                                [deliver, transformed_input_partitions, result,
+                                 skipped_partitions,
+                                 input_complete](atom::ok) mutable {
                                   deliver(partition_apply_result{
                                     .input_partitions
                                     = std::move(transformed_input_partitions),
                                     .output_partitions = std::move(result),
+                                    .skipped_partitions
+                                    = std::move(skipped_partitions),
                                     .input_complete = input_complete,
                                   });
                                 },
@@ -1882,6 +1830,8 @@ index(index_actor::stateful_pointer<index_state> self,
                               .input_partitions
                               = std::move(transformed_input_partitions),
                               .output_partitions = std::move(result),
+                              .skipped_partitions
+                              = std::move(skipped_partitions),
                               .input_complete = input_complete,
                             });
                           }
@@ -1890,13 +1840,9 @@ index(index_actor::stateful_pointer<index_state> self,
                             .request(self->state().catalog, caf::infinite)
                             .then(
                               [self, deliver, old_partition_ids,
-                               transformed_input_partitions, result, apsv,
+                               transformed_input_partitions, result,
+                               skipped_partitions,
                                input_complete](atom::ok) mutable {
-                                for (auto const& aps : apsv) {
-                                  self->state().persisted_partitions.emplace(
-                                    aps.uuid);
-                                }
-                                self->state().flush_to_disk();
                                 self->mail(atom::erase_v, old_partition_ids)
                                   .request(static_cast<index_actor>(self),
                                            caf::infinite)
@@ -1906,6 +1852,8 @@ index(index_actor::stateful_pointer<index_state> self,
                                         .input_partitions = std::move(
                                           transformed_input_partitions),
                                         .output_partitions = std::move(result),
+                                        .skipped_partitions
+                                        = std::move(skipped_partitions),
                                         .input_complete = input_complete,
                                       });
                                     },

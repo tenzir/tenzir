@@ -82,6 +82,10 @@ struct partition_transformer_state {
   /// The input partitions that the transformer actually consumed.
   std::vector<partition_info> transformed_input_partitions = {};
 
+  /// The input partitions whose on-disk state no longer existed when the
+  /// transformer tried to load them.
+  std::vector<partition_info> skipped_partitions = {};
+
   /// Whether the transformer consumed every selected input partition.
   bool input_complete = true;
 
