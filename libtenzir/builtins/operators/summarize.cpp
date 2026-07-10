@@ -342,11 +342,9 @@ public:
       return {};
     }
     if (cfg_.mode == "reset") {
-      // Emit all groups and reset aggregations
+      // Emit all groups and reset the complete aggregation state.
       auto result = finish_impl(ctx);
-      for (auto it = groups_.begin(); it != groups_.end(); ++it) {
-        it.value().aggregations = make_bucket(ctx).aggregations;
-      }
+      groups_.clear();
       return result;
     }
     if (cfg_.mode == "cumulative") {
