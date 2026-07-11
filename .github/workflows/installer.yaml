@@ -175,11 +175,11 @@ jobs:
             echo "none"
             echo "notify=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Send Discord notification
+      - name: Send Slack notification
         if: steps.classify.outputs.notify == 'true'
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_DEVELOPERS }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_ENGINEERING_WEBHOOK_URL }}
         run: |
-          .github/scripts/notify-discord.sh \
-            "⚠️ Installer Test Failed" \
+          .github/scripts/notify-slack.sh \
+            "Installer test failed" \
             "Downloading or executing the installer failed. The installer may be broken or unavailable for users."
