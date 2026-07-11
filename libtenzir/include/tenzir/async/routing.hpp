@@ -179,6 +179,9 @@ private:
       if (total == 0) {
         co_return;
       }
+      if (open_lanes() == 0) {
+        panic("scatter has no open lane to route to");
+      }
       // `distribute_adaptive` works over all lanes; funnel closed lanes by
       // pre-loading them so they are never selected.
       auto assignments
