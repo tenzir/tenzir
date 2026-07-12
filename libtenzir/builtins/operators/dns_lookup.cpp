@@ -92,7 +92,7 @@ public:
   ares_channel_wrapper(const ares_channel_wrapper&) = delete;
   ares_channel_wrapper& operator=(const ares_channel_wrapper&) = delete;
 
-  auto get() const -> ares_channel {
+  auto get() const -> ares_channel_t* {
     return channel_;
   }
 
@@ -105,7 +105,7 @@ public:
   }
 
 private:
-  ares_channel channel_ = nullptr;
+  ares_channel_t* channel_ = nullptr;
   ares_status_t status_;
 };
 
