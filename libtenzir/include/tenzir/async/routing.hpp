@@ -99,25 +99,14 @@ auto hash_runs(const multi_series& values, uint64_t jobs)
 
 namespace tenzir {
 
-/// Routing policy for a scatter exchange: distribute stateless work across
-/// lanes while balancing load. For events, this splits slices by row using the
-/// adaptive water-fill policy; for other element types it round-robins whole
-/// messages.
-struct RoundRobinAdaptive {};
-
-/// The routing policy of a scatter exchange.
-///
-/// Hash-partitioned routing is a later phase; only round-robin exists today.
-using ScatterPolicy = variant<RoundRobinAdaptive>;
-
 /// The fan-out endpoint of a scatter exchange.
 ///
 /// A `ScatterPush` is held by the single upstream operator and forwards each
 /// message to one or more of its `n` downstream lanes:
 ///
-/// - Data is routed by the `ScatterPolicy`. `RoundRobinAdaptive` splits event
-///   slices across lanes by row (via `routing::distribute_adaptive`) and
-///   round-robins non-event messages.
+/// - Data is routed round-robin with adaptive load balancing: event slices are
+///   split across lanes by row (via `routing::distribute_adaptive`) while other
+///   element types round-robin whole messages.
 /// - Signals are broadcast to every open lane, sequentially. Blocking on a slow
 ///   lane is correct: it applies backpressure.
 ///
@@ -127,11 +116,9 @@ using ScatterPolicy = variant<RoundRobinAdaptive>;
 template <class T>
 class ScatterPush final : public Push<OperatorMsg<T>> {
 public:
-  ScatterPush(std::vector<Box<Push<OperatorMsg<T>>>> lanes,
-              ScatterPolicy policy)
+  explicit ScatterPush(std::vector<Box<Push<OperatorMsg<T>>>> lanes)
     : lanes_{std::move(lanes)},
       open_(lanes_.size(), true),
-      policy_{policy},
       rows_assigned_(lanes_.size(), 0) {
     TENZIR_ASSERT(not lanes_.empty());
   }
@@ -166,12 +153,6 @@ public:
 
 private:
   auto route_data(T data) -> Task<void> {
-    return match(policy_, [&](const RoundRobinAdaptive&) -> Task<void> {
-      return route_round_robin(std::move(data));
-    });
-  }
-
-  auto route_round_robin(T data) -> Task<void> {
     if constexpr (std::same_as<T, table_slice>) {
       // Split the slice across open lanes by row, keeping load balanced.
       auto total = static_cast<uint64_t>(data.rows());
@@ -224,7 +205,6 @@ private:
 
   std::vector<Box<Push<OperatorMsg<T>>>> lanes_;
   std::vector<bool> open_;
-  ScatterPolicy policy_;
   std::vector<uint64_t> rows_assigned_;
   size_t rr_cursor_ = 0;
 };
@@ -316,8 +296,7 @@ auto run_gather(std::vector<Box<Pull<OperatorMsg<T>>>> lanes,
 /// `Pull`s. `make_channel` produces one internal SPSC channel per lane, e.g.
 /// `ExecCtx::make_channel<T>`.
 template <class T, class Factory>
-auto make_scatter(size_t lanes, ScatterPolicy policy, Factory make_channel,
-                  ChannelId id)
+auto make_scatter(size_t lanes, Factory make_channel, ChannelId id)
   -> std::pair<Box<Push<OperatorMsg<T>>>,
                std::vector<Box<Pull<OperatorMsg<T>>>>> {
   TENZIR_ASSERT(lanes > 0);
@@ -332,7 +311,7 @@ auto make_scatter(size_t lanes, ScatterPolicy policy, Factory make_channel,
     lane_pulls.push_back(std::move(pair.pull));
   }
   auto scatter
-    = Box<Push<OperatorMsg<T>>>{ScatterPush<T>{std::move(lane_pushes), policy}};
+    = Box<Push<OperatorMsg<T>>>{ScatterPush<T>{std::move(lane_pushes)}};
   return {std::move(scatter), std::move(lane_pulls)};
 }
 

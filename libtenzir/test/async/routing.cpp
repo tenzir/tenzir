@@ -120,8 +120,7 @@ auto run(F&& f) -> void {
 
 TEST("scatter round-robins data and broadcasts signals") {
   run([&]() -> Task<void> {
-    auto [push, pulls]
-      = make_scatter<int>(2, RoundRobinAdaptive{}, factory(), ChannelId{});
+    auto [push, pulls] = make_scatter<int>(2, factory(), ChannelId{});
     co_await folly::coro::collectAll(
       [&]() -> Task<void> {
         for (auto i = 0; i < 4; ++i) {
@@ -162,8 +161,7 @@ TEST("scatter round-robins data and broadcasts signals") {
 
 TEST("scatter stops routing data to a closed lane") {
   run([&]() -> Task<void> {
-    auto [push, pulls]
-      = make_scatter<int>(2, RoundRobinAdaptive{}, factory(), ChannelId{});
+    auto [push, pulls] = make_scatter<int>(2, factory(), ChannelId{});
     // Retire lane 1 up front.
     static_cast<ScatterPush<int>&>(*push).close_lane(1);
     check_eq(static_cast<ScatterPush<int>&>(*push).open_lanes(), size_t{1});
@@ -267,8 +265,8 @@ TEST("scatter keeps a fair slice on one lane after closing a lane") {
   // lanes to [100, 100, 100]. A subsequent 10-row slice stays within the
   // fairness factor on a single lane instead of fragmenting across all three.
   run([&]() -> Task<void> {
-    auto [push, pulls] = make_scatter<table_slice>(
-      4, RoundRobinAdaptive{}, slice_factory(), ChannelId{});
+    auto [push, pulls]
+      = make_scatter<table_slice>(4, slice_factory(), ChannelId{});
     static_cast<ScatterPush<table_slice>&>(*push).close_lane(3);
     co_await folly::coro::collectAll(
       [&]() -> Task<void> {
