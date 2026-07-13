@@ -75,6 +75,8 @@ auto read_cgroup_memory_available(const std::filesystem::path& dir,
   };
 }
 
+#if TENZIR_LINUX
+
 auto relative_cgroup_path(std::string_view raw) -> std::filesystem::path {
   while (raw.starts_with('/')) {
     raw.remove_prefix(1);
@@ -88,7 +90,6 @@ struct cgroup2_mount {
 };
 
 auto find_cgroup2_mount() -> std::optional<cgroup2_mount> {
-#if TENZIR_LINUX
   try {
     for (const auto& mount : pfs::procfs{}.get_task().get_mountinfo()) {
       if (mount.filesystem_type != "cgroup2") {
@@ -101,7 +102,6 @@ auto find_cgroup2_mount() -> std::optional<cgroup2_mount> {
     }
   } catch (const std::exception&) {
   }
-#endif
   return std::nullopt;
 }
 
@@ -159,6 +159,8 @@ auto cgroup2_memory_available(const std::filesystem::path& path)
   }
   return result;
 }
+
+#endif
 
 auto cgroup_memory_available() -> std::optional<available_memory_info> {
 #if TENZIR_LINUX
