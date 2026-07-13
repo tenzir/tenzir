@@ -485,8 +485,7 @@ struct request_meta {
 struct request_base {
   std::string serve_id = {};
   std::string continuation_token = {};
-  /// Per-request schema override. Falls back to the request-wide default when
-  /// unset.
+  /// Overrides the request-wide default `schema` when set.
   std::optional<enum schema> schema_override = {};
 };
 
@@ -610,7 +609,7 @@ struct serve_manager_state {
   std::unordered_map<std::string, caf::error> expired_ids = {};
 
   /// A first-page get request that arrived before its serve operator
-  /// registered. Parked until registration, a flush, or its timeout.
+  /// registered.
   struct pending_get {
     uint64_t id = {};
     single_serve_request request = {};
@@ -627,12 +626,9 @@ struct serve_manager_state {
   /// Monotonic id generator for parked get requests.
   uint64_t next_pending_get_id = {};
 
-  // Distinguishes a genuine pipeline failure from a clean teardown. A failing
-  // pipeline propagates a diagnostic; a pipeline that merely finished -- by
-  // exhausting its input, a user shutdown, or the executor tearing down its
-  // now-unreachable nodes (`exit_reason::unreachable`) -- does not. Only
-  // genuine failures are surfaced as errors; clean completions are retained so
-  // a client can retry its final poll.
+  // A genuine pipeline failure propagates a diagnostic; a clean teardown --
+  // input exhaustion, user shutdown, or the executor tearing down unreachable
+  // nodes -- does not.
   static auto is_pipeline_failure(const caf::error& err) -> bool {
     // A clean exit passes an empty error; `context()` must not be called on it.
     if (not err.valid()) {
@@ -677,22 +673,16 @@ struct serve_manager_state {
         ops.erase(found);
       }
     };
-    // A pipeline that failed with a diagnostic is removed right away. A
-    // pipeline that finished cleanly keeps its last result set available for
-    // `retention_time`, so a client that lost or cancelled the response to its
-    // final poll can still retry and re-fetch it.
+    // Failures are removed right away; clean completions linger for
+    // `retention_time` so a client can retry its final poll.
     if (is_pipeline_failure(err)) {
       delete_serve();
       return;
     }
-    // Answer any in-flight poll immediately with a completion response instead
-    // of making it wait for the long-poll timeout or the retention timer.
+    // Answer any in-flight poll with the remaining buffer immediately instead
+    // of leaving it to the long-poll timeout.
     if (not found->get_rps.empty()) {
-      found->delayed_attempt.dispose();
-      for (auto&& get_rp : std::exchange(found->get_rps, {})) {
-        get_rp.deliver(
-          serve_response{std::string{}, std::vector<table_slice>{}});
-      }
+      found->try_deliver_results(/*force_underful=*/true);
     }
     detail::weak_run_delayed(self, defaults::api::serve::retention_time,
                              delete_serve);
@@ -882,21 +872,16 @@ struct serve_manager_state {
       const auto expired_id = expired_ids.find(request.serve_id);
       if (expired_id != expired_ids.end()) {
         const auto& err = expired_id->second;
-        // A pipeline that failed with a diagnostic surfaces that error. One
-        // that completed cleanly is reported as completed, not as an internal
-        // error: a client may retry its final poll after losing or cancelling
-        // the response, even past the retention window.
+        // Clean completions report as completed rather than an error so a
+        // client can retry its final poll even past the retention window.
         if (is_pipeline_failure(err)) {
           return err;
         }
         return std::make_tuple(std::string{}, std::vector<table_slice>{});
       }
-      // A first-page poll may race the serve operator's startup: a pipeline
-      // reports running before its operators finished starting. Park the
-      // request until the operator registers instead of failing, and report
-      // an unknown serve id only when the timeout fires first. A generated
-      // token can never become valid through a future registration (a fresh
-      // registration always starts at the initial token), so fail fast then.
+      // Park a first-page poll that raced the serve operator's startup. A
+      // generated token can never become valid through a future registration,
+      // which always starts at the initial token, so fail fast instead.
       if (request.continuation_token == initial_continuation_token) {
         return park_get(std::move(request));
       }
@@ -963,12 +948,9 @@ struct serve_manager_state {
   /// Answers a get request for a registered serve operator on `rp`.
   auto get_registered(managed_serve_operator& op, single_serve_request request,
                       caf::typed_response_promise<serve_response> rp) -> void {
-    // Re-fetch of the most recently delivered batch: the client retried with
-    // the token of its previous request because the response was lost or its
-    // poll was cancelled. This covers the first page (whose token is the
-    // well-known initial token) and the final batch of a completed pipeline.
-    // `last_continuation_token` stays empty until the first delivery, and the
-    // request token is never empty here, so a fresh serve cannot match.
+    // A client whose response was lost re-sent its previous token: re-deliver
+    // the last batch. A fresh serve cannot match, as `last_continuation_token`
+    // is empty until the first delivery and the request token is never empty.
     if (op.last_continuation_token == request.continuation_token) {
       rp.deliver(
         std::make_tuple(op.continuation_token,
@@ -976,11 +958,8 @@ struct serve_manager_state {
       return;
     }
     if (op.continuation_token != request.continuation_token) {
-      // A serve that reached a terminal state reports completion instead of an
-      // unknown-token error, so that a client retrying the first page or
-      // polling with the previously advertised token after a graceful shutdown
-      // sees a completed stream. All paths that terminally clear the
-      // continuation token also set `done`, so this covers lingering serves.
+      // A done serve reports completion instead of an unknown-token error;
+      // every path that terminally clears the continuation token sets `done`.
       if (op.done) {
         rp.deliver(std::make_tuple(std::string{}, std::vector<table_slice>{}));
         return;
@@ -1038,12 +1017,9 @@ struct serve_manager_state {
     const auto found = std::ranges::find_if(ops, [&](const auto& op) {
       return op.serve_id == serve_id;
     });
-    // Unknown/expired serve, or no request is currently waiting: nothing to do.
     if (found == ops.end() or found->get_rps.empty()) {
       return {};
     }
-    // Deliver immediately with whatever is buffered (possibly empty),
-    // cancelling the pending long-poll timer via try_deliver_results.
     found->try_deliver_results(/*force_underful=*/true);
     return {};
   }
@@ -1154,36 +1130,51 @@ struct serve_handler_state {
     caf::error detail;
   };
 
-  // Parses and validates an optional `schema` parameter, returning nullopt when
-  // it is absent or null. A null value is treated as unset because TQL list
-  // unification fills an omitted per-request `schema` with null when a sibling
-  // request specifies one.
-  static auto try_extract_schema(const tenzir::record& params)
-    -> std::variant<std::optional<enum schema>, parse_error> {
-    const auto it = params.find("schema");
+  // Returns a pointer to the string value of `key`, or nullptr when the key
+  // is absent or null. Null is treated as unset because TQL list unification
+  // fills an omitted field with null when a sibling record specifies it.
+  static auto
+  try_get_nullable_string(const tenzir::record& params, std::string_view key)
+    -> std::variant<const std::string*, parse_error> {
+    const auto it = params.find(key);
     if (it == params.end() or is<caf::none_t>(it->second)) {
-      return std::optional<enum schema>{};
+      return static_cast<const std::string*>(nullptr);
     }
     const auto* str = try_as<std::string>(&it->second);
     if (not str) {
       return parse_error{
-        .message = "failed to read schema parameter",
+        .message = fmt::format("failed to read {} parameter", key),
         .detail = caf::make_error(
           ec::invalid_argument,
           fmt::format("expected a string, got params {}", params))};
     }
-    auto opt = from_string<enum schema>(*str);
+    return str;
+  }
+
+  // Parses and validates an optional `schema` parameter, returning nullopt
+  // when it is absent or null.
+  static auto try_extract_schema(const tenzir::record& params)
+    -> std::variant<std::optional<enum schema>, parse_error> {
+    auto str = try_get_nullable_string(params, "schema");
+    if (auto* err = try_as<parse_error>(str)) {
+      return std::move(*err);
+    }
+    const auto* value = as<const std::string*>(str);
+    if (not value) {
+      return std::optional<enum schema>{};
+    }
+    auto opt = from_string<enum schema>(*value);
     if (not opt) {
       return parse_error{.message = "invalid schema parameter",
                          .detail
                          = caf::make_error(ec::invalid_argument,
-                                           fmt::format("got `{}`", *str))};
+                                           fmt::format("got `{}`", *value))};
     }
     return *opt;
   }
 
   // Extracts `serve_id`, `continuation_token`, and the optional per-request
-  // `schema` override by moving out of `params`.
+  // `schema` override from `params`.
   static auto try_extract_request_base(tenzir::record& params)
     -> std::variant<request_base, parse_error> {
     auto result = request_base{};
@@ -1202,20 +1193,12 @@ struct serve_handler_state {
                                   fmt::format("got parameters {}", params))};
     }
     result.serve_id = std::move(**serve_id);
-    // Treat both an absent key and an explicit null as unset: TQL list
-    // unification fills an omitted per-request `continuation_token` with null
-    // when a sibling request specifies one.
-    if (const auto it = params.find("continuation_token");
-        it != params.end() and not is<caf::none_t>(it->second)) {
-      const auto* str = try_as<std::string>(&it->second);
-      if (not str) {
-        return parse_error{
-          .message = "failed to read continuation_token",
-          .detail = caf::make_error(
-            ec::invalid_argument,
-            fmt::format("expected a string, got parameters {}", params))};
-      }
-      result.continuation_token = *str;
+    auto token = try_get_nullable_string(params, "continuation_token");
+    if (auto* err = try_as<parse_error>(token)) {
+      return std::move(*err);
+    }
+    if (const auto* value = as<const std::string*>(token)) {
+      result.continuation_token = *value;
     }
     auto schema = try_extract_schema(params);
     if (auto* err = try_as<parse_error>(schema)) {
@@ -1495,6 +1478,15 @@ struct serve_handler_state {
     enum schema schema;
   };
 
+  /// State shared between the continuations of one /serve-multi request.
+  struct multi_request_state {
+    std::unordered_map<std::string, serve_response_with_state> results;
+    /// All serve ids in the request, so a flush can target the other serves.
+    std::vector<std::string> serve_ids;
+    /// Set once the first serve returns events; guards against flushing twice.
+    bool flush_triggered = false;
+  };
+
   /// Handles a request to /serve-multi by
   /// * "parsing" `params`
   /// * Performing a fanout over all `serve_id` in params.requests, making a
@@ -1510,29 +1502,23 @@ struct serve_handler_state {
     }
     auto& request = as<multi_serve_request>(maybe_requests);
     auto rp = self->make_response_promise<rest_response>();
-    const auto min_events_per_request
-      = round_up_to_multiple(request.min_events, request.requests.size())
-        / request.requests.size();
-    const auto max_events_per_request
-      = round_up_to_multiple(request.max_events, request.requests.size())
-        / request.requests.size();
-    auto result_map = std::make_shared<
-      std::unordered_map<std::string, serve_response_with_state>>();
-    // Set once the first serve returns events; guards against flushing twice.
-    auto triggered = std::make_shared<bool>(false);
-    // Copy of all serve ids so the flush can target the *other* serves. Must be
-    // a shared copy because `request` is local and the continuations outlive it.
-    auto all_ids = std::make_shared<std::vector<std::string>>();
-    all_ids->reserve(request.requests.size());
+    const auto per_request = [&](uint64_t total) {
+      return round_up_to_multiple(total, request.requests.size())
+             / request.requests.size();
+    };
+    const auto min_events_per_request = per_request(request.min_events);
+    const auto max_events_per_request = per_request(request.max_events);
+    auto st = std::make_shared<multi_request_state>();
+    st->serve_ids.reserve(request.requests.size());
     for (const auto& r : request.requests) {
-      all_ids->push_back(r.serve_id);
+      st->serve_ids.push_back(r.serve_id);
     }
     auto fan = detail::make_fanout_counter(
       request.requests.size(),
-      [rp, result_map]() mutable {
+      [rp, st]() mutable {
         auto json_text = std::string{'{'};
         auto first = true;
-        for (auto& [id, result] : *result_map) {
+        for (auto& [id, result] : st->results) {
           const auto& [response, state, schema] = result;
           const auto& [next_token, data] = response;
           if (not first) {
@@ -1555,22 +1541,20 @@ struct serve_handler_state {
                min_events_per_request, request.timeout, max_events_per_request)
         .request(serve_manager, caf::infinite)
         .then(
-          [self = self, serve_manager = serve_manager, fan, id = r.serve_id,
-           result_map, triggered, all_ids,
+          [self = self, serve_manager = serve_manager, fan, id = r.serve_id, st,
            effective_schema](serve_response& result) mutable {
             auto& [continuation_token, data] = result;
             const auto has_events = rows(data) > 0;
             const auto state = continuation_token.empty()
                                  ? serve_state::completed
                                  : serve_state::running;
-            const auto [_, success] = result_map->try_emplace(
+            const auto [_, success] = st->results.try_emplace(
               id, std::move(result), state, effective_schema);
             TENZIR_ASSERT(success);
-            // As soon as any serve has data, stop waiting on the others: flush
-            // their currently-buffered events instead of long-polling to the
-            // timeout.
-            if (has_events and not std::exchange(*triggered, true)) {
-              for (const auto& other : *all_ids) {
+            // Once any serve has data, flush the others' buffers instead of
+            // long-polling to the timeout.
+            if (has_events and not std::exchange(st->flush_triggered, true)) {
+              for (const auto& other : st->serve_ids) {
                 if (other != id) {
                   self->mail(atom::flush_v, other).send(serve_manager);
                 }
@@ -1578,7 +1562,7 @@ struct serve_handler_state {
             }
             fan->receive_success();
           },
-          [fan, id = r.serve_id, result_map,
+          [fan, id = r.serve_id, st,
            effective_schema](caf::error& err) mutable {
             if (err == caf::exit_reason::user_shutdown
                 or err.context().match_elements<diagnostic>()) {
@@ -1590,7 +1574,7 @@ struct serve_handler_state {
               const auto state = err == caf::exit_reason::user_shutdown
                                    ? serve_state::completed
                                    : serve_state::failed;
-              const auto [_, success] = result_map->try_emplace(
+              const auto [_, success] = st->results.try_emplace(
                 std::move(id), serve_response{}, state, effective_schema);
               TENZIR_ASSERT(success);
               fan->receive_success();
