@@ -879,17 +879,12 @@ struct serve_manager_state {
         found->continuation_token,
         split(found->last_results, request.max_events).first);
     }
-    // A first-page request against a serve that completed past its first page:
-    // report completion instead of an unknown-token error. An empty current
-    // token means the final batch was already delivered.
-    if (request.continuation_token == initial_continuation_token
-        and (found->done or found->continuation_token.empty())) {
-      return std::make_tuple(std::string{}, std::vector<table_slice>{});
-    }
     if (found->continuation_token != request.continuation_token) {
-      // If the operator already reached a terminal state, e.g., because it was
-      // dropped on graceful shutdown, we report completion instead of an error
-      // for a client that polls with the previously advertised token.
+      // A serve that reached a terminal state reports completion instead of an
+      // unknown-token error, so that a client retrying the first page or
+      // polling with the previously advertised token after a graceful shutdown
+      // sees a completed stream. All paths that terminally clear the
+      // continuation token also set `done`, so this covers lingering serves.
       if (found->done) {
         return std::make_tuple(std::string{}, std::vector<table_slice>{});
       }
