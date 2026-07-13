@@ -124,7 +124,12 @@ public:
   }
 
   auto operator()(OperatorMsg<T> msg) -> Task<void> override {
-    return co_match(
+    // Note the `co_await`: `operator()` must itself be a coroutine so the
+    // handler lambda temporaries created by `co_match` stay alive across the
+    // suspension. A plain `return co_match(...)` would destroy them at the end
+    // of the full expression, leaving the returned (lazily-started) handler
+    // coroutine with a dangling reference to its captured `this`.
+    co_await co_match(
       std::move(msg),
       [this](Signal signal) -> Task<void> {
         // Broadcast signals to every open lane, sequentially.
