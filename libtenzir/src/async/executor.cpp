@@ -835,42 +835,39 @@ private:
                   pipe.operators.end());
     }
     auto output = pipe.infer_type(input, parent_dh);
-    // The caller is responsible for passing a well-typed pipeline that
-    // type-checks against `input`. And since optimizations are type-preserving,
-    // we know that this cannot fail.
+    // The caller is responsible for passing a well-typed pipeline
     TENZIR_ASSERT(output);
-    auto spawned = std::move(pipe).spawn(input);
-    if (spawned.empty()) {
-      TENZIR_ASSERT(*output == input);
-      spawned.push_back(make_identity_operator(input));
-    }
+    auto plan = ir::Plan::from(std::move(pipe), input, parent_dh);
+    // The caller passed a well-typed pipeline and optimizations are
+    // type-preserving, so planning cannot fail here.
+    TENZIR_ASSERT(plan);
+    // The plan may end up empty if every operator elides; the plan runner then
+    // inserts a single identity operator. Account for at least one operator
+    // when naming the boundary channel.
+    auto num_ops = std::max(plan->size(), size_t{1});
     auto [from_control_sender, from_control_receiver]
       = channel<FromControl>(16);
     auto [to_control_sender, to_control_receiver] = channel<ToControl>(16);
-    auto [runner, push_sub, pull_sub] = match(
-      std::tie(input, *output),
-      [&]<class In, class Out>(
-        tag<In>, tag<Out>) -> std::tuple<Task<void>, AnyOpPush, AnyOpPull> {
-        auto chain
-          = OperatorChain<In, Out>::try_from(std::move(spawned)).unwrap();
-        auto [push_upstream, pull_upstream]
-          = exec_ctx_.make_channel<In>(id_.to(sub_id.op(0)));
-        // We already checked for non-empty chain above.
-        TENZIR_ASSERT(chain.size() > 0);
-        auto [push_downstream, pull_downstream]
-          = exec_ctx_.make_channel<Out>(sub_id.op(chain.size() - 1).to(id_));
-        auto runner
-          = drive_chain(std::move(chain), std::move(pull_upstream),
-                        std::move(push_downstream),
-                        std::move(from_control_receiver),
-                        std::move(to_control_sender), std::move(sub_id),
-                        exec_ctx_, sys_, *sub_dh, fused);
-        return {
-          std::move(runner),
-          AnyOpPush{std::move(push_upstream)},
-          AnyOpPull{std::move(pull_downstream)},
-        };
-      });
+    auto [runner, push_sub, pull_sub]
+      = match(std::tie(input, *output),
+              [&]<class In, class Out>(tag<In>, tag<Out>)
+                -> std::tuple<Task<void>, AnyOpPush, AnyOpPull> {
+                auto [push_upstream, pull_upstream]
+                  = exec_ctx_.make_channel<In>(id_.to(sub_id.op(0)));
+                auto [push_downstream, pull_downstream]
+                  = exec_ctx_.make_channel<Out>(sub_id.op(num_ops - 1).to(id_));
+                auto runner
+                  = drive_plan(std::move(*plan), std::move(pull_upstream),
+                               std::move(push_downstream),
+                               std::move(from_control_receiver),
+                               std::move(to_control_sender), std::move(sub_id),
+                               exec_ctx_, sys_, *sub_dh, fused);
+                return {
+                  std::move(runner),
+                  AnyOpPush{std::move(push_upstream)},
+                  AnyOpPull{std::move(pull_downstream)},
+                };
+              });
     auto [to_parent, from_sub] = channel<Checkpoint>(16);
     auto sub_key = key;
     // Insert the resulting subpipeline into our internal state before starting
@@ -1684,13 +1681,13 @@ auto run_operator(Box<Operator<Input, Output>> op,
 
 } // namespace
 
-class ChainRunner {
+class PlanRunner {
 public:
-  ChainRunner(std::vector<AnyOperator> operators, AnyOpPull pull_upstream,
-              AnyOpPush push_downstream, Receiver<FromControl> from_control,
-              Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
-              caf::actor_system& sys, DiagHandler& dh)
-    : operators_{std::move(operators)},
+  PlanRunner(ir::Plan plan, AnyOpPull pull_upstream, AnyOpPush push_downstream,
+             Receiver<FromControl> from_control, Sender<ToControl> to_control,
+             PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
+             DiagHandler& dh)
+    : plan_{std::move(plan)},
       pull_upstream_{std::move(pull_upstream)},
       push_downstream_{std::move(push_downstream)},
       from_control_{std::move(from_control)},
@@ -1704,9 +1701,9 @@ public:
 
   auto run_to_completion() && -> Task<void> {
     auto guard = detail::scope_guard{[&] noexcept {
-      LOGI("returning from chain runner {}", id_);
+      LOGI("returning from plan runner {}", id_);
     }};
-    LOGV("creating chain runner scope");
+    LOGV("creating plan runner scope");
     co_await driver_.activate([&] -> Task<void> {
       LOGW("beginning chain setup of {}", id_);
       spawn_operators();
@@ -1718,51 +1715,115 @@ public:
 
 private:
   auto spawn_operators() -> void {
-    auto next_input = std::move(pull_upstream_);
-    // TODO: Polish this.
-    for (auto& op : operators_) {
-      auto index = detail::narrow<size_t>(&op - operators_.data());
-      co_match(op, [&]<class In, class Out>(Box<Operator<In, Out>>& op) {
-        LOGI("got {}", typeid(*op).name());
-        auto input = std::move(as<Box<Pull<OperatorMsg<In>>>>(next_input));
-        auto last = index == operators_.size() - 1;
-        auto output_sender = [&]() -> Box<Push<OperatorMsg<Out>>> {
-          if (last) {
-            return std::move(as<Box<Push<OperatorMsg<Out>>>>(push_downstream_));
-          }
-          auto [sender, receiver]
-            = exec_ctx_.make_channel<Out>(id_.op(index).to(id_.op(index + 1)));
-          next_input = std::move(receiver);
-          return std::move(sender);
-        }();
-        auto [from_control_sender, from_control_receiver]
-          = channel<FromControl>(16);
-        auto [to_control_sender, to_control_receiver] = channel<ToControl>(16);
-        op_controls_.push_back(OpControl{
-          Option<Sender<FromControl>>{std::move(from_control_sender)},
-          std::move(to_control_receiver),
-        });
-        TENZIR_ASSERT(not op->name().empty());
-        auto executor
-          = exec_ctx_.make_executor(id_.op(index), std::string{op->name()});
-        auto task = run_operator(std::move(op), std::move(input),
-                                 std::move(output_sender),
-                                 std::move(from_control_receiver),
-                                 std::move(to_control_sender), id_.op(index),
-                                 exec_ctx_, sys_, dh_);
-        LOGI("spawning operator task");
-        driver_.add([task = std::move(task), index,
-                     executor = std::move(executor)] mutable
-                      -> Task<std::pair<size_t, Terminated>> {
-          co_await folly::coro::co_withExecutor(std::move(executor),
-                                                std::move(task));
-          co_return {index, Terminated{}};
-        });
-      });
+    // Spawn one runtime instance per planned operator.
+    for (auto& planned : plan_.operators) {
+      TENZIR_ASSERT(planned.parallelism == 1);
+      auto spawned = std::move(*planned.op).spawn(planned.input);
+      operators_.push_back(std::move(spawned));
+    }
+    // An empty plan still needs at least one operator to drive.
+    if (operators_.empty()) {
+      operators_.push_back(make_identity_operator(plan_.input));
+    }
+    // Per-operator input and output endpoints, computed during wiring.
+    auto inputs = std::vector<Option<AnyOpPull>>(operators_.size());
+    auto outputs = std::vector<Option<AnyOpPush>>(operators_.size());
+    // Wire the data plane by honoring each planned channel. Without elision,
+    // planned operator indices map one-to-one onto runtime operator indices.
+    for (auto& channel : plan_.channels) {
+      wire_channel(channel, inputs, outputs);
+    }
+    // The operator left without an input is the source; the one left without
+    // an output is the sink. Connect them to the plan's external endpoints.
+    auto wired_input = false;
+    auto wired_output = false;
+    for (auto index = size_t{0}; index < operators_.size(); ++index) {
+      if (not inputs[index]) {
+        TENZIR_ASSERT(not wired_input);
+        inputs[index] = std::move(pull_upstream_);
+        wired_input = true;
+      }
+      if (not outputs[index]) {
+        TENZIR_ASSERT(not wired_output);
+        outputs[index] = std::move(push_downstream_);
+        wired_output = true;
+      }
+    }
+    TENZIR_ASSERT(wired_input);
+    TENZIR_ASSERT(wired_output);
+    for (auto index = size_t{0}; index < operators_.size(); ++index) {
+      start_operator_task(index, std::move(inputs[index]),
+                          std::move(outputs[index]));
     }
     for (auto index = size_t{0}; index < operators_.size(); ++index) {
       add_control_read(index);
     }
+  }
+
+  /// Materialize a planned channel between two runtime operators. The channel
+  /// kind encodes the element type, so no type inspection of the operators is
+  /// needed here.
+  auto
+  wire_channel(ir::PlannedChannel& plan, std::vector<Option<AnyOpPull>>& inputs,
+               std::vector<Option<AnyOpPush>>& outputs) -> void {
+    auto id = id_.op(plan.from).to(id_.op(plan.to));
+    auto install = [&](auto pushpull) {
+      outputs[plan.from] = AnyOpPush{std::move(pushpull.push)};
+      inputs[plan.to] = AnyOpPull{std::move(pushpull.pull)};
+    };
+    switch (plan.kind) {
+      case ir::ChannelKind::Direct:
+        install(exec_ctx_.make_channel<table_slice>(std::move(id)));
+        return;
+      case ir::ChannelKind::DirectFused:
+        install(exec_ctx_.make_fused_channel<table_slice>(std::move(id)));
+        return;
+      case ir::ChannelKind::Bytes:
+        install(exec_ctx_.make_channel<chunk_ptr>(std::move(id)));
+        return;
+      case ir::ChannelKind::Scatter:
+      case ir::ChannelKind::Gather:
+      case ir::ChannelKind::Shuffle:
+        TENZIR_TODO();
+    }
+  }
+
+  /// Start the runner task for the operator at `index`, using the input and
+  /// output endpoints computed during wiring.
+  auto start_operator_task(size_t index, Option<AnyOpPull> input_endpoint,
+                           Option<AnyOpPush> output_endpoint) -> void {
+    co_match(operators_[index], [&]<class In, class Out>(
+                                  Box<Operator<In, Out>>& op) {
+      LOGI("got {}", typeid(*op).name());
+      TENZIR_ASSERT(input_endpoint);
+      TENZIR_ASSERT(output_endpoint);
+      auto input = std::move(as<Box<Pull<OperatorMsg<In>>>>(*input_endpoint));
+      auto output
+        = std::move(as<Box<Push<OperatorMsg<Out>>>>(*output_endpoint));
+      auto [from_control_sender, from_control_receiver]
+        = channel<FromControl>(16);
+      auto [to_control_sender, to_control_receiver] = channel<ToControl>(16);
+      op_controls_.push_back(OpControl{
+        Option<Sender<FromControl>>{std::move(from_control_sender)},
+        std::move(to_control_receiver),
+      });
+      TENZIR_ASSERT(not op->name().empty());
+      auto executor
+        = exec_ctx_.make_executor(id_.op(index), std::string{op->name()});
+      auto task
+        = run_operator(std::move(op), std::move(input), std::move(output),
+                       std::move(from_control_receiver),
+                       std::move(to_control_sender), id_.op(index), exec_ctx_,
+                       sys_, dh_);
+      LOGI("spawning operator task");
+      driver_.add([task = std::move(task), index,
+                   executor = std::move(
+                     executor)] mutable -> Task<std::pair<size_t, Terminated>> {
+        co_await folly::coro::co_withExecutor(std::move(executor),
+                                              std::move(task));
+        co_return {index, Terminated{}};
+      });
+    });
   }
 
   auto add_control_read(size_t index) -> void {
@@ -1868,6 +1929,7 @@ private:
     TENZIR_ASSERT(ready_for_shutdown == operators_.size());
   }
 
+  ir::Plan plan_;
   std::vector<AnyOperator> operators_;
   AnyOpPull pull_upstream_;
   AnyOpPush push_downstream_;
@@ -1901,22 +1963,22 @@ private:
 };
 
 template <class Input, class Output>
-auto drive_chain(OperatorChain<Input, Output> chain,
-                 Box<Pull<OperatorMsg<Input>>> pull_upstream,
-                 Box<Push<OperatorMsg<Output>>> push_downstream,
-                 Receiver<FromControl> from_control,
-                 Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
-                 caf::actor_system& sys, DiagHandler& dh, bool fused)
+auto drive_plan(ir::Plan plan, Box<Pull<OperatorMsg<Input>>> pull_upstream,
+                Box<Push<OperatorMsg<Output>>> push_downstream,
+                Receiver<FromControl> from_control,
+                Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
+                caf::actor_system& sys, DiagHandler& dh, bool fused)
   -> Task<void> {
-  TENZIR_ASSERT(chain.size() != 0);
+  TENZIR_ASSERT(plan.input.is<Input>());
+  TENZIR_ASSERT(plan.output.is<Output>());
   co_await folly::coro::co_safe_point;
   // Conditially use a fused ctx (that controls creation of new channels).
   auto fused_ctx = Option<FusedExecCtx>{};
   if (fused) {
     fused_ctx.emplace(exec_ctx);
   }
-  co_await ChainRunner{
-    std::move(chain).unwrap(),
+  co_await PlanRunner{
+    std::move(plan),
     AnyOpPull{std::move(pull_upstream)},
     AnyOpPush{std::move(push_downstream)},
     std::move(from_control),
@@ -1930,12 +1992,11 @@ auto drive_chain(OperatorChain<Input, Output> chain,
 }
 
 template auto
-drive_chain(OperatorChain<table_slice, table_slice> chain,
-            Box<Pull<OperatorMsg<table_slice>>> pull_upstream,
-            Box<Push<OperatorMsg<table_slice>>> push_downstream,
-            Receiver<FromControl> from_control, Sender<ToControl> to_control,
-            PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
-            DiagHandler& dh, bool fused) -> Task<void>;
+drive_plan(ir::Plan plan, Box<Pull<OperatorMsg<table_slice>>> pull_upstream,
+           Box<Push<OperatorMsg<table_slice>>> push_downstream,
+           Receiver<FromControl> from_control, Sender<ToControl> to_control,
+           PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
+           DiagHandler& dh, bool fused) -> Task<void>;
 
 namespace {
 
@@ -1949,14 +2010,14 @@ auto new_pipe_id() -> PipeId {
 
 struct GracefulStopRequested {};
 
-auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
-                  caf::actor_system& sys, DiagHandler& dh,
-                  Notify* graceful_stop) -> Task<void> {
+auto execute_plan(ir::Plan plan, ExecCtx& exec_ctx, caf::actor_system& sys,
+                  DiagHandler& dh, Notify* graceful_stop) -> Task<void> {
   auto id = new_pipe_id();
+  auto num_ops = std::max(plan.size(), size_t{1});
   auto [push_input, pull_input]
     = exec_ctx.make_channel<void>(ChannelId::first(id.op(0)));
   auto [push_output, pull_output]
-    = exec_ctx.make_channel<void>(ChannelId::last(id.op(pipeline.size() - 1)));
+    = exec_ctx.make_channel<void>(ChannelId::last(id.op(num_ops - 1)));
   auto result = co_await async_try([&]() -> Task<void> {
     auto [from_control_sender_raw, from_control_receiver]
       = channel<FromControl>(16);
@@ -1969,11 +2030,11 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
     LOGV("creating pipeline queue scope");
     co_await driver.activate([&] -> Task<void> {
       driver.add([&] -> Task<Terminated> {
-        co_await drive_chain(std::move(pipeline), std::move(pull_input),
-                             std::move(push_output),
-                             std::move(from_control_receiver),
-                             std::move(to_control_sender), id, exec_ctx, sys,
-                             dh);
+        co_await drive_plan(std::move(plan), std::move(pull_input),
+                            std::move(push_output),
+                            std::move(from_control_receiver),
+                            std::move(to_control_sender), id, exec_ctx, sys,
+                            dh);
         co_return Terminated{};
       });
       driver.add(pull_output());
@@ -2000,7 +2061,7 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
         co_await co_match(
           std::move(*next),
           [&](Terminated) -> Task<void> {
-            LOGI("run_pipeline got info that chain terminated");
+            LOGI("execute_plan got info that chain terminated");
             terminated = true;
             from_control_sender = None{};
             // If the pipeline terminated without graceful stop,
@@ -2017,7 +2078,7 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
               // so that the JoinSet can complete.
               co_return;
             }
-            LOGI("run_pipeline got graceful stop request");
+            LOGI("execute_plan got graceful stop request");
             if (from_control_sender) {
               co_await from_control_sender->send(GracefulStop{});
             }
@@ -2077,12 +2138,11 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
     .emit(dh);
 }
 
-auto run_bounded_pipeline(OperatorChain<table_slice, table_slice> chain,
-                          ExecCtx& exec_ctx, caf::actor_system& sys,
-                          DiagHandler& dh, PipelineFeeder feed_input,
+auto execute_plan_with_io(ir::Plan plan, ExecCtx& exec_ctx,
+                          caf::actor_system& sys, DiagHandler& dh,
+                          PipelineFeeder feed_input,
                           PipelineDrainer drain_output) -> Task<void> {
-  auto num_ops = chain.size();
-  TENZIR_ASSERT(num_ops > 0);
+  auto num_ops = std::max(plan.size(), size_t{1});
   auto id = new_pipe_id();
   auto [push_input, pull_input]
     = exec_ctx.make_channel<table_slice>(ChannelId::first(id.op(0)));
@@ -2105,14 +2165,14 @@ auto run_bounded_pipeline(OperatorChain<table_slice, table_slice> chain,
   co_await async_scope([&](AsyncScope& scope) -> Task<void> {
     // Chain runner.
     scope.spawn(folly::coro::co_invoke(
-      [chain = std::move(chain), pull_input = std::move(pull_input),
+      [plan = std::move(plan), pull_input = std::move(pull_input),
        push_output = std::move(push_output),
        from_ctl_recv = std::move(from_ctl_recv),
        to_ctl_send = std::move(to_ctl_send), id, &exec_ctx, &sys,
        &dh]() mutable -> Task<void> {
-        co_await drive_chain(std::move(chain), std::move(pull_input),
-                             std::move(push_output), std::move(from_ctl_recv),
-                             std::move(to_ctl_send), id, exec_ctx, sys, dh);
+        co_await drive_plan(std::move(plan), std::move(pull_input),
+                            std::move(push_output), std::move(from_ctl_recv),
+                            std::move(to_ctl_send), id, exec_ctx, sys, dh);
       }));
     // Feeder. Drops `push_input` on exit, closing the input channel. Honors
     // `feed_cancel` so we exit promptly if the chain stops reading upstream.

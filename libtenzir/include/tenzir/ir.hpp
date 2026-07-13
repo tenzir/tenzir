@@ -78,6 +78,26 @@ public:
   /// However, other methods such as `optimize` may be called in between.
   virtual auto spawn(element_type_tag input) const -> AnyOperator = 0;
 
+  /// Return the number of parallel instances that may run for this operator.
+  ///
+  /// A return value of 1 (the default) means the operator must run as a single
+  /// instance. Values greater than 1 allow the planner to spawn multiple
+  /// instances that process input concurrently.
+  virtual auto parallelism() const -> size_t {
+    return 1;
+  }
+
+  /// Return the expressions that determine how input is partitioned across the
+  /// parallel instances of this operator.
+  ///
+  /// An empty result (the default) means the operator does not constrain
+  /// partitioning, so any input may be routed to any instance. A non-empty
+  /// result means input must be partitioned such that rows with equal key
+  /// values are routed to the same instance.
+  virtual auto partition_keys() const -> std::vector<ast::expression> {
+    return {};
+  }
+
   /// Return the "main location" of the operator.
   ///
   /// Typically, this is the operator name. If there is no operator name, for
@@ -181,6 +201,87 @@ struct split_filter_result {
 auto split_filter_by_dependents(ir::optimize_filter filter,
                                 const ast::ExprRefs& touched)
   -> split_filter_result;
+
+/// How data flows across one edge of the pipeline plan DAG.
+enum class ChannelKind {
+  /// N:N events channel (`table_slice`) — upstream instance i feeds downstream
+  /// instance i. Chosen when the parallelism matches on both ends and no
+  /// repartitioning is required.
+  Direct,
+  /// 1:1 bytes channel (`chunk_ptr`) — the `Direct` equivalent for byte
+  /// streams between operators.
+  Bytes,
+  /// N:N fused events channel (`table_slice`) — like `Direct`, but each input
+  /// is fully processed through the downstream before the next is pulled.
+  DirectFused,
+  /// 1:N — one upstream instance distributes rows across N downstream
+  /// instances with no key constraint (load balancing).
+  Scatter,
+  /// N:1 — N upstream instances merge into a single downstream instance.
+  Gather,
+  /// N:M — rows are hash-partitioned on the downstream's `partition_keys` and
+  /// routed so that equal keys land on the same downstream instance.
+  Shuffle,
+};
+
+/// A stage in the pipeline plan: one logical IR operator together with its
+/// degree of parallelism. When the plan is spawned, this stage becomes
+/// `parallelism` runtime operator instances.
+struct PlannedOperator {
+  /// The (optimized, instantiated) IR operator backing this node.
+  Box<Operator> op;
+  /// The number of runtime instances to spawn for this node.
+  size_t parallelism = 1;
+  /// The keys that constrain how input is partitioned across the instances.
+  std::vector<ast::expression> partition_keys;
+  /// The element type flowing into this node.
+  element_type_tag input;
+  /// The element type flowing out of this node.
+  element_type_tag output;
+};
+
+/// A directed channel between two operators of the pipeline plan.
+struct PlannedChannel {
+  /// Index into `Plan::operators` of the upstream operator.
+  size_t from;
+  /// Index into `Plan::operators` of the downstream operator.
+  size_t to;
+  /// How data flows across this channel.
+  ChannelKind kind;
+};
+
+/// The pipeline plan: a DAG of operator stages ready to be spawned and driven
+/// by the executor. This is the execution-time counterpart of a `pipeline`
+/// and replaces the linear operator chain.
+///
+/// In phase 1 the plan is always a linear chain of single-instance operators
+/// connected by `Direct` channels, but the representation already supports the
+/// general DAG shape needed for parallel execution.
+struct Plan {
+  std::vector<PlannedOperator> operators;
+  std::vector<PlannedChannel> channels;
+  /// The element type flowing into the plan (input of the first operator).
+  element_type_tag input;
+  /// The element type flowing out of the plan (output of the last operator).
+  element_type_tag output;
+
+  /// Build a plan from an already-instantiated pipeline.
+  ///
+  /// This optimizes the pipeline, threads element types starting from `input`,
+  /// and records one node per operator with its parallelism and partition
+  /// keys. The operators are not spawned yet; spawning is deferred to the
+  /// executor.
+  static auto from(pipeline pipe, element_type_tag input,
+                   diagnostic_handler& dh) -> failure_or<Plan>;
+
+  auto size() const -> size_t {
+    return operators.size();
+  }
+
+  auto empty() const -> bool {
+    return operators.empty();
+  }
+};
 
 class SetIr final : public Operator {
 public:

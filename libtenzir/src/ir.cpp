@@ -883,12 +883,82 @@ auto ir::pipeline::spawn(element_type_tag input) && -> std::vector<AnyOperator> 
   return result;
 }
 
+namespace {
+
+/// Derive the channel kind between two adjacent planned operators.
+auto derive_channel_kind(const ir::PlannedOperator& up,
+                         const ir::PlannedOperator& down) -> ir::ChannelKind {
+  TENZIR_ASSERT(not up.output.is<void>(), "cannot construct a void channel");
+  if (up.output.is<chunk_ptr>()) {
+    return ir::ChannelKind::Bytes;
+  }
+  if (not down.partition_keys.empty()) {
+    return ir::ChannelKind::Shuffle;
+  }
+  if (up.parallelism == down.parallelism) {
+    return up.parallelism == 1 ? ir::ChannelKind::Direct
+                               : ir::ChannelKind::DirectFused;
+  }
+  if (up.parallelism == 1) {
+    return ir::ChannelKind::Scatter;
+  }
+  if (down.parallelism == 1) {
+    return ir::ChannelKind::Gather;
+  }
+  TENZIR_TODO(); // this can only happen for N:M parallelism
+}
+
+} // namespace
+
+auto ir::Plan::from(pipeline pipe, element_type_tag input,
+                    diagnostic_handler& dh) -> failure_or<Plan> {
+  // Mirror `pipeline::spawn`: the pipeline must already be instantiated, so it
+  // no longer carries `let`s. We optimize once more and fold any leftover
+  // filter into leading `where` operators.
+  TENZIR_ASSERT(pipe.lets.empty());
+  auto opt = std::move(pipe).optimize(optimize_filter{}, event_order::ordered);
+  TENZIR_ASSERT(opt.replacement.lets.empty());
+  pipe = std::move(opt.replacement);
+  for (auto& expr : opt.filter) {
+    pipe.operators.insert(pipe.operators.begin(), make_where_ir(expr));
+  }
+  auto plan = Plan{};
+  plan.input = input;
+  plan.output = input;
+  plan.operators.reserve(pipe.operators.size());
+  for (auto& op : pipe.operators) {
+    TRY(auto output, op->infer_type(input, dh));
+    // Query parallelism and partition keys before moving the operator.
+    auto parallelism = op->parallelism();
+    auto partition_keys = op->partition_keys();
+    plan.operators.push_back(PlannedOperator{
+      .op = std::move(op),
+      .parallelism = parallelism,
+      .partition_keys = std::move(partition_keys),
+      .input = input,
+      .output = output,
+    });
+    input = output;
+  }
+  plan.output = input;
+  // Phase 1: a linear chain of channels. The channel kind is derived from the
+  // adjacent operators' parallelism and partition keys, which is `Direct`
+  // while all operators run as a single instance.
+  for (auto i = size_t{1}; i < plan.operators.size(); ++i) {
+    plan.channels.push_back(PlannedChannel{
+      .from = i - 1,
+      .to = i,
+      .kind = derive_channel_kind(plan.operators[i - 1], plan.operators[i]),
+    });
+  }
+  return plan;
+}
+
 auto ir::pipeline::infer_type(element_type_tag input,
                               diagnostic_handler& dh) const
   -> failure_or<element_type_tag> {
   for (auto& op : operators) {
     TRY(input, op->infer_type(input, dh));
-    // TODO: What if we get void in the middle?
   }
   return input;
 }
