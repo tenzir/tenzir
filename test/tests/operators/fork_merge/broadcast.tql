@@ -1,0 +1,8 @@
+// Each branch receives the full input stream.
+from {x: 1}, {x: 2}
+fork_merge {
+  set kind="a"
+}, {
+  set kind="b"
+}
+sort kind, x

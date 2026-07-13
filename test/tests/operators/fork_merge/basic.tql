@@ -1,0 +1,9 @@
+from {x: 1}, {x: 2}, {x: 3}
+fork_merge {
+  summarize s=sum(x)
+}, {
+  summarize c=count()
+}, {
+  summarize m=max(x)
+}
+sort s?, c?, m?

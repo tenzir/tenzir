@@ -1,0 +1,8 @@
+// Branches may terminate early (here via `head`); their outputs still merge.
+from {x: 1}, {x: 2}, {x: 3}
+fork_merge {
+  head 1
+}, {
+  head 2
+}
+sort x

@@ -1,0 +1,5 @@
+// fork_merge pushes downstream filters into each branch, not upstream.
+export
+fork_merge { pass }, { pass }
+where x > 1
+discard
