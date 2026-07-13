@@ -138,6 +138,13 @@ def iceberg_rest() -> Iterator[dict[str, str]]:
             "ICEBERG_REST_CONTAINER_ID": container.container_id,
             "ICEBERG_REST_CONTAINER_RUNTIME": runtime.binary,
         }
+        # Tenzir's debug build is ASan-instrumented, while the packaged Avro
+        # and Iceberg libraries are not. Disable the resulting false-positive
+        # std::vector container annotations for Iceberg fixture processes.
+        asan_options = os.environ.get("ASAN_OPTIONS", "")
+        env["ASAN_OPTIONS"] = ":".join(
+            option for option in (asan_options, "detect_container_overflow=0") if option
+        )
         yield env
     finally:
         if container is not None:

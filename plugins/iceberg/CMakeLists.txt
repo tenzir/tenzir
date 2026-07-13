@@ -41,6 +41,20 @@ if (Iceberg_FOUND)
   target_link_libraries(iceberg PUBLIC iceberg::iceberg_bundle_static
                                        iceberg::iceberg_rest_static)
 else ()
+  find_program(PATCH_EXECUTABLE patch REQUIRED)
+  set(_iceberg_cpp_source "${CMAKE_CURRENT_BINARY_DIR}/aux/patched-iceberg-cpp")
+  file(REMOVE_RECURSE "${_iceberg_cpp_source}")
+  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/aux/iceberg-cpp/"
+       DESTINATION "${_iceberg_cpp_source}")
+  execute_process(
+    COMMAND "${PATCH_EXECUTABLE}" -p1 -i
+            "${CMAKE_CURRENT_SOURCE_DIR}/aux/iceberg-cpp.patch"
+    WORKING_DIRECTORY "${_iceberg_cpp_source}"
+    RESULT_VARIABLE _iceberg_patch_result)
+  if (NOT _iceberg_patch_result EQUAL 0)
+    message(FATAL_ERROR "failed to patch bundled iceberg-cpp")
+  endif ()
+
   set(ICEBERG_BUILD_STATIC
       ON
       CACHE BOOL "")
@@ -67,7 +81,8 @@ else ()
   set(BUILD_SHARED_LIBS OFF)
   set(_pic_before "${CMAKE_POSITION_INDEPENDENT_CODE}")
   set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-  add_subdirectory(aux/iceberg-cpp)
+  add_subdirectory("${_iceberg_cpp_source}"
+                   "${CMAKE_CURRENT_BINARY_DIR}/aux/iceberg-cpp")
   set(BUILD_SHARED_LIBS "${_build_shared_libs_before}")
   unset(_build_shared_libs_before)
   set(CMAKE_POSITION_INDEPENDENT_CODE "${_pic_before}")
@@ -103,7 +118,7 @@ else ()
       endif ()
     endforeach ()
   endfunction ()
-  iceberg_relax_warnings("${CMAKE_CURRENT_SOURCE_DIR}/aux/iceberg-cpp")
+  iceberg_relax_warnings("${_iceberg_cpp_source}")
 
   foreach (_target IN ITEMS iceberg_static iceberg_data_static
                             iceberg_bundle_static iceberg_rest_static)
@@ -115,8 +130,7 @@ else ()
   target_link_libraries(iceberg PUBLIC iceberg_bundle_static
                                        iceberg_rest_static)
 
-  dependency_summary(
-    "iceberg-cpp" "${CMAKE_CURRENT_SOURCE_DIR}/aux/iceberg-cpp" "Dependencies")
+  dependency_summary("iceberg-cpp" "${_iceberg_cpp_source}" "Dependencies")
 endif ()
 
 option(TENZIR_ICEBERG_ENABLE_SPIKE

@@ -1,0 +1,37 @@
+diff --git a/cmake_modules/IcebergThirdpartyToolchain.cmake b/cmake_modules/IcebergThirdpartyToolchain.cmake
+index 33a1ee4..fd51a0b 100644
+--- a/cmake_modules/IcebergThirdpartyToolchain.cmake
++++ b/cmake_modules/IcebergThirdpartyToolchain.cmake
+@@ -320,4 +320,4 @@ macro(build_avro)
+   else()
+     set(AVRO_VENDORED FALSE)
+-    list(APPEND ICEBERG_SYSTEM_DEPENDENCIES Avro)
++    list(APPEND ICEBERG_SYSTEM_DEPENDENCIES avro-cpp)
+   endif()
+diff --git a/src/iceberg/arrow/s3/arrow_s3_file_io.cc b/src/iceberg/arrow/s3/arrow_s3_file_io.cc
+index 2d2cc6a..3872af1 100644
+--- a/src/iceberg/arrow/s3/arrow_s3_file_io.cc
++++ b/src/iceberg/arrow/s3/arrow_s3_file_io.cc
+@@ -70,4 +70,7 @@ Status EnsureS3Initialized() {
+ Status EnsureS3Initialized() {
+   static const ::arrow::Status init_status = []() {
++    if (::arrow::fs::IsS3Initialized()) {
++      return ::arrow::Status::OK();
++    }
+     auto options = ::arrow::fs::S3GlobalOptions::Defaults();
+     return ::arrow::fs::InitializeS3(options);
+diff --git a/src/iceberg/partition_summary.cc b/src/iceberg/partition_summary.cc
+index 33d056f..3903a24 100644
+--- a/src/iceberg/partition_summary.cc
++++ b/src/iceberg/partition_summary.cc
+@@ -84,5 +84,10 @@ Status PartitionSummary::Update(const PartitionValues& partition_values) {
+   for (size_t i = 0; i < partition_values.num_fields(); i++) {
+     ICEBERG_ASSIGN_OR_RAISE(auto val, partition_values.ValueAt(i));
++    if (val.get().IsNull()) {
++      ICEBERG_RETURN_UNEXPECTED(field_stats_[i].Update(Literal::Null(
++          internal::checked_pointer_cast<PrimitiveType>(field_stats_[i].type()))));
++      continue;
++    }
+     ICEBERG_ASSIGN_OR_RAISE(
+         auto lit, val.get().CastTo(internal::checked_pointer_cast<PrimitiveType>(
+                       field_stats_[i].type())));
