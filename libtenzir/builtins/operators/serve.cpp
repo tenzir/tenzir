@@ -79,6 +79,7 @@
 #include <caf/typed_event_based_actor.hpp>
 #include <folly/coro/BoundedQueue.h>
 
+#include <chrono>
 #include <sstream>
 
 namespace tenzir::plugins::serve {
@@ -608,6 +609,24 @@ struct serve_manager_state {
   /// messages to the user.
   std::unordered_map<std::string, caf::error> expired_ids = {};
 
+  /// A first-page get request that arrived before its serve operator
+  /// registered. Parked until registration, a flush, or its timeout.
+  struct pending_get {
+    uint64_t id = {};
+    single_serve_request request = {};
+    caf::typed_response_promise<serve_response> rp = {};
+    caf::disposable timeout = {};
+    std::chrono::steady_clock::time_point deadline = {};
+  };
+
+  /// Parked first-page get requests, keyed by serve id. A pipeline reports
+  /// running before its operators finished starting, so a poll may arrive
+  /// before the serve operator registered its id.
+  std::unordered_map<std::string, std::vector<pending_get>> pending_gets = {};
+
+  /// Monotonic id generator for parked get requests.
+  uint64_t next_pending_get_id = {};
+
   // Distinguishes a genuine pipeline failure from a clean teardown. A failing
   // pipeline propagates a diagnostic; a pipeline that merely finished -- by
   // exhausting its input, a user shutdown, or the executor tearing down its
@@ -712,6 +731,15 @@ struct serve_manager_state {
     self->monitor(std::move(watched), [this, addr](const caf::error& err) {
       handle_down_msg(addr, err);
     });
+    // Replay polls that arrived before this registration, with the remainder
+    // of their timeout budget.
+    const auto now = std::chrono::steady_clock::now();
+    for (auto& get : take_parked(serve_id)) {
+      get.request.timeout
+        = std::max(duration::zero(),
+                   std::chrono::duration_cast<duration>(get.deadline - now));
+      get_registered(ops.back(), std::move(get.request), std::move(get.rp));
+    }
     return {};
   }
 
@@ -863,52 +891,122 @@ struct serve_manager_state {
         }
         return std::make_tuple(std::string{}, std::vector<table_slice>{});
       }
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("{} got request for events with "
-                                         "unknown serve id {}",
-                                         *self, request.serve_id));
+      // A first-page poll may race the serve operator's startup: a pipeline
+      // reports running before its operators finished starting. Park the
+      // request until the operator registers instead of failing, and report
+      // an unknown serve id only when the timeout fires first. A generated
+      // token can never become valid through a future registration (a fresh
+      // registration always starts at the initial token), so fail fast then.
+      if (request.continuation_token == initial_continuation_token) {
+        return park_get(std::move(request));
+      }
+      return unknown_serve_id_error(request.serve_id);
     }
+    auto rp = self->make_response_promise<serve_response>();
+    get_registered(*found, std::move(request), rp);
+    return rp;
+  }
+
+  auto unknown_serve_id_error(std::string_view serve_id) const -> caf::error {
+    return caf::make_error(ec::invalid_argument,
+                           fmt::format("{} got request for events with "
+                                       "unknown serve id {}",
+                                       *self, serve_id));
+  }
+
+  /// Extracts all parked polls for a serve id and cancels their timeouts.
+  auto take_parked(const std::string& serve_id) -> std::vector<pending_get> {
+    auto pending = pending_gets.extract(serve_id);
+    if (pending.empty()) {
+      return {};
+    }
+    for (auto& get : pending.mapped()) {
+      get.timeout.dispose();
+    }
+    return std::move(pending.mapped());
+  }
+
+  /// Parks a first-page get request whose serve id is not registered yet.
+  /// `start()` replays it, `flush()` completes it, or its timeout fails it.
+  auto park_get(single_serve_request request) -> caf::result<serve_response> {
+    auto rp = self->make_response_promise<serve_response>();
+    const auto id = next_pending_get_id++;
+    const auto deadline = std::chrono::steady_clock::now() + request.timeout;
+    auto timeout = detail::weak_run_delayed(
+      self, request.timeout, [this, id, serve_id = request.serve_id]() {
+        const auto pending = pending_gets.find(serve_id);
+        if (pending == pending_gets.end()) {
+          return;
+        }
+        const auto found
+          = std::ranges::find(pending->second, id, &pending_get::id);
+        if (found == pending->second.end()) {
+          return;
+        }
+        found->rp.deliver(unknown_serve_id_error(serve_id));
+        pending->second.erase(found);
+        if (pending->second.empty()) {
+          pending_gets.erase(pending);
+        }
+      });
+    auto serve_id = request.serve_id;
+    pending_gets[std::move(serve_id)].push_back({
+      .id = id,
+      .request = std::move(request),
+      .rp = rp,
+      .timeout = std::move(timeout),
+      .deadline = deadline,
+    });
+    return rp;
+  }
+
+  /// Answers a get request for a registered serve operator on `rp`.
+  auto get_registered(managed_serve_operator& op, single_serve_request request,
+                      caf::typed_response_promise<serve_response> rp) -> void {
     // Re-fetch of the most recently delivered batch: the client retried with
     // the token of its previous request because the response was lost or its
     // poll was cancelled. This covers the first page (whose token is the
     // well-known initial token) and the final batch of a completed pipeline.
     // `last_continuation_token` stays empty until the first delivery, and the
     // request token is never empty here, so a fresh serve cannot match.
-    if (found->last_continuation_token == request.continuation_token) {
-      return std::make_tuple(
-        found->continuation_token,
-        split(found->last_results, request.max_events).first);
+    if (op.last_continuation_token == request.continuation_token) {
+      rp.deliver(
+        std::make_tuple(op.continuation_token,
+                        split(op.last_results, request.max_events).first));
+      return;
     }
-    if (found->continuation_token != request.continuation_token) {
+    if (op.continuation_token != request.continuation_token) {
       // A serve that reached a terminal state reports completion instead of an
       // unknown-token error, so that a client retrying the first page or
       // polling with the previously advertised token after a graceful shutdown
       // sees a completed stream. All paths that terminally clear the
       // continuation token also set `done`, so this covers lingering serves.
-      if (found->done) {
-        return std::make_tuple(std::string{}, std::vector<table_slice>{});
+      if (op.done) {
+        rp.deliver(std::make_tuple(std::string{}, std::vector<table_slice>{}));
+        return;
       }
-      return caf::make_error(
+      rp.deliver(caf::make_error(
         ec::invalid_argument,
         fmt::format("{} got request for events with unknown continuation token "
                     "{} for serve id {}",
-                    *self, request.continuation_token, request.serve_id));
+                    *self, request.continuation_token, request.serve_id)));
+      return;
     }
-    if (found->done and found->buffer.empty()) {
-      return std::make_tuple(std::string{}, std::vector<table_slice>{});
+    if (op.done and op.buffer.empty()) {
+      rp.deliver(std::make_tuple(std::string{}, std::vector<table_slice>{}));
+      return;
     }
-    auto rp = self->make_response_promise<serve_response>();
-    found->get_rps.push_back(rp);
-    found->requested = request.max_events;
-    found->min_events = request.min_events;
+    op.get_rps.push_back(rp);
+    op.requested = request.max_events;
+    op.min_events = request.min_events;
     // Once the source is gone, no more data will arrive, so deliver whatever
     // remains buffered immediately rather than waiting for `min_events`.
-    const auto delivered = found->try_deliver_results(found->done);
+    const auto delivered = op.try_deliver_results(op.done);
     if (delivered) {
-      return rp;
+      return;
     }
-    found->delayed_attempt.dispose();
-    found->delayed_attempt = detail::weak_run_delayed(
+    op.delayed_attempt.dispose();
+    op.delayed_attempt = detail::weak_run_delayed(
       self, request.timeout,
       [this, serve_id = request.serve_id,
        continuation_token = request.continuation_token]() mutable {
@@ -928,10 +1026,15 @@ struct serve_manager_state {
         const auto delivered = found->try_deliver_results(true);
         TENZIR_ASSERT(delivered);
       });
-    return rp;
   }
 
   auto flush(std::string serve_id) -> caf::result<void> {
+    // Complete parked polls for a not-yet-registered serve id with an empty
+    // first page, so a group poll is not held back until their timeout.
+    for (auto& get : take_parked(serve_id)) {
+      get.rp.deliver(std::make_tuple(std::string{initial_continuation_token},
+                                     std::vector<table_slice>{}));
+    }
     const auto found = std::ranges::find_if(ops, [&](const auto& op) {
       return op.serve_id == serve_id;
     });
