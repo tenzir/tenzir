@@ -4,3 +4,5 @@ update-accepts-legacy-and-neo-definitions: ok
 every-stop-terminates-serve: ok
 hidden-diagnostics-stop-terminates-serve: ok
 full-buffer-stop-terminates-serve: ok
+force-stop-terminates-pipeline: ok
+invalid-action-rejected: ok

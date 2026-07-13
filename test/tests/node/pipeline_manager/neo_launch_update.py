@@ -525,6 +525,70 @@ def _check_full_buffer_stop_terminates_serve(base_url: str) -> None:
             _delete_pipeline(base_url, created_id)
 
 
+def _check_force_stop_terminates_pipeline(base_url: str) -> None:
+    # A `force-stop` skips the graceful drain and terminates a running pipeline
+    # immediately. Here we launch a continuously-running pipeline and assert it
+    # stops after a force-stop request.
+    created_id = ""
+    try:
+        status, body = _post_api(
+            base_url,
+            "/pipeline/launch",
+            {
+                "definition": ("//neo\nfrom {x: 1}\nrepeat\n"),
+                "name": "neo-force-stop",
+                "hidden": True,
+                "serve_id": "neo-force-stop",
+                "ttl": "60s",
+                "autostart": {"created": True},
+            },
+        )
+        assert status == 200, body
+        created_id = str(body.get("id", ""))
+        assert created_id, body
+        _wait_for_pipeline_state(base_url, created_id, "running")
+        status, body = _post_api(
+            base_url,
+            "/pipeline/update",
+            {"id": created_id, "action": "force-stop"},
+        )
+        assert status == 200, body
+        _wait_for_pipeline_stopped_or_deleted(base_url, created_id, timeout=10)
+        print("force-stop-terminates-pipeline: ok")
+    finally:
+        if created_id:
+            _delete_pipeline(base_url, created_id)
+
+
+def _check_invalid_action_rejected(base_url: str) -> None:
+    # Unknown actions must still be rejected so that clients get clear feedback.
+    created_id = ""
+    try:
+        status, body = _post_api(
+            base_url,
+            "/pipeline/create",
+            {
+                "definition": "from {x: 1} | discard",
+                "name": "invalid-action",
+            },
+        )
+        assert status == 200, body
+        created_id = str(body.get("id", ""))
+        assert created_id, body
+        status, body = _post_api(
+            base_url,
+            "/pipeline/update",
+            {"id": created_id, "action": "stahp"},
+        )
+        # The web layer surfaces the pipeline manager's rejection as an error
+        # body rather than a distinct HTTP status.
+        assert body.get("error"), {"status": status, "body": body}
+        print("invalid-action-rejected: ok")
+    finally:
+        if created_id:
+            _delete_pipeline(base_url, created_id)
+
+
 def main() -> None:
     with _running_web_server() as base_url:
         _check_launch_compile_diagnostics(base_url)
@@ -533,6 +597,8 @@ def main() -> None:
         _check_every_stop_terminates_serve(base_url)
         _check_hidden_diagnostics_stop_terminates_serve(base_url)
         _check_full_buffer_stop_terminates_serve(base_url)
+        _check_force_stop_terminates_pipeline(base_url)
+        _check_invalid_action_rejected(base_url)
 
 
 if __name__ == "__main__":
