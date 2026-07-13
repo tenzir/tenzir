@@ -22,7 +22,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <span>
 #include <utility>
 #include <vector>
@@ -179,15 +178,28 @@ private:
       if (total == 0) {
         co_return;
       }
-      if (open_lanes() == 0) {
+      // Distribute across open lanes only. Retired lanes are excluded from the
+      // load vector entirely, so they neither receive rows nor skew the
+      // fairness check (a pinned sentinel would reject every `k < n`, forcing
+      // needless fragmentation across all open lanes).
+      auto open_lane_ids = std::vector<size_t>{};
+      auto open_loads = std::vector<uint64_t>{};
+      for (auto i = size_t{0}; i < open_.size(); ++i) {
+        if (open_[i]) {
+          open_lane_ids.push_back(i);
+          open_loads.push_back(rows_assigned_[i]);
+        }
+      }
+      if (open_lane_ids.empty()) {
         panic("scatter has no open lane to route to");
       }
-      // `distribute_adaptive` works over all lanes; funnel closed lanes by
-      // pre-loading them so they are never selected.
-      auto assignments
-        = routing::distribute_adaptive(total, effective_rows_assigned());
+      // `distribute_adaptive` updates `open_loads` in place for the lanes it
+      // fills; fold those back into the real per-lane load vector.
+      auto assignments = routing::distribute_adaptive(total, open_loads);
       auto offset = size_t{0};
-      for (auto [lane, count] : assignments) {
+      for (auto [compact, count] : assignments) {
+        auto lane = open_lane_ids[compact];
+        rows_assigned_[lane] = open_loads[compact];
         auto slice = subslice(data, offset, offset + count);
         offset += count;
         co_await (*lanes_[lane])(OperatorMsg<table_slice>{std::move(slice)});
@@ -197,21 +209,6 @@ private:
       auto lane = next_open_lane();
       co_await (*lanes_[lane])(OperatorMsg<T>{std::move(data)});
     }
-  }
-
-  /// For adaptive routing, returns a load vector where closed lanes are pinned
-  /// to the maximum so they never receive rows, and records the real assignment
-  /// back into `rows_assigned_`.
-  auto effective_rows_assigned() -> std::vector<uint64_t>& {
-    // Closed lanes are excluded by setting their load extremely high, which
-    // keeps `distribute_adaptive` from ever choosing them (it always fills the
-    // least-loaded first and checks fairness against the minimum).
-    for (auto i = size_t{0}; i < open_.size(); ++i) {
-      if (not open_[i]) {
-        rows_assigned_[i] = std::numeric_limits<uint64_t>::max();
-      }
-    }
-    return rows_assigned_;
   }
 
   auto next_open_lane() -> size_t {
