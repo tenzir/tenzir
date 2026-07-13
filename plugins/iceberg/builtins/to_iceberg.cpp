@@ -268,7 +268,10 @@ public:
     std::string partition;
     int64_t generation;
   };
-  using Message = variant<RotateRequested>;
+  struct CommitRequested {
+    int64_t generation;
+  };
+  using Message = variant<RotateRequested, CommitRequested>;
 
   /// Rows accumulating toward one partition's next data file. A partition
   /// starts out buffering Arrow batches in memory — cheap to hold, so any
@@ -546,18 +549,32 @@ public:
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
     auto msg = std::move(result).as<Message>();
-    co_await co_match(msg, [&](RotateRequested& r) -> Task<void> {
-      auto it = partitions_.find(r.partition);
-      if (it == partitions_.end() or it->second.generation != r.generation) {
-        co_return;
-      }
-      TENZIR_DEBUG("to_iceberg: rotating partition `{}` after `timeout`",
-                   r.partition);
-      co_await close_partition(r.partition, ctx);
-      if (not done_ and not checkpointing_) {
-        co_await commit_staged(pending_files_, ctx);
-      }
-    });
+    co_await co_match(
+      msg,
+      [&](RotateRequested& r) -> Task<void> {
+        auto it = partitions_.find(r.partition);
+        if (it == partitions_.end() or it->second.generation != r.generation) {
+          co_return;
+        }
+        TENZIR_DEBUG("to_iceberg: rotating partition `{}` after `timeout`",
+                     r.partition);
+        co_await close_partition(r.partition, ctx);
+        if (not done_ and not checkpointing_) {
+          co_await commit_staged(pending_files_, ctx);
+        }
+      },
+      [&](CommitRequested& r) -> Task<void> {
+        if (not commit_timer_cancel_
+            or r.generation != commit_timer_generation_) {
+          co_return;
+        }
+        commit_timer_cancel_.reset();
+        TENZIR_DEBUG("to_iceberg: committing evicted partition files after "
+                     "`timeout`");
+        if (not done_ and not checkpointing_) {
+          co_await commit_staged(pending_files_, ctx);
+        }
+      });
   }
 
   auto snapshot(Serde& serde) -> void override {
@@ -578,6 +595,7 @@ public:
                    "checkpoints");
     }
     checkpointing_ = true;
+    cancel_commit_timer();
     co_await close_all(ctx);
     if (done_) {
       co_return;
@@ -1136,13 +1154,13 @@ private:
   }
 
   /// Closes the largest buffering partitions into data files until the
-  /// total buffered bytes fit the budget again. Closed buffers ride along
-  /// with the next commit, so high partition cardinality cannot cause a
-  /// commit storm; the size floor of the resulting files degrades as
-  /// budget divided by the number of buffering partitions.
+  /// total buffered bytes fit the budget again. All files closed in one
+  /// eviction pass commit together in non-checkpointed pipelines. This keeps
+  /// them visible even when the evicted partition owned the only timer.
   auto enforce_buffer_budget(OpCtx& ctx) -> Task<void> {
     const auto budget
       = args_.buffer_size ? args_.buffer_size->inner : default_buffer_size;
+    auto closed_any = false;
     while (std::cmp_greater(total_buffered_, budget)) {
       auto victim = partitions_.end();
       for (auto it = partitions_.begin(); it != partitions_.end(); ++it) {
@@ -1169,6 +1187,10 @@ private:
       if (done_) {
         co_return;
       }
+      closed_any = true;
+    }
+    if (closed_any and not checkpointing_) {
+      arm_commit_timer(ctx);
     }
   }
 
@@ -1308,10 +1330,14 @@ private:
     if (staged.empty() or done_) {
       co_return;
     }
+    if (not checkpointing_) {
+      cancel_commit_timer();
+    }
+    const auto staged_count = staged.size();
     auto files = std::vector<DataFile>{};
-    files.reserve(staged.size());
-    for (const auto& entry : staged) {
-      files.push_back(entry.file);
+    files.reserve(staged_count);
+    for (auto it = staged.begin(); it != staged.begin() + staged_count; ++it) {
+      files.push_back(it->file);
     }
     const auto tag = CommitTag{writer_id_, commit_seq_};
     auto backoff = duration{commit_initial_backoff};
@@ -1322,16 +1348,29 @@ private:
           });
       if (result) {
         auto bytes = int64_t{0};
-        for (const auto& entry : staged) {
-          bytes += entry.serialized.file_size;
+        for (auto it = staged.begin(); it != staged.begin() + staged_count;
+             ++it) {
+          bytes += it->serialized.file_size;
         }
         TENZIR_DEBUG("to_iceberg: committed {} data files ({} bytes) as seq "
                      "{} of writer `{}` on attempt {}",
-                     staged.size(), bytes, tag.sequence, tag.writer_id,
-                     attempt);
-        staged.clear();
+                     staged_count, bytes, tag.sequence, tag.writer_id, attempt);
+        const auto layout_changed = not table_->has_same_write_layout(*result);
+        if (layout_changed) {
+          TENZIR_DEBUG("to_iceberg: table write layout changed after commit; "
+                       "closing {} open partitions",
+                       partitions_.size());
+          co_await close_all(ctx);
+          if (done_) {
+            co_return;
+          }
+        }
+        staged.erase(staged.begin(), staged.begin() + staged_count);
         commit_seq_ += 1;
         set_table(std::move(*result), ctx);
+        if (not done_ and not checkpointing_ and not staged.empty()) {
+          co_await commit_staged(staged, ctx);
+        }
         co_return;
       }
       if (attempt >= commit_max_attempts
@@ -1355,15 +1394,29 @@ private:
           co_return;
         }
         const auto landed = reloaded->has_commit(tag);
+        const auto layout_changed
+          = not table_->has_same_write_layout(*reloaded);
+        if (layout_changed) {
+          TENZIR_DEBUG("to_iceberg: table write layout changed while "
+                       "reloading; closing {} open partitions",
+                       partitions_.size());
+          co_await close_all(ctx);
+          if (done_) {
+            co_return;
+          }
+        }
         if (landed) {
           TENZIR_DEBUG("to_iceberg: commit seq {} had already landed; "
                        "dropping {} staged files",
-                       tag.sequence, staged.size());
-          staged.clear();
+                       tag.sequence, staged_count);
+          staged.erase(staged.begin(), staged.begin() + staged_count);
           commit_seq_ += 1;
         }
         set_table(std::move(*reloaded), ctx);
         if (done_ or landed) {
+          if (not done_ and not checkpointing_ and not staged.empty()) {
+            co_await commit_staged(staged, ctx);
+          }
           co_return;
         }
         continue;
@@ -1387,6 +1440,34 @@ private:
         co_await folly::coro::co_withCancellation(merged, sleep_for(timeout));
         control_queue_->enqueue(RotateRequested{key, generation});
       });
+  }
+
+  /// Schedules one commit for files closed by buffer eviction. Partition
+  /// timers cannot drive this commit because eviction cancels them.
+  auto arm_commit_timer(OpCtx& ctx) -> void {
+    if (commit_timer_cancel_ or checkpointing_) {
+      return;
+    }
+    const auto timeout
+      = args_.timeout ? args_.timeout->inner : duration{default_timeout};
+    auto cancel = std::make_shared<folly::CancellationSource>();
+    commit_timer_cancel_ = cancel;
+    const auto generation = ++commit_timer_generation_;
+    std::ignore = ctx.spawn_task(
+      [this, generation, timeout, token = cancel->getToken()]() -> Task<void> {
+        auto merged = folly::cancellation_token_merge(
+          co_await folly::coro::co_current_cancellation_token, token);
+        co_await folly::coro::co_withCancellation(merged, sleep_for(timeout));
+        control_queue_->enqueue(CommitRequested{generation});
+      });
+  }
+
+  auto cancel_commit_timer() -> void {
+    if (not commit_timer_cancel_) {
+      return;
+    }
+    commit_timer_cancel_->requestCancellation();
+    commit_timer_cancel_.reset();
   }
 
   auto fail(const Error& error, std::string_view what, OpCtx& ctx) -> void {
@@ -1441,6 +1522,8 @@ private:
   /// issues after the checkpoint is durable.
   bool checkpointing_ = false;
   int64_t writer_generation_ = 0;
+  int64_t commit_timer_generation_ = 0;
+  std::shared_ptr<folly::CancellationSource> commit_timer_cancel_;
   bool done_ = false;
   std::unordered_set<std::string> warned_;
   /// Fingerprints of input schemas the table schema is known to cover.

@@ -321,6 +321,11 @@ public:
   /// The table's base location as reported by the catalog.
   auto location() const -> std::string;
 
+  /// Whether both handles use the same current schema and default partition
+  /// spec. Open file writers remain valid across metadata refreshes only when
+  /// this holds.
+  auto has_same_write_layout(const Table& other) const -> bool;
+
   /// Exports the table's schema as an Arrow schema; the caller assumes
   /// ownership of `out`. Writers must be fed arrays matching this schema
   /// exactly, including nested structs and lists. Fails when the table

@@ -1089,6 +1089,13 @@ auto Table::location() const -> std::string {
   return std::string{impl_->table->location()};
 }
 
+auto Table::has_same_write_layout(const Table& other) const -> bool {
+  const auto& lhs = impl_->table->metadata();
+  const auto& rhs = other.impl_->table->metadata();
+  return lhs->current_schema_id == rhs->current_schema_id
+         and lhs->default_spec_id == rhs->default_spec_id;
+}
+
 auto Table::export_arrow_schema(ArrowSchema* out) const -> Result<void> {
   auto schema = impl_->table->schema();
   if (not schema.has_value()) {
