@@ -1,0 +1,14 @@
+// Route each event to a table chosen by its `kind`. `dyn_a` has a JSON column,
+// `dyn_b` a plain String column. The same `payload` field is a record for the
+// JSON target and a string for the String target; the operator resolves the
+// table per row and only serializes `payload` to JSON for `dyn_a`.
+from {kind: "a", payload: {x: 1}},
+     {kind: "b", payload: "hello"},
+     {kind: "a", payload: {y: [1, 2]}},
+     {kind: "b", payload: "world"}
+to_clickhouse table="dyn_" + kind,
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

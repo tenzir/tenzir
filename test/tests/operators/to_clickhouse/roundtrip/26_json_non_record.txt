@@ -4,5 +4,5 @@ warning: cannot write `payload` into a ClickHouse JSON column
 4 | to_clickhouse table="test_json",
   | ~~~~~~~~~~~~~ 
   |
-  = note: expected a record, but got `int64`
-  = note: values will be written as empty objects (`{}`)
+  = note: expected a JSON object, but the value is not one
+  = note: affected values are written as empty objects (`{}`)

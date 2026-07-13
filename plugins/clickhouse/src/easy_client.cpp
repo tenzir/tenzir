@@ -10,7 +10,6 @@
 #include "clickhouse/client.h"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/tql2/eval.hpp"
-#include "tenzir/view3.hpp"
 
 #include <fmt/format.h>
 
@@ -24,6 +23,12 @@ namespace tenzir::plugins::clickhouse {
 auto easy_client::make(arguments args, diagnostic_handler& dh)
   -> std::shared_ptr<easy_client> {
   return std::make_shared<easy_client>(std::move(args), dh, ctor_token{});
+}
+
+auto easy_client::make_locked(arguments args, diagnostic_handler& dh)
+  -> Arc<Mutex<easy_client>> {
+  return Arc<Mutex<easy_client>>{std::in_place, std::in_place, std::move(args),
+                                 dh, ctor_token{}};
 }
 
 auto easy_client::effective_table_name(std::string_view table_name) const
@@ -299,6 +304,13 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
 auto easy_client::ensure_transformations(const tenzir::record_type& schema,
                                          std::string_view table_name)
   -> failure_or<transformer_record*> {
+  auto guard = std::scoped_lock{client_mutex_};
+  return ensure_transformations_impl(schema, effective_table_name(table_name));
+}
+
+auto easy_client::ensure_transformations_impl(const tenzir::record_type& schema,
+                                              std::string_view table_name)
+  -> failure_or<transformer_record*> {
   if (auto it = transformations_.find(table_name);
       it != transformations_.end()) {
     return &it.value();
@@ -377,10 +389,17 @@ auto easy_client::ensure_transformations(const tenzir::record_type& schema,
 
 auto easy_client::insert(const table_slice& slice, std::string_view table_name,
                          std::string_view query_id) -> failure_or<void> {
+  auto guard = std::scoped_lock{client_mutex_};
+  return insert_impl(slice, table_name, query_id);
+}
+
+auto easy_client::insert_impl(const table_slice& slice,
+                              std::string_view table_name,
+                              std::string_view query_id) -> failure_or<void> {
   auto resolved_table_name = effective_table_name(table_name);
   const auto& schema = as<record_type>(slice.schema());
   TRY(auto transformations,
-      ensure_transformations(schema, resolved_table_name));
+      ensure_transformations_impl(schema, resolved_table_name));
   dropmask_.clear();
   dropmask_.resize(slice.rows());
   std::ranges::fill(transformations->found_column, false);
@@ -493,65 +512,11 @@ auto easy_client::insert_dynamic(const table_slice& slice,
                                  std::string_view query_id)
   -> failure_or<void> {
   auto guard = std::scoped_lock{client_mutex_};
-  const auto table_values = eval(args_.table, slice, dh_);
-  auto begin = int64_t{0};
-  for (const auto& tables : table_values.parts()) {
-    auto strings = tables.as<string_type>();
-    if (not strings) {
-      diagnostic::warning("expected `string`, got `{}`", tables.type.kind())
-        .primary(args_.table)
-        .note("event is skipped")
-        .emit(dh_);
-      begin += tables.length();
-      continue;
-    }
-    const auto& array = *strings->array;
-    auto run_begin = int64_t{-1};
-    auto run_table = std::string_view{};
-    auto flush = [&](int64_t rel_end) -> failure_or<void> {
-      if (run_begin == -1) {
-        return {};
-      }
-      const auto abs_begin = begin + run_begin;
-      const auto abs_end = begin + rel_end;
-      TRY(insert(subslice(slice, static_cast<size_t>(abs_begin),
-                          static_cast<size_t>(abs_end)),
-                 run_table, query_id));
-      run_begin = -1;
-      run_table = {};
-      return {};
-    };
-    for (auto i = int64_t{0}; i < array.length(); ++i) {
-      if (array.IsNull(i)) {
-        TRY(flush(i));
-        diagnostic::warning("expected `string`, got `null`")
-          .primary(args_.table)
-          .note("event is skipped")
-          .emit(dh_);
-        continue;
-      }
-      const auto table_name = array.GetView(i);
-      if (not validate_table_name<false>(table_name, args_.table.get_location(),
-                                         dh_)) {
-        TRY(flush(i));
-        continue;
-      }
-      if (run_begin == -1) {
-        run_begin = i;
-        run_table = table_name;
-        continue;
-      }
-      if (run_table != table_name) {
-        TRY(flush(i));
-        run_begin = i;
-        run_table = table_name;
-      }
-    }
-    TRY(flush(array.length()));
-    begin += array.length();
-  }
-  TENZIR_ASSERT(static_cast<size_t>(begin) == slice.rows());
-  return {};
+  return split_into_table_runs(
+    slice, args_.table, args_.table.get_location(), dh_,
+    [&](std::string_view table, const table_slice& run) -> failure_or<void> {
+      return insert_impl(run, table, query_id);
+    });
 }
 
 void easy_client::ping() {

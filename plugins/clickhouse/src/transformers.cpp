@@ -9,10 +9,12 @@
 #include "clickhouse/transformers.hpp"
 
 #include "clickhouse/arguments.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/concept/printable/tenzir/json2.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/view3.hpp"
 
+#include <arrow/builder.h>
 #include <clickhouse/columns/array.h>
 #include <clickhouse/columns/bool.h>
 #include <clickhouse/columns/date.h>
@@ -658,19 +660,19 @@ struct transformer_blob : transformer {
   }
 };
 
-/// Sends data to a ClickHouse `JSON` column by serializing each row's record to
-/// JSON text. We only support sending to an existing JSON column; we never
-/// create one (there is no Tenzir `json` type). ClickHouse `JSON` columns only
-/// accept objects at the top level, so non-record columns are written as empty
-/// objects with a warning. Absent rows become `{}`; null rows become `{}` for a
-/// plain `JSON` column and SQL `NULL` for a `Nullable(JSON)` column (ClickHouse
-/// rejects empty strings for JSON but accepts the empty object).
+/// Sends data to a ClickHouse `JSON` column. The `to_clickhouse` worker
+/// serializes fields bound for a JSON column to JSON text before insertion (it
+/// discovers which columns are JSON from this table's transformations), so we
+/// always receive a string array of JSON text and append it verbatim. We only
+/// support sending to an existing
+/// JSON column; we never create one (there is no Tenzir `json` type). ClickHouse
+/// `JSON` columns only accept objects at the top level, so values that are not
+/// JSON objects are written as empty objects with a warning. Absent rows become
+/// `{}`; null rows become `{}` for a plain `JSON` column and SQL `NULL` for a
+/// `Nullable(JSON)` column (ClickHouse rejects empty strings for JSON but
+/// accepts the empty object).
 struct transformer_json : transformer {
   bool nullable;
-  json_printer2 printer = json_printer2{json_printer_options{
-    .style = no_style(),
-    .oneline = true,
-  }};
 
   explicit transformer_json(bool nullable)
     : transformer(nullable ? "Nullable(JSON)" : "JSON", /*nullable=*/true),
@@ -697,40 +699,56 @@ struct transformer_json : transformer {
                      const arrow::Array& array, dropmask_cref dropmask,
                      int64_t dropcount, tenzir::diagnostic_handler& dh)
     -> ::clickhouse::ColumnRef override {
-    // ClickHouse `JSON` columns only accept JSON objects at the top level. A
-    // record maps to an object; anything else (scalars, lists) would be
-    // rejected by the server, so we substitute empty objects and warn.
-    const auto unsupported
-      = not type.kind().is<record_type>() and not type.kind().is<null_type>();
-    if (unsupported) {
-      diagnostic::warning("cannot write `{}` into a ClickHouse JSON column",
-                          fmt::join(path, "."))
-        .note("expected a record, but got `{}`", type.kind())
-        .note("values will be written as empty objects (`{}`)")
-        .emit(dh);
+    // A `JSON` column accepts any Tenzir value. The async `to_clickhouse`
+    // operator serializes fields bound for a `JSON` column to JSON text before
+    // they reach us (see `prepare_slice`), in which case we receive a string
+    // array and append it verbatim. The legacy generator sink does not
+    // pre-serialize, so we may also receive a raw (struct/list/scalar) array,
+    // which we serialize here. Either way we end up appending JSON-object text;
+    // values that are not JSON objects are written as `{}` with a warning.
+    auto serialized = std::shared_ptr<arrow::Array>{};
+    if (not type.kind().is<string_type>()) {
+      serialized = to_json_string_array(array);
     }
+    const auto& strings
+      = as<arrow::StringArray>(serialized ? *serialized : array);
+    auto warned = false;
     return build(array.length() - dropcount, [&](auto&& append) {
       for (int64_t i = 0; i < array.length(); ++i) {
         if (dropmask[i]) {
           continue;
         }
-        auto v = view_at(array, i);
-        if (is<caf::none_t>(v)) {
+        if (strings.IsNull(i)) {
           // A null row becomes SQL NULL for a nullable column and `{}` for a
-          // plain one; check this before substituting unsupported values so
-          // nulls are not silently turned into empty objects.
+          // plain one.
           append(std::nullopt);
           continue;
         }
-        if (unsupported) {
-          // Non-record value: write an explicit empty object, not NULL.
+        auto text = strings.GetView(i);
+        // ClickHouse `JSON` columns only accept objects at the top level. Guard
+        // against non-object JSON (a bare scalar or array) by peeking at the
+        // first non-whitespace byte; anything but `{` is written as an empty
+        // object with a warning (emitted at most once per column).
+        auto trimmed = text;
+        while (not trimmed.empty()
+               and (trimmed.front() == ' ' or trimmed.front() == '\t'
+                    or trimmed.front() == '\n' or trimmed.front() == '\r')) {
+          trimmed.remove_prefix(1);
+        }
+        if (trimmed.empty() or trimmed.front() != '{') {
+          if (not warned) {
+            diagnostic::warning("cannot write `{}` into a ClickHouse JSON "
+                                "column",
+                                fmt::join(path, "."))
+              .note("expected a JSON object, but the value is not one")
+              .note("affected values are written as empty objects (`{}`)")
+              .emit(dh);
+            warned = true;
+          }
           append(std::string_view{"{}"});
           continue;
         }
-        printer.load_new(v);
-        auto bytes = printer.bytes();
-        append(std::string_view{reinterpret_cast<const char*>(bytes.data()),
-                                bytes.size()});
+        append(std::string_view{text.data(), text.size()});
       }
     });
   }
@@ -1210,6 +1228,32 @@ auto make_array_functions_from_clickhouse(path_type& path,
 }
 
 } // namespace
+
+auto is_json_transformer(const transformer& t) -> bool {
+  return dynamic_cast<const transformer_json*>(&t) != nullptr;
+}
+
+auto to_json_string_array(const arrow::Array& array)
+  -> std::shared_ptr<arrow::Array> {
+  auto printer = json_printer2{json_printer_options{
+    .style = no_style(),
+    .oneline = true,
+  }};
+  auto builder = arrow::StringBuilder{};
+  check(builder.Reserve(array.length()));
+  for (auto value : values3(array)) {
+    if (is<caf::none_t>(value)) {
+      // Preserve nulls instead of rendering them as a string.
+      check(builder.AppendNull());
+      continue;
+    }
+    printer.load_new(value);
+    auto bytes = printer.bytes();
+    check(builder.Append(reinterpret_cast<const char*>(bytes.data()),
+                         detail::narrow_cast<int32_t>(bytes.size())));
+  }
+  return finish(builder);
+}
 
 auto type_to_clickhouse_typename(path_type& path, tenzir::type t, bool nullable,
                                  diagnostic_handler& dh)
