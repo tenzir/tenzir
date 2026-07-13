@@ -1,7 +1,13 @@
 api "/serve-multi", {
   requests: [
-    {serve_id: "serve_multi_1"},
-    {serve_id: "serve_multi_2"},
+    {
+      serve_id: "serve_multi_1",
+      continuation_token: "00000000-0000-0000-0000-000000000000",
+    },
+    {
+      serve_id: "serve_multi_2",
+      continuation_token: "00000000-0000-0000-0000-000000000000",
+    },
   ],
   timeout: 5s,
   min_events: 8,

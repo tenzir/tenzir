@@ -91,6 +91,11 @@ namespace {
 constexpr auto serve_endpoint_id = 0;
 constexpr auto serve_multi_endpoint_id = 1;
 
+/// The well-known continuation token of the first page. Generated tokens are
+/// v4 UUIDs, so the nil UUID cannot collide with them.
+constexpr auto initial_continuation_token
+  = "00000000-0000-0000-0000-000000000000";
+
 constexpr auto serve_spec = R"_(
 /serve:
   post:
@@ -279,7 +284,7 @@ constexpr auto serve_multi_spec = R"_(
                 minItems: 1
                 items:
                   type: object
-                  required: [serve_id]
+                  required: [serve_id, continuation_token]
                   properties:
                     serve_id:
                       type: string
@@ -288,7 +293,12 @@ constexpr auto serve_multi_spec = R"_(
                     continuation_token:
                       type: string
                       example: "340ce2j"
-                      description: The continuation token from the previous response for this output stream. Omit this field for the initial request.
+                      description: The continuation token from the previous response for this output stream. Pass `00000000-0000-0000-0000-000000000000` for the initial request.
+                    schema:
+                      type: string
+                      enum: [legacy, exact, never]
+                      example: "exact"
+                      description: The schema representation to include in this output stream's response. Overrides the request-wide `schema` for this stream only.
               max_events:
                 type: integer
                 minimum: 0
@@ -311,12 +321,14 @@ constexpr auto serve_multi_spec = R"_(
                 enum: [legacy, exact, never]
                 example: "exact"
                 default: "legacy"
-                description: The schema representation to include in each response. Use `exact` for a representation that matches Tenzir's type system exactly, and `never` to omit schema definitions.
+                description: The default schema representation to include in each response. Use `exact` for a representation that matches Tenzir's type system exactly, and `never` to omit schema definitions. Individual output streams can override this with their own `schema` field.
           example:
             requests:
               - serve_id: "query-1"
+                continuation_token: "00000000-0000-0000-0000-000000000000"
               - serve_id: "query-2"
                 continuation_token: "340ce2j"
+                schema: never
             max_events: 1024
             min_events: 1
             timeout: "5s"
@@ -456,7 +468,9 @@ using serve_manager_actor = typed_actor_fwd<
   // access token and the desired number of events.
   auto(atom::get, std::string serve_id, std::string continuation_token,
        uint64_t min_events, duration timeout, uint64_t max_events)
-    ->caf::result<serve_response>>
+    ->caf::result<serve_response>,
+  // Force-deliver whatever is currently buffered for a pending get, if any.
+  auto(atom::flush, std::string serve_id)->caf::result<void>>
   // Conform to the protocol of the COMPONENT PLUGIN actor interface.
   ::extend_with<component_plugin_actor>::unwrap;
 
@@ -470,6 +484,9 @@ struct request_meta {
 struct request_base {
   std::string serve_id = {};
   std::string continuation_token = {};
+  /// Per-request schema override. Falls back to the request-wide default when
+  /// unset.
+  std::optional<enum schema> schema_override = {};
 };
 
 struct single_serve_request : request_base, request_meta {};
@@ -591,6 +608,20 @@ struct serve_manager_state {
   /// messages to the user.
   std::unordered_map<std::string, caf::error> expired_ids = {};
 
+  // Distinguishes a genuine pipeline failure from a clean teardown. A failing
+  // pipeline propagates a diagnostic; a pipeline that merely finished -- by
+  // exhausting its input, a user shutdown, or the executor tearing down its
+  // now-unreachable nodes (`exit_reason::unreachable`) -- does not. Only
+  // genuine failures are surfaced as errors; clean completions are retained so
+  // a client can retry its final poll.
+  static auto is_pipeline_failure(const caf::error& err) -> bool {
+    // A clean exit passes an empty error; `context()` must not be called on it.
+    if (not err.valid()) {
+      return false;
+    }
+    return err == ec::diagnostic or err.context().match_elements<diagnostic>();
+  }
+
   auto handle_down_msg(const caf::actor_addr& source, const caf::error& err)
     -> void {
     const auto found = std::ranges::find_if(ops, [&](const auto& op) {
@@ -602,7 +633,8 @@ struct serve_manager_state {
       TENZIR_DEBUG("{} received DOWN for an unknown serve operator", *self);
       return;
     }
-    if (not found->continuation_token.empty()) {
+    if (not found->continuation_token.empty()
+        and found->continuation_token != initial_continuation_token) {
       TENZIR_DEBUG("{} received premature DOWN for serve id {} with "
                    "continuation "
                    "token {}",
@@ -626,9 +658,22 @@ struct serve_manager_state {
         ops.erase(found);
       }
     };
-    if (err.valid()) {
+    // A pipeline that failed with a diagnostic is removed right away. A
+    // pipeline that finished cleanly keeps its last result set available for
+    // `retention_time`, so a client that lost or cancelled the response to its
+    // final poll can still retry and re-fetch it.
+    if (is_pipeline_failure(err)) {
       delete_serve();
       return;
+    }
+    // Answer any in-flight poll immediately with a completion response instead
+    // of making it wait for the long-poll timeout or the retention timer.
+    if (not found->get_rps.empty()) {
+      found->delayed_attempt.dispose();
+      for (auto&& get_rp : std::exchange(found->get_rps, {})) {
+        get_rp.deliver(
+          serve_response{std::string{}, std::vector<table_slice>{}});
+      }
     }
     detail::weak_run_delayed(self, defaults::api::serve::retention_time,
                              delete_serve);
@@ -661,7 +706,7 @@ struct serve_manager_state {
     ops.push_back({
       .source = addr,
       .serve_id = serve_id,
-      .continuation_token = "",
+      .continuation_token = initial_continuation_token,
       .buffer_size = buffer_size,
     });
     self->monitor(std::move(watched), [this, addr](const caf::error& err) {
@@ -796,6 +841,11 @@ struct serve_manager_state {
   }
 
   auto get(single_serve_request request) -> caf::result<serve_response> {
+    // /serve allows omitting the continuation token for the first request;
+    // /serve-multi requires it and rejects empty tokens at parse time.
+    if (request.continuation_token.empty()) {
+      request.continuation_token = initial_continuation_token;
+    }
     const auto found
       = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
           return op.serve_id == request.serve_id;
@@ -803,30 +853,38 @@ struct serve_manager_state {
     if (found == ops.end()) {
       const auto expired_id = expired_ids.find(request.serve_id);
       if (expired_id != expired_ids.end()) {
-        if (expired_id->second == ec::diagnostic) {
-          return expired_id->second;
+        const auto& err = expired_id->second;
+        // A pipeline that failed with a diagnostic surfaces that error. One
+        // that completed cleanly is reported as completed, not as an internal
+        // error: a client may retry its final poll after losing or cancelling
+        // the response, even past the retention window.
+        if (is_pipeline_failure(err)) {
+          return err;
         }
-        return caf::make_error(
-          ec::logic_error,
-          fmt::format("{} got request for events with expired serve id {}; the "
-                      "pipeline serving this data is no longer available: {}",
-                      *self, request.serve_id, expired_id->second));
+        return std::make_tuple(std::string{}, std::vector<table_slice>{});
       }
       return caf::make_error(ec::invalid_argument,
                              fmt::format("{} got request for events with "
                                          "unknown serve id {}",
                                          *self, request.serve_id));
     }
-    if (not found->continuation_token.empty()
-        and found->last_continuation_token == request.continuation_token) {
+    // Re-fetch of the most recently delivered batch: the client retried with
+    // the token of its previous request because the response was lost or its
+    // poll was cancelled. This covers the first page (whose token is the
+    // well-known initial token) and the final batch of a completed pipeline.
+    // `last_continuation_token` stays empty until the first delivery, and the
+    // request token is never empty here, so a fresh serve cannot match.
+    if (found->last_continuation_token == request.continuation_token) {
       return std::make_tuple(
         found->continuation_token,
         split(found->last_results, request.max_events).first);
     }
     if (found->continuation_token != request.continuation_token) {
-      // If the operator already reached a terminal state, e.g., because it was
-      // dropped on graceful shutdown, we report completion instead of an error
-      // for a client that polls with the previously advertised token.
+      // A serve that reached a terminal state reports completion instead of an
+      // unknown-token error, so that a client retrying the first page or
+      // polling with the previously advertised token after a graceful shutdown
+      // sees a completed stream. All paths that terminally clear the
+      // continuation token also set `done`, so this covers lingering serves.
       if (found->done) {
         return std::make_tuple(std::string{}, std::vector<table_slice>{});
       }
@@ -871,6 +929,20 @@ struct serve_manager_state {
         TENZIR_ASSERT(delivered);
       });
     return rp;
+  }
+
+  auto flush(std::string serve_id) -> caf::result<void> {
+    const auto found = std::ranges::find_if(ops, [&](const auto& op) {
+      return op.serve_id == serve_id;
+    });
+    // Unknown/expired serve, or no request is currently waiting: nothing to do.
+    if (found == ops.end() or found->get_rps.empty()) {
+      return {};
+    }
+    // Deliver immediately with whatever is buffered (possibly empty),
+    // cancelling the pending long-poll timer via try_deliver_results.
+    found->try_deliver_results(/*force_underful=*/true);
+    return {};
   }
 
   auto status(status_verbosity verbosity) const -> caf::result<record> {
@@ -945,6 +1017,9 @@ auto serve_manager(
         },
       });
     },
+    [self](atom::flush, std::string& serve_id) -> caf::result<void> {
+      return self->state().flush(std::move(serve_id));
+    },
     [self](atom::status, status_verbosity verbosity,
            duration) -> caf::result<record> {
       return self->state().status(verbosity);
@@ -976,7 +1051,36 @@ struct serve_handler_state {
     caf::error detail;
   };
 
-  // Extracts `serve_id` and `continuation_token` by moving out of `params`
+  // Parses and validates an optional `schema` parameter, returning nullopt when
+  // it is absent or null. A null value is treated as unset because TQL list
+  // unification fills an omitted per-request `schema` with null when a sibling
+  // request specifies one.
+  static auto try_extract_schema(const tenzir::record& params)
+    -> std::variant<std::optional<enum schema>, parse_error> {
+    const auto it = params.find("schema");
+    if (it == params.end() or is<caf::none_t>(it->second)) {
+      return std::optional<enum schema>{};
+    }
+    const auto* str = try_as<std::string>(&it->second);
+    if (not str) {
+      return parse_error{
+        .message = "failed to read schema parameter",
+        .detail = caf::make_error(
+          ec::invalid_argument,
+          fmt::format("expected a string, got params {}", params))};
+    }
+    auto opt = from_string<enum schema>(*str);
+    if (not opt) {
+      return parse_error{.message = "invalid schema parameter",
+                         .detail
+                         = caf::make_error(ec::invalid_argument,
+                                           fmt::format("got `{}`", *str))};
+    }
+    return *opt;
+  }
+
+  // Extracts `serve_id`, `continuation_token`, and the optional per-request
+  // `schema` override by moving out of `params`.
   static auto try_extract_request_base(tenzir::record& params)
     -> std::variant<request_base, parse_error> {
     auto result = request_base{};
@@ -995,18 +1099,26 @@ struct serve_handler_state {
                                   fmt::format("got parameters {}", params))};
     }
     result.serve_id = std::move(**serve_id);
-    auto continuation_token
-      = try_get<std::string>(params, "continuation_token");
-    if (not continuation_token) {
-      return parse_error{.message = "failed to read continuation_token",
-                         .detail = caf::make_error(
-                           ec::invalid_argument,
-                           fmt::format("{}; got parameters {}",
-                                       continuation_token.error(), params))};
+    // Treat both an absent key and an explicit null as unset: TQL list
+    // unification fills an omitted per-request `continuation_token` with null
+    // when a sibling request specifies one.
+    if (const auto it = params.find("continuation_token");
+        it != params.end() and not is<caf::none_t>(it->second)) {
+      const auto* str = try_as<std::string>(&it->second);
+      if (not str) {
+        return parse_error{
+          .message = "failed to read continuation_token",
+          .detail = caf::make_error(
+            ec::invalid_argument,
+            fmt::format("expected a string, got parameters {}", params))};
+      }
+      result.continuation_token = *str;
     }
-    if (*continuation_token) {
-      result.continuation_token = std::move(**continuation_token);
+    auto schema = try_extract_schema(params);
+    if (auto* err = try_as<parse_error>(schema)) {
+      return std::move(*err);
     }
+    result.schema_override = as<std::optional<enum schema>>(schema);
     return result;
   }
 
@@ -1055,23 +1167,11 @@ struct serve_handler_state {
       }
       result.timeout = **timeout;
     }
-    auto schema = try_get<std::string>(params, "schema");
-    if (not schema) {
-      auto detail_msg
-        = fmt::format("{}; got params {}", schema.error(), params);
-      auto detail
-        = caf::make_error(ec::invalid_argument, std::move(detail_msg));
-      return parse_error{.message = "failed to read schema parameter",
-                         .detail = std::move(detail)};
+    auto schema = try_extract_schema(params);
+    if (auto* err = try_as<parse_error>(schema)) {
+      return std::move(*err);
     }
-    if (*schema) {
-      auto opt = from_string<enum schema>(**schema);
-      if (not opt) {
-        return parse_error{
-          .message = "invalid schema parameter",
-          .detail = caf::make_error(ec::invalid_argument,
-                                    fmt::format("got `{}`", **schema))};
-      }
+    if (auto& opt = as<std::optional<enum schema>>(schema)) {
       result.schema = *opt;
     }
     return result;
@@ -1136,6 +1236,15 @@ struct serve_handler_state {
         return std::move(*err);
       }
       auto& new_request = as<request_base>(parsed);
+      if (new_request.continuation_token.empty()) {
+        return parse_error{
+          .message
+          = fmt::format("missing `continuation_token` for serve id "
+                        "`{}`; pass `{}` for the initial request",
+                        new_request.serve_id, initial_continuation_token),
+          .detail = caf::make_error(ec::invalid_argument),
+        };
+      }
       const auto is_duplicate = std::ranges::contains(
         requests, new_request.serve_id, &request_base::serve_id);
       if (is_duplicate) {
@@ -1280,6 +1389,7 @@ struct serve_handler_state {
   struct serve_response_with_state {
     serve_response response;
     serve_state state;
+    enum schema schema;
   };
 
   /// Handles a request to /serve-multi by
@@ -1305,13 +1415,22 @@ struct serve_handler_state {
         / request.requests.size();
     auto result_map = std::make_shared<
       std::unordered_map<std::string, serve_response_with_state>>();
+    // Set once the first serve returns events; guards against flushing twice.
+    auto triggered = std::make_shared<bool>(false);
+    // Copy of all serve ids so the flush can target the *other* serves. Must be
+    // a shared copy because `request` is local and the continuations outlive it.
+    auto all_ids = std::make_shared<std::vector<std::string>>();
+    all_ids->reserve(request.requests.size());
+    for (const auto& r : request.requests) {
+      all_ids->push_back(r.serve_id);
+    }
     auto fan = detail::make_fanout_counter(
       request.requests.size(),
-      [rp, result_map, schema = request.schema]() mutable {
+      [rp, result_map]() mutable {
         auto json_text = std::string{'{'};
         auto first = true;
         for (auto& [id, result] : *result_map) {
-          const auto& [response, state] = result;
+          const auto& [response, state, schema] = result;
           const auto& [next_token, data] = response;
           if (not first) {
             json_text += ',';
@@ -1327,21 +1446,37 @@ struct serve_handler_state {
         rp.deliver(rest_response::make_error(400, fmt::to_string(e), {}));
       });
     for (auto& r : request.requests) {
+      const auto effective_schema = r.schema_override.value_or(request.schema);
       self
         ->mail(atom::get_v, r.serve_id, r.continuation_token,
                min_events_per_request, request.timeout, max_events_per_request)
         .request(serve_manager, caf::infinite)
         .then(
-          [fan, id = r.serve_id, result_map](serve_response& result) mutable {
-            const auto state = std::get<0>(result).empty()
+          [self = self, serve_manager = serve_manager, fan, id = r.serve_id,
+           result_map, triggered, all_ids,
+           effective_schema](serve_response& result) mutable {
+            auto& [continuation_token, data] = result;
+            const auto has_events = rows(data) > 0;
+            const auto state = continuation_token.empty()
                                  ? serve_state::completed
                                  : serve_state::running;
             const auto [_, success] = result_map->try_emplace(
-              std::move(id), std::move(result), state);
+              id, std::move(result), state, effective_schema);
             TENZIR_ASSERT(success);
+            // As soon as any serve has data, stop waiting on the others: flush
+            // their currently-buffered events instead of long-polling to the
+            // timeout.
+            if (has_events and not std::exchange(*triggered, true)) {
+              for (const auto& other : *all_ids) {
+                if (other != id) {
+                  self->mail(atom::flush_v, other).send(serve_manager);
+                }
+              }
+            }
             fan->receive_success();
           },
-          [fan, id = r.serve_id, result_map](caf::error& err) mutable {
+          [fan, id = r.serve_id, result_map,
+           effective_schema](caf::error& err) mutable {
             if (err == caf::exit_reason::user_shutdown
                 or err.context().match_elements<diagnostic>()) {
               // The pipeline has either shut down naturally or we got an
@@ -1353,7 +1488,7 @@ struct serve_handler_state {
                                    ? serve_state::completed
                                    : serve_state::failed;
               const auto [_, success] = result_map->try_emplace(
-                std::move(id), serve_response{}, state);
+                std::move(id), serve_response{}, state, effective_schema);
               TENZIR_ASSERT(success);
               fan->receive_success();
               return;
@@ -1817,7 +1952,8 @@ public:
           {"requests", type{list_type{
             record_type{
               {"serve_id", type{string_type{}, {{"required"}}}},
-              {"continuation_token", string_type{}},
+              {"continuation_token", type{ string_type{}, {{"required"}}}},
+              {"schema", string_type{}},
             },
           },{{"required"}}}},
           {"max_events", uint64_type{}},

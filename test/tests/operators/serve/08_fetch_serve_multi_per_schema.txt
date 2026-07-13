@@ -1,0 +1,4 @@
+{
+  a_has_schemas: true,
+  b_has_schemas: false,
+}

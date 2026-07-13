@@ -1,0 +1,9 @@
+serve_multi_retry_a-first: [1, 2]
+serve_multi_retry_b-first: [5, 6]
+retry-events-match: True
+retry-tokens-match: True
+serve_multi_retry_a-rest: [3, 4]
+serve_multi_retry_a-final-state: completed
+serve_multi_retry_b-rest: [7, 8]
+serve_multi_retry_b-final-state: completed
+missing-token-rejected: True
