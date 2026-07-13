@@ -2064,16 +2064,16 @@ auto run_profiler(Profiler const& profiler, TestExecCtx& exec_ctx,
     });
 }
 
-auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
-              DiagHandler& dh, Profiler profiler, bool has_terminal,
-              bool is_hidden, Notify* graceful_stop) -> Task<failure_or<void>> {
-  auto num_ops = chain.size();
+auto run_plan(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
+              Profiler profiler, bool has_terminal, bool is_hidden,
+              Notify* graceful_stop) -> Task<failure_or<void>> {
+  auto num_ops = plan.size();
   LOGW("spawning plan with {} operators", num_ops);
   auto exec_ctx = TestExecCtx{profiler, has_terminal, is_hidden};
   co_await async_scope([&](AsyncScope& scope) -> Task<void> {
     scope.spawn(run_profiler(profiler, exec_ctx, num_ops));
     LOGW("blocking on pipeline");
-    co_await run_pipeline(std::move(chain), exec_ctx, sys, dh, graceful_stop);
+    co_await execute_plan(std::move(plan), exec_ctx, sys, dh, graceful_stop);
     LOGW("blocking on pipeline done");
     scope.cancel();
   });
@@ -2082,22 +2082,22 @@ auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
 
 } // namespace
 
-auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
-              DiagHandler& dh, Profiler profiler, bool is_hidden,
-              Notify* graceful_stop) -> Task<failure_or<void>> {
-  co_return co_await run_plan(std::move(chain), sys, dh, std::move(profiler),
+auto run_plan(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
+              Profiler profiler, bool is_hidden, Notify* graceful_stop)
+  -> Task<failure_or<void>> {
+  co_return co_await run_plan(std::move(plan), sys, dh, std::move(profiler),
                               false, is_hidden, graceful_stop);
 }
 
-auto run_transform(OperatorChain<table_slice, table_slice> chain,
-                   caf::actor_system& sys, DiagHandler& dh, Profiler profiler,
-                   bool is_hidden, PipelineFeeder feed_input,
-                   PipelineDrainer drain_output) -> Task<failure_or<void>> {
+auto run_plan_with_io(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
+                      Profiler profiler, bool is_hidden,
+                      PipelineFeeder feed_input, PipelineDrainer drain_output)
+  -> Task<failure_or<void>> {
   auto exec_ctx = TestExecCtx{profiler, /*has_terminal=*/false, is_hidden};
-  auto num_ops = chain.size();
+  auto num_ops = plan.size();
   co_await async_scope([&](AsyncScope& scope) -> Task<void> {
     scope.spawn(run_profiler(profiler, exec_ctx, num_ops));
-    co_await run_bounded_pipeline(std::move(chain), exec_ctx, sys, dh,
+    co_await execute_plan_with_io(std::move(plan), exec_ctx, sys, dh,
                                   std::move(feed_input),
                                   std::move(drain_output));
     scope.cancel();
@@ -2139,7 +2139,7 @@ private:
   failure_or<void> failure_;
 };
 
-auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
+auto run_plan_blocking(ir::Plan plan, caf::actor_system& sys,
                        diagnostic_handler& dh,
                        std::optional<std::string> const& profile_path)
   -> failure_or<void> {
@@ -2163,7 +2163,7 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
   auto task = folly::coro::co_invoke([&] -> Task<Option<failure_or<void>>> {
     co_return co_await catch_cancellation(folly::coro::co_withCancellation(
       cancel_source.getToken(),
-      run_plan(std::move(chain), sys, diag_handler, std::move(profiler),
+      run_plan(std::move(plan), sys, diag_handler, std::move(profiler),
                has_terminal, false, &graceful_stop)));
   });
 #if 0
@@ -2364,16 +2364,15 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     fmt::print("{:#?}\n", ir);
     return not ctx.has_failure();
   }
-  // Spawn operators from the IR.
-  auto spawned = std::move(ir).spawn(tag_v<void>);
+  // Build the executable plan from the IR.
+  auto plan = ir::Plan::from(std::move(ir), tag_v<void>, ctx);
   // Do not proceed to execution if there has been an error.
   if (ctx.has_failure()) {
     return false;
   }
-  auto chain = OperatorChain<void, void>::try_from(std::move(spawned))
-                 .expect("we already checked the type");
+  TENZIR_ASSERT(plan);
   // Start the actual execution.
-  TRY(run_plan_blocking(std::move(chain), sys, ctx, cfg.profile));
+  TRY(run_plan_blocking(std::move(*plan), sys, ctx, cfg.profile));
   return true;
 }
 
