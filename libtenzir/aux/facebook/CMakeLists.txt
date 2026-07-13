@@ -235,8 +235,9 @@ target_compile_options(proxygen PRIVATE -include gflags/gflags.h)
 # older OpenSSL and c-ares releases. Newer dependency versions mark those APIs
 # as deprecated, but migrating the vendored implementations is an upstream
 # concern. Suppress those diagnostics, and platform-specific unused parameters,
-# on every target created by the bundle so that they do not obscure warnings in
-# Tenzir code.
+# on every compilable target created by the bundle so that they do not obscure
+# warnings in Tenzir code. Do not attach them to interface targets because
+# their usage requirements propagate to consumers.
 function (tenzir_suppress_bundled_facebook_warnings directory)
   get_property(
     targets
@@ -244,24 +245,18 @@ function (tenzir_suppress_bundled_facebook_warnings directory)
     PROPERTY BUILDSYSTEM_TARGETS)
   foreach (target IN LISTS targets)
     get_target_property(type "${target}" TYPE)
-    if (type STREQUAL "INTERFACE_LIBRARY")
-      set(visibility INTERFACE)
-    elseif (
-      type
-      MATCHES
-      "^(EXECUTABLE|STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY)$"
+    if (type
+        MATCHES
+        "^(EXECUTABLE|STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY)$"
     )
-      set(visibility PRIVATE)
-    else ()
-      continue()
+      target_compile_options(
+        "${target}"
+        PRIVATE
+          $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations
+          -Wno-unused-parameter>
+          $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated-declarations
+          -Wno-unused-parameter>)
     endif ()
-    target_compile_options(
-      "${target}"
-      ${visibility}
-      $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations
-      -Wno-unused-parameter>
-      $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated-declarations
-      -Wno-unused-parameter>)
   endforeach ()
   get_property(
     subdirectories
