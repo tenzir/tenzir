@@ -102,6 +102,24 @@ set(BUILD_SHARED_LIBS OFF)
 set(_tenzir_prev_skip_install_rules "${CMAKE_SKIP_INSTALL_RULES}")
 set(CMAKE_SKIP_INSTALL_RULES ON)
 
+# The bundled projects support CMake releases older than Tenzir does and ship
+# find modules whose package-name casing predates current CMake diagnostics.
+# Keep those warnings scoped to the upstream projects instead of suppressing
+# developer and deprecation warnings for Tenzir itself.
+if (DEFINED CMAKE_WARN_DEPRECATED)
+  set(_tenzir_prev_warn_deprecated "${CMAKE_WARN_DEPRECATED}")
+endif ()
+if (DEFINED CMAKE_SUPPRESS_DEVELOPER_WARNINGS)
+  set(_tenzir_prev_suppress_developer_warnings
+      "${CMAKE_SUPPRESS_DEVELOPER_WARNINGS}")
+endif ()
+set(CMAKE_WARN_DEPRECATED
+    OFF
+    CACHE BOOL "" FORCE)
+set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS
+    ON
+    CACHE BOOL "" FORCE)
+
 # ---- 1. FOLLY ----
 add_subdirectory(folly SYSTEM)
 target_compile_options(
@@ -165,7 +183,7 @@ target_include_directories(
 # upstream CMakeLists.txt is missing the dependency declaration.
 if (TARGET wangle_acceptor AND TARGET folly_io_async_fdsock_async_fd_socket)
   target_link_libraries(wangle_acceptor
-    PUBLIC folly_io_async_fdsock_async_fd_socket)
+                        PUBLIC folly_io_async_fdsock_async_fd_socket)
 endif ()
 if (NOT TARGET wangle::wangle)
   add_library(wangle::wangle ALIAS wangle)
@@ -212,6 +230,43 @@ add_subdirectory(proxygen SYSTEM)
 # <glog/logging.h>. Proxygen source files use raw DEFINE_int32/DEFINE_bool
 # macros without explicitly including gflags. Force-include the header.
 target_compile_options(proxygen PRIVATE -include gflags/gflags.h)
+
+# The bundled Facebook libraries intentionally retain compatibility code for
+# older OpenSSL and c-ares releases. Newer dependency versions mark those APIs
+# as deprecated, but migrating the vendored implementations is an upstream
+# concern. Suppress those diagnostics, and platform-specific unused parameters,
+# on every compilable target created by the bundle so that they do not obscure
+# warnings in Tenzir code. Do not attach them to interface targets because
+# their usage requirements propagate to consumers.
+function (tenzir_suppress_bundled_facebook_warnings directory)
+  get_property(
+    targets
+    DIRECTORY "${directory}"
+    PROPERTY BUILDSYSTEM_TARGETS)
+  foreach (target IN LISTS targets)
+    get_target_property(type "${target}" TYPE)
+    if (type
+        MATCHES
+        "^(EXECUTABLE|STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY)$"
+    )
+      target_compile_options(
+        "${target}"
+        PRIVATE
+          $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations
+          -Wno-unused-parameter>
+          $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated-declarations
+          -Wno-unused-parameter>)
+    endif ()
+  endforeach ()
+  get_property(
+    subdirectories
+    DIRECTORY "${directory}"
+    PROPERTY SUBDIRECTORIES)
+  foreach (subdirectory IN LISTS subdirectories)
+    tenzir_suppress_bundled_facebook_warnings("${subdirectory}")
+  endforeach ()
+endfunction ()
+tenzir_suppress_bundled_facebook_warnings("${CMAKE_CURRENT_SOURCE_DIR}")
 TenzirSystemizeTarget(proxygen_coro_client)
 # proxygen_utils_trace calls getTraceEventTypeString/getTraceFieldTypeString
 # from proxygen_utils_trace_event_types but does not declare the dependency.
@@ -244,6 +299,22 @@ unset(_tenzir_fb_install_stub_dir)
 # export/install of individual targets needed.
 set(CMAKE_SKIP_INSTALL_RULES "${_tenzir_prev_skip_install_rules}")
 unset(_tenzir_prev_skip_install_rules)
+if (DEFINED _tenzir_prev_warn_deprecated)
+  set(CMAKE_WARN_DEPRECATED
+      "${_tenzir_prev_warn_deprecated}"
+      CACHE BOOL "" FORCE)
+else ()
+  unset(CMAKE_WARN_DEPRECATED CACHE)
+endif ()
+if (DEFINED _tenzir_prev_suppress_developer_warnings)
+  set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS
+      "${_tenzir_prev_suppress_developer_warnings}"
+      CACHE BOOL "" FORCE)
+else ()
+  unset(CMAKE_SUPPRESS_DEVELOPER_WARNINGS CACHE)
+endif ()
+unset(_tenzir_prev_warn_deprecated)
+unset(_tenzir_prev_suppress_developer_warnings)
 
 # Bundle public headers from vendored Facebook libraries into the Tenzir
 # development package so downstream consumers can compile against tenzir's
@@ -276,7 +347,8 @@ install(
   COMPONENT Development
   OPTIONAL)
 install(
-  FILES "${CMAKE_CURRENT_BINARY_DIR}/wangle/wangle/generated/wangle/wangle-config.h"
+  FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/wangle/wangle/generated/wangle/wangle-config.h"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/wangle"
   COMPONENT Development
   OPTIONAL)

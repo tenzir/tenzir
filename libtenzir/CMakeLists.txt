@@ -20,7 +20,21 @@ if (NOT tsl-robin-map_FOUND)
       STATUS
         "Cannot find installed tsl-robin-map; falling back to bundled version")
   endif ()
+  if (DEFINED CMAKE_WARN_DEPRECATED)
+    set(_tenzir_prev_warn_deprecated "${CMAKE_WARN_DEPRECATED}")
+  endif ()
+  set(CMAKE_WARN_DEPRECATED
+      OFF
+      CACHE BOOL "" FORCE)
   add_subdirectory(aux/robin-map)
+  if (DEFINED _tenzir_prev_warn_deprecated)
+    set(CMAKE_WARN_DEPRECATED
+        "${_tenzir_prev_warn_deprecated}"
+        CACHE BOOL "" FORCE)
+  else ()
+    unset(CMAKE_WARN_DEPRECATED CACHE)
+  endif ()
+  unset(_tenzir_prev_warn_deprecated)
   dependency_summary("robin-map" "${CMAKE_CURRENT_SOURCE_DIR}/aux/robin-map"
                      "Dependencies")
   export(

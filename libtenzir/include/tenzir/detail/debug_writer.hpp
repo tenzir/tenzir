@@ -208,7 +208,7 @@ public:
   template <class... Args>
   [[nodiscard]] auto fmt_value(fmt::format_string<Args...> fs, Args&&... args)
     -> bool {
-    return fmt_value_impl(fs, fmt::make_format_args(args...));
+    return fmt_value_impl(fs.get(), fmt::make_format_args(args...));
   }
 
   /// Augments the following value with a string.
@@ -217,7 +217,7 @@ public:
   template <class... Args>
   [[nodiscard]] auto
   prepend(fmt::format_string<Args...> fs, const Args&... args) -> bool {
-    return prepend_impl(fs, fmt::make_format_args(args...));
+    return prepend_impl(fs.get(), fmt::make_format_args(args...));
   }
 
   /// Augments the preceding value with a string.
@@ -226,7 +226,7 @@ public:
   template <class... Args>
   [[nodiscard]] auto append(fmt::format_string<Args...> fs, const Args&... args)
     -> bool {
-    return append_impl(fs, fmt::make_format_args(args...));
+    return append_impl(fs.get(), fmt::make_format_args(args...));
   }
 
   // Enters a new level of nesting.
