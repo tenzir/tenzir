@@ -615,6 +615,10 @@ struct serve_manager_state {
   // genuine failures are surfaced as errors; clean completions are retained so
   // a client can retry its final poll.
   static auto is_pipeline_failure(const caf::error& err) -> bool {
+    // A clean exit passes an empty error; `context()` must not be called on it.
+    if (not err.valid()) {
+      return false;
+    }
     return err == ec::diagnostic or err.context().match_elements<diagnostic>();
   }
 
