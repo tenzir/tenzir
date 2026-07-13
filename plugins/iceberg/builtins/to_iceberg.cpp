@@ -16,6 +16,7 @@
 #include <tenzir/co_match.hpp>
 #include <tenzir/detail/enum.hpp>
 #include <tenzir/detail/string.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/table_slice.hpp>
@@ -311,6 +312,8 @@ public:
       writer_id_ = fmt::to_string(uuid::random());
     }
     checkpointing_ = restored;
+    TENZIR_DEBUG("to_iceberg: starting writer `{}`{}", writer_id_,
+                 restored ? " (restored from checkpoint)" : "");
     if (done_) {
       co_return;
     }
@@ -432,6 +435,8 @@ public:
         done_ = true;
         co_return;
       }
+      TENZIR_DEBUG("to_iceberg: loaded existing table `{}`",
+                   args_.table_id.inner);
       set_table(std::move(*table), ctx);
       if (done_) {
         co_return;
@@ -486,6 +491,9 @@ public:
     }
     // The table is created from the schema of the first arriving events; see
     // `ensure_table`.
+    TENZIR_DEBUG("to_iceberg: table `{}` does not exist; creating it from the "
+                 "first input schema",
+                 args_.table_id.inner);
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
@@ -543,6 +551,8 @@ public:
       if (it == partitions_.end() or it->second.generation != r.generation) {
         co_return;
       }
+      TENZIR_DEBUG("to_iceberg: rotating partition `{}` after `timeout`",
+                   r.partition);
       co_await close_partition(r.partition, ctx);
       if (not done_ and not checkpointing_) {
         co_await commit_staged(pending_files_, ctx);
@@ -563,6 +573,10 @@ public:
     // `snapshot`, and `post_commit` appends them once the checkpoint is
     // durable. Committing before durability would duplicate the data when a
     // crash replays input from the previous checkpoint.
+    if (not checkpointing_) {
+      TENZIR_DEBUG("to_iceberg: first checkpoint; commits now align with "
+                   "checkpoints");
+    }
     checkpointing_ = true;
     co_await close_all(ctx);
     if (done_) {
@@ -573,6 +587,8 @@ public:
       epoch_files_.push_back(std::move(staged));
     }
     pending_files_.clear();
+    TENZIR_DEBUG("to_iceberg: checkpoint carries {} uncommitted data files",
+                 epoch_snapshot_.size());
   }
 
   auto post_commit(OpCtx& ctx) -> Task<void> override {
@@ -593,6 +609,9 @@ public:
     if (done_) {
       co_return FinalizeBehavior::done;
     }
+    TENZIR_DEBUG("to_iceberg: finalizing with {} epoch and {} pending data "
+                 "files",
+                 epoch_files_.size(), pending_files_.size());
     // The last checkpoint's files commit under their persisted sequence
     // number; folding newer files into that commit would break restart
     // reconciliation, which trusts the checkpoint to describe the tagged
@@ -686,6 +705,8 @@ private:
            ctx);
       co_return;
     }
+    TENZIR_DEBUG("to_iceberg: ensured table `{}` exists ({} partition fields)",
+                 args_.table_id.inner, partition_fields_.size());
     set_table(std::move(*table), ctx);
   }
 
@@ -718,6 +739,9 @@ private:
       }
       if (evolved) {
         if (*evolved) {
+          TENZIR_DEBUG("to_iceberg: evolved schema of table `{}` for input "
+                       "schema `{}` (attempt {})",
+                       args_.table_id.inner, input.schema().name(), attempt);
           // The projection target changes: open data files stay valid under
           // the old schema, but must not receive new-schema batches. Close
           // them, then adopt the evolved schema from the update response.
@@ -989,6 +1013,7 @@ private:
                           })
              .first;
       arm_rotation_timer(group.key, it->second, ctx);
+      TENZIR_TRACE("to_iceberg: opened partition `{}`", group.key);
     }
     auto& partition = it->second;
     events_counter_.add(sub->length());
@@ -1083,6 +1108,9 @@ private:
         }
       }
       TENZIR_ASSERT(victim != partitions_.end());
+      TENZIR_DEBUG("to_iceberg: closing largest open file for partition `{}` "
+                   "({} bytes) early to stay under {} streaming writers",
+                   victim->first, victim->second.bytes, max_streaming_writers);
       co_await close_partition(victim->first, ctx);
       if (done_) {
         co_return;
@@ -1096,6 +1124,9 @@ private:
       fail(writer.error(), "failed to open data file writer", ctx);
       co_return;
     }
+    TENZIR_DEBUG("to_iceberg: partition graduates to a streaming writer at {} "
+                 "buffered bytes",
+                 partition.buffered_bytes);
     partition.writer = std::move(*writer);
     streaming_count_ += 1;
     total_buffered_ -= partition.buffered_bytes;
@@ -1130,6 +1161,10 @@ private:
                             "which may produce small files",
                             budget),
                 ctx);
+      TENZIR_DEBUG("to_iceberg: {} buffered bytes exceed budget {}; closing "
+                   "largest buffer `{}` ({} bytes) early",
+                   total_buffered_, budget, victim->first,
+                   victim->second.buffered_bytes);
       co_await close_partition(victim->first, ctx);
       if (done_) {
         co_return;
@@ -1195,6 +1230,9 @@ private:
     if (not partition.writer) {
       bytes_counter_.add(serialized->file_size);
     }
+    TENZIR_DEBUG("to_iceberg: staged data file `{}` ({} events, {} bytes)",
+                 serialized->path, serialized->record_count,
+                 serialized->file_size);
     pending_files_.push_back(StagedFile{
       .file = std::move(*file),
       .serialized = std::move(*serialized),
@@ -1229,6 +1267,9 @@ private:
       co_return;
     }
     if (table_->has_commit(CommitTag{writer_id_, commit_seq_})) {
+      TENZIR_DEBUG("to_iceberg: restart reconciliation: commit seq {} already "
+                   "landed; dropping {} restored file handles",
+                   commit_seq_, epoch_snapshot_.size());
       epoch_snapshot_.clear();
       commit_seq_ += 1;
       co_return;
@@ -1244,6 +1285,9 @@ private:
         .serialized = serialized,
       });
     }
+    TENZIR_DEBUG("to_iceberg: restart reconciliation: committing {} restored "
+                 "data files under seq {}",
+                 epoch_files_.size(), commit_seq_);
     co_await commit_staged(epoch_files_, ctx);
     if (not done_) {
       epoch_snapshot_.clear();
@@ -1277,6 +1321,14 @@ private:
             return table.commit_append(files, tag);
           });
       if (result) {
+        auto bytes = int64_t{0};
+        for (const auto& entry : staged) {
+          bytes += entry.serialized.file_size;
+        }
+        TENZIR_DEBUG("to_iceberg: committed {} data files ({} bytes) as seq "
+                     "{} of writer `{}` on attempt {}",
+                     staged.size(), bytes, tag.sequence, tag.writer_id,
+                     attempt);
         staged.clear();
         commit_seq_ += 1;
         set_table(std::move(*result), ctx);
@@ -1304,6 +1356,9 @@ private:
         }
         const auto landed = reloaded->has_commit(tag);
         if (landed) {
+          TENZIR_DEBUG("to_iceberg: commit seq {} had already landed; "
+                       "dropping {} staged files",
+                       tag.sequence, staged.size());
           staged.clear();
           commit_seq_ += 1;
         }
