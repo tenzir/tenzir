@@ -390,24 +390,6 @@ private:
   ExecCtx& inner_;
 };
 
-/// Run a pipeline with fused (run-to-completion) semantics.
-///
-/// Each input slice is fully processed through the entire operator chain
-/// before the next input is pulled. Internally creates a `FusedExecCtx` that
-/// replaces buffered channels with fused channels.
-template <class Input, class Output>
-auto run_chain_fused(OperatorChain<Input, Output> chain,
-                     Box<Pull<OperatorMsg<Input>>> pull_upstream,
-                     Box<Push<OperatorMsg<Output>>> push_downstream,
-                     Receiver<FromControl> from_control,
-                     Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
-                     caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
-  auto fused_ctx = FusedExecCtx{exec_ctx};
-  co_await run_chain(std::move(chain), std::move(pull_upstream),
-                     std::move(push_downstream), std::move(from_control),
-                     std::move(to_control), std::move(id), fused_ctx, sys, dh);
-}
-
 /// Core execution logic for a single operator.
 ///
 /// This is heavily inspired by "Asynchronous Barrier Snapshotting"[^1]. In the
@@ -874,16 +856,11 @@ private:
         auto [push_downstream, pull_downstream]
           = exec_ctx_.make_channel<Out>(sub_id.op(chain.size() - 1).to(id_));
         auto runner
-          = fused ? run_chain_fused(std::move(chain), std::move(pull_upstream),
-                                    std::move(push_downstream),
-                                    std::move(from_control_receiver),
-                                    std::move(to_control_sender),
-                                    std::move(sub_id), exec_ctx_, sys_, *sub_dh)
-                  : run_chain(std::move(chain), std::move(pull_upstream),
-                              std::move(push_downstream),
-                              std::move(from_control_receiver),
-                              std::move(to_control_sender), std::move(sub_id),
-                              exec_ctx_, sys_, *sub_dh);
+          = drive_chain(std::move(chain), std::move(pull_upstream),
+                        std::move(push_downstream),
+                        std::move(from_control_receiver),
+                        std::move(to_control_sender), std::move(sub_id),
+                        exec_ctx_, sys_, *sub_dh, fused);
         return {
           std::move(runner),
           AnyOpPush{std::move(push_upstream)},
@@ -1920,14 +1897,20 @@ private:
 };
 
 template <class Input, class Output>
-auto run_chain(OperatorChain<Input, Output> chain,
-               Box<Pull<OperatorMsg<Input>>> pull_upstream,
-               Box<Push<OperatorMsg<Output>>> push_downstream,
-               Receiver<FromControl> from_control, Sender<ToControl> to_control,
-               PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
-               DiagHandler& dh) -> Task<void> {
+auto drive_chain(OperatorChain<Input, Output> chain,
+                 Box<Pull<OperatorMsg<Input>>> pull_upstream,
+                 Box<Push<OperatorMsg<Output>>> push_downstream,
+                 Receiver<FromControl> from_control,
+                 Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
+                 caf::actor_system& sys, DiagHandler& dh, bool fused)
+  -> Task<void> {
   TENZIR_ASSERT(chain.size() != 0);
   co_await folly::coro::co_safe_point;
+  // Conditially use a fused ctx (that controls creation of new channels).
+  auto fused_ctx = Option<FusedExecCtx>{};
+  if (fused) {
+    fused_ctx.emplace(exec_ctx);
+  }
   co_await ChainRunner{
     std::move(chain).unwrap(),
     AnyOpPull{std::move(pull_upstream)},
@@ -1935,7 +1918,7 @@ auto run_chain(OperatorChain<Input, Output> chain,
     std::move(from_control),
     std::move(to_control),
     std::move(id),
-    exec_ctx,
+    fused_ctx ? static_cast<ExecCtx&>(*fused_ctx) : exec_ctx,
     sys,
     dh,
   }
@@ -1943,86 +1926,12 @@ auto run_chain(OperatorChain<Input, Output> chain,
 }
 
 template auto
-run_chain(OperatorChain<void, table_slice> chain,
-          Box<Pull<OperatorMsg<void>>> pull_upstream,
-          Box<Push<OperatorMsg<table_slice>>> push_downstream,
-          Receiver<FromControl> from_control, Sender<ToControl> to_control,
-          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
-  -> Task<void>;
-
-template auto
-run_chain(OperatorChain<chunk_ptr, table_slice> chain,
-          Box<Pull<OperatorMsg<chunk_ptr>>> pull_upstream,
-          Box<Push<OperatorMsg<table_slice>>> push_downstream,
-          Receiver<FromControl> from_control, Sender<ToControl> to_control,
-          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
-  -> Task<void>;
-
-template auto
-run_chain(OperatorChain<table_slice, table_slice> chain,
-          Box<Pull<OperatorMsg<table_slice>>> pull_upstream,
-          Box<Push<OperatorMsg<table_slice>>> push_downstream,
-          Receiver<FromControl> from_control, Sender<ToControl> to_control,
-          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
-  -> Task<void>;
-
-template auto
-run_chain(OperatorChain<void, void> chain,
-          Box<Pull<OperatorMsg<void>>> pull_upstream,
-          Box<Push<OperatorMsg<void>>> push_downstream,
-          Receiver<FromControl> from_control, Sender<ToControl> to_control,
-          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
-  -> Task<void>;
-
-template auto
-run_chain(OperatorChain<table_slice, void> chain,
-          Box<Pull<OperatorMsg<table_slice>>> pull_upstream,
-          Box<Push<OperatorMsg<void>>> push_downstream,
-          Receiver<FromControl> from_control, Sender<ToControl> to_control,
-          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
-  -> Task<void>;
-
-template auto
-run_chain(OperatorChain<chunk_ptr, void> chain,
-          Box<Pull<OperatorMsg<chunk_ptr>>> pull_upstream,
-          Box<Push<OperatorMsg<void>>> push_downstream,
-          Receiver<FromControl> from_control, Sender<ToControl> to_control,
-          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
-  -> Task<void>;
-
-template auto
-run_chain(OperatorChain<void, chunk_ptr> chain,
-          Box<Pull<OperatorMsg<void>>> pull_upstream,
-          Box<Push<OperatorMsg<chunk_ptr>>> push_downstream,
-          Receiver<FromControl> from_control, Sender<ToControl> to_control,
-          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
-  -> Task<void>;
-
-template auto
-run_chain(OperatorChain<chunk_ptr, chunk_ptr> chain,
-          Box<Pull<OperatorMsg<chunk_ptr>>> pull_upstream,
-          Box<Push<OperatorMsg<chunk_ptr>>> push_downstream,
-          Receiver<FromControl> from_control, Sender<ToControl> to_control,
-          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
-  -> Task<void>;
-
-template auto
-run_chain(OperatorChain<table_slice, chunk_ptr> chain,
-          Box<Pull<OperatorMsg<table_slice>>> pull_upstream,
-          Box<Push<OperatorMsg<chunk_ptr>>> push_downstream,
-          Receiver<FromControl> from_control, Sender<ToControl> to_control,
-          PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
-  -> Task<void>;
-
-/// Run a potentially-open pipeline without external control.
-template <class Output>
-  requires(not std::same_as<Output, void>)
-auto run_open_pipeline(OperatorChain<void, Output> pipeline,
-                       caf::actor_system& sys, DiagHandler& dh)
-  -> AsyncGenerator<Output> {
-  TENZIR_UNUSED(pipeline, sys, dh);
-  TENZIR_TODO();
-}
+drive_chain(OperatorChain<table_slice, table_slice> chain,
+            Box<Pull<OperatorMsg<table_slice>>> pull_upstream,
+            Box<Push<OperatorMsg<table_slice>>> push_downstream,
+            Receiver<FromControl> from_control, Sender<ToControl> to_control,
+            PipeId id, ExecCtx& exec_ctx, caf::actor_system& sys,
+            DiagHandler& dh, bool fused) -> Task<void>;
 
 namespace {
 
@@ -2056,10 +1965,11 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
     LOGV("creating pipeline queue scope");
     co_await driver.activate([&] -> Task<void> {
       driver.add([&] -> Task<Terminated> {
-        co_await run_chain(std::move(pipeline), std::move(pull_input),
-                           std::move(push_output),
-                           std::move(from_control_receiver),
-                           std::move(to_control_sender), id, exec_ctx, sys, dh);
+        co_await drive_chain(std::move(pipeline), std::move(pull_input),
+                             std::move(push_output),
+                             std::move(from_control_receiver),
+                             std::move(to_control_sender), id, exec_ctx, sys,
+                             dh);
         co_return Terminated{};
       });
       driver.add(pull_output());
@@ -2161,6 +2071,69 @@ auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
   }
   diagnostic::error("uncaught exception in pipeline: {}", exception.what())
     .emit(dh);
+}
+
+auto run_bounded_pipeline(OperatorChain<table_slice, table_slice> chain,
+                          ExecCtx& exec_ctx, caf::actor_system& sys,
+                          DiagHandler& dh, PipelineFeeder feed_input,
+                          PipelineDrainer drain_output) -> Task<void> {
+  auto num_ops = chain.size();
+  TENZIR_ASSERT(num_ops > 0);
+  auto id = new_pipe_id();
+  auto [push_input, pull_input]
+    = exec_ctx.make_channel<table_slice>(ChannelId::first(id.op(0)));
+  auto [push_output, pull_output]
+    = exec_ctx.make_channel<table_slice>(ChannelId::last(id.op(num_ops - 1)));
+  // A bounded transform has no outside controller, so we keep only the
+  // receiver. The matching sender dies with the temporary tuple at the end of
+  // this statement, which closes the channel; the chain's
+  // `from_control_.recv()` then resolves with `None` instead of pinning the
+  // chain's `JoinSet` open forever.
+  auto from_ctl_recv = std::get<1>(channel<FromControl>(16));
+  auto [to_ctl_send, to_ctl_recv] = channel<ToControl>(16);
+  // Feeder cancellation. The chain's receiver may be dropped before the feeder
+  // pushes all input (for example, a `head N` operator inside the transform
+  // emits `no_more_input` after seeing N events). Because dropping a receiver
+  // does not close the channel (see `Receiver` in `channel.hpp`), the feeder
+  // would otherwise block on `push_input` once the buffer fills. We forward
+  // that signal here to cancel the feeder.
+  auto feed_cancel = folly::CancellationSource{};
+  co_await async_scope([&](AsyncScope& scope) -> Task<void> {
+    // Chain runner.
+    scope.spawn(folly::coro::co_invoke(
+      [chain = std::move(chain), pull_input = std::move(pull_input),
+       push_output = std::move(push_output),
+       from_ctl_recv = std::move(from_ctl_recv),
+       to_ctl_send = std::move(to_ctl_send), id, &exec_ctx, &sys,
+       &dh]() mutable -> Task<void> {
+        co_await drive_chain(std::move(chain), std::move(pull_input),
+                             std::move(push_output), std::move(from_ctl_recv),
+                             std::move(to_ctl_send), id, exec_ctx, sys, dh);
+      }));
+    // Feeder. Drops `push_input` on exit, closing the input channel. Honors
+    // `feed_cancel` so we exit promptly if the chain stops reading upstream.
+    scope.spawn(folly::coro::co_invoke(
+      [&feed_input, push_input = std::move(push_input),
+       token = feed_cancel.getToken()]() mutable -> Task<void> {
+        co_await folly::coro::co_withCancellation(
+          token, folly::coro::co_invoke([&]() mutable -> Task<void> {
+            co_await feed_input(*push_input);
+          }));
+      }));
+    // Drain control messages and react to `no_more_input` by cancelling the
+    // feeder. Other control signals (e.g., shutdown readiness, checkpoint
+    // bookkeeping) are not actionable for a bounded one-shot transform.
+    scope.spawn(folly::coro::co_invoke([to_ctl_recv = std::move(to_ctl_recv),
+                                        &feed_cancel]() mutable -> Task<void> {
+      while (auto msg = co_await to_ctl_recv.recv()) {
+        if (*msg == ToControl::no_more_input) {
+          feed_cancel.requestCancellation();
+        }
+      }
+    }));
+    co_await drain_output(*pull_output);
+    scope.cancel();
+  });
 }
 
 } // namespace tenzir

@@ -84,42 +84,18 @@ auto parse_and_compile(std::string_view source, session ctx)
 
 /// Run a closed pipeline from a list of operators.
 auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
-              DiagHandler& dh, Profiler profiler, bool has_terminal,
-              bool is_hidden, Notify* graceful_stop = nullptr)
-  -> Task<failure_or<void>>;
-
-auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
               DiagHandler& dh, Profiler profiler, bool is_hidden,
               Notify* graceful_stop = nullptr) -> Task<failure_or<void>>;
 
-/// Feeds input into a transform pipeline.
-using TransformFeeder
-  = std::function<Task<void>(Push<OperatorMsg<table_slice>>&)>;
-
-/// Drains output from a transform pipeline.
-using TransformDrainer
-  = std::function<Task<void>(Pull<OperatorMsg<table_slice>>&)>;
-
 /// Run a `table_slice -> table_slice` chain with caller-provided IO.
 ///
-/// The feeder receives the pipeline input push endpoint. It should push all
-/// input slices and then an `EndOfData` signal. The drainer receives the output
-/// pull endpoint and can process transformed slices incrementally.
+/// Wraps `run_bounded_pipeline` with a profiler and `failure_or` result. The
+/// feeder receives the pipeline input push endpoint. It should push all input
+/// slices and then an `EndOfData` signal. The drainer receives the output pull
+/// endpoint and can process transformed slices incrementally.
 auto run_transform(OperatorChain<table_slice, table_slice> chain,
                    caf::actor_system& sys, DiagHandler& dh, Profiler profiler,
-                   bool is_hidden, TransformFeeder feed_input,
-                   TransformDrainer drain_output) -> Task<failure_or<void>>;
-
-/// Run a `table_slice -> table_slice` chain over a fixed input vector.
-///
-/// Feeds the input slices into the head of the chain, runs the new
-/// coroutine executor, and returns the slices produced by the tail. Used by
-/// partition transformations (compaction, rebuild) that need to apply a
-/// pipeline to a pre-collected batch of events.
-auto run_transform(std::vector<table_slice> input,
-                   OperatorChain<table_slice, table_slice> chain,
-                   caf::actor_system& sys, DiagHandler& dh, Profiler profiler,
-                   bool is_hidden)
-  -> Task<failure_or<std::vector<table_slice>>>;
+                   bool is_hidden, PipelineFeeder feed_input,
+                   PipelineDrainer drain_output) -> Task<failure_or<void>>;
 
 } // namespace tenzir
