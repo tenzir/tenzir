@@ -4,6 +4,8 @@ type: feature
 authors:
   - aljazerzen
   - claude
+prs:
+  - 6442
 created: 2026-07-13T08:43:36.753785Z
 ---
 
