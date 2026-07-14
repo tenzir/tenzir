@@ -14,9 +14,16 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Iterator
 from urllib.parse import parse_qs
 
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
 from tenzir_test import fixture
+from tenzir_test.fixtures import FixtureUnavailable
+
+try:
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding
+except ImportError:
+    hashes = None  # type: ignore[assignment]
+    serialization = None  # type: ignore[assignment]
+    padding = None  # type: ignore[assignment]
 
 _HOST = "127.0.0.1"
 _CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
@@ -54,9 +61,13 @@ YvLLIc82V7eqcVJTZtaFkuht68qu/Jn1ezbzJMJ4YXDYo1+KFi+2CAGR06QILb+I
 lUtj+/nH3HDQjM4ltYfTPUg=
 -----END PRIVATE KEY-----
 """
-_PUBLIC_KEY = serialization.load_pem_private_key(
-    _PRIVATE_KEY.encode(), password=None
-).public_key()
+_PUBLIC_KEY = (
+    serialization.load_pem_private_key(
+        _PRIVATE_KEY.encode(), password=None
+    ).public_key()
+    if serialization is not None
+    else None
+)
 _LOGS_PATH = re.compile(
     r"^/v1/projects/[^/]+/locations/[^/]+/instances/[^/]+"
     r"/logTypes/[^/]+/logs:import$"
@@ -349,6 +360,10 @@ def _validate_entities(inline_source: dict) -> str | None:  # type: ignore[type-
 
 @fixture()
 def google_secops() -> Iterator[dict[str, str]]:
+    if _PUBLIC_KEY is None:
+        raise FixtureUnavailable(
+            "cryptography not installed; install with: pip install cryptography"
+        )
     fd, capture_path = tempfile.mkstemp(prefix="secops-capture-", suffix=".jsonl")
     os.close(fd)
     fd, token_capture_path = tempfile.mkstemp(
