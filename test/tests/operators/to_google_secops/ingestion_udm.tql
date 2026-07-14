@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {metadata: {eventType: "NETWORK_DNS"}}
+to_google_secops _dry_run=true, mode="udm_event", api="ingestion"

@@ -1,0 +1,6 @@
+error: `collection_time` is only valid when `api="import"`
+ --> tests/operators/to_google_secops/ingestion_collection_time.tql:7:34
+  |
+7 |   log_text=text, collection_time=2026-01-01T00:00:01,
+  |                                  ^^^^^^^^^^^^^^^^^^^ 
+  |

@@ -1,0 +1,1 @@
+{"customer_id":"CUSTOMER","log_type":"CUSTOM_DNS","namespace":"tenzir","labels":[{"key":"env","value":"prod"}],"entries":[{"log_text":"CUSTOM_DNS_LOG"}]}
