@@ -155,6 +155,7 @@ def main() -> None:
     tokens = token_captures()
     assert tokens, tokens
     assert all(token["assertion_segments"] == 3 for token in tokens), tokens
+    assert all(token["signature_verified"] for token in tokens), tokens
     issuers = {token["issuer"] for token in tokens}
     assert issuers == {
         "test-only-email@test-only-project-id.iam.gserviceaccount.com"

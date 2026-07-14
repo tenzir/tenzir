@@ -14,6 +14,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Iterator
 from urllib.parse import parse_qs
 
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
 from tenzir_test import fixture
 
 _HOST = "127.0.0.1"
@@ -52,6 +54,9 @@ YvLLIc82V7eqcVJTZtaFkuht68qu/Jn1ezbzJMJ4YXDYo1+KFi+2CAGR06QILb+I
 lUtj+/nH3HDQjM4ltYfTPUg=
 -----END PRIVATE KEY-----
 """
+_PUBLIC_KEY = serialization.load_pem_private_key(
+    _PRIVATE_KEY.encode(), password=None
+).public_key()
 _LOGS_PATH = re.compile(
     r"^/v1/projects/[^/]+/locations/[^/]+/instances/[^/]+"
     r"/logTypes/[^/]+/logs:import$"
@@ -87,6 +92,10 @@ def _service_credentials(token_uri: str) -> str:
             ),
         }
     )
+
+
+def _b64url_decode(value: str) -> bytes:
+    return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
 
 
 def _parse_rfc3339(value: str) -> datetime:
@@ -153,23 +162,39 @@ def _make_ingestion_handler(
             if grant_type != "urn:ietf:params:oauth:grant-type:jwt-bearer":
                 self._json_response(400, {"error": "unexpected grant_type"})
                 return
-            if len(assertion.split(".")) != 3:
+            segments = assertion.split(".")
+            if len(segments) != 3:
                 self._json_response(400, {"error": "invalid assertion"})
                 return
+            encoded_header, encoded_claims, encoded_signature = segments
             try:
-                encoded_claims = assertion.split(".")[1]
-                padding = "=" * (-len(encoded_claims) % 4)
-                claims = json.loads(
-                    base64.urlsafe_b64decode(encoded_claims + padding).decode()
-                )
+                header = json.loads(_b64url_decode(encoded_header).decode())
+                claims = json.loads(_b64url_decode(encoded_claims).decode())
+                signature = _b64url_decode(encoded_signature)
             except Exception as e:
-                self._json_response(400, {"error": f"invalid claims: {e}"})
+                self._json_response(400, {"error": f"invalid assertion: {e}"})
+                return
+            if header.get("alg") != "RS256":
+                self._json_response(
+                    400, {"error": f"unexpected alg: {header.get('alg')}"}
+                )
+                return
+            try:
+                _PUBLIC_KEY.verify(
+                    signature,
+                    f"{encoded_header}.{encoded_claims}".encode(),
+                    padding.PKCS1v15(),
+                    hashes.SHA256(),
+                )
+            except Exception:
+                self._json_response(400, {"error": "invalid signature"})
                 return
             capture = {
                 "grant_type": grant_type,
-                "assertion_segments": len(assertion.split(".")),
+                "assertion_segments": len(segments),
                 "issuer": claims.get("iss"),
                 "scope": claims.get("scope"),
+                "signature_verified": True,
             }
             access_token = _TOKENS_BY_SCOPE.get(capture["scope"])
             if access_token is None:
