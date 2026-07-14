@@ -427,16 +427,14 @@ def _prepare_input_pipeline(
             "drop _benchmark_sequence",
         ]
     )
-    if tags.get("workload") != "homogeneous":
-        # `repeat` interleaves the per-class seed events, and `batch` only
-        # coalesces consecutive same-schema events. Without grouping by class
-        # first, the cache degenerates into one single-event slice per input
-        # event and the benchmark measures per-slice overhead instead of the
-        # write path.
-        pipeline.append("sort class_uid")
     pipeline.extend(
         [
-            f"batch {batch_size}",
+            # `repeat` interleaves the per-class seed events, and ordered
+            # batching flushes on every schema change, which would degenerate
+            # the cache into one single-event slice per input event. Relaxing
+            # the ordering lets `batch` keep one buffer per schema and emit
+            # full schema-homogeneous batches.
+            f"unordered {{ batch {batch_size} }}",
             f"to_file {_quoted(str(output_path))} {{ write_bitz }}",
         ]
     )
