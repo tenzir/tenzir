@@ -3,6 +3,7 @@ bench:
   id: control
   description: Read the prepared mixed OCSF batches, then discard them.
   tags:
+    regrouping: none
     layout: control
     expected_tables: "0"
 ---

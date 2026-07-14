@@ -1,9 +1,9 @@
 ---
 bench:
-  id: class-tables
-  description: Demultiplex mixed OCSF events into one table per event class.
+  id: class-tables-batched
+  description: Demultiplex mixed OCSF events into one table per event class. Regroups interleaved slices with unordered batching first.
   tags:
-    regrouping: none
+    regrouping: unordered-batch
     layout: class-tables
     expected_tables: "25"
 ---
@@ -11,6 +11,7 @@ from_file env("BENCHMARK_ICEBERG_INPUT_PATH"), mmap=true {
   read_bitz
 }
 repeat int(env("BENCHMARK_ICEBERG_STREAM_REPETITIONS"))
+unordered { batch 4096 }
 group class_uid {
   to_iceberg f"{env("BENCHMARK_ICEBERG_NAMESPACE")}.class_{$group}",
     catalog=env("ICEBERG_REST_URI"), mode="append", partition_by=[day(time)],

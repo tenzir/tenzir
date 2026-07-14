@@ -4,7 +4,10 @@ description: >-
   slices: 128-event schema-homogeneous slices cycling through all 25 event
   classes. Complements to_iceberg_ocsf_layouts, which feeds the same events as
   ideal 4,096-event batches; the difference isolates the operator's per-slice
-  overhead on realistic multi-class streams.
+  overhead on realistic multi-class streams. Every implementation has a
+  -batched twin that regroups the stream with `unordered { batch 4096 }`
+  before the sink, so reports show the impact of schema-aware regrouping
+  directly.
 tags:
   benchmark: iceberg
   dataset: ocsf-1.8
