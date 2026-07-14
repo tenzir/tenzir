@@ -11,6 +11,7 @@
 #include "tenzir/plugins/iceberg/facade.hpp"
 
 #include <algorithm>
+#include <string_view>
 
 namespace tenzir::plugins::iceberg::file_io {
 
@@ -32,6 +33,18 @@ inline auto select_file_io(CatalogConfig const& config) -> FileIO {
     return FileIO::gcs;
   }
   return FileIO::automatic;
+}
+
+/// Whether opening the catalog should retry with the local FileIO: automatic
+/// selection has nothing to detect the data plane from when the merged REST
+/// configuration carries neither an `io-impl` nor a `warehouse`. Some catalog
+/// servers (e.g. the Iceberg REST test fixture) vend absolute table locations
+/// without advertising either property.
+inline auto should_fall_back_to_local(FileIO selection,
+                                      std::string_view error_message) -> bool {
+  return selection == FileIO::automatic
+         and error_message.find("is required to create FileIO")
+               != std::string_view::npos;
 }
 
 } // namespace tenzir::plugins::iceberg::file_io

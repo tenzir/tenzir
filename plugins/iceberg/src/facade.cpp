@@ -923,8 +923,10 @@ auto Catalog::open(CatalogConfig config) -> Result<Catalog> {
   // (e.g. GCS interop with HMAC keys) keeps working; without them, Google
   // authentication implies the native GCS data plane. Otherwise, leave
   // `io-impl` unset so iceberg-cpp detects it from the final warehouse after
-  // merging the REST server configuration.
-  switch (file_io::select_file_io(config)) {
+  // merging the REST server configuration; when that merge yields neither
+  // property, retry below with the local filesystem.
+  const auto selection = file_io::select_file_io(config);
+  switch (selection) {
     case file_io::FileIO::automatic:
       break;
     case file_io::FileIO::s3:
@@ -940,6 +942,14 @@ auto Catalog::open(CatalogConfig config) -> Result<Catalog> {
     properties.mutable_configs()[key] = value;
   }
   auto rest_catalog = ice::rest::RestCatalog::Make(properties);
+  if (not rest_catalog.has_value()
+      and rest_catalog.error().kind == ice::ErrorKind::kInvalidArgument
+      and file_io::should_fall_back_to_local(selection,
+                                             rest_catalog.error().message)) {
+    properties.Set(ice::rest::RestCatalogProperties::kIOImpl,
+                   std::string{ice::FileIORegistry::kArrowLocalFileIO});
+    rest_catalog = ice::rest::RestCatalog::Make(properties);
+  }
   if (not rest_catalog.has_value()) {
     return std::unexpected{translate_error(rest_catalog.error())};
   }
