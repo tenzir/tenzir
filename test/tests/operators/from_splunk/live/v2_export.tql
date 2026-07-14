@@ -1,9 +1,9 @@
 from_splunk env("SPLUNK_MGMT_URL"),
-  search="| makeresults count=2 | streamstats count | eval message=\"result-\" . count | fields message count",
-  earliest="-1h",
-  latest="now",
+  search=r#"search index=main source="tenzir-docs-auth" action="login" | fields _time host source sourcetype user action src_ip outcome | sort 0 user"#,
+  earliest="1735689599",
+  latest="1735689780",
   headers={
     Authorization: secret(env("SPLUNK_AUTHORIZATION"), _literal=true),
   },
   tls={skip_peer_verification: true}
-select message, count
+select _time, host, source, sourcetype, user, action, src_ip, outcome

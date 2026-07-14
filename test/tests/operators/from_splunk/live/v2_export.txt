@@ -1,8 +1,20 @@
 {
-  message: "result-1",
-  count: "1",
+  _time: "2025-01-01 00:00:00.000 GMT",
+  host: "auth-01",
+  source: "tenzir-docs-auth",
+  sourcetype: "_json",
+  user: "alice",
+  action: "login",
+  src_ip: 192.0.2.10,
+  outcome: "success",
 }
 {
-  message: "result-2",
-  count: "2",
+  _time: "2025-01-01 00:01:00.000 GMT",
+  host: "auth-01",
+  source: "tenzir-docs-auth",
+  sourcetype: "_json",
+  user: "bob",
+  action: "login",
+  src_ip: 198.51.100.24,
+  outcome: "failure",
 }

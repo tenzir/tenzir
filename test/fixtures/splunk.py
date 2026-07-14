@@ -13,6 +13,9 @@ Environment variables yielded:
 - SPLUNK_ADMIN_PASSWORD: Management API password.
 - SPLUNK_AUTHORIZATION: Complete Basic management API authorization value.
 
+Options accepted under ``fixtures.splunk``:
+- seed_auth_events: ingest deterministic authentication events through HEC.
+
 Assertions payload accepted under ``assertions.fixtures.splunk``:
 - count: optional number of search results expected.
 - contains: substring or list of substrings expected in matching events.
@@ -43,7 +46,7 @@ from pathlib import Path
 from typing import Any
 
 from tenzir_test import FixtureHandle, fixture
-from tenzir_test.fixtures import FixtureUnavailable
+from tenzir_test.fixtures import FixtureUnavailable, current_options
 from tenzir_test.fixtures.container_runtime import (
     ContainerReadinessTimeout,
     ManagedContainer,
@@ -69,6 +72,11 @@ STARTUP_TIMEOUT = 420
 HEALTH_CHECK_INTERVAL = 2
 ASSERTION_TIMEOUT = 60
 ASSERTION_INTERVAL = 1
+
+
+@dataclass(frozen=True)
+class SplunkOptions:
+    seed_auth_events: bool = False
 
 
 @dataclass(frozen=True)
@@ -280,6 +288,64 @@ def _verify_v2_export(mgmt_port: int) -> None:
         )
 
 
+def _seed_auth_events(hec_port: int) -> None:
+    events = [
+        {
+            "time": 1735689600,
+            "host": "auth-01",
+            "source": "tenzir-docs-auth",
+            "sourcetype": "_json",
+            "index": SPLUNK_INDEX,
+            "event": {
+                "user": "alice",
+                "action": "login",
+                "src_ip": "192.0.2.10",
+                "outcome": "success",
+            },
+        },
+        {
+            "time": 1735689660,
+            "host": "auth-01",
+            "source": "tenzir-docs-auth",
+            "sourcetype": "_json",
+            "index": SPLUNK_INDEX,
+            "event": {
+                "user": "bob",
+                "action": "login",
+                "src_ip": "198.51.100.24",
+                "outcome": "failure",
+            },
+        },
+        {
+            "time": 1735689720,
+            "host": "auth-01",
+            "source": "tenzir-docs-auth",
+            "sourcetype": "_json",
+            "index": SPLUNK_INDEX,
+            "event": {
+                "user": "alice",
+                "action": "logout",
+                "src_ip": "192.0.2.10",
+                "outcome": "success",
+            },
+        },
+    ]
+    url = f"http://127.0.0.1:{hec_port}/services/collector/event"
+    for event in events:
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(event, separators=(",", ":")).encode(),
+            headers={
+                "Authorization": f"Splunk {SPLUNK_HEC_TOKEN}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        response = json.loads(_urlopen(request).decode())
+        if not isinstance(response, dict) or response.get("code") != 0:
+            raise RuntimeError(f"Splunk HEC rejected seed event: {response!r}")
+
+
 def _result_text(result: dict[str, Any]) -> str:
     return json.dumps(result, sort_keys=True, separators=(",", ":"))
 
@@ -333,8 +399,9 @@ def _verify_search(
         time.sleep(ASSERTION_INTERVAL)
 
 
-@fixture(assertions=SplunkAssertions)
+@fixture(options=SplunkOptions, assertions=SplunkAssertions)
 def splunk() -> FixtureHandle:
+    opts = current_options("splunk")
     runtime = detect_runtime()
     if runtime is None:
         raise FixtureUnavailable(
@@ -371,6 +438,19 @@ def splunk() -> FixtureHandle:
         )
         _wait_for_splunk(web_port, hec_port, mgmt_port)
         _verify_v2_export(mgmt_port)
+        if opts.seed_auth_events:
+            _seed_auth_events(hec_port)
+            _verify_search(
+                test=Path("seed_auth_events"),
+                mgmt_port=mgmt_port,
+                assertions=SplunkAssertions(
+                    count=3,
+                    source="tenzir-docs-auth",
+                    sourcetype="_json",
+                    earliest_time="1735689599",
+                    latest_time="1735689780",
+                ),
+            )
     except Exception:
         if container is not None:
             _stop_splunk(container)

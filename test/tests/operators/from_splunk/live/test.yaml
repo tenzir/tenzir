@@ -1,2 +1,4 @@
-fixtures: [splunk]
+fixtures:
+  - splunk:
+      seed_auth_events: true
 timeout: 600
