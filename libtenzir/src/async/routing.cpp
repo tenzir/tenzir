@@ -8,7 +8,10 @@
 
 #include "tenzir/async/routing.hpp"
 
+#include "tenzir/async/select_set.hpp"
+#include "tenzir/co_match.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/panic.hpp"
 
 #include <algorithm>
 #include <functional>
@@ -110,3 +113,143 @@ auto hash_runs(const multi_series& values, uint64_t jobs)
 }
 
 } // namespace tenzir::routing
+
+namespace tenzir {
+
+ScatterPush::ScatterPush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes)
+  : lanes_{std::move(lanes)},
+    open_(lanes_.size(), true),
+    rows_assigned_(lanes_.size(), 0) {
+  TENZIR_ASSERT(not lanes_.empty());
+}
+
+auto ScatterPush::operator()(OperatorMsg<table_slice> msg) -> Task<void> {
+  // Note the `co_await`: `operator()` must itself be a coroutine so the
+  // handler lambda temporaries created by `co_match` stay alive across the
+  // suspension. A plain `return co_match(...)` would destroy them at the end
+  // of the full expression, leaving the returned (lazily-started) handler
+  // coroutine with a dangling reference to its captured `this`.
+  co_await co_match(
+    std::move(msg),
+    [this](Signal signal) -> Task<void> {
+      // Broadcast signals to every open lane, sequentially.
+      for (auto i = size_t{0}; i < lanes_.size(); ++i) {
+        if (open_[i]) {
+          co_await (*lanes_[i])(OperatorMsg<table_slice>{signal});
+        }
+      }
+    },
+    [this](table_slice data) -> Task<void> {
+      co_await route_data(std::move(data));
+    });
+}
+
+auto ScatterPush::close_lane(size_t lane) -> void {
+  TENZIR_ASSERT(lane < open_.size());
+  open_[lane] = false;
+}
+
+auto ScatterPush::open_lanes() const -> size_t {
+  return std::ranges::count(open_, true);
+}
+
+auto ScatterPush::route_data(table_slice data) -> Task<void> {
+  // Split the slice across open lanes by row, keeping load balanced.
+  auto total = static_cast<uint64_t>(data.rows());
+  if (total == 0) {
+    co_return;
+  }
+  // Distribute across open lanes only. Retired lanes are excluded from the
+  // load vector entirely, so they neither receive rows nor skew the
+  // fairness check (a pinned sentinel would reject every `k < n`, forcing
+  // needless fragmentation across all open lanes).
+  auto open_lane_ids = std::vector<size_t>{};
+  auto open_loads = std::vector<uint64_t>{};
+  for (auto i = size_t{0}; i < open_.size(); ++i) {
+    if (open_[i]) {
+      open_lane_ids.push_back(i);
+      open_loads.push_back(rows_assigned_[i]);
+    }
+  }
+  if (open_lane_ids.empty()) {
+    panic("scatter has no open lane to route to");
+  }
+  // `distribute_adaptive` updates `open_loads` in place for the lanes it
+  // fills; fold those back into the real per-lane load vector.
+  auto assignments = routing::distribute_adaptive(total, open_loads);
+  auto offset = size_t{0};
+  for (auto [compact, count] : assignments) {
+    auto lane = open_lane_ids[compact];
+    rows_assigned_[lane] = open_loads[compact];
+    auto slice = subslice(data, offset, offset + count);
+    offset += count;
+    co_await (*lanes_[lane])(OperatorMsg<table_slice>{std::move(slice)});
+  }
+}
+
+auto run_gather(std::vector<Box<Pull<OperatorMsg<table_slice>>>> lanes,
+                Box<Push<OperatorMsg<table_slice>>> out) -> Task<void> {
+  struct LaneMsg {
+    size_t lane;
+    Option<OperatorMsg<table_slice>> msg;
+  };
+  const auto n = lanes.size();
+  TENZIR_ASSERT(n > 0);
+  auto eod_count = size_t{0};
+  auto drained = size_t{0};
+  auto set = SelectSet<LaneMsg>{};
+  co_await set.activate([&]() -> Task<void> {
+    auto arm = [&](size_t lane) {
+      set.add([&lanes, lane]() -> Task<LaneMsg> {
+        co_return LaneMsg{lane, co_await (*lanes[lane])()};
+      });
+    };
+    for (auto lane = size_t{0}; lane < n; ++lane) {
+      arm(lane);
+    }
+    while (auto next = co_await set.next([](const LaneMsg&) {
+      return true;
+    })) {
+      auto lane = next->lane;
+      if (not next->msg) {
+        // The lane drained; do not re-arm it.
+        ++drained;
+        if (drained == n) {
+          break;
+        }
+        continue;
+      }
+      auto stop = co_await co_match(
+        std::move(*next->msg),
+        [&](table_slice data) -> Task<bool> {
+          co_await (*out)(OperatorMsg<table_slice>{std::move(data)});
+          arm(lane);
+          co_return false;
+        },
+        [&](Signal signal) -> Task<bool> {
+          co_return co_await co_match(
+            std::move(signal),
+            [&](EndOfData) -> Task<bool> {
+              // Emit a single aligned end-of-data once all lanes delivered it.
+              if (++eod_count == n) {
+                co_await (*out)(OperatorMsg<table_slice>{Signal{EndOfData{}}});
+                eod_count = 0;
+              }
+              // Keep polling the lane for its eventual drain.
+              arm(lane);
+              co_return false;
+            },
+            [&](Checkpoint) -> Task<bool> {
+              // Aligned barrier handling is deferred to the checkpointing epic.
+              TENZIR_TODO();
+              co_return true;
+            });
+        });
+      if (stop) {
+        break;
+      }
+    }
+  });
+}
+
+} // namespace tenzir
