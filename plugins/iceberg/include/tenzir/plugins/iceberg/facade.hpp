@@ -28,6 +28,10 @@
 struct ArrowArray;
 struct ArrowSchema;
 
+namespace arrow {
+class StructArray;
+} // namespace arrow
+
 namespace tenzir::plugins::iceberg {
 
 /// Error surfaced from the catalog, file IO, or commit path. The kind
@@ -362,9 +366,9 @@ public:
 
   /// Splits a batch matching the table schema into per-partition row groups
   /// by evaluating the partition spec's transforms. Returns exactly one
-  /// group, covering all rows, for unpartitioned tables. Ownership of the
-  /// Arrow array is transferred.
-  auto split_by_partition(ArrowArray* batch)
+  /// group, covering all rows, for unpartitioned tables. The batch's Arrow
+  /// type must be the one this facade exports for the table schema.
+  auto split_by_partition(std::shared_ptr<arrow::StructArray> batch)
     -> Result<std::vector<PartitionGroup>>;
 
   /// Opens a writer for a new data file of the given partition in the

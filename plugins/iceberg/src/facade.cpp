@@ -1294,32 +1294,13 @@ auto append_partition_key(const ice::Literal& literal, std::string& key)
 
 } // namespace
 
-auto Table::split_by_partition(ArrowArray* batch)
+auto Table::split_by_partition(std::shared_ptr<arrow::StructArray> batch)
   -> Result<std::vector<PartitionGroup>> {
   auto bound = impl_->ensure_partitioning();
   if (not bound.has_value()) {
     return std::unexpected{bound.error()};
   }
-  auto schema = impl_->table->schema();
-  if (not schema.has_value()) {
-    return std::unexpected{translate_error(schema.error())};
-  }
-  // The batch matches the table schema by construction (the operator
-  // projects onto the schema this facade exports), so its Arrow type is the
-  // one we derive ourselves.
-  auto arrow_type = to_arrow_type(**schema);
-  if (not arrow_type.has_value()) {
-    return std::unexpected{arrow_type.error()};
-  }
-  auto imported = arrow::ImportArray(batch, std::move(*arrow_type));
-  if (not imported.ok()) {
-    return std::unexpected{Error{
-      Error::Kind::permanent,
-      fmt::format("failed to import batch: {}", imported.status().ToString()),
-    }};
-  }
-  auto struct_batch = std::dynamic_pointer_cast<arrow::StructArray>(*imported);
-  TENZIR_ASSERT(struct_batch);
+  const auto& struct_batch = batch;
   auto groups = std::vector<PartitionGroup>{};
   if (bound->empty()) {
     groups.push_back(PartitionGroup{

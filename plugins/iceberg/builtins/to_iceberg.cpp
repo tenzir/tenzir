@@ -519,17 +519,8 @@ public:
       co_return;
     }
     auto groups = co_await spawn_blocking(
-      [table = *table_,
-       batch = *batch]() mutable -> Result<std::vector<PartitionGroup>> {
-        auto c_array = ArrowArray{};
-        if (auto status = arrow::ExportArray(*batch, &c_array);
-            not status.ok()) {
-          return std::unexpected{Error{
-            Error::Kind::permanent,
-            fmt::format("failed to export batch: {}", status.ToString()),
-          }};
-        }
-        return table.split_by_partition(&c_array);
+      [table = *table_, batch = *batch]() mutable {
+        return table.split_by_partition(std::move(batch));
       });
     if (not groups) {
       fail(groups.error(), "failed to compute partition values", ctx);
