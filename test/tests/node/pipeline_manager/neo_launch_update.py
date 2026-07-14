@@ -341,18 +341,37 @@ def _background_serve_request(
 
     def worker() -> None:
         try:
-            status, response = _post_api(
-                base_url,
-                "/serve",
-                {
+            # `/serve` long-polls, but it may hand back an early empty page
+            # (with a continuation token and state `running`) before any events
+            # or a terminal state. Keep polling until we either observe events
+            # or the pipeline terminates (`next_continuation_token` is null),
+            # so `done` is set only when the stream has genuinely ended. This
+            # avoids a race where an early empty page looks like the serve
+            # request returned before the pipeline was stopped.
+            token: str | None = None
+            while True:
+                payload: dict[str, Any] = {
                     "serve_id": serve_id,
                     "timeout": "10s",
                     "min_events": 1,
                     "max_events": 1,
                     "schema": "never",
-                },
-            )
-            results.append(_ServeResult(status, response))
+                }
+                if token is not None:
+                    payload["continuation_token"] = token
+                status, response = _post_api(base_url, "/serve", payload)
+                if status != 200 or not isinstance(response, dict):
+                    results.append(_ServeResult(status, response))
+                    return
+                events = response.get("events") or []
+                token = response.get("next_continuation_token")
+                state = response.get("state")
+                if events or token is None or state != "running":
+                    results.append(_ServeResult(status, response))
+                    return
+                # Guard against a tight loop if the endpoint returns empty
+                # pages without honoring the long-poll timeout.
+                time.sleep(0.05)
         except BaseException as exc:  # pragma: no cover - surfaced below
             errors.append(exc)
         finally:
@@ -525,6 +544,70 @@ def _check_full_buffer_stop_terminates_serve(base_url: str) -> None:
             _delete_pipeline(base_url, created_id)
 
 
+def _check_force_stop_terminates_pipeline(base_url: str) -> None:
+    # A `force-stop` skips the graceful drain and terminates a running pipeline
+    # immediately. Here we launch a continuously-running pipeline and assert it
+    # stops after a force-stop request.
+    created_id = ""
+    try:
+        status, body = _post_api(
+            base_url,
+            "/pipeline/launch",
+            {
+                "definition": ("//neo\nfrom {x: 1}\nrepeat\n"),
+                "name": "neo-force-stop",
+                "hidden": True,
+                "serve_id": "neo-force-stop",
+                "ttl": "60s",
+                "autostart": {"created": True},
+            },
+        )
+        assert status == 200, body
+        created_id = str(body.get("id", ""))
+        assert created_id, body
+        _wait_for_pipeline_state(base_url, created_id, "running")
+        status, body = _post_api(
+            base_url,
+            "/pipeline/update",
+            {"id": created_id, "action": "force-stop"},
+        )
+        assert status == 200, body
+        _wait_for_pipeline_stopped_or_deleted(base_url, created_id, timeout=10)
+        print("force-stop-terminates-pipeline: ok")
+    finally:
+        if created_id:
+            _delete_pipeline(base_url, created_id)
+
+
+def _check_invalid_action_rejected(base_url: str) -> None:
+    # Unknown actions must still be rejected so that clients get clear feedback.
+    created_id = ""
+    try:
+        status, body = _post_api(
+            base_url,
+            "/pipeline/create",
+            {
+                "definition": "from {x: 1} | discard",
+                "name": "invalid-action",
+            },
+        )
+        assert status == 200, body
+        created_id = str(body.get("id", ""))
+        assert created_id, body
+        status, body = _post_api(
+            base_url,
+            "/pipeline/update",
+            {"id": created_id, "action": "stahp"},
+        )
+        # The web layer surfaces the pipeline manager's rejection as an error
+        # body rather than a distinct HTTP status.
+        assert body.get("error"), {"status": status, "body": body}
+        print("invalid-action-rejected: ok")
+    finally:
+        if created_id:
+            _delete_pipeline(base_url, created_id)
+
+
 def main() -> None:
     with _running_web_server() as base_url:
         _check_launch_compile_diagnostics(base_url)
@@ -533,6 +616,8 @@ def main() -> None:
         _check_every_stop_terminates_serve(base_url)
         _check_hidden_diagnostics_stop_terminates_serve(base_url)
         _check_full_buffer_stop_terminates_serve(base_url)
+        _check_force_stop_terminates_pipeline(base_url)
+        _check_invalid_action_rejected(base_url)
 
 
 if __name__ == "__main__":
