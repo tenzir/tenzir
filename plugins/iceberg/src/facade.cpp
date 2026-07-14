@@ -8,6 +8,8 @@
 
 #include "tenzir/plugins/iceberg/facade.hpp"
 
+#include "tenzir/plugins/iceberg/detail/file_io.hpp"
+
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
@@ -919,18 +921,21 @@ auto Catalog::open(CatalogConfig config) -> Result<Catalog> {
     .Set(ice::rest::RestCatalogProperties::kWarehouse, config.warehouse);
   // Explicit S3 settings win so that S3-compatible access to non-S3 stores
   // (e.g. GCS interop with HMAC keys) keeps working; without them, Google
-  // authentication implies the native GCS data plane.
-  const auto uses_s3 = std::ranges::any_of(config.properties, [](auto& entry) {
-    return entry.first.starts_with("s3.");
-  });
-  auto io_impl = std::string_view{ice::FileIORegistry::kArrowLocalFileIO};
-  if (uses_s3) {
-    io_impl = s3_file_io;
-  } else if (config.gcp_auth) {
-    io_impl = gcs_file_io;
+  // authentication implies the native GCS data plane. Otherwise, leave
+  // `io-impl` unset so iceberg-cpp detects it from the final warehouse after
+  // merging the REST server configuration.
+  switch (file_io::select_file_io(config)) {
+    case file_io::FileIO::automatic:
+      break;
+    case file_io::FileIO::s3:
+      properties.Set(ice::rest::RestCatalogProperties::kIOImpl,
+                     std::string{s3_file_io});
+      break;
+    case file_io::FileIO::gcs:
+      properties.Set(ice::rest::RestCatalogProperties::kIOImpl,
+                     std::string{gcs_file_io});
+      break;
   }
-  properties.Set(ice::rest::RestCatalogProperties::kIOImpl,
-                 std::string{io_impl});
   for (const auto& [key, value] : config.properties) {
     properties.mutable_configs()[key] = value;
   }

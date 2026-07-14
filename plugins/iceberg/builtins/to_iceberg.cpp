@@ -365,6 +365,7 @@ public:
       co_return;
     }
     config.warehouse = std::move(warehouse);
+    config.use_s3_file_io = auth->credentials.has_value();
     if (not token.empty()) {
       config.properties["rest.auth.type"] = "oauth2";
       config.properties["token"] = std::move(token);
@@ -386,7 +387,7 @@ public:
         config.properties["s3.session-token"] = creds.session_token;
       }
       if (not creds.region.empty()) {
-        config.properties["s3.region"] = creds.region;
+        config.properties["client.region"] = creds.region;
       }
     }
     if (not s3_endpoint.empty()) {

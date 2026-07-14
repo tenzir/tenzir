@@ -100,6 +100,9 @@ struct CatalogConfig {
   std::string name = "tenzir";
   /// Additional catalog and FileIO properties (auth, "s3.endpoint", ...).
   std::unordered_map<std::string, std::string> properties;
+  /// Select S3 FileIO even when AWS credentials do not materialize as
+  /// `s3.*` properties, for example for profiles and assumed roles.
+  bool use_s3_file_io = false;
   /// Authenticate catalog requests with Google OAuth2 bearer tokens, minted
   /// from `gcp_credentials_json` or from Application Default Credentials
   /// when empty. Tokens refresh automatically before they expire. Unless
