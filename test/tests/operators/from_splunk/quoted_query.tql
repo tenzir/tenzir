@@ -1,0 +1,15 @@
+---
+fixtures:
+  - http_server:
+      expected:
+        - method: POST
+          path: /services/search/v2/jobs/export
+          body: search=search%20index%3Dmain%20user%3D%22Jane%20Doe%22%20%7C%20eval%20label%3D%22login%20event%22&earliest_time=-15m&latest_time=-5m&output_mode=json&preview=false
+---
+
+from_splunk env("HTTP_FIXTURE_URL"),
+  search=r#"search index=main user="Jane Doe" | eval label="login event""#,
+  earliest="-15m",
+  latest="-5m",
+  headers={Authorization: "Splunk test-token"},
+  tls=false

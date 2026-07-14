@@ -20,8 +20,10 @@
 #include "tenzir/try.hpp"
 
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace tenzir::plugins::from_splunk {
 
@@ -29,9 +31,9 @@ namespace {
 
 struct Args {
   located<std::string> url;
-  located<std::string> search;
-  located<std::string> earliest;
-  located<std::string> latest;
+  ast::expression search;
+  ast::expression earliest;
+  ast::expression latest;
   located<data> headers;
   Option<located<data>> tls;
   Option<located<duration>> timeout;
@@ -69,6 +71,21 @@ auto append_named_arg(ast::invocation& inv, std::string name, data value,
     std::move(name), make_constant(std::move(value), source), source));
 }
 
+auto check_non_empty_literal(std::string_view name,
+                             ast::expression const& expression,
+                             diagnostic_handler& dh) -> failure_or<void> {
+  auto const* constant = try_as<ast::constant>(expression);
+  if (not constant) {
+    return {};
+  }
+  auto const* value = try_as<std::string>(constant->value);
+  if (not value) {
+    return {};
+  }
+  return check_non_empty(
+    name, located<std::string>{*value, expression.get_location()}, dh);
+}
+
 template <class T>
 auto append_optional_named_arg(ast::invocation& inv, std::string name,
                                Option<located<T>> value) -> void {
@@ -94,9 +111,9 @@ public:
     auto session = provider.as_session();
     TRY(argument_parser2::operator_(name())
           .positional("url", args.url)
-          .named("search", args.search)
-          .named("earliest", args.earliest)
-          .named("latest", args.latest)
+          .named("search", args.search, "string")
+          .named("earliest", args.earliest, "string|time")
+          .named("latest", args.latest, "string|time")
           .named("headers", args.headers, "record")
           .named("tls", args.tls)
           .named("timeout", args.timeout)
@@ -107,9 +124,12 @@ public:
                                              std::move(inv.args)},
                  session));
     TRY(check_non_empty("url", args.url, ctx));
-    TRY(check_non_empty("search", args.search, ctx));
-    TRY(check_non_empty("earliest", args.earliest, ctx));
-    TRY(check_non_empty("latest", args.latest, ctx));
+    auto const search_source = args.search.get_location();
+    auto const earliest_source = args.earliest.get_location();
+    auto const latest_source = args.latest.get_location();
+    TRY(check_non_empty_literal("search", args.search, ctx));
+    TRY(check_non_empty_literal("earliest", args.earliest, ctx));
+    TRY(check_non_empty_literal("latest", args.latest, ctx));
     auto& headers = as<record>(args.headers.inner);
     auto has_authorization = false;
     for (auto const& [name, _] : headers) {
@@ -137,14 +157,23 @@ public:
       make_constant(data{std::move(endpoint)}, args.url.source));
     append_named_arg(replacement, "method", data{std::string{"post"}},
                      args.url.source);
-    auto body = record{};
-    body.emplace("search", std::move(args.search.inner));
-    body.emplace("earliest_time", std::move(args.earliest.inner));
-    body.emplace("latest_time", std::move(args.latest.inner));
-    body.emplace("output_mode", std::string{"json"});
-    body.emplace("preview", std::string{"false"});
-    append_named_arg(replacement, "body", data{std::move(body)},
-                     args.search.source);
+    auto body = std::vector<ast::record::item>{};
+    body.emplace_back(ast::record::field{
+      ast::identifier{"search", search_source}, std::move(args.search)});
+    body.emplace_back(
+      ast::record::field{ast::identifier{"earliest_time", earliest_source},
+                         std::move(args.earliest)});
+    body.emplace_back(ast::record::field{
+      ast::identifier{"latest_time", latest_source}, std::move(args.latest)});
+    body.emplace_back(ast::record::field{
+      ast::identifier{"output_mode", search_source},
+      make_constant(data{std::string{"json"}}, search_source)});
+    body.emplace_back(ast::record::field{
+      ast::identifier{"preview", search_source},
+      make_constant(data{std::string{"false"}}, search_source)});
+    replacement.args.push_back(make_named_arg(
+      "body", ast::record{search_source, std::move(body), search_source},
+      search_source));
     append_named_arg(replacement, "headers", std::move(args.headers.inner),
                      args.headers.source);
     append_optional_named_arg(replacement, "tls", std::move(args.tls));
@@ -156,13 +185,13 @@ public:
     append_optional_named_arg(replacement, "retry_delay",
                               std::move(args.retry_delay));
     append_named_arg(replacement, "encode", data{std::string{"form"}},
-                     args.search.source);
+                     search_source);
     TRY(auto parser, parse_pipeline_with_location_override(
                        "read_json | where result? != null | this = result",
-                       args.search.source, session));
+                       search_source, session));
     TRY(resolve_entities(parser, session));
-    replacement.args.emplace_back(ast::pipeline_expr{
-      args.search.source, std::move(parser), args.search.source});
+    replacement.args.emplace_back(
+      ast::pipeline_expr{search_source, std::move(parser), search_source});
     return from_http->compile(std::move(replacement), ctx);
   }
 };
