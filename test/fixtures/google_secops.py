@@ -17,7 +17,12 @@ from urllib.parse import parse_qs
 from tenzir_test import fixture
 
 _HOST = "127.0.0.1"
-_EXPECTED_TOKEN = "test-token-12345"
+_CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
+_INGESTION_SCOPE = "https://www.googleapis.com/auth/malachite-ingestion"
+_TOKENS_BY_SCOPE = {
+    _CLOUD_PLATFORM_SCOPE: "test-import-token-12345",
+    _INGESTION_SCOPE: "test-ingestion-token-12345",
+}
 _PRIVATE_KEY = """-----BEGIN PRIVATE KEY-----
 MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCltiF2oP3KJJ+S
 tTc1McylY+TuAi3AdohX7mmqIjd8a3eBYDHs7FlnUrFC4CRijCr0rUqYfg2pmk4a
@@ -104,7 +109,12 @@ def _make_ingestion_handler(
                 self._handle_token()
                 return
             auth = self.headers.get("Authorization", "")
-            if auth != f"Bearer {_EXPECTED_TOKEN}":
+            expected_token = (
+                _TOKENS_BY_SCOPE[_INGESTION_SCOPE]
+                if self.path == _INGESTION_PATH
+                else _TOKENS_BY_SCOPE[_CLOUD_PLATFORM_SCOPE]
+            )
+            if auth != f"Bearer {expected_token}":
                 self._json_response(401, {"error": "unauthorized"})
                 return
             content_length = int(self.headers.get("Content-Length", 0))
@@ -161,6 +171,10 @@ def _make_ingestion_handler(
                 "issuer": claims.get("iss"),
                 "scope": claims.get("scope"),
             }
+            access_token = _TOKENS_BY_SCOPE.get(capture["scope"])
+            if access_token is None:
+                self._json_response(400, {"error": "unexpected scope"})
+                return
             with lock:
                 with open(token_capture_path, "a") as f:
                     f.write(json.dumps(capture, sort_keys=True) + "\n")
@@ -168,7 +182,7 @@ def _make_ingestion_handler(
                 200,
                 {
                     "token_type": "Bearer",
-                    "access_token": _EXPECTED_TOKEN,
+                    "access_token": access_token,
                     "expires_in": 3600,
                 },
             )
