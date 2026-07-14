@@ -60,6 +60,7 @@
 #include <mutex>
 #include <set>
 #include <system_error>
+#include <unordered_set>
 #include <variant>
 
 namespace tenzir::plugins::iceberg {
@@ -1379,8 +1380,8 @@ auto Table::split_by_partition(std::shared_ptr<arrow::StructArray> batch)
   return groups;
 }
 
-auto Table::new_file_writer(const PartitionTuple& partition)
-  -> Result<FileWriter> {
+auto Table::new_file_writer(const PartitionTuple& partition,
+                            std::vector<bool>& omit) -> Result<FileWriter> {
   auto schema = impl_->table->schema();
   if (not schema.has_value()) {
     return std::unexpected{translate_error(schema.error())};
@@ -1388,6 +1389,32 @@ auto Table::new_file_writer(const PartitionTuple& partition)
   auto spec = impl_->table->spec();
   if (not spec.has_value()) {
     return std::unexpected{translate_error(spec.error())};
+  }
+  auto file_schema = *schema;
+  if (std::ranges::contains(omit, true)) {
+    const auto fields = (*schema)->fields();
+    TENZIR_ASSERT(omit.size() == fields.size());
+    auto sources = std::unordered_set<int32_t>{};
+    for (const auto& field : (*spec)->fields()) {
+      sources.insert(field.source_id());
+    }
+    auto kept = std::vector<ice::SchemaField>{};
+    kept.reserve(fields.size());
+    for (auto i = size_t{0}; i < fields.size(); ++i) {
+      if (omit[i] and fields[i].optional()
+          and not sources.contains(fields[i].field_id())) {
+        continue;
+      }
+      omit[i] = false;
+      kept.push_back(fields[i]);
+    }
+    if (kept.empty()) {
+      // A Parquet file cannot have zero columns; keep the full schema.
+      std::ranges::fill(omit, false);
+    } else if (std::ranges::contains(omit, true)) {
+      file_schema = std::make_shared<ice::Schema>(std::move(kept),
+                                                  (*schema)->schema_id());
+    }
   }
   auto location_provider = impl_->table->location_provider();
   if (not location_provider.has_value()) {
@@ -1423,7 +1450,7 @@ auto Table::new_file_writer(const PartitionTuple& partition)
   }
   auto writer = ice::DataWriter::Make(ice::DataWriterOptions{
     .path = std::move(path),
-    .schema = std::move(*schema),
+    .schema = std::move(file_schema),
     .spec = std::move(*spec),
     .partition = std::move(values),
     .format = ice::FileFormatType::kParquet,

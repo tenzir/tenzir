@@ -372,8 +372,17 @@ public:
     -> Result<std::vector<PartitionGroup>>;
 
   /// Opens a writer for a new data file of the given partition in the
-  /// table's data location.
-  auto new_file_writer(const PartitionTuple& partition) -> Result<FileWriter>;
+  /// table's data location. `omit` flags top-level columns (by position in
+  /// the table schema) that hold only nulls in every batch the caller will
+  /// write; the data file leaves them out entirely, and readers restore
+  /// them as nulls through the same field-id projection that serves files
+  /// written before a schema evolution. Columns that must stay in the file
+  /// (required fields, partition-spec sources) are cleared from `omit`, so
+  /// on return it flags exactly the columns the caller must drop from
+  /// every batch fed to the writer. An empty `omit` writes the full
+  /// schema.
+  auto new_file_writer(const PartitionTuple& partition, std::vector<bool>& omit)
+    -> Result<FileWriter>;
 
   /// Commits the given data files as one new snapshot (FastAppend) tagged
   /// with the commit tag, and returns the refreshed table. Callers must

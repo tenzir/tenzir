@@ -32,9 +32,12 @@
 #include <arrow/util/byte_size.h>
 #include <folly/coro/UnboundedQueue.h>
 
+#include <algorithm>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace tenzir::plugins::iceberg {
@@ -284,6 +287,10 @@ public:
     int64_t buffered_bytes = 0;
     /// The streaming writer, once the partition graduates.
     Option<FileWriter> writer;
+    /// Top-level columns the open data file omits because every row seen
+    /// at graduation held null; empty while buffering or when the file
+    /// carries the full table schema.
+    std::vector<bool> omitted;
     /// The partition tuple, for opening the data file at graduation or
     /// close.
     PartitionTuple partition;
@@ -518,10 +525,10 @@ public:
     if (not batch) {
       co_return;
     }
-    auto groups = co_await spawn_blocking(
-      [table = *table_, batch = *batch]() mutable {
-        return table.split_by_partition(std::move(batch));
-      });
+    auto groups
+      = co_await spawn_blocking([table = *table_, batch = *batch]() mutable {
+          return table.split_by_partition(std::move(batch));
+        });
     if (not groups) {
       fail(groups.error(), "failed to compute partition values", ctx);
       co_return;
@@ -984,6 +991,70 @@ private:
     return result.MoveValueUnsafe();
   }
 
+  /// Flags the top-level columns that hold only nulls in every given
+  /// batch. Wide tables make this worthwhile: Parquet encodes
+  /// definition levels for every column of every row group, so a table
+  /// column the input never uses still costs per-row work — omitting it
+  /// from the data file removes that cost, and readers restore it as
+  /// nulls through the same field-id projection that serves files written
+  /// before a schema evolution.
+  static auto
+  all_null_columns(std::span<const std::shared_ptr<arrow::Array>> pieces)
+    -> std::vector<bool> {
+    auto mask = std::vector<bool>{};
+    for (const auto& piece : pieces) {
+      const auto& array = static_cast<const arrow::StructArray&>(*piece);
+      const auto fields = detail::narrow_cast<size_t>(array.num_fields());
+      mask.resize(fields, true);
+      for (auto i = size_t{0}; i < fields; ++i) {
+        if (not mask[i]) {
+          continue;
+        }
+        const auto& child = *array.field(detail::narrow_cast<int>(i));
+        mask[i] = child.null_count() == child.length();
+      }
+    }
+    return mask;
+  }
+
+  /// Whether a projected batch holds only nulls in every column the open
+  /// data file omits.
+  static auto
+  covered(const std::vector<bool>& omitted, const arrow::Array& batch) -> bool {
+    const auto& array = static_cast<const arrow::StructArray&>(batch);
+    for (auto i = size_t{0}; i < omitted.size(); ++i) {
+      if (not omitted[i]) {
+        continue;
+      }
+      const auto& child = *array.field(detail::narrow_cast<int>(i));
+      if (child.null_count() != child.length()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// Drops the omitted columns from a projected batch, matching it to the
+  /// data file's pruned schema.
+  static auto drop_omitted(const std::shared_ptr<arrow::Array>& piece,
+                           const std::vector<bool>& omitted)
+    -> std::shared_ptr<arrow::Array> {
+    if (not std::ranges::contains(omitted, true)) {
+      return piece;
+    }
+    const auto& array = static_cast<const arrow::StructArray&>(*piece);
+    auto children = arrow::ArrayVector{};
+    auto fields = arrow::FieldVector{};
+    for (auto i = 0; i < array.num_fields(); ++i) {
+      if (omitted[detail::narrow_cast<size_t>(i)]) {
+        continue;
+      }
+      children.push_back(array.field(i));
+      fields.push_back(array.struct_type()->field(i));
+    }
+    return check(arrow::StructArray::Make(children, fields));
+  }
+
   /// Buffers one partition group of a projected batch, graduating the
   /// partition to a streaming writer at `stream_threshold`. Rotates and
   /// commits when the open file reaches `max_size`, and closes the largest
@@ -1008,6 +1079,22 @@ private:
       sub = taken->make_array();
     }
     auto it = partitions_.find(group.key);
+    if (it != partitions_.end() and it->second.writer
+        and not covered(it->second.omitted, *sub)) {
+      // The open data file omits columns this batch has values for; close
+      // it so that the next file's schema covers them again.
+      co_await close_partition(group.key, ctx);
+      if (done_) {
+        co_return;
+      }
+      if (not checkpointing_) {
+        co_await commit_staged(pending_files_, ctx);
+        if (done_) {
+          co_return;
+        }
+      }
+      it = partitions_.find(group.key);
+    }
     if (it == partitions_.end()) {
       it = partitions_
              .try_emplace(group.key,
@@ -1015,6 +1102,7 @@ private:
                             .buffered = {},
                             .buffered_bytes = 0,
                             .writer = {},
+                            .omitted = {},
                             .partition = group.partition,
                             .path = group.path,
                             .bytes = 0,
@@ -1072,11 +1160,12 @@ private:
                    std::vector<std::shared_ptr<arrow::Array>> pieces,
                    OpCtx& ctx) -> Task<void> {
     auto written = co_await spawn_blocking(
-      [writer = *partition.writer,
+      [writer = *partition.writer, omitted = partition.omitted,
        pieces = std::move(pieces)]() mutable -> Result<int64_t> {
         for (const auto& piece : pieces) {
           auto c_array = ArrowArray{};
-          if (auto status = arrow::ExportArray(*piece, &c_array);
+          if (auto status
+              = arrow::ExportArray(*drop_omitted(piece, omitted), &c_array);
               not status.ok()) {
             return std::unexpected{Error{
               Error::Kind::permanent,
@@ -1126,18 +1215,25 @@ private:
         co_return;
       }
     }
-    auto writer = co_await spawn_blocking(
-      [table = *table_, partition = partition.partition]() mutable {
-        return table.new_file_writer(partition);
+    auto opened = co_await spawn_blocking(
+      [table = *table_, partition = partition.partition,
+       omitted = all_null_columns(partition.buffered)]() mutable
+        -> Result<std::pair<FileWriter, std::vector<bool>>> {
+        auto writer = table.new_file_writer(partition, omitted);
+        if (not writer) {
+          return std::unexpected{writer.error()};
+        }
+        return std::pair{std::move(*writer), std::move(omitted)};
       });
-    if (not writer) {
-      fail(writer.error(), "failed to open data file writer", ctx);
+    if (not opened) {
+      fail(opened.error(), "failed to open data file writer", ctx);
       co_return;
     }
     TENZIR_DEBUG("to_iceberg: partition graduates to a streaming writer at {} "
                  "buffered bytes",
                  partition.buffered_bytes);
-    partition.writer = std::move(*writer);
+    partition.writer = std::move(opened->first);
+    partition.omitted = std::move(opened->second);
     streaming_count_ += 1;
     total_buffered_ -= partition.buffered_bytes;
     partition.buffered_bytes = 0;
@@ -1211,13 +1307,15 @@ private:
       closed = co_await spawn_blocking(
         [table = *table_, tuple = partition.partition,
          pieces = std::move(partition.buffered)]() mutable -> Result<DataFile> {
-          auto writer = table.new_file_writer(tuple);
+          auto omitted = all_null_columns(pieces);
+          auto writer = table.new_file_writer(tuple, omitted);
           if (not writer) {
             return std::unexpected{writer.error()};
           }
           for (const auto& piece : pieces) {
             auto c_array = ArrowArray{};
-            if (auto status = arrow::ExportArray(*piece, &c_array);
+            if (auto status
+                = arrow::ExportArray(*drop_omitted(piece, omitted), &c_array);
                 not status.ok()) {
               return std::unexpected{Error{
                 Error::Kind::permanent,

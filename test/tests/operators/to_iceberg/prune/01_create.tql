@@ -1,0 +1,4 @@
+// Create a table whose schema is the union of two event shapes.
+from {id: 0, kind: "a", payload_a: "seed-a", ts: 2026-01-01T00:00:00Z},
+  {id: 1, kind: "b", payload_b: "seed-b", ts: 2026-01-01T00:00:01Z}
+to_iceberg "prunens.events", catalog=env("ICEBERG_REST_URI")
