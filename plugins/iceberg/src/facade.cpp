@@ -55,10 +55,12 @@
 #include <iceberg/update/update_schema.h>
 
 #include <algorithm>
+#include <concepts>
 #include <filesystem>
 #include <mutex>
 #include <set>
 #include <system_error>
+#include <variant>
 
 namespace tenzir::plugins::iceberg {
 
@@ -1250,6 +1252,48 @@ auto Table::check_partition_spec(std::span<const PartitionField> fields)
   return {};
 }
 
+namespace {
+
+/// Appends one transformed partition value to the in-memory grouping key.
+/// The encoding tags the value's variant alternative and length-prefixes
+/// variable-sized payloads, so values cannot collide across field
+/// boundaries. This runs once per row; `Transform::ToHumanString` renders
+/// dates through std::chrono formatting and is orders of magnitude too slow
+/// here. Returns false for exotic value types so the caller can fall back to
+/// the human-readable rendering.
+auto append_partition_key(const ice::Literal& literal, std::string& key)
+  -> bool {
+  return std::visit(
+    [&]<typename T>(const T& value) {
+      key += "|v";
+      key += static_cast<char>('0' + literal.value().index());
+      if constexpr (std::same_as<T, std::monostate>) {
+        return true;
+      } else if constexpr (std::same_as<T, bool>) {
+        key += value ? '1' : '0';
+        return true;
+      } else if constexpr (std::same_as<T, int32_t> or std::same_as<T, int64_t>
+                           or std::same_as<T, float>
+                           or std::same_as<T, double>) {
+        key.append(reinterpret_cast<const char*>(&value), sizeof value);
+        return true;
+      } else if constexpr (std::same_as<T, std::string>) {
+        fmt::format_to(std::back_inserter(key), "{}:", value.size());
+        key += value;
+        return true;
+      } else if constexpr (std::same_as<T, std::vector<uint8_t>>) {
+        fmt::format_to(std::back_inserter(key), "{}:", value.size());
+        key.append(reinterpret_cast<const char*>(value.data()), value.size());
+        return true;
+      } else {
+        return false;
+      }
+    },
+    literal.value());
+}
+
+} // namespace
+
 auto Table::split_by_partition(ArrowArray* batch)
   -> Result<std::vector<PartitionGroup>> {
   auto bound = impl_->ensure_partitioning();
@@ -1320,12 +1364,12 @@ auto Table::split_by_partition(ArrowArray* batch)
       // boundaries.
       if (transformed->IsNull()) {
         key += "|n";
-      } else {
+      } else if (not append_partition_key(*transformed, key)) {
         auto human = field.transform->ToHumanString(*transformed);
         if (not human.has_value()) {
           return std::unexpected{translate_error(human.error())};
         }
-        key += fmt::format("|v{}:{}", human->size(), *human);
+        key += fmt::format("|h{}:{}", human->size(), *human);
       }
       values.push_back(std::move(*transformed));
     }
