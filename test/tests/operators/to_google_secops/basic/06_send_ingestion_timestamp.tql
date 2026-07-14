@@ -1,0 +1,12 @@
+from {text: "use explicit timestamp", type: "CUSTOM_JSON"}
+to_google_secops api="ingestion",
+                 log_text=text,
+                 log_type=type,
+                 namespace="explicit-ns",
+                 log_entry_time=2026-01-01T00:00:00.123456,
+                 private_key=env("GOOGLE_SECOPS_PRIVATE_KEY"),
+                 client_email=env("GOOGLE_SECOPS_CLIENT_EMAIL"),
+                 customer_id=env("GOOGLE_SECOPS_CUSTOMER_ID"),
+                 _token_url=env("GOOGLE_SECOPS_TOKEN_URL"),
+                 _ingestion_url=env("GOOGLE_SECOPS_INGESTION_URL"),
+                 batch_timeout=1s

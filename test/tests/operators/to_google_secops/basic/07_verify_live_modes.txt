@@ -1,3 +1,5 @@
 udm_live: true
 entity_live: true
+raw_ingestion_live: true
+optional_log_entry_time: true
 oauth_token_exchange: true
