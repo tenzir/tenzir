@@ -1,0 +1,10 @@
+parked-events: [1, 2, 3, 4]
+parked-final-state: completed
+multi-live-events: [5, 6, 7, 8]
+multi-ghost-events: []
+multi-ghost-state: running
+multi-ghost-token-is-initial: True
+multi-returned-before-timeout: True
+never-waited-for-timeout: True
+never-mentions-unknown-id: True
+never-has-events: False
