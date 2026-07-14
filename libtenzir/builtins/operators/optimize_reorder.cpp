@@ -48,8 +48,7 @@ public:
 
   auto optimize(ir::optimize_filter filter,
                 event_order /*order*/) && -> ir::optimize_result override {
-    // Relax the upstream ordering requirement and forward the filters
-    // unchanged.
+    // Relax the upstream ordering requirement and forward the filters unchanged
     return {
       std::move(filter),
       event_order::unordered,

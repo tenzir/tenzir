@@ -1,4 +1,0 @@
-// optimize_reorder is IR-only and removes itself before spawning, so executing
-// it passes data through unchanged.
-from {x: 1}, {x: 2}, {x: 3}
-optimize_reorder

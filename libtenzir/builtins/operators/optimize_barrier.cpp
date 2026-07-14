@@ -48,7 +48,7 @@ public:
 
   auto optimize(ir::optimize_filter filter,
                 event_order /*order*/) && -> ir::optimize_result override {
-    // Pin the filters and request the strictest ordering from upstream.
+    // Pin the filters and request the strictest ordering from upstream
     auto replacement = std::vector<Box<ir::Operator>>{};
     for (auto& expr : filter) {
       replacement.push_back(make_where_ir(std::move(expr)));

@@ -147,9 +147,6 @@ struct pipeline {
   auto substitute(substitute_ctx ctx, bool instantiate) -> failure_or<void>;
 
   /// @see Operator
-  auto spawn(element_type_tag input) && -> std::vector<AnyOperator>;
-
-  /// @see Operator
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<element_type_tag>;
 
