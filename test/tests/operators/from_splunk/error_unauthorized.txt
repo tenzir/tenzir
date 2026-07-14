@@ -1,6 +1,7 @@
-error: received HTTP error status 401
- --> tests/operators/from_splunk/error_unauthorized.tql:6:13
+error: Splunk rejected the search: ERROR: Unauthorized
+ --> tests/operators/from_splunk/error_unauthorized.tql:7:10
   |
-6 | from_splunk env("HTTP_FIXTURE_SPLUNK_UNAUTHORIZED_URL"),
-  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+7 |   search="fixture",
+  |          ^^^^^^^^^ 
   |
+  = note: search: fixture

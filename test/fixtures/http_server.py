@@ -68,6 +68,8 @@ _STATUS_401 = "/status/unauthorized"
 _STATUS_403 = "/status/forbidden"
 _SPLUNK_EXPORT = "/services/search/v2/jobs/export"
 _SPLUNK_EMPTY = "/splunk/empty"
+_SPLUNK_ERROR_MESSAGE = "/splunk/error-message"
+_SPLUNK_FATAL_MESSAGE = "/splunk/fatal-message"
 _SPLUNK_MALFORMED = "/splunk/malformed"
 _SPLUNK_MISSING_RESULT = "/splunk/missing-result"
 _SPLUNK_RETRY_429 = "/splunk/retry-429"
@@ -76,6 +78,7 @@ _SPLUNK_SPLIT = "/splunk/split"
 _SPLUNK_STREAM = "/splunk/stream"
 _SPLUNK_TIMEOUT = "/splunk/timeout"
 _SPLUNK_UNAUTHORIZED = "/splunk/unauthorized"
+_SPLUNK_WARNING_MESSAGE = "/splunk/warning-message"
 
 _SPLUNK_RESULTS = (
     b'{"preview":false,"offset":0,"result":{"_time":"2026-07-14 '
@@ -337,6 +340,19 @@ def _make_handler(
             if path == _SPLUNK_EMPTY + _SPLUNK_EXPORT:
                 self._reply(b"")
                 return
+            if path == _SPLUNK_ERROR_MESSAGE + _SPLUNK_EXPORT:
+                self._reply(
+                    b'{"preview":false,"messages":[{"type":"ERROR",'
+                    b'"text":"The lookup table does not exist."}],'
+                    b'"lastrow":true}\n'
+                )
+                return
+            if path == _SPLUNK_FATAL_MESSAGE + _SPLUNK_EXPORT:
+                self._reply(
+                    b'{"messages":[{"type":"FATAL",'
+                    b'"text":"The search could not be parsed."}]}\n'
+                )
+                return
             if path == _SPLUNK_MALFORMED + _SPLUNK_EXPORT:
                 self._reply(b'{"result":{"broken":true}\n')
                 return
@@ -346,6 +362,13 @@ def _make_handler(
             if path == _SPLUNK_TIMEOUT + _SPLUNK_EXPORT:
                 time.sleep(0.25)
                 self._reply(_SPLUNK_RESULTS)
+                return
+            if path == _SPLUNK_WARNING_MESSAGE + _SPLUNK_EXPORT:
+                self._reply(
+                    b'{"preview":false,"messages":[{"type":"WARN",'
+                    b'"text":"Some search peers did not return results."}]}\n'
+                    + _SPLUNK_RESULTS
+                )
                 return
             if path == _SPLUNK_RETRY_429 + _SPLUNK_EXPORT:
                 retry_429_after_attempts[0] += 1
@@ -559,6 +582,12 @@ def run() -> Iterator[dict[str, str]]:
             "HTTP_FIXTURE_GZIP_EMPTY_URL": f"{base_url}{_GZIP_EMPTY}",
             "HTTP_FIXTURE_GZIP_JSON_URL": f"{base_url}{_GZIP_JSON}",
             "HTTP_FIXTURE_SPLUNK_EMPTY_URL": f"{base_url}{_SPLUNK_EMPTY}",
+            "HTTP_FIXTURE_SPLUNK_ERROR_MESSAGE_URL": (
+                f"{base_url}{_SPLUNK_ERROR_MESSAGE}"
+            ),
+            "HTTP_FIXTURE_SPLUNK_FATAL_MESSAGE_URL": (
+                f"{base_url}{_SPLUNK_FATAL_MESSAGE}"
+            ),
             "HTTP_FIXTURE_SPLUNK_MALFORMED_URL": f"{base_url}{_SPLUNK_MALFORMED}",
             "HTTP_FIXTURE_SPLUNK_MISSING_RESULT_URL": f"{base_url}{_SPLUNK_MISSING_RESULT}",
             "HTTP_FIXTURE_SPLUNK_RETRY_429_URL": f"{base_url}{_SPLUNK_RETRY_429}",
@@ -567,6 +596,9 @@ def run() -> Iterator[dict[str, str]]:
             "HTTP_FIXTURE_SPLUNK_STREAM_URL": f"{base_url}{_SPLUNK_STREAM}",
             "HTTP_FIXTURE_SPLUNK_TIMEOUT_URL": f"{base_url}{_SPLUNK_TIMEOUT}",
             "HTTP_FIXTURE_SPLUNK_UNAUTHORIZED_URL": f"{base_url}{_SPLUNK_UNAUTHORIZED}",
+            "HTTP_FIXTURE_SPLUNK_WARNING_MESSAGE_URL": (
+                f"{base_url}{_SPLUNK_WARNING_MESSAGE}"
+            ),
         }
         if opts.proxy:
             env.update(
