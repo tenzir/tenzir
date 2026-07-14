@@ -1,0 +1,9 @@
+from_splunk env("SPLUNK_MGMT_URL"),
+  search="| makeresults count=2 | streamstats count | eval message=\"result-\" . count | fields message count",
+  earliest="-1h",
+  latest="now",
+  headers={
+    Authorization: secret(env("SPLUNK_AUTHORIZATION"), _literal=true),
+  },
+  tls={skip_peer_verification: true}
+select message, count

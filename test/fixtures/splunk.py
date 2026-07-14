@@ -1,6 +1,7 @@
-"""Splunk fixture for to_splunk integration testing.
+"""Splunk fixture for Splunk integration testing.
 
-Provides a Splunk single-node container with HTTP Event Collector enabled.
+Provides a Splunk single-node container with the management API and HTTP Event
+Collector enabled.
 
 Environment variables yielded:
 - SPLUNK_WEB_URL: Splunk Web base URL.
@@ -10,6 +11,7 @@ Environment variables yielded:
 - SPLUNK_MGMT_URL: HTTPS management API base URL.
 - SPLUNK_ADMIN_USER: Management API username.
 - SPLUNK_ADMIN_PASSWORD: Management API password.
+- SPLUNK_AUTHORIZATION: Complete Basic management API authorization value.
 
 Assertions payload accepted under ``assertions.fixtures.splunk``:
 - count: optional number of search results expected.
@@ -55,12 +57,15 @@ from ._utils import find_free_port
 
 logger = logging.getLogger(__name__)
 
-SPLUNK_IMAGE = "docker.io/splunk/splunk:latest"
+SPLUNK_IMAGE = (
+    "docker.io/splunk/splunk"
+    "@sha256:af4f671c9c931bfd80954e7f1baaff8540d1378ae26b098666cf05256bb24311"
+)
 SPLUNK_HEC_TOKEN = "abcd1234"
 SPLUNK_PASSWORD = "tenzir123"
 SPLUNK_USER = "admin"
 SPLUNK_INDEX = "main"
-STARTUP_TIMEOUT = 180
+STARTUP_TIMEOUT = 420
 HEALTH_CHECK_INTERVAL = 2
 ASSERTION_TIMEOUT = 60
 ASSERTION_INTERVAL = 1
@@ -221,8 +226,9 @@ def _run_search(
     *,
     earliest_time: str,
     latest_time: str,
+    endpoint: str = "/services/search/jobs/export",
 ) -> list[dict[str, Any]]:
-    url = f"https://127.0.0.1:{mgmt_port}/services/search/jobs/export"
+    url = f"https://127.0.0.1:{mgmt_port}{endpoint}"
     payload = urllib.parse.urlencode(
         {
             "search": search,
@@ -256,6 +262,22 @@ def _run_search(
         if isinstance(result, dict):
             results.append(result)
     return results
+
+
+def _verify_v2_export(mgmt_port: int) -> None:
+    results = _run_search(
+        mgmt_port,
+        '| makeresults count=2 | streamstats count | eval message="v2-" . count',
+        earliest_time="-1h",
+        latest_time="now",
+        endpoint="/services/search/v2/jobs/export",
+    )
+    messages = [result.get("message") for result in results]
+    if messages != ["v2-1", "v2-2"]:
+        raise RuntimeError(
+            "Splunk v2 export readiness search returned unexpected results: "
+            f"{results!r}"
+        )
 
 
 def _result_text(result: dict[str, Any]) -> str:
@@ -348,6 +370,7 @@ def splunk() -> FixtureHandle:
             defaults_path=defaults_path,
         )
         _wait_for_splunk(web_port, hec_port, mgmt_port)
+        _verify_v2_export(mgmt_port)
     except Exception:
         if container is not None:
             _stop_splunk(container)
@@ -383,6 +406,7 @@ def splunk() -> FixtureHandle:
             "SPLUNK_MGMT_URL": f"https://127.0.0.1:{mgmt_port}",
             "SPLUNK_ADMIN_USER": SPLUNK_USER,
             "SPLUNK_ADMIN_PASSWORD": SPLUNK_PASSWORD,
+            "SPLUNK_AUTHORIZATION": _basic_auth_header(),
         },
         teardown=_teardown,
         hooks={"assert_test": _assert_test},

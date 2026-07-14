@@ -1,0 +1,12 @@
+---
+fixtures:
+  - http_server:
+      tls: true
+---
+
+from_splunk env("HTTP_FIXTURE_URL"),
+  search="fixture",
+  earliest="-15m",
+  latest="-5m",
+  headers={Authorization: "Splunk test-token"},
+  tls={cacert: env("HTTP_FIXTURE_TLS_CAFILE")}

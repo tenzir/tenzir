@@ -1,0 +1,6 @@
+error: HTTP request to `http://splunk-timeout.invalid/splunk/timeout/services/search/v2/jobs/export` failed: proxygen::coro::HTTPError: Read timeout after 25
+ --> tests/operators/from_splunk/error_timeout.tql:8:13
+  |
+8 | from_splunk env("HTTP_FIXTURE_SPLUNK_TIMEOUT_URL"),
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |

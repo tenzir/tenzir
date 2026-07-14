@@ -66,6 +66,26 @@ _RETRY_EXHAUSTED_503 = "/status/retry-exhausted-503"
 _STATUS_400 = "/status/bad-request"
 _STATUS_401 = "/status/unauthorized"
 _STATUS_403 = "/status/forbidden"
+_SPLUNK_EXPORT = "/services/search/v2/jobs/export"
+_SPLUNK_EMPTY = "/splunk/empty"
+_SPLUNK_MALFORMED = "/splunk/malformed"
+_SPLUNK_MISSING_RESULT = "/splunk/missing-result"
+_SPLUNK_RETRY_429 = "/splunk/retry-429"
+_SPLUNK_RETRY_503 = "/splunk/retry-503"
+_SPLUNK_SPLIT = "/splunk/split"
+_SPLUNK_STREAM = "/splunk/stream"
+_SPLUNK_TIMEOUT = "/splunk/timeout"
+_SPLUNK_UNAUTHORIZED = "/splunk/unauthorized"
+
+_SPLUNK_RESULTS = (
+    b'{"preview":false,"offset":0,"result":{"_time":"2026-07-14 '
+    b'14:54:45.000 GMT","_raw":"raw-one","host":"host-a","source":'
+    b'"source-a","sourcetype":"type-a","custom":"one","number":42}}\n'
+    b'{"preview":false,"offset":1,"lastrow":true,"result":{"_time":'
+    b'"2026-07-14 14:54:46.000 GMT","_raw":"raw-two","host":"host-b",'
+    b'"source":"source-b","sourcetype":"type-b","custom":"two",'
+    b'"number":43}}\n'
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -81,6 +101,7 @@ class HttpServerOptions:
         header_value: str = ""
 
     tls: bool = False
+    proxy: bool = False
     expected: list[ExpectedRequest | dict[str, object]] = dataclasses.field(
         default_factory=list
     )
@@ -230,18 +251,36 @@ def _make_handler(
             extra_headers: list[tuple[str, str]] | None = None,
             status: HTTPStatus = HTTPStatus.OK,
         ) -> None:
-            content_type = self.headers.get("Content-Type", "application/json")
-            if not content_type:
-                content_type = "application/json"
-            self.send_response(status)
-            self.send_header("Content-Type", content_type)
-            if extra_headers:
-                for key, value in extra_headers:
-                    self.send_header(key, value)
-            self.send_header("Content-Length", str(len(payload)))
+            try:
+                content_type = self.headers.get("Content-Type", "application/json")
+                if not content_type:
+                    content_type = "application/json"
+                self.send_response(status)
+                self.send_header("Content-Type", content_type)
+                if extra_headers:
+                    for key, value in extra_headers:
+                        self.send_header(key, value)
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                if payload:
+                    self.wfile.write(payload)
+            except (BrokenPipeError, ConnectionResetError):
+                return
+
+        def _reply_stream(self, chunks: list[bytes], delay: float = 0) -> None:
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Connection", "close")
             self.end_headers()
-            if payload:
-                self.wfile.write(payload)
+            self.close_connection = True
+            try:
+                for chunk in chunks:
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+                    if delay:
+                        time.sleep(delay)
+            except (BrokenPipeError, ConnectionResetError):
+                return
 
         def _handle_request(self, body: bytes) -> None:
             path = urlsplit(self.path).path
@@ -288,6 +327,69 @@ def _make_handler(
                     b'{"error":"forbidden"}\n',
                     status=HTTPStatus.FORBIDDEN,
                 )
+                return
+            if path == _SPLUNK_UNAUTHORIZED + _SPLUNK_EXPORT:
+                self._reply(
+                    b'{"messages":[{"type":"ERROR","text":"Unauthorized"}]}\n',
+                    status=HTTPStatus.UNAUTHORIZED,
+                )
+                return
+            if path == _SPLUNK_EMPTY + _SPLUNK_EXPORT:
+                self._reply(b"")
+                return
+            if path == _SPLUNK_MALFORMED + _SPLUNK_EXPORT:
+                self._reply(b'{"result":{"broken":true}\n')
+                return
+            if path == _SPLUNK_MISSING_RESULT + _SPLUNK_EXPORT:
+                self._reply(b'{"preview":false,"lastrow":true}\n')
+                return
+            if path == _SPLUNK_TIMEOUT + _SPLUNK_EXPORT:
+                time.sleep(0.25)
+                self._reply(_SPLUNK_RESULTS)
+                return
+            if path == _SPLUNK_RETRY_429 + _SPLUNK_EXPORT:
+                retry_429_after_attempts[0] += 1
+                if retry_429_after_attempts[0] == 1:
+                    self._reply(
+                        b'{"messages":[{"type":"WARN","text":"Busy"}]}\n',
+                        [("Retry-After", "1")],
+                        status=HTTPStatus.TOO_MANY_REQUESTS,
+                    )
+                else:
+                    self._reply(_SPLUNK_RESULTS)
+                return
+            if path == _SPLUNK_RETRY_503 + _SPLUNK_EXPORT:
+                retry_503_attempts[0] += 1
+                if retry_503_attempts[0] <= 2:
+                    self._reply(
+                        b'{"messages":[{"type":"WARN","text":"Busy"}]}\n',
+                        status=HTTPStatus.SERVICE_UNAVAILABLE,
+                    )
+                else:
+                    self._reply(_SPLUNK_RESULTS)
+                return
+            if path == _SPLUNK_SPLIT + _SPLUNK_EXPORT:
+                self._reply_stream(
+                    [
+                        _SPLUNK_RESULTS[:17],
+                        _SPLUNK_RESULTS[17:113],
+                        _SPLUNK_RESULTS[113:227],
+                        _SPLUNK_RESULTS[227:],
+                    ]
+                )
+                return
+            if path == _SPLUNK_STREAM + _SPLUNK_EXPORT:
+                chunks = [
+                    (
+                        '{"preview":false,"offset":%d,"result":{"number":%d}}\n'
+                        % (number, number)
+                    ).encode()
+                    for number in range(100)
+                ]
+                self._reply_stream(chunks, delay=0.01)
+                return
+            if path == _SPLUNK_EXPORT:
+                self._reply(_SPLUNK_RESULTS)
                 return
             if path == _RETRY_429_AFTER:
                 retry_429_after_attempts[0] += 1
@@ -456,7 +558,28 @@ def run() -> Iterator[dict[str, str]]:
             "HTTP_FIXTURE_RETRY_EXHAUSTED_503_URL": f"{base_url}{_RETRY_EXHAUSTED_503}",
             "HTTP_FIXTURE_GZIP_EMPTY_URL": f"{base_url}{_GZIP_EMPTY}",
             "HTTP_FIXTURE_GZIP_JSON_URL": f"{base_url}{_GZIP_JSON}",
+            "HTTP_FIXTURE_SPLUNK_EMPTY_URL": f"{base_url}{_SPLUNK_EMPTY}",
+            "HTTP_FIXTURE_SPLUNK_MALFORMED_URL": f"{base_url}{_SPLUNK_MALFORMED}",
+            "HTTP_FIXTURE_SPLUNK_MISSING_RESULT_URL": f"{base_url}{_SPLUNK_MISSING_RESULT}",
+            "HTTP_FIXTURE_SPLUNK_RETRY_429_URL": f"{base_url}{_SPLUNK_RETRY_429}",
+            "HTTP_FIXTURE_SPLUNK_RETRY_503_URL": f"{base_url}{_SPLUNK_RETRY_503}",
+            "HTTP_FIXTURE_SPLUNK_SPLIT_URL": f"{base_url}{_SPLUNK_SPLIT}",
+            "HTTP_FIXTURE_SPLUNK_STREAM_URL": f"{base_url}{_SPLUNK_STREAM}",
+            "HTTP_FIXTURE_SPLUNK_TIMEOUT_URL": f"{base_url}{_SPLUNK_TIMEOUT}",
+            "HTTP_FIXTURE_SPLUNK_UNAUTHORIZED_URL": f"{base_url}{_SPLUNK_UNAUTHORIZED}",
         }
+        if opts.proxy:
+            env.update(
+                {
+                    "HTTP_FIXTURE_SPLUNK_TIMEOUT_URL": (
+                        f"http://splunk-timeout.invalid{_SPLUNK_TIMEOUT}"
+                    ),
+                    "HTTP_PROXY": base_url,
+                    "http_proxy": base_url,
+                    "NO_PROXY": "127.0.0.1,localhost",
+                    "no_proxy": "127.0.0.1,localhost",
+                }
+            )
         env.update(tls_env)
         yield env
     finally:

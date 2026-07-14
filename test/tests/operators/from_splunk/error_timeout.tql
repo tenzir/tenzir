@@ -1,0 +1,15 @@
+---
+fixtures:
+  - http_server:
+      proxy: true
+error: true
+---
+
+from_splunk env("HTTP_FIXTURE_SPLUNK_TIMEOUT_URL"),
+  search="fixture",
+  earliest="-15m",
+  latest="-5m",
+  headers={Authorization: "Splunk test-token"},
+  tls=false,
+  timeout=25ms,
+  max_retry_count=0

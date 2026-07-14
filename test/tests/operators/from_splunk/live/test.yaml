@@ -1,0 +1,2 @@
+fixtures: [splunk]
+timeout: 600

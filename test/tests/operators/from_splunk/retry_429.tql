@@ -1,0 +1,18 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - count: 2
+      method: POST
+      path: /splunk/retry-429/services/search/v2/jobs/export
+timeout: 60
+---
+
+from_splunk env("HTTP_FIXTURE_SPLUNK_RETRY_429_URL"),
+  search="fixture",
+  earliest="-15m",
+  latest="-5m",
+  headers={Authorization: "Splunk test-token"},
+  tls=false,
+  max_retry_count=1,
+  retry_delay=1ms
