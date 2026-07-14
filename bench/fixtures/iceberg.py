@@ -425,6 +425,17 @@ def _prepare_input_pipeline(
             "time = (1735689600s + _benchmark_sequence * 1us).from_epoch()",
             'metadata.original_event_uid = f"iceberg-bench-{_benchmark_sequence}"',
             "drop _benchmark_sequence",
+        ]
+    )
+    if tags.get("workload") != "homogeneous":
+        # `repeat` interleaves the per-class seed events, and `batch` only
+        # coalesces consecutive same-schema events. Without grouping by class
+        # first, the cache degenerates into one single-event slice per input
+        # event and the benchmark measures per-slice overhead instead of the
+        # write path.
+        pipeline.append("sort class_uid")
+    pipeline.extend(
+        [
             f"batch {batch_size}",
             f"to_file {_quoted(str(output_path))} {{ write_bitz }}",
         ]
