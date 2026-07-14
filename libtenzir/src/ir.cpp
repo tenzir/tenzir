@@ -858,31 +858,6 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::pipeline::spawn(element_type_tag input) && -> std::vector<AnyOperator> {
-  // TODO: Assert that we were instantiated, or instantiate ourselves?
-  TENZIR_ASSERT(lets.empty());
-  // TODO: This is probably not the right place for optimizations.
-  auto opt = std::move(*this).optimize(optimize_filter{}, event_order::ordered);
-  TENZIR_ASSERT(opt.replacement.lets.empty());
-  // TODO: Should we really ignore this here?
-  (void)opt.order;
-  for (auto& expr : opt.filter) {
-    opt.replacement.operators.insert(opt.replacement.operators.begin(),
-                                     make_where_ir(expr));
-  }
-  *this = std::move(opt.replacement);
-  auto result = std::vector<AnyOperator>{};
-  for (auto& op : operators) {
-    // We already checked, there should be no diagnostics here.
-    auto dh = null_diagnostic_handler{};
-    auto output = op->infer_type(input, dh);
-    TENZIR_ASSERT(output);
-    result.push_back(op->spawn(input));
-    input = *output;
-  }
-  return result;
-}
-
 namespace {
 
 /// Derive the channel kind between two adjacent planned operators.

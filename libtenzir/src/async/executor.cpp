@@ -1715,25 +1715,39 @@ public:
 
 private:
   auto spawn_operators() -> void {
-    // Spawn one runtime instance per planned operator.
-    for (auto& planned : plan_.operators) {
-      TENZIR_ASSERT(planned.parallelism == 1);
-      auto spawned = std::move(*planned.op).spawn(planned.input);
-      operators_.push_back(std::move(spawned));
+    // Expand each planned operator into `parallelism` runtime instances. All
+    // instances of one planned operator share that operator's `OpId`.
+    //
+    // `instances_of[p]` holds the flat indices into `operators_` of the
+    // instances of planned operator `p`; the `instance_of_` member maps a flat
+    // instance index back to its planned operator index (and thus its `OpId`).
+    auto instances_of
+      = std::vector<std::vector<size_t>>(plan_.operators.size());
+    for (auto p = size_t{0}; p < plan_.operators.size(); ++p) {
+      auto& planned = plan_.operators[p];
+      TENZIR_ASSERT(planned.parallelism >= 1);
+      for (auto k = size_t{0}; k < planned.parallelism; ++k) {
+        // `spawn` is `const`, so each instance is created independently from
+        // the planned operator without cloning the IR node.
+        instances_of[p].push_back(operators_.size());
+        instance_of_.push_back(p);
+        operators_.push_back(planned.op->spawn(planned.input));
+      }
     }
     // An empty plan still needs at least one operator to drive.
     if (operators_.empty()) {
       operators_.push_back(make_identity_operator(plan_.input));
+      instance_of_.push_back(0);
     }
-    // Per-operator input and output endpoints, computed during wiring.
+    // Per-instance input and output endpoints, computed during wiring.
     auto inputs = std::vector<Option<AnyOpPull>>(operators_.size());
     auto outputs = std::vector<Option<AnyOpPush>>(operators_.size());
     // Wire the data plane by honoring each planned channel. Without elision,
-    // planned operator indices map one-to-one onto runtime operator indices.
+    // planned operator indices map one-to-one onto their instance groups.
     for (auto& channel : plan_.channels) {
-      wire_channel(channel, inputs, outputs);
+      wire_channel(channel, instances_of, inputs, outputs);
     }
-    // The operator left without an input is the source; the one left without
+    // The instance left without an input is the source; the one left without
     // an output is the sink. Connect them to the plan's external endpoints.
     auto wired_input = false;
     auto wired_output = false;
@@ -1752,8 +1766,8 @@ private:
     TENZIR_ASSERT(wired_input);
     TENZIR_ASSERT(wired_output);
     for (auto index = size_t{0}; index < operators_.size(); ++index) {
-      start_operator_task(index, std::move(inputs[index]),
-                          std::move(outputs[index]));
+      start_operator_task(index, id_.op(instance_of_[index]),
+                          std::move(inputs[index]), std::move(outputs[index]));
     }
     for (auto index = size_t{0}; index < operators_.size(); ++index) {
       add_control_read(index);
@@ -1763,23 +1777,37 @@ private:
   /// Materialize a planned channel between two runtime operators. The channel
   /// kind encodes the element type, so no type inspection of the operators is
   /// needed here.
-  auto
-  wire_channel(ir::PlannedChannel& plan, std::vector<Option<AnyOpPull>>& inputs,
-               std::vector<Option<AnyOpPush>>& outputs) -> void {
+  auto wire_channel(ir::PlannedChannel& plan,
+                    const std::vector<std::vector<size_t>>& instances_of,
+                    std::vector<Option<AnyOpPull>>& inputs,
+                    std::vector<Option<AnyOpPush>>& outputs) -> void {
     auto id = id_.op(plan.from).to(id_.op(plan.to));
-    auto install = [&](auto pushpull) {
-      outputs[plan.from] = AnyOpPush{std::move(pushpull.push)};
-      inputs[plan.to] = AnyOpPull{std::move(pushpull.pull)};
+    auto const& from = instances_of[plan.from];
+    auto const& to = instances_of[plan.to];
+    // 1:1 wiring between matching instances of the two operators.
+    auto wire_direct = [&](auto make) {
+      TENZIR_ASSERT(from.size() == to.size());
+      for (auto i = size_t{0}; i < from.size(); ++i) {
+        auto pushpull = make(id);
+        outputs[from[i]] = AnyOpPush{std::move(pushpull.push)};
+        inputs[to[i]] = AnyOpPull{std::move(pushpull.pull)};
+      }
     };
     switch (plan.kind) {
       case ir::ChannelKind::Direct:
-        install(exec_ctx_.make_channel<table_slice>(std::move(id)));
+        wire_direct([&](ChannelId cid) {
+          return exec_ctx_.make_channel<table_slice>(std::move(cid));
+        });
         return;
       case ir::ChannelKind::DirectFused:
-        install(exec_ctx_.make_fused_channel<table_slice>(std::move(id)));
+        wire_direct([&](ChannelId cid) {
+          return exec_ctx_.make_fused_channel<table_slice>(std::move(cid));
+        });
         return;
       case ir::ChannelKind::Bytes:
-        install(exec_ctx_.make_channel<chunk_ptr>(std::move(id)));
+        wire_direct([&](ChannelId cid) {
+          return exec_ctx_.make_channel<chunk_ptr>(std::move(cid));
+        });
         return;
       case ir::ChannelKind::Scatter:
       case ir::ChannelKind::Gather:
@@ -1790,7 +1818,8 @@ private:
 
   /// Start the runner task for the operator at `index`, using the input and
   /// output endpoints computed during wiring.
-  auto start_operator_task(size_t index, Option<AnyOpPull> input_endpoint,
+  auto start_operator_task(size_t index, OpId op_id,
+                           Option<AnyOpPull> input_endpoint,
                            Option<AnyOpPush> output_endpoint) -> void {
     co_match(operators_[index], [&]<class In, class Out>(
                                   Box<Operator<In, Out>>& op) {
@@ -1808,13 +1837,12 @@ private:
         std::move(to_control_receiver),
       });
       TENZIR_ASSERT(not op->name().empty());
-      auto executor
-        = exec_ctx_.make_executor(id_.op(index), std::string{op->name()});
+      auto executor = exec_ctx_.make_executor(op_id, std::string{op->name()});
       auto task
         = run_operator(std::move(op), std::move(input), std::move(output),
                        std::move(from_control_receiver),
-                       std::move(to_control_sender), id_.op(index), exec_ctx_,
-                       sys_, dh_);
+                       std::move(to_control_sender), std::move(op_id),
+                       exec_ctx_, sys_, dh_);
       LOGI("spawning operator task");
       driver_.add([task = std::move(task), index,
                    executor = std::move(
@@ -1831,6 +1859,34 @@ private:
       TENZIR_ASSERT(index < op_controls_.size());
       co_return {index, co_await op_controls_[index].receiver.recv()};
     });
+  }
+
+  /// Compute the planned operators strictly upstream of `op` that feed
+  /// exclusively into its branch. A set bit `p` means operator `p` can be
+  /// safely stopped when `op` no longer wants input. Backward traversal stops
+  /// at any fan-out operator (out-degree > 1): such an operator has other live
+  /// downstream consumers and must not be stopped, and neither may anything
+  /// beyond it. The result excludes `op` itself.
+  auto upstream_branch(size_t op) const -> std::vector<bool> {
+    auto out_degree = std::vector<size_t>(plan_.operators.size(), 0);
+    for (auto const& channel : plan_.channels) {
+      ++out_degree[channel.from];
+    }
+    auto marked = std::vector<bool>(plan_.operators.size(), false);
+    auto stack = std::vector<size_t>{op};
+    while (not stack.empty()) {
+      auto x = stack.back();
+      stack.pop_back();
+      for (auto const& channel : plan_.channels) {
+        // Only follow a predecessor that feeds exclusively into this branch.
+        if (channel.to == x and not marked[channel.from]
+            and out_degree[channel.from] == 1) {
+          marked[channel.from] = true;
+          stack.push_back(channel.from);
+        }
+      }
+    }
+    return marked;
   }
 
   auto run_until_shutdown() -> Task<void> {
@@ -1906,15 +1962,24 @@ private:
                   }
                   break;
                 }
-                case ToControl::no_more_input:
-                  for (auto preceding = size_t{0}; preceding < index;
-                       ++preceding) {
-                    if (op_controls_[preceding].sender) {
-                      co_await op_controls_[preceding].sender->send(HardStop{});
+                case ToControl::no_more_input: {
+                  const auto p = instance_of_[index];
+                  // Operators that emit `no_more_input` (head/slice/taste) run
+                  // single-instance, so we stop the upstream branch
+                  // immediately — no per-instance aggregation needed.
+                  TENZIR_ASSERT(p >= plan_.operators.size()
+                                or plan_.operators[p].parallelism == 1);
+                  const auto upstream = upstream_branch(p);
+                  for (auto f = size_t{0}; f < operators_.size(); ++f) {
+                    if (instance_of_[f] < upstream.size()
+                        and upstream[instance_of_[f]]
+                        and op_controls_[f].sender) {
+                      co_await op_controls_[f].sender->send(HardStop{});
                     }
                   }
                   co_await to_control_.send(ToControl::no_more_input);
                   break;
+                }
                 case ToControl::checkpoint_begin:
                 case ToControl::checkpoint_done:
                   LOGI("chain got {} from operator {}", to_control,
@@ -1931,6 +1996,9 @@ private:
 
   ir::Plan plan_;
   std::vector<AnyOperator> operators_;
+  /// Maps a flat instance index in `operators_` to its planned operator index
+  /// in `plan_.operators` (and thus its shared `OpId`).
+  std::vector<size_t> instance_of_;
   AnyOpPull pull_upstream_;
   AnyOpPush push_downstream_;
   Receiver<FromControl> from_control_;
