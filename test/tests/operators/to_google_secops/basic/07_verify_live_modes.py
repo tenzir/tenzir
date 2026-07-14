@@ -156,6 +156,7 @@ def main() -> None:
     assert tokens, tokens
     assert all(token["assertion_segments"] == 3 for token in tokens), tokens
     assert all(token["signature_verified"] for token in tokens), tokens
+    assert all(token["claims_validated"] for token in tokens), tokens
     issuers = {token["issuer"] for token in tokens}
     assert issuers == {
         "test-only-email@test-only-project-id.iam.gserviceaccount.com"
@@ -163,6 +164,11 @@ def main() -> None:
     scopes = {token["scope"] for token in tokens}
     assert "https://www.googleapis.com/auth/cloud-platform" in scopes, scopes
     assert "https://www.googleapis.com/auth/malachite-ingestion" in scopes, scopes
+    audiences = {token["audience"] for token in tokens}
+    assert audiences == {"https://oauth2.googleapis.com/token"}, audiences
+    assert all(
+        0 < token["expires_at"] - token["issued_at"] <= 3600 for token in tokens
+    ), tokens
     print("udm_live: true")
     print("entity_live: true")
     print("raw_ingestion_live: true")

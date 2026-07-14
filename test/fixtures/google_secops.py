@@ -9,6 +9,7 @@ import os
 import re
 import tempfile
 import threading
+import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Iterator
@@ -26,8 +27,12 @@ except ImportError:
     padding = None  # type: ignore[assignment]
 
 _HOST = "127.0.0.1"
+_CLIENT_EMAIL = "test-only-email@test-only-project-id.iam.gserviceaccount.com"
 _CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 _INGESTION_SCOPE = "https://www.googleapis.com/auth/malachite-ingestion"
+_TOKEN_AUDIENCE = "https://oauth2.googleapis.com/token"
+_MAX_ASSERTION_LIFETIME_SECONDS = 3600
+_CLOCK_SKEW_SECONDS = 60
 _TOKENS_BY_SCOPE = {
     _CLOUD_PLATFORM_SCOPE: "test-import-token-12345",
     _INGESTION_SCOPE: "test-ingestion-token-12345",
@@ -88,9 +93,7 @@ def _service_credentials(token_uri: str) -> str:
             "project_id": "test-only-project-id",
             "private_key_id": "a1a111aa1111a11a11a11aa111a111a1a1111111",
             "private_key": _PRIVATE_KEY,
-            "client_email": (
-                "test-only-email@test-only-project-id.iam.gserviceaccount.com"
-            ),
+            "client_email": _CLIENT_EMAIL,
             "client_id": "100000000000000000001",
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": token_uri,
@@ -113,6 +116,30 @@ def _parse_rfc3339(value: str) -> datetime:
     if value.endswith("Z"):
         value = f"{value[:-1]}+00:00"
     return datetime.fromisoformat(value)
+
+
+def _validate_jwt_claims(claims: dict) -> str | None:  # type: ignore[type-arg]
+    if claims.get("iss") != _CLIENT_EMAIL:
+        return "unexpected issuer"
+    if claims.get("scope") not in _TOKENS_BY_SCOPE:
+        return "unexpected scope"
+    if claims.get("aud") != _TOKEN_AUDIENCE:
+        return "unexpected audience"
+    issued_at = claims.get("iat")
+    expires_at = claims.get("exp")
+    if not isinstance(issued_at, int) or isinstance(issued_at, bool):
+        return "iat must be an integer"
+    if not isinstance(expires_at, int) or isinstance(expires_at, bool):
+        return "exp must be an integer"
+    lifetime = expires_at - issued_at
+    if lifetime <= 0 or lifetime > _MAX_ASSERTION_LIFETIME_SECONDS:
+        return "invalid assertion lifetime"
+    now = int(time.time())
+    if issued_at > now + _CLOCK_SKEW_SECONDS:
+        return "assertion issued in the future"
+    if expires_at <= now - _CLOCK_SKEW_SECONDS:
+        return "assertion expired"
+    return None
 
 
 def _make_ingestion_handler(
@@ -185,6 +212,9 @@ def _make_ingestion_handler(
             except Exception as e:
                 self._json_response(400, {"error": f"invalid assertion: {e}"})
                 return
+            if not isinstance(header, dict) or not isinstance(claims, dict):
+                self._json_response(400, {"error": "invalid assertion objects"})
+                return
             if header.get("alg") != "RS256":
                 self._json_response(
                     400, {"error": f"unexpected alg: {header.get('alg')}"}
@@ -200,17 +230,21 @@ def _make_ingestion_handler(
             except Exception:
                 self._json_response(400, {"error": "invalid signature"})
                 return
+            if err := _validate_jwt_claims(claims):
+                self._json_response(400, {"error": err})
+                return
             capture = {
                 "grant_type": grant_type,
                 "assertion_segments": len(segments),
                 "issuer": claims.get("iss"),
                 "scope": claims.get("scope"),
+                "audience": claims.get("aud"),
+                "issued_at": claims.get("iat"),
+                "expires_at": claims.get("exp"),
+                "claims_validated": True,
                 "signature_verified": True,
             }
-            access_token = _TOKENS_BY_SCOPE.get(capture["scope"])
-            if access_token is None:
-                self._json_response(400, {"error": "unexpected scope"})
-                return
+            access_token = _TOKENS_BY_SCOPE[capture["scope"]]
             with lock:
                 with open(token_capture_path, "a") as f:
                     f.write(json.dumps(capture, sort_keys=True) + "\n")
@@ -386,9 +420,7 @@ def google_secops() -> Iterator[dict[str, str]]:
             "GOOGLE_SECOPS_TOKEN_CAPTURE_FILE": token_capture_path,
             "GOOGLE_SECOPS_SERVICE_CREDENTIALS": _service_credentials(token_uri),
             "GOOGLE_SECOPS_PRIVATE_KEY": _PRIVATE_KEY,
-            "GOOGLE_SECOPS_CLIENT_EMAIL": (
-                "test-only-email@test-only-project-id.iam.gserviceaccount.com"
-            ),
+            "GOOGLE_SECOPS_CLIENT_EMAIL": _CLIENT_EMAIL,
             "GOOGLE_SECOPS_CUSTOMER_ID": "1234567890",
             "GOOGLE_CLOUD_CPP_EXPERIMENTAL_DISABLE_SELF_SIGNED_JWT": "1",
         }
