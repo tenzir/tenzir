@@ -30,7 +30,7 @@ _HOST = "127.0.0.1"
 _CLIENT_EMAIL = "test-only-email@test-only-project-id.iam.gserviceaccount.com"
 _CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 _INGESTION_SCOPE = "https://www.googleapis.com/auth/malachite-ingestion"
-_TOKEN_AUDIENCE = "https://oauth2.googleapis.com/token"
+_INGESTION_TOKEN_AUDIENCE = "https://oauth2.googleapis.com/token"
 _MAX_ASSERTION_LIFETIME_SECONDS = 3600
 _CLOCK_SKEW_SECONDS = 60
 _TOKENS_BY_SCOPE = {
@@ -118,12 +118,15 @@ def _parse_rfc3339(value: str) -> datetime:
     return datetime.fromisoformat(value)
 
 
-def _validate_jwt_claims(claims: dict) -> str | None:  # type: ignore[type-arg]
+def _validate_jwt_claims(
+    claims: dict, expected_audiences: dict[str, str]
+) -> str | None:  # type: ignore[type-arg]
     if claims.get("iss") != _CLIENT_EMAIL:
         return "unexpected issuer"
-    if claims.get("scope") not in _TOKENS_BY_SCOPE:
+    scope = claims.get("scope")
+    if not isinstance(scope, str) or scope not in _TOKENS_BY_SCOPE:
         return "unexpected scope"
-    if claims.get("aud") != _TOKEN_AUDIENCE:
+    if claims.get("aud") != expected_audiences[scope]:
         return "unexpected audience"
     issued_at = claims.get("iat")
     expires_at = claims.get("exp")
@@ -148,6 +151,8 @@ def _make_ingestion_handler(
     lock = threading.Lock()
 
     class IngestionHandler(BaseHTTPRequestHandler):
+        token_audiences: dict[str, str] = {}
+
         def log_message(self, format: str, *args: object) -> None:
             pass
 
@@ -230,7 +235,7 @@ def _make_ingestion_handler(
             except Exception:
                 self._json_response(400, {"error": "invalid signature"})
                 return
-            if err := _validate_jwt_claims(claims):
+            if err := _validate_jwt_claims(claims, self.token_audiences):
                 self._json_response(400, {"error": err})
                 return
             capture = {
@@ -410,9 +415,13 @@ def google_secops() -> Iterator[dict[str, str]]:
         handler = _make_ingestion_handler(capture_path, token_capture_path)
         server = HTTPServer((_HOST, 0), handler)
         port = server.server_port
+        token_uri = f"http://{_HOST}:{port}/token"
+        handler.token_audiences = {
+            _CLOUD_PLATFORM_SCOPE: token_uri,
+            _INGESTION_SCOPE: _INGESTION_TOKEN_AUDIENCE,
+        }
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
-        token_uri = f"http://{_HOST}:{port}/token"
         env = {
             "GOOGLE_SECOPS_INGESTION_URL": f"http://{_HOST}:{port}",
             "GOOGLE_SECOPS_TOKEN_URL": token_uri,

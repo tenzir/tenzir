@@ -165,7 +165,10 @@ def main() -> None:
     assert "https://www.googleapis.com/auth/cloud-platform" in scopes, scopes
     assert "https://www.googleapis.com/auth/malachite-ingestion" in scopes, scopes
     audiences = {token["audience"] for token in tokens}
-    assert audiences == {"https://oauth2.googleapis.com/token"}, audiences
+    assert audiences == {
+        os.environ["GOOGLE_SECOPS_TOKEN_URL"],
+        "https://oauth2.googleapis.com/token",
+    }, audiences
     assert all(
         0 < token["expires_at"] - token["issued_at"] <= 3600 for token in tokens
     ), tokens
