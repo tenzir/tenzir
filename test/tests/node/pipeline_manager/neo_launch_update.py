@@ -341,18 +341,37 @@ def _background_serve_request(
 
     def worker() -> None:
         try:
-            status, response = _post_api(
-                base_url,
-                "/serve",
-                {
+            # `/serve` long-polls, but it may hand back an early empty page
+            # (with a continuation token and state `running`) before any events
+            # or a terminal state. Keep polling until we either observe events
+            # or the pipeline terminates (`next_continuation_token` is null),
+            # so `done` is set only when the stream has genuinely ended. This
+            # avoids a race where an early empty page looks like the serve
+            # request returned before the pipeline was stopped.
+            token: str | None = None
+            while True:
+                payload: dict[str, Any] = {
                     "serve_id": serve_id,
                     "timeout": "10s",
                     "min_events": 1,
                     "max_events": 1,
                     "schema": "never",
-                },
-            )
-            results.append(_ServeResult(status, response))
+                }
+                if token is not None:
+                    payload["continuation_token"] = token
+                status, response = _post_api(base_url, "/serve", payload)
+                if status != 200 or not isinstance(response, dict):
+                    results.append(_ServeResult(status, response))
+                    return
+                events = response.get("events") or []
+                token = response.get("next_continuation_token")
+                state = response.get("state")
+                if events or token is None or state != "running":
+                    results.append(_ServeResult(status, response))
+                    return
+                # Guard against a tight loop if the endpoint returns empty
+                # pages without honoring the long-poll timeout.
+                time.sleep(0.05)
         except BaseException as exc:  # pragma: no cover - surfaced below
             errors.append(exc)
         finally:
