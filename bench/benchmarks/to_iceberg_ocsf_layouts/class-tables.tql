@@ -1,0 +1,17 @@
+---
+bench:
+  id: class-tables
+  description: Demultiplex mixed OCSF events into one table per event class.
+  tags:
+    layout: class-tables
+    expected_tables: "25"
+---
+from_file env("BENCHMARK_ICEBERG_INPUT_PATH"), mmap=true {
+  read_bitz
+}
+repeat int(env("BENCHMARK_ICEBERG_STREAM_REPETITIONS"))
+group class_uid {
+  to_iceberg f"{env("BENCHMARK_ICEBERG_NAMESPACE")}.class_{$group}",
+    catalog=env("ICEBERG_REST_URI"), mode="append", partition_by=[day(time)],
+    max_size=536870912, buffer_size=1073741824, timeout=1h
+}
