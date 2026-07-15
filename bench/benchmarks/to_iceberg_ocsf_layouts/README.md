@@ -49,13 +49,39 @@ multiple row groups. It compares:
 | `control` | 0 | Discards the prepared workload. |
 | `unified-unpartitioned` | 1 | None. |
 | `unified-partitioned` | 1 | `class_uid` and `day(time)`. |
+| `unified-partitioned-parallel-2` | 1 | `class_uid` and `day(time)` routed across two sink instances. |
+| `unified-partitioned-parallel-4` | 1 | `class_uid` and `day(time)` routed across four sink instances. |
 | `category-tables` | 5 | One table per `category_uid`; each table uses `class_uid` and `day(time)`. |
 | `class-tables` | 25 | One table per `class_uid`; each table uses `day(time)`. |
 
 The Parquet writer creates a row group for every batch passed to it because
-all benchmark batches are below its 1,048,576-row limit. Partitioned layouts
-write 25 files with four row groups each; the unpartitioned unified layout
+all benchmark batches are below its 1,048,576-row limit. Single-sink
+partitioned layouts write 25 files with four row groups each; parallel variants
+route the complete `(class_uid, day(time))` partition tuple to one sink instance
+so workers do not overlap partition ownership. The unpartitioned unified layout
 writes one file with 100 row groups.
+
+The interleaved group also includes a four-day scaling matrix for
+`parallel { to_iceberg }`. It divides the 409,600 events into four contiguous
+days, which produces 100 `(class_uid, day(time))` partitions. The parallel
+variant routes by the complete partition tuple and compares four sink instances
+with the direct single-instance baseline.
+
+The `eager-close` pair sets `buffer_size=1` to force buffered files to close
+during input processing. Use this pair to distinguish active-write concurrency
+from finalization behavior. This setting is diagnostic and does not represent
+a recommended production buffer size.
+
+The `to_iceberg_ocsf_parallel_scaling` group measures sustained throughput. It
+writes 6,553,600 events across two days and 50 class/day partitions using the
+default 512 MiB maximum file size and 64 MiB streaming threshold, and compares
+1 and 4 sink instances. Parallel variants route by
+`{class_uid, day(time)}` so each Iceberg partition belongs to one sink instance.
+
+The `to_iceberg_ocsf_layouts_double` group repeats the complete layout matrix
+with 819,200 events. It keeps the same 4,096-event batches and 25 one-day class
+partitions, doubling the batches per partition from four to eight while leaving
+all writer settings unchanged.
 
 The small NDJSON seed file expands before measurement. Its declared input
 count is the logical event count so benchmark reports calculate events per
