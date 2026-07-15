@@ -59,6 +59,13 @@ stdenv.mkDerivation {
   #   themselves handle null fine (contains_null); feed it directly.
   patches = [ ../../plugins/iceberg/aux/iceberg-cpp.patch ];
 
+  postPatch = ''
+    substituteInPlace CMakeLists.txt \
+      --replace-fail \
+        'set(CMAKE_COMPILE_WARNING_AS_ERROR ON)' \
+        'set(CMAKE_COMPILE_WARNING_AS_ERROR OFF)'
+  '';
+
   # The static libraries surface all of these through find_dependency() in
   # the installed iceberg-config.cmake, so downstream consumers need them.
   propagatedBuildInputs = [
