@@ -17,6 +17,7 @@
 
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
+#include <arrow/filesystem/s3fs.h>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 #include <iceberg/arrow/arrow_io_internal.h>
@@ -213,6 +214,102 @@ auto translate(ice::Result<T> result) -> Result<T> {
 /// check while the FileIO itself strips foreign schemes off object paths.
 constexpr auto s3_file_io = std::string_view{"tenzir-arrow-s3"};
 
+/// Catalog property carrying the handle of a registered live AWS
+/// credentials provider into the S3 FileIO factory. iceberg-cpp hands
+/// configuration to FileIO factories as a string map, so the provider
+/// object travels through this side table instead.
+constexpr auto s3_credentials_handle_property
+  = std::string_view{"tenzir.s3-credentials-handle"};
+
+auto s3_credentials_registry() -> std::pair<
+  std::mutex&,
+  std::unordered_map<std::string,
+                     std::shared_ptr<Aws::Auth::AWSCredentialsProvider>>&> {
+  static auto mutex = std::mutex{};
+  static auto providers
+    = std::unordered_map<std::string,
+                         std::shared_ptr<Aws::Auth::AWSCredentialsProvider>>{};
+  return {mutex, providers};
+}
+
+auto register_s3_credentials(
+  std::shared_ptr<Aws::Auth::AWSCredentialsProvider> provider) -> std::string {
+  auto [mutex, providers] = s3_credentials_registry();
+  auto handle = fmt::to_string(uuid::random());
+  const auto lock = std::lock_guard{mutex};
+  providers.emplace(handle, std::move(provider));
+  return handle;
+}
+
+auto lookup_s3_credentials(const std::string& handle)
+  -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
+  auto [mutex, providers] = s3_credentials_registry();
+  const auto lock = std::lock_guard{mutex};
+  const auto it = providers.find(handle);
+  return it == providers.end() ? nullptr : it->second;
+}
+
+auto unregister_s3_credentials(const std::string& handle) -> void {
+  auto [mutex, providers] = s3_credentials_registry();
+  const auto lock = std::lock_guard{mutex};
+  providers.erase(handle);
+}
+
+/// An S3 FileIO whose requests sign through a live credentials provider.
+/// STS-backed IAM modes hand out expiring credentials that the provider
+/// refreshes transparently; the static `s3.*` properties of the builtin
+/// FileIO cannot. Falls through to the builtin behavior when no provider
+/// handle is present.
+auto make_s3_file_io(
+  const std::unordered_map<std::string, std::string>& properties)
+  -> ice::Result<std::unique_ptr<ice::FileIO>> {
+  const auto handle
+    = properties.find(std::string{s3_credentials_handle_property});
+  if (handle == properties.end()) {
+    return ice::FileIORegistry::Load(
+      std::string{ice::FileIORegistry::kArrowS3FileIO}, properties);
+  }
+  auto provider = lookup_s3_credentials(handle->second);
+  if (not provider) {
+    return ice::IOError("stale S3 credentials provider handle");
+  }
+  if (auto status = arrow::fs::EnsureS3Initialized(); not status.ok()) {
+    return ice::IOError("failed to initialize the S3 subsystem: {}",
+                        status.ToString());
+  }
+  auto options = arrow::fs::S3Options::Defaults();
+  options.credentials_provider = std::move(provider);
+  options.credentials_kind = arrow::fs::S3CredentialsKind::Role;
+  if (const auto region = properties.find("client.region");
+      region != properties.end()) {
+    options.region = region->second;
+  }
+  if (const auto endpoint = properties.find("s3.endpoint");
+      endpoint != properties.end()) {
+    auto value = std::string_view{endpoint->second};
+    for (const auto scheme :
+         {std::string_view{"http"}, std::string_view{"https"}}) {
+      if (value.starts_with(scheme)
+          and value.substr(scheme.size()).starts_with("://")) {
+        options.scheme = std::string{scheme};
+        value.remove_prefix(scheme.size() + 3);
+        break;
+      }
+    }
+    options.endpoint_override = std::string{value};
+  }
+  if (const auto style = properties.find("s3.path-style-access");
+      style != properties.end()) {
+    options.force_virtual_addressing = style->second != "true";
+  }
+  auto fs = arrow::fs::S3FileSystem::Make(options);
+  if (not fs.ok()) {
+    return ice::IOError("failed to create the S3 filesystem: {}",
+                        fs.status().ToString());
+  }
+  return std::make_unique<ice::arrow::ArrowFileSystemFileIO>(*std::move(fs));
+}
+
 #ifdef TENZIR_ICEBERG_GCS
 
 /// A native GCS FileIO; iceberg-cpp has no `gs://` builtin, so `gs://`
@@ -249,12 +346,7 @@ auto ensure_registered() -> void {
     ice::arrow::RegisterAll();
     ice::parquet::RegisterAll();
     ice::avro::RegisterAll();
-    ice::FileIORegistry::Register(
-      std::string{s3_file_io},
-      [](const std::unordered_map<std::string, std::string>& properties) {
-        return ice::FileIORegistry::Load(
-          std::string{ice::FileIORegistry::kArrowS3FileIO}, properties);
-      });
+    ice::FileIORegistry::Register(std::string{s3_file_io}, make_s3_file_io);
 #ifdef TENZIR_ICEBERG_GCS
     ice::rest::auth::AuthManagers::Register(
       gcp_auth_type,
@@ -790,6 +882,9 @@ auto resolve_partition_column(const std::shared_ptr<arrow::StructArray>& batch,
 
 struct Catalog::Impl {
   std::shared_ptr<ice::Catalog> catalog;
+  /// Keeps the registered S3 credentials provider alive for FileIO
+  /// factories, and unregisters it when the last catalog handle drops.
+  std::shared_ptr<void> s3_credentials_guard;
 };
 
 struct Table::Impl {
@@ -942,6 +1037,15 @@ auto Catalog::open(CatalogConfig config) -> Result<Catalog> {
   // merging the REST server configuration; when that merge yields neither
   // property, retry below with the local filesystem.
   const auto selection = file_io::select_file_io(config);
+  auto s3_credentials_guard = std::shared_ptr<void>{};
+  if (config.s3_credentials_provider) {
+    auto handle
+      = register_s3_credentials(std::move(config.s3_credentials_provider));
+    config.properties[std::string{s3_credentials_handle_property}] = handle;
+    s3_credentials_guard = std::shared_ptr<void>(nullptr, [handle](void*) {
+      unregister_s3_credentials(handle);
+    });
+  }
   switch (selection) {
     case file_io::FileIO::automatic:
       break;
@@ -982,7 +1086,10 @@ auto Catalog::open(CatalogConfig config) -> Result<Catalog> {
   if (not catalog.has_value()) {
     return std::unexpected{translate_error(catalog.error())};
   }
-  return Catalog{std::make_shared<Impl>(Impl{.catalog = std::move(*catalog)})};
+  return Catalog{std::make_shared<Impl>(Impl{
+    .catalog = std::move(*catalog),
+    .s3_credentials_guard = std::move(s3_credentials_guard),
+  })};
 }
 
 auto Catalog::ensure_namespace(std::span<const std::string> ns)

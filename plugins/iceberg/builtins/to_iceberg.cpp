@@ -386,50 +386,30 @@ public:
     }
     if (auth->credentials) {
       const auto& creds = *auth->credentials;
-      const auto needs_materialization = not creds.role.empty()
-                                         or not creds.profile.empty()
-                                         or creds.web_identity.has_value();
-      if (needs_materialization) {
-        // The role, profile, and web-identity flows materialize a static
-        // snapshot of temporary credentials, like the S3 operators do:
-        // iceberg-cpp's S3 FileIO is configured through plain string
-        // properties, so there is no seam for a refreshing credentials
-        // provider. STS-issued credentials expire eventually; pipelines
-        // outliving them must restart to re-authenticate.
-        auto materialized = co_await spawn_blocking(
-          [creds]() -> caf::expected<sts_credentials> {
-            const auto region = creds.region.empty()
-                                  ? std::optional<std::string>{}
-                                  : std::optional{creds.region};
-            auto provider
-              = make_aws_credentials_provider(std::optional{creds}, region);
-            if (not provider) {
-              return provider.error();
-            }
-            auto snapshot = (*provider)->GetAWSCredentials();
-            if (snapshot.IsEmpty()) {
-              return diagnostic::error("failed to obtain AWS credentials")
-                .to_error();
-            }
-            return sts_credentials{
-              .access_key_id = std::string{snapshot.GetAWSAccessKeyId()},
-              .secret_access_key = std::string{snapshot.GetAWSSecretKey()},
-              .session_token = std::string{snapshot.GetSessionToken()},
-            };
-          });
-        if (not materialized) {
-          diagnostic::error(materialized.error())
+      const auto needs_provider = not creds.role.empty()
+                                  or not creds.profile.empty()
+                                  or creds.web_identity.has_value();
+      if (needs_provider) {
+        // The role, profile, and web-identity flows sign S3 requests
+        // through a live credentials provider from the shared IAM ladder.
+        // STS-backed providers refresh their expiring credentials
+        // transparently, so long-running pipelines outlive individual
+        // tokens. Construction is blocking: some flows fetch initial
+        // credentials from STS eagerly to surface errors here.
+        auto provider = co_await spawn_blocking([creds]() {
+          const auto region = creds.region.empty()
+                                ? std::optional<std::string>{}
+                                : std::optional{creds.region};
+          return make_aws_credentials_provider(std::optional{creds}, region);
+        });
+        if (not provider) {
+          diagnostic::error(provider.error())
             .primary(args_.aws_iam->source)
             .emit(dh);
           done_ = true;
           co_return;
         }
-        config.properties["s3.access-key-id"] = materialized->access_key_id;
-        config.properties["s3.secret-access-key"]
-          = materialized->secret_access_key;
-        if (not materialized->session_token.empty()) {
-          config.properties["s3.session-token"] = materialized->session_token;
-        }
+        config.s3_credentials_provider = std::move(*provider);
       } else {
         if (not creds.access_key_id.empty()) {
           config.properties["s3.access-key-id"] = creds.access_key_id;

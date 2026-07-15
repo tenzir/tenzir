@@ -26,7 +26,8 @@ inline auto select_file_io(CatalogConfig const& config) -> FileIO {
     = std::ranges::any_of(config.properties, [](auto const& entry) {
         return entry.first.starts_with("s3.");
       });
-  if (config.use_s3_file_io or has_s3_properties) {
+  if (config.use_s3_file_io or has_s3_properties
+      or config.s3_credentials_provider != nullptr) {
     return FileIO::s3;
   }
   if (config.gcp_auth) {

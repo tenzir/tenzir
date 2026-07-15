@@ -32,6 +32,10 @@ namespace arrow {
 class StructArray;
 } // namespace arrow
 
+namespace Aws::Auth {
+class AWSCredentialsProvider;
+} // namespace Aws::Auth
+
 namespace tenzir::plugins::iceberg {
 
 /// Error surfaced from the catalog, file IO, or commit path. The kind
@@ -107,6 +111,12 @@ struct CatalogConfig {
   /// Select S3 FileIO even when AWS credentials do not materialize as
   /// `s3.*` properties, for example for profiles and assumed roles.
   bool use_s3_file_io = false;
+  /// Signs S3 data-plane requests through a live credentials provider
+  /// instead of static `s3.*` properties. STS-backed IAM modes (assumed
+  /// roles, profiles, web identity) hand out expiring credentials; the
+  /// provider refreshes them transparently for the lifetime of the
+  /// pipeline, which static properties cannot.
+  std::shared_ptr<Aws::Auth::AWSCredentialsProvider> s3_credentials_provider;
   /// Authenticate catalog requests with Google OAuth2 bearer tokens, minted
   /// from `gcp_credentials_json` or from Application Default Credentials
   /// when empty. Tokens refresh automatically before they expire. Unless
