@@ -8,14 +8,13 @@
 
 #include "tenzir/async.hpp"
 #include "tenzir/compile_ctx.hpp"
-#include "tenzir/detail/narrow.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
-#include <algorithm>
+#include <iterator>
 #include <ranges>
 
 namespace tenzir::plugins::fork_merge {
@@ -32,71 +31,6 @@ struct ForkMergeArgs {
                               f.field("locations", x.locations),
                               f.field("branches", x.branches));
   }
-};
-
-/// Broadcasts each input slice to all branches. The outputs of the branch
-/// subpipelines are merged into the operator's output by the executor.
-///
-/// Every branch is an events-to-events transformation.
-class ForkMerge final : public Operator<table_slice, table_slice> {
-public:
-  explicit ForkMerge(ForkMergeArgs args) : args_{std::move(args)} {
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> override {
-    for (auto i = size_t{0}; i < args_.branches.size(); ++i) {
-      if (args_.branches[i].operators.empty()
-          or ctx.get_sub(static_cast<int64_t>(i)).is_some()) {
-        continue;
-      }
-      co_await ctx.spawn_sub<table_slice>(static_cast<int64_t>(i),
-                                          args_.branches[i]);
-    }
-  }
-
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    for (auto i = size_t{0}; i < args_.branches.size(); ++i) {
-      if (closed_[i]) {
-        continue;
-      }
-      auto sub = ctx.get_sub(static_cast<int64_t>(i));
-      if (not sub) {
-        // An empty branch acts as the identity, forwarding its input straight
-        // to the merged output.
-        if (args_.branches[i].operators.empty()) {
-          co_await push(input);
-        } else {
-          closed_[i] = true;
-        }
-        continue;
-      }
-      auto& handle = as<SubHandle<table_slice>>(*sub);
-      closed_[i] = (co_await handle.push(input)).is_err();
-    }
-  }
-
-  auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
-    -> Task<void> override {
-    auto key_data = materialize(key);
-    auto* index = try_as<int64_t>(key_data);
-    TENZIR_ASSERT(index);
-    closed_[detail::narrow<size_t>(*index)] = true;
-    co_return;
-  }
-
-  auto state() -> OperatorState override {
-    return (not closed_.empty()
-            and std::ranges::all_of(closed_, std::identity{}))
-             ? OperatorState::done
-             : OperatorState::normal;
-  }
-
-private:
-  ForkMergeArgs args_;
-  // A branch is considered closed once its subpipeline terminated. Empty
-  // branches never close on their own; they drain input until end of stream.
-  std::vector<bool> closed_ = std::vector<bool>(args_.branches.size(), false);
 };
 
 class ForkMergeIr final : public ir::Operator {
@@ -178,9 +112,33 @@ public:
     return tag_v<table_slice>;
   }
 
-  auto spawn(element_type_tag input) const -> AnyOperator override {
-    TENZIR_ASSERT(input.is<table_slice>());
-    return ForkMerge{args_}.with_name("fork_merge");
+  auto spawn(element_type_tag) const -> AnyOperator override {
+    TENZIR_UNREACHABLE();
+  }
+
+  auto plan(ir::PlanBuilder& builder, ir::PlanPorts input,
+            diagnostic_handler& dh) && -> failure_or<ir::PlanPorts> override {
+    // Broadcast the input to every branch and gather their outputs: wire the
+    // (single) upstream to each branch head via a `Broadcast` channel, then
+    // return the branch tails so the consumer merges them.
+    auto src = builder.into_single(input);
+    auto heads = std::vector<size_t>{};
+    heads.reserve(args_.branches.size());
+    auto tails = ir::PlanPorts{};
+    for (auto& branch : args_.branches) {
+      // A detached identity head gives the branch a single entry node to
+      // broadcast into (and the identity for an empty branch).
+      auto ty = tag_v<table_slice>;
+      auto head = builder.add_identity(ty);
+      heads.push_back(head);
+      TRY(auto tail,
+          builder.lower_pipeline(std::move(branch),
+                                 ir::PlanPorts{ir::PlanPort{head, ty}}, dh));
+      tails.insert(tails.end(), std::make_move_iterator(tail.begin()),
+                   std::make_move_iterator(tail.end()));
+    }
+    builder.broadcast(src, heads);
+    return tails;
   }
 
   friend auto inspect(auto& f, ForkMergeIr& x) -> bool {

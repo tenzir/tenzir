@@ -10,12 +10,10 @@
 
 #include "tenzir/async/fwd.hpp"
 #include "tenzir/element_type.hpp"
-#include "tenzir/option.hpp"
 #include "tenzir/tql2/ast.hpp"
 
 #include <concepts>
 #include <limits>
-#include <span>
 #include <type_traits>
 #include <vector>
 
@@ -32,6 +30,19 @@ namespace ir {
 /// which implies that subsequent expressions are not evaluated if a previous
 /// one already filtered an event out.
 using optimize_filter = std::vector<ast::expression>;
+
+class PlanBuilder;
+
+/// One output of a plan: the node producing it and the element type.
+struct PlanPort {
+  size_t node{};
+  element_type_tag type;
+
+  static constexpr auto input = std::numeric_limits<size_t>::max() - 1;
+  static constexpr auto output = std::numeric_limits<size_t>::max();
+};
+
+using PlanPorts = std::vector<PlanPort>;
 
 /// Base class for all IR operators.
 class Operator {
@@ -110,6 +121,15 @@ public:
   virtual auto main_location() const -> location {
     return location::unknown;
   }
+
+  /// Lower this operator into a plan, consuming `*this`.
+  ///
+  /// `input` is the frontier feeding this operator; the returned frontier
+  /// carries this operator's output(s). The default appends a single node and
+  /// joins `input` into it. Branch-bearing operators override this to expand
+  /// their sub-pipelines into the plan DAG.
+  virtual auto plan(PlanBuilder& builder, PlanPorts input,
+                    diagnostic_handler& dh) && -> failure_or<PlanPorts>;
 };
 
 /// The IR representation of a `let` statement.
@@ -221,6 +241,9 @@ enum class ChannelKind {
   Scatter,
   /// N:1 — N upstream instances merge into a single downstream instance.
   Gather,
+  /// N:0 — `from.front()` is the typed main lane and `from[1..]` are void aux
+  /// lanes.
+  GatherSignals,
   /// N:M — rows are hash-partitioned on the downstream's `partition_keys` and
   /// routed so that equal keys land on the same downstream instance.
   Shuffle,
@@ -245,10 +268,12 @@ struct PlannedOperator {
 /// A directed channel between operators of the pipeline plan.
 struct PlannedChannel {
   /// Indices into `Plan::operators` of the upstream operators. Size 1 except
-  /// for `Gather`, which merges N upstreams into a single downstream.
+  /// for fan-in kinds like `Gather` and `GatherSignals`. A singleton
+  /// `{PlanPort::input}` denotes the plan's external input.
   std::vector<size_t> from;
   /// Indices into `Plan::operators` of the downstream operators. Size 1 except
-  /// for fan-out kinds (`Broadcast`, `Scatter`) that feed N downstreams.
+  /// for fan-out kinds (`Broadcast`, `Scatter`) that feed N downstreams. A
+  /// singleton `{PlanPort::output}` denotes the plan's external output.
   std::vector<size_t> to;
   /// How data flows across this channel.
   ChannelKind kind;
@@ -264,10 +289,6 @@ struct PlannedChannel {
 struct Plan {
   std::vector<PlannedOperator> operators;
   std::vector<PlannedChannel> channels;
-  /// The element type flowing into the plan (input of the first operator).
-  element_type_tag input;
-  /// The element type flowing out of the plan (output of the last operator).
-  element_type_tag output;
 
   /// Build a plan from an already-instantiated pipeline.
   ///
@@ -278,6 +299,10 @@ struct Plan {
   static auto from(pipeline pipe, element_type_tag input,
                    diagnostic_handler& dh) -> failure_or<Plan>;
 
+  auto input_type() const -> element_type_tag;
+
+  auto output_type() const -> element_type_tag;
+
   auto size() const -> size_t {
     return operators.size();
   }
@@ -285,6 +310,48 @@ struct Plan {
   auto empty() const -> bool {
     return operators.empty();
   }
+};
+
+/// Incrementally builds a `Plan` while lowering a pipeline. Operators receive
+/// a reference to it from `Operator::plan` and use it to append nodes and wire
+/// channels; all channel-kind decisions live here.
+class PlanBuilder {
+public:
+  explicit PlanBuilder(Plan& plan) : plan_{plan} {
+  }
+
+  /// Append a node backed by `op` with the given input/output element types.
+  /// Returns the port carrying the node's output.
+  auto add_node(Box<Operator> op, element_type_tag input,
+                element_type_tag output) -> size_t;
+
+  /// Emit the input channel(s) feeding node `to` from the given frontier:
+  ///   - a lone external-source port emits a channel from `PlanPort::input`;
+  ///   - a single real port emits a `Direct`/`Bytes`/… channel;
+  ///   - multiple real ports emit a single `Gather` channel.
+  auto connect(const PlanPorts& from, size_t to) -> void;
+
+  /// Emit a `Broadcast` channel copying `from`'s output to each node in `to`.
+  auto broadcast(PlanPort from, std::vector<size_t> to) -> void;
+
+  /// Collapse a frontier into a single real node. Returns the sole real port
+  /// unchanged; otherwise appends an identity node fed by `from` (via a
+  /// `Gather`, or the external source for a lone sentinel) and returns it.
+  auto into_single(const PlanPorts& from) -> PlanPort;
+
+  /// Append an identity node with the given element type, leaving its input
+  /// unwired. Branch-bearing operators use it as a detached head that they
+  /// then wire (e.g. via `broadcast`); it also acts as the identity for an
+  /// empty branch.
+  auto add_identity(element_type_tag type) -> size_t;
+
+  /// Lower a pipeline's operators into the plan, threading `input` through each
+  /// via `Operator::plan`. Returns the resulting output frontier.
+  auto lower_pipeline(pipeline pipe, PlanPorts input, diagnostic_handler& dh)
+    -> failure_or<PlanPorts>;
+
+private:
+  Plan& plan_;
 };
 
 class SetIr final : public Operator {
