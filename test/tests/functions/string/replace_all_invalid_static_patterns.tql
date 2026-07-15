@@ -1,7 +1,3 @@
----
-error: true
----
-
 from {
   raw: "port 8080",
 }

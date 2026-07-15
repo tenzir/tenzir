@@ -11,7 +11,6 @@
 #include "tenzir/data.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/multi_series.hpp"
-#include "tenzir/option.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 
@@ -35,11 +34,6 @@ auto const_eval_series(const ast::expression& expr, diagnostic_handler& dh)
 /// Constant evaluates an expression, even if it is non-deterministic.
 auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
   -> failure_or<data>;
-
-/// Evaluates `expr` if it does not depend on input. Returns `None` for dynamic
-/// expressions and propagates diagnostics if constant evaluation fails.
-auto const_eval_if_possible(const ast::expression& expr, session ctx)
-  -> failure_or<Option<data>>;
 
 /// Tries to evaluate a determistic expression to a constant value. Emits
 /// diagnostics only if the evaluation succeeded.

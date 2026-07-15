@@ -176,43 +176,6 @@ auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
   return materialize(view_at(*part.array, 0));
 }
 
-auto const_eval_if_possible(const ast::expression& expr, session ctx)
-  -> failure_or<Option<data>> {
-  return trace_panic(expr, [&] -> failure_or<Option<data>> {
-    if (not expr.is_deterministic(ctx.reg())) {
-      return None{};
-    }
-    auto const_dh = collecting_diagnostic_handler{};
-    auto const_sp = session_provider::make(const_dh);
-    auto depends_on_input = false;
-    try {
-      auto result
-        = evaluator{nullptr, const_sp.as_session(), &depends_on_input}.eval(
-          expr, {});
-      TENZIR_ASSERT(result.length() == 1);
-      TENZIR_ASSERT(result.parts().size() == 1);
-      auto value = materialize(view_at(*result.part(0).array, 0));
-      auto diagnostics = std::move(const_dh).collect();
-      auto failed = std::ranges::any_of(diagnostics, [](auto const& diag) {
-        return diag.severity == severity::error;
-      });
-      for (auto& diag : diagnostics) {
-        std::move(diag).modify().emit(ctx);
-      }
-      if (failed) {
-        return failure::promise();
-      }
-      return value;
-    } catch (failure fail) {
-      if (depends_on_input) {
-        return None{};
-      }
-      std::move(const_dh).forward_to(ctx);
-      return fail;
-    }
-  });
-}
-
 auto try_const_eval(const ast::expression& expr, session ctx)
   -> std::optional<data> {
   return trace_panic(expr, [&] -> std::optional<data> {

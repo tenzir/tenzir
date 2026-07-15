@@ -1,6 +1,9 @@
-error: expected argument of type `list<string>`, but found element of type `int64`
- --> tests/functions/string/replace_all_invalid_static_patterns.tql:9:23
+{
+  raw: null,
+}
+warning: `replace_all` expected `list<string>`, but got `list<int64>`
+ --> tests/functions/string/replace_all_invalid_static_patterns.tql:5:23
   |
-9 | raw = raw.replace_all([80], "x")
-  |                       ^^^^ 
+5 | raw = raw.replace_all([80], "x")
+  |                       ~~~~ 
   |

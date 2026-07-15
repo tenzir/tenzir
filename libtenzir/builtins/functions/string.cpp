@@ -11,7 +11,6 @@
 #include <tenzir/option.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/to_string.hpp>
-#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/array/array_binary.h>
@@ -189,50 +188,35 @@ auto replace_all_literals(std::string_view input,
   return result;
 }
 
-auto static_string_arg(const ast::expression& expr, session ctx)
-  -> failure_or<Option<std::string>> {
-  TRY(auto value, const_eval_if_possible(expr, ctx));
-  if (not value) {
+auto literal_string_arg(const ast::expression& expr) -> Option<std::string> {
+  const auto* constant = try_as<ast::constant>(expr);
+  if (not constant) {
     return None{};
   }
-  if (auto* result = try_as<std::string>(&*value)) {
+  if (const auto* result = try_as<std::string>(constant->value)) {
     return *result;
   }
-  diagnostic::error("expected argument of type `string`, but got `{}`",
-                    type_kind_of_data(*value))
-    .primary(expr)
-    .emit(ctx);
-  return failure::promise();
+  return None{};
 }
 
-auto static_patterns_arg(const ast::expression& expr, session ctx)
-  -> failure_or<Option<std::vector<std::string>>> {
-  TRY(auto value, const_eval_if_possible(expr, ctx));
-  if (not value) {
+auto literal_patterns_arg(const ast::expression& expr)
+  -> Option<std::vector<std::string>> {
+  const auto* values = try_as<ast::list>(expr);
+  if (not values) {
     return None{};
   }
-  auto* values = try_as<list>(&*value);
-  if (not values) {
-    diagnostic::error("expected argument of type `list<string>`, but got `{}`",
-                      type_kind_of_data(*value))
-      .primary(expr)
-      .emit(ctx);
-    return failure::promise();
-  }
   auto patterns = std::vector<std::string>{};
-  patterns.reserve(values->size());
-  for (auto const& item : *values) {
-    auto* pattern = try_as<std::string>(&item);
-    if (not pattern) {
-      diagnostic::error("expected argument of type `list<string>`, but found "
-                        "element of type "
-                        "`{}`",
-                        type_kind_of_data(item))
-        .primary(expr)
-        .emit(ctx);
-      return failure::promise();
+  patterns.reserve(values->items.size());
+  for (const auto& item : values->items) {
+    const auto* item_expr = try_as<ast::expression>(item);
+    if (not item_expr) {
+      return None{};
     }
-    patterns.push_back(*pattern);
+    auto pattern = literal_string_arg(*item_expr);
+    if (not pattern) {
+      return None{};
+    }
+    patterns.push_back(std::move(*pattern));
   }
   return prepare_replace_all_patterns(std::move(patterns));
 }
@@ -827,31 +811,32 @@ public:
       .named_optional("ignore_case", ignore_case);
     TRY(parser.parse(inv, ctx));
     validate_max_replacements(max_replacements, ctx);
-    TRY(auto static_pattern, static_string_arg(pattern_expr, ctx));
-    TRY(auto static_replacement, static_string_arg(replacement_expr, ctx));
+    auto literal_pattern = literal_string_arg(pattern_expr);
+    auto literal_replacement = literal_string_arg(replacement_expr);
     return function_use::make([this, subject_expr = std::move(subject_expr),
                                pattern_expr = std::move(pattern_expr),
                                replacement_expr = std::move(replacement_expr),
-                               static_pattern = std::move(static_pattern),
-                               static_replacement
-                               = std::move(static_replacement),
+                               literal_pattern = std::move(literal_pattern),
+                               literal_replacement
+                               = std::move(literal_replacement),
                                max_replacements, ignore_case](
                                 evaluator eval, session ctx) -> multi_series {
       auto result_type = string_type{};
       auto max = max_replacements ? max_replacements->inner : -1;
-      if (static_pattern and static_replacement) {
-        if (not ignore_case and not static_pattern->empty()) {
+      if (literal_pattern and literal_replacement) {
+        if (not ignore_case and not literal_pattern->empty()) {
           return replace_substring(eval(subject_expr), "replace_substring",
-                                   *static_pattern, *static_replacement, max,
+                                   *literal_pattern, *literal_replacement, max,
                                    pattern_expr.get_location(), subject_expr,
                                    name(), ctx);
         }
         return map_series(eval(subject_expr), [&](series subject) {
           auto f = detail::overload{
             [&](arrow::StringArray const& array) {
-              auto folded_pattern = static_pattern->empty()
-                                      ? std::string{}
-                                      : detail::utf8_fold_case(*static_pattern);
+              auto folded_pattern
+                = literal_pattern->empty()
+                    ? std::string{}
+                    : detail::utf8_fold_case(*literal_pattern);
               auto b = arrow::StringBuilder{tenzir::arrow_memory_pool()};
               check(b.Reserve(array.length()));
               for (auto i = int64_t{0}; i < array.length(); ++i) {
@@ -859,11 +844,12 @@ public:
                   check(b.AppendNull());
                   continue;
                 }
-                if (static_pattern->empty()) {
+                if (literal_pattern->empty()) {
                   check(b.Append(array.Value(i)));
                 } else {
-                  check(b.Append(replace_literal_ignore_case(
-                    array.Value(i), folded_pattern, *static_replacement, max)));
+                  check(b.Append(
+                    replace_literal_ignore_case(array.Value(i), folded_pattern,
+                                                *literal_replacement, max)));
                 }
               }
               return series{result_type, finish(b)};
@@ -962,25 +948,25 @@ public:
           .positional("patterns", patterns_expr, "list")
           .positional("replacement", replacement_expr, "string")
           .parse(inv, ctx));
-    TRY(auto static_patterns, static_patterns_arg(patterns_expr, ctx));
-    TRY(auto static_replacement, static_string_arg(replacement_expr, ctx));
+    auto literal_patterns = literal_patterns_arg(patterns_expr);
+    auto literal_replacement = literal_string_arg(replacement_expr);
     return function_use::make([subject_expr = std::move(subject_expr),
                                patterns_expr = std::move(patterns_expr),
                                replacement_expr = std::move(replacement_expr),
-                               static_patterns = std::move(static_patterns),
-                               static_replacement
-                               = std::move(static_replacement)](evaluator eval,
-                                                                session ctx) {
+                               literal_patterns = std::move(literal_patterns),
+                               literal_replacement
+                               = std::move(literal_replacement)](evaluator eval,
+                                                                 session ctx) {
       auto result_type = string_type{};
       auto subject = eval(subject_expr);
       auto replacement
-        = static_replacement
-            ? multi_series{data_to_series(*static_replacement, eval.length())}
+        = literal_replacement
+            ? multi_series{data_to_series(*literal_replacement, eval.length())}
             : eval(replacement_expr);
       auto b = arrow::StringBuilder{tenzir::arrow_memory_pool()};
       check(b.Reserve(eval.length()));
       auto warned = false;
-      if (static_patterns) {
+      if (literal_patterns) {
         for (auto [subject, replacement] :
              split_multi_series(std::move(subject), std::move(replacement))) {
           TENZIR_ASSERT(subject.length() == replacement.length());
@@ -992,12 +978,12 @@ public:
                   check(b.AppendNull());
                   continue;
                 }
-                if (static_patterns->empty()) {
+                if (literal_patterns->empty()) {
                   check(b.Append(subject.Value(i)));
                   continue;
                 }
                 check(b.Append(replace_all_literals(
-                  subject.Value(i), *static_patterns, replacement.Value(i))));
+                  subject.Value(i), *literal_patterns, replacement.Value(i))));
               }
             },
             [&]<class Subject, class Replacement>(Subject const&,

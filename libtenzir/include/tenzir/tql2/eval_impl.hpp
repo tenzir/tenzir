@@ -22,11 +22,9 @@ namespace tenzir {
 
 class evaluator {
 public:
-  explicit evaluator(const table_slice* input, session ctx,
-                     bool* depends_on_input = nullptr)
+  explicit evaluator(const table_slice* input, session ctx)
     : input_{input},
       length_{input ? detail::narrow<int64_t>(input->rows()) : 1},
-      depends_on_input_{depends_on_input},
       ctx_{ctx} {
   }
 
@@ -143,7 +141,6 @@ public:
 private:
   variant<const table_slice*, table_slice> input_;
   int64_t length_;
-  bool* depends_on_input_;
   session ctx_;
 };
 
