@@ -1,0 +1,9 @@
+created: 2026-07-15
+title: Fan out and rejoin pipelines with fork_merge
+intro: >-
+  This release introduces the `fork_merge` operator for fanning out subpipelines over
+  the same input and merging their outputs into one stream. It also improves the performance
+  of the Tenzir Platform and restores raw-log ingestion for Google SecOps.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.6.0
