@@ -35,3 +35,11 @@ index 33d056f..3903a24 100644
      ICEBERG_ASSIGN_OR_RAISE(
          auto lit, val.get().CastTo(internal::checked_pointer_cast<PrimitiveType>(
                        field_stats_[i].type())));
+diff --git a/src/iceberg/util/url_encoder.cc b/src/iceberg/util/url_encoder.cc
+index 3a7fcf1..b50e982 100644
+--- a/src/iceberg/util/url_encoder.cc
++++ b/src/iceberg/util/url_encoder.cc
+@@ -22 +22,2 @@
+-#include <locale>
++#include <cstdint>
++#include <locale>
