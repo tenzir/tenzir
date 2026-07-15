@@ -43,14 +43,3 @@ index 3a7fcf1..b50e982 100644
 -#include <locale>
 +#include <cstdint>
 +#include <locale>
-diff --git a/src/iceberg/iceberg-config.cmake.in b/src/iceberg/iceberg-config.cmake.in
-index b059af1..5c85b7e 100644
---- a/src/iceberg/iceberg-config.cmake.in
-+++ b/src/iceberg/iceberg-config.cmake.in
-@@ -56,2 +56,6 @@ macro(iceberg_find_dependencies dependencies)
-   foreach(dependency ${dependencies})
-+    if(dependency STREQUAL "Arrow" AND
-+       (TARGET Arrow::arrow_static OR TARGET Arrow::arrow_shared))
-+      continue()
-+    endif()
-     find_dependency(${dependency} ${ICEBERG_FIND_EXTRA_ARGS_${dependency}})
