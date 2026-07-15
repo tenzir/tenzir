@@ -187,6 +187,50 @@ auto ScatterPush::route_data(table_slice data) -> Task<void> {
   }
 }
 
+BroadcastPush::BroadcastPush(
+  std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes)
+  : lanes_{std::move(lanes)}, open_(lanes_.size(), true) {
+  TENZIR_ASSERT(not lanes_.empty());
+}
+
+auto BroadcastPush::operator()(OperatorMsg<table_slice> msg) -> Task<void> {
+  // See the note in `ScatterPush::operator()` for why this is a coroutine
+  // rather than a plain `return co_match(...)`.
+  co_await co_match(
+    std::move(msg),
+    [this](Signal signal) -> Task<void> {
+      // Broadcast signals to every open lane, sequentially.
+      for (auto i = size_t{0}; i < lanes_.size(); ++i) {
+        if (open_[i]) {
+          co_await (*lanes_[i])(OperatorMsg<table_slice>{signal});
+        }
+      }
+    },
+    [this](table_slice data) -> Task<void> {
+      co_await route_data(std::move(data));
+    });
+}
+
+auto BroadcastPush::close_lane(size_t lane) -> void {
+  TENZIR_ASSERT(lane < open_.size());
+  open_[lane] = false;
+}
+
+auto BroadcastPush::open_lanes() const -> size_t {
+  return std::ranges::count(open_, true);
+}
+
+auto BroadcastPush::route_data(table_slice data) -> Task<void> {
+  // Broadcast a copy of the whole slice to every open lane. Unlike scatter,
+  // no partitioning happens: each lane receives all rows. Blocking on a slow
+  // lane applies backpressure to the upstream.
+  for (auto i = size_t{0}; i < lanes_.size(); ++i) {
+    if (open_[i]) {
+      co_await (*lanes_[i])(OperatorMsg<table_slice>{data});
+    }
+  }
+}
+
 auto run_gather(std::vector<Box<Pull<OperatorMsg<table_slice>>>> lanes,
                 Box<Push<OperatorMsg<table_slice>>> out) -> Task<void> {
   struct LaneMsg {

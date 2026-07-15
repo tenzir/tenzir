@@ -189,6 +189,84 @@ TEST("scatter stops routing data to a closed lane") {
   });
 }
 
+TEST("broadcast sends every slice to all lanes") {
+  run([&]() -> Task<void> {
+    auto [push, pulls] = make_broadcast(2, slice_factory(), ChannelId{});
+    co_await folly::coro::collectAll(
+      [&]() -> Task<void> {
+        // Four single-row slices; each lane should receive all four rows.
+        for (auto i = 0; i < 4; ++i) {
+          co_await (*push)(OperatorMsg<table_slice>{make_slice(1)});
+        }
+        co_await (*push)(OperatorMsg<table_slice>{Signal{EndOfData{}}});
+        // Drop the broadcast to close all lanes.
+        push = {};
+      }(),
+      [&]() -> Task<void> {
+        auto rows = int64_t{0};
+        auto got_signal = false;
+        while (auto msg = co_await (*pulls[0])()) {
+          if (auto* slice = try_as<table_slice>(*msg)) {
+            rows += slice->rows();
+          } else {
+            check(is<Signal>(*msg));
+            got_signal = true;
+          }
+        }
+        check_eq(rows, int64_t{4});
+        check(got_signal);
+      }(),
+      [&]() -> Task<void> {
+        auto rows = int64_t{0};
+        auto got_signal = false;
+        while (auto msg = co_await (*pulls[1])()) {
+          if (auto* slice = try_as<table_slice>(*msg)) {
+            rows += slice->rows();
+          } else {
+            got_signal = true;
+          }
+        }
+        check_eq(rows, int64_t{4});
+        check(got_signal);
+      }());
+  });
+}
+
+TEST("broadcast stops routing data to a closed lane") {
+  run([&]() -> Task<void> {
+    auto [push, pulls] = make_broadcast(2, slice_factory(), ChannelId{});
+    // Retire lane 1 up front.
+    static_cast<BroadcastPush&>(*push).close_lane(1);
+    check_eq(static_cast<BroadcastPush&>(*push).open_lanes(), size_t{1});
+    co_await folly::coro::collectAll(
+      [&]() -> Task<void> {
+        for (auto i = 0; i < 3; ++i) {
+          co_await (*push)(OperatorMsg<table_slice>{make_slice(1)});
+        }
+        push = {};
+      }(),
+      [&]() -> Task<void> {
+        auto rows = int64_t{0};
+        while (auto msg = co_await (*pulls[0])()) {
+          if (auto* slice = try_as<table_slice>(*msg)) {
+            rows += slice->rows();
+          }
+        }
+        // The open lane still receives every slice.
+        check_eq(rows, int64_t{3});
+      }(),
+      [&]() -> Task<void> {
+        auto rows = int64_t{0};
+        while (auto msg = co_await (*pulls[1])()) {
+          if (auto* slice = try_as<table_slice>(*msg)) {
+            rows += slice->rows();
+          }
+        }
+        check_eq(rows, int64_t{0});
+      }());
+  });
+}
+
 TEST("gather interleaves data from all lanes") {
   run([&]() -> Task<void> {
     auto parts = make_gather(3, slice_factory(), ChannelId{});
