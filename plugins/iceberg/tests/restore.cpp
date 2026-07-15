@@ -83,6 +83,22 @@ TEST("a missing table is fatal after committed epochs") {
   }));
 }
 
+TEST("a checkpoint without a recorded table matches any table") {
+  // A checkpoint taken before the operator ever saw the table records no
+  // UUID and must not block the restart.
+  CHECK(not restored_table_identity_conflict("", "0195c-fresh"));
+}
+
+TEST("a matching table UUID resumes") {
+  CHECK(not restored_table_identity_conflict("0195c-same", "0195c-same"));
+}
+
+TEST("a dropped-and-recreated table conflicts") {
+  // The rows committed before the checkpoint lived in the old table;
+  // resuming on the impostor would silently lose them.
+  CHECK(restored_table_identity_conflict("0195c-old", "0195c-new"));
+}
+
 } // namespace
 
 } // namespace tenzir::plugins::iceberg

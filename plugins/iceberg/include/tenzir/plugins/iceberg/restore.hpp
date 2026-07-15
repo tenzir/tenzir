@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 
 namespace tenzir::plugins::iceberg {
 
@@ -45,6 +46,19 @@ constexpr auto may_resume_existing_table(const RestoredState& state) -> bool {
 /// table is indistinguishable from a fresh start and gets recreated.
 constexpr auto missing_table_is_fatal(const RestoredState& state) -> bool {
   return state.commit_seq > 0 or state.restored_files > 0;
+}
+
+/// Decides whether the table found at start is a different table than the
+/// one the checkpoint wrote to. Iceberg mints a table UUID at creation that
+/// survives renames and metadata updates; a mismatch means the table was
+/// dropped and recreated in between, so the rows committed before the
+/// checkpoint are gone and resuming would silently continue on the
+/// impostor. A checkpoint that never saw a table records no UUID and
+/// matches anything.
+constexpr auto restored_table_identity_conflict(std::string_view recorded_uuid,
+                                                std::string_view current_uuid)
+  -> bool {
+  return not recorded_uuid.empty() and recorded_uuid != current_uuid;
 }
 
 } // namespace tenzir::plugins::iceberg

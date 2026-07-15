@@ -502,6 +502,21 @@ public:
         done_ = true;
         co_return;
       }
+      // A matching name is not enough after a restore: if the table was
+      // dropped and recreated since the checkpoint, the rows committed
+      // before it are gone, and resuming would silently continue on the
+      // impostor.
+      if (restored_table_identity_conflict(table_uuid_, table->uuid())) {
+        diagnostic::error("Iceberg table `{}` is not the table the "
+                          "checkpoint wrote to",
+                          args_.table_id.inner)
+          .primary(args_.table_id.source)
+          .note("the table was dropped and recreated since the checkpoint; "
+                "the rows committed before the checkpoint are lost")
+          .emit(dh);
+        done_ = true;
+        co_return;
+      }
       TENZIR_DEBUG("to_iceberg: loaded existing table `{}`",
                    args_.table_id.inner);
       set_table(std::move(*table), ctx);
@@ -636,6 +651,7 @@ public:
     serde("files", epoch_snapshot_);
     serde("done", done_);
     serde("created_table", created_table_);
+    serde("table_uuid", table_uuid_);
   }
 
   auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
@@ -743,6 +759,9 @@ private:
     }
     table_ = std::move(table);
     target_schema_ = std::move(schema);
+    // The UUID persists in checkpoints so that a restore can tell a
+    // dropped-and-recreated table apart from the one it wrote to.
+    table_uuid_ = table_->uuid();
   }
 
   /// Verifies that a supplied `partition_by` matches an existing table's
@@ -1736,6 +1755,9 @@ private:
   std::vector<SerializedDataFile> epoch_snapshot_;
   /// Identifies this pipeline's commits across restarts.
   std::string writer_id_;
+  /// UUID of the table this operator writes to, recorded when the table is
+  /// first loaded or created and persisted across restarts.
+  std::string table_uuid_;
   /// Sequence number of the next commit; each value commits at most once.
   uint64_t commit_seq_ = 0;
   /// Whether this operator created the table itself; restored across

@@ -328,6 +328,11 @@ public:
   /// The table's base location as reported by the catalog.
   auto location() const -> std::string;
 
+  /// The table's UUID, minted at creation and stable across renames and
+  /// metadata updates. Distinguishes a dropped-and-recreated table from the
+  /// one a checkpoint wrote to.
+  auto uuid() const -> std::string;
+
   /// Whether both handles use the same current schema and default partition
   /// spec. Open file writers remain valid across metadata refreshes only when
   /// this holds.
