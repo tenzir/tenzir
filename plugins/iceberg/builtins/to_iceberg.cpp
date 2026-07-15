@@ -1519,6 +1519,36 @@ private:
   /// Upstream replays everything after the checkpoint, so either way no row
   /// is lost or duplicated.
   auto reconcile(OpCtx& ctx) -> Task<void> {
+    co_await settle_epoch_files(ctx);
+    if (done_) {
+      co_return;
+    }
+    // Commits may also have landed *after* the restored sequence: rotation-
+    // or finalize-driven commits between the last checkpoint and the crash.
+    // Upstream replays their rows, and without a durable record of those
+    // commits' contents the replay cannot be deduplicated safely — rotation
+    // points can differ across runs, so dropping replayed rows could lose
+    // data instead. Skip past the orphaned sequence numbers so commit tags
+    // stay unambiguous, and surface the potential duplication.
+    auto orphaned = uint64_t{0};
+    while (table_->has_commit(CommitTag{writer_id_, commit_seq_})) {
+      commit_seq_ += 1;
+      orphaned += 1;
+    }
+    if (orphaned > 0) {
+      diagnostic::warning("Iceberg table `{}` has {} commits from before the "
+                          "restart that the restored checkpoint does not "
+                          "cover",
+                          args_.table_id.inner, orphaned)
+        .primary(args_.table_id.source)
+        .note("rows written between the last checkpoint and the restart may "
+              "appear twice after the replay")
+        .emit(ctx.dh());
+    }
+  }
+
+  /// Settles the data files restored from the checkpoint; see `reconcile`.
+  auto settle_epoch_files(OpCtx& ctx) -> Task<void> {
     if (epoch_snapshot_.empty()) {
       co_return;
     }
