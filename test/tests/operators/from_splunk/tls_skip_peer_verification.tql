@@ -9,4 +9,4 @@ from_splunk env("HTTP_FIXTURE_URL"),
   earliest="-15m",
   latest="-5m",
   headers={Authorization: "Splunk test-token"},
-  tls={cacert: env("HTTP_FIXTURE_TLS_CAFILE")}
+  tls={skip_peer_verification: true}
