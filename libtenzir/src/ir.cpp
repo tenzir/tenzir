@@ -23,6 +23,7 @@
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/set.hpp"
 #include "tenzir/tql2/user_defined_operator.hpp"
+#include "tenzir/type.hpp"
 #include "tenzir/view3.hpp"
 
 #include <algorithm>
@@ -337,139 +338,6 @@ struct IfArgs {
   }
 };
 
-/// Shared implementation for both transform and sink variants of `if`.
-class IfImpl {
-public:
-  explicit IfImpl(IfArgs args) : args_{std::move(args)} {
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> {
-    // Spawn subpipelines if they are not already spawned (due to restore).
-    if (not ctx.get_sub(true).is_some()) {
-      co_await ctx.spawn_sub<table_slice>(true, args_.consequence);
-      if (args_.alternative) {
-        co_await ctx.spawn_sub<table_slice>(false, *args_.alternative);
-      }
-    }
-  }
-
-  auto process(table_slice input, OpCtx& ctx, Push<table_slice>* push = nullptr)
-    -> Task<void> {
-    // FIXME: If the inner subpipelines terminate and get erased, this can fail.
-    auto& true_sub = ctx.get_sub(true).unwrap();
-    auto& consequence = as<SubHandle<table_slice>>(true_sub);
-    auto false_sub = ctx.get_sub(false);
-    auto alternative
-      = false_sub ? Option<SubHandle<table_slice>&>{as<SubHandle<table_slice>>(
-                      *false_sub)}
-                  : None{};
-    TENZIR_ASSERT(alternative.is_some() == args_.alternative.has_value());
-    auto true_events = std::vector<table_slice>{};
-    auto false_events = std::vector<table_slice>{};
-    auto end = int64_t{0};
-    for (auto const& predicate : eval(args_.condition, input, ctx)) {
-      auto const start = std::exchange(end, end + predicate.length());
-      TENZIR_ASSERT(end > start);
-      auto const sliced_input = subslice(input, start, end);
-      auto const typed_predicate = predicate.as<bool_type>();
-      if (not typed_predicate) {
-        diagnostic::warning("expected `bool`, but got `{}`",
-                            predicate.type.kind())
-          .primary(args_.condition)
-          .emit(ctx);
-        TENZIR_ASSERT(sliced_input.rows() > 0);
-        false_events.push_back(sliced_input);
-        continue;
-      }
-      if (typed_predicate->array->null_count() > 0) {
-        diagnostic::warning("expected `bool`, but got `null`")
-          .primary(args_.condition)
-          .emit(ctx);
-      }
-      auto [lhs, rhs] = partition(sliced_input, *typed_predicate->array);
-      TENZIR_ASSERT(lhs.rows() + rhs.rows() == sliced_input.rows());
-      if (lhs.rows() > 0) {
-        true_events.push_back(std::move(lhs));
-      }
-      if (rhs.rows() > 0) {
-        false_events.push_back(std::move(rhs));
-      }
-    }
-    if (not consequence_closed_) {
-      for (auto& slice : rebatch(std::move(true_events))) {
-        consequence_closed_
-          = (co_await consequence.push(std::move(slice))).is_err();
-      }
-    }
-    if (not alternative_closed_) {
-      for (auto& slice : rebatch(std::move(false_events))) {
-        if (alternative) {
-          alternative_closed_
-            = (co_await alternative->push(std::move(slice))).is_err();
-        } else if (push) {
-          co_await (*push)(std::move(slice));
-        }
-      }
-    }
-  }
-
-  auto state() -> OperatorState {
-    if (consequence_closed_ and alternative_closed_) {
-      return OperatorState::done;
-    }
-    return OperatorState::normal;
-  }
-
-private:
-  IfArgs args_;
-  bool consequence_closed_ = false;
-  bool alternative_closed_ = false;
-};
-
-class If final : public Operator<table_slice, table_slice> {
-public:
-  explicit If(IfArgs args) : impl_{std::move(args)} {
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> override {
-    return impl_.start(ctx);
-  }
-
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    return impl_.process(std::move(input), ctx, &push);
-  }
-
-  auto state() -> OperatorState override {
-    return impl_.state();
-  }
-
-private:
-  IfImpl impl_;
-};
-
-/// Sink variant of `if` for when both branches return void.
-class IfSink final : public Operator<table_slice, void> {
-public:
-  explicit IfSink(IfArgs args) : impl_{std::move(args)} {
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> override {
-    return impl_.start(ctx);
-  }
-
-  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    return impl_.process(std::move(input), ctx);
-  }
-
-  auto state() -> OperatorState override {
-    return impl_.state();
-  }
-
-private:
-  IfImpl impl_;
-};
-
 } // namespace
 
 auto make_set_ir(std::vector<ast::assignment> assignments)
@@ -576,15 +444,51 @@ public:
     };
   }
 
-  auto spawn(element_type_tag input) const -> AnyOperator override {
-    TENZIR_ASSERT(input.is<table_slice>());
-    auto dh = null_diagnostic_handler{};
-    auto output = infer_type(input, dh);
-    TENZIR_ASSERT(output);
-    if ((*output).is<void>()) {
-      return IfSink{args_}.with_name("if");
-    }
-    return If{args_}.with_name("if");
+  auto spawn(element_type_tag) const -> AnyOperator override {
+    // `if` expands into the plan via `plan()` and is never spawned as a single
+    // node.
+    TENZIR_UNREACHABLE();
+  }
+
+  auto plan(ir::PlanBuilder& builder, ir::PlanPorts input,
+            diagnostic_handler& dh) && -> failure_or<ir::PlanPorts> override {
+    // Flatten `if` into a broadcast that copies the input to two branches, each
+    // guarded by a `where`: the consequence keeps rows where the condition is
+    // `true`, the alternative keeps the rest. Without an explicit `else`, the
+    // alternative forwards the unmatched rows unchanged.
+    auto src = builder.into_single(input);
+    auto heads = std::vector<size_t>{};
+    auto tails = ir::PlanPorts{};
+    auto lower_branch
+      = [&](ir::pipeline branch, ast::expression filter) -> failure_or<void> {
+      branch.operators.insert(branch.operators.begin(),
+                              make_where_ir(std::move(filter)));
+      auto ty = tag_v<table_slice>;
+      auto head = builder.add_identity(ty);
+      heads.push_back(head);
+      TRY(auto tail,
+          builder.lower_pipeline(std::move(branch),
+                                 ir::PlanPorts{ir::PlanPort{head, ty}}, dh));
+      tails.insert(tails.end(), tail.begin(), tail.end());
+      return {};
+    };
+    // Consequence: `where <cond>` keeps rows where the condition is `true` and
+    // emits the sole `expected bool` diagnostic for null/non-bool conditions.
+    TRY(lower_branch(std::move(args_.consequence), args_.condition));
+    // Alternative: `(not <cond>) else true` keeps the rest (`false` and null
+    // route to the else branch, matching `if`'s partition). Coalescing the
+    // negation's null result to `true` routes null rows here without dropping
+    // them and without emitting a second `expected bool` diagnostic.
+    const auto loc = args_.condition.get_location();
+    auto guard = ast::expression{ast::binary_expr{
+      ast::expression{
+        ast::unary_expr{located{ast::unary_op::not_, loc}, args_.condition}},
+      ast::binary_op::else_, ast::expression{ast::constant{true, loc}}}};
+    auto alternative
+      = args_.alternative ? std::move(*args_.alternative) : ir::pipeline{};
+    TRY(lower_branch(std::move(alternative), std::move(guard)));
+    builder.broadcast({src}, std::move(heads));
+    return tails;
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
@@ -883,6 +787,26 @@ auto derive_channel_kind(const ir::PlannedOperator& up,
   TENZIR_TODO(); // this can only happen for N:M parallelism
 }
 
+/// Collects the plan's sinks
+auto find_sinks(ir::Plan const& plan) -> std::vector<size_t> {
+  auto has_out = std::vector<bool>(plan.operators.size(), false);
+  for (const auto& channel : plan.channels) {
+    for (auto from : channel.from) {
+      if (from < plan.operators.size()) {
+        has_out[from] = true;
+      }
+    }
+  }
+  auto sinks = std::vector<size_t>{};
+  for (auto node = size_t{0}; node < plan.operators.size(); ++node) {
+    if (has_out[node] or plan.operators[node].output.is_not<void>()) {
+      continue;
+    }
+    sinks.push_back(node);
+  }
+  return sinks;
+}
+
 } // namespace
 
 auto ir::Plan::from(pipeline pipe, element_type_tag input,
@@ -898,44 +822,248 @@ auto ir::Plan::from(pipeline pipe, element_type_tag input,
     pipe.operators.insert(pipe.operators.begin(), make_where_ir(expr));
   }
   auto plan = Plan{};
-  plan.input = input;
-  plan.output = input;
   plan.operators.reserve(pipe.operators.size());
-  for (auto& op : pipe.operators) {
-    TRY(auto output, op->infer_type(input, dh));
-    // Query parallelism and partition keys before moving the operator.
-    auto parallelism = op->parallelism();
-    auto partition_keys = op->partition_keys();
-    plan.operators.push_back(PlannedOperator{
-      .op = std::move(op),
-      .parallelism = parallelism,
-      .partition_keys = std::move(partition_keys),
-      .input = input,
-      .output = output,
-    });
-    input = output;
-  }
-  plan.output = input;
-  // Phase 1: a linear chain of channels. The channel kind is derived from the
-  // adjacent operators' parallelism and partition keys, which is `Direct`
-  // while all operators run as a single instance.
-  for (auto i = size_t{1}; i < plan.operators.size(); ++i) {
+  auto builder = PlanBuilder{plan};
+  auto head = PlanPorts{PlanPort{.node = PlanPort::input, .type = input}};
+  TRY(auto tail, builder.lower_pipeline(std::move(pipe), std::move(head), dh));
+  // Bundle tail and sinks (to gather all output signals)
+  auto sinks = find_sinks(plan);
+  if (tail.empty()) {
     plan.channels.push_back(PlannedChannel{
-      .from = {i - 1},
-      .to = {i},
-      .kind = derive_channel_kind(plan.operators[i - 1], plan.operators[i]),
+      .from = std::move(sinks),
+      .to = {PlanPort::output},
+      .kind = ChannelKind::GatherSignals,
     });
+  } else {
+    auto output = builder.into_single(tail);
+    if (sinks.empty()) {
+      builder.connect({output}, PlanPort::output);
+    } else {
+      auto gather_signals = std::vector<size_t>{output.node};
+      gather_signals.insert(gather_signals.end(), sinks.begin(), sinks.end());
+      plan.channels.push_back(PlannedChannel{
+        .from = std::move(gather_signals),
+        .to = {PlanPort::output},
+        .kind = ChannelKind::GatherSignals,
+      });
+    }
   }
   return plan;
+}
+
+namespace {
+
+auto find_external_input_channel(ir::Plan const& plan)
+  -> ir::PlannedChannel const& {
+  auto* result = static_cast<ir::PlannedChannel const*>(nullptr);
+  for (auto const& channel : plan.channels) {
+    if (channel.from == std::vector<size_t>{ir::PlanPort::input}) {
+      TENZIR_ASSERT(result == nullptr);
+      result = &channel;
+    }
+  }
+  TENZIR_ASSERT(result != nullptr);
+  return *result;
+}
+
+auto find_external_output_channel(ir::Plan const& plan)
+  -> ir::PlannedChannel const& {
+  auto* result = static_cast<ir::PlannedChannel const*>(nullptr);
+  for (auto const& channel : plan.channels) {
+    if (channel.to == std::vector<size_t>{ir::PlanPort::output}) {
+      TENZIR_ASSERT(result == nullptr);
+      result = &channel;
+    }
+  }
+  TENZIR_ASSERT(result != nullptr);
+  return *result;
+}
+
+} // namespace
+
+auto ir::Plan::input_type() const -> element_type_tag {
+  auto const& channel = find_external_input_channel(*this);
+  TENZIR_ASSERT(channel.to.size() == 1);
+  return operators[channel.to.front()].input;
+}
+
+auto ir::Plan::output_type() const -> element_type_tag {
+  auto const& channel = find_external_output_channel(*this);
+  TENZIR_ASSERT(not channel.from.empty());
+  return operators[channel.from.front()].output;
+}
+
+auto ir::Operator::plan(PlanBuilder& builder, PlanPorts input,
+                        diagnostic_handler& dh) && -> failure_or<PlanPorts> {
+  TENZIR_ASSERT(not input.empty());
+  auto in = input.front().type;
+  TRY(auto out_ty, infer_type(in, dh));
+  auto node = builder.add_node(std::move(*this).move(), in, out_ty);
+  builder.connect(input, node);
+  return out_ty.is<void>() ? PlanPorts{} : PlanPorts{PlanPort{node, out_ty}};
+}
+
+auto ir::PlanBuilder::add_node(Box<Operator> op, element_type_tag input,
+                               element_type_tag output) -> size_t {
+  // Query parallelism and partition keys before moving the operator.
+  auto parallelism = op->parallelism();
+  auto partition_keys = op->partition_keys();
+  auto node = plan_.operators.size();
+  plan_.operators.push_back(PlannedOperator{
+    .op = std::move(op),
+    .parallelism = parallelism,
+    .partition_keys = std::move(partition_keys),
+    .input = input,
+    .output = output,
+  });
+  return node;
+}
+
+auto ir::PlanBuilder::connect(const PlanPorts& from, size_t to) -> void {
+  TENZIR_ASSERT(not from.empty());
+  if (from[0].node == PlanPort::input) {
+    plan_.channels.push_back(PlannedChannel{
+      .from = {from[0].node},
+      .to = {to},
+      .kind = ChannelKind::Direct,
+    });
+    return;
+  }
+  if (to == PlanPort::output) {
+    TENZIR_ASSERT_EQ(from.size(), 1);
+    plan_.channels.push_back(PlannedChannel{
+      .from = {from[0].node},
+      .to = {to},
+      .kind = ChannelKind::Direct,
+    });
+    return;
+  }
+  if (from.size() > 1) {
+    // gather
+    auto froms = std::vector<size_t>{};
+    froms.reserve(from.size());
+    for (const auto& port : from) {
+      froms.push_back(port.node);
+    }
+    plan_.channels.push_back(PlannedChannel{
+      .from = std::move(froms),
+      .to = {to},
+      .kind = ChannelKind::Gather,
+    });
+    return;
+  }
+  plan_.channels.push_back(PlannedChannel{
+    .from = {from[0].node},
+    .to = {to},
+    .kind
+    = derive_channel_kind(plan_.operators[from[0].node], plan_.operators[to]),
+  });
+}
+
+auto ir::PlanBuilder::broadcast(PlanPort from, std::vector<size_t> to) -> void {
+  TENZIR_ASSERT(from.node != PlanPort::input);
+  plan_.channels.push_back(PlannedChannel{
+    .from = {from.node},
+    .to = std::move(to),
+    .kind = ChannelKind::Broadcast,
+  });
+}
+
+namespace {
+
+/// Runtime pass-through used to materialize identity IR nodes.
+template <class T>
+class PassOp final : public Operator<T, T> {
+public:
+  auto process(T input, Push<T>& push, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    co_await push(std::move(input));
+  }
+};
+
+template <>
+class PassOp<void> final : public Operator<void, void> {
+public:
+  auto state() -> OperatorState override {
+    return OperatorState::done;
+  }
+};
+
+/// A stateless identity IR operator that forwards its input unchanged. The
+/// planner inserts it to give branches a single entry node and to merge
+/// fan-out frontiers; it never appears in a serialized `ir::pipeline`.
+class IdentityIr final : public ir::Operator {
+public:
+  auto name() const -> std::string override {
+    return "pass";
+  }
+
+  auto copy() const -> Box<ir::Operator> override {
+    return IdentityIr{};
+  }
+
+  auto move() && -> Box<ir::Operator> override {
+    return IdentityIr{};
+  }
+
+  auto substitute(substitute_ctx, bool) -> failure_or<void> override {
+    return {};
+  }
+
+  auto infer_type(element_type_tag input, diagnostic_handler&) const
+    -> failure_or<element_type_tag> override {
+    return input;
+  }
+
+  auto spawn(element_type_tag input) const -> AnyOperator override {
+    return match(input, []<class T>(tag<T>) -> AnyOperator {
+      return Box<tenzir::Operator<T, T>>{PassOp<T>{}.with_name("pass")};
+    });
+  }
+};
+
+auto make_identity_ir() -> Box<ir::Operator> {
+  return IdentityIr{};
+}
+
+} // namespace
+
+auto ir::PlanBuilder::into_single(const PlanPorts& from) -> PlanPort {
+  TENZIR_ASSERT(not from.empty());
+  if (from.size() == 1 and from.front().node != PlanPort::input) {
+    return from.front();
+  }
+  // Collapse the frontier (a lone external source, or multiple upstreams) into
+  // a single node by routing it through an identity operator.
+  auto type = from.front().type;
+  auto node = add_node(make_identity_ir(), type, type);
+  connect(from, node);
+  return PlanPort{node, type};
+}
+
+auto ir::PlanBuilder::add_identity(element_type_tag type) -> size_t {
+  return add_node(make_identity_ir(), type, type);
+}
+
+auto ir::PlanBuilder::lower_pipeline(pipeline pipe, PlanPorts input,
+                                     diagnostic_handler& dh)
+  -> failure_or<PlanPorts> {
+  TENZIR_ASSERT(pipe.lets.empty());
+  PlanPorts frontier = std::move(input);
+  for (auto& op : pipe.operators) {
+    TRY(frontier, std::move(*op).plan(*this, std::move(frontier), dh));
+  }
+  return frontier;
 }
 
 auto ir::pipeline::infer_type(element_type_tag input,
                               diagnostic_handler& dh) const
   -> failure_or<element_type_tag> {
+  auto frontier = input;
   for (auto& op : operators) {
-    TRY(input, op->infer_type(input, dh));
+    TRY(frontier, op->infer_type(frontier, dh));
   }
-  return input;
+  return frontier;
 }
 
 auto ir::pipeline::optimize(optimize_filter filter,
@@ -996,6 +1124,19 @@ auto ir::Operator::copy() const -> Box<Operator> {
 auto ir::Operator::move() && -> Box<Operator> {
   // TODO: This should be overriden by something like CRTP.
   return copy();
+}
+
+auto ir::Operator::display_name() const -> std::string {
+  auto n = name();
+  if (n.ends_with("_ir")) {
+    n.resize(n.length() - 3);
+  }
+  return n;
+}
+
+auto ir::Operator::infer_type(element_type_tag input, diagnostic_handler&) const
+  -> failure_or<element_type_tag> {
+  return input;
 }
 
 auto operator_compiler_plugin::operator_name() const -> std::string {
