@@ -46,7 +46,7 @@ struct Args {
   ast::expression earliest;
   ast::expression latest;
   located<data> headers;
-  Option<located<data>> tls;
+  Option<ast::expression> tls;
   Option<located<duration>> timeout;
   Option<located<duration>> connection_timeout;
   Option<located<uint64_t>> max_retry_count;
@@ -376,7 +376,7 @@ public:
           .named("earliest", args.earliest, "string|time")
           .named("latest", args.latest, "string|time")
           .named("headers", args.headers, "record")
-          .named("tls", args.tls)
+          .named("tls", args.tls, "record")
           .named("timeout", args.timeout)
           .named("connection_timeout", args.connection_timeout)
           .named("max_retry_count", args.max_retry_count)
@@ -443,7 +443,11 @@ public:
                      ast::root_field{ast::identifier{
                        std::string{error_field_name}, search_source}},
                      search_source));
-    append_optional_named_arg(replacement, "tls", std::move(args.tls));
+    if (args.tls) {
+      auto const source = args.tls->get_location();
+      replacement.args.push_back(
+        make_named_arg("tls", std::move(*args.tls), source));
+    }
     append_optional_named_arg(replacement, "timeout", std::move(args.timeout));
     append_optional_named_arg(replacement, "connection_timeout",
                               std::move(args.connection_timeout));
