@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+let $search = ""
+
+from_splunk "https://splunk.example.com:8089",
+  search=$search,
+  earliest="-15m",
+  latest="-5m",
+  headers={Authorization: "Splunk test-token"}

@@ -366,8 +366,9 @@ def _make_handler(
             if path == _SPLUNK_WARNING_MESSAGE + _SPLUNK_EXPORT:
                 self._reply(
                     b'{"preview":false,"messages":[{"type":"WARN",'
-                    b'"text":"Some search peers did not return results."}]}\n'
-                    + _SPLUNK_RESULTS
+                    b'"text":"Some search peers did not return results."},'
+                    b'{"type":"INFO","text":"Search mode is normal."},'
+                    b'{"type":"DEBUG","text":"Search finalized."}]}\n' + _SPLUNK_RESULTS
                 )
                 return
             if path == _SPLUNK_RETRY_429 + _SPLUNK_EXPORT:

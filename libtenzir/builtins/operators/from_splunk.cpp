@@ -254,10 +254,14 @@ public:
         }
         auto type
           = message.type.empty() ? std::string{"message"} : message.type;
-        diagnostic::warning("Splunk search returned {}: {}", type, text)
-          .primary(search_source_)
-          .note("search: {}", search_)
-          .emit(ctx);
+        if (detail::ascii_icase_equal(message.type, "WARN")) {
+          diagnostic::warning("Splunk search returned {}: {}", type, text)
+            .primary(search_source_)
+            .note("search: {}", search_)
+            .emit(ctx);
+          continue;
+        }
+        TENZIR_DEBUG("from_splunk: search returned {}: {}", type, text);
       }
     }
     if (failed) {
@@ -305,6 +309,8 @@ public:
           .emit(ctx);
         return failure::promise();
       }
+      TRY(check_non_empty("search",
+                          located<std::string>{*search, search_source_}, ctx));
       search_value_ = std::move(*search);
     }
     return {};
