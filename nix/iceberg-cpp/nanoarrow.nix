@@ -20,8 +20,11 @@ stdenv.mkDerivation rec {
     ninja
   ];
 
+  # The shared library cannot link against the non-PIC runtime objects of
+  # the musl cross toolchain; static platforms build the static library
+  # that iceberg-cpp links there.
   cmakeFlags = [
-    "-DBUILD_SHARED_LIBS=ON"
+    "-DBUILD_SHARED_LIBS=${if stdenv.hostPlatform.isStatic then "OFF" else "ON"}"
   ];
 
   meta = {
