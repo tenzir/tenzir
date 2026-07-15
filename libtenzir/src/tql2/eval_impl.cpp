@@ -955,6 +955,10 @@ auto evaluator::input_or_throw(into_location location) -> const table_slice& {
   return input_.match(
     [&](const table_slice* input) -> const table_slice& {
       if (not input) {
+        if (depends_on_input_) {
+          *depends_on_input_ = true;
+          throw failure::promise();
+        }
         diagnostic::error("expected a constant expression")
           .primary(location)
           .emit(ctx_);

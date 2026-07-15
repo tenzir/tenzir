@@ -1,0 +1,10 @@
+{
+  raw: "src=<redacted> dst=<redacted> src=<redacted>",
+  src_ip: 192.0.2.1,
+  dst_ip: 198.51.100.2,
+}
+{
+  raw: "dst=<redacted> src=<redacted>",
+  src_ip: 10.0.0.1,
+  dst_ip: 10.0.0.10,
+}

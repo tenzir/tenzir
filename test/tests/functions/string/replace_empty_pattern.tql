@@ -1,0 +1,7 @@
+from {
+  static: "abc".replace("", "-"),
+  dynamic: "abc".replace("", "-"),
+  pattern: "",
+}
+
+dynamic = dynamic.replace(pattern, "-")

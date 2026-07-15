@@ -1,0 +1,20 @@
+---
+name: string_replace
+description: >-
+  Compare static and dynamic single- and multi-pattern replacement over
+  repeated fixed-size token strings, with a control for pipeline overhead.
+tags:
+  functions: string
+  transform: replacement
+  baseline: control
+inputs:
+  main:
+    path: empty.ndjson
+    source:
+      num_events: 100000
+env:
+  TENZIR_CONSOLE_FORMAT: none
+runtime:
+  warmup_runs: 1
+  measurement_runs: 3
+  timeout_seconds: 900

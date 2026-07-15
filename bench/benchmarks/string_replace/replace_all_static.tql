@@ -1,0 +1,31 @@
+---
+bench:
+  id: replace_all_static
+  description: Apply 16 multi-pattern passes with literal arguments.
+---
+
+from {
+  raw: "alpha bravo ".repeat(32),
+  pattern_1: "alpha",
+  pattern_2: "bravo",
+}
+repeat 100k
+batch 5k
+// Equal-length tokens keep the byte count stable while every pass matches.
+raw = raw.replace_all(["alpha", "bravo"], "alpha")
+raw = raw.replace_all(["alpha", "bravo"], "bravo")
+raw = raw.replace_all(["alpha", "bravo"], "alpha")
+raw = raw.replace_all(["alpha", "bravo"], "bravo")
+raw = raw.replace_all(["alpha", "bravo"], "alpha")
+raw = raw.replace_all(["alpha", "bravo"], "bravo")
+raw = raw.replace_all(["alpha", "bravo"], "alpha")
+raw = raw.replace_all(["alpha", "bravo"], "bravo")
+raw = raw.replace_all(["alpha", "bravo"], "alpha")
+raw = raw.replace_all(["alpha", "bravo"], "bravo")
+raw = raw.replace_all(["alpha", "bravo"], "alpha")
+raw = raw.replace_all(["alpha", "bravo"], "bravo")
+raw = raw.replace_all(["alpha", "bravo"], "alpha")
+raw = raw.replace_all(["alpha", "bravo"], "bravo")
+raw = raw.replace_all(["alpha", "bravo"], "alpha")
+raw = raw.replace_all(["alpha", "bravo"], "bravo")
+discard

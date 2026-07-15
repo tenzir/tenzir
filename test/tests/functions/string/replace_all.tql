@@ -1,0 +1,12 @@
+from {
+  raw: "src=192.0.2.1 dst=198.51.100.2 src=192.0.2.1",
+  src_ip: 192.0.2.1,
+  dst_ip: 198.51.100.2,
+},
+{
+  raw: "dst=10.0.0.10 src=10.0.0.1",
+  src_ip: 10.0.0.1,
+  dst_ip: 10.0.0.10,
+}
+
+raw = raw.replace_all([src_ip.string(), dst_ip.string()], "<redacted>")

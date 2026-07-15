@@ -8,6 +8,7 @@
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/detail/string.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/to_string.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -20,9 +21,11 @@
 #include <arrow/util/utf8.h>
 #include <re2/re2.h>
 
+#include <algorithm>
 #include <iterator>
 #include <limits>
 #include <string_view>
+#include <vector>
 
 namespace tenzir::plugins::string {
 
@@ -45,6 +48,193 @@ auto fold_case(const arrow::StringArray& array)
     check(b.Append(detail::utf8_fold_case(array.Value(i))));
   }
   return finish(b);
+}
+
+auto replace_literal_ignore_case(std::string_view input,
+                                 std::string_view folded_pattern,
+                                 std::string_view replacement, int64_t max)
+  -> std::string {
+  auto result = std::string{};
+  auto pos = size_t{0};
+  auto count = int64_t{0};
+  for (auto [s, e] : detail::utf8_fold_case_find(input, folded_pattern)) {
+    if (max >= 0 and count >= max) {
+      break;
+    }
+    result.append(input.substr(pos, s - pos));
+    result.append(replacement);
+    pos = e;
+    ++count;
+  }
+  result.append(input.substr(pos));
+  return result;
+}
+
+auto replace_literal(std::string_view input, std::string_view pattern,
+                     std::string_view replacement, int64_t max,
+                     bool ignore_case) -> std::string {
+  if (pattern.empty()) {
+    return std::string{input};
+  }
+  if (ignore_case) {
+    return replace_literal_ignore_case(input, detail::utf8_fold_case(pattern),
+                                       replacement, max);
+  }
+  auto result = std::string{};
+  auto pos = size_t{0};
+  auto count = int64_t{0};
+  while (max < 0 or count < max) {
+    auto next = input.find(pattern, pos);
+    if (next == std::string_view::npos) {
+      break;
+    }
+    result.append(input.substr(pos, next - pos));
+    result.append(replacement);
+    pos = next + pattern.size();
+    ++count;
+  }
+  result.append(input.substr(pos));
+  return result;
+}
+
+auto validate_max_replacements(
+  std::optional<located<int64_t>> const& max_replacements, session ctx)
+  -> void {
+  if (max_replacements and max_replacements->inner < 0) {
+    diagnostic::error("`max` must be at least 0, but got {}",
+                      max_replacements->inner)
+      .primary(*max_replacements)
+      .emit(ctx);
+  }
+}
+
+auto replace_substring(multi_series subjects, char const* arrow_function,
+                       std::string const& pattern,
+                       std::string const& replacement, int64_t max,
+                       location pattern_location,
+                       ast::expression const& subject_expr,
+                       std::string_view function_name, session ctx)
+  -> multi_series {
+  auto result_type = string_type{};
+  return map_series(std::move(subjects), [&](series subject) {
+    auto f = detail::overload{
+      [&](arrow::StringArray const& array) {
+        auto options
+          = arrow::compute::ReplaceSubstringOptions(pattern, replacement, max);
+        auto result
+          = arrow::compute::CallFunction(arrow_function, {array}, &options);
+        if (not result.ok()) {
+          diagnostic::warning("{}",
+                              result.status().ToStringWithoutContextLines())
+            .severity(result.status().IsInvalid() ? severity::error
+                                                  : severity::warning)
+            .primary(pattern_location)
+            .emit(ctx);
+          return series::null(result_type, subject.length());
+        }
+        return series{result_type, result.MoveValueUnsafe().make_array()};
+      },
+      [&](arrow::NullArray const& array) {
+        return series::null(result_type, array.length());
+      },
+      [&](auto const&) {
+        diagnostic::warning("`{}` expected `string`, but got `{}`",
+                            function_name, subject.type.kind())
+          .primary(subject_expr)
+          .emit(ctx);
+        return series::null(result_type, subject.length());
+      },
+    };
+    return match(*subject.array, f);
+  });
+}
+
+auto prepare_replace_all_patterns(std::vector<std::string> patterns)
+  -> std::vector<std::string> {
+  std::erase_if(patterns, [](const auto& pattern) {
+    return pattern.empty();
+  });
+  std::ranges::sort(patterns, [](const auto& lhs, const auto& rhs) {
+    if (lhs.size() != rhs.size()) {
+      return lhs.size() > rhs.size();
+    }
+    return lhs < rhs;
+  });
+  const auto last = std::ranges::unique(patterns);
+  patterns.erase(last.begin(), last.end());
+  return patterns;
+}
+
+auto replace_all_literals(std::string_view input,
+                          const std::vector<std::string>& patterns,
+                          std::string_view replacement) -> std::string {
+  auto result = std::string{};
+  auto pos = size_t{0};
+  while (pos < input.size()) {
+    auto matched = std::string_view{};
+    for (const auto& pattern : patterns) {
+      if (input.substr(pos).starts_with(pattern)) {
+        matched = pattern;
+        break;
+      }
+    }
+    if (matched.empty()) {
+      result.push_back(input[pos]);
+      ++pos;
+      continue;
+    }
+    result.append(replacement);
+    pos += matched.size();
+  }
+  return result;
+}
+
+auto static_string_arg(const ast::expression& expr, session ctx)
+  -> failure_or<Option<std::string>> {
+  TRY(auto value, const_eval_if_possible(expr, ctx));
+  if (not value) {
+    return None{};
+  }
+  if (auto* result = try_as<std::string>(&*value)) {
+    return *result;
+  }
+  diagnostic::error("expected argument of type `string`, but got `{}`",
+                    type_kind_of_data(*value))
+    .primary(expr)
+    .emit(ctx);
+  return failure::promise();
+}
+
+auto static_patterns_arg(const ast::expression& expr, session ctx)
+  -> failure_or<Option<std::vector<std::string>>> {
+  TRY(auto value, const_eval_if_possible(expr, ctx));
+  if (not value) {
+    return None{};
+  }
+  auto* values = try_as<list>(&*value);
+  if (not values) {
+    diagnostic::error("expected argument of type `list<string>`, but got `{}`",
+                      type_kind_of_data(*value))
+      .primary(expr)
+      .emit(ctx);
+    return failure::promise();
+  }
+  auto patterns = std::vector<std::string>{};
+  patterns.reserve(values->size());
+  for (auto const& item : *values) {
+    auto* pattern = try_as<std::string>(&item);
+    if (not pattern) {
+      diagnostic::error("expected argument of type `list<string>`, but found "
+                        "element of type "
+                        "`{}`",
+                        type_kind_of_data(item))
+        .primary(expr)
+        .emit(ctx);
+      return failure::promise();
+    }
+    patterns.push_back(*pattern);
+  }
+  return prepare_replace_all_patterns(std::move(patterns));
 }
 
 class starts_or_ends_with : public virtual function_plugin {
@@ -606,88 +796,82 @@ public:
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
-    auto pattern = located<std::string>{};
-    auto replacement = std::string{};
+    auto pattern_expr = ast::expression{};
+    auto replacement_expr = ast::expression{};
     auto max_replacements = std::optional<located<int64_t>>{};
     auto ignore_case = false;
     auto parser = argument_parser2::function(name());
-    parser.positional("x", subject_expr, "string")
-      .positional("pattern", pattern)
-      .positional("replacement", replacement)
-      .named("max", max_replacements);
-    if (not regex_) {
-      parser.named_optional("ignore_case", ignore_case);
+    parser.positional("x", subject_expr, "string");
+    if (regex_) {
+      auto pattern = located<std::string>{};
+      auto replacement = std::string{};
+      parser.positional("pattern", pattern)
+        .positional("replacement", replacement)
+        .named("max", max_replacements);
+      TRY(parser.parse(inv, ctx));
+      validate_max_replacements(max_replacements, ctx);
+      return function_use::make(
+        [this, subject_expr = std::move(subject_expr),
+         pattern = std::move(pattern), replacement = std::move(replacement),
+         max_replacements](evaluator eval, session ctx) {
+          auto max = max_replacements ? max_replacements->inner : -1;
+          return replace_substring(eval(subject_expr),
+                                   "replace_substring_regex", pattern.inner,
+                                   replacement, max, pattern.source,
+                                   subject_expr, name(), ctx);
+        });
     }
+    parser.positional("pattern", pattern_expr, "string")
+      .positional("replacement", replacement_expr, "string")
+      .named("max", max_replacements)
+      .named_optional("ignore_case", ignore_case);
     TRY(parser.parse(inv, ctx));
-    if (max_replacements) {
-      if (max_replacements->inner < 0) {
-        diagnostic::error("`max` must be at least 0, but got {}",
-                          max_replacements->inner)
-          .primary(*max_replacements)
-          .emit(ctx);
-      }
-    }
-    return function_use::make(
-      [this, subject_expr = std::move(subject_expr),
-       pattern = std::move(pattern), replacement = std::move(replacement),
-       max_replacements, ignore_case](evaluator eval, session ctx) {
-        auto result_type = string_type{};
-        auto result_arrow_type
-          = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
+    validate_max_replacements(max_replacements, ctx);
+    TRY(auto static_pattern, static_string_arg(pattern_expr, ctx));
+    TRY(auto static_replacement, static_string_arg(replacement_expr, ctx));
+    return function_use::make([this, subject_expr = std::move(subject_expr),
+                               pattern_expr = std::move(pattern_expr),
+                               replacement_expr = std::move(replacement_expr),
+                               static_pattern = std::move(static_pattern),
+                               static_replacement
+                               = std::move(static_replacement),
+                               max_replacements, ignore_case](
+                                evaluator eval, session ctx) -> multi_series {
+      auto result_type = string_type{};
+      auto max = max_replacements ? max_replacements->inner : -1;
+      if (static_pattern and static_replacement) {
+        if (not ignore_case and not static_pattern->empty()) {
+          return replace_substring(eval(subject_expr), "replace_substring",
+                                   *static_pattern, *static_replacement, max,
+                                   pattern_expr.get_location(), subject_expr,
+                                   name(), ctx);
+        }
         return map_series(eval(subject_expr), [&](series subject) {
           auto f = detail::overload{
-            [&](const arrow::StringArray& array) {
-              auto max = max_replacements ? max_replacements->inner : -1;
-              // Arrow's literal `replace_substring` has no case-insensitive
-              // mode, so we match with full Unicode case folding ourselves and
-              // rebuild the result from the original bytes.
-              if (ignore_case and not regex_ and not pattern.inner.empty()) {
-                auto fp = detail::utf8_fold_case(pattern.inner);
-                auto b = arrow::StringBuilder{tenzir::arrow_memory_pool()};
-                check(b.Reserve(array.length()));
-                for (auto i = int64_t{0}; i < array.length(); ++i) {
-                  if (array.IsNull(i)) {
-                    check(b.AppendNull());
-                    continue;
-                  }
-                  auto v = array.Value(i);
-                  auto out = std::string{};
-                  auto pos = size_t{0};
-                  auto count = int64_t{0};
-                  for (auto [s, e] : detail::utf8_fold_case_find(v, fp)) {
-                    if (max >= 0 and count >= max) {
-                      break;
-                    }
-                    out.append(v.substr(pos, s - pos));
-                    out.append(replacement);
-                    pos = e;
-                    ++count;
-                  }
-                  out.append(v.substr(pos));
-                  check(b.Append(out));
+            [&](arrow::StringArray const& array) {
+              auto folded_pattern = static_pattern->empty()
+                                      ? std::string{}
+                                      : detail::utf8_fold_case(*static_pattern);
+              auto b = arrow::StringBuilder{tenzir::arrow_memory_pool()};
+              check(b.Reserve(array.length()));
+              for (auto i = int64_t{0}; i < array.length(); ++i) {
+                if (array.IsNull(i)) {
+                  check(b.AppendNull());
+                  continue;
                 }
-                return series{result_type, finish(b)};
+                if (static_pattern->empty()) {
+                  check(b.Append(array.Value(i)));
+                } else {
+                  check(b.Append(replace_literal_ignore_case(
+                    array.Value(i), folded_pattern, *static_replacement, max)));
+                }
               }
-              auto options = arrow::compute::ReplaceSubstringOptions(
-                pattern.inner, replacement, max);
-              auto result = arrow::compute::CallFunction(
-                regex_ ? "replace_substring_regex" : "replace_substring",
-                {array}, &options);
-              if (not result.ok()) {
-                diagnostic::warning(
-                  "{}", result.status().ToStringWithoutContextLines())
-                  .severity(result.status().IsInvalid() ? severity::error
-                                                        : severity::warning)
-                  .primary(pattern.source)
-                  .emit(ctx);
-                return series::null(result_type, subject.length());
-              }
-              return series{result_type, result.MoveValueUnsafe().make_array()};
+              return series{result_type, finish(b)};
             },
-            [&](const arrow::NullArray& array) {
+            [&](arrow::NullArray const& array) {
               return series::null(result_type, array.length());
             },
-            [&](const auto&) {
+            [&](auto const&) {
               diagnostic::warning("`{}` expected `string`, but got `{}`",
                                   name(), subject.type.kind())
                 .primary(subject_expr)
@@ -697,11 +881,241 @@ public:
           };
           return match(*subject.array, f);
         });
-      });
+      }
+      auto warned = false;
+      auto subject = eval(subject_expr);
+      auto pattern = eval(pattern_expr);
+      auto replacement = eval(replacement_expr);
+      auto b = arrow::StringBuilder{tenzir::arrow_memory_pool()};
+      check(b.Reserve(eval.length()));
+      for (auto [subject, pattern, replacement] : split_multi_series(
+             std::move(subject), std::move(pattern), std::move(replacement))) {
+        TENZIR_ASSERT(subject.length() == pattern.length());
+        TENZIR_ASSERT(subject.length() == replacement.length());
+        auto f = detail::overload{
+          [&](const arrow::StringArray& subject,
+              const arrow::StringArray& pattern,
+              const arrow::StringArray& replacement) {
+            for (auto i = int64_t{0}; i < subject.length(); ++i) {
+              if (subject.IsNull(i) or pattern.IsNull(i)
+                  or replacement.IsNull(i)) {
+                check(b.AppendNull());
+                continue;
+              }
+              check(b.Append(replace_literal(subject.Value(i), pattern.Value(i),
+                                             replacement.Value(i), max,
+                                             ignore_case)));
+            }
+          },
+          [&]<class Subject, class Pattern, class Replacement>(
+            Subject const&, Pattern const&, Replacement const&) {
+            if constexpr (not detail::is_any_v<Subject, arrow::StringArray,
+                                               arrow::NullArray>
+                          or not detail::is_any_v<Pattern, arrow::StringArray,
+                                                  arrow::NullArray>
+                          or not detail::is_any_v<Replacement,
+                                                  arrow::StringArray,
+                                                  arrow::NullArray>) {
+              if (not warned) {
+                warned = true;
+                diagnostic::warning("`replace` expected `string`, but got "
+                                    "`{}`, "
+                                    "`{}`, and `{}`",
+                                    subject.type.kind(), pattern.type.kind(),
+                                    replacement.type.kind())
+                  .primary(subject_expr)
+                  .primary(pattern_expr)
+                  .primary(replacement_expr)
+                  .emit(ctx);
+              }
+            }
+            check(b.AppendNulls(subject.length()));
+          },
+        };
+        match(std::tie(*subject.array, *pattern.array, *replacement.array), f);
+      }
+      return series{result_type, finish(b)};
+    });
   }
 
 private:
   bool regex_ = {};
+};
+
+class replace_all : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.replace_all";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(function_invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    auto patterns_expr = ast::expression{};
+    auto replacement_expr = ast::expression{};
+    TRY(argument_parser2::function(name())
+          .positional("x", subject_expr, "string")
+          .positional("patterns", patterns_expr, "list")
+          .positional("replacement", replacement_expr, "string")
+          .parse(inv, ctx));
+    TRY(auto static_patterns, static_patterns_arg(patterns_expr, ctx));
+    TRY(auto static_replacement, static_string_arg(replacement_expr, ctx));
+    return function_use::make([subject_expr = std::move(subject_expr),
+                               patterns_expr = std::move(patterns_expr),
+                               replacement_expr = std::move(replacement_expr),
+                               static_patterns = std::move(static_patterns),
+                               static_replacement
+                               = std::move(static_replacement)](evaluator eval,
+                                                                session ctx) {
+      auto result_type = string_type{};
+      auto subject = eval(subject_expr);
+      auto replacement
+        = static_replacement
+            ? multi_series{data_to_series(*static_replacement, eval.length())}
+            : eval(replacement_expr);
+      auto b = arrow::StringBuilder{tenzir::arrow_memory_pool()};
+      check(b.Reserve(eval.length()));
+      auto warned = false;
+      if (static_patterns) {
+        for (auto [subject, replacement] :
+             split_multi_series(std::move(subject), std::move(replacement))) {
+          TENZIR_ASSERT(subject.length() == replacement.length());
+          auto f = detail::overload{
+            [&](arrow::StringArray const& subject,
+                arrow::StringArray const& replacement) {
+              for (auto i = int64_t{0}; i < subject.length(); ++i) {
+                if (subject.IsNull(i) or replacement.IsNull(i)) {
+                  check(b.AppendNull());
+                  continue;
+                }
+                if (static_patterns->empty()) {
+                  check(b.Append(subject.Value(i)));
+                  continue;
+                }
+                check(b.Append(replace_all_literals(
+                  subject.Value(i), *static_patterns, replacement.Value(i))));
+              }
+            },
+            [&]<class Subject, class Replacement>(Subject const&,
+                                                  Replacement const&) {
+              if constexpr (not detail::is_any_v<Subject, arrow::StringArray,
+                                                 arrow::NullArray>
+                            or not detail::is_any_v<Replacement,
+                                                    arrow::StringArray,
+                                                    arrow::NullArray>) {
+                if (not warned) {
+                  warned = true;
+                  diagnostic::warning(
+                    "`replace_all` expected `string` and `string`, but "
+                    "got `{}` and `{}`",
+                    subject.type.kind(), replacement.type.kind())
+                    .primary(subject_expr)
+                    .primary(replacement_expr)
+                    .emit(ctx);
+                }
+              }
+              check(b.AppendNulls(subject.length()));
+            },
+          };
+          match(std::tie(*subject.array, *replacement.array), f);
+        }
+        return series{result_type, finish(b)};
+      }
+      auto patterns = eval(patterns_expr);
+      for (auto [subject, patterns, replacement] : split_multi_series(
+             std::move(subject), std::move(patterns), std::move(replacement))) {
+        TENZIR_ASSERT(subject.length() == patterns.length());
+        TENZIR_ASSERT(subject.length() == replacement.length());
+        auto f = detail::overload{
+          [&](arrow::StringArray const& subject,
+              arrow::ListArray const& pattern_lists,
+              arrow::StringArray const& replacement) {
+            if (not is<arrow::StringArray>(*pattern_lists.values())
+                and not is<arrow::NullArray>(*pattern_lists.values())) {
+              if (not warned) {
+                warned = true;
+                diagnostic::warning(
+                  "`replace_all` expected `list<string>`, but got `list<{}>`",
+                  as<list_type>(patterns.type).value_type().kind())
+                  .primary(patterns_expr)
+                  .emit(ctx);
+              }
+              check(b.AppendNulls(subject.length()));
+              return;
+            }
+            auto* values = is<arrow::StringArray>(*pattern_lists.values())
+                             ? &as<arrow::StringArray>(*pattern_lists.values())
+                             : nullptr;
+            for (auto i = int64_t{0}; i < subject.length(); ++i) {
+              if (subject.IsNull(i) or pattern_lists.IsNull(i)
+                  or replacement.IsNull(i)) {
+                check(b.AppendNull());
+                continue;
+              }
+              auto row_patterns = std::vector<std::string>{};
+              auto begin = pattern_lists.value_offset(i);
+              auto end = begin + pattern_lists.value_length(i);
+              auto found_null = false;
+              if (values) {
+                row_patterns.reserve(detail::narrow<size_t>(end - begin));
+                for (auto j = begin; j < end; ++j) {
+                  if (values->IsNull(j)) {
+                    found_null = true;
+                    break;
+                  }
+                  row_patterns.emplace_back(values->Value(j));
+                }
+              } else {
+                found_null = begin != end;
+              }
+              if (found_null) {
+                check(b.AppendNull());
+                continue;
+              }
+              row_patterns
+                = prepare_replace_all_patterns(std::move(row_patterns));
+              if (row_patterns.empty()) {
+                check(b.Append(subject.Value(i)));
+                continue;
+              }
+              check(b.Append(replace_all_literals(
+                subject.Value(i), row_patterns, replacement.Value(i))));
+            }
+          },
+          [&]<class Subject, class Patterns, class Replacement>(
+            Subject const&, Patterns const&, Replacement const&) {
+            if constexpr (not detail::is_any_v<Subject, arrow::StringArray,
+                                               arrow::NullArray>
+                          or not detail::is_any_v<Patterns, arrow::ListArray,
+                                                  arrow::NullArray>
+                          or not detail::is_any_v<Replacement,
+                                                  arrow::StringArray,
+                                                  arrow::NullArray>) {
+              if (not warned) {
+                warned = true;
+                diagnostic::warning("`replace_all` expected `string`, "
+                                    "`list<string>`, and "
+                                    "`string`, but got `{}`, `{}`, and `{}`",
+                                    subject.type.kind(), patterns.type.kind(),
+                                    replacement.type.kind())
+                  .primary(subject_expr)
+                  .primary(patterns_expr)
+                  .primary(replacement_expr)
+                  .emit(ctx);
+              }
+            }
+            check(b.AppendNulls(subject.length()));
+          },
+        };
+        match(std::tie(*subject.array, *patterns.array, *replacement.array), f);
+      }
+      return series{result_type, finish(b)};
+    });
+  }
 };
 
 template <bool Deprecated>
@@ -1097,6 +1511,7 @@ TENZIR_REGISTER_PLUGIN(nullary_method{"length_chars", "utf8_length",
 
 TENZIR_REGISTER_PLUGIN(replace{true});
 TENZIR_REGISTER_PLUGIN(replace{false});
+TENZIR_REGISTER_PLUGIN(replace_all);
 TENZIR_REGISTER_PLUGIN(string_fn<false>);
 TENZIR_REGISTER_PLUGIN(string_fn<true>);
 

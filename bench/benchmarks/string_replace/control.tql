@@ -1,0 +1,14 @@
+---
+bench:
+  id: control
+  description: Measure source, repetition, and batching overhead without replacement.
+---
+
+from {
+  raw: "alpha bravo ".repeat(32),
+  pattern_1: "alpha",
+  pattern_2: "bravo",
+}
+repeat 100k
+batch 5k
+discard
