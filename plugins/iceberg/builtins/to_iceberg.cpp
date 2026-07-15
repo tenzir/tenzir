@@ -13,6 +13,7 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/async/blocking_executor.hpp>
+#include <tenzir/aws_credentials.hpp>
 #include <tenzir/aws_iam.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/detail/enum.hpp>
@@ -385,14 +386,60 @@ public:
     }
     if (auth->credentials) {
       const auto& creds = *auth->credentials;
-      if (not creds.access_key_id.empty()) {
-        config.properties["s3.access-key-id"] = creds.access_key_id;
-      }
-      if (not creds.secret_access_key.empty()) {
-        config.properties["s3.secret-access-key"] = creds.secret_access_key;
-      }
-      if (not creds.session_token.empty()) {
-        config.properties["s3.session-token"] = creds.session_token;
+      const auto needs_materialization = not creds.role.empty()
+                                         or not creds.profile.empty()
+                                         or creds.web_identity.has_value();
+      if (needs_materialization) {
+        // The role, profile, and web-identity flows materialize a static
+        // snapshot of temporary credentials, like the S3 operators do:
+        // iceberg-cpp's S3 FileIO is configured through plain string
+        // properties, so there is no seam for a refreshing credentials
+        // provider. STS-issued credentials expire eventually; pipelines
+        // outliving them must restart to re-authenticate.
+        auto materialized = co_await spawn_blocking(
+          [creds]() -> caf::expected<sts_credentials> {
+            const auto region = creds.region.empty()
+                                  ? std::optional<std::string>{}
+                                  : std::optional{creds.region};
+            auto provider
+              = make_aws_credentials_provider(std::optional{creds}, region);
+            if (not provider) {
+              return provider.error();
+            }
+            auto snapshot = (*provider)->GetAWSCredentials();
+            if (snapshot.IsEmpty()) {
+              return diagnostic::error("failed to obtain AWS credentials")
+                .to_error();
+            }
+            return sts_credentials{
+              .access_key_id = std::string{snapshot.GetAWSAccessKeyId()},
+              .secret_access_key = std::string{snapshot.GetAWSSecretKey()},
+              .session_token = std::string{snapshot.GetSessionToken()},
+            };
+          });
+        if (not materialized) {
+          diagnostic::error(materialized.error())
+            .primary(args_.aws_iam->source)
+            .emit(dh);
+          done_ = true;
+          co_return;
+        }
+        config.properties["s3.access-key-id"] = materialized->access_key_id;
+        config.properties["s3.secret-access-key"]
+          = materialized->secret_access_key;
+        if (not materialized->session_token.empty()) {
+          config.properties["s3.session-token"] = materialized->session_token;
+        }
+      } else {
+        if (not creds.access_key_id.empty()) {
+          config.properties["s3.access-key-id"] = creds.access_key_id;
+        }
+        if (not creds.secret_access_key.empty()) {
+          config.properties["s3.secret-access-key"] = creds.secret_access_key;
+        }
+        if (not creds.session_token.empty()) {
+          config.properties["s3.session-token"] = creds.session_token;
+        }
       }
       if (not creds.region.empty()) {
         config.properties["client.region"] = creds.region;
