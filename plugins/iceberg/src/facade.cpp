@@ -1129,6 +1129,10 @@ auto Table::location() const -> std::string {
   return std::string{impl_->table->location()};
 }
 
+auto Table::uuid() const -> std::string {
+  return impl_->table->uuid();
+}
+
 auto Table::has_same_write_layout(const Table& other) const -> bool {
   const auto& lhs = impl_->table->metadata();
   const auto& rhs = other.impl_->table->metadata();
@@ -1402,6 +1406,29 @@ auto Table::split_by_partition(std::shared_ptr<arrow::StructArray> batch)
   return groups;
 }
 
+namespace {
+
+/// Whether the field or any nested descendant carries one of the ids.
+/// Partition-spec sources may sit inside nested structs, so pruning must
+/// keep the whole top-level ancestor of a source column.
+auto subtree_contains(const ice::SchemaField& field,
+                      const std::unordered_set<int32_t>& ids) -> bool {
+  if (ids.contains(field.field_id())) {
+    return true;
+  }
+  if (field.type()->is_nested()) {
+    const auto& nested = static_cast<const ice::NestedType&>(*field.type());
+    for (const auto& child : nested.fields()) {
+      if (subtree_contains(child, ids)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+} // namespace
+
 auto Table::new_file_writer(const PartitionTuple& partition,
                             std::vector<bool>& omit) -> Result<FileWriter> {
   auto schema = impl_->table->schema();
@@ -1424,7 +1451,7 @@ auto Table::new_file_writer(const PartitionTuple& partition,
     kept.reserve(fields.size());
     for (auto i = size_t{0}; i < fields.size(); ++i) {
       if (omit[i] and fields[i].optional()
-          and not sources.contains(fields[i].field_id())) {
+          and not subtree_contains(fields[i], sources)) {
         continue;
       }
       omit[i] = false;
