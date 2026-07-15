@@ -1758,6 +1758,20 @@ public:
           .primary(*ctx.get_location(gcp_project_arg))
           .emit(ctx);
       }
+#ifndef TENZIR_ICEBERG_GCS
+      if (uses_gcp) {
+        auto location = ctx.get_location(gcp_auth_arg);
+        if (not location) {
+          location = ctx.get_location(gcp_key_arg);
+        }
+        diagnostic::error("this build of `to_iceberg` lacks Google Cloud "
+                          "support")
+          .primary(*location)
+          .note("rebuild against an Arrow with `ARROW_GCS=ON` and "
+                "google-cloud-cpp installed")
+          .emit(ctx);
+      }
+#endif
       return {};
     });
     return d.without_optimize();

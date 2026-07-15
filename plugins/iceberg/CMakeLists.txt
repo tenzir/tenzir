@@ -15,18 +15,24 @@ TenzirRegisterPlugin(
   BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp"
   INCLUDE_DIRECTORIES include)
 
-# Google catalog authentication mints OAuth2 tokens through google-cloud-cpp,
-# the same dependency the gcs plugin uses (and that arrow's GcsFileSystem
-# links anyway).
-find_package(google_cloud_cpp_storage REQUIRED CONFIG)
-dependency_summary("google-cloud-cpp" google-cloud-cpp::storage "Dependencies")
-target_link_libraries(iceberg PUBLIC google-cloud-cpp::storage)
-
-# The data plane for gs:// table locations uses arrow's GcsFileSystem.
+# Google Cloud support is optional: catalog authentication mints OAuth2
+# tokens through google-cloud-cpp, and the data plane for gs:// table
+# locations uses arrow's GcsFileSystem. Homebrew's apache-arrow ships with
+# ARROW_GCS=OFF and homebrew-core carries no google-cloud-cpp, so builds
+# without the prerequisites compile the plugin without Google Cloud support
+# and reject the `gcp_*` arguments at pipeline validation instead.
 find_package(Arrow REQUIRED CONFIG)
-if (NOT ARROW_GCS)
-  message(FATAL_ERROR "The iceberg plugin requires Arrow with GCS support;"
-                      " rebuild Arrow with ARROW_GCS=ON.")
+find_package(google_cloud_cpp_storage QUIET CONFIG)
+if (ARROW_GCS AND google_cloud_cpp_storage_FOUND)
+  dependency_summary("google-cloud-cpp" google-cloud-cpp::storage
+                     "Dependencies")
+  target_link_libraries(iceberg PUBLIC google-cloud-cpp::storage)
+  target_compile_definitions(iceberg PUBLIC TENZIR_ICEBERG_GCS)
+else ()
+  message(
+    STATUS
+      "Disabling Google Cloud support for the iceberg plugin (requires Arrow"
+      " with ARROW_GCS=ON and google-cloud-cpp)")
 endif ()
 
 option(TENZIR_ENABLE_BUNDLED_ICEBERG_CPP "Always use the bundled iceberg-cpp"

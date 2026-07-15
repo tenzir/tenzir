@@ -17,10 +17,8 @@
 
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
-#include <arrow/filesystem/gcsfs.h>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
-#include <google/cloud/storage/oauth2/google_credentials.h>
 #include <iceberg/arrow/arrow_io_internal.h>
 #include <iceberg/arrow/arrow_register.h>
 #include <iceberg/avro/avro_register.h>
@@ -54,6 +52,11 @@
 #include <iceberg/update/fast_append.h>
 #include <iceberg/update/update_schema.h>
 
+#ifdef TENZIR_ICEBERG_GCS
+#  include <arrow/filesystem/gcsfs.h>
+#  include <google/cloud/storage/oauth2/google_credentials.h>
+#endif
+
 #include <algorithm>
 #include <concepts>
 #include <filesystem>
@@ -81,6 +84,8 @@ constexpr auto commit_seq_property = std::string_view{"tenzir.commit-seq"};
 constexpr auto gcp_credentials_property = std::string_view{"gcp."
                                                            "credentials-json"};
 constexpr auto gcp_auth_type = std::string_view{"gcp"};
+
+#ifdef TENZIR_ICEBERG_GCS
 
 /// Stamps a catalog request with a Google OAuth2 bearer token.
 /// google-cloud-cpp caches the token and refreshes it before its ~1h expiry,
@@ -160,6 +165,8 @@ public:
   }
 };
 
+#endif
+
 auto translate_error(const ice::Error& error) -> Error {
   auto kind = Error::Kind::permanent;
   switch (error.kind) {
@@ -206,6 +213,8 @@ auto translate(ice::Result<T> result) -> Result<T> {
 /// check while the FileIO itself strips foreign schemes off object paths.
 constexpr auto s3_file_io = std::string_view{"tenzir-arrow-s3"};
 
+#ifdef TENZIR_ICEBERG_GCS
+
 /// A native GCS FileIO; iceberg-cpp has no `gs://` builtin, so `gs://`
 /// table locations are backed by Arrow's GcsFileSystem here, authenticated
 /// like the catalog: with the service-account key when configured,
@@ -230,6 +239,8 @@ auto make_gcs_file_io(
   return std::make_unique<ice::arrow::ArrowFileSystemFileIO>(*std::move(fs));
 }
 
+#endif
+
 auto ensure_registered() -> void {
   // The bundle's self-registration lives in static initializers that the
   // linker may drop when linking the static archives, so register explicitly.
@@ -238,19 +249,21 @@ auto ensure_registered() -> void {
     ice::arrow::RegisterAll();
     ice::parquet::RegisterAll();
     ice::avro::RegisterAll();
-    ice::rest::auth::AuthManagers::Register(
-      gcp_auth_type,
-      [](std::string_view, const std::unordered_map<std::string, std::string>&)
-        -> ice::Result<std::unique_ptr<ice::rest::auth::AuthManager>> {
-        return std::make_unique<GcpAuthManager>();
-      });
     ice::FileIORegistry::Register(
       std::string{s3_file_io},
       [](const std::unordered_map<std::string, std::string>& properties) {
         return ice::FileIORegistry::Load(
           std::string{ice::FileIORegistry::kArrowS3FileIO}, properties);
       });
+#ifdef TENZIR_ICEBERG_GCS
+    ice::rest::auth::AuthManagers::Register(
+      gcp_auth_type,
+      [](std::string_view, const std::unordered_map<std::string, std::string>&)
+        -> ice::Result<std::unique_ptr<ice::rest::auth::AuthManager>> {
+        return std::make_unique<GcpAuthManager>();
+      });
     ice::FileIORegistry::Register(std::string{gcs_file_io}, make_gcs_file_io);
+#endif
   });
 }
 
@@ -937,9 +950,18 @@ auto Catalog::open(CatalogConfig config) -> Result<Catalog> {
                      std::string{s3_file_io});
       break;
     case file_io::FileIO::gcs:
+#ifdef TENZIR_ICEBERG_GCS
       properties.Set(ice::rest::RestCatalogProperties::kIOImpl,
                      std::string{gcs_file_io});
       break;
+#else
+      // Unreachable: the operator rejects the `gcp_*` arguments at pipeline
+      // validation when the plugin is built without Google Cloud support.
+      return std::unexpected{Error{
+        Error::Kind::permanent,
+        "this build of the iceberg plugin lacks Google Cloud support",
+      }};
+#endif
   }
   for (const auto& [key, value] : config.properties) {
     properties.mutable_configs()[key] = value;
