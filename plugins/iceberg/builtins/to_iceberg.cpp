@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/plugins/iceberg/facade.hpp"
+#include "tenzir/plugins/iceberg/restore.hpp"
 
 #include <tenzir/any.hpp>
 #include <tenzir/arrow_utils.hpp>
@@ -434,9 +435,17 @@ public:
         return catalog.load_table(ns, name);
       });
     if (table) {
-      // After a restore, an existing table is our own previous work, not a
-      // conflict; `mode="create"` resumes by appending.
-      if (mode_ == mode::create and not restored) {
+      // After a restore, an existing table is our own previous work only
+      // when the checkpoint proves this operator created or wrote it. An
+      // empty checkpoint can predate the first input, and an externally
+      // created table must still raise the create-mode conflict then.
+      const auto resumable = may_resume_existing_table({
+        .restored = restored,
+        .created_table = created_table_,
+        .commit_seq = commit_seq_,
+        .restored_files = epoch_snapshot_.size(),
+      });
+      if (mode_ == mode::create and not resumable) {
         diagnostic::error("Iceberg table `{}` already exists",
                           args_.table_id.inner)
           .primary(args_.table_id.source)
@@ -452,24 +461,9 @@ public:
       if (done_) {
         co_return;
       }
-      if (args_.partition_by) {
-        // The existing table's partition spec governs the fanout; a supplied
-        // `partition_by` must match it so that the user's expectation and
-        // reality do not diverge silently.
-        auto checked = co_await spawn_blocking(
-          [table = *table_, fields = partition_fields_]() mutable {
-            return table.check_partition_spec(fields);
-          });
-        if (not checked) {
-          diagnostic::error("{}", checked.error().message)
-            .primary(args_.partition_by->get_location())
-            .note("the partition spec of an existing table cannot be changed "
-                  "by this operator; drop `partition_by` to append to the "
-                  "table as-is")
-            .emit(dh);
-          done_ = true;
-          co_return;
-        }
+      co_await check_partition_spec(*table_, ctx);
+      if (done_) {
+        co_return;
       }
       co_await reconcile(ctx);
       co_return;
@@ -482,11 +476,24 @@ public:
       done_ = true;
       co_return;
     }
-    if (not epoch_snapshot_.empty()) {
+    // Once the checkpoint records committed epochs or holds uncommitted
+    // file handles, recreating a fresh table from post-checkpoint input
+    // would silently lose the rows written before the checkpoint.
+    const auto missing_is_fatal = missing_table_is_fatal({
+      .restored = restored,
+      .created_table = created_table_,
+      .commit_seq = commit_seq_,
+      .restored_files = epoch_snapshot_.size(),
+    });
+    if (missing_is_fatal) {
       diagnostic::error("Iceberg table `{}` no longer exists, but the "
-                        "checkpoint references {} uncommitted data files",
-                        args_.table_id.inner, epoch_snapshot_.size())
+                        "checkpoint records {} committed epochs and {} "
+                        "uncommitted data files",
+                        args_.table_id.inner, commit_seq_,
+                        epoch_snapshot_.size())
         .primary(args_.table_id.source)
+        .note("recreating the table would silently lose the rows committed "
+              "before the checkpoint")
         .emit(dh);
       done_ = true;
       co_return;
@@ -581,6 +588,7 @@ public:
     serde("commit_seq", commit_seq_);
     serde("files", epoch_snapshot_);
     serde("done", done_);
+    serde("created_table", created_table_);
   }
 
   auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
@@ -647,6 +655,31 @@ public:
   }
 
 private:
+  /// Imports the table's Arrow schema. Emits a diagnostic and sets `done_`
+  /// on failure, returning nullptr.
+  auto import_table_schema(Table& table, OpCtx& ctx)
+    -> std::shared_ptr<arrow::Schema> {
+    auto c_schema = ArrowSchema{};
+    if (auto result = table.export_arrow_schema(&c_schema); not result) {
+      diagnostic::error("failed to map Iceberg table schema: {}",
+                        result.error().message)
+        .primary(args_.table_id.source)
+        .emit(ctx.dh());
+      done_ = true;
+      return nullptr;
+    }
+    auto imported = arrow::ImportSchema(&c_schema);
+    if (not imported.ok()) {
+      diagnostic::error("failed to import Iceberg table schema: {}",
+                        imported.status().ToString())
+        .primary(args_.table_id.source)
+        .emit(ctx.dh());
+      done_ = true;
+      return nullptr;
+    }
+    return imported.MoveValueUnsafe();
+  }
+
   /// Imports the table's Arrow schema and makes `table` the write target.
   auto set_table(Table table, OpCtx& ctx) -> void {
     if (auto result = table.validate_partitioning(); not result) {
@@ -657,26 +690,35 @@ private:
       done_ = true;
       return;
     }
-    auto c_schema = ArrowSchema{};
-    if (auto result = table.export_arrow_schema(&c_schema); not result) {
-      diagnostic::error("failed to map Iceberg table schema: {}",
-                        result.error().message)
-        .primary(args_.table_id.source)
-        .emit(ctx.dh());
-      done_ = true;
-      return;
-    }
-    auto imported = arrow::ImportSchema(&c_schema);
-    if (not imported.ok()) {
-      diagnostic::error("failed to import Iceberg table schema: {}",
-                        imported.status().ToString())
-        .primary(args_.table_id.source)
-        .emit(ctx.dh());
-      done_ = true;
+    auto schema = import_table_schema(table, ctx);
+    if (not schema) {
       return;
     }
     table_ = std::move(table);
-    target_schema_ = imported.MoveValueUnsafe();
+    target_schema_ = std::move(schema);
+  }
+
+  /// Verifies that a supplied `partition_by` matches an existing table's
+  /// spec: the table's spec governs the fanout, and the user's expectation
+  /// and reality must not diverge silently. Emits a diagnostic and sets
+  /// `done_` on a mismatch. No-op without `partition_by`.
+  auto check_partition_spec(Table table, OpCtx& ctx) -> Task<void> {
+    if (not args_.partition_by) {
+      co_return;
+    }
+    auto checked = co_await spawn_blocking(
+      [table = std::move(table), fields = partition_fields_]() mutable {
+        return table.check_partition_spec(fields);
+      });
+    if (not checked) {
+      diagnostic::error("{}", checked.error().message)
+        .primary(args_.partition_by->get_location())
+        .note("the partition spec of an existing table cannot be changed "
+              "by this operator; drop `partition_by` to append to the "
+              "table as-is")
+        .emit(ctx.dh());
+      done_ = true;
+    }
   }
 
   /// Creates the table from the schema of the first arriving events. Only
@@ -692,9 +734,10 @@ private:
       }
     }
     auto dropped = std::make_shared<std::vector<std::string>>();
+    auto fell_back = std::make_shared<bool>(false);
     auto table = co_await spawn_blocking(
       [catalog = *catalog_, ns = ns_, name = table_name_, ty = input.schema(),
-       options = std::move(options), dropped,
+       options = std::move(options), dropped, fell_back,
        fall_back_to_load
        = mode_ == mode::create_append]() mutable -> Result<Table> {
         if (auto result = catalog.ensure_namespace(ns); not result) {
@@ -707,6 +750,7 @@ private:
           // Another writer won the race between our existence check and the
           // creation; appending to their table is exactly what this mode
           // promises.
+          *fell_back = true;
           return catalog.load_table(ns, name);
         }
         return created;
@@ -724,6 +768,16 @@ private:
     }
     TENZIR_DEBUG("to_iceberg: ensured table `{}` exists ({} partition fields)",
                  args_.table_id.inner, partition_fields_.size());
+    if (*fell_back) {
+      // The winner's table governs; the same `partition_by` compatibility
+      // check as for tables that already existed at start applies.
+      co_await check_partition_spec(*table, ctx);
+      if (done_) {
+        co_return;
+      }
+    } else {
+      created_table_ = true;
+    }
     set_table(std::move(*table), ctx);
   }
 
@@ -774,6 +828,37 @@ private:
             co_await commit_staged(pending_files_, ctx);
             if (done_) {
               co_return;
+            }
+          }
+        } else {
+          // The table already covers the input without an update of our
+          // own. That is no proof that the cached projection schema does: a
+          // concurrent writer may have added the very fields this input
+          // carries, observed either through a conflict reload or through
+          // the table handle refreshing its metadata. Adopt the table's
+          // current schema when it differs, or projection would silently
+          // drop those fields from this writer's rows.
+          auto schema = import_table_schema(current, ctx);
+          if (done_) {
+            co_return;
+          }
+          if (not schema->Equals(*target_schema_)) {
+            TENZIR_DEBUG("to_iceberg: adopting concurrently evolved schema "
+                         "of table `{}` for input schema `{}` (attempt {})",
+                         args_.table_id.inner, input.schema().name(), attempt);
+            co_await close_all(ctx);
+            if (done_) {
+              co_return;
+            }
+            set_table(std::move(current), ctx);
+            if (done_) {
+              co_return;
+            }
+            if (not checkpointing_) {
+              co_await commit_staged(pending_files_, ctx);
+              if (done_) {
+                co_return;
+              }
             }
           }
         }
@@ -1606,6 +1691,10 @@ private:
   std::string writer_id_;
   /// Sequence number of the next commit; each value commits at most once.
   uint64_t commit_seq_ = 0;
+  /// Whether this operator created the table itself; restored across
+  /// restarts so that create-mode conflict detection stays intact for
+  /// checkpoints that predate the first input.
+  bool created_table_ = false;
   /// Whether checkpoints drive commits. Without checkpoints, every rotation
   /// commits directly (there is no replay to guard against); the first
   /// checkpoint switches to one commit per checkpoint, which `post_commit`

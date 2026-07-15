@@ -1,0 +1,2 @@
+writer exited with 1
+rows: [(1, 'external')]
