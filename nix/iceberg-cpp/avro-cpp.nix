@@ -34,12 +34,19 @@ stdenv.mkDerivation {
     snappy
   ];
 
-  cmakeFlags = [
-    "-DAVRO_USE_BOOST=OFF"
-    "-DAVRO_BUILD_EXECUTABLES=OFF"
-    "-DAVRO_BUILD_TESTS=OFF"
-    "-DBUILD_SHARED_LIBS=ON"
-  ];
+  cmakeFlags =
+    [
+      "-DAVRO_USE_BOOST=OFF"
+      "-DAVRO_BUILD_EXECUTABLES=OFF"
+      "-DAVRO_BUILD_TESTS=OFF"
+      "-DBUILD_SHARED_LIBS=ON"
+    ]
+    # The shared library cannot link against the non-PIC static libstdc++ of
+    # the musl cross toolchain, and iceberg-cpp links the static avro target
+    # anyway.
+    ++ lib.optionals stdenv.hostPlatform.isStatic [
+      "-DAVRO_BUILD_SHARED=OFF"
+    ];
 
   meta = {
     description = "C++ implementation of the Apache Avro data serialization system";
