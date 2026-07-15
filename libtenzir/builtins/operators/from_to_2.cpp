@@ -178,9 +178,9 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) && -> Option<AnyOperator> override {
+  auto spawn(element_type_tag input) const -> AnyOperator override {
     TENZIR_ASSERT(input.is<void>());
-    return From{std::move(events_)}.with_name("from");
+    return From{events_}.with_name("from");
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const

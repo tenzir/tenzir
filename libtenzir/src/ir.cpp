@@ -249,9 +249,9 @@ auto ir::SetIr::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::SetIr::spawn(element_type_tag input) && -> Option<AnyOperator> {
+auto ir::SetIr::spawn(element_type_tag input) const -> AnyOperator {
   TENZIR_ASSERT(input.is<table_slice>());
-  return Set{std::move(assignments_), order_}.with_name("set");
+  return Set{assignments_, order_}.with_name("set");
 }
 
 namespace {
@@ -576,15 +576,15 @@ public:
     };
   }
 
-  auto spawn(element_type_tag input) && -> Option<AnyOperator> override {
+  auto spawn(element_type_tag input) const -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
     auto dh = null_diagnostic_handler{};
     auto output = infer_type(input, dh);
     TENZIR_ASSERT(output);
     if ((*output).is<void>()) {
-      return IfSink{std::move(args_)}.with_name("if");
+      return IfSink{args_}.with_name("if");
     }
-    return If{std::move(args_)}.with_name("if");
+    return If{args_}.with_name("if");
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
@@ -877,9 +877,7 @@ auto ir::pipeline::spawn(element_type_tag input) && -> std::vector<AnyOperator> 
     auto dh = null_diagnostic_handler{};
     auto output = op->infer_type(input, dh);
     TENZIR_ASSERT(output);
-    if (auto spawned = std::move(*op).spawn(input)) {
-      result.push_back(std::move(*spawned));
-    }
+    result.push_back(op->spawn(input));
     input = *output;
   }
   return result;

@@ -398,9 +398,7 @@ public:
     return failure::promise();
   }
 
-  auto spawn(element_type_tag input) && -> Option<AnyOperator> override {
-    // The spawner must be retrieved before filling args, because we move them
-    // out and thus the passed `DescribeCtx` would be incomplete.
+  auto spawn(element_type_tag input) const -> AnyOperator override {
     auto spawner = std::optional<AnySpawn>{};
     if (desc_->spawner) {
       auto noop_dh = null_diagnostic_handler{};
@@ -415,7 +413,7 @@ public:
     auto args = desc_->make_args();
     for (auto [idx, arg] : detail::enumerate(args_)) {
       match(
-        std::move(arg),
+        arg,
         [&]<class T>(T x) {
           // For variadic arguments, all args >= variadic_index map to
           // variadic_index
@@ -432,7 +430,7 @@ public:
     }
     for (auto& named_arg : named_args_) {
       match(
-        std::move(named_arg.value),
+        named_arg.value,
         [&]<class T>(T x) {
           TENZIR_ASSERT(named_arg.index < desc_->named.size());
           as<Setter<T>>(desc_->named[named_arg.index].setter)(args,
@@ -445,14 +443,14 @@ public:
     if (pipeline_) {
       // This is already checked in make().
       TENZIR_ASSERT(desc_->pipeline);
-      desc_->pipeline->setter(args, std::move(pipeline_->pipeline));
+      desc_->pipeline->setter(args, pipeline_->pipeline);
       for (const auto& [binding_idx, id] : pipeline_->let_ids) {
         auto& binding = desc_->pipeline->let_bindings[binding_idx];
         binding.setter(args, id);
       }
     }
     if (desc_->set_filter) {
-      (*desc_->set_filter)(args, std::move(filter_));
+      (*desc_->set_filter)(args, filter_);
     } else {
       TENZIR_ASSERT(filter_.empty());
     }

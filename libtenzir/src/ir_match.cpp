@@ -506,15 +506,15 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) && -> Option<AnyOperator> override {
+  auto spawn(element_type_tag input) const -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
     auto dh = null_diagnostic_handler{};
     auto output = infer_type(input, dh);
     TENZIR_ASSERT(output);
     if ((*output).is<void>()) {
-      return MatchSink{std::move(args_)}.with_name("match");
+      return MatchSink{args_}.with_name("match");
     }
-    return Match{std::move(args_)}.with_name("match");
+    return Match{args_}.with_name("match");
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
