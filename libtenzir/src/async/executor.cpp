@@ -13,6 +13,7 @@
 #include "tenzir/async/join_set.hpp"
 #include "tenzir/async/log.hpp"
 #include "tenzir/async/mail.hpp"
+#include "tenzir/async/routing.hpp"
 #include "tenzir/async/select_set.hpp"
 #include "tenzir/async_secret_resolution.hpp"
 #include "tenzir/co_match.hpp"
@@ -26,6 +27,8 @@
 #include <folly/OperationCancelled.h>
 #include <folly/coro/BoundedQueue.h>
 
+#include <algorithm>
+#include <limits>
 #include <mutex>
 
 // TODO: Why does this not report line numbers correctly?
@@ -1744,8 +1747,11 @@ private:
     auto outputs = std::vector<Option<AnyOpPush>>(operators_.size());
     // Wire the data plane by honoring each planned channel. Without elision,
     // planned operator indices map one-to-one onto their instance groups.
+    // Fan-in channels (`Gather`) produce a merge loop that must be driven
+    // alongside the operator tasks; we collect and spawn them below.
+    auto mergers = std::vector<Task<void>>{};
     for (auto& channel : plan_.channels) {
-      wire_channel(channel, instances_of, inputs, outputs);
+      wire_channel(channel, instances_of, inputs, outputs, mergers);
     }
     // The instance left without an input is the source; the one left without
     // an output is the sink. Connect them to the plan's external endpoints.
@@ -1772,6 +1778,16 @@ private:
     for (auto index = size_t{0}; index < operators_.size(); ++index) {
       add_control_read(index);
     }
+    // Drive the gather merge loops. They are not operators, so they carry no
+    // control plane and do not participate in shutdown accounting; the driver
+    // simply waits for them to finish once their lanes drain.
+    for (auto& merger : mergers) {
+      driver_.add([task = std::move(
+                     merger)] mutable -> Task<std::pair<size_t, Terminated>> {
+        co_await std::move(task);
+        co_return {std::numeric_limits<size_t>::max(), Terminated{}};
+      });
+    }
   }
 
   /// Materialize a planned channel between two runtime operators. The channel
@@ -1780,12 +1796,15 @@ private:
   auto wire_channel(ir::PlannedChannel& plan,
                     const std::vector<std::vector<size_t>>& instances_of,
                     std::vector<Option<AnyOpPull>>& inputs,
-                    std::vector<Option<AnyOpPush>>& outputs) -> void {
-    auto id = id_.op(plan.from).to(id_.op(plan.to));
-    auto const& from = instances_of[plan.from];
-    auto const& to = instances_of[plan.to];
-    // 1:1 wiring between matching instances of the two operators.
+                    std::vector<Option<AnyOpPush>>& outputs,
+                    std::vector<Task<void>>& mergers) -> void {
+    // 1:1 wiring between matching instances of a single upstream/downstream
+    // operator pair.
     auto wire_direct = [&](auto make) {
+      TENZIR_ASSERT(plan.from.size() == 1 and plan.to.size() == 1);
+      auto id = id_.op(plan.from[0]).to(id_.op(plan.to[0]));
+      auto const& from = instances_of[plan.from[0]];
+      auto const& to = instances_of[plan.to[0]];
       TENZIR_ASSERT(from.size() == to.size());
       for (auto i = size_t{0}; i < from.size(); ++i) {
         auto pushpull = make(id);
@@ -1793,11 +1812,12 @@ private:
         inputs[to[i]] = AnyOpPull{std::move(pushpull.pull)};
       }
     };
+    auto make_events = [&](ChannelId cid) {
+      return exec_ctx_.make_channel<table_slice>(std::move(cid));
+    };
     switch (plan.kind) {
       case ir::ChannelKind::Direct:
-        wire_direct([&](ChannelId cid) {
-          return exec_ctx_.make_channel<table_slice>(std::move(cid));
-        });
+        wire_direct(make_events);
         return;
       case ir::ChannelKind::DirectFused:
         wire_direct([&](ChannelId cid) {
@@ -1809,8 +1829,69 @@ private:
           return exec_ctx_.make_channel<chunk_ptr>(std::move(cid));
         });
         return;
-      case ir::ChannelKind::Scatter:
-      case ir::ChannelKind::Gather:
+      case ir::ChannelKind::Broadcast: {
+        // One upstream instance fans a copy of every slice out to N downstream
+        // branch heads. Phase 1 runs every participant single-instance.
+        TENZIR_ASSERT(plan.from.size() == 1);
+        TENZIR_ASSERT(not plan.to.empty());
+        auto const& from = instances_of[plan.from[0]];
+        TENZIR_ASSERT(from.size() == 1);
+        auto id = id_.op(plan.from[0]).to(id_.op(plan.to[0]));
+        auto [push, pulls] = make_broadcast(plan.to.size(), make_events, id);
+        outputs[from[0]] = AnyOpPush{std::move(push)};
+        for (auto i = size_t{0}; i < plan.to.size(); ++i) {
+          auto const& to = instances_of[plan.to[i]];
+          TENZIR_ASSERT(to.size() == 1);
+          inputs[to[0]] = AnyOpPull{std::move(pulls[i])};
+        }
+        return;
+      }
+      case ir::ChannelKind::Gather: {
+        // The instances of N upstream operators merge into a single downstream
+        // instance. Every upstream instance gets its own lane; the merge loop
+        // is returned as a task for the driver to run. We assume a single
+        // downstream operator with a single instance, but any number of
+        // upstream operators, each with any number of instances.
+        TENZIR_ASSERT(not plan.from.empty());
+        TENZIR_ASSERT(plan.to.size() == 1);
+        auto const& to = instances_of[plan.to[0]];
+        TENZIR_ASSERT(to.size() == 1);
+        // Flatten all upstream instances into a lane list, preserving order.
+        auto lanes = std::vector<size_t>{};
+        for (auto from_op : plan.from) {
+          for (auto instance : instances_of[from_op]) {
+            lanes.push_back(instance);
+          }
+        }
+        TENZIR_ASSERT(not lanes.empty());
+        auto id = id_.op(plan.from[0]).to(id_.op(plan.to[0]));
+        auto parts = make_gather(lanes.size(), make_events, id);
+        for (auto i = size_t{0}; i < lanes.size(); ++i) {
+          outputs[lanes[i]] = AnyOpPush{std::move(parts.lanes[i])};
+        }
+        inputs[to[0]] = AnyOpPull{std::move(parts.pull)};
+        mergers.push_back(std::move(parts.merger));
+        return;
+      }
+      case ir::ChannelKind::Scatter: {
+        // A single upstream instance load-balances rows across the instances of
+        // a single downstream operator. We assume one upstream operator with a
+        // single instance and one downstream operator with any number of
+        // instances.
+        TENZIR_ASSERT(plan.from.size() == 1);
+        TENZIR_ASSERT(plan.to.size() == 1);
+        auto const& from = instances_of[plan.from[0]];
+        TENZIR_ASSERT(from.size() == 1);
+        auto const& to = instances_of[plan.to[0]];
+        TENZIR_ASSERT(not to.empty());
+        auto id = id_.op(plan.from[0]).to(id_.op(plan.to[0]));
+        auto [push, pulls] = make_scatter(to.size(), make_events, id);
+        outputs[from[0]] = AnyOpPush{std::move(push)};
+        for (auto i = size_t{0}; i < to.size(); ++i) {
+          inputs[to[i]] = AnyOpPull{std::move(pulls[i])};
+        }
+        return;
+      }
       case ir::ChannelKind::Shuffle:
         TENZIR_TODO();
     }
@@ -1870,7 +1951,9 @@ private:
   auto upstream_branch(size_t op) const -> std::vector<bool> {
     auto out_degree = std::vector<size_t>(plan_.operators.size(), 0);
     for (auto const& channel : plan_.channels) {
-      ++out_degree[channel.from];
+      for (auto from : channel.from) {
+        out_degree[from] += channel.to.size();
+      }
     }
     auto marked = std::vector<bool>(plan_.operators.size(), false);
     auto stack = std::vector<size_t>{op};
@@ -1878,11 +1961,15 @@ private:
       auto x = stack.back();
       stack.pop_back();
       for (auto const& channel : plan_.channels) {
-        // Only follow a predecessor that feeds exclusively into this branch.
-        if (channel.to == x and not marked[channel.from]
-            and out_degree[channel.from] == 1) {
-          marked[channel.from] = true;
-          stack.push_back(channel.from);
+        if (std::ranges::find(channel.to, x) == channel.to.end()) {
+          continue;
+        }
+        // Only follow predecessors that feed exclusively into this branch.
+        for (auto from : channel.from) {
+          if (not marked[from] and out_degree[from] == 1) {
+            marked[from] = true;
+            stack.push_back(from);
+          }
         }
       }
     }

@@ -921,8 +921,8 @@ auto ir::Plan::from(pipeline pipe, element_type_tag input,
   // while all operators run as a single instance.
   for (auto i = size_t{1}; i < plan.operators.size(); ++i) {
     plan.channels.push_back(PlannedChannel{
-      .from = i - 1,
-      .to = i,
+      .from = {i - 1},
+      .to = {i},
       .kind = derive_channel_kind(plan.operators[i - 1], plan.operators[i]),
     });
   }
