@@ -178,9 +178,9 @@ public:
     return tag_v<table_slice>;
   }
 
-  auto spawn(element_type_tag input) && -> Option<AnyOperator> override {
+  auto spawn(element_type_tag input) const -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
-    return ForkMerge{std::move(args_)}.with_name("fork_merge");
+    return ForkMerge{args_}.with_name("fork_merge");
   }
 
   friend auto inspect(auto& f, ForkMergeIr& x) -> bool {

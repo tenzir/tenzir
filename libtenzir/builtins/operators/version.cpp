@@ -210,7 +210,7 @@ public:
     TENZIR_UNUSED(ctx, instantiate);
     return {};
   }
-  auto spawn(element_type_tag input) && -> Option<AnyOperator> override {
+  auto spawn(element_type_tag input) const -> AnyOperator override {
     TENZIR_ASSERT(input.is<void>());
     return Version{}.with_name("version");
   }
