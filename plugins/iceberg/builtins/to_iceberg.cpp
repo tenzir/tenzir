@@ -936,6 +936,19 @@ private:
              ctx);
         co_return;
       }
+      // Evolving the schema of a table that was dropped and recreated
+      // underneath us would commit metadata to the impostor and adopt it.
+      if (restored_table_identity_conflict(table_uuid_, reloaded->uuid())) {
+        diagnostic::error("Iceberg table `{}` was dropped and recreated "
+                          "while writing to it",
+                          args_.table_id.inner)
+          .primary(args_.table_id.source)
+          .note("the rows already committed to the previous table are "
+                "gone; refusing to continue on its replacement")
+          .emit(ctx.dh());
+        done_ = true;
+        co_return;
+      }
       current = std::move(*reloaded);
     }
   }
@@ -1641,6 +1654,20 @@ private:
           });
         if (not reloaded) {
           fail(reloaded.error(), "failed to reload Iceberg table", ctx);
+          co_return;
+        }
+        // A conflict can also mean the table was dropped and recreated
+        // underneath us; appending the staged files to the impostor would
+        // silently abandon the rows already committed to the old table.
+        if (restored_table_identity_conflict(table_uuid_, reloaded->uuid())) {
+          diagnostic::error("Iceberg table `{}` was dropped and recreated "
+                            "while writing to it",
+                            args_.table_id.inner)
+            .primary(args_.table_id.source)
+            .note("the rows already committed to the previous table are "
+                  "gone; refusing to continue on its replacement")
+            .emit(ctx.dh());
+          done_ = true;
           co_return;
         }
         const auto landed = reloaded->has_commit(tag);
