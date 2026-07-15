@@ -415,6 +415,14 @@ public:
   /// answer.
   auto has_commit(const CommitTag& tag) const -> bool;
 
+  /// Whether the table's current snapshot references any of the given
+  /// data-file paths. Restart reconciliation falls back to this when
+  /// snapshot expiration has erased the tagged snapshot that proves a
+  /// commit: paths carry per-file UUIDs and files commit atomically, so one
+  /// live file proves the whole commit landed.
+  auto references_any_data_file(std::span<const std::string> paths)
+    -> Result<bool>;
+
 private:
   struct Impl;
   explicit Table(std::shared_ptr<Impl> impl);

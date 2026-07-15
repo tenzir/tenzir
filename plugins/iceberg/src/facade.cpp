@@ -47,6 +47,7 @@
 #include <iceberg/table.h>
 #include <iceberg/table_identifier.h>
 #include <iceberg/table_metadata.h>
+#include <iceberg/table_scan.h>
 #include <iceberg/transaction.h>
 #include <iceberg/transform.h>
 #include <iceberg/type.h>
@@ -1723,6 +1724,34 @@ auto Table::has_commit(const CommitTag& tag) const -> bool {
     auto seq = snapshot->summary.find(std::string{commit_seq_property});
     return writer != snapshot->summary.end() and seq != snapshot->summary.end()
            and writer->second == tag.writer_id and seq->second == sequence;
+  });
+}
+
+auto Table::references_any_data_file(std::span<const std::string> paths)
+  -> Result<bool> {
+  auto current = impl_->table->current_snapshot();
+  if (not current.has_value() or not *current) {
+    return false;
+  }
+  auto builder = impl_->table->NewScan();
+  if (not builder.has_value()) {
+    return std::unexpected{translate_error(builder.error())};
+  }
+  auto scan = (*builder)->Build();
+  if (not scan.has_value()) {
+    return std::unexpected{translate_error(scan.error())};
+  }
+  auto tasks = (*scan)->PlanFiles();
+  if (not tasks.has_value()) {
+    return std::unexpected{translate_error(tasks.error())};
+  }
+  auto live = std::unordered_set<std::string_view>{};
+  live.reserve(tasks->size());
+  for (const auto& task : *tasks) {
+    live.insert(task->data_file()->file_path);
+  }
+  return std::ranges::any_of(paths, [&](const std::string& path) {
+    return live.contains(path);
   });
 }
 

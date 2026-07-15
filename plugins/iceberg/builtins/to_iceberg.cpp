@@ -1517,6 +1517,35 @@ private:
       commit_seq_ += 1;
       co_return;
     }
+    // The tagged snapshot is the primary proof of the previous commit, but
+    // Iceberg snapshot expiration may have erased it while the committed
+    // rows live on. The restored file paths carry per-file UUIDs and commit
+    // atomically, so any of them being live in the current snapshot proves
+    // the commit landed. (A compaction rewriting all of them away inside
+    // the same crash window would still slip through; that stacked
+    // coincidence remains unhandled.)
+    auto paths = std::vector<std::string>{};
+    paths.reserve(epoch_snapshot_.size());
+    for (const auto& serialized : epoch_snapshot_) {
+      paths.push_back(serialized.path);
+    }
+    auto referenced = co_await spawn_blocking(
+      [table = *table_, paths = std::move(paths)]() mutable {
+        return table.references_any_data_file(paths);
+      });
+    if (not referenced) {
+      fail(referenced.error(), "failed to inspect table data files", ctx);
+      co_return;
+    }
+    if (*referenced) {
+      TENZIR_DEBUG("to_iceberg: restart reconciliation: restored data files "
+                   "are live in the table without the tagged snapshot; "
+                   "dropping {} file handles",
+                   epoch_snapshot_.size());
+      epoch_snapshot_.clear();
+      commit_seq_ += 1;
+      co_return;
+    }
     for (const auto& serialized : epoch_snapshot_) {
       auto file = DataFile::deserialize(serialized);
       if (not file) {
