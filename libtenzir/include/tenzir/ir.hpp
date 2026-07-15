@@ -14,6 +14,7 @@
 #include "tenzir/tql2/ast.hpp"
 
 #include <concepts>
+#include <limits>
 #include <span>
 #include <type_traits>
 #include <vector>
@@ -211,6 +212,10 @@ enum class ChannelKind {
   /// N:N fused events channel (`table_slice`) — like `Direct`, but each input
   /// is fully processed through the downstream before the next is pulled.
   DirectFused,
+  /// 1:N — one upstream instance sends a copy of every slice to each of its N
+  /// downstream instances (fan-out). Used to feed the branches of operators
+  /// like `fork` and `if`.
+  Broadcast,
   /// 1:N — one upstream instance distributes rows across N downstream
   /// instances with no key constraint (load balancing).
   Scatter,
@@ -237,12 +242,14 @@ struct PlannedOperator {
   element_type_tag output;
 };
 
-/// A directed channel between two operators of the pipeline plan.
+/// A directed channel between operators of the pipeline plan.
 struct PlannedChannel {
-  /// Index into `Plan::operators` of the upstream operator.
-  size_t from;
-  /// Index into `Plan::operators` of the downstream operator.
-  size_t to;
+  /// Indices into `Plan::operators` of the upstream operators. Size 1 except
+  /// for `Gather`, which merges N upstreams into a single downstream.
+  std::vector<size_t> from;
+  /// Indices into `Plan::operators` of the downstream operators. Size 1 except
+  /// for fan-out kinds (`Broadcast`, `Scatter`) that feed N downstreams.
+  std::vector<size_t> to;
   /// How data flows across this channel.
   ChannelKind kind;
 };
