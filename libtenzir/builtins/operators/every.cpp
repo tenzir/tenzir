@@ -390,14 +390,8 @@ public:
       } else {
         TRY(auto p, ctx.get(pipe));
         TRY(auto output, p.inner.infer_type(tag_v<Input>, ctx));
-        if (not output) {
-          // Output type not yet determined; default to events.
-          return [](EveryArgs args) {
-            return Every<Input, table_slice>{std::move(args)};
-          };
-        }
         return match(
-          *output,
+          output,
           [](tag<table_slice>)
             -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
             return [](EveryArgs args) {

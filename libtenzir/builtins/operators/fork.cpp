@@ -332,10 +332,10 @@ public:
     d.validate([pipe](DescribeCtx& ctx) -> Empty {
       TRY(auto p, ctx.get(pipe));
       auto output = p.inner.infer_type(tag_v<table_slice>, ctx);
-      if (output.is_error() or not output->has_value()) {
+      if (output.is_error()) {
         return {};
       }
-      if (output->value().is_not<void>()) {
+      if (output->is_not<void>()) {
         diagnostic::error("subpipeline must end in a sink")
           .primary(p.source)
           .emit(ctx);

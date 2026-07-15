@@ -746,7 +746,7 @@ public:
       if (output.is_error()) {
         return {};
       }
-      if (not *output or (*output)->is_not<table_slice>()) {
+      if (output->is_not<table_slice>()) {
         diagnostic::error("pipeline must return events")
           .primary(parser.source.subloc(0, 1))
           .emit(ctx);

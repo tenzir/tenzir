@@ -95,7 +95,7 @@ struct FromArrowFsArgs {
       if (output.is_error()) {
         return {};
       }
-      if (*output and (*output)->template is<chunk_ptr>()) {
+      if (output->template is<chunk_ptr>()) {
         diagnostic::error("pipeline must not return bytes")
           .primary(pipe)
           .emit(ctx);
@@ -386,7 +386,7 @@ struct ToArrowFsArgs {
       if (output.is_error()) {
         return {};
       }
-      if (not *output or (*output)->template is_not<chunk_ptr>()) {
+      if (output->template is_not<chunk_ptr>()) {
         diagnostic::error("pipeline must return bytes").primary(pipe).emit(ctx);
       }
       extra(ctx);

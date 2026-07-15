@@ -687,7 +687,7 @@ public:
       if (output.is_error()) {
         return {};
       }
-      if (not *output or (*output)->is_not<chunk_ptr>()) {
+      if (output->is_not<chunk_ptr>()) {
         diagnostic::error("pipeline must return bytes")
           .primary(printer.source)
           .emit(ctx);
