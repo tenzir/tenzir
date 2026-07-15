@@ -97,6 +97,23 @@ auto check_non_empty_literal(std::string_view name,
     name, located<std::string>{*value, expression.get_location()}, dh);
 }
 
+auto validate_time_bound(std::string_view name,
+                         ast::expression const& expression, location source,
+                         diagnostic_handler& dh) -> failure_or<void> {
+  TRY(auto value, const_eval(expression, dh));
+  if (auto const* string = try_as<std::string>(value)) {
+    return check_non_empty(name, located<std::string>{*string, source}, dh);
+  }
+  if (is<time>(value)) {
+    return {};
+  }
+  auto const inferred = type::infer(value);
+  diagnostic::error("expected `string` or `time` for `{}`", name)
+    .primary(source, "got `{}`", inferred ? inferred->kind() : type_kind{})
+    .emit(dh);
+  return failure::promise();
+}
+
 auto extract_messages(record const& envelope) -> std::vector<SplunkMessage> {
   auto result = std::vector<SplunkMessage>{};
   list const* messages = nullptr;
@@ -289,8 +306,15 @@ class ValidateSplunkResponseIr final : public ir::Operator {
 public:
   ValidateSplunkResponseIr() = default;
 
-  ValidateSplunkResponseIr(ast::expression search, location search_source)
-    : search_{std::move(search)}, search_source_{search_source} {
+  ValidateSplunkResponseIr(ast::expression search, ast::expression earliest,
+                           ast::expression latest, location search_source,
+                           location earliest_source, location latest_source)
+    : search_{std::move(search)},
+      earliest_{std::move(earliest)},
+      latest_{std::move(latest)},
+      search_source_{search_source},
+      earliest_source_{earliest_source},
+      latest_source_{latest_source} {
   }
 
   auto name() const -> std::string override {
@@ -300,6 +324,8 @@ public:
   auto substitute(substitute_ctx ctx, bool instantiate)
     -> failure_or<void> override {
     TRY(search_.substitute(ctx));
+    TRY(earliest_.substitute(ctx));
+    TRY(latest_.substitute(ctx));
     if (instantiate) {
       TRY(auto value, const_eval(search_, ctx));
       auto* search = try_as<std::string>(value);
@@ -311,6 +337,8 @@ public:
       }
       TRY(check_non_empty("search",
                           located<std::string>{*search, search_source_}, ctx));
+      TRY(validate_time_bound("earliest", earliest_, earliest_source_, ctx));
+      TRY(validate_time_bound("latest", latest_, latest_source_, ctx));
       search_value_ = std::move(*search);
     }
     return {};
@@ -340,14 +368,22 @@ public:
 
   friend auto inspect(auto& f, ValidateSplunkResponseIr& x) -> bool {
     return f.object(x).fields(f.field("search", x.search_),
+                              f.field("earliest", x.earliest_),
+                              f.field("latest", x.latest_),
                               f.field("search_value", x.search_value_),
-                              f.field("search_source", x.search_source_));
+                              f.field("search_source", x.search_source_),
+                              f.field("earliest_source", x.earliest_source_),
+                              f.field("latest_source", x.latest_source_));
   }
 
 private:
   ast::expression search_;
+  ast::expression earliest_;
+  ast::expression latest_;
   Option<std::string> search_value_;
   location search_source_;
+  location earliest_source_;
+  location latest_source_;
 };
 
 using validate_splunk_response_ir_plugin
@@ -425,6 +461,8 @@ public:
     append_named_arg(replacement, "method", data{std::string{"post"}},
                      args.url.source);
     auto search_for_diagnostic = args.search;
+    auto earliest_for_validation = args.earliest;
+    auto latest_for_validation = args.latest;
     auto body = std::vector<ast::record::item>{};
     body.emplace_back(ast::record::field{
       ast::identifier{"search", search_source}, std::move(args.search)});
@@ -471,7 +509,9 @@ public:
     TRY(auto result, from_http->compile(std::move(replacement), ctx));
     auto pipeline = std::move(result).unwrap();
     pipeline.operators.push_back(ValidateSplunkResponseIr{
-      std::move(search_for_diagnostic), search_source});
+      std::move(search_for_diagnostic), std::move(earliest_for_validation),
+      std::move(latest_for_validation), search_source, earliest_source,
+      latest_source});
     TRY(auto extract_result,
         parse_pipeline_with_location_override(
           "where result? != null | this = result", search_source, session));

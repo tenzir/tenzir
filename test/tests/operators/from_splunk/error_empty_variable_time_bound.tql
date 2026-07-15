@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+let $earliest = ""
+
+from_splunk "https://splunk.example.com:8089",
+  search="fixture",
+  earliest=$earliest,
+  latest="-5m",
+  headers={Authorization: "Splunk test-token"}
