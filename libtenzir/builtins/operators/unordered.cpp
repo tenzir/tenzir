@@ -45,7 +45,7 @@ public:
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
+    -> failure_or<element_type_tag> override {
     return pipeline_.infer_type(input, dh);
   }
 

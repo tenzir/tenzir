@@ -48,11 +48,11 @@ public:
 
   /// Return the output type of this operator for a given input type.
   ///
-  /// The operator is responsible to report any type mismatches. If the
-  /// operator could potentially accept the given input type, but the output
-  /// type is not known yet, then `std::nullopt` may be returned.
+  /// The operator is responsible to report any type mismatches. This is only
+  /// called after instantiation, so the output type is always determinable.
   virtual auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>>;
+    -> failure_or<element_type_tag>
+    = 0;
 
   /// Substitute variables from the context and potentially instantiate `this`.
   ///
@@ -135,7 +135,7 @@ struct pipeline {
 
   /// @see Operator
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>>;
+    -> failure_or<element_type_tag>;
 
   // TODO: How do we take care that we don't propagate $-vars past the point
   // where they will be defined?
@@ -207,7 +207,7 @@ public:
                 event_order order) && -> optimize_result override;
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override;
+    -> failure_or<element_type_tag> override;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, SetIr& x) -> bool;

@@ -1395,7 +1395,7 @@ public:
       if (auto parser = ctx.get(parser_arg)) {
         auto output = parser->inner.infer_type(tag_v<chunk_ptr>, ctx);
         if (not output.is_error()) {
-          if (not *output or (*output)->is_not<table_slice>()) {
+          if (output->is_not<table_slice>()) {
             diagnostic::error("pipeline must return events")
               .primary(parser->source.subloc(0, 1))
               .emit(ctx);

@@ -184,7 +184,7 @@ public:
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
+    -> failure_or<element_type_tag> override {
     if (input.is_not<void>()) {
       diagnostic::error("expected void, got {}", input).primary(self_).emit(dh);
       return failure::promise();

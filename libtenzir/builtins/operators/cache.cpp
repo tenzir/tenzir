@@ -1221,10 +1221,12 @@ public:
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
+    -> failure_or<element_type_tag> override {
     if (not mode_value_) {
-      // Mode not yet resolved; defer type inference.
-      return std::optional<element_type_tag>{};
+      diagnostic::error("`cache --mode` must be a constant")
+        .primary(op_loc_)
+        .emit(dh);
+      return failure::promise();
     }
     if (*mode_value_ == "write") {
       if (input.is_not<table_slice>()) {
