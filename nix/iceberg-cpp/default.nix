@@ -15,6 +15,8 @@
   openssl,
   zlib,
   snappy,
+  zstd,
+  lz4,
 }:
 
 let
@@ -70,6 +72,8 @@ stdenv.mkDerivation {
     spdlog
     zlib
     snappy
+    zstd
+    lz4
   ];
 
   cmakeFlags = [
@@ -83,6 +87,19 @@ stdenv.mkDerivation {
     "-DICEBERG_BUNDLE_AWSSDK=OFF"
     "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
     "-DCMAKE_COMPILE_WARNING_AS_ERROR=OFF"
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isStatic [
+    # ORC's legacy find modules do not discover libraries when Nix splits
+    # headers and static archives into separate outputs.
+    "-DSNAPPY_INCLUDE_DIR=${lib.getDev snappy}/include"
+    "-DSNAPPY_LIBRARY=${lib.getLib snappy}/lib/libsnappy.a"
+    "-DSNAPPY_STATIC_LIB=${lib.getLib snappy}/lib/libsnappy.a"
+    "-DZSTD_INCLUDE_DIR=${lib.getDev zstd}/include"
+    "-DZSTD_LIBRARY=${lib.getLib zstd}/lib/libzstd.a"
+    "-DZSTD_STATIC_LIB=${lib.getLib zstd}/lib/libzstd.a"
+    "-DLZ4_INCLUDE_DIR=${lib.getDev lz4}/include"
+    "-DLZ4_LIBRARY=${lib.getLib lz4}/lib/liblz4.a"
+    "-DLZ4_STATIC_LIB=${lib.getLib lz4}/lib/liblz4.a"
   ];
 
   # Upstream's header install list misses these two, but the installed
