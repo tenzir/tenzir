@@ -34,6 +34,7 @@ struct exec_config {
   bool dump_ir = false;
   bool dump_inst_ir = false;
   bool dump_opt_ir = false;
+  bool dump_ir_plan = false;
 
   bool multi = false;
   bool strict = false;

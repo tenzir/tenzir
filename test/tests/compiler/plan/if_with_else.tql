@@ -1,0 +1,2 @@
+version
+if name == "x" { head 1 } else { tail 1 }

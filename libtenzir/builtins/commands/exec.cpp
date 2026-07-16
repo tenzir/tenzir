@@ -72,6 +72,8 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   cfg.dump_inst_ir
     = caf::get_or(inv.options, "tenzir.exec.dump-inst-ir", false);
   cfg.dump_opt_ir = caf::get_or(inv.options, "tenzir.exec.dump-opt-ir", false);
+  cfg.dump_ir_plan
+    = caf::get_or(inv.options, "tenzir.exec.dump-ir-plan", false);
   cfg.dump_pipeline
     = caf::get_or(inv.options, "tenzir.exec.dump-pipeline", false);
   cfg.dump_diagnostics
@@ -80,8 +82,8 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
     = caf::get_or(inv.options, "tenzir.exec.dump-metrics", false);
   auto as_file = caf::get_or(inv.options, "tenzir.exec.file", false);
   cfg.neo = caf::get_or(inv.options, "tenzir.neo", cfg.neo);
-  const auto use_neo_executor
-    = cfg.neo or cfg.dump_ir or cfg.dump_inst_ir or cfg.dump_opt_ir;
+  const auto use_neo_executor = cfg.neo or cfg.dump_ir or cfg.dump_inst_ir
+                                or cfg.dump_opt_ir or cfg.dump_ir_plan;
   const auto stdout_color
     = (color_mode == "auto" and not no_color_env and isatty(STDOUT_FILENO))
       or color_mode == "always";
@@ -175,6 +177,8 @@ public:
                                    "instantiated IR and then exit")
         .add<bool>("dump-opt-ir", "print a textual description of the "
                                   "optimized IR and then exit")
+        .add<bool>("dump-ir-plan", "print a diagram of the IR plan and then "
+                                   "exit")
         .add<bool>("dump-finalized", "print a textual description of the "
                                      "finalized pipeline and then exit")
         .add<bool>("dump-diagnostics",

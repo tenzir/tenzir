@@ -2371,6 +2371,10 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     return false;
   }
   TENZIR_ASSERT(plan);
+  if (cfg.dump_ir_plan) {
+    fmt::print("{}", ir::fmt_ir_plan(*plan));
+    return not ctx.has_failure();
+  }
   // Start the actual execution.
   TRY(run_plan_blocking(std::move(*plan), sys, ctx, cfg.profile));
   return true;
@@ -2397,7 +2401,7 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
       return not ctx.has_failure();
     }
     if ((cfg.neo and not cfg.dump_pipeline) or cfg.dump_ir or cfg.dump_inst_ir
-        or cfg.dump_opt_ir) {
+        or cfg.dump_opt_ir or cfg.dump_ir_plan) {
       // This new code path will eventually supersede the current one.
       return exec_with_ir(std::move(parsed), cfg, ctx, sys, source_map);
     }

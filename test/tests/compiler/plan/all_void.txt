@@ -1,0 +1,4 @@
+c0: {input} -- version -- discard
+
+links:
+  c0 --gather-signals-> {output}
