@@ -191,6 +191,10 @@ COPY --from=development --chown=tenzir:tenzir /var/cache/tenzir/ /var/cache/tenz
 COPY --from=development --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir/
 COPY --from=development --chown=tenzir:tenzir /var/log/tenzir/ /var/log/tenzir/
 
+# The build toolchain's libstdc++ is newer than the distro's; ship its
+# runtime so that objects referencing newer GLIBCXX symbols load.
+COPY --from=build-base /usr/local/lib64/libstdc++.so.6* /usr/local/lib64/
+
 COPY --from=arrow-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=aws-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=azure-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
@@ -254,7 +258,9 @@ RUN apt-get update && \
       login \
       util-linux && \
     rm -rf /tmp/custom-packages && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    echo /usr/local/lib64 > /etc/ld.so.conf.d/000-gcc-toolchain.conf && \
+    ldconfig
 
 USER tenzir:tenzir
 
