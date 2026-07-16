@@ -525,6 +525,10 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
         x.content.assign(begin, end);
       }
     }
+    // The message body extends to the end of the input, so the parser always
+    // consumes the entire range. Advance the iterator accordingly so callers
+    // can detect full consumption.
+    f = l;
     return true;
   }
 };
