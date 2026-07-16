@@ -5,6 +5,7 @@ from .instantiation_runner import InstantiationRunner  # noqa: F401
 from .ir_runner import IrRunner  # noqa: F401
 from .lexer_runner import LexerRunner  # noqa: F401
 from .opt_runner import OptRunner  # noqa: F401
+from .plan_runner import PlanRunner  # noqa: F401
 
 __all__ = [
     "AstRunner",
@@ -12,4 +13,5 @@ __all__ = [
     "IrRunner",
     "LexerRunner",
     "OptRunner",
+    "PlanRunner",
 ]

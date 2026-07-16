@@ -52,6 +52,9 @@ public:
   /// Return the name of a matching serialization plugin.
   virtual auto name() const -> std::string = 0;
 
+  /// Return the display name of the operator.
+  virtual auto display_name() const -> std::string;
+
   /// A virtual copy constructor.
   virtual auto copy() const -> Box<Operator>;
 
@@ -311,6 +314,13 @@ struct Plan {
     return operators.empty();
   }
 };
+
+/// Render a debug text description of a `Plan`.
+///
+/// The output is intended for snapshot tests: it decomposes the plan DAG into
+/// maximal linear chains (printed inline with channel glyphs) plus a `links:`
+/// section listing the non-linear cross-chain edges.
+auto fmt_ir_plan(const Plan& plan) -> std::string;
 
 /// Incrementally builds a `Plan` while lowering a pipeline. Operators receive
 /// a reference to it from `Operator::plan` and use it to append nodes and wire

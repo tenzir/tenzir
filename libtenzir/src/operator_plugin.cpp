@@ -355,6 +355,10 @@ public:
     return "GenericIr";
   }
 
+  auto display_name() const -> std::string override {
+    return desc_->name;
+  }
+
   auto copy() const -> Box<ir::Operator> override {
     return GenericIr{*this};
   }

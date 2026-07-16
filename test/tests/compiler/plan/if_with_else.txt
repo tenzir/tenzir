@@ -1,0 +1,9 @@
+c0: {input} -- version
+c1: pass -- where -- head
+c2: pass -- where -- tail
+c3: to_stdout
+
+links:
+  c0 --broadcast-> c1 c2
+  c1 c2 --gather-> c3
+  c3 --gather-signals-> {output}
