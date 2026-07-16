@@ -207,6 +207,29 @@ struct partition_source_state {
   }
 };
 
+/// Wraps `err` with contextual notes for diagnostics, like
+/// `diagnostic::error(err).note(...).to_error()`, but preserves `err`'s
+/// original `tenzir::ec` code when it is `ec::format_error` instead of
+/// collapsing it to `ec::diagnostic`, and attaches `partition` as a second,
+/// typed context element. Callers such as the rebuilder need to identify
+/// exactly which partition in a batch a decode failure came from, which is
+/// only possible if that information survives the wrapping instead of being
+/// left to string-parsing after the fact (see `store_error_partition`).
+template <class... Ts>
+auto wrap_store_error(caf::error err, const uuid& partition,
+                      fmt::format_string<Ts...> note, Ts&&... xs)
+  -> caf::error {
+  if (err == ec::format_error) {
+    return caf::make_error(
+      ec::format_error,
+      fmt::format("{}: {}", fmt::format(note, std::forward<Ts>(xs)...), err),
+      partition);
+  }
+  return diagnostic::error(std::move(err))
+    .note(note, std::forward<Ts>(xs)...)
+    .to_error();
+}
+
 class partition_loader {
 public:
   partition_loader(std::vector<partition_info> partitions,
@@ -287,36 +310,44 @@ private:
     auto partition_path = std::filesystem::path{filename};
     auto partition_chunk = chunk::mmap(partition_path);
     if (not partition_chunk) {
-      co_return diagnostic::error(partition_chunk.error())
-        .note("failed to mmap partition {} at {}", partition.uuid,
-              partition_path)
-        .to_error();
+      co_return wrap_store_error(std::move(partition_chunk.error()),
+                                 partition.uuid,
+                                 "failed to mmap partition {} at {}",
+                                 partition.uuid, partition_path);
     }
     auto partition_state = passive_partition_state{};
     if (auto err = partition_state.initialize_from_chunk(*partition_chunk);
         err.valid()) {
-      co_return diagnostic::error(std::move(err))
-        .note("failed to load partition {}", partition.uuid)
-        .to_error();
+      co_return wrap_store_error(std::move(err), partition.uuid,
+                                 "failed to load partition {}", partition.uuid);
     }
     if (partition_state.id != partition.uuid) {
-      co_return caf::make_error(ec::format_error,
-                                "unexpected ID for passive partition: "
-                                "expected {}, got {}",
-                                partition.uuid, partition_state.id);
+      co_return wrap_store_error(
+        caf::make_error(ec::format_error,
+                        "unexpected ID for passive partition: "
+                        "expected {}, got {}",
+                        partition.uuid, partition_state.id),
+        partition.uuid, "unexpected ID for passive partition {}",
+        partition.uuid);
     }
     if (auto const* plugin
         = plugins::find<store_plugin>(partition_state.store_id)) {
       if (partition_state.store_header.size() != uuid::num_bytes) {
-        co_return caf::make_error(ec::format_error,
-                                  "unexpected store header size for "
-                                  "partition {}: expected {}, got {}",
-                                  partition.uuid, uuid::num_bytes,
-                                  partition_state.store_header.size());
+        co_return wrap_store_error(
+          caf::make_error(ec::format_error,
+                          "unexpected store header size for "
+                          "partition {}: expected {}, got {}",
+                          partition.uuid, uuid::num_bytes,
+                          partition_state.store_header.size()),
+          partition.uuid, "unexpected store header size for partition {}",
+          partition.uuid);
       }
       auto store = plugin->make_passive_store();
       if (not store) {
-        co_return std::move(store.error());
+        co_return wrap_store_error(std::move(store.error()), partition.uuid,
+                                   "failed to create passive store for "
+                                   "partition {}",
+                                   partition.uuid);
       }
       const auto store_uuid
         = uuid{partition_state.store_header.subspan<0, uuid::num_bytes>()};
@@ -329,22 +360,23 @@ private:
       }
       auto store_chunk = chunk::mmap(store_path);
       if (not store_chunk) {
-        co_return diagnostic::error(store_chunk.error())
-          .note("failed to mmap store for partition {} at {}", partition.uuid,
-                store_path)
-          .to_error();
+        co_return wrap_store_error(std::move(store_chunk.error()),
+                                   partition.uuid,
+                                   "failed to mmap store for partition {} "
+                                   "at {}",
+                                   partition.uuid, store_path);
       }
       if (auto err = (*store)->load(std::move(*store_chunk)); err.valid()) {
-        co_return diagnostic::error(std::move(err))
-          .note("failed to load store for partition {}", partition.uuid)
-          .to_error();
+        co_return wrap_store_error(std::move(err), partition.uuid,
+                                   "failed to load store for partition {}",
+                                   partition.uuid);
       }
       auto result = std::vector<table_slice>{};
       for (auto&& slice : (*store)->slices()) {
         if (not slice) {
-          co_return diagnostic::error(slice.error())
-            .note("failed to read store for partition {}", partition.uuid)
-            .to_error();
+          co_return wrap_store_error(std::move(slice.error()), partition.uuid,
+                                     "failed to read store for partition {}",
+                                     partition.uuid);
         }
         result.push_back(std::move(*slice));
       }
@@ -353,15 +385,20 @@ private:
     auto const* plugin
       = plugins::find<store_actor_plugin>(partition_state.store_id);
     if (not plugin) {
-      co_return caf::make_error(ec::format_error,
-                                "encountered unhandled store backend "
-                                "'{}' for partition {}",
-                                partition_state.store_id, partition.uuid);
+      co_return wrap_store_error(
+        caf::make_error(ec::format_error,
+                        "encountered unhandled store backend '{}' for "
+                        "partition {}",
+                        partition_state.store_id, partition.uuid),
+        partition.uuid, "encountered unhandled store backend '{}'",
+        partition_state.store_id);
     }
     auto store = plugin->make_store(filesystem_, partition_state.store_header,
                                     caf::message_priority::normal);
     if (not store) {
-      co_return std::move(store.error());
+      co_return wrap_store_error(std::move(store.error()), partition.uuid,
+                                 "failed to create store for partition {}",
+                                 partition.uuid);
     }
     auto result = std::make_shared<std::vector<table_slice>>();
     auto collector
@@ -376,7 +413,9 @@ private:
     caf::anon_send_exit(collector, caf::exit_reason::user_shutdown);
     caf::anon_send_exit(*store, caf::exit_reason::user_shutdown);
     if (not num_hits) {
-      co_return std::move(num_hits.error());
+      co_return wrap_store_error(std::move(num_hits.error()), partition.uuid,
+                                 "failed to read store for partition {}",
+                                 partition.uuid);
     }
     co_return std::move(*result);
   }
@@ -424,6 +463,17 @@ auto compile_table_slice_transform(ast::pipeline ast, diagnostic_handler& dh)
 }
 
 } // namespace
+
+auto store_error_partition(const caf::error& err) -> std::optional<uuid> {
+  if (err != ec::format_error) {
+    return std::nullopt;
+  }
+  const auto& ctx = err.context();
+  if (ctx.size() < 2 or not ctx.match_element<uuid>(1)) {
+    return std::nullopt;
+  }
+  return ctx.get_as<uuid>(1);
+}
 
 active_partition_state::serialization_data&
 partition_transformer_state::create_or_get_partition(const table_slice& slice) {

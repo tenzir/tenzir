@@ -23,6 +23,7 @@
 #include <tenzir/index.hpp>
 #include <tenzir/node.hpp>
 #include <tenzir/partition_synopsis.hpp>
+#include <tenzir/partition_transformer.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/query_context.hpp>
@@ -126,21 +127,6 @@ auto format_bytes(uint64_t bytes) -> std::string {
     return "unlimited";
   }
   return fmt::format("{} bytes", bytes);
-}
-
-/// Checks whether an error indicates that a partition's data could not be
-/// decoded, e.g. because its store file is corrupt or truncated. Errors from
-/// the partition transformer are wrapped in `ec::diagnostic` (via
-/// `diagnostic::error(...).to_error()`) for context, which loses the
-/// original `tenzir::ec` code; we detect the underlying format error by
-/// inspecting the rendered diagnostic text instead, since `to_string(ec)` is
-/// embedded verbatim wherever the wrapped error's code is rendered.
-auto is_unrecoverable_format_error(const caf::error& error) -> bool {
-  if (error == ec::format_error) {
-    return true;
-  }
-  return fmt::to_string(error).find(to_string(ec::format_error))
-         != std::string::npos;
 }
 
 /// Statistics for an ongoing rebuild. Numbers are partitions.
@@ -711,19 +697,29 @@ struct rebuilder_state {
             rp.deliver();
             return;
           }
-          if (is_unrecoverable_format_error(error)) {
-            // The partition's data could not be decoded, e.g. because its
-            // store file is corrupt or truncated. Retrying will never
-            // succeed, so quarantine it instead of retrying it forever.
-            for (const auto& partition : retry_partitions) {
-              TENZIR_ERROR("{} quarantines partition {} after a format "
-                           "error: {}",
-                           *self, partition.uuid, error);
-              quarantined.insert_or_assign(
-                partition.uuid,
-                quarantine_entry{partition.schema, partition.events, error});
-            }
-            run->statistics.num_total -= num_partitions;
+          // The partition transformer attributes a store decode failure
+          // (e.g. a corrupt/truncated store file) to the specific partition
+          // it came from (see `store_error_partition`), so a batch failure
+          // never needs to be treated as "some partition in here is
+          // corrupt" — we can quarantine exactly the culprit and retry the
+          // rest of the batch normally.
+          if (const auto corrupt = store_error_partition(error)) {
+            const auto it
+              = std::find_if(retry_partitions.begin(), retry_partitions.end(),
+                             [&](const partition_info& partition) {
+                               return partition.uuid == *corrupt;
+                             });
+            TENZIR_ASSERT(it != retry_partitions.end());
+            TENZIR_ERROR("{} quarantines partition {} after a format "
+                         "error: {}",
+                         *self, *corrupt, error);
+            quarantined.insert_or_assign(
+              *corrupt, quarantine_entry{it->schema, it->events, error});
+            retry_partitions.erase(it);
+            run->remaining_partitions.insert(run->remaining_partitions.begin(),
+                                             retry_partitions.begin(),
+                                             retry_partitions.end());
+            run->statistics.num_total -= 1;
             run->statistics.num_rebuilding -= num_partitions;
             rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
                         atom::rebuild_v);
