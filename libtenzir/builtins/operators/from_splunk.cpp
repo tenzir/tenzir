@@ -433,9 +433,15 @@ public:
     TRY(check_non_empty_literal("search", args.search, ctx));
     TRY(check_non_empty_literal("earliest", args.earliest, ctx));
     TRY(check_non_empty_literal("latest", args.latest, ctx));
-    auto& headers = as<record>(args.headers.inner);
+    auto const* headers = try_as<record>(args.headers.inner);
+    if (not headers) {
+      diagnostic::error("`headers` must be a record")
+        .primary(args.headers.source)
+        .emit(ctx);
+      return failure::promise();
+    }
     auto has_authorization = false;
-    for (auto const& [name, _] : headers) {
+    for (auto const& [name, _] : *headers) {
       if (detail::ascii_icase_equal(name, "authorization")) {
         has_authorization = true;
         break;
