@@ -341,7 +341,12 @@ private:
       }
       auto result = std::vector<table_slice>{};
       for (auto&& slice : (*store)->slices()) {
-        result.push_back(std::move(slice));
+        if (not slice) {
+          co_return diagnostic::error(slice.error())
+            .note("failed to read store for partition {}", partition.uuid)
+            .to_error();
+        }
+        result.push_back(std::move(*slice));
       }
       co_return result;
     }

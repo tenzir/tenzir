@@ -48,8 +48,15 @@ void continue_query(auto self, const uuid& query_id) {
     self->state().running_extractions.erase(it);
     return;
   }
-  state.num_hits += slice->rows();
-  self->mail(std::move(*slice))
+  if (not *slice) {
+    TENZIR_WARN("{} failed to extract query {}: {}", *self, query_id,
+                slice->error());
+    state.rp.deliver(std::move(slice->error()));
+    self->state().running_extractions.erase(it);
+    return;
+  }
+  state.num_hits += slice->value().rows();
+  self->mail(std::move(slice->value()))
     .request(state.sink, caf::infinite)
     .then(
       [self, query_id] {
@@ -87,7 +94,11 @@ caf::result<uint64_t>
 handle_query(const auto& self, const query_context& query_context) {
   TENZIR_DEBUG("{} got a query: {}", *self, query_context);
   const auto start = std::chrono::steady_clock::now();
-  const auto schema = self->state().store->schema();
+  auto schema_result = self->state().store->schema();
+  if (not schema_result) {
+    return std::move(schema_result.error());
+  }
+  const auto& schema = *schema_result;
   const auto tailored_expr = tailor(query_context.expr, schema);
   if (not tailored_expr) {
     // In case the query was delegated from an active partition the
@@ -131,22 +142,35 @@ handle_query(const auto& self, const query_context& query_context) {
 
 } // namespace
 
-type base_store::schema() const {
-  for (const auto& slice : slices()) {
-    return slice.schema();
+caf::expected<type> base_store::schema() const {
+  for (auto&& slice : slices()) {
+    if (not slice) {
+      return std::move(slice.error());
+    }
+    return slice->schema();
   }
-  return {};
+  return type{};
 }
 
-generator<uint64_t> base_store::count(expression expr, ids selection) const {
-  for (const auto& slice : slices()) {
-    co_yield count_matching(slice, expr, selection);
+generator<caf::expected<uint64_t>>
+base_store::count(expression expr, ids selection) const {
+  for (auto&& slice : slices()) {
+    if (not slice) {
+      co_yield std::move(slice.error());
+      co_return;
+    }
+    co_yield count_matching(*slice, expr, selection);
   }
 }
 
-generator<table_slice> base_store::extract(expression expr) const {
-  for (const auto& slice : slices()) {
-    if (auto filtered_slice = filter(slice, expr)) {
+generator<caf::expected<table_slice>>
+base_store::extract(expression expr) const {
+  for (auto&& slice : slices()) {
+    if (not slice) {
+      co_yield std::move(slice.error());
+      co_return;
+    }
+    if (auto filtered_slice = filter(*slice, expr)) {
       co_yield std::move(*filtered_slice);
     }
   }
@@ -289,8 +313,11 @@ default_active_store_actor::behavior_type default_active_store(
     },
     [self](atom::get) -> caf::result<std::vector<table_slice>> {
       auto result = std::vector<table_slice>{};
-      for (auto slice : self->state().store->slices()) {
-        result.push_back(std::move(slice));
+      for (auto&& slice : self->state().store->slices()) {
+        if (not slice) {
+          return std::move(slice.error());
+        }
+        result.push_back(std::move(*slice));
       }
       return result;
     },

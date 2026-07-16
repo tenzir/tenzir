@@ -128,6 +128,21 @@ auto format_bytes(uint64_t bytes) -> std::string {
   return fmt::format("{} bytes", bytes);
 }
 
+/// Checks whether an error indicates that a partition's data could not be
+/// decoded, e.g. because its store file is corrupt or truncated. Errors from
+/// the partition transformer are wrapped in `ec::diagnostic` (via
+/// `diagnostic::error(...).to_error()`) for context, which loses the
+/// original `tenzir::ec` code; we detect the underlying format error by
+/// inspecting the rendered diagnostic text instead, since `to_string(ec)` is
+/// embedded verbatim wherever the wrapped error's code is rendered.
+auto is_unrecoverable_format_error(const caf::error& error) -> bool {
+  if (error == ec::format_error) {
+    return true;
+  }
+  return fmt::to_string(error).find(to_string(ec::format_error))
+         != std::string::npos;
+}
+
 /// Statistics for an ongoing rebuild. Numbers are partitions.
 struct statistics {
   size_t num_total = {};
@@ -136,8 +151,17 @@ struct statistics {
   size_t num_results = {};
 };
 
+/// Identifies a single rebuild run so continuations from a superseded run can
+/// detect that they no longer apply, mirroring the compactor's `run_id`.
+enum class run_id : uint64_t {};
+
 /// The state of an in-progress rebuild.
 struct run {
+  /// Distinguishes this run from any run that starts after it. Continuations
+  /// launched for this run must check their captured id against
+  /// `rebuilder_state::run->id` before touching `run->` state, since `run`
+  /// may have been reset and re-emplaced for a new run by the time they fire.
+  run_id id = {};
   std::vector<partition_info> remaining_partitions = {};
   struct statistics statistics = {};
   start_options options = {};
@@ -182,36 +206,62 @@ struct rebuilder_state {
   std::optional<struct run> run = {};
   bool stopping = false;
 
+  /// Counter to distinguish between successive rebuild runs.
+  run_id next_run = {};
+
+  /// A partition that failed to rebuild with a format/decode error, e.g.
+  /// because its store file is corrupt or truncated. Quarantined partitions
+  /// are never selected as rebuild candidates again, which prevents a
+  /// permanently broken partition from being retried forever.
+  struct quarantine_entry {
+    type schema = {};
+    size_t events = 0;
+    caf::error error = {};
+  };
+
+  /// Partitions quarantined after a format/decode error, keyed by uuid.
+  std::unordered_map<uuid, quarantine_entry> quarantined = {};
+
   /// Runtime byte estimates for legacy partitions that do not have persisted
   /// `approx_bytes` metadata yet.
   std::unordered_map<type, uint64_t> approx_bytes_per_event = {};
 
   /// Shows the status of a currently ongoing rebuild.
-  auto status(status_verbosity) -> record {
-    if (not run) {
-      return {};
+  auto status(status_verbosity verbosity) -> record {
+    auto result = record{};
+    if (run) {
+      result["partitions"] = record{
+        {"total", run->statistics.num_total},
+        {"transforming", run->statistics.num_rebuilding},
+        {"transformed", run->statistics.num_completed},
+        {"remaining",
+         run->statistics.num_total - run->statistics.num_completed},
+        {"results", run->statistics.num_results},
+      };
+      result["options"] = record{
+        {"all", run->options.all},
+        {"undersized", run->options.undersized},
+        {"parallel", run->options.parallel},
+        {"max-partitions", run->options.max_partitions},
+        {"expression", fmt::to_string(run->options.expression)},
+        {"detached", run->options.detached},
+        {"automatic", run->options.automatic},
+      };
     }
-    return {
-      {"partitions",
-       record{
-         {"total", run->statistics.num_total},
-         {"transforming", run->statistics.num_rebuilding},
-         {"transformed", run->statistics.num_completed},
-         {"remaining",
-          run->statistics.num_total - run->statistics.num_completed},
-         {"results", run->statistics.num_results},
-       }},
-      {"options",
-       record{
-         {"all", run->options.all},
-         {"undersized", run->options.undersized},
-         {"parallel", run->options.parallel},
-         {"max-partitions", run->options.max_partitions},
-         {"expression", fmt::to_string(run->options.expression)},
-         {"detached", run->options.detached},
-         {"automatic", run->options.automatic},
-       }},
-    };
+    result["quarantined-size"] = quarantined.size();
+    if (verbosity >= status_verbosity::debug) {
+      auto quarantined_list = list{};
+      for (const auto& [id, entry] : quarantined) {
+        quarantined_list.emplace_back(record{
+          {"id", fmt::format("{}", id)},
+          {"schema", fmt::format("{}", entry.schema)},
+          {"events", entry.events},
+          {"error", fmt::format("{}", entry.error)},
+        });
+      }
+      result["quarantined"] = std::move(quarantined_list);
+    }
+    return result;
   }
 
   void learn_size_estimate(const partition_info& partition) {
@@ -282,6 +332,9 @@ struct rebuilder_state {
       return rp;
     }
     run.emplace();
+    const auto this_run = next_run;
+    next_run = static_cast<run_id>(static_cast<uint64_t>(next_run) + 1);
+    run->id = this_run;
     run->options = std::move(options);
     TENZIR_DEBUG("{} requests {}{} partitions matching the expression {}",
                  *self, run->options.all ? "all" : "outdated",
@@ -328,12 +381,22 @@ struct rebuilder_state {
     self->mail(atom::candidates_v, std::move(query_context))
       .request(catalog, caf::infinite)
       .then(
-        [this, finish](catalog_lookup_result& lookup_result) mutable {
+        [this, finish, this_run](catalog_lookup_result& lookup_result) mutable {
+          if (not run or run->id != this_run) {
+            TENZIR_DEBUG("{} abandons candidate lookup for a superseded "
+                         "rebuild run",
+                         *self);
+            return;
+          }
           TENZIR_ASSERT(run->statistics.num_total == 0);
           for (auto& [type, result] : lookup_result.candidate_infos) {
             std::erase_if(result.partition_infos,
                           [](const partition_info& partition) {
                             return partition.events == 0;
+                          });
+            std::erase_if(result.partition_infos,
+                          [&](const partition_info& partition) {
+                            return quarantined.contains(partition.uuid);
                           });
             if (not run->options.all) {
               std::erase_if(
@@ -396,14 +459,32 @@ struct rebuilder_state {
                                                           self),
                              caf::infinite, caf::policy::select_all_tag)
             .then(
-              [finish]() mutable {
+              [this, finish, this_run]() mutable {
+                if (not run or run->id != this_run) {
+                  TENZIR_DEBUG("{} abandons completion of a superseded "
+                               "rebuild run",
+                               *self);
+                  return;
+                }
                 finish({});
               },
-              [finish](caf::error& error) mutable {
+              [this, finish, this_run](caf::error& error) mutable {
+                if (not run or run->id != this_run) {
+                  TENZIR_DEBUG("{} abandons completion of a superseded "
+                               "rebuild run",
+                               *self);
+                  return;
+                }
                 finish(std::move(error));
               });
         },
-        [finish](caf::error& error) mutable {
+        [this, finish, this_run](caf::error& error) mutable {
+          if (not run or run->id != this_run) {
+            TENZIR_DEBUG("{} abandons candidate lookup for a superseded "
+                         "rebuild run",
+                         *self);
+            return;
+          }
           finish(std::move(error));
         });
     return rp;
@@ -543,6 +624,7 @@ struct rebuilder_state {
     auto selected_partitions = current_run_partitions;
     auto retry_partitions = current_run_partitions;
     const auto num_partitions = current_run_partitions.size();
+    const auto this_run = run->id;
     self
       ->mail(atom::apply_v, std::move(*rebatch),
              std::move(current_run_partitions), keep_original_partition::no,
@@ -550,7 +632,14 @@ struct rebuilder_state {
       .request(index, caf::infinite)
       .then(
         [this, rp, selected_partitions = std::move(selected_partitions),
-         num_partitions](partition_apply_result& result) mutable {
+         num_partitions, this_run](partition_apply_result& result) mutable {
+          if (not run or run->id != this_run) {
+            TENZIR_DEBUG("{} abandons rebuild continuation for a superseded "
+                         "run",
+                         *self);
+            rp.deliver();
+            return;
+          }
           if (result.input_partitions.empty()
               and result.output_partitions.empty()) {
             TENZIR_DEBUG("{} skipped {} partitions as they are already being "
@@ -614,7 +703,32 @@ struct rebuilder_state {
                       atom::rebuild_v);
         },
         [this, retry_partitions = std::move(retry_partitions), num_partitions,
-         rp](caf::error& error) mutable {
+         this_run, rp](caf::error& error) mutable {
+          if (not run or run->id != this_run) {
+            TENZIR_DEBUG("{} abandons rebuild continuation for a superseded "
+                         "run",
+                         *self);
+            rp.deliver();
+            return;
+          }
+          if (is_unrecoverable_format_error(error)) {
+            // The partition's data could not be decoded, e.g. because its
+            // store file is corrupt or truncated. Retrying will never
+            // succeed, so quarantine it instead of retrying it forever.
+            for (const auto& partition : retry_partitions) {
+              TENZIR_ERROR("{} quarantines partition {} after a format "
+                           "error: {}",
+                           *self, partition.uuid, error);
+              quarantined.insert_or_assign(
+                partition.uuid,
+                quarantine_entry{partition.schema, partition.events, error});
+            }
+            run->statistics.num_total -= num_partitions;
+            run->statistics.num_rebuilding -= num_partitions;
+            rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
+                        atom::rebuild_v);
+            return;
+          }
           TENZIR_WARN("{} failed to rebuild partitions: {}", *self, error);
           run->remaining_partitions.insert(run->remaining_partitions.begin(),
                                            retry_partitions.begin(),
@@ -691,10 +805,18 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
       },
       {{"internal"}},
     }};
+    auto quarantine_builder = series_builder{type{
+      "tenzir.metrics.rebuild_quarantine",
+      record_type{
+        {"timestamp", time_type{}},
+        {"quarantined_partitions", uint64_type{}},
+      },
+      {{"internal"}},
+    }};
     detail::weak_run_delayed_loop(
       self, defaults::metrics_interval,
-      [self, importer = std::move(importer),
-       builder = std::move(builder)]() mutable {
+      [self, importer = std::move(importer), builder = std::move(builder),
+       quarantine_builder = std::move(quarantine_builder)]() mutable {
         const auto partitions = self->state().run
                                   ? self->state().run->statistics.num_rebuilding
                                   : 0;
@@ -708,6 +830,11 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
         metric.field("partitions", partitions);
         metric.field("queued_partitions", queued_partitions);
         self->mail(builder.finish_assert_one_slice()).send(importer);
+        auto quarantine_metric = quarantine_builder.record();
+        quarantine_metric.field("timestamp", time::clock::now());
+        quarantine_metric.field("quarantined_partitions",
+                                self->state().quarantined.size());
+        self->mail(quarantine_builder.finish_assert_one_slice()).send(importer);
       });
   }
   return {

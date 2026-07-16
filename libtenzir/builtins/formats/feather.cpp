@@ -232,21 +232,29 @@ class passive_feather_store final : public passive_store {
     return {};
   }
 
-  [[nodiscard]] auto slices() const -> generator<table_slice> override {
+  [[nodiscard]] auto slices() const
+    -> generator<caf::expected<table_slice>> override {
     if (not chunk_) {
       co_return;
     }
     auto decode_result = decode_ipc_file(make_chunk_view());
     if (not decode_result) {
-      TENZIR_ASSERT(false, "failed to decode feather store after load");
+      co_yield caf::make_error(ec::format_error,
+                               fmt::format("failed to decode feather store "
+                                           "after load: {}",
+                                           decode_result.error()));
       co_return;
     }
     auto batches = std::move(*decode_result);
     auto offset = id{};
     auto schema = schema_;
     for (auto it = batches.begin(); it != batches.end(); ++it) {
-      auto batch = check(std::move(*it));
-      TENZIR_ASSERT(batch);
+      auto batch_result = std::move(*it);
+      if (not batch_result) {
+        co_yield std::move(batch_result.error());
+        co_return;
+      }
+      auto batch = std::move(*batch_result);
       auto import_time_column = batch->GetColumnByName("import_time");
       auto slice = schema ? table_slice{unwrap_record_batch(batch), *schema}
                           : table_slice{unwrap_record_batch(batch)};
@@ -268,12 +276,15 @@ class passive_feather_store final : public passive_store {
     return *num_events_;
   }
 
-  [[nodiscard]] auto schema() const -> type override {
+  [[nodiscard]] auto schema() const -> caf::expected<type> override {
     if (schema_) {
       return *schema_;
     }
     for (const auto& slice : slices()) {
-      return slice.schema();
+      if (not slice) {
+        return slice.error();
+      }
+      return slice->schema();
     }
     TENZIR_ASSERT(false, "store must not be empty");
   }
@@ -372,7 +383,8 @@ public:
     return chunk::make(buffer.MoveValueUnsafe());
   }
 
-  [[nodiscard]] auto slices() const -> generator<table_slice> override {
+  [[nodiscard]] auto slices() const
+    -> generator<caf::expected<table_slice>> override {
     rebatch();
     for (auto& slice : slices_) {
       co_yield slice;
