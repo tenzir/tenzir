@@ -268,7 +268,20 @@ WORKDIR /var/lib/tenzir
 VOLUME ["/var/cache/tenzir", "/var/lib/tenzir"]
 
 # Verify that Tenzir starts up correctly.
-RUN tenzir 'version'
+# TEMPORARY diagnostic for the exit-time segfault: run the smoke test under
+# gdb to capture the crash backtrace and the loaded libstdc++ copies in the
+# CI log. Revert to a plain `RUN tenzir 'version'` once diagnosed.
+USER root
+RUN apt-get update && \
+    apt-get -y --no-install-recommends install gdb && \
+    rm -rf /var/lib/apt/lists/*
+USER tenzir:tenzir
+RUN gdb -batch -return-child-result \
+      -ex 'set confirm off' \
+      -ex 'run' \
+      -ex 'bt' \
+      -ex 'info sharedlibrary stdc++' \
+      --args tenzir 'version'
 
 ENTRYPOINT ["tenzir"]
 CMD ["--help"]
