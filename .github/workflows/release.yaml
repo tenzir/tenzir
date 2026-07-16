@@ -165,3 +165,53 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ needs.release.outputs.version }}
         run: gh release upload "$RELEASE_VERSION" /tmp/tenzir.spdx.json --clobber
+
+  # Record this release in Linear's "Tenzir Node" releases view by attaching
+  # every Linear issue referenced from the commits since the previous release.
+  # The action walks git history from a stored baseline up to HEAD, so it must
+  # check out full history (fetch-depth: 0) with HEAD at the release commit.
+  #
+  # Keep this job last and non-blocking: it only affects Linear's
+  # project-tracking view and nothing downstream depends on it, so a
+  # Linear/API outage here should not fail a release whose tags and GitHub
+  # release are already published.
+  #
+  # Only run for latest mainline releases. The action advances the stored
+  # baseline to HEAD on every `sync`, and that baseline is global (not
+  # per-branch). Running it on a backport or RC branch would move the
+  # baseline onto that branch's HEAD, so the next mainline release would scan
+  # from the wrong point and mis-attach already-released commits.
+  linear-release:
+    name: Sync Linear Release
+    needs: release
+    if: needs.release.outputs.is_latest == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          ref: ${{ needs.release.outputs.version }}
+          fetch-depth: 0
+
+      - name: Create Linear release
+        id: linear_release
+        continue-on-error: true
+        uses: linear/linear-release-action@v0.14.5
+        with:
+          access_key: ${{ secrets.LINEAR_NODE_RELEASE_API_KEY }}
+          version: ${{ needs.release.outputs.version }}
+          name: ${{ inputs.title }}
+
+      # The action's docs are ambiguous about whether `sync` always creates a
+      # release: it may leave release-id empty in some cases (e.g. when no
+      # scanned commits reference a Linear issue). Marking a release complete
+      # fails if it does not exist, so guard on release-id and only run this
+      # step when the previous one actually created a release.
+      - name: Mark Linear release as released
+        if: steps.linear_release.outputs.release-id != ''
+        continue-on-error: true
+        uses: linear/linear-release-action@v0.14.5
+        with:
+          access_key: ${{ secrets.LINEAR_NODE_RELEASE_API_KEY }}
+          command: complete
+          version: ${{ needs.release.outputs.version }}
