@@ -82,4 +82,4 @@ checkinstall \
   --pkgrelease="TENZIR" \
   --pkgname=arrow \
   --requires="libc6,libboost-filesystem-dev,libboost-system-dev,libcurl4,libgcc1,libre2-11,libssl3,libstdc++6,libxml2,zlib1g" \
-  cmake --install build # DEBUG: unstripped for crash symbolization
+  cmake --install build --strip
