@@ -280,19 +280,15 @@ USER tenzir:tenzir
 RUN mv /opt/tenzir/lib/tenzir/plugins/libtenzir-plugin-iceberg.so /tmp/ && \
     tenzir 'version' >/dev/null; echo "WITHOUT_ICEBERG_EXIT=$?"; \
     mv /tmp/libtenzir-plugin-iceberg.so /opt/tenzir/lib/tenzir/plugins/
-# Experiment 2: strict glibc heap checking to catch the corruption earlier.
-RUN MALLOC_CHECK_=3 MALLOC_PERTURB_=42 gdb -batch \
+# Experiment 2: symbolized backtrace of the exit-time use-after-free in
+# libparquet's static destructors; the arrow package is unstripped for this.
+RUN MALLOC_PERTURB_=42 gdb -batch \
       -ex 'set confirm off' \
       -ex 'run' \
-      -ex 'bt 15' \
+      -ex 'bt 20' \
       --args tenzir 'version' > /tmp/exp2.log 2>&1; \
-    echo "WITH_MALLOC_CHECK_EXIT=$?"; tail -30 /tmp/exp2.log
-# Experiment 3: the plain crash backtrace, still failing the build on crash.
-RUN gdb -batch -return-child-result \
-      -ex 'set confirm off' \
-      -ex 'run' \
-      -ex 'bt 15' \
-      --args tenzir 'version' >/dev/null
+    echo "PERTURB_EXIT=$?"; tail -40 /tmp/exp2.log; \
+    grep -q SIGSEGV /tmp/exp2.log && exit 1 || true
 
 ENTRYPOINT ["tenzir"]
 CMD ["--help"]
