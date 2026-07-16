@@ -276,12 +276,23 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install gdb && \
     rm -rf /var/lib/apt/lists/*
 USER tenzir:tenzir
+# Experiment 1: does the crash disappear without the iceberg plugin?
+RUN mv /opt/tenzir/lib/tenzir/plugins/libtenzir-plugin-iceberg.so /tmp/ && \
+    tenzir 'version' >/dev/null; echo "WITHOUT_ICEBERG_EXIT=$?"; \
+    mv /tmp/libtenzir-plugin-iceberg.so /opt/tenzir/lib/tenzir/plugins/
+# Experiment 2: strict glibc heap checking to catch the corruption earlier.
+RUN MALLOC_CHECK_=3 MALLOC_PERTURB_=42 gdb -batch \
+      -ex 'set confirm off' \
+      -ex 'run' \
+      -ex 'bt 15' \
+      --args tenzir 'version' > /tmp/exp2.log 2>&1; \
+    echo "WITH_MALLOC_CHECK_EXIT=$?"; tail -30 /tmp/exp2.log
+# Experiment 3: the plain crash backtrace, still failing the build on crash.
 RUN gdb -batch -return-child-result \
       -ex 'set confirm off' \
       -ex 'run' \
-      -ex 'bt' \
-      -ex 'info sharedlibrary stdc++' \
-      --args tenzir 'version'
+      -ex 'bt 15' \
+      --args tenzir 'version' >/dev/null
 
 ENTRYPOINT ["tenzir"]
 CMD ["--help"]
