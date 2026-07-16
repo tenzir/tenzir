@@ -15,6 +15,20 @@ TenzirRegisterPlugin(
   BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp"
   INCLUDE_DIRECTORIES include)
 
+# The plugin statically bundles third-party code (iceberg-cpp and its
+# vendored avro, cpr, croaring, and nanoarrow — and, depending on the
+# packaging, static Arrow libraries). Keep those symbols out of the dynamic
+# symbol table: plugins load with RTLD_GLOBAL, so an exported global that
+# also exists in a shared library (e.g. libparquet's thrift-generated enum
+# tables) gets unified by the dynamic linker, and both images then run
+# constructors and exit-time destructors on the same object — a double free
+# at shutdown. The tenzir_plugin_* entrypoints are compiled directly into
+# the shared target and stay exported. ld64 on macOS has no equivalent, but
+# its two-level namespace does not unify symbols across images anyway.
+if (TARGET iceberg-shared AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(iceberg-shared PRIVATE "LINKER:--exclude-libs,ALL")
+endif ()
+
 # Google Cloud support is optional: catalog authentication mints OAuth2
 # tokens through google-cloud-cpp, and the data plane for gs:// table
 # locations uses arrow's GcsFileSystem. Homebrew's apache-arrow ships with

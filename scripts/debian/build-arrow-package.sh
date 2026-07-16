@@ -45,9 +45,17 @@ cd cpp
 
 patch -p1 </patches/arrow-cpp-eager-struct-fields.patch
 
+# Ship shared libraries only: everything in the image links Arrow
+# dynamically, and exporting Parquet::parquet_static tricks the bundled
+# iceberg-cpp (which prefers static Parquet when the target exists) into
+# embedding a second copy of libparquet into the dlopened iceberg plugin.
+# The duplicated thrift-generated enum tables then get unified across the
+# plugin and libparquet.so by the dynamic linker and destroyed twice at
+# exit, crashing the process.
 cmake -B build -S . \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} \
+  -DARROW_BUILD_STATIC=OFF \
   -DAWSSDK_SOURCE=SYSTEM \
   -DAzure_SOURCE=SYSTEM \
   -DBOOST_SOURCE=SYSTEM \
