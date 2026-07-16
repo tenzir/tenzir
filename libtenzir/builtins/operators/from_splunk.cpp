@@ -520,7 +520,8 @@ public:
       latest_source});
     TRY(auto extract_result,
         parse_pipeline_with_location_override(
-          "where result? != null | this = result", search_source, session));
+          "where result? != null | this = result | @name = \"tenzir.splunk\"",
+          search_source, session));
     TRY(resolve_entities(extract_result, session));
     TRY(auto extract_result_ir, std::move(extract_result).compile(ctx));
     for (auto& let : extract_result_ir.lets) {
