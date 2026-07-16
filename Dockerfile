@@ -268,26 +268,57 @@ WORKDIR /var/lib/tenzir
 VOLUME ["/var/cache/tenzir", "/var/lib/tenzir"]
 
 # Verify that Tenzir starts up correctly.
-# TEMPORARY diagnostic for the exit-time segfault: run the smoke test under
-# gdb to capture the crash backtrace and the loaded libstdc++ copies in the
-# CI log. Revert to a plain `RUN tenzir 'version'` once diagnosed.
+# TEMPORARY diagnostic for the exit-time segfault: the crash is a double
+# destruction of a static std::map<int, const char*>. Identify the object by
+# (a) dumping which images define/export such maps and (b) tracing every
+# __cxa_atexit registration; an object registered twice is the culprit.
+# Revert to a plain `RUN tenzir 'version'` once diagnosed.
 USER root
 RUN apt-get update && \
-    apt-get -y --no-install-recommends install gdb && \
+    apt-get -y --no-install-recommends install gdb binutils && \
     rm -rf /var/lib/apt/lists/*
 USER tenzir:tenzir
-# Experiment 1: does the crash disappear without the iceberg plugin?
-RUN mv /opt/tenzir/lib/tenzir/plugins/libtenzir-plugin-iceberg.so /tmp/ && \
-    tenzir 'version' >/dev/null; echo "WITHOUT_ICEBERG_EXIT=$?"; \
-    mv /tmp/libtenzir-plugin-iceberg.so /opt/tenzir/lib/tenzir/plugins/
-# Experiment 2: symbolized backtrace of the exit-time use-after-free in
-# libparquet's static destructors; the arrow package is unstripped for this.
-RUN MALLOC_PERTURB_=42 gdb -batch \
-      -ex 'set confirm off' \
-      -ex 'run' \
-      -ex 'bt 20' \
-      --args tenzir 'version' > /tmp/exp2.log 2>&1; \
-    echo "PERTURB_EXIT=$?"; tail -40 /tmp/exp2.log; \
+# Experiment 1: which images contain map<int, const char*> statics, and is
+# the plugin linked directly against libparquet?
+RUN P=/opt/tenzir/lib/tenzir/plugins/libtenzir-plugin-iceberg.so; \
+    echo "=== plugin DT_NEEDED ==="; readelf -dW $P | grep NEEDED; \
+    echo "=== plugin: map<int, char const*> data objects (all) ==="; \
+    nm -C --defined-only $P 2>/dev/null | grep -iE "^[0-9a-f]+ [bdgvwu] " | grep -F "map<int, char const*" | head -40; \
+    nm -C --defined-only $P 2>/dev/null | grep -F "VALUES_TO_NAMES" | head -40; \
+    echo "=== plugin: exported (dynamic) ==="; \
+    nm -CD --defined-only $P 2>/dev/null | grep -E "VALUES_TO_NAMES|map<int, char const\*" | head -40; \
+    echo "=== libparquet: exported map objects ==="; \
+    nm -CD --defined-only /usr/local/lib/libparquet.so 2>/dev/null | grep -E "VALUES_TO_NAMES|map<int, char const\*" | head -40; \
+    echo "=== libarrow: exported map objects ==="; \
+    nm -CD --defined-only /usr/local/lib/libarrow.so 2>/dev/null | grep -E "VALUES_TO_NAMES|map<int, char const\*" | head -20; \
+    echo "=== libtenzir: exported map objects ==="; \
+    nm -CD --defined-only /opt/tenzir/lib/libtenzir.so* 2>/dev/null | grep -E "VALUES_TO_NAMES|map<int, char const\*" | head -20; \
+    echo "=== tenzir exe: exported map objects ==="; \
+    nm -CD --defined-only /opt/tenzir/bin/tenzir 2>/dev/null | grep -E "VALUES_TO_NAMES|map<int, char const\*" | head -20; \
+    echo "=== experiment 1 done ==="
+# Experiment 2: trace __cxa_atexit registrations and flag duplicate objects.
+RUN ARG1=$(test "$(uname -m)" = "x86_64" && echo '$rdi' || echo '$x0'); \
+    ARG2=$(test "$(uname -m)" = "x86_64" && echo '$rsi' || echo '$x1'); \
+    { echo 'set pagination off'; \
+      echo 'set confirm off'; \
+      echo 'set breakpoint pending on'; \
+      echo 'break __cxa_atexit'; \
+      echo 'commands'; \
+      echo 'silent'; \
+      echo "printf \"ATEXIT obj=%p fn=%p \", (void*)$ARG2, (void*)$ARG1"; \
+      echo "info symbol $ARG2"; \
+      echo 'continue'; \
+      echo 'end'; \
+      echo 'run'; \
+      echo 'bt 8'; } > /tmp/dtors.gdb; \
+    MALLOC_PERTURB_=42 gdb -batch -x /tmp/dtors.gdb --args tenzir 'version' > /tmp/exp2.log 2>&1; \
+    echo "TRACE_EXIT=$?"; \
+    echo "=== duplicate atexit objects ==="; \
+    grep -oE "obj=0x[0-9a-f]+" /tmp/exp2.log | sort | uniq -d | while read -r dup; do \
+      grep -F "$dup" /tmp/exp2.log | head -4; done | head -40; \
+    echo "=== registrations from the iceberg plugin ==="; \
+    grep "libtenzir-plugin-iceberg" /tmp/exp2.log | head -30; \
+    echo "=== crash backtrace ==="; tail -25 /tmp/exp2.log; \
     grep -q SIGSEGV /tmp/exp2.log && exit 1 || true
 
 ENTRYPOINT ["tenzir"]
