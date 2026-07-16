@@ -991,6 +991,35 @@ rebuild_stop_command(const invocation& inv, caf::actor_system& sys) {
   return result;
 }
 
+caf::message rebuild_show_command(const invocation&, caf::actor_system& sys) {
+  // Create a scoped actor for interaction with the actor system and connect to
+  // the node.
+  auto self = caf::scoped_actor{sys};
+  auto rebuilder = get_rebuilder(sys);
+  if (not rebuilder) {
+    return caf::make_message(std::move(rebuilder.error()));
+  }
+  auto err = caf::error{};
+  self->mail(atom::status_v, status_verbosity::debug, duration::max())
+    .request(*rebuilder, caf::infinite)
+    .receive(
+      [&](const record& status) {
+        auto yaml = to_yaml(status);
+        if (not yaml) {
+          err = std::move(yaml.error());
+          return;
+        }
+        fmt::print("{}\n", *yaml);
+      },
+      [&](caf::error& error) {
+        err = std::move(error);
+      });
+  if (err.valid()) {
+    return caf::make_message(std::move(err));
+  }
+  return {};
+}
+
 /// An example plugin.
 class plugin final : public virtual command_plugin,
                      public virtual component_plugin {
@@ -1043,11 +1072,16 @@ public:
       command::opts("?tenzir.rebuild")
         .add<bool>("detached,d", "exit immediately instead of waiting for the "
                                  "rebuild to be stopped"));
+    rebuild->add_subcommand("show",
+                            "shows the current rebuild status, including "
+                            "quarantined partitions",
+                            command::opts("?tenzir.rebuild"));
     auto factory = command::factory{
       {"rebuild start", rebuild_start_command},
       // Make 'tenzir rebuild' an alias for 'tenzir rebuild start'.
       {"rebuild", rebuild_start_command},
       {"rebuild stop", rebuild_stop_command},
+      {"rebuild show", rebuild_show_command},
     };
     return {std::move(rebuild), std::move(factory)};
   }
