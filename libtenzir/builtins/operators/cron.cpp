@@ -121,7 +121,7 @@ public:
       if (auto pipe = ctx.get(pipe_arg)) {
         auto output = pipe->inner.infer_type(tag_v<void>, ctx);
         if (not output.is_error()) {
-          if (not *output or (*output)->is_not<table_slice>()) {
+          if (output->is_not<table_slice>()) {
             diagnostic::error("pipeline must return events")
               .primary(pipe->source.subloc(0, 1))
               .emit(ctx);

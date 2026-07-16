@@ -540,14 +540,8 @@ public:
       if constexpr (std::same_as<Input, table_slice>) {
         TRY(auto p, ctx.get(pipe));
         TRY(auto output, p.inner.infer_type(tag_v<table_slice>, ctx));
-        if (not output) {
-          diagnostic::error("subpipeline must not produce bytes")
-            .primary(p.source)
-            .emit(ctx);
-          return failure::promise();
-        }
         return match(
-          *output,
+          output,
           [](tag<table_slice>)
             -> failure_or<Option<SpawnWith<WindowArgs, Input>>> {
             return [](WindowArgs args) {

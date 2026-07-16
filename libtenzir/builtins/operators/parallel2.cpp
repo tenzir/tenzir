@@ -7,22 +7,18 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/async.hpp"
+#include "tenzir/async/routing.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
-#include "tenzir/view.hpp"
 
-#include <algorithm>
-#include <numeric>
 #include <thread>
 
 namespace tenzir::plugins::parallel2 {
 
 namespace {
-
-constexpr auto fairness_factor = 2.0;
 
 struct ParallelArgs {
   Option<located<uint64_t>> jobs;
@@ -30,109 +26,6 @@ struct ParallelArgs {
   bool fuse = true;
   located<ir::pipeline> pipe;
 };
-
-/// Distributes `total` rows across `k` workers, leveling them up from the
-/// least-loaded first. Workers with fewer rows assigned get more rows, bringing
-/// everyone as close to equal as possible. Any leftover rows after leveling are
-/// split evenly.
-///
-/// The `sorted_indices` must be sorted by ascending `rows_assigned`.
-///
-/// Example: rows_assigned = [100, 300, 500], total = 1000
-///   Level up worker 0 by 200 to match worker 1 (cost: 200)
-///   Level up workers 0,1 by 200 each to match worker 2 (cost: 400)
-///   Remaining 400 split evenly: 134, 133, 133
-///   Result: [534, 333, 133], new totals: [634, 633, 633]
-auto water_fill(uint64_t total, std::span<const size_t> sorted_indices,
-                std::span<const uint64_t> rows_assigned)
-  -> std::vector<uint64_t> {
-  auto k = sorted_indices.size();
-  auto alloc = std::vector<uint64_t>(k, 0);
-  auto remaining = total;
-  for (auto level = size_t{0}; level + 1 < k; ++level) {
-    auto gap = rows_assigned[sorted_indices[level + 1]]
-               - rows_assigned[sorted_indices[level]];
-    auto needed = gap * (level + 1);
-    if (needed <= remaining) {
-      for (auto j = size_t{0}; j <= level; ++j) {
-        alloc[j] += gap;
-      }
-      remaining -= needed;
-    } else {
-      auto per = remaining / (level + 1);
-      auto extra = remaining % (level + 1);
-      for (auto j = size_t{0}; j <= level; ++j) {
-        alloc[j] += per + (j < extra ? 1 : 0);
-      }
-      remaining = 0;
-      break;
-    }
-  }
-  if (remaining > 0) {
-    auto per = remaining / k;
-    auto extra = remaining % k;
-    for (auto j = size_t{0}; j < k; ++j) {
-      alloc[j] += per + (j < extra ? 1 : 0);
-    }
-  }
-  return alloc;
-}
-
-/// Distributes `total_rows` across workers while maintaining fairness.
-///
-/// Tries to use as few workers as possible (for better locality) while keeping
-/// the max/min ratio of total rows assigned across all workers within
-/// `fairness_factor`. Starts by trying to send everything to the most-starved
-/// worker (k=1), then considers spreading across 2, 3, ... workers until the
-/// fairness constraint is satisfied. At k=n (all workers), always accepts.
-///
-/// Updates `rows_assigned` in place and returns (worker_index, row_count) pairs.
-///
-/// Example: 4 workers at [0, 0, 0, 0], distributing 1000 rows
-///   k=1: all to worker 0 → [1000, 0, 0, 0], unfair → rejected
-///   k=4: 250 each → [250, 250, 250, 250] → accepted
-///
-/// Example: 4 workers at [500, 300, 200, 100], distributing 400 rows
-///   k=1: all to worker 3 → [500, 300, 200, 500], max/min = 2.5 → rejected
-///   k=2: water-fill workers 3,2 → [500, 300, 300, 300], max/min = 1.67 → ok
-auto distribute_adaptive(uint64_t total_rows,
-                         std::vector<uint64_t>& rows_assigned)
-  -> std::vector<std::pair<size_t, uint64_t>> {
-  auto n = rows_assigned.size();
-  // Sort worker indices by rows_assigned ascending.
-  auto sorted = std::vector<size_t>(n);
-  std::iota(sorted.begin(), sorted.end(), size_t{0});
-  std::sort(sorted.begin(), sorted.end(), [&](size_t a, size_t b) {
-    return rows_assigned[a] < rows_assigned[b];
-  });
-  auto alloc = std::vector<uint64_t>{};
-  for (auto k = size_t{1}; k <= n; ++k) {
-    alloc = water_fill(total_rows, std::span{sorted.data(), k}, rows_assigned);
-    if (k == n) {
-      break;
-    }
-    // Check whether this distribution satisfies the fairness constraint.
-    auto new_totals = rows_assigned;
-    for (auto i = size_t{0}; i < k; ++i) {
-      new_totals[sorted[i]] += alloc[i];
-    }
-    auto [min_it, max_it]
-      = std::minmax_element(new_totals.begin(), new_totals.end());
-    auto is_fair = static_cast<double>(*max_it)
-                   <= static_cast<double>(*min_it) * fairness_factor;
-    if (is_fair) {
-      break;
-    }
-  }
-  auto result = std::vector<std::pair<size_t, uint64_t>>{};
-  for (auto i = size_t{0}; i < alloc.size(); ++i) {
-    if (alloc[i] > 0) {
-      rows_assigned[sorted[i]] += alloc[i];
-      result.emplace_back(sorted[i], alloc[i]);
-    }
-  }
-  return result;
-}
 
 /// Shared implementation for both transform and sink variants.
 class ParallelImpl {
@@ -176,7 +69,7 @@ public:
     serde("rows_assigned", rows_assigned_);
   }
 
-  auto finalize(OpCtx& ctx) -> Task<void> {
+  auto finalize(OpCtx& ctx) const -> Task<void> {
     for (auto i = uint64_t{0}; i < jobs_; ++i) {
       auto sub = ctx.get_sub(int64_t(i));
       if (sub) {
@@ -189,29 +82,19 @@ public:
 private:
   auto process_hash(table_slice input, OpCtx& ctx) -> Task<void> {
     auto values = eval(*route_by_, input, ctx.dh());
-    auto num_rows = static_cast<int64_t>(input.rows());
     // Find runs of same-bucket rows and push subslices.
-    auto begin = int64_t{0};
-    while (begin < num_rows) {
-      auto bucket = std::hash<data_view3>{}(values.view3_at(begin)) % jobs_;
-      auto end = begin + 1;
-      while (end < num_rows
-             and std::hash<data_view3>{}(values.view3_at(end)) % jobs_
-                   == bucket) {
-        ++end;
-      }
+    for (auto [bucket, begin, end] : routing::hash_runs(values, jobs_)) {
       auto slice = subslice(input, begin, end);
       auto sub = ctx.get_sub(int64_t(bucket));
       TENZIR_ASSERT(sub);
       auto& pipe = as<SubHandle<table_slice>>(*sub);
       std::ignore = co_await pipe.push(std::move(slice));
-      begin = end;
     }
   }
 
   auto process_round_robin(table_slice input, OpCtx& ctx) -> Task<void> {
     auto total_rows = static_cast<uint64_t>(input.rows());
-    auto assignments = distribute_adaptive(total_rows, rows_assigned_);
+    auto assignments = routing::distribute_adaptive(total_rows, rows_assigned_);
     auto offset = size_t{0};
     for (auto [worker, count] : assignments) {
       auto slice = subslice(input, offset, offset + count);

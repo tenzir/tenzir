@@ -48,11 +48,11 @@ public:
 
   /// Return the output type of this operator for a given input type.
   ///
-  /// The operator is responsible to report any type mismatches. If the
-  /// operator could potentially accept the given input type, but the output
-  /// type is not known yet, then `std::nullopt` may be returned.
+  /// The operator is responsible to report any type mismatches. This is only
+  /// called after instantiation, so the output type is always determinable.
   virtual auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>>;
+    -> failure_or<element_type_tag>
+    = 0;
 
   /// Substitute variables from the context and potentially instantiate `this`.
   ///
@@ -76,11 +76,7 @@ public:
   /// The implementation may assume that the operator was previously
   /// instantiated, i.e., `substitute` was called with `instantiate == true`.
   /// However, other methods such as `optimize` may be called in between.
-  ///
-  /// Returns `None` if the operator has no runtime representation and shall be
-  /// elided when the pipeline is spawned. Such operators exist only in the IR,
-  /// for example to act as optimization barriers.
-  virtual auto spawn(element_type_tag input) && -> Option<AnyOperator> = 0;
+  virtual auto spawn(element_type_tag input) const -> AnyOperator = 0;
 
   /// Return the "main location" of the operator.
   ///
@@ -135,7 +131,7 @@ struct pipeline {
 
   /// @see Operator
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>>;
+    -> failure_or<element_type_tag>;
 
   // TODO: How do we take care that we don't propagate $-vars past the point
   // where they will be defined?
@@ -201,13 +197,13 @@ public:
   auto substitute(substitute_ctx ctx, bool instantiate)
     -> failure_or<void> override;
 
-  auto spawn(element_type_tag input) && -> Option<AnyOperator> override;
+  auto spawn(element_type_tag input) const -> AnyOperator override;
 
   auto optimize(optimize_filter filter,
                 event_order order) && -> optimize_result override;
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override;
+    -> failure_or<element_type_tag> override;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, SetIr& x) -> bool;

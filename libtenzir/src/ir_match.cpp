@@ -506,19 +506,19 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) && -> Option<AnyOperator> override {
+  auto spawn(element_type_tag input) const -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
     auto dh = null_diagnostic_handler{};
     auto output = infer_type(input, dh);
-    TENZIR_ASSERT(output and *output);
-    if ((**output).is<void>()) {
-      return MatchSink{std::move(args_)}.with_name("match");
+    TENZIR_ASSERT(output);
+    if ((*output).is<void>()) {
+      return MatchSink{args_}.with_name("match");
     }
-    return Match{std::move(args_)}.with_name("match");
+    return Match{args_}.with_name("match");
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
+    -> failure_or<element_type_tag> override {
     if (input.is_not<table_slice>()) {
       diagnostic::error("match operator expected events").emit(dh);
       return failure::promise();
@@ -528,7 +528,7 @@ public:
     for (auto const& arm : args_.arms) {
       has_wildcard = has_wildcard or arm.wildcard;
       TRY(auto branch_ty, arm.pipeline.infer_type(input, dh));
-      if (branch_ty and branch_ty->is<chunk_ptr>()) {
+      if (branch_ty.is<chunk_ptr>()) {
         diagnostic::error("branches must not return bytes")
           .primary(arm.source)
           .emit(dh);
@@ -538,7 +538,9 @@ public:
           combine_branch_types(result, branch_ty, args_.match_keyword, dh));
     }
     TENZIR_ASSERT(has_wildcard);
-    return result;
+    // A match always has a wildcard arm, so at least one branch contributed.
+    TENZIR_ASSERT(result);
+    return *result;
   }
 
   friend auto inspect(auto& f, MatchIr& x) -> bool {

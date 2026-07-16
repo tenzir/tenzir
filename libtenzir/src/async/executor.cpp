@@ -834,17 +834,16 @@ private:
     // type-checks against `input`. And since optimizations are type-preserving,
     // we know that this cannot fail.
     TENZIR_ASSERT(output);
-    TENZIR_ASSERT(*output);
     auto spawned = std::move(pipe).spawn(input);
     if (spawned.empty()) {
-      TENZIR_ASSERT(**output == input);
+      TENZIR_ASSERT(*output == input);
       spawned.push_back(make_identity_operator(input));
     }
     auto [from_control_sender, from_control_receiver]
       = channel<FromControl>(16);
     auto [to_control_sender, to_control_receiver] = channel<ToControl>(16);
     auto [runner, push_sub, pull_sub] = match(
-      std::tie(input, **output),
+      std::tie(input, *output),
       [&]<class In, class Out>(
         tag<In>, tag<Out>) -> std::tuple<Task<void>, AnyOpPush, AnyOpPull> {
         auto chain

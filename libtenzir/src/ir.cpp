@@ -249,9 +249,9 @@ auto ir::SetIr::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::SetIr::spawn(element_type_tag input) && -> Option<AnyOperator> {
+auto ir::SetIr::spawn(element_type_tag input) const -> AnyOperator {
   TENZIR_ASSERT(input.is<table_slice>());
-  return Set{std::move(assignments_), order_}.with_name("set");
+  return Set{assignments_, order_}.with_name("set");
 }
 
 namespace {
@@ -298,7 +298,7 @@ auto ir::SetIr::optimize(ir::optimize_filter filter,
 }
 
 auto ir::SetIr::infer_type(element_type_tag input, diagnostic_handler& dh) const
-  -> failure_or<std::optional<element_type_tag>> {
+  -> failure_or<element_type_tag> {
   if (input.is_not<table_slice>()) {
     diagnostic::error("set operator expected events").emit(dh);
     return failure::promise();
@@ -541,7 +541,7 @@ public:
     auto null_dh = null_diagnostic_handler{};
     auto outputs_events = [&](ir::pipeline const& pipe) -> bool {
       auto t = pipe.infer_type(tag_v<table_slice>, null_dh);
-      return t and *t and (**t).is<table_slice>();
+      return t and (*t).is<table_slice>();
     };
     auto optimize_branch
       = [&](ir::pipeline& branch, ir::optimize_filter f) -> event_order {
@@ -576,19 +576,19 @@ public:
     };
   }
 
-  auto spawn(element_type_tag input) && -> Option<AnyOperator> override {
+  auto spawn(element_type_tag input) const -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
     auto dh = null_diagnostic_handler{};
     auto output = infer_type(input, dh);
-    TENZIR_ASSERT(output and *output);
-    if ((**output).is<void>()) {
-      return IfSink{std::move(args_)}.with_name("if");
+    TENZIR_ASSERT(output);
+    if ((*output).is<void>()) {
+      return IfSink{args_}.with_name("if");
     }
-    return If{std::move(args_)}.with_name("if");
+    return If{args_}.with_name("if");
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
+    -> failure_or<element_type_tag> override {
     // A branch may be empty (or contain only `let`s), in which case it has no
     // operator to point at. Fall back to the condition's location, which is
     // always present.
@@ -599,41 +599,35 @@ public:
       return args_.condition.get_location();
     };
     TRY(auto then_ty, args_.consequence.infer_type(input, dh));
-    auto else_ty = std::optional{input};
+    auto else_ty = input;
     if (args_.alternative) {
       TRY(else_ty, args_.alternative->infer_type(input, dh));
     }
-    if (then_ty and then_ty->is<chunk_ptr>()) {
+    if (then_ty.is<chunk_ptr>()) {
       diagnostic::error("branches must not return bytes")
         .primary(branch_location(args_.consequence))
         .emit(dh);
       return failure::promise();
     }
-    if (args_.alternative and else_ty and else_ty->is<chunk_ptr>()) {
+    if (args_.alternative and else_ty.is<chunk_ptr>()) {
       diagnostic::error("branches must not return bytes")
         .primary(branch_location(*args_.alternative))
         .emit(dh);
       return failure::promise();
     }
-    if (not then_ty) {
-      return else_ty;
-    }
-    if (not else_ty) {
+    if (then_ty == else_ty) {
       return then_ty;
     }
-    if (*then_ty == *else_ty) {
-      return then_ty;
-    }
-    if (then_ty->is<void>()) {
+    if (then_ty.is<void>()) {
       return else_ty;
     }
-    if (else_ty->is<void>()) {
+    if (else_ty.is<void>()) {
       return then_ty;
     }
     // TODO: Improve diagnostic.
     auto diag = diagnostic::error("incompatible branch output types: {} and {}",
-                                  operator_type_name(*then_ty),
-                                  operator_type_name(*else_ty))
+                                  operator_type_name(then_ty),
+                                  operator_type_name(else_ty))
                   .primary(branch_location(args_.consequence));
     if (args_.alternative) {
       diag = std::move(diag).secondary(branch_location(*args_.alternative));
@@ -883,21 +877,17 @@ auto ir::pipeline::spawn(element_type_tag input) && -> std::vector<AnyOperator> 
     auto dh = null_diagnostic_handler{};
     auto output = op->infer_type(input, dh);
     TENZIR_ASSERT(output);
-    TENZIR_ASSERT(*output);
-    if (auto spawned = std::move(*op).spawn(input)) {
-      result.push_back(std::move(*spawned));
-    }
-    input = **output;
+    result.push_back(op->spawn(input));
+    input = *output;
   }
   return result;
 }
 
 auto ir::pipeline::infer_type(element_type_tag input,
                               diagnostic_handler& dh) const
-  -> failure_or<std::optional<element_type_tag>> {
+  -> failure_or<element_type_tag> {
   for (auto& op : operators) {
-    TRY(auto output, op->infer_type(input, dh));
-    TRY(input, output);
+    TRY(input, op->infer_type(input, dh));
     // TODO: What if we get void in the middle?
   }
   return input;
@@ -961,14 +951,6 @@ auto ir::Operator::copy() const -> Box<Operator> {
 auto ir::Operator::move() && -> Box<Operator> {
   // TODO: This should be overriden by something like CRTP.
   return copy();
-}
-
-auto ir::Operator::infer_type(element_type_tag input,
-                              diagnostic_handler& dh) const
-  -> failure_or<std::optional<element_type_tag>> {
-  // TODO: Is this a good default to have? Should probably be pure virtual.
-  (void)input, (void)dh;
-  return std::nullopt;
 }
 
 auto operator_compiler_plugin::operator_name() const -> std::string {

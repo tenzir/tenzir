@@ -22,9 +22,9 @@
        named_args: [
          
        ]
-     },
-     OptimizeReorderIr {
-       loc: [1]:7..23 from 0
+-    },
+-    OptimizeReorderIr {
+-      loc: [1]:7..23 from 0
      },
      GenericIr {
        op: {

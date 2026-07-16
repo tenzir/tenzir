@@ -1221,10 +1221,12 @@ public:
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
+    -> failure_or<element_type_tag> override {
     if (not mode_value_) {
-      // Mode not yet resolved; defer type inference.
-      return std::optional<element_type_tag>{};
+      diagnostic::error("`cache --mode` must be a constant")
+        .primary(op_loc_)
+        .emit(dh);
+      return failure::promise();
     }
     if (*mode_value_ == "write") {
       if (input.is_not<table_slice>()) {
@@ -1371,11 +1373,11 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) && -> Option<AnyOperator> override {
+  auto spawn(element_type_tag input) const -> AnyOperator override {
     TENZIR_ASSERT(mode_value_);
     TENZIR_ASSERT(id_value_);
     auto args = CacheArgs{};
-    args.id = std::move(*id_value_);
+    args.id = *id_value_;
     args.mode = *mode_value_;
     args.capacity = capacity_value_;
     args.read_timeout

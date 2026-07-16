@@ -159,7 +159,7 @@ public:
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
+    -> failure_or<element_type_tag> override {
     if (input.is_not<table_slice>()) {
       diagnostic::error("`fork_merge` expects events as input")
         .primary(args_.keyword)
@@ -168,10 +168,7 @@ public:
     }
     for (auto i = size_t{0}; i < args_.branches.size(); ++i) {
       TRY(auto branch_ty, args_.branches[i].infer_type(input, dh));
-      if (not branch_ty) {
-        continue;
-      }
-      if (branch_ty->is_not<table_slice>()) {
+      if (branch_ty.is_not<table_slice>()) {
         diagnostic::error("`fork_merge` subpipelines must produce events")
           .primary(args_.locations[i])
           .emit(dh);
@@ -181,9 +178,9 @@ public:
     return tag_v<table_slice>;
   }
 
-  auto spawn(element_type_tag input) && -> Option<AnyOperator> override {
+  auto spawn(element_type_tag input) const -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
-    return ForkMerge{std::move(args_)}.with_name("fork_merge");
+    return ForkMerge{args_}.with_name("fork_merge");
   }
 
   friend auto inspect(auto& f, ForkMergeIr& x) -> bool {

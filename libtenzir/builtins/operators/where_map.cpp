@@ -876,13 +876,13 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) && -> Option<AnyOperator> override {
+  auto spawn(element_type_tag input) const -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
-    return Where{std::move(predicate_)}.with_name("where");
+    return Where{predicate_}.with_name("where");
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
+    -> failure_or<element_type_tag> override {
     if (input.is_not<table_slice>()) {
       // TODO: Do not duplicate these messages across the codebase.
       diagnostic::error("operator expects events").primary(self_).emit(dh);

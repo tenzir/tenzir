@@ -1032,13 +1032,13 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) && -> Option<AnyOperator> override {
+  auto spawn(element_type_tag input) const -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
-    return Summarize{std::move(cfg_)}.with_name("summarize");
+    return Summarize{cfg_}.with_name("summarize");
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
+    -> failure_or<element_type_tag> override {
     if (input.is_not<table_slice>()) {
       diagnostic::error("operator expects events").primary(self_).emit(dh);
       return failure::promise();

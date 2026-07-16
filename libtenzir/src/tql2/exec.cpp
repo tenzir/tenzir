@@ -2283,15 +2283,13 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   auto null_dh = null_diagnostic_handler{};
   auto output = Option<element_type_tag>{};
   auto implicit_source = Option<std::string_view>{};
-  if (auto inferred = ir.infer_type(tag_v<void>, null_dh);
-      inferred and *inferred) {
-    output = **inferred;
+  if (auto inferred = ir.infer_type(tag_v<void>, null_dh); inferred) {
+    output = *inferred;
   } else if (auto inferred = ir.infer_type(tag_v<chunk_ptr>, null_dh);
-             inferred and *inferred and not cfg.implicit_bytes_source.empty()) {
+             inferred and not cfg.implicit_bytes_source.empty()) {
     implicit_source = cfg.implicit_bytes_source;
   } else if (auto inferred = ir.infer_type(tag_v<table_slice>, null_dh);
-             inferred and *inferred
-             and not cfg.implicit_events_source.empty()) {
+             inferred and not cfg.implicit_events_source.empty()) {
     implicit_source = cfg.implicit_events_source;
   } else {
     TRY(output, ir.infer_type(tag_v<void>, ctx));
@@ -2304,8 +2302,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     ir.operators.insert(ir.operators.begin(),
                         std::move_iterator{implicit.operators.begin()},
                         std::move_iterator{implicit.operators.end()});
-    TRY(auto inferred_after_source, ir.infer_type(tag_v<void>, ctx));
-    output = *inferred_after_source;
+    TRY(output, ir.infer_type(tag_v<void>, ctx));
   }
   if (output.is_none()) {
     // TODO: Improve?

@@ -1,0 +1,9 @@
+from {text: "CUSTOM_DNS_LOG"}
+to_google_secops _dry_run=true,
+  api="ingestion",
+  log_type="CUSTOM_DNS",
+  log_text=text,
+  labels={env: "prod"},
+  private_key=secret("test-key", _literal=true),
+  client_email=secret("test@example.com", _literal=true),
+  customer_id=secret("CUSTOMER", _literal=true)

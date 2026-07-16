@@ -22,9 +22,9 @@
          
        ]
      },
-     OptimizeBarrierIr {
-       loc: [1]:7..23 from 0
-     },
+-    OptimizeBarrierIr {
+-      loc: [1]:7..23 from 0
+-    },
      GenericIr {
        op: {
          path: [
