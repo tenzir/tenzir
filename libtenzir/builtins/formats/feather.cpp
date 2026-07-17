@@ -256,8 +256,16 @@ class passive_feather_store final : public passive_store {
       }
       auto batch = std::move(*batch_result);
       auto import_time_column = batch->GetColumnByName("import_time");
-      auto slice = schema ? table_slice{unwrap_record_batch(batch), *schema}
-                          : table_slice{unwrap_record_batch(batch)};
+      auto slice_result
+        = schema ? table_slice::try_from(unwrap_record_batch(batch), *schema)
+                 : table_slice::try_from(unwrap_record_batch(batch));
+      if (not slice_result) {
+        co_yield caf::make_error(ec::format_error,
+                                 fmt::format("failed to read record batch: {}",
+                                             slice_result.error().message));
+        co_return;
+      }
+      auto slice = std::move(*slice_result);
       if (not schema) {
         schema = slice.schema();
         schema_ = schema;

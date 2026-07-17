@@ -459,10 +459,19 @@ auto verify_column(const arrow::Array& arr,
   return false;
 }
 
-/// Verifies that an `arrow::RecordBatch`'s types are supported by Tenzir.
+/// Verifies that an `arrow::RecordBatch`'s types are supported by Tenzir, and
+/// that its buffers are internally consistent. Unlike `ValidateFull()`,
+/// `Validate()` is a cheap, non-recursive structural check, so it is run
+/// unconditionally rather than gated behind `TENZIR_ENABLE_ASSERTIONS` --
+/// externally-sourced record batches (e.g. read back from a store file) are
+/// exactly the case where corruption is expected to occur.
 [[maybe_unused]] auto
 verify_record_batch(const arrow::RecordBatch& record_batch)
   -> std::expected<void, table_slice::creation_error> {
+  if (auto status = record_batch.Validate(); not status.ok()) {
+    return std::unexpected(
+      table_slice::creation_error{.message = status.ToString()});
+  }
   auto error = std::optional<table_slice::creation_error>{};
   for (const auto& column : record_batch.columns()) {
     if (not verify_column(*column, error)) {
