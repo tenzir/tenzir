@@ -57,20 +57,25 @@ auto emit_with_location(DiagnosticBuilder&& diag, DiagnosticHandler& dh,
   std::forward<DiagnosticBuilder>(diag).emit(dh);
 }
 
+// Partitions written by VAST (supported indefinitely since partition
+// version 2, see `config.cpp.in`) carry `VAST:`-prefixed schema metadata
+// instead of `TENZIR:`; the type deserialization accepts both prefixes (see
+// the prefix parser in `type.cpp`), so envelope detection must as well.
+
 template <class Metadata>
 auto has_tenzir_name_metadata(std::shared_ptr<Metadata> const& metadata)
   -> bool {
   return metadata
-         and std::find(metadata->keys().begin(), metadata->keys().end(),
-                       "TENZIR:name:0")
-               != metadata->keys().end();
+         and std::ranges::any_of(metadata->keys(), [](std::string const& key) {
+               return key == "TENZIR:name:0" or key == "VAST:name:0";
+             });
 }
 
 template <class Metadata>
 auto has_tenzir_metadata(std::shared_ptr<Metadata> const& metadata) -> bool {
   return metadata
          and std::ranges::any_of(metadata->keys(), [](std::string const& key) {
-               return key.starts_with("TENZIR:");
+               return key.starts_with("TENZIR:") or key.starts_with("VAST:");
              });
 }
 
