@@ -815,17 +815,16 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
       },
       {{"internal"}},
     }};
+    // The periodic metric deliberately only carries the count: per-partition
+    // details would be duplicated into storage once per metrics interval for
+    // as long as the quarantine persists. The full list is available via the
+    // rebuilder's debug status (`tenzir-ctl rebuild show`), and every
+    // quarantine event is logged with uuid and error when it happens.
     auto quarantine_builder = series_builder{type{
       "tenzir.metrics.rebuild_quarantine",
       record_type{
         {"timestamp", time_type{}},
         {"quarantined_partitions", uint64_type{}},
-        {"partitions", list_type{record_type{
-                         {"id", string_type{}},
-                         {"schema", string_type{}},
-                         {"events", uint64_type{}},
-                         {"error", string_type{}},
-                       }}},
       },
       {{"internal"}},
     }};
@@ -850,14 +849,6 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
         quarantine_metric.field("timestamp", time::clock::now());
         quarantine_metric.field("quarantined_partitions",
                                 self->state().quarantined.size());
-        auto quarantined_list = quarantine_metric.field("partitions").list();
-        for (const auto& [id, entry] : self->state().quarantined) {
-          auto quarantined_partition = quarantined_list.record();
-          quarantined_partition.field("id", fmt::to_string(id));
-          quarantined_partition.field("schema", fmt::to_string(entry.schema));
-          quarantined_partition.field("events", entry.events);
-          quarantined_partition.field("error", fmt::to_string(entry.error));
-        }
         self->mail(quarantine_builder.finish_assert_one_slice()).send(importer);
       });
   }
