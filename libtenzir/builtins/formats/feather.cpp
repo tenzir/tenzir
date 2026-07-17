@@ -255,6 +255,16 @@ class passive_feather_store final : public passive_store {
         co_return;
       }
       auto batch = std::move(*batch_result);
+      // A damaged store can decode as a valid Arrow IPC file whose batches
+      // are not store envelopes (e.g. a missing or non-struct `event`
+      // column); `unwrap_record_batch` would dereference the missing column,
+      // so validate the envelope shape first.
+      if (not is_store_envelope(batch)) {
+        co_yield caf::make_error(ec::format_error,
+                                 "record batch in feather store is not a "
+                                 "valid store envelope");
+        co_return;
+      }
       auto import_time_column = batch->GetColumnByName("import_time");
       auto slice_result
         = schema ? table_slice::try_from(unwrap_record_batch(batch), *schema)

@@ -13,6 +13,9 @@ Phase 2: `rebuild --all` succeeds, quarantines exactly the corrupt
          partition, and rebuilds the healthy one.
 Phase 3: the healthy data is still exportable and the node is alive.
 Phase 4: a second `rebuild --all` does not retry the quarantined partition.
+Phase 5: a store file that is a valid Arrow IPC file but not a store
+         envelope (e.g. a plain feather file) is quarantined as well
+         instead of crashing the node on the missing `event` column.
 """
 
 from __future__ import annotations
@@ -208,5 +211,33 @@ try:
     assert "quarantined-size: 1" in r.stdout, f"unexpected status:\n{r.stdout}"
     assert export_count(tenzir, "quarantine.good") == 100
     print("phase4-second-rebuild-skips-quarantined: ok")
+
+    # --- Phase 5: valid IPC file that is not a store envelope --------------
+
+    # The rebuilds above rewrote the healthy partition, so re-resolve its
+    # uuid before replacing its store with a plain (non-envelope) feather
+    # file: a valid Arrow IPC file of ordinary events without the
+    # import_time/event envelope columns that store files have.
+    good_uuids = partition_uuids(tenzir, "quarantine.good")
+    assert len(good_uuids) == 1, f"expected one good partition: {good_uuids}"
+    inputs = Path(os.environ.get("TENZIR_INPUTS", Path(__file__).parents[3] / "inputs"))
+    plain_feather = inputs / "feather" / "ipc_file.feather"
+    assert plain_feather.exists(), f"input not found: {plain_feather}"
+    node.stop()
+    store_file = node.state_dir / "archive" / f"{good_uuids[0]}.feather"
+    assert store_file.exists(), f"store file not found: {store_file}"
+    store_file.write_bytes(plain_feather.read_bytes())
+    node.start()
+    tenzir = Executor.from_env(node.env)
+    r = run_ctl(node, "rebuild", "--all")
+    assert r.returncode == 0, f"rebuild failed: {r.stderr}"
+    assert node.alive(), "node died during rebuild of non-envelope store"
+    r = run_ctl(node, "rebuild", "show")
+    assert r.returncode == 0, f"rebuild show failed: {r.stderr}"
+    # The quarantine set is in-memory, so after the restart both the garbage
+    # store from phase 1 and the non-envelope store get (re-)quarantined.
+    assert "quarantined-size: 2" in r.stdout, f"unexpected status:\n{r.stdout}"
+    assert good_uuids[0] in r.stdout, f"quarantined uuid missing:\n{r.stdout}"
+    print("phase5-non-envelope-store-quarantined: ok")
 finally:
     node.cleanup()

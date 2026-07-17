@@ -346,6 +346,11 @@ struct rebuilder_state {
       for (auto&& rp : std::exchange(run->stop_requests, {})) {
         rp.deliver();
       }
+      // Any run ending completes a pending stop, so the flag must not leak
+      // into the next run: a stale `stopping` would make the corrupt-
+      // partition handler silently drop the healthy remainder of a failed
+      // batch instead of requeuing it.
+      stopping = false;
       if (run->options.detached) {
         run.reset();
         return;
