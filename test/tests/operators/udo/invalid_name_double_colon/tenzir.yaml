@@ -1,0 +1,4 @@
+tenzir:
+  operators:
+    foo::bar: |
+      pass

@@ -1,0 +1,4 @@
+tenzir:
+  operators:
+    a-b: |
+      pass
