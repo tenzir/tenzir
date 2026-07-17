@@ -716,11 +716,20 @@ struct rebuilder_state {
             quarantined.insert_or_assign(
               *corrupt, quarantine_entry{it->schema, it->events, error});
             retry_partitions.erase(it);
+            run->statistics.num_rebuilding -= num_partitions;
+            if (stopping) {
+              // A stop request already decided not to touch any partition
+              // beyond the ones currently rebuilding, so don't requeue the
+              // survivors of this batch or pick up more work; just drop them
+              // from this run's accounting and let this worker finish.
+              run->statistics.num_total -= 1 + retry_partitions.size();
+              rp.deliver();
+              return;
+            }
             run->remaining_partitions.insert(run->remaining_partitions.begin(),
                                              retry_partitions.begin(),
                                              retry_partitions.end());
             run->statistics.num_total -= 1;
-            run->statistics.num_rebuilding -= num_partitions;
             rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
                         atom::rebuild_v);
             return;
