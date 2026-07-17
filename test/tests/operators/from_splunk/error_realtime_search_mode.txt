@@ -1,0 +1,6 @@
+error: real-time Splunk searches are not supported
+ --> tests/operators/from_splunk/error_realtime_search_mode.tql:9:11
+  |
+9 |   options={search_mode: "realtime"},
+  |           ^^^^^^^^^^^^^^^^^^^^^^^^^ `search_mode` is set to `realtime`
+  |

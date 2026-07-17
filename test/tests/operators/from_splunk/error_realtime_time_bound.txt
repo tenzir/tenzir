@@ -1,0 +1,7 @@
+error: real-time Splunk searches are not supported
+ --> tests/operators/from_splunk/error_realtime_time_bound.tql:7:12
+  |
+7 |   earliest="rt-5m",
+  |            ^^^^^^^ `earliest` uses a real-time bound
+  |
+  = note: use a finite time bound instead

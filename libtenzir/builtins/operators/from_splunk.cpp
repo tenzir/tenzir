@@ -45,6 +45,7 @@ struct Args {
   ast::expression search;
   ast::expression earliest;
   ast::expression latest;
+  Option<ast::expression> options;
   located<data> headers;
   Option<ast::expression> tls;
   Option<located<duration>> timeout;
@@ -97,12 +98,29 @@ auto check_non_empty_literal(std::string_view name,
     name, located<std::string>{*value, expression.get_location()}, dh);
 }
 
-auto validate_time_bound(std::string_view name,
-                         ast::expression const& expression, location source,
-                         diagnostic_handler& dh) -> failure_or<void> {
-  TRY(auto value, const_eval(expression, dh));
+auto is_realtime_time_bound(std::string_view value) -> bool {
+  value = detail::trim(value);
+  if (value.size() < 2
+      or not detail::ascii_icase_equal(value.substr(0, 2), "rt")) {
+    return false;
+  }
+  return value.size() == 2 or value[2] == '+' or value[2] == '-'
+         or value[2] == '@';
+}
+
+auto validate_time_bound_value(std::string_view name, data const& value,
+                               location source, diagnostic_handler& dh)
+  -> failure_or<void> {
   if (auto const* string = try_as<std::string>(value)) {
-    return check_non_empty(name, located<std::string>{*string, source}, dh);
+    TRY(check_non_empty(name, located<std::string>{*string, source}, dh));
+    if (is_realtime_time_bound(*string)) {
+      diagnostic::error("real-time Splunk searches are not supported")
+        .primary(source, "`{}` uses a real-time bound", name)
+        .note("use a finite time bound instead")
+        .emit(dh);
+      return failure::promise();
+    }
+    return {};
   }
   if (is<time>(value)) {
     return {};
@@ -112,6 +130,71 @@ auto validate_time_bound(std::string_view name,
     .primary(source, "got `{}`", inferred ? inferred->kind() : type_kind{})
     .emit(dh);
   return failure::promise();
+}
+
+auto validate_time_bound(std::string_view name,
+                         ast::expression const& expression, location source,
+                         diagnostic_handler& dh) -> failure_or<void> {
+  TRY(auto value, const_eval(expression, dh));
+  return validate_time_bound_value(name, value, source, dh);
+}
+
+auto is_protected_option(std::string_view name) -> bool {
+  return detail::ascii_icase_equal(name, "search")
+         or detail::ascii_icase_equal(name, "earliest_time")
+         or detail::ascii_icase_equal(name, "latest_time")
+         or detail::ascii_icase_equal(name, "output_mode")
+         or detail::ascii_icase_equal(name, "preview");
+}
+
+auto is_realtime_only_option(std::string_view name) -> bool {
+  auto const normalized = detail::ascii_tolower(name);
+  return normalized.starts_with("rt_") or normalized == "indexedrealtime"
+         or normalized == "indexedrealtimeoffset"
+         or normalized == "realtime_schedule" or normalized == "replay_et"
+         or normalized == "replay_lt" or normalized == "replay_speed";
+}
+
+auto validate_options(ast::expression const& expression, location source,
+                      diagnostic_handler& dh) -> failure_or<void> {
+  TRY(auto value, const_eval(expression, dh));
+  auto const* options = try_as<record>(value);
+  if (not options) {
+    auto const inferred = type::infer(value);
+    diagnostic::error("expected `record` for `options`")
+      .primary(source, "got `{}`", inferred ? inferred->kind() : type_kind{})
+      .emit(dh);
+    return failure::promise();
+  }
+  for (auto const& [name, option] : *options) {
+    if (is_protected_option(name)) {
+      diagnostic::error("`options` must not override `{}`", name)
+        .primary(source)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (is_realtime_only_option(name)) {
+      diagnostic::error("real-time Splunk searches are not supported")
+        .primary(source, "`options` contains the real-time parameter `{}`",
+                 name)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (detail::ascii_icase_equal(name, "search_mode")) {
+      if (auto const* mode = try_as<std::string>(option);
+          mode and detail::ascii_icase_equal(detail::trim(*mode), "realtime")) {
+        diagnostic::error("real-time Splunk searches are not supported")
+          .primary(source, "`search_mode` is set to `realtime`")
+          .emit(dh);
+        return failure::promise();
+      }
+    }
+    if (detail::ascii_icase_equal(name, "index_earliest")
+        or detail::ascii_icase_equal(name, "index_latest")) {
+      TRY(validate_time_bound_value(name, option, source, dh));
+    }
+  }
+  return {};
 }
 
 auto extract_messages(record const& envelope) -> std::vector<SplunkMessage> {
@@ -307,14 +390,18 @@ public:
   ValidateSplunkResponseIr() = default;
 
   ValidateSplunkResponseIr(ast::expression search, ast::expression earliest,
-                           ast::expression latest, location search_source,
-                           location earliest_source, location latest_source)
+                           ast::expression latest,
+                           Option<ast::expression> options,
+                           location search_source, location earliest_source,
+                           location latest_source, location options_source)
     : search_{std::move(search)},
       earliest_{std::move(earliest)},
       latest_{std::move(latest)},
+      options_{std::move(options)},
       search_source_{search_source},
       earliest_source_{earliest_source},
-      latest_source_{latest_source} {
+      latest_source_{latest_source},
+      options_source_{options_source} {
   }
 
   auto name() const -> std::string override {
@@ -326,6 +413,9 @@ public:
     TRY(search_.substitute(ctx));
     TRY(earliest_.substitute(ctx));
     TRY(latest_.substitute(ctx));
+    if (options_) {
+      TRY(options_->substitute(ctx));
+    }
     if (instantiate) {
       TRY(auto value, const_eval(search_, ctx));
       auto* search = try_as<std::string>(value);
@@ -339,6 +429,9 @@ public:
                           located<std::string>{*search, search_source_}, ctx));
       TRY(validate_time_bound("earliest", earliest_, earliest_source_, ctx));
       TRY(validate_time_bound("latest", latest_, latest_source_, ctx));
+      if (options_) {
+        TRY(validate_options(*options_, options_source_, ctx));
+      }
       search_value_ = std::move(*search);
     }
     return {};
@@ -370,20 +463,24 @@ public:
     return f.object(x).fields(f.field("search", x.search_),
                               f.field("earliest", x.earliest_),
                               f.field("latest", x.latest_),
+                              f.field("options", x.options_),
                               f.field("search_value", x.search_value_),
                               f.field("search_source", x.search_source_),
                               f.field("earliest_source", x.earliest_source_),
-                              f.field("latest_source", x.latest_source_));
+                              f.field("latest_source", x.latest_source_),
+                              f.field("options_source", x.options_source_));
   }
 
 private:
   ast::expression search_;
   ast::expression earliest_;
   ast::expression latest_;
+  Option<ast::expression> options_;
   Option<std::string> search_value_;
   location search_source_;
   location earliest_source_;
   location latest_source_;
+  location options_source_;
 };
 
 using validate_splunk_response_ir_plugin
@@ -417,6 +514,7 @@ public:
           .named("search", args.search, "string")
           .named("earliest", args.earliest, "string|time")
           .named("latest", args.latest, "string|time")
+          .named("options", args.options, "record")
           .named("headers", args.headers, "record")
           .named("tls", args.tls, "record")
           .named("timeout", args.timeout)
@@ -430,6 +528,8 @@ public:
     auto const search_source = args.search.get_location();
     auto const earliest_source = args.earliest.get_location();
     auto const latest_source = args.latest.get_location();
+    auto const options_source
+      = args.options ? args.options->get_location() : location::unknown;
     TRY(check_non_empty_literal("search", args.search, ctx));
     TRY(check_non_empty_literal("earliest", args.earliest, ctx));
     TRY(check_non_empty_literal("latest", args.latest, ctx));
@@ -469,6 +569,7 @@ public:
     auto search_for_diagnostic = args.search;
     auto earliest_for_validation = args.earliest;
     auto latest_for_validation = args.latest;
+    auto options_for_validation = args.options;
     auto body = std::vector<ast::record::item>{};
     body.emplace_back(ast::record::field{
       ast::identifier{"search", search_source}, std::move(args.search)});
@@ -483,6 +584,9 @@ public:
     body.emplace_back(ast::record::field{
       ast::identifier{"preview", search_source},
       make_constant(data{std::string{"false"}}, search_source)});
+    if (args.options) {
+      body.emplace_back(ast::spread{options_source, std::move(*args.options)});
+    }
     replacement.args.push_back(make_named_arg(
       "body", ast::record{search_source, std::move(body), search_source},
       search_source));
@@ -516,8 +620,8 @@ public:
     auto pipeline = std::move(result).unwrap();
     pipeline.operators.push_back(ValidateSplunkResponseIr{
       std::move(search_for_diagnostic), std::move(earliest_for_validation),
-      std::move(latest_for_validation), search_source, earliest_source,
-      latest_source});
+      std::move(latest_for_validation), std::move(options_for_validation),
+      search_source, earliest_source, latest_source, options_source});
     TRY(auto extract_result,
         parse_pipeline_with_location_override(
           "where result? != null | this = result | @name = \"tenzir.splunk\"",
