@@ -1,3 +1,4 @@
 // The default create_append mode appends when the table already exists.
 from {id: 3, time: 2026-01-01T00:00:02Z, src_ip: 8.8.8.8, net: 172.16.0.0/12, dur: 2h, meta: {level: "error", tags: ["x"]}}
-to_iceberg "createns.events", catalog=env("ICEBERG_REST_URI")
+to_iceberg "createns.events", catalog=env("ICEBERG_REST_URI"),
+  location=env("ICEBERG_UNUSED_TABLE_LOCATION")

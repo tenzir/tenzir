@@ -1,3 +1,4 @@
+location: True
 table {
   1: id: optional long
   2: time: optional timestamptz

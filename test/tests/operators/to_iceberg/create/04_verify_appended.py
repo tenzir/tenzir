@@ -13,6 +13,10 @@ from pyiceberg.catalog.rest import RestCatalog
 def main() -> None:
     catalog = RestCatalog("test", uri=os.environ["ICEBERG_REST_URI"])
     table = catalog.load_table("createns.events")
+    print(
+        "location unchanged: "
+        f"{table.location() == os.environ['ICEBERG_TABLE_LOCATION']}"
+    )
     snapshots = list(table.snapshots())
     print(f"snapshots: {len(snapshots)}")
     rows = sorted(table.scan().to_arrow().to_pylist(), key=lambda row: row["id"])

@@ -9,6 +9,7 @@
 #include "tenzir/plugins/iceberg/facade.hpp"
 #include "tenzir/plugins/iceberg/restore.hpp"
 
+#include <tenzir/amazon.hpp>
 #include <tenzir/any.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
@@ -68,6 +69,7 @@ constexpr auto stream_threshold = uint64_t{64} * 1024 * 1024;
 constexpr auto max_streaming_writers = size_t{64};
 
 TENZIR_ENUM(mode, create_append, create, append);
+TENZIR_ENUM(aws_catalog_service, glue, s3tables);
 
 /// The column that becomes the table's registered sort order when a created
 /// table has a matching top-level timestamp (the OCSF event time convention).
@@ -78,7 +80,9 @@ struct ToIcebergArgs {
   located<secret> catalog = {secret::make_literal(""), location::unknown};
   Option<located<std::string>> mode;
   Option<located<secret>> warehouse;
+  Option<located<secret>> table_location;
   Option<located<record>> aws_iam;
+  Option<located<std::string>> catalog_aws_service;
   Option<located<secret>> s3_endpoint;
   Option<located<bool>> s3_path_style;
   Option<located<secret>> token;
@@ -349,6 +353,10 @@ public:
       requests.push_back(
         make_secret_request("warehouse", *args_.warehouse, warehouse, dh));
     }
+    if (args_.table_location) {
+      requests.push_back(make_secret_request("location", *args_.table_location,
+                                             table_location_, dh));
+    }
     if (args_.s3_endpoint) {
       requests.push_back(make_secret_request("s3_endpoint", *args_.s3_endpoint,
                                              s3_endpoint, dh));
@@ -374,7 +382,26 @@ public:
       co_return;
     }
     config.warehouse = std::move(warehouse);
-    config.use_s3_file_io = auth->credentials.has_value();
+    const auto uses_managed_aws_catalog
+      = static_cast<bool>(args_.catalog_aws_service);
+    config.use_s3_file_io
+      = auth->credentials.has_value() or uses_managed_aws_catalog;
+    if (args_.catalog_aws_service) {
+      const auto service = *from_string<enum aws_catalog_service>(
+        args_.catalog_aws_service->inner);
+      config.aws_catalog_signing_name
+        = service == aws_catalog_service::glue ? "glue" : "s3tables";
+    }
+    if (uses_managed_aws_catalog) {
+      auto credentials = Option<resolved_aws_credentials>{None{}};
+      if (auth->credentials) {
+        credentials = *auth->credentials;
+      }
+      config.aws_signing_region = amazon::resolve_region(None{}, credentials);
+      config.properties["client.region"] = config.aws_signing_region;
+    } else if (auth->credentials and not auth->credentials->region.empty()) {
+      config.properties["client.region"] = auth->credentials->region;
+    }
     if (not token.empty()) {
       config.properties["rest.auth.type"] = "oauth2";
       config.properties["token"] = std::move(token);
@@ -384,45 +411,55 @@ public:
     if (args_.gcp_project) {
       config.gcp_user_project = args_.gcp_project->inner;
     }
-    if (auth->credentials) {
-      const auto& creds = *auth->credentials;
-      const auto needs_provider = not creds.role.empty()
-                                  or not creds.profile.empty()
-                                  or creds.web_identity.has_value();
-      if (needs_provider) {
-        // The role, profile, and web-identity flows sign S3 requests
-        // through a live credentials provider from the shared IAM ladder.
-        // STS-backed providers refresh their expiring credentials
-        // transparently, so long-running pipelines outlive individual
-        // tokens. Construction is blocking: some flows fetch initial
-        // credentials from STS eagerly to surface errors here.
-        auto provider = co_await spawn_blocking([creds]() {
-          const auto region = creds.region.empty()
-                                ? std::optional<std::string>{}
-                                : std::optional{creds.region};
-          return make_aws_credentials_provider(std::optional{creds}, region);
-        });
-        if (not provider) {
-          diagnostic::error(provider.error())
-            .primary(args_.aws_iam->source)
+    const auto needs_provider
+      = uses_managed_aws_catalog
+        or (auth->credentials
+            and (not auth->credentials->role.empty()
+                 or not auth->credentials->profile.empty()
+                 or auth->credentials->web_identity.has_value()));
+    if (needs_provider) {
+      if (uses_managed_aws_catalog) {
+        auto initialized = ensure_aws_sdk_initialized();
+        if (not initialized) {
+          diagnostic::error("failed to initialize AWS authentication: {}",
+                            initialized.error().message)
+            .primary(args_.catalog_aws_service->source)
             .emit(dh);
           done_ = true;
           co_return;
         }
-        config.s3_credentials_provider = std::move(*provider);
-      } else {
-        if (not creds.access_key_id.empty()) {
-          config.properties["s3.access-key-id"] = creds.access_key_id;
-        }
-        if (not creds.secret_access_key.empty()) {
-          config.properties["s3.secret-access-key"] = creds.secret_access_key;
-        }
-        if (not creds.session_token.empty()) {
-          config.properties["s3.session-token"] = creds.session_token;
-        }
       }
-      if (not creds.region.empty()) {
-        config.properties["client.region"] = creds.region;
+      // Use the shared live provider for catalog signing and S3 access. The
+      // default chain and STS-backed providers refresh expiring credentials,
+      // including profiles backed by credential_process.
+      auto region = std::optional<std::string>{};
+      if (not config.aws_signing_region.empty()) {
+        region = config.aws_signing_region;
+      } else if (auth->credentials and not auth->credentials->region.empty()) {
+        region = auth->credentials->region;
+      }
+      auto provider = co_await spawn_blocking(
+        [credentials = auth->credentials, region = std::move(region)]() {
+          return make_aws_credentials_provider(credentials, region);
+        });
+      if (not provider) {
+        const auto source = args_.aws_iam ? args_.aws_iam->source
+                                          : args_.catalog_aws_service->source;
+        diagnostic::error(provider.error()).primary(source).emit(dh);
+        done_ = true;
+        co_return;
+      }
+      config.aws_credentials_provider = std::move(*provider);
+    } else if (auth->credentials) {
+      const auto& creds = *auth->credentials;
+      if (not creds.access_key_id.empty()) {
+        config.properties["s3.access-key-id"] = creds.access_key_id;
+      }
+      if (not creds.secret_access_key.empty()) {
+        config.properties["s3.secret-access-key"] = creds.secret_access_key;
+      }
+      if (not creds.session_token.empty()) {
+        config.properties["s3.session-token"] = creds.session_token;
       }
     }
     if (not s3_endpoint.empty()) {
@@ -772,6 +809,7 @@ private:
   auto ensure_table(const table_slice& input, OpCtx& ctx) -> Task<void> {
     const auto& schema = as<record_type>(input.schema());
     auto options = CreateTableOptions{};
+    options.location = table_location_;
     options.partition_by = partition_fields_;
     for (const auto& field : schema.fields()) {
       if (field.name == default_sort_column and is<time_type>(field.type)) {
@@ -1840,6 +1878,8 @@ private:
   std::shared_ptr<folly::CancellationSource> commit_timer_cancel_;
   bool done_ = false;
   std::unordered_set<std::string> warned_;
+  /// Explicit location used only if this operator creates the table.
+  std::string table_location_;
   /// Fingerprints of input schemas the table schema is known to cover.
   std::unordered_set<std::string> evolved_schemas_;
   MetricsCounter events_counter_;
@@ -1894,7 +1934,10 @@ public:
     d.named("catalog", &ToIcebergArgs::catalog);
     auto mode_arg = d.named("mode", &ToIcebergArgs::mode);
     d.named("warehouse", &ToIcebergArgs::warehouse);
+    d.named("location", &ToIcebergArgs::table_location);
     d.named("aws_iam", &ToIcebergArgs::aws_iam);
+    auto aws_catalog_arg
+      = d.named("catalog_aws_service", &ToIcebergArgs::catalog_aws_service);
     auto endpoint_arg = d.named("s3_endpoint", &ToIcebergArgs::s3_endpoint);
     auto path_style_arg
       = d.named("s3_path_style", &ToIcebergArgs::s3_path_style);
@@ -1959,9 +2002,29 @@ public:
           .primary(*ctx.get_location(path_style_arg))
           .emit(ctx);
       }
+      if (auto service = ctx.get(aws_catalog_arg)) {
+        if (not from_string<enum aws_catalog_service>(service->inner)) {
+          diagnostic::error(
+            "`catalog_aws_service` must be `glue` or `s3tables`")
+            .primary(service->source, "got `{}`", service->inner)
+            .emit(ctx);
+        }
+        if (ctx.get(token_arg)) {
+          diagnostic::error(
+            "`catalog_aws_service` cannot be combined with `token`")
+            .primary(service->source)
+            .emit(ctx);
+        }
+      }
       const auto gcp_auth_opt = ctx.get(gcp_auth_arg);
       const auto uses_gcp = (gcp_auth_opt and gcp_auth_opt->inner)
                             or static_cast<bool>(ctx.get(gcp_key_arg));
+      if (ctx.get(aws_catalog_arg) and uses_gcp) {
+        diagnostic::error("`catalog_aws_service` cannot be combined with "
+                          "Google authentication")
+          .primary(*ctx.get_location(aws_catalog_arg))
+          .emit(ctx);
+      }
       if (ctx.get(token_arg) and uses_gcp) {
         diagnostic::error("`token` cannot be combined with Google "
                           "authentication")

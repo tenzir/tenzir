@@ -18,6 +18,7 @@
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
 #include <arrow/filesystem/s3fs.h>
+#include <aws/core/auth/AWSCredentialsProvider.h>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 #include <iceberg/arrow/arrow_io_internal.h>
@@ -54,6 +55,8 @@
 #include <iceberg/update/fast_append.h>
 #include <iceberg/update/update_schema.h>
 
+#include <sigv4_auth_manager_internal.h>
+
 #ifdef TENZIR_ICEBERG_GCS
 #  include <arrow/filesystem/gcsfs.h>
 #  include <google/cloud/storage/oauth2/google_credentials.h>
@@ -86,6 +89,10 @@ constexpr auto commit_seq_property = std::string_view{"tenzir.commit-seq"};
 constexpr auto gcp_credentials_property = std::string_view{"gcp."
                                                            "credentials-json"};
 constexpr auto gcp_auth_type = std::string_view{"gcp"};
+
+/// Tenzir-owned auth type that supplies iceberg-cpp's SigV4 signer with the
+/// same live AWS credentials provider used by the S3 data plane.
+constexpr auto aws_auth_type = std::string_view{"tenzir-aws-sigv4"};
 
 #ifdef TENZIR_ICEBERG_GCS
 
@@ -215,14 +222,14 @@ auto translate(ice::Result<T> result) -> Result<T> {
 /// check while the FileIO itself strips foreign schemes off object paths.
 constexpr auto s3_file_io = std::string_view{"tenzir-arrow-s3"};
 
-/// Catalog property carrying the handle of a registered live AWS
-/// credentials provider into the S3 FileIO factory. iceberg-cpp hands
-/// configuration to FileIO factories as a string map, so the provider
-/// object travels through this side table instead.
-constexpr auto s3_credentials_handle_property
-  = std::string_view{"tenzir.s3-credentials-handle"};
+/// Catalog property carrying the handle of a registered live AWS credentials
+/// provider into the auth manager and S3 FileIO factory. iceberg-cpp hands
+/// configuration to extensions as a string map, so the provider object
+/// travels through this side table instead.
+constexpr auto aws_credentials_handle_property
+  = std::string_view{"tenzir.aws-credentials-handle"};
 
-auto s3_credentials_registry() -> std::pair<
+auto aws_credentials_registry() -> std::pair<
   std::mutex&,
   std::unordered_map<std::string,
                      std::shared_ptr<Aws::Auth::AWSCredentialsProvider>>&> {
@@ -233,27 +240,89 @@ auto s3_credentials_registry() -> std::pair<
   return {mutex, providers};
 }
 
-auto register_s3_credentials(
+auto register_aws_credentials(
   std::shared_ptr<Aws::Auth::AWSCredentialsProvider> provider) -> std::string {
-  auto [mutex, providers] = s3_credentials_registry();
+  auto [mutex, providers] = aws_credentials_registry();
   auto handle = fmt::to_string(uuid::random());
   const auto lock = std::lock_guard{mutex};
   providers.emplace(handle, std::move(provider));
   return handle;
 }
 
-auto lookup_s3_credentials(const std::string& handle)
+auto lookup_aws_credentials(const std::string& handle)
   -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
-  auto [mutex, providers] = s3_credentials_registry();
+  auto [mutex, providers] = aws_credentials_registry();
   const auto lock = std::lock_guard{mutex};
   const auto it = providers.find(handle);
   return it == providers.end() ? nullptr : it->second;
 }
 
-auto unregister_s3_credentials(const std::string& handle) -> void {
-  auto [mutex, providers] = s3_credentials_registry();
+auto unregister_aws_credentials(const std::string& handle) -> void {
+  auto [mutex, providers] = aws_credentials_registry();
   const auto lock = std::lock_guard{mutex};
   providers.erase(handle);
+}
+
+/// Signs every REST catalog request with a live AWS credentials provider.
+/// SigV4AuthSession asks the provider for credentials for every signature, so
+/// refreshed SSO, workload-identity, and assumed-role sessions take effect
+/// without rebuilding the catalog.
+class AwsAuthManager final : public ice::rest::auth::AuthManager {
+public:
+  AwsAuthManager(std::shared_ptr<Aws::Auth::AWSCredentialsProvider> credentials,
+                 std::string region, std::string service)
+    : credentials_{std::move(credentials)},
+      region_{std::move(region)},
+      service_{std::move(service)} {
+  }
+
+  auto CatalogSession(ice::rest::HttpClient&,
+                      const std::unordered_map<std::string, std::string>&)
+    -> ice::Result<std::shared_ptr<ice::rest::auth::AuthSession>> override {
+    auto initialized = ice::rest::auth::InitializeAwsSdk();
+    if (not initialized) {
+      return std::unexpected{std::move(initialized.error())};
+    }
+    if (credentials_->GetAWSCredentials().IsEmpty()) {
+      return ice::AuthenticationFailed(
+        "AWS credentials provider returned empty credentials");
+    }
+    return ice::rest::auth::SigV4AuthSession::Make(
+      ice::rest::auth::AuthSession::MakeDefault({}), region_, service_,
+      credentials_);
+  }
+
+private:
+  std::shared_ptr<Aws::Auth::AWSCredentialsProvider> credentials_;
+  std::string region_;
+  std::string service_;
+};
+
+auto make_aws_auth_manager(
+  std::string_view,
+  const std::unordered_map<std::string, std::string>& properties)
+  -> ice::Result<std::unique_ptr<ice::rest::auth::AuthManager>> {
+  const auto handle
+    = properties.find(std::string{aws_credentials_handle_property});
+  if (handle == properties.end()) {
+    return ice::InvalidArgument("missing AWS credentials provider handle");
+  }
+  auto provider = lookup_aws_credentials(handle->second);
+  if (not provider) {
+    return ice::InvalidArgument("stale AWS credentials provider handle");
+  }
+  const auto region
+    = properties.find(ice::rest::auth::AuthProperties::kSigV4SigningRegion);
+  if (region == properties.end() or region->second.empty()) {
+    return ice::InvalidArgument("missing AWS signing region");
+  }
+  const auto service
+    = properties.find(ice::rest::auth::AuthProperties::kSigV4SigningName);
+  if (service == properties.end() or service->second.empty()) {
+    return ice::InvalidArgument("missing AWS signing service name");
+  }
+  return std::make_unique<AwsAuthManager>(std::move(provider), region->second,
+                                          service->second);
 }
 
 /// An S3 FileIO whose requests sign through a live credentials provider.
@@ -265,12 +334,12 @@ auto make_s3_file_io(
   const std::unordered_map<std::string, std::string>& properties)
   -> ice::Result<std::unique_ptr<ice::FileIO>> {
   const auto handle
-    = properties.find(std::string{s3_credentials_handle_property});
+    = properties.find(std::string{aws_credentials_handle_property});
   if (handle == properties.end()) {
     return ice::FileIORegistry::Load(
       std::string{ice::FileIORegistry::kArrowS3FileIO}, properties);
   }
-  auto provider = lookup_s3_credentials(handle->second);
+  auto provider = lookup_aws_credentials(handle->second);
   if (not provider) {
     return ice::IOError("stale S3 credentials provider handle");
   }
@@ -347,6 +416,8 @@ auto ensure_registered() -> void {
     ice::arrow::RegisterAll();
     ice::parquet::RegisterAll();
     ice::avro::RegisterAll();
+    ice::rest::auth::AuthManagers::Register(aws_auth_type,
+                                            make_aws_auth_manager);
     ice::FileIORegistry::Register(std::string{s3_file_io}, make_s3_file_io);
 #ifdef TENZIR_ICEBERG_GCS
     ice::rest::auth::AuthManagers::Register(
@@ -883,9 +954,9 @@ auto resolve_partition_column(const std::shared_ptr<arrow::StructArray>& batch,
 
 struct Catalog::Impl {
   std::shared_ptr<ice::Catalog> catalog;
-  /// Keeps the registered S3 credentials provider alive for FileIO
-  /// factories, and unregisters it when the last catalog handle drops.
-  std::shared_ptr<void> s3_credentials_guard;
+  /// Keeps the registered AWS credentials provider alive for auth sessions
+  /// and FileIO factories until the last catalog handle drops.
+  std::shared_ptr<void> aws_credentials_guard;
 };
 
 struct Table::Impl {
@@ -1011,6 +1082,10 @@ PartitionTuple::PartitionTuple(std::shared_ptr<Impl> impl)
   : impl_{std::move(impl)} {
 }
 
+auto ensure_aws_sdk_initialized() -> Result<void> {
+  return translate(ice::rest::auth::InitializeAwsSdk());
+}
+
 auto Catalog::open(CatalogConfig config) -> Result<Catalog> {
   ensure_registered();
   if (config.gcp_auth) {
@@ -1038,14 +1113,35 @@ auto Catalog::open(CatalogConfig config) -> Result<Catalog> {
   // merging the REST server configuration; when that merge yields neither
   // property, retry below with the local filesystem.
   const auto selection = file_io::select_file_io(config);
-  auto s3_credentials_guard = std::shared_ptr<void>{};
-  if (config.s3_credentials_provider) {
+  const auto has_aws_credentials = config.aws_credentials_provider != nullptr;
+  auto aws_credentials_guard = std::shared_ptr<void>{};
+  if (config.aws_credentials_provider) {
     auto handle
-      = register_s3_credentials(std::move(config.s3_credentials_provider));
-    config.properties[std::string{s3_credentials_handle_property}] = handle;
-    s3_credentials_guard = std::shared_ptr<void>(nullptr, [handle](void*) {
-      unregister_s3_credentials(handle);
+      = register_aws_credentials(std::move(config.aws_credentials_provider));
+    config.properties[std::string{aws_credentials_handle_property}] = handle;
+    aws_credentials_guard = std::shared_ptr<void>(nullptr, [handle](void*) {
+      unregister_aws_credentials(handle);
     });
+  }
+  if (not config.aws_catalog_signing_name.empty()) {
+    if (not has_aws_credentials) {
+      return std::unexpected{Error{
+        Error::Kind::permanent,
+        "AWS catalog authentication requires a credentials provider",
+      }};
+    }
+    if (config.aws_signing_region.empty()) {
+      return std::unexpected{Error{
+        Error::Kind::permanent,
+        "AWS catalog authentication requires a signing region",
+      }};
+    }
+    config.properties[ice::rest::auth::AuthProperties::kAuthType]
+      = std::string{aws_auth_type};
+    config.properties[ice::rest::auth::AuthProperties::kSigV4SigningRegion]
+      = std::move(config.aws_signing_region);
+    config.properties[ice::rest::auth::AuthProperties::kSigV4SigningName]
+      = std::move(config.aws_catalog_signing_name);
   }
   switch (selection) {
     case file_io::FileIO::automatic:
@@ -1089,14 +1185,21 @@ auto Catalog::open(CatalogConfig config) -> Result<Catalog> {
   }
   return Catalog{std::make_shared<Impl>(Impl{
     .catalog = std::move(*catalog),
-    .s3_credentials_guard = std::move(s3_credentials_guard),
+    .aws_credentials_guard = std::move(aws_credentials_guard),
   })};
 }
 
 auto Catalog::ensure_namespace(std::span<const std::string> ns)
   -> Result<void> {
-  auto status = impl_->catalog->CreateNamespace(
-    ice::Namespace{.levels = {ns.begin(), ns.end()}}, {});
+  auto namespace_id = ice::Namespace{.levels = {ns.begin(), ns.end()}};
+  auto exists = impl_->catalog->NamespaceExists(namespace_id);
+  if (not exists.has_value()) {
+    return std::unexpected{translate_error(exists.error())};
+  }
+  if (*exists) {
+    return {};
+  }
+  auto status = impl_->catalog->CreateNamespace(namespace_id, {});
   if (not status.has_value()
       and status.error().kind != ice::ErrorKind::kAlreadyExists) {
     return std::unexpected{translate_error(status.error())};
@@ -1224,8 +1327,8 @@ auto Catalog::create_table(std::span<const std::string> ns,
   }
   auto table
     = impl_->catalog->CreateTable(make_identifier(ns, name), iceberg_schema,
-                                  spec, std::move(sort_order),
-                                  /*location=*/"", properties);
+                                  spec, std::move(sort_order), options.location,
+                                  properties);
   if (not table.has_value()) {
     return std::unexpected{translate_error(table.error())};
   }

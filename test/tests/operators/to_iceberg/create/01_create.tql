@@ -4,4 +4,5 @@
 // counts.
 from {id: 1, time: 2026-01-01T00:00:00Z, src_ip: 192.168.0.1, net: 10.0.0.0/8, dur: 90s, meta: {level: "info", tags: ["a", "b"]}},
      {id: 2, time: 2026-01-01T00:00:01Z, src_ip: ::1, net: 192.168.0.0/16, dur: 1ms, meta: {level: "warn", tags: []}}
-to_iceberg "createns.events", catalog=env("ICEBERG_REST_URI")
+to_iceberg "createns.events", catalog=env("ICEBERG_REST_URI"),
+  location=env("ICEBERG_TABLE_LOCATION")

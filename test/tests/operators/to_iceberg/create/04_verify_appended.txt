@@ -1,3 +1,4 @@
+location unchanged: True
 snapshots: 2
 rows: 3
 {'id': 3, 'time': datetime.datetime(2026, 1, 1, 0, 0, 2, tzinfo=zoneinfo.ZoneInfo(key='UTC')), 'src_ip': '8.8.8.8', 'net': '172.16.0.0/12', 'dur': 7200000000000, 'meta': {'level': 'error', 'tags': ['x']}}

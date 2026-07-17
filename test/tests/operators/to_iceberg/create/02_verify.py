@@ -18,6 +18,7 @@ from pyiceberg.catalog.rest import RestCatalog
 def main() -> None:
     catalog = RestCatalog("test", uri=os.environ["ICEBERG_REST_URI"])
     table = catalog.load_table("createns.events")
+    print(f"location: {table.location() == os.environ['ICEBERG_TABLE_LOCATION']}")
     print(table.schema())
     print(f"sort_order: {table.sort_order()}")
     for key in sorted(table.properties):

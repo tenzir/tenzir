@@ -10,6 +10,8 @@
 
 #include <tenzir/test/test.hpp>
 
+#include <aws/core/auth/AWSCredentialsProvider.h>
+
 namespace tenzir::plugins::iceberg {
 
 namespace {
@@ -23,6 +25,14 @@ TEST("S3 warehouses use automatic FileIO selection by default") {
 TEST("AWS authentication selects S3 FileIO without static credentials") {
   auto config = CatalogConfig{};
   config.use_s3_file_io = true;
+  CHECK(file_io::select_file_io(config) == file_io::FileIO::s3);
+}
+
+TEST("a live AWS credentials provider selects S3 FileIO") {
+  auto config = CatalogConfig{};
+  config.aws_credentials_provider
+    = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>("key",
+                                                                "secret");
   CHECK(file_io::select_file_io(config) == file_io::FileIO::s3);
 }
 

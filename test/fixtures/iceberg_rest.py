@@ -135,6 +135,12 @@ def iceberg_rest() -> Iterator[dict[str, str]]:
         env: dict[str, str] = {
             "ICEBERG_REST_URI": f"http://127.0.0.1:{port}",
             "ICEBERG_WAREHOUSE_DIR": warehouse_dir,
+            "ICEBERG_TABLE_LOCATION": (
+                f"file://{warehouse_dir}/custom/createns/events"
+            ),
+            "ICEBERG_UNUSED_TABLE_LOCATION": (
+                f"file://{warehouse_dir}/unused/createns/events"
+            ),
             "ICEBERG_REST_CONTAINER_ID": container.container_id,
             "ICEBERG_REST_CONTAINER_RUNTIME": runtime.binary,
         }

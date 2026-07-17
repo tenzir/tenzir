@@ -86,6 +86,9 @@ struct PartitionField {
 
 /// Options for creating a new table.
 struct CreateTableOptions {
+  /// Explicit base location for the new table. Empty lets the catalog choose.
+  std::string location;
+
   /// Partition spec fields, in order. Empty for an unpartitioned table.
   /// Source columns must exist in the created schema and support the
   /// transform (e.g. temporal transforms need a timestamp source).
@@ -111,12 +114,15 @@ struct CatalogConfig {
   /// Select S3 FileIO even when AWS credentials do not materialize as
   /// `s3.*` properties, for example for profiles and assumed roles.
   bool use_s3_file_io = false;
-  /// Signs S3 data-plane requests through a live credentials provider
-  /// instead of static `s3.*` properties. STS-backed IAM modes (assumed
-  /// roles, profiles, web identity) hand out expiring credentials; the
-  /// provider refreshes them transparently for the lifetime of the
-  /// pipeline, which static properties cannot.
-  std::shared_ptr<Aws::Auth::AWSCredentialsProvider> s3_credentials_provider;
+  /// AWS SigV4 service name for catalog requests, for example `glue` or
+  /// `s3tables`. Empty disables AWS catalog authentication.
+  std::string aws_catalog_signing_name;
+  /// AWS region used to sign catalog requests.
+  std::string aws_signing_region;
+  /// Signs AWS catalog and S3 requests through the same live credentials
+  /// provider. Profiles, workload identities, and STS-backed IAM modes can
+  /// refresh credentials without reopening the catalog or pipeline.
+  std::shared_ptr<Aws::Auth::AWSCredentialsProvider> aws_credentials_provider;
   /// Authenticate catalog requests with Google OAuth2 bearer tokens, minted
   /// from `gcp_credentials_json` or from Application Default Credentials
   /// when empty. Tokens refresh automatically before they expire. Unless
@@ -128,6 +134,10 @@ struct CatalogConfig {
   /// Project id for the `x-goog-user-project` header; empty omits it.
   std::string gcp_user_project;
 };
+
+/// Initializes the AWS SDK lifecycle used by Iceberg REST SigV4 sessions.
+/// Call before constructing credentials providers that may resolve eagerly.
+auto ensure_aws_sdk_initialized() -> Result<void>;
 
 class Table;
 
