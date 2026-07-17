@@ -296,7 +296,10 @@ struct message_content_parser : parser_base<message_content_parser> {
   template <class Iterator, class Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
     if (f == l) {
-      return false;
+      if constexpr (not std::is_same_v<Attribute, unused_type>) {
+        x.clear();
+      }
+      return true;
     }
     auto remaining = std::string_view{&*f, static_cast<size_t>(l - f)};
     auto bom = std::string_view{"\xEF\xBB\xBF"};
