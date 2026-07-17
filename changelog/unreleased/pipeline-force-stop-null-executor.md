@@ -9,4 +9,5 @@ created: 2026-06-29T00:00:00Z
 ---
 
 Fixes a node crash (`assertion 'pipeline.executor' failed`) that could occur
-when stopping or force-stopping a pipeline that had no live executor.
+when stopping or force-stopping a pipeline that was previously placed in an
+invalid "half-stopped" state.
