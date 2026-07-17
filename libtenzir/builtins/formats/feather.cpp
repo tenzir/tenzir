@@ -265,6 +265,18 @@ class passive_feather_store final : public passive_store {
                                  "valid store envelope");
         co_return;
       }
+      // `is_store_envelope` only inspects the schema and `try_from` below
+      // only validates the unwrapped `event` batch, so corrupt array data in
+      // the envelope itself (e.g. an undersized `import_time` buffer) would
+      // still assert in `derive_import_time`. Structurally validate the
+      // whole envelope batch before taking it apart.
+      if (auto status = batch->Validate(); not status.ok()) {
+        co_yield caf::make_error(
+          ec::format_error,
+          fmt::format("record batch in feather store failed validation: {}",
+                      status.ToStringWithoutContextLines()));
+        co_return;
+      }
       auto import_time_column = batch->GetColumnByName("import_time");
       auto slice_result
         = schema ? table_slice::try_from(unwrap_record_batch(batch), *schema)
@@ -488,8 +500,15 @@ private:
 auto make_table_slice(std::shared_ptr<arrow::RecordBatch> batch,
                       diagnostic_handler& dh, location operator_location)
   -> std::optional<table_slice> {
-  auto validate_status = batch->Validate();
-  TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+  // Feather input is externally sourced, so a batch that decodes but fails
+  // structural validation is malformed input, not a programming error.
+  if (auto status = batch->Validate(); not status.ok()) {
+    emit_with_location(diagnostic::error("Feather input contains an invalid "
+                                         "record batch")
+                         .note("{}", status.ToStringWithoutContextLines()),
+                       dh, operator_location);
+    return std::nullopt;
+  }
   if (is_store_envelope(batch)) {
     auto import_time_column = batch->GetColumnByName("import_time");
     auto unwrapped = ensure_tenzir_name_metadata(
