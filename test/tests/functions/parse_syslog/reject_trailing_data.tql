@@ -1,0 +1,12 @@
+// `parse_syslog` must consume the entire input. Previously a partial parse was
+// accepted and any trailing bytes the parser did not reach were silently
+// dropped. Such input is now rejected instead of being truncated.
+from {
+  // Valid RFC 5424 message: the parser consumes the whole input.
+  x: r#"<34>1 2003-10-11T22:14:15.003Z host app - - [sd@1 a="1"] valid message"#,
+}, {
+  // Trailing bytes right after the structured data (no separating space). The
+  // RFC 5424 parser stops after the SD element, leaving "trailing" unconsumed.
+  x: r#"<34>1 2003-10-11T22:14:15.003Z host app - - [sd@1 a="1"]trailing"#,
+}
+x = x.parse_syslog()

@@ -1,0 +1,27 @@
+{
+  x: {
+    facility: 4,
+    severity: 2,
+    version: 1,
+    timestamp: 2003-10-11T22:14:15.003Z,
+    hostname: "host",
+    app_name: "app",
+    process_id: null,
+    message_id: null,
+    structured_data: {
+      "sd@1": {
+        a: 1,
+      },
+    },
+    message: "valid message",
+  },
+}
+{
+  x: null,
+}
+warning: `input` is not valid syslog
+  --> tests/functions/parse_syslog/reject_trailing_data.tql:12:5
+   |
+12 | x = x.parse_syslog()
+   |     ~ 
+   |

@@ -710,17 +710,20 @@ public:
             };
             /// Tries to parse input as syslog; returns the builder_tag
             /// indicating which parser succeeded, or unknown_syslog_builder
-            /// if parsing failed.
+            /// if parsing failed. A parse only counts as successful if it
+            /// consumes the entire input; otherwise a partial parse would
+            /// silently drop the trailing bytes, so we reject it and let the
+            /// caller emit a diagnostic instead.
             const auto try_parse
               = [&](std::string_view input, message& msg,
                     legacy_message& legacy_msg) -> builder_tag {
               auto f = input.begin();
               auto l = input.end();
-              if (message_parser{}.parse(f, l, msg)) {
+              if (message_parser{}.parse(f, l, msg) and f == l) {
                 return builder_tag::syslog_builder;
               }
               f = input.begin();
-              if (legacy_message_parser{}.parse(f, l, legacy_msg)) {
+              if (legacy_message_parser{}.parse(f, l, legacy_msg) and f == l) {
                 return get_legacy_builder_tag(legacy_msg);
               }
               return builder_tag::unknown_syslog_builder;
