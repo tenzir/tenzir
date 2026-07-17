@@ -109,17 +109,23 @@ stdenv.mkDerivation {
     "-DLZ4_STATIC_LIB=${lib.getLib lz4}/lib/liblz4.a"
   ];
 
-  # Upstream's header install list misses these two, but the installed
+  # Upstream's header install list misses the first two, but the installed
   # rest_catalog.h includes session_catalog.h. arrow_io_internal.h is
   # excluded as internal, but its ArrowFileSystemFileIO is bundle-exported
   # and Tenzir's iceberg plugin wraps it around Arrow's GcsFileSystem to
   # back gs:// table locations until upstream grows a native GCS FileIO.
+  # sigv4_auth_manager_internal.h is likewise internal, but its
+  # SigV4AuthSession is rest-exported and Tenzir's iceberg plugin signs
+  # managed AWS catalog requests with it through a live credentials
+  # provider.
   postInstall = ''
     install -m 644 -Dt $out/include/iceberg/catalog \
       ../src/iceberg/catalog/session_catalog.h \
       ../src/iceberg/catalog/session_context.h
     install -m 644 -Dt $out/include/iceberg/arrow \
       ../src/iceberg/arrow/arrow_io_internal.h
+    install -m 644 -Dt $out/include/iceberg/catalog/rest/auth \
+      ../src/iceberg/catalog/rest/auth/sigv4_auth_manager_internal.h
   '';
 
   meta = {

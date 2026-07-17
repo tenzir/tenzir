@@ -29,6 +29,7 @@
 #include <iceberg/catalog/rest/auth/auth_managers.h>
 #include <iceberg/catalog/rest/auth/auth_properties.h>
 #include <iceberg/catalog/rest/auth/auth_session.h>
+#include <iceberg/catalog/rest/auth/sigv4_auth_manager_internal.h>
 #include <iceberg/catalog/rest/catalog_properties.h>
 #include <iceberg/catalog/rest/http_request.h>
 #include <iceberg/catalog/rest/rest_catalog.h>
@@ -54,8 +55,6 @@
 #include <iceberg/type.h>
 #include <iceberg/update/fast_append.h>
 #include <iceberg/update/update_schema.h>
-
-#include <sigv4_auth_manager_internal.h>
 
 #ifdef TENZIR_ICEBERG_GCS
 #  include <arrow/filesystem/gcsfs.h>

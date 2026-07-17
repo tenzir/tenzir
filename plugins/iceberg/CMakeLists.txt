@@ -29,15 +29,6 @@ if (TARGET iceberg-shared AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(iceberg-shared PRIVATE "LINKER:--exclude-libs,ALL")
 endif ()
 
-# The refreshable AWS catalog integration uses iceberg-cpp's exported SigV4
-# session. Upstream currently classifies its declaration as internal and does
-# not install it, so make the header from the pinned source available whether
-# the plugin links the bundled or packaged libraries.
-target_include_directories(
-  iceberg
-  PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/aux/iceberg-cpp/src/iceberg/catalog/rest/auth")
-
 # Google Cloud support is optional: catalog authentication mints OAuth2
 # tokens through google-cloud-cpp, and the data plane for gs:// table
 # locations uses arrow's GcsFileSystem. Homebrew's apache-arrow ships with
