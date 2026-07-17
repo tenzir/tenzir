@@ -28,6 +28,7 @@
 #include "tenzir/source.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/resolve.hpp"
+#include "tenzir/tql2/tokens.hpp"
 
 #if TENZIR_HAS_AWS_SDK
 #  include <aws/core/Aws.h>
@@ -325,6 +326,15 @@ auto main(int argc, char** argv) -> int try {
     };
     auto udos = std::unordered_map<std::string, config_udo>{};
     for (auto&& [name, value] : *r) {
+      auto name_tokens = tokenize_permissive(name);
+      if (name_tokens.size() != 1
+          or name_tokens.front().kind != token_kind::identifier) {
+        TENZIR_ERROR("invalid operator name `{}` in `tenzir.operators` (must "
+                     "be a single identifier, matching "
+                     "[A-Za-z_][A-Za-z0-9_]* and not a reserved keyword)",
+                     name);
+        return EXIT_FAILURE;
+      }
       auto* definition = try_as<std::string>(&value);
       if (not definition) {
         TENZIR_ERROR("could not load `tenzir.operators`: alias `{}` does not "
