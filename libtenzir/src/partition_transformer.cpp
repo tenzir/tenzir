@@ -253,14 +253,14 @@ public:
         if (auto used = live_budget_used(*memory_budget_);
             used and used->first >= memory_budget_->bytes) {
           if (state_->loaded_partitions.empty()) {
-            fail(caf::make_error(ec::out_of_memory,
-                                 "partition transform memory budget is "
-                                 "exhausted before loading partition {} "
-                                 "({} bytes used, {} bytes budget, {} bytes "
-                                 "available, source: {})",
-                                 partition.uuid, used->first,
-                                 memory_budget_->bytes, used->second,
-                                 memory_budget_->source));
+            fail(caf::make_error(
+              ec::out_of_memory,
+              fmt::format("partition transform memory budget is "
+                          "exhausted before loading partition {} "
+                          "({} bytes used, {} bytes budget, {} bytes "
+                          "available, source: {})",
+                          partition.uuid, used->first, memory_budget_->bytes,
+                          used->second, memory_budget_->source)));
             co_await push_input(OperatorMsg<table_slice>{Signal{EndOfData{}}});
             co_return;
           }

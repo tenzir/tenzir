@@ -1,0 +1,4 @@
+phase1-corrupt-store-file: ok
+phase2-rebuild-quarantines-corrupt-partition: ok
+phase3-healthy-data-survives: ok
+phase4-second-rebuild-skips-quarantined: ok

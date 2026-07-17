@@ -277,9 +277,13 @@ class passive_feather_store final : public passive_store {
     }
   }
 
-  [[nodiscard]] auto num_events() const -> uint64_t override {
+  [[nodiscard]] auto num_events() const -> caf::expected<uint64_t> override {
     if (not num_events_) {
-      num_events_ = count_rows();
+      auto rows = count_rows();
+      if (not rows) {
+        return std::move(rows.error());
+      }
+      num_events_ = *rows;
     }
     return *num_events_;
   }
@@ -294,7 +298,8 @@ class passive_feather_store final : public passive_store {
       }
       return slice->schema();
     }
-    TENZIR_ASSERT(false, "store must not be empty");
+    return caf::make_error(ec::format_error,
+                           "failed to derive schema from empty feather store");
   }
 
 private:
@@ -303,13 +308,24 @@ private:
     return chunk_->slice(0, chunk_->size());
   }
 
-  [[nodiscard]] auto count_rows() const -> uint64_t {
+  [[nodiscard]] auto count_rows() const -> caf::expected<uint64_t> {
     auto reader_result = arrow::ipc::RecordBatchFileReader::Open(
       as_arrow_file(make_chunk_view()), arrow_ipc_read_options());
-    check(reader_result.status());
+    if (not reader_result.ok()) {
+      return caf::make_error(
+        ec::format_error,
+        fmt::format("failed to open feather store for counting: {}",
+                    reader_result.status().ToStringWithoutContextLines()));
+    }
     auto reader = reader_result.MoveValueUnsafe();
-    auto rows = check(reader->CountRows());
-    return detail::narrow_cast<uint64_t>(rows);
+    auto rows = reader->CountRows();
+    if (not rows.ok()) {
+      return caf::make_error(
+        ec::format_error,
+        fmt::format("failed to count rows of feather store: {}",
+                    rows.status().ToStringWithoutContextLines()));
+    }
+    return detail::narrow_cast<uint64_t>(rows.MoveValueUnsafe());
   }
 
   chunk_ptr chunk_;
@@ -399,7 +415,7 @@ public:
     }
   }
 
-  [[nodiscard]] auto num_events() const -> uint64_t override {
+  [[nodiscard]] auto num_events() const -> caf::expected<uint64_t> override {
     return num_events_;
   }
 

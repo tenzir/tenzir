@@ -36,8 +36,9 @@ public:
     = 0;
 
   /// Retrieve the number of contained events.
-  /// @returns The number of rows in all contained slices.
-  [[nodiscard]] virtual uint64_t num_events() const = 0;
+  /// @returns The number of rows in all contained slices, or an error if the
+  /// store could not be decoded (e.g. a corrupt/truncated backing file).
+  [[nodiscard]] virtual caf::expected<uint64_t> num_events() const = 0;
 
   /// Retrieve the schema associated with the data in the store.
   /// @returns The Tenzir schema of the stored data, an empty type if the

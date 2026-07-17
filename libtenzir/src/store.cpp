@@ -215,11 +215,21 @@ default_passive_store_actor::behavior_type default_passive_store(
     },
     [self](atom::erase, const ids& selection) -> caf::result<uint64_t> {
       // For new, partition-local stores we know that we always erase
-      // everything.
-      const auto num_events = self->state().store->num_events();
+      // everything. Erasing must also work for a corrupt store whose event
+      // count cannot be determined anymore — deleting the broken file is
+      // exactly the remediation path — so a count failure only degrades the
+      // reported number of erased events to zero.
+      const auto num_events_result = self->state().store->num_events();
+      if (not num_events_result) {
+        TENZIR_WARN("{} failed to count events of store scheduled for "
+                    "erasure: {}",
+                    *self, num_events_result.error());
+      }
+      const auto num_events
+        = num_events_result ? *num_events_result : uint64_t{0};
       TENZIR_DEBUG("{} erases {} events", *self, num_events);
       TENZIR_UNUSED(selection);
-      TENZIR_ASSERT_EXPENSIVE(rank(selection) == 0
+      TENZIR_ASSERT_EXPENSIVE(not num_events_result or rank(selection) == 0
                               or rank(selection) == num_events);
       auto rp = self->make_response_promise<uint64_t>();
       self->mail(atom::erase_v, self->state().path)
@@ -250,15 +260,23 @@ default_active_store_actor::behavior_type default_active_store(
     [self](atom::query,
            const query_context& query_context) -> caf::result<uint64_t> {
       TENZIR_DEBUG("{} starts working on query {}", *self, query_context.id);
-      if (self->state().store->num_events() == 0) {
+      const auto num_events = self->state().store->num_events();
+      if (not num_events) {
+        return num_events.error();
+      }
+      if (*num_events == 0) {
         return 0ull;
       }
       return handle_query<default_active_store_actor>(self, query_context);
     },
-    [self](atom::erase, const ids& selection) {
+    [self](atom::erase, const ids& selection) -> caf::result<uint64_t> {
       // For new, partition-local stores we know that we always erase
       // everything.
-      const auto num_events = self->state().store->num_events();
+      const auto num_events_result = self->state().store->num_events();
+      if (not num_events_result) {
+        return num_events_result.error();
+      }
+      const auto num_events = *num_events_result;
       TENZIR_UNUSED(selection);
       TENZIR_ASSERT_EXPENSIVE(rank(selection) == 0
                               or rank(selection) == num_events);
@@ -322,8 +340,9 @@ default_active_store_actor::behavior_type default_active_store(
       return result;
     },
     [self](atom::status, status_verbosity, duration) {
+      const auto num_events = self->state().store->num_events();
       return record{
-        {"events", self->state().store->num_events()},
+        {"events", num_events ? *num_events : uint64_t{0}},
         {"path", self->state().path.string()},
         {"store-type", self->state().store_type},
       };
