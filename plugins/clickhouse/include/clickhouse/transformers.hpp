@@ -96,6 +96,18 @@ struct transformer {
   virtual ~transformer() = default;
 };
 
+/// Whether `t` targets a ClickHouse `JSON` column. The `to_clickhouse` async
+/// operator serializes such columns to JSON strings before insertion; the
+/// transformer itself also accepts and serializes the raw array (see
+/// `transformer_json::create_column`). Implemented via a type check against the
+/// concrete JSON transformer.
+auto is_json_transformer(const transformer& t) -> bool;
+
+/// Serializes an Arrow array to a one-line JSON `StringArray`, preserving
+/// nulls. Used to render a field bound for a ClickHouse `JSON` column.
+auto to_json_string_array(const arrow::Array& array)
+  -> std::shared_ptr<arrow::Array>;
+
 struct transformer_record : transformer {
   using schema_transformations
     = detail::stable_map<std::string, std::unique_ptr<transformer>>;

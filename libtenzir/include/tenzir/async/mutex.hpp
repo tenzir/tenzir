@@ -59,6 +59,12 @@ public:
   explicit Mutex(T x) : value_{std::move(x)} {
   }
 
+  template <class... Args>
+    requires std::constructible_from<T, Args...>
+  explicit Mutex(std::in_place_t, Args&&... args)
+    : value_{std::forward<Args>(args)...} {
+  }
+
   auto lock() -> Task<MutexGuard<T>>;
 
 private:
