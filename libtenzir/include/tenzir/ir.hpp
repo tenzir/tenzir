@@ -330,19 +330,22 @@ public:
   explicit PlanBuilder(Plan& plan) : plan_{plan} {
   }
 
-  /// Append a node backed by `op` with the given input/output element types.
-  /// Returns the port carrying the node's output.
+  /// Add a node (operator)
   auto add_node(Box<Operator> op, element_type_tag input,
                 element_type_tag output) -> size_t;
 
-  /// Emit the input channel(s) feeding node `to` from the given frontier:
-  ///   - a lone external-source port emits a channel from `PlanPort::input`;
-  ///   - a single real port emits a `Direct`/`Bytes`/… channel;
-  ///   - multiple real ports emit a single `Gather` channel.
-  auto connect(const PlanPorts& from, size_t to) -> void;
+  /// Add a channel
+  auto add_channel(std::vector<size_t> from, std::vector<size_t> to,
+                   ChannelKind kind) -> void;
+
+  /// Add a channel and inferring its kind:
+  /// - when connecting input/output, direct is used
+  /// - many-to-one infers gather,
+  /// - one-to-one infers depending on parallleism of upstream and downstream.
+  auto add_channel(const PlanPorts& from, size_t to) -> void;
 
   /// Emit a `Broadcast` channel copying `from`'s output to each node in `to`.
-  auto broadcast(PlanPort from, std::vector<size_t> to) -> void;
+  auto add_broadcast(PlanPort from, std::vector<size_t> to) -> void;
 
   /// Collapse a frontier into a single real node. Returns the sole real port
   /// unchanged; otherwise appends an identity node fed by `from` (via a
