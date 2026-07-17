@@ -353,7 +353,7 @@ public:
                      std::move(args_.pipe),
                      ir::PlanPorts{ir::PlanPort{side_effect, ty}}, dh));
     TENZIR_ASSERT(tail.empty());
-    builder.broadcast(src, {passthrough, side_effect});
+    builder.add_broadcast(src, {passthrough, side_effect});
     return ir::PlanPorts{ir::PlanPort{passthrough, ty}};
   }
 

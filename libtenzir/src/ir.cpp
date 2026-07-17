@@ -487,7 +487,7 @@ public:
     auto alternative
       = args_.alternative ? std::move(*args_.alternative) : ir::pipeline{};
     TRY(lower_branch(std::move(alternative), std::move(guard)));
-    builder.broadcast({src}, std::move(heads));
+    builder.add_broadcast({src}, std::move(heads));
     return tails;
   }
 
@@ -811,9 +811,7 @@ auto find_sinks(ir::Plan const& plan) -> std::vector<size_t> {
 
 auto ir::Plan::from(pipeline pipe, element_type_tag input,
                     diagnostic_handler& dh) -> failure_or<Plan> {
-  // Mirror `pipeline::spawn`: the pipeline must already be instantiated, so it
-  // no longer carries `let`s. We optimize once more and fold any leftover
-  // filter into leading `where` operators.
+  // optimize
   TENZIR_ASSERT(pipe.lets.empty());
   auto opt = std::move(pipe).optimize(optimize_filter{}, event_order::ordered);
   TENZIR_ASSERT(opt.replacement.lets.empty());
@@ -821,33 +819,24 @@ auto ir::Plan::from(pipeline pipe, element_type_tag input,
   for (auto& expr : opt.filter) {
     pipe.operators.insert(pipe.operators.begin(), make_where_ir(expr));
   }
+  // construct plan
   auto plan = Plan{};
   plan.operators.reserve(pipe.operators.size());
   auto builder = PlanBuilder{plan};
   auto head = PlanPorts{PlanPort{.node = PlanPort::input, .type = input}};
   TRY(auto tail, builder.lower_pipeline(std::move(pipe), std::move(head), dh));
-  // Bundle tail and sinks (to gather all output signals)
+  // bundle tail and sinks (to gather all output signals)
   auto sinks = find_sinks(plan);
-  if (tail.empty()) {
-    plan.channels.push_back(PlannedChannel{
-      .from = std::move(sinks),
-      .to = {PlanPort::output},
-      .kind = ChannelKind::GatherSignals,
-    });
-  } else {
-    auto output = builder.into_single(tail);
-    if (sinks.empty()) {
-      builder.connect({output}, PlanPort::output);
-    } else {
-      auto gather_signals = std::vector<size_t>{output.node};
-      gather_signals.insert(gather_signals.end(), sinks.begin(), sinks.end());
-      plan.channels.push_back(PlannedChannel{
-        .from = std::move(gather_signals),
-        .to = {PlanPort::output},
-        .kind = ChannelKind::GatherSignals,
-      });
-    }
+  if (not tail.empty()) {
+    sinks.insert(sinks.begin(), builder.into_single(tail).node);
   }
+  auto kind
+    = sinks.size() > 1 ? ChannelKind::GatherSignals : ChannelKind::Direct;
+  plan.channels.push_back(PlannedChannel{
+    .from = std::move(sinks),
+    .to = {PlanPort::output},
+    .kind = kind,
+  });
   return plan;
 }
 
@@ -899,7 +888,7 @@ auto ir::Operator::plan(PlanBuilder& builder, PlanPorts input,
   auto in = input.front().type;
   TRY(auto out_ty, infer_type(in, dh));
   auto node = builder.add_node(std::move(*this).move(), in, out_ty);
-  builder.connect(input, node);
+  builder.add_channel(input, node);
   return out_ty.is<void>() ? PlanPorts{} : PlanPorts{PlanPort{node, out_ty}};
 }
 
@@ -919,23 +908,25 @@ auto ir::PlanBuilder::add_node(Box<Operator> op, element_type_tag input,
   return node;
 }
 
-auto ir::PlanBuilder::connect(const PlanPorts& from, size_t to) -> void {
+auto ir::PlanBuilder::add_channel(std::vector<size_t> from,
+                                  std::vector<size_t> to, ChannelKind kind)
+  -> void {
+  plan_.channels.push_back(PlannedChannel{
+    .from = std::move(from),
+    .to = std::move(to),
+    .kind = kind,
+  });
+}
+
+auto ir::PlanBuilder::add_channel(const PlanPorts& from, size_t to) -> void {
   TENZIR_ASSERT(not from.empty());
   if (from[0].node == PlanPort::input) {
-    plan_.channels.push_back(PlannedChannel{
-      .from = {from[0].node},
-      .to = {to},
-      .kind = ChannelKind::Direct,
-    });
+    add_channel({from[0].node}, {to}, ChannelKind::Direct);
     return;
   }
   if (to == PlanPort::output) {
     TENZIR_ASSERT_EQ(from.size(), 1);
-    plan_.channels.push_back(PlannedChannel{
-      .from = {from[0].node},
-      .to = {to},
-      .kind = ChannelKind::Direct,
-    });
+    add_channel({from[0].node}, {to}, ChannelKind::Direct);
     return;
   }
   if (from.size() > 1) {
@@ -945,28 +936,18 @@ auto ir::PlanBuilder::connect(const PlanPorts& from, size_t to) -> void {
     for (const auto& port : from) {
       froms.push_back(port.node);
     }
-    plan_.channels.push_back(PlannedChannel{
-      .from = std::move(froms),
-      .to = {to},
-      .kind = ChannelKind::Gather,
-    });
+    add_channel(std::move(froms), {to}, ChannelKind::Gather);
     return;
   }
-  plan_.channels.push_back(PlannedChannel{
-    .from = {from[0].node},
-    .to = {to},
-    .kind
-    = derive_channel_kind(plan_.operators[from[0].node], plan_.operators[to]),
-  });
+  auto kind
+    = derive_channel_kind(plan_.operators[from[0].node], plan_.operators[to]);
+  add_channel({from[0].node}, {to}, kind);
 }
 
-auto ir::PlanBuilder::broadcast(PlanPort from, std::vector<size_t> to) -> void {
+auto ir::PlanBuilder::add_broadcast(PlanPort from, std::vector<size_t> to)
+  -> void {
   TENZIR_ASSERT(from.node != PlanPort::input);
-  plan_.channels.push_back(PlannedChannel{
-    .from = {from.node},
-    .to = std::move(to),
-    .kind = ChannelKind::Broadcast,
-  });
+  add_channel({from.node}, std::move(to), ChannelKind::Broadcast);
 }
 
 namespace {
@@ -1037,7 +1018,7 @@ auto ir::PlanBuilder::into_single(const PlanPorts& from) -> PlanPort {
   // a single node by routing it through an identity operator.
   auto type = from.front().type;
   auto node = add_node(make_identity_ir(), type, type);
-  connect(from, node);
+  add_channel(from, node);
   return PlanPort{node, type};
 }
 

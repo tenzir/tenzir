@@ -1,4 +1,1 @@
-c0: {input} -- version -- to_stdout
-
-links:
-  c0 --gather-signals-> {output}
+c0: {input} -- version -- to_stdout -- {output}

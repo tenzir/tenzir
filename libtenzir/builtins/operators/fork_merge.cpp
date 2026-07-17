@@ -137,7 +137,7 @@ public:
       tails.insert(tails.end(), std::make_move_iterator(tail.begin()),
                    std::make_move_iterator(tail.end()));
     }
-    builder.broadcast(src, heads);
+    builder.add_broadcast(src, heads);
     return tails;
   }
 
