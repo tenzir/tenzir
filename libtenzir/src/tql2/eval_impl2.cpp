@@ -95,28 +95,18 @@ auto evaluator::eval(tenzir::ast::record const& x,
 
   // Build per-row key mapping. Uniform columns (field exprs and uniform
   // spreads) always have element index == row index. Non-uniform spread
-  // columns use occurrence counting to reconstruct the original key indices.
-  using key_t = array_<::tenzir2::record>::key_t;
+  // columns are keyed by their own row index `i` too: every field array is
+  // always exactly as long as its owning record array, so a spread's
+  // `value_array(k)` already has one (possibly dead) slot per row `i`.
   using keys_builder_t
-    = memory::list_array_builder<memory::array_builder<key_t>,
-                                 memory::array<key_t>>;
+    = memory::list_array_builder<memory::array_builder<std::size_t>,
+                                 memory::array<std::size_t>>;
   auto kb = keys_builder_t{memory::default_resource()};
 
-  struct SpreadHelper {
-    const SpreadInfo* sp;
-    std::vector<int64_t> occurrence_counts;
-  };
-  auto helpers = std::vector<SpreadHelper>{};
-  helpers.reserve(non_uniform_spreads.size());
-  for (auto& sp : non_uniform_spreads) {
-    helpers.push_back({&sp, std::vector<int64_t>(sp.arr.num_fields(), 0)});
-  }
-
-  auto find_spread = [&](std::size_t col) -> SpreadHelper* {
-    for (auto& h : helpers) {
-      if (col >= h.sp->col_offset
-          && col < h.sp->col_offset + h.sp->arr.num_fields()) {
-        return &h;
+  auto find_spread = [&](std::size_t col) -> const SpreadInfo* {
+    for (auto const& sp : non_uniform_spreads) {
+      if (col >= sp.col_offset and col < sp.col_offset + sp.arr.num_fields()) {
+        return &sp;
       }
     }
     return nullptr;
@@ -126,23 +116,21 @@ auto evaluator::eval(tenzir::ast::record const& x,
     auto list = kb.list();
     auto col = std::size_t{0};
     while (col < names.size()) {
-      if (auto* h = find_spread(col)) {
-        auto row_view = h->sp->arr.get(i);
+      if (auto* sp = find_spread(col)) {
+        auto row_view = sp->arr.get(i);
         if (row_view.valid()) {
           for (auto const& field_kv : *row_view) {
             const auto fname = field_kv.first;
             auto k = std::size_t{0};
-            while (k < h->sp->arr.num_fields()
-                   and h->sp->arr.name(k) != fname) {
+            while (k < sp->arr.num_fields() and sp->arr.name(k) != fname) {
               ++k;
             }
-            list.emplace_back(
-              key_t{h->sp->col_offset + k, h->occurrence_counts[k]++});
+            list.emplace_back(sp->col_offset + k);
           }
         }
-        col = h->sp->col_offset + h->sp->arr.num_fields();
+        col = sp->col_offset + sp->arr.num_fields();
       } else {
-        list.emplace_back(key_t{col, static_cast<int64_t>(i)});
+        list.emplace_back(col);
         ++col;
       }
     }
