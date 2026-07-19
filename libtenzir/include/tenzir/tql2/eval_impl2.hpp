@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "tenzir/active_rows.hpp"
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/tql2/eval2.hpp"
+#include "tenzir2/active_row2.hpp"
 
 #include <utility>
 
@@ -26,63 +26,63 @@ public:
       ctx_{ctx} {
   }
 
-  auto eval(tenzir::ast::expression const& x, tenzir::ActiveRows const& active)
+  auto eval(tenzir::ast::expression const& x, ActiveRows const& active)
     -> array_<data>;
 
   /// Like `eval`, but skips evaluation and returns all-null if `active` has no
   /// active rows. Use this when `active` was narrowed down from a parent set,
   /// to avoid evaluating expressions in dead branches.
   auto eval_narrowed(tenzir::ast::expression const& x,
-                     tenzir::ActiveRows const& active) -> array_<data> {
+                     ActiveRows const& active) -> array_<data> {
     if (active.as_constant() == false) {
       return null();
     }
     return eval(x, active);
   }
 
-  auto eval(tenzir::ast::constant const& x, tenzir::ActiveRows const& active)
+  auto eval(tenzir::ast::constant const& x, ActiveRows const& active)
     -> array_<data>;
 
-  auto eval(tenzir::ast::record const& x, tenzir::ActiveRows const& active)
+  auto eval(tenzir::ast::record const& x, ActiveRows const& active)
     -> array_<data>;
 
-  auto eval(tenzir::ast::list const& x, tenzir::ActiveRows const& active)
+  auto eval(tenzir::ast::list const& x, ActiveRows const& active)
     -> array_<data>;
 
-  auto eval(tenzir::ast::this_ const& x, tenzir::ActiveRows const& active)
+  auto eval(tenzir::ast::this_ const& x, ActiveRows const& active)
     -> array_<data>;
 
-  auto eval(tenzir::ast::root_field const& x, tenzir::ActiveRows const& active)
+  auto eval(tenzir::ast::root_field const& x, ActiveRows const& active)
     -> array_<data>;
 
   auto eval(tenzir::ast::function_call const& x,
-            tenzir::ActiveRows const& active) -> array_<data>;
+            ActiveRows const& active) -> array_<data>;
 
-  auto eval(tenzir::ast::unary_expr const& x, tenzir::ActiveRows const& active)
+  auto eval(tenzir::ast::unary_expr const& x, ActiveRows const& active)
     -> array_<data>;
 
-  auto eval(tenzir::ast::binary_expr const& x, tenzir::ActiveRows const& active)
+  auto eval(tenzir::ast::binary_expr const& x, ActiveRows const& active)
     -> array_<data>;
 
   auto eval(tenzir::ast::field_access const& x,
-            tenzir::ActiveRows const& active) -> array_<data>;
+            ActiveRows const& active) -> array_<data>;
 
-  auto eval(tenzir::ast::assignment const& x, tenzir::ActiveRows const& active)
+  auto eval(tenzir::ast::assignment const& x, ActiveRows const& active)
     -> array_<data>;
 
-  auto eval(tenzir::ast::meta const& x, tenzir::ActiveRows const& active)
+  auto eval(tenzir::ast::meta const& x, ActiveRows const& active)
     -> array_<data>;
 
-  auto eval(tenzir::ast::index_expr const& x, tenzir::ActiveRows const& active)
+  auto eval(tenzir::ast::index_expr const& x, ActiveRows const& active)
     -> array_<data>;
 
-  auto eval(tenzir::ast::format_expr const& x, tenzir::ActiveRows const& active)
+  auto eval(tenzir::ast::format_expr const& x, ActiveRows const& active)
     -> array_<data>;
 
   template <class T>
     requires(
       tenzir::detail::tl_contains<tenzir::ast::expression_kinds, T>::value)
-  auto eval(T const& x, tenzir::ActiveRows const& active) -> array_<data> {
+  auto eval(T const& x, ActiveRows const& active) -> array_<data> {
     (void)active;
     return not_implemented(x);
   }

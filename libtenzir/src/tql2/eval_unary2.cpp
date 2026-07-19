@@ -64,7 +64,7 @@ auto make_null_array(std::ptrdiff_t length, memory::element_state state
   return builder.finish();
 }
 
-auto has_active_rows(tenzir::ActiveRows const& active, std::ptrdiff_t length)
+auto has_active_rows(ActiveRows const& active, std::ptrdiff_t length)
   -> bool {
   if (auto constant = active.as_constant()) {
     return *constant;
@@ -84,7 +84,7 @@ struct null_warn {
 
 template <tenzir::ast::unary_op Op, class T>
 inline constexpr auto has_eval_un_op_v
-  = requires(array_<T> arr, tenzir::ActiveRows const& active) {
+  = requires(array_<T> arr, ActiveRows const& active) {
       {
         EvalUnOp<Op, T>::eval(std::move(arr), null_warn{}, active)
       } -> std::same_as<array_<data>>;
@@ -104,7 +104,7 @@ using array_value_type_t =
 
 template <tenzir::ast::unary_op Op>
 struct EvalUnOp<Op, null> {
-  static auto eval(array_<null> x, auto warn, tenzir::ActiveRows const& active)
+  static auto eval(array_<null> x, auto warn, ActiveRows const& active)
     -> array_<data> {
     TENZIR_UNUSED(warn, active);
     return array_<data>{std::move(x)};
@@ -113,7 +113,7 @@ struct EvalUnOp<Op, null> {
 
 template <>
 struct EvalUnOp<tenzir::ast::unary_op::not_, bool> {
-  static auto eval(array_<bool> x, auto warn, tenzir::ActiveRows const& active)
+  static auto eval(array_<bool> x, auto warn, ActiveRows const& active)
     -> array_<data> {
     TENZIR_UNUSED(warn);
     auto builder = array_builder_<bool>{memory::default_resource()};
@@ -132,7 +132,7 @@ struct EvalUnOp<tenzir::ast::unary_op::not_, bool> {
 template <>
 struct EvalUnOp<tenzir::ast::unary_op::neg, std::int64_t> {
   static auto eval(array_<std::int64_t> x, auto warn,
-                   tenzir::ActiveRows const& active) -> array_<data> {
+                   ActiveRows const& active) -> array_<data> {
     auto builder = array_builder_<std::int64_t>{memory::default_resource()};
     auto overflow = false;
     for (auto row = std::ptrdiff_t{0}; row < x.length(); ++row) {
@@ -159,7 +159,7 @@ struct EvalUnOp<tenzir::ast::unary_op::neg, std::int64_t> {
 template <>
 struct EvalUnOp<tenzir::ast::unary_op::neg, std::uint64_t> {
   static auto eval(array_<std::uint64_t> x, auto warn,
-                   tenzir::ActiveRows const& active) -> array_<data> {
+                   ActiveRows const& active) -> array_<data> {
     auto builder = array_builder_<std::int64_t>{memory::default_resource()};
     auto overflow = false;
     for (auto row = std::ptrdiff_t{0}; row < x.length(); ++row) {
@@ -188,7 +188,7 @@ struct EvalUnOp<tenzir::ast::unary_op::neg, std::uint64_t> {
 template <>
 struct EvalUnOp<tenzir::ast::unary_op::neg, double> {
   static auto eval(array_<double> x, auto warn,
-                   tenzir::ActiveRows const& active) -> array_<data> {
+                   ActiveRows const& active) -> array_<data> {
     TENZIR_UNUSED(warn);
     auto builder = array_builder_<double>{memory::default_resource()};
     for (auto row = std::ptrdiff_t{0}; row < x.length(); ++row) {
@@ -206,7 +206,7 @@ struct EvalUnOp<tenzir::ast::unary_op::neg, double> {
 template <>
 struct EvalUnOp<tenzir::ast::unary_op::neg, duration> {
   static auto eval(array_<duration> x, auto warn,
-                   tenzir::ActiveRows const& active) -> array_<data> {
+                   ActiveRows const& active) -> array_<data> {
     auto builder = array_builder_<duration>{memory::default_resource()};
     auto overflow = false;
     for (auto row = std::ptrdiff_t{0}; row < x.length(); ++row) {
@@ -232,7 +232,7 @@ struct EvalUnOp<tenzir::ast::unary_op::neg, duration> {
 
 template <tenzir::ast::unary_op Op>
 auto eval_un_op(evaluator& self, tenzir::ast::unary_expr const& x,
-                tenzir::ActiveRows const& active) -> array_<data> {
+                ActiveRows const& active) -> array_<data> {
   auto operand = self.eval(x.expr, active);
   auto active_rows = has_active_rows(active, self.length());
   return access::transform(std::move(operand), [&](auto&& arr) -> array_<data> {
@@ -260,7 +260,7 @@ auto eval_un_op(evaluator& self, tenzir::ast::unary_expr const& x,
 } // namespace
 
 auto evaluator::eval(tenzir::ast::unary_expr const& x,
-                     tenzir::ActiveRows const& active) -> array_<data> {
+                     ActiveRows const& active) -> array_<data> {
   using enum tenzir::ast::unary_op;
   switch (x.op) {
     case pos:

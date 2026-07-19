@@ -6,14 +6,12 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/arrow_memory_pool.hpp"
-#include "tenzir/arrow_utils.hpp"
-#include "tenzir/detail/assert.hpp"
 #include "tenzir/tql2/eval_impl2.hpp"
+#include "tenzir2/memory/shared_owner.hpp"
 #include "tenzir2/type_system/array/builder.hpp"
 #include "tenzir2/type_system/array/fundamental.hpp"
 
-#include <arrow/array/builder_primitive.h>
+#include <vector>
 
 namespace tenzir2 {
 
@@ -22,6 +20,21 @@ namespace tenzir2 {
 // ---------------------------------------------------------------------------
 
 namespace {
+
+/// Builds a `state_buffer` of length `length` where `pred(i)` selects
+/// `element_state::valid` (active) vs. `element_state::dead` (inactive).
+template <class Pred>
+auto build_active_state(std::ptrdiff_t length, Pred&& pred)
+  -> memory::detail::state_buffer {
+  auto builder
+    = memory::shared_owner<memory::element_state[]>::builder{
+      memory::default_resource()};
+  for (auto i = std::ptrdiff_t{0}; i < length; ++i) {
+    builder.emplace_back(pred(i) ? memory::element_state::valid
+                                 : memory::element_state::dead);
+  }
+  return memory::detail::state_buffer{builder.finish()};
+}
 
 auto append_to_builder(array_builder_<data>& b, array_row_view_<data> row)
   -> void {
@@ -57,21 +70,20 @@ auto append_to_builder(array_builder_<data>& b, array_row_view_<data> row)
 
 auto eval_if(evaluator& self, tenzir::ast::binary_expr const& x,
              tenzir::ast::expression const& fallback,
-             tenzir::ActiveRows const& active) -> array_<data> {
+             ActiveRows const& active) -> array_<data> {
   auto cond = self.eval(x.right, active);
 
-  // Build cond_active[i] = active[i] AND cond[i] is valid true bool.
-  auto cond_active_builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
-  tenzir::check(cond_active_builder.Reserve(self.length()));
+  // cond_active[i] = active[i] AND cond[i] is valid true bool.
+  auto cond_active = std::vector<bool>(static_cast<std::size_t>(self.length()));
   auto warned_cond_type = false;
   auto warned_cond_null = false;
 
-  for (auto i = int64_t{0}; i < self.length(); ++i) {
-    auto cv = cond.get(static_cast<std::ptrdiff_t>(i));
+  for (auto i = std::ptrdiff_t{0}; i < self.length(); ++i) {
+    auto cv = cond.get(i);
     auto active_row = active.is_active(i);
     if (auto* b = try_as<array_row_view_<bool>>(&cv)) {
       if (b->valid()) {
-        cond_active_builder.UnsafeAppend(active_row and **b);
+        cond_active[static_cast<std::size_t>(i)] = active_row and **b;
       } else {
         // null bool condition
         if (not warned_cond_null and active_row) {
@@ -81,7 +93,6 @@ auto eval_if(evaluator& self, tenzir::ast::binary_expr const& x,
             .hint("use `else` to provide a fallback value")
             .emit(self.ctx());
         }
-        cond_active_builder.UnsafeAppend(false);
       }
     } else {
       // Non-bool condition
@@ -120,32 +131,26 @@ auto eval_if(evaluator& self, tenzir::ast::binary_expr const& x,
           .hint("this will be treated as `false`")
           .emit(self.ctx());
       }
-      cond_active_builder.UnsafeAppend(false);
     }
   }
 
-  auto cond_active = std::static_pointer_cast<arrow::BooleanArray>(
-    tenzir::finish(cond_active_builder));
-  TENZIR_ASSERT_EQ(cond_active->length(), self.length());
-
-  auto then_active = tenzir::ActiveRows{cond_active, false};
+  auto then_state = build_active_state(self.length(), [&](std::ptrdiff_t i) {
+    return cond_active[static_cast<std::size_t>(i)];
+  });
+  auto then_active = ActiveRows{then_state};
 
   // Build else_active: active[i] AND NOT cond_active[i].
-  auto else_active = [&]() -> tenzir::ActiveRows {
+  auto else_active = [&]() -> ActiveRows {
     if (active.as_constant() == true) {
-      // All rows were active; cond_active already encodes cond truthiness,
-      // so inactive_=true correctly marks then-rows inactive for the else branch.
-      return tenzir::ActiveRows{cond_active, true};
+      // All rows were active; then_state already encodes cond truthiness,
+      // so inverted=true correctly marks then-rows inactive for the else
+      // branch.
+      return ActiveRows{then_state, true};
     }
-    auto else_builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
-    tenzir::check(else_builder.Reserve(self.length()));
-    for (auto i = int64_t{0}; i < self.length(); ++i) {
-      else_builder.UnsafeAppend(active.is_active(i)
-                                and not cond_active->GetView(i));
-    }
-    return tenzir::ActiveRows{std::static_pointer_cast<arrow::BooleanArray>(
-                                tenzir::finish(else_builder)),
-                              false};
+    auto else_state = build_active_state(self.length(), [&](std::ptrdiff_t i) {
+      return active.is_active(i) and not cond_active[static_cast<std::size_t>(i)];
+    });
+    return ActiveRows{std::move(else_state)};
   }();
 
   auto then_result = self.eval_narrowed(x.left, then_active);
@@ -154,7 +159,7 @@ auto eval_if(evaluator& self, tenzir::ast::binary_expr const& x,
   // Combine: cond_active[row]=true → then; false → else.
   auto result_builder = array_builder_<data>{memory::default_resource()};
   for (auto row = std::ptrdiff_t{0}; row < self.length(); ++row) {
-    if (cond_active->GetView(static_cast<int64_t>(row))) {
+    if (cond_active[static_cast<std::size_t>(row)]) {
       append_to_builder(result_builder, then_result.get(row));
     } else {
       append_to_builder(result_builder, else_result.get(row));
@@ -165,7 +170,7 @@ auto eval_if(evaluator& self, tenzir::ast::binary_expr const& x,
 }
 
 auto eval_if(evaluator& self, tenzir::ast::binary_expr const& x,
-             tenzir::ActiveRows const& active) -> array_<data> {
+             ActiveRows const& active) -> array_<data> {
   return eval_if(self, x,
                  tenzir::ast::constant{caf::none, tenzir::location::unknown},
                  active);
@@ -181,7 +186,7 @@ auto eval_if(evaluator& self, tenzir::ast::binary_expr const& x,
 // ---------------------------------------------------------------------------
 
 auto eval_else(evaluator& self, tenzir::ast::binary_expr const& x,
-               tenzir::ActiveRows const& active) -> array_<data> {
+               ActiveRows const& active) -> array_<data> {
   // Short-circuit: `(a if b) else c` → eval_if(a, b, c, active)
   if (auto const* binop = tenzir::try_as<tenzir::ast::binary_expr>(x.left)) {
     if (binop->op == tenzir::ast::binary_op::if_) {
@@ -192,17 +197,12 @@ auto eval_else(evaluator& self, tenzir::ast::binary_expr const& x,
   auto left = self.eval(x.left, active);
 
   // right_active[i] = active[i] AND left[i] is null.
-  auto right_active_builder
-    = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
-  tenzir::check(right_active_builder.Reserve(self.length()));
-  for (auto i = int64_t{0}; i < self.length(); ++i) {
-    auto lv = left.get(static_cast<std::ptrdiff_t>(i));
-    right_active_builder.UnsafeAppend(active.is_active(i) and not lv.valid());
-  }
-  auto right_active
-    = tenzir::ActiveRows{std::static_pointer_cast<arrow::BooleanArray>(
-                           tenzir::finish(right_active_builder)),
-                         false};
+  auto right_active_state
+    = build_active_state(self.length(), [&](std::ptrdiff_t i) {
+        auto lv = left.get(i);
+        return active.is_active(i) and not lv.valid();
+      });
+  auto right_active = ActiveRows{std::move(right_active_state)};
 
   auto right = self.eval_narrowed(x.right, right_active);
 

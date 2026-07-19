@@ -29,7 +29,7 @@
 namespace tenzir2 {
 
 auto evaluator::eval(tenzir::ast::record const& x,
-                     tenzir::ActiveRows const& active) -> array_<data> {
+                     ActiveRows const& active) -> array_<data> {
   auto names = std::vector<std::string>{};
   auto arrays = std::vector<array_<data>>{};
 
@@ -142,12 +142,12 @@ auto evaluator::eval(tenzir::ast::record const& x,
 }
 
 auto evaluator::eval(tenzir::ast::list const& x,
-                     tenzir::ActiveRows const& active) -> array_<data> {
+                     ActiveRows const& active) -> array_<data> {
   TENZIR_TODO();
 }
 
 auto evaluator::eval(tenzir::ast::field_access const& x,
-                     tenzir::ActiveRows const& active) -> array_<data> {
+                     ActiveRows const& active) -> array_<data> {
   auto left = eval(x.left, active);
   return access::transform(
     std::move(left), [&]<typename T>(array_<T>&& arr) -> array_<data> {
@@ -162,25 +162,25 @@ auto evaluator::eval(tenzir::ast::field_access const& x,
 }
 
 auto evaluator::eval(tenzir::ast::function_call const& x,
-                     tenzir::ActiveRows const& active) -> array_<data> {
+                     ActiveRows const& active) -> array_<data> {
   TENZIR_UNUSED(active);
   return not_implemented(x);
 }
 
 auto evaluator::eval(tenzir::ast::this_ const& x,
-                     tenzir::ActiveRows const& active) -> array_<data> {
+                     ActiveRows const& active) -> array_<data> {
   TENZIR_UNUSED(active);
   return array_<data>{input_or_throw(x).data_};
 }
 
 auto evaluator::eval(tenzir::ast::root_field const& x,
-                     tenzir::ActiveRows const& active) -> array_<data> {
+                     ActiveRows const& active) -> array_<data> {
   TENZIR_UNUSED(active);
   return input_or_throw(x).data_.field(x.id.name);
 }
 
 auto evaluator::eval(tenzir::ast::index_expr const& x,
-                     tenzir::ActiveRows const& active) -> array_<data> {
+                     ActiveRows const& active) -> array_<data> {
   auto left = eval(x.expr, active);
 
   // Classify the index: string constant, integer constant, or dynamic.
@@ -338,23 +338,23 @@ auto evaluator::eval(tenzir::ast::index_expr const& x,
 }
 
 auto evaluator::eval(tenzir::ast::meta const& x,
-                     tenzir::ActiveRows const& active) -> array_<data> {
+                     ActiveRows const& active) -> array_<data> {
   TENZIR_TODO();
 }
 
 auto evaluator::eval(tenzir::ast::assignment const& x,
-                     tenzir::ActiveRows const& active) -> array_<data> {
+                     ActiveRows const& active) -> array_<data> {
   TENZIR_UNUSED(active);
 }
 
 auto evaluator::eval(tenzir::ast::constant const& x,
-                     tenzir::ActiveRows const& active) -> array_<data> {
+                     ActiveRows const& active) -> array_<data> {
   TENZIR_UNUSED(active);
   return to_array(x.as_data());
 }
 
 auto evaluator::eval(tenzir::ast::format_expr const& x,
-                     tenzir::ActiveRows const& active) -> array_<data> {
+                     ActiveRows const& active) -> array_<data> {
   auto cols = std::vector<variant<std::string, array_<data>>>{};
   cols.reserve(x.segments.size());
   for (auto const& segment : x.segments) {
@@ -391,7 +391,7 @@ auto evaluator::eval(tenzir::ast::lambda_expr const& x,
 }
 
 auto evaluator::eval(tenzir::ast::expression const& x,
-                     tenzir::ActiveRows const& active) -> array_<data> {
+                     ActiveRows const& active) -> array_<data> {
   return tenzir::trace_panic(x, [&] {
     auto result = x.match([&](auto const& y) {
       return eval(y, active);
@@ -489,7 +489,8 @@ auto eval(tenzir::ast::expression const& expr, TableSlice const& input,
   return tenzir::trace_panic(expr, [&] -> array_<data> {
     // TODO: Do not create a new session here.
     auto sp = tenzir::session_provider::make(dh);
-    return evaluator{input, sp.as_session()}.eval(expr, {});
+    auto active = ActiveRows{input.data_.state_buffer()};
+    return evaluator{input, sp.as_session()}.eval(expr, active);
   });
 }
 

@@ -10,12 +10,32 @@
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/tql2/eval_impl2.hpp"
+#include "tenzir2/memory/shared_owner.hpp"
 #include "tenzir2/type_system/array/builder.hpp"
 #include "tenzir2/type_system/array/fundamental.hpp"
 
 #include <arrow/array/builder_primitive.h>
 
 namespace tenzir2 {
+
+namespace {
+
+/// Builds a `state_buffer` of length `length` where `pred(i)` selects
+/// `element_state::valid` (active) vs. `element_state::dead` (inactive).
+template <class Pred>
+auto build_active_state(std::ptrdiff_t length, Pred&& pred)
+  -> memory::detail::state_buffer {
+  auto builder
+    = memory::shared_owner<memory::element_state[]>::builder{
+      memory::default_resource()};
+  for (auto i = std::ptrdiff_t{0}; i < length; ++i) {
+    builder.emplace_back(pred(i) ? memory::element_state::valid
+                                 : memory::element_state::dead);
+  }
+  return memory::detail::state_buffer{builder.finish()};
+}
+
+} // namespace
 
 // ---------------------------------------------------------------------------
 // eval_and_or<Op>
@@ -34,7 +54,7 @@ namespace tenzir2 {
 
 template <tenzir::ast::binary_op Op>
 auto eval_and_or(evaluator& self, tenzir::ast::binary_expr const& x,
-                 tenzir::ActiveRows const& active) -> array_<data> {
+                 ActiveRows const& active) -> array_<data> {
   static_assert(Op == tenzir::ast::binary_op::and_
                 or Op == tenzir::ast::binary_op::or_);
 
@@ -103,20 +123,19 @@ auto eval_and_or(evaluator& self, tenzir::ast::binary_expr const& x,
   // For OR:  rows where left is definitively true  can skip right evaluation.
   constexpr auto inactive_value = (Op == tenzir::ast::binary_op::or_);
 
-  auto right_active = [&]() -> tenzir::ActiveRows {
+  auto right_active = [&]() -> ActiveRows {
     if (active.as_constant() == true) {
-      return tenzir::ActiveRows{left_flat, inactive_value};
+      auto state = build_active_state(self.length(), [&](std::ptrdiff_t i) {
+        return left_flat->IsNull(i) or left_flat->GetView(i) != inactive_value;
+      });
+      return ActiveRows{std::move(state)};
     }
-    auto mask_builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
-    tenzir::check(mask_builder.Reserve(self.length()));
-    for (auto i = int64_t{0}; i < self.length(); ++i) {
-      mask_builder.UnsafeAppend(
-        active.is_active(i)
-        and (left_flat->IsNull(i) or left_flat->GetView(i) != inactive_value));
-    }
-    return tenzir::ActiveRows{std::static_pointer_cast<arrow::BooleanArray>(
-                                tenzir::finish(mask_builder)),
-                              false};
+    auto state = build_active_state(self.length(), [&](std::ptrdiff_t i) {
+      return active.is_active(i)
+             and (left_flat->IsNull(i)
+                  or left_flat->GetView(i) != inactive_value);
+    });
+    return ActiveRows{std::move(state)};
   }();
 
   auto right = self.eval_narrowed(x.right, right_active);
@@ -219,12 +238,12 @@ auto eval_and_or(evaluator& self, tenzir::ast::binary_expr const& x,
 template auto
 eval_and_or<tenzir::ast::binary_op::and_>(evaluator&,
                                           tenzir::ast::binary_expr const&,
-                                          tenzir::ActiveRows const&)
+                                          ActiveRows const&)
   -> array_<data>;
 template auto
 eval_and_or<tenzir::ast::binary_op::or_>(evaluator&,
                                          tenzir::ast::binary_expr const&,
-                                         tenzir::ActiveRows const&)
+                                         ActiveRows const&)
   -> array_<data>;
 
 } // namespace tenzir2

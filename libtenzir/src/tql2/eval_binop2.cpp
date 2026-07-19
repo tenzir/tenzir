@@ -29,15 +29,15 @@ namespace tenzir2 {
 // Forward declarations for helpers in sibling translation units.
 template <tenzir::ast::binary_op Op>
 auto eval_and_or(evaluator& self, tenzir::ast::binary_expr const& x,
-                 tenzir::ActiveRows const& active) -> array_<data>;
+                 ActiveRows const& active) -> array_<data>;
 
 auto eval_if(evaluator& self, tenzir::ast::binary_expr const& x,
              tenzir::ast::expression const& fallback,
-             tenzir::ActiveRows const& active) -> array_<data>;
+             ActiveRows const& active) -> array_<data>;
 auto eval_if(evaluator& self, tenzir::ast::binary_expr const& x,
-             tenzir::ActiveRows const& active) -> array_<data>;
+             ActiveRows const& active) -> array_<data>;
 auto eval_else(evaluator& self, tenzir::ast::binary_expr const& x,
-               tenzir::ActiveRows const& active) -> array_<data>;
+               ActiveRows const& active) -> array_<data>;
 
 namespace {
 
@@ -138,7 +138,7 @@ auto make_null_array(std::ptrdiff_t length, memory::element_state state
   return builder.finish();
 }
 
-auto has_active_rows(tenzir::ActiveRows const& active, std::ptrdiff_t length)
+auto has_active_rows(ActiveRows const& active, std::ptrdiff_t length)
   -> bool {
   if (auto constant = active.as_constant()) {
     return *constant;
@@ -554,7 +554,7 @@ auto handle_in_list(array_row_view_<data> lv, array_row_view_<list> list_rv,
 
 template <tenzir::ast::binary_op Op>
 auto eval_op(evaluator& self, tenzir::ast::binary_expr const& x,
-             tenzir::ActiveRows const& active) -> array_<data> {
+             ActiveRows const& active) -> array_<data> {
   TENZIR_ASSERT_EQ(x.op, Op);
   auto left = self.eval(x.left, active);
   auto right = self.eval(x.right, active);
@@ -667,7 +667,7 @@ auto eval_op(evaluator& self, tenzir::ast::binary_expr const& x,
 // ---------------------------------------------------------------------------
 
 auto evaluator::eval(tenzir::ast::binary_expr const& x,
-                     tenzir::ActiveRows const& active) -> array_<data> {
+                     ActiveRows const& active) -> array_<data> {
   using enum tenzir::ast::binary_op;
 #define X(op)                                                                  \
   case op:                                                                     \
