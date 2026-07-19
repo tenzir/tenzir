@@ -418,16 +418,19 @@ public:
                  or not auth->credentials->profile.empty()
                  or auth->credentials->web_identity.has_value()));
     if (needs_provider) {
-      if (uses_managed_aws_catalog) {
-        auto initialized = ensure_aws_sdk_initialized();
-        if (not initialized) {
-          diagnostic::error("failed to initialize AWS authentication: {}",
-                            initialized.error().message)
-            .primary(args_.catalog_aws_service->source)
-            .emit(dh);
-          done_ = true;
-          co_return;
-        }
+      // Profile, assume-role, and web-identity providers talk to STS and
+      // the shared config machinery, so the AWS SDK must be initialized
+      // for every provider, not just for managed AWS catalogs.
+      auto initialized = ensure_aws_sdk_initialized();
+      if (not initialized) {
+        const auto source = args_.aws_iam ? args_.aws_iam->source
+                                          : args_.catalog_aws_service->source;
+        diagnostic::error("failed to initialize AWS authentication: {}",
+                          initialized.error().message)
+          .primary(source)
+          .emit(dh);
+        done_ = true;
+        co_return;
       }
       // Use the shared live provider for catalog signing and S3 access. The
       // default chain and STS-backed providers refresh expiring credentials,
