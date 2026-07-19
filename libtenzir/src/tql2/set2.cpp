@@ -14,6 +14,7 @@
 #include "tenzir2/type_system/array/record.hpp"
 
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -47,25 +48,22 @@ auto assign(std::span<tenzir::ast::field_path::segment const> path,
   // is handled at the `array_<data>` level by `assign_data`.
   TENZIR2_ASSERT(not path.empty());
   auto const& head = path[0].id.name;
-  // Copy out the existing top-level fields.
-  auto names = std::vector<std::string>{};
-  auto arrays = std::vector<array_<data>>{};
-  names.reserve(input.num_fields());
-  arrays.reserve(input.num_fields());
+  // Find the existing top-level field, if any, without copying every flat
+  // field out of `input` first.
+  auto existing_idx = std::optional<std::size_t>{};
   for (auto i = std::size_t{0}; i < input.num_fields(); ++i) {
-    names.emplace_back(input.name(i));
-    arrays.emplace_back(input.value_array(i));
+    if (input.name(i) == head) {
+      existing_idx = i;
+      break;
+    }
   }
-  auto const it = std::ranges::find(names, head);
-  if (it != names.end()) {
-    auto const idx = static_cast<std::size_t>(it - names.begin());
-    arrays[idx]
-      = assign_data(path.subspan(1), std::move(right), arrays[idx], dh);
-  } else {
-    names.emplace_back(head);
-    arrays.push_back(consume_path(path.subspan(1), std::move(right)));
+  if (existing_idx) {
+    auto new_value = assign_data(path.subspan(1), std::move(right),
+                                 input.value_array(*existing_idx), dh);
+    return input.with_field(head, std::move(new_value));
   }
-  return array_<record>{std::move(names), std::move(arrays)};
+  return input.with_field(head,
+                          consume_path(path.subspan(1), std::move(right)));
 }
 
 namespace {

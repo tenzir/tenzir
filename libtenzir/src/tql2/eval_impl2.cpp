@@ -90,6 +90,7 @@ auto evaluator::eval(tenzir::ast::record const& x,
       std::move(arrays),
       {},
       {},
+      {},
       memory::detail::slice_info{0, static_cast<std::ptrdiff_t>(length_)}};
   }
 
