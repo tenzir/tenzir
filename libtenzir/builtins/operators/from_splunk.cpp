@@ -417,6 +417,25 @@ public:
       TRY(options_->substitute(ctx));
     }
     if (instantiate) {
+      auto require_deterministic
+        = [&](std::string_view name, ast::expression const& expression,
+              location source) -> failure_or<void> {
+        if (expression.is_deterministic(ctx)) {
+          return {};
+        }
+        diagnostic::error("`{}` must be deterministic", name)
+          .primary(source)
+          .note("Splunk request arguments must have a stable value during "
+                "pipeline instantiation")
+          .emit(ctx);
+        return failure::promise();
+      };
+      TRY(require_deterministic("search", search_, search_source_));
+      TRY(require_deterministic("earliest", earliest_, earliest_source_));
+      TRY(require_deterministic("latest", latest_, latest_source_));
+      if (options_) {
+        TRY(require_deterministic("options", *options_, options_source_));
+      }
       TRY(auto value, const_eval(search_, ctx));
       auto* search = try_as<std::string>(value);
       if (not search) {
