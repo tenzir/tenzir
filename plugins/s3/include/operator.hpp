@@ -24,6 +24,8 @@
 #include <arrow/util/uri.h>
 #include <fmt/core.h>
 
+#include <tuple>
+
 namespace tenzir::plugins::s3 {
 
 namespace {
@@ -292,16 +294,9 @@ public:
         .emit(dh);
       co_return;
     }
-    auto stream_guard
-      = detail::scope_guard([this, &dh, output_stream]() noexcept {
-          auto status = output_stream.ValueUnsafe()->Close();
-          if (not status.ok()) {
-            diagnostic::error("failed to close stream: {}",
-                              status.ToStringWithoutContextLines())
-              .primary(args_.uri.source)
-              .emit(dh);
-          }
-        });
+    auto stream_guard = detail::scope_guard([output_stream]() noexcept {
+      std::ignore = output_stream.ValueUnsafe()->Close();
+    });
     for (const auto& chunk : input) {
       if (not chunk or chunk->size() == 0) {
         co_yield {};
@@ -317,6 +312,14 @@ public:
         co_return;
       }
       co_yield {};
+    }
+    stream_guard.disable();
+    auto status = output_stream.ValueUnsafe()->Close();
+    if (not status.ok()) {
+      diagnostic::error("failed to close stream: {}",
+                        status.ToStringWithoutContextLines())
+        .primary(args_.uri.source)
+        .emit(dh);
     }
   }
 
