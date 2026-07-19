@@ -167,6 +167,13 @@ auto validate_options(ast::expression const& expression, location source,
     return failure::promise();
   }
   for (auto const& [name, option] : *options) {
+    if (is<list>(option)) {
+      diagnostic::error("list-valued Splunk options are not supported")
+        .primary(source, "`options.{}` contains a list", name)
+        .note("pass a single value for `{}`", name)
+        .emit(dh);
+      return failure::promise();
+    }
     if (is_protected_option(name)) {
       diagnostic::error("`options` must not override `{}`", name)
         .primary(source)
