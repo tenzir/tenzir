@@ -12,7 +12,7 @@
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
-#include "tenzir/plugin/register.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/view3.hpp"
@@ -21,12 +21,26 @@
 
 namespace tenzir {
 
-auto combine_branch_types(std::optional<element_type_tag> lhs,
-                          std::optional<element_type_tag> rhs, location primary,
-                          diagnostic_handler& dh)
-  -> failure_or<std::optional<element_type_tag>>;
-
 namespace {
+
+auto combine_branch_types(element_type_tag lhs, element_type_tag rhs,
+                          location primary, diagnostic_handler& dh)
+  -> failure_or<element_type_tag> {
+  if (lhs == rhs) {
+    return lhs;
+  }
+  if (lhs.is<void>()) {
+    return rhs;
+  }
+  if (rhs.is<void>()) {
+    return lhs;
+  }
+  diagnostic::error("incompatible branch output types: {} and {}",
+                    operator_type_name(lhs), operator_type_name(rhs))
+    .primary(primary)
+    .emit(dh);
+  return failure::promise();
+}
 
 struct MatchPattern {
   struct Wildcard {};
@@ -534,8 +548,12 @@ public:
           .emit(dh);
         return failure::promise();
       }
+      if (not result) {
+        result = branch_ty;
+        continue;
+      }
       TRY(result,
-          combine_branch_types(result, branch_ty, args_.match_keyword, dh));
+          combine_branch_types(*result, branch_ty, args_.match_keyword, dh));
     }
     TENZIR_ASSERT(has_wildcard);
     // A match always has a wildcard arm, so at least one branch contributed.
