@@ -1728,8 +1728,11 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
     Option<size_t> task_count;
   };
   auto set = []<class T>(Option<T>& field, T value) {
-    TENZIR_ASSERT(field.is_none());
-    field = value;
+    if (field.is_none()) {
+      field = value;
+    } else {
+      *field += value;
+    }
   };
   auto ops = std::unordered_map<OpId, OpStats>{};
   auto is_child_of = [](OpId const& child, OpId const& parent) -> bool {
