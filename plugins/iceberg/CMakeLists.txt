@@ -152,20 +152,3 @@ else ()
 
   dependency_summary("iceberg-cpp" "${_iceberg_cpp_source}" "Dependencies")
 endif ()
-
-option(TENZIR_ICEBERG_ENABLE_SPIKE
-       "Build the throwaway Phase 0 iceberg spike executable" OFF)
-if (TENZIR_ICEBERG_ENABLE_SPIKE)
-  add_executable(iceberg-spike spike/spike.cpp src/facade.cpp)
-  target_compile_features(iceberg-spike PRIVATE cxx_std_23)
-  target_include_directories(iceberg-spike
-                             PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
-  target_link_libraries(iceberg-spike PRIVATE tenzir::libtenzir)
-  if (Iceberg_FOUND)
-    target_link_libraries(iceberg-spike PRIVATE iceberg::iceberg_bundle_static
-                                                iceberg::iceberg_rest_static)
-  else ()
-    target_link_libraries(iceberg-spike PRIVATE iceberg_bundle_static
-                                                iceberg_rest_static)
-  endif ()
-endif ()
