@@ -792,6 +792,12 @@ private:
     if (not schema) {
       return;
     }
+    // A different table schema invalidates the fingerprint cache: inputs it
+    // declared covered may need re-evolution, e.g. re-adding a column that
+    // a concurrent writer dropped.
+    if (target_schema_ and not schema->Equals(*target_schema_)) {
+      evolved_schemas_.clear();
+    }
     table_ = std::move(table);
     target_schema_ = std::move(schema);
     // The UUID persists in checkpoints so that a restore can tell a
