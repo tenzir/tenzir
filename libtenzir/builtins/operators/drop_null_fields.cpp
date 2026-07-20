@@ -110,6 +110,7 @@ class plugin final : public virtual operator_plugin2<drop_null_fields_operator>,
 public:
   auto describe() const -> Description override {
     auto d = Describer<DropNullFieldsArgs, DropNullFields>{};
+    d.parallelizable();
     auto fields
       = d.optional_variadic("fields", &DropNullFieldsArgs::fields, "field");
     d.optimization_order(&DropNullFieldsArgs::order);

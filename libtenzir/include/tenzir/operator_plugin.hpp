@@ -189,6 +189,7 @@ struct Description {
   // FIXME: Document.
   std::optional<Spawner> spawner;
   std::vector<AnySpawn> spawns;
+  bool parallelizable = false;
 };
 
 class OperatorPlugin : public virtual operator_compiler_plugin {
@@ -612,6 +613,10 @@ public:
 
   auto docs(std::string url) -> void {
     desc_.docs = std::move(url);
+  }
+
+  auto parallelizable() -> void {
+    desc_.parallelizable = true;
   }
 
   // TODO: Implement callable-based positional for custom type transformations.

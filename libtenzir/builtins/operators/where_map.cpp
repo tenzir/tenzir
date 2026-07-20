@@ -898,6 +898,10 @@ public:
     return ir::optimize_result{std::move(filter), order, {}};
   }
 
+  auto parallelizable() const -> bool override {
+    return true;
+  }
+
   friend auto inspect(auto& f, where_ir& x) -> bool {
     return f.object(x).fields(f.field("self", x.self_),
                               f.field("predicate", x.predicate_));

@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <ranges>
+#include <thread>
 #include <utility>
 
 namespace tenzir {
@@ -894,8 +895,10 @@ auto ir::Operator::plan(PlanBuilder& builder, PlanPorts input,
 
 auto ir::PlanBuilder::add_node(Box<Operator> op, element_type_tag input,
                                element_type_tag output) -> size_t {
-  // Query parallelism and partition keys before moving the operator.
-  auto parallelism = op->parallelism();
+  // Query parallelizability and partition keys before moving the operator. The
+  // planner picks the exact degree of parallelism for replicable operators.
+  auto parallelism
+    = op->parallelizable() ? size_t{std::thread::hardware_concurrency()} : 1;
   auto partition_keys = op->partition_keys();
   auto node = plan_.operators.size();
   plan_.operators.push_back(PlannedOperator{
