@@ -298,7 +298,8 @@ auto get_proxy_settings() -> proxy_settings const& {
 }
 
 auto effective_no_proxy(proxy_settings const& settings) -> std::string {
-  auto result = std::string{"localhost,127.0.0.1,127.0.0.0/8,::1"};
+  auto result
+    = std::string{"localhost,127.0.0.1,127.0.0.0/8,169.254.0.0/16,::1"};
   if (settings.no_proxy) {
     append_no_proxy_entries(result, *settings.no_proxy);
   }

@@ -264,6 +264,16 @@ TEST("no-proxy CIDR entries match IP literals") {
   CHECK(not bypass_proxy("2001:db9::1"));
 }
 
+TEST("link-local IPv4 addresses always bypass proxies") {
+  auto settings = caf::settings{};
+  caf::put(settings, "tenzir.http-proxy",
+           std::string{"http://proxy.example:3128"});
+  REQUIRE_EQUAL(initialize_proxy_settings(settings), caf::error{});
+  CHECK(not proxy_for_target("http", "169.254.169.254"));
+  CHECK(not proxy_for_target("http", "169.254.170.2"));
+  CHECK(proxy_for_target("http", "169.253.255.255"));
+}
+
 TEST("no-proxy CIDR entries do not resolve DNS names") {
   auto settings = caf::settings{};
   caf::put(settings, "tenzir.no-proxy", std::string{"10.0.0.0/8"});
