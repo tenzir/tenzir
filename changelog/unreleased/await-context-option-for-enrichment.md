@@ -3,6 +3,8 @@ title: Await context option for enrichment
 type: feature
 authors:
   - IyeOnline
+prs:
+  - 6460
 created: 2026-07-20T22:00:13.593383Z
 ---
 
