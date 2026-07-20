@@ -377,11 +377,9 @@ auto bypass_proxy(std::string_view host) -> bool {
   if (is_loopback(normalized)) {
     return true;
   }
-  if (not ps.no_proxy) {
-    return false;
-  }
   auto host_address = to<ip>(normalized);
-  for (auto part : std::views::split(*ps.no_proxy, ',')) {
+  auto no_proxy = effective_no_proxy(ps);
+  for (auto part : std::views::split(no_proxy, ',')) {
     auto raw = std::string_view{part.begin(), part.end()};
     auto entry = parse_no_proxy_entry(raw);
     if (entry.empty()) {

@@ -285,6 +285,8 @@ TEST("link-local addresses always bypass proxies") {
   caf::put(settings, "tenzir.http-proxy",
            std::string{"http://proxy.example:3128"});
   REQUIRE_EQUAL(initialize_proxy_settings(settings), caf::error{});
+  CHECK(bypass_proxy("169.254.169.254"));
+  CHECK(bypass_proxy("fe80::1%eth0"));
   CHECK(not proxy_for_target("http", "169.254.169.254"));
   CHECK(not proxy_for_target("http", "169.254.170.2"));
   CHECK(not proxy_for_target("http", "fe80::1%eth0"));
