@@ -43,7 +43,10 @@ top of concurrent updates. Partitions buffer in memory under a shared
 cardinality degrades file sizes gracefully instead of thrashing open
 writers. S3 and S3-compatible object stores are supported
 via `aws_iam`, `s3_endpoint`, and `s3_path_style`; catalogs taking bearer
-tokens authenticate via `token`. Google-hosted catalogs (BigLake) work with
+tokens authenticate via `token`. AWS-managed catalogs work through
+`catalog_aws_service`: `glue` targets the AWS Glue Data Catalog and
+`s3tables` targets Amazon S3 Tables, signing catalog requests with SigV4
+from the same `aws_iam` credentials. Google-hosted catalogs (BigLake) work with
 one credential for both the catalog and `gs://` storage: pass a
 service-account key via `gcp_service_account_key`, or set `gcp_auth=true` to
 use Application Default Credentials.
