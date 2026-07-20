@@ -1,9 +1,15 @@
-cmake_minimum_required(VERSION 3.25...3.28 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.30...4.0 FATAL_ERROR)
 
 project(
   iceberg
   DESCRIPTION "Apache Iceberg integration for Tenzir"
   LANGUAGES CXX)
+
+# Enable unit testing. Note that it is necessary to include CTest in the
+# top-level CMakeLists.txt file for it to create a test target, so while
+# optional for plugins built alongside Tenzir, it is necessary to specify this
+# line manually so plugins can be linked against an installed Tenzir.
+include(CTest)
 
 find_package(Tenzir REQUIRED)
 
