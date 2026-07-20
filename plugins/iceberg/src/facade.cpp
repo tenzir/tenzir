@@ -67,6 +67,7 @@
 #include <mutex>
 #include <set>
 #include <system_error>
+#include <unordered_map>
 #include <unordered_set>
 #include <variant>
 
@@ -1825,14 +1826,41 @@ auto DataFile::deserialize(const SerializedDataFile& serialized)
 }
 
 auto Table::has_commit(const CommitTag& tag) const -> bool {
+  // Only the current snapshot's ancestry proves the commit is part of the
+  // table state being resumed: a rollback (or a retained branch) can leave
+  // the tagged snapshot in the metadata's snapshot list while its rows are
+  // no longer reachable, and treating it as landed would drop staged files
+  // whose rows the table does not hold.
+  auto current = impl_->table->current_snapshot();
+  if (not current.has_value() or not *current) {
+    return false;
+  }
   const auto& snapshots = impl_->table->metadata()->snapshots;
+  auto by_id = std::unordered_map<int64_t, const ice::Snapshot*>{};
+  by_id.reserve(snapshots.size());
+  for (const auto& snapshot : snapshots) {
+    by_id.emplace(snapshot->snapshot_id, snapshot.get());
+  }
   const auto sequence = fmt::to_string(tag.sequence);
-  return std::ranges::any_of(snapshots, [&](const auto& snapshot) {
+  const auto* snapshot = current->get();
+  // The parent chain of valid metadata is acyclic; the bound merely keeps a
+  // corrupted chain from spinning forever.
+  for (auto steps = snapshots.size() + 1; snapshot and steps > 0; --steps) {
     auto writer = snapshot->summary.find(std::string{writer_id_property});
     auto seq = snapshot->summary.find(std::string{commit_seq_property});
-    return writer != snapshot->summary.end() and seq != snapshot->summary.end()
-           and writer->second == tag.writer_id and seq->second == sequence;
-  });
+    if (writer != snapshot->summary.end() and seq != snapshot->summary.end()
+        and writer->second == tag.writer_id and seq->second == sequence) {
+      return true;
+    }
+    if (not snapshot->parent_snapshot_id.has_value()) {
+      break;
+    }
+    // An expired ancestor breaks the chain; `references_any_data_file`
+    // covers commits whose snapshots expired while their rows live on.
+    auto it = by_id.find(*snapshot->parent_snapshot_id);
+    snapshot = it == by_id.end() ? nullptr : it->second;
+  }
+  return false;
 }
 
 auto Table::references_any_data_file(std::span<const std::string> paths)
