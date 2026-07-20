@@ -52,10 +52,11 @@ constexpr auto default_timeout = std::chrono::minutes{15};
 constexpr auto commit_max_attempts = 5;
 constexpr auto commit_initial_backoff = std::chrono::milliseconds{250};
 /// Total in-memory bytes buffered across all partitions before the largest
-/// buffer closes into a data file early. The budget, not the partition
-/// count, bounds memory: with N partitions buffering, the size floor of
-/// early-closed files degrades gracefully as budget/N instead of cliffing
-/// at a fixed writer cap.
+/// buffer closes into a data file early. The budget bounds buffered data:
+/// with N partitions buffering, the size floor of early-closed files
+/// degrades gracefully as budget/N instead of cliffing at a small writer
+/// cap. `max_open_partitions` separately bounds the per-partition overhead
+/// the budget cannot see.
 constexpr auto default_buffer_size = uint64_t{1024} * 1024 * 1024;
 /// A partition graduates from buffering batches to a streaming Parquet
 /// writer once it accumulates this much data; hot partitions stream while
@@ -67,6 +68,12 @@ constexpr auto stream_threshold = uint64_t{64} * 1024 * 1024;
 /// is the file that was going to rotate soonest anyway. Every file it
 /// produces already carries at least `stream_threshold` bytes.
 constexpr auto max_streaming_writers = size_t{64};
+/// Upper bound on simultaneously open partitions. The byte budget bounds
+/// buffered data, but every open partition also costs a map entry, its key
+/// strings, and a rotation-timer task that the budget cannot see; a burst
+/// of high-cardinality partition keys with tiny rows could otherwise grow
+/// that overhead without bound until `timeout`.
+constexpr auto max_open_partitions = size_t{4096};
 
 TENZIR_ENUM(mode, create_append, create, append);
 TENZIR_ENUM(aws_catalog_service, glue, s3tables);
@@ -1560,7 +1567,8 @@ private:
     const auto budget
       = args_.buffer_size ? args_.buffer_size->inner : default_buffer_size;
     auto closed_any = false;
-    while (std::cmp_greater(total_buffered_, budget)) {
+    while (std::cmp_greater(total_buffered_, budget)
+           or partitions_.size() > max_open_partitions) {
       auto victim = partitions_.end();
       for (auto it = partitions_.begin(); it != partitions_.end(); ++it) {
         if (not it->second.writer
@@ -1573,11 +1581,19 @@ private:
       if (victim == partitions_.end()) {
         co_return;
       }
-      warn_once(fmt::format("buffered partition data exceeds `buffer_size` "
-                            "({} bytes); closing the largest buffer early, "
-                            "which may produce small files",
-                            budget),
-                ctx);
+      if (std::cmp_greater(total_buffered_, budget)) {
+        warn_once(fmt::format("buffered partition data exceeds `buffer_size` "
+                              "({} bytes); closing the largest buffer early, "
+                              "which may produce small files",
+                              budget),
+                  ctx);
+      } else {
+        warn_once(fmt::format("exceeded {} open partitions; closing the "
+                              "largest buffer early, which may produce "
+                              "small files",
+                              max_open_partitions),
+                  ctx);
+      }
       TENZIR_DEBUG("to_iceberg: {} buffered bytes exceed budget {}; closing "
                    "largest buffer `{}` ({} bytes) early",
                    total_buffered_, budget, victim->first,
