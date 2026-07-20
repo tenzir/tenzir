@@ -298,8 +298,8 @@ auto get_proxy_settings() -> proxy_settings const& {
 }
 
 auto effective_no_proxy(proxy_settings const& settings) -> std::string {
-  auto result
-    = std::string{"localhost,127.0.0.1,127.0.0.0/8,169.254.0.0/16,::1"};
+  auto result = std::string{
+    "localhost,127.0.0.1,127.0.0.0/8,169.254.0.0/16,::1,fe80::/10"};
   if (settings.no_proxy) {
     append_no_proxy_entries(result, *settings.no_proxy);
   }
@@ -308,11 +308,18 @@ auto effective_no_proxy(proxy_settings const& settings) -> std::string {
 
 namespace {
 
-// Strips IPv6 brackets so `[::1]` and `::1` compare equal.
+// Strips IPv6 brackets and interface scopes before comparing IP literals.
 auto canonicalize_host(std::string_view host) -> std::string {
   if (host.size() >= 2 and host.front() == '[' and host.back() == ']') {
     host.remove_prefix(1);
     host.remove_suffix(1);
+  }
+  if (auto scope = host.find('%'); scope != std::string_view::npos) {
+    auto unscoped = host.substr(0, scope);
+    if (auto address = to<ip>(std::string{unscoped});
+        address and address->is_v6()) {
+      host = unscoped;
+    }
   }
   return to_lower(host);
 }
@@ -390,7 +397,7 @@ auto bypass_proxy(std::string_view host) -> bool {
       }
       continue;
     }
-    auto normalized_entry = to_lower(entry);
+    auto normalized_entry = canonicalize_host(entry);
     if (normalized_entry.starts_with('.')) {
       normalized_entry.erase(0, 1);
     }

@@ -51,7 +51,7 @@ tenzir:
   # and subdomains on a label boundary (`internal` matches `internal`,
   # `host.internal`, and `a.b.internal`, but not `notinternal`); `*` matches
   # everything; CIDR entries match IP-literal hosts only; `localhost`,
-  # IPv4/IPv6 loopback, and IPv4 link-local addresses always bypass.
+  # IPv4/IPv6 loopback, and IPv4/IPv6 link-local addresses always bypass.
   # Falls back to `TENZIR_NO_PROXY`, `NO_PROXY`, or `no_proxy` from the
   # environment when unset, in that order. An explicitly empty
   # `TENZIR_NO_PROXY` or configured `no-proxy` value disables fallback to the

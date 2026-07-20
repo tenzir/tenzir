@@ -73,7 +73,7 @@ auto get_proxy_settings() -> const proxy_settings&;
 
 /// Returns the comma-separated no-proxy list handed to backend APIs. This
 /// preserves the user-provided `tenzir.no-proxy` list but prepends Tenzir's
-/// implicit loopback and link-local IPv4 bypass entries.
+/// implicit loopback and link-local IPv4/IPv6 bypass entries.
 auto effective_no_proxy(proxy_settings const& settings) -> std::string;
 
 /// Returns true when `host` matches the `no-proxy` bypass list.
