@@ -1103,8 +1103,14 @@ auto Catalog::open(CatalogConfig config) -> Result<Catalog> {
   }
   auto properties = ice::rest::RestCatalogProperties::default_properties();
   properties.Set(ice::rest::RestCatalogProperties::kUri, config.uri)
-    .Set(ice::rest::RestCatalogProperties::kName, config.name)
-    .Set(ice::rest::RestCatalogProperties::kWarehouse, config.warehouse);
+    .Set(ice::rest::RestCatalogProperties::kName, config.name);
+  // Client configs take precedence over the REST server's defaults when
+  // iceberg-cpp merges them, so an empty warehouse must stay unset or it
+  // shadows a server-supplied default warehouse.
+  if (not config.warehouse.empty()) {
+    properties.Set(ice::rest::RestCatalogProperties::kWarehouse,
+                   config.warehouse);
+  }
   // Explicit S3 settings win so that S3-compatible access to non-S3 stores
   // (e.g. GCS interop with HMAC keys) keeps working; without them, Google
   // authentication implies the native GCS data plane. Otherwise, leave
