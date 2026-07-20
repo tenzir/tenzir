@@ -346,32 +346,6 @@ auto make_set_ir(std::vector<ast::assignment> assignments)
   return ir::SetIr{std::move(assignments)};
 }
 
-auto combine_branch_types(std::optional<element_type_tag> lhs,
-                          std::optional<element_type_tag> rhs, location primary,
-                          diagnostic_handler& dh)
-  -> failure_or<std::optional<element_type_tag>> {
-  if (not lhs) {
-    return rhs;
-  }
-  if (not rhs) {
-    return lhs;
-  }
-  if (*lhs == *rhs) {
-    return lhs;
-  }
-  if (lhs->is<void>()) {
-    return rhs;
-  }
-  if (rhs->is<void>()) {
-    return lhs;
-  }
-  diagnostic::error("incompatible branch output types: {} and {}",
-                    operator_type_name(*lhs), operator_type_name(*rhs))
-    .primary(primary)
-    .emit(dh);
-  return failure::promise();
-}
-
 namespace {
 
 class IfIr final : public ir::Operator {
