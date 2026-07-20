@@ -545,6 +545,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<UnrollArgs, Unroll>{};
+    d.parallelizable();
     d.positional("field", &UnrollArgs::field);
     d.optimization_order(&UnrollArgs::order);
     return d.without_optimize();

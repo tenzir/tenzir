@@ -863,6 +863,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<SigmaArgs, Sigma>{};
+    d.parallelizable();
     d.positional("path", &SigmaArgs::path);
     auto refresh_interval
       = d.named_optional("refresh_interval", &SigmaArgs::refresh_interval);

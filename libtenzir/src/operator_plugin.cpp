@@ -359,6 +359,10 @@ public:
     return desc_->name;
   }
 
+  auto parallelizable() const -> bool override {
+    return desc_->parallelizable;
+  }
+
   auto copy() const -> Box<ir::Operator> override {
     return GenericIr{*this};
   }

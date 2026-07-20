@@ -93,13 +93,10 @@ public:
   /// However, other methods such as `optimize` may be called in between.
   virtual auto spawn(element_type_tag input) const -> AnyOperator = 0;
 
-  /// Return the number of parallel instances that may run for this operator.
-  ///
-  /// A return value of 1 (the default) means the operator must run as a single
-  /// instance. Values greater than 1 allow the planner to spawn multiple
-  /// instances that process input concurrently.
-  virtual auto parallelism() const -> size_t {
-    return 1;
+  /// Whether the planner may replicate this operator across parallel
+  /// instances.
+  virtual auto parallelizable() const -> bool {
+    return false;
   }
 
   /// Return the expressions that determine how input is partitioned across the
@@ -389,6 +386,10 @@ public:
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<element_type_tag> override;
+
+  auto parallelizable() const -> bool override {
+    return true;
+  }
 
   template <class Inspector>
   friend auto inspect(Inspector& f, SetIr& x) -> bool;
