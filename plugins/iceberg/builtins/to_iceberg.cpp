@@ -153,6 +153,25 @@ auto cast_valid_rows(const std::shared_ptr<arrow::Array>& source,
   cast_valid_rows(source->Slice(half), options, out, failures);
 }
 
+/// Counts nulls in `array` at rows where `parent` is valid. Nulls under a
+/// null parent row are legal even for a required child field: the row's
+/// struct is null as a whole, so the child carries no value of its own.
+auto nulls_under_valid_parent(const std::shared_ptr<arrow::Array>& array,
+                              const std::shared_ptr<arrow::Array>& parent)
+  -> int64_t {
+  if (array->null_count() == 0) {
+    return 0;
+  }
+  if (not parent or parent->null_count() == 0) {
+    return array->null_count();
+  }
+  auto nulls = check(arrow::compute::IsNull(array));
+  auto valid = check(arrow::compute::IsValid(parent));
+  auto conflict = check(arrow::compute::And(nulls, valid));
+  return static_cast<const arrow::BooleanArray&>(*conflict.make_array())
+    .true_count();
+}
+
 /// Extracts the dotted path of a field expression, e.g. `metadata.version`.
 auto parse_partition_source(const ast::expression& expr, diagnostic_handler& dh)
   -> failure_or<std::string> {
@@ -1025,31 +1044,68 @@ private:
   /// Recursively projects a source column onto a field of the table schema.
   /// Missing and unrepresentable data is null-filled with a one-time
   /// warning; nested structs project field-by-field so that records written
-  /// into struct columns line up by name, not by position.
+  /// into struct columns line up by name, not by position. Required (non-
+  /// null) table fields must not be null-filled — a data file carrying
+  /// nulls for them would be invalid or fail late in the writer — so any
+  /// null that would land under a valid `parent` row raises an error
+  /// instead, returning nullptr with `done_` set.
   auto project_column(std::shared_ptr<arrow::Array> source,
                       const std::shared_ptr<arrow::Field>& target,
-                      const std::string& path, int64_t rows, OpCtx& ctx)
+                      const std::string& path, int64_t rows,
+                      const std::shared_ptr<arrow::Array>& parent, OpCtx& ctx)
     -> std::shared_ptr<arrow::Array> {
+    const auto required = not target->nullable();
+    auto fail_required
+      = [&](const std::string& reason) -> std::shared_ptr<arrow::Array> {
+      diagnostic::error("column `{}` is required in the Iceberg table but {}",
+                        path, reason)
+        .primary(args_.operator_location)
+        .emit(ctx.dh());
+      done_ = true;
+      return nullptr;
+    };
     auto null_column = [&] {
       return check(arrow::MakeArrayOfNull(target->type(), rows));
     };
+    // Null-filling a required field is only legal when every affected row
+    // sits under a null parent row.
+    auto may_null_fill = [&] {
+      if (not required) {
+        return true;
+      }
+      return parent and parent->null_count() == parent->length();
+    };
+    const auto had_source = static_cast<bool>(source);
     if (source) {
       source = normalize(std::move(source), ctx);
     }
     if (not source) {
+      if (not may_null_fill()) {
+        return fail_required(had_source
+                               ? "its values cannot be represented in Iceberg"
+                               : "the input does not provide it");
+      }
       return null_column();
     }
+    auto type_mismatch = [&]() -> std::shared_ptr<arrow::Array> {
+      if (not may_null_fill()) {
+        return fail_required(
+          fmt::format("the input column has type `{}` instead of `{}`",
+                      source->type()->ToString(), target->type()->ToString()));
+      }
+      warn_once(fmt::format("column `{}` has type `{}` but the table "
+                            "expects `{}`; writing nulls instead",
+                            path, source->type()->ToString(),
+                            target->type()->ToString()),
+                ctx);
+      return null_column();
+    };
     switch (target->type()->id()) {
       case arrow::Type::STRUCT: {
         auto struct_source
           = std::dynamic_pointer_cast<arrow::StructArray>(source);
         if (not struct_source) {
-          warn_once(fmt::format("column `{}` has type `{}` but the table "
-                                "expects `{}`; writing nulls instead",
-                                path, source->type()->ToString(),
-                                target->type()->ToString()),
-                    ctx);
-          return null_column();
+          return type_mismatch();
         }
         const auto& target_fields = target->type()->fields();
         auto children = arrow::ArrayVector{};
@@ -1060,9 +1116,14 @@ private:
           if (child) {
             used.insert(field->name());
           }
-          children.push_back(project_column(
-            std::move(child), field, fmt::format("{}.{}", path, field->name()),
-            rows, ctx));
+          auto projected
+            = project_column(std::move(child), field,
+                             fmt::format("{}.{}", path, field->name()), rows,
+                             struct_source, ctx);
+          if (not projected) {
+            return nullptr;
+          }
+          children.push_back(std::move(projected));
         }
         for (const auto& field : struct_source->struct_type()->fields()) {
           if (not used.contains(field->name())) {
@@ -1080,51 +1141,83 @@ private:
           auto valid = check(arrow::compute::IsValid(struct_source)).array();
           bitmap = valid->buffers[1];
         }
-        return check(arrow::StructArray::Make(children, target_fields,
-                                              std::move(bitmap), null_count));
+        auto result = check(arrow::StructArray::Make(
+          children, target_fields, std::move(bitmap), null_count));
+        if (required and nulls_under_valid_parent(result, parent) > 0) {
+          return fail_required("the input holds null records for it");
+        }
+        return result;
       }
       case arrow::Type::LIST: {
         auto list_source = std::dynamic_pointer_cast<arrow::ListArray>(source);
         if (not list_source) {
-          warn_once(fmt::format("column `{}` has type `{}` but the table "
-                                "expects `{}`; writing nulls instead",
-                                path, source->type()->ToString(),
-                                target->type()->ToString()),
-                    ctx);
-          return null_column();
+          return type_mismatch();
         }
         // The values child covers the array's entire buffer range, so the
-        // original offsets remain valid for the converted values.
+        // original offsets remain valid for the converted values. That
+        // range may also hold values no list slot references, so the
+        // element's required check runs on the flattened result below, not
+        // inside the recursion.
         const auto& element = target->type()->field(0);
         auto values
-          = project_column(list_source->values(), element, path + "[]",
-                           list_source->values()->length(), ctx);
-        return std::make_shared<arrow::ListArray>(
+          = project_column(list_source->values(), element->WithNullable(true),
+                           path + "[]", list_source->values()->length(),
+                           nullptr, ctx);
+        if (not values) {
+          return nullptr;
+        }
+        auto result = std::make_shared<arrow::ListArray>(
           arrow::list(element), list_source->length(),
           list_source->data()->buffers[1], std::move(values),
           list_source->null_bitmap(), list_source->data()->null_count,
           list_source->offset());
+        if (not element->nullable() and result->values()->null_count() > 0) {
+          auto flat = check(result->Flatten());
+          if (flat->null_count() > 0) {
+            diagnostic::error("column `{}[]` is required in the Iceberg "
+                              "table but the input holds null elements",
+                              path)
+              .primary(args_.operator_location)
+              .emit(ctx.dh());
+            done_ = true;
+            return nullptr;
+          }
+        }
+        if (required and nulls_under_valid_parent(result, parent) > 0) {
+          return fail_required("the input holds null lists for it");
+        }
+        return result;
       }
       default: {
         if (source->type()->Equals(target->type())) {
+          if (required and nulls_under_valid_parent(source, parent) > 0) {
+            return fail_required("the input holds null values for it");
+          }
           return source;
         }
         if (not arrow::compute::CanCast(*source->type(), *target->type())) {
-          warn_once(fmt::format("column `{}` has type `{}` but the table "
-                                "expects `{}`; writing nulls instead",
-                                path, source->type()->ToString(),
-                                target->type()->ToString()),
-                    ctx);
-          return null_column();
+          return type_mismatch();
         }
         auto options = arrow::compute::CastOptions::Safe(target->type());
         options.allow_time_truncate = true;
         auto cast = arrow::compute::Cast(source, options);
         if (cast.ok()) {
-          return cast->make_array();
+          auto result = cast->make_array();
+          if (required and nulls_under_valid_parent(result, parent) > 0) {
+            return fail_required("the input holds null values for it");
+          }
+          return result;
         }
         // The cast exists but some values cannot convert, e.g. numeric
         // overflow or unparsable strings; null only the offending rows.
+        // Failing values were non-null, so for a required field they always
+        // count against valid rows.
+        if (required) {
+          return fail_required(fmt::format(
+            "some of its `{}` values cannot convert to the "
+            "table's `{}`",
+            source->type()->ToString(), target->type()->ToString()));
+        }
         auto pieces = std::vector<std::shared_ptr<arrow::Array>>{};
         auto failures = int64_t{0};
         cast_valid_rows(source, options, pieces, failures);
@@ -1154,8 +1247,12 @@ private:
       if (column) {
         used.insert(field->name());
       }
-      arrays.push_back(
-        project_column(std::move(column), field, field->name(), rows, ctx));
+      auto projected = project_column(std::move(column), field, field->name(),
+                                      rows, nullptr, ctx);
+      if (not projected) {
+        return None{};
+      }
+      arrays.push_back(std::move(projected));
     }
     for (const auto& field : batch->schema()->fields()) {
       if (not used.contains(field->name())) {

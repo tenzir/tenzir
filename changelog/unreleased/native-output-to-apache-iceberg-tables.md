@@ -29,7 +29,9 @@ any data file carries them, so heterogeneous streams like OCSF converge into
 one wide table without name mappings or manual `ALTER TABLE` steps. Existing
 columns too narrow for the incoming values widen in place where the Iceberg
 spec allows it (`int` to `long`, `float` to `double`); individual values that
-still cannot convert land as null without affecting neighboring rows.
+still cannot convert land as null without affecting neighboring rows, except
+in columns the table marks as required, which reject the input with an error
+instead of writing nulls.
 
 Tables partition via Iceberg's hidden partitioning: `partition_by` accepts
 field paths and the symbolic transforms `year`, `month`, `day`, `hour`,
