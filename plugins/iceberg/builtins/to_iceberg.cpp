@@ -921,6 +921,7 @@ private:
     // projection target and open data file stay untouched unless the table
     // schema actually changes.
     auto current = *table_;
+    auto backoff = duration{commit_initial_backoff};
     for (auto attempt = 1;; ++attempt) {
       auto dropped = std::make_shared<std::vector<std::string>>();
       auto evolved = co_await spawn_blocking(
@@ -988,18 +989,29 @@ private:
         evolved_schemas_.insert(std::move(fingerprint));
         co_return;
       }
-      if (evolved.error().kind != Error::Kind::conflict
-          or attempt >= commit_max_attempts) {
+      const auto kind = evolved.error().kind;
+      if (attempt >= commit_max_attempts
+          or (kind != Error::Kind::conflict
+              and kind != Error::Kind::transient)) {
         fail(evolved.error(),
              fmt::format("failed to evolve schema of Iceberg table `{}`",
                          args_.table_id.inner),
              ctx);
         co_return;
       }
-      diagnostic::warning("conflicting schema update (attempt {}/{}): {}",
+      diagnostic::warning("{} schema update (attempt {}/{}): {}",
+                          kind == Error::Kind::conflict ? "conflicting"
+                                                        : "failed",
                           attempt, commit_max_attempts, evolved.error().message)
         .primary(args_.operator_location)
         .emit(ctx.dh());
+      // Schema evolution is a metadata commit on the write path, so a brief
+      // catalog hiccup gets the same backoff as append commits.
+      if (kind == Error::Kind::transient) {
+        co_await sleep_for(backoff);
+        backoff *= 2;
+        continue;
+      }
       // A concurrent writer updated the table between our load and the
       // schema commit; re-derive the diff against their changes.
       auto reloaded = co_await spawn_blocking(
