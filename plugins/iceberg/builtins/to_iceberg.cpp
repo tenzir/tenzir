@@ -558,11 +558,7 @@ public:
       }
       TENZIR_DEBUG("to_iceberg: loaded existing table `{}`",
                    args_.table_id.inner);
-      set_table(std::move(*table), ctx);
-      if (done_) {
-        co_return;
-      }
-      co_await check_partition_spec(*table_, ctx);
+      co_await adopt_table(std::move(*table), ctx);
       if (done_) {
         co_return;
       }
@@ -826,6 +822,21 @@ private:
     }
   }
 
+  /// Makes `table` the write target mid-run. When its write layout differs
+  /// from the current one, a supplied `partition_by` is re-checked against
+  /// the adopted spec: a concurrent change of the table's default spec must
+  /// not silently override the user's requested partitioning when the same
+  /// divergence at startup is a hard error.
+  auto adopt_table(Table table, OpCtx& ctx) -> Task<void> {
+    const auto layout_changed
+      = not table_ or not table_->has_same_write_layout(table);
+    set_table(std::move(table), ctx);
+    if (done_ or not layout_changed) {
+      co_return;
+    }
+    co_await check_partition_spec(*table_, ctx);
+  }
+
   /// Creates the table from the schema of the first arriving events. Only
   /// reached in the create modes when the table did not exist at start.
   auto ensure_table(const table_slice& input, OpCtx& ctx) -> Task<void> {
@@ -926,7 +937,7 @@ private:
           if (done_) {
             co_return;
           }
-          set_table(std::move(**evolved), ctx);
+          co_await adopt_table(std::move(**evolved), ctx);
           if (done_) {
             co_return;
           }
@@ -956,7 +967,7 @@ private:
             if (done_) {
               co_return;
             }
-            set_table(std::move(current), ctx);
+            co_await adopt_table(std::move(current), ctx);
             if (done_) {
               co_return;
             }
@@ -1798,7 +1809,7 @@ private:
         }
         staged.erase(staged.begin(), staged.begin() + staged_count);
         commit_seq_ += 1;
-        set_table(std::move(*result), ctx);
+        co_await adopt_table(std::move(*result), ctx);
         if (not done_ and not checkpointing_ and not staged.empty()) {
           co_await commit_staged(staged, ctx);
         }
@@ -1857,7 +1868,7 @@ private:
           staged.erase(staged.begin(), staged.begin() + staged_count);
           commit_seq_ += 1;
         }
-        set_table(std::move(*reloaded), ctx);
+        co_await adopt_table(std::move(*reloaded), ctx);
         if (done_ or landed) {
           if (not done_ and not checkpointing_ and not staged.empty()) {
             co_await commit_staged(staged, ctx);
