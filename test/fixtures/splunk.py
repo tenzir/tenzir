@@ -60,10 +60,7 @@ from ._utils import find_free_port
 
 logger = logging.getLogger(__name__)
 
-SPLUNK_IMAGE = (
-    "docker.io/splunk/splunk"
-    "@sha256:af4f671c9c931bfd80954e7f1baaff8540d1378ae26b098666cf05256bb24311"
-)
+SPLUNK_IMAGE = "docker.io/splunk/splunk:latest"
 SPLUNK_HEC_TOKEN = "abcd1234"
 SPLUNK_PASSWORD = "tenzir123"
 SPLUNK_USER = "admin"
