@@ -135,6 +135,7 @@ struct statistics {
   size_t num_rebuilding = {};
   size_t num_completed = {};
   size_t num_results = {};
+  size_t num_quarantined = {};
 };
 
 /// Identifies a single rebuild run so continuations from a superseded run can
@@ -181,6 +182,26 @@ struct rebuilder_state {
   rebuilder_actor::pointer self = {};
   catalog_actor catalog = {};
   index_actor index = {};
+  importer_actor importer = {};
+
+  /// Emits a `tenzir.metrics.rebuild_quarantine` event; unset if no importer
+  /// is registered. Only used on demand, when a partition is quarantined, so
+  /// it deliberately does not run on the periodic metrics timer like the
+  /// `tenzir.metrics.rebuild` builder below.
+  std::optional<series_builder> quarantine_builder = {};
+
+  /// Emits a metric event recording that `partition` was quarantined for
+  /// `error`. A no-op if no importer is registered.
+  void report_quarantine(const uuid& partition, const caf::error& error) {
+    if (not importer or not quarantine_builder) {
+      return;
+    }
+    auto event = quarantine_builder->record();
+    event.field("timestamp", time::clock::now());
+    event.field("partition", fmt::to_string(partition));
+    event.field("error", fmt::to_string(error));
+    self->mail(quarantine_builder->finish_assert_one_slice()).send(importer);
+  }
 
   /// Constants read once from the system configuration.
   size_t max_partition_size = 0u;
@@ -192,60 +213,54 @@ struct rebuilder_state {
   std::optional<struct run> run = {};
   bool stopping = false;
 
+  /// A snapshot of the most recently completed rebuild run, kept around so
+  /// `rebuild show` still has something to report once `run` is reset. Only
+  /// the latest run is remembered; it is overwritten the next time a run
+  /// finishes.
+  std::optional<struct run> last_run = {};
+
   /// Counter to distinguish between successive rebuild runs.
   run_id next_run = {};
-
-  /// A partition that failed to rebuild with a format/decode error, e.g.
-  /// because its store file is corrupt or truncated. Quarantined partitions
-  /// are never selected as rebuild candidates again, which prevents a
-  /// permanently broken partition from being retried forever.
-  struct quarantine_entry {
-    type schema = {};
-    size_t events = 0;
-    caf::error error = {};
-  };
-
-  /// Partitions quarantined after a format/decode error, keyed by uuid.
-  std::unordered_map<uuid, quarantine_entry> quarantined = {};
 
   /// Runtime byte estimates for legacy partitions that do not have persisted
   /// `approx_bytes` metadata yet.
   std::unordered_map<type, uint64_t> approx_bytes_per_event = {};
 
-  /// Shows the status of a currently ongoing rebuild.
-  auto status(status_verbosity verbosity) -> record {
+  /// Describes a single run's statistics and options, shared between the
+  /// live `current-run` and the historical `last-run` status entries.
+  static auto describe_run(const struct run& run) -> record {
+    return record{
+      {"partitions",
+       record{
+         {"total", run.statistics.num_total},
+         {"transforming", run.statistics.num_rebuilding},
+         {"transformed", run.statistics.num_completed},
+         {"remaining", run.statistics.num_total - run.statistics.num_completed},
+         {"results", run.statistics.num_results},
+         {"quarantined", run.statistics.num_quarantined},
+       }},
+      {"options",
+       record{
+         {"all", run.options.all},
+         {"undersized", run.options.undersized},
+         {"parallel", run.options.parallel},
+         {"max-partitions", run.options.max_partitions},
+         {"expression", fmt::to_string(run.options.expression)},
+         {"detached", run.options.detached},
+         {"automatic", run.options.automatic},
+       }},
+    };
+  }
+
+  /// Shows the status of a currently ongoing rebuild, plus the last
+  /// completed run if there is one.
+  auto status([[maybe_unused]] status_verbosity verbosity) -> record {
     auto result = record{};
     if (run) {
-      result["partitions"] = record{
-        {"total", run->statistics.num_total},
-        {"transforming", run->statistics.num_rebuilding},
-        {"transformed", run->statistics.num_completed},
-        {"remaining",
-         run->statistics.num_total - run->statistics.num_completed},
-        {"results", run->statistics.num_results},
-      };
-      result["options"] = record{
-        {"all", run->options.all},
-        {"undersized", run->options.undersized},
-        {"parallel", run->options.parallel},
-        {"max-partitions", run->options.max_partitions},
-        {"expression", fmt::to_string(run->options.expression)},
-        {"detached", run->options.detached},
-        {"automatic", run->options.automatic},
-      };
+      result["current-run"] = describe_run(*run);
     }
-    result["quarantined-size"] = quarantined.size();
-    if (verbosity >= status_verbosity::debug) {
-      auto quarantined_list = list{};
-      for (const auto& [id, entry] : quarantined) {
-        quarantined_list.emplace_back(record{
-          {"id", fmt::format("{}", id)},
-          {"schema", fmt::format("{}", entry.schema)},
-          {"events", entry.events},
-          {"error", fmt::format("{}", entry.error)},
-        });
-      }
-      result["quarantined"] = std::move(quarantined_list);
+    if (last_run) {
+      result["last-run"] = describe_run(*last_run);
     }
     return result;
   }
@@ -352,16 +367,16 @@ struct rebuilder_state {
       // batch instead of requeuing it.
       stopping = false;
       if (run->options.detached) {
-        run.reset();
+        last_run = std::exchange(run, std::nullopt);
         return;
       }
       if (err.valid()) {
         rp.deliver(std::move(err));
-        run.reset();
+        last_run = std::exchange(run, std::nullopt);
         return;
       }
       rp.deliver();
-      run.reset();
+      last_run = std::exchange(run, std::nullopt);
     };
     if (run->options.detached) {
       rp.deliver();
@@ -384,10 +399,6 @@ struct rebuilder_state {
             std::erase_if(result.partition_infos,
                           [](const partition_info& partition) {
                             return partition.events == 0;
-                          });
-            std::erase_if(result.partition_infos,
-                          [&](const partition_info& partition) {
-                            return quarantined.contains(partition.uuid);
                           });
             if (not run->options.all) {
               std::erase_if(
@@ -704,10 +715,14 @@ struct rebuilder_state {
           }
           // The partition transformer attributes a store decode failure
           // (e.g. a corrupt/truncated store file) to the specific partition
-          // it came from (see `store_error_partition`), so a batch failure
-          // never needs to be treated as "some partition in here is
-          // corrupt" — we can quarantine exactly the culprit and retry the
-          // rest of the batch normally.
+          // it came from (see `store_error_partition`), and already renames
+          // the offending file aside, so a batch failure never needs to be
+          // treated as "some partition in here is corrupt" — we can drop
+          // exactly the culprit and retry the rest of the batch normally.
+          // The partition is also erased from the catalog/index below so it
+          // is never selected as a rebuild candidate again; without that, a
+          // future run would reselect it and fail again at `chunk::mmap`
+          // instead of the `ec::format_error` this branch handles.
           if (const auto corrupt = store_error_partition(error)) {
             const auto it
               = std::find_if(retry_partitions.begin(), retry_partitions.end(),
@@ -715,11 +730,24 @@ struct rebuilder_state {
                                return partition.uuid == *corrupt;
                              });
             TENZIR_ASSERT(it != retry_partitions.end());
-            TENZIR_ERROR("{} quarantines partition {} after a format "
-                         "error: {}",
-                         *self, *corrupt, error);
-            quarantined.insert_or_assign(
-              *corrupt, quarantine_entry{it->schema, it->events, error});
+            TENZIR_WARN("{} quarantines partition {} after a format "
+                        "error: {}",
+                        *self, *corrupt, error);
+            report_quarantine(*corrupt, error);
+            ++run->statistics.num_quarantined;
+            self->mail(atom::erase_v, *corrupt)
+              .request(index, caf::infinite)
+              .then(
+                [this, corrupt = *corrupt](atom::done) {
+                  TENZIR_DEBUG("{} erased quarantined partition {} from the "
+                               "catalog",
+                               *self, corrupt);
+                },
+                [this, corrupt = *corrupt](const caf::error& erase_err) {
+                  TENZIR_WARN("{} failed to erase quarantined partition {} "
+                              "from the catalog: {}",
+                              *self, corrupt, erase_err);
+                });
             retry_partitions.erase(it);
             run->statistics.num_rebuilding -= num_partitions;
             if (stopping) {
@@ -806,6 +834,16 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
   }
   if (auto importer
       = self->system().registry().get<importer_actor>("tenzir.importer")) {
+    self->state().importer = importer;
+    self->state().quarantine_builder = series_builder{type{
+      "tenzir.metrics.rebuild_quarantine",
+      record_type{
+        {"timestamp", time_type{}},
+        {"partition", string_type{}},
+        {"error", string_type{}},
+      },
+      {{"internal"}},
+    }};
     auto builder = series_builder{type{
       "tenzir.metrics.rebuild",
       record_type{
@@ -815,23 +853,10 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
       },
       {{"internal"}},
     }};
-    // The periodic metric deliberately only carries the count: per-partition
-    // details would be duplicated into storage once per metrics interval for
-    // as long as the quarantine persists. The full list is available via the
-    // rebuilder's debug status (`tenzir-ctl rebuild show`), and every
-    // quarantine event is logged with uuid and error when it happens.
-    auto quarantine_builder = series_builder{type{
-      "tenzir.metrics.rebuild_quarantine",
-      record_type{
-        {"timestamp", time_type{}},
-        {"quarantined_partitions", uint64_type{}},
-      },
-      {{"internal"}},
-    }};
     detail::weak_run_delayed_loop(
       self, defaults::metrics_interval,
-      [self, importer = std::move(importer), builder = std::move(builder),
-       quarantine_builder = std::move(quarantine_builder)]() mutable {
+      [self, importer = std::move(importer),
+       builder = std::move(builder)]() mutable {
         const auto partitions = self->state().run
                                   ? self->state().run->statistics.num_rebuilding
                                   : 0;
@@ -845,11 +870,6 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
         metric.field("partitions", partitions);
         metric.field("queued_partitions", queued_partitions);
         self->mail(builder.finish_assert_one_slice()).send(importer);
-        auto quarantine_metric = quarantine_builder.record();
-        quarantine_metric.field("timestamp", time::clock::now());
-        quarantine_metric.field("quarantined_partitions",
-                                self->state().quarantined.size());
-        self->mail(quarantine_builder.finish_assert_one_slice()).send(importer);
       });
   }
   return {
@@ -1077,9 +1097,7 @@ public:
       command::opts("?tenzir.rebuild")
         .add<bool>("detached,d", "exit immediately instead of waiting for the "
                                  "rebuild to be stopped"));
-    rebuild->add_subcommand("show",
-                            "shows the current rebuild status, including "
-                            "quarantined partitions",
+    rebuild->add_subcommand("show", "shows the current rebuild status",
                             command::opts("?tenzir.rebuild"));
     auto factory = command::factory{
       {"rebuild start", rebuild_start_command},
