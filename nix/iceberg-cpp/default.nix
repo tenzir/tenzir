@@ -93,11 +93,11 @@ stdenv.mkDerivation {
     "-DICEBERG_SIGV4=ON"
     "-DICEBERG_BUNDLE_AWSSDK=OFF"
     "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
-    "-DCMAKE_COMPILE_WARNING_AS_ERROR=OFF"
   ]
   ++ lib.optionals stdenv.hostPlatform.isStatic [
-    # ORC's legacy find modules do not discover libraries when Nix splits
-    # headers and static archives into separate outputs.
+    # Static Arrow's CMake config pulls in ORC, whose legacy find modules do
+    # not discover libraries when Nix splits headers and static archives into
+    # separate outputs.
     "-DSNAPPY_INCLUDE_DIR=${lib.getDev snappy}/include"
     "-DSNAPPY_LIBRARY=${lib.getLib snappy}/lib/libsnappy.a"
     "-DSNAPPY_STATIC_LIB=${lib.getLib snappy}/lib/libsnappy.a"
