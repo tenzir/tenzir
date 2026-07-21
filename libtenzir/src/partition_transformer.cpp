@@ -303,16 +303,6 @@ private:
     state_->error = std::move(error);
   }
 
-  /// Logs that `path` will be quarantined by the caller (the catalog, once
-  /// it identifies the corrupt partition from the returned error via
-  /// `store_error_partition`) after a format error.
-  void quarantine_file(const std::filesystem::path& path,
-                       const caf::error& error) const {
-    TENZIR_WARN("{} detected a format error in {}, which will be "
-                "quarantined: {}",
-                "partition-transformer", path, error);
-  }
-
   auto load_partition(const partition_info& partition) const
     -> Task<caf::expected<std::vector<table_slice>>> {
     const auto filename = fmt::format(
@@ -328,27 +318,22 @@ private:
     auto partition_state = passive_partition_state{};
     if (auto err = partition_state.initialize_from_chunk(*partition_chunk);
         err.valid()) {
-      auto wrapped
-        = wrap_store_error(std::move(err), partition.uuid,
-                           "failed to load partition {}", partition.uuid);
-      quarantine_file(partition_path, wrapped);
-      co_return wrapped;
+      co_return wrap_store_error(std::move(err), partition.uuid,
+                                 "failed to load partition {}", partition.uuid);
     }
     if (partition_state.id != partition.uuid) {
-      auto wrapped = wrap_store_error(
+      co_return wrap_store_error(
         caf::make_error(ec::format_error,
                         "unexpected ID for passive partition: "
                         "expected {}, got {}",
                         partition.uuid, partition_state.id),
         partition.uuid, "unexpected ID for passive partition {}",
         partition.uuid);
-      quarantine_file(partition_path, wrapped);
-      co_return wrapped;
     }
     if (auto const* plugin
         = plugins::find<store_plugin>(partition_state.store_id)) {
       if (partition_state.store_header.size() != uuid::num_bytes) {
-        auto wrapped = wrap_store_error(
+        co_return wrap_store_error(
           caf::make_error(ec::format_error,
                           "unexpected store header size for "
                           "partition {}: expected {}, got {}",
@@ -356,8 +341,6 @@ private:
                           partition_state.store_header.size()),
           partition.uuid, "unexpected store header size for partition {}",
           partition.uuid);
-        quarantine_file(partition_path, wrapped);
-        co_return wrapped;
       }
       auto store = plugin->make_passive_store();
       if (not store) {
@@ -377,30 +360,23 @@ private:
       }
       auto store_chunk = chunk::mmap(store_path);
       if (not store_chunk) {
-        auto wrapped
-          = wrap_store_error(std::move(store_chunk.error()), partition.uuid,
-                             "failed to mmap store for partition {} "
-                             "at {}",
-                             partition.uuid, store_path);
-        quarantine_file(store_path, wrapped);
-        co_return wrapped;
+        co_return wrap_store_error(std::move(store_chunk.error()),
+                                   partition.uuid,
+                                   "failed to mmap store for partition {} "
+                                   "at {}",
+                                   partition.uuid, store_path);
       }
       if (auto err = (*store)->load(std::move(*store_chunk)); err.valid()) {
-        auto wrapped = wrap_store_error(std::move(err), partition.uuid,
-                                        "failed to load store for partition {}",
-                                        partition.uuid);
-        quarantine_file(store_path, wrapped);
-        co_return wrapped;
+        co_return wrap_store_error(std::move(err), partition.uuid,
+                                   "failed to load store for partition {}",
+                                   partition.uuid);
       }
       auto result = std::vector<table_slice>{};
       for (auto&& slice : (*store)->slices()) {
         if (not slice) {
-          auto wrapped
-            = wrap_store_error(std::move(slice.error()), partition.uuid,
-                               "failed to read store for partition {}",
-                               partition.uuid);
-          quarantine_file(store_path, wrapped);
-          co_return wrapped;
+          co_return wrap_store_error(std::move(slice.error()), partition.uuid,
+                                     "failed to read store for partition {}",
+                                     partition.uuid);
         }
         result.push_back(std::move(*slice));
       }

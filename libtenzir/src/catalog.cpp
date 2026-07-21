@@ -395,10 +395,46 @@ auto catalog_state::erase_and_extract(const uuid& partition, std::string error)
   const auto partition_path = path_from_file_url(synopsis->indexes_file);
   const auto synopsis_path = path_from_file_url(synopsis->sketches_file);
   const auto store_path = path_from_file_url(synopsis->store_file);
-  auto quarantined_path
-    = store_path.parent_path() / "quarantined" / store_path.filename();
   TENZIR_WARN("{} quarantines partition {} after an error: {}", *self,
               partition, error);
+  // A partition whose synopsis failed to serialize can end up with an empty
+  // `resource::url` for one of these three fields (see e.g.
+  // `active_partition.cpp`'s handling of a failed external `.mdx` write).
+  // `path_from_file_url` would then return an empty path, which the
+  // filesystem actor resolves as its own root directory, turning an
+  // `atom::erase`/`atom::move` meant for one file into one that touches the
+  // whole database directory. Skip any request whose path is empty instead.
+  if (not partition_path.empty()) {
+    self->mail(atom::erase_v, partition_path)
+      .request(filesystem, caf::infinite)
+      .then([](atom::done) { /* nop */ },
+            [self = self, partition, partition_path](const caf::error& err) {
+              TENZIR_WARN("{} failed to erase quarantined partition {} at "
+                          "{}: {}",
+                          *self, partition, partition_path, err);
+            });
+  }
+  if (not synopsis_path.empty()) {
+    self->mail(atom::erase_v, synopsis_path)
+      .request(filesystem, caf::infinite)
+      .then([](atom::done) { /* nop */ },
+            [self = self, partition, synopsis_path](const caf::error& err) {
+              TENZIR_WARN("{} failed to erase quarantined partition synopsis "
+                          "{} at {}: {}",
+                          *self, partition, synopsis_path, err);
+            });
+  }
+  auto rp = self->make_response_promise<atom::done>();
+  if (store_path.empty()) {
+    TENZIR_WARN("{} cannot quarantine store for partition {}: no store path "
+                "on record",
+                *self, partition);
+    erase(partition);
+    rp.deliver(atom::done_v);
+    return rp;
+  }
+  auto quarantined_path
+    = store_path.parent_path() / "quarantined" / store_path.filename();
   std::error_code err;
   std::filesystem::create_directories(quarantined_path.parent_path(), err);
   if (err) {
@@ -407,22 +443,6 @@ auto catalog_state::erase_and_extract(const uuid& partition, std::string error)
       fmt::format("failed to create quarantine directory {}: {}",
                   quarantined_path.parent_path(), err.message()));
   }
-  auto rp = self->make_response_promise<atom::done>();
-  self->mail(atom::erase_v, partition_path)
-    .request(filesystem, caf::infinite)
-    .then([](atom::done) { /* nop */ },
-          [self = self, partition, partition_path](const caf::error& err) {
-            TENZIR_WARN("{} failed to erase quarantined partition {} at {}: {}",
-                        *self, partition, partition_path, err);
-          });
-  self->mail(atom::erase_v, synopsis_path)
-    .request(filesystem, caf::infinite)
-    .then([](atom::done) { /* nop */ },
-          [self = self, partition, synopsis_path](const caf::error& err) {
-            TENZIR_WARN("{} failed to erase quarantined partition synopsis "
-                        "{} at {}: {}",
-                        *self, partition, synopsis_path, err);
-          });
   self->mail(atom::move_v, store_path, quarantined_path)
     .request(filesystem, caf::infinite)
     .then(
