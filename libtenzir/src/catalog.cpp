@@ -363,6 +363,102 @@ void catalog_state::erase(const uuid& partition) {
   }
 }
 
+namespace {
+
+/// Recovers the filesystem path from a `resource`'s `url`, which is always
+/// written as a literal `file://` prefix followed by the canonical path (see
+/// e.g. `index_state`'s population of `partition_synopsis::store_file`),
+/// never a percent-encoded or otherwise escaped URI.
+auto path_from_file_url(const resource& res) -> std::filesystem::path {
+  constexpr auto prefix = std::string_view{"file://"};
+  if (res.url.starts_with(prefix)) {
+    return std::filesystem::path{res.url.substr(prefix.size())};
+  }
+  return std::filesystem::path{res.url};
+}
+
+} // namespace
+
+auto catalog_state::erase_and_extract(const uuid& partition, std::string error)
+  -> caf::result<atom::done> {
+  const partition_synopsis* synopsis = nullptr;
+  for (const auto& [type, entries] : synopses_per_type) {
+    if (auto it = entries.find(partition); it != entries.end()) {
+      synopsis = it->second.get();
+      break;
+    }
+  }
+  if (not synopsis) {
+    erase(partition);
+    return atom::done_v;
+  }
+  const auto partition_path = path_from_file_url(synopsis->indexes_file);
+  const auto synopsis_path = path_from_file_url(synopsis->sketches_file);
+  const auto store_path = path_from_file_url(synopsis->store_file);
+  TENZIR_WARN("{} quarantines partition {} after an error: {}", *self,
+              partition, error);
+  // A partition whose synopsis failed to serialize can end up with an empty
+  // `resource::url` for one of these three fields (see e.g.
+  // `active_partition.cpp`'s handling of a failed external `.mdx` write).
+  // `path_from_file_url` would then return an empty path, which the
+  // filesystem actor resolves as its own root directory, turning an
+  // `atom::erase`/`atom::move` meant for one file into one that touches the
+  // whole database directory. Skip any request whose path is empty instead.
+  if (not partition_path.empty()) {
+    self->mail(atom::erase_v, partition_path)
+      .request(filesystem, caf::infinite)
+      .then([](atom::done) { /* nop */ },
+            [self = self, partition, partition_path](const caf::error& err) {
+              TENZIR_WARN("{} failed to erase quarantined partition {} at "
+                          "{}: {}",
+                          *self, partition, partition_path, err);
+            });
+  }
+  if (not synopsis_path.empty()) {
+    self->mail(atom::erase_v, synopsis_path)
+      .request(filesystem, caf::infinite)
+      .then([](atom::done) { /* nop */ },
+            [self = self, partition, synopsis_path](const caf::error& err) {
+              TENZIR_WARN("{} failed to erase quarantined partition synopsis "
+                          "{} at {}: {}",
+                          *self, partition, synopsis_path, err);
+            });
+  }
+  auto rp = self->make_response_promise<atom::done>();
+  if (store_path.empty()) {
+    TENZIR_WARN("{} cannot quarantine store for partition {}: no store path "
+                "on record",
+                *self, partition);
+    erase(partition);
+    rp.deliver(atom::done_v);
+    return rp;
+  }
+  auto quarantined_path
+    = store_path.parent_path() / "quarantined" / store_path.filename();
+  std::error_code err;
+  std::filesystem::create_directories(quarantined_path.parent_path(), err);
+  if (err) {
+    return caf::make_error(
+      ec::filesystem_error,
+      fmt::format("failed to create quarantine directory {}: {}",
+                  quarantined_path.parent_path(), err.message()));
+  }
+  self->mail(atom::move_v, store_path, quarantined_path)
+    .request(filesystem, caf::infinite)
+    .then(
+      [this, partition, rp](atom::done) mutable {
+        erase(partition);
+        rp.deliver(atom::done_v);
+      },
+      [this, partition, rp](caf::error& err) mutable {
+        TENZIR_WARN("{} failed to quarantine store for partition {}: {}", *self,
+                    partition, err);
+        erase(partition);
+        rp.deliver(std::move(err));
+      });
+  return rp;
+}
+
 auto catalog_state::lookup(expression expr) const
   -> caf::expected<catalog_lookup_result> {
   auto start = stopwatch::now();
@@ -713,12 +809,13 @@ auto catalog_state::memusage() const -> size_t {
   return result;
 }
 
-auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
-  -> catalog_actor::behavior_type {
+auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
+             filesystem_actor filesystem) -> catalog_actor::behavior_type {
   if (self->getf(caf::local_actor::is_detached_flag)) {
     caf::detail::set_thread_name("tnz.catalog");
   }
   self->state().self = self;
+  self->state().filesystem = std::move(filesystem);
   self->state().taxonomies.concepts = modules::concepts();
   self->state().cache.emplace();
   return {
@@ -785,6 +882,14 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
       }
       self->state().erase(partition);
       return atom::ok_v;
+    },
+    [self](atom::erase, atom::extract, uuid partition,
+           std::string& error) -> caf::result<atom::done> {
+      if (self->state().cache) {
+        return self->state().cache->stash(self, atom::erase_v, atom::extract_v,
+                                          partition, std::move(error));
+      }
+      return self->state().erase_and_extract(partition, std::move(error));
     },
     [self](atom::replace, const std::vector<uuid>& old_uuids,
            std::vector<partition_synopsis_pair>& new_synopses)

@@ -30,29 +30,35 @@ public:
   virtual ~base_store() noexcept = default;
 
   /// Retrieve the slices of the store.
-  /// @returns The contained slices.
-  [[nodiscard]] virtual generator<table_slice> slices() const = 0;
+  /// @returns The contained slices, or an error if the store could not be
+  /// fully decoded (e.g. a corrupt/truncated backing file).
+  [[nodiscard]] virtual generator<caf::expected<table_slice>> slices() const
+    = 0;
 
   /// Retrieve the number of contained events.
-  /// @returns The number of rows in all contained slices.
-  [[nodiscard]] virtual uint64_t num_events() const = 0;
+  /// @returns The number of rows in all contained slices, or an error if the
+  /// store could not be decoded (e.g. a corrupt/truncated backing file).
+  [[nodiscard]] virtual caf::expected<uint64_t> num_events() const = 0;
 
   /// Retrieve the schema associated with the data in the store.
-  /// @returns The Tenzir schema of the stored data.
-  [[nodiscard]] virtual type schema() const;
+  /// @returns The Tenzir schema of the stored data, an empty type if the
+  /// store contains no slices, or an error if the store could not be
+  /// decoded (e.g. a corrupt/truncated backing file).
+  [[nodiscard]] virtual caf::expected<type> schema() const;
 
   /// Execute a count query against the store.
   /// @param expr The expression to filter events.
   /// @param selection Pre-filtered ids to consider.
   /// @return The results of applying the count query to each table slice.
-  [[nodiscard]] virtual generator<uint64_t>
+  [[nodiscard]] virtual generator<caf::expected<uint64_t>>
   count(expression expr, ids selection) const;
 
   /// Execute an extract query against the store.
   /// @param expr The expression to filter events.
   /// @param selection Pre-filtered ids to consider.
   /// @return The results of applying the extract query to each table slice.
-  [[nodiscard]] virtual generator<table_slice> extract(expression expr) const;
+  [[nodiscard]] virtual generator<caf::expected<table_slice>>
+  extract(expression expr) const;
 };
 
 /// A base class for passive stores used by the store plugin.
@@ -95,7 +101,7 @@ private:
 template <class ResultType>
 struct base_query_state {
   /// Generator producing results per stored table slice.
-  generator<ResultType> result_generator = {};
+  generator<caf::expected<ResultType>> result_generator = {};
   /// Aggregator for number of matching events.
   uint64_t num_hits = {};
   /// Actor to send the final / intermediate results to.

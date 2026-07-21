@@ -311,6 +311,15 @@ private:
 /// @param slices The input table slices.
 table_slice concatenate(std::vector<table_slice> slices);
 
+/// Concatenates all slices in the given range, returning an error instead of
+/// panicking when a slice's underlying record batch is malformed (e.g. its
+/// child arrays do not match its schema). Use this over `concatenate` when
+/// the slices come from an untrusted source, e.g. were read back from disk
+/// or received over the wire.
+/// @param slices The input table slices.
+auto try_concatenate(std::vector<table_slice> slices)
+  -> caf::expected<table_slice>;
+
 /// Selects all rows in `slice` with event IDs in `selection`. Cuts `slice`
 /// into multiple slices if `selection` produces gaps.
 /// @param slice The input table slice.
