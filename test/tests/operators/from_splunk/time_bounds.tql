@@ -1,0 +1,18 @@
+---
+fixtures:
+  - http_server:
+      expected:
+        - method: POST
+          path: /services/search/v2/jobs/export
+          body: search=fixture&earliest_time=2026-07-14T08%3A00%3A00Z&latest_time=2026-07-14T09%3A00%3A00Z&output_mode=json&preview=false
+---
+
+let $start = 2026-07-14T08:00:00Z
+let $end = 2026-07-14T09:00:00Z
+
+from_splunk env("HTTP_FIXTURE_URL"),
+  search="fixture",
+  earliest=$start,
+  latest=$end,
+  headers={Authorization: "Splunk test-token"},
+  tls=false

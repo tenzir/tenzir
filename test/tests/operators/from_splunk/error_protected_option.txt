@@ -1,0 +1,6 @@
+error: `options` must not override `output_mode`
+ --> tests/operators/from_splunk/error_protected_option.tql:9:11
+  |
+9 |   options={output_mode: "csv"},
+  |           ^^^^^^^^^^^^^^^^^^^^ 
+  |

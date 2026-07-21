@@ -1,6 +1,7 @@
-"""Splunk fixture for to_splunk integration testing.
+"""Splunk fixture for Splunk integration testing.
 
-Provides a Splunk single-node container with HTTP Event Collector enabled.
+Provides a Splunk single-node container with the management API and HTTP Event
+Collector enabled.
 
 Environment variables yielded:
 - SPLUNK_WEB_URL: Splunk Web base URL.
@@ -10,6 +11,10 @@ Environment variables yielded:
 - SPLUNK_MGMT_URL: HTTPS management API base URL.
 - SPLUNK_ADMIN_USER: Management API username.
 - SPLUNK_ADMIN_PASSWORD: Management API password.
+- SPLUNK_AUTHORIZATION: Complete Basic management API authorization value.
+
+Options accepted under ``fixtures.splunk``:
+- seed_auth_events: ingest deterministic authentication events through HEC.
 
 Assertions payload accepted under ``assertions.fixtures.splunk``:
 - count: optional number of search results expected.
@@ -41,7 +46,7 @@ from pathlib import Path
 from typing import Any
 
 from tenzir_test import FixtureHandle, fixture
-from tenzir_test.fixtures import FixtureUnavailable
+from tenzir_test.fixtures import FixtureUnavailable, current_options
 from tenzir_test.fixtures.container_runtime import (
     ContainerReadinessTimeout,
     ManagedContainer,
@@ -60,10 +65,15 @@ SPLUNK_HEC_TOKEN = "abcd1234"
 SPLUNK_PASSWORD = "tenzir123"
 SPLUNK_USER = "admin"
 SPLUNK_INDEX = "main"
-STARTUP_TIMEOUT = 180
+STARTUP_TIMEOUT = 420
 HEALTH_CHECK_INTERVAL = 2
 ASSERTION_TIMEOUT = 60
 ASSERTION_INTERVAL = 1
+
+
+@dataclass(frozen=True)
+class SplunkOptions:
+    seed_auth_events: bool = False
 
 
 @dataclass(frozen=True)
@@ -221,8 +231,9 @@ def _run_search(
     *,
     earliest_time: str,
     latest_time: str,
+    endpoint: str = "/services/search/jobs/export",
 ) -> list[dict[str, Any]]:
-    url = f"https://127.0.0.1:{mgmt_port}/services/search/jobs/export"
+    url = f"https://127.0.0.1:{mgmt_port}{endpoint}"
     payload = urllib.parse.urlencode(
         {
             "search": search,
@@ -256,6 +267,80 @@ def _run_search(
         if isinstance(result, dict):
             results.append(result)
     return results
+
+
+def _verify_v2_export(mgmt_port: int) -> None:
+    results = _run_search(
+        mgmt_port,
+        '| makeresults count=2 | streamstats count | eval message="v2-" . count',
+        earliest_time="-1h",
+        latest_time="now",
+        endpoint="/services/search/v2/jobs/export",
+    )
+    messages = [result.get("message") for result in results]
+    if messages != ["v2-1", "v2-2"]:
+        raise RuntimeError(
+            "Splunk v2 export readiness search returned unexpected results: "
+            f"{results!r}"
+        )
+
+
+def _seed_auth_events(hec_port: int) -> None:
+    events = [
+        {
+            "time": 1735689600,
+            "host": "auth-01",
+            "source": "tenzir-docs-auth",
+            "sourcetype": "_json",
+            "index": SPLUNK_INDEX,
+            "event": {
+                "user": "alice",
+                "action": "login",
+                "src_ip": "192.0.2.10",
+                "outcome": "success",
+            },
+        },
+        {
+            "time": 1735689660,
+            "host": "auth-01",
+            "source": "tenzir-docs-auth",
+            "sourcetype": "_json",
+            "index": SPLUNK_INDEX,
+            "event": {
+                "user": "bob",
+                "action": "login",
+                "src_ip": "198.51.100.24",
+                "outcome": "failure",
+            },
+        },
+        {
+            "time": 1735689720,
+            "host": "auth-01",
+            "source": "tenzir-docs-auth",
+            "sourcetype": "_json",
+            "index": SPLUNK_INDEX,
+            "event": {
+                "user": "alice",
+                "action": "logout",
+                "src_ip": "192.0.2.10",
+                "outcome": "success",
+            },
+        },
+    ]
+    url = f"http://127.0.0.1:{hec_port}/services/collector/event"
+    for event in events:
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(event, separators=(",", ":")).encode(),
+            headers={
+                "Authorization": f"Splunk {SPLUNK_HEC_TOKEN}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        response = json.loads(_urlopen(request).decode())
+        if not isinstance(response, dict) or response.get("code") != 0:
+            raise RuntimeError(f"Splunk HEC rejected seed event: {response!r}")
 
 
 def _result_text(result: dict[str, Any]) -> str:
@@ -311,8 +396,9 @@ def _verify_search(
         time.sleep(ASSERTION_INTERVAL)
 
 
-@fixture(assertions=SplunkAssertions)
+@fixture(options=SplunkOptions, assertions=SplunkAssertions)
 def splunk() -> FixtureHandle:
+    opts = current_options("splunk")
     runtime = detect_runtime()
     if runtime is None:
         raise FixtureUnavailable(
@@ -348,6 +434,20 @@ def splunk() -> FixtureHandle:
             defaults_path=defaults_path,
         )
         _wait_for_splunk(web_port, hec_port, mgmt_port)
+        _verify_v2_export(mgmt_port)
+        if opts.seed_auth_events:
+            _seed_auth_events(hec_port)
+            _verify_search(
+                test=Path("seed_auth_events"),
+                mgmt_port=mgmt_port,
+                assertions=SplunkAssertions(
+                    count=3,
+                    source="tenzir-docs-auth",
+                    sourcetype="_json",
+                    earliest_time="1735689599",
+                    latest_time="1735689780",
+                ),
+            )
     except Exception:
         if container is not None:
             _stop_splunk(container)
@@ -383,6 +483,7 @@ def splunk() -> FixtureHandle:
             "SPLUNK_MGMT_URL": f"https://127.0.0.1:{mgmt_port}",
             "SPLUNK_ADMIN_USER": SPLUNK_USER,
             "SPLUNK_ADMIN_PASSWORD": SPLUNK_PASSWORD,
+            "SPLUNK_AUTHORIZATION": _basic_auth_header(),
         },
         teardown=_teardown,
         hooks={"assert_test": _assert_test},

@@ -1,0 +1,12 @@
+---
+fixtures: [http_server]
+error: true
+---
+
+from_splunk env("HTTP_FIXTURE_SPLUNK_UNAUTHORIZED_URL"),
+  search="fixture",
+  earliest="-15m",
+  latest="-5m",
+  headers={Authorization: "Splunk invalid-token"},
+  tls=false,
+  max_retry_count=0

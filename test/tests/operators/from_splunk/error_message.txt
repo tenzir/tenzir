@@ -1,0 +1,7 @@
+error: Splunk search failed: The lookup table does not exist.
+  --> tests/operators/from_splunk/error_message.tql:12:10
+   |
+12 |   search=r#"| inputlookup "missing lookup.csv""#,
+   |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+   |
+   = note: search: | inputlookup "missing lookup.csv"

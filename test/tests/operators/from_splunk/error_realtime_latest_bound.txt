@@ -1,0 +1,7 @@
+error: real-time Splunk searches are not supported
+ --> tests/operators/from_splunk/error_realtime_latest_bound.tql:8:10
+  |
+8 |   latest="rt",
+  |          ^^^^ `latest` uses a real-time bound
+  |
+  = note: use a finite time bound instead

@@ -1,0 +1,24 @@
+{
+  _time: "2026-07-14 14:54:45.000 GMT",
+  _raw: "raw-one",
+  host: "host-a",
+  source: "source-a",
+  sourcetype: "type-a",
+  custom: "one",
+  number: 42,
+}
+{
+  _time: "2026-07-14 14:54:46.000 GMT",
+  _raw: "raw-two",
+  host: "host-b",
+  source: "source-b",
+  sourcetype: "type-b",
+  custom: "two",
+  number: 43,
+}
+warning: HTTP error 429, attempt 1/2, retrying after 1s
+  --> tests/operators/from_splunk/retry_429.tql:11:13
+   |
+11 | from_splunk env("HTTP_FIXTURE_SPLUNK_RETRY_429_URL"),
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+   |

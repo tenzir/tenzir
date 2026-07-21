@@ -1,0 +1,31 @@
+{
+  _time: "2026-07-14 14:54:45.000 GMT",
+  _raw: "raw-one",
+  host: "host-a",
+  source: "source-a",
+  sourcetype: "type-a",
+  custom: "one",
+  number: 42,
+}
+{
+  _time: "2026-07-14 14:54:46.000 GMT",
+  _raw: "raw-two",
+  host: "host-b",
+  source: "source-b",
+  sourcetype: "type-b",
+  custom: "two",
+  number: 43,
+}
+warning: HTTP error 503, attempt 1/3, retrying after 0s
+  --> tests/operators/from_splunk/retry_503.tql:11:13
+   |
+11 | from_splunk env("HTTP_FIXTURE_SPLUNK_RETRY_503_URL"),
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+   |
+
+warning: HTTP error 503, attempt 2/3, retrying after 0s
+  --> tests/operators/from_splunk/retry_503.tql:11:13
+   |
+11 | from_splunk env("HTTP_FIXTURE_SPLUNK_RETRY_503_URL"),
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+   |

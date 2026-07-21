@@ -1,0 +1,7 @@
+error: Splunk rejected the search: ERROR: Unauthorized
+ --> tests/operators/from_splunk/error_unauthorized.tql:7:10
+  |
+7 |   search="fixture",
+  |          ^^^^^^^^^ 
+  |
+  = note: search: fixture

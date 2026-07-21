@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+from_splunk "https://splunk.example.com:8089",
+  search="fixture",
+  earliest="-15m",
+  latest="-5m",
+  headers={Authorization: 42}
