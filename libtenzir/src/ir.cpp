@@ -1148,4 +1148,37 @@ ir::pipeline::pipeline(std::vector<let> lets,
   : lets{std::move(lets)}, operators{std::move(operators)} {
 }
 
+auto ir::Plan::upstream_branch(size_t op) const -> std::vector<bool> {
+  auto out_degree = std::vector<size_t>(operators.size(), 0);
+  for (auto const& channel : channels) {
+    for (auto from : channel.from) {
+      if (from < out_degree.size()) {
+        out_degree[from] += channel.to.size();
+      }
+    }
+  }
+  auto marked = std::vector<bool>(operators.size(), false);
+  auto stack = std::vector<size_t>{op};
+  while (not stack.empty()) {
+    auto x = stack.back();
+    stack.pop_back();
+    for (auto const& channel : channels) {
+      if (std::ranges::find(channel.to, x) == channel.to.end()) {
+        continue;
+      }
+      // Only follow predecessors that feed exclusively into this branch.
+      for (auto from : channel.from) {
+        if (from >= marked.size()) {
+          continue;
+        }
+        if (not marked[from] and out_degree[from] == 1) {
+          marked[from] = true;
+          stack.push_back(from);
+        }
+      }
+    }
+  }
+  return marked;
+}
+
 } // namespace tenzir

@@ -1740,7 +1740,6 @@ private:
     // Per-instance input and output endpoints, computed during wiring.
     auto inputs = std::vector<Option<AnyOpPull>>(operators_.size());
     auto outputs = std::vector<Option<AnyOpPush>>(operators_.size());
-    auto mergers = std::vector<Task<void>>{};
     // An empty plan still needs at least one operator to drive. `Plan::from`
     // inserts an identity for empty pipelines, so this is only a safety net;
     // when it triggers there is no `input`/`output` port to honor, so the lone
@@ -1754,10 +1753,10 @@ private:
       // Wire the data plane by honoring each planned channel. Without elision,
       // planned operator indices map one-to-one onto their instance groups.
       // Fan-in channels (`Gather`, `GatherSignals`) may produce merge loops
-      // that must be driven alongside the operator tasks; we collect and spawn
-      // them below.
+      // that `wire_channel` spawns directly onto the driver alongside the
+      // operator tasks.
       for (auto& channel : plan_.channels) {
-        wire_channel(channel, instances_of, inputs, outputs, mergers);
+        wire_channel(channel, instances_of, inputs, outputs);
       }
       // Every remaining endpoint must have been wired by a channel.
       for (auto index = size_t{0}; index < operators_.size(); ++index) {
@@ -1772,16 +1771,6 @@ private:
     for (auto index = size_t{0}; index < operators_.size(); ++index) {
       add_control_read(index);
     }
-    // Drive the gather merge loops. They are not operators, so they carry no
-    // control plane and do not participate in shutdown accounting; the driver
-    // simply waits for them to finish once their lanes drain.
-    for (auto& merger : mergers) {
-      driver_.add([task = std::move(
-                     merger)] mutable -> Task<std::pair<size_t, Terminated>> {
-        co_await std::move(task);
-        co_return {std::numeric_limits<size_t>::max(), Terminated{}};
-      });
-    }
   }
 
   /// Materialize a planned channel between two runtime operators. The channel
@@ -1790,8 +1779,7 @@ private:
   auto wire_channel(ir::PlannedChannel& plan,
                     const std::vector<std::vector<size_t>>& instances_of,
                     std::vector<Option<AnyOpPull>>& inputs,
-                    std::vector<Option<AnyOpPush>>& outputs,
-                    std::vector<Task<void>>& mergers) -> void {
+                    std::vector<Option<AnyOpPush>>& outputs) -> void {
     // 1:1 wiring between matching instances of a single upstream/downstream
     // operator pair.
     auto wire_direct = [&](auto make) {
@@ -1880,25 +1868,24 @@ private:
         if (plan.to[0] == ir::PlanPort::output) {
           auto out = std::move(
             as<Box<Push<OperatorMsg<table_slice>>>>(push_downstream_));
-          mergers.push_back(std::move(parts.merger));
+          add_task(std::move(parts.merger));
           // Move captures through coroutine parameters, not through lambda
           // captures: an immediately-invoked lambda's closure is destroyed
           // at the end of the full expression, so a lazy `Task<>` coroutine
           // that resumes later would find its captures dangling. Passing
           // them as arguments moves them into the coroutine frame instead.
-          mergers.push_back(
-            [](Box<Pull<OperatorMsg<table_slice>>> pull,
-               Box<Push<OperatorMsg<table_slice>>> out) -> Task<void> {
-              while (auto msg = co_await (*pull)()) {
-                co_await (*out)(std::move(*msg));
-              }
-            }(std::move(parts.pull), std::move(out)));
+          add_task([](Box<Pull<OperatorMsg<table_slice>>> pull,
+                      Box<Push<OperatorMsg<table_slice>>> out) -> Task<void> {
+            while (auto msg = co_await (*pull)()) {
+              co_await (*out)(std::move(*msg));
+            }
+          }(std::move(parts.pull), std::move(out)));
           return;
         }
         auto const& to = instances_of[plan.to[0]];
         TENZIR_ASSERT(to.size() == 1);
         inputs[to[0]] = AnyOpPull{std::move(parts.pull)};
-        mergers.push_back(std::move(parts.merger));
+        add_task(std::move(parts.merger));
         return;
       }
       case ir::ChannelKind::Scatter: {
@@ -1953,8 +1940,8 @@ private:
           outputs[main_instances.front()]
             = AnyOpPush{std::move(main_lane.push)};
           auto out = std::move(as<Box<Push<OperatorMsg<T>>>>(push_downstream_));
-          mergers.push_back(run_gather_signals<T>(
-            std::move(main_lane.pull), std::move(aux), std::move(out)));
+          add_task(run_gather_signals<T>(std::move(main_lane.pull),
+                                         std::move(aux), std::move(out)));
         });
         return;
       }
@@ -1986,7 +1973,7 @@ private:
             ChannelId{fmt::format("{}#shuffle-gather/{}", id.value, j)});
           per_downstream_pushes[j] = std::move(parts.lanes);
           inputs[to[j]] = AnyOpPull{std::move(parts.pull)};
-          mergers.push_back(std::move(parts.merger));
+          add_task(std::move(parts.merger));
         }
         // One shuffle push per upstream instance: fan-out to all M downstream
         // gathers, using the downstream operator's partition keys.
@@ -2043,50 +2030,22 @@ private:
     });
   }
 
+  /// Spawn a task directly onto the driver. These tasks have no control plane
+  /// do not participate in shutdown accounting; the driver simply waits for
+  /// them to finish once.
+  auto add_task(Task<void> task) -> void {
+    driver_.add(
+      [task = std::move(task)] mutable -> Task<std::pair<size_t, Terminated>> {
+        co_await std::move(task);
+        co_return {std::numeric_limits<size_t>::max(), Terminated{}};
+      });
+  }
+
   auto add_control_read(size_t index) -> void {
     driver_.add([this, index] -> Task<std::pair<size_t, Option<ToControl>>> {
       TENZIR_ASSERT(index < op_controls_.size());
       co_return {index, co_await op_controls_[index].receiver.recv()};
     });
-  }
-
-  /// Compute the planned operators strictly upstream of `op` that feed
-  /// exclusively into its branch. A set bit `p` means operator `p` can be
-  /// safely stopped when `op` no longer wants input. Backward traversal stops
-  /// at any fan-out operator (out-degree > 1): such an operator has other live
-  /// downstream consumers and must not be stopped, and neither may anything
-  /// beyond it. The result excludes `op` itself.
-  auto upstream_branch(size_t op) const -> std::vector<bool> {
-    auto out_degree = std::vector<size_t>(plan_.operators.size(), 0);
-    for (auto const& channel : plan_.channels) {
-      for (auto from : channel.from) {
-        if (from < out_degree.size()) {
-          out_degree[from] += channel.to.size();
-        }
-      }
-    }
-    auto marked = std::vector<bool>(plan_.operators.size(), false);
-    auto stack = std::vector<size_t>{op};
-    while (not stack.empty()) {
-      auto x = stack.back();
-      stack.pop_back();
-      for (auto const& channel : plan_.channels) {
-        if (std::ranges::find(channel.to, x) == channel.to.end()) {
-          continue;
-        }
-        // Only follow predecessors that feed exclusively into this branch.
-        for (auto from : channel.from) {
-          if (from >= marked.size()) {
-            continue;
-          }
-          if (not marked[from] and out_degree[from] == 1) {
-            marked[from] = true;
-            stack.push_back(from);
-          }
-        }
-      }
-    }
-    return marked;
   }
 
   auto run_until_shutdown() -> Task<void> {
@@ -2169,7 +2128,7 @@ private:
                   // immediately — no per-instance aggregation needed.
                   TENZIR_ASSERT(p >= plan_.operators.size()
                                 or plan_.operators[p].parallelism == 1);
-                  const auto upstream = upstream_branch(p);
+                  const auto upstream = plan_.upstream_branch(p);
                   for (auto f = size_t{0}; f < operators_.size(); ++f) {
                     if (instance_of_[f] < upstream.size()
                         and upstream[instance_of_[f]]
