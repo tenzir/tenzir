@@ -234,9 +234,11 @@ try:
     assert node.alive(), "node died during rebuild of non-envelope store"
     r = run_ctl(node, "rebuild", "show")
     assert r.returncode == 0, f"rebuild show failed: {r.stderr}"
-    # The quarantine set is in-memory, so after the restart both the garbage
-    # store from phase 1 and the non-envelope store get (re-)quarantined.
-    assert "quarantined-size: 2" in r.stdout, f"unexpected status:\n{r.stdout}"
+    # The quarantine set is in-memory only and does not survive a restart,
+    # but that's fine: the phase-1 partition was already erased from disk by
+    # the first quarantine, so it can never be reselected again regardless.
+    # Only the newly-quarantined partition from this run shows up here.
+    assert "quarantined-size: 1" in r.stdout, f"unexpected status:\n{r.stdout}"
     assert good_uuids[0] in r.stdout, f"quarantined uuid missing:\n{r.stdout}"
     print("phase5-non-envelope-store-quarantined: ok")
 finally:

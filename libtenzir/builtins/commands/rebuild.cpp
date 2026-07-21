@@ -222,6 +222,14 @@ struct rebuilder_state {
   /// Counter to distinguish between successive rebuild runs.
   run_id next_run = {};
 
+  /// Partitions quarantined for an unrecoverable format error, and the
+  /// rendered error that caused the quarantine. Kept independently of
+  /// `run`/`last_run` (which only ever remember the most recent run's
+  /// statistics) so `rebuild show` continues to report every quarantined
+  /// partition across runs for the lifetime of the process; this set is
+  /// in-memory only and does not survive a node restart.
+  std::unordered_map<uuid, std::string> quarantined_partitions = {};
+
   /// Runtime byte estimates for legacy partitions that do not have persisted
   /// `approx_bytes` metadata yet.
   std::unordered_map<type, uint64_t> approx_bytes_per_event = {};
@@ -262,6 +270,16 @@ struct rebuilder_state {
     if (last_run) {
       result["last-run"] = describe_run(*last_run);
     }
+    result["quarantined-size"] = quarantined_partitions.size();
+    auto quarantined = list{};
+    quarantined.reserve(quarantined_partitions.size());
+    for (const auto& [partition, error] : quarantined_partitions) {
+      quarantined.emplace_back(record{
+        {"uuid", fmt::to_string(partition)},
+        {"error", error},
+      });
+    }
+    result["quarantined"] = std::move(quarantined);
     return result;
   }
 
@@ -524,6 +542,37 @@ struct rebuilder_state {
     return run->stop_requests.emplace_back(std::move(rp));
   }
 
+  /// Resumes a worker's rebuild chain after a quarantined partition's erase
+  /// request has completed (successfully or not). Requeues the survivors of
+  /// the failed batch and either lets a pending stop request finish this
+  /// worker, or picks up more work, mirroring what used to run unconditionally
+  /// right after firing the erase.
+  void
+  finish_quarantine(std::vector<partition_info>& retry_partitions,
+                    run_id this_run, caf::typed_response_promise<void>& rp) {
+    if (not run or run->id != this_run) {
+      TENZIR_DEBUG("{} abandons rebuild continuation for a superseded run",
+                   *self);
+      rp.deliver();
+      return;
+    }
+    if (stopping) {
+      // A stop request already decided not to touch any partition beyond
+      // the ones currently rebuilding, so don't requeue the survivors of
+      // this batch or pick up more work; just drop them from this run's
+      // accounting and let this worker finish.
+      run->statistics.num_total -= 1 + retry_partitions.size();
+      rp.deliver();
+      return;
+    }
+    run->remaining_partitions.insert(run->remaining_partitions.begin(),
+                                     retry_partitions.begin(),
+                                     retry_partitions.end());
+    run->statistics.num_total -= 1;
+    rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
+                atom::rebuild_v);
+  }
+
   /// Make progress on the ongoing rebuild.
   auto rebuild() -> caf::result<void> {
     if (run->remaining_partitions.empty()) {
@@ -735,36 +784,36 @@ struct rebuilder_state {
                         *self, *corrupt, error);
             report_quarantine(*corrupt, error);
             ++run->statistics.num_quarantined;
+            quarantined_partitions[*corrupt] = fmt::to_string(error);
+            retry_partitions.erase(it);
+            run->statistics.num_rebuilding -= num_partitions;
+            // Continuing the run (requeueing survivors, picking up more
+            // work, or letting a stop request finish this worker) must wait
+            // for the erase to complete: `rp` is one of the promises that
+            // `start()`'s `fan_out_request` awaits before calling `finish()`
+            // and unblocking a new rebuild run. If `rp` resolved before the
+            // erase reached the catalog, a subsequent run's candidate query
+            // could still see (and reselect) the partition we just decided
+            // to quarantine.
             self->mail(atom::erase_v, *corrupt)
               .request(index, caf::infinite)
               .then(
-                [this, corrupt = *corrupt](atom::done) {
+                [this, corrupt = *corrupt,
+                 retry_partitions = std::move(retry_partitions), this_run,
+                 rp](atom::done) mutable {
                   TENZIR_DEBUG("{} erased quarantined partition {} from the "
                                "catalog",
                                *self, corrupt);
+                  finish_quarantine(retry_partitions, this_run, rp);
                 },
-                [this, corrupt = *corrupt](const caf::error& erase_err) {
+                [this, corrupt = *corrupt,
+                 retry_partitions = std::move(retry_partitions), this_run,
+                 rp](const caf::error& erase_err) mutable {
                   TENZIR_WARN("{} failed to erase quarantined partition {} "
                               "from the catalog: {}",
                               *self, corrupt, erase_err);
+                  finish_quarantine(retry_partitions, this_run, rp);
                 });
-            retry_partitions.erase(it);
-            run->statistics.num_rebuilding -= num_partitions;
-            if (stopping) {
-              // A stop request already decided not to touch any partition
-              // beyond the ones currently rebuilding, so don't requeue the
-              // survivors of this batch or pick up more work; just drop them
-              // from this run's accounting and let this worker finish.
-              run->statistics.num_total -= 1 + retry_partitions.size();
-              rp.deliver();
-              return;
-            }
-            run->remaining_partitions.insert(run->remaining_partitions.begin(),
-                                             retry_partitions.begin(),
-                                             retry_partitions.end());
-            run->statistics.num_total -= 1;
-            rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
-                        atom::rebuild_v);
             return;
           }
           TENZIR_WARN("{} failed to rebuild partitions: {}", *self, error);
