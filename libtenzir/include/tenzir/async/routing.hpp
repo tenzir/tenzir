@@ -15,6 +15,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/multi_series.hpp"
 #include "tenzir/table_slice.hpp"
+#include "tenzir/tql2/ast.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -163,6 +164,49 @@ private:
   std::vector<bool> open_;
 };
 
+/// The fan-out endpoint of a shuffle exchange.
+///
+/// A `ShufflePush` is held by a single upstream instance and hash-partitions
+/// each `table_slice` across its `n` downstream lanes based on a set of
+/// partition-key expressions:
+///
+/// - The keys are evaluated once per incoming slice, producing a
+///   `multi_series`. `routing::hash_runs` splits the slice into maximal
+///   contiguous runs of rows that map to the same bucket, and each run is
+///   forwarded as a subslice to `lanes_[bucket]`.
+/// - Signals are broadcast to every open lane, sequentially. Blocking on a
+///   slow lane is correct: it applies backpressure.
+///
+/// The control plane may retire a lane with `close_lane`; signals continue to
+/// flow to the remaining lanes.
+class ShufflePush final : public Push<OperatorMsg<table_slice>> {
+public:
+  /// Construct a shuffle fan-out.
+  ///
+  /// If `keys` has more than one element, the entries are wrapped into a
+  /// single `ast::record` expression so that a single evaluation per slice
+  /// yields a composite key. `dh` must outlive the `ShufflePush`.
+  ShufflePush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes,
+              std::vector<ast::expression> keys, diagnostic_handler& dh);
+
+  auto operator()(OperatorMsg<table_slice> msg) -> Task<void> override;
+
+  /// Retires a lane so no further data is routed to it. Signals are still
+  /// broadcast to open lanes only.
+  auto close_lane(size_t lane) -> void;
+
+  /// Returns the number of lanes still receiving data.
+  auto open_lanes() const -> size_t;
+
+private:
+  auto route_data(table_slice data) -> Task<void>;
+
+  std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes_;
+  std::vector<bool> open_;
+  ast::expression key_;
+  diagnostic_handler* dh_;
+};
+
 /// Drives the fan-in of a gather exchange.
 ///
 /// Runs the merge loop that reads the `n` upstream lane pulls and writes the
@@ -240,6 +284,34 @@ struct GatherParts {
   /// The merge loop; the caller must spawn this task.
   Task<void> merger;
 };
+
+/// Creates a shuffle exchange with `lanes` downstream lanes.
+///
+/// Returns the single upstream `Push` (a `ShufflePush`) and the `lanes` lane
+/// `Pull`s. `make_channel` produces one internal SPSC channel per lane, e.g.
+/// `ExecCtx::make_channel<table_slice>`. `keys` are the partition-key
+/// expressions evaluated against each incoming slice; `dh` must outlive the
+/// returned `Push`.
+template <class Factory>
+auto make_shuffle(size_t lanes, std::vector<ast::expression> keys,
+                  diagnostic_handler& dh, Factory make_channel, ChannelId id)
+  -> std::pair<Box<Push<OperatorMsg<table_slice>>>,
+               std::vector<Box<Pull<OperatorMsg<table_slice>>>>> {
+  TENZIR_ASSERT(lanes > 0);
+  auto lane_pushes = std::vector<Box<Push<OperatorMsg<table_slice>>>>{};
+  auto lane_pulls = std::vector<Box<Pull<OperatorMsg<table_slice>>>>{};
+  lane_pushes.reserve(lanes);
+  lane_pulls.reserve(lanes);
+  for (auto lane = size_t{0}; lane < lanes; ++lane) {
+    auto pair
+      = make_channel(ChannelId{fmt::format("{}#shuffle/{}", id.value, lane)});
+    lane_pushes.push_back(std::move(pair.push));
+    lane_pulls.push_back(std::move(pair.pull));
+  }
+  auto shuffle = Box<Push<OperatorMsg<table_slice>>>{
+    ShufflePush{std::move(lane_pushes), std::move(keys), dh}};
+  return {std::move(shuffle), std::move(lane_pulls)};
+}
 
 /// Creates a gather exchange with `lanes` upstream lanes.
 ///

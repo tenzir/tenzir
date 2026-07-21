@@ -11,7 +11,9 @@
 #include "tenzir/async/select_set.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/panic.hpp"
+#include "tenzir/tql2/eval.hpp"
 
 #include <algorithm>
 #include <functional>
@@ -228,6 +230,93 @@ auto BroadcastPush::route_data(table_slice data) -> Task<void> {
     if (open_[i]) {
       co_await (*lanes_[i])(OperatorMsg<table_slice>{data});
     }
+  }
+}
+
+namespace {
+
+/// Wraps `keys` into a single expression suitable for one-shot evaluation.
+///
+/// A single key is used as-is. Multiple keys are combined into an
+/// `ast::record` so that hashing a row over the composite is a single
+/// `hash<data_view3>` call in `hash_runs`.
+auto combine_keys(std::vector<ast::expression> keys) -> ast::expression {
+  TENZIR_ASSERT(not keys.empty());
+  if (keys.size() == 1) {
+    return std::move(keys.front());
+  }
+  auto items = std::vector<ast::record::item>{};
+  items.reserve(keys.size());
+  for (auto i = size_t{0}; i < keys.size(); ++i) {
+    auto name = ast::identifier{fmt::format("{}", i), location::unknown};
+    items.emplace_back(ast::record::field{std::move(name), std::move(keys[i])});
+  }
+  return ast::expression{
+    ast::record{location::unknown, std::move(items), location::unknown}};
+}
+
+} // namespace
+
+ShufflePush::ShufflePush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes,
+                         std::vector<ast::expression> keys,
+                         diagnostic_handler& dh)
+  : lanes_{std::move(lanes)},
+    open_(lanes_.size(), true),
+    key_{combine_keys(std::move(keys))},
+    dh_{&dh} {
+  TENZIR_ASSERT(not lanes_.empty());
+}
+
+auto ShufflePush::operator()(OperatorMsg<table_slice> msg) -> Task<void> {
+  // See the note in `ScatterPush::operator()` for why this is a coroutine
+  // rather than a plain `return co_match(...)`.
+  co_await co_match(
+    std::move(msg),
+    [this](Signal signal) -> Task<void> {
+      // Broadcast signals to every open lane, sequentially.
+      for (auto i = size_t{0}; i < lanes_.size(); ++i) {
+        if (open_[i]) {
+          co_await (*lanes_[i])(OperatorMsg<table_slice>{signal});
+        }
+      }
+    },
+    [this](table_slice data) -> Task<void> {
+      co_await route_data(std::move(data));
+    });
+}
+
+auto ShufflePush::close_lane(size_t lane) -> void {
+  TENZIR_ASSERT(lane < open_.size());
+  open_[lane] = false;
+}
+
+auto ShufflePush::open_lanes() const -> size_t {
+  return std::ranges::count(open_, true);
+}
+
+auto ShufflePush::route_data(table_slice data) -> Task<void> {
+  if (data.rows() == 0) {
+    co_return;
+  }
+  // Determine the open-lane set and its size; hash into that reduced space so
+  // retired lanes never receive rows.
+  auto open_lane_ids = std::vector<size_t>{};
+  open_lane_ids.reserve(open_.size());
+  for (auto i = size_t{0}; i < open_.size(); ++i) {
+    if (open_[i]) {
+      open_lane_ids.push_back(i);
+    }
+  }
+  if (open_lane_ids.empty()) {
+    panic("shuffle has no open lane to route to");
+  }
+  auto values = eval(key_, data, *dh_);
+  TENZIR_ASSERT(values.length() == detail::narrow<int64_t>(data.rows()));
+  auto jobs = static_cast<uint64_t>(open_lane_ids.size());
+  for (auto [bucket, begin, end] : routing::hash_runs(values, jobs)) {
+    auto lane = open_lane_ids[bucket];
+    auto slice = subslice(data, begin, end);
+    co_await (*lanes_[lane])(OperatorMsg<table_slice>{std::move(slice)});
   }
 }
 
