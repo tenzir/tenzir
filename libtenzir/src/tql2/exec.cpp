@@ -1207,7 +1207,7 @@ private:
   static constexpr auto void_limit = 0;
   static constexpr auto events_limit = 0;
   static constexpr auto bytes_limit = 0;
-  static constexpr auto routing_events_limit = 0;
+  static constexpr auto events_routing_limit = 0;
 #else
   // Memory limit per channel type.
   static constexpr auto void_limit = 1_Ki;

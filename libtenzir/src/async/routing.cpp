@@ -100,12 +100,19 @@ auto hash_runs(const multi_series& values, uint64_t jobs)
   TENZIR_ASSERT(jobs > 0);
   auto result = std::vector<hash_run>{};
   auto num_rows = values.length();
+  // Hash every row exactly once up front. Deriving runs from a precomputed
+  // bucket vector avoids re-hashing each run boundary (once as a run's `end`
+  // candidate and again as the next run's `begin`).
+  auto buckets = std::vector<uint64_t>{};
+  buckets.reserve(static_cast<size_t>(num_rows));
+  for (auto row = int64_t{0}; row < num_rows; ++row) {
+    buckets.push_back(std::hash<data_view3>{}(values.view3_at(row)) % jobs);
+  }
   auto begin = int64_t{0};
   while (begin < num_rows) {
-    auto bucket = std::hash<data_view3>{}(values.view3_at(begin)) % jobs;
+    auto bucket = buckets[begin];
     auto end = begin + 1;
-    while (end < num_rows
-           and std::hash<data_view3>{}(values.view3_at(end)) % jobs == bucket) {
+    while (end < num_rows and buckets[end] == bucket) {
       ++end;
     }
     result.push_back({bucket, begin, end});
