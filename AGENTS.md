@@ -198,6 +198,7 @@ when they model the same concept.
 
 ### Tooling
 
+- [nix.md](.agents/references/nix.md): Packaging and dependencies
 - [external-files.md](.agents/references/external-files.md): Third-party code integration
 - [utilities.md](.agents/references/utilities.md): Helpers in tenzir::detail
 - [hashing.md](.agents/references/hashing.md): Hashing infrastructure
