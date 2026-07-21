@@ -1870,32 +1870,19 @@ private:
           }
         }
         TENZIR_ASSERT(not lanes.empty());
-        if (plan.to[0] == ir::PlanPort::output) {
-          auto parts = make_gather(lanes.size(), make_events,
-                                   ChannelId::last(id_.op(plan.from[0])));
-          for (auto i = size_t{0}; i < lanes.size(); ++i) {
-            outputs[lanes[i]] = AnyOpPush{std::move(parts.lanes[i])};
-          }
-          auto pull = std::move(parts.pull);
-          auto out = std::move(
-            as<Box<Push<OperatorMsg<table_slice>>>>(push_downstream_));
-          mergers.push_back(
-            [pull = std::move(pull), out = std::move(out),
-             merger = std::move(parts.merger)]() mutable -> Task<void> {
-              co_await std::move(merger);
-              while (auto msg = co_await (*pull)()) {
-                co_await (*out)(std::move(*msg));
-              }
-            }());
-          return;
-        }
-        auto const& to = instances_of[plan.to[0]];
-        TENZIR_ASSERT(to.size() == 1);
-        auto id = id_.op(plan.from[0]).to(id_.op(plan.to[0]));
+        auto id = (plan.to[0] == ir::PlanPort::output)
+                    ? ChannelId::last(id_.op(plan.from[0]))
+                    : id_.op(plan.from[0]).to(id_.op(plan.to[0]));
         auto parts = make_gather(lanes.size(), make_events, id);
         for (auto i = size_t{0}; i < lanes.size(); ++i) {
           outputs[lanes[i]] = AnyOpPush{std::move(parts.lanes[i])};
         }
+        // The planner never emits `Gather` to `{output}` — the output
+        // boundary always goes through `Direct` or `GatherSignals`, with
+        // `into_single` collapsing parallel tails through an identity.
+        TENZIR_ASSERT(plan.to[0] != ir::PlanPort::output);
+        auto const& to = instances_of[plan.to[0]];
+        TENZIR_ASSERT(to.size() == 1);
         inputs[to[0]] = AnyOpPull{std::move(parts.pull)};
         mergers.push_back(std::move(parts.merger));
         return;
@@ -1920,28 +1907,37 @@ private:
         return;
       }
       case ir::ChannelKind::GatherSignals: {
-        // Route the typed main output plus any auxiliary void sink lanes
-        // through an output signal gather so pipeline completion awaits every
-        // side-effect sink.
+        // Route every sink instance through an output signal gather so
+        // pipeline completion awaits every side-effect sink.
         TENZIR_ASSERT(not plan.from.empty());
         TENZIR_ASSERT(plan.to == std::vector<size_t>{ir::PlanPort::output});
-        auto const& main = instances_of[plan.from.front()];
-        TENZIR_ASSERT(main.size() == 1 and not outputs[main[0]]);
-        auto const& main_type = plan_.operators[plan.from.front()].output;
-        match(main_type, [&]<class T>(tag<T>) {
-          auto main_lane = exec_ctx_.make_channel<T>(
-            ChannelId::last(id_.op(plan.from.front())));
-          outputs[main[0]] = AnyOpPush{std::move(main_lane.push)};
-          auto aux = std::vector<Box<Pull<OperatorMsg<void>>>>{};
-          aux.reserve(plan.from.size() - 1);
-          for (auto i = size_t{1}; i < plan.from.size(); ++i) {
-            auto const& sink = instances_of[plan.from[i]];
-            TENZIR_ASSERT(sink.size() == 1 and not outputs[sink[0]]);
-            auto lane = exec_ctx_.make_channel<void>(
-              ChannelId::last(id_.op(plan.from[i])));
-            outputs[sink[0]] = AnyOpPush{std::move(lane.push)};
-            aux.push_back(std::move(lane.pull));
+        auto main_op = plan.from.front();
+        auto const& main_instances = instances_of[main_op];
+        TENZIR_ASSERT(not outputs[main_instances.front()]);
+        auto aux = std::vector<Box<Pull<OperatorMsg<void>>>>{};
+        auto add_aux = [&](size_t from_op, size_t inst) {
+          TENZIR_ASSERT(not outputs[inst]);
+          auto lane
+            = exec_ctx_.make_channel<void>(ChannelId::last(id_.op(from_op)));
+          outputs[inst] = AnyOpPush{std::move(lane.push)};
+          aux.push_back(std::move(lane.pull));
+        };
+        for (auto i = size_t{1}; i < main_instances.size(); ++i) {
+          add_aux(main_op, main_instances[i]);
+        }
+        for (auto j = size_t{1}; j < plan.from.size(); ++j) {
+          for (auto inst : instances_of[plan.from[j]]) {
+            add_aux(plan.from[j], inst);
           }
+        }
+        match(plan_.operators[main_op].output, [&]<class T>(tag<T>) {
+          if constexpr (not std::is_void_v<T>) {
+            TENZIR_ASSERT(main_instances.size() == 1);
+          }
+          auto main_lane
+            = exec_ctx_.make_channel<T>(ChannelId::last(id_.op(main_op)));
+          outputs[main_instances.front()]
+            = AnyOpPush{std::move(main_lane.push)};
           auto out = std::move(as<Box<Push<OperatorMsg<T>>>>(push_downstream_));
           mergers.push_back(run_gather_signals<T>(
             std::move(main_lane.pull), std::move(aux), std::move(out)));

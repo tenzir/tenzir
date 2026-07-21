@@ -4,3 +4,4 @@ from {a: 1, b: {c: {d: "x"}}, e: 10, id: 1},
      {a: 1, b: {c: {d: "y"}}, e: 10, id: 4},
      {a: 2, b: {c: {d: "x"}}, e: 10, id: 5}
 deduplicate a, b.c.d, e
+sort id

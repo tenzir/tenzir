@@ -1,0 +1,5 @@
+// `distance=` is a global row-counter gate: it must not be parallelized,
+// otherwise each instance would count rows independently. This test would
+// break if `deduplicate` were parallelized with `distance=` set.
+from {k: 1}, {k: 2}, {k: 1}, {k: 3}, {k: 1}, {k: 2}
+deduplicate k, distance=3

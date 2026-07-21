@@ -1,6 +1,6 @@
 c0: {input} -- version
-c1: pass -- where -- head
-c2: pass -- where
+c1: pass -< where xN >- head
+c2: pass -< where xN
 c3: to_stdout -- {output}
 
 links:

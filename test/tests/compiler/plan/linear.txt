@@ -1,1 +1,1 @@
-c0: {input} -- version -- where -- head -- to_stdout -- {output}
+c0: {input} -- version -< where xN >- head -- to_stdout -- {output}
