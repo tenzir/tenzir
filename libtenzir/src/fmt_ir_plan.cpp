@@ -90,14 +90,7 @@ auto plan_node_label(const ir::PlannedOperator& node) -> std::string {
     label += " xN";
   }
   if (not node.partition_keys.empty()) {
-    auto keys = std::string{};
-    for (const auto& key : node.partition_keys) {
-      if (not keys.empty()) {
-        keys += ", ";
-      }
-      keys += fmt::to_string(key);
-    }
-    label += fmt::format(" by [{}]", keys);
+    label += " partitioned";
   }
   return label;
 }

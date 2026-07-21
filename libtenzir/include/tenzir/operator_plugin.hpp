@@ -172,6 +172,13 @@ struct Optimization {
 using Optimizer = std::function<
   auto(DescribeCtx&, event_order, ir::optimize_filter)->Optimization>;
 
+/// Extracts partition-key expressions from a materialized argument bundle.
+/// The returned expressions are evaluated at runtime against each incoming
+/// table slice so rows with equal key values route to the same parallel
+/// instance. Set by `Describer::partition_keys`.
+using PartitionKeys
+  = std::function<auto(const Any&)->std::vector<ast::expression>>;
+
 struct Description {
   std::string name;
   std::string docs;
@@ -190,6 +197,8 @@ struct Description {
   std::optional<Spawner> spawner;
   std::vector<AnySpawn> spawns;
   bool parallelizable = false;
+  std::optional<std::function<auto(const Any&)->bool>> parallelizable_when;
+  std::optional<PartitionKeys> partition_keys;
 };
 
 class OperatorPlugin : public virtual operator_compiler_plugin {
@@ -617,6 +626,38 @@ public:
 
   auto parallelizable() -> void {
     desc_.parallelizable = true;
+  }
+
+  /// Declare that parallelizability depends on the parsed arguments.
+  ///
+  /// `predicate` receives the `Args` bundle and returns whether the operator
+  /// may be replicated. This overrides the plain `parallelizable()` flag.
+  template <class F>
+    requires std::convertible_to<std::invoke_result_t<F, const Args&>, bool>
+  auto parallelizable(F predicate) -> void {
+    desc_.parallelizable_when
+      = [predicate = std::move(predicate)](const Any& args) -> bool {
+      return predicate(args.as<Args>());
+    };
+  }
+
+  /// Declare partition-key expressions for this operator.
+  ///
+  /// `extract` receives the parsed `Args` bundle and returns the list of
+  /// expressions the planner uses to hash-partition the operator's input
+  /// across parallel instances. Rows with equal key values always land on
+  /// the same instance. See `ir::Operator::partition_keys()`.
+  ///
+  /// Declaring partition keys does not imply `parallelizable()` — the
+  /// operator must be marked explicitly.
+  template <class F>
+    requires std::convertible_to<std::invoke_result_t<F, const Args&>,
+                                 std::vector<ast::expression>>
+  auto partition_keys(F extract) -> void {
+    desc_.partition_keys = [extract = std::move(extract)](
+                             const Any& args) -> std::vector<ast::expression> {
+      return extract(args.as<Args>());
+    };
   }
 
   // TODO: Implement callable-based positional for custom type transformations.

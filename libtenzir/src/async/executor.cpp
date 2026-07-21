@@ -1948,8 +1948,50 @@ private:
         });
         return;
       }
-      case ir::ChannelKind::Shuffle:
-        TENZIR_TODO();
+      case ir::ChannelKind::Shuffle: {
+        // N upstream instances hash-partition their input across M downstream
+        // instances. We compose an existing broadcast-to-signals shuffle push
+        // per upstream instance with M internal gathers, one per downstream
+        // instance, each merging N upstream contributions.
+        TENZIR_ASSERT(plan.from.size() == 1);
+        TENZIR_ASSERT(plan.to.size() == 1);
+        TENZIR_ASSERT(plan.from[0] != ir::PlanPort::input);
+        TENZIR_ASSERT(plan.to[0] != ir::PlanPort::output);
+        auto const& from = instances_of[plan.from[0]];
+        auto const& to = instances_of[plan.to[0]];
+        TENZIR_ASSERT(not from.empty());
+        TENZIR_ASSERT(not to.empty());
+        auto const& keys = plan_.operators[plan.to[0]].partition_keys;
+        TENZIR_ASSERT(not keys.empty());
+        auto id = id_.op(plan.from[0]).to(id_.op(plan.to[0]));
+        auto const n = from.size();
+        auto const m = to.size();
+        // One M-way gather per downstream instance: merges the N upstream
+        // contributions destined for that instance.
+        auto per_downstream_pushes
+          = std::vector<std::vector<Box<Push<OperatorMsg<table_slice>>>>>(m);
+        for (auto j = size_t{0}; j < m; ++j) {
+          auto parts = make_gather(
+            n, make_events,
+            ChannelId{fmt::format("{}#shuffle-gather/{}", id.value, j)});
+          per_downstream_pushes[j] = std::move(parts.lanes);
+          inputs[to[j]] = AnyOpPull{std::move(parts.pull)};
+          mergers.push_back(std::move(parts.merger));
+        }
+        // One shuffle push per upstream instance: fan-out to all M downstream
+        // gathers, using the downstream operator's partition keys.
+        for (auto i = size_t{0}; i < n; ++i) {
+          auto lane_pushes = std::vector<Box<Push<OperatorMsg<table_slice>>>>{};
+          lane_pushes.reserve(m);
+          for (auto j = size_t{0}; j < m; ++j) {
+            lane_pushes.push_back(std::move(per_downstream_pushes[j][i]));
+          }
+          auto shuffle = Box<Push<OperatorMsg<table_slice>>>{
+            ShufflePush{std::move(lane_pushes), keys, dh_}};
+          outputs[from[i]] = AnyOpPush{std::move(shuffle)};
+        }
+        return;
+      }
     }
   }
 
