@@ -4,6 +4,8 @@ type: change
 authors:
   - aljazerzen
   - claude
+prs:
+  - 6462
 created: 2026-07-21T06:48:18.71574Z
 ---
 
