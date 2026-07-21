@@ -97,63 +97,64 @@ auto hash_runs(const multi_series& values, uint64_t jobs)
 
 namespace tenzir {
 
+/// Shared fan-out base for the exchange push endpoints.
+///
+/// Implements the common message loop: signals are broadcast to every lane
+/// sequentially (blocking on a slow lane is correct—it applies backpressure),
+/// and non-empty data slices are forwarded to the derived `route_data` policy.
+class ExchangePush : public Push<OperatorMsg<table_slice>> {
+public:
+  auto operator()(OperatorMsg<table_slice> msg) -> Task<void> final;
+
+protected:
+  explicit ExchangePush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes);
+
+  /// Routes a data slice across `lanes_`.
+  virtual auto route_data(table_slice data) -> Task<void> = 0;
+
+  std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes_;
+};
+
 /// The fan-out endpoint of a scatter exchange.
 ///
 /// A `ScatterPush` is held by the single upstream operator and forwards each
-/// `table_slice` to one or more of its `n` downstream lanes:
-///
-/// - Data is split across lanes by row via `routing::distribute_adaptive`,
-///   keeping total rows assigned as balanced as possible.
-/// - Signals are broadcast to every lane, sequentially. Blocking on a slow
-///   lane is correct: it applies backpressure.
-class ScatterPush final : public Push<OperatorMsg<table_slice>> {
+/// `table_slice` to one or more of its `n` downstream lanes. Data is split
+/// across lanes by row via `routing::distribute_adaptive`, keeping total rows
+/// assigned as balanced as possible.
+class ScatterPush final : public ExchangePush {
 public:
   explicit ScatterPush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes);
 
-  auto operator()(OperatorMsg<table_slice> msg) -> Task<void> override;
-
 private:
-  auto route_data(table_slice data) -> Task<void>;
+  auto route_data(table_slice data) -> Task<void> override;
 
-  std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes_;
   std::vector<uint64_t> rows_assigned_;
 };
 
 /// The fan-out endpoint of a broadcast exchange.
 ///
 /// A `BroadcastPush` is held by the single upstream operator and broadcasts
-/// each message to its `n` downstream lanes:
-///
-/// - Unlike `ScatterPush`, which partitions rows so each row lands on exactly
-///   one lane, a broadcast sends a copy of the *whole* slice to every open
-///   lane. `table_slice` copies are cheap (ref-counted Arrow buffers).
-/// - Signals are broadcast to every lane, sequentially. Blocking on a slow
-///   lane is correct: it applies backpressure.
-class BroadcastPush final : public Push<OperatorMsg<table_slice>> {
+/// each message to its `n` downstream lanes. Unlike `ScatterPush`, which
+/// partitions rows so each row lands on exactly one lane, a broadcast sends a
+/// copy of the *whole* slice to every lane. `table_slice` copies are cheap
+/// (ref-counted Arrow buffers).
+class BroadcastPush final : public ExchangePush {
 public:
   explicit BroadcastPush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes);
 
-  auto operator()(OperatorMsg<table_slice> msg) -> Task<void> override;
-
 private:
-  auto route_data(table_slice data) -> Task<void>;
-
-  std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes_;
+  auto route_data(table_slice data) -> Task<void> override;
 };
 
 /// The fan-out endpoint of a shuffle exchange.
 ///
 /// A `ShufflePush` is held by a single upstream instance and hash-partitions
 /// each `table_slice` across its `n` downstream lanes based on a set of
-/// partition-key expressions:
-///
-/// - The keys are evaluated once per incoming slice, producing a
-///   `multi_series`. `routing::hash_runs` splits the slice into maximal
-///   contiguous runs of rows that map to the same bucket, and each run is
-///   forwarded as a subslice to `lanes_[bucket]`.
-/// - Signals are broadcast to every lane, sequentially. Blocking on a
-///   slow lane is correct: it applies backpressure.
-class ShufflePush final : public Push<OperatorMsg<table_slice>> {
+/// partition-key expressions. The keys are evaluated once per incoming slice,
+/// producing a `multi_series`. `routing::hash_runs` splits the slice into
+/// maximal contiguous runs of rows that map to the same bucket, and each run
+/// is forwarded as a subslice to `lanes_[bucket]`.
+class ShufflePush final : public ExchangePush {
 public:
   /// Construct a shuffle fan-out.
   ///
@@ -163,12 +164,9 @@ public:
   ShufflePush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes,
               std::vector<ast::expression> keys, diagnostic_handler& dh);
 
-  auto operator()(OperatorMsg<table_slice> msg) -> Task<void> override;
-
 private:
-  auto route_data(table_slice data) -> Task<void>;
+  auto route_data(table_slice data) -> Task<void> override;
 
-  std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes_;
   ast::expression key_;
   diagnostic_handler* dh_;
 };

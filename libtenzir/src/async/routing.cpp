@@ -118,12 +118,13 @@ auto hash_runs(const multi_series& values, uint64_t jobs)
 
 namespace tenzir {
 
-ScatterPush::ScatterPush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes)
-  : lanes_{std::move(lanes)}, rows_assigned_(lanes_.size(), 0) {
+ExchangePush::ExchangePush(
+  std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes)
+  : lanes_{std::move(lanes)} {
   TENZIR_ASSERT(not lanes_.empty());
 }
 
-auto ScatterPush::operator()(OperatorMsg<table_slice> msg) -> Task<void> {
+auto ExchangePush::operator()(OperatorMsg<table_slice> msg) -> Task<void> {
   // Note the `co_await`: `operator()` must itself be a coroutine so the
   // handler lambda temporaries created by `co_match` stay alive across the
   // suspension. A plain `return co_match(...)` would destroy them at the end
@@ -140,6 +141,10 @@ auto ScatterPush::operator()(OperatorMsg<table_slice> msg) -> Task<void> {
     [this](table_slice data) -> Task<void> {
       co_await route_data(std::move(data));
     });
+}
+
+ScatterPush::ScatterPush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes)
+  : ExchangePush{std::move(lanes)}, rows_assigned_(lanes_.size(), 0) {
 }
 
 auto ScatterPush::route_data(table_slice data) -> Task<void> {
@@ -161,24 +166,7 @@ auto ScatterPush::route_data(table_slice data) -> Task<void> {
 
 BroadcastPush::BroadcastPush(
   std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes)
-  : lanes_{std::move(lanes)} {
-  TENZIR_ASSERT(not lanes_.empty());
-}
-
-auto BroadcastPush::operator()(OperatorMsg<table_slice> msg) -> Task<void> {
-  // See the note in `ScatterPush::operator()` for why this is a coroutine
-  // rather than a plain `return co_match(...)`.
-  co_await co_match(
-    std::move(msg),
-    [this](Signal signal) -> Task<void> {
-      // Broadcast signals to every lane, sequentially.
-      for (auto& lane : lanes_) {
-        co_await (*lane)(OperatorMsg<table_slice>{signal});
-      }
-    },
-    [this](table_slice data) -> Task<void> {
-      co_await route_data(std::move(data));
-    });
+  : ExchangePush{std::move(lanes)} {
 }
 
 auto BroadcastPush::route_data(table_slice data) -> Task<void> {
@@ -217,24 +205,9 @@ auto combine_keys(std::vector<ast::expression> keys) -> ast::expression {
 ShufflePush::ShufflePush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes,
                          std::vector<ast::expression> keys,
                          diagnostic_handler& dh)
-  : lanes_{std::move(lanes)}, key_{combine_keys(std::move(keys))}, dh_{&dh} {
-  TENZIR_ASSERT(not lanes_.empty());
-}
-
-auto ShufflePush::operator()(OperatorMsg<table_slice> msg) -> Task<void> {
-  // See the note in `ScatterPush::operator()` for why this is a coroutine
-  // rather than a plain `return co_match(...)`.
-  co_await co_match(
-    std::move(msg),
-    [this](Signal signal) -> Task<void> {
-      // Broadcast signals to every lane, sequentially.
-      for (auto& lane : lanes_) {
-        co_await (*lane)(OperatorMsg<table_slice>{signal});
-      }
-    },
-    [this](table_slice data) -> Task<void> {
-      co_await route_data(std::move(data));
-    });
+  : ExchangePush{std::move(lanes)},
+    key_{combine_keys(std::move(keys))},
+    dh_{&dh} {
 }
 
 auto ShufflePush::route_data(table_slice data) -> Task<void> {
