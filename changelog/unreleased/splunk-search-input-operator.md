@@ -15,10 +15,14 @@ Head and emits every result as an event:
 ```tql
 from_splunk "https://splunk.example.com:8089",
   search="search index=main sourcetype=linux_secure",
-  earliest="-15m",
-  latest="-5m",
+  earliest=now() - 15min,
+  latest=now() - 5min,
   headers={Authorization: secret("splunk-authorization")}
 ```
+
+The `earliest` and `latest` bounds take `time` values like the ones above or
+strings in Splunk's native relative-time syntax, such as `earliest="-15m"` or
+`earliest="-1h@h"` for snapping to the full hour.
 
 The operator supports secret-valued authorization headers, TLS configuration,
 request timeouts, and retries for recurring collection pipelines.
