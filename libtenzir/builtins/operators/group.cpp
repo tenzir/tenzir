@@ -171,6 +171,10 @@ public:
     d.positional("over", &GroupArgs::over, "expr");
     auto pipe = d.pipeline(&GroupArgs::pipe, SubOptimize::from_downstream,
                            {{"group", &GroupArgs::let}});
+    d.parallelizable();
+    d.partition_keys([](const GroupArgs& args) -> std::vector<ast::expression> {
+      return {args.over};
+    });
     d.spawner([pipe]<class Input>(DescribeCtx& ctx)
                 -> failure_or<Option<SpawnWith<GroupArgs, Input>>> {
       if constexpr (std::same_as<Input, table_slice>) {

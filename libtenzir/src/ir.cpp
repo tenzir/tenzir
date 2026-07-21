@@ -782,6 +782,16 @@ auto find_sinks(ir::Plan const& plan) -> std::vector<size_t> {
   return sinks;
 }
 
+/// Collects the plan's sinks
+auto count_instances(ir::Plan const& plan, std::vector<size_t> const& operators)
+  -> size_t {
+  size_t r = 0;
+  for (const auto& o : operators) {
+    r += plan.operators[o].parallelism;
+  }
+  return r;
+}
+
 } // namespace
 
 auto ir::Plan::from(pipeline pipe, element_type_tag input,
@@ -801,14 +811,15 @@ auto ir::Plan::from(pipeline pipe, element_type_tag input,
   auto head = PlanPorts{PlanPort{.node = PlanPort::input, .type = input}};
   TRY(auto tail, builder.lower_pipeline(std::move(pipe), std::move(head), dh));
   // bundle tail and sinks (to gather all output signals)
-  auto sinks = find_sinks(plan);
+  auto outputs = find_sinks(plan);
   if (not tail.empty()) {
-    sinks.insert(sinks.begin(), builder.into_single(tail).node);
+    outputs.insert(outputs.begin(), builder.into_single(tail).node);
   }
+  auto output_instances = count_instances(plan, outputs);
   auto kind
-    = sinks.size() > 1 ? ChannelKind::GatherSignals : ChannelKind::Direct;
+    = output_instances > 1 ? ChannelKind::GatherSignals : ChannelKind::Direct;
   plan.channels.push_back(PlannedChannel{
-    .from = std::move(sinks),
+    .from = std::move(outputs),
     .to = {PlanPort::output},
     .kind = kind,
   });

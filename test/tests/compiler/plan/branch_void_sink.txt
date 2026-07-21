@@ -1,6 +1,6 @@
 c0: {input} -- version
-c1: pass -- where -- discard
-c2: pass -- where -- to_stdout
+c1: pass -< where xN >- discard
+c2: pass -< where xN >- to_stdout
 
 links:
   c0 --broadcast-> c1 c2
