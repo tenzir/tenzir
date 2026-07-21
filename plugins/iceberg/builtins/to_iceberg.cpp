@@ -418,14 +418,8 @@ public:
       config.aws_catalog_signing_name
         = service == aws_catalog_service::glue ? "glue" : "s3tables";
     }
-    if (uses_managed_aws_catalog) {
-      auto credentials = Option<resolved_aws_credentials>{None{}};
-      if (auth->credentials) {
-        credentials = *auth->credentials;
-      }
-      config.aws_signing_region = amazon::resolve_region(None{}, credentials);
-      config.properties["client.region"] = config.aws_signing_region;
-    } else if (auth->credentials and not auth->credentials->region.empty()) {
+    if (not uses_managed_aws_catalog and auth->credentials
+        and not auth->credentials->region.empty()) {
       config.properties["client.region"] = auth->credentials->region;
     }
     if (not token.empty()) {
@@ -457,6 +451,17 @@ public:
           .emit(dh);
         done_ = true;
         co_return;
+      }
+      if (uses_managed_aws_catalog) {
+        // Signing-region resolution consults a named profile's config file,
+        // which requires the initialized SDK; that is why it happens here
+        // and not alongside the other catalog properties above.
+        auto credentials = Option<resolved_aws_credentials>{None{}};
+        if (auth->credentials) {
+          credentials = *auth->credentials;
+        }
+        config.aws_signing_region = amazon::resolve_region(None{}, credentials);
+        config.properties["client.region"] = config.aws_signing_region;
       }
       // Use the shared live provider for catalog signing and S3 access. The
       // default chain and STS-backed providers refresh expiring credentials,
