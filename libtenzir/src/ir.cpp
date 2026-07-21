@@ -812,16 +812,26 @@ auto ir::Plan::from(pipeline pipe, element_type_tag input,
   TRY(auto tail, builder.lower_pipeline(std::move(pipe), std::move(head), dh));
   // bundle tail and sinks (to gather all output signals)
   auto outputs = find_sinks(plan);
+  auto has_sinks = not outputs.empty();
+  auto tail_has_input = std::ranges::any_of(tail, [](const PlanPort& port) {
+    return port.node == PlanPort::input;
+  });
   if (not tail.empty()) {
-    outputs.insert(outputs.begin(), builder.into_single(tail).node);
+    if (has_sinks or tail_has_input) {
+      outputs.insert(outputs.begin(), builder.into_single(tail).node);
+    } else {
+      for (auto t : tail) {
+        outputs.push_back(t.node);
+      }
+    }
   }
   auto output_instances = count_instances(plan, outputs);
-  auto kind
-    = output_instances > 1 ? ChannelKind::GatherSignals : ChannelKind::Direct;
   plan.channels.push_back(PlannedChannel{
     .from = std::move(outputs),
     .to = {PlanPort::output},
-    .kind = kind,
+    .kind = output_instances == 1 ? ChannelKind::Direct
+            : has_sinks           ? ChannelKind::GatherSignals
+                                  : ChannelKind::Gather,
   });
   return plan;
 }
