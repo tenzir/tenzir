@@ -146,6 +146,9 @@ auto ExchangePush::operator()(OperatorMsg<table_slice> msg) -> Task<void> {
       }
     },
     [this](table_slice data) -> Task<void> {
+      if (data.rows() == 0) {
+        co_return;
+      }
       co_await route_data(std::move(data));
     });
 }
@@ -157,9 +160,6 @@ ScatterPush::ScatterPush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes)
 auto ScatterPush::route_data(table_slice data) -> Task<void> {
   // Split the slice across lanes by row, keeping load balanced.
   auto total = static_cast<uint64_t>(data.rows());
-  if (total == 0) {
-    co_return;
-  }
   // `distribute_adaptive` updates `rows_assigned_` in place for the lanes it
   // fills and returns (lane, count) pairs for the non-empty assignments.
   auto assignments = routing::distribute_adaptive(total, rows_assigned_);
@@ -218,9 +218,6 @@ ShufflePush::ShufflePush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes,
 }
 
 auto ShufflePush::route_data(table_slice data) -> Task<void> {
-  if (data.rows() == 0) {
-    co_return;
-  }
   auto values = eval(key_, data, *dh_);
   TENZIR_ASSERT(values.length() == detail::narrow<int64_t>(data.rows()));
   auto jobs = static_cast<uint64_t>(lanes_.size());
