@@ -746,7 +746,7 @@ auto derive_channel_kind(const ir::PlannedOperator& up,
   if (up.output.is<chunk_ptr>()) {
     return ir::ChannelKind::Bytes;
   }
-  if (not down.partition_keys.empty()) {
+  if (not down.partition_keys.empty() and down.parallelism > 1) {
     return ir::ChannelKind::Shuffle;
   }
   if (up.parallelism == down.parallelism) {
@@ -898,6 +898,17 @@ auto ir::PlanBuilder::add_channel(std::vector<size_t> from,
 auto ir::PlanBuilder::add_channel(const PlanPorts& from, size_t to) -> void {
   TENZIR_ASSERT(not from.empty());
   if (from[0].node == PlanPort::input) {
+    auto to_op = plan_.operators[to];
+    if (to_op.parallelism > 1 or not to_op.partition_keys.empty()) {
+      // When {input} should be scattered/shuffled, we have to inject an
+      // identity operator, because the input channel must `Direct`.
+      auto identity = add_identity(to_op.input);
+      add_channel({from[0].node}, {identity}, ChannelKind::Direct);
+      auto kind
+        = derive_channel_kind(plan_.operators[identity], plan_.operators[to]);
+      add_channel({identity}, {to}, kind);
+      return;
+    }
     add_channel({from[0].node}, {to}, ChannelKind::Direct);
     return;
   }
@@ -989,7 +1000,13 @@ auto make_identity_ir() -> Box<ir::Operator> {
 auto ir::PlanBuilder::into_single(const PlanPorts& from) -> PlanPort {
   TENZIR_ASSERT(not from.empty());
   if (from.size() == 1 and from.front().node != PlanPort::input) {
-    return from.front();
+    auto const& up = plan_.operators[from.front().node];
+    // A single parallelized port still has `parallelism` runtime instances,
+    // so collapse it through an identity to expose a proper single-instance
+    // output to the downstream boundary (e.g. the plan's `{output}`).
+    if (up.parallelism <= 1) {
+      return from.front();
+    }
   }
   // Collapse the frontier (a lone external source, or multiple upstreams) into
   // a single node by routing it through an identity operator.
