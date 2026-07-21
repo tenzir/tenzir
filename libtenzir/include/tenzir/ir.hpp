@@ -310,6 +310,14 @@ struct Plan {
   auto empty() const -> bool {
     return operators.empty();
   }
+
+  /// Compute the planned operators strictly upstream of `op` that feed
+  /// exclusively into its branch. A set bit `p` means operator `p` can be
+  /// safely stopped when `op` no longer wants input. Backward traversal stops
+  /// at any fan-out operator (out-degree > 1): such an operator has other live
+  /// downstream consumers and must not be stopped, and neither may anything
+  /// beyond it. The result excludes `op` itself.
+  auto upstream_branch(size_t op) const -> std::vector<bool>;
 };
 
 /// Render a debug text description of a `Plan`.
