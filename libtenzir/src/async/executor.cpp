@@ -1809,6 +1809,9 @@ private:
     auto make_events = [&](ChannelId cid) {
       return exec_ctx_.make_channel<table_slice>(std::move(cid));
     };
+    auto make_routing_events = [&](ChannelId cid) {
+      return exec_ctx_.make_routing_channel(std::move(cid));
+    };
     switch (plan.kind) {
       case ir::ChannelKind::Direct:
         wire_direct(make_events);
@@ -1832,7 +1835,8 @@ private:
         auto const& from = instances_of[plan.from[0]];
         TENZIR_ASSERT(from.size() == 1);
         auto id = id_.op(plan.from[0]).to(id_.op(plan.to[0]));
-        auto [push, pulls] = make_broadcast(plan.to.size(), make_events, id);
+        auto [push, pulls]
+          = make_broadcast(plan.to.size(), make_routing_events, id);
         outputs[from[0]] = AnyOpPush{std::move(push)};
         for (auto i = size_t{0}; i < plan.to.size(); ++i) {
           auto const& to = instances_of[plan.to[i]];
@@ -1861,7 +1865,7 @@ private:
         auto id = (plan.to[0] == ir::PlanPort::output)
                     ? ChannelId::last(id_.op(plan.from[0]))
                     : id_.op(plan.from[0]).to(id_.op(plan.to[0]));
-        auto parts = make_gather(lanes.size(), make_events, id);
+        auto parts = make_gather(lanes.size(), make_routing_events, id);
         for (auto i = size_t{0}; i < lanes.size(); ++i) {
           outputs[lanes[i]] = AnyOpPush{std::move(parts.lanes[i])};
         }
@@ -1900,7 +1904,7 @@ private:
         auto const& to = instances_of[plan.to[0]];
         TENZIR_ASSERT(not to.empty());
         auto id = id_.op(plan.from[0]).to(id_.op(plan.to[0]));
-        auto [push, pulls] = make_scatter(to.size(), make_events, id);
+        auto [push, pulls] = make_scatter(to.size(), make_routing_events, id);
         outputs[from[0]] = AnyOpPush{std::move(push)};
         for (auto i = size_t{0}; i < to.size(); ++i) {
           inputs[to[i]] = AnyOpPull{std::move(pulls[i])};
@@ -1968,9 +1972,9 @@ private:
         auto per_downstream_pushes
           = std::vector<std::vector<Box<Push<OperatorMsg<table_slice>>>>>(m);
         for (auto j = size_t{0}; j < m; ++j) {
-          auto parts = make_gather(
-            n, make_events,
-            ChannelId{fmt::format("{}#shuffle-gather/{}", id.value, j)});
+          // All per-downstream gathers of one shuffle share the exchange ID so
+          // their stats collate into a single metric.
+          auto parts = make_gather(n, make_routing_events, id);
           per_downstream_pushes[j] = std::move(parts.lanes);
           inputs[to[j]] = AnyOpPull{std::move(parts.pull)};
           add_task(std::move(parts.merger));
