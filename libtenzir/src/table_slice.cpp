@@ -328,9 +328,16 @@ auto upgrade_arrays(const std::shared_ptr<arrow::Array>& array)
     case arrow::Type::LIST: {
       auto list_array = std::static_pointer_cast<arrow::ListArray>(array);
       auto values = upgrade_arrays(list_array->values());
+      if (values == list_array->values()) {
+        return array;
+      }
+      auto value_field
+        = list_array->list_type()->value_field()->WithType(values->type());
+      auto arrow_list_type = arrow::list(std::move(value_field));
       return check(arrow::ListArray::FromArrays(
-        *list_array->offsets(), *values, arrow_memory_pool(),
-        list_array->null_bitmap(), list_array->data()->null_count));
+        std::move(arrow_list_type), *list_array->offsets(), *values,
+        arrow_memory_pool(), list_array->null_bitmap(),
+        list_array->data()->null_count));
     }
     default: {
       if (auto target = target_type_for(*array->type())) {
@@ -625,7 +632,7 @@ auto table_slice::try_from(
     return std::unexpected(valid.error());
   }
   auto valid_schema
-    = create_schema_if_not_exist(record_batch, std::move(schema));
+    = create_schema_if_not_exist(converted_batch, std::move(schema));
   auto builder = flatbuffers::FlatBufferBuilder{};
   return create_table_slice(converted_batch, builder, std::move(valid_schema),
                             serialize);
