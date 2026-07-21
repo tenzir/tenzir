@@ -9,12 +9,14 @@
 #pragma once
 
 #include "tenzir/async/executor.hpp"
+#include "tenzir/async/fused.hpp"
 #include "tenzir/async/push_pull.hpp"
 #include "tenzir/async/signal.hpp"
 #include "tenzir/box.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/multi_series.hpp"
 #include "tenzir/table_slice.hpp"
+#include "tenzir/tql2/ast.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -23,7 +25,7 @@
 #include <vector>
 
 /// Routing policies shared between the explicit `parallel` operator and the
-/// implicit parallelization exchanges (scatter/gather).
+/// implicit parallelization channels.
 namespace tenzir::routing {
 
 /// The maximum allowed ratio between the most- and least-loaded worker for a
@@ -95,38 +97,78 @@ auto hash_runs(const multi_series& values, uint64_t jobs)
 
 namespace tenzir {
 
+/// Shared fan-out base for the exchange push endpoints.
+///
+/// Implements the common message loop: signals are broadcast to every lane
+/// sequentially (blocking on a slow lane is correct—it applies backpressure),
+/// and non-empty data slices are forwarded to the derived `route_data` policy.
+class ExchangePush : public Push<OperatorMsg<table_slice>> {
+public:
+  auto operator()(OperatorMsg<table_slice> msg) -> Task<void> final;
+
+protected:
+  explicit ExchangePush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes);
+
+  /// Routes a data slice across `lanes_`.
+  virtual auto route_data(table_slice data) -> Task<void> = 0;
+
+  std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes_;
+};
+
 /// The fan-out endpoint of a scatter exchange.
 ///
 /// A `ScatterPush` is held by the single upstream operator and forwards each
-/// `table_slice` to one or more of its `n` downstream lanes:
-///
-/// - Data is split across lanes by row via `routing::distribute_adaptive`,
-///   keeping total rows assigned as balanced as possible.
-/// - Signals are broadcast to every open lane, sequentially. Blocking on a slow
-///   lane is correct: it applies backpressure.
-///
-/// The control plane may retire a lane with `close_lane` once its downstream
-/// finished (e.g. `head`); the scatter then stops routing data to it while
-/// still forwarding signals to the remaining lanes.
-class ScatterPush final : public Push<OperatorMsg<table_slice>> {
+/// `table_slice` to one or more of its `n` downstream lanes. Data is split
+/// across lanes by row via `routing::distribute_adaptive`, keeping total rows
+/// assigned as balanced as possible.
+class ScatterPush final : public ExchangePush {
 public:
   explicit ScatterPush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes);
 
-  auto operator()(OperatorMsg<table_slice> msg) -> Task<void> override;
+private:
+  auto route_data(table_slice data) -> Task<void> override;
 
-  /// Retires a lane so no further data is routed to it. Signals are still
-  /// broadcast to open lanes only.
-  auto close_lane(size_t lane) -> void;
+  std::vector<uint64_t> rows_assigned_;
+};
 
-  /// Returns the number of lanes still receiving data.
-  auto open_lanes() const -> size_t;
+/// The fan-out endpoint of a broadcast exchange.
+///
+/// A `BroadcastPush` is held by the single upstream operator and broadcasts
+/// each message to its `n` downstream lanes. Unlike `ScatterPush`, which
+/// partitions rows so each row lands on exactly one lane, a broadcast sends a
+/// copy of the *whole* slice to every lane. `table_slice` copies are cheap
+/// (ref-counted Arrow buffers).
+class BroadcastPush final : public ExchangePush {
+public:
+  explicit BroadcastPush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes);
 
 private:
-  auto route_data(table_slice data) -> Task<void>;
+  auto route_data(table_slice data) -> Task<void> override;
+};
 
-  std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes_;
-  std::vector<bool> open_;
-  std::vector<uint64_t> rows_assigned_;
+/// The fan-out endpoint of a shuffle exchange.
+///
+/// A `ShufflePush` is held by a single upstream instance and hash-partitions
+/// each `table_slice` across its `n` downstream lanes based on a set of
+/// partition-key expressions. The keys are evaluated once per incoming slice,
+/// producing a `multi_series`. `routing::hash_runs` splits the slice into
+/// maximal contiguous runs of rows that map to the same bucket, and each run
+/// is forwarded as a subslice to `lanes_[bucket]`.
+class ShufflePush final : public ExchangePush {
+public:
+  /// Construct a shuffle fan-out.
+  ///
+  /// If `keys` has more than one element, the entries are wrapped into a
+  /// single `ast::record` expression so that a single evaluation per slice
+  /// yields a composite key. `dh` must outlive the `ShufflePush`.
+  ShufflePush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes,
+              std::vector<ast::expression> keys, diagnostic_handler& dh);
+
+private:
+  auto route_data(table_slice data) -> Task<void> override;
+
+  ast::expression key_;
+  diagnostic_handler* dh_;
 };
 
 /// Drives the fan-in of a gather exchange.
@@ -147,6 +189,59 @@ private:
 auto run_gather(std::vector<Box<Pull<OperatorMsg<table_slice>>>> lanes,
                 Box<Push<OperatorMsg<table_slice>>> out) -> Task<void>;
 
+/// Forwards a single typed `main` stream to `out` while draining `aux` void
+/// lanes (the outputs of side-effect sinks), holding the output's completion
+/// back until every lane finished.
+///
+/// Per-signal policy:
+///
+/// - data: forwarded from `main` as received.
+/// - `EndOfData` (only on a non-void `main`): a single aligned end-of-data is
+///   emitted downstream once `main` ended and all `aux` lanes drained.
+/// - lane drained (`None`): counted; when all lanes drained the loop stops and
+///   `out` is dropped, so the downstream observes closure only after every
+///   side-effect sink completed.
+/// - `Checkpoint`: aligned barrier, not yet implemented.
+///
+/// `aux` lanes are always `void`: a void channel never carries data or
+/// `EndOfData`, so an aux lane signals completion purely by draining.
+template <class T>
+auto run_gather_signals(Box<Pull<OperatorMsg<T>>> main,
+                        std::vector<Box<Pull<OperatorMsg<void>>>> aux,
+                        Box<Push<OperatorMsg<T>>> out) -> Task<void>;
+
+extern template auto
+  run_gather_signals(Box<Pull<OperatorMsg<void>>>,
+                     std::vector<Box<Pull<OperatorMsg<void>>>>,
+                     Box<Push<OperatorMsg<void>>>) -> Task<void>;
+extern template auto
+  run_gather_signals(Box<Pull<OperatorMsg<table_slice>>>,
+                     std::vector<Box<Pull<OperatorMsg<void>>>>,
+                     Box<Push<OperatorMsg<table_slice>>>) -> Task<void>;
+extern template auto
+  run_gather_signals(Box<Pull<OperatorMsg<chunk_ptr>>>,
+                     std::vector<Box<Pull<OperatorMsg<void>>>>,
+                     Box<Push<OperatorMsg<chunk_ptr>>>) -> Task<void>;
+
+/// Builds `lanes` internal channels, returning the per-lane pushes and pulls
+/// as parallel vectors. `make_channel` produces one channel per lane, e.g.
+/// `ExecCtx::make_channel<table_slice>`.
+template <class Factory>
+auto make_lane_channels(size_t lanes, Factory& make_channel, ChannelId id)
+  -> std::pair<std::vector<Box<Push<OperatorMsg<table_slice>>>>,
+               std::vector<Box<Pull<OperatorMsg<table_slice>>>>> {
+  auto lane_pushes = std::vector<Box<Push<OperatorMsg<table_slice>>>>{};
+  auto lane_pulls = std::vector<Box<Pull<OperatorMsg<table_slice>>>>{};
+  lane_pushes.reserve(lanes);
+  lane_pulls.reserve(lanes);
+  for (auto lane = size_t{0}; lane < lanes; ++lane) {
+    auto pair = make_channel(id);
+    lane_pushes.push_back(std::move(pair.push));
+    lane_pulls.push_back(std::move(pair.pull));
+  }
+  return {std::move(lane_pushes), std::move(lane_pulls)};
+}
+
 /// Creates a scatter exchange with `lanes` downstream lanes.
 ///
 /// Returns the single upstream `Push` (a `ScatterPush`) and the `lanes` lane
@@ -157,19 +252,26 @@ auto make_scatter(size_t lanes, Factory make_channel, ChannelId id)
   -> std::pair<Box<Push<OperatorMsg<table_slice>>>,
                std::vector<Box<Pull<OperatorMsg<table_slice>>>>> {
   TENZIR_ASSERT(lanes > 0);
-  auto lane_pushes = std::vector<Box<Push<OperatorMsg<table_slice>>>>{};
-  auto lane_pulls = std::vector<Box<Pull<OperatorMsg<table_slice>>>>{};
-  lane_pushes.reserve(lanes);
-  lane_pulls.reserve(lanes);
-  for (auto lane = size_t{0}; lane < lanes; ++lane) {
-    auto pair
-      = make_channel(ChannelId{fmt::format("{}#scatter/{}", id.value, lane)});
-    lane_pushes.push_back(std::move(pair.push));
-    lane_pulls.push_back(std::move(pair.pull));
-  }
+  auto [lane_pushes, lane_pulls] = make_lane_channels(lanes, make_channel, id);
   auto scatter
     = Box<Push<OperatorMsg<table_slice>>>{ScatterPush{std::move(lane_pushes)}};
   return {std::move(scatter), std::move(lane_pulls)};
+}
+
+/// Creates a broadcast exchange with `lanes` downstream lanes.
+///
+/// Returns the single upstream `Push` (a `BroadcastPush`) and the `lanes` lane
+/// `Pull`s. `make_channel` produces one internal SPSC channel per lane, e.g.
+/// `ExecCtx::make_channel<table_slice>`.
+template <class Factory>
+auto make_broadcast(size_t lanes, Factory make_channel, ChannelId id)
+  -> std::pair<Box<Push<OperatorMsg<table_slice>>>,
+               std::vector<Box<Pull<OperatorMsg<table_slice>>>>> {
+  TENZIR_ASSERT(lanes > 0);
+  auto [lane_pushes, lane_pulls] = make_lane_channels(lanes, make_channel, id);
+  auto broadcast = Box<Push<OperatorMsg<table_slice>>>{
+    BroadcastPush{std::move(lane_pushes)}};
+  return {std::move(broadcast), std::move(lane_pulls)};
 }
 
 /// The parts of a gather exchange with `lanes` upstream lanes.
@@ -182,26 +284,44 @@ struct GatherParts {
   Task<void> merger;
 };
 
+/// Creates a shuffle exchange with `lanes` downstream lanes.
+///
+/// Returns the single upstream `Push` (a `ShufflePush`) and the `lanes` lane
+/// `Pull`s. `make_channel` produces one internal SPSC channel per lane, e.g.
+/// `ExecCtx::make_channel<table_slice>`. `keys` are the partition-key
+/// expressions evaluated against each incoming slice; `dh` must outlive the
+/// returned `Push`.
+template <class Factory>
+auto make_shuffle(size_t lanes, std::vector<ast::expression> keys,
+                  diagnostic_handler& dh, Factory make_channel, ChannelId id)
+  -> std::pair<Box<Push<OperatorMsg<table_slice>>>,
+               std::vector<Box<Pull<OperatorMsg<table_slice>>>>> {
+  TENZIR_ASSERT(lanes > 0);
+  auto [lane_pushes, lane_pulls] = make_lane_channels(lanes, make_channel, id);
+  auto shuffle = Box<Push<OperatorMsg<table_slice>>>{
+    ShufflePush{std::move(lane_pushes), std::move(keys), dh}};
+  return {std::move(shuffle), std::move(lane_pulls)};
+}
+
 /// Creates a gather exchange with `lanes` upstream lanes.
 ///
 /// The caller is responsible for spawning `GatherParts::merger` on a suitable
-/// scope. `make_channel` produces the internal SPSC channels, e.g.
-/// `ExecCtx::make_channel<table_slice>`.
+/// scope. `make_channel` produces the profiled per-lane fan-in channels that
+/// share `id`, e.g. `ExecCtx::make_routing_channel`.
+///
+/// The post-merge output channel that feeds the downstream operator is created
+/// internally as a plain, unprofiled fused channel rather than through
+/// `make_channel`. If it shared the lanes' `id`, every gathered row would be
+/// metered twice (once on its lane, once on the merge output), double-counting
+/// the exchange's throughput and adding a spurious per-lane limit to its
+/// reported input capacity. Keeping it out of the profiled factory lets all
+/// lanes collate into a single accurate metric under `id`.
 template <class Factory>
 auto make_gather(size_t lanes, Factory make_channel, ChannelId id)
   -> GatherParts {
   TENZIR_ASSERT(lanes > 0);
-  auto lane_pushes = std::vector<Box<Push<OperatorMsg<table_slice>>>>{};
-  auto lane_pulls = std::vector<Box<Pull<OperatorMsg<table_slice>>>>{};
-  lane_pushes.reserve(lanes);
-  lane_pulls.reserve(lanes);
-  for (auto lane = size_t{0}; lane < lanes; ++lane) {
-    auto pair
-      = make_channel(ChannelId{fmt::format("{}#gather/{}", id.value, lane)});
-    lane_pushes.push_back(std::move(pair.push));
-    lane_pulls.push_back(std::move(pair.pull));
-  }
-  auto out = make_channel(ChannelId{fmt::format("{}#gather/out", id.value)});
+  auto [lane_pushes, lane_pulls] = make_lane_channels(lanes, make_channel, id);
+  auto out = fused_channel<OperatorMsg<table_slice>>().into_push_pull();
   return GatherParts{
     .lanes = std::move(lane_pushes),
     .pull = std::move(out.pull),

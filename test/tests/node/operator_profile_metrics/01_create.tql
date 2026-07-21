@@ -1,2 +1,5 @@
-api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000001", definition: "//neo\nevery 1s { version }\nhead 3\nwrite_json\ndiscard"}
+// The parallelizable `where` operator runs with multiple instances, wiring a
+// scatter in front of it and a gather behind it. This exercises the combined
+// routing channel metrics alongside the regular operator profile metrics.
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000001", definition: "//neo\nevery 1s { version }\nwhere true\nhead 3\nwrite_json\ndiscard"}
 discard

@@ -3,7 +3,7 @@ every 1s {
   where pipeline_id == "00000000-0000-0000-0000-000000000001"
   // Use head's events_out as the completion condition: the pipeline
   // emits exactly 3 events, and head always outputs exactly 3.
-  head_events_out = events_out if operator_id == "0/1" else 0
+  head_events_out = events_out if name == "head" else 0
   summarize \
     timestamps=distinct(timestamp),
     operator_ids=distinct(operator_id),
@@ -15,16 +15,25 @@ every 1s {
     total_batches_out=sum(batches_out),
     total_signals_in=sum(signals_in),
     total_signals_out=sum(signals_out),
-    total_task_count=sum(task_count)
+    total_task_count=sum(task_count),
+    // The parallelized `where` sits behind a scatter of routing channels; its
+    // combined input capacity is the per-lane limit times the lane count, so
+    // it is a non-zero multiple of 1 MiB.
+    where_input_capacity=max(input_capacity if name == "where" else 0)
   where total_head_events_out == 3
 }
 head 1
+// The lanes of each routing exchange collate into a single metric attributed
+// to the real operator, so no operator id carries a routing suffix like
+// "#scatter/0". The sorted id list in the reference output confirms this.
 operator_ids = sort(operator_ids)
 unaligned = timestamps.map(t => t - t.floor(1s)).where(d => d != 0ns)
 select \
   operator_ids,
   unaligned,
   total_head_events_out,
+  where_capacity_is_mib_multiple=(where_input_capacity > 0 and \
+    (where_input_capacity / 1Mi).floor() * 1Mi == where_input_capacity),
   has_cpu=(total_cpu > 0.0),
   has_bytes_in=(total_bytes_in > 0),
   has_bytes_out=(total_bytes_out > 0),

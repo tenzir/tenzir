@@ -11,7 +11,9 @@
 #include "tenzir/async/select_set.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/panic.hpp"
+#include "tenzir/tql2/eval.hpp"
 
 #include <algorithm>
 #include <functional>
@@ -98,12 +100,19 @@ auto hash_runs(const multi_series& values, uint64_t jobs)
   TENZIR_ASSERT(jobs > 0);
   auto result = std::vector<hash_run>{};
   auto num_rows = values.length();
+  // Hash every row exactly once up front. Deriving runs from a precomputed
+  // bucket vector avoids re-hashing each run boundary (once as a run's `end`
+  // candidate and again as the next run's `begin`).
+  auto buckets = std::vector<uint64_t>{};
+  buckets.reserve(static_cast<size_t>(num_rows));
+  for (auto row = int64_t{0}; row < num_rows; ++row) {
+    buckets.push_back(std::hash<data_view3>{}(values.view3_at(row)) % jobs);
+  }
   auto begin = int64_t{0};
   while (begin < num_rows) {
-    auto bucket = std::hash<data_view3>{}(values.view3_at(begin)) % jobs;
+    auto bucket = buckets[begin];
     auto end = begin + 1;
-    while (end < num_rows
-           and std::hash<data_view3>{}(values.view3_at(end)) % jobs == bucket) {
+    while (end < num_rows and buckets[end] == bucket) {
       ++end;
     }
     result.push_back({bucket, begin, end});
@@ -116,14 +125,13 @@ auto hash_runs(const multi_series& values, uint64_t jobs)
 
 namespace tenzir {
 
-ScatterPush::ScatterPush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes)
-  : lanes_{std::move(lanes)},
-    open_(lanes_.size(), true),
-    rows_assigned_(lanes_.size(), 0) {
+ExchangePush::ExchangePush(
+  std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes)
+  : lanes_{std::move(lanes)} {
   TENZIR_ASSERT(not lanes_.empty());
 }
 
-auto ScatterPush::operator()(OperatorMsg<table_slice> msg) -> Task<void> {
+auto ExchangePush::operator()(OperatorMsg<table_slice> msg) -> Task<void> {
   // Note the `co_await`: `operator()` must itself be a coroutine so the
   // handler lambda temporaries created by `co_match` stay alive across the
   // suspension. A plain `return co_match(...)` would destroy them at the end
@@ -132,58 +140,90 @@ auto ScatterPush::operator()(OperatorMsg<table_slice> msg) -> Task<void> {
   co_await co_match(
     std::move(msg),
     [this](Signal signal) -> Task<void> {
-      // Broadcast signals to every open lane, sequentially.
-      for (auto i = size_t{0}; i < lanes_.size(); ++i) {
-        if (open_[i]) {
-          co_await (*lanes_[i])(OperatorMsg<table_slice>{signal});
-        }
+      // Broadcast signals to every lane, sequentially.
+      for (auto& lane : lanes_) {
+        co_await (*lane)(OperatorMsg<table_slice>{signal});
       }
     },
     [this](table_slice data) -> Task<void> {
+      if (data.rows() == 0) {
+        co_return;
+      }
       co_await route_data(std::move(data));
     });
 }
 
-auto ScatterPush::close_lane(size_t lane) -> void {
-  TENZIR_ASSERT(lane < open_.size());
-  open_[lane] = false;
-}
-
-auto ScatterPush::open_lanes() const -> size_t {
-  return std::ranges::count(open_, true);
+ScatterPush::ScatterPush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes)
+  : ExchangePush{std::move(lanes)}, rows_assigned_(lanes_.size(), 0) {
 }
 
 auto ScatterPush::route_data(table_slice data) -> Task<void> {
-  // Split the slice across open lanes by row, keeping load balanced.
+  // Split the slice across lanes by row, keeping load balanced.
   auto total = static_cast<uint64_t>(data.rows());
-  if (total == 0) {
-    co_return;
-  }
-  // Distribute across open lanes only. Retired lanes are excluded from the
-  // load vector entirely, so they neither receive rows nor skew the
-  // fairness check (a pinned sentinel would reject every `k < n`, forcing
-  // needless fragmentation across all open lanes).
-  auto open_lane_ids = std::vector<size_t>{};
-  auto open_loads = std::vector<uint64_t>{};
-  for (auto i = size_t{0}; i < open_.size(); ++i) {
-    if (open_[i]) {
-      open_lane_ids.push_back(i);
-      open_loads.push_back(rows_assigned_[i]);
-    }
-  }
-  if (open_lane_ids.empty()) {
-    panic("scatter has no open lane to route to");
-  }
-  // `distribute_adaptive` updates `open_loads` in place for the lanes it
-  // fills; fold those back into the real per-lane load vector.
-  auto assignments = routing::distribute_adaptive(total, open_loads);
+  // `distribute_adaptive` updates `rows_assigned_` in place for the lanes it
+  // fills and returns (lane, count) pairs for the non-empty assignments.
+  auto assignments = routing::distribute_adaptive(total, rows_assigned_);
   auto offset = size_t{0};
-  for (auto [compact, count] : assignments) {
-    auto lane = open_lane_ids[compact];
-    rows_assigned_[lane] = open_loads[compact];
+  for (auto [lane, count] : assignments) {
     auto slice = subslice(data, offset, offset + count);
     offset += count;
     co_await (*lanes_[lane])(OperatorMsg<table_slice>{std::move(slice)});
+  }
+}
+
+BroadcastPush::BroadcastPush(
+  std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes)
+  : ExchangePush{std::move(lanes)} {
+}
+
+auto BroadcastPush::route_data(table_slice data) -> Task<void> {
+  // Broadcast a copy of the whole slice to every lane. Unlike scatter, no
+  // partitioning happens: each lane receives all rows. Blocking on a slow
+  // lane applies backpressure to the upstream.
+  for (auto& lane : lanes_) {
+    co_await (*lane)(OperatorMsg<table_slice>{data});
+  }
+}
+
+namespace {
+
+/// Wraps `keys` into a single expression suitable for one-shot evaluation.
+///
+/// A single key is used as-is. Multiple keys are combined into an
+/// `ast::record` so that hashing a row over the composite is a single
+/// `hash<data_view3>` call in `hash_runs`.
+auto combine_keys(std::vector<ast::expression> keys) -> ast::expression {
+  TENZIR_ASSERT(not keys.empty());
+  if (keys.size() == 1) {
+    return std::move(keys.front());
+  }
+  auto items = std::vector<ast::record::item>{};
+  items.reserve(keys.size());
+  for (auto i = size_t{0}; i < keys.size(); ++i) {
+    auto name = ast::identifier{fmt::format("{}", i), location::unknown};
+    items.emplace_back(ast::record::field{std::move(name), std::move(keys[i])});
+  }
+  return ast::expression{
+    ast::record{location::unknown, std::move(items), location::unknown}};
+}
+
+} // namespace
+
+ShufflePush::ShufflePush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes,
+                         std::vector<ast::expression> keys,
+                         diagnostic_handler& dh)
+  : ExchangePush{std::move(lanes)},
+    key_{combine_keys(std::move(keys))},
+    dh_{&dh} {
+}
+
+auto ShufflePush::route_data(table_slice data) -> Task<void> {
+  auto values = eval(key_, data, *dh_);
+  TENZIR_ASSERT(values.length() == detail::narrow<int64_t>(data.rows()));
+  auto jobs = static_cast<uint64_t>(lanes_.size());
+  for (auto [bucket, begin, end] : routing::hash_runs(values, jobs)) {
+    auto slice = subslice(data, begin, end);
+    co_await (*lanes_[bucket])(OperatorMsg<table_slice>{std::move(slice)});
   }
 }
 
@@ -251,5 +291,135 @@ auto run_gather(std::vector<Box<Pull<OperatorMsg<table_slice>>>> lanes,
     }
   });
 }
+
+template <class T>
+auto run_gather_signals(Box<Pull<OperatorMsg<T>>> main,
+                        std::vector<Box<Pull<OperatorMsg<void>>>> aux,
+                        Box<Push<OperatorMsg<T>>> out) -> Task<void> {
+  struct LaneMsg {
+    size_t lane;                     // 0 = main, i>0 = aux[i - 1]
+    Option<OperatorMsg<T>> main{};   // valid iff lane == 0
+    Option<OperatorMsg<void>> aux{}; // valid iff lane != 0
+  };
+  const auto total = size_t{1} + aux.size();
+  auto drained = size_t{0};
+  auto aux_drained = size_t{0};
+  auto main_ended = false;
+  auto emitted_eod = false;
+  auto set = SelectSet<LaneMsg>{};
+  co_await set.activate([&]() -> Task<void> {
+    auto arm_main = [&] {
+      set.add([&main]() -> Task<LaneMsg> {
+        co_return LaneMsg{.lane = 0, .main = co_await (*main)()};
+      });
+    };
+    auto arm_aux = [&](size_t i) {
+      set.add([&aux, i]() -> Task<LaneMsg> {
+        co_return LaneMsg{.lane = i + 1, .aux = co_await (*aux[i])()};
+      });
+    };
+    // Emit the single aligned end-of-data once the main stream ended and all
+    // aux sinks drained. No-op for a void output (void carries no EndOfData).
+    auto maybe_emit = [&]() -> Task<void> {
+      if constexpr (not std::is_void_v<T>) {
+        if (not emitted_eod and main_ended and aux_drained == aux.size()) {
+          co_await (*out)(OperatorMsg<T>{Signal{EndOfData{}}});
+          emitted_eod = true;
+        }
+      }
+      co_return;
+    };
+    arm_main();
+    for (auto i = size_t{0}; i < aux.size(); ++i) {
+      arm_aux(i);
+    }
+    while (auto next = co_await set.next([](const LaneMsg&) {
+      return true;
+    })) {
+      if (next->lane == 0) {
+        if (not next->main) {
+          // The main lane drained; treat it as ended in case it closed without
+          // an explicit end-of-data.
+          ++drained;
+          main_ended = true;
+          co_await maybe_emit();
+          if (drained == total) {
+            break;
+          }
+          continue;
+        }
+        if constexpr (std::is_void_v<T>) {
+          co_await co_match(std::move(*next->main),
+                            [](Signal signal) -> Task<void> {
+                              co_await co_match(
+                                std::move(signal),
+                                [](EndOfData) -> Task<void> {
+                                  co_return;
+                                },
+                                [](Checkpoint) -> Task<void> {
+                                  TENZIR_TODO();
+                                  co_return;
+                                });
+                            });
+        } else {
+          co_await co_match(
+            std::move(*next->main),
+            [&](T data) -> Task<void> {
+              co_await (*out)(OperatorMsg<T>{std::move(data)});
+            },
+            [&](Signal signal) -> Task<void> {
+              co_await co_match(
+                std::move(signal),
+                [&](EndOfData) -> Task<void> {
+                  main_ended = true;
+                  co_await maybe_emit();
+                },
+                [](Checkpoint) -> Task<void> {
+                  TENZIR_TODO();
+                  co_return;
+                });
+            });
+        }
+        arm_main();
+      } else {
+        const auto i = next->lane - 1;
+        if (not next->aux) {
+          ++drained;
+          ++aux_drained;
+          co_await maybe_emit();
+          if (drained == total) {
+            break;
+          }
+          continue;
+        }
+        co_await co_match(std::move(*next->aux),
+                          [](Signal signal) -> Task<void> {
+                            co_await co_match(
+                              std::move(signal),
+                              [](EndOfData) -> Task<void> {
+                                co_return;
+                              },
+                              [](Checkpoint) -> Task<void> {
+                                TENZIR_TODO();
+                                co_return;
+                              });
+                          });
+        arm_aux(i);
+      }
+    }
+  });
+}
+
+template auto run_gather_signals(Box<Pull<OperatorMsg<void>>>,
+                                 std::vector<Box<Pull<OperatorMsg<void>>>>,
+                                 Box<Push<OperatorMsg<void>>>) -> Task<void>;
+template auto run_gather_signals(Box<Pull<OperatorMsg<table_slice>>>,
+                                 std::vector<Box<Pull<OperatorMsg<void>>>>,
+                                 Box<Push<OperatorMsg<table_slice>>>)
+  -> Task<void>;
+template auto run_gather_signals(Box<Pull<OperatorMsg<chunk_ptr>>>,
+                                 std::vector<Box<Pull<OperatorMsg<void>>>>,
+                                 Box<Push<OperatorMsg<chunk_ptr>>>)
+  -> Task<void>;
 
 } // namespace tenzir
