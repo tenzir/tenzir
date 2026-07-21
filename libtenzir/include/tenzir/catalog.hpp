@@ -74,6 +74,15 @@ public:
   /// Erase this partition from the catalog.
   void erase(const uuid& partition);
 
+  /// Quarantines this partition: moves its store file aside into a
+  /// "quarantined" directory, deletes its other on-disk files, and erases it
+  /// from the catalog.
+  /// @param partition The partition to quarantine.
+  /// @param error The rendered error that triggered the quarantine, kept for
+  /// logging.
+  auto erase_and_extract(const uuid& partition, std::string error)
+    -> caf::result<atom::done>;
+
   /// Retrieves the list of candidate partition IDs for a given expression.
   /// @param expr The expression to lookup.
   /// @returns A lookup result of candidate partitions categorized by type.
@@ -90,6 +99,9 @@ public:
 
   /// A pointer to the parent actor.
   catalog_actor::pointer self = {};
+
+  /// Used to move/erase on-disk partition files during quarantine.
+  filesystem_actor filesystem = {};
 
   /// For each type, maps a partition ID to the synopses for that partition.
   // We mainly iterate over the whole map and return a sorted set, for which
@@ -108,7 +120,9 @@ public:
 /// represents a list of candidate partition IDs that may contain the desired
 /// data. The CATALOG may return false positives but never false negatives.
 /// @param self The actor handle.
-auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
-  -> catalog_actor::behavior_type;
+/// @param filesystem Used to move/erase on-disk partition files during
+/// quarantine.
+auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
+             filesystem_actor filesystem) -> catalog_actor::behavior_type;
 
 } // namespace tenzir

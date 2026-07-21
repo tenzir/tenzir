@@ -764,14 +764,13 @@ struct rebuilder_state {
           }
           // The partition transformer attributes a store decode failure
           // (e.g. a corrupt/truncated store file) to the specific partition
-          // it came from (see `store_error_partition`), and already renames
-          // the offending file aside, so a batch failure never needs to be
-          // treated as "some partition in here is corrupt" — we can drop
-          // exactly the culprit and retry the rest of the batch normally.
-          // The partition is also erased from the catalog/index below so it
-          // is never selected as a rebuild candidate again; without that, a
-          // future run would reselect it and fail again at `chunk::mmap`
-          // instead of the `ec::format_error` this branch handles.
+          // it came from (see `store_error_partition`), so a batch failure
+          // never needs to be treated as "some partition in here is
+          // corrupt" — we can drop exactly the culprit and retry the rest
+          // of the batch normally. The partition is also quarantined by the
+          // catalog below so it is never selected as a rebuild candidate
+          // again; without that, a future run would reselect it and fail
+          // again instead of being skipped.
           if (const auto corrupt = store_error_partition(error)) {
             const auto it
               = std::find_if(retry_partitions.begin(), retry_partitions.end(),
@@ -779,9 +778,6 @@ struct rebuilder_state {
                                return partition.uuid == *corrupt;
                              });
             TENZIR_ASSERT(it != retry_partitions.end());
-            TENZIR_WARN("{} quarantines partition {} after a format "
-                        "error: {}",
-                        *self, *corrupt, error);
             report_quarantine(*corrupt, error);
             ++run->statistics.num_quarantined;
             quarantined_partitions[*corrupt] = fmt::to_string(error);
@@ -789,29 +785,30 @@ struct rebuilder_state {
             run->statistics.num_rebuilding -= num_partitions;
             // Continuing the run (requeueing survivors, picking up more
             // work, or letting a stop request finish this worker) must wait
-            // for the erase to complete: `rp` is one of the promises that
-            // `start()`'s `fan_out_request` awaits before calling `finish()`
-            // and unblocking a new rebuild run. If `rp` resolved before the
-            // erase reached the catalog, a subsequent run's candidate query
-            // could still see (and reselect) the partition we just decided
-            // to quarantine.
-            self->mail(atom::erase_v, *corrupt)
-              .request(index, caf::infinite)
+            // for the quarantine to complete: `rp` is one of the promises
+            // that `start()`'s `fan_out_request` awaits before calling
+            // `finish()` and unblocking a new rebuild run. If `rp` resolved
+            // before the quarantine reached the catalog, a subsequent
+            // run's candidate query could still see (and reselect) the
+            // partition we just decided to quarantine.
+            self
+              ->mail(atom::erase_v, atom::extract_v, *corrupt,
+                     fmt::to_string(error))
+              .request(catalog, caf::infinite)
               .then(
                 [this, corrupt = *corrupt,
                  retry_partitions = std::move(retry_partitions), this_run,
                  rp](atom::done) mutable {
-                  TENZIR_DEBUG("{} erased quarantined partition {} from the "
-                               "catalog",
+                  TENZIR_DEBUG("{} quarantined partition {} in the catalog",
                                *self, corrupt);
                   finish_quarantine(retry_partitions, this_run, rp);
                 },
                 [this, corrupt = *corrupt,
                  retry_partitions = std::move(retry_partitions), this_run,
-                 rp](const caf::error& erase_err) mutable {
-                  TENZIR_WARN("{} failed to erase quarantined partition {} "
-                              "from the catalog: {}",
-                              *self, corrupt, erase_err);
+                 rp](const caf::error& quarantine_err) mutable {
+                  TENZIR_WARN("{} failed to quarantine partition {} in the "
+                              "catalog: {}",
+                              *self, corrupt, quarantine_err);
                   finish_quarantine(retry_partitions, this_run, rp);
                 });
             return;

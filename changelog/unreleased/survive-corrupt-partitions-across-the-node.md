@@ -17,9 +17,11 @@ record batches fail to concatenate — the affected buffer is dropped with an er
 
 A corrupt or truncated partition or store file could also crash a node
 repeatedly and stall reads across the whole node, even though `import` kept
-working. The node now detects such a file, renames it aside by appending
-`.broken` so `rebuild` no longer picks it up again, and continues rebuilding
-all other partitions normally. Each quarantine is logged with the file and
-error, tracked in the rebuilder's status, and reported through a new
+working. The catalog now quarantines such a partition as a single operation:
+it moves the store file into a `quarantined` directory for later inspection,
+deletes the partition's other on-disk files, and removes it from the catalog,
+so `rebuild` no longer picks it up again and continues rebuilding all other
+partitions normally. Each quarantine is logged with the file and error,
+tracked in the rebuilder's status, and reported through a new
 `tenzir.metrics.rebuild_quarantine` event, emitted only when a partition is
 actually quarantined.
