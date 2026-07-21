@@ -2,13 +2,14 @@
   lib,
   stdenv,
   fetchFromGitHub,
-  callPackage,
   cmake,
   ninja,
   arrow-cpp,
+  avro-cpp,
   aws-sdk-cpp-tenzir,
   croaring,
   libcpr,
+  nanoarrow,
   nlohmann_json,
   spdlog,
   curl,
@@ -19,10 +20,6 @@
   lz4,
 }:
 
-let
-  avro-cpp = callPackage ./avro-cpp.nix { };
-  nanoarrow = callPackage ./nanoarrow.nix { };
-in
 stdenv.mkDerivation {
   pname = "iceberg-cpp";
   # Development pin of apache/iceberg-cpp main (D2 in the to_iceberg plan);
@@ -45,6 +42,10 @@ stdenv.mkDerivation {
   buildInputs = [
     curl
     openssl
+    # Only build-time discovery (static Arrow's ORC find modules); not part
+    # of the installed iceberg-config.cmake dependency list.
+    snappy
+    lz4
   ];
 
   # Upstream fixes shared with the bundled CMake fallback:
@@ -66,8 +67,9 @@ stdenv.mkDerivation {
         'set(CMAKE_COMPILE_WARNING_AS_ERROR OFF)'
   '';
 
-  # The static libraries surface all of these through find_dependency() in
-  # the installed iceberg-config.cmake, so downstream consumers need them.
+  # Exactly the ICEBERG_SYSTEM_DEPENDENCIES that the installed
+  # iceberg-config.cmake resolves through find_dependency(); downstream
+  # consumers need these at configure time.
   propagatedBuildInputs = [
     arrow-cpp
     avro-cpp
@@ -78,9 +80,7 @@ stdenv.mkDerivation {
     nlohmann_json
     spdlog
     zlib
-    snappy
     zstd
-    lz4
   ];
 
   cmakeFlags = [
