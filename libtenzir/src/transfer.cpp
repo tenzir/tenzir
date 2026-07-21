@@ -14,6 +14,8 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/proxy_settings.hpp"
 
+#include <boost/url/parse.hpp>
+
 namespace tenzir {
 
 namespace {
@@ -22,10 +24,14 @@ namespace {
 /// `initialize_proxy_settings` mirrors scheme-specific proxies into
 /// `HTTP_PROXY` / `HTTPS_PROXY`; leaving `CURLOPT_PROXY` unset lets libcurl
 /// pick the right proxy again after redirects. `CURLOPT_NOPROXY` gets Tenzir's
-/// effective bypass list, including the implicit loopback entries.
-auto apply_proxy_options(curl::easy& easy) -> caf::error {
+/// effective bypass list, including an unscoped IPv6 literal for scoped targets
+/// that match a CIDR entry.
+auto apply_proxy_options(curl::easy& easy, std::string_view url) -> caf::error {
   auto const& ps = get_proxy_settings();
   auto no_proxy = effective_no_proxy(ps);
+  if (auto parsed = boost::urls::parse_uri(url); parsed) {
+    no_proxy = effective_no_proxy_for_target(parsed->host());
+  }
   if (auto err = to_error(easy.set(CURLOPT_NOPROXY, no_proxy.c_str()));
       err.valid()) {
     return err;
@@ -55,7 +61,7 @@ auto transfer::prepare(http::Request req) -> caf::error {
   if (auto err = to_error(easy.set(CURLOPT_FOLLOWLOCATION, 1)); err.valid()) {
     return err;
   }
-  if (auto err = apply_proxy_options(easy); err.valid()) {
+  if (auto err = apply_proxy_options(easy, req.uri); err.valid()) {
     return err;
   }
   TRY(tls.apply_to(easy, req.uri));
@@ -138,7 +144,7 @@ auto transfer::prepare(std::string url) -> caf::error {
   if (auto err = reset(); err.valid()) {
     return err;
   }
-  if (auto err = apply_proxy_options(easy_); err.valid()) {
+  if (auto err = apply_proxy_options(easy_, url); err.valid()) {
     return err;
   }
   return to_error(easy_.set(CURLOPT_URL, url.c_str()));

@@ -271,6 +271,15 @@ TEST("no-proxy CIDR entries match scoped IPv6 literals") {
   CHECK(bypass_proxy("fe80::1%eth0"));
   CHECK(bypass_proxy("[fe80::1%25eth0]"));
   CHECK(not bypass_proxy("fec0::1%eth0"));
+  CHECK_EQUAL(effective_no_proxy_for_target("fe80::1%eth0"),
+              "localhost,127.0.0.1,127.0.0.0/8,169.254.0.0/16,::1,fe80::/10,"
+              "fe80::/10,fe80::1");
+  CHECK_EQUAL(effective_no_proxy_for_target("[fe80::1%25eth0]"),
+              "localhost,127.0.0.1,127.0.0.0/8,169.254.0.0/16,::1,fe80::/10,"
+              "fe80::/10,fe80::1");
+  CHECK_EQUAL(effective_no_proxy_for_target("fec0::1%eth0"),
+              "localhost,127.0.0.1,127.0.0.0/8,169.254.0.0/16,::1,fe80::/10,"
+              "fe80::/10");
 }
 
 TEST("no-proxy preserves percent-encoded hostnames") {

@@ -407,6 +407,22 @@ auto bypass_proxy(std::string_view host) -> bool {
   return false;
 }
 
+auto effective_no_proxy_for_target(std::string_view host) -> std::string {
+  auto result = effective_no_proxy(get_proxy_settings());
+  if (host.find('%') == std::string_view::npos) {
+    return result;
+  }
+  auto normalized = canonicalize_host(host);
+  auto address = to<ip>(normalized);
+  if (not address or not address->is_v6() or not bypass_proxy(host)) {
+    return result;
+  }
+  // Older libcurl releases do not apply CIDR entries to scoped IPv6 literals.
+  // They do match the unscoped literal, while retaining the scope for dialing.
+  append_no_proxy_entries(result, normalized);
+  return result;
+}
+
 auto proxy_for_target(std::string_view target_scheme, std::string_view host)
   -> Option<proxy_url> {
   auto const& ps = get_proxy_settings();
