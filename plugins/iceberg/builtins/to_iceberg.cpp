@@ -1026,6 +1026,21 @@ private:
           return catalog.load_table(ns, name);
         });
       if (not reloaded) {
+        // The reload is part of the same idempotent conflict recovery as
+        // the evolution commit, so a transient catalog error consumes
+        // another attempt instead of terminating the sink.
+        if (reloaded.error().kind == Error::Kind::transient
+            and attempt < commit_max_attempts) {
+          diagnostic::warning("failed to reload Iceberg table (attempt "
+                              "{}/{}): {}",
+                              attempt, commit_max_attempts,
+                              reloaded.error().message)
+            .primary(args_.operator_location)
+            .emit(ctx.dh());
+          co_await sleep_for(backoff);
+          backoff *= 2;
+          continue;
+        }
         fail(reloaded.error(),
              fmt::format("failed to reload Iceberg table `{}`",
                          args_.table_id.inner),
