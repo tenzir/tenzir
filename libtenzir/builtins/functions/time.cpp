@@ -291,7 +291,10 @@ public:
                 if (parsers::time(arg.GetView(i), result)) {
                   check(b.Append(result.time_since_epoch().count()));
                 } else {
-                  // TODO: Warning.
+                  diagnostic::warning("`time` failed to parse string")
+                    .primary(expr)
+                    .note(fmt::format("tried to convert: {}", arg.GetView(i)))
+                    .emit(ctx);
                   check(b.AppendNull());
                 }
               }
