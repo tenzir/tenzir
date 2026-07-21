@@ -368,6 +368,11 @@ protected:
     return inner_.make_fused_channel<table_slice>(std::move(id));
   }
 
+  auto make_routing_events(ChannelId id)
+    -> PushPull<OperatorMsg<table_slice>> override {
+    return inner_.make_fused_channel<table_slice>(std::move(id));
+  }
+
   auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> override {
     return inner_.make_fused_channel<chunk_ptr>(std::move(id));
   }

@@ -240,8 +240,7 @@ auto make_scatter(size_t lanes, Factory make_channel, ChannelId id)
   lane_pushes.reserve(lanes);
   lane_pulls.reserve(lanes);
   for (auto lane = size_t{0}; lane < lanes; ++lane) {
-    auto pair
-      = make_channel(ChannelId{fmt::format("{}#scatter/{}", id.value, lane)});
+    auto pair = make_channel(id);
     lane_pushes.push_back(std::move(pair.push));
     lane_pulls.push_back(std::move(pair.pull));
   }
@@ -265,8 +264,7 @@ auto make_broadcast(size_t lanes, Factory make_channel, ChannelId id)
   lane_pushes.reserve(lanes);
   lane_pulls.reserve(lanes);
   for (auto lane = size_t{0}; lane < lanes; ++lane) {
-    auto pair
-      = make_channel(ChannelId{fmt::format("{}#broadcast/{}", id.value, lane)});
+    auto pair = make_channel(id);
     lane_pushes.push_back(std::move(pair.push));
     lane_pulls.push_back(std::move(pair.pull));
   }
@@ -303,8 +301,7 @@ auto make_shuffle(size_t lanes, std::vector<ast::expression> keys,
   lane_pushes.reserve(lanes);
   lane_pulls.reserve(lanes);
   for (auto lane = size_t{0}; lane < lanes; ++lane) {
-    auto pair
-      = make_channel(ChannelId{fmt::format("{}#shuffle/{}", id.value, lane)});
+    auto pair = make_channel(id);
     lane_pushes.push_back(std::move(pair.push));
     lane_pulls.push_back(std::move(pair.pull));
   }
@@ -327,12 +324,11 @@ auto make_gather(size_t lanes, Factory make_channel, ChannelId id)
   lane_pushes.reserve(lanes);
   lane_pulls.reserve(lanes);
   for (auto lane = size_t{0}; lane < lanes; ++lane) {
-    auto pair
-      = make_channel(ChannelId{fmt::format("{}#gather/{}", id.value, lane)});
+    auto pair = make_channel(id);
     lane_pushes.push_back(std::move(pair.push));
     lane_pulls.push_back(std::move(pair.pull));
   }
-  auto out = make_channel(ChannelId{fmt::format("{}#gather/out", id.value)});
+  auto out = make_channel(id);
   return GatherParts{
     .lanes = std::move(lane_pushes),
     .pull = std::move(out.pull),
