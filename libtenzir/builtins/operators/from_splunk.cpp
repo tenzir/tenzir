@@ -177,15 +177,25 @@ auto validate_headers(located<data> const& value, diagnostic_handler& dh)
     diagnostic::error("`headers` must be a record").primary(value).emit(dh);
     return failure::promise();
   }
-  for (auto const& [name, _] : *headers) {
+  auto has_authorization = false;
+  for (auto const& [name, header] : *headers) {
+    if (not is<std::string>(header) and not is<secret>(header)) {
+      diagnostic::error("header values must be `string` or `secret`")
+        .primary(value)
+        .emit(dh);
+      return failure::promise();
+    }
     if (detail::ascii_icase_equal(name, "authorization")) {
-      return {};
+      has_authorization = true;
     }
   }
-  diagnostic::error("`headers` must contain an `Authorization` header")
-    .primary(value)
-    .emit(dh);
-  return failure::promise();
+  if (not has_authorization) {
+    diagnostic::error("`headers` must contain an `Authorization` header")
+      .primary(value)
+      .emit(dh);
+    return failure::promise();
+  }
+  return {};
 }
 
 auto extract_messages(record const& envelope) -> std::vector<SplunkMessage> {
