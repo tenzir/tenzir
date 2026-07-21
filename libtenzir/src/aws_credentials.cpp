@@ -47,10 +47,10 @@ auto make_default_aws_credentials_provider_chain()
   config.imdsConfig.disableImds = false;
   if (auto profile = detail::getenv("AWS_PROFILE");
       profile and not profile->empty()) {
-    config.profile = profile->c_str();
+    config.profile = Aws::String{*profile};
   } else if (auto profile = detail::getenv("AWS_DEFAULT_PROFILE");
              profile and not profile->empty()) {
-    config.profile = profile->c_str();
+    config.profile = Aws::String{*profile};
   }
   return std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>(
     config);
@@ -87,9 +87,9 @@ public:
       std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(
         profile.c_str()));
     AddProvider(std::make_shared<Aws::Auth::ProcessCredentialsProvider>(
-      Aws::String{profile.c_str()}));
+      Aws::String{profile}));
     AddProvider(std::make_shared<Aws::Auth::SSOCredentialsProvider>(
-      Aws::String{profile.c_str()}));
+      Aws::String{profile}));
   }
 };
 
