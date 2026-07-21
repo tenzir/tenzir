@@ -1,0 +1,7 @@
+warning: column `n` contains `null`, but the ClickHouse column is not nullable
+ --> tests/operators/to_clickhouse/roundtrip/50_supported_default_null.tql:5:1
+  |
+5 | to_clickhouse table="test_supported_default",
+  | ~~~~~~~~~~~~~ 
+  |
+  = note: affected events will be dropped

@@ -86,6 +86,9 @@ auto tenzir_features(const record& cfg) -> std::vector<std::string> {
     "hr-pipeline-activity",
     // summarize supports streaming mode via the frequency option.
     "summarize_frequency",
+    // The pipeline manager supports the `force-stop` update action that kills a
+    // pipeline immediately instead of draining in-flight data.
+    "pipeline_force_stop",
   };
   return result;
 }

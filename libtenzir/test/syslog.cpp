@@ -12,6 +12,18 @@
 
 namespace tenzir {
 
+TEST("RFC 5424 message parser accepts an empty message") {
+  auto line = std::string{
+    "<34>1 2003-10-11T22:14:15.003Z host app - - [sd@1 a=\"1\"] "};
+  auto msg = plugins::syslog::message{};
+  auto f = line.begin();
+  auto l = line.end();
+  REQUIRE(plugins::syslog::message_parser{}.parse(f, l, msg));
+  CHECK(f == l);
+  REQUIRE(msg.msg.has_value());
+  CHECK(msg.msg->empty());
+}
+
 TEST("syslog builder keeps pending multiline state when flushing committed "
      "rows") {
   auto dh = null_diagnostic_handler{};

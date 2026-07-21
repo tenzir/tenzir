@@ -17,13 +17,6 @@ on:
       build-version:
         type: string
         required: true
-      version-suffix:
-        type: string
-        required: false
-        default: ""
-      version-build-metadata:
-        type: string
-        required: true
       run-tests:
         type: boolean
         required: false
@@ -82,7 +75,7 @@ jobs:
         with:
           name: tenzir
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
-          pushFilter: "(tenzir-ee|tenzir-plugins-source)"
+          pushFilter: "(tenzir-ee|tenzir-plugins-source|tenzir-plugins\\.tar\\.gz)"
       - name: Prepare ccache directory
         run: |
           sudo mkdir -p /tmp/tenzir-ccache
@@ -224,8 +217,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
-          TENZIR_VERSION_SUFFIX: ${{ inputs.version-suffix }}
-          TENZIR_VERSION_BUILD_METADATA: ${{ inputs.version-build-metadata }}
         run: |
           release_flag=""
           if [[ "${{ github.event_name }}" == "release" ]]; then
@@ -241,8 +232,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
-          TENZIR_VERSION_SUFFIX: ${{ inputs.version-suffix }}
-          TENZIR_VERSION_BUILD_METADATA: ${{ inputs.version-build-metadata }}
         run: |
           release_flag=""
           if [[ "${{ github.event_name }}" == "release" ]]; then
@@ -356,8 +345,6 @@ jobs:
           GHCR_TOKEN: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
           DOCKERHUB_USER: ${{ vars.DOCKERHUB_USER }}
           DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
-          TENZIR_VERSION_SUFFIX: ${{ inputs.version-suffix }}
-          TENZIR_VERSION_BUILD_METADATA: ${{ inputs.version-build-metadata }}
         run: |
           # Determine push arguments based on event type
           release_flag=""

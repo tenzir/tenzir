@@ -682,9 +682,6 @@ public:
     if (lifecycle_ != Lifecycle::running) {
       co_return;
     }
-    if (not input or input->size() == 0) {
-      co_return;
-    }
     TENZIR_ASSERT(subprocess_);
     auto stdin_pipe = subprocess_->stdin_pipe();
     TENZIR_ASSERT(stdin_pipe.is_some());

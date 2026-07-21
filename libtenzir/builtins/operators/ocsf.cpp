@@ -1685,9 +1685,6 @@ public:
                                      not args_.encode_variants, args_.null_fill,
                                      args_.timestamp_to_ms);
     for (auto&& out : output) {
-      if (out.rows() == 0) {
-        continue;
-      }
       co_await push(std::move(out));
     }
   }
@@ -1713,9 +1710,6 @@ public:
       = process_trim_slice(input, args_.operator_location, ctx.dh(),
                            args_.drop_optional, args_.drop_recommended);
     for (auto&& out : output) {
-      if (out.rows() == 0) {
-        continue;
-      }
       co_await push(std::move(out));
     }
   }
@@ -1738,9 +1732,6 @@ public:
     auto output
       = process_derive_slice(input, args_.operator_location, ctx.dh());
     for (auto&& out : output) {
-      if (out.rows() == 0) {
-        continue;
-      }
       co_await push(std::move(out));
     }
   }

@@ -342,11 +342,9 @@ public:
       return {};
     }
     if (cfg_.mode == "reset") {
-      // Emit all groups and reset aggregations
+      // Emit all groups and reset the complete aggregation state.
       auto result = finish_impl(ctx);
-      for (auto it = groups_.begin(); it != groups_.end(); ++it) {
-        it.value().aggregations = make_bucket(ctx).aggregations;
-      }
+      groups_.clear();
       return result;
     }
     if (cfg_.mode == "cumulative") {
@@ -913,9 +911,6 @@ public:
         .emit(provider_->as_session());
     }
     co_await flush_until(steady_clock::now(), push);
-    if (input.rows() == 0) {
-      co_return;
-    }
     if (impl_->cfg().frequency and not next_flush_) {
       arm_timer();
     }
@@ -1037,13 +1032,13 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) && -> Option<AnyOperator> override {
+  auto spawn(element_type_tag input) const -> AnyOperator override {
     TENZIR_ASSERT(input.is<table_slice>());
-    return Summarize{std::move(cfg_)}.with_name("summarize");
+    return Summarize{cfg_}.with_name("summarize");
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<std::optional<element_type_tag>> override {
+    -> failure_or<element_type_tag> override {
     if (input.is_not<table_slice>()) {
       diagnostic::error("operator expects events").primary(self_).emit(dh);
       return failure::promise();

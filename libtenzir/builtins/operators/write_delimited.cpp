@@ -46,9 +46,6 @@ public:
 
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (input.rows() == 0) {
-      co_return;
-    }
     auto evaluated = eval(args_.value, input, ctx.dh());
     auto buffer = blob{};
     auto append_separator = [&] {

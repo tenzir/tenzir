@@ -121,11 +121,61 @@ def main() -> None:
         ],
         "logType": "AZURE_AD_CONTEXT",
     }
+    ingestion = [
+        record
+        for record in records
+        if record["path"] == "/v2/unstructuredlogentries:batchCreate"
+    ]
+    assert len(ingestion) == 2, ingestion
+    ingestion_by_text = {
+        record["payload"]["entries"][0]["log_text"]: record["payload"]
+        for record in ingestion
+    }
+    raw_log = (
+        "<134>1 2026-01-01T00:00:00Z host app - - - derive timestamp from this log"
+    )
+    assert ingestion_by_text[raw_log] == {
+        "customer_id": "1234567890",
+        "log_type": "CUSTOM_JSON",
+        "namespace": "tenzir",
+        "labels": [{"key": "env", "value": "test"}],
+        "entries": [{"log_text": raw_log}],
+    }
+    assert ingestion_by_text["use explicit timestamp"] == {
+        "customer_id": "1234567890",
+        "log_type": "CUSTOM_JSON",
+        "namespace": "explicit-ns",
+        "entries": [
+            {
+                "log_text": "use explicit timestamp",
+                "ts_epoch_microseconds": 1767225600123456,
+            }
+        ],
+    }
     tokens = token_captures()
     assert tokens, tokens
     assert all(token["assertion_segments"] == 3 for token in tokens), tokens
+    assert all(token["signature_verified"] for token in tokens), tokens
+    assert all(token["claims_validated"] for token in tokens), tokens
+    issuers = {token["issuer"] for token in tokens}
+    assert issuers == {
+        "test-only-email@test-only-project-id.iam.gserviceaccount.com"
+    }, issuers
+    scopes = {token["scope"] for token in tokens}
+    assert "https://www.googleapis.com/auth/cloud-platform" in scopes, scopes
+    assert "https://www.googleapis.com/auth/malachite-ingestion" in scopes, scopes
+    audiences = {token["audience"] for token in tokens}
+    assert audiences == {
+        os.environ["GOOGLE_SECOPS_TOKEN_URL"],
+        "https://oauth2.googleapis.com/token",
+    }, audiences
+    assert all(
+        0 < token["expires_at"] - token["issued_at"] <= 3600 for token in tokens
+    ), tokens
     print("udm_live: true")
     print("entity_live: true")
+    print("raw_ingestion_live: true")
+    print("optional_log_entry_time: true")
     print("oauth_token_exchange: true")
 
 

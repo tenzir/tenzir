@@ -709,6 +709,8 @@ auto eval_op_typed(evaluator& self, ast::binary_expr const& x,
                    basic_series<L> const& left, basic_series<R> const& right,
                    ActiveRows const& active) -> series {
   if constexpr (caf::detail::is_complete<EvalBinOp<Op, L, R>>) {
+    TENZIR_ASSERT(left.array);
+    TENZIR_ASSERT(right.array);
     auto oa = EvalBinOp<Op, L, R>::eval(
       *left.array, *right.array,
       [&](const char* w) {

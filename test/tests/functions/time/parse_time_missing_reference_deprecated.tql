@@ -1,0 +1,7 @@
+from {
+  syslog: "May  5 18:16:21",
+  time_only: "14:30:45",
+}
+
+syslog_default = syslog.parse_time("%b %e %H:%M:%S")
+time_only_default = time_only.parse_time("%H:%M:%S")

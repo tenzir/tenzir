@@ -393,9 +393,6 @@ public:
   }
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
-    if (not chunk or chunk->size() == 0) {
-      co_return;
-    }
     co_await message_queue_->enqueue(Payload{std::move(chunk)});
     co_return;
   }
@@ -690,7 +687,7 @@ public:
       if (output.is_error()) {
         return {};
       }
-      if (not *output or (*output)->is_not<chunk_ptr>()) {
+      if (output->is_not<chunk_ptr>()) {
         diagnostic::error("pipeline must return bytes")
           .primary(printer.source)
           .emit(ctx);

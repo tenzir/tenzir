@@ -41,9 +41,6 @@ public:
 
   auto process(table_slice slice, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (slice.rows() == 0) {
-      co_return;
-    }
     auto selected = select_field(slice, ctx);
     if (not selected) {
       co_return;

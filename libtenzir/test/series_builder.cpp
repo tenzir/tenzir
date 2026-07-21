@@ -564,6 +564,32 @@ TEST("int64 absorbs fitting uint64 when negative values present") {
 ])"}});
 }
 
+TEST("finish_assert_one_array on empty builder yields a valid array") {
+  // Regression: an empty builder must not produce a null-array series. Such a
+  // series reports length 0 (masking the null `array`) but segfaults the moment
+  // it is sliced or otherwise dereferenced downstream.
+  {
+    auto b = series_builder{};
+    auto s = b.finish_assert_one_array();
+    REQUIRE(s.array);
+    CHECK_EQUAL(s.length(), int64_t{0});
+    // Slicing must not crash on the empty result.
+    auto sliced = s.slice(0, 0);
+    REQUIRE(sliced.array);
+    CHECK_EQUAL(sliced.length(), int64_t{0});
+  }
+  {
+    auto ty = type{list_type{int64_type{}}};
+    auto b = series_builder{&ty};
+    auto s = b.finish_assert_one_array();
+    REQUIRE(s.array);
+    CHECK_EQUAL(s.length(), int64_t{0});
+    auto sliced = s.slice(0, 0);
+    REQUIRE(sliced.array);
+    CHECK_EQUAL(sliced.length(), int64_t{0});
+  }
+}
+
 } // namespace
 
 } // namespace tenzir

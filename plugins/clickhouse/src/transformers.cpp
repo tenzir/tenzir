@@ -9,10 +9,12 @@
 #include "clickhouse/transformers.hpp"
 
 #include "clickhouse/arguments.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/concept/printable/tenzir/json2.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/view3.hpp"
 
+#include <arrow/builder.h>
 #include <clickhouse/columns/array.h>
 #include <clickhouse/columns/bool.h>
 #include <clickhouse/columns/date.h>
@@ -54,6 +56,66 @@ void emit_missing_column_warning(const path_type& path,
     .note("column `{}` is missing", fmt::join(path, "."))
     .emit(dh);
 }
+
+/// Emitted when a non-nullable ClickHouse column receives `null` values. Such
+/// rows cannot be written and are dropped from the slice; `easy_client::insert`
+/// relies on the drop having been reported here.
+void emit_null_in_non_nullable_warning(const path_type& path,
+                                       diagnostic_handler& dh) {
+  diagnostic::warning("column `{}` contains `null`, but the ClickHouse column "
+                      "is not nullable",
+                      fmt::join(path, "."))
+    .note("affected events will be dropped")
+    .emit(dh);
+}
+
+/// Applies the standard null-drop policy for a non-nullable *leaf* column: no
+/// nulls (or no null bitmap) yields `drop::none`; an all-null array yields
+/// `drop::all`; otherwise the null rows are marked in `dropmask` and
+/// `drop::some` is returned. `easy_client::insert` relies on this drop having
+/// been reported. Not for record columns, which reconstruct from nested values
+/// and thus do not short-circuit to `drop::all` on a top-level null.
+///
+/// The warning is emitted at most once, and only when this column introduces a
+/// null for a row not *already* dropped upstream. A null nested record marks
+/// its rows dropped before recursing into its children (see
+/// `transformer_record::update_dropmask`), so a null that merely mirrors the
+/// parent's null does not warn again here; only a genuinely leaf-level null in
+/// an otherwise-present row does.
+auto apply_null_dropmask(const arrow::Array& array, dropmask_ref dropmask,
+                         const path_type& path, diagnostic_handler& dh)
+  -> transformer::drop {
+  if (not array.null_bitmap() or array.null_count() == 0) {
+    return transformer::drop::none;
+  }
+  if (array.null_count() == array.length()) {
+    // Report only if the caller has not already dropped every row upstream.
+    auto newly_dropped = false;
+    for (int64_t i = 0; i < array.length(); ++i) {
+      if (not dropmask[i]) {
+        newly_dropped = true;
+        break;
+      }
+    }
+    if (newly_dropped) {
+      emit_null_in_non_nullable_warning(path, dh);
+    }
+    return transformer::drop::all;
+  }
+  auto newly_dropped = false;
+  for (int64_t i = 0; i < array.length(); ++i) {
+    if (array.IsNull(i)) {
+      if (not dropmask[i]) {
+        newly_dropped = true;
+      }
+      dropmask[i] = true;
+    }
+  }
+  if (newly_dropped) {
+    emit_null_in_non_nullable_warning(path, dh);
+  }
+  return transformer::drop::some;
+}
 } // namespace
 
 transformer_record::transformer_record(std::string clickhouse_typename,
@@ -91,6 +153,9 @@ auto transformer_record::update_dropmask(
   /// Update the dropmask based of the record itself. If we are here, we know
   /// that we cannot null every subcolumn, so a "top level" null requires us
   /// to drop the event.
+  if (array.null_count() > 0) {
+    emit_null_in_non_nullable_warning(path, dh);
+  }
   for (int64_t i = 0; i < array.length(); ++i) {
     if (array.IsNull(i)) {
       dropmask[i] = true;
@@ -466,21 +531,7 @@ struct transformer_from_trait : transformer {
     if (not correct_type) {
       return drop::all;
     }
-    if (not array.null_bitmap()) {
-      return drop::none;
-    }
-    if (array.null_count() == 0) {
-      return drop::none;
-    }
-    if (array.null_count() == array.length()) {
-      return drop::all;
-    }
-    for (int64_t i = 0; i < array.length(); ++i) {
-      if (array.IsNull(i)) {
-        dropmask[i] = true;
-      }
-    }
-    return drop::some;
+    return apply_null_dropmask(array, dropmask, path, dh);
   }
 
   virtual auto create_null_column(size_t n) const
@@ -609,19 +660,19 @@ struct transformer_blob : transformer {
   }
 };
 
-/// Sends data to a ClickHouse `JSON` column by serializing each row's record to
-/// JSON text. We only support sending to an existing JSON column; we never
-/// create one (there is no Tenzir `json` type). ClickHouse `JSON` columns only
-/// accept objects at the top level, so non-record columns are written as empty
-/// objects with a warning. Absent rows become `{}`; null rows become `{}` for a
-/// plain `JSON` column and SQL `NULL` for a `Nullable(JSON)` column (ClickHouse
-/// rejects empty strings for JSON but accepts the empty object).
+/// Sends data to a ClickHouse `JSON` column. The `to_clickhouse` worker
+/// serializes fields bound for a JSON column to JSON text before insertion (it
+/// discovers which columns are JSON from this table's transformations), so we
+/// always receive a string array of JSON text and append it verbatim. We only
+/// support sending to an existing
+/// JSON column; we never create one (there is no Tenzir `json` type). ClickHouse
+/// `JSON` columns only accept objects at the top level, so values that are not
+/// JSON objects are written as empty objects with a warning. Absent rows become
+/// `{}`; null rows become `{}` for a plain `JSON` column and SQL `NULL` for a
+/// `Nullable(JSON)` column (ClickHouse rejects empty strings for JSON but
+/// accepts the empty object).
 struct transformer_json : transformer {
   bool nullable;
-  json_printer2 printer = json_printer2{json_printer_options{
-    .style = no_style(),
-    .oneline = true,
-  }};
 
   explicit transformer_json(bool nullable)
     : transformer(nullable ? "Nullable(JSON)" : "JSON", /*nullable=*/true),
@@ -648,40 +699,56 @@ struct transformer_json : transformer {
                      const arrow::Array& array, dropmask_cref dropmask,
                      int64_t dropcount, tenzir::diagnostic_handler& dh)
     -> ::clickhouse::ColumnRef override {
-    // ClickHouse `JSON` columns only accept JSON objects at the top level. A
-    // record maps to an object; anything else (scalars, lists) would be
-    // rejected by the server, so we substitute empty objects and warn.
-    const auto unsupported
-      = not type.kind().is<record_type>() and not type.kind().is<null_type>();
-    if (unsupported) {
-      diagnostic::warning("cannot write `{}` into a ClickHouse JSON column",
-                          fmt::join(path, "."))
-        .note("expected a record, but got `{}`", type.kind())
-        .note("values will be written as empty objects (`{}`)")
-        .emit(dh);
+    // A `JSON` column accepts any Tenzir value. The async `to_clickhouse`
+    // operator serializes fields bound for a `JSON` column to JSON text before
+    // they reach us (see `prepare_slice`), in which case we receive a string
+    // array and append it verbatim. The legacy generator sink does not
+    // pre-serialize, so we may also receive a raw (struct/list/scalar) array,
+    // which we serialize here. Either way we end up appending JSON-object text;
+    // values that are not JSON objects are written as `{}` with a warning.
+    auto serialized = std::shared_ptr<arrow::Array>{};
+    if (not type.kind().is<string_type>()) {
+      serialized = to_json_string_array(array);
     }
+    const auto& strings
+      = as<arrow::StringArray>(serialized ? *serialized : array);
+    auto warned = false;
     return build(array.length() - dropcount, [&](auto&& append) {
       for (int64_t i = 0; i < array.length(); ++i) {
         if (dropmask[i]) {
           continue;
         }
-        auto v = view_at(array, i);
-        if (is<caf::none_t>(v)) {
+        if (strings.IsNull(i)) {
           // A null row becomes SQL NULL for a nullable column and `{}` for a
-          // plain one; check this before substituting unsupported values so
-          // nulls are not silently turned into empty objects.
+          // plain one.
           append(std::nullopt);
           continue;
         }
-        if (unsupported) {
-          // Non-record value: write an explicit empty object, not NULL.
+        auto text = strings.GetView(i);
+        // ClickHouse `JSON` columns only accept objects at the top level. Guard
+        // against non-object JSON (a bare scalar or array) by peeking at the
+        // first non-whitespace byte; anything but `{` is written as an empty
+        // object with a warning (emitted at most once per column).
+        auto trimmed = text;
+        while (not trimmed.empty()
+               and (trimmed.front() == ' ' or trimmed.front() == '\t'
+                    or trimmed.front() == '\n' or trimmed.front() == '\r')) {
+          trimmed.remove_prefix(1);
+        }
+        if (trimmed.empty() or trimmed.front() != '{') {
+          if (not warned) {
+            diagnostic::warning("cannot write `{}` into a ClickHouse JSON "
+                                "column",
+                                fmt::join(path, "."))
+              .note("expected a JSON object, but the value is not one")
+              .note("affected values are written as empty objects (`{}`)")
+              .emit(dh);
+            warned = true;
+          }
           append(std::string_view{"{}"});
           continue;
         }
-        printer.load_new(v);
-        auto bytes = printer.bytes();
-        append(std::string_view{reinterpret_cast<const char*>(bytes.data()),
-                                bytes.size()});
+        append(std::string_view{text.data(), text.size()});
       }
     });
   }
@@ -704,6 +771,156 @@ private:
     column->Reserve(n);
     fill([&](std::optional<std::string_view> v) {
       column->Append(v.value_or(std::string_view{"{}"}));
+    });
+    return column;
+  }
+};
+
+/// Sends Tenzir `time` values to a ClickHouse `DateTime64(N[, 'tz'])` column of
+/// arbitrary scale `N`. The built-in `time_type` trait only handles the
+/// canonical `DateTime64(9)` (no timezone) that `to_clickhouse` creates itself;
+/// this transformer lets us append to pre-existing tables whose column uses a
+/// different scale or carries a timezone. We build a column with the table's
+/// exact scale and timezone so the inserted block type matches the target
+/// column and no server-side conversion is required. Nanosecond values are
+/// divided down to the column's tick unit (`10^(9-N)`), flooring toward
+/// negative infinity just as a server-side scale conversion would (so
+/// pre-epoch, sub-tick values round down rather than toward zero).
+struct transformer_datetime64 : transformer {
+  size_t scale;
+  Option<std::string> timezone;
+  bool nullable;
+  int64_t divisor;
+
+  static auto type_name(size_t scale, const Option<std::string>& tz,
+                        bool nullable) -> std::string {
+    auto inner = fmt::format("DateTime64({}", scale);
+    if (tz) {
+      fmt::format_to(std::back_inserter(inner), ",'{}'", *tz);
+    }
+    inner += ')';
+    if (nullable) {
+      return fmt::format("Nullable({})", inner);
+    }
+    return inner;
+  }
+
+  transformer_datetime64(size_t scale, Option<std::string> tz, bool nullable)
+    : transformer{type_name(scale, tz, nullable), nullable},
+      scale{scale},
+      timezone{std::move(tz)},
+      nullable{nullable},
+      divisor{[&] {
+        auto d = int64_t{1};
+        for (auto i = scale; i < 9; ++i) {
+          d *= 10;
+        }
+        return d;
+      }()} {
+  }
+
+  auto update_dropmask(path_type& path, const tenzir::type& type,
+                       const arrow::Array& array, dropmask_ref dropmask,
+                       tenzir::diagnostic_handler& dh) -> drop override {
+    // Validate the input type up front for both the nullable and non-nullable
+    // case, so a mismatch produces the targeted "incompatible type" diagnostic
+    // here rather than a generic "failed to add column" from `create_column`.
+    // A `null_type` input is accepted: it is materialized via
+    // `create_null_column` (nullable) or dropped as all-null (non-nullable).
+    if (not type.kind().is<time_type>() and not type.kind().is<null_type>()) {
+      diagnostic::warning("incompatible type for column `{}`",
+                          fmt::join(path, "."))
+        .note("expected `{}`, got `{}`", type_kind{tag_v<time_type>},
+              type.kind())
+        .emit(dh);
+      return drop::all;
+    }
+    if (nullable) {
+      return drop::none;
+    }
+    return apply_null_dropmask(array, dropmask, path, dh);
+  }
+
+  auto create_null_column(size_t n) const -> ::clickhouse::ColumnRef override {
+    if (not nullable) {
+      return nullptr;
+    }
+    return build(n, [n](auto&& append) {
+      for (size_t i = 0; i < n; ++i) {
+        append(std::nullopt);
+      }
+    });
+  }
+
+  auto create_column(path_type& path, const tenzir::type& type,
+                     const arrow::Array& array, dropmask_cref dropmask,
+                     int64_t dropcount, tenzir::diagnostic_handler& dh)
+    -> ::clickhouse::ColumnRef override {
+    const auto n = array.length() - dropcount;
+    if (type.kind().is<null_type>()) {
+      return create_null_column(n);
+    }
+    if (not type.kind().is<time_type>()) {
+      diagnostic::warning("incompatible type for column `{}`",
+                          fmt::join(path, "."))
+        .note("expected `{}`, got `{}`", type_kind{tag_v<time_type>},
+              type.kind())
+        .emit(dh);
+      return nullptr;
+    }
+    const auto& cast_array = as<type_to_arrow_array_t<time_type>>(array);
+    return build(n, [&](auto&& append) {
+      for (int64_t i = 0; i < cast_array.length(); ++i) {
+        if (dropmask[i]) {
+          continue;
+        }
+        auto v = view_at(cast_array, i);
+        if (not v) {
+          append(std::nullopt);
+          continue;
+        }
+        append(to_ticks(value_transform(*v)));
+      }
+    });
+  }
+
+private:
+  /// Converts a nanosecond timestamp to the column's tick unit, flooring toward
+  /// negative infinity to match ClickHouse's server-side scale conversion.
+  /// Integer division alone truncates toward zero, which would round pre-epoch
+  /// (negative) sub-tick values up. `divisor` is always positive.
+  auto to_ticks(int64_t nanos) const -> int64_t {
+    auto q = nanos / divisor;
+    if (nanos % divisor != 0 and nanos < 0) {
+      --q;
+    }
+    return q;
+  }
+
+  /// Allocates a plain or nullable `ColumnDateTime64` with the configured scale
+  /// and timezone, reserves `n` rows, and invokes `fill` with an `append`
+  /// callback taking an optional tick value. For a plain column a
+  /// `std::nullopt` cannot legitimately occur (null rows are dropped) but is
+  /// written as 0 defensively.
+  auto build(size_t n, auto&& fill) const -> ::clickhouse::ColumnRef {
+    if (nullable) {
+      auto column
+        = timezone
+            ? std::make_shared<ColumnNullableT<ColumnDateTime64>>(scale,
+                                                                  *timezone)
+            : std::make_shared<ColumnNullableT<ColumnDateTime64>>(scale);
+      column->Reserve(n);
+      fill([&](std::optional<int64_t> v) {
+        column->Append(v);
+      });
+      return column;
+    }
+    auto column = timezone
+                    ? std::make_shared<ColumnDateTime64>(scale, *timezone)
+                    : std::make_shared<ColumnDateTime64>(scale);
+    column->Reserve(n);
+    fill([&](std::optional<int64_t> v) {
+      column->Append(v.value_or(0));
     });
     return column;
   }
@@ -896,6 +1113,53 @@ struct transformer_array : transformer {
   }
 };
 
+/// Transformer for an existing ClickHouse column whose type we cannot represent
+/// but which has a default value. It is only ever created at the top level (in
+/// `remote_fetch_schema_transformations`), because column defaults are a
+/// top-level concept in ClickHouse; it is never nested inside a `Tuple`/`Array`.
+///
+/// It reports itself as nullable so that, when the column is absent from the
+/// input, `easy_client::insert`'s missing-column check skips it and ClickHouse
+/// fills the default. `update_dropmask` is only ever invoked when the input
+/// *does* contain the column -- and since we cannot convert an unsupported
+/// type, its mere invocation means the event must be dropped.
+struct transformer_default_only : transformer {
+  explicit transformer_default_only(std::string clickhouse_typename)
+    : transformer{std::move(clickhouse_typename),
+                  /*clickhouse_nullable=*/true} {
+  }
+
+  auto update_dropmask(path_type& path, const tenzir::type& type,
+                       const arrow::Array& array, dropmask_ref dropmask,
+                       tenzir::diagnostic_handler& dh) -> drop override {
+    TENZIR_UNUSED(type, array, dropmask);
+    diagnostic::warning("column `{}` has an unsupported ClickHouse type `{}` "
+                        "and cannot be "
+                        "written",
+                        fmt::join(path, "."), clickhouse_typename)
+      .note("the column has a default value and must be omitted from the input")
+      .note("event will be dropped")
+      .emit(dh);
+    return drop::all;
+  }
+
+  auto create_null_column(size_t n) const -> ::clickhouse::ColumnRef override {
+    // Unreachable: an absent column is never materialized at the top level.
+    TENZIR_UNUSED(n);
+    return nullptr;
+  }
+
+  auto create_column(path_type& path, const tenzir::type& type,
+                     const arrow::Array& array, dropmask_cref dropmask,
+                     int64_t dropcount, tenzir::diagnostic_handler& dh)
+    -> ::clickhouse::ColumnRef override {
+    // Unreachable: if the column is present, `update_dropmask` returned
+    // `drop::all` and `insert` skips the slice before creating any columns.
+    TENZIR_UNUSED(path, type, array, dropmask, dropcount, dh);
+    return nullptr;
+  }
+};
+
 auto make_record_functions_from_clickhouse(path_type& path,
                                            std::string_view clickhouse_typename,
                                            diagnostic_handler& dh)
@@ -964,6 +1228,32 @@ auto make_array_functions_from_clickhouse(path_type& path,
 }
 
 } // namespace
+
+auto is_json_transformer(const transformer& t) -> bool {
+  return dynamic_cast<const transformer_json*>(&t) != nullptr;
+}
+
+auto to_json_string_array(const arrow::Array& array)
+  -> std::shared_ptr<arrow::Array> {
+  auto printer = json_printer2{json_printer_options{
+    .style = no_style(),
+    .oneline = true,
+  }};
+  auto builder = arrow::StringBuilder{};
+  check(builder.Reserve(array.length()));
+  for (auto value : values3(array)) {
+    if (is<caf::none_t>(value)) {
+      // Preserve nulls instead of rendering them as a string.
+      check(builder.AppendNull());
+      continue;
+    }
+    printer.load_new(value);
+    auto bytes = printer.bytes();
+    check(builder.Append(reinterpret_cast<const char*>(bytes.data()),
+                         detail::narrow_cast<int32_t>(bytes.size())));
+  }
+  return finish(builder);
+}
 
 auto type_to_clickhouse_typename(path_type& path, tenzir::type t, bool nullable,
                                  diagnostic_handler& dh)
@@ -1114,6 +1404,62 @@ auto make_functions_from_clickhouse(path_type& path,
       or clickhouse_typename.starts_with("Nullable(JSON(")) {
     return std::make_unique<transformer_json>(/*nullable=*/true);
   }
+  // `LowCardinality(X)` is a storage optimization that does not change the
+  // logical type. ClickHouse's native INSERT path transparently wraps a plain
+  // inner column into `LowCardinality`, so we strip the wrapper and recurse on
+  // the inner type, sending the plain column. The clickhouse-cpp client only
+  // supports this for `String`; it rejects or mishandles fixed-size inner types
+  // such as numerics, so we reject those here with a clear error.
+  if (auto inner
+      = unwrap_clickhouse_type_call(clickhouse_typename, "LowCardinality")) {
+    if (not is_lowcardinality_supported_inner(*inner)) {
+      diagnostic::error("ClickHouse column `{}` has unsupported type `{}`",
+                        fmt::join(path, "."), clickhouse_typename)
+        .note("`LowCardinality` is only supported for `String` columns")
+        .emit(dh);
+      return nullptr;
+    }
+    return make_functions_from_clickhouse(path, *inner, dh);
+  }
+  // `DateTime64(N[, 'tz'])` of any scale/timezone (other than the canonical
+  // `DateTime64(9)` already handled above). We build a column matching the
+  // table's exact scale and timezone.
+  const auto strip_quotes = [](std::string_view s) -> std::string {
+    if (s.size() >= 2 and s.front() == '\'' and s.back() == '\'') {
+      return std::string{s.substr(1, s.size() - 2)};
+    }
+    return std::string{s};
+  };
+  const auto make_datetime64
+    = [&](std::string_view tn, bool nullable) -> std::unique_ptr<transformer> {
+    auto inner = unwrap_clickhouse_type_call(tn, "DateTime64");
+    if (not inner) {
+      return nullptr;
+    }
+    auto parts = split_top_level_clickhouse_type_arguments(*inner);
+    auto scale = size_t{0};
+    if (parts.empty() or not parse_clickhouse_size(parts[0], scale)
+        or scale > 9) {
+      return nullptr;
+    }
+    auto timezone = Option<std::string>{};
+    if (parts.size() > 1) {
+      timezone = strip_quotes(parts[1]);
+    }
+    return std::make_unique<transformer_datetime64>(scale, std::move(timezone),
+                                                    nullable);
+  };
+  if (auto t = make_datetime64(clickhouse_typename, false)) {
+    return t;
+  }
+  if (is_nullable) {
+    auto bare = clickhouse_typename;
+    bare.remove_prefix("Nullable("sv.size());
+    bare.remove_suffix(1);
+    if (auto t = make_datetime64(bare, true)) {
+      return t;
+    }
+  }
   if (clickhouse_typename.starts_with("Tuple(")) {
     return make_record_functions_from_clickhouse(path, clickhouse_typename, dh);
   }
@@ -1122,6 +1468,12 @@ auto make_functions_from_clickhouse(path_type& path,
   }
   emit_unsupported_clickhouse_type_diagnostic(path, clickhouse_typename, dh);
   return nullptr;
+}
+
+auto make_default_only_transformer(std::string clickhouse_typename)
+  -> std::unique_ptr<transformer> {
+  return std::make_unique<transformer_default_only>(
+    std::move(clickhouse_typename));
 }
 
 } // namespace tenzir::plugins::clickhouse

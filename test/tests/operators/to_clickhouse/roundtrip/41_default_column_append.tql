@@ -1,0 +1,10 @@
+// Append rows that omit the `tag` column. Its ClickHouse type (`IPv4`) is one
+// we cannot represent, but the column has a DEFAULT, so ClickHouse fills it in
+// and the append succeeds instead of being rejected.
+from {id: 1}, {id: 2}, {id: 3}
+to_clickhouse table="test_default_col",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

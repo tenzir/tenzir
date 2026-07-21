@@ -805,7 +805,7 @@ public:
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
-    if (not parser_ or not builder_ or not input or input->size() == 0) {
+    if (not parser_ or not builder_) {
       co_return;
     }
     auto* begin = reinterpret_cast<char const*>(input->data());

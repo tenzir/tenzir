@@ -1,0 +1,14 @@
+warning: column `m` is a generated ClickHouse column and cannot be written
+ --> tests/operators/to_clickhouse/roundtrip/56_generated_present.tql:5:1
+  |
+5 | to_clickhouse table="test_generated",
+  | ~~~~~~~~~~~~~ 
+  |
+  = note: the provided value is ignored; ClickHouse computes the column
+warning: column `al` is a generated ClickHouse column and cannot be written
+ --> tests/operators/to_clickhouse/roundtrip/56_generated_present.tql:5:1
+  |
+5 | to_clickhouse table="test_generated",
+  | ~~~~~~~~~~~~~ 
+  |
+  = note: the provided value is ignored; ClickHouse computes the column

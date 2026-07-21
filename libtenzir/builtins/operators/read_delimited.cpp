@@ -49,9 +49,6 @@ public:
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (input->size() == 0) {
-      co_return;
-    }
     buffer_.append(reinterpret_cast<const char*>(input->data()), input->size());
     auto remaining = std::string_view{buffer_};
     while (true) {

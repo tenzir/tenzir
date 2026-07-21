@@ -23,6 +23,7 @@
 #include <cctype>
 #include <charconv>
 #include <limits>
+#include <span>
 #include <vector>
 
 namespace tenzir::plugins::clickhouse {
@@ -205,6 +206,27 @@ unwrap_clickhouse_type_call(std::string_view text, std::string_view name)
   return text.substr(name.size() + 1, text.size() - name.size() - 2);
 }
 
+/// Returns the index of the first entry in `columns` whose `.inner` equals
+/// `name`, or `None` if absent. Used to look up a field name in the `json=` and
+/// `low_cardinality=` argument lists.
+inline auto index_of(std::span<const located<std::string>> columns,
+                     std::string_view name) -> Option<size_t> {
+  for (size_t i = 0; i < columns.size(); ++i) {
+    if (columns[i].inner == name) {
+      return i;
+    }
+  }
+  return None{};
+}
+
+/// The clickhouse-cpp client only supports `LowCardinality` over `String` (and
+/// its nullable form); it rejects or mishandles fixed-size inner types such as
+/// numerics. Both the create-table path (`remote_create_table`) and the
+/// append path (`make_functions_from_clickhouse`) gate on this same invariant.
+inline auto is_lowcardinality_supported_inner(std::string_view inner) -> bool {
+  return inner == "String" or inner == "Nullable(String)";
+}
+
 inline auto parse_clickhouse_size(std::string_view text, size_t& result)
   -> bool {
   auto value = uint64_t{0};
@@ -267,25 +289,28 @@ inline auto validate_table_name(std::string_view table, location table_loc,
   return true;
 }
 
-// `json=` accepts either a single field selector or a list of field selectors.
-// Extracts the validated, de-duplicated set of top-level column names that
-// should be created as ClickHouse `JSON` columns. The caller must ensure the
-// expression was actually provided (i.e. `expr.kind` is set).
+// `json=` and `low_cardinality=` each accept either a single field selector or
+// a list of field selectors. Extracts the validated, de-duplicated set of
+// top-level column names. `argument_name` selects the argument named in
+// diagnostics. The caller must ensure the expression was actually provided
+// (i.e. `expr.kind` is set).
 inline auto
-parse_json_field_argument(const ast::expression& expr, diagnostic_handler& dh)
+parse_field_list_argument(const ast::expression& expr, diagnostic_handler& dh,
+                          std::string_view argument_name = "json")
   -> failure_or<std::vector<located<std::string>>> {
   auto result = std::vector<located<std::string>>{};
   auto add = [&](const ast::expression& e) -> failure_or<void> {
     auto sel = ast::field_path::try_from(e);
     if (not sel or sel->has_this() or sel->path().size() != 1) {
-      diagnostic::error("`json` expects a top-level field")
+      diagnostic::error("`{}` expects a top-level field", argument_name)
         .primary(e.get_location())
         .emit(dh);
       return failure::promise();
     }
     const auto name = std::string{sel->path().front().id.name};
     if (not validate_identifier(name)) {
-      emit_invalid_identifier<true>("json", name, sel->get_location(), dh);
+      emit_invalid_identifier<true>(argument_name, name, sel->get_location(),
+                                    dh);
       return failure::promise();
     }
     for (const auto& existing : result) {
@@ -301,7 +326,7 @@ parse_json_field_argument(const ast::expression& expr, diagnostic_handler& dh)
     for (const auto& item : list->items) {
       const auto* item_expr = try_as<ast::expression>(item);
       if (not item_expr) {
-        diagnostic::error("`json` expects a field")
+        diagnostic::error("`{}` expects a field", argument_name)
           .primary(into_location(item))
           .emit(dh);
         return failure::promise();
@@ -312,6 +337,13 @@ parse_json_field_argument(const ast::expression& expr, diagnostic_handler& dh)
     TRY(add(expr));
   }
   return result;
+}
+
+// Backwards-compatible alias for the `json=` argument.
+inline auto
+parse_json_field_argument(const ast::expression& expr, diagnostic_handler& dh)
+  -> failure_or<std::vector<located<std::string>>> {
+  return parse_field_list_argument(expr, dh, "json");
 }
 
 struct operator_arguments {

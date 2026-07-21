@@ -68,22 +68,13 @@
         tenzirPythonPkgs = pkgs.callPackage ./python {
           inherit (inputs) uv2nix pyproject-nix pyproject-build-systems;
         };
-        tenzirVersionSuffix = builtins.getEnv "TENZIR_VERSION_SUFFIX";
-        tenzirVersionBuildMetadataFromEnv = builtins.getEnv "TENZIR_VERSION_BUILD_METADATA";
-        tenzirVersionBuildMetadata =
-          if tenzirVersionBuildMetadataFromEnv != "" then
-            tenzirVersionBuildMetadataFromEnv
-          else if self ? rev then
-            "g${builtins.substring 0 10 self.rev}"
-          else
-            null;
         package = pkgs.callPackages ./nix/package.nix {
           nix2container = inputs.nix2container.packages.${system};
-          inherit tenzirPythonPkgs tenzirVersionSuffix tenzirVersionBuildMetadata;
+          inherit tenzirPythonPkgs;
         };
         package-clang = pkgs.callPackages ./nix/package.nix {
           nix2container = inputs.nix2container.packages.${system};
-          inherit tenzirPythonPkgs tenzirVersionSuffix tenzirVersionBuildMetadata;
+          inherit tenzirPythonPkgs;
           forceClang = true;
         };
         treefmtEval = inputs.treefmt-nix.lib.evalModule pkgs ./nix/treefmt.nix;

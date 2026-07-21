@@ -353,7 +353,8 @@ private:
                                 "'{}' for partition {}",
                                 partition_state.store_id, partition.uuid);
     }
-    auto store = plugin->make_store(filesystem_, partition_state.store_header);
+    auto store = plugin->make_store(filesystem_, partition_state.store_header,
+                                    caf::message_priority::normal);
     if (not store) {
       co_return std::move(store.error());
     }
@@ -395,15 +396,10 @@ auto compile_table_slice_transform(ast::pipeline ast, diagnostic_handler& dh)
   auto sub_ctx = substitute_ctx{b_ctx, nullptr};
   TRY(ir.substitute(sub_ctx, true));
   TRY(auto output, ir.infer_type(tag_v<table_slice>, dh));
-  if (not output) {
-    diagnostic::error("partition transform: pipeline output type is unknown")
-      .emit(dh);
-    return failure::promise();
-  }
-  if (not output->is<table_slice>()) {
+  if (not output.is<table_slice>()) {
     diagnostic::error("partition transform: pipeline must produce events, "
                       "got {}",
-                      *output)
+                      output)
       .emit(dh);
     return failure::promise();
   }

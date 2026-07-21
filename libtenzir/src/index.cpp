@@ -315,7 +315,8 @@ partition_actor partition_factory::operator()(const uuid& id) const {
   const auto path = state_.partition_path(id);
   TENZIR_TRACE("{} loads partition {} for path {}", *state_.self, id, path);
   materializations_++;
-  return state_.self->spawn(passive_partition, id, filesystem_, path);
+  return state_.self->spawn(passive_partition, id, filesystem_, path,
+                            caf::message_priority::normal);
 }
 
 size_t partition_factory::materializations() const {
@@ -436,8 +437,8 @@ caf::error index_state::load_from_disk() {
             // result in incorrect index statistics. This depends on whether the
             // statistics where already updated on-disk before Tenzir crashed or
             // not, which is hard to figure out here.
-            auto partition
-              = self->spawn(passive_partition, uuid, filesystem, path);
+            auto partition = self->spawn(passive_partition, uuid, filesystem,
+                                         path, caf::message_priority::normal);
             self->mail(atom::erase_v)
               .request(partition, caf::infinite)
               .then(

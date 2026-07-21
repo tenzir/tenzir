@@ -42,6 +42,12 @@ struct transformer {
   /// Iff all nested columns are nullable, we consider the Tuple/Array nullable
   /// as well.
   bool clickhouse_nullable;
+  /// True when the target ClickHouse column has a default
+  /// (`DEFAULT`/`MATERIALIZED`/`ALIAS`/`EPHEMERAL`) and may therefore be
+  /// omitted from an insert entirely, letting ClickHouse fill it in. Set by
+  /// `remote_fetch_schema_transformations`; only meaningful for top-level
+  /// columns, as ClickHouse reports defaults per top-level column only.
+  bool has_default = false;
 
   transformer(std::string clickhouse_typename, bool clickhouse_nullable)
     : clickhouse_typename{std::move(clickhouse_typename)},
@@ -90,12 +96,29 @@ struct transformer {
   virtual ~transformer() = default;
 };
 
+/// Whether `t` targets a ClickHouse `JSON` column. The `to_clickhouse` async
+/// operator serializes such columns to JSON strings before insertion; the
+/// transformer itself also accepts and serializes the raw array (see
+/// `transformer_json::create_column`). Implemented via a type check against the
+/// concrete JSON transformer.
+auto is_json_transformer(const transformer& t) -> bool;
+
+/// Serializes an Arrow array to a one-line JSON `StringArray`, preserving
+/// nulls. Used to render a field bound for a ClickHouse `JSON` column.
+auto to_json_string_array(const arrow::Array& array)
+  -> std::shared_ptr<arrow::Array>;
+
 struct transformer_record : transformer {
   using schema_transformations
     = detail::stable_map<std::string, std::unique_ptr<transformer>>;
   schema_transformations transformations;
   std::vector<char> found_column;
   const arrow::Array* my_array = nullptr;
+  /// Names of `MATERIALIZED`/`ALIAS` columns of the target table. ClickHouse
+  /// computes these and rejects explicit values, so they never get a
+  /// transformer and are never sent; we only keep their names to warn if the
+  /// input provides one. Only populated for the top-level table record.
+  detail::heterogeneous_string_hashset generated_columns;
 
   transformer_record() : transformer{"UNUSED", true} {};
   transformer_record(std::string clickhouse_typename,
@@ -134,6 +157,14 @@ auto plain_clickhouse_tuple_elements(path_type& path, const record_type& record,
 auto make_functions_from_clickhouse(path_type& path,
                                     const std::string_view clickhouse_typename,
                                     diagnostic_handler&)
+  -> std::unique_ptr<transformer>;
+
+/// Builds a transformer for a ClickHouse column whose type we cannot represent
+/// but which has a default value (`DEFAULT`/`MATERIALIZED`/`ALIAS`/`EPHEMERAL`).
+/// The column is considered nullable/omittable: when it is absent from the
+/// input, ClickHouse fills the default. When the input *does* provide the
+/// column we cannot convert its values, so the event is dropped.
+auto make_default_only_transformer(std::string clickhouse_typename)
   -> std::unique_ptr<transformer>;
 
 } // namespace tenzir::plugins::clickhouse

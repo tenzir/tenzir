@@ -132,7 +132,7 @@ public:
     return channel_ != nullptr;
   }
 
-  [[nodiscard]] auto get() const -> ares_channel {
+  [[nodiscard]] auto get() const -> ares_channel_t* {
     return channel_;
   }
 
@@ -141,7 +141,7 @@ public:
   }
 
 private:
-  ares_channel channel_ = nullptr;
+  ares_channel_t* channel_ = nullptr;
   ares_status_t status_ = ARES_ENOTINITIALIZED;
 };
 

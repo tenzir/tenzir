@@ -48,6 +48,7 @@
 
 #include "tenzir/async.hpp"
 #include "tenzir/async/mail.hpp"
+#include "tenzir/box.hpp"
 #include "tenzir/detail/fanout_counter.hpp"
 
 #include <tenzir/actors.hpp>
@@ -76,7 +77,9 @@
 #include <caf/send.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
+#include <folly/coro/BoundedQueue.h>
 
+#include <chrono>
 #include <sstream>
 
 namespace tenzir::plugins::serve {
@@ -88,6 +91,11 @@ namespace {
 
 constexpr auto serve_endpoint_id = 0;
 constexpr auto serve_multi_endpoint_id = 1;
+
+/// The well-known continuation token of the first page. Generated tokens are
+/// v4 UUIDs, so the nil UUID cannot collide with them.
+constexpr auto initial_continuation_token
+  = "00000000-0000-0000-0000-000000000000";
 
 constexpr auto serve_spec = R"_(
 /serve:
@@ -277,7 +285,7 @@ constexpr auto serve_multi_spec = R"_(
                 minItems: 1
                 items:
                   type: object
-                  required: [serve_id]
+                  required: [serve_id, continuation_token]
                   properties:
                     serve_id:
                       type: string
@@ -286,7 +294,12 @@ constexpr auto serve_multi_spec = R"_(
                     continuation_token:
                       type: string
                       example: "340ce2j"
-                      description: The continuation token from the previous response for this output stream. Omit this field for the initial request.
+                      description: The continuation token from the previous response for this output stream. Pass `00000000-0000-0000-0000-000000000000` for the initial request.
+                    schema:
+                      type: string
+                      enum: [legacy, exact, never]
+                      example: "exact"
+                      description: The schema representation to include in this output stream's response. Overrides the request-wide `schema` for this stream only.
               max_events:
                 type: integer
                 minimum: 0
@@ -309,12 +322,14 @@ constexpr auto serve_multi_spec = R"_(
                 enum: [legacy, exact, never]
                 example: "exact"
                 default: "legacy"
-                description: The schema representation to include in each response. Use `exact` for a representation that matches Tenzir's type system exactly, and `never` to omit schema definitions.
+                description: The default schema representation to include in each response. Use `exact` for a representation that matches Tenzir's type system exactly, and `never` to omit schema definitions. Individual output streams can override this with their own `schema` field.
           example:
             requests:
               - serve_id: "query-1"
+                continuation_token: "00000000-0000-0000-0000-000000000000"
               - serve_id: "query-2"
                 continuation_token: "340ce2j"
+                schema: never
             max_events: 1024
             min_events: 1
             timeout: "5s"
@@ -444,16 +459,19 @@ using serve_manager_actor = typed_actor_fwd<
     ->caf::result<void>,
   // Drop all buffered data and complete immediately, without waiting for the
   // data to be drained to the client.
-  auto(atom::stop, std::string serve_id)->caf::result<void>,
+  auto(atom::stop, std::string serve_id, caf::actor source)->caf::result<void>,
   // Deregister a serve operator, waiting until it completed.
-  auto(atom::shutdown, std::string serve_id)->caf::result<void>,
+  auto(atom::shutdown, std::string serve_id, caf::actor source)
+    ->caf::result<void>,
   // Put additional slices into the buffer for the given access token.
   auto(atom::put, std::string serve_id, table_slice)->caf::result<void>,
   // Get slices from the buffer for the given access token, returning the next
   // access token and the desired number of events.
   auto(atom::get, std::string serve_id, std::string continuation_token,
        uint64_t min_events, duration timeout, uint64_t max_events)
-    ->caf::result<serve_response>>
+    ->caf::result<serve_response>,
+  // Force-deliver whatever is currently buffered for a pending get, if any.
+  auto(atom::flush, std::string serve_id)->caf::result<void>>
   // Conform to the protocol of the COMPONENT PLUGIN actor interface.
   ::extend_with<component_plugin_actor>::unwrap;
 
@@ -467,6 +485,8 @@ struct request_meta {
 struct request_base {
   std::string serve_id = {};
   std::string continuation_token = {};
+  /// Overrides the request-wide default `schema` when set.
+  std::optional<enum schema> schema_override = {};
 };
 
 struct single_serve_request : request_base, request_meta {};
@@ -536,15 +556,27 @@ struct managed_serve_operator {
     TENZIR_DEBUG("clearing continuation token");
     last_continuation_token = std::exchange(continuation_token, {});
     last_results = results;
-    if (stop_rp.pending() and buffer.empty()) {
+    // Emit the terminal response (null continuation token) once the source is
+    // gone and the buffer is drained. `stop_rp.pending()` covers the case
+    // where a client drains the buffer before finalization; `done` covers the
+    // case where finalization already happened without a waiter and a late
+    // client drains the retained buffer afterwards.
+    if ((stop_rp.pending() or done) and buffer.empty()) {
       TENZIR_ASSERT(not put_rp.pending());
       TENZIR_DEBUG("serve for id {} is done", escape_operator_arg(serve_id));
-      continuation_token.clear();
+      // Mark the operator done so that a client re-polling with the empty
+      // continuation token before the lifetime actor's DOWN is processed
+      // observes a completed state instead of queuing a request that hangs.
+      // Note: `continuation_token` was already cleared by the `std::exchange`
+      // above.
+      done = true;
       for (auto&& get_rp : std::exchange(get_rps, {})) {
         TENZIR_ASSERT(get_rp.pending());
         get_rp.deliver(std::make_tuple(std::string{}, results));
       }
-      stop_rp.deliver();
+      if (stop_rp.pending()) {
+        stop_rp.deliver();
+      }
       return true;
     }
     // If we throttled the serve operator, then we can continue its operation
@@ -576,13 +608,48 @@ struct serve_manager_state {
   /// messages to the user.
   std::unordered_map<std::string, caf::error> expired_ids = {};
 
+  /// A first-page get request that arrived before its serve operator
+  /// registered.
+  struct pending_get {
+    uint64_t id = {};
+    single_serve_request request = {};
+    caf::typed_response_promise<serve_response> rp = {};
+    caf::disposable timeout = {};
+    std::chrono::steady_clock::time_point deadline = {};
+  };
+
+  /// Parked first-page get requests, keyed by serve id. A pipeline reports
+  /// running before its operators finished starting, so a poll may arrive
+  /// before the serve operator registered its id.
+  std::unordered_map<std::string, std::vector<pending_get>> pending_gets = {};
+
+  /// Monotonic id generator for parked get requests.
+  uint64_t next_pending_get_id = {};
+
+  // A genuine pipeline failure propagates a diagnostic; a clean teardown --
+  // input exhaustion, user shutdown, or the executor tearing down unreachable
+  // nodes -- does not.
+  static auto is_pipeline_failure(const caf::error& err) -> bool {
+    // A clean exit passes an empty error; `context()` must not be called on it.
+    if (not err.valid()) {
+      return false;
+    }
+    return err == ec::diagnostic or err.context().match_elements<diagnostic>();
+  }
+
   auto handle_down_msg(const caf::actor_addr& source, const caf::error& err)
     -> void {
     const auto found = std::ranges::find_if(ops, [&](const auto& op) {
       return op.source == source;
     });
-    TENZIR_ASSERT(found != ops.end());
-    if (not found->continuation_token.empty()) {
+    if (found == ops.end()) {
+      // The entry may already be gone, e.g., because it was removed on an
+      // earlier error path.
+      TENZIR_DEBUG("{} received DOWN for an unknown serve operator", *self);
+      return;
+    }
+    if (not found->continuation_token.empty()
+        and found->continuation_token != initial_continuation_token) {
       TENZIR_DEBUG("{} received premature DOWN for serve id {} with "
                    "continuation "
                    "token {}",
@@ -606,9 +673,16 @@ struct serve_manager_state {
         ops.erase(found);
       }
     };
-    if (err.valid()) {
+    // Failures are removed right away; clean completions linger for
+    // `retention_time` so a client can retry its final poll.
+    if (is_pipeline_failure(err)) {
       delete_serve();
       return;
+    }
+    // Answer any in-flight poll with the remaining buffer immediately instead
+    // of leaving it to the long-poll timeout.
+    if (not found->get_rps.empty()) {
+      found->try_deliver_results(/*force_underful=*/true);
     }
     detail::weak_run_delayed(self, defaults::api::serve::retention_time,
                              delete_serve);
@@ -620,13 +694,16 @@ struct serve_manager_state {
       return op.serve_id == serve_id;
     });
     if (found != ops.end()) {
-      if (not found->done) {
-        return caf::make_error(
-          ec::invalid_argument,
-          fmt::format("{} received duplicate serve id {}", *self,
-                      escape_operator_arg(found->serve_id)));
-      }
-      ops.erase(found);
+      // Reject any serve id that is still registered, even one that is `done`
+      // but lingering for the retention window. Replacing a live entry would
+      // let a stale `stop`/`shutdown` from the previous operator resolve
+      // against the new entry, so we require serve ids to be unique among
+      // registered operators. A serve id may be reused only once its entry
+      // has been fully removed.
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("{} received duplicate serve id {}",
+                                         *self,
+                                         escape_operator_arg(found->serve_id)));
     }
     if (not watched) {
       return caf::make_error(ec::invalid_argument,
@@ -638,25 +715,38 @@ struct serve_manager_state {
     ops.push_back({
       .source = addr,
       .serve_id = serve_id,
-      .continuation_token = "",
+      .continuation_token = initial_continuation_token,
       .buffer_size = buffer_size,
     });
     self->monitor(std::move(watched), [this, addr](const caf::error& err) {
       handle_down_msg(addr, err);
     });
+    // Replay polls that arrived before this registration, with the remainder
+    // of their timeout budget.
+    const auto now = std::chrono::steady_clock::now();
+    for (auto& get : take_parked(serve_id)) {
+      get.request.timeout
+        = std::max(duration::zero(),
+                   std::chrono::duration_cast<duration>(get.deadline - now));
+      get_registered(ops.back(), std::move(get.request), std::move(get.rp));
+    }
     return {};
   }
 
-  auto finalize(std::string serve_id) -> caf::result<void> {
+  auto finalize(std::string serve_id, caf::actor source) -> caf::result<void> {
+    const auto source_addr = source ? source->address() : caf::actor_addr{};
     const auto found
       = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
-          return op.serve_id == serve_id;
+          return op.serve_id == serve_id
+                 and (not source_addr or op.source == source_addr);
         });
     if (found == ops.end()) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("{} received request to despawn for "
-                                         "unknown serve id {}",
-                                         *self, escape_operator_arg(serve_id)));
+      // The entry was already removed, e.g., because the operator's DOWN was
+      // processed first. Treat the request as a no-op so the operator can
+      // finish instead of surfacing a spurious error.
+      TENZIR_DEBUG("{} ignores despawn request for unknown serve id {}", *self,
+                   escape_operator_arg(serve_id));
+      return {};
     }
     if (found->stop_rp.pending()) {
       return caf::make_error(ec::logic_error,
@@ -665,19 +755,45 @@ struct serve_manager_state {
                                          *self, escape_operator_arg(serve_id)));
     }
     found->stop_rp = self->make_response_promise<void>();
+    if (not found->get_rps.empty()) {
+      // A client is already waiting: deliver the results to it. This pages
+      // through the buffer across successive requests and delivers the stop
+      // promise once the buffer is fully drained.
+      const auto delivered = found->try_deliver_results(false);
+      TENZIR_ASSERT(delivered);
+      return found->stop_rp;
+    }
+    // No client is waiting. Complete finalization immediately instead of
+    // blocking until a client polls, which may never happen (e.g., a pipeline
+    // ending in `serve` whose client already disconnected, or a hidden
+    // pipeline during shutdown). We mark the entry done and, if rows remain,
+    // retain them as the final page so that a poll within the retention window
+    // can still fetch them.
+    TENZIR_ASSERT(not found->put_rp.pending());
+    found->delayed_attempt.dispose();
+    found->requested = 0;
+    // Mark the entry done and resolve immediately. The buffer is kept intact:
+    // `get()` pages through it across successive polls even though the source
+    // is gone, and reports completion only once it is fully drained. The
+    // entry survives for the retention window (see `handle_down_msg`).
+    found->done = true;
+    found->stop_rp.deliver();
     return found->stop_rp;
   }
 
-  auto stop(std::string serve_id) -> caf::result<void> {
+  auto stop(std::string serve_id, caf::actor source) -> caf::result<void> {
+    const auto source_addr = source ? source->address() : caf::actor_addr{};
     const auto found
       = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
-          return op.serve_id == serve_id;
+          return op.serve_id == serve_id
+                 and (not source_addr or op.source == source_addr);
         });
     if (found == ops.end()) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("{} received request to drop for "
-                                         "unknown serve id {}",
-                                         *self, escape_operator_arg(serve_id)));
+      // The entry was already removed, e.g., because the operator's DOWN was
+      // processed first. Treat the request as a no-op.
+      TENZIR_DEBUG("{} ignores drop request for unknown serve id {}", *self,
+                   escape_operator_arg(serve_id));
+      return {};
     }
     TENZIR_DEBUG("{} drops all buffered data for serve id {}", *self,
                  escape_operator_arg(serve_id));
@@ -743,6 +859,11 @@ struct serve_manager_state {
   }
 
   auto get(single_serve_request request) -> caf::result<serve_response> {
+    // /serve allows omitting the continuation token for the first request;
+    // /serve-multi requires it and rejects empty tokens at parse time.
+    if (request.continuation_token.empty()) {
+      request.continuation_token = initial_continuation_token;
+    }
     const auto found
       = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
           return op.serve_id == request.serve_id;
@@ -750,52 +871,121 @@ struct serve_manager_state {
     if (found == ops.end()) {
       const auto expired_id = expired_ids.find(request.serve_id);
       if (expired_id != expired_ids.end()) {
-        if (expired_id->second == ec::diagnostic) {
-          return expired_id->second;
+        const auto& err = expired_id->second;
+        // Clean completions report as completed rather than an error so a
+        // client can retry its final poll even past the retention window.
+        if (is_pipeline_failure(err)) {
+          return err;
         }
-        return caf::make_error(
-          ec::logic_error,
-          fmt::format("{} got request for events with expired serve id {}; the "
-                      "pipeline serving this data is no longer available: {}",
-                      *self, request.serve_id, expired_id->second));
-      }
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("{} got request for events with "
-                                         "unknown serve id {}",
-                                         *self, request.serve_id));
-    }
-    if (not found->continuation_token.empty()
-        and found->last_continuation_token == request.continuation_token) {
-      return std::make_tuple(
-        found->continuation_token,
-        split(found->last_results, request.max_events).first);
-    }
-    if (found->continuation_token != request.continuation_token) {
-      // If the operator already reached a terminal state, e.g., because it was
-      // dropped on graceful shutdown, we report completion instead of an error
-      // for a client that polls with the previously advertised token.
-      if (found->done) {
         return std::make_tuple(std::string{}, std::vector<table_slice>{});
       }
-      return caf::make_error(
+      // Park a first-page poll that raced the serve operator's startup. A
+      // generated token can never become valid through a future registration,
+      // which always starts at the initial token, so fail fast instead.
+      if (request.continuation_token == initial_continuation_token) {
+        return park_get(std::move(request));
+      }
+      return unknown_serve_id_error(request.serve_id);
+    }
+    auto rp = self->make_response_promise<serve_response>();
+    get_registered(*found, std::move(request), rp);
+    return rp;
+  }
+
+  auto unknown_serve_id_error(std::string_view serve_id) const -> caf::error {
+    return caf::make_error(ec::invalid_argument,
+                           fmt::format("{} got request for events with "
+                                       "unknown serve id {}",
+                                       *self, serve_id));
+  }
+
+  /// Extracts all parked polls for a serve id and cancels their timeouts.
+  auto take_parked(const std::string& serve_id) -> std::vector<pending_get> {
+    auto pending = pending_gets.extract(serve_id);
+    if (pending.empty()) {
+      return {};
+    }
+    for (auto& get : pending.mapped()) {
+      get.timeout.dispose();
+    }
+    return std::move(pending.mapped());
+  }
+
+  /// Parks a first-page get request whose serve id is not registered yet.
+  /// `start()` replays it, `flush()` completes it, or its timeout fails it.
+  auto park_get(single_serve_request request) -> caf::result<serve_response> {
+    auto rp = self->make_response_promise<serve_response>();
+    const auto id = next_pending_get_id++;
+    const auto deadline = std::chrono::steady_clock::now() + request.timeout;
+    auto timeout = detail::weak_run_delayed(
+      self, request.timeout, [this, id, serve_id = request.serve_id]() {
+        const auto pending = pending_gets.find(serve_id);
+        if (pending == pending_gets.end()) {
+          return;
+        }
+        const auto found
+          = std::ranges::find(pending->second, id, &pending_get::id);
+        if (found == pending->second.end()) {
+          return;
+        }
+        found->rp.deliver(unknown_serve_id_error(serve_id));
+        pending->second.erase(found);
+        if (pending->second.empty()) {
+          pending_gets.erase(pending);
+        }
+      });
+    auto serve_id = request.serve_id;
+    pending_gets[std::move(serve_id)].push_back({
+      .id = id,
+      .request = std::move(request),
+      .rp = rp,
+      .timeout = std::move(timeout),
+      .deadline = deadline,
+    });
+    return rp;
+  }
+
+  /// Answers a get request for a registered serve operator on `rp`.
+  auto get_registered(managed_serve_operator& op, single_serve_request request,
+                      caf::typed_response_promise<serve_response> rp) -> void {
+    // A client whose response was lost re-sent its previous token: re-deliver
+    // the last batch. A fresh serve cannot match, as `last_continuation_token`
+    // is empty until the first delivery and the request token is never empty.
+    if (op.last_continuation_token == request.continuation_token) {
+      rp.deliver(
+        std::make_tuple(op.continuation_token,
+                        split(op.last_results, request.max_events).first));
+      return;
+    }
+    if (op.continuation_token != request.continuation_token) {
+      // A done serve reports completion instead of an unknown-token error;
+      // every path that terminally clears the continuation token sets `done`.
+      if (op.done) {
+        rp.deliver(std::make_tuple(std::string{}, std::vector<table_slice>{}));
+        return;
+      }
+      rp.deliver(caf::make_error(
         ec::invalid_argument,
         fmt::format("{} got request for events with unknown continuation token "
                     "{} for serve id {}",
-                    *self, request.continuation_token, request.serve_id));
+                    *self, request.continuation_token, request.serve_id)));
+      return;
     }
-    if (found->done) {
-      return std::make_tuple(std::string{}, std::vector<table_slice>{});
+    if (op.done and op.buffer.empty()) {
+      rp.deliver(std::make_tuple(std::string{}, std::vector<table_slice>{}));
+      return;
     }
-    auto rp = self->make_response_promise<serve_response>();
-    found->get_rps.push_back(rp);
-    found->requested = request.max_events;
-    found->min_events = request.min_events;
-    const auto delivered = found->try_deliver_results(false);
+    op.get_rps.push_back(rp);
+    op.requested = request.max_events;
+    op.min_events = request.min_events;
+    // Once the source is gone, no more data will arrive, so deliver whatever
+    // remains buffered immediately rather than waiting for `min_events`.
+    const auto delivered = op.try_deliver_results(op.done);
     if (delivered) {
-      return rp;
+      return;
     }
-    found->delayed_attempt.dispose();
-    found->delayed_attempt = detail::weak_run_delayed(
+    op.delayed_attempt.dispose();
+    op.delayed_attempt = detail::weak_run_delayed(
       self, request.timeout,
       [this, serve_id = request.serve_id,
        continuation_token = request.continuation_token]() mutable {
@@ -815,7 +1005,23 @@ struct serve_manager_state {
         const auto delivered = found->try_deliver_results(true);
         TENZIR_ASSERT(delivered);
       });
-    return rp;
+  }
+
+  auto flush(std::string serve_id) -> caf::result<void> {
+    // Complete parked polls for a not-yet-registered serve id with an empty
+    // first page, so a group poll is not held back until their timeout.
+    for (auto& get : take_parked(serve_id)) {
+      get.rp.deliver(std::make_tuple(std::string{initial_continuation_token},
+                                     std::vector<table_slice>{}));
+    }
+    const auto found = std::ranges::find_if(ops, [&](const auto& op) {
+      return op.serve_id == serve_id;
+    });
+    if (found == ops.end() or found->get_rps.empty()) {
+      return {};
+    }
+    found->try_deliver_results(/*force_underful=*/true);
+    return {};
   }
 
   auto status(status_verbosity verbosity) const -> caf::result<record> {
@@ -863,11 +1069,13 @@ auto serve_manager(
       return self->state().start(std::move(serve_id), buffer_size,
                                  std::move(watched));
     },
-    [self](atom::stop, std::string& serve_id) -> caf::result<void> {
-      return self->state().stop(std::move(serve_id));
+    [self](atom::stop, std::string& serve_id,
+           caf::actor& source) -> caf::result<void> {
+      return self->state().stop(std::move(serve_id), std::move(source));
     },
-    [self](atom::shutdown, std::string& serve_id) -> caf::result<void> {
-      return self->state().finalize(std::move(serve_id));
+    [self](atom::shutdown, std::string& serve_id,
+           caf::actor& source) -> caf::result<void> {
+      return self->state().finalize(std::move(serve_id), std::move(source));
     },
     [self](atom::put, std::string& serve_id,
            table_slice& slice) -> caf::result<void> {
@@ -887,6 +1095,9 @@ auto serve_manager(
           .timeout = timeout,
         },
       });
+    },
+    [self](atom::flush, std::string& serve_id) -> caf::result<void> {
+      return self->state().flush(std::move(serve_id));
     },
     [self](atom::status, status_verbosity verbosity,
            duration) -> caf::result<record> {
@@ -919,7 +1130,51 @@ struct serve_handler_state {
     caf::error detail;
   };
 
-  // Extracts `serve_id` and `continuation_token` by moving out of `params`
+  // Returns a pointer to the string value of `key`, or nullptr when the key
+  // is absent or null. Null is treated as unset because TQL list unification
+  // fills an omitted field with null when a sibling record specifies it.
+  static auto
+  try_get_nullable_string(const tenzir::record& params, std::string_view key)
+    -> std::variant<const std::string*, parse_error> {
+    const auto it = params.find(key);
+    if (it == params.end() or is<caf::none_t>(it->second)) {
+      return static_cast<const std::string*>(nullptr);
+    }
+    const auto* str = try_as<std::string>(&it->second);
+    if (not str) {
+      return parse_error{
+        .message = fmt::format("failed to read {} parameter", key),
+        .detail = caf::make_error(
+          ec::invalid_argument,
+          fmt::format("expected a string, got params {}", params))};
+    }
+    return str;
+  }
+
+  // Parses and validates an optional `schema` parameter, returning nullopt
+  // when it is absent or null.
+  static auto try_extract_schema(const tenzir::record& params)
+    -> std::variant<std::optional<enum schema>, parse_error> {
+    auto str = try_get_nullable_string(params, "schema");
+    if (auto* err = try_as<parse_error>(str)) {
+      return std::move(*err);
+    }
+    const auto* value = as<const std::string*>(str);
+    if (not value) {
+      return std::optional<enum schema>{};
+    }
+    auto opt = from_string<enum schema>(*value);
+    if (not opt) {
+      return parse_error{.message = "invalid schema parameter",
+                         .detail
+                         = caf::make_error(ec::invalid_argument,
+                                           fmt::format("got `{}`", *value))};
+    }
+    return *opt;
+  }
+
+  // Extracts `serve_id`, `continuation_token`, and the optional per-request
+  // `schema` override from `params`.
   static auto try_extract_request_base(tenzir::record& params)
     -> std::variant<request_base, parse_error> {
     auto result = request_base{};
@@ -938,18 +1193,18 @@ struct serve_handler_state {
                                   fmt::format("got parameters {}", params))};
     }
     result.serve_id = std::move(**serve_id);
-    auto continuation_token
-      = try_get<std::string>(params, "continuation_token");
-    if (not continuation_token) {
-      return parse_error{.message = "failed to read continuation_token",
-                         .detail = caf::make_error(
-                           ec::invalid_argument,
-                           fmt::format("{}; got parameters {}",
-                                       continuation_token.error(), params))};
+    auto token = try_get_nullable_string(params, "continuation_token");
+    if (auto* err = try_as<parse_error>(token)) {
+      return std::move(*err);
     }
-    if (*continuation_token) {
-      result.continuation_token = std::move(**continuation_token);
+    if (const auto* value = as<const std::string*>(token)) {
+      result.continuation_token = *value;
     }
+    auto schema = try_extract_schema(params);
+    if (auto* err = try_as<parse_error>(schema)) {
+      return std::move(*err);
+    }
+    result.schema_override = as<std::optional<enum schema>>(schema);
     return result;
   }
 
@@ -998,23 +1253,11 @@ struct serve_handler_state {
       }
       result.timeout = **timeout;
     }
-    auto schema = try_get<std::string>(params, "schema");
-    if (not schema) {
-      auto detail_msg
-        = fmt::format("{}; got params {}", schema.error(), params);
-      auto detail
-        = caf::make_error(ec::invalid_argument, std::move(detail_msg));
-      return parse_error{.message = "failed to read schema parameter",
-                         .detail = std::move(detail)};
+    auto schema = try_extract_schema(params);
+    if (auto* err = try_as<parse_error>(schema)) {
+      return std::move(*err);
     }
-    if (*schema) {
-      auto opt = from_string<enum schema>(**schema);
-      if (not opt) {
-        return parse_error{
-          .message = "invalid schema parameter",
-          .detail = caf::make_error(ec::invalid_argument,
-                                    fmt::format("got `{}`", **schema))};
-      }
+    if (auto& opt = as<std::optional<enum schema>>(schema)) {
       result.schema = *opt;
     }
     return result;
@@ -1079,6 +1322,15 @@ struct serve_handler_state {
         return std::move(*err);
       }
       auto& new_request = as<request_base>(parsed);
+      if (new_request.continuation_token.empty()) {
+        return parse_error{
+          .message
+          = fmt::format("missing `continuation_token` for serve id "
+                        "`{}`; pass `{}` for the initial request",
+                        new_request.serve_id, initial_continuation_token),
+          .detail = caf::make_error(ec::invalid_argument),
+        };
+      }
       const auto is_duplicate = std::ranges::contains(
         requests, new_request.serve_id, &request_base::serve_id);
       if (is_duplicate) {
@@ -1223,6 +1475,16 @@ struct serve_handler_state {
   struct serve_response_with_state {
     serve_response response;
     serve_state state;
+    enum schema schema;
+  };
+
+  /// State shared between the continuations of one /serve-multi request.
+  struct multi_request_state {
+    std::unordered_map<std::string, serve_response_with_state> results;
+    /// All serve ids in the request, so a flush can target the other serves.
+    std::vector<std::string> serve_ids;
+    /// Set once the first serve returns events; guards against flushing twice.
+    bool flush_triggered = false;
   };
 
   /// Handles a request to /serve-multi by
@@ -1240,21 +1502,24 @@ struct serve_handler_state {
     }
     auto& request = as<multi_serve_request>(maybe_requests);
     auto rp = self->make_response_promise<rest_response>();
-    const auto min_events_per_request
-      = round_up_to_multiple(request.min_events, request.requests.size())
-        / request.requests.size();
-    const auto max_events_per_request
-      = round_up_to_multiple(request.max_events, request.requests.size())
-        / request.requests.size();
-    auto result_map = std::make_shared<
-      std::unordered_map<std::string, serve_response_with_state>>();
+    const auto per_request = [&](uint64_t total) {
+      return round_up_to_multiple(total, request.requests.size())
+             / request.requests.size();
+    };
+    const auto min_events_per_request = per_request(request.min_events);
+    const auto max_events_per_request = per_request(request.max_events);
+    auto st = std::make_shared<multi_request_state>();
+    st->serve_ids.reserve(request.requests.size());
+    for (const auto& r : request.requests) {
+      st->serve_ids.push_back(r.serve_id);
+    }
     auto fan = detail::make_fanout_counter(
       request.requests.size(),
-      [rp, result_map, schema = request.schema]() mutable {
+      [rp, st]() mutable {
         auto json_text = std::string{'{'};
         auto first = true;
-        for (auto& [id, result] : *result_map) {
-          const auto& [response, state] = result;
+        for (auto& [id, result] : st->results) {
+          const auto& [response, state, schema] = result;
           const auto& [next_token, data] = response;
           if (not first) {
             json_text += ',';
@@ -1270,21 +1535,35 @@ struct serve_handler_state {
         rp.deliver(rest_response::make_error(400, fmt::to_string(e), {}));
       });
     for (auto& r : request.requests) {
+      const auto effective_schema = r.schema_override.value_or(request.schema);
       self
         ->mail(atom::get_v, r.serve_id, r.continuation_token,
                min_events_per_request, request.timeout, max_events_per_request)
         .request(serve_manager, caf::infinite)
         .then(
-          [fan, id = r.serve_id, result_map](serve_response& result) mutable {
-            const auto state = std::get<0>(result).empty()
+          [self = self, serve_manager = serve_manager, fan, id = r.serve_id, st,
+           effective_schema](serve_response& result) mutable {
+            auto& [continuation_token, data] = result;
+            const auto has_events = rows(data) > 0;
+            const auto state = continuation_token.empty()
                                  ? serve_state::completed
                                  : serve_state::running;
-            const auto [_, success] = result_map->try_emplace(
-              std::move(id), std::move(result), state);
+            const auto [_, success] = st->results.try_emplace(
+              id, std::move(result), state, effective_schema);
             TENZIR_ASSERT(success);
+            // Once any serve has data, flush the others' buffers instead of
+            // long-polling to the timeout.
+            if (has_events and not std::exchange(st->flush_triggered, true)) {
+              for (const auto& other : st->serve_ids) {
+                if (other != id) {
+                  self->mail(atom::flush_v, other).send(serve_manager);
+                }
+              }
+            }
             fan->receive_success();
           },
-          [fan, id = r.serve_id, result_map](caf::error& err) mutable {
+          [fan, id = r.serve_id, st,
+           effective_schema](caf::error& err) mutable {
             if (err == caf::exit_reason::user_shutdown
                 or err.context().match_elements<diagnostic>()) {
               // The pipeline has either shut down naturally or we got an
@@ -1295,8 +1574,8 @@ struct serve_handler_state {
               const auto state = err == caf::exit_reason::user_shutdown
                                    ? serve_state::completed
                                    : serve_state::failed;
-              const auto [_, success] = result_map->try_emplace(
-                std::move(id), serve_response{}, state);
+              const auto [_, success] = st->results.try_emplace(
+                std::move(id), serve_response{}, state, effective_schema);
               TENZIR_ASSERT(success);
               fan->receive_success();
               return;
@@ -1352,6 +1631,11 @@ public:
   explicit ServeImpl(ServeArgs args) : args_{std::move(args)} {
   }
 
+  ServeImpl(ServeImpl&&) = default;
+  auto operator=(ServeImpl&&) -> ServeImpl& = default;
+  ServeImpl(const ServeImpl&) = delete;
+  auto operator=(const ServeImpl&) -> ServeImpl& = delete;
+
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await OperatorBase::start(ctx);
     bytes_counter_
@@ -1365,12 +1649,17 @@ public:
     serve_manager_ = ctx.actor_system().registry().get<serve_manager_actor>(
       "tenzir.serve-manager");
     lifetime_actor_
-      = ctx.actor_system().spawn<caf::hidden>([](caf::event_based_actor*) {
+      = ctx.actor_system().spawn<caf::hidden>([](caf::event_based_actor* self) {
           return caf::behavior{
-            []() {
-              // Dummy handler because CAF immediately kills actors who return
-              // an empty behavior.
-              return;
+            [self](atom::done) {
+              // Quit cleanly so the serve-manager's down handler takes the
+              // retention path instead of treating this as a failure.
+              self->quit();
+            },
+            [self](caf::error& reason) {
+              // Quit with the given failure reason so the serve-manager
+              // expires the serve id and reports the failure to clients.
+              self->quit(std::move(reason));
             },
           };
         });
@@ -1393,16 +1682,59 @@ public:
     }
     auto const rows = input.rows();
     auto const bytes = input.approx_bytes();
-    auto result = co_await async_mail(atom::put_v, args_.id, std::move(input))
-                    .request(serve_manager_);
-    if (not result) {
-      diagnostic::error(result.error())
+    // Send the `put` without blocking the operator's main loop on the
+    // serve-manager's response. When the manager throttles us it keeps the
+    // response pending until a client drains the buffer. Awaiting that here
+    // would stall the main loop and, critically, prevent a concurrent
+    // graceful-stop signal from being delivered -- yet that signal is the only
+    // way the serve-manager learns to drop its buffer and release the pending
+    // `put`. That circular wait made stopped pipelines with a full buffer and
+    // no draining client hang forever.
+    //
+    // Instead we report `blocked` from `state()` until the `put` resolves,
+    // which applies the same one-slice-at-a-time backpressure as before
+    // without stalling control-message processing. While blocked, the executor
+    // withholds further input and the end-of-input signal, so at most one
+    // `put` is ever in flight and `finalize()` cannot run before it completes.
+    blocked_ = true;
+    ctx.spawn_task([this, id = args_.id, input = std::move(input), rows,
+                    bytes]() mutable -> Task<void> {
+      auto result = co_await async_mail(atom::put_v, id, std::move(input))
+                      .request(serve_manager_);
+      co_await put_queue_->enqueue(PutDone{std::move(result), rows, bytes});
+    });
+    co_return;
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    co_return co_await put_queue_->dequeue();
+  }
+
+  auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
+    auto* done = result.try_as<PutDone>();
+    if (not done) {
+      co_return;
+    }
+    // The in-flight `put` completed; unblock so the executor resumes feeding
+    // input (or delivers the end-of-input signal it withheld while blocked).
+    blocked_ = false;
+    if (not done->result) {
+      diagnostic::error(done->result.error())
         .note("failed to buffer events at serve-manager")
         .emit(ctx);
       co_return;
     }
-    bytes_counter_.add(bytes);
-    events_counter_.add(rows);
+    bytes_counter_.add(done->bytes);
+    events_counter_.add(done->rows);
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    // Apply backpressure without blocking the main loop: while a `put` is in
+    // flight we do not want more input, but control messages (graceful stop)
+    // must still be processed.
+    return blocked_ ? OperatorState::blocked : OperatorState::normal;
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
@@ -1410,8 +1742,8 @@ public:
     // accepted after this point is dropped instead of being forwarded to the
     // serve-manager.
     stopped_ = true;
-    auto result
-      = co_await async_mail(atom::stop_v, args_.id).request(serve_manager_);
+    auto result = co_await async_mail(atom::stop_v, args_.id, lifetime_actor_)
+                    .request(serve_manager_);
     if (not result) {
       diagnostic::error(result.error())
         .note("failed to stop serve-manager")
@@ -1422,7 +1754,15 @@ public:
 
   auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
     auto result
-      = co_await async_mail(atom::shutdown_v, args_.id).request(serve_manager_);
+      = co_await async_mail(atom::shutdown_v, args_.id, lifetime_actor_)
+          .request(serve_manager_);
+    // Terminate the lifetime actor cleanly. The serve-manager then keeps the
+    // final result set available for the retention time so that a client can
+    // still fetch it. Letting the actor die from its handle being dropped
+    // would surface as an `unreachable` error at the serve-manager, which
+    // deletes the serve id immediately and breaks late client requests.
+    caf::anon_mail(atom::done_v).send(lifetime_actor_);
+    lifetime_actor_ = nullptr;
     if (not result) {
       diagnostic::error(result.error())
         .note("failed to deregister at serve-manager")
@@ -1431,11 +1771,38 @@ public:
     co_return FinalizeBehavior::done;
   }
 
+  ~ServeImpl() override {
+    if (lifetime_actor_) {
+      // We did not reach `finalize`, e.g., because the pipeline was
+      // force-killed. Signal a failure to the serve-manager so it expires the
+      // serve id right away. Use a diagnostic error rather than
+      // `user_shutdown`: the `/serve` endpoint maps `user_shutdown` to a
+      // successful completion, which would hide that the pipeline was aborted
+      // before all results were delivered.
+      caf::anon_mail(diagnostic::error("serve pipeline was aborted before all "
+                                       "results were delivered")
+                       .to_error())
+        .send(lifetime_actor_);
+    }
+  }
+
 private:
+  /// The result of an in-flight `put`, handed from the background task that
+  /// awaits the serve-manager response back to the operator's main loop via
+  /// `await_task()` / `process_task()`.
+  struct PutDone {
+    caf::expected<void> result;
+    uint64_t rows = {};
+    uint64_t bytes = {};
+  };
+
   ServeArgs args_;
   serve_manager_actor serve_manager_;
   caf::actor lifetime_actor_;
   bool stopped_ = false;
+  /// Whether a `put` is currently in flight; drives `state()` backpressure.
+  bool blocked_ = false;
+  mutable Box<folly::coro::BoundedQueue<PutDone>> put_queue_{std::in_place, 1};
   MetricsCounter bytes_counter_;
   MetricsCounter events_counter_;
 };
@@ -1499,7 +1866,8 @@ public:
     //  Wait until all events were fetched.
     ctrl.set_waiting(true);
     ctrl.self()
-      .mail(atom::shutdown_v, serve_id_)
+      .mail(atom::shutdown_v, serve_id_,
+            caf::actor_cast<caf::actor>(&ctrl.self()))
       .request(serve_manager, caf::infinite)
       .then(
         [&]() {
@@ -1671,7 +2039,8 @@ public:
           {"requests", type{list_type{
             record_type{
               {"serve_id", type{string_type{}, {{"required"}}}},
-              {"continuation_token", string_type{}},
+              {"continuation_token", type{ string_type{}, {{"required"}}}},
+              {"schema", string_type{}},
             },
           },{{"required"}}}},
           {"max_events", uint64_type{}},

@@ -1,0 +1,31 @@
+// Per-pipeline `schema` override: the request-wide default is `never`, but
+// serve_multi_schema_a overrides it with `exact`. Only that stream's response
+// carries schema definitions; serve_multi_schema_b falls back to the `never`
+// default and omits them.
+//
+// This also exercises a request list with mixed per-request `schema` presence,
+// which TQL list unification turns into an explicit null on the request that
+// omits it. That null must be treated as "unset" rather than rejected.
+api "/serve-multi", {
+  requests: [
+    {
+      serve_id: "serve_multi_schema_a",
+      continuation_token: "00000000-0000-0000-0000-000000000000",
+      schema: "exact",
+    },
+    {
+      serve_id: "serve_multi_schema_b",
+      continuation_token: "00000000-0000-0000-0000-000000000000",
+    },
+  ],
+  timeout: 5s,
+  min_events: 8,
+  max_events: 8,
+  schema: "never",
+}
+a_has_schemas = serve_multi_schema_a.has("schemas")
+b_has_schemas = serve_multi_schema_b.has("schemas")
+select a_has_schemas, b_has_schemas
+to_stdout {
+  write_tql
+}

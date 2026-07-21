@@ -1608,7 +1608,11 @@ auto series_builder::finish_assert_one_slice(std::string_view name)
 auto series_builder::finish_assert_one_array() -> series {
   auto result = finish();
   if (result.empty()) {
-    return {};
+    // An empty builder (no rows appended) must still yield a valid, zero-length
+    // series. Returning a default-constructed `series` here would leave its
+    // `array` null, which `length()` masks as 0 and which then segfaults the
+    // moment it is sliced or otherwise dereferenced downstream.
+    return series::null(type(), 0);
   }
   TENZIR_ASSERT(result.size() == 1);
   return std::move(result[0]);

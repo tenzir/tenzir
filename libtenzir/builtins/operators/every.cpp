@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/async/executor.hpp>
 #include <tenzir/async/semaphore.hpp>
 #include <tenzir/async/task.hpp>
 #include <tenzir/ir.hpp>
@@ -15,13 +16,15 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/try.hpp>
 
+#include <folly/CancellationToken.h>
+#include <folly/coro/CurrentExecutor.h>
+#include <folly/coro/Error.h>
 #include <folly/coro/Sleep.h>
+#include <folly/coro/WithCancellation.h>
 
 namespace tenzir::plugins::every_cron {
 
 namespace {
-
-using std::chrono::steady_clock;
 
 struct EveryArgs {
   duration interval = {};
@@ -40,16 +43,40 @@ struct EveryImpl {
   }
 
   auto await_task_impl() const -> Task<Any> {
-    // Start the timer once the subpipeline was actually started. This makes it
-    // so that it runs for the specified interval. The time it takes for it to
-    // close before starting the new pipelines is added on top of that. We could
-    // also do it differently and aim for the total time to match the specified
-    // interval. But if the subpipeline is slow to shut down (e.g., `to_http`
-    // sending requests), then we run into trouble when the interval is short.
-    // Hence we're going with the former, safer alternative for now.
-    auto permit = co_await sleep_permits_.acquire();
-    co_await sleep_for(args_.interval);
-    co_return permit;
+    // Run the interval timer under a token that also fires when we request a
+    // stop on `stop_source_`, so a stop can interrupt us even while we are
+    // still waiting for the permit. Acquiring the permit outside the
+    // cancellation scope would park this task on the semaphore, out of reach
+    // of the stop token, whenever the permit is still held (e.g., a previous
+    // interval fired but its subpipeline has not finished yet), so a
+    // concurrent stop could not wake us and shutdown would hang.
+    //
+    // The permit is acquired only once the previous subpipeline released it,
+    // so the interval timer starts after the subpipeline was actually
+    // started. The time it takes to close before starting the new pipelines
+    // is added on top of that. We could also aim for the total time to match
+    // the specified interval, but if the subpipeline is slow to shut down
+    // (e.g., `to_http` sending requests), then we run into trouble when the
+    // interval is short. Hence we're going with the former, safer alternative.
+    auto outer = co_await folly::coro::co_current_cancellation_token;
+    auto result
+      = co_await folly::coro::co_awaitTry(folly::coro::co_withCancellation(
+        folly::cancellation_token_merge(outer, stop_source_.getToken()),
+        folly::coro::co_invoke(
+          [this, interval = args_.interval]() mutable -> Task<SemaphorePermit> {
+            auto permit = co_await sleep_permits_.acquire();
+            co_await sleep_for(interval);
+            co_return std::move(permit);
+          })));
+    if (result.hasValue()) {
+      co_return std::move(result).value();
+    }
+    // The wait was cancelled by the whole pipeline shutting down; propagate.
+    if (outer.isCancellationRequested()) {
+      co_yield folly::coro::co_stopped_may_throw;
+    }
+    co_await wait_forever();
+    TENZIR_UNREACHABLE();
   }
 
   auto process_task_impl(Any result, OpCtx& ctx) -> Task<void> {
@@ -77,6 +104,8 @@ struct EveryImpl {
   // TODO: Clean this up with the upcoming subpipelines PR.
   auto finalize_impl() -> FinalizeBehavior {
     stop_spawning_ = true;
+    // Cancel a pending `await_task` so it stops instead of arming a new timer.
+    stop_source_.requestCancellation();
     return FinalizeBehavior::done;
   }
 
@@ -84,6 +113,7 @@ struct EveryImpl {
     requires(std::same_as<Input, void>)
   {
     stop_spawning_ = true;
+    stop_source_.requestCancellation();
   }
 
   auto state_impl() -> OperatorState {
@@ -146,6 +176,7 @@ struct EveryImpl {
   int64_t next_sub_id_ = 0;
   bool sub_finished_ = false;
   bool stop_spawning_ = false;
+  folly::CancellationSource stop_source_;
 };
 
 template <class Input, class Output>
@@ -359,14 +390,8 @@ public:
       } else {
         TRY(auto p, ctx.get(pipe));
         TRY(auto output, p.inner.infer_type(tag_v<Input>, ctx));
-        if (not output) {
-          // Output type not yet determined; default to events.
-          return [](EveryArgs args) {
-            return Every<Input, table_slice>{std::move(args)};
-          };
-        }
         return match(
-          *output,
+          output,
           [](tag<table_slice>)
             -> failure_or<Option<SpawnWith<EveryArgs, Input>>> {
             return [](EveryArgs args) {

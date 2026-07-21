@@ -225,7 +225,7 @@ public:
   }
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
-    if (not chunk or chunk->size() == 0 or not writer_) {
+    if (not writer_) {
       co_return;
     }
     const auto bytes = chunk->size();
@@ -320,7 +320,7 @@ public:
   }
 
   auto process(chunk_ptr chunk, OpCtx&) -> Task<void> override {
-    if (done_ or not chunk or chunk->size() == 0 or not writer_) {
+    if (done_ or not writer_) {
       co_return;
     }
     const auto bytes = chunk->size();
@@ -394,7 +394,7 @@ public:
       if (output.is_error()) {
         return {};
       }
-      if (not *output or (*output)->is_not<chunk_ptr>()) {
+      if (output->is_not<chunk_ptr>()) {
         diagnostic::error("pipeline must return bytes")
           .primary(pipe->source.subloc(0, 1))
           .emit(ctx);

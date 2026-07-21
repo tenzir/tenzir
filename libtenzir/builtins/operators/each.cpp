@@ -159,18 +159,18 @@ public:
         TRY(auto p, ctx.get(pipe));
         auto null_dh = null_diagnostic_handler{};
         auto result = p.inner.infer_type(tag_v<void>, null_dh);
-        if (not result or not *result) {
+        if (not result) {
           diagnostic::error("pipeline inside `each` must be a source")
             .primary(p.source)
             .emit(ctx);
           return failure::promise();
         }
-        if (**result == tag_v<table_slice>) {
+        if (*result == tag_v<table_slice>) {
           return [](EachArgs args) {
             return Each{std::move(args)};
           };
         }
-        if (**result == tag_v<void>) {
+        if (*result == tag_v<void>) {
           return [](EachArgs args) {
             return EachSink{std::move(args)};
           };

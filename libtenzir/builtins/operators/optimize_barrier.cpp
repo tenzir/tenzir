@@ -9,6 +9,7 @@
 #include <tenzir/async.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/ir.hpp>
+#include <tenzir/panic.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/substitute_ctx.hpp>
@@ -41,16 +42,14 @@ public:
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler&) const
-    -> failure_or<std::optional<element_type_tag>> override {
+    -> failure_or<element_type_tag> override {
     return input;
   }
 
   auto optimize(ir::optimize_filter filter,
                 event_order /*order*/) && -> ir::optimize_result override {
-    // Keep the barrier itself, pin the downstream filter right after it, and
-    // request the strictest ordering from upstream.
+    // Pin the filters and request the strictest ordering from upstream.
     auto replacement = std::vector<Box<ir::Operator>>{};
-    replacement.push_back(std::move(*this).move());
     for (auto& expr : filter) {
       replacement.push_back(make_where_ir(std::move(expr)));
     }
@@ -61,9 +60,9 @@ public:
     };
   }
 
-  auto spawn(element_type_tag) && -> Option<AnyOperator> override {
-    // IR-only: contributes no runtime operator.
-    return None{};
+  auto spawn(element_type_tag) const -> AnyOperator override {
+    panic("cannot spawn optimize_barrier; it must be removed during "
+          "optimization");
   }
 
   friend auto inspect(auto& f, OptimizeBarrierIr& x) -> bool {

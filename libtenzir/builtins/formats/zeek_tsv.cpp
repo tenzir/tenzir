@@ -1178,9 +1178,6 @@ public:
   auto process(table_slice input, Push<chunk_ptr>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (input.rows() == 0) {
-      co_return;
-    }
     auto printer
       = zeek_printer{resolved_set_separator(), args_.empty_field,
                      args_.unset_field, args_.disable_timestamp_tags};

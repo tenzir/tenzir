@@ -316,7 +316,7 @@ public:
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx& ctx)
     -> Task<void> override {
-    if (not chunk or chunk->size() == 0 or lifecycle_ == Lifecycle::done) {
+    if (lifecycle_ == Lifecycle::done) {
       co_return;
     }
     if (is_buffer_all()) {
@@ -780,7 +780,7 @@ public:
       if (output.is_error()) {
         return {};
       }
-      if (not *output or (*output)->is_not<chunk_ptr>()) {
+      if (output->is_not<chunk_ptr>()) {
         diagnostic::error("pipeline must return bytes")
           .primary(printer.source.subloc(0, 1))
           .emit(ctx);

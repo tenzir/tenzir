@@ -844,6 +844,9 @@ public:
     auto lock = co_await mutex_.lock();
     while (lock->queue.empty()) {
       if (sender_closed_.load(std::memory_order::acquire)) {
+        // Cascade to the next blocked receiver: `close_sender()` only posts a
+        // single notification, but every receiver must observe the closure.
+        notify_receive_.notify_one();
         co_return None{};
       }
       lock.unlock();
@@ -2039,8 +2042,6 @@ auto run_profiler(Profiler const& profiler, TestExecCtx& exec_ctx,
     });
 }
 
-} // namespace
-
 auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
               DiagHandler& dh, Profiler profiler, bool has_terminal,
               bool is_hidden, Notify* graceful_stop) -> Task<failure_or<void>> {
@@ -2057,6 +2058,8 @@ auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
   co_return dh.failure();
 }
 
+} // namespace
+
 auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
               DiagHandler& dh, Profiler profiler, bool is_hidden,
               Notify* graceful_stop) -> Task<failure_or<void>> {
@@ -2066,115 +2069,18 @@ auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
 
 auto run_transform(OperatorChain<table_slice, table_slice> chain,
                    caf::actor_system& sys, DiagHandler& dh, Profiler profiler,
-                   bool is_hidden, TransformFeeder feed_input,
-                   TransformDrainer drain_output) -> Task<failure_or<void>> {
+                   bool is_hidden, PipelineFeeder feed_input,
+                   PipelineDrainer drain_output) -> Task<failure_or<void>> {
   auto exec_ctx = TestExecCtx{profiler, /*has_terminal=*/false, is_hidden};
   auto num_ops = chain.size();
-  TENZIR_ASSERT(num_ops > 0);
-  auto id = PipeId{fmt::to_string(uuid::random())};
-  auto [push_input, pull_input]
-    = exec_ctx.make_channel<table_slice>(ChannelId::first(id.op(0)));
-  auto [push_output, pull_output]
-    = exec_ctx.make_channel<table_slice>(ChannelId::last(id.op(num_ops - 1)));
-  // A bounded transform has no outside controller, so we keep only the
-  // receiver. The matching sender dies with the temporary tuple at the end of
-  // this statement, which closes the channel; the chain's
-  // `from_control_.recv()` then resolves with `None` instead of pinning the
-  // chain's `JoinSet` open forever.
-  auto from_ctl_recv = std::get<1>(channel<FromControl>(16));
-  auto [to_ctl_send, to_ctl_recv] = channel<ToControl>(16);
-  // Feeder cancellation. The chain's receiver may be dropped before the feeder
-  // pushes all input (for example, a `head N` operator inside the transform
-  // emits `no_more_input` after seeing N events). Because dropping a receiver
-  // does not close the channel (see `Receiver` in `channel.hpp`), the feeder
-  // would otherwise block on `push_input` once the buffer fills. We forward
-  // that signal here to cancel the feeder.
-  auto feed_cancel = folly::CancellationSource{};
   co_await async_scope([&](AsyncScope& scope) -> Task<void> {
     scope.spawn(run_profiler(profiler, exec_ctx, num_ops));
-    // Chain runner.
-    scope.spawn(folly::coro::co_invoke(
-      [chain = std::move(chain), pull_input = std::move(pull_input),
-       push_output = std::move(push_output),
-       from_ctl_recv = std::move(from_ctl_recv),
-       to_ctl_send = std::move(to_ctl_send), id, &exec_ctx, &sys,
-       &dh]() mutable -> Task<void> {
-        co_await run_chain(std::move(chain), std::move(pull_input),
-                           std::move(push_output), std::move(from_ctl_recv),
-                           std::move(to_ctl_send), id, exec_ctx, sys, dh);
-      }));
-    // Feeder. Drops `push_input` on exit, closing the input channel. Honors
-    // `feed_cancel` so we exit promptly if the chain stops reading upstream.
-    scope.spawn(folly::coro::co_invoke(
-      [&feed_input, push_input = std::move(push_input),
-       token = feed_cancel.getToken()]() mutable -> Task<void> {
-        co_await folly::coro::co_withCancellation(
-          token, folly::coro::co_invoke([&]() mutable -> Task<void> {
-            co_await feed_input(*push_input);
-          }));
-      }));
-    // Drain control messages and react to `no_more_input` by cancelling the
-    // feeder. Other control signals (e.g., shutdown readiness, checkpoint
-    // bookkeeping) are not actionable for a bounded one-shot transform.
-    scope.spawn(folly::coro::co_invoke([to_ctl_recv = std::move(to_ctl_recv),
-                                        &feed_cancel]() mutable -> Task<void> {
-      while (auto msg = co_await to_ctl_recv.recv()) {
-        if (*msg == ToControl::no_more_input) {
-          feed_cancel.requestCancellation();
-        }
-      }
-    }));
-    co_await drain_output(*pull_output);
+    co_await run_bounded_pipeline(std::move(chain), exec_ctx, sys, dh,
+                                  std::move(feed_input),
+                                  std::move(drain_output));
     scope.cancel();
   });
   co_return dh.failure();
-}
-
-auto run_transform(std::vector<table_slice> input,
-                   OperatorChain<table_slice, table_slice> chain,
-                   caf::actor_system& sys, DiagHandler& dh, Profiler profiler,
-                   bool is_hidden)
-  -> Task<failure_or<std::vector<table_slice>>> {
-  auto output_slices = std::vector<table_slice>{};
-  auto feed_input
-    = [input_slices = std::move(input)](
-        Push<OperatorMsg<table_slice>>& push_input) mutable -> Task<void> {
-    for (auto& slice : input_slices) {
-      if (slice.rows() == 0) {
-        continue;
-      }
-      co_await push_input(OperatorMsg<table_slice>{std::move(slice)});
-    }
-    co_await push_input(OperatorMsg<table_slice>{Signal{EndOfData{}}});
-  };
-  auto drain_output
-    = [&output_slices](
-        Pull<OperatorMsg<table_slice>>& pull_output) mutable -> Task<void> {
-    while (auto msg = co_await pull_output()) {
-      co_await co_match(
-        std::move(*msg),
-        [&](table_slice slice) -> Task<void> {
-          if (slice.rows() > 0) {
-            output_slices.push_back(std::move(slice));
-          }
-          co_return;
-        },
-        [&](Signal signal) -> Task<void> {
-          co_await co_match(
-            signal,
-            [&](EndOfData) -> Task<void> {
-              co_return;
-            },
-            [&](Checkpoint) -> Task<void> {
-              co_return;
-            });
-        });
-    }
-  };
-  CO_TRY(co_await run_transform(std::move(chain), sys, dh, std::move(profiler),
-                                is_hidden, std::move(feed_input),
-                                std::move(drain_output)));
-  co_return output_slices;
 }
 
 namespace {
@@ -2377,15 +2283,13 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   auto null_dh = null_diagnostic_handler{};
   auto output = Option<element_type_tag>{};
   auto implicit_source = Option<std::string_view>{};
-  if (auto inferred = ir.infer_type(tag_v<void>, null_dh);
-      inferred and *inferred) {
-    output = **inferred;
+  if (auto inferred = ir.infer_type(tag_v<void>, null_dh); inferred) {
+    output = *inferred;
   } else if (auto inferred = ir.infer_type(tag_v<chunk_ptr>, null_dh);
-             inferred and *inferred and not cfg.implicit_bytes_source.empty()) {
+             inferred and not cfg.implicit_bytes_source.empty()) {
     implicit_source = cfg.implicit_bytes_source;
   } else if (auto inferred = ir.infer_type(tag_v<table_slice>, null_dh);
-             inferred and *inferred
-             and not cfg.implicit_events_source.empty()) {
+             inferred and not cfg.implicit_events_source.empty()) {
     implicit_source = cfg.implicit_events_source;
   } else {
     TRY(output, ir.infer_type(tag_v<void>, ctx));
@@ -2398,8 +2302,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     ir.operators.insert(ir.operators.begin(),
                         std::move_iterator{implicit.operators.begin()},
                         std::move_iterator{implicit.operators.end()});
-    TRY(auto inferred_after_source, ir.infer_type(tag_v<void>, ctx));
-    output = *inferred_after_source;
+    TRY(output, ir.infer_type(tag_v<void>, ctx));
   }
   if (output.is_none()) {
     // TODO: Improve?

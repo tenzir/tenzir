@@ -33,10 +33,8 @@ public:
 
   auto process(chunk_ptr input, Push<table_slice>&, OpCtx&)
     -> Task<void> override {
-    if (input->size() == 0) {
-      co_return;
-    }
     buffer_.push_back(std::move(input));
+    co_return;
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)

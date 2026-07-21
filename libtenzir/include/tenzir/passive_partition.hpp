@@ -20,6 +20,7 @@
 #include "tenzir/type.hpp"
 #include "tenzir/uuid.hpp"
 
+#include <caf/message_priority.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <filesystem>
@@ -85,6 +86,9 @@ struct passive_partition_state {
   /// Actor handle of the filesystem.
   filesystem_actor filesystem = {};
 
+  /// The priority for requests to the filesystem actor.
+  caf::message_priority priority = caf::message_priority::normal;
+
   /// The store to retrieve the data from.
   store_actor store = {};
 
@@ -122,8 +126,10 @@ struct partition_chunk {
 /// @param id The UUID of this partition.
 /// @param filesystem The actor handle of the filesystem actor.
 /// @param path The path where the partition flatbuffer can be found.
+/// @param priority The priority for requests to the filesystem actor.
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  filesystem_actor filesystem, const std::filesystem::path& path);
+  filesystem_actor filesystem, const std::filesystem::path& path,
+  caf::message_priority priority);
 
 } // namespace tenzir

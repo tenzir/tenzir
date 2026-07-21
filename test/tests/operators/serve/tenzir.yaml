@@ -32,3 +32,52 @@ tenzir:
           {i: 43},
           {s: "str 2", i: 1}
         serve "serve_multi_2"
+    serve_multi_partial:
+      name: serve multi partial
+      definition: |
+        from {s: "Hello World 1"},
+          {s: "Hiya 1"},
+          {i: 42},
+          {s: "str 1", i: 0}
+        serve "serve_multi_partial"
+    serve_multi_idle:
+      name: serve multi idle
+      definition: |
+        subscribe "serve_multi_idle_topic"
+        serve "serve_multi_idle"
+    serve_multi_schema_a:
+      name: serve multi schema a
+      definition: |
+        from {s: "Hello World 1"},
+          {s: "Hiya 1"},
+          {i: 42},
+          {s: "str 1", i: 0}
+        serve "serve_multi_schema_a"
+    serve_multi_schema_b:
+      name: serve multi schema b
+      definition: |
+        from {s: "Hello World 2"},
+          {s: "Hiya 2"},
+          {i: 43},
+          {s: "str 2", i: 1}
+        serve "serve_multi_schema_b"
+    serve_retry:
+      name: serve retry
+      definition: |
+        from {n: 1}, {n: 2}, {n: 3}, {n: 4}
+        serve "serve_retry"
+    serve_multi_retry_a:
+      name: serve multi retry a
+      definition: |
+        from {n: 1}, {n: 2}, {n: 3}, {n: 4}
+        serve "serve_multi_retry_a"
+    serve_multi_retry_b:
+      name: serve multi retry b
+      definition: |
+        from {n: 5}, {n: 6}, {n: 7}, {n: 8}
+        serve "serve_multi_retry_b"
+    serve_first_page:
+      name: serve first page
+      definition: |
+        from {n: 1}, {n: 2}, {n: 3}, {n: 4}
+        serve "serve_first_page"

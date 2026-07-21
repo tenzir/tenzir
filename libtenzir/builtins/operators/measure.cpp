@@ -161,9 +161,6 @@ public:
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (input.rows() == 0) {
-      co_return;
-    }
     auto& events = counters_[input.schema()];
     const auto is_new = events == 0;
     events = args_.cumulative ? events + input.rows() : input.rows();
@@ -203,9 +200,6 @@ public:
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (not input or input->size() == 0) {
-      co_return;
-    }
     counter_ = args_.cumulative ? counter_ + input->size() : input->size();
 
     series_builder builder_;

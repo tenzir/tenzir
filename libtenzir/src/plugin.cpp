@@ -535,7 +535,8 @@ auto store_plugin::make_store_builder(filesystem_actor fs,
 }
 
 auto store_plugin::make_store(filesystem_actor fs,
-                              std::span<const std::byte> header) const
+                              std::span<const std::byte> header,
+                              caf::message_priority priority) const
   -> caf::expected<store_actor> {
   auto store = make_passive_store();
   if (not store) {
@@ -552,8 +553,10 @@ auto store_plugin::make_store(filesystem_actor fs,
   std::error_code err{};
   const auto abs_dir = std::filesystem::absolute(db_dir, err);
   auto path = abs_dir / "archive" / fmt::format("{}.{}", id, name());
-  return fs->home_system().spawn<caf::lazy_init>(
-    default_passive_store, std::move(*store), fs, std::move(path), name());
+  return fs->home_system().spawn<caf::lazy_init>(default_passive_store,
+                                                 std::move(*store), fs,
+                                                 std::move(path), name(),
+                                                 priority);
 }
 
 // -- aspect plugin ------------------------------------------------------------

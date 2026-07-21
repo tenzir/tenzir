@@ -294,7 +294,7 @@ public:
   }
 
   auto process_sub(SubKeyView, chunk_ptr chunk, OpCtx&) -> Task<void> override {
-    if (lifecycle_ != Lifecycle::running or not chunk or chunk->size() == 0) {
+    if (lifecycle_ != Lifecycle::running) {
       co_return;
     }
     co_await message_queue_->enqueue(Payload{std::move(chunk)});
@@ -572,7 +572,7 @@ public:
       if (output.is_error()) {
         return {};
       }
-      if (not *output or (*output)->is_not<chunk_ptr>()) {
+      if (output->is_not<chunk_ptr>()) {
         diagnostic::error("pipeline must return bytes")
           .primary(printer.source.subloc(0, 1))
           .emit(ctx);

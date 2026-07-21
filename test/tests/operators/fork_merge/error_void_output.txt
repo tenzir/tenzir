@@ -1,0 +1,6 @@
+error: `fork_merge` subpipelines must produce events
+ --> tests/operators/fork_merge/error_void_output.tql:6:12
+  |
+6 | fork_merge { discard }, { summarize c=count() }
+  |            ^^^^^^^^^^^ 
+  |

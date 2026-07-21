@@ -225,7 +225,7 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (done_ or input.rows() == 0) {
+    if (done_) {
       co_return;
     }
     TENZIR_ASSERT(client_);

@@ -43,9 +43,6 @@ public:
 
   auto process(table_slice slice, Push<chunk_ptr>&, OpCtx& ctx)
     -> Task<void> override {
-    if (slice.rows() == 0) {
-      co_return;
-    }
     auto resolved = resolve(args_.field, slice);
     if (auto* error = std::get_if<resolve_error>(&resolved)) {
       emit_resolve_error(*error, ctx);

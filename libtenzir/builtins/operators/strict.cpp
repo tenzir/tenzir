@@ -243,11 +243,8 @@ struct strict : public virtual operator_plugin2<strict_operator>,
                 -> failure_or<Option<SpawnWith<StrictArgs, Input>>> {
       TRY(auto p, ctx.get(pipe));
       TRY(auto output, p.inner.infer_type(tag_v<Input>, ctx));
-      if (not output) {
-        return {};
-      }
       return match(
-        *output,
+        output,
         [](tag<table_slice>)
           -> failure_or<Option<SpawnWith<StrictArgs, Input>>> {
           return [](StrictArgs args) {
