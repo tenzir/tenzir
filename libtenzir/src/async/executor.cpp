@@ -1877,10 +1877,24 @@ private:
         for (auto i = size_t{0}; i < lanes.size(); ++i) {
           outputs[lanes[i]] = AnyOpPush{std::move(parts.lanes[i])};
         }
-        // The planner never emits `Gather` to `{output}` — the output
-        // boundary always goes through `Direct` or `GatherSignals`, with
-        // `into_single` collapsing parallel tails through an identity.
-        TENZIR_ASSERT(plan.to[0] != ir::PlanPort::output);
+        if (plan.to[0] == ir::PlanPort::output) {
+          auto out = std::move(
+            as<Box<Push<OperatorMsg<table_slice>>>>(push_downstream_));
+          mergers.push_back(std::move(parts.merger));
+          // Move captures through coroutine parameters, not through lambda
+          // captures: an immediately-invoked lambda's closure is destroyed
+          // at the end of the full expression, so a lazy `Task<>` coroutine
+          // that resumes later would find its captures dangling. Passing
+          // them as arguments moves them into the coroutine frame instead.
+          mergers.push_back(
+            [](Box<Pull<OperatorMsg<table_slice>>> pull,
+               Box<Push<OperatorMsg<table_slice>>> out) -> Task<void> {
+              while (auto msg = co_await (*pull)()) {
+                co_await (*out)(std::move(*msg));
+              }
+            }(std::move(parts.pull), std::move(out)));
+          return;
+        }
         auto const& to = instances_of[plan.to[0]];
         TENZIR_ASSERT(to.size() == 1);
         inputs[to[0]] = AnyOpPull{std::move(parts.pull)};
