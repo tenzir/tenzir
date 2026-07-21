@@ -1,1 +1,7 @@
-error: json parser: parser input ended with incomplete object
+error: failed to parse Splunk response as JSON
+ --> tests/operators/from_splunk/error_malformed_json.tql:6:13
+  |
+6 | from_splunk env("HTTP_FIXTURE_SPLUNK_MALFORMED_URL"),
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |
+  = note: TAPE_ERROR: The JSON document has an improper structure: missing or superfluous commas, braces, missing keys, etc.  This is a fatal and unrecoverable error.

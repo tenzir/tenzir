@@ -1,7 +1,0 @@
-error: `search` must be deterministic
- --> tests/operators/from_splunk/error_nondeterministic_search.tql:6:11
-  |
-6 |   search=("search index=main" if random() < 0.5 else "search index=other"),
-  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
-  |
-  = note: Splunk request arguments must have a stable value during pipeline instantiation

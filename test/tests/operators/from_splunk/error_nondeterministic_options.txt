@@ -1,7 +1,0 @@
-error: `options` must be deterministic
- --> tests/operators/from_splunk/error_nondeterministic_options.tql:9:12
-  |
-9 |   options=({index_earliest: "rt"} if random() < 0.5 else {index_earliest: "-20m"}),
-  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
-  |
-  = note: Splunk request arguments must have a stable value during pipeline instantiation

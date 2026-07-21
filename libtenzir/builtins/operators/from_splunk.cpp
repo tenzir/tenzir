@@ -6,26 +6,39 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/arc.hpp"
 #include "tenzir/argument_parser2.hpp"
-#include "tenzir/compile_ctx.hpp"
+#include "tenzir/async/task.hpp"
+#include "tenzir/co_match.hpp"
+#include "tenzir/curl.hpp"
+#include "tenzir/data.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/format_utils.hpp"
-#include "tenzir/ir.hpp"
+#include "tenzir/http.hpp"
+#include "tenzir/http_pool.hpp"
+#include "tenzir/location.hpp"
+#include "tenzir/multi_series_builder.hpp"
 #include "tenzir/operator_plugin.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/plugin.hpp"
-#include "tenzir/substitute_ctx.hpp"
-#include "tenzir/tql2/eval.hpp"
-#include "tenzir/tql2/parser.hpp"
-#include "tenzir/tql2/plugin.hpp"
-#include "tenzir/tql2/resolve.hpp"
+#include "tenzir/secret_resolution.hpp"
+#include "tenzir/tls_options.hpp"
 #include "tenzir/try.hpp"
-#include "tenzir/view3.hpp"
+#include "tenzir/type.hpp"
+#include "tenzir/variant.hpp"
 
+#include <boost/url/parse.hpp>
+#include <caf/error.hpp>
+#include <caf/message.hpp>
+#include <folly/CancellationToken.h>
+#include <folly/coro/BoundedQueue.h>
+#include <folly/coro/WithCancellation.h>
+
+#include <chrono>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -33,70 +46,28 @@ namespace tenzir::plugins::from_splunk {
 
 namespace {
 
-constexpr auto error_field_name = std::string_view{"_from_splunk_error"};
+constexpr auto export_path
+  = std::string_view{"/services/search/v2/jobs/export"};
+
+struct FromSplunkArgs {
+  located<std::string> url;
+  located<std::string> search;
+  located<data> earliest;
+  located<data> latest;
+  Option<located<data>> options;
+  located<data> headers;
+  Option<located<data>> tls;
+  Option<located<duration>> timeout;
+  Option<located<duration>> connection_timeout;
+  Option<located<uint64_t>> max_retry_count;
+  Option<located<duration>> retry_delay;
+  location operator_location = location::unknown;
+};
 
 struct SplunkMessage {
   std::string type;
   std::string text;
 };
-
-struct Args {
-  located<std::string> url;
-  ast::expression search;
-  ast::expression earliest;
-  ast::expression latest;
-  Option<ast::expression> options;
-  located<data> headers;
-  Option<ast::expression> tls;
-  Option<located<duration>> timeout;
-  Option<located<duration>> connection_timeout;
-  Option<located<uint64_t>> max_retry_count;
-  Option<located<duration>> retry_delay;
-};
-
-auto make_constant(data value, location source) -> ast::expression {
-  auto constant = match(
-    std::move(value),
-    [](pattern const&) -> ast::constant::kind {
-      TENZIR_UNREACHABLE();
-    },
-    []<class T>(T&& value) -> ast::constant::kind
-      requires(not std::same_as<std::decay_t<T>, pattern>)
-    {
-      return std::forward<T>(value);
-    });
-  return ast::constant{std::move(constant), source};
-}
-
-auto make_named_arg(std::string name, ast::expression value, location source)
-  -> ast::expression {
-  auto field = ast::field_path::try_from(
-    ast::root_field{ast::identifier{std::move(name), source}});
-  TENZIR_ASSERT(field);
-  return ast::assignment{std::move(field).value().unwrap(), source,
-                         std::move(value)};
-}
-
-auto append_named_arg(ast::invocation& inv, std::string name, data value,
-                      location source) -> void {
-  inv.args.push_back(make_named_arg(
-    std::move(name), make_constant(std::move(value), source), source));
-}
-
-auto check_non_empty_literal(std::string_view name,
-                             ast::expression const& expression,
-                             diagnostic_handler& dh) -> failure_or<void> {
-  auto const* constant = try_as<ast::constant>(expression);
-  if (not constant) {
-    return {};
-  }
-  auto const* value = try_as<std::string>(constant->value);
-  if (not value) {
-    return {};
-  }
-  return check_non_empty(
-    name, located<std::string>{*value, expression.get_location()}, dh);
-}
 
 auto is_realtime_time_bound(std::string_view value) -> bool {
   value = detail::trim(value);
@@ -108,8 +79,8 @@ auto is_realtime_time_bound(std::string_view value) -> bool {
          or value[2] == '@';
 }
 
-auto validate_time_bound_value(std::string_view name, data const& value,
-                               location source, diagnostic_handler& dh)
+auto validate_time_bound(std::string_view name, data const& value,
+                         location source, diagnostic_handler& dh)
   -> failure_or<void> {
   if (auto const* string = try_as<std::string>(value)) {
     TRY(check_non_empty(name, located<std::string>{*string, source}, dh));
@@ -132,13 +103,6 @@ auto validate_time_bound_value(std::string_view name, data const& value,
   return failure::promise();
 }
 
-auto validate_time_bound(std::string_view name,
-                         ast::expression const& expression, location source,
-                         diagnostic_handler& dh) -> failure_or<void> {
-  TRY(auto value, const_eval(expression, dh));
-  return validate_time_bound_value(name, value, source, dh);
-}
-
 auto is_protected_option(std::string_view name) -> bool {
   return detail::ascii_icase_equal(name, "search")
          or detail::ascii_icase_equal(name, "earliest_time")
@@ -155,12 +119,12 @@ auto is_realtime_only_option(std::string_view name) -> bool {
          or normalized == "replay_lt" or normalized == "replay_speed";
 }
 
-auto validate_options(ast::expression const& expression, location source,
-                      diagnostic_handler& dh) -> failure_or<void> {
-  TRY(auto value, const_eval(expression, dh));
-  auto const* options = try_as<record>(value);
+auto validate_options(located<data> const& value, diagnostic_handler& dh)
+  -> failure_or<void> {
+  auto const source = value.source;
+  auto const* options = try_as<record>(value.inner);
   if (not options) {
-    auto const inferred = type::infer(value);
+    auto const inferred = type::infer(value.inner);
     diagnostic::error("expected `record` for `options`")
       .primary(source, "got `{}`", inferred ? inferred->kind() : type_kind{})
       .emit(dh);
@@ -198,21 +162,37 @@ auto validate_options(ast::expression const& expression, location source,
     }
     if (detail::ascii_icase_equal(name, "index_earliest")
         or detail::ascii_icase_equal(name, "index_latest")) {
-      TRY(validate_time_bound_value(name, option, source, dh));
+      TRY(validate_time_bound(name, option, source, dh));
     }
   }
   return {};
 }
 
-auto extract_messages(record const& envelope) -> std::vector<SplunkMessage> {
-  auto result = std::vector<SplunkMessage>{};
-  list const* messages = nullptr;
-  for (auto const& [name, value] : envelope) {
-    if (name == "messages") {
-      messages = try_as<list>(value);
-      break;
+auto validate_headers(located<data> const& value, diagnostic_handler& dh)
+  -> failure_or<void> {
+  auto const* headers = try_as<record>(value.inner);
+  if (not headers) {
+    diagnostic::error("`headers` must be a record").primary(value).emit(dh);
+    return failure::promise();
+  }
+  for (auto const& [name, _] : *headers) {
+    if (detail::ascii_icase_equal(name, "authorization")) {
+      return {};
     }
   }
+  diagnostic::error("`headers` must contain an `Authorization` header")
+    .primary(value)
+    .emit(dh);
+  return failure::promise();
+}
+
+auto extract_messages(record const& envelope) -> std::vector<SplunkMessage> {
+  auto result = std::vector<SplunkMessage>{};
+  auto const it = envelope.find("messages");
+  if (it == envelope.end()) {
+    return result;
+  }
+  auto const* messages = try_as<list>(it->second);
   if (not messages) {
     return result;
   }
@@ -240,47 +220,7 @@ auto extract_messages(record const& envelope) -> std::vector<SplunkMessage> {
   return result;
 }
 
-auto extract_messages(record_view3 envelope) -> std::vector<SplunkMessage> {
-  auto result = std::vector<SplunkMessage>{};
-  auto messages = Option<list_view3>{};
-  for (auto [name, value] : envelope) {
-    if (name == "messages") {
-      if (auto const* list = try_as<list_view3>(value)) {
-        messages = *list;
-      }
-      break;
-    }
-  }
-  if (not messages) {
-    return result;
-  }
-  for (auto message : *messages) {
-    auto const* message_record = try_as<record_view3>(message);
-    if (not message_record) {
-      continue;
-    }
-    auto parsed = SplunkMessage{};
-    for (auto [name, value] : *message_record) {
-      auto const* text = try_as<std::string_view>(value);
-      if (not text) {
-        continue;
-      }
-      if (name == "type") {
-        parsed.type = *text;
-      } else if (name == "text") {
-        parsed.text = *text;
-      }
-    }
-    if (not parsed.type.empty() or not parsed.text.empty()) {
-      result.push_back(std::move(parsed));
-    }
-  }
-  return result;
-}
-
-auto response_body_text(blob_view body) -> std::string {
-  auto const* data = reinterpret_cast<char const*>(body.data());
-  auto text = std::string_view{data, body.size()};
+auto response_body_text(std::string_view text) -> std::string {
   if (auto parsed = from_json(text)) {
     if (auto const* envelope = try_as<record>(*parsed)) {
       auto messages = extract_messages(*envelope);
@@ -308,359 +248,458 @@ auto response_body_text(blob_view body) -> std::string {
   return fmt::format("{}...", text.substr(0, max_body_size));
 }
 
-class ValidateSplunkResponse final : public Operator<table_slice, table_slice> {
+auto make_export_url(std::string url) -> std::string {
+  if (url.ends_with('/')) {
+    url.pop_back();
+  }
+  url += export_path;
+  return url;
+}
+
+auto make_request_target(std::string_view url, location loc,
+                         diagnostic_handler& dh) -> failure_or<std::string> {
+  auto parsed = boost::urls::parse_uri(url);
+  if (not parsed) {
+    diagnostic::error("failed to parse Splunk URL: {}",
+                      parsed.error().message())
+      .primary(loc)
+      .emit(dh);
+    return failure::promise();
+  }
+  return std::string{parsed->encoded_target()};
+}
+
+auto make_form_body(FromSplunkArgs const& args) -> std::string {
+  auto body = record{};
+  body.emplace("search", args.search.inner);
+  body.emplace("earliest_time", args.earliest.inner);
+  body.emplace("latest_time", args.latest.inner);
+  body.emplace("output_mode", std::string{"json"});
+  body.emplace("preview", std::string{"false"});
+  if (args.options) {
+    auto const* options = try_as<record>(args.options->inner);
+    TENZIR_ASSERT(options);
+    for (auto const& [name, value] : *options) {
+      body.emplace(name, value);
+    }
+  }
+  return curl::escape(flatten(body));
+}
+
+// Renders a JSON parse error without the caf boilerplate, mirroring what
+// `diagnostic::error(caf::error)` extracts.
+auto render_parse_error(caf::error const& err) -> std::string {
+  auto const& ctx = err.context();
+  if (ctx.size() > 0 and ctx.match_element<std::string>(ctx.size() - 1)) {
+    return ctx.get_as<std::string>(ctx.size() - 1);
+  }
+  return fmt::to_string(err);
+}
+
+// Messages sent from the streaming fetch task to the operator.
+struct StreamSlice {
+  table_slice slice;
+};
+
+// A Splunk `messages` envelope reported a `WARN` condition.
+struct StreamWarning {
+  std::string type;
+  std::string text;
+};
+
+// The HTTP layer retried the request.
+struct RetryWarning {
+  std::string message;
+};
+
+// A Splunk `messages` envelope reported an `ERROR` or `FATAL` condition.
+struct SearchFailed {
+  std::string text;
+};
+
+// Splunk answered with a non-success HTTP status.
+struct SearchRejected {
+  std::string text;
+};
+
+// The HTTP request itself failed.
+struct RequestFailed {
+  std::string message;
+};
+
+struct ParseFailed {
+  std::string message;
+  Option<std::string> detail;
+};
+
+struct StreamDone {};
+
+using StreamMessage
+  = variant<StreamSlice, StreamWarning, RetryWarning, SearchFailed,
+            SearchRejected, RequestFailed, ParseFailed, StreamDone>;
+
+using StreamQueue = folly::coro::BoundedQueue<StreamMessage, false, true>;
+
+// Streams the Splunk export response and forwards results through the queue.
+// Runs detached from the operator, so it must not touch the operator or its
+// diagnostic handler.
+auto run_export_request(std::string url, std::string target, std::string body,
+                        std::vector<http::Header> headers,
+                        HttpPoolConfig config, Arc<StreamQueue> queue,
+                        folly::Executor::KeepAlive<folly::IOExecutor> executor)
+  -> Task<void> {
+  auto success = false;
+  auto stopped = false;
+  auto error_body = std::string{};
+  auto buffer = std::string{};
+  auto builder_dh = null_diagnostic_handler{};
+  auto builder = multi_series_builder{
+    multi_series_builder::options{
+      .settings = {.default_schema_name = "tenzir.splunk"},
+    },
+    builder_dh};
+  // Processes one newline-delimited response envelope. Returns true to stop
+  // consuming the stream.
+  auto process_line = [&](std::string_view line) -> Task<bool> {
+    line = detail::trim(line);
+    if (line.empty()) {
+      co_return false;
+    }
+    auto parsed = from_json(line);
+    if (not parsed) {
+      co_await queue->enqueue(
+        ParseFailed{"failed to parse Splunk response as JSON",
+                    render_parse_error(parsed.error())});
+      co_return true;
+    }
+    auto* envelope = try_as<record>(*parsed);
+    if (not envelope) {
+      co_await queue->enqueue(
+        ParseFailed{"expected Splunk response to be a JSON object", {}});
+      co_return true;
+    }
+    for (auto const& message : extract_messages(*envelope)) {
+      auto text = message.text.empty() ? std::string{"no details provided"}
+                                       : message.text;
+      if (detail::ascii_icase_equal(message.type, "ERROR")
+          or detail::ascii_icase_equal(message.type, "FATAL")) {
+        co_await queue->enqueue(SearchFailed{std::move(text)});
+        co_return true;
+      }
+      auto type = message.type.empty() ? std::string{"message"} : message.type;
+      if (detail::ascii_icase_equal(message.type, "WARN")) {
+        co_await queue->enqueue(
+          StreamWarning{std::move(type), std::move(text)});
+        continue;
+      }
+      TENZIR_DEBUG("from_splunk: search returned {}: {}", type, text);
+    }
+    auto const it = envelope->find("result");
+    if (it == envelope->end() or is<caf::none_t>(it->second)) {
+      co_return false;
+    }
+    if (is<record>(it->second)) {
+      builder.data(std::move(it->second));
+    }
+    co_return false;
+  };
+  auto callbacks = HttpStreamCallbacks{};
+  callbacks.on_headers = [&](http::Response const& response) {
+    success = response.is_status_success();
+  };
+  callbacks.on_body = [&](std::string chunk) -> Task<bool> {
+    if (not success) {
+      constexpr auto max_error_body_size = size_t{65536};
+      if (error_body.size() < max_error_body_size) {
+        error_body += chunk;
+      }
+      co_return false;
+    }
+    buffer += chunk;
+    auto pos = size_t{};
+    while ((pos = buffer.find('\n')) != std::string::npos) {
+      auto const line = std::string_view{buffer.data(), pos};
+      if (co_await process_line(line)) {
+        stopped = true;
+        co_return true;
+      }
+      buffer.erase(0, pos + 1);
+    }
+    for (auto&& slice : builder.yield_ready_as_table_slice()) {
+      co_await queue->enqueue(StreamSlice{std::move(slice)});
+    }
+    co_return false;
+  };
+  auto pool = HttpPool::make(std::move(executor), url, std::move(config));
+  auto result
+    = co_await pool->stream_post(std::move(target), std::move(body),
+                                 std::move(headers), std::move(callbacks));
+  if (stopped) {
+    co_await queue->enqueue(StreamDone{});
+    co_return;
+  }
+  if (result.is_err()) {
+    co_await queue->enqueue(RequestFailed{std::move(result).unwrap_err()});
+    co_await queue->enqueue(StreamDone{});
+    co_return;
+  }
+  auto response = std::move(result).unwrap();
+  if (not response.is_status_success()) {
+    auto message = response_body_text(error_body);
+    if (message.empty()) {
+      message = "HTTP request failed without a response body";
+    }
+    co_await queue->enqueue(SearchRejected{std::move(message)});
+    co_await queue->enqueue(StreamDone{});
+    co_return;
+  }
+  if (not buffer.empty()) {
+    if (co_await process_line(buffer)) {
+      co_await queue->enqueue(StreamDone{});
+      co_return;
+    }
+  }
+  for (auto&& slice : builder.finalize_as_table_slice()) {
+    co_await queue->enqueue(StreamSlice{std::move(slice)});
+  }
+  co_await queue->enqueue(StreamDone{});
+}
+
+class FromSplunk final : public Operator<void, table_slice> {
 public:
-  ValidateSplunkResponse(std::string search, location search_source)
-    : search_{std::move(search)}, search_source_{search_source} {
+  explicit FromSplunk(FromSplunkArgs args) : args_{std::move(args)} {
   }
 
-  auto start(OpCtx&) -> Task<void> override {
-    TENZIR_DEBUG("from_splunk: submitting streaming search without pagination: "
-                 "{}",
-                 search_);
+  auto start(OpCtx& ctx) -> Task<void> override {
+    events_read_
+      = ctx.make_counter(MetricsLabel{"operator", "from_splunk"},
+                         MetricsDirection::read, MetricsVisibility::external_,
+                         MetricsUnit::events);
+    auto resolved_headers = std::vector<http::Header>{};
+    auto header_requests = http::make_header_secret_requests(
+      Option<located<data>>{args_.headers}, resolved_headers, ctx.dh());
+    if (auto result = co_await ctx.resolve_secrets(std::move(header_requests));
+        result.is_error()) {
+      done_ = true;
+      co_return;
+    }
+    auto url = make_export_url(args_.url.inner);
+    auto const request_timeout
+      = args_.timeout ? std::chrono::duration_cast<std::chrono::milliseconds>(
+                          args_.timeout->inner)
+                      : std::chrono::milliseconds{http::default_timeout};
+    auto config = http::make_http_pool_config(args_.tls, url, args_.url.source,
+                                              ctx.dh(), request_timeout,
+                                              ctx.actor_system().config());
+    if (not config) {
+      done_ = true;
+      co_return;
+    }
+    if (args_.connection_timeout) {
+      config->connection_timeout
+        = std::chrono::duration_cast<std::chrono::milliseconds>(
+          args_.connection_timeout->inner);
+    }
+    config->max_retry_count
+      = args_.max_retry_count
+          ? detail::narrow<uint32_t>(args_.max_retry_count->inner)
+          : http::default_max_retry_count;
+    config->retry_delay
+      = args_.retry_delay
+          ? std::chrono::duration_cast<std::chrono::milliseconds>(
+              args_.retry_delay->inner)
+          : std::chrono::milliseconds{http::default_retry_delay};
+    auto target = make_request_target(url, args_.url.source, ctx.dh());
+    if (not target) {
+      done_ = true;
+      co_return;
+    }
+    if (not http::find(resolved_headers, "content-type")) {
+      resolved_headers.emplace_back("Content-Type",
+                                    "application/x-www-form-urlencoded");
+    }
+    if (not http::find(resolved_headers, "accept")) {
+      resolved_headers.emplace_back("Accept", "application/json");
+    }
+    auto queue = Arc<StreamQueue>{std::in_place, 64};
+    queue_ = queue;
+    config->on_retry = [queue](std::string_view message) mutable {
+      std::ignore = queue->try_enqueue(RetryWarning{std::string{message}});
+    };
+    url_ = url;
+    TENZIR_DEBUG("from_splunk: submitting streaming search without "
+                 "pagination: {}",
+                 args_.search.inner);
+    ctx.spawn_task([url = std::move(url), target = std::move(*target),
+                    body = make_form_body(args_),
+                    headers = std::move(resolved_headers),
+                    config = std::move(*config), queue = std::move(queue),
+                    executor = ctx.io_executor(),
+                    cancel = cancel_.getToken()]() mutable -> Task<void> {
+      auto token = folly::cancellation_token_merge(
+        co_await folly::coro::co_current_cancellation_token, cancel);
+      co_await folly::coro::co_withCancellation(
+        token,
+        run_export_request(std::move(url), std::move(target), std::move(body),
+                           std::move(headers), std::move(config),
+                           std::move(queue), std::move(executor)));
+    });
+  }
+
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    if (done_ or not queue_) {
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
+    co_return Any{co_await (*queue_)->dequeue()};
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    co_await co_match(
+      std::move(result).as<StreamMessage>(),
+      [&](StreamSlice msg) -> Task<void> {
+        auto const rows = msg.slice.rows();
+        co_await push(std::move(msg.slice));
+        events_read_.add(rows);
+      },
+      [&](StreamWarning msg) -> Task<void> {
+        diagnostic::warning("Splunk search returned {}: {}", msg.type, msg.text)
+          .primary(args_.search.source)
+          .note("search: {}", args_.search.inner)
+          .emit(ctx);
+        co_return;
+      },
+      [&](RetryWarning msg) -> Task<void> {
+        diagnostic::warning("{}", msg.message)
+          .primary(args_.url.source)
+          .emit(ctx);
+        co_return;
+      },
+      [&](SearchFailed msg) -> Task<void> {
+        diagnostic::error("Splunk search failed: {}", msg.text)
+          .primary(args_.search.source)
+          .note("search: {}", args_.search.inner)
+          .emit(ctx);
+        done_ = true;
+        co_return;
+      },
+      [&](SearchRejected msg) -> Task<void> {
+        diagnostic::error("Splunk rejected the search: {}", msg.text)
+          .primary(args_.search.source)
+          .note("search: {}", args_.search.inner)
+          .emit(ctx);
+        done_ = true;
+        co_return;
+      },
+      [&](RequestFailed msg) -> Task<void> {
+        diagnostic::error("HTTP request to `{}` failed: {}", url_, msg.message)
+          .primary(args_.url.source)
+          .emit(ctx);
+        done_ = true;
+        co_return;
+      },
+      [&](ParseFailed msg) -> Task<void> {
+        auto builder
+          = diagnostic::error("{}", msg.message).primary(args_.url.source);
+        if (msg.detail) {
+          builder = std::move(builder).note("{}", *msg.detail);
+        }
+        std::move(builder).emit(ctx);
+        done_ = true;
+        co_return;
+      },
+      [&](StreamDone) -> Task<void> {
+        done_ = true;
+        co_return;
+      });
+  }
+
+  auto state() -> OperatorState override {
+    return done_ ? OperatorState::done : OperatorState::normal;
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    cancel_.requestCancellation();
+    if (queue_) {
+      std::ignore = (*queue_)->try_enqueue(StreamDone{});
+    }
+    done_ = true;
     co_return;
   }
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    ++response_batches_;
-    TENZIR_TRACE("from_splunk: received response batch with {} records",
-                 input.rows());
-    auto failed = false;
-    for (auto row : values3(input)) {
-      for (auto [name, value] : row) {
-        if (name == "result" and not is<caf::none_t>(value)) {
-          ++results_received_;
-        }
-        if (name != error_field_name) {
-          continue;
-        }
-        auto const* body = try_as<blob_view>(value);
-        auto message = body ? response_body_text(*body)
-                            : std::string{"unexpected HTTP error response"};
-        if (message.empty()) {
-          message = "HTTP request failed without a response body";
-        }
-        diagnostic::error("Splunk rejected the search: {}", message)
-          .primary(search_source_)
-          .note("search: {}", search_)
-          .emit(ctx);
-        co_return;
-      }
-      for (auto const& message : extract_messages(row)) {
-        auto text = message.text.empty() ? std::string{"no details provided"}
-                                         : message.text;
-        if (detail::ascii_icase_equal(message.type, "ERROR")
-            or detail::ascii_icase_equal(message.type, "FATAL")) {
-          diagnostic::error("Splunk search failed: {}", text)
-            .primary(search_source_)
-            .note("search: {}", search_)
-            .emit(ctx);
-          failed = true;
-          continue;
-        }
-        auto type
-          = message.type.empty() ? std::string{"message"} : message.type;
-        if (detail::ascii_icase_equal(message.type, "WARN")) {
-          diagnostic::warning("Splunk search returned {}: {}", type, text)
-            .primary(search_source_)
-            .note("search: {}", search_)
-            .emit(ctx);
-          continue;
-        }
-        TENZIR_DEBUG("from_splunk: search returned {}: {}", type, text);
-      }
-    }
-    if (failed) {
-      co_return;
-    }
-    co_await push(std::move(input));
-  }
-
-  auto finalize(Push<table_slice>&, OpCtx&) -> Task<FinalizeBehavior> override {
-    TENZIR_DEBUG("from_splunk: completed streaming search with {} results in "
-                 "{} response "
-                 "batches",
-                 results_received_, response_batches_);
-    co_return FinalizeBehavior::done;
+  auto snapshot(Serde& serde) -> void override {
+    serde("done", done_);
   }
 
 private:
-  std::string search_;
-  location search_source_;
-  uint64_t results_received_ = 0;
-  uint64_t response_batches_ = 0;
+  FromSplunkArgs args_;
+  std::string url_;
+  mutable Option<Arc<StreamQueue>> queue_;
+  folly::CancellationSource cancel_;
+  MetricsCounter events_read_;
+  bool done_ = false;
 };
 
-class ValidateSplunkResponseIr final : public ir::Operator {
-public:
-  ValidateSplunkResponseIr() = default;
-
-  ValidateSplunkResponseIr(ast::expression search, ast::expression earliest,
-                           ast::expression latest,
-                           Option<ast::expression> options,
-                           location search_source, location earliest_source,
-                           location latest_source, location options_source)
-    : search_{std::move(search)},
-      earliest_{std::move(earliest)},
-      latest_{std::move(latest)},
-      options_{std::move(options)},
-      search_source_{search_source},
-      earliest_source_{earliest_source},
-      latest_source_{latest_source},
-      options_source_{options_source} {
-  }
-
-  auto name() const -> std::string override {
-    return "validate_splunk_response_ir";
-  }
-
-  auto substitute(substitute_ctx ctx, bool instantiate)
-    -> failure_or<void> override {
-    TRY(search_.substitute(ctx));
-    TRY(earliest_.substitute(ctx));
-    TRY(latest_.substitute(ctx));
-    if (options_) {
-      TRY(options_->substitute(ctx));
-    }
-    if (instantiate) {
-      auto require_deterministic
-        = [&](std::string_view name, ast::expression const& expression,
-              location source) -> failure_or<void> {
-        if (expression.is_deterministic(ctx)) {
-          return {};
-        }
-        diagnostic::error("`{}` must be deterministic", name)
-          .primary(source)
-          .note("Splunk request arguments must have a stable value during "
-                "pipeline instantiation")
-          .emit(ctx);
-        return failure::promise();
-      };
-      TRY(require_deterministic("search", search_, search_source_));
-      TRY(require_deterministic("earliest", earliest_, earliest_source_));
-      TRY(require_deterministic("latest", latest_, latest_source_));
-      if (options_) {
-        TRY(require_deterministic("options", *options_, options_source_));
-      }
-      TRY(auto value, const_eval(search_, ctx));
-      auto* search = try_as<std::string>(value);
-      if (not search) {
-        diagnostic::error("expected `string` for `search`")
-          .primary(search_)
-          .emit(ctx);
-        return failure::promise();
-      }
-      TRY(check_non_empty("search",
-                          located<std::string>{*search, search_source_}, ctx));
-      TRY(validate_time_bound("earliest", earliest_, earliest_source_, ctx));
-      TRY(validate_time_bound("latest", latest_, latest_source_, ctx));
-      if (options_) {
-        TRY(validate_options(*options_, options_source_, ctx));
-      }
-      search_value_ = std::move(*search);
-    }
-    return {};
-  }
-
-  auto spawn(element_type_tag input) const -> AnyOperator override {
-    TENZIR_ASSERT(input.is<table_slice>());
-    TENZIR_ASSERT(search_value_);
-    return ValidateSplunkResponse{*search_value_, search_source_}.with_name(
-      "from_splunk");
-  }
-
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<element_type_tag> override {
-    if (input.is_not<table_slice>()) {
-      diagnostic::error("operator expects events")
-        .primary(search_source_)
-        .emit(dh);
-      return failure::promise();
-    }
-    return tag_v<table_slice>;
-  }
-
-  auto main_location() const -> location override {
-    return search_source_;
-  }
-
-  friend auto inspect(auto& f, ValidateSplunkResponseIr& x) -> bool {
-    return f.object(x).fields(f.field("search", x.search_),
-                              f.field("earliest", x.earliest_),
-                              f.field("latest", x.latest_),
-                              f.field("options", x.options_),
-                              f.field("search_value", x.search_value_),
-                              f.field("search_source", x.search_source_),
-                              f.field("earliest_source", x.earliest_source_),
-                              f.field("latest_source", x.latest_source_),
-                              f.field("options_source", x.options_source_));
-  }
-
-private:
-  ast::expression search_;
-  ast::expression earliest_;
-  ast::expression latest_;
-  Option<ast::expression> options_;
-  Option<std::string> search_value_;
-  location search_source_;
-  location earliest_source_;
-  location latest_source_;
-  location options_source_;
-};
-
-using validate_splunk_response_ir_plugin
-  = inspection_plugin<ir::Operator, ValidateSplunkResponseIr>;
-
-template <class T>
-auto append_optional_named_arg(ast::invocation& inv, std::string name,
-                               Option<located<T>> value) -> void {
-  if (value) {
-    append_named_arg(inv, std::move(name), data{std::move(value->inner)},
-                     value->source);
-  }
-}
-
-class Plugin final : public virtual operator_compiler_plugin {
+class Plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "from_splunk";
   }
 
-  auto compile(ast::invocation inv, compile_ctx ctx) const
-    -> failure_or<ir::CompileResult> override {
-    for (auto& arg : inv.args) {
-      TRY(arg.bind(ctx));
-    }
-    auto args = Args{};
-    auto provider = session_provider::make(ctx);
-    auto session = provider.as_session();
-    TRY(argument_parser2::operator_(name())
-          .positional("url", args.url)
-          .named("search", args.search, "string")
-          .named("earliest", args.earliest, "string|time")
-          .named("latest", args.latest, "string|time")
-          .named("options", args.options, "record")
-          .named("headers", args.headers, "record")
-          .named("tls", args.tls, "record")
-          .named("timeout", args.timeout)
-          .named("connection_timeout", args.connection_timeout)
-          .named("max_retry_count", args.max_retry_count)
-          .named("retry_delay", args.retry_delay)
-          .parse(operator_factory_invocation{std::move(inv.op),
-                                             std::move(inv.args)},
-                 session));
-    TRY(check_non_empty("url", args.url, ctx));
-    auto const search_source = args.search.get_location();
-    auto const earliest_source = args.earliest.get_location();
-    auto const latest_source = args.latest.get_location();
-    auto const options_source
-      = args.options ? args.options->get_location() : location::unknown;
-    TRY(check_non_empty_literal("search", args.search, ctx));
-    TRY(check_non_empty_literal("earliest", args.earliest, ctx));
-    TRY(check_non_empty_literal("latest", args.latest, ctx));
-    auto const* headers = try_as<record>(args.headers.inner);
-    if (not headers) {
-      diagnostic::error("`headers` must be a record")
-        .primary(args.headers.source)
-        .emit(ctx);
-      return failure::promise();
-    }
-    auto has_authorization = false;
-    for (auto const& [name, _] : *headers) {
-      if (detail::ascii_icase_equal(name, "authorization")) {
-        has_authorization = true;
-        break;
-      }
-    }
-    if (not has_authorization) {
-      diagnostic::error("`headers` must contain an `Authorization` header")
-        .primary(args.headers.source)
-        .emit(ctx);
-      return failure::promise();
-    }
-    auto endpoint = std::move(args.url.inner);
-    if (endpoint.ends_with('/')) {
-      endpoint.pop_back();
-    }
-    endpoint += "/services/search/v2/jobs/export";
-    auto const* from_http
-      = plugins::find<operator_compiler_plugin>("from_http");
-    TENZIR_ASSERT(from_http);
-    auto replacement = invocation_for_plugin(*from_http, args.url.source);
-    replacement.args.push_back(
-      make_constant(data{std::move(endpoint)}, args.url.source));
-    append_named_arg(replacement, "method", data{std::string{"post"}},
-                     args.url.source);
-    auto search_for_diagnostic = args.search;
-    auto earliest_for_validation = args.earliest;
-    auto latest_for_validation = args.latest;
-    auto options_for_validation = args.options;
-    auto body = std::vector<ast::record::item>{};
-    body.emplace_back(ast::record::field{
-      ast::identifier{"search", search_source}, std::move(args.search)});
-    body.emplace_back(
-      ast::record::field{ast::identifier{"earliest_time", earliest_source},
-                         std::move(args.earliest)});
-    body.emplace_back(ast::record::field{
-      ast::identifier{"latest_time", latest_source}, std::move(args.latest)});
-    body.emplace_back(ast::record::field{
-      ast::identifier{"output_mode", search_source},
-      make_constant(data{std::string{"json"}}, search_source)});
-    body.emplace_back(ast::record::field{
-      ast::identifier{"preview", search_source},
-      make_constant(data{std::string{"false"}}, search_source)});
-    if (args.options) {
-      body.emplace_back(ast::spread{options_source, std::move(*args.options)});
-    }
-    replacement.args.push_back(make_named_arg(
-      "body", ast::record{search_source, std::move(body), search_source},
-      search_source));
-    append_named_arg(replacement, "headers", std::move(args.headers.inner),
-                     args.headers.source);
-    replacement.args.push_back(
-      make_named_arg("error_field",
-                     ast::root_field{ast::identifier{
-                       std::string{error_field_name}, search_source}},
-                     search_source));
-    if (args.tls) {
-      auto const source = args.tls->get_location();
-      replacement.args.push_back(
-        make_named_arg("tls", std::move(*args.tls), source));
-    }
-    append_optional_named_arg(replacement, "timeout", std::move(args.timeout));
-    append_optional_named_arg(replacement, "connection_timeout",
-                              std::move(args.connection_timeout));
-    append_optional_named_arg(replacement, "max_retry_count",
-                              std::move(args.max_retry_count));
-    append_optional_named_arg(replacement, "retry_delay",
-                              std::move(args.retry_delay));
-    append_named_arg(replacement, "encode", data{std::string{"form"}},
-                     search_source);
-    TRY(auto parser, parse_pipeline_with_location_override(
-                       "read_json", search_source, session));
-    TRY(resolve_entities(parser, session));
-    replacement.args.emplace_back(
-      ast::pipeline_expr{search_source, std::move(parser), search_source});
-    TRY(auto result, from_http->compile(std::move(replacement), ctx));
-    auto pipeline = std::move(result).unwrap();
-    pipeline.operators.push_back(ValidateSplunkResponseIr{
-      std::move(search_for_diagnostic), std::move(earliest_for_validation),
-      std::move(latest_for_validation), std::move(options_for_validation),
-      search_source, earliest_source, latest_source, options_source});
-    TRY(auto extract_result,
-        parse_pipeline_with_location_override(
-          "where result? != null | this = result | @name = \"tenzir.splunk\"",
-          search_source, session));
-    TRY(resolve_entities(extract_result, session));
-    TRY(auto extract_result_ir, std::move(extract_result).compile(ctx));
-    for (auto& let : extract_result_ir.lets) {
-      pipeline.lets.push_back(std::move(let));
-    }
-    for (auto& op : extract_result_ir.operators) {
-      pipeline.operators.push_back(std::move(op));
-    }
-    return pipeline;
+  auto describe() const -> Description override {
+    auto d = Describer<FromSplunkArgs, FromSplunk>{};
+    auto url = d.positional("url", &FromSplunkArgs::url);
+    auto search = d.named("search", &FromSplunkArgs::search, "string");
+    auto earliest
+      = d.named("earliest", &FromSplunkArgs::earliest, "string|time");
+    auto latest = d.named("latest", &FromSplunkArgs::latest, "string|time");
+    auto options = d.named("options", &FromSplunkArgs::options, "record");
+    auto headers = d.named("headers", &FromSplunkArgs::headers, "record");
+    auto tls = d.named("tls", &FromSplunkArgs::tls, "record");
+    d.named("timeout", &FromSplunkArgs::timeout);
+    d.named("connection_timeout", &FromSplunkArgs::connection_timeout);
+    d.named("max_retry_count", &FromSplunkArgs::max_retry_count);
+    d.named("retry_delay", &FromSplunkArgs::retry_delay);
+    d.operator_location(&FromSplunkArgs::operator_location);
+    d.validate([=](DescribeCtx& ctx) -> Empty {
+      // Fail fast so that one invalid argument yields one diagnostic.
+      auto run = [&]() -> failure_or<void> {
+        if (auto value = ctx.get(url)) {
+          TRY(check_non_empty("url", *value, ctx));
+        }
+        if (auto value = ctx.get(search)) {
+          TRY(check_non_empty("search", *value, ctx));
+        }
+        if (auto value = ctx.get(earliest)) {
+          TRY(
+            validate_time_bound("earliest", value->inner, value->source, ctx));
+        }
+        if (auto value = ctx.get(latest)) {
+          TRY(validate_time_bound("latest", value->inner, value->source, ctx));
+        }
+        if (auto value = ctx.get(options)) {
+          TRY(validate_options(*value, ctx));
+        }
+        if (auto value = ctx.get(headers)) {
+          TRY(validate_headers(*value, ctx));
+        }
+        if (auto value = ctx.get(tls)) {
+          auto tls_opts = tls_options{*value, {.is_server = false}};
+          if (auto url_value = ctx.get(url)) {
+            TRY(tls_opts.validate(*url_value, ctx));
+          } else {
+            TRY(tls_opts.validate(ctx));
+          }
+        }
+        return {};
+      };
+      std::ignore = run();
+      return {};
+    });
+    return d.without_optimize();
   }
 };
 
@@ -669,5 +708,3 @@ public:
 } // namespace tenzir::plugins::from_splunk
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from_splunk::Plugin)
-TENZIR_REGISTER_PLUGIN(
-  tenzir::plugins::from_splunk::validate_splunk_response_ir_plugin)

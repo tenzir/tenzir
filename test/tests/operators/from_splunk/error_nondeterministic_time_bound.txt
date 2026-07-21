@@ -1,7 +1,0 @@
-error: `earliest` must be deterministic
- --> tests/operators/from_splunk/error_nondeterministic_time_bound.tql:7:13
-  |
-7 |   earliest=("rt" if random() < 0.5 else "-15m"),
-  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
-  |
-  = note: Splunk request arguments must have a stable value during pipeline instantiation
