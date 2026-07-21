@@ -114,49 +114,28 @@ auto make_boolean_array(std::vector<bool> const& mask)
   return finish(builder);
 }
 
-class MatchImpl {
+/// Routes rows across one lane per `match` arm. For each row, the first arm
+/// whose pattern matches and whose guard passes claims it; the mandatory
+/// wildcard arm catches any remaining rows. This mirrors `match`'s first-match
+/// semantics, evaluating the scrutinee and guards once per slice.
+class MatchSplitter final : public Splitter {
 public:
-  explicit MatchImpl(MatchArgs args) : args_{std::move(args)} {
+  explicit MatchSplitter(MatchArgs args) : args_{std::move(args)} {
   }
 
-  auto start(OpCtx& ctx) -> Task<void> {
-    for (auto i = size_t{0}; i < args_.arms.size(); ++i) {
-      if (args_.arms[i].pipeline.operators.empty()
-          or ctx.get_sub(static_cast<int64_t>(i)).is_some()) {
-        continue;
-      }
-      co_await ctx.spawn_sub<table_slice>(static_cast<int64_t>(i),
-                                          args_.arms[i].pipeline);
-    }
+  auto copy() const -> Box<Splitter> override {
+    return MatchSplitter{args_};
   }
 
-  auto process(table_slice input, OpCtx& ctx, Push<table_slice>& push)
-    -> Task<void> {
-    auto emit = [&](table_slice slice) -> Task<void> {
-      co_await push(std::move(slice));
-    };
-    return process_impl(std::move(input), ctx, std::move(emit));
+  auto lanes() const -> size_t override {
+    return args_.arms.size();
   }
 
-  auto process(table_slice input, OpCtx& ctx) -> Task<void> {
-    auto drop = [](table_slice) -> Task<void> {
-      co_return;
-    };
-    return process_impl(std::move(input), ctx, std::move(drop));
-  }
-
-  auto state() -> OperatorState {
-    if (std::ranges::all_of(arm_closed_, std::identity{})) {
-      return OperatorState::done;
-    }
-    return OperatorState::normal;
-  }
-
-private:
-  template <class Emit>
-  auto process_impl(table_slice input, OpCtx& ctx, Emit emit) -> Task<void> {
+  auto split(table_slice input, diagnostic_handler& dh) const
+    -> std::vector<SplitRun> override {
+    auto runs = std::vector<SplitRun>{};
     auto matched = std::vector<bool>(input.rows(), false);
-    auto scrutinee = eval(args_.scrutinee, input, ctx);
+    auto scrutinee = eval(args_.scrutinee, input, dh);
     for (auto arm_index = size_t{0}; arm_index < args_.arms.size();
          ++arm_index) {
       auto const& arm = args_.arms[arm_index];
@@ -189,14 +168,14 @@ private:
         auto candidate_input
           = filter(input, *make_boolean_array(candidate_mask));
         auto end = int64_t{0};
-        for (auto const& predicate : eval(*arm.guard, candidate_input, ctx)) {
+        for (auto const& predicate : eval(*arm.guard, candidate_input, dh)) {
           auto const start = std::exchange(end, end + predicate.length());
           auto const typed_predicate = predicate.as<bool_type>();
           if (not typed_predicate) {
             diagnostic::warning("expected `bool`, but got `{}`",
                                 predicate.type.kind())
               .primary(*arm.guard)
-              .emit(ctx);
+              .emit(dh);
             std::fill(guard_mask.begin() + start, guard_mask.begin() + end,
                       false);
             continue;
@@ -204,7 +183,7 @@ private:
           if (typed_predicate->array->null_count() > 0) {
             diagnostic::warning("expected `bool`, but got `null`")
               .primary(*arm.guard)
-              .emit(ctx);
+              .emit(dh);
           }
           auto const& array = *typed_predicate->array;
           for (auto row = start; row < end; ++row) {
@@ -222,73 +201,17 @@ private:
           matched[row] = true;
         }
       }
-      if (arm_closed_[arm_index]) {
-        continue;
-      }
       auto filtered = filter(input, *make_boolean_array(arm_mask));
       if (filtered.rows() == 0) {
         continue;
       }
-      auto sub = ctx.get_sub(static_cast<int64_t>(arm_index));
-      if (not sub) {
-        if (args_.arms[arm_index].pipeline.operators.empty()) {
-          co_await emit(std::move(filtered));
-        } else {
-          arm_closed_[arm_index] = true;
-        }
-        continue;
-      }
-      auto& handle = as<SubHandle<table_slice>>(*sub);
-      arm_closed_[arm_index]
-        = (co_await handle.push(std::move(filtered))).is_err();
+      runs.push_back({arm_index, std::move(filtered)});
     }
+    return runs;
   }
 
+private:
   MatchArgs args_;
-  std::vector<bool> arm_closed_ = std::vector<bool>(args_.arms.size(), false);
-};
-
-class Match final : public Operator<table_slice, table_slice> {
-public:
-  explicit Match(MatchArgs args) : impl_{std::move(args)} {
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> override {
-    return impl_.start(ctx);
-  }
-
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    return impl_.process(std::move(input), ctx, push);
-  }
-
-  auto state() -> OperatorState override {
-    return impl_.state();
-  }
-
-private:
-  MatchImpl impl_;
-};
-
-class MatchSink final : public Operator<table_slice, void> {
-public:
-  explicit MatchSink(MatchArgs args) : impl_{std::move(args)} {
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> override {
-    return impl_.start(ctx);
-  }
-
-  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    return impl_.process(std::move(input), ctx);
-  }
-
-  auto state() -> OperatorState override {
-    return impl_.state();
-  }
-
-private:
-  MatchImpl impl_;
 };
 
 auto const_eval_match_expression(ast::expression const& expr, location source,
@@ -520,15 +443,34 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) const -> AnyOperator override {
-    TENZIR_ASSERT(input.is<table_slice>());
-    auto dh = null_diagnostic_handler{};
-    auto output = infer_type(input, dh);
-    TENZIR_ASSERT(output);
-    if ((*output).is<void>()) {
-      return MatchSink{args_}.with_name("match");
+  auto spawn(element_type_tag) const -> AnyOperator override {
+    // `match` expands into the plan via `plan()` and is never spawned as a
+    // single node.
+    TENZIR_UNREACHABLE();
+  }
+
+  auto plan(ir::PlanBuilder& builder, ir::PlanPorts input,
+            diagnostic_handler& dh) && -> failure_or<ir::PlanPorts> override {
+    // Flatten `match` into a `Split` channel with one lane per arm. The
+    // splitter evaluates the scrutinee and guards per row and routes each row
+    // to the first arm that claims it, materializing it into only that arm's
+    // branch.
+    auto src = builder.into_single(input);
+    auto heads = std::vector<size_t>{};
+    auto tails = ir::PlanPorts{};
+    for (auto& arm : args_.arms) {
+      auto ty = tag_v<table_slice>;
+      auto head = builder.add_identity(ty);
+      heads.push_back(head);
+      TRY(auto tail,
+          builder.lower_pipeline(std::move(arm.pipeline),
+                                 ir::PlanPorts{ir::PlanPort{head, ty}}, dh));
+      tails.insert(tails.end(), tail.begin(), tail.end());
     }
-    return Match{args_}.with_name("match");
+    // The arm pipelines are now consumed; the splitter only needs the
+    // scrutinee, patterns, and guards for classification.
+    builder.add_split(src, std::move(heads), MatchSplitter{std::move(args_)});
+    return tails;
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const

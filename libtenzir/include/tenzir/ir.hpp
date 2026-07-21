@@ -10,6 +10,8 @@
 
 #include "tenzir/async/fwd.hpp"
 #include "tenzir/element_type.hpp"
+#include "tenzir/option.hpp"
+#include "tenzir/splitter.hpp"
 #include "tenzir/tql2/ast.hpp"
 
 #include <concepts>
@@ -236,6 +238,12 @@ enum class ChannelKind {
   /// downstream instances (fan-out). Used to feed the branches of operators
   /// like `fork` and `if`.
   Broadcast,
+  /// 1:2 — one upstream instance evaluates a boolean condition per row and
+  /// routes each row to exactly one of two downstream branches: `true` rows to
+  /// the first (consequence), `false` and `null` rows to the second
+  /// (alternative). Used to feed the branches of `if` without copying every
+  /// row into both branches.
+  Split,
   /// 1:N — one upstream instance distributes rows across N downstream
   /// instances with no key constraint (load balancing).
   Scatter,
@@ -277,6 +285,9 @@ struct PlannedChannel {
   std::vector<size_t> to;
   /// How data flows across this channel.
   ChannelKind kind;
+  /// Channel-kind-specific arguments. For a `Split` channel this holds the
+  /// splitter that routes each row to one of the downstream lanes in `to`.
+  Option<Box<Splitter>> args;
 };
 
 /// The pipeline plan: a DAG of operator stages ready to be spawned and driven
@@ -351,6 +362,12 @@ public:
 
   /// Emit a `Broadcast` channel copying `from`'s output to each node in `to`.
   auto add_broadcast(PlanPort from, std::vector<size_t> to) -> void;
+
+  /// Emit a `Split` channel routing `from`'s output across the nodes in `to`
+  /// using `splitter`, which assigns each row to exactly one lane. The number
+  /// of lanes must match `to.size()`.
+  auto add_split(PlanPort from, std::vector<size_t> to, Box<Splitter> splitter)
+    -> void;
 
   /// Collapse a frontier into a single real node. Returns the sole real port
   /// unchanged; otherwise appends an identity node fed by `from` (via a

@@ -115,6 +115,7 @@ auto ir::Plan::from(pipeline pipe, element_type_tag input,
     .kind = output_instances == 1 ? ChannelKind::Direct
             : has_sinks           ? ChannelKind::GatherSignals
                                   : ChannelKind::Gather,
+    .args = {},
   });
   return plan;
 }
@@ -196,6 +197,7 @@ auto ir::PlanBuilder::add_channel(std::vector<size_t> from,
     .from = std::move(from),
     .to = std::move(to),
     .kind = kind,
+    .args = {},
   });
 }
 
@@ -240,6 +242,18 @@ auto ir::PlanBuilder::add_broadcast(PlanPort from, std::vector<size_t> to)
   -> void {
   TENZIR_ASSERT(from.node != PlanPort::input);
   add_channel({from.node}, std::move(to), ChannelKind::Broadcast);
+}
+
+auto ir::PlanBuilder::add_split(PlanPort from, std::vector<size_t> to,
+                                Box<Splitter> splitter) -> void {
+  TENZIR_ASSERT(from.node != PlanPort::input);
+  TENZIR_ASSERT(to.size() == splitter->lanes());
+  plan_.channels.push_back(PlannedChannel{
+    .from = {from.node},
+    .to = std::move(to),
+    .kind = ChannelKind::Split,
+    .args = std::move(splitter),
+  });
 }
 
 namespace {
