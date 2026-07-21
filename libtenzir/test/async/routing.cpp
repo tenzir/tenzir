@@ -181,40 +181,6 @@ TEST("scatter distributes rows across lanes and broadcasts signals") {
   });
 }
 
-TEST("scatter stops routing data to a closed lane") {
-  run([&]() -> Task<void> {
-    auto [push, pulls] = make_scatter(2, slice_factory(), ChannelId{});
-    // Retire lane 1 up front.
-    static_cast<ScatterPush&>(*push).close_lane(1);
-    check_eq(static_cast<ScatterPush&>(*push).open_lanes(), size_t{1});
-    co_await folly::coro::collectAll(
-      [&]() -> Task<void> {
-        for (auto i = 0; i < 3; ++i) {
-          co_await (*push)(OperatorMsg<table_slice>{make_slice(1)});
-        }
-        push = {};
-      }(),
-      [&]() -> Task<void> {
-        auto rows = int64_t{0};
-        while (auto msg = co_await (*pulls[0])()) {
-          if (auto* slice = try_as<table_slice>(*msg)) {
-            rows += slice->rows();
-          }
-        }
-        check_eq(rows, int64_t{3});
-      }(),
-      [&]() -> Task<void> {
-        auto rows = int64_t{0};
-        while (auto msg = co_await (*pulls[1])()) {
-          if (auto* slice = try_as<table_slice>(*msg)) {
-            rows += slice->rows();
-          }
-        }
-        check_eq(rows, int64_t{0});
-      }());
-  });
-}
-
 TEST("broadcast sends every slice to all lanes") {
   run([&]() -> Task<void> {
     auto [push, pulls] = make_broadcast(2, slice_factory(), ChannelId{});
@@ -254,41 +220,6 @@ TEST("broadcast sends every slice to all lanes") {
         }
         check_eq(rows, int64_t{4});
         check(got_signal);
-      }());
-  });
-}
-
-TEST("broadcast stops routing data to a closed lane") {
-  run([&]() -> Task<void> {
-    auto [push, pulls] = make_broadcast(2, slice_factory(), ChannelId{});
-    // Retire lane 1 up front.
-    static_cast<BroadcastPush&>(*push).close_lane(1);
-    check_eq(static_cast<BroadcastPush&>(*push).open_lanes(), size_t{1});
-    co_await folly::coro::collectAll(
-      [&]() -> Task<void> {
-        for (auto i = 0; i < 3; ++i) {
-          co_await (*push)(OperatorMsg<table_slice>{make_slice(1)});
-        }
-        push = {};
-      }(),
-      [&]() -> Task<void> {
-        auto rows = int64_t{0};
-        while (auto msg = co_await (*pulls[0])()) {
-          if (auto* slice = try_as<table_slice>(*msg)) {
-            rows += slice->rows();
-          }
-        }
-        // The open lane still receives every slice.
-        check_eq(rows, int64_t{3});
-      }(),
-      [&]() -> Task<void> {
-        auto rows = int64_t{0};
-        while (auto msg = co_await (*pulls[1])()) {
-          if (auto* slice = try_as<table_slice>(*msg)) {
-            rows += slice->rows();
-          }
-        }
-        check_eq(rows, int64_t{0});
       }());
   });
 }
@@ -360,39 +291,6 @@ TEST("gather emits end-of-data exactly once after all lanes deliver it") {
         }
         check_eq(data_rows, int64_t{2});
         check_eq(eod, 1);
-      }());
-  });
-}
-
-TEST("scatter keeps a fair slice on one lane after closing a lane") {
-  // Regression test: a retired lane must not skew the adaptive fairness check.
-  // With four lanes and lane 3 closed, sending 300 rows levels the three open
-  // lanes to [100, 100, 100]. A subsequent 10-row slice stays within the
-  // fairness factor on a single lane instead of fragmenting across all three.
-  run([&]() -> Task<void> {
-    auto [push, pulls] = make_scatter(4, slice_factory(), ChannelId{});
-    static_cast<ScatterPush&>(*push).close_lane(3);
-    co_await folly::coro::collectAll(
-      [&]() -> Task<void> {
-        co_await (*push)(OperatorMsg<table_slice>{make_slice(300)});
-        co_await (*push)(OperatorMsg<table_slice>{make_slice(10)});
-        push = {};
-      }(),
-      [&]() -> Task<void> {
-        auto rows_per_lane = std::multiset<int64_t>{};
-        for (auto& pull : pulls) {
-          auto rows = int64_t{0};
-          while (auto msg = co_await (*pull)()) {
-            if (auto* slice = try_as<table_slice>(*msg)) {
-              rows += slice->rows();
-            }
-          }
-          rows_per_lane.insert(rows);
-        }
-        // Lane 3 is retired (0 rows); the 10-row slice lands entirely on one
-        // of the three open lanes, taking it to 110.
-        auto expected = std::multiset<int64_t>{0, 100, 100, 110};
-        check(rows_per_lane == expected);
       }());
   });
 }

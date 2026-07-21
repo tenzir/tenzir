@@ -119,9 +119,7 @@ auto hash_runs(const multi_series& values, uint64_t jobs)
 namespace tenzir {
 
 ScatterPush::ScatterPush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes)
-  : lanes_{std::move(lanes)},
-    open_(lanes_.size(), true),
-    rows_assigned_(lanes_.size(), 0) {
+  : lanes_{std::move(lanes)}, rows_assigned_(lanes_.size(), 0) {
   TENZIR_ASSERT(not lanes_.empty());
 }
 
@@ -134,11 +132,9 @@ auto ScatterPush::operator()(OperatorMsg<table_slice> msg) -> Task<void> {
   co_await co_match(
     std::move(msg),
     [this](Signal signal) -> Task<void> {
-      // Broadcast signals to every open lane, sequentially.
-      for (auto i = size_t{0}; i < lanes_.size(); ++i) {
-        if (open_[i]) {
-          co_await (*lanes_[i])(OperatorMsg<table_slice>{signal});
-        }
+      // Broadcast signals to every lane, sequentially.
+      for (auto& lane : lanes_) {
+        co_await (*lane)(OperatorMsg<table_slice>{signal});
       }
     },
     [this](table_slice data) -> Task<void> {
@@ -146,43 +142,17 @@ auto ScatterPush::operator()(OperatorMsg<table_slice> msg) -> Task<void> {
     });
 }
 
-auto ScatterPush::close_lane(size_t lane) -> void {
-  TENZIR_ASSERT(lane < open_.size());
-  open_[lane] = false;
-}
-
-auto ScatterPush::open_lanes() const -> size_t {
-  return std::ranges::count(open_, true);
-}
-
 auto ScatterPush::route_data(table_slice data) -> Task<void> {
-  // Split the slice across open lanes by row, keeping load balanced.
+  // Split the slice across lanes by row, keeping load balanced.
   auto total = static_cast<uint64_t>(data.rows());
   if (total == 0) {
     co_return;
   }
-  // Distribute across open lanes only. Retired lanes are excluded from the
-  // load vector entirely, so they neither receive rows nor skew the
-  // fairness check (a pinned sentinel would reject every `k < n`, forcing
-  // needless fragmentation across all open lanes).
-  auto open_lane_ids = std::vector<size_t>{};
-  auto open_loads = std::vector<uint64_t>{};
-  for (auto i = size_t{0}; i < open_.size(); ++i) {
-    if (open_[i]) {
-      open_lane_ids.push_back(i);
-      open_loads.push_back(rows_assigned_[i]);
-    }
-  }
-  if (open_lane_ids.empty()) {
-    panic("scatter has no open lane to route to");
-  }
-  // `distribute_adaptive` updates `open_loads` in place for the lanes it
-  // fills; fold those back into the real per-lane load vector.
-  auto assignments = routing::distribute_adaptive(total, open_loads);
+  // `distribute_adaptive` updates `rows_assigned_` in place for the lanes it
+  // fills and returns (lane, count) pairs for the non-empty assignments.
+  auto assignments = routing::distribute_adaptive(total, rows_assigned_);
   auto offset = size_t{0};
-  for (auto [compact, count] : assignments) {
-    auto lane = open_lane_ids[compact];
-    rows_assigned_[lane] = open_loads[compact];
+  for (auto [lane, count] : assignments) {
     auto slice = subslice(data, offset, offset + count);
     offset += count;
     co_await (*lanes_[lane])(OperatorMsg<table_slice>{std::move(slice)});
@@ -191,7 +161,7 @@ auto ScatterPush::route_data(table_slice data) -> Task<void> {
 
 BroadcastPush::BroadcastPush(
   std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes)
-  : lanes_{std::move(lanes)}, open_(lanes_.size(), true) {
+  : lanes_{std::move(lanes)} {
   TENZIR_ASSERT(not lanes_.empty());
 }
 
@@ -201,11 +171,9 @@ auto BroadcastPush::operator()(OperatorMsg<table_slice> msg) -> Task<void> {
   co_await co_match(
     std::move(msg),
     [this](Signal signal) -> Task<void> {
-      // Broadcast signals to every open lane, sequentially.
-      for (auto i = size_t{0}; i < lanes_.size(); ++i) {
-        if (open_[i]) {
-          co_await (*lanes_[i])(OperatorMsg<table_slice>{signal});
-        }
+      // Broadcast signals to every lane, sequentially.
+      for (auto& lane : lanes_) {
+        co_await (*lane)(OperatorMsg<table_slice>{signal});
       }
     },
     [this](table_slice data) -> Task<void> {
@@ -213,23 +181,12 @@ auto BroadcastPush::operator()(OperatorMsg<table_slice> msg) -> Task<void> {
     });
 }
 
-auto BroadcastPush::close_lane(size_t lane) -> void {
-  TENZIR_ASSERT(lane < open_.size());
-  open_[lane] = false;
-}
-
-auto BroadcastPush::open_lanes() const -> size_t {
-  return std::ranges::count(open_, true);
-}
-
 auto BroadcastPush::route_data(table_slice data) -> Task<void> {
-  // Broadcast a copy of the whole slice to every open lane. Unlike scatter,
-  // no partitioning happens: each lane receives all rows. Blocking on a slow
+  // Broadcast a copy of the whole slice to every lane. Unlike scatter, no
+  // partitioning happens: each lane receives all rows. Blocking on a slow
   // lane applies backpressure to the upstream.
-  for (auto i = size_t{0}; i < lanes_.size(); ++i) {
-    if (open_[i]) {
-      co_await (*lanes_[i])(OperatorMsg<table_slice>{data});
-    }
+  for (auto& lane : lanes_) {
+    co_await (*lane)(OperatorMsg<table_slice>{data});
   }
 }
 
@@ -260,10 +217,7 @@ auto combine_keys(std::vector<ast::expression> keys) -> ast::expression {
 ShufflePush::ShufflePush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes,
                          std::vector<ast::expression> keys,
                          diagnostic_handler& dh)
-  : lanes_{std::move(lanes)},
-    open_(lanes_.size(), true),
-    key_{combine_keys(std::move(keys))},
-    dh_{&dh} {
+  : lanes_{std::move(lanes)}, key_{combine_keys(std::move(keys))}, dh_{&dh} {
   TENZIR_ASSERT(not lanes_.empty());
 }
 
@@ -273,11 +227,9 @@ auto ShufflePush::operator()(OperatorMsg<table_slice> msg) -> Task<void> {
   co_await co_match(
     std::move(msg),
     [this](Signal signal) -> Task<void> {
-      // Broadcast signals to every open lane, sequentially.
-      for (auto i = size_t{0}; i < lanes_.size(); ++i) {
-        if (open_[i]) {
-          co_await (*lanes_[i])(OperatorMsg<table_slice>{signal});
-        }
+      // Broadcast signals to every lane, sequentially.
+      for (auto& lane : lanes_) {
+        co_await (*lane)(OperatorMsg<table_slice>{signal});
       }
     },
     [this](table_slice data) -> Task<void> {
@@ -285,38 +237,16 @@ auto ShufflePush::operator()(OperatorMsg<table_slice> msg) -> Task<void> {
     });
 }
 
-auto ShufflePush::close_lane(size_t lane) -> void {
-  TENZIR_ASSERT(lane < open_.size());
-  open_[lane] = false;
-}
-
-auto ShufflePush::open_lanes() const -> size_t {
-  return std::ranges::count(open_, true);
-}
-
 auto ShufflePush::route_data(table_slice data) -> Task<void> {
   if (data.rows() == 0) {
     co_return;
   }
-  // Determine the open-lane set and its size; hash into that reduced space so
-  // retired lanes never receive rows.
-  auto open_lane_ids = std::vector<size_t>{};
-  open_lane_ids.reserve(open_.size());
-  for (auto i = size_t{0}; i < open_.size(); ++i) {
-    if (open_[i]) {
-      open_lane_ids.push_back(i);
-    }
-  }
-  if (open_lane_ids.empty()) {
-    panic("shuffle has no open lane to route to");
-  }
   auto values = eval(key_, data, *dh_);
   TENZIR_ASSERT(values.length() == detail::narrow<int64_t>(data.rows()));
-  auto jobs = static_cast<uint64_t>(open_lane_ids.size());
+  auto jobs = static_cast<uint64_t>(lanes_.size());
   for (auto [bucket, begin, end] : routing::hash_runs(values, jobs)) {
-    auto lane = open_lane_ids[bucket];
     auto slice = subslice(data, begin, end);
-    co_await (*lanes_[lane])(OperatorMsg<table_slice>{std::move(slice)});
+    co_await (*lanes_[bucket])(OperatorMsg<table_slice>{std::move(slice)});
   }
 }
 

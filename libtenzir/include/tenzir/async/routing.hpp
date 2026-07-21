@@ -104,30 +104,18 @@ namespace tenzir {
 ///
 /// - Data is split across lanes by row via `routing::distribute_adaptive`,
 ///   keeping total rows assigned as balanced as possible.
-/// - Signals are broadcast to every open lane, sequentially. Blocking on a slow
+/// - Signals are broadcast to every lane, sequentially. Blocking on a slow
 ///   lane is correct: it applies backpressure.
-///
-/// The control plane may retire a lane with `close_lane` once its downstream
-/// finished (e.g. `head`); the scatter then stops routing data to it while
-/// still forwarding signals to the remaining lanes.
 class ScatterPush final : public Push<OperatorMsg<table_slice>> {
 public:
   explicit ScatterPush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes);
 
   auto operator()(OperatorMsg<table_slice> msg) -> Task<void> override;
 
-  /// Retires a lane so no further data is routed to it. Signals are still
-  /// broadcast to open lanes only.
-  auto close_lane(size_t lane) -> void;
-
-  /// Returns the number of lanes still receiving data.
-  auto open_lanes() const -> size_t;
-
 private:
   auto route_data(table_slice data) -> Task<void>;
 
   std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes_;
-  std::vector<bool> open_;
   std::vector<uint64_t> rows_assigned_;
 };
 
@@ -139,30 +127,18 @@ private:
 /// - Unlike `ScatterPush`, which partitions rows so each row lands on exactly
 ///   one lane, a broadcast sends a copy of the *whole* slice to every open
 ///   lane. `table_slice` copies are cheap (ref-counted Arrow buffers).
-/// - Signals are broadcast to every open lane, sequentially. Blocking on a slow
+/// - Signals are broadcast to every lane, sequentially. Blocking on a slow
 ///   lane is correct: it applies backpressure.
-///
-/// The control plane may retire a lane with `close_lane` once its downstream
-/// finished (e.g. `head`); the broadcast then stops routing data to it while
-/// still forwarding signals to the remaining lanes.
 class BroadcastPush final : public Push<OperatorMsg<table_slice>> {
 public:
   explicit BroadcastPush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes);
 
   auto operator()(OperatorMsg<table_slice> msg) -> Task<void> override;
 
-  /// Retires a lane so no further data is routed to it. Signals are still
-  /// broadcast to open lanes only.
-  auto close_lane(size_t lane) -> void;
-
-  /// Returns the number of lanes still receiving data.
-  auto open_lanes() const -> size_t;
-
 private:
   auto route_data(table_slice data) -> Task<void>;
 
   std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes_;
-  std::vector<bool> open_;
 };
 
 /// The fan-out endpoint of a shuffle exchange.
@@ -175,11 +151,8 @@ private:
 ///   `multi_series`. `routing::hash_runs` splits the slice into maximal
 ///   contiguous runs of rows that map to the same bucket, and each run is
 ///   forwarded as a subslice to `lanes_[bucket]`.
-/// - Signals are broadcast to every open lane, sequentially. Blocking on a
+/// - Signals are broadcast to every lane, sequentially. Blocking on a
 ///   slow lane is correct: it applies backpressure.
-///
-/// The control plane may retire a lane with `close_lane`; signals continue to
-/// flow to the remaining lanes.
 class ShufflePush final : public Push<OperatorMsg<table_slice>> {
 public:
   /// Construct a shuffle fan-out.
@@ -192,18 +165,10 @@ public:
 
   auto operator()(OperatorMsg<table_slice> msg) -> Task<void> override;
 
-  /// Retires a lane so no further data is routed to it. Signals are still
-  /// broadcast to open lanes only.
-  auto close_lane(size_t lane) -> void;
-
-  /// Returns the number of lanes still receiving data.
-  auto open_lanes() const -> size_t;
-
 private:
   auto route_data(table_slice data) -> Task<void>;
 
   std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes_;
-  std::vector<bool> open_;
   ast::expression key_;
   diagnostic_handler* dh_;
 };
