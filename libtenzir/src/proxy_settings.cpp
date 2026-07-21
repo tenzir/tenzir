@@ -298,7 +298,8 @@ auto get_proxy_settings() -> proxy_settings const& {
 }
 
 auto effective_no_proxy(proxy_settings const& settings) -> std::string {
-  auto result = std::string{"localhost,127.0.0.1,127.0.0.0/8,::1"};
+  auto result = std::string{
+    "localhost,127.0.0.1,127.0.0.0/8,169.254.0.0/16,::1,fe80::/10"};
   if (settings.no_proxy) {
     append_no_proxy_entries(result, *settings.no_proxy);
   }
@@ -307,11 +308,18 @@ auto effective_no_proxy(proxy_settings const& settings) -> std::string {
 
 namespace {
 
-// Strips IPv6 brackets so `[::1]` and `::1` compare equal.
+// Strips IPv6 brackets and interface scopes before comparing IP literals.
 auto canonicalize_host(std::string_view host) -> std::string {
   if (host.size() >= 2 and host.front() == '[' and host.back() == ']') {
     host.remove_prefix(1);
     host.remove_suffix(1);
+  }
+  if (auto scope = host.find('%'); scope != std::string_view::npos) {
+    auto unscoped = host.substr(0, scope);
+    if (auto address = to<ip>(std::string{unscoped});
+        address and address->is_v6()) {
+      host = unscoped;
+    }
   }
   return to_lower(host);
 }
@@ -369,11 +377,9 @@ auto bypass_proxy(std::string_view host) -> bool {
   if (is_loopback(normalized)) {
     return true;
   }
-  if (not ps.no_proxy) {
-    return false;
-  }
   auto host_address = to<ip>(normalized);
-  for (auto part : std::views::split(*ps.no_proxy, ',')) {
+  auto no_proxy = effective_no_proxy(ps);
+  for (auto part : std::views::split(no_proxy, ',')) {
     auto raw = std::string_view{part.begin(), part.end()};
     auto entry = parse_no_proxy_entry(raw);
     if (entry.empty()) {
@@ -389,7 +395,7 @@ auto bypass_proxy(std::string_view host) -> bool {
       }
       continue;
     }
-    auto normalized_entry = to_lower(entry);
+    auto normalized_entry = canonicalize_host(entry);
     if (normalized_entry.starts_with('.')) {
       normalized_entry.erase(0, 1);
     }
@@ -399,6 +405,22 @@ auto bypass_proxy(std::string_view host) -> bool {
     }
   }
   return false;
+}
+
+auto effective_no_proxy_for_target(std::string_view host) -> std::string {
+  auto result = effective_no_proxy(get_proxy_settings());
+  if (host.find('%') == std::string_view::npos) {
+    return result;
+  }
+  auto normalized = canonicalize_host(host);
+  auto address = to<ip>(normalized);
+  if (not address or not address->is_v6() or not bypass_proxy(host)) {
+    return result;
+  }
+  // Older libcurl releases do not apply CIDR entries to scoped IPv6 literals.
+  // They do match the unscoped literal, while retaining the scope for dialing.
+  append_no_proxy_entries(result, normalized);
+  return result;
 }
 
 auto proxy_for_target(std::string_view target_scheme, std::string_view host)

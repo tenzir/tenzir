@@ -264,6 +264,46 @@ TEST("no-proxy CIDR entries match IP literals") {
   CHECK(not bypass_proxy("2001:db9::1"));
 }
 
+TEST("no-proxy CIDR entries match scoped IPv6 literals") {
+  auto settings = caf::settings{};
+  caf::put(settings, "tenzir.no-proxy", std::string{"fe80::/10"});
+  REQUIRE_EQUAL(initialize_proxy_settings(settings), caf::error{});
+  CHECK(bypass_proxy("fe80::1%eth0"));
+  CHECK(bypass_proxy("[fe80::1%25eth0]"));
+  CHECK(not bypass_proxy("fec0::1%eth0"));
+  CHECK_EQUAL(effective_no_proxy_for_target("fe80::1%eth0"),
+              "localhost,127.0.0.1,127.0.0.0/8,169.254.0.0/16,::1,fe80::/10,"
+              "fe80::/10,fe80::1");
+  CHECK_EQUAL(effective_no_proxy_for_target("[fe80::1%25eth0]"),
+              "localhost,127.0.0.1,127.0.0.0/8,169.254.0.0/16,::1,fe80::/10,"
+              "fe80::/10,fe80::1");
+  CHECK_EQUAL(effective_no_proxy_for_target("fec0::1%eth0"),
+              "localhost,127.0.0.1,127.0.0.0/8,169.254.0.0/16,::1,fe80::/10,"
+              "fe80::/10");
+}
+
+TEST("no-proxy preserves percent-encoded hostnames") {
+  auto settings = caf::settings{};
+  caf::put(settings, "tenzir.no-proxy", std::string{"example.com"});
+  REQUIRE_EQUAL(initialize_proxy_settings(settings), caf::error{});
+  CHECK(not bypass_proxy("example%2ecom"));
+}
+
+TEST("link-local addresses always bypass proxies") {
+  auto settings = caf::settings{};
+  caf::put(settings, "tenzir.http-proxy",
+           std::string{"http://proxy.example:3128"});
+  REQUIRE_EQUAL(initialize_proxy_settings(settings), caf::error{});
+  CHECK(bypass_proxy("169.254.169.254"));
+  CHECK(bypass_proxy("fe80::1%eth0"));
+  CHECK(not proxy_for_target("http", "169.254.169.254"));
+  CHECK(not proxy_for_target("http", "169.254.170.2"));
+  CHECK(not proxy_for_target("http", "fe80::1%eth0"));
+  CHECK(not proxy_for_target("http", "[fe80::1%25eth0]"));
+  CHECK(proxy_for_target("http", "169.253.255.255"));
+  CHECK(proxy_for_target("http", "fec0::1%eth0"));
+}
+
 TEST("no-proxy CIDR entries do not resolve DNS names") {
   auto settings = caf::settings{};
   caf::put(settings, "tenzir.no-proxy", std::string{"10.0.0.0/8"});
