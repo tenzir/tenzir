@@ -189,6 +189,25 @@ private:
 auto run_gather(std::vector<Box<Pull<OperatorMsg<table_slice>>>> lanes,
                 Box<Push<OperatorMsg<table_slice>>> out) -> Task<void>;
 
+/// Builds `lanes` internal channels, returning the per-lane pushes and pulls
+/// as parallel vectors. `make_channel` produces one channel per lane, e.g.
+/// `ExecCtx::make_channel<table_slice>`.
+template <class Factory>
+auto make_lane_channels(size_t lanes, Factory& make_channel, ChannelId id)
+  -> std::pair<std::vector<Box<Push<OperatorMsg<table_slice>>>>,
+               std::vector<Box<Pull<OperatorMsg<table_slice>>>>> {
+  auto lane_pushes = std::vector<Box<Push<OperatorMsg<table_slice>>>>{};
+  auto lane_pulls = std::vector<Box<Pull<OperatorMsg<table_slice>>>>{};
+  lane_pushes.reserve(lanes);
+  lane_pulls.reserve(lanes);
+  for (auto lane = size_t{0}; lane < lanes; ++lane) {
+    auto pair = make_channel(id);
+    lane_pushes.push_back(std::move(pair.push));
+    lane_pulls.push_back(std::move(pair.pull));
+  }
+  return {std::move(lane_pushes), std::move(lane_pulls)};
+}
+
 /// Creates a scatter exchange with `lanes` downstream lanes.
 ///
 /// Returns the single upstream `Push` (a `ScatterPush`) and the `lanes` lane
@@ -199,15 +218,7 @@ auto make_scatter(size_t lanes, Factory make_channel, ChannelId id)
   -> std::pair<Box<Push<OperatorMsg<table_slice>>>,
                std::vector<Box<Pull<OperatorMsg<table_slice>>>>> {
   TENZIR_ASSERT(lanes > 0);
-  auto lane_pushes = std::vector<Box<Push<OperatorMsg<table_slice>>>>{};
-  auto lane_pulls = std::vector<Box<Pull<OperatorMsg<table_slice>>>>{};
-  lane_pushes.reserve(lanes);
-  lane_pulls.reserve(lanes);
-  for (auto lane = size_t{0}; lane < lanes; ++lane) {
-    auto pair = make_channel(id);
-    lane_pushes.push_back(std::move(pair.push));
-    lane_pulls.push_back(std::move(pair.pull));
-  }
+  auto [lane_pushes, lane_pulls] = make_lane_channels(lanes, make_channel, id);
   auto scatter
     = Box<Push<OperatorMsg<table_slice>>>{ScatterPush{std::move(lane_pushes)}};
   return {std::move(scatter), std::move(lane_pulls)};
@@ -223,15 +234,7 @@ auto make_broadcast(size_t lanes, Factory make_channel, ChannelId id)
   -> std::pair<Box<Push<OperatorMsg<table_slice>>>,
                std::vector<Box<Pull<OperatorMsg<table_slice>>>>> {
   TENZIR_ASSERT(lanes > 0);
-  auto lane_pushes = std::vector<Box<Push<OperatorMsg<table_slice>>>>{};
-  auto lane_pulls = std::vector<Box<Pull<OperatorMsg<table_slice>>>>{};
-  lane_pushes.reserve(lanes);
-  lane_pulls.reserve(lanes);
-  for (auto lane = size_t{0}; lane < lanes; ++lane) {
-    auto pair = make_channel(id);
-    lane_pushes.push_back(std::move(pair.push));
-    lane_pulls.push_back(std::move(pair.pull));
-  }
+  auto [lane_pushes, lane_pulls] = make_lane_channels(lanes, make_channel, id);
   auto broadcast = Box<Push<OperatorMsg<table_slice>>>{
     BroadcastPush{std::move(lane_pushes)}};
   return {std::move(broadcast), std::move(lane_pulls)};
@@ -260,15 +263,7 @@ auto make_shuffle(size_t lanes, std::vector<ast::expression> keys,
   -> std::pair<Box<Push<OperatorMsg<table_slice>>>,
                std::vector<Box<Pull<OperatorMsg<table_slice>>>>> {
   TENZIR_ASSERT(lanes > 0);
-  auto lane_pushes = std::vector<Box<Push<OperatorMsg<table_slice>>>>{};
-  auto lane_pulls = std::vector<Box<Pull<OperatorMsg<table_slice>>>>{};
-  lane_pushes.reserve(lanes);
-  lane_pulls.reserve(lanes);
-  for (auto lane = size_t{0}; lane < lanes; ++lane) {
-    auto pair = make_channel(id);
-    lane_pushes.push_back(std::move(pair.push));
-    lane_pulls.push_back(std::move(pair.pull));
-  }
+  auto [lane_pushes, lane_pulls] = make_lane_channels(lanes, make_channel, id);
   auto shuffle = Box<Push<OperatorMsg<table_slice>>>{
     ShufflePush{std::move(lane_pushes), std::move(keys), dh}};
   return {std::move(shuffle), std::move(lane_pulls)};
@@ -291,15 +286,7 @@ template <class Factory>
 auto make_gather(size_t lanes, Factory make_channel, ChannelId id)
   -> GatherParts {
   TENZIR_ASSERT(lanes > 0);
-  auto lane_pushes = std::vector<Box<Push<OperatorMsg<table_slice>>>>{};
-  auto lane_pulls = std::vector<Box<Pull<OperatorMsg<table_slice>>>>{};
-  lane_pushes.reserve(lanes);
-  lane_pulls.reserve(lanes);
-  for (auto lane = size_t{0}; lane < lanes; ++lane) {
-    auto pair = make_channel(id);
-    lane_pushes.push_back(std::move(pair.push));
-    lane_pulls.push_back(std::move(pair.pull));
-  }
+  auto [lane_pushes, lane_pulls] = make_lane_channels(lanes, make_channel, id);
   auto out = fused_channel<OperatorMsg<table_slice>>().into_push_pull();
   return GatherParts{
     .lanes = std::move(lane_pushes),
