@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/async/executor.hpp"
+#include "tenzir/async/fused.hpp"
 #include "tenzir/async/push_pull.hpp"
 #include "tenzir/async/signal.hpp"
 #include "tenzir/box.hpp"
@@ -313,8 +314,16 @@ auto make_shuffle(size_t lanes, std::vector<ast::expression> keys,
 /// Creates a gather exchange with `lanes` upstream lanes.
 ///
 /// The caller is responsible for spawning `GatherParts::merger` on a suitable
-/// scope. `make_channel` produces the internal SPSC channels, e.g.
-/// `ExecCtx::make_channel<table_slice>`.
+/// scope. `make_channel` produces the profiled per-lane fan-in channels that
+/// share `id`, e.g. `ExecCtx::make_routing_channel`.
+///
+/// The post-merge output channel that feeds the downstream operator is created
+/// internally as a plain, unprofiled fused channel rather than through
+/// `make_channel`. If it shared the lanes' `id`, every gathered row would be
+/// metered twice (once on its lane, once on the merge output), double-counting
+/// the exchange's throughput and adding a spurious per-lane limit to its
+/// reported input capacity. Keeping it out of the profiled factory lets all
+/// lanes collate into a single accurate metric under `id`.
 template <class Factory>
 auto make_gather(size_t lanes, Factory make_channel, ChannelId id)
   -> GatherParts {
@@ -328,7 +337,7 @@ auto make_gather(size_t lanes, Factory make_channel, ChannelId id)
     lane_pushes.push_back(std::move(pair.push));
     lane_pulls.push_back(std::move(pair.pull));
   }
-  auto out = make_channel(id);
+  auto out = fused_channel<OperatorMsg<table_slice>>().into_push_pull();
   return GatherParts{
     .lanes = std::move(lane_pushes),
     .pull = std::move(out.pull),
