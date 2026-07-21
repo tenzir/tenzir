@@ -37,6 +37,8 @@
 #include <folly/coro/WithCancellation.h>
 
 #include <chrono>
+#include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -659,10 +661,12 @@ public:
     auto options = d.named("options", &FromSplunkArgs::options, "record");
     auto headers = d.named("headers", &FromSplunkArgs::headers, "record");
     auto tls = d.named("tls", &FromSplunkArgs::tls, "record");
-    d.named("timeout", &FromSplunkArgs::timeout);
-    d.named("connection_timeout", &FromSplunkArgs::connection_timeout);
-    d.named("max_retry_count", &FromSplunkArgs::max_retry_count);
-    d.named("retry_delay", &FromSplunkArgs::retry_delay);
+    auto timeout = d.named("timeout", &FromSplunkArgs::timeout);
+    auto connection_timeout
+      = d.named("connection_timeout", &FromSplunkArgs::connection_timeout);
+    auto max_retry_count
+      = d.named("max_retry_count", &FromSplunkArgs::max_retry_count);
+    auto retry_delay = d.named("retry_delay", &FromSplunkArgs::retry_delay);
     d.operator_location(&FromSplunkArgs::operator_location);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       // Fail fast so that one invalid argument yields one diagnostic.
@@ -692,6 +696,31 @@ public:
             TRY(tls_opts.validate(*url_value, ctx));
           } else {
             TRY(tls_opts.validate(ctx));
+          }
+        }
+        // Validate timeout/retry arguments like the other HTTP operators.
+        auto check_non_negative
+          = [&](std::string_view name,
+                std::optional<located<duration>> value) -> failure_or<void> {
+          if (value and value->inner < duration::zero()) {
+            diagnostic::error("`{}` must be a non-negative duration", name)
+              .primary(value->source)
+              .emit(ctx);
+            return failure::promise();
+          }
+          return {};
+        };
+        TRY(check_non_negative("timeout", ctx.get(timeout)));
+        TRY(check_non_negative("connection_timeout",
+                               ctx.get(connection_timeout)));
+        TRY(check_non_negative("retry_delay", ctx.get(retry_delay)));
+        if (auto value = ctx.get(max_retry_count)) {
+          if (value->inner > std::numeric_limits<uint32_t>::max()) {
+            diagnostic::error("`max_retry_count` must be <= {}",
+                              std::numeric_limits<uint32_t>::max())
+              .primary(value->source)
+              .emit(ctx);
+            return failure::promise();
           }
         }
         return {};
