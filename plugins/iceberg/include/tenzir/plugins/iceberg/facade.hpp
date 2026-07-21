@@ -57,6 +57,9 @@ struct Error {
 
   Kind kind = Kind::permanent;
   std::string message;
+  /// Whether the failed operation may nevertheless have taken effect, such
+  /// as a commit whose success response was lost.
+  bool uncertain = false;
 };
 
 template <class T>

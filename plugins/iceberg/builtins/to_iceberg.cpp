@@ -1918,7 +1918,29 @@ private:
           done_ = true;
           co_return;
         }
-        const auto landed = reloaded->has_commit(tag);
+        auto landed = reloaded->has_commit(tag);
+        if (not landed and result.error().uncertain) {
+          // A commit whose success response was lost may have landed even
+          // though snapshot expiration already erased its tagged snapshot.
+          // The staged file paths carry per-file UUIDs and commit
+          // atomically, so any of them being live proves the commit;
+          // retrying the append without this check would duplicate rows.
+          auto paths = std::vector<std::string>{};
+          paths.reserve(staged_count);
+          for (auto it = staged.begin(); it != staged.begin() + staged_count;
+               ++it) {
+            paths.push_back(it->serialized.path);
+          }
+          auto referenced = co_await spawn_blocking(
+            [table = *reloaded, paths = std::move(paths)]() mutable {
+              return table.references_any_data_file(paths);
+            });
+          if (not referenced) {
+            fail(referenced.error(), "failed to inspect table data files", ctx);
+            co_return;
+          }
+          landed = *referenced;
+        }
         const auto layout_changed
           = not table_->has_same_write_layout(*reloaded);
         if (layout_changed) {

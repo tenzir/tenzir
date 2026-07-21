@@ -200,7 +200,11 @@ auto translate_error(const ice::Error& error) -> Error {
       kind = Error::Kind::permanent;
       break;
   }
-  return Error{kind, error.message};
+  return Error{
+    kind,
+    error.message,
+    error.kind == ice::ErrorKind::kCommitStateUnknown,
+  };
 }
 
 template <class T>
