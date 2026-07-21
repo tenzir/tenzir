@@ -295,4 +295,134 @@ auto run_gather(std::vector<Box<Pull<OperatorMsg<table_slice>>>> lanes,
   });
 }
 
+template <class T>
+auto run_gather_signals(Box<Pull<OperatorMsg<T>>> main,
+                        std::vector<Box<Pull<OperatorMsg<void>>>> aux,
+                        Box<Push<OperatorMsg<T>>> out) -> Task<void> {
+  struct LaneMsg {
+    size_t lane;                     // 0 = main, i>0 = aux[i - 1]
+    Option<OperatorMsg<T>> main{};   // valid iff lane == 0
+    Option<OperatorMsg<void>> aux{}; // valid iff lane != 0
+  };
+  const auto total = size_t{1} + aux.size();
+  auto drained = size_t{0};
+  auto aux_drained = size_t{0};
+  auto main_ended = false;
+  auto emitted_eod = false;
+  auto set = SelectSet<LaneMsg>{};
+  co_await set.activate([&]() -> Task<void> {
+    auto arm_main = [&] {
+      set.add([&main]() -> Task<LaneMsg> {
+        co_return LaneMsg{.lane = 0, .main = co_await (*main)()};
+      });
+    };
+    auto arm_aux = [&](size_t i) {
+      set.add([&aux, i]() -> Task<LaneMsg> {
+        co_return LaneMsg{.lane = i + 1, .aux = co_await (*aux[i])()};
+      });
+    };
+    // Emit the single aligned end-of-data once the main stream ended and all
+    // aux sinks drained. No-op for a void output (void carries no EndOfData).
+    auto maybe_emit = [&]() -> Task<void> {
+      if constexpr (not std::is_void_v<T>) {
+        if (not emitted_eod and main_ended and aux_drained == aux.size()) {
+          co_await (*out)(OperatorMsg<T>{Signal{EndOfData{}}});
+          emitted_eod = true;
+        }
+      }
+      co_return;
+    };
+    arm_main();
+    for (auto i = size_t{0}; i < aux.size(); ++i) {
+      arm_aux(i);
+    }
+    while (auto next = co_await set.next([](const LaneMsg&) {
+      return true;
+    })) {
+      if (next->lane == 0) {
+        if (not next->main) {
+          // The main lane drained; treat it as ended in case it closed without
+          // an explicit end-of-data.
+          ++drained;
+          main_ended = true;
+          co_await maybe_emit();
+          if (drained == total) {
+            break;
+          }
+          continue;
+        }
+        if constexpr (std::is_void_v<T>) {
+          co_await co_match(std::move(*next->main),
+                            [](Signal signal) -> Task<void> {
+                              co_await co_match(
+                                std::move(signal),
+                                [](EndOfData) -> Task<void> {
+                                  co_return;
+                                },
+                                [](Checkpoint) -> Task<void> {
+                                  TENZIR_TODO();
+                                  co_return;
+                                });
+                            });
+        } else {
+          co_await co_match(
+            std::move(*next->main),
+            [&](T data) -> Task<void> {
+              co_await (*out)(OperatorMsg<T>{std::move(data)});
+            },
+            [&](Signal signal) -> Task<void> {
+              co_await co_match(
+                std::move(signal),
+                [&](EndOfData) -> Task<void> {
+                  main_ended = true;
+                  co_await maybe_emit();
+                },
+                [](Checkpoint) -> Task<void> {
+                  TENZIR_TODO();
+                  co_return;
+                });
+            });
+        }
+        arm_main();
+      } else {
+        const auto i = next->lane - 1;
+        if (not next->aux) {
+          ++drained;
+          ++aux_drained;
+          co_await maybe_emit();
+          if (drained == total) {
+            break;
+          }
+          continue;
+        }
+        co_await co_match(std::move(*next->aux),
+                          [](Signal signal) -> Task<void> {
+                            co_await co_match(
+                              std::move(signal),
+                              [](EndOfData) -> Task<void> {
+                                co_return;
+                              },
+                              [](Checkpoint) -> Task<void> {
+                                TENZIR_TODO();
+                                co_return;
+                              });
+                          });
+        arm_aux(i);
+      }
+    }
+  });
+}
+
+template auto run_gather_signals(Box<Pull<OperatorMsg<void>>>,
+                                 std::vector<Box<Pull<OperatorMsg<void>>>>,
+                                 Box<Push<OperatorMsg<void>>>) -> Task<void>;
+template auto run_gather_signals(Box<Pull<OperatorMsg<table_slice>>>,
+                                 std::vector<Box<Pull<OperatorMsg<void>>>>,
+                                 Box<Push<OperatorMsg<table_slice>>>)
+  -> Task<void>;
+template auto run_gather_signals(Box<Pull<OperatorMsg<chunk_ptr>>>,
+                                 std::vector<Box<Pull<OperatorMsg<void>>>>,
+                                 Box<Push<OperatorMsg<chunk_ptr>>>)
+  -> Task<void>;
+
 } // namespace tenzir

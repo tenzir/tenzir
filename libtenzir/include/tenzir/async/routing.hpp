@@ -189,6 +189,40 @@ private:
 auto run_gather(std::vector<Box<Pull<OperatorMsg<table_slice>>>> lanes,
                 Box<Push<OperatorMsg<table_slice>>> out) -> Task<void>;
 
+/// Forwards a single typed `main` stream to `out` while draining `aux` void
+/// lanes (the outputs of side-effect sinks), holding the output's completion
+/// back until every lane finished.
+///
+/// Per-signal policy:
+///
+/// - data: forwarded from `main` as received.
+/// - `EndOfData` (only on a non-void `main`): a single aligned end-of-data is
+///   emitted downstream once `main` ended and all `aux` lanes drained.
+/// - lane drained (`None`): counted; when all lanes drained the loop stops and
+///   `out` is dropped, so the downstream observes closure only after every
+///   side-effect sink completed.
+/// - `Checkpoint`: aligned barrier, not yet implemented.
+///
+/// `aux` lanes are always `void`: a void channel never carries data or
+/// `EndOfData`, so an aux lane signals completion purely by draining.
+template <class T>
+auto run_gather_signals(Box<Pull<OperatorMsg<T>>> main,
+                        std::vector<Box<Pull<OperatorMsg<void>>>> aux,
+                        Box<Push<OperatorMsg<T>>> out) -> Task<void>;
+
+extern template auto
+  run_gather_signals(Box<Pull<OperatorMsg<void>>>,
+                     std::vector<Box<Pull<OperatorMsg<void>>>>,
+                     Box<Push<OperatorMsg<void>>>) -> Task<void>;
+extern template auto
+  run_gather_signals(Box<Pull<OperatorMsg<table_slice>>>,
+                     std::vector<Box<Pull<OperatorMsg<void>>>>,
+                     Box<Push<OperatorMsg<table_slice>>>) -> Task<void>;
+extern template auto
+  run_gather_signals(Box<Pull<OperatorMsg<chunk_ptr>>>,
+                     std::vector<Box<Pull<OperatorMsg<void>>>>,
+                     Box<Push<OperatorMsg<chunk_ptr>>>) -> Task<void>;
+
 /// Builds `lanes` internal channels, returning the per-lane pushes and pulls
 /// as parallel vectors. `make_channel` produces one channel per lane, e.g.
 /// `ExecCtx::make_channel<table_slice>`.
