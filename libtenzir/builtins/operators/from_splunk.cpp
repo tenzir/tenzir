@@ -34,10 +34,12 @@
 #include <caf/message.hpp>
 #include <folly/CancellationToken.h>
 #include <folly/coro/BoundedQueue.h>
+#include <folly/coro/Invoke.h>
 #include <folly/coro/WithCancellation.h>
 
 #include <chrono>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -309,9 +311,13 @@ auto render_parse_error(caf::error const& err) -> std::string {
 }
 
 // Messages sent from the streaming fetch task to the operator.
-struct StreamSlice {
-  table_slice slice;
+struct ResultBatch {
+  std::vector<data> records;
 };
+
+// Periodic wake-up so that buffered results flush on the builder timeout
+// even when no new response data arrives.
+struct FlushTick {};
 
 // A Splunk `messages` envelope reported a `WARN` condition.
 struct StreamWarning {
@@ -347,7 +353,7 @@ struct ParseFailed {
 struct StreamDone {};
 
 using StreamMessage
-  = variant<StreamSlice, StreamWarning, RetryWarning, SearchFailed,
+  = variant<ResultBatch, FlushTick, StreamWarning, RetryWarning, SearchFailed,
             SearchRejected, RequestFailed, ParseFailed, StreamDone>;
 
 using StreamQueue = folly::coro::BoundedQueue<StreamMessage, false, true>;
@@ -364,14 +370,9 @@ auto run_export_request(std::string url, std::string target, std::string body,
   auto stopped = false;
   auto error_body = std::string{};
   auto buffer = std::string{};
-  auto builder_dh = null_diagnostic_handler{};
-  auto builder = multi_series_builder{
-    multi_series_builder::options{
-      .settings = {.default_schema_name = "tenzir.splunk"},
-    },
-    builder_dh};
-  // Processes one newline-delimited response envelope. Returns true to stop
-  // consuming the stream.
+  auto records = std::vector<data>{};
+  // Processes one newline-delimited response envelope, collecting `result`
+  // records into `records`. Returns true to stop consuming the stream.
   auto process_line = [&](std::string_view line) -> Task<bool> {
     line = detail::trim(line);
     if (line.empty()) {
@@ -411,7 +412,7 @@ auto run_export_request(std::string url, std::string target, std::string body,
       co_return false;
     }
     if (is<record>(it->second)) {
-      builder.data(std::move(it->second));
+      records.push_back(std::move(it->second));
     }
     co_return false;
   };
@@ -437,8 +438,9 @@ auto run_export_request(std::string url, std::string target, std::string body,
       }
       buffer.erase(0, pos + 1);
     }
-    for (auto&& slice : builder.yield_ready_as_table_slice()) {
-      co_await queue->enqueue(StreamSlice{std::move(slice)});
+    if (not records.empty()) {
+      co_await queue->enqueue(ResultBatch{std::move(records)});
+      records.clear();
     }
     co_return false;
   };
@@ -471,8 +473,8 @@ auto run_export_request(std::string url, std::string target, std::string body,
       co_return;
     }
   }
-  for (auto&& slice : builder.finalize_as_table_slice()) {
-    co_await queue->enqueue(StreamSlice{std::move(slice)});
+  if (not records.empty()) {
+    co_await queue->enqueue(ResultBatch{std::move(records)});
   }
   co_await queue->enqueue(StreamDone{});
 }
@@ -539,6 +541,26 @@ public:
       std::ignore = queue->try_enqueue(RetryWarning{std::string{message}});
     };
     url_ = url;
+    builder_ = std::make_unique<multi_series_builder>(
+      multi_series_builder::options{
+        .settings = {.default_schema_name = "tenzir.splunk"},
+      },
+      ctx.dh());
+    // Wake the operator periodically so that buffered results flush on the
+    // builder timeout even when the response stream goes quiet.
+    ctx.spawn_task(
+      [queue, cancel = cancel_.getToken()]() mutable -> Task<void> {
+        auto token = folly::cancellation_token_merge(
+          co_await folly::coro::co_current_cancellation_token, cancel);
+        co_await folly::coro::co_withCancellation(
+          token, folly::coro::co_invoke(
+                   [queue = std::move(queue)]() mutable -> Task<void> {
+                     while (true) {
+                       co_await sleep_for(std::chrono::milliseconds{250});
+                       std::ignore = queue->try_enqueue(FlushTick{});
+                     }
+                   }));
+      });
     TENZIR_DEBUG("from_splunk: submitting streaming search without "
                  "pagination: {}",
                  args_.search.inner);
@@ -571,10 +593,15 @@ public:
     -> Task<void> override {
     co_await co_match(
       std::move(result).as<StreamMessage>(),
-      [&](StreamSlice msg) -> Task<void> {
-        auto const rows = msg.slice.rows();
-        co_await push(std::move(msg.slice));
-        events_read_.add(rows);
+      [&](ResultBatch msg) -> Task<void> {
+        TENZIR_ASSERT(builder_);
+        for (auto& record : msg.records) {
+          builder_->data(std::move(record));
+        }
+        co_await flush(push);
+      },
+      [&](FlushTick) -> Task<void> {
+        co_await flush(push);
       },
       [&](StreamWarning msg) -> Task<void> {
         diagnostic::warning("Splunk search returned {}: {}", msg.type, msg.text)
@@ -623,9 +650,28 @@ public:
         co_return;
       },
       [&](StreamDone) -> Task<void> {
+        if (builder_) {
+          for (auto&& slice : builder_->finalize_as_table_slice()) {
+            auto const rows = slice.rows();
+            co_await push(std::move(slice));
+            events_read_.add(rows);
+          }
+        }
         done_ = true;
         co_return;
       });
+  }
+
+  auto flush(Push<table_slice>& push) -> Task<void> {
+    TENZIR_ASSERT(builder_);
+    // The 250ms flush ticks drive timeout-based yields, so the `wait_for`
+    // hint in the result does not need separate scheduling.
+    auto ready = builder_->yield_ready_as_table_slice();
+    for (auto&& slice : ready.slices) {
+      auto const rows = slice.rows();
+      co_await push(std::move(slice));
+      events_read_.add(rows);
+    }
   }
 
   auto state() -> OperatorState override {
@@ -650,6 +696,7 @@ private:
   FromSplunkArgs args_;
   std::string url_;
   mutable Option<Arc<StreamQueue>> queue_;
+  std::unique_ptr<multi_series_builder> builder_;
   folly::CancellationSource cancel_;
   MetricsCounter events_read_;
   bool done_ = false;
