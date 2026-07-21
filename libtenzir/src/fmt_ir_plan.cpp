@@ -32,6 +32,7 @@ auto is_inline_kind(ir::ChannelKind kind) -> bool {
     case ir::ChannelKind::Shuffle:
       return true;
     case ir::ChannelKind::Broadcast:
+    case ir::ChannelKind::Split:
     case ir::ChannelKind::GatherSignals:
       return false;
   }
@@ -54,6 +55,7 @@ auto inline_glyph(ir::ChannelKind kind) -> std::string_view {
     case ir::ChannelKind::Shuffle:
       return "-x-";
     case ir::ChannelKind::Broadcast:
+    case ir::ChannelKind::Split:
     case ir::ChannelKind::GatherSignals:
       return "--";
   }
@@ -77,6 +79,8 @@ auto link_kind_name(ir::ChannelKind kind) -> std::string_view {
       return "shuffle";
     case ir::ChannelKind::Broadcast:
       return "broadcast";
+    case ir::ChannelKind::Split:
+      return "split";
     case ir::ChannelKind::GatherSignals:
       return "gather-signals";
   }

@@ -1845,6 +1845,28 @@ private:
         }
         return;
       }
+      case ir::ChannelKind::Split: {
+        // One upstream instance routes each row to exactly one of N branch
+        // heads via the channel's splitter. Like `Broadcast`, phase 1 runs
+        // every participant single-instance.
+        TENZIR_ASSERT(plan.from.size() == 1);
+        TENZIR_ASSERT(plan.from[0] != ir::PlanPort::input);
+        TENZIR_ASSERT(not plan.to.empty());
+        TENZIR_ASSERT(plan.args.is_some());
+        auto const& from = instances_of[plan.from[0]];
+        TENZIR_ASSERT(from.size() == 1);
+        auto id = id_.op(plan.from[0]).to(id_.op(plan.to[0]));
+        auto [push, pulls]
+          = make_split(make_routing_events, std::move(*plan.args), dh_, id);
+        TENZIR_ASSERT(pulls.size() == plan.to.size());
+        outputs[from[0]] = AnyOpPush{std::move(push)};
+        for (auto i = size_t{0}; i < plan.to.size(); ++i) {
+          auto const& to = instances_of[plan.to[i]];
+          TENZIR_ASSERT(to.size() == 1);
+          inputs[to[0]] = AnyOpPull{std::move(pulls[i])};
+        }
+        return;
+      }
       case ir::ChannelKind::Gather: {
         // The instances of N upstream operators merge into a single downstream
         // instance. Every upstream instance gets its own lane; the merge loop

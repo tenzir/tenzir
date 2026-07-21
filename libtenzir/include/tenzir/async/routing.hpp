@@ -15,6 +15,7 @@
 #include "tenzir/box.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/multi_series.hpp"
+#include "tenzir/splitter.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
 
@@ -171,6 +172,25 @@ private:
   diagnostic_handler* dh_;
 };
 
+/// The fan-out endpoint of a split exchange.
+///
+/// A `SplitPush` is held by a single upstream instance and routes each row of
+/// an incoming `table_slice` to exactly one of its downstream lanes. The
+/// row-to-lane classification is delegated to a `Splitter`: `if` routes on a
+/// boolean condition (two lanes), `match` routes on pattern and guard
+/// evaluation (one lane per arm). `dh` must outlive the `SplitPush`.
+class SplitPush final : public ExchangePush {
+public:
+  SplitPush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes,
+            Box<Splitter> splitter, diagnostic_handler& dh);
+
+private:
+  auto route_data(table_slice data) -> Task<void> override;
+
+  Box<Splitter> splitter_;
+  diagnostic_handler* dh_;
+};
+
 /// Drives the fan-in of a gather exchange.
 ///
 /// Runs the merge loop that reads the `n` upstream lane pulls and writes the
@@ -272,6 +292,24 @@ auto make_broadcast(size_t lanes, Factory make_channel, ChannelId id)
   auto broadcast = Box<Push<OperatorMsg<table_slice>>>{
     BroadcastPush{std::move(lane_pushes)}};
   return {std::move(broadcast), std::move(lane_pulls)};
+}
+
+/// Creates a split exchange whose lane count is determined by `splitter`.
+///
+/// Returns the single upstream `Push` (a `SplitPush`) and the lane `Pull`s.
+/// Rows are routed by `splitter`. `make_channel` produces one internal SPSC
+/// channel per lane, e.g. `ExecCtx::make_channel<table_slice>`. `dh` must
+/// outlive the returned `SplitPush`.
+template <class Factory>
+auto make_split(Factory make_channel, Box<Splitter> splitter,
+                diagnostic_handler& dh, ChannelId id)
+  -> std::pair<Box<Push<OperatorMsg<table_slice>>>,
+               std::vector<Box<Pull<OperatorMsg<table_slice>>>>> {
+  auto lanes = splitter->lanes();
+  auto [lane_pushes, lane_pulls] = make_lane_channels(lanes, make_channel, id);
+  auto split = Box<Push<OperatorMsg<table_slice>>>{
+    SplitPush{std::move(lane_pushes), std::move(splitter), dh}};
+  return {std::move(split), std::move(lane_pulls)};
 }
 
 /// The parts of a gather exchange with `lanes` upstream lanes.

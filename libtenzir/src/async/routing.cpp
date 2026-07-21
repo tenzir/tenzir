@@ -227,6 +227,25 @@ auto ShufflePush::route_data(table_slice data) -> Task<void> {
   }
 }
 
+SplitPush::SplitPush(std::vector<Box<Push<OperatorMsg<table_slice>>>> lanes,
+                     Box<Splitter> splitter, diagnostic_handler& dh)
+  : ExchangePush{std::move(lanes)}, splitter_{std::move(splitter)}, dh_{&dh} {
+  TENZIR_ASSERT(lanes_.size() == splitter_->lanes());
+}
+
+auto SplitPush::route_data(table_slice data) -> Task<void> {
+  // Delegate the row-to-lane classification to the splitter, then forward each
+  // resulting run to its lane. Every row lands on exactly one lane.
+  for (auto& run : splitter_->split(std::move(data), *dh_)) {
+    if (run.slice.rows() == 0) {
+      continue;
+    }
+    TENZIR_ASSERT(run.lane < lanes_.size());
+    co_await (*lanes_[run.lane])(
+      OperatorMsg<table_slice>{std::move(run.slice)});
+  }
+}
+
 auto run_gather(std::vector<Box<Pull<OperatorMsg<table_slice>>>> lanes,
                 Box<Push<OperatorMsg<table_slice>>> out) -> Task<void> {
   struct LaneMsg {
