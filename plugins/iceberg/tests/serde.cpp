@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/plugins/iceberg/facade.hpp"
+#include "tenzir/plugins/iceberg/catalog.hpp"
 
 #include <tenzir/test/test.hpp>
 
@@ -76,9 +76,9 @@ auto make_serialized_file() -> SerializedDataFile {
 
 TEST("data file handles round-trip through their persistable form") {
   auto serialized = make_serialized_file();
-  auto file = DataFile::deserialize(serialized);
+  auto file = deserialize_data_file(serialized);
   REQUIRE(file.has_value());
-  auto roundtripped = file->serialize();
+  auto roundtripped = serialize_data_file(**file);
   REQUIRE(roundtripped.has_value());
   CHECK(*roundtripped == serialized);
 }
@@ -87,9 +87,9 @@ TEST("unpartitioned data file handles round-trip") {
   auto serialized = make_serialized_file();
   serialized.partition.clear();
   serialized.spec_id = std::nullopt;
-  auto file = DataFile::deserialize(serialized);
+  auto file = deserialize_data_file(serialized);
   REQUIRE(file.has_value());
-  auto roundtripped = file->serialize();
+  auto roundtripped = serialize_data_file(**file);
   REQUIRE(roundtripped.has_value());
   CHECK(*roundtripped == serialized);
 }
@@ -101,7 +101,7 @@ TEST("unknown literal type tags fail to restore") {
     .is_null = false,
     .value = le_bytes(int64_t{1}),
   });
-  auto file = DataFile::deserialize(serialized);
+  auto file = deserialize_data_file(serialized);
   REQUIRE(not file.has_value());
   CHECK(file.error().kind == Error::Kind::permanent);
 }

@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/plugins/iceberg/facade.hpp"
+#include "tenzir/plugins/iceberg/catalog.hpp"
 #include "tenzir/plugins/iceberg/restore.hpp"
 
 #include <tenzir/amazon.hpp>
@@ -34,6 +34,8 @@
 #include <arrow/compute/cast.h>
 #include <arrow/util/byte_size.h>
 #include <folly/coro/UnboundedQueue.h>
+#include <iceberg/data/data_writer.h>
+#include <iceberg/table.h>
 
 #include <algorithm>
 #include <span>
@@ -318,14 +320,14 @@ public:
     std::vector<std::shared_ptr<arrow::Array>> buffered;
     int64_t buffered_bytes = 0;
     /// The streaming writer, once the partition graduates.
-    Option<FileWriter> writer;
+    std::shared_ptr<ice::DataWriter> writer;
     /// Top-level columns the open data file omits because every row seen
     /// at graduation held null; empty while buffering or when the file
     /// carries the full table schema.
     std::vector<bool> omitted;
     /// The partition tuple, for opening the data file at graduation or
     /// close.
-    PartitionTuple partition;
+    ice::PartitionValues partition;
     /// The human-readable partition path, for diagnostics.
     std::string path;
     /// Bytes written to the open data file; 0 while buffering.
@@ -338,7 +340,7 @@ public:
   /// checkpoint-persistable form. The latter is computed at close time
   /// because `snapshot` runs synchronously.
   struct StagedFile {
-    DataFile file;
+    std::shared_ptr<ice::DataFile> file;
     SerializedDataFile serialized;
   };
 
@@ -517,7 +519,7 @@ public:
     std::tie(ns_, table_name_) = split_table_id(args_.table_id.inner);
     auto catalog
       = co_await spawn_blocking([config = std::move(config)]() mutable {
-          return Catalog::open(std::move(config));
+          return open_catalog(std::move(config));
         });
     if (not catalog) {
       diagnostic::error("failed to open Iceberg catalog: {}",
@@ -529,8 +531,8 @@ public:
     }
     catalog_ = std::move(*catalog);
     auto table = co_await spawn_blocking(
-      [catalog = *catalog_, ns = ns_, name = table_name_]() mutable {
-        return catalog.load_table(ns, name);
+      [catalog = catalog_, ns = ns_, name = table_name_]() mutable {
+        return load_table(*catalog, ns, name);
       });
     if (table) {
       // After a restore, an existing table is our own previous work only
@@ -557,7 +559,7 @@ public:
       // dropped and recreated since the checkpoint, the rows committed
       // before it are gone, and resuming would silently continue on the
       // impostor.
-      if (restored_table_identity_conflict(table_uuid_, table->uuid())) {
+      if (restored_table_identity_conflict(table_uuid_, (*table)->uuid())) {
         diagnostic::error("Iceberg table `{}` is not the table the "
                           "checkpoint wrote to",
                           args_.table_id.inner)
@@ -641,10 +643,11 @@ public:
     if (not batch) {
       co_return;
     }
-    auto groups
-      = co_await spawn_blocking([table = *table_, batch = *batch]() mutable {
-          return table.split_by_partition(std::move(batch));
-        });
+    auto groups = co_await spawn_blocking(
+      [table = table_, partitioning = partitioning_,
+       batch = *batch]() mutable {
+        return split_by_partition(*table, *partitioning, std::move(batch));
+      });
     if (not groups) {
       fail(groups.error(), "failed to compute partition values", ctx);
       co_return;
@@ -767,40 +770,32 @@ public:
 private:
   /// Imports the table's Arrow schema. Emits a diagnostic and sets `done_`
   /// on failure, returning nullptr.
-  auto import_table_schema(Table& table, OpCtx& ctx)
+  auto import_table_schema(const ice::Table& table, OpCtx& ctx)
     -> std::shared_ptr<arrow::Schema> {
-    auto c_schema = ArrowSchema{};
-    if (auto result = table.export_arrow_schema(&c_schema); not result) {
+    auto schema = table_arrow_schema(table);
+    if (not schema) {
       diagnostic::error("failed to map Iceberg table schema: {}",
-                        result.error().message)
+                        schema.error().message)
         .primary(args_.table_id.source)
         .emit(ctx.dh());
       done_ = true;
       return nullptr;
     }
-    auto imported = arrow::ImportSchema(&c_schema);
-    if (not imported.ok()) {
-      diagnostic::error("failed to import Iceberg table schema: {}",
-                        imported.status().ToString())
-        .primary(args_.table_id.source)
-        .emit(ctx.dh());
-      done_ = true;
-      return nullptr;
-    }
-    return imported.MoveValueUnsafe();
+    return std::move(*schema);
   }
 
   /// Imports the table's Arrow schema and makes `table` the write target.
-  auto set_table(Table table, OpCtx& ctx) -> void {
-    if (auto result = table.validate_partitioning(); not result) {
+  auto set_table(std::shared_ptr<ice::Table> table, OpCtx& ctx) -> void {
+    auto partitioning = bind_partitioning(*table);
+    if (not partitioning) {
       diagnostic::error("cannot write to partitioned Iceberg table `{}`: {}",
-                        args_.table_id.inner, result.error().message)
+                        args_.table_id.inner, partitioning.error().message)
         .primary(args_.table_id.source)
         .emit(ctx.dh());
       done_ = true;
       return;
     }
-    auto schema = import_table_schema(table, ctx);
+    auto schema = import_table_schema(*table, ctx);
     if (not schema) {
       return;
     }
@@ -811,6 +806,8 @@ private:
       evolved_schemas_.clear();
     }
     table_ = std::move(table);
+    partitioning_ = std::make_shared<const std::vector<BoundPartitionField>>(
+      std::move(*partitioning));
     target_schema_ = std::move(schema);
     // The UUID persists in checkpoints so that a restore can tell a
     // dropped-and-recreated table apart from the one it wrote to.
@@ -821,13 +818,14 @@ private:
   /// spec: the table's spec governs the fanout, and the user's expectation
   /// and reality must not diverge silently. Emits a diagnostic and sets
   /// `done_` on a mismatch. No-op without `partition_by`.
-  auto check_partition_spec(Table table, OpCtx& ctx) -> Task<void> {
+  auto verify_partition_by(std::shared_ptr<ice::Table> table, OpCtx& ctx)
+    -> Task<void> {
     if (not args_.partition_by) {
       co_return;
     }
     auto checked = co_await spawn_blocking(
       [table = std::move(table), fields = partition_fields_]() mutable {
-        return table.check_partition_spec(fields);
+        return check_partition_spec(*table, fields);
       });
     if (not checked) {
       diagnostic::error("{}", checked.error().message)
@@ -845,14 +843,15 @@ private:
   /// the adopted spec: a concurrent change of the table's default spec must
   /// not silently override the user's requested partitioning when the same
   /// divergence at startup is a hard error.
-  auto adopt_table(Table table, OpCtx& ctx) -> Task<void> {
+  auto adopt_table(std::shared_ptr<ice::Table> table, OpCtx& ctx)
+    -> Task<void> {
     const auto layout_changed
-      = not table_ or not table_->has_same_write_layout(table);
+      = not table_ or not same_write_layout(*table_, *table);
     set_table(std::move(table), ctx);
     if (done_ or not layout_changed) {
       co_return;
     }
-    co_await check_partition_spec(*table_, ctx);
+    co_await verify_partition_by(table_, ctx);
   }
 
   /// Creates the table from the schema of the first arriving events. Only
@@ -871,22 +870,22 @@ private:
     auto dropped = std::make_shared<std::vector<std::string>>();
     auto fell_back = std::make_shared<bool>(false);
     auto table = co_await spawn_blocking(
-      [catalog = *catalog_, ns = ns_, name = table_name_, ty = input.schema(),
+      [catalog = catalog_, ns = ns_, name = table_name_, ty = input.schema(),
        options = std::move(options), dropped, fell_back,
-       fall_back_to_load
-       = mode_ == mode::create_append]() mutable -> Result<Table> {
-        if (auto result = catalog.ensure_namespace(ns); not result) {
+       fall_back_to_load = mode_ == mode::create_append]() mutable
+      -> Result<std::shared_ptr<ice::Table>> {
+        if (auto result = ensure_namespace(*catalog, ns); not result) {
           return std::unexpected{result.error()};
         }
-        auto created = catalog.create_table(ns, name, as<record_type>(ty),
-                                            options, *dropped);
+        auto created = create_table(*catalog, ns, name, as<record_type>(ty),
+                                    options, *dropped);
         if (not created and fall_back_to_load
             and created.error().kind == Error::Kind::already_exists) {
           // Another writer won the race between our existence check and the
           // creation; appending to their table is exactly what this mode
           // promises.
           *fell_back = true;
-          return catalog.load_table(ns, name);
+          return load_table(*catalog, ns, name);
         }
         return created;
       });
@@ -906,7 +905,7 @@ private:
     if (*fell_back) {
       // The winner's table governs; the same `partition_by` compatibility
       // check as for tables that already existed at start applies.
-      co_await check_partition_spec(*table, ctx);
+      co_await verify_partition_by(*table, ctx);
       if (done_) {
         co_return;
       }
@@ -932,13 +931,13 @@ private:
     // Evolution retries run against a local handle so that the operator's
     // projection target and open data file stay untouched unless the table
     // schema actually changes.
-    auto current = *table_;
+    auto current = table_;
     auto backoff = duration{commit_initial_backoff};
     for (auto attempt = 1;; ++attempt) {
       auto dropped = std::make_shared<std::vector<std::string>>();
       auto evolved = co_await spawn_blocking(
         [table = current, ty = input.schema(), dropped]() mutable {
-          return table.evolve_schema(as<record_type>(ty), *dropped);
+          return evolve_schema(table, as<record_type>(ty), *dropped);
         });
       for (const auto& reason : *dropped) {
         warn_once(fmt::format("cannot represent column in Iceberg: {}", reason),
@@ -974,7 +973,7 @@ private:
           // the table handle refreshing its metadata. Adopt the table's
           // current schema when it differs, or projection would silently
           // drop those fields from this writer's rows.
-          auto schema = import_table_schema(current, ctx);
+          auto schema = import_table_schema(*current, ctx);
           if (done_) {
             co_return;
           }
@@ -1027,8 +1026,8 @@ private:
       // A concurrent writer updated the table between our load and the
       // schema commit; re-derive the diff against their changes.
       auto reloaded = co_await spawn_blocking(
-        [catalog = *catalog_, ns = ns_, name = table_name_]() mutable {
-          return catalog.load_table(ns, name);
+        [catalog = catalog_, ns = ns_, name = table_name_]() mutable {
+          return load_table(*catalog, ns, name);
         });
       if (not reloaded) {
         // The reload is part of the same idempotent conflict recovery as
@@ -1054,7 +1053,7 @@ private:
       }
       // Evolving the schema of a table that was dropped and recreated
       // underneath us would commit metadata to the impostor and adopt it.
-      if (restored_table_identity_conflict(table_uuid_, reloaded->uuid())) {
+      if (restored_table_identity_conflict(table_uuid_, (*reloaded)->uuid())) {
         diagnostic::error("Iceberg table `{}` was dropped and recreated "
                           "while writing to it",
                           args_.table_id.inner)
@@ -1498,7 +1497,7 @@ private:
                    std::vector<std::shared_ptr<arrow::Array>> pieces,
                    OpCtx& ctx) -> Task<void> {
     auto written = co_await spawn_blocking(
-      [writer = *partition.writer, omitted = partition.omitted,
+      [writer = partition.writer, omitted = partition.omitted,
        pieces = std::move(pieces)]() mutable -> Result<int64_t> {
         for (const auto& piece : pieces) {
           auto c_array = ArrowArray{};
@@ -1510,11 +1509,11 @@ private:
               fmt::format("failed to export batch: {}", status.ToString()),
             }};
           }
-          if (auto result = writer.write(&c_array); not result) {
+          if (auto result = translate(writer->Write(&c_array)); not result) {
             return std::unexpected{result.error()};
           }
         }
-        return writer.bytes_written();
+        return translate(writer->Length());
       });
     if (not written) {
       fail(written.error(), "failed to write data file", ctx);
@@ -1554,10 +1553,11 @@ private:
       }
     }
     auto opened = co_await spawn_blocking(
-      [table = *table_, partition = partition.partition,
+      [table = table_, partition = partition.partition,
        omitted = all_null_columns(partition.buffered)]() mutable
-        -> Result<std::pair<FileWriter, std::vector<bool>>> {
-        auto writer = table.new_file_writer(partition, omitted);
+      -> Result<std::pair<std::shared_ptr<ice::DataWriter>,
+                          std::vector<bool>>> {
+        auto writer = new_file_writer(*table, partition, omitted);
         if (not writer) {
           return std::unexpected{writer.error()};
         }
@@ -1641,21 +1641,22 @@ private:
     }
     auto& partition = node.mapped();
     partition.timer_cancel.requestCancellation();
-    auto closed = Option<Result<DataFile>>{};
+    auto closed = Option<Result<std::shared_ptr<ice::DataFile>>>{};
     if (partition.writer) {
       streaming_count_ -= 1;
-      closed = co_await spawn_blocking([writer = *partition.writer]() mutable {
-        return writer.finish();
+      closed = co_await spawn_blocking([writer = partition.writer]() mutable {
+        return finish_data_file(*writer);
       });
     } else {
       // The one-shot writer never outlives this call, so it does not count
       // against the streaming cap.
       total_buffered_ -= partition.buffered_bytes;
       closed = co_await spawn_blocking(
-        [table = *table_, tuple = partition.partition,
-         pieces = std::move(partition.buffered)]() mutable -> Result<DataFile> {
+        [table = table_, tuple = partition.partition,
+         pieces = std::move(partition.buffered)]() mutable
+        -> Result<std::shared_ptr<ice::DataFile>> {
           auto omitted = all_null_columns(pieces);
-          auto writer = table.new_file_writer(tuple, omitted);
+          auto writer = new_file_writer(*table, tuple, omitted);
           if (not writer) {
             return std::unexpected{writer.error()};
           }
@@ -1669,11 +1670,12 @@ private:
                 fmt::format("failed to export batch: {}", status.ToString()),
               }};
             }
-            if (auto result = writer->write(&c_array); not result) {
+            if (auto result = translate((*writer)->Write(&c_array));
+                not result) {
               return std::unexpected{result.error()};
             }
           }
-          return writer->finish();
+          return finish_data_file(**writer);
         });
     }
     auto& file = *closed;
@@ -1681,7 +1683,7 @@ private:
       fail(file.error(), "failed to finalize data file", ctx);
       co_return;
     }
-    auto serialized = file->serialize();
+    auto serialized = serialize_data_file(**file);
     if (not serialized) {
       fail(serialized.error(), "failed to persist data file handle", ctx);
       co_return;
@@ -1734,7 +1736,7 @@ private:
     // data instead. Skip past the orphaned sequence numbers so commit tags
     // stay unambiguous, and surface the potential duplication.
     auto orphaned = uint64_t{0};
-    while (table_->has_commit(CommitTag{writer_id_, commit_seq_})) {
+    while (has_commit(*table_, CommitTag{writer_id_, commit_seq_})) {
       commit_seq_ += 1;
       orphaned += 1;
     }
@@ -1755,7 +1757,7 @@ private:
     if (epoch_snapshot_.empty()) {
       co_return;
     }
-    if (table_->has_commit(CommitTag{writer_id_, commit_seq_})) {
+    if (has_commit(*table_, CommitTag{writer_id_, commit_seq_})) {
       TENZIR_DEBUG("to_iceberg: restart reconciliation: commit seq {} already "
                    "landed; dropping {} restored file handles",
                    commit_seq_, epoch_snapshot_.size());
@@ -1776,8 +1778,8 @@ private:
       paths.push_back(serialized.path);
     }
     auto referenced = co_await spawn_blocking(
-      [table = *table_, paths = std::move(paths)]() mutable {
-        return table.references_any_data_file(paths);
+      [table = table_, paths = std::move(paths)]() mutable {
+        return references_any_data_file(*table, paths);
       });
     if (not referenced) {
       fail(referenced.error(), "failed to inspect table data files", ctx);
@@ -1793,7 +1795,7 @@ private:
       co_return;
     }
     for (const auto& serialized : epoch_snapshot_) {
-      auto file = DataFile::deserialize(serialized);
+      auto file = deserialize_data_file(serialized);
       if (not file) {
         fail(file.error(), "failed to restore data file from checkpoint", ctx);
         co_return;
@@ -1830,7 +1832,7 @@ private:
       cancel_commit_timer();
     }
     const auto staged_count = staged.size();
-    auto files = std::vector<DataFile>{};
+    auto files = std::vector<std::shared_ptr<ice::DataFile>>{};
     files.reserve(staged_count);
     for (auto it = staged.begin(); it != staged.begin() + staged_count; ++it) {
       files.push_back(it->file);
@@ -1839,8 +1841,8 @@ private:
     auto backoff = duration{commit_initial_backoff};
     for (auto attempt = 1;; ++attempt) {
       auto result
-        = co_await spawn_blocking([table = *table_, files, tag]() mutable {
-            return table.commit_append(files, tag);
+        = co_await spawn_blocking([table = table_, files, tag]() mutable {
+            return commit_append(std::move(table), files, tag);
           });
       if (result) {
         auto bytes = int64_t{0};
@@ -1851,7 +1853,7 @@ private:
         TENZIR_DEBUG("to_iceberg: committed {} data files ({} bytes) as seq "
                      "{} of writer `{}` on attempt {}",
                      staged_count, bytes, tag.sequence, tag.writer_id, attempt);
-        const auto layout_changed = not table_->has_same_write_layout(*result);
+        const auto layout_changed = not same_write_layout(*table_, **result);
         if (layout_changed) {
           TENZIR_DEBUG("to_iceberg: table write layout changed after commit; "
                        "closing {} open partitions",
@@ -1882,8 +1884,8 @@ private:
       if (result.error().kind == Error::Kind::conflict) {
         // A concurrent update won the race; commit again on top of it.
         auto reloaded = co_await spawn_blocking(
-          [catalog = *catalog_, ns = ns_, name = table_name_]() mutable {
-            return catalog.load_table(ns, name);
+          [catalog = catalog_, ns = ns_, name = table_name_]() mutable {
+            return load_table(*catalog, ns, name);
           });
         if (not reloaded) {
           // The reload is part of conflict recovery and idempotent with
@@ -1907,7 +1909,8 @@ private:
         // A conflict can also mean the table was dropped and recreated
         // underneath us; appending the staged files to the impostor would
         // silently abandon the rows already committed to the old table.
-        if (restored_table_identity_conflict(table_uuid_, reloaded->uuid())) {
+        if (restored_table_identity_conflict(table_uuid_,
+                                             (*reloaded)->uuid())) {
           diagnostic::error("Iceberg table `{}` was dropped and recreated "
                             "while writing to it",
                             args_.table_id.inner)
@@ -1918,7 +1921,7 @@ private:
           done_ = true;
           co_return;
         }
-        auto landed = reloaded->has_commit(tag);
+        auto landed = has_commit(**reloaded, tag);
         if (not landed and result.error().uncertain) {
           // A commit whose success response was lost may have landed even
           // though snapshot expiration already erased its tagged snapshot.
@@ -1933,7 +1936,7 @@ private:
           }
           auto referenced = co_await spawn_blocking(
             [table = *reloaded, paths = std::move(paths)]() mutable {
-              return table.references_any_data_file(paths);
+              return references_any_data_file(*table, paths);
             });
           if (not referenced) {
             fail(referenced.error(), "failed to inspect table data files", ctx);
@@ -1941,8 +1944,7 @@ private:
           }
           landed = *referenced;
         }
-        const auto layout_changed
-          = not table_->has_same_write_layout(*reloaded);
+        const auto layout_changed = not same_write_layout(*table_, **reloaded);
         if (layout_changed) {
           TENZIR_DEBUG("to_iceberg: table write layout changed while "
                        "reloading; closing {} open partitions",
@@ -2036,8 +2038,12 @@ private:
   enum mode mode_ = mode::create_append;
   std::vector<std::string> ns_;
   std::string table_name_;
-  Option<Catalog> catalog_;
-  Option<Table> table_;
+  std::shared_ptr<ice::Catalog> catalog_;
+  std::shared_ptr<ice::Table> table_;
+  /// The bound partition spec of `table_`, rebuilt whenever the write
+  /// target changes; shared so that blocking split tasks keep a consistent
+  /// view across table adoptions.
+  std::shared_ptr<const std::vector<BoundPartitionField>> partitioning_;
   std::shared_ptr<arrow::Schema> target_schema_;
   /// The parsed `partition_by` argument; empty when not partitioning.
   std::vector<PartitionField> partition_fields_;

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "tenzir/plugins/iceberg/facade.hpp"
+#include "tenzir/plugins/iceberg/types.hpp"
 
 #include <algorithm>
 #include <string_view>

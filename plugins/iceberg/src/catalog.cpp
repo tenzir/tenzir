@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/plugins/iceberg/facade.hpp"
+#include "tenzir/plugins/iceberg/catalog.hpp"
 
 #include "tenzir/plugins/iceberg/detail/file_io.hpp"
 
@@ -74,10 +74,6 @@
 namespace tenzir::plugins::iceberg {
 
 namespace {
-
-// Our namespace ends in `iceberg`, so the library must be qualified from the
-// global namespace throughout this file.
-namespace ice = ::iceberg;
 
 /// Snapshot summary properties keying exactly-once deduplication.
 constexpr auto writer_id_property = std::string_view{"tenzir.writer-id"};
@@ -176,6 +172,8 @@ public:
 
 #endif
 
+} // namespace
+
 auto translate_error(const ice::Error& error) -> Error {
   auto kind = Error::Kind::permanent;
   switch (error.kind) {
@@ -207,17 +205,7 @@ auto translate_error(const ice::Error& error) -> Error {
   };
 }
 
-template <class T>
-auto translate(ice::Result<T> result) -> Result<T> {
-  if (not result.has_value()) {
-    return std::unexpected{translate_error(result.error())};
-  }
-  if constexpr (std::same_as<T, void>) {
-    return {};
-  } else {
-    return std::move(result).value();
-  }
-}
+namespace {
 
 /// The S3 FileIO under a Tenzir-owned registry name. iceberg-cpp
 /// cross-checks its *builtin* FileIO names against the warehouse URI scheme,
@@ -758,7 +746,8 @@ auto render_partition_field(std::string_view source,
   return fmt::format("{}({})", transform.ToString(), source);
 }
 
-/// Whether the facade can read partition source values of this type out of
+/// Whether `split_by_partition` can read partition source values of this
+/// type out of
 /// an Arrow array (see `literal_from_arrow`).
 auto supports_partition_source(ice::TypeId id) -> bool {
   switch (id) {
@@ -895,16 +884,6 @@ auto literal_from_arrow(ice::TypeId id, const arrow::Array& array, int64_t row)
   }
 }
 
-/// One partition spec field bound against the table schema, ready to compute
-/// partition values.
-struct BoundPartitionField {
-  /// Path of the source column, one entry per struct level.
-  std::vector<std::string> segments;
-  std::shared_ptr<ice::PrimitiveType> source_type;
-  std::shared_ptr<ice::Transform> transform;
-  std::shared_ptr<ice::TransformFunction> function;
-};
-
 /// A partition source column located within one batch: the leaf array plus
 /// the enclosing struct arrays whose validity masks the leaf (an Arrow child
 /// array holds unspecified values where an ancestor is null).
@@ -956,32 +935,7 @@ auto resolve_partition_column(const std::shared_ptr<arrow::StructArray>& batch,
 
 } // namespace
 
-struct Catalog::Impl {
-  std::shared_ptr<ice::Catalog> catalog;
-  /// Keeps the registered AWS credentials provider alive for auth sessions
-  /// and FileIO factories until the last catalog handle drops.
-  std::shared_ptr<void> aws_credentials_guard;
-};
-
-struct Table::Impl {
-  std::shared_ptr<ice::Table> table;
-  /// The bound default partition spec, built on first use. Not synchronized;
-  /// the operator serializes all facade calls per table handle.
-  std::optional<std::vector<BoundPartitionField>> partitioning;
-
-  /// Returns the bound partitioning, building it on first use.
-  auto ensure_partitioning() -> Result<std::span<const BoundPartitionField>>;
-};
-
-struct PartitionTuple::Impl {
-  std::vector<ice::Literal> values;
-};
-
-namespace {
-
-/// Binds the table's default partition spec against its schema. Returns one
-/// entry per partition field; empty for unpartitioned tables.
-auto bind_partitioning(ice::Table& table)
+auto bind_partitioning(const ice::Table& table)
   -> Result<std::vector<BoundPartitionField>> {
   auto spec = table.spec();
   if (not spec.has_value()) {
@@ -1045,52 +999,12 @@ auto bind_partitioning(ice::Table& table)
   return result;
 }
 
-} // namespace
-
-auto Table::Impl::ensure_partitioning()
-  -> Result<std::span<const BoundPartitionField>> {
-  if (not partitioning) {
-    auto bound = bind_partitioning(*table);
-    if (not bound.has_value()) {
-      return std::unexpected{bound.error()};
-    }
-    partitioning = std::move(*bound);
-  }
-  return std::span{*partitioning};
-}
-
-struct FileWriter::Impl {
-  std::unique_ptr<ice::DataWriter> writer;
-};
-
-struct DataFile::Impl {
-  std::shared_ptr<ice::DataFile> file;
-};
-
-Catalog::Catalog(std::shared_ptr<Impl> impl) : impl_{std::move(impl)} {
-}
-
-Table::Table(std::shared_ptr<Impl> impl) : impl_{std::move(impl)} {
-}
-
-FileWriter::FileWriter(std::shared_ptr<Impl> impl) : impl_{std::move(impl)} {
-}
-
-DataFile::DataFile(std::shared_ptr<Impl> impl) : impl_{std::move(impl)} {
-}
-
-PartitionTuple::PartitionTuple() : impl_{std::make_shared<Impl>()} {
-}
-
-PartitionTuple::PartitionTuple(std::shared_ptr<Impl> impl)
-  : impl_{std::move(impl)} {
-}
-
 auto ensure_aws_sdk_initialized() -> Result<void> {
   return translate(ice::rest::auth::InitializeAwsSdk());
 }
 
-auto Catalog::open(CatalogConfig config) -> Result<Catalog> {
+auto open_catalog(CatalogConfig config)
+  -> Result<std::shared_ptr<ice::Catalog>> {
   ensure_registered();
   if (config.gcp_auth) {
     config.properties[ice::rest::auth::AuthProperties::kAuthType]
@@ -1193,23 +1107,29 @@ auto Catalog::open(CatalogConfig config) -> Result<Catalog> {
   if (not catalog.has_value()) {
     return std::unexpected{translate_error(catalog.error())};
   }
-  return Catalog{std::make_shared<Impl>(Impl{
-    .catalog = std::move(*catalog),
-    .aws_credentials_guard = std::move(aws_credentials_guard),
-  })};
+  if (not aws_credentials_guard) {
+    return std::move(*catalog);
+  }
+  // Tie the credentials registration to the catalog handle: auth sessions
+  // and FileIO factories resolve the provider through the registry for as
+  // long as any copy of the returned pointer lives.
+  auto bundle = std::make_shared<
+    std::pair<std::shared_ptr<ice::Catalog>, std::shared_ptr<void>>>(
+    std::move(*catalog), std::move(aws_credentials_guard));
+  return std::shared_ptr<ice::Catalog>{bundle, bundle->first.get()};
 }
 
-auto Catalog::ensure_namespace(std::span<const std::string> ns)
+auto ensure_namespace(ice::Catalog& catalog, std::span<const std::string> ns)
   -> Result<void> {
   auto namespace_id = ice::Namespace{.levels = {ns.begin(), ns.end()}};
-  auto exists = impl_->catalog->NamespaceExists(namespace_id);
+  auto exists = catalog.NamespaceExists(namespace_id);
   if (not exists.has_value()) {
     return std::unexpected{translate_error(exists.error())};
   }
   if (*exists) {
     return {};
   }
-  auto status = impl_->catalog->CreateNamespace(namespace_id, {});
+  auto status = catalog.CreateNamespace(namespace_id, {});
   if (not status.has_value()
       and status.error().kind != ice::ErrorKind::kAlreadyExists) {
     return std::unexpected{translate_error(status.error())};
@@ -1217,21 +1137,16 @@ auto Catalog::ensure_namespace(std::span<const std::string> ns)
   return {};
 }
 
-auto Catalog::load_table(std::span<const std::string> ns, std::string_view name)
-  -> Result<Table> {
-  auto table = impl_->catalog->LoadTable(make_identifier(ns, name));
-  if (not table.has_value()) {
-    return std::unexpected{translate_error(table.error())};
-  }
-  return Table{std::make_shared<Table::Impl>(
-    Table::Impl{.table = std::move(*table), .partitioning = {}})};
+auto load_table(ice::Catalog& catalog, std::span<const std::string> ns,
+                std::string_view name) -> Result<std::shared_ptr<ice::Table>> {
+  return translate(catalog.LoadTable(make_identifier(ns, name)));
 }
 
-auto Catalog::create_table(std::span<const std::string> ns,
-                           std::string_view name, const record_type& schema,
-                           const CreateTableOptions& options,
-                           std::vector<std::string>& dropped_fields)
-  -> Result<Table> {
+auto create_table(ice::Catalog& catalog, std::span<const std::string> ns,
+                  std::string_view name, const record_type& schema,
+                  const CreateTableOptions& options,
+                  std::vector<std::string>& dropped_fields)
+  -> Result<std::shared_ptr<ice::Table>> {
   auto next_id = int32_t{1};
   auto fields = std::vector<ice::SchemaField>{};
   auto sort_source_id = std::optional<int32_t>{};
@@ -1335,34 +1250,22 @@ auto Catalog::create_table(std::span<const std::string> ns,
                     *options.sort_column, made.error().message));
     }
   }
-  auto table
-    = impl_->catalog->CreateTable(make_identifier(ns, name), iceberg_schema,
-                                  spec, std::move(sort_order), options.location,
-                                  properties);
-  if (not table.has_value()) {
-    return std::unexpected{translate_error(table.error())};
-  }
-  return Table{std::make_shared<Table::Impl>(
-    Table::Impl{.table = std::move(*table), .partitioning = {}})};
+  return translate(catalog.CreateTable(make_identifier(ns, name),
+                                       iceberg_schema, spec,
+                                       std::move(sort_order), options.location,
+                                       properties));
 }
 
-auto Table::location() const -> std::string {
-  return std::string{impl_->table->location()};
+auto same_write_layout(const ice::Table& lhs, const ice::Table& rhs) -> bool {
+  const auto& lhs_metadata = lhs.metadata();
+  const auto& rhs_metadata = rhs.metadata();
+  return lhs_metadata->current_schema_id == rhs_metadata->current_schema_id
+         and lhs_metadata->default_spec_id == rhs_metadata->default_spec_id;
 }
 
-auto Table::uuid() const -> std::string {
-  return impl_->table->uuid();
-}
-
-auto Table::has_same_write_layout(const Table& other) const -> bool {
-  const auto& lhs = impl_->table->metadata();
-  const auto& rhs = other.impl_->table->metadata();
-  return lhs->current_schema_id == rhs->current_schema_id
-         and lhs->default_spec_id == rhs->default_spec_id;
-}
-
-auto Table::export_arrow_schema(ArrowSchema* out) const -> Result<void> {
-  auto schema = impl_->table->schema();
+auto table_arrow_schema(const ice::Table& table)
+  -> Result<std::shared_ptr<arrow::Schema>> {
+  auto schema = table.schema();
   if (not schema.has_value()) {
     return std::unexpected{translate_error(schema.error())};
   }
@@ -1379,20 +1282,14 @@ auto Table::export_arrow_schema(ArrowSchema* out) const -> Result<void> {
     fields.push_back(arrow::field(std::string{field.name()}, std::move(*type),
                                   field.optional()));
   }
-  auto status = arrow::ExportSchema(*arrow::schema(std::move(fields)), out);
-  if (not status.ok()) {
-    return std::unexpected{Error{
-      Error::Kind::permanent,
-      fmt::format("failed to export arrow schema: {}", status.ToString()),
-    }};
-  }
-  return {};
+  return arrow::schema(std::move(fields));
 }
 
-auto Table::evolve_schema(const record_type& schema,
-                          std::vector<std::string>& dropped_fields)
-  -> Result<std::optional<Table>> {
-  auto current = impl_->table->schema();
+auto evolve_schema(const std::shared_ptr<ice::Table>& table,
+                   const record_type& schema,
+                   std::vector<std::string>& dropped_fields)
+  -> Result<std::optional<std::shared_ptr<ice::Table>>> {
+  auto current = table->schema();
   if (not current.has_value()) {
     return std::unexpected{translate_error(current.error())};
   }
@@ -1401,13 +1298,12 @@ auto Table::evolve_schema(const record_type& schema,
   diff_schema(schema, (*current)->fields(), "", additions, promotions,
               dropped_fields);
   if (additions.empty() and promotions.empty()) {
-    return std::optional<Table>{};
+    return std::optional<std::shared_ptr<ice::Table>>{};
   }
   // A schema update is not retryable after a conflicting commit: replaying
   // it against refreshed metadata could apply a different evolution than
   // authored. The caller reloads the table and re-derives the diff instead.
-  auto transaction
-    = ice::Transaction::Make(impl_->table, ice::TransactionKind::kUpdate);
+  auto transaction = ice::Transaction::Make(table, ice::TransactionKind::kUpdate);
   if (not transaction.has_value()) {
     return std::unexpected{translate_error(transaction.error())};
   }
@@ -1433,25 +1329,17 @@ auto Table::evolve_schema(const record_type& schema,
   if (not committed.has_value()) {
     return std::unexpected{translate_error(committed.error())};
   }
-  return Table{std::make_shared<Impl>(
-    Impl{.table = std::move(*committed), .partitioning = {}})};
+  return std::optional{std::move(*committed)};
 }
 
-auto Table::validate_partitioning() -> Result<void> {
-  auto bound = impl_->ensure_partitioning();
-  if (not bound.has_value()) {
-    return std::unexpected{bound.error()};
-  }
-  return {};
-}
-
-auto Table::check_partition_spec(std::span<const PartitionField> fields)
+auto check_partition_spec(const ice::Table& table,
+                          std::span<const PartitionField> fields)
   -> Result<void> {
-  auto spec = impl_->table->spec();
+  auto spec = table.spec();
   if (not spec.has_value()) {
     return std::unexpected{translate_error(spec.error())};
   }
-  auto schema = impl_->table->schema();
+  auto schema = table.schema();
   if (not schema.has_value()) {
     return std::unexpected{translate_error(schema.error())};
   }
@@ -1542,30 +1430,28 @@ auto append_partition_key(const ice::Literal& literal, std::string& key)
 
 } // namespace
 
-auto Table::split_by_partition(std::shared_ptr<arrow::StructArray> batch)
+auto split_by_partition(const ice::Table& table,
+                        std::span<const BoundPartitionField> bound,
+                        std::shared_ptr<arrow::StructArray> batch)
   -> Result<std::vector<PartitionGroup>> {
-  auto bound = impl_->ensure_partitioning();
-  if (not bound.has_value()) {
-    return std::unexpected{bound.error()};
-  }
   const auto& struct_batch = batch;
   auto groups = std::vector<PartitionGroup>{};
-  if (bound->empty()) {
+  if (bound.empty()) {
     groups.push_back(PartitionGroup{
       .key = {},
       .path = {},
       .rows = {},
-      .partition = PartitionTuple{std::make_shared<PartitionTuple::Impl>()},
+      .partition = {},
     });
     return groups;
   }
-  auto spec = impl_->table->spec();
+  auto spec = table.spec();
   if (not spec.has_value()) {
     return std::unexpected{translate_error(spec.error())};
   }
   auto columns = std::vector<PartitionColumn>{};
-  columns.reserve(bound->size());
-  for (const auto& field : *bound) {
+  columns.reserve(bound.size());
+  for (const auto& field : bound) {
     auto column = resolve_partition_column(struct_batch, field.segments);
     if (not column.has_value()) {
       return std::unexpected{column.error()};
@@ -1578,8 +1464,8 @@ auto Table::split_by_partition(std::shared_ptr<arrow::StructArray> batch)
   for (auto row = int64_t{0}; row < struct_batch->length(); ++row) {
     key.clear();
     values.clear();
-    for (size_t i = 0; i < bound->size(); ++i) {
-      const auto& field = (*bound)[i];
+    for (size_t i = 0; i < bound.size(); ++i) {
+      const auto& field = bound[i];
       auto value = columns[i].is_null(row)
                      ? ice::Literal::Null(field.source_type)
                      : literal_from_arrow(field.source_type->type_id(),
@@ -1612,8 +1498,7 @@ auto Table::split_by_partition(std::shared_ptr<arrow::StructArray> batch)
         .key = key,
         .path = std::move(*path),
         .rows = {},
-        .partition = PartitionTuple{std::make_shared<PartitionTuple::Impl>(
-          PartitionTuple::Impl{.values = std::move(values)})},
+        .partition = ice::PartitionValues{std::move(values)},
       });
       values = {};
     }
@@ -1650,13 +1535,15 @@ auto subtree_contains(const ice::SchemaField& field,
 
 } // namespace
 
-auto Table::new_file_writer(const PartitionTuple& partition,
-                            std::vector<bool>& omit) -> Result<FileWriter> {
-  auto schema = impl_->table->schema();
+auto new_file_writer(const ice::Table& table,
+                     const ice::PartitionValues& partition,
+                     std::vector<bool>& omit)
+  -> Result<std::shared_ptr<ice::DataWriter>> {
+  auto schema = table.schema();
   if (not schema.has_value()) {
     return std::unexpected{translate_error(schema.error())};
   }
-  auto spec = impl_->table->spec();
+  auto spec = table.spec();
   if (not spec.has_value()) {
     return std::unexpected{translate_error(spec.error())};
   }
@@ -1686,11 +1573,11 @@ auto Table::new_file_writer(const PartitionTuple& partition,
                                                   (*schema)->schema_id());
     }
   }
-  auto location_provider = impl_->table->location_provider();
+  auto location_provider = table.location_provider();
   if (not location_provider.has_value()) {
     return std::unexpected{translate_error(location_provider.error())};
   }
-  auto values = ice::PartitionValues{partition.impl_->values};
+  auto values = partition;
   auto filename = fmt::format("{}.parquet", uuid::random());
   auto path = std::string{};
   if ((*spec)->fields().empty()) {
@@ -1724,19 +1611,18 @@ auto Table::new_file_writer(const PartitionTuple& partition,
     .spec = std::move(*spec),
     .partition = std::move(values),
     .format = ice::FileFormatType::kParquet,
-    .io = impl_->table->io(),
+    .io = table.io(),
     .sort_order_id = std::nullopt,
-    .properties = impl_->table->properties().configs(),
+    .properties = table.properties().configs(),
   });
   if (not writer.has_value()) {
     return std::unexpected{translate_error(writer.error())};
   }
-  return FileWriter{std::make_shared<FileWriter::Impl>(
-    FileWriter::Impl{.writer = std::move(*writer)})};
+  return std::shared_ptr<ice::DataWriter>{std::move(*writer)};
 }
 
-auto DataFile::serialize() const -> Result<SerializedDataFile> {
-  const auto& file = *impl_->file;
+auto serialize_data_file(const ice::DataFile& file)
+  -> Result<SerializedDataFile> {
   // The remaining DataFile fields describe delete files, deletion vectors,
   // encryption, and commit-time row lineage; this plugin's writers produce
   // none of them, and silently dropping a set field would corrupt the table.
@@ -1789,8 +1675,8 @@ auto DataFile::serialize() const -> Result<SerializedDataFile> {
   return result;
 }
 
-auto DataFile::deserialize(const SerializedDataFile& serialized)
-  -> Result<DataFile> {
+auto deserialize_data_file(const SerializedDataFile& serialized)
+  -> Result<std::shared_ptr<ice::DataFile>> {
   auto values = std::vector<ice::Literal>{};
   values.reserve(serialized.partition.size());
   for (const auto& literal : serialized.partition) {
@@ -1824,22 +1710,20 @@ auto DataFile::deserialize(const SerializedDataFile& serialized)
   file->split_offsets = serialized.split_offsets;
   file->sort_order_id = serialized.sort_order_id;
   file->partition_spec_id = serialized.spec_id;
-  return DataFile{
-    std::make_shared<Impl>(Impl{.file = std::move(file)}),
-  };
+  return file;
 }
 
-auto Table::has_commit(const CommitTag& tag) const -> bool {
+auto has_commit(const ice::Table& table, const CommitTag& tag) -> bool {
   // Only the current snapshot's ancestry proves the commit is part of the
   // table state being resumed: a rollback (or a retained branch) can leave
   // the tagged snapshot in the metadata's snapshot list while its rows are
   // no longer reachable, and treating it as landed would drop staged files
   // whose rows the table does not hold.
-  auto current = impl_->table->current_snapshot();
+  auto current = table.current_snapshot();
   if (not current.has_value() or not *current) {
     return false;
   }
-  const auto& snapshots = impl_->table->metadata()->snapshots;
+  const auto& snapshots = table.metadata()->snapshots;
   auto by_id = std::unordered_map<int64_t, const ice::Snapshot*>{};
   by_id.reserve(snapshots.size());
   for (const auto& snapshot : snapshots) {
@@ -1867,13 +1751,14 @@ auto Table::has_commit(const CommitTag& tag) const -> bool {
   return false;
 }
 
-auto Table::references_any_data_file(std::span<const std::string> paths)
+auto references_any_data_file(const ice::Table& table,
+                              std::span<const std::string> paths)
   -> Result<bool> {
-  auto current = impl_->table->current_snapshot();
+  auto current = table.current_snapshot();
   if (not current.has_value() or not *current) {
     return false;
   }
-  auto builder = impl_->table->NewScan();
+  auto builder = table.NewScan();
   if (not builder.has_value()) {
     return std::unexpected{translate_error(builder.error())};
   }
@@ -1895,10 +1780,12 @@ auto Table::references_any_data_file(std::span<const std::string> paths)
   });
 }
 
-auto Table::commit_append(std::span<DataFile> files, const CommitTag& tag)
-  -> Result<Table> {
+auto commit_append(std::shared_ptr<ice::Table> table,
+                   std::span<const std::shared_ptr<ice::DataFile>> files,
+                   const CommitTag& tag)
+  -> Result<std::shared_ptr<ice::Table>> {
   auto transaction
-    = ice::Transaction::Make(impl_->table, ice::TransactionKind::kUpdate);
+    = ice::Transaction::Make(std::move(table), ice::TransactionKind::kUpdate);
   if (not transaction.has_value()) {
     return std::unexpected{translate_error(transaction.error())};
   }
@@ -1917,7 +1804,7 @@ auto Table::commit_append(std::span<DataFile> files, const CommitTag& tag)
   (*append)->Set(std::string{commit_seq_property},
                  fmt::to_string(tag.sequence));
   for (const auto& file : files) {
-    (*append)->AppendFile(file.impl_->file);
+    (*append)->AppendFile(file);
   }
   if (auto status = (*append)->Commit(); not status.has_value()) {
     return std::unexpected{translate_error(status.error())};
@@ -1938,23 +1825,15 @@ auto Table::commit_append(std::span<DataFile> files, const CommitTag& tag)
       "(a concurrent update won the race)",
     }};
   }
-  return Table{std::make_shared<Impl>(
-    Impl{.table = std::move(*committed), .partitioning = {}})};
+  return std::move(*committed);
 }
 
-auto FileWriter::write(ArrowArray* batch) -> Result<void> {
-  return translate(impl_->writer->Write(batch));
-}
-
-auto FileWriter::bytes_written() -> Result<int64_t> {
-  return translate(impl_->writer->Length());
-}
-
-auto FileWriter::finish() -> Result<DataFile> {
-  if (auto status = impl_->writer->Close(); not status.has_value()) {
+auto finish_data_file(ice::DataWriter& writer)
+  -> Result<std::shared_ptr<ice::DataFile>> {
+  if (auto status = writer.Close(); not status.has_value()) {
     return std::unexpected{translate_error(status.error())};
   }
-  auto metadata = impl_->writer->Metadata();
+  auto metadata = writer.Metadata();
   if (not metadata.has_value()) {
     return std::unexpected{translate_error(metadata.error())};
   }
@@ -1965,8 +1844,7 @@ auto FileWriter::finish() -> Result<DataFile> {
                   metadata->data_files.size()),
     }};
   }
-  return DataFile{std::make_shared<DataFile::Impl>(
-    DataFile::Impl{.file = std::move(metadata->data_files.front())})};
+  return std::move(metadata->data_files.front());
 }
 
 } // namespace tenzir::plugins::iceberg
