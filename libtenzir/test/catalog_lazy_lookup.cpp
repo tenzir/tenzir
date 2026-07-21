@@ -136,6 +136,45 @@ TEST("catalog loads deferred bloom filters on demand to prune") {
   CHECK_EQUAL(present->size(), 1u);
 }
 
+TEST("catalog evaluates metadata before deferred bloom filters in "
+     "disjunctions") {
+  auto f = fixture{};
+  auto state = catalog_state{};
+  state.sketches = sketch_cache{size_t{1} << 20};
+  state.synopses_per_type[f.schema][f.id] = f.resident;
+  // `@name == "test"` is represented as a schema meta extractor in the
+  // catalog expression. It makes the disjunction true without a Bloom lookup.
+  auto expression = disjunction{
+    predicate{field_extractor{"msg"}, relational_operator::equal,
+              data{std::string{"absent"}}},
+    predicate{meta_extractor{meta_extractor::schema},
+              relational_operator::equal, data{std::string{"test"}}},
+  };
+  auto result = state.lookup(std::move(expression));
+  REQUIRE(result);
+  CHECK_EQUAL(result->size(), 1u);
+  CHECK_EQUAL(state.sketches.peek(f.id), nullptr);
+}
+
+TEST("catalog evaluates metadata before deferred bloom filters in "
+     "conjunctions") {
+  auto f = fixture{};
+  auto state = catalog_state{};
+  state.sketches = sketch_cache{size_t{1} << 20};
+  state.synopses_per_type[f.schema][f.id] = f.resident;
+  // `@name == "other"` rules out the partition without a Bloom lookup.
+  auto expression = conjunction{
+    predicate{field_extractor{"msg"}, relational_operator::equal,
+              data{std::string{"absent"}}},
+    predicate{meta_extractor{meta_extractor::schema},
+              relational_operator::equal, data{std::string{"other"}}},
+  };
+  auto result = state.lookup(std::move(expression));
+  REQUIRE(result);
+  CHECK_EQUAL(result->size(), 0u);
+  CHECK_EQUAL(state.sketches.peek(f.id), nullptr);
+}
+
 TEST("catalog prunes more partitions than fit in the sketch cache budget") {
   auto f = fixture{};
   // Budget large enough for a single loaded synopsis but not for several.

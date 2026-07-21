@@ -54,6 +54,30 @@ namespace {
 
 TENZIR_ENUM(catalog_slice_selector, fields, schemas, partitions);
 
+auto contains_metadata(const expression& expr) -> bool {
+  return match(
+    expr,
+    [](caf::none_t) {
+      return false;
+    },
+    [](const predicate& pred) {
+      return is<meta_extractor>(pred.lhs) or is<meta_extractor>(pred.rhs);
+    },
+    [](const conjunction& expressions) {
+      return std::ranges::any_of(expressions, [](const auto& expression) {
+        return contains_metadata(expression);
+      });
+    },
+    [](const disjunction& expressions) {
+      return std::ranges::any_of(expressions, [](const auto& expression) {
+        return contains_metadata(expression);
+      });
+    },
+    [](const negation& expression) {
+      return contains_metadata(expression.expr());
+    });
+}
+
 auto collect_synopses(const catalog_state& state)
   -> std::vector<partition_synopsis_pair> {
   auto result = std::vector<partition_synopsis_pair>{};
@@ -727,41 +751,54 @@ auto catalog_state::lookup_impl(
   auto f = detail::overload{
     [&](const conjunction& x) -> catalog_lookup_result::candidate_info {
       TENZIR_ASSERT(not x.empty());
-      auto i = x.begin();
-      auto result = lookup_impl(*i, schema, partition_synopses,
-                                deferred_sketch_partitions);
-      if (not result.partition_infos.empty()) {
-        for (++i; i != x.end(); ++i) {
+      auto result = catalog_lookup_result::candidate_info{};
+      auto initialized = false;
+      for (const auto metadata : {true, false}) {
+        for (const auto& op : x) {
+          if (contains_metadata(op) != metadata) {
+            continue;
+          }
           // TODO: A conjunction means that we can restrict the lookup to the
           // remaining candidates. This could be achived by passing the `result`
           // set to `lookup` along with the child expression.
-          auto xs = lookup_impl(*i, schema, partition_synopses,
+          auto xs = lookup_impl(op, schema, partition_synopses,
                                 deferred_sketch_partitions);
-          if (xs.partition_infos.empty()) {
-            return xs; // short-circuit
+          if (not initialized) {
+            result = std::move(xs);
+            initialized = true;
+          } else {
+            detail::inplace_intersect(result.partition_infos,
+                                      xs.partition_infos);
+            TENZIR_ASSERT_EXPENSIVE(std::is_sorted(
+              result.partition_infos.begin(), result.partition_infos.end()));
           }
-          detail::inplace_intersect(result.partition_infos, xs.partition_infos);
-          TENZIR_ASSERT_EXPENSIVE(std::is_sorted(result.partition_infos.begin(),
-                                                 result.partition_infos.end()));
+          if (result.partition_infos.empty()) {
+            return result; // short-circuit
+          }
         }
       }
       return result;
     },
     [&](const disjunction& x) -> catalog_lookup_result::candidate_info {
       catalog_lookup_result::candidate_info result;
-      for (const auto& op : x) {
-        // TODO: A disjunction means that we can restrict the lookup to the
-        // set of partitions that are outside of the current result set.
-        auto xs = lookup_impl(op, schema, partition_synopses,
-                              deferred_sketch_partitions);
-        if (xs.partition_infos.size() == partition_synopses.size()) {
-          return xs; // short-circuit
+      for (const auto metadata : {true, false}) {
+        for (const auto& op : x) {
+          if (contains_metadata(op) != metadata) {
+            continue;
+          }
+          // TODO: A disjunction means that we can restrict the lookup to the
+          // set of partitions that are outside of the current result set.
+          auto xs = lookup_impl(op, schema, partition_synopses,
+                                deferred_sketch_partitions);
+          if (xs.partition_infos.size() == partition_synopses.size()) {
+            return xs; // short-circuit
+          }
+          TENZIR_ASSERT_EXPENSIVE(std::is_sorted(xs.partition_infos.begin(),
+                                                 xs.partition_infos.end()));
+          detail::inplace_unify(result.partition_infos, xs.partition_infos);
+          TENZIR_ASSERT_EXPENSIVE(std::is_sorted(result.partition_infos.begin(),
+                                                 result.partition_infos.end()));
         }
-        TENZIR_ASSERT_EXPENSIVE(
-          std::is_sorted(xs.partition_infos.begin(), xs.partition_infos.end()));
-        detail::inplace_unify(result.partition_infos, xs.partition_infos);
-        TENZIR_ASSERT_EXPENSIVE(std::is_sorted(result.partition_infos.begin(),
-                                               result.partition_infos.end()));
       }
       return result;
     },

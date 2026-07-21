@@ -4,6 +4,8 @@ type: feature
 authors:
   - jachris
   - claude
+prs:
+  - 6368
 created: 2026-06-18T10:35:07.122320Z
 ---
 
