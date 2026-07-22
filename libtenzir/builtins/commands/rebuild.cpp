@@ -661,7 +661,8 @@ struct rebuilder_state {
             return;
           }
           if (result.input_partitions.empty()
-              and result.output_partitions.empty()) {
+              and result.output_partitions.empty()
+              and result.skipped_partitions.empty()) {
             TENZIR_DEBUG("{} skipped {} partitions as they are already being "
                          "transformed by another actor",
                          *self, num_partitions);
@@ -672,11 +673,22 @@ struct rebuilder_state {
                         atom::rebuild_v);
             return;
           }
+          // Partitions that vanished before the transformer could load them
+          // were erased concurrently, e.g., by compaction or the disk
+          // monitor. Drop them from the run instead of retrying them.
+          if (not result.skipped_partitions.empty()) {
+            TENZIR_VERBOSE("{} drops {} partition(s) that no longer exist",
+                           *self, result.skipped_partitions.size());
+            run->statistics.num_total -= result.skipped_partitions.size();
+          }
           auto unconsumed_partitions = selected_partitions;
           std::erase_if(unconsumed_partitions, [&](const auto& partition) {
             return std::find(result.input_partitions.begin(),
                              result.input_partitions.end(), partition)
-                   != result.input_partitions.end();
+                     != result.input_partitions.end()
+                   or std::find(result.skipped_partitions.begin(),
+                                result.skipped_partitions.end(), partition)
+                        != result.skipped_partitions.end();
           });
           if (not result.input_complete or not unconsumed_partitions.empty()) {
             TENZIR_DEBUG("{} requeues {} partition(s) that were selected but "

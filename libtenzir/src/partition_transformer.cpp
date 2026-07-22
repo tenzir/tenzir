@@ -186,8 +186,8 @@ struct partition_source_state {
   tenzir::time max_import_time = tenzir::time::min();
   std::atomic<duration::rep> loaded_min_import_time
     = time::max().time_since_epoch().count();
-  std::vector<partition_info> selected_partitions = {};
   std::vector<partition_info> loaded_partitions = {};
+  std::vector<partition_info> skipped_partitions = {};
   bool input_complete = true;
 
   auto observe_import_time(time import_time) -> void {
@@ -245,7 +245,6 @@ public:
       memory_budget_{make_memory_budget()},
       state_{std::move(state)} {
     TENZIR_ASSERT(state_);
-    state_->selected_partitions = partitions_;
   }
 
   auto feed(Push<OperatorMsg<table_slice>>& push_input) const -> Task<void> {
@@ -279,6 +278,19 @@ public:
       }
       auto maybe_slices = co_await load_partition(partition);
       if (not maybe_slices) {
+        // Partitions can legitimately disappear between their selection and
+        // this load, e.g., when compaction or the disk monitor erase them
+        // concurrently. Skip them instead of failing the whole transform, and
+        // report them so callers do not retry.
+        auto ec = std::error_code{};
+        if (not std::filesystem::exists(partition_path(partition), ec)) {
+          TENZIR_VERBOSE("{} skips partition {} that no longer exists on "
+                         "disk: {}",
+                         "partition-transformer", partition.uuid,
+                         maybe_slices.error());
+          state_->skipped_partitions.push_back(partition);
+          continue;
+        }
         fail(std::move(maybe_slices.error()));
         co_await push_input(OperatorMsg<table_slice>{Signal{EndOfData{}}});
         co_return;
@@ -304,11 +316,15 @@ private:
     state_->error = std::move(error);
   }
 
+  auto partition_path(const partition_info& partition) const
+    -> std::filesystem::path {
+    return std::filesystem::path{fmt::format(
+      TENZIR_FMT_RUNTIME(partition_path_template_), partition.uuid)};
+  }
+
   auto load_partition(const partition_info& partition) const
     -> Task<caf::expected<std::vector<table_slice>>> {
-    const auto filename = fmt::format(
-      TENZIR_FMT_RUNTIME(partition_path_template_), partition.uuid);
-    auto partition_path = std::filesystem::path{filename};
+    auto partition_path = this->partition_path(partition);
     auto partition_chunk = chunk::mmap(partition_path);
     if (not partition_chunk) {
       co_return wrap_store_error(std::move(partition_chunk.error()),
@@ -535,6 +551,7 @@ void partition_transformer_state::fulfill(
     promise.deliver(partition_transformer_result{
       .input_partitions = self->state().transformed_input_partitions,
       .output_partitions = {},
+      .skipped_partitions = self->state().skipped_partitions,
       .input_complete = self->state().input_complete,
     });
     self->quit();
@@ -583,6 +600,8 @@ void partition_transformer_state::fulfill(
                           .input_partitions
                           = self->state().transformed_input_partitions,
                           .output_partitions = std::move(result),
+                          .skipped_partitions
+                          = self->state().skipped_partitions,
                           .input_complete = self->state().input_complete,
                         },
                       });
@@ -875,9 +894,9 @@ auto partition_transformer(
             self->state().min_import_time = source_state->min_import_time;
             self->state().max_import_time = source_state->max_import_time;
             self->state().transformed_input_partitions
-              = source_state->input_complete
-                  ? std::move(source_state->selected_partitions)
-                  : std::move(source_state->loaded_partitions);
+              = std::move(source_state->loaded_partitions);
+            self->state().skipped_partitions
+              = std::move(source_state->skipped_partitions);
             self->state().input_complete = source_state->input_complete;
             finish_transform();
           });
