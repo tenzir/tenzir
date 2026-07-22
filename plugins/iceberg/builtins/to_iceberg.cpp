@@ -90,6 +90,11 @@ constexpr auto default_sort_column = std::string_view{"time"};
 
 struct ToIcebergArgs {
   located<std::string> table_id;
+  /// The REST catalog endpoint. Deliberately named `catalog` instead of the
+  /// database-operator contract's `uri`: the operator involves three
+  /// endpoints (catalog, warehouse, S3), so the generic name would not say
+  /// which one it is, and the Iceberg ecosystem universally configures "a
+  /// catalog". `table` and `mode` follow the contract.
   located<secret> catalog = {secret::make_literal(""), location::unknown};
   Option<located<std::string>> mode;
   Option<located<secret>> warehouse;
