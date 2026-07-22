@@ -1030,19 +1030,24 @@ private:
              ctx);
         co_return;
       }
-      diagnostic::warning("{} schema update (attempt {}/{}): {}",
-                          kind == Error::Kind::conflict ? "conflicting"
-                                                        : "failed",
-                          attempt, commit_max_attempts, evolved.error().message)
-        .primary(args_.operator_location)
-        .emit(ctx.dh());
       // Schema evolution is a metadata commit on the write path, so a brief
       // catalog hiccup gets the same backoff as append commits.
       if (kind == Error::Kind::transient) {
+        diagnostic::warning("failed schema update ({}), attempt {}/{}, "
+                            "retrying after {}",
+                            evolved.error().message, attempt,
+                            commit_max_attempts, backoff)
+          .primary(args_.operator_location)
+          .emit(ctx.dh());
         co_await sleep_for(backoff);
         backoff *= 2;
         continue;
       }
+      diagnostic::warning("conflicting schema update ({}), attempt {}/{}, "
+                          "retrying against the reloaded table",
+                          evolved.error().message, attempt, commit_max_attempts)
+        .primary(args_.operator_location)
+        .emit(ctx.dh());
       // A concurrent writer updated the table between our load and the
       // schema commit; re-derive the diff against their changes.
       auto reloaded = co_await spawn_blocking(
@@ -1055,10 +1060,10 @@ private:
         // another attempt instead of terminating the sink.
         if (reloaded.error().kind == Error::Kind::transient
             and attempt < commit_max_attempts) {
-          diagnostic::warning("failed to reload Iceberg table (attempt "
-                              "{}/{}): {}",
-                              attempt, commit_max_attempts,
-                              reloaded.error().message)
+          diagnostic::warning("failed to reload Iceberg table ({}), attempt "
+                              "{}/{}, retrying after {}",
+                              reloaded.error().message, attempt,
+                              commit_max_attempts, backoff)
             .primary(args_.operator_location)
             .emit(ctx.dh());
           co_await sleep_for(backoff);
@@ -1124,6 +1129,15 @@ private:
   /// nulls for them would be invalid or fail late in the writer — so any
   /// null that would land under a valid `parent` row raises an error
   /// instead, returning nullptr with `done_` set.
+  ///
+  /// The hard error is a deliberate integrity-over-availability choice, and
+  /// it only ever fires against externally-authored tables: this operator
+  /// creates and evolves every field as optional. Dropping the offending
+  /// rows with a warning (as `to_clickhouse` does) would have an
+  /// exactly-once sink silently lose data; stopping leaves every committed
+  /// snapshot intact and points at the input to fix. If availability-first
+  /// handling is ever needed, add an explicit `on_violation=error|drop`
+  /// argument rather than changing this default.
   auto project_column(std::shared_ptr<arrow::Array> source,
                       std::shared_ptr<arrow::Field> const& target,
                       std::string const& path, int64_t rows,
@@ -1880,11 +1894,13 @@ private:
         fail(result.error(), "failed to commit snapshot", ctx);
         co_return;
       }
-      diagnostic::warning("commit failure (attempt {}/{}): {}", attempt,
-                          commit_max_attempts, result.error().message)
-        .primary(args_.operator_location)
-        .emit(ctx.dh());
       if (result.error().kind == Error::Kind::conflict) {
+        diagnostic::warning("conflicting commit ({}), attempt {}/{}, "
+                            "retrying against the reloaded table",
+                            result.error().message, attempt,
+                            commit_max_attempts)
+          .primary(args_.operator_location)
+          .emit(ctx.dh());
         // A concurrent update won the race; commit again on top of it.
         auto reloaded = co_await spawn_blocking(
           [catalog = catalog_, ns = ns_, name = table_name_]() mutable {
@@ -1896,10 +1912,10 @@ private:
           // consumes another attempt instead of terminating the sink.
           if (reloaded.error().kind == Error::Kind::transient
               and attempt < commit_max_attempts) {
-            diagnostic::warning("failed to reload Iceberg table (attempt "
-                                "{}/{}): {}",
-                                attempt, commit_max_attempts,
-                                reloaded.error().message)
+            diagnostic::warning("failed to reload Iceberg table ({}), "
+                                "attempt {}/{}, retrying after {}",
+                                reloaded.error().message, attempt,
+                                commit_max_attempts, backoff)
               .primary(args_.operator_location)
               .emit(ctx.dh());
             co_await sleep_for(backoff);
@@ -1981,6 +1997,12 @@ private:
         }
         continue;
       }
+      diagnostic::warning("failed commit ({}), attempt {}/{}, retrying "
+                          "after {}",
+                          result.error().message, attempt, commit_max_attempts,
+                          backoff)
+        .primary(args_.operator_location)
+        .emit(ctx.dh());
       co_await sleep_for(backoff);
       backoff *= 2;
     }
