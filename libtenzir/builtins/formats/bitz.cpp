@@ -18,6 +18,7 @@
 #include <tenzir/read_detection.hpp>
 #include <tenzir/secret.hpp>
 #include <tenzir/table_slice.hpp>
+#include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/io/memory.h>
@@ -353,6 +354,127 @@ private:
   std::shared_ptr<arrow::util::Codec> codec_;
 };
 
+// Decodes a BITZ payload (a Zstd-compressed Feather IPC stream) into slices.
+auto decode_bitz_payload(chunk_ptr message, diagnostic_handler& dh)
+  -> generator<table_slice> {
+  auto input = std::make_shared<arrow::io::BufferReader>(
+    arrow::Buffer::Wrap(message->data(), message->size()));
+  auto reader_result = arrow::ipc::RecordBatchStreamReader::Open(
+    input, arrow_ipc_read_options());
+  if (not reader_result.ok()) {
+    diagnostic::error("failed to decode BITZ payload as Feather stream")
+      .note("{}", reader_result.status().ToStringWithoutContextLines())
+      .emit(dh);
+    co_return;
+  }
+  auto reader = reader_result.MoveValueUnsafe();
+  while (true) {
+    auto next = reader->ReadNext();
+    if (not next.ok()) {
+      diagnostic::error("failed to read record batch from BITZ payload")
+        .note("{}", next.status().ToStringWithoutContextLines())
+        .emit(dh);
+      co_return;
+    }
+    if (not next->batch) {
+      break;
+    }
+    auto validate_status = next->batch->Validate();
+    TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+    auto const& metadata = next->batch->schema()->metadata();
+    if (not metadata
+        or std::find(metadata->keys().begin(), metadata->keys().end(),
+                     "TENZIR:name:0")
+             == metadata->keys().end()) {
+      diagnostic::error("not implemented")
+        .note("cannot convert Feather without Tenzir metadata")
+        .emit(dh);
+      co_return;
+    }
+    auto slice = table_slice{next->batch};
+    if (slice.rows() == 0) {
+      continue;
+    }
+    co_yield std::move(slice);
+  }
+  std::ignore = reader->Close();
+}
+
+// Serializes a slice into a BITZ payload (a Zstd-compressed Feather IPC stream).
+auto encode_bitz_payload(table_slice input, diagnostic_handler& dh)
+  -> Option<chunk_ptr> {
+  auto default_level
+    = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD);
+  if (not default_level.ok()) {
+    diagnostic::error("failed to get default Zstd compression level")
+      .note("{}", default_level.status().ToStringWithoutContextLines())
+      .emit(dh);
+    return None{};
+  }
+  auto codec_result
+    = arrow::util::Codec::Create(arrow::Compression::ZSTD, *default_level);
+  if (not codec_result.ok()) {
+    diagnostic::error("failed to create Zstd codec")
+      .note("{}", codec_result.status().ToStringWithoutContextLines())
+      .emit(dh);
+    return None{};
+  }
+  std::shared_ptr<arrow::util::Codec> codec = codec_result.MoveValueUnsafe();
+  auto has_secrets = false;
+  std::tie(has_secrets, input) = replace_secrets(std::move(input));
+  if (has_secrets) {
+    diagnostic::warning("`secret` is serialized as text")
+      .note("fields will be `\"***\"`")
+      .emit(dh);
+  }
+  auto batch = to_record_batch(input);
+  auto validate_status = batch->Validate();
+  TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+  auto sink_result
+    = arrow::io::BufferOutputStream::Create(4096, arrow_memory_pool());
+  if (not sink_result.ok()) {
+    diagnostic::error("failed to create BufferOutputStream")
+      .note("{}", sink_result.status().ToStringWithoutContextLines())
+      .emit(dh);
+    return None{};
+  }
+  auto sink = sink_result.MoveValueUnsafe();
+  auto write_options = arrow::ipc::IpcWriteOptions::Defaults();
+  write_options.memory_pool = arrow_memory_pool();
+  write_options.codec = codec;
+  auto writer_result
+    = arrow::ipc::MakeStreamWriter(sink, batch->schema(), write_options);
+  if (not writer_result.ok()) {
+    diagnostic::error("failed to initialize Feather stream writer")
+      .note("{}", writer_result.status().ToStringWithoutContextLines())
+      .emit(dh);
+    return None{};
+  }
+  auto writer = writer_result.MoveValueUnsafe();
+  auto write_status = writer->WriteRecordBatch(*batch);
+  if (not write_status.ok()) {
+    diagnostic::error("failed to write record batch")
+      .note("{}", write_status.ToStringWithoutContextLines())
+      .emit(dh);
+    return None{};
+  }
+  auto close_status = writer->Close();
+  if (not close_status.ok()) {
+    diagnostic::error("failed to close Feather stream writer")
+      .note("{}", close_status.ToStringWithoutContextLines())
+      .emit(dh);
+    return None{};
+  }
+  auto buffer_result = sink->Finish();
+  if (not buffer_result.ok()) {
+    diagnostic::error("failed to finish Feather stream")
+      .note("{}", buffer_result.status().ToStringWithoutContextLines())
+      .emit(dh);
+    return None{};
+  }
+  return chunk::make(buffer_result.MoveValueUnsafe());
+}
+
 class bitz_parser final : public plugin_parser {
 public:
   bitz_parser() = default;
@@ -416,22 +538,9 @@ public:
               .emit(ctrl.diagnostics());
             co_return;
           }
-          auto parser
-            = check(pipeline::internal_parse_as_operator("read feather"));
-          TENZIR_ASSERT(parser);
-          auto untyped_instance = check(parser->instantiate(
-            [](auto chunk) -> generator<chunk_ptr> {
-              co_yield std::move(chunk);
-            }(std::move(message)),
-            ctrl));
-          auto* instance
-            = std::get_if<generator<table_slice>>(&untyped_instance);
-          TENZIR_ASSERT(instance);
-          while (auto result = instance->next()) {
-            if (size(*result) == 0) {
-              continue;
-            }
-            co_yield std::move(*result);
+          for (auto&& slice :
+               decode_bitz_payload(std::move(message), ctrl.diagnostics())) {
+            co_yield std::move(slice);
           }
         }
       },
@@ -461,34 +570,16 @@ public:
           co_yield {};
           co_return;
         }
-        auto printer = check(pipeline::internal_parse_as_operator(
-          "write feather --compression-type zstd"));
-        TENZIR_ASSERT(printer);
-        auto untyped_instance = check(printer->instantiate(
-          [](auto slice) -> generator<table_slice> {
-            co_yield std::move(slice);
-          }(std::move(slice)),
-          ctrl));
-        auto* instance = std::get_if<generator<chunk_ptr>>(&untyped_instance);
-        TENZIR_ASSERT(instance);
-        auto total_size = uint64_t{0};
-        auto results = std::vector<chunk_ptr>{};
-        while (auto result = instance->next()) {
-          auto const chunk_size = size(*result);
-          if (chunk_size == 0) {
-            continue;
-          }
-          total_size += size(*result);
-          results.push_back(std::move(*result));
+        auto payload
+          = encode_bitz_payload(std::move(slice), ctrl.diagnostics());
+        if (not payload) {
+          co_return;
         }
-        TENZIR_ASSERT(not results.empty());
-        TENZIR_ASSERT(total_size > 0);
-        total_size = detail::to_network_order(total_size);
+        auto total_size = detail::to_network_order(
+          detail::narrow<uint64_t>((*payload)->size()));
         co_yield chunk::copy(BITZ_MAGIC.data(), BITZ_MAGIC.size());
         co_yield chunk::copy(&total_size, sizeof(total_size));
-        for (auto&& result : results) {
-          co_yield std::move(result);
-        }
+        co_yield std::move(*payload);
       });
   }
 
@@ -544,7 +635,11 @@ public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TENZIR_UNUSED(inv, ctx);
-    return check(pipeline::internal_parse_as_operator("read bitz"));
+    auto diag = null_diagnostic_handler{};
+    auto p = tql::make_parser_interface("bitz", diag);
+    const auto* plugin = plugins::find<operator_parser_plugin>("read");
+    TENZIR_ASSERT(plugin);
+    return plugin->parse_operator(*p);
   }
 
   auto read_properties() const -> read_properties_t override {
@@ -579,7 +674,11 @@ public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TENZIR_UNUSED(inv, ctx);
-    return check(pipeline::internal_parse_as_operator("write bitz"));
+    auto diag = null_diagnostic_handler{};
+    auto p = tql::make_parser_interface("bitz", diag);
+    const auto* plugin = plugins::find<operator_parser_plugin>("write");
+    TENZIR_ASSERT(plugin);
+    return plugin->parse_operator(*p);
   }
 };
 
