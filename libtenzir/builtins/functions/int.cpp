@@ -47,7 +47,8 @@ public:
     }
     return function_use::make([this, expr = std::move(expr),
                                base = base.inner](auto eval, session ctx) {
-      return map_series(eval(expr), [&](series value) {
+      auto failed = std::optional<std::string>{};
+      auto result = map_series(eval(expr), [&](series value) {
         auto f = detail::overload{
           [](const arrow::NullArray& arg) {
             auto b = Builder{tenzir::arrow_memory_pool()};
@@ -114,7 +115,6 @@ public:
             return finish(b);
           },
           [&](const arrow::StringArray& arg) {
-            auto failed = std::optional<std::string>{};
             auto b = Builder{tenzir::arrow_memory_pool()};
             check(b.Reserve(value.length()));
             constexpr auto p = std::invoke([] {
@@ -163,12 +163,6 @@ public:
                 }
               }
             }
-            if (failed) {
-              diagnostic::warning("`{}` failed to convert some string", name())
-                .primary(expr)
-                .note(fmt::format("tried to convert: {}", *failed))
-                .emit(ctx);
-            }
             return finish(b);
           },
           [&](const auto&) -> std::shared_ptr<Array> {
@@ -184,6 +178,13 @@ public:
           };
         return series{Type{}, match(*value.array, f)};
       });
+      if (failed) {
+        diagnostic::warning("`{}` failed to convert some string", name())
+          .primary(expr)
+          .note(fmt::format("tried to convert: {}", *failed))
+          .emit(ctx);
+      }
+      return result;
     });
   }
 };

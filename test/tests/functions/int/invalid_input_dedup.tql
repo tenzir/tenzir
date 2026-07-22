@@ -1,8 +1,8 @@
 from {
   x: "not an int",
 }, {
-  x: "still not an int",
+  x: 0,
 }, {
-  x: "also not an int",
+  x: "still not an int",
 }
 x = x.int()
