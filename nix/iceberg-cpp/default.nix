@@ -68,8 +68,11 @@ stdenv.mkDerivation {
   '';
 
   # Exactly the ICEBERG_SYSTEM_DEPENDENCIES that the installed
-  # iceberg-config.cmake resolves through find_dependency(); downstream
-  # consumers need these at configure time.
+  # iceberg-config.cmake runs find_dependency() over at consumer configure
+  # time, so the non-static build needs them propagated: "ZLIB;nanoarrow;
+  # roaring;nlohmann_json;spdlog;Threads;AWSSDK;Arrow;Parquet;avro-cpp;
+  # zstd;cpr" -- Threads is system-provided, and Arrow plus Parquet both
+  # resolve to arrow-cpp.
   propagatedBuildInputs = [
     arrow-cpp
     avro-cpp
