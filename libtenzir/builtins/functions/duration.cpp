@@ -40,6 +40,7 @@ public:
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto b = duration_type::make_arrow_builder(arrow_memory_pool());
         check(b->Reserve(eval.length()));
+        auto failed = std::optional<std::string>{};
         for (auto& arg : eval(expr)) {
           const auto f = detail::overload{
             [&](const arrow::NullArray& arg) {
@@ -61,10 +62,9 @@ public:
                   check(b->Append(result.count()));
                   continue;
                 }
-                diagnostic::warning("failed to parse string")
-                  .primary(expr)
-                  .note(fmt::format("tried to convert: {}", arg.GetView(i)))
-                  .emit(ctx);
+                if (not failed) {
+                  failed = std::string{arg.GetView(i)};
+                }
                 check(b->AppendNull());
               }
             },
@@ -77,6 +77,12 @@ public:
             },
           };
           match(*arg.array, f);
+        }
+        if (failed) {
+          diagnostic::warning("failed to parse string")
+            .primary(expr)
+            .note(fmt::format("tried to convert: {}", *failed))
+            .emit(ctx);
         }
         return series{duration_type{}, finish(*b)};
       });

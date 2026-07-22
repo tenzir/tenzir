@@ -1,0 +1,8 @@
+from {
+  x: "not a float",
+}, {
+  x: "still not a float",
+}, {
+  x: "also not a float",
+}
+x = x.float()

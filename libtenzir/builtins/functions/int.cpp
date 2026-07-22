@@ -114,7 +114,7 @@ public:
             return finish(b);
           },
           [&](const arrow::StringArray& arg) {
-            auto report = false;
+            auto failed = std::optional<std::string>{};
             auto b = Builder{tenzir::arrow_memory_pool()};
             check(b.Reserve(value.length()));
             constexpr auto p = std::invoke([] {
@@ -158,14 +158,15 @@ public:
                     TENZIR_UNREACHABLE();
                 }
                 check(b.AppendNull());
-                report = true;
+                if (not failed) {
+                  failed = std::string{arg.GetView(row)};
+                }
               }
             }
-            if (report) {
-              // TODO: It would be helpful to know what string, but then
-              // deduplication doesn't work.
+            if (failed) {
               diagnostic::warning("`{}` failed to convert some string", name())
                 .primary(expr)
+                .note(fmt::format("tried to convert: {}", *failed))
                 .emit(ctx);
             }
             return finish(b);
