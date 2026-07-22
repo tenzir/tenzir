@@ -243,6 +243,45 @@ extern template auto
                      std::vector<Box<Pull<OperatorMsg<void>>>>,
                      Box<Push<OperatorMsg<chunk_ptr>>>) -> Task<void>;
 
+/// Forwards a single typed input stream to the `main` source head while
+/// broadcasting its signals to `aux` void source heads. The input-side dual of
+/// `run_gather_signals`: it lets multiple source chains share one external
+/// input so they observe the same completion and checkpoint signals.
+///
+/// Per-message policy:
+///
+/// - data (only on a non-void input): forwarded to `main` as received.
+/// - `EndOfData`: forwarded to `main` only. A void channel never carries
+///   `EndOfData` (the receiving driver asserts it is only seen on a non-void
+///   input), so void `aux` heads observe closure by being dropped when the
+///   input drains.
+/// - `Checkpoint`: a barrier that must reach every head, so it is broadcast to
+///   `main` and every void `aux` head. `OperatorMsg<void>` is a
+///   `variant<Signal>`, so the void channels relay checkpoints fine.
+/// - input drained (`None`): `main` and every `aux` head are dropped, so all
+///   source heads observe closure together.
+template <class T>
+auto run_broadcast_signals(Box<Pull<OperatorMsg<T>>> in,
+                           Box<Push<OperatorMsg<T>>> main,
+                           std::vector<Box<Push<OperatorMsg<void>>>> aux)
+  -> Task<void>;
+
+extern template auto
+  run_broadcast_signals(Box<Pull<OperatorMsg<void>>>,
+                        Box<Push<OperatorMsg<void>>>,
+                        std::vector<Box<Push<OperatorMsg<void>>>>)
+    -> Task<void>;
+extern template auto
+  run_broadcast_signals(Box<Pull<OperatorMsg<table_slice>>>,
+                        Box<Push<OperatorMsg<table_slice>>>,
+                        std::vector<Box<Push<OperatorMsg<void>>>>)
+    -> Task<void>;
+extern template auto
+  run_broadcast_signals(Box<Pull<OperatorMsg<chunk_ptr>>>,
+                        Box<Push<OperatorMsg<chunk_ptr>>>,
+                        std::vector<Box<Push<OperatorMsg<void>>>>)
+    -> Task<void>;
+
 /// Builds `lanes` internal channels, returning the per-lane pushes and pulls
 /// as parallel vectors. `make_channel` produces one channel per lane, e.g.
 /// `ExecCtx::make_channel<table_slice>`.
