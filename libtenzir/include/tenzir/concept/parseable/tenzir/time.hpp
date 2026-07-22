@@ -225,7 +225,11 @@ struct ymdhms_parser : tenzir::parser_base<ymdhms_parser> {
     // clang-format off
     auto sign = '+'_p ->* [] { return 1; }
               | '-'_p ->* [] { return -1; };
+    // The zero-offset names parse like `Z`: they are ignored, leaving the
+    // zone shift at its zero default.
+    auto zero_offset_name = "GMT"_p | "UTC" | "UT";
     auto zone = 'Z'
+              | (~' '_p >> zero_offset_name)
               | (sign >> hour >> ~(~':'_p >> min));
     auto p = year >> '-' >> mon
               >> ~('-' >> day

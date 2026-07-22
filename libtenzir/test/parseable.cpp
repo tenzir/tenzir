@@ -1214,6 +1214,25 @@ TEST("time - YMD") {
   CHECK_EQUAL(ts.time_since_epoch(), utc_secs);
 }
 
+TEST("time - zero-offset zone names") {
+  using namespace std::chrono;
+  tenzir::time ts;
+  auto utc_secs = seconds{1502658642};
+  CHECK(parsers::time("2017-08-13 21:10:42 GMT", ts));
+  CHECK_EQUAL(ts.time_since_epoch(), utc_secs);
+  CHECK(parsers::time("2017-08-13T21:10:42 UTC", ts));
+  CHECK_EQUAL(ts.time_since_epoch(), utc_secs);
+  CHECK(parsers::time("2017-08-13 21:10:42UTC", ts));
+  CHECK_EQUAL(ts.time_since_epoch(), utc_secs);
+  CHECK(parsers::time("2017-08-13 21:10:42 UT", ts));
+  CHECK_EQUAL(ts.time_since_epoch(), utc_secs);
+  CHECK(parsers::time("2017-08-13 21:10:42.500 GMT", ts));
+  CHECK_EQUAL(ts.time_since_epoch(), utc_secs + milliseconds{500});
+  // Other zone names remain unsupported.
+  CHECK(not parsers::time("2017-08-13 21:10:42 EST", ts));
+  CHECK(not parsers::time("2017-08-13 21:10:42 CET", ts));
+}
+
 // -- SI literals -------------------------------------------------------------
 
 namespace {

@@ -1,0 +1,10 @@
+{
+  x: null,
+}
+warning: `time` failed to parse string
+ --> tests/functions/time/time_invalid_input.tql:4:5
+  |
+4 | x = x.time()
+  |     ~ 
+  |
+  = note: tried to convert: definitely not a time
