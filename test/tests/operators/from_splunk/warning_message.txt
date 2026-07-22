@@ -1,5 +1,5 @@
 {
-  _time: "2026-07-14 14:54:45.000 GMT",
+  _time: 2026-07-14T14:54:45Z,
   _raw: "raw-one",
   host: "host-a",
   source: "source-a",
@@ -8,7 +8,7 @@
   number: 42,
 }
 {
-  _time: "2026-07-14 14:54:46.000 GMT",
+  _time: 2026-07-14T14:54:46Z,
   _raw: "raw-two",
   host: "host-b",
   source: "source-b",
