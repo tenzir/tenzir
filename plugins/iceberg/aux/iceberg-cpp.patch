@@ -1,0 +1,59 @@
+Upstream fixes applied to the bundled iceberg-cpp; the nix package applies
+the same patch (see nix/iceberg-cpp/default.nix).
+
+- IcebergThirdpartyToolchain.cmake: the system-Avro discovery looks for an
+  `Avro` CMake package, but avro-cpp installs `avro-cpp-config.cmake`.
+- arrow_s3_file_io.cc: EnsureS3Initialized() fails (and caches the failure)
+  when the host application already initialized Arrow's S3 subsystem, which
+  Tenzir's s3 plugin always does; treat that as already-initialized.
+- partition_summary.cc: PartitionSummary::Update casts every partition value
+  to the partition field type, but LiteralCaster::CastTo refuses null
+  literals, so any data file with a null partition value fails to commit.
+  The stats themselves handle null fine (contains_null); feed it directly.
+- url_encoder.cc: uses uint8_t without including <cstdint>.
+
+diff --git a/cmake_modules/IcebergThirdpartyToolchain.cmake b/cmake_modules/IcebergThirdpartyToolchain.cmake
+index 33a1ee4..fd51a0b 100644
+--- a/cmake_modules/IcebergThirdpartyToolchain.cmake
++++ b/cmake_modules/IcebergThirdpartyToolchain.cmake
+@@ -320,4 +320,4 @@ macro(build_avro)
+   else()
+     set(AVRO_VENDORED FALSE)
+-    list(APPEND ICEBERG_SYSTEM_DEPENDENCIES Avro)
++    list(APPEND ICEBERG_SYSTEM_DEPENDENCIES avro-cpp)
+   endif()
+diff --git a/src/iceberg/arrow/s3/arrow_s3_file_io.cc b/src/iceberg/arrow/s3/arrow_s3_file_io.cc
+index 2d2cc6a..3872af1 100644
+--- a/src/iceberg/arrow/s3/arrow_s3_file_io.cc
++++ b/src/iceberg/arrow/s3/arrow_s3_file_io.cc
+@@ -70,4 +70,7 @@ Status EnsureS3Initialized() {
+ Status EnsureS3Initialized() {
+   static const ::arrow::Status init_status = []() {
++    if (::arrow::fs::IsS3Initialized()) {
++      return ::arrow::Status::OK();
++    }
+     auto options = ::arrow::fs::S3GlobalOptions::Defaults();
+     return ::arrow::fs::InitializeS3(options);
+diff --git a/src/iceberg/partition_summary.cc b/src/iceberg/partition_summary.cc
+index 33d056f..3903a24 100644
+--- a/src/iceberg/partition_summary.cc
++++ b/src/iceberg/partition_summary.cc
+@@ -84,5 +84,10 @@ Status PartitionSummary::Update(const PartitionValues& partition_values) {
+   for (size_t i = 0; i < partition_values.num_fields(); i++) {
+     ICEBERG_ASSIGN_OR_RAISE(auto val, partition_values.ValueAt(i));
++    if (val.get().IsNull()) {
++      ICEBERG_RETURN_UNEXPECTED(field_stats_[i].Update(Literal::Null(
++          internal::checked_pointer_cast<PrimitiveType>(field_stats_[i].type()))));
++      continue;
++    }
+     ICEBERG_ASSIGN_OR_RAISE(
+         auto lit, val.get().CastTo(internal::checked_pointer_cast<PrimitiveType>(
+                       field_stats_[i].type())));
+diff --git a/src/iceberg/util/url_encoder.cc b/src/iceberg/util/url_encoder.cc
+index 3a7fcf1..b50e982 100644
+--- a/src/iceberg/util/url_encoder.cc
++++ b/src/iceberg/util/url_encoder.cc
+@@ -22 +22,2 @@
+-#include <locale>
++#include <cstdint>
++#include <locale>

@@ -1,0 +1,5 @@
+suite: to-iceberg-create
+fixtures: [iceberg_rest]
+timeout: 300
+skip:
+  on: fixture-unavailable

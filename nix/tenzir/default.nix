@@ -43,6 +43,7 @@ let
         "plugins/from_velociraptor"
         "plugins/gcs"
         "plugins/google-cloud-pubsub"
+        "plugins/iceberg"
         "plugins/kafka"
         "plugins/nats"
         "plugins/nic"

@@ -1,0 +1,5 @@
+// Append three events to the existing table.
+from {id: 0, message: "zero", ts: 2026-01-01T00:00:00Z},
+     {id: 1, message: "one", ts: 2026-01-01T00:00:01Z},
+     {id: 2, message: "two", ts: 2026-01-01T00:00:02Z}
+to_iceberg "testns.events", catalog=env("ICEBERG_REST_URI")

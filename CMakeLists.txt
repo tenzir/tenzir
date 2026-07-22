@@ -51,7 +51,12 @@ endif ()
 # check whether their plugin is built alongside Tenzir.
 if ("${CMAKE_PROJECT_NAME}" STREQUAL "${PROJECT_NAME}")
   macro (find_package)
-    if (NOT "${ARGV0}" STREQUAL "${CMAKE_PROJECT_NAME}")
+    # Static Arrow's config is not idempotent because it recreates imported
+    # dependency targets. An existing Arrow target already satisfies the call.
+    if ("${ARGV0}" STREQUAL "Arrow" AND (TARGET Arrow::arrow_shared
+                                         OR TARGET Arrow::arrow_static))
+      set(Arrow_FOUND TRUE)
+    elseif (NOT "${ARGV0}" STREQUAL "${CMAKE_PROJECT_NAME}")
       _find_package(${ARGV})
     endif ()
   endmacro ()

@@ -1,0 +1,5 @@
+writer exited with 0
+writer exited with 0
+columns: ['alpha', 'beta', 'id', 'time']
+rows: [(1, 4), (2, 4)]
+snapshots: 8

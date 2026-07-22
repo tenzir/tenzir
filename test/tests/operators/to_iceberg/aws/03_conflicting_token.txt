@@ -1,0 +1,6 @@
+error: `catalog_aws_service` cannot be combined with `token`
+ --> tests/operators/to_iceberg/aws/03_conflicting_token.tql:7:23
+  |
+7 |   catalog_aws_service="glue", aws_iam={region: "us-east-1"}, token="x"
+  |                       ^^^^^^ 
+  |

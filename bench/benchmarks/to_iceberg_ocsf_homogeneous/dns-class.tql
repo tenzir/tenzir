@@ -1,0 +1,16 @@
+---
+bench:
+  id: dns-class
+  description: Append DNS Activity to a table seeded with only its class schema.
+  tags:
+    class_uid: "4003"
+    schema_width: class
+    expected_tables: "1"
+---
+from_file env("BENCHMARK_ICEBERG_INPUT_PATH"), mmap=true {
+  read_bitz
+}
+repeat int(env("BENCHMARK_ICEBERG_STREAM_REPETITIONS"))
+to_iceberg f"{env("BENCHMARK_ICEBERG_NAMESPACE")}.events",
+  catalog=env("ICEBERG_REST_URI"), mode="append", max_size=536870912,
+  buffer_size=1073741824, timeout=1h

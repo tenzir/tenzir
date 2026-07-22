@@ -1,0 +1,8 @@
+// Append events that never touch `payload_b`; the data file omits the
+// column instead of encoding 64 nulls.
+from {id: 2, kind: "a", payload_a: "narrow", ts: 2026-01-01T00:00:02Z}
+repeat 64
+enumerate seq
+id = seq + 2
+drop seq
+to_iceberg "prunens.events", catalog=env("ICEBERG_REST_URI")

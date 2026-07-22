@@ -1,0 +1,3 @@
+rows: 9
+rows with null meta: 8
+files with meta column: 2 of 2

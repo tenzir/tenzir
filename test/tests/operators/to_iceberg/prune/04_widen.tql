@@ -1,0 +1,19 @@
+// A batch with values in a previously omitted column must not stream into
+// the open pruned file: the tiny `max_size` graduates the first 128-row
+// batch to a streaming writer whose file omits `payload_b`, and the final
+// event then forces a rotation into a file that carries the column.
+from {
+  kind: "a",
+  payload_a: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  payload_b: null,
+  ts: 2026-01-01T00:01:00Z,
+}
+repeat 129
+enumerate seq
+id = seq + 1000
+if seq == 128 {
+  payload_b = "widen"
+}
+drop seq
+batch 128
+to_iceberg "prunens.events", catalog=env("ICEBERG_REST_URI"), max_size=4096
