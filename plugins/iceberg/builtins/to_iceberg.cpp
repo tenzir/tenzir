@@ -937,6 +937,12 @@ private:
     // Evolution retries run against a local handle so that the operator's
     // projection target and open data file stay untouched unless the table
     // schema actually changes.
+    //
+    // Hand-rolled rather than retryWithExponentialBackoff: the retry policy
+    // branches on the error kind. A transient error backs off and replays,
+    // but a conflict must reload the table, re-check its identity, and
+    // re-derive the diff before trying again -- per-attempt state that a
+    // uniform exception-driven retry wrapper cannot carry.
     auto current = table_;
     auto backoff = duration{commit_initial_backoff};
     for (auto attempt = 1;; ++attempt) {
@@ -1819,6 +1825,12 @@ private:
       files.push_back(it->file);
     }
     auto const tag = CommitTag{writer_id_, commit_seq_};
+    // Hand-rolled rather than retryWithExponentialBackoff: only transient
+    // errors back off and replay as-is. A conflict instead reloads the
+    // table, re-checks its identity, and probes whether the tagged commit
+    // landed after all before deciding between dropping the files and
+    // retrying -- per-attempt state that a uniform exception-driven retry
+    // wrapper cannot carry.
     auto backoff = duration{commit_initial_backoff};
     for (auto attempt = 1;; ++attempt) {
       auto result
