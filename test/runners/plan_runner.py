@@ -16,7 +16,7 @@ class PlanRunner(TqlRunner):
             run_mod.run_simple_test(
                 test,
                 update=update,
-                args=("--dump-ir-plan",),
+                args=("--dump-ir-plan", "--parallelism", "max"),
                 output_ext=self.output_ext,
                 coverage=coverage,
             )

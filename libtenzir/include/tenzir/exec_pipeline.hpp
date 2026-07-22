@@ -41,6 +41,7 @@ struct exec_config {
   bool neo = true;
   bool legacy = false;
   std::optional<std::string> profile;
+  std::optional<std::string> parallelism;
 };
 
 auto exec_pipeline(Arc<const Source> source, diagnostic_handler& dh,
