@@ -452,7 +452,9 @@ public:
       // Profile, assume-role, and web-identity providers talk to STS and
       // the shared config machinery, so the AWS SDK must be initialized
       // for every provider, not just for managed AWS catalogs.
-      auto initialized = ensure_aws_sdk_initialized();
+      auto initialized = co_await spawn_blocking([] {
+        return ensure_aws_sdk_initialized();
+      });
       if (not initialized) {
         auto const source = args_.aws_iam ? args_.aws_iam->source
                                           : args_.catalog_aws_service->source;
@@ -471,7 +473,10 @@ public:
         if (auth->credentials) {
           credentials = *auth->credentials;
         }
-        config.aws_signing_region = amazon::resolve_region(None{}, credentials);
+        config.aws_signing_region
+          = co_await spawn_blocking([credentials = std::move(credentials)]() {
+              return amazon::resolve_region(None{}, credentials);
+            });
         config.properties["client.region"] = config.aws_signing_region;
       }
       // Use the shared live provider for catalog signing and S3 access. The
