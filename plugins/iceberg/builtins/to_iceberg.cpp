@@ -1733,7 +1733,15 @@ private:
     // data instead. Skip past the orphaned sequence numbers so commit tags
     // stay unambiguous, and surface the potential duplication.
     auto orphaned = uint64_t{0};
-    while (has_commit(*table_, CommitTag{writer_id_, commit_seq_})) {
+    for (;;) {
+      auto landed = has_commit(*table_, CommitTag{writer_id_, commit_seq_});
+      if (not landed) {
+        fail(landed.error(), "failed to inspect table snapshots", ctx);
+        co_return;
+      }
+      if (not *landed) {
+        break;
+      }
       commit_seq_ += 1;
       orphaned += 1;
     }
@@ -1754,7 +1762,12 @@ private:
     if (epoch_snapshot_.empty()) {
       co_return;
     }
-    if (has_commit(*table_, CommitTag{writer_id_, commit_seq_})) {
+    auto landed = has_commit(*table_, CommitTag{writer_id_, commit_seq_});
+    if (not landed) {
+      fail(landed.error(), "failed to inspect table snapshots", ctx);
+      co_return;
+    }
+    if (*landed) {
       TENZIR_DEBUG("to_iceberg: restart reconciliation: commit seq {} already "
                    "landed; dropping {} restored file handles",
                    commit_seq_, epoch_snapshot_.size());
@@ -1924,7 +1937,15 @@ private:
           done_ = true;
           co_return;
         }
-        auto landed = has_commit(**reloaded, tag);
+        auto tagged = has_commit(**reloaded, tag);
+        if (not tagged) {
+          // Neither retrying nor dropping the staged files is safe without
+          // knowing whether the commit landed; surface the broken metadata
+          // instead of guessing.
+          fail(tagged.error(), "failed to inspect table snapshots", ctx);
+          co_return;
+        }
+        auto landed = *tagged;
         if (not landed and result.error().uncertain) {
           // A commit whose success response was lost may have landed even
           // though snapshot expiration already erased its tagged snapshot.

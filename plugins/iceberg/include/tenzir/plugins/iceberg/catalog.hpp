@@ -214,8 +214,9 @@ auto commit_append(std::shared_ptr<ice::Table> table,
 
 /// Whether the table has a snapshot carrying the given commit tag. Reads
 /// the handle's metadata; load or reload the table first for a current
-/// answer.
-auto has_commit(ice::Table const& table, CommitTag const& tag) -> bool;
+/// answer. Fails when the metadata is unreadable: the exactly-once
+/// callers must not mistake that for "not committed".
+auto has_commit(ice::Table const& table, CommitTag const& tag) -> Result<bool>;
 
 /// Whether the table's current snapshot references any of the given
 /// data-file paths. Restart reconciliation falls back to this when

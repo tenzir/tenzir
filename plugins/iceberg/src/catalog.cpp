@@ -1719,14 +1719,23 @@ auto deserialize_data_file(SerializedDataFile const& serialized)
   return file;
 }
 
-auto has_commit(ice::Table const& table, CommitTag const& tag) -> bool {
+auto has_commit(ice::Table const& table, CommitTag const& tag) -> Result<bool> {
   // Only the current snapshot's ancestry proves the commit is part of the
   // table state being resumed: a rollback (or a retained branch) can leave
   // the tagged snapshot in the metadata's snapshot list while its rows are
   // no longer reachable, and treating it as landed would drop staged files
   // whose rows the table does not hold.
   auto current = table.current_snapshot();
-  if (not current.has_value() or not *current) {
+  if (not current.has_value()) {
+    // A table without snapshots reports kNotFound; only that kind means
+    // "provably no commit". Anything else leaves the question unanswered
+    // and must not silently read as "not committed".
+    if (current.error().kind == ice::ErrorKind::kNotFound) {
+      return false;
+    }
+    return std::unexpected{translate_error(current.error())};
+  }
+  if (not *current) {
     return false;
   }
   auto const& snapshots = table.metadata()->snapshots;
@@ -1761,7 +1770,14 @@ auto references_any_data_file(ice::Table const& table,
                               std::span<std::string const> paths)
   -> Result<bool> {
   auto current = table.current_snapshot();
-  if (not current.has_value() or not *current) {
+  if (not current.has_value()) {
+    // A table without snapshots reports kNotFound and holds no files.
+    if (current.error().kind == ice::ErrorKind::kNotFound) {
+      return false;
+    }
+    return std::unexpected{translate_error(current.error())};
+  }
+  if (not *current) {
     return false;
   }
   auto builder = table.NewScan();
