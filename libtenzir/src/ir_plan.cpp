@@ -99,6 +99,29 @@ auto find_sinks(ir::Plan const& plan) -> std::vector<size_t> {
   return sinks;
 }
 
+/// Collects source heads that have no incoming channel. These arise when a sink
+/// is followed by a new source in the same pipeline (see `Operator::plan`); the
+/// first source is wired from the external input, while these extra sources are
+/// left unconnected and must receive the input's signals via `BroadcastSignals`.
+auto find_orphan_sources(ir::Plan const& plan) -> std::vector<size_t> {
+  auto has_in = std::vector<bool>(plan.operators.size(), false);
+  for (const auto& channel : plan.channels) {
+    for (auto to : channel.to) {
+      if (to < plan.operators.size()) {
+        has_in[to] = true;
+      }
+    }
+  }
+  auto sources = std::vector<size_t>{};
+  for (auto node = size_t{0}; node < plan.operators.size(); ++node) {
+    if (has_in[node] or plan.operators[node].input.is_not<void>()) {
+      continue;
+    }
+    sources.push_back(node);
+  }
+  return sources;
+}
+
 /// Collects the plan's sinks
 auto count_instances(ir::Plan const& plan, std::vector<size_t> const& operators)
   -> size_t {
@@ -152,6 +175,22 @@ auto ir::Plan::from(pipeline pipe, element_type_tag input,
                                   : ChannelKind::Gather,
     .args = {},
   });
+  // Extra source chains (a sink followed by a new source) have no incoming
+  // channel. Broadcast the external input's signals to every source head so
+  // they stay in lockstep, mirroring the `GatherSignals` output channel.
+  if (auto extra = find_orphan_sources(plan); not extra.empty()) {
+    auto* input_channel = static_cast<PlannedChannel*>(nullptr);
+    for (auto& channel : plan.channels) {
+      if (channel.from == std::vector<size_t>{PlanPort::input}) {
+        input_channel = &channel;
+        break;
+      }
+    }
+    TENZIR_ASSERT(input_channel != nullptr);
+    input_channel->to.insert(input_channel->to.end(), extra.begin(),
+                             extra.end());
+    input_channel->kind = ChannelKind::BroadcastSignals;
+  }
   return plan;
 }
 
@@ -187,7 +226,7 @@ auto find_external_output_channel(ir::Plan const& plan)
 
 auto ir::Plan::input_type() const -> element_type_tag {
   auto const& channel = find_external_input_channel(*this);
-  TENZIR_ASSERT(channel.to.size() == 1);
+  TENZIR_ASSERT(not channel.to.empty());
   return operators[channel.to.front()].input;
 }
 
@@ -199,11 +238,12 @@ auto ir::Plan::output_type() const -> element_type_tag {
 
 auto ir::Operator::plan(PlanBuilder& builder, PlanPorts input,
                         diagnostic_handler& dh) && -> failure_or<PlanPorts> {
-  TENZIR_ASSERT(not input.empty());
-  auto in = input.front().type;
+  auto in = input.empty() ? element_type_tag{tag_v<void>} : input.front().type;
   TRY(auto out_ty, infer_type(in, dh));
   auto node = builder.add_node(std::move(*this).move(), in, out_ty);
-  builder.add_channel(input, node);
+  if (not input.empty()) {
+    builder.add_channel(input, node);
+  }
   return out_ty.is<void>() ? PlanPorts{} : PlanPorts{PlanPort{node, out_ty}};
 }
 

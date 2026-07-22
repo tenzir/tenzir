@@ -255,6 +255,13 @@ enum class ChannelKind {
   /// N:0 — `from.front()` is the typed main lane and `from[1..]` are void aux
   /// lanes.
   GatherSignals,
+  /// 0:N — the input-side dual of `GatherSignals`. `from` is the singleton
+  /// external input `{PlanPort::input}` and `to` lists the void input ports of
+  /// every source chain. The external input's signals (checkpoints,
+  /// termination, control) are broadcast to all of them so that multiple
+  /// void-input sources stay in lockstep. Used when a pipeline has more than
+  /// one source, e.g. a `pipeline::run { … }` sink followed by a new source.
+  BroadcastSignals,
   /// N:M — rows are hash-partitioned on the downstream's `partition_keys` and
   /// routed so that equal keys land on the same downstream instance.
   Shuffle,

@@ -34,6 +34,7 @@ auto is_inline_kind(ir::ChannelKind kind) -> bool {
     case ir::ChannelKind::Broadcast:
     case ir::ChannelKind::Split:
     case ir::ChannelKind::GatherSignals:
+    case ir::ChannelKind::BroadcastSignals:
       return false;
   }
   return false;
@@ -57,6 +58,7 @@ auto inline_glyph(ir::ChannelKind kind) -> std::string_view {
     case ir::ChannelKind::Broadcast:
     case ir::ChannelKind::Split:
     case ir::ChannelKind::GatherSignals:
+    case ir::ChannelKind::BroadcastSignals:
       return "--";
   }
   return "--";
@@ -83,6 +85,8 @@ auto link_kind_name(ir::ChannelKind kind) -> std::string_view {
       return "split";
     case ir::ChannelKind::GatherSignals:
       return "gather-signals";
+    case ir::ChannelKind::BroadcastSignals:
+      return "broadcast-signals";
   }
   return "link";
 }

@@ -441,4 +441,60 @@ template auto run_gather_signals(Box<Pull<OperatorMsg<chunk_ptr>>>,
                                  Box<Push<OperatorMsg<chunk_ptr>>>)
   -> Task<void>;
 
+template <class T>
+auto run_broadcast_signals(Box<Pull<OperatorMsg<T>>> in,
+                           Box<Push<OperatorMsg<T>>> main,
+                           std::vector<Box<Push<OperatorMsg<void>>>> aux)
+  -> Task<void> {
+  // Data and `EndOfData` flow only to the typed `main` head. A void channel
+  // never carries `EndOfData` (the receiving driver asserts it is only seen on
+  // a non-void input), so the void `aux` heads learn of completion by being
+  // dropped once `in` drains. `Checkpoint` is different: it is a barrier that
+  // must reach every head, so it is broadcast to `main` and all void `aux`
+  // heads, keeping the source chains in lockstep. `OperatorMsg<void>` is a
+  // `variant<Signal>`, so the void channels relay checkpoints fine.
+  auto handle_signal = [&](Signal signal) -> Task<void> {
+    co_await co_match(
+      std::move(signal),
+      [&](EndOfData) -> Task<void> {
+        co_await (*main)(OperatorMsg<T>{Signal{EndOfData{}}});
+      },
+      [&](Checkpoint checkpoint) -> Task<void> {
+        for (auto& head : aux) {
+          co_await (*head)(OperatorMsg<void>{Signal{checkpoint}});
+        }
+        co_await (*main)(OperatorMsg<T>{Signal{checkpoint}});
+      });
+  };
+  while (auto msg = co_await (*in)()) {
+    if constexpr (std::is_void_v<T>) {
+      co_await co_match(std::move(*msg), [&](Signal signal) -> Task<void> {
+        co_await handle_signal(std::move(signal));
+      });
+    } else {
+      co_await co_match(
+        std::move(*msg),
+        [&](T data) -> Task<void> {
+          co_await (*main)(OperatorMsg<T>{std::move(data)});
+        },
+        [&](Signal signal) -> Task<void> {
+          co_await handle_signal(std::move(signal));
+        });
+    }
+  }
+}
+
+template auto run_broadcast_signals(Box<Pull<OperatorMsg<void>>>,
+                                    Box<Push<OperatorMsg<void>>>,
+                                    std::vector<Box<Push<OperatorMsg<void>>>>)
+  -> Task<void>;
+template auto run_broadcast_signals(Box<Pull<OperatorMsg<table_slice>>>,
+                                    Box<Push<OperatorMsg<table_slice>>>,
+                                    std::vector<Box<Push<OperatorMsg<void>>>>)
+  -> Task<void>;
+template auto run_broadcast_signals(Box<Pull<OperatorMsg<chunk_ptr>>>,
+                                    Box<Push<OperatorMsg<chunk_ptr>>>,
+                                    std::vector<Box<Push<OperatorMsg<void>>>>)
+  -> Task<void>;
+
 } // namespace tenzir

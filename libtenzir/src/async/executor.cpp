@@ -1971,6 +1971,39 @@ private:
         });
         return;
       }
+      case ir::ChannelKind::BroadcastSignals: {
+        // Input-side dual of `GatherSignals`: the single external input feeds
+        // the typed main source head while its signals are broadcast to the
+        // void input ports of the remaining source heads.
+        TENZIR_ASSERT(plan.from == std::vector<size_t>{ir::PlanPort::input});
+        TENZIR_ASSERT(not plan.to.empty());
+        auto main_op = plan.to.front();
+        auto const& main_instances = instances_of[main_op];
+        TENZIR_ASSERT(main_instances.size() == 1);
+        TENZIR_ASSERT(not inputs[main_instances.front()]);
+        auto aux = std::vector<Box<Push<OperatorMsg<void>>>>{};
+        auto add_aux = [&](size_t to_op, size_t inst) {
+          TENZIR_ASSERT(not inputs[inst]);
+          auto lane
+            = exec_ctx_.make_channel<void>(ChannelId::first(id_.op(to_op)));
+          inputs[inst] = AnyOpPull{std::move(lane.pull)};
+          aux.push_back(std::move(lane.push));
+        };
+        for (auto j = size_t{1}; j < plan.to.size(); ++j) {
+          auto const& to = instances_of[plan.to[j]];
+          TENZIR_ASSERT(to.size() == 1);
+          add_aux(plan.to[j], to.front());
+        }
+        match(plan_.operators[main_op].input, [&]<class T>(tag<T>) {
+          auto main_lane
+            = exec_ctx_.make_channel<T>(ChannelId::first(id_.op(main_op)));
+          inputs[main_instances.front()] = AnyOpPull{std::move(main_lane.pull)};
+          auto in = std::move(as<Box<Pull<OperatorMsg<T>>>>(pull_upstream_));
+          add_task(run_broadcast_signals<T>(
+            std::move(in), std::move(main_lane.push), std::move(aux)));
+        });
+        return;
+      }
       case ir::ChannelKind::Shuffle: {
         // N upstream instances hash-partition their input across M downstream
         // instances. We compose an existing broadcast-to-signals shuffle push
