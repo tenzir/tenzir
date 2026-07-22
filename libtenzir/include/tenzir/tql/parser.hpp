@@ -18,10 +18,6 @@ namespace tenzir::tql {
 /// Update the operator aliases. This should be called once on startup.
 void set_operator_aliases(std::unordered_map<std::string, std::string> map);
 
-/// Parse and set source locations.
-auto parse(Source const& source, diagnostic_handler& diag)
-  -> std::optional<std::vector<located<operator_ptr>>>;
-
 /// No diagnostics will be emitted, no locations will be set.
 auto parse_internal(std::string source) -> caf::expected<pipeline>;
 

@@ -629,12 +629,6 @@ auto make_parser_interface(std::string source, diagnostic_handler& diag)
                                   std::unordered_set<std::string>{});
 }
 
-auto parse(Source const& source, diagnostic_handler& diag)
-  -> std::optional<std::vector<located<operator_ptr>>> {
-  auto recursed = std::unordered_set<std::string>{};
-  return parser{source.text, diag, false, recursed}.parse();
-}
-
 auto parse_internal(std::string source) -> caf::expected<pipeline> {
   auto [pipe, diags] = parse_internal_with_diags(std::move(source));
   if (not pipe) {
