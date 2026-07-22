@@ -15,6 +15,7 @@
 #pragma once
 
 #include <tenzir/option.hpp>
+#include <tenzir/try.hpp>
 
 #include <cstdint>
 #include <expected>
@@ -224,3 +225,24 @@ struct CommitTag {
 };
 
 } // namespace tenzir::plugins::iceberg
+
+/// Enables `TRY(...)` propagation for `Result<T>`.
+template <class T>
+struct tenzir::tryable<std::expected<T, tenzir::plugins::iceberg::Error>> {
+  using Expected = std::expected<T, tenzir::plugins::iceberg::Error>;
+
+  static auto is_success(Expected const& x) -> bool {
+    return x.has_value();
+  }
+
+  static auto get_success(Expected&& x) -> T {
+    if constexpr (not std::same_as<T, void>) {
+      return std::move(*x);
+    }
+  }
+
+  static auto get_error(Expected&& x)
+    -> std::unexpected<tenzir::plugins::iceberg::Error> {
+    return std::unexpected{std::move(x).error()};
+  }
+};

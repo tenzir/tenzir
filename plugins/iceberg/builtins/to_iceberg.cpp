@@ -890,9 +890,7 @@ private:
        options = std::move(options), dropped, fell_back,
        fall_back_to_load = mode_ == mode::create_append]() mutable
         -> Result<std::shared_ptr<ice::Table>> {
-        if (auto result = ensure_namespace(*catalog, ns); not result) {
-          return std::unexpected{result.error()};
-        }
+        TRY(ensure_namespace(*catalog, ns));
         auto created = create_table(*catalog, ns, name, as<record_type>(ty),
                                     options, *dropped);
         if (not created and fall_back_to_load
@@ -1506,9 +1504,7 @@ private:
               fmt::format("failed to export batch: {}", status.ToString()),
             }};
           }
-          if (auto result = translate(writer->Write(&c_array)); not result) {
-            return std::unexpected{result.error()};
-          }
+          TRY(translate(writer->Write(&c_array)));
         }
         return translate(writer->Length());
       });
@@ -1554,11 +1550,8 @@ private:
        omitted = all_null_columns(partition.buffered)]() mutable
         -> Result<
           std::pair<std::shared_ptr<ice::DataWriter>, std::vector<bool>>> {
-        auto writer = new_file_writer(*table, partition, omitted);
-        if (not writer) {
-          return std::unexpected{writer.error()};
-        }
-        return std::pair{std::move(*writer), std::move(omitted)};
+        TRY(auto writer, new_file_writer(*table, partition, omitted));
+        return std::pair{std::move(writer), std::move(omitted)};
       });
     if (not opened) {
       fail(opened.error(), "failed to open data file writer", ctx);
@@ -1653,10 +1646,7 @@ private:
          pieces = std::move(partition.buffered)]() mutable
           -> Result<std::shared_ptr<ice::DataFile>> {
           auto omitted = all_null_columns(pieces);
-          auto writer = new_file_writer(*table, tuple, omitted);
-          if (not writer) {
-            return std::unexpected{writer.error()};
-          }
+          TRY(auto writer, new_file_writer(*table, tuple, omitted));
           for (auto const& piece : pieces) {
             auto c_array = ArrowArray{};
             if (auto status
@@ -1667,12 +1657,9 @@ private:
                 fmt::format("failed to export batch: {}", status.ToString()),
               }};
             }
-            if (auto result = translate((*writer)->Write(&c_array));
-                not result) {
-              return std::unexpected{result.error()};
-            }
+            TRY(translate(writer->Write(&c_array)));
           }
-          return finish_data_file(**writer);
+          return finish_data_file(*writer);
         });
     }
     auto& file = *closed;
@@ -2116,6 +2103,11 @@ private:
   std::unordered_set<std::string> evolved_schemas_;
   MetricsCounter events_counter_;
   MetricsCounter bytes_counter_;
+  /// Unbounded by type, bounded in practice: producers are one-shot,
+  /// generation-checked timer tasks -- at most one rotation timer per open
+  /// partition (capped by `max_open_partitions`) plus one commit timer --
+  /// and `await_task` drains continuously. A bounded queue would add a
+  /// blocking enqueue that could wedge timer tasks for no gain.
   mutable Box<folly::coro::UnboundedQueue<Message>> control_queue_{
     std::in_place,
   };

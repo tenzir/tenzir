@@ -941,43 +941,31 @@ auto resolve_partition_column(std::shared_ptr<arrow::StructArray> const& batch,
 
 auto bind_partitioning(ice::Table const& table)
   -> Result<std::vector<BoundPartitionField>> {
-  auto spec = table.spec();
-  if (not spec.has_value()) {
-    return std::unexpected{translate_error(spec.error())};
-  }
-  auto schema = table.schema();
-  if (not schema.has_value()) {
-    return std::unexpected{translate_error(schema.error())};
-  }
+  TRY(auto spec, translate(table.spec()));
+  TRY(auto schema, translate(table.schema()));
   auto result = std::vector<BoundPartitionField>{};
-  result.reserve((*spec)->fields().size());
-  for (auto const& field : (*spec)->fields()) {
-    auto name = (*schema)->FindColumnNameById(field.source_id());
-    if (not name.has_value()) {
-      return std::unexpected{translate_error(name.error())};
-    }
-    if (not *name) {
+  result.reserve(spec->fields().size());
+  for (auto const& field : spec->fields()) {
+    TRY(auto name, translate(schema->FindColumnNameById(field.source_id())));
+    if (not name) {
       return std::unexpected{Error{
         Error::Kind::permanent,
         fmt::format("partition field `{}` references unknown column {}",
                     field.name(), field.source_id()),
       }};
     }
-    auto source = (*schema)->FindFieldById(field.source_id());
-    if (not source.has_value()) {
-      return std::unexpected{translate_error(source.error())};
-    }
-    TENZIR_ASSERT(*source);
+    TRY(auto source, translate(schema->FindFieldById(field.source_id())));
+    TENZIR_ASSERT(source);
     auto source_type
-      = std::dynamic_pointer_cast<ice::PrimitiveType>((*source)->get().type());
+      = std::dynamic_pointer_cast<ice::PrimitiveType>(source->get().type());
     if (not source_type
         or not supports_partition_source(source_type->type_id())) {
       return std::unexpected{Error{
         Error::Kind::permanent,
         fmt::format("cannot compute partition field `{}`: unsupported source "
                     "column type `{}`",
-                    render_partition_field(**name, *field.transform()),
-                    ice::ToString((*source)->get().type()->type_id())),
+                    render_partition_field(*name, *field.transform()),
+                    ice::ToString(source->get().type()->type_id())),
       }};
     }
     auto function = field.transform()->Bind(source_type);
@@ -985,12 +973,12 @@ auto bind_partitioning(ice::Table const& table)
       return std::unexpected{Error{
         Error::Kind::permanent,
         fmt::format("cannot compute partition field `{}`: {}",
-                    render_partition_field(**name, *field.transform()),
+                    render_partition_field(*name, *field.transform()),
                     function.error().message),
       }};
     }
     auto segments = std::vector<std::string>{};
-    for (auto const part : detail::split(**name, ".")) {
+    for (auto const part : detail::split(*name, ".")) {
       segments.emplace_back(part);
     }
     result.push_back(BoundPartitionField{
@@ -1107,30 +1095,24 @@ auto open_catalog(CatalogConfig config)
   if (not rest_catalog.has_value()) {
     return std::unexpected{translate_error(rest_catalog.error())};
   }
-  auto catalog = (*rest_catalog)->AsCatalog();
-  if (not catalog.has_value()) {
-    return std::unexpected{translate_error(catalog.error())};
-  }
+  TRY(auto catalog, translate((*rest_catalog)->AsCatalog()));
   if (not aws_credentials_guard) {
-    return std::move(*catalog);
+    return catalog;
   }
   // Tie the credentials registration to the catalog handle: auth sessions
   // and FileIO factories resolve the provider through the registry for as
   // long as any copy of the returned pointer lives.
   auto bundle = std::make_shared<
     std::pair<std::shared_ptr<ice::Catalog>, std::shared_ptr<void>>>(
-    std::move(*catalog), std::move(aws_credentials_guard));
+    std::move(catalog), std::move(aws_credentials_guard));
   return std::shared_ptr<ice::Catalog>{bundle, bundle->first.get()};
 }
 
 auto ensure_namespace(ice::Catalog& catalog, std::span<std::string const> ns)
   -> Result<void> {
   auto namespace_id = ice::Namespace{.levels = {ns.begin(), ns.end()}};
-  auto exists = catalog.NamespaceExists(namespace_id);
-  if (not exists.has_value()) {
-    return std::unexpected{translate_error(exists.error())};
-  }
-  if (*exists) {
+  TRY(auto exists, translate(catalog.NamespaceExists(namespace_id)));
+  if (exists) {
     return {};
   }
   auto status = catalog.CreateNamespace(namespace_id, {});
@@ -1181,11 +1163,8 @@ auto create_table(ice::Catalog& catalog, std::span<std::string const> ns,
     spec_fields.reserve(options.partition_by.size());
     auto next_field_id = ice::PartitionSpec::kLegacyPartitionDataIdStart;
     for (auto const& field : options.partition_by) {
-      auto found = iceberg_schema->FindFieldByName(field.source);
-      if (not found.has_value()) {
-        return std::unexpected{translate_error(found.error())};
-      }
-      if (not *found) {
+      TRY(auto found, translate(iceberg_schema->FindFieldByName(field.source)));
+      if (not found) {
         return std::unexpected{Error{
           Error::Kind::permanent,
           fmt::format("partition column `{}` does not exist in the table "
@@ -1193,7 +1172,7 @@ auto create_table(ice::Catalog& catalog, std::span<std::string const> ns,
                       field.source),
         }};
       }
-      auto const& source = (*found)->get();
+      auto const& source = found->get();
       auto transform = to_ice_transform(field);
       auto rendered = render_partition_field(field.source, *transform);
       auto source_type
@@ -1214,22 +1193,15 @@ auto create_table(ice::Catalog& catalog, std::span<std::string const> ns,
                       bound.error().message),
         }};
       }
-      auto partition_name = transform->GeneratePartitionName(field.source);
-      if (not partition_name.has_value()) {
-        return std::unexpected{translate_error(partition_name.error())};
-      }
+      TRY(auto partition_name,
+          translate(transform->GeneratePartitionName(field.source)));
       spec_fields.emplace_back(source.field_id(), next_field_id++,
-                               std::move(*partition_name),
-                               std::move(transform));
+                               std::move(partition_name), std::move(transform));
     }
-    auto made = ice::PartitionSpec::Make(*iceberg_schema,
-                                         ice::PartitionSpec::kInitialSpecId,
-                                         std::move(spec_fields),
-                                         /*allow_missing_fields=*/false);
-    if (not made.has_value()) {
-      return std::unexpected{translate_error(made.error())};
-    }
-    spec = std::move(*made);
+    TRY(auto made, translate(ice::PartitionSpec::Make(
+                     *iceberg_schema, ice::PartitionSpec::kInitialSpecId,
+                     std::move(spec_fields), /*allow_missing_fields=*/false)));
+    spec = std::move(made);
   }
   auto sort_order = ice::SortOrder::Unsorted();
   auto properties = std::unordered_map<std::string, std::string>{
@@ -1268,13 +1240,10 @@ auto same_write_layout(ice::Table const& lhs, ice::Table const& rhs) -> bool {
 
 auto table_arrow_schema(ice::Table const& table)
   -> Result<std::shared_ptr<arrow::Schema>> {
-  auto schema = table.schema();
-  if (not schema.has_value()) {
-    return std::unexpected{translate_error(schema.error())};
-  }
+  TRY(auto schema, translate(table.schema()));
   auto fields = std::vector<std::shared_ptr<arrow::Field>>{};
-  fields.reserve((*schema)->fields().size());
-  for (auto const& field : (*schema)->fields()) {
+  fields.reserve(schema->fields().size());
+  for (auto const& field : schema->fields()) {
     auto type = to_arrow_type(*field.type());
     if (not type.has_value()) {
       return std::unexpected{Error{
@@ -1292,13 +1261,10 @@ auto evolve_schema(std::shared_ptr<ice::Table> const& table,
                    record_type const& schema,
                    std::vector<std::string>& dropped_fields)
   -> Result<std::optional<std::shared_ptr<ice::Table>>> {
-  auto current = table->schema();
-  if (not current.has_value()) {
-    return std::unexpected{translate_error(current.error())};
-  }
+  TRY(auto current, translate(table->schema()));
   auto additions = std::vector<SchemaAddition>{};
   auto promotions = std::vector<SchemaPromotion>{};
-  diff_schema(schema, (*current)->fields(), "", additions, promotions,
+  diff_schema(schema, current->fields(), "", additions, promotions,
               dropped_fields);
   if (additions.empty() and promotions.empty()) {
     return std::optional<std::shared_ptr<ice::Table>>{};
@@ -1306,51 +1272,34 @@ auto evolve_schema(std::shared_ptr<ice::Table> const& table,
   // A schema update is not retryable after a conflicting commit: replaying
   // it against refreshed metadata could apply a different evolution than
   // authored. The caller reloads the table and re-derives the diff instead.
-  auto transaction
-    = ice::Transaction::Make(table, ice::TransactionKind::kUpdate);
-  if (not transaction.has_value()) {
-    return std::unexpected{translate_error(transaction.error())};
-  }
-  auto update = (*transaction)->NewUpdateSchema();
-  if (not update.has_value()) {
-    return std::unexpected{translate_error(update.error())};
-  }
+  TRY(auto transaction,
+      translate(ice::Transaction::Make(table, ice::TransactionKind::kUpdate)));
+  TRY(auto update, translate(transaction->NewUpdateSchema()));
   for (auto& addition : additions) {
     if (addition.parent.empty()) {
-      (*update)->AddColumn(addition.name, std::move(addition.type));
+      update->AddColumn(addition.name, std::move(addition.type));
     } else {
-      (*update)->AddColumn(std::optional<std::string_view>{addition.parent},
-                           addition.name, std::move(addition.type));
+      update->AddColumn(std::optional<std::string_view>{addition.parent},
+                        addition.name, std::move(addition.type));
     }
   }
   for (auto& promotion : promotions) {
-    (*update)->UpdateColumn(promotion.path, std::move(promotion.type));
+    update->UpdateColumn(promotion.path, std::move(promotion.type));
   }
-  if (auto status = (*update)->Commit(); not status.has_value()) {
-    return std::unexpected{translate_error(status.error())};
-  }
-  auto committed = (*transaction)->Commit();
-  if (not committed.has_value()) {
-    return std::unexpected{translate_error(committed.error())};
-  }
-  return std::optional{std::move(*committed)};
+  TRY(translate(update->Commit()));
+  TRY(auto committed, translate(transaction->Commit()));
+  return std::optional{std::move(committed)};
 }
 
 auto check_partition_spec(ice::Table const& table,
                           std::span<PartitionField const> fields)
   -> Result<void> {
-  auto spec = table.spec();
-  if (not spec.has_value()) {
-    return std::unexpected{translate_error(spec.error())};
-  }
-  auto schema = table.schema();
-  if (not schema.has_value()) {
-    return std::unexpected{translate_error(schema.error())};
-  }
+  TRY(auto spec, translate(table.spec()));
+  TRY(auto schema, translate(table.schema()));
   auto render_table_spec = [&]() -> std::string {
     auto rendered = std::vector<std::string>{};
-    for (auto const& field : (*spec)->fields()) {
-      auto name = (*schema)->FindColumnNameById(field.source_id());
+    for (auto const& field : spec->fields()) {
+      auto name = schema->FindColumnNameById(field.source_id());
       auto source = name.has_value() and *name
                       ? std::string{**name}
                       : fmt::format("#{}", field.source_id());
@@ -1374,15 +1323,12 @@ auto check_partition_spec(ice::Table const& table,
                   render_table_spec(), render_requested()),
     }};
   };
-  if ((*spec)->fields().size() != fields.size()) {
+  if (spec->fields().size() != fields.size()) {
     return mismatch();
   }
-  for (auto const& [have, want] : std::views::zip((*spec)->fields(), fields)) {
-    auto found = (*schema)->FindFieldByName(want.source);
-    if (not found.has_value()) {
-      return std::unexpected{translate_error(found.error())};
-    }
-    if (not *found or (*found)->get().field_id() != have.source_id()
+  for (auto const& [have, want] : std::views::zip(spec->fields(), fields)) {
+    TRY(auto found, translate(schema->FindFieldByName(want.source)));
+    if (not found or found->get().field_id() != have.source_id()
         or *to_ice_transform(want) != *have.transform()) {
       return mismatch();
     }
@@ -1451,18 +1397,12 @@ auto split_by_partition(ice::Table const& table,
     });
     return groups;
   }
-  auto spec = table.spec();
-  if (not spec.has_value()) {
-    return std::unexpected{translate_error(spec.error())};
-  }
+  TRY(auto spec, translate(table.spec()));
   auto columns = std::vector<PartitionColumn>{};
   columns.reserve(bound.size());
   for (auto const& field : bound) {
-    auto column = resolve_partition_column(struct_batch, field.segments);
-    if (not column.has_value()) {
-      return std::unexpected{column.error()};
-    }
-    columns.push_back(std::move(*column));
+    TRY(auto column, resolve_partition_column(struct_batch, field.segments));
+    columns.push_back(std::move(column));
   }
   auto group_by_key = std::unordered_map<std::string, size_t>{};
   auto key = std::string{};
@@ -1476,33 +1416,25 @@ auto split_by_partition(ice::Table const& table,
                      ? ice::Literal::Null(field.source_type)
                      : literal_from_arrow(field.source_type->type_id(),
                                           *columns[i].leaf, row);
-      auto transformed = field.function->Transform(value);
-      if (not transformed.has_value()) {
-        return std::unexpected{translate_error(transformed.error())};
-      }
+      TRY(auto transformed, translate(field.function->Transform(value)));
       // The key encoding distinguishes null from any value and is
       // length-prefixed so that string values cannot collide across field
       // boundaries.
-      if (transformed->IsNull()) {
+      if (transformed.IsNull()) {
         key += "|n";
-      } else if (not append_partition_key(*transformed, key)) {
-        auto human = field.transform->ToHumanString(*transformed);
-        if (not human.has_value()) {
-          return std::unexpected{translate_error(human.error())};
-        }
-        key += fmt::format("|h{}:{}", human->size(), *human);
+      } else if (not append_partition_key(transformed, key)) {
+        TRY(auto human, translate(field.transform->ToHumanString(transformed)));
+        key += fmt::format("|h{}:{}", human.size(), human);
       }
-      values.push_back(std::move(*transformed));
+      values.push_back(std::move(transformed));
     }
     auto [it, inserted] = group_by_key.try_emplace(key, groups.size());
     if (inserted) {
-      auto path = (*spec)->PartitionPath(ice::PartitionValues{values});
-      if (not path.has_value()) {
-        return std::unexpected{translate_error(path.error())};
-      }
+      TRY(auto path,
+          translate(spec->PartitionPath(ice::PartitionValues{values})));
       groups.push_back(PartitionGroup{
         .key = key,
-        .path = std::move(*path),
+        .path = std::move(path),
         .rows = {},
         .partition = ice::PartitionValues{std::move(values)},
       });
@@ -1545,20 +1477,14 @@ auto new_file_writer(ice::Table const& table,
                      ice::PartitionValues const& partition,
                      std::vector<bool>& omit)
   -> Result<std::shared_ptr<ice::DataWriter>> {
-  auto schema = table.schema();
-  if (not schema.has_value()) {
-    return std::unexpected{translate_error(schema.error())};
-  }
-  auto spec = table.spec();
-  if (not spec.has_value()) {
-    return std::unexpected{translate_error(spec.error())};
-  }
-  auto file_schema = *schema;
+  TRY(auto schema, translate(table.schema()));
+  TRY(auto spec, translate(table.spec()));
+  auto file_schema = schema;
   if (std::ranges::contains(omit, true)) {
-    auto const fields = (*schema)->fields();
+    auto const fields = schema->fields();
     TENZIR_ASSERT(omit.size() == fields.size());
     auto sources = std::unordered_set<int32_t>{};
-    for (auto const& field : (*spec)->fields()) {
+    for (auto const& field : spec->fields()) {
       sources.insert(field.source_id());
     }
     auto kept = std::vector<ice::SchemaField>{};
@@ -1575,26 +1501,20 @@ auto new_file_writer(ice::Table const& table,
       // A Parquet file cannot have zero columns; keep the full schema.
       std::ranges::fill(omit, false);
     } else if (std::ranges::contains(omit, true)) {
-      file_schema = std::make_shared<ice::Schema>(std::move(kept),
-                                                  (*schema)->schema_id());
+      file_schema
+        = std::make_shared<ice::Schema>(std::move(kept), schema->schema_id());
     }
   }
-  auto location_provider = table.location_provider();
-  if (not location_provider.has_value()) {
-    return std::unexpected{translate_error(location_provider.error())};
-  }
+  TRY(auto location_provider, translate(table.location_provider()));
   auto values = partition;
   auto filename = fmt::format("{}.parquet", uuid::random());
   auto path = std::string{};
-  if ((*spec)->fields().empty()) {
-    path = (*location_provider)->NewDataLocation(filename);
+  if (spec->fields().empty()) {
+    path = location_provider->NewDataLocation(filename);
   } else {
-    auto located
-      = (*location_provider)->NewDataLocation(**spec, values, filename);
-    if (not located.has_value()) {
-      return std::unexpected{translate_error(located.error())};
-    }
-    path = std::move(*located);
+    TRY(auto located,
+        translate(location_provider->NewDataLocation(*spec, values, filename)));
+    path = std::move(located);
   }
   // Arrow's local filesystem does not create parent directories on write;
   // object stores have no such concept. Only relevant for file:// tables.
@@ -1611,20 +1531,17 @@ auto new_file_writer(ice::Table const& table,
       }};
     }
   }
-  auto writer = ice::DataWriter::Make(ice::DataWriterOptions{
-    .path = std::move(path),
-    .schema = std::move(file_schema),
-    .spec = std::move(*spec),
-    .partition = std::move(values),
-    .format = ice::FileFormatType::kParquet,
-    .io = table.io(),
-    .sort_order_id = std::nullopt,
-    .properties = table.properties().configs(),
-  });
-  if (not writer.has_value()) {
-    return std::unexpected{translate_error(writer.error())};
-  }
-  return std::shared_ptr<ice::DataWriter>{std::move(*writer)};
+  TRY(auto writer, translate(ice::DataWriter::Make(ice::DataWriterOptions{
+                     .path = std::move(path),
+                     .schema = std::move(file_schema),
+                     .spec = std::move(spec),
+                     .partition = std::move(values),
+                     .format = ice::FileFormatType::kParquet,
+                     .io = table.io(),
+                     .sort_order_id = std::nullopt,
+                     .properties = table.properties().configs(),
+                   })));
+  return std::shared_ptr<ice::DataWriter>{std::move(writer)};
 }
 
 auto serialize_data_file(ice::DataFile const& file)
@@ -1660,21 +1577,15 @@ auto serialize_data_file(ice::DataFile const& file)
   };
   result.partition.reserve(file.partition.values().size());
   for (auto const& literal : file.partition.values()) {
-    auto type = to_literal_type(literal.type()->type_id());
-    if (not type.has_value()) {
-      return std::unexpected{type.error()};
-    }
+    TRY(auto type, to_literal_type(literal.type()->type_id()));
     auto serialized = SerializedLiteral{
-      .type = static_cast<int32_t>(*type),
+      .type = static_cast<int32_t>(type),
       .is_null = literal.IsNull(),
       .value = {},
     };
     if (not serialized.is_null) {
-      auto bytes = literal.Serialize();
-      if (not bytes.has_value()) {
-        return std::unexpected{translate_error(bytes.error())};
-      }
-      serialized.value = std::move(*bytes);
+      TRY(auto bytes, translate(literal.Serialize()));
+      serialized.value = std::move(bytes);
     }
     result.partition.push_back(std::move(serialized));
   }
@@ -1686,19 +1597,14 @@ auto deserialize_data_file(SerializedDataFile const& serialized)
   auto values = std::vector<ice::Literal>{};
   values.reserve(serialized.partition.size());
   for (auto const& literal : serialized.partition) {
-    auto type = from_literal_type(literal.type);
-    if (not type.has_value()) {
-      return std::unexpected{type.error()};
-    }
+    TRY(auto type, from_literal_type(literal.type));
     if (literal.is_null) {
-      values.push_back(ice::Literal::Null(std::move(*type)));
+      values.push_back(ice::Literal::Null(std::move(type)));
       continue;
     }
-    auto restored = ice::Literal::Deserialize(literal.value, std::move(*type));
-    if (not restored.has_value()) {
-      return std::unexpected{translate_error(restored.error())};
-    }
-    values.push_back(std::move(*restored));
+    TRY(auto restored,
+        translate(ice::Literal::Deserialize(literal.value, std::move(type))));
+    values.push_back(std::move(restored));
   }
   auto file = std::make_shared<ice::DataFile>();
   file->content = ice::DataFile::Content::kData;
@@ -1780,21 +1686,12 @@ auto references_any_data_file(ice::Table const& table,
   if (not *current) {
     return false;
   }
-  auto builder = table.NewScan();
-  if (not builder.has_value()) {
-    return std::unexpected{translate_error(builder.error())};
-  }
-  auto scan = (*builder)->Build();
-  if (not scan.has_value()) {
-    return std::unexpected{translate_error(scan.error())};
-  }
-  auto tasks = (*scan)->PlanFiles();
-  if (not tasks.has_value()) {
-    return std::unexpected{translate_error(tasks.error())};
-  }
+  TRY(auto builder, translate(table.NewScan()));
+  TRY(auto scan, translate(builder->Build()));
+  TRY(auto tasks, translate(scan->PlanFiles()));
   auto live = std::unordered_set<std::string_view>{};
-  live.reserve(tasks->size());
-  for (auto const& task : *tasks) {
+  live.reserve(tasks.size());
+  for (auto const& task : tasks) {
     live.insert(task->data_file()->file_path);
   }
   return std::ranges::any_of(paths, [&](std::string const& path) {
@@ -1806,36 +1703,24 @@ auto commit_append(std::shared_ptr<ice::Table> table,
                    std::span<std::shared_ptr<ice::DataFile> const> files,
                    CommitTag const& tag)
   -> Result<std::shared_ptr<ice::Table>> {
-  auto transaction
-    = ice::Transaction::Make(std::move(table), ice::TransactionKind::kUpdate);
-  if (not transaction.has_value()) {
-    return std::unexpected{translate_error(transaction.error())};
-  }
-  auto append = (*transaction)->NewFastAppend();
-  if (not append.has_value()) {
-    return std::unexpected{translate_error(append.error())};
-  }
+  TRY(auto transaction, translate(ice::Transaction::Make(
+                          std::move(table), ice::TransactionKind::kUpdate)));
+  TRY(auto append, translate(transaction->NewFastAppend()));
   // Tag the snapshot so the commit can be verified below: iceberg-cpp's
   // internal retry after a conflicting commit can report success without the
   // snapshot landing, which would silently drop the files.
   auto commit_id = fmt::to_string(uuid::random());
-  (*append)->Set("tenzir.commit-id", commit_id);
+  append->Set("tenzir.commit-id", commit_id);
   // The writer/sequence pair keys exactly-once deduplication: a restarted
   // operator searches the snapshot history for it (see `has_commit`).
-  (*append)->Set(std::string{writer_id_property}, tag.writer_id);
-  (*append)->Set(std::string{commit_seq_property},
-                 fmt::to_string(tag.sequence));
+  append->Set(std::string{writer_id_property}, tag.writer_id);
+  append->Set(std::string{commit_seq_property}, fmt::to_string(tag.sequence));
   for (auto const& file : files) {
-    (*append)->AppendFile(file);
+    append->AppendFile(file);
   }
-  if (auto status = (*append)->Commit(); not status.has_value()) {
-    return std::unexpected{translate_error(status.error())};
-  }
-  auto committed = (*transaction)->Commit();
-  if (not committed.has_value()) {
-    return std::unexpected{translate_error(committed.error())};
-  }
-  auto const& snapshots = (*committed)->metadata()->snapshots;
+  TRY(translate(append->Commit()));
+  TRY(auto committed, translate(transaction->Commit()));
+  auto const& snapshots = committed->metadata()->snapshots;
   auto const landed = std::ranges::any_of(snapshots, [&](auto const& snapshot) {
     auto it = snapshot->summary.find("tenzir.commit-id");
     return it != snapshot->summary.end() and it->second == commit_id;
@@ -1847,26 +1732,21 @@ auto commit_append(std::shared_ptr<ice::Table> table,
       "(a concurrent update won the race)",
     }};
   }
-  return std::move(*committed);
+  return std::move(committed);
 }
 
 auto finish_data_file(ice::DataWriter& writer)
   -> Result<std::shared_ptr<ice::DataFile>> {
-  if (auto status = writer.Close(); not status.has_value()) {
-    return std::unexpected{translate_error(status.error())};
-  }
-  auto metadata = writer.Metadata();
-  if (not metadata.has_value()) {
-    return std::unexpected{translate_error(metadata.error())};
-  }
-  if (metadata->data_files.size() != 1) {
+  TRY(translate(writer.Close()));
+  TRY(auto metadata, translate(writer.Metadata()));
+  if (metadata.data_files.size() != 1) {
     return std::unexpected{Error{
       Error::Kind::permanent,
       fmt::format("expected exactly one data file from writer, got {}",
-                  metadata->data_files.size()),
+                  metadata.data_files.size()),
     }};
   }
-  return std::move(metadata->data_files.front());
+  return std::move(metadata.data_files.front());
 }
 
 } // namespace tenzir::plugins::iceberg
