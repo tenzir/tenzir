@@ -47,7 +47,8 @@ public:
     }
     return function_use::make([this, expr = std::move(expr),
                                base = base.inner](auto eval, session ctx) {
-      return map_series(eval(expr), [&](series value) {
+      auto failed = std::optional<std::string>{};
+      auto result = map_series(eval(expr), [&](series value) {
         auto f = detail::overload{
           [](const arrow::NullArray& arg) {
             auto b = Builder{tenzir::arrow_memory_pool()};
@@ -114,7 +115,6 @@ public:
             return finish(b);
           },
           [&](const arrow::StringArray& arg) {
-            auto report = false;
             auto b = Builder{tenzir::arrow_memory_pool()};
             check(b.Reserve(value.length()));
             constexpr auto p = std::invoke([] {
@@ -158,15 +158,10 @@ public:
                     TENZIR_UNREACHABLE();
                 }
                 check(b.AppendNull());
-                report = true;
+                if (not failed) {
+                  failed = std::string{arg.GetView(row)};
+                }
               }
-            }
-            if (report) {
-              // TODO: It would be helpful to know what string, but then
-              // deduplication doesn't work.
-              diagnostic::warning("`{}` failed to convert some string", name())
-                .primary(expr)
-                .emit(ctx);
             }
             return finish(b);
           },
@@ -183,6 +178,13 @@ public:
           };
         return series{Type{}, match(*value.array, f)};
       });
+      if (failed) {
+        diagnostic::warning("`{}` failed to convert some string", name())
+          .primary(expr)
+          .note(fmt::format("tried to convert: {}", *failed))
+          .emit(ctx);
+      }
+      return result;
     });
   }
 };
