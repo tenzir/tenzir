@@ -1,5 +1,5 @@
 {
-  _time: "2025-01-01 00:00:00.000 GMT",
+  _time: 2025-01-01T00:00:00Z,
   host: "auth-01",
   source: "tenzir-docs-auth",
   sourcetype: "_json",
@@ -9,7 +9,7 @@
   outcome: "success",
 }
 {
-  _time: "2025-01-01 00:01:00.000 GMT",
+  _time: 2025-01-01T00:01:00Z,
   host: "auth-01",
   source: "tenzir-docs-auth",
   sourcetype: "_json",
