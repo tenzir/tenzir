@@ -418,7 +418,7 @@ auto ensure_registered() -> void {
 #ifdef TENZIR_ICEBERG_GCS
     ice::rest::auth::AuthManagers::Register(
       gcp_auth_type,
-      [](std::string_view, const std::unordered_map<std::string, std::string>&)
+      [](std::string_view, std::unordered_map<std::string, std::string> const&)
         -> ice::Result<std::unique_ptr<ice::rest::auth::AuthManager>> {
         return std::make_unique<GcpAuthManager>();
       });
