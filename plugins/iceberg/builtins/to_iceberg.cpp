@@ -644,8 +644,7 @@ public:
       co_return;
     }
     auto groups = co_await spawn_blocking(
-      [table = table_, partitioning = partitioning_,
-       batch = *batch]() mutable {
+      [table = table_, partitioning = partitioning_, batch = *batch]() mutable {
         return split_by_partition(*table, *partitioning, std::move(batch));
       });
     if (not groups) {
@@ -873,7 +872,7 @@ private:
       [catalog = catalog_, ns = ns_, name = table_name_, ty = input.schema(),
        options = std::move(options), dropped, fell_back,
        fall_back_to_load = mode_ == mode::create_append]() mutable
-      -> Result<std::shared_ptr<ice::Table>> {
+        -> Result<std::shared_ptr<ice::Table>> {
         if (auto result = ensure_namespace(*catalog, ns); not result) {
           return std::unexpected{result.error()};
         }
@@ -1555,8 +1554,8 @@ private:
     auto opened = co_await spawn_blocking(
       [table = table_, partition = partition.partition,
        omitted = all_null_columns(partition.buffered)]() mutable
-      -> Result<std::pair<std::shared_ptr<ice::DataWriter>,
-                          std::vector<bool>>> {
+        -> Result<
+          std::pair<std::shared_ptr<ice::DataWriter>, std::vector<bool>>> {
         auto writer = new_file_writer(*table, partition, omitted);
         if (not writer) {
           return std::unexpected{writer.error()};
@@ -1654,7 +1653,7 @@ private:
       closed = co_await spawn_blocking(
         [table = table_, tuple = partition.partition,
          pieces = std::move(partition.buffered)]() mutable
-        -> Result<std::shared_ptr<ice::DataFile>> {
+          -> Result<std::shared_ptr<ice::DataFile>> {
           auto omitted = all_null_columns(pieces);
           auto writer = new_file_writer(*table, tuple, omitted);
           if (not writer) {

@@ -1250,10 +1250,9 @@ auto create_table(ice::Catalog& catalog, std::span<const std::string> ns,
                     *options.sort_column, made.error().message));
     }
   }
-  return translate(catalog.CreateTable(make_identifier(ns, name),
-                                       iceberg_schema, spec,
-                                       std::move(sort_order), options.location,
-                                       properties));
+  return translate(
+    catalog.CreateTable(make_identifier(ns, name), iceberg_schema, spec,
+                        std::move(sort_order), options.location, properties));
 }
 
 auto same_write_layout(const ice::Table& lhs, const ice::Table& rhs) -> bool {
@@ -1303,7 +1302,8 @@ auto evolve_schema(const std::shared_ptr<ice::Table>& table,
   // A schema update is not retryable after a conflicting commit: replaying
   // it against refreshed metadata could apply a different evolution than
   // authored. The caller reloads the table and re-derives the diff instead.
-  auto transaction = ice::Transaction::Make(table, ice::TransactionKind::kUpdate);
+  auto transaction
+    = ice::Transaction::Make(table, ice::TransactionKind::kUpdate);
   if (not transaction.has_value()) {
     return std::unexpected{translate_error(transaction.error())};
   }
