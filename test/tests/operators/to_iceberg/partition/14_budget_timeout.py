@@ -34,7 +34,9 @@ def main() -> None:
     writer.stdin.flush()
 
     catalog = RestCatalog("test", uri=os.environ["ICEBERG_REST_URI"])
-    deadline = time.monotonic() + 10
+    # The deadline covers process startup, which alone takes >10 seconds
+    # under ASan-instrumented debug builds; success breaks the loop early.
+    deadline = time.monotonic() + 60
     rows = 0
     while time.monotonic() < deadline:
         if writer.poll() is not None:
@@ -51,7 +53,7 @@ def main() -> None:
 
     print(f"rows before EOF: {rows}")
     writer.stdin.close()
-    returncode = writer.wait(timeout=10)
+    returncode = writer.wait(timeout=30)
     print(f"writer exited with {returncode}")
     if rows != 1 or returncode != 0:
         assert writer.stderr is not None
