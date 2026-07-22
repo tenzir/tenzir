@@ -465,28 +465,32 @@ public:
         done_ = true;
         co_return;
       }
+      // Region resolution consults a named profile's config file, which
+      // requires the initialized SDK; that is why it happens here and not
+      // alongside the other catalog properties above. It runs for every
+      // provider-backed configuration, not just managed AWS catalogs: the
+      // S3 FileIO would otherwise sign with the SDK's ambient region
+      // instead of the selected profile's region.
+      auto credentials = Option<resolved_aws_credentials>{None{}};
+      if (auth->credentials) {
+        credentials = *auth->credentials;
+      }
+      auto resolved_region
+        = co_await spawn_blocking([credentials = std::move(credentials)]() {
+            return amazon::resolve_region(None{}, credentials);
+          });
       if (uses_managed_aws_catalog) {
-        // Signing-region resolution consults a named profile's config file,
-        // which requires the initialized SDK; that is why it happens here
-        // and not alongside the other catalog properties above.
-        auto credentials = Option<resolved_aws_credentials>{None{}};
-        if (auth->credentials) {
-          credentials = *auth->credentials;
-        }
-        config.aws_signing_region
-          = co_await spawn_blocking([credentials = std::move(credentials)]() {
-              return amazon::resolve_region(None{}, credentials);
-            });
-        config.properties["client.region"] = config.aws_signing_region;
+        config.aws_signing_region = resolved_region;
+      }
+      if (not resolved_region.empty()) {
+        config.properties["client.region"] = resolved_region;
       }
       // Use the shared live provider for catalog signing and S3 access. The
       // default chain and STS-backed providers refresh expiring credentials,
       // including profiles backed by credential_process.
       auto region = std::optional<std::string>{};
-      if (not config.aws_signing_region.empty()) {
-        region = config.aws_signing_region;
-      } else if (auth->credentials and not auth->credentials->region.empty()) {
-        region = auth->credentials->region;
+      if (not resolved_region.empty()) {
+        region = resolved_region;
       }
       auto provider = co_await spawn_blocking(
         [credentials = auth->credentials, region = std::move(region)]() {
@@ -1526,6 +1530,11 @@ private:
       fail(written.error(), "failed to write data file", ctx);
       co_return;
     }
+    // `Length()` reports the flushed stream position only; bytes buffered
+    // in the writer's open row group surface here after the next flush, and
+    // the remainder lands via the closed file's actual size in
+    // `close_partition`. Rotation on `max_size` therefore triggers on
+    // flushed bytes, and files can overshoot by up to one row group.
     if (*written > partition.bytes) {
       bytes_counter_.add(*written - partition.bytes);
     }
@@ -1686,8 +1695,11 @@ private:
       fail(serialized.error(), "failed to persist data file handle", ctx);
       co_return;
     }
-    if (not partition.writer) {
-      bytes_counter_.add(serialized->file_size);
+    // For streaming writers this adds the delta that `Length()` had not
+    // flushed yet (final row group and footer); for one-shot writers
+    // `partition.bytes` is zero and this adds the whole file.
+    if (serialized->file_size > partition.bytes) {
+      bytes_counter_.add(serialized->file_size - partition.bytes);
     }
     TENZIR_DEBUG("to_iceberg: staged data file `{}` ({} events, {} bytes)",
                  serialized->path, serialized->record_count,

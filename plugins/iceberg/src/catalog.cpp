@@ -1035,9 +1035,16 @@ auto open_catalog(CatalogConfig config)
     auto handle
       = register_aws_credentials(std::move(config.aws_credentials_provider));
     config.properties[std::string{aws_credentials_handle_property}] = handle;
-    aws_credentials_guard = std::shared_ptr<void>(nullptr, [handle](void*) {
-      unregister_aws_credentials(handle);
-    });
+    // The guard must hold a non-null pointer: a null shared_ptr with a
+    // deleter still runs the deleter, but converts to false, and the check
+    // below would then drop the registration before any FileIO factory
+    // could resolve the handle.
+    aws_credentials_guard = std::shared_ptr<void>(
+      new std::string{std::move(handle)}, [](void* handle) {
+        auto* stored = static_cast<std::string*>(handle);
+        unregister_aws_credentials(*stored);
+        delete stored;
+      });
   }
   if (not config.aws_catalog_signing_name.empty()) {
     if (not has_aws_credentials) {
