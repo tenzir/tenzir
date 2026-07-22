@@ -10,6 +10,8 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/session.hpp>
+#include <tenzir/tql2/exec.hpp>
 
 namespace tenzir::plugins::operators {
 
@@ -49,15 +51,16 @@ public:
         // about them here.
         continue;
       }
-      auto op = pipeline::internal_parse(*def_str);
-      if (not op) {
-        diagnostic::warning("user-defined operator `{}` failed to parse: {}",
-                            udo, op.error())
+      auto diag = null_diagnostic_handler{};
+      auto provider = session_provider::make(diag);
+      auto op = parse_and_compile(*def_str, provider.as_session());
+      if (op.is_error()) {
+        diagnostic::warning("user-defined operator `{}` failed to parse", udo)
           .emit(ctrl.diagnostics());
         continue;
       }
       auto event = builder.record();
-      const auto signature = op->infer_signature();
+      const auto signature = (*op).infer_signature();
       event.field("name", udo);
       event.field("definition", *def_str);
       event.field("source", signature.source);

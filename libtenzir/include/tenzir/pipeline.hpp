@@ -514,12 +514,6 @@ public:
   /// pipelines, for example `(a | b) | c` becomes `a | b | c`.
   explicit pipeline(std::vector<operator_ptr> operators);
 
-  // TODO: Remove or make it better.
-  /// Replacement API for `legacy_parse`.
-  static auto internal_parse(std::string_view repr) -> caf::expected<pipeline>;
-  static auto internal_parse_as_operator(std::string_view repr)
-    -> caf::expected<operator_ptr>;
-
   /// Adds an operator at the end of this pipeline.
   void append(operator_ptr op);
 

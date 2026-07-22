@@ -11,6 +11,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/metric_handler.hpp"
 #include "tenzir/modules.hpp"
+#include "tenzir/parser_interface.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/source.hpp"
 #include "tenzir/tql/parser.hpp"
@@ -129,20 +130,6 @@ pipeline::pipeline(std::vector<operator_ptr> operators) {
   }
 }
 
-auto pipeline::internal_parse(std::string_view repr)
-  -> caf::expected<pipeline> {
-  return tql::parse_internal(std::string{repr});
-}
-
-auto pipeline::internal_parse_as_operator(std::string_view repr)
-  -> caf::expected<operator_ptr> {
-  auto result = internal_parse(repr);
-  if (not result) {
-    return std::move(result.error());
-  }
-  return std::make_unique<pipeline>(std::move(*result));
-}
-
 void pipeline::append(operator_ptr op) {
   if (auto* sub_pipeline = dynamic_cast<pipeline*>(&*op)) {
     auto sub_ops = std::move(*sub_pipeline).unwrap();
@@ -241,11 +228,12 @@ auto pipeline::optimize(expression const& filter, event_order order) const
     } else if (current_filter != trivially_true_expression()) {
       // TODO: We just want to create a `where {current}` operator. However,
       // we currently only have the interface for parsing this from a string.
-      auto pipe = tql::parse_internal(fmt::format("where {}", current_filter));
-      TENZIR_ASSERT(pipe);
-      auto ops = std::move(*pipe).unwrap();
-      TENZIR_ASSERT(ops.size() == 1);
-      result.push_back(std::move(ops[0]));
+      auto diag = null_diagnostic_handler{};
+      auto pi
+        = tql::make_parser_interface(fmt::format("{}", current_filter), diag);
+      const auto* where_plugin = plugins::find<operator_parser_plugin>("where");
+      TENZIR_ASSERT(where_plugin);
+      result.push_back(where_plugin->parse_operator(*pi));
       current_filter = trivially_true_expression();
     }
     if (opt.replacement) {

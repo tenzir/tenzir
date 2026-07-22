@@ -16,6 +16,7 @@
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql/parser.hpp>
 #include <tenzir/uuid.hpp>
 
 #include <arrow/type.h>
@@ -657,15 +658,11 @@ public:
       }
       args.op = read_plugin->parse_operator(p);
     } else {
-      auto read_pipe = pipeline::internal_parse("read json");
-      if (not read_pipe) {
-        diagnostic::error("failed to parse default format `json`")
-          .primary(p.current_span())
-          .throw_();
-      }
-      auto ops = std::move(*read_pipe).unwrap();
-      TENZIR_ASSERT(ops.size() == 1);
-      args.op = std::move(ops[0]);
+      auto diag = null_diagnostic_handler{};
+      auto pi = tql::make_parser_interface("json", diag);
+      const auto* read_plugin = plugins::find<operator_parser_plugin>("read");
+      TENZIR_ASSERT(read_plugin);
+      args.op = read_plugin->parse_operator(*pi);
     }
     TENZIR_ASSERT(args.op);
     TENZIR_ASSERT(not dynamic_cast<pipeline*>(args.op.get()));
@@ -678,22 +675,21 @@ public:
     // `tcp-listen` operator under the hood to allow multiple parallel
     // connections to be accepted, which the connector API cannot handle.
     if (args.connect or args.listen_once) {
-      const auto load_definition = fmt::format(
-        "load tcp {}:{} {}{}{}{}{}", args.hostname, args.port,
+      const auto load_args = fmt::format(
+        "tcp {}:{} {}{}{}{}{}", args.hostname, args.port,
         args.connect ? " --connect" : "",
         args.listen_once ? " --listen-once" : "", args.tls ? " --tls" : "",
         args.tls_certfile ? fmt::format(" --certfile {}", args.tls_certfile)
                           : "",
         args.tls_keyfile ? fmt::format(" --keyfile {}", args.tls_keyfile) : "");
-      auto load_read = pipeline::internal_parse(load_definition);
-      TENZIR_ASSERT(load_read);
-      if (not load_read) {
-        diagnostic::warning("`{}` failed to parse: {}", load_definition,
-                            load_read.error())
-          .throw_();
-      }
-      load_read->append(std::move(args.op));
-      return std::make_unique<pipeline>(std::move(*load_read));
+      auto diag = null_diagnostic_handler{};
+      auto pi = tql::make_parser_interface(load_args, diag);
+      const auto* load_plugin = plugins::find<operator_parser_plugin>("load");
+      TENZIR_ASSERT(load_plugin);
+      auto ops = std::vector<operator_ptr>{};
+      ops.push_back(load_plugin->parse_operator(*pi));
+      ops.push_back(std::move(args.op));
+      return std::make_unique<pipeline>(std::move(ops));
     }
     return std::make_unique<tcp_listen_operator>(std::move(args));
   }
