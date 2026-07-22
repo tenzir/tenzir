@@ -1,0 +1,2 @@
+tenzir:
+  import-buffer-timeout: 3s

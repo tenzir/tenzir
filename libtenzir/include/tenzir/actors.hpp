@@ -184,9 +184,10 @@ using catalog_actor = typed_actor_fwd<
 struct importer_actor_traits {
   using signatures = caf::type_list<
     // Register a subscriber for table slices and/or get recently imported,
-    // unpersisted events, depending on the 'live' and 'recent' flags.
+    // unpersisted events. The 'eager' flag is for internal consumers that need
+    // buffered and new live slices without waiting for the importer flush.
     auto(atom::get, receiver_actor<table_slice>, bool internal, bool live,
-         bool recent)
+         bool recent, bool eager)
       ->caf::result<std::vector<table_slice>>,
     // Push buffered slices downstream to make the data available.
     auto(atom::flush)->caf::result<void>,
@@ -368,25 +369,27 @@ struct export_mode {
   bool internal = false;
   uint64_t parallel = 3;
   bool high_priority = false;
+  bool eager = false;
 
   export_mode() = default;
 
   export_mode(bool retro_, bool live_, bool internal_, uint64_t parallel_,
-              bool high_priority_ = false)
+              bool high_priority_ = false, bool eager_ = false)
     : retro{retro_},
       live{live_},
       internal{internal_},
       parallel{parallel_},
-      high_priority{high_priority_} {
+      high_priority{high_priority_},
+      eager{eager_} {
     TENZIR_ASSERT(live or retro);
+    TENZIR_ASSERT(not eager or live);
   }
 
   friend auto inspect(auto& f, export_mode& x) -> bool {
-    return f.object(x).fields(f.field("retro", x.retro),
-                              f.field("live", x.live),
-                              f.field("internal", x.internal),
-                              f.field("parallel", x.parallel),
-                              f.field("high_priority", x.high_priority));
+    return f.object(x).fields(
+      f.field("retro", x.retro), f.field("live", x.live),
+      f.field("internal", x.internal), f.field("parallel", x.parallel),
+      f.field("high_priority", x.high_priority), f.field("eager", x.eager));
   }
 };
 

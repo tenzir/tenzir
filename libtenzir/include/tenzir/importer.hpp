@@ -52,9 +52,14 @@ private:
   /// Buffered events waiting to be flushed.
   std::unordered_map<type, std::vector<table_slice>> unpersisted_events = {};
 
+  struct subscriber {
+    receiver_actor<table_slice> receiver;
+    bool internal;
+    bool eager;
+  };
+
   /// A list of subscribers for incoming events.
-  std::vector<std::pair<receiver_actor<table_slice>, bool /*internal*/>>
-    subscribers = {};
+  std::vector<subscriber> subscribers = {};
 };
 
 } // namespace tenzir

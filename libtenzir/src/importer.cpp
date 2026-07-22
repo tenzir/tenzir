@@ -35,24 +35,33 @@ importer::~importer() noexcept {
 void importer::handle_slice(table_slice&& slice) {
   const auto rows = slice.rows();
   TENZIR_ASSERT(rows > 0);
-  // If we're in "unbuffered" mode, we flush immediately.
-  if (import_buffer_timeout == duration::zero()) {
-    flush();
-    return;
+  const auto is_internal = slice.schema().attribute("internal").has_value();
+  auto events = std::optional<table_slice>{};
+  for (const auto& subscriber : subscribers) {
+    if (subscriber.eager and subscriber.internal == is_internal) {
+      if (not events) {
+        events.emplace(slice);
+        events->import_time(time::clock::now());
+      }
+      self->mail(*events).send(subscriber.receiver);
+    }
   }
-  // Otherwise, we buffer the slice first, and register it for flushing after
-  // some timeout.
   auto schema = slice.schema();
   auto it = unpersisted_events.find(schema);
   if (it == unpersisted_events.end()) {
     it
       = unpersisted_events.emplace_hint(it, schema, std::vector<table_slice>{});
-    self->run_delayed_weak(import_buffer_timeout,
-                           [this, schema = std::move(schema)]() mutable {
-                             flush(std::move(schema));
-                           });
+    if (import_buffer_timeout != duration::zero()) {
+      self->run_delayed_weak(import_buffer_timeout,
+                             [this, schema = std::move(schema)]() mutable {
+                               flush(std::move(schema));
+                             });
+    }
   }
   it->second.push_back(std::move(slice));
+  if (import_buffer_timeout == duration::zero()) {
+    flush(std::move(schema));
+  }
 }
 
 void importer::flush(std::optional<type> schema) {
@@ -80,9 +89,9 @@ void importer::flush(std::optional<type> schema) {
           if (not is_internal) {
             schema_counters[events.schema()] += events.rows();
           }
-          for (const auto& [subscriber, wants_internal] : subscribers) {
-            if (is_internal == wants_internal) {
-              self->mail(events).send(subscriber);
+          for (const auto& subscriber : subscribers) {
+            if (not subscriber.eager and is_internal == subscriber.internal) {
+              self->mail(events).send(subscriber.receiver);
             }
           }
           if (retention_policy.should_be_persisted(events)) {
@@ -183,18 +192,31 @@ auto importer::make_behavior() -> importer_actor::behavior_type {
       return {};
     },
     [this](atom::get, receiver_actor<table_slice>& subscriber, bool internal,
-           bool live, bool recent) -> caf::result<std::vector<table_slice>> {
+           bool live, bool recent,
+           bool eager) -> caf::result<std::vector<table_slice>> {
       auto rp = self->make_response_promise<std::vector<table_slice>>();
       if (live) {
         self->monitor(subscriber, [this, source = subscriber->address()](
                                     const caf::error&) {
-          const auto it = std::remove_if(subscribers.begin(), subscribers.end(),
-                                         [&](const auto& sub) {
-                                           return sub.first.address() == source;
-                                         });
+          const auto it = std::remove_if(
+            subscribers.begin(), subscribers.end(), [&](const auto& sub) {
+              return sub.receiver.address() == source;
+            });
           subscribers.erase(it, subscribers.end());
         });
-        subscribers.emplace_back(std::move(subscriber), internal);
+        subscribers.emplace_back(std::move(subscriber), internal, eager);
+        if (eager) {
+          for (const auto& [schema, buffered] : unpersisted_events) {
+            if (schema.attribute("internal").has_value() != internal) {
+              continue;
+            }
+            for (const auto& slice : buffered) {
+              auto events = slice;
+              events.import_time(time::clock::now());
+              self->mail(events).send(subscribers.back().receiver);
+            }
+          }
+        }
       }
       // We must call the index ourselves here in order to return a consistent
       // state if both `live` and `recent` are set.
