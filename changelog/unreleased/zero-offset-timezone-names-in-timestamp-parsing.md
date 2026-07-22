@@ -1,6 +1,6 @@
 ---
 title: Zero-offset timezone names in timestamp parsing
-type: feature
+type: change
 authors:
   - zedoraps
   - claude
@@ -9,9 +9,8 @@ prs:
 created: 2026-07-21T14:42:56.24664Z
 ---
 
-The `time()` function and all other places that parse timestamps now accept
-the zero-offset timezone names `GMT`, `UTC`, and `UT` as suffixes, optionally
-preceded by a space:
+Timestamps ending in `GMT`, `UTC`, or `UT`—common in web server and mail
+logs—now parse out of the box, with or without a space before the name:
 
 ```tql
 from {x: "2026-07-21 13:55:59.000 GMT"}
@@ -21,5 +20,6 @@ x = x.time()
 Previously, such timestamps failed to parse because only `Z` and numeric
 offsets like `+02:00` were supported.
 
-Additionally, `time()` now emits a warning when it fails to parse a string
-instead of silently returning `null`.
+Note that this also affects automatic type detection: values like
+`"2026-07-21 13:55:59 GMT"` that previously stayed strings are now
+recognized as timestamps, for example when reading CSV files.
