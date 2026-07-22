@@ -110,7 +110,7 @@ public:
                                        "token: {}",
                                        header.status().message());
     }
-    const auto pos = header->find(": ");
+    auto const pos = header->find(": ");
     if (pos == std::string::npos) {
       return ice::AuthenticationFailed("malformed authorization header from "
                                        "Google credentials");
@@ -131,12 +131,12 @@ class GcpAuthManager final : public ice::rest::auth::AuthManager {
 public:
   auto
   CatalogSession(ice::rest::HttpClient& client,
-                 const std::unordered_map<std::string, std::string>& properties)
+                 std::unordered_map<std::string, std::string> const& properties)
     -> ice::Result<std::shared_ptr<ice::rest::auth::AuthSession>> override {
     (void)client;
     auto credentials
       = std::shared_ptr<google::cloud::storage::oauth2::Credentials>{};
-    const auto key = properties.find(std::string{gcp_credentials_property});
+    auto const key = properties.find(std::string{gcp_credentials_property});
     if (key != properties.end() and not key->second.empty()) {
       // The storage module's default token scope is devstorage-only, which
       // Google's catalog rejects with ACCESS_TOKEN_SCOPE_INSUFFICIENT;
@@ -174,7 +174,7 @@ public:
 
 } // namespace
 
-auto translate_error(const ice::Error& error) -> Error {
+auto translate_error(ice::Error const& error) -> Error {
   auto kind = Error::Kind::permanent;
   switch (error.kind) {
     case ice::ErrorKind::kIOError:
@@ -236,22 +236,22 @@ auto register_aws_credentials(
   std::shared_ptr<Aws::Auth::AWSCredentialsProvider> provider) -> std::string {
   auto [mutex, providers] = aws_credentials_registry();
   auto handle = fmt::to_string(uuid::random());
-  const auto lock = std::lock_guard{mutex};
+  auto const lock = std::lock_guard{mutex};
   providers.emplace(handle, std::move(provider));
   return handle;
 }
 
-auto lookup_aws_credentials(const std::string& handle)
+auto lookup_aws_credentials(std::string const& handle)
   -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider> {
   auto [mutex, providers] = aws_credentials_registry();
-  const auto lock = std::lock_guard{mutex};
-  const auto it = providers.find(handle);
+  auto const lock = std::lock_guard{mutex};
+  auto const it = providers.find(handle);
   return it == providers.end() ? nullptr : it->second;
 }
 
-auto unregister_aws_credentials(const std::string& handle) -> void {
+auto unregister_aws_credentials(std::string const& handle) -> void {
   auto [mutex, providers] = aws_credentials_registry();
-  const auto lock = std::lock_guard{mutex};
+  auto const lock = std::lock_guard{mutex};
   providers.erase(handle);
 }
 
@@ -269,7 +269,7 @@ public:
   }
 
   auto CatalogSession(ice::rest::HttpClient&,
-                      const std::unordered_map<std::string, std::string>&)
+                      std::unordered_map<std::string, std::string> const&)
     -> ice::Result<std::shared_ptr<ice::rest::auth::AuthSession>> override {
     auto initialized = ice::rest::auth::InitializeAwsSdk();
     if (not initialized) {
@@ -292,9 +292,9 @@ private:
 
 auto make_aws_auth_manager(
   std::string_view,
-  const std::unordered_map<std::string, std::string>& properties)
+  std::unordered_map<std::string, std::string> const& properties)
   -> ice::Result<std::unique_ptr<ice::rest::auth::AuthManager>> {
-  const auto handle
+  auto const handle
     = properties.find(std::string{aws_credentials_handle_property});
   if (handle == properties.end()) {
     return ice::InvalidArgument("missing AWS credentials provider handle");
@@ -303,12 +303,12 @@ auto make_aws_auth_manager(
   if (not provider) {
     return ice::InvalidArgument("stale AWS credentials provider handle");
   }
-  const auto region
+  auto const region
     = properties.find(ice::rest::auth::AuthProperties::kSigV4SigningRegion);
   if (region == properties.end() or region->second.empty()) {
     return ice::InvalidArgument("missing AWS signing region");
   }
-  const auto service
+  auto const service
     = properties.find(ice::rest::auth::AuthProperties::kSigV4SigningName);
   if (service == properties.end() or service->second.empty()) {
     return ice::InvalidArgument("missing AWS signing service name");
@@ -323,9 +323,9 @@ auto make_aws_auth_manager(
 /// FileIO cannot. Falls through to the builtin behavior when no provider
 /// handle is present.
 auto make_s3_file_io(
-  const std::unordered_map<std::string, std::string>& properties)
+  std::unordered_map<std::string, std::string> const& properties)
   -> ice::Result<std::unique_ptr<ice::FileIO>> {
-  const auto handle
+  auto const handle
     = properties.find(std::string{aws_credentials_handle_property});
   if (handle == properties.end()) {
     return ice::FileIORegistry::Load(
@@ -342,14 +342,14 @@ auto make_s3_file_io(
   auto options = arrow::fs::S3Options::Defaults();
   options.credentials_provider = std::move(provider);
   options.credentials_kind = arrow::fs::S3CredentialsKind::Role;
-  if (const auto region = properties.find("client.region");
+  if (auto const region = properties.find("client.region");
       region != properties.end()) {
     options.region = region->second;
   }
-  if (const auto endpoint = properties.find("s3.endpoint");
+  if (auto const endpoint = properties.find("s3.endpoint");
       endpoint != properties.end()) {
     auto value = std::string_view{endpoint->second};
-    for (const auto scheme :
+    for (auto const scheme :
          {std::string_view{"http"}, std::string_view{"https"}}) {
       if (value.starts_with(scheme)
           and value.substr(scheme.size()).starts_with("://")) {
@@ -360,7 +360,7 @@ auto make_s3_file_io(
     }
     options.endpoint_override = std::string{value};
   }
-  if (const auto style = properties.find("s3.path-style-access");
+  if (auto const style = properties.find("s3.path-style-access");
       style != properties.end()) {
     options.force_virtual_addressing = style->second != "true";
   }
@@ -383,10 +383,10 @@ auto make_s3_file_io(
 constexpr auto gcs_file_io = std::string_view{"tenzir-arrow-gcs"};
 
 auto make_gcs_file_io(
-  const std::unordered_map<std::string, std::string>& properties)
+  std::unordered_map<std::string, std::string> const& properties)
   -> ice::Result<std::unique_ptr<ice::FileIO>> {
   auto options = arrow::fs::GcsOptions::Defaults();
-  const auto key = properties.find(std::string{gcp_credentials_property});
+  auto const key = properties.find(std::string{gcp_credentials_property});
   if (key != properties.end() and not key->second.empty()) {
     options = arrow::fs::GcsOptions::FromServiceAccountCredentials(key->second);
   }
@@ -428,8 +428,8 @@ auto ensure_registered() -> void {
 /// IDs on commit; these are only the initial proposal. Returns nullptr for
 /// types that cannot be represented; callers drop the enclosing field and
 /// record the reason in `dropped`.
-auto derive_type(const tenzir::type& ty, int32_t& next_id,
-                 const std::string& path, std::vector<std::string>& dropped)
+auto derive_type(tenzir::type const& ty, int32_t& next_id,
+                 std::string const& path, std::vector<std::string>& dropped)
   -> std::shared_ptr<ice::Type> {
   auto drop = [&](std::string_view reason) -> std::shared_ptr<ice::Type> {
     dropped.push_back(fmt::format("{}: {}", path, reason));
@@ -437,45 +437,45 @@ auto derive_type(const tenzir::type& ty, int32_t& next_id,
   };
   return match(
     ty,
-    [](const bool_type&) -> std::shared_ptr<ice::Type> {
+    [](bool_type const&) -> std::shared_ptr<ice::Type> {
       return ice::boolean();
     },
-    [](const int64_type&) -> std::shared_ptr<ice::Type> {
+    [](int64_type const&) -> std::shared_ptr<ice::Type> {
       return ice::int64();
     },
-    [](const uint64_type&) -> std::shared_ptr<ice::Type> {
+    [](uint64_type const&) -> std::shared_ptr<ice::Type> {
       // Iceberg has no unsigned integers; values above 2^63-1 turn into
       // nulls with a warning on write.
       return ice::int64();
     },
-    [](const double_type&) -> std::shared_ptr<ice::Type> {
+    [](double_type const&) -> std::shared_ptr<ice::Type> {
       return ice::float64();
     },
-    [](const duration_type&) -> std::shared_ptr<ice::Type> {
+    [](duration_type const&) -> std::shared_ptr<ice::Type> {
       // Iceberg has no duration type; stored as nanosecond counts.
       return ice::int64();
     },
-    [](const time_type&) -> std::shared_ptr<ice::Type> {
+    [](time_type const&) -> std::shared_ptr<ice::Type> {
       // Iceberg timestamps are microsecond; nanoseconds are a separate v3
       // type with far weaker ecosystem support, so we truncate on write.
       return ice::timestamp_tz();
     },
-    [](const string_type&) -> std::shared_ptr<ice::Type> {
+    [](string_type const&) -> std::shared_ptr<ice::Type> {
       return ice::string();
     },
-    [](const ip_type&) -> std::shared_ptr<ice::Type> {
+    [](ip_type const&) -> std::shared_ptr<ice::Type> {
       return ice::string();
     },
-    [](const subnet_type&) -> std::shared_ptr<ice::Type> {
+    [](subnet_type const&) -> std::shared_ptr<ice::Type> {
       return ice::string();
     },
-    [](const enumeration_type&) -> std::shared_ptr<ice::Type> {
+    [](enumeration_type const&) -> std::shared_ptr<ice::Type> {
       return ice::string();
     },
-    [](const blob_type&) -> std::shared_ptr<ice::Type> {
+    [](blob_type const&) -> std::shared_ptr<ice::Type> {
       return ice::binary();
     },
-    [&](const list_type& t) -> std::shared_ptr<ice::Type> {
+    [&](list_type const& t) -> std::shared_ptr<ice::Type> {
       auto element_id = next_id++;
       auto element = derive_type(t.value_type(), next_id, path + "[]", dropped);
       if (not element) {
@@ -484,9 +484,9 @@ auto derive_type(const tenzir::type& ty, int32_t& next_id,
       return std::make_shared<ice::ListType>(ice::SchemaField::MakeOptional(
         element_id, "element", std::move(element)));
     },
-    [&](const record_type& t) -> std::shared_ptr<ice::Type> {
+    [&](record_type const& t) -> std::shared_ptr<ice::Type> {
       auto fields = std::vector<ice::SchemaField>{};
-      for (const auto& field : t.fields()) {
+      for (auto const& field : t.fields()) {
         auto field_id = next_id++;
         auto field_path = path.empty() ? std::string{field.name}
                                        : fmt::format("{}.{}", path, field.name);
@@ -502,13 +502,13 @@ auto derive_type(const tenzir::type& ty, int32_t& next_id,
       }
       return std::make_shared<ice::StructType>(std::move(fields));
     },
-    [&](const null_type&) -> std::shared_ptr<ice::Type> {
+    [&](null_type const&) -> std::shared_ptr<ice::Type> {
       return drop("cannot represent a column whose values are all null");
     },
-    [&](const map_type&) -> std::shared_ptr<ice::Type> {
+    [&](map_type const&) -> std::shared_ptr<ice::Type> {
       return drop("cannot represent legacy map columns");
     },
-    [&](const secret_type&) -> std::shared_ptr<ice::Type> {
+    [&](secret_type const&) -> std::shared_ptr<ice::Type> {
       return drop("refusing to persist secrets");
     });
 }
@@ -538,7 +538,7 @@ struct SchemaPromotion {
 /// Tenzir's int64 promotes to `long`, so no value can overflow at write time.
 /// Only int → long and float → double are reachable; Tenzir types never derive
 /// to the spec's other promotion source types.
-auto promoted_type(const tenzir::type& want, const ice::Type& have)
+auto promoted_type(tenzir::type const& want, ice::Type const& have)
   -> std::shared_ptr<ice::PrimitiveType> {
   switch (have.type_id()) {
     case ice::TypeId::kInt:
@@ -558,9 +558,9 @@ auto promoted_type(const tenzir::type& want, const ice::Type& have)
   }
 }
 
-auto find_field(std::span<const ice::SchemaField> fields, std::string_view name)
-  -> const ice::SchemaField* {
-  for (const auto& field : fields) {
+auto find_field(std::span<ice::SchemaField const> fields, std::string_view name)
+  -> ice::SchemaField const* {
+  for (auto const& field : fields) {
     if (field.name() == name) {
       return &field;
     }
@@ -568,9 +568,9 @@ auto find_field(std::span<const ice::SchemaField> fields, std::string_view name)
   return nullptr;
 }
 
-auto diff_schema(const record_type& want,
-                 std::span<const ice::SchemaField> have,
-                 const std::string& path,
+auto diff_schema(record_type const& want,
+                 std::span<ice::SchemaField const> have,
+                 std::string const& path,
                  std::vector<SchemaAddition>& additions,
                  std::vector<SchemaPromotion>& promotions,
                  std::vector<std::string>& dropped) -> void;
@@ -578,29 +578,29 @@ auto diff_schema(const record_type& want,
 /// Recurses into nested types that exist on both sides. Shape conflicts and
 /// type conflicts beyond the legal promotions stay untouched; the operator
 /// null-fills them at write time with a warning.
-auto diff_nested(const tenzir::type& want, const ice::Type& have,
-                 const std::string& path,
+auto diff_nested(tenzir::type const& want, ice::Type const& have,
+                 std::string const& path,
                  std::vector<SchemaAddition>& additions,
                  std::vector<SchemaPromotion>& promotions,
                  std::vector<std::string>& dropped) -> void {
   match(
     want,
-    [&](const record_type& t) {
+    [&](record_type const& t) {
       if (have.type_id() == ice::TypeId::kStruct) {
-        diff_schema(t, static_cast<const ice::StructType&>(have).fields(), path,
+        diff_schema(t, static_cast<ice::StructType const&>(have).fields(), path,
                     additions, promotions, dropped);
       }
     },
-    [&](const list_type& t) {
+    [&](list_type const& t) {
       if (have.type_id() == ice::TypeId::kList) {
-        const auto& element = static_cast<const ice::ListType&>(have).element();
+        auto const& element = static_cast<ice::ListType const&>(have).element();
         // `element` is the canonical path step for list elements; the schema
         // update resolves it to the element struct when used as a parent.
         diff_nested(t.value_type(), *element.type(), path + ".element",
                     additions, promotions, dropped);
       }
     },
-    [&](const auto&) {
+    [&](auto const&) {
       if (auto promoted = promoted_type(want, have)) {
         promotions.push_back(SchemaPromotion{
           .path = path,
@@ -614,16 +614,16 @@ auto diff_nested(const tenzir::type& want, const ice::Type& have,
 /// existing columns whose type must widen to hold the incoming values,
 /// recursing into records and lists of records present on both sides. `path`
 /// is the canonical dotted name of the enclosing struct, empty at the root.
-auto diff_schema(const record_type& want,
-                 std::span<const ice::SchemaField> have,
-                 const std::string& path,
+auto diff_schema(record_type const& want,
+                 std::span<ice::SchemaField const> have,
+                 std::string const& path,
                  std::vector<SchemaAddition>& additions,
                  std::vector<SchemaPromotion>& promotions,
                  std::vector<std::string>& dropped) -> void {
-  for (const auto& field : want.fields()) {
+  for (auto const& field : want.fields()) {
     auto field_path = path.empty() ? std::string{field.name}
                                    : fmt::format("{}.{}", path, field.name);
-    const auto* existing = find_field(have, field.name);
+    auto const* existing = find_field(have, field.name);
     if (not existing) {
       auto next_id = int32_t{0};
       auto field_type = derive_type(field.type, next_id, field_path, dropped);
@@ -644,7 +644,7 @@ auto diff_schema(const record_type& want,
 // Mirrors iceberg-cpp's own Iceberg-to-Arrow mapping (schema_internal.cc) for
 // the types the operator supports; the parquet writer imports input arrays
 // against exactly these Arrow types.
-auto to_arrow_type(const ice::Type& type)
+auto to_arrow_type(ice::Type const& type)
   -> Result<std::shared_ptr<arrow::DataType>> {
   switch (type.type_id()) {
     case ice::TypeId::kBoolean:
@@ -670,10 +670,10 @@ auto to_arrow_type(const ice::Type& type)
     case ice::TypeId::kBinary:
       return arrow::binary();
     case ice::TypeId::kStruct: {
-      const auto& struct_type = static_cast<const ice::StructType&>(type);
+      auto const& struct_type = static_cast<ice::StructType const&>(type);
       auto fields = std::vector<std::shared_ptr<arrow::Field>>{};
       fields.reserve(struct_type.fields().size());
-      for (const auto& field : struct_type.fields()) {
+      for (auto const& field : struct_type.fields()) {
         auto child = to_arrow_type(*field.type());
         if (not child.has_value()) {
           return std::unexpected{Error{
@@ -687,8 +687,8 @@ auto to_arrow_type(const ice::Type& type)
       return arrow::struct_(std::move(fields));
     }
     case ice::TypeId::kList: {
-      const auto& list_type = static_cast<const ice::ListType&>(type);
-      const auto& element = list_type.element();
+      auto const& list_type = static_cast<ice::ListType const&>(type);
+      auto const& element = list_type.element();
       auto child = to_arrow_type(*element.type());
       if (not child.has_value()) {
         return std::unexpected{Error{
@@ -708,7 +708,7 @@ auto to_arrow_type(const ice::Type& type)
   }
 }
 
-auto make_identifier(std::span<const std::string> ns, std::string_view name)
+auto make_identifier(std::span<std::string const> ns, std::string_view name)
   -> ice::TableIdentifier {
   return ice::TableIdentifier{
     .ns = ice::Namespace{.levels = {ns.begin(), ns.end()}},
@@ -716,7 +716,7 @@ auto make_identifier(std::span<const std::string> ns, std::string_view name)
   };
 }
 
-auto to_ice_transform(const PartitionField& field)
+auto to_ice_transform(PartitionField const& field)
   -> std::shared_ptr<ice::Transform> {
   switch (field.transform) {
     case PartitionTransform::identity:
@@ -731,10 +731,10 @@ auto to_ice_transform(const PartitionField& field)
       return ice::Transform::Hour();
     case PartitionTransform::bucket:
       return ice::Transform::Bucket(
-        detail::narrow_cast<int32_t>(field.parameter.value_or(0)));
+        detail::narrow_cast<int32_t>(field.parameter.unwrap_or(0)));
     case PartitionTransform::truncate:
       return ice::Transform::Truncate(
-        detail::narrow_cast<int32_t>(field.parameter.value_or(0)));
+        detail::narrow_cast<int32_t>(field.parameter.unwrap_or(0)));
   }
   TENZIR_UNREACHABLE();
 }
@@ -742,7 +742,7 @@ auto to_ice_transform(const PartitionField& field)
 /// Renders one partition spec field as `transform(source)` for diagnostics,
 /// e.g. `bucket[16](class_uid)`.
 auto render_partition_field(std::string_view source,
-                            const ice::Transform& transform) -> std::string {
+                            ice::Transform const& transform) -> std::string {
   return fmt::format("{}({})", transform.ToString(), source);
 }
 
@@ -840,43 +840,43 @@ auto from_literal_type(int32_t type)
 /// Reads one non-null value out of an Arrow array. The array's Arrow type is
 /// the one `to_arrow_type` derives for the Iceberg type, so the casts below
 /// hold by construction.
-auto literal_from_arrow(ice::TypeId id, const arrow::Array& array, int64_t row)
+auto literal_from_arrow(ice::TypeId id, arrow::Array const& array, int64_t row)
   -> ice::Literal {
   switch (id) {
     case ice::TypeId::kBoolean:
       return ice::Literal::Boolean(
-        static_cast<const arrow::BooleanArray&>(array).Value(row));
+        static_cast<arrow::BooleanArray const&>(array).Value(row));
     case ice::TypeId::kInt:
       return ice::Literal::Int(
-        static_cast<const arrow::Int32Array&>(array).Value(row));
+        static_cast<arrow::Int32Array const&>(array).Value(row));
     case ice::TypeId::kLong:
       return ice::Literal::Long(
-        static_cast<const arrow::Int64Array&>(array).Value(row));
+        static_cast<arrow::Int64Array const&>(array).Value(row));
     case ice::TypeId::kFloat:
       return ice::Literal::Float(
-        static_cast<const arrow::FloatArray&>(array).Value(row));
+        static_cast<arrow::FloatArray const&>(array).Value(row));
     case ice::TypeId::kDouble:
       return ice::Literal::Double(
-        static_cast<const arrow::DoubleArray&>(array).Value(row));
+        static_cast<arrow::DoubleArray const&>(array).Value(row));
     case ice::TypeId::kDate:
       return ice::Literal::Date(
-        static_cast<const arrow::Date32Array&>(array).Value(row));
+        static_cast<arrow::Date32Array const&>(array).Value(row));
     case ice::TypeId::kTime:
       return ice::Literal::Time(
-        static_cast<const arrow::Time64Array&>(array).Value(row));
+        static_cast<arrow::Time64Array const&>(array).Value(row));
     case ice::TypeId::kTimestamp:
       return ice::Literal::Timestamp(
-        static_cast<const arrow::TimestampArray&>(array).Value(row));
+        static_cast<arrow::TimestampArray const&>(array).Value(row));
     case ice::TypeId::kTimestampTz:
       return ice::Literal::TimestampTz(
-        static_cast<const arrow::TimestampArray&>(array).Value(row));
+        static_cast<arrow::TimestampArray const&>(array).Value(row));
     case ice::TypeId::kString: {
-      auto view = static_cast<const arrow::StringArray&>(array).GetView(row);
+      auto view = static_cast<arrow::StringArray const&>(array).GetView(row);
       return ice::Literal::String(std::string{view});
     }
     case ice::TypeId::kBinary: {
-      auto view = static_cast<const arrow::BinaryArray&>(array).GetView(row);
-      const auto* data = reinterpret_cast<const uint8_t*>(view.data());
+      auto view = static_cast<arrow::BinaryArray const&>(array).GetView(row);
+      auto const* data = reinterpret_cast<uint8_t const*>(view.data());
       return ice::Literal::Binary({data, data + view.size()});
     }
     default:
@@ -895,18 +895,18 @@ struct PartitionColumn {
     if (leaf->IsNull(row)) {
       return true;
     }
-    return std::ranges::any_of(ancestors, [&](const auto& ancestor) {
+    return std::ranges::any_of(ancestors, [&](auto const& ancestor) {
       return ancestor->IsNull(row);
     });
   }
 };
 
-auto resolve_partition_column(const std::shared_ptr<arrow::StructArray>& batch,
-                              std::span<const std::string> segments)
+auto resolve_partition_column(std::shared_ptr<arrow::StructArray> const& batch,
+                              std::span<std::string const> segments)
   -> Result<PartitionColumn> {
   auto column = PartitionColumn{};
   auto current = std::static_pointer_cast<arrow::Array>(batch);
-  for (const auto& segment : segments) {
+  for (auto const& segment : segments) {
     auto struct_array = std::dynamic_pointer_cast<arrow::StructArray>(current);
     if (not struct_array) {
       return std::unexpected{Error{
@@ -935,7 +935,7 @@ auto resolve_partition_column(const std::shared_ptr<arrow::StructArray>& batch,
 
 } // namespace
 
-auto bind_partitioning(const ice::Table& table)
+auto bind_partitioning(ice::Table const& table)
   -> Result<std::vector<BoundPartitionField>> {
   auto spec = table.spec();
   if (not spec.has_value()) {
@@ -947,7 +947,7 @@ auto bind_partitioning(const ice::Table& table)
   }
   auto result = std::vector<BoundPartitionField>{};
   result.reserve((*spec)->fields().size());
-  for (const auto& field : (*spec)->fields()) {
+  for (auto const& field : (*spec)->fields()) {
     auto name = (*schema)->FindColumnNameById(field.source_id());
     if (not name.has_value()) {
       return std::unexpected{translate_error(name.error())};
@@ -986,7 +986,7 @@ auto bind_partitioning(const ice::Table& table)
       }};
     }
     auto segments = std::vector<std::string>{};
-    for (const auto part : detail::split(**name, ".")) {
+    for (auto const part : detail::split(**name, ".")) {
       segments.emplace_back(part);
     }
     result.push_back(BoundPartitionField{
@@ -1036,8 +1036,8 @@ auto open_catalog(CatalogConfig config)
   // `io-impl` unset so iceberg-cpp detects it from the final warehouse after
   // merging the REST server configuration; when that merge yields neither
   // property, retry below with the local filesystem.
-  const auto selection = file_io::select_file_io(config);
-  const auto has_aws_credentials = config.aws_credentials_provider != nullptr;
+  auto const selection = file_io::select_file_io(config);
+  auto const has_aws_credentials = config.aws_credentials_provider != nullptr;
   auto aws_credentials_guard = std::shared_ptr<void>{};
   if (config.aws_credentials_provider) {
     auto handle
@@ -1088,7 +1088,7 @@ auto open_catalog(CatalogConfig config)
       }};
 #endif
   }
-  for (const auto& [key, value] : config.properties) {
+  for (auto const& [key, value] : config.properties) {
     properties.mutable_configs()[key] = value;
   }
   auto rest_catalog = ice::rest::RestCatalog::Make(properties);
@@ -1119,7 +1119,7 @@ auto open_catalog(CatalogConfig config)
   return std::shared_ptr<ice::Catalog>{bundle, bundle->first.get()};
 }
 
-auto ensure_namespace(ice::Catalog& catalog, std::span<const std::string> ns)
+auto ensure_namespace(ice::Catalog& catalog, std::span<std::string const> ns)
   -> Result<void> {
   auto namespace_id = ice::Namespace{.levels = {ns.begin(), ns.end()}};
   auto exists = catalog.NamespaceExists(namespace_id);
@@ -1137,20 +1137,20 @@ auto ensure_namespace(ice::Catalog& catalog, std::span<const std::string> ns)
   return {};
 }
 
-auto load_table(ice::Catalog& catalog, std::span<const std::string> ns,
+auto load_table(ice::Catalog& catalog, std::span<std::string const> ns,
                 std::string_view name) -> Result<std::shared_ptr<ice::Table>> {
   return translate(catalog.LoadTable(make_identifier(ns, name)));
 }
 
-auto create_table(ice::Catalog& catalog, std::span<const std::string> ns,
-                  std::string_view name, const record_type& schema,
-                  const CreateTableOptions& options,
+auto create_table(ice::Catalog& catalog, std::span<std::string const> ns,
+                  std::string_view name, record_type const& schema,
+                  CreateTableOptions const& options,
                   std::vector<std::string>& dropped_fields)
   -> Result<std::shared_ptr<ice::Table>> {
   auto next_id = int32_t{1};
   auto fields = std::vector<ice::SchemaField>{};
-  auto sort_source_id = std::optional<int32_t>{};
-  for (const auto& field : schema.fields()) {
+  auto sort_source_id = Option<int32_t>{};
+  for (auto const& field : schema.fields()) {
     auto field_id = next_id++;
     auto field_type = derive_type(field.type, next_id, std::string{field.name},
                                   dropped_fields);
@@ -1176,7 +1176,7 @@ auto create_table(ice::Catalog& catalog, std::span<const std::string> ns,
     auto spec_fields = std::vector<ice::PartitionField>{};
     spec_fields.reserve(options.partition_by.size());
     auto next_field_id = ice::PartitionSpec::kLegacyPartitionDataIdStart;
-    for (const auto& field : options.partition_by) {
+    for (auto const& field : options.partition_by) {
       auto found = iceberg_schema->FindFieldByName(field.source);
       if (not found.has_value()) {
         return std::unexpected{translate_error(found.error())};
@@ -1189,7 +1189,7 @@ auto create_table(ice::Catalog& catalog, std::span<const std::string> ns,
                       field.source),
         }};
       }
-      const auto& source = (*found)->get();
+      auto const& source = (*found)->get();
       auto transform = to_ice_transform(field);
       auto rendered = render_partition_field(field.source, *transform);
       auto source_type
@@ -1255,14 +1255,14 @@ auto create_table(ice::Catalog& catalog, std::span<const std::string> ns,
                         std::move(sort_order), options.location, properties));
 }
 
-auto same_write_layout(const ice::Table& lhs, const ice::Table& rhs) -> bool {
-  const auto& lhs_metadata = lhs.metadata();
-  const auto& rhs_metadata = rhs.metadata();
+auto same_write_layout(ice::Table const& lhs, ice::Table const& rhs) -> bool {
+  auto const& lhs_metadata = lhs.metadata();
+  auto const& rhs_metadata = rhs.metadata();
   return lhs_metadata->current_schema_id == rhs_metadata->current_schema_id
          and lhs_metadata->default_spec_id == rhs_metadata->default_spec_id;
 }
 
-auto table_arrow_schema(const ice::Table& table)
+auto table_arrow_schema(ice::Table const& table)
   -> Result<std::shared_ptr<arrow::Schema>> {
   auto schema = table.schema();
   if (not schema.has_value()) {
@@ -1270,7 +1270,7 @@ auto table_arrow_schema(const ice::Table& table)
   }
   auto fields = std::vector<std::shared_ptr<arrow::Field>>{};
   fields.reserve((*schema)->fields().size());
-  for (const auto& field : (*schema)->fields()) {
+  for (auto const& field : (*schema)->fields()) {
     auto type = to_arrow_type(*field.type());
     if (not type.has_value()) {
       return std::unexpected{Error{
@@ -1284,8 +1284,8 @@ auto table_arrow_schema(const ice::Table& table)
   return arrow::schema(std::move(fields));
 }
 
-auto evolve_schema(const std::shared_ptr<ice::Table>& table,
-                   const record_type& schema,
+auto evolve_schema(std::shared_ptr<ice::Table> const& table,
+                   record_type const& schema,
                    std::vector<std::string>& dropped_fields)
   -> Result<std::optional<std::shared_ptr<ice::Table>>> {
   auto current = table->schema();
@@ -1332,8 +1332,8 @@ auto evolve_schema(const std::shared_ptr<ice::Table>& table,
   return std::optional{std::move(*committed)};
 }
 
-auto check_partition_spec(const ice::Table& table,
-                          std::span<const PartitionField> fields)
+auto check_partition_spec(ice::Table const& table,
+                          std::span<PartitionField const> fields)
   -> Result<void> {
   auto spec = table.spec();
   if (not spec.has_value()) {
@@ -1345,7 +1345,7 @@ auto check_partition_spec(const ice::Table& table,
   }
   auto render_table_spec = [&]() -> std::string {
     auto rendered = std::vector<std::string>{};
-    for (const auto& field : (*spec)->fields()) {
+    for (auto const& field : (*spec)->fields()) {
       auto name = (*schema)->FindColumnNameById(field.source_id());
       auto source = name.has_value() and *name
                       ? std::string{**name}
@@ -1356,7 +1356,7 @@ auto check_partition_spec(const ice::Table& table,
   };
   auto render_requested = [&]() -> std::string {
     auto rendered = std::vector<std::string>{};
-    for (const auto& field : fields) {
+    for (auto const& field : fields) {
       rendered.push_back(
         render_partition_field(field.source, *to_ice_transform(field)));
     }
@@ -1374,8 +1374,8 @@ auto check_partition_spec(const ice::Table& table,
     return mismatch();
   }
   for (size_t i = 0; i < fields.size(); ++i) {
-    const auto& have = (*spec)->fields()[i];
-    const auto& want = fields[i];
+    auto const& have = (*spec)->fields()[i];
+    auto const& want = fields[i];
     auto found = (*schema)->FindFieldByName(want.source);
     if (not found.has_value()) {
       return std::unexpected{translate_error(found.error())};
@@ -1397,44 +1397,48 @@ namespace {
 /// dates through std::chrono formatting and is orders of magnitude too slow
 /// here. Returns false for exotic value types so the caller can fall back to
 /// the human-readable rendering.
-auto append_partition_key(const ice::Literal& literal, std::string& key)
+auto append_partition_key(ice::Literal const& literal, std::string& key)
   -> bool {
-  return std::visit(
-    [&]<typename T>(const T& value) {
-      key += "|v";
-      key += static_cast<char>('0' + literal.value().index());
-      if constexpr (std::same_as<T, std::monostate>) {
-        return true;
-      } else if constexpr (std::same_as<T, bool>) {
-        key += value ? '1' : '0';
-        return true;
-      } else if constexpr (std::same_as<T, int32_t> or std::same_as<T, int64_t>
-                           or std::same_as<T, float>
-                           or std::same_as<T, double>) {
-        key.append(reinterpret_cast<const char*>(&value), sizeof value);
-        return true;
-      } else if constexpr (std::same_as<T, std::string>) {
-        fmt::format_to(std::back_inserter(key), "{}:", value.size());
-        key += value;
-        return true;
-      } else if constexpr (std::same_as<T, std::vector<uint8_t>>) {
-        fmt::format_to(std::back_inserter(key), "{}:", value.size());
-        key.append(reinterpret_cast<const char*>(value.data()), value.size());
-        return true;
-      } else {
-        return false;
-      }
+  key += "|v";
+  key += static_cast<char>('0' + literal.value().index());
+  return match(
+    literal.value(),
+    [](std::monostate) {
+      return true;
     },
-    literal.value());
+    [&](bool value) {
+      key += value ? '1' : '0';
+      return true;
+    },
+    [&]<class T>(T const& value)
+      requires(std::same_as<T, int32_t> or std::same_as<T, int64_t>
+               or std::same_as<T, float> or std::same_as<T, double>)
+    {
+      key.append(reinterpret_cast<char const*>(&value), sizeof value);
+      return true;
+    },
+    [&](std::string const& value) {
+      fmt::format_to(std::back_inserter(key), "{}:", value.size());
+      key += value;
+      return true;
+    },
+    [&](std::vector<uint8_t> const& value) {
+      fmt::format_to(std::back_inserter(key), "{}:", value.size());
+      key.append(reinterpret_cast<char const*>(value.data()), value.size());
+      return true;
+    },
+    [](auto const&) {
+      return false;
+    });
 }
 
 } // namespace
 
-auto split_by_partition(const ice::Table& table,
-                        std::span<const BoundPartitionField> bound,
+auto split_by_partition(ice::Table const& table,
+                        std::span<BoundPartitionField const> bound,
                         std::shared_ptr<arrow::StructArray> batch)
   -> Result<std::vector<PartitionGroup>> {
-  const auto& struct_batch = batch;
+  auto const& struct_batch = batch;
   auto groups = std::vector<PartitionGroup>{};
   if (bound.empty()) {
     groups.push_back(PartitionGroup{
@@ -1451,7 +1455,7 @@ auto split_by_partition(const ice::Table& table,
   }
   auto columns = std::vector<PartitionColumn>{};
   columns.reserve(bound.size());
-  for (const auto& field : bound) {
+  for (auto const& field : bound) {
     auto column = resolve_partition_column(struct_batch, field.segments);
     if (not column.has_value()) {
       return std::unexpected{column.error()};
@@ -1465,7 +1469,7 @@ auto split_by_partition(const ice::Table& table,
     key.clear();
     values.clear();
     for (size_t i = 0; i < bound.size(); ++i) {
-      const auto& field = bound[i];
+      auto const& field = bound[i];
       auto value = columns[i].is_null(row)
                      ? ice::Literal::Null(field.source_type)
                      : literal_from_arrow(field.source_type->type_id(),
@@ -1517,14 +1521,14 @@ namespace {
 /// Whether the field or any nested descendant carries one of the ids.
 /// Partition-spec sources may sit inside nested structs, so pruning must
 /// keep the whole top-level ancestor of a source column.
-auto subtree_contains(const ice::SchemaField& field,
-                      const std::unordered_set<int32_t>& ids) -> bool {
+auto subtree_contains(ice::SchemaField const& field,
+                      std::unordered_set<int32_t> const& ids) -> bool {
   if (ids.contains(field.field_id())) {
     return true;
   }
   if (field.type()->is_nested()) {
-    const auto& nested = static_cast<const ice::NestedType&>(*field.type());
-    for (const auto& child : nested.fields()) {
+    auto const& nested = static_cast<ice::NestedType const&>(*field.type());
+    for (auto const& child : nested.fields()) {
       if (subtree_contains(child, ids)) {
         return true;
       }
@@ -1535,8 +1539,8 @@ auto subtree_contains(const ice::SchemaField& field,
 
 } // namespace
 
-auto new_file_writer(const ice::Table& table,
-                     const ice::PartitionValues& partition,
+auto new_file_writer(ice::Table const& table,
+                     ice::PartitionValues const& partition,
                      std::vector<bool>& omit)
   -> Result<std::shared_ptr<ice::DataWriter>> {
   auto schema = table.schema();
@@ -1549,10 +1553,10 @@ auto new_file_writer(const ice::Table& table,
   }
   auto file_schema = *schema;
   if (std::ranges::contains(omit, true)) {
-    const auto fields = (*schema)->fields();
+    auto const fields = (*schema)->fields();
     TENZIR_ASSERT(omit.size() == fields.size());
     auto sources = std::unordered_set<int32_t>{};
-    for (const auto& field : (*spec)->fields()) {
+    for (auto const& field : (*spec)->fields()) {
       sources.insert(field.source_id());
     }
     auto kept = std::vector<ice::SchemaField>{};
@@ -1621,7 +1625,7 @@ auto new_file_writer(const ice::Table& table,
   return std::shared_ptr<ice::DataWriter>{std::move(*writer)};
 }
 
-auto serialize_data_file(const ice::DataFile& file)
+auto serialize_data_file(ice::DataFile const& file)
   -> Result<SerializedDataFile> {
   // The remaining DataFile fields describe delete files, deletion vectors,
   // encryption, and commit-time row lineage; this plugin's writers produce
@@ -1653,7 +1657,7 @@ auto serialize_data_file(const ice::DataFile& file)
     .sort_order_id = file.sort_order_id,
   };
   result.partition.reserve(file.partition.values().size());
-  for (const auto& literal : file.partition.values()) {
+  for (auto const& literal : file.partition.values()) {
     auto type = to_literal_type(literal.type()->type_id());
     if (not type.has_value()) {
       return std::unexpected{type.error()};
@@ -1675,11 +1679,11 @@ auto serialize_data_file(const ice::DataFile& file)
   return result;
 }
 
-auto deserialize_data_file(const SerializedDataFile& serialized)
+auto deserialize_data_file(SerializedDataFile const& serialized)
   -> Result<std::shared_ptr<ice::DataFile>> {
   auto values = std::vector<ice::Literal>{};
   values.reserve(serialized.partition.size());
-  for (const auto& literal : serialized.partition) {
+  for (auto const& literal : serialized.partition) {
     auto type = from_literal_type(literal.type);
     if (not type.has_value()) {
       return std::unexpected{type.error()};
@@ -1713,7 +1717,7 @@ auto deserialize_data_file(const SerializedDataFile& serialized)
   return file;
 }
 
-auto has_commit(const ice::Table& table, const CommitTag& tag) -> bool {
+auto has_commit(ice::Table const& table, CommitTag const& tag) -> bool {
   // Only the current snapshot's ancestry proves the commit is part of the
   // table state being resumed: a rollback (or a retained branch) can leave
   // the tagged snapshot in the metadata's snapshot list while its rows are
@@ -1723,14 +1727,14 @@ auto has_commit(const ice::Table& table, const CommitTag& tag) -> bool {
   if (not current.has_value() or not *current) {
     return false;
   }
-  const auto& snapshots = table.metadata()->snapshots;
-  auto by_id = std::unordered_map<int64_t, const ice::Snapshot*>{};
+  auto const& snapshots = table.metadata()->snapshots;
+  auto by_id = std::unordered_map<int64_t, ice::Snapshot const*>{};
   by_id.reserve(snapshots.size());
-  for (const auto& snapshot : snapshots) {
+  for (auto const& snapshot : snapshots) {
     by_id.emplace(snapshot->snapshot_id, snapshot.get());
   }
-  const auto sequence = fmt::to_string(tag.sequence);
-  const auto* snapshot = current->get();
+  auto const sequence = fmt::to_string(tag.sequence);
+  auto const* snapshot = current->get();
   // The parent chain of valid metadata is acyclic; the bound merely keeps a
   // corrupted chain from spinning forever.
   for (auto steps = snapshots.size() + 1; snapshot and steps > 0; --steps) {
@@ -1751,8 +1755,8 @@ auto has_commit(const ice::Table& table, const CommitTag& tag) -> bool {
   return false;
 }
 
-auto references_any_data_file(const ice::Table& table,
-                              std::span<const std::string> paths)
+auto references_any_data_file(ice::Table const& table,
+                              std::span<std::string const> paths)
   -> Result<bool> {
   auto current = table.current_snapshot();
   if (not current.has_value() or not *current) {
@@ -1772,17 +1776,17 @@ auto references_any_data_file(const ice::Table& table,
   }
   auto live = std::unordered_set<std::string_view>{};
   live.reserve(tasks->size());
-  for (const auto& task : *tasks) {
+  for (auto const& task : *tasks) {
     live.insert(task->data_file()->file_path);
   }
-  return std::ranges::any_of(paths, [&](const std::string& path) {
+  return std::ranges::any_of(paths, [&](std::string const& path) {
     return live.contains(path);
   });
 }
 
 auto commit_append(std::shared_ptr<ice::Table> table,
-                   std::span<const std::shared_ptr<ice::DataFile>> files,
-                   const CommitTag& tag)
+                   std::span<std::shared_ptr<ice::DataFile> const> files,
+                   CommitTag const& tag)
   -> Result<std::shared_ptr<ice::Table>> {
   auto transaction
     = ice::Transaction::Make(std::move(table), ice::TransactionKind::kUpdate);
@@ -1803,7 +1807,7 @@ auto commit_append(std::shared_ptr<ice::Table> table,
   (*append)->Set(std::string{writer_id_property}, tag.writer_id);
   (*append)->Set(std::string{commit_seq_property},
                  fmt::to_string(tag.sequence));
-  for (const auto& file : files) {
+  for (auto const& file : files) {
     (*append)->AppendFile(file);
   }
   if (auto status = (*append)->Commit(); not status.has_value()) {
@@ -1813,8 +1817,8 @@ auto commit_append(std::shared_ptr<ice::Table> table,
   if (not committed.has_value()) {
     return std::unexpected{translate_error(committed.error())};
   }
-  const auto& snapshots = (*committed)->metadata()->snapshots;
-  const auto landed = std::ranges::any_of(snapshots, [&](const auto& snapshot) {
+  auto const& snapshots = (*committed)->metadata()->snapshots;
+  auto const landed = std::ranges::any_of(snapshots, [&](auto const& snapshot) {
     auto it = snapshot->summary.find("tenzir.commit-id");
     return it != snapshot->summary.end() and it->second == commit_id;
   });

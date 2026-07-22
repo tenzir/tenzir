@@ -49,7 +49,7 @@ namespace tenzir::plugins::iceberg {
 namespace ice = ::iceberg;
 
 /// Maps an iceberg-cpp error onto the operator's retry taxonomy.
-auto translate_error(const ice::Error& error) -> Error;
+auto translate_error(ice::Error const& error) -> Error;
 
 /// Unwraps an iceberg-cpp result, translating the error on failure.
 template <class T>
@@ -66,7 +66,7 @@ auto translate(ice::Result<T> result) -> Result<T> {
 
 /// Initializes the AWS SDK lifecycle used by Iceberg REST SigV4 sessions.
 /// Call before constructing credentials providers that may resolve eagerly.
-auto ensure_aws_sdk_initialized() -> Result<void>;
+[[nodiscard]] auto ensure_aws_sdk_initialized() -> Result<void>;
 
 /// Connects to a REST catalog. Fails fast on unreachable endpoints or
 /// rejected credentials. The returned pointer keeps the registered AWS
@@ -75,10 +75,11 @@ auto open_catalog(CatalogConfig config)
   -> Result<std::shared_ptr<ice::Catalog>>;
 
 /// Creates a namespace if it does not exist yet.
-auto ensure_namespace(ice::Catalog& catalog, std::span<const std::string> ns)
+[[nodiscard]] auto
+ensure_namespace(ice::Catalog& catalog, std::span<std::string const> ns)
   -> Result<void>;
 
-auto load_table(ice::Catalog& catalog, std::span<const std::string> ns,
+auto load_table(ice::Catalog& catalog, std::span<std::string const> ns,
                 std::string_view name) -> Result<std::shared_ptr<ice::Table>>;
 
 /// Creates a table whose schema derives from a Tenzir record type. Records
@@ -86,9 +87,9 @@ auto load_table(ice::Catalog& catalog, std::span<const std::string> ns,
 /// strings; timestamps map to microsecond timestamptz; durations and
 /// unsigned integers map to long. Fields that cannot be represented are
 /// skipped and reported in `dropped_fields` as `path: reason` strings.
-auto create_table(ice::Catalog& catalog, std::span<const std::string> ns,
-                  std::string_view name, const record_type& schema,
-                  const CreateTableOptions& options,
+auto create_table(ice::Catalog& catalog, std::span<std::string const> ns,
+                  std::string_view name, record_type const& schema,
+                  CreateTableOptions const& options,
                   std::vector<std::string>& dropped_fields)
   -> Result<std::shared_ptr<ice::Table>>;
 
@@ -96,13 +97,13 @@ auto create_table(ice::Catalog& catalog, std::span<const std::string> ns,
 /// matching this schema exactly, including nested structs and lists. Fails
 /// when the table schema uses types the plugin cannot map (e.g. uuid, map,
 /// decimal).
-auto table_arrow_schema(const ice::Table& table)
+auto table_arrow_schema(ice::Table const& table)
   -> Result<std::shared_ptr<arrow::Schema>>;
 
 /// Whether both tables use the same current schema and default partition
 /// spec. Open file writers remain valid across metadata refreshes only when
 /// this holds.
-auto same_write_layout(const ice::Table& lhs, const ice::Table& rhs) -> bool;
+auto same_write_layout(ice::Table const& lhs, ice::Table const& rhs) -> bool;
 
 /// Adds columns for fields of `schema` that the table does not have yet,
 /// recursing into nested records and lists of records (a metadata-only
@@ -114,8 +115,8 @@ auto same_write_layout(const ice::Table& lhs, const ice::Table& rhs) -> bool;
 /// when the table already covers every representable field. An error of
 /// kind `conflict` means a concurrent writer updated the table; callers
 /// should reload the table and retry against the fresh schema.
-auto evolve_schema(const std::shared_ptr<ice::Table>& table,
-                   const record_type& schema,
+auto evolve_schema(std::shared_ptr<ice::Table> const& table,
+                   record_type const& schema,
                    std::vector<std::string>& dropped_fields)
   -> Result<std::optional<std::shared_ptr<ice::Table>>>;
 
@@ -135,14 +136,14 @@ struct BoundPartitionField {
 /// field; empty for unpartitioned tables. The result is only valid for this
 /// table's current schema and default spec; rebind after adopting a table
 /// with a different write layout.
-auto bind_partitioning(const ice::Table& table)
+auto bind_partitioning(ice::Table const& table)
   -> Result<std::vector<BoundPartitionField>>;
 
 /// Checks that the table's partition spec matches `fields` exactly
 /// (source, transform, and parameter, in order). Fails with a permanent
 /// error describing both specs otherwise.
-auto check_partition_spec(const ice::Table& table,
-                          std::span<const PartitionField> fields)
+[[nodiscard]] auto check_partition_spec(ice::Table const& table,
+                                        std::span<PartitionField const> fields)
   -> Result<void>;
 
 /// Rows of one batch that share a partition tuple.
@@ -166,8 +167,8 @@ struct PartitionGroup {
 /// by evaluating the bound partition fields. Returns exactly one group,
 /// covering all rows, for unpartitioned tables. The batch's Arrow type must
 /// be the one `table_arrow_schema` derives for the table schema.
-auto split_by_partition(const ice::Table& table,
-                        std::span<const BoundPartitionField> bound,
+auto split_by_partition(ice::Table const& table,
+                        std::span<BoundPartitionField const> bound,
                         std::shared_ptr<arrow::StructArray> batch)
   -> Result<std::vector<PartitionGroup>>;
 
@@ -181,8 +182,8 @@ auto split_by_partition(const ice::Table& table,
 /// on return it flags exactly the columns the caller must drop from
 /// every batch fed to the writer. An empty `omit` writes the full
 /// schema.
-auto new_file_writer(const ice::Table& table,
-                     const ice::PartitionValues& partition,
+auto new_file_writer(ice::Table const& table,
+                     ice::PartitionValues const& partition,
                      std::vector<bool>& omit)
   -> Result<std::shared_ptr<ice::DataWriter>>;
 
@@ -192,11 +193,11 @@ auto finish_data_file(ice::DataWriter& writer)
 
 /// Converts a data file handle into its checkpoint-persistable form. Fails
 /// for files this plugin's writers cannot have produced.
-auto serialize_data_file(const ice::DataFile& file)
+auto serialize_data_file(ice::DataFile const& file)
   -> Result<SerializedDataFile>;
 
 /// Restores a data file handle from its checkpoint-persistable form.
-auto deserialize_data_file(const SerializedDataFile& serialized)
+auto deserialize_data_file(SerializedDataFile const& serialized)
   -> Result<std::shared_ptr<ice::DataFile>>;
 
 /// Commits the given data files as one new snapshot (FastAppend) tagged
@@ -208,21 +209,21 @@ auto deserialize_data_file(const SerializedDataFile& serialized)
 /// callers should reload the table, check `has_commit` (the retried commit
 /// may have landed after all), and otherwise retry with the same files.
 auto commit_append(std::shared_ptr<ice::Table> table,
-                   std::span<const std::shared_ptr<ice::DataFile>> files,
-                   const CommitTag& tag) -> Result<std::shared_ptr<ice::Table>>;
+                   std::span<std::shared_ptr<ice::DataFile> const> files,
+                   CommitTag const& tag) -> Result<std::shared_ptr<ice::Table>>;
 
 /// Whether the table has a snapshot carrying the given commit tag. Reads
 /// the handle's metadata; load or reload the table first for a current
 /// answer.
-auto has_commit(const ice::Table& table, const CommitTag& tag) -> bool;
+auto has_commit(ice::Table const& table, CommitTag const& tag) -> bool;
 
 /// Whether the table's current snapshot references any of the given
 /// data-file paths. Restart reconciliation falls back to this when
 /// snapshot expiration has erased the tagged snapshot that proves a
 /// commit: paths carry per-file UUIDs and files commit atomically, so one
 /// live file proves the whole commit landed.
-auto references_any_data_file(const ice::Table& table,
-                              std::span<const std::string> paths)
+auto references_any_data_file(ice::Table const& table,
+                              std::span<std::string const> paths)
   -> Result<bool>;
 
 } // namespace tenzir::plugins::iceberg

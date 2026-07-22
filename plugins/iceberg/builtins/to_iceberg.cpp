@@ -22,6 +22,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
+#include <tenzir/si_literals.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/to_string.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -49,7 +50,9 @@ namespace tenzir::plugins::iceberg {
 
 namespace {
 
-constexpr auto default_max_size = uint64_t{512} * 1024 * 1024;
+using namespace binary_byte_literals;
+
+constexpr auto default_max_size = uint64_t{512_MiB};
 constexpr auto default_timeout = std::chrono::minutes{15};
 constexpr auto commit_max_attempts = 5;
 constexpr auto commit_initial_backoff = std::chrono::milliseconds{250};
@@ -59,11 +62,11 @@ constexpr auto commit_initial_backoff = std::chrono::milliseconds{250};
 /// degrades gracefully as budget/N instead of cliffing at a small writer
 /// cap. `max_open_partitions` separately bounds the per-partition overhead
 /// the budget cannot see.
-constexpr auto default_buffer_size = uint64_t{1024} * 1024 * 1024;
+constexpr auto default_buffer_size = uint64_t{1_GiB};
 /// A partition graduates from buffering batches to a streaming Parquet
 /// writer once it accumulates this much data; hot partitions stream while
 /// cold ones only hold cheap Arrow buffers.
-constexpr auto stream_threshold = uint64_t{64} * 1024 * 1024;
+constexpr auto stream_threshold = uint64_t{64_MiB};
 /// Every streaming writer holds Parquet row-group encoder state, so their
 /// count is capped separately from buffering partitions. When exceeded, the
 /// largest open file closes early: it frees the most encoder state, and it
@@ -111,7 +114,7 @@ auto split_table_id(std::string_view table_id)
   auto parts = detail::split(table_id, ".");
   auto ns = std::vector<std::string>{};
   ns.reserve(parts.size() - 1);
-  for (const auto& part : parts | std::views::take(parts.size() - 1)) {
+  for (auto const& part : parts | std::views::take(parts.size() - 1)) {
     ns.emplace_back(part);
   }
   return {std::move(ns), std::string{parts.back()}};
@@ -142,8 +145,8 @@ auto has_parameter(PartitionTransform transform) -> bool {
 /// value would fail the whole column; this bisects around the rows the cast
 /// kernel rejects (numeric overflow, unparsable strings) in
 /// O(failures * log rows) casts and nulls only those.
-auto cast_valid_rows(const std::shared_ptr<arrow::Array>& source,
-                     const arrow::compute::CastOptions& options,
+auto cast_valid_rows(std::shared_ptr<arrow::Array> const& source,
+                     arrow::compute::CastOptions const& options,
                      std::vector<std::shared_ptr<arrow::Array>>& out,
                      int64_t& failures) -> void {
   auto cast = arrow::compute::Cast(source, options);
@@ -157,7 +160,7 @@ auto cast_valid_rows(const std::shared_ptr<arrow::Array>& source,
       check(arrow::MakeArrayOfNull(options.to_type.GetSharedPtr(), 1)));
     return;
   }
-  const auto half = source->length() / 2;
+  auto const half = source->length() / 2;
   cast_valid_rows(source->Slice(0, half), options, out, failures);
   cast_valid_rows(source->Slice(half), options, out, failures);
 }
@@ -165,8 +168,8 @@ auto cast_valid_rows(const std::shared_ptr<arrow::Array>& source,
 /// Counts nulls in `array` at rows where `parent` is valid. Nulls under a
 /// null parent row are legal even for a required child field: the row's
 /// struct is null as a whole, so the child carries no value of its own.
-auto nulls_under_valid_parent(const std::shared_ptr<arrow::Array>& array,
-                              const std::shared_ptr<arrow::Array>& parent)
+auto nulls_under_valid_parent(std::shared_ptr<arrow::Array> const& array,
+                              std::shared_ptr<arrow::Array> const& parent)
   -> int64_t {
   if (array->null_count() == 0) {
     return 0;
@@ -177,12 +180,12 @@ auto nulls_under_valid_parent(const std::shared_ptr<arrow::Array>& array,
   auto nulls = check(arrow::compute::IsNull(array));
   auto valid = check(arrow::compute::IsValid(parent));
   auto conflict = check(arrow::compute::And(nulls, valid));
-  return static_cast<const arrow::BooleanArray&>(*conflict.make_array())
+  return static_cast<arrow::BooleanArray const&>(*conflict.make_array())
     .true_count();
 }
 
 /// Extracts the dotted path of a field expression, e.g. `metadata.version`.
-auto parse_partition_source(const ast::expression& expr, diagnostic_handler& dh)
+auto parse_partition_source(ast::expression const& expr, diagnostic_handler& dh)
   -> failure_or<std::string> {
   auto path = ast::field_path::try_from(expr);
   if (not path or path->path().empty()) {
@@ -191,7 +194,7 @@ auto parse_partition_source(const ast::expression& expr, diagnostic_handler& dh)
   }
   auto segments = std::vector<std::string_view>{};
   segments.reserve(path->path().size());
-  for (const auto& segment : path->path()) {
+  for (auto const& segment : path->path()) {
     segments.push_back(segment.id.name);
   }
   return fmt::to_string(fmt::join(segments, "."));
@@ -200,9 +203,9 @@ auto parse_partition_source(const ast::expression& expr, diagnostic_handler& dh)
 /// Parses one element of `partition_by`: either a bare field (identity
 /// transform) or a symbolic transform call like `day(time)` or
 /// `bucket(class_uid, 16)`.
-auto parse_partition_field(const ast::expression& expr, diagnostic_handler& dh)
+auto parse_partition_field(ast::expression const& expr, diagnostic_handler& dh)
   -> failure_or<PartitionField> {
-  const auto* call = try_as<ast::function_call>(expr);
+  auto const* call = try_as<ast::function_call>(expr);
   if (not call) {
     TRY(auto source, parse_partition_source(expr, dh));
     return PartitionField{
@@ -211,9 +214,9 @@ auto parse_partition_field(const ast::expression& expr, diagnostic_handler& dh)
       .parameter = {},
     };
   }
-  auto transform = std::optional<PartitionTransform>{};
+  auto transform = Option<PartitionTransform>{};
   if (call->fn.path.size() == 1) {
-    for (const auto& [name, candidate] : partition_transforms) {
+    for (auto const& [name, candidate] : partition_transforms) {
       if (call->fn.path[0].name == name) {
         transform = candidate;
         break;
@@ -228,7 +231,7 @@ auto parse_partition_field(const ast::expression& expr, diagnostic_handler& dh)
       .emit(dh);
     return failure::promise();
   }
-  const auto arity = has_parameter(*transform) ? size_t{2} : size_t{1};
+  auto const arity = has_parameter(*transform) ? size_t{2} : size_t{1};
   if (call->args.size() != arity) {
     diagnostic::error("`{}` expects exactly {} argument{}",
                       call->fn.path[0].name, arity, arity == 1 ? "" : "s")
@@ -237,10 +240,10 @@ auto parse_partition_field(const ast::expression& expr, diagnostic_handler& dh)
     return failure::promise();
   }
   TRY(auto source, parse_partition_source(call->args[0], dh));
-  auto parameter = std::optional<int64_t>{};
+  auto parameter = Option<int64_t>{};
   if (has_parameter(*transform)) {
-    const auto* constant = try_as<ast::constant>(call->args[1]);
-    auto value = std::optional<int64_t>{};
+    auto const* constant = try_as<ast::constant>(call->args[1]);
+    auto value = Option<int64_t>{};
     if (constant) {
       match(
         constant->value,
@@ -252,7 +255,7 @@ auto parse_partition_field(const ast::expression& expr, diagnostic_handler& dh)
             value = static_cast<int64_t>(x);
           }
         },
-        [](const auto&) {});
+        [](auto const&) {});
     }
     if (not value or *value <= 0
         or *value > std::numeric_limits<int32_t>::max()) {
@@ -272,9 +275,9 @@ auto parse_partition_field(const ast::expression& expr, diagnostic_handler& dh)
 }
 
 /// Parses the `partition_by` argument: a list of partition fields.
-auto parse_partition_by(const ast::expression& expr, diagnostic_handler& dh)
+auto parse_partition_by(ast::expression const& expr, diagnostic_handler& dh)
   -> failure_or<std::vector<PartitionField>> {
-  const auto* list = try_as<ast::list>(expr);
+  auto const* list = try_as<ast::list>(expr);
   if (not list) {
     diagnostic::error("`partition_by` expects a list of fields or partition "
                       "transforms, e.g. `[class_uid, day(time)]`")
@@ -284,8 +287,8 @@ auto parse_partition_by(const ast::expression& expr, diagnostic_handler& dh)
   }
   auto result = std::vector<PartitionField>{};
   result.reserve(list->items.size());
-  for (const auto& item : list->items) {
-    const auto* item_expr = try_as<ast::expression>(item);
+  for (auto const& item : list->items) {
+    auto const* item_expr = try_as<ast::expression>(item);
     if (not item_expr) {
       diagnostic::error("expected a field or a partition transform")
         .primary(into_location(item))
@@ -351,7 +354,7 @@ public:
     // A non-empty writer id this early means `snapshot` ran with restored
     // checkpoint state before `start`; commits then align with checkpoints
     // from the beginning.
-    const auto restored = not writer_id_.empty();
+    auto const restored = not writer_id_.empty();
     if (not restored) {
       writer_id_ = fmt::to_string(uuid::random());
     }
@@ -410,12 +413,12 @@ public:
       co_return;
     }
     config.warehouse = std::move(warehouse);
-    const auto uses_managed_aws_catalog
+    auto const uses_managed_aws_catalog
       = static_cast<bool>(args_.catalog_aws_service);
     config.use_s3_file_io
       = auth->credentials.has_value() or uses_managed_aws_catalog;
     if (args_.catalog_aws_service) {
-      const auto service = *from_string<enum aws_catalog_service>(
+      auto const service = *from_string<enum aws_catalog_service>(
         args_.catalog_aws_service->inner);
       config.aws_catalog_signing_name
         = service == aws_catalog_service::glue ? "glue" : "s3tables";
@@ -433,7 +436,7 @@ public:
     if (args_.gcp_project) {
       config.gcp_user_project = args_.gcp_project->inner;
     }
-    const auto needs_provider
+    auto const needs_provider
       = uses_managed_aws_catalog
         or (auth->credentials
             and (not auth->credentials->role.empty()
@@ -445,7 +448,7 @@ public:
       // for every provider, not just for managed AWS catalogs.
       auto initialized = ensure_aws_sdk_initialized();
       if (not initialized) {
-        const auto source = args_.aws_iam ? args_.aws_iam->source
+        auto const source = args_.aws_iam ? args_.aws_iam->source
                                           : args_.catalog_aws_service->source;
         diagnostic::error("failed to initialize AWS authentication: {}",
                           initialized.error().message)
@@ -479,7 +482,7 @@ public:
           return make_aws_credentials_provider(credentials, region);
         });
       if (not provider) {
-        const auto source = args_.aws_iam ? args_.aws_iam->source
+        auto const source = args_.aws_iam ? args_.aws_iam->source
                                           : args_.catalog_aws_service->source;
         diagnostic::error(provider.error()).primary(source).emit(dh);
         done_ = true;
@@ -487,7 +490,7 @@ public:
       }
       config.aws_credentials_provider = std::move(*provider);
     } else if (auth->credentials) {
-      const auto& creds = *auth->credentials;
+      auto const& creds = *auth->credentials;
       if (not creds.access_key_id.empty()) {
         config.properties["s3.access-key-id"] = creds.access_key_id;
       }
@@ -502,7 +505,7 @@ public:
       config.properties["s3.endpoint"] = std::move(s3_endpoint);
       // Custom S3-compatible endpoints practically always require path-style
       // addressing; virtual-hosted style remains opt-out via `s3_path_style`.
-      const auto path_style
+      auto const path_style
         = not args_.s3_path_style or args_.s3_path_style->inner;
       config.properties["s3.path-style-access"] = path_style ? "true" : "false";
     }
@@ -539,7 +542,7 @@ public:
       // when the checkpoint proves this operator created or wrote it. An
       // empty checkpoint can predate the first input, and an externally
       // created table must still raise the create-mode conflict then.
-      const auto resumable = may_resume_existing_table({
+      auto const resumable = may_resume_existing_table({
         .restored = restored,
         .created_table = created_table_,
         .commit_seq = commit_seq_,
@@ -590,7 +593,7 @@ public:
     // Once the checkpoint records committed epochs or holds uncommitted
     // file handles, recreating a fresh table from post-checkpoint input
     // would silently lose the rows written before the checkpoint.
-    const auto missing_is_fatal = missing_table_is_fatal({
+    auto const missing_is_fatal = missing_table_is_fatal({
       .restored = restored,
       .created_table = created_table_,
       .commit_seq = commit_seq_,
@@ -651,7 +654,7 @@ public:
       fail(groups.error(), "failed to compute partition values", ctx);
       co_return;
     }
-    for (const auto& group : *groups) {
+    for (auto const& group : *groups) {
       co_await write_partition(group, *batch, ctx);
       if (done_) {
         co_return;
@@ -769,7 +772,7 @@ public:
 private:
   /// Imports the table's Arrow schema. Emits a diagnostic and sets `done_`
   /// on failure, returning nullptr.
-  auto import_table_schema(const ice::Table& table, OpCtx& ctx)
+  auto import_table_schema(ice::Table const& table, OpCtx& ctx)
     -> std::shared_ptr<arrow::Schema> {
     auto schema = table_arrow_schema(table);
     if (not schema) {
@@ -805,7 +808,7 @@ private:
       evolved_schemas_.clear();
     }
     table_ = std::move(table);
-    partitioning_ = std::make_shared<const std::vector<BoundPartitionField>>(
+    partitioning_ = std::make_shared<std::vector<BoundPartitionField> const>(
       std::move(*partitioning));
     target_schema_ = std::move(schema);
     // The UUID persists in checkpoints so that a restore can tell a
@@ -844,7 +847,7 @@ private:
   /// divergence at startup is a hard error.
   auto adopt_table(std::shared_ptr<ice::Table> table, OpCtx& ctx)
     -> Task<void> {
-    const auto layout_changed
+    auto const layout_changed
       = not table_ or not same_write_layout(*table_, *table);
     set_table(std::move(table), ctx);
     if (done_ or not layout_changed) {
@@ -855,12 +858,12 @@ private:
 
   /// Creates the table from the schema of the first arriving events. Only
   /// reached in the create modes when the table did not exist at start.
-  auto ensure_table(const table_slice& input, OpCtx& ctx) -> Task<void> {
-    const auto& schema = as<record_type>(input.schema());
+  auto ensure_table(table_slice const& input, OpCtx& ctx) -> Task<void> {
+    auto const& schema = as<record_type>(input.schema());
     auto options = CreateTableOptions{};
     options.location = table_location_;
     options.partition_by = partition_fields_;
-    for (const auto& field : schema.fields()) {
+    for (auto const& field : schema.fields()) {
       if (field.name == default_sort_column and is<time_type>(field.type)) {
         options.sort_column = std::string{default_sort_column};
         break;
@@ -888,7 +891,7 @@ private:
         }
         return created;
       });
-    for (const auto& reason : *dropped) {
+    for (auto const& reason : *dropped) {
       warn_once(fmt::format("cannot represent column in Iceberg: {}", reason),
                 ctx);
     }
@@ -922,7 +925,7 @@ private:
   /// only ever stamped with field IDs the catalog has confirmed. When a
   /// concurrent writer updates the table underneath us, the commit conflicts;
   /// we reload the table and re-derive the diff against their changes.
-  auto ensure_schema(const table_slice& input, OpCtx& ctx) -> Task<void> {
+  auto ensure_schema(table_slice const& input, OpCtx& ctx) -> Task<void> {
     auto fingerprint = input.schema().make_fingerprint();
     if (evolved_schemas_.contains(fingerprint)) {
       co_return;
@@ -938,7 +941,7 @@ private:
         [table = current, ty = input.schema(), dropped]() mutable {
           return evolve_schema(table, as<record_type>(ty), *dropped);
         });
-      for (const auto& reason : *dropped) {
+      for (auto const& reason : *dropped) {
         warn_once(fmt::format("cannot represent column in Iceberg: {}", reason),
                   ctx);
       }
@@ -999,7 +1002,7 @@ private:
         evolved_schemas_.insert(std::move(fingerprint));
         co_return;
       }
-      const auto kind = evolved.error().kind;
+      auto const kind = evolved.error().kind;
       if (attempt >= commit_max_attempts
           or (kind != Error::Kind::conflict
               and kind != Error::Kind::transient)) {
@@ -1078,19 +1081,19 @@ private:
     auto ty = type::from_arrow(*array->type());
     return match(
       ty,
-      [&](const enumeration_type& t) -> std::shared_ptr<arrow::Array> {
+      [&](enumeration_type const& t) -> std::shared_ptr<arrow::Array> {
         return resolve_enumerations(
                  t,
                  std::static_pointer_cast<enumeration_type::array_type>(array))
           .second;
       },
-      [&](const concepts::one_of<ip_type, subnet_type> auto&)
+      [&](concepts::one_of<ip_type, subnet_type> auto const&)
         -> std::shared_ptr<arrow::Array> {
         return to_string(multi_series{series{ty, array}},
                          args_.operator_location, ctx.dh())
           .array;
       },
-      [&](const auto&) -> std::shared_ptr<arrow::Array> {
+      [&](auto const&) -> std::shared_ptr<arrow::Array> {
         return nullptr;
       });
   }
@@ -1104,13 +1107,13 @@ private:
   /// null that would land under a valid `parent` row raises an error
   /// instead, returning nullptr with `done_` set.
   auto project_column(std::shared_ptr<arrow::Array> source,
-                      const std::shared_ptr<arrow::Field>& target,
-                      const std::string& path, int64_t rows,
-                      const std::shared_ptr<arrow::Array>& parent, OpCtx& ctx)
+                      std::shared_ptr<arrow::Field> const& target,
+                      std::string const& path, int64_t rows,
+                      std::shared_ptr<arrow::Array> const& parent, OpCtx& ctx)
     -> std::shared_ptr<arrow::Array> {
-    const auto required = not target->nullable();
+    auto const required = not target->nullable();
     auto fail_required
-      = [&](const std::string& reason) -> std::shared_ptr<arrow::Array> {
+      = [&](std::string const& reason) -> std::shared_ptr<arrow::Array> {
       diagnostic::error("column `{}` is required in the Iceberg table but {}",
                         path, reason)
         .primary(args_.operator_location)
@@ -1129,7 +1132,7 @@ private:
       }
       return parent and parent->null_count() == parent->length();
     };
-    const auto had_source = static_cast<bool>(source);
+    auto const had_source = static_cast<bool>(source);
     if (source) {
       source = normalize(std::move(source), ctx);
     }
@@ -1161,11 +1164,11 @@ private:
         if (not struct_source) {
           return type_mismatch();
         }
-        const auto& target_fields = target->type()->fields();
+        auto const& target_fields = target->type()->fields();
         auto children = arrow::ArrayVector{};
         children.reserve(target_fields.size());
         auto used = std::unordered_set<std::string>{};
-        for (const auto& field : target_fields) {
+        for (auto const& field : target_fields) {
           auto child = struct_source->GetFieldByName(field->name());
           if (child) {
             used.insert(field->name());
@@ -1179,7 +1182,7 @@ private:
           }
           children.push_back(std::move(projected));
         }
-        for (const auto& field : struct_source->struct_type()->fields()) {
+        for (auto const& field : struct_source->struct_type()->fields()) {
           if (not used.contains(field->name())) {
             warn_once(fmt::format("column `{}.{}` does not exist in the "
                                   "table and will be dropped",
@@ -1212,7 +1215,7 @@ private:
         // range may also hold values no list slot references, so the
         // element's required check runs on the flattened result below, not
         // inside the recursion.
-        const auto& element = target->type()->field(0);
+        auto const& element = target->type()->field(0);
         auto values
           = project_column(list_source->values(), element->WithNullable(true),
                            path + "[]", list_source->values()->length(),
@@ -1291,12 +1294,12 @@ private:
   /// columns are dropped with a one-time warning per input schema.
   auto project(table_slice input, OpCtx& ctx)
     -> Option<std::shared_ptr<arrow::StructArray>> {
-    const auto rows = detail::narrow_cast<int64_t>(input.rows());
+    auto const rows = detail::narrow_cast<int64_t>(input.rows());
     auto batch = to_record_batch(input);
     auto arrays = arrow::ArrayVector{};
     arrays.reserve(target_schema_->num_fields());
     auto used = std::unordered_set<std::string>{};
-    for (const auto& field : target_schema_->fields()) {
+    for (auto const& field : target_schema_->fields()) {
       auto column = batch->GetColumnByName(field->name());
       if (column) {
         used.insert(field->name());
@@ -1308,7 +1311,7 @@ private:
       }
       arrays.push_back(std::move(projected));
     }
-    for (const auto& field : batch->schema()->fields()) {
+    for (auto const& field : batch->schema()->fields()) {
       if (not used.contains(field->name())) {
         warn_once(fmt::format("column `{}` does not exist in the table and "
                               "will be dropped",
@@ -1335,18 +1338,18 @@ private:
   /// nulls through the same field-id projection that serves files written
   /// before a schema evolution.
   static auto
-  all_null_columns(std::span<const std::shared_ptr<arrow::Array>> pieces)
+  all_null_columns(std::span<std::shared_ptr<arrow::Array> const> pieces)
     -> std::vector<bool> {
     auto mask = std::vector<bool>{};
-    for (const auto& piece : pieces) {
-      const auto& array = static_cast<const arrow::StructArray&>(*piece);
-      const auto fields = detail::narrow_cast<size_t>(array.num_fields());
+    for (auto const& piece : pieces) {
+      auto const& array = static_cast<arrow::StructArray const&>(*piece);
+      auto const fields = detail::narrow_cast<size_t>(array.num_fields());
       mask.resize(fields, true);
       for (auto i = size_t{0}; i < fields; ++i) {
         if (not mask[i]) {
           continue;
         }
-        const auto& child = *array.field(detail::narrow_cast<int>(i));
+        auto const& child = *array.field(detail::narrow_cast<int>(i));
         mask[i] = child.null_count() == child.length();
       }
     }
@@ -1356,13 +1359,13 @@ private:
   /// Whether a projected batch holds only nulls in every column the open
   /// data file omits.
   static auto
-  covered(const std::vector<bool>& omitted, const arrow::Array& batch) -> bool {
-    const auto& array = static_cast<const arrow::StructArray&>(batch);
+  covered(std::vector<bool> const& omitted, arrow::Array const& batch) -> bool {
+    auto const& array = static_cast<arrow::StructArray const&>(batch);
     for (auto i = size_t{0}; i < omitted.size(); ++i) {
       if (not omitted[i]) {
         continue;
       }
-      const auto& child = *array.field(detail::narrow_cast<int>(i));
+      auto const& child = *array.field(detail::narrow_cast<int>(i));
       if (child.null_count() != child.length()) {
         return false;
       }
@@ -1372,13 +1375,13 @@ private:
 
   /// Drops the omitted columns from a projected batch, matching it to the
   /// data file's pruned schema.
-  static auto drop_omitted(const std::shared_ptr<arrow::Array>& piece,
-                           const std::vector<bool>& omitted)
+  static auto drop_omitted(std::shared_ptr<arrow::Array> const& piece,
+                           std::vector<bool> const& omitted)
     -> std::shared_ptr<arrow::Array> {
     if (not std::ranges::contains(omitted, true)) {
       return piece;
     }
-    const auto& array = static_cast<const arrow::StructArray&>(*piece);
+    auto const& array = static_cast<arrow::StructArray const&>(*piece);
     auto children = arrow::ArrayVector{};
     auto fields = arrow::FieldVector{};
     for (auto i = 0; i < array.num_fields(); ++i) {
@@ -1395,8 +1398,8 @@ private:
   /// partition to a streaming writer at `stream_threshold`. Rotates and
   /// commits when the open file reaches `max_size`, and closes the largest
   /// buffers early when the shared buffer budget runs over.
-  auto write_partition(const PartitionGroup& group,
-                       const std::shared_ptr<arrow::StructArray>& batch,
+  auto write_partition(PartitionGroup const& group,
+                       std::shared_ptr<arrow::StructArray> const& batch,
                        OpCtx& ctx) -> Task<void> {
     auto sub = std::static_pointer_cast<arrow::Array>(batch);
     if (not group.rows.empty()) {
@@ -1451,7 +1454,7 @@ private:
     }
     auto& partition = it->second;
     events_counter_.add(sub->length());
-    const auto max_size
+    auto const max_size
       = args_.max_size ? args_.max_size->inner : default_max_size;
     if (partition.writer) {
       auto pieces = std::vector<std::shared_ptr<arrow::Array>>{};
@@ -1461,7 +1464,7 @@ private:
         co_return;
       }
     } else {
-      const auto sub_bytes
+      auto const sub_bytes
         = static_cast<int64_t>(arrow::util::TotalBufferSize(*sub->data()));
       partition.buffered.push_back(std::move(sub));
       partition.buffered_bytes += sub_bytes;
@@ -1498,7 +1501,7 @@ private:
     auto written = co_await spawn_blocking(
       [writer = partition.writer, omitted = partition.omitted,
        pieces = std::move(pieces)]() mutable -> Result<int64_t> {
-        for (const auto& piece : pieces) {
+        for (auto const& piece : pieces) {
           auto c_array = ArrowArray{};
           if (auto status
               = arrow::ExportArray(*drop_omitted(piece, omitted), &c_array);
@@ -1583,7 +1586,7 @@ private:
   /// eviction pass commit together in non-checkpointed pipelines. This keeps
   /// them visible even when the evicted partition owned the only timer.
   auto enforce_buffer_budget(OpCtx& ctx) -> Task<void> {
-    const auto budget
+    auto const budget
       = args_.buffer_size ? args_.buffer_size->inner : default_buffer_size;
     auto closed_any = false;
     while (std::cmp_greater(total_buffered_, budget)
@@ -1633,7 +1636,7 @@ private:
   /// one step, a streaming partition finishes its open writer. Does not
   /// commit itself, so an eviction cascade under high partition cardinality
   /// cannot turn into a commit storm.
-  auto close_partition(const std::string& key, OpCtx& ctx) -> Task<void> {
+  auto close_partition(std::string const& key, OpCtx& ctx) -> Task<void> {
     auto node = partitions_.extract(key);
     if (node.empty() or done_) {
       co_return;
@@ -1659,7 +1662,7 @@ private:
           if (not writer) {
             return std::unexpected{writer.error()};
           }
-          for (const auto& piece : pieces) {
+          for (auto const& piece : pieces) {
             auto c_array = ArrowArray{};
             if (auto status
                 = arrow::ExportArray(*drop_omitted(piece, omitted), &c_array);
@@ -1704,10 +1707,10 @@ private:
   auto close_all(OpCtx& ctx) -> Task<void> {
     auto keys = std::vector<std::string>{};
     keys.reserve(partitions_.size());
-    for (const auto& [key, unused] : partitions_) {
+    for (auto const& [key, unused] : partitions_) {
       keys.push_back(key);
     }
-    for (const auto& key : keys) {
+    for (auto const& key : keys) {
       co_await close_partition(key, ctx);
       if (done_) {
         co_return;
@@ -1773,7 +1776,7 @@ private:
     // coincidence remains unhandled.)
     auto paths = std::vector<std::string>{};
     paths.reserve(epoch_snapshot_.size());
-    for (const auto& serialized : epoch_snapshot_) {
+    for (auto const& serialized : epoch_snapshot_) {
       paths.push_back(serialized.path);
     }
     auto referenced = co_await spawn_blocking(
@@ -1793,7 +1796,7 @@ private:
       commit_seq_ += 1;
       co_return;
     }
-    for (const auto& serialized : epoch_snapshot_) {
+    for (auto const& serialized : epoch_snapshot_) {
       auto file = deserialize_data_file(serialized);
       if (not file) {
         fail(file.error(), "failed to restore data file from checkpoint", ctx);
@@ -1830,13 +1833,13 @@ private:
     if (not checkpointing_) {
       cancel_commit_timer();
     }
-    const auto staged_count = staged.size();
+    auto const staged_count = staged.size();
     auto files = std::vector<std::shared_ptr<ice::DataFile>>{};
     files.reserve(staged_count);
     for (auto it = staged.begin(); it != staged.begin() + staged_count; ++it) {
       files.push_back(it->file);
     }
-    const auto tag = CommitTag{writer_id_, commit_seq_};
+    auto const tag = CommitTag{writer_id_, commit_seq_};
     auto backoff = duration{commit_initial_backoff};
     for (auto attempt = 1;; ++attempt) {
       auto result
@@ -1852,7 +1855,7 @@ private:
         TENZIR_DEBUG("to_iceberg: committed {} data files ({} bytes) as seq "
                      "{} of writer `{}` on attempt {}",
                      staged_count, bytes, tag.sequence, tag.writer_id, attempt);
-        const auto layout_changed = not same_write_layout(*table_, **result);
+        auto const layout_changed = not same_write_layout(*table_, **result);
         if (layout_changed) {
           TENZIR_DEBUG("to_iceberg: table write layout changed after commit; "
                        "closing {} open partitions",
@@ -1943,7 +1946,7 @@ private:
           }
           landed = *referenced;
         }
-        const auto layout_changed = not same_write_layout(*table_, **reloaded);
+        auto const layout_changed = not same_write_layout(*table_, **reloaded);
         if (layout_changed) {
           TENZIR_DEBUG("to_iceberg: table write layout changed while "
                        "reloading; closing {} open partitions",
@@ -1976,9 +1979,9 @@ private:
 
   /// Spawns a timer that requests rotation of the partition after
   /// `timeout`. Cancelled when the partition closes for another reason.
-  auto arm_rotation_timer(const std::string& key, OpenPartition& partition,
+  auto arm_rotation_timer(std::string const& key, OpenPartition& partition,
                           OpCtx& ctx) -> void {
-    const auto timeout
+    auto const timeout
       = args_.timeout ? args_.timeout->inner : duration{default_timeout};
     std::ignore = ctx.spawn_task(
       [this, key, generation = partition.generation, timeout,
@@ -1996,11 +1999,11 @@ private:
     if (commit_timer_cancel_ or checkpointing_) {
       return;
     }
-    const auto timeout
+    auto const timeout
       = args_.timeout ? args_.timeout->inner : duration{default_timeout};
     auto cancel = std::make_shared<folly::CancellationSource>();
     commit_timer_cancel_ = cancel;
-    const auto generation = ++commit_timer_generation_;
+    auto const generation = ++commit_timer_generation_;
     std::ignore = ctx.spawn_task(
       [this, generation, timeout, token = cancel->getToken()]() -> Task<void> {
         auto merged = folly::cancellation_token_merge(
@@ -2018,7 +2021,7 @@ private:
     commit_timer_cancel_.reset();
   }
 
-  auto fail(const Error& error, std::string_view what, OpCtx& ctx) -> void {
+  auto fail(Error const& error, std::string_view what, OpCtx& ctx) -> void {
     diagnostic::error("{}: {}", what, error.message)
       .primary(args_.operator_location)
       .emit(ctx.dh());
@@ -2042,7 +2045,7 @@ private:
   /// The bound partition spec of `table_`, rebuilt whenever the write
   /// target changes; shared so that blocking split tasks keep a consistent
   /// view across table adoptions.
-  std::shared_ptr<const std::vector<BoundPartitionField>> partitioning_;
+  std::shared_ptr<std::vector<BoundPartitionField> const> partitioning_;
   std::shared_ptr<arrow::Schema> target_schema_;
   /// The parsed `partition_by` argument; empty when not partitioning.
   std::vector<PartitionField> partition_fields_;
@@ -2162,7 +2165,7 @@ public:
     d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto table = ctx.get(table_arg)) {
         auto parts = detail::split(table->inner, ".");
-        const auto valid
+        auto const valid
           = parts.size() >= 2
             and std::ranges::none_of(parts, &std::string_view::empty);
         if (not valid) {
@@ -2223,8 +2226,8 @@ public:
             .emit(ctx);
         }
       }
-      const auto gcp_auth_opt = ctx.get(gcp_auth_arg);
-      const auto uses_gcp = (gcp_auth_opt and gcp_auth_opt->inner)
+      auto const gcp_auth_opt = ctx.get(gcp_auth_arg);
+      auto const uses_gcp = (gcp_auth_opt and gcp_auth_opt->inner)
                             or static_cast<bool>(ctx.get(gcp_key_arg));
       if (ctx.get(aws_catalog_arg) and uses_gcp) {
         diagnostic::error("`catalog_aws_service` cannot be combined with "

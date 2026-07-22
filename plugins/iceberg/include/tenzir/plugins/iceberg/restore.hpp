@@ -33,7 +33,7 @@ struct RestoredState {
 /// case an externally created table of the same name must still raise the
 /// create-mode conflict. Only checkpoint state showing that this operator
 /// created or wrote the table lifts the conflict.
-constexpr auto may_resume_existing_table(const RestoredState& state) -> bool {
+constexpr auto may_resume_existing_table(RestoredState const& state) -> bool {
   return state.restored
          and (state.created_table or state.commit_seq > 0
               or state.restored_files > 0);
@@ -44,7 +44,7 @@ constexpr auto may_resume_existing_table(const RestoredState& state) -> bool {
 /// recreating a fresh table from post-checkpoint input would silently lose
 /// the rows written before the checkpoint. Before the first write, a missing
 /// table is indistinguishable from a fresh start and gets recreated.
-constexpr auto missing_table_is_fatal(const RestoredState& state) -> bool {
+constexpr auto missing_table_is_fatal(RestoredState const& state) -> bool {
   return state.commit_seq > 0 or state.restored_files > 0;
 }
 

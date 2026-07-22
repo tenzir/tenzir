@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <tenzir/option.hpp>
+
 #include <cstdint>
 #include <expected>
 #include <map>
@@ -75,7 +77,7 @@ struct PartitionField {
   std::string source;
   PartitionTransform transform = PartitionTransform::identity;
   /// Bucket count or truncate width; unused for the other transforms.
-  std::optional<int64_t> parameter;
+  Option<int64_t> parameter;
 };
 
 /// Options for creating a new table.
@@ -93,7 +95,7 @@ struct CreateTableOptions {
   /// column exists and derives to a timestamp. Data files written by this
   /// plugin do not claim the sort order until in-file sorting lands; the
   /// registration informs other writers and compaction jobs.
-  std::optional<std::string> sort_column;
+  Option<std::string> sort_column;
 };
 
 struct CatalogConfig {
@@ -156,7 +158,7 @@ struct SerializedLiteral {
   bool is_null = true;
   std::vector<uint8_t> value;
 
-  friend auto operator==(const SerializedLiteral&, const SerializedLiteral&)
+  friend auto operator==(SerializedLiteral const&, SerializedLiteral const&)
     -> bool
     = default;
 
@@ -189,7 +191,7 @@ struct SerializedDataFile {
   std::vector<int64_t> split_offsets;
   std::optional<int32_t> sort_order_id;
 
-  friend auto operator==(const SerializedDataFile&, const SerializedDataFile&)
+  friend auto operator==(SerializedDataFile const&, SerializedDataFile const&)
     -> bool
     = default;
 
