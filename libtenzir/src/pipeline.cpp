@@ -129,16 +129,6 @@ pipeline::pipeline(std::vector<operator_ptr> operators) {
   }
 }
 
-auto pipeline::parse(std::string source, diagnostic_handler& diag)
-  -> std::optional<pipeline> {
-  auto parsed = tql::parse(
-    *Source::new_source(std::move(source), "<input>", false), diag);
-  if (not parsed) {
-    return {};
-  }
-  return tql::to_pipeline(std::move(*parsed));
-}
-
 auto pipeline::internal_parse(std::string_view repr)
   -> caf::expected<pipeline> {
   return tql::parse_internal(std::string{repr});
