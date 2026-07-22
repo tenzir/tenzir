@@ -1,3 +1,17 @@
+Upstream fixes applied to the bundled iceberg-cpp; the nix package applies
+the same patch (see nix/iceberg-cpp/default.nix).
+
+- IcebergThirdpartyToolchain.cmake: the system-Avro discovery looks for an
+  `Avro` CMake package, but avro-cpp installs `avro-cpp-config.cmake`.
+- arrow_s3_file_io.cc: EnsureS3Initialized() fails (and caches the failure)
+  when the host application already initialized Arrow's S3 subsystem, which
+  Tenzir's s3 plugin always does; treat that as already-initialized.
+- partition_summary.cc: PartitionSummary::Update casts every partition value
+  to the partition field type, but LiteralCaster::CastTo refuses null
+  literals, so any data file with a null partition value fails to commit.
+  The stats themselves handle null fine (contains_null); feed it directly.
+- url_encoder.cc: uses uint8_t without including <cstdint>.
+
 diff --git a/cmake_modules/IcebergThirdpartyToolchain.cmake b/cmake_modules/IcebergThirdpartyToolchain.cmake
 index 33a1ee4..fd51a0b 100644
 --- a/cmake_modules/IcebergThirdpartyToolchain.cmake

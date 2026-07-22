@@ -51,6 +51,10 @@ to_iceberg "{TABLE}", catalog="{catalog_uri}", mode="append", max_size=1000
     assert writer.stdin is not None
     writer.stdin.write(json.dumps({"id": 2, "value": "buffered"}) + "\n")
     writer.stdin.flush()
+    # Best-effort scheduling: the event should buffer under the old schema
+    # before the concurrent evolution below. There is nothing to poll --
+    # buffered rows are deliberately invisible until a commit -- and the
+    # refresh behavior under test holds in either interleaving.
     time.sleep(1)
 
     run_pipeline(

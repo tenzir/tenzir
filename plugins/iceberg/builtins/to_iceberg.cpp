@@ -39,6 +39,7 @@
 #include <iceberg/table.h>
 
 #include <algorithm>
+#include <ranges>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -180,8 +181,7 @@ auto nulls_under_valid_parent(std::shared_ptr<arrow::Array> const& array,
   auto nulls = check(arrow::compute::IsNull(array));
   auto valid = check(arrow::compute::IsValid(parent));
   auto conflict = check(arrow::compute::And(nulls, valid));
-  return static_cast<arrow::BooleanArray const&>(*conflict.make_array())
-    .true_count();
+  return as<arrow::BooleanArray>(*conflict.make_array()).true_count();
 }
 
 /// Extracts the dotted path of a field expression, e.g. `metadata.version`.
@@ -418,10 +418,11 @@ public:
     config.use_s3_file_io
       = auth->credentials.has_value() or uses_managed_aws_catalog;
     if (args_.catalog_aws_service) {
-      auto const service = *from_string<enum aws_catalog_service>(
+      auto const service = from_string<enum aws_catalog_service>(
         args_.catalog_aws_service->inner);
+      TENZIR_ASSERT(service);
       config.aws_catalog_signing_name
-        = service == aws_catalog_service::glue ? "glue" : "s3tables";
+        = *service == aws_catalog_service::glue ? "glue" : "s3tables";
     }
     if (not uses_managed_aws_catalog and auth->credentials
         and not auth->credentials->region.empty()) {
@@ -509,8 +510,11 @@ public:
         = not args_.s3_path_style or args_.s3_path_style->inner;
       config.properties["s3.path-style-access"] = path_style ? "true" : "false";
     }
-    mode_ = args_.mode ? *from_string<enum mode>(args_.mode->inner)
-                       : mode::create_append;
+    if (args_.mode) {
+      auto const parsed = from_string<enum mode>(args_.mode->inner);
+      TENZIR_ASSERT(parsed);
+      mode_ = *parsed;
+    }
     if (args_.partition_by) {
       auto parsed = parse_partition_by(*args_.partition_by, dh);
       if (parsed.is_error()) {
@@ -1159,8 +1163,7 @@ private:
     };
     switch (target->type()->id()) {
       case arrow::Type::STRUCT: {
-        auto struct_source
-          = std::dynamic_pointer_cast<arrow::StructArray>(source);
+        auto const* struct_source = try_as<arrow::StructArray>(*source);
         if (not struct_source) {
           return type_mismatch();
         }
@@ -1176,7 +1179,7 @@ private:
           auto projected
             = project_column(std::move(child), field,
                              fmt::format("{}.{}", path, field->name()), rows,
-                             struct_source, ctx);
+                             source, ctx);
           if (not projected) {
             return nullptr;
           }
@@ -1195,7 +1198,7 @@ private:
         auto bitmap = std::shared_ptr<arrow::Buffer>{};
         auto null_count = struct_source->null_count();
         if (null_count > 0) {
-          auto valid = check(arrow::compute::IsValid(struct_source)).array();
+          auto valid = check(arrow::compute::IsValid(source)).array();
           bitmap = valid->buffers[1];
         }
         auto result = check(arrow::StructArray::Make(
@@ -1206,7 +1209,7 @@ private:
         return result;
       }
       case arrow::Type::LIST: {
-        auto list_source = std::dynamic_pointer_cast<arrow::ListArray>(source);
+        auto const* list_source = try_as<arrow::ListArray>(*source);
         if (not list_source) {
           return type_mismatch();
         }
@@ -1319,15 +1322,7 @@ private:
                   ctx);
       }
     }
-    auto result = arrow::StructArray::Make(arrays, target_schema_->fields());
-    if (not result.ok()) {
-      diagnostic::error("failed to assemble batch: {}",
-                        result.status().ToString())
-        .emit(ctx.dh());
-      done_ = true;
-      return None{};
-    }
-    return result.MoveValueUnsafe();
+    return check(arrow::StructArray::Make(arrays, target_schema_->fields()));
   }
 
   /// Flags the top-level columns that hold only nulls in every given
@@ -1342,15 +1337,12 @@ private:
     -> std::vector<bool> {
     auto mask = std::vector<bool>{};
     for (auto const& piece : pieces) {
-      auto const& array = static_cast<arrow::StructArray const&>(*piece);
-      auto const fields = detail::narrow_cast<size_t>(array.num_fields());
-      mask.resize(fields, true);
-      for (auto i = size_t{0}; i < fields; ++i) {
-        if (not mask[i]) {
-          continue;
+      auto const& array = as<arrow::StructArray>(*piece);
+      mask.resize(detail::narrow_cast<size_t>(array.num_fields()), true);
+      for (auto&& [flag, child] : std::views::zip(mask, array.fields())) {
+        if (flag) {
+          flag = child->null_count() == child->length();
         }
-        auto const& child = *array.field(detail::narrow_cast<int>(i));
-        mask[i] = child.null_count() == child.length();
       }
     }
     return mask;
@@ -1360,13 +1352,9 @@ private:
   /// data file omits.
   static auto
   covered(std::vector<bool> const& omitted, arrow::Array const& batch) -> bool {
-    auto const& array = static_cast<arrow::StructArray const&>(batch);
-    for (auto i = size_t{0}; i < omitted.size(); ++i) {
-      if (not omitted[i]) {
-        continue;
-      }
-      auto const& child = *array.field(detail::narrow_cast<int>(i));
-      if (child.null_count() != child.length()) {
+    auto const& array = as<arrow::StructArray>(batch);
+    for (auto const& [omit, child] : std::views::zip(omitted, array.fields())) {
+      if (omit and child->null_count() != child->length()) {
         return false;
       }
     }
@@ -1381,15 +1369,15 @@ private:
     if (not std::ranges::contains(omitted, true)) {
       return piece;
     }
-    auto const& array = static_cast<arrow::StructArray const&>(*piece);
+    auto const& array = as<arrow::StructArray>(*piece);
     auto children = arrow::ArrayVector{};
     auto fields = arrow::FieldVector{};
-    for (auto i = 0; i < array.num_fields(); ++i) {
-      if (omitted[detail::narrow_cast<size_t>(i)]) {
-        continue;
+    for (auto const& [omit, child, field] : std::views::zip(
+           omitted, array.fields(), array.struct_type()->fields())) {
+      if (not omit) {
+        children.push_back(child);
+        fields.push_back(field);
       }
-      children.push_back(array.field(i));
-      fields.push_back(array.struct_type()->field(i));
     }
     return check(arrow::StructArray::Make(children, fields));
   }
@@ -1406,16 +1394,7 @@ private:
       auto builder = arrow::Int64Builder{};
       check(builder.AppendValues(group.rows));
       auto indices = check(builder.Finish());
-      auto taken = arrow::compute::Take(sub, indices);
-      if (not taken.ok()) {
-        diagnostic::error("failed to split batch: {}",
-                          taken.status().ToString())
-          .primary(args_.operator_location)
-          .emit(ctx.dh());
-        done_ = true;
-        co_return;
-      }
-      sub = taken->make_array();
+      sub = check(arrow::compute::Take(sub, indices)).make_array();
     }
     auto it = partitions_.find(group.key);
     if (it != partitions_.end() and it->second.writer

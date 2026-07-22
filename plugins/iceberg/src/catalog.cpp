@@ -65,6 +65,7 @@
 #include <concepts>
 #include <filesystem>
 #include <mutex>
+#include <ranges>
 #include <set>
 #include <system_error>
 #include <unordered_map>
@@ -133,7 +134,7 @@ public:
   CatalogSession(ice::rest::HttpClient& client,
                  std::unordered_map<std::string, std::string> const& properties)
     -> ice::Result<std::shared_ptr<ice::rest::auth::AuthSession>> override {
-    (void)client;
+    TENZIR_UNUSED(client);
     auto credentials
       = std::shared_ptr<google::cloud::storage::oauth2::Credentials>{};
     auto const key = properties.find(std::string{gcp_credentials_property});
@@ -221,6 +222,9 @@ constexpr auto s3_file_io = std::string_view{"tenzir-arrow-s3"};
 constexpr auto aws_credentials_handle_property
   = std::string_view{"tenzir.aws-credentials-handle"};
 
+// A plain std::mutex with a separate map rather than Mutex<T>: the registry
+// is read from iceberg-cpp's synchronous auth-manager and FileIO factory
+// callbacks, which run on arbitrary threads and cannot await an async mutex.
 auto aws_credentials_registry() -> std::pair<
   std::mutex&,
   std::unordered_map<std::string,
@@ -1373,9 +1377,7 @@ auto check_partition_spec(ice::Table const& table,
   if ((*spec)->fields().size() != fields.size()) {
     return mismatch();
   }
-  for (size_t i = 0; i < fields.size(); ++i) {
-    auto const& have = (*spec)->fields()[i];
-    auto const& want = fields[i];
+  for (auto const& [have, want] : std::views::zip((*spec)->fields(), fields)) {
     auto found = (*schema)->FindFieldByName(want.source);
     if (not found.has_value()) {
       return std::unexpected{translate_error(found.error())};
