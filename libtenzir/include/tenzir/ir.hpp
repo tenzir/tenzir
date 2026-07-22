@@ -13,9 +13,12 @@
 #include "tenzir/option.hpp"
 #include "tenzir/splitter.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/variant.hpp"
 
 #include <concepts>
 #include <limits>
+#include <optional>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
@@ -257,6 +260,42 @@ enum class ChannelKind {
   Shuffle,
 };
 
+/// Strategies that control how the planner assigns parallelism to
+/// parallelizable operators.
+namespace parallelism {
+
+/// Use a parallelism degree of 1 for all operators. This is the default.
+struct Disabled {};
+
+/// Use `std::thread::hardware_concurrency()` for parallelizable operators.
+struct Max {};
+
+/// Use a parallelism degree of 1, but derive `Direct` event channels as
+/// `DirectFused` so that each input is fully processed before the next.
+struct Fused {};
+
+// A fixed degree is expressed directly as `size_t`.
+
+} // namespace parallelism
+
+/// How the planner assigns parallelism to parallelizable operators. A `size_t`
+/// selects a fixed degree directly.
+using Parallelism
+  = variant<parallelism::Disabled, parallelism::Max, parallelism::Fused, size_t>;
+
+namespace parallelism {
+
+/// Resolve the effective parallelism from a pipeline's source text and an
+/// optional CLI flag value. A `// parallelism: <value>` directive in the
+/// leading comment lines of `source` takes precedence over `flag`; if neither
+/// is present, the result is `Disabled`. Recognized values are `disabled`,
+/// `max`, `fused`, and any non-negative integer. Returns `std::nullopt` if a
+/// present value fails to parse.
+auto resolve(std::string_view source, Option<std::string_view> flag)
+  -> Option<Parallelism>;
+
+} // namespace parallelism
+
 /// A stage in the pipeline plan: one logical IR operator together with its
 /// degree of parallelism. When the plan is spawned, this stage becomes
 /// `parallelism` runtime operator instances.
@@ -307,8 +346,9 @@ struct Plan {
   /// and records one node per operator with its parallelism and partition
   /// keys. The operators are not spawned yet; spawning is deferred to the
   /// executor.
-  static auto from(pipeline pipe, element_type_tag input,
-                   diagnostic_handler& dh) -> failure_or<Plan>;
+  static auto
+  from(pipeline pipe, element_type_tag input, diagnostic_handler& dh,
+       Parallelism parallelism = parallelism::Disabled{}) -> failure_or<Plan>;
 
   auto input_type() const -> element_type_tag;
 
@@ -343,7 +383,8 @@ auto fmt_ir_plan(const Plan& plan) -> std::string;
 /// channels; all channel-kind decisions live here.
 class PlanBuilder {
 public:
-  explicit PlanBuilder(Plan& plan) : plan_{plan} {
+  explicit PlanBuilder(Plan& plan, Parallelism par = parallelism::Disabled{})
+    : plan_{plan}, par_{par} {
   }
 
   /// Add a node (operator)
@@ -386,7 +427,13 @@ public:
     -> failure_or<PlanPorts>;
 
 private:
+  /// Derive the channel kind between two adjacent planned operators, honoring
+  /// the configured parallelism (e.g. fused event channels).
+  auto derive_channel_kind(const PlannedOperator& up,
+                           const PlannedOperator& down) const -> ChannelKind;
+
   Plan& plan_;
+  Parallelism par_;
 };
 
 class SetIr final : public Operator {

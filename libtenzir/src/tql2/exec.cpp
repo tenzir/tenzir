@@ -2250,8 +2250,8 @@ namespace {
 
 // TODO: failure_or<bool> is bad
 auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
-                  caf::actor_system& sys, SourceMap& source_map)
-  -> failure_or<bool> {
+                  caf::actor_system& sys, SourceMap& source_map,
+                  ir::Parallelism parallelism) -> failure_or<bool> {
   auto source_location = ast.get_location();
   auto make_zero_width_location
     = [](location source_location, uint32_t offset) {
@@ -2365,7 +2365,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     return not ctx.has_failure();
   }
   // Build the executable plan from the IR.
-  auto plan = ir::Plan::from(std::move(ir), tag_v<void>, ctx);
+  auto plan = ir::Plan::from(std::move(ir), tag_v<void>, ctx, parallelism);
   // Do not proceed to execution if there has been an error.
   if (ctx.has_failure()) {
     return false;
@@ -2403,7 +2403,17 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
     if ((cfg.neo and not cfg.dump_pipeline) or cfg.dump_ir or cfg.dump_inst_ir
         or cfg.dump_opt_ir or cfg.dump_ir_plan) {
       // This new code path will eventually supersede the current one.
-      return exec_with_ir(std::move(parsed), cfg, ctx, sys, source_map);
+      auto flag = cfg.parallelism ? Option<std::string_view>{*cfg.parallelism}
+                                  : Option<std::string_view>{};
+      auto parallelism = ir::parallelism::resolve(source->text, flag);
+      if (not parallelism) {
+        diagnostic::error("invalid parallelism value")
+          .hint("expected `disabled`, `max`, `fused`, or an integer")
+          .emit(ctx);
+        return failure::promise();
+      }
+      return exec_with_ir(std::move(parsed), cfg, ctx, sys, source_map,
+                          *parallelism);
     }
     if (cfg.profile) {
       diagnostic::warning("`--profile` is only supported with `--neo`")

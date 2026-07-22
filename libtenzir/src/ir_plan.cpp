@@ -8,12 +8,16 @@
 
 #include "tenzir/async.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/string.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/substitute_ctx.hpp"
 
 #include <algorithm>
+#include <charconv>
+#include <optional>
 #include <ranges>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -22,9 +26,34 @@ namespace tenzir {
 
 namespace {
 
-/// Derive the channel kind between two adjacent planned operators.
-auto derive_channel_kind(const ir::PlannedOperator& up,
-                         const ir::PlannedOperator& down) -> ir::ChannelKind {
+/// Whether the given parallelism strategy requests fused event channels.
+auto is_fused(const ir::Parallelism& parallelism) -> bool {
+  return std::holds_alternative<ir::parallelism::Fused>(parallelism);
+}
+
+/// Resolve the parallelism degree for a parallelizable operator.
+auto resolve_op_parallelism(const ir::Parallelism& parallelism) -> size_t {
+  return match(
+    parallelism,
+    [](ir::parallelism::Disabled) -> size_t {
+      return 1;
+    },
+    [](ir::parallelism::Max) -> size_t {
+      return std::thread::hardware_concurrency();
+    },
+    [](ir::parallelism::Fused) -> size_t {
+      return 1;
+    },
+    [](size_t degree) -> size_t {
+      return degree;
+    });
+}
+
+} // namespace
+
+auto ir::PlanBuilder::derive_channel_kind(const PlannedOperator& up,
+                                          const PlannedOperator& down) const
+  -> ChannelKind {
   TENZIR_ASSERT(not up.output.is<void>(), "cannot construct a void channel");
   if (up.output.is<chunk_ptr>()) {
     return ir::ChannelKind::Bytes;
@@ -33,8 +62,11 @@ auto derive_channel_kind(const ir::PlannedOperator& up,
     return ir::ChannelKind::Shuffle;
   }
   if (up.parallelism == down.parallelism) {
-    return up.parallelism == 1 ? ir::ChannelKind::Direct
-                               : ir::ChannelKind::DirectFused;
+    if (up.parallelism == 1) {
+      return is_fused(par_) ? ir::ChannelKind::DirectFused
+                            : ir::ChannelKind::Direct;
+    }
+    return ir::ChannelKind::DirectFused;
   }
   if (up.parallelism == 1) {
     return ir::ChannelKind::Scatter;
@@ -44,6 +76,8 @@ auto derive_channel_kind(const ir::PlannedOperator& up,
   }
   TENZIR_TODO(); // this can only happen for N:M parallelism
 }
+
+namespace {
 
 /// Collects the plan's sinks
 auto find_sinks(ir::Plan const& plan) -> std::vector<size_t> {
@@ -78,7 +112,8 @@ auto count_instances(ir::Plan const& plan, std::vector<size_t> const& operators)
 } // namespace
 
 auto ir::Plan::from(pipeline pipe, element_type_tag input,
-                    diagnostic_handler& dh) -> failure_or<Plan> {
+                    diagnostic_handler& dh, Parallelism parallelism)
+  -> failure_or<Plan> {
   // optimize
   TENZIR_ASSERT(pipe.lets.empty());
   auto opt = std::move(pipe).optimize(optimize_filter{}, event_order::ordered);
@@ -90,7 +125,7 @@ auto ir::Plan::from(pipeline pipe, element_type_tag input,
   // construct plan
   auto plan = Plan{};
   plan.operators.reserve(pipe.operators.size());
-  auto builder = PlanBuilder{plan};
+  auto builder = PlanBuilder{plan, parallelism};
   auto head = PlanPorts{PlanPort{.node = PlanPort::input, .type = input}};
   TRY(auto tail, builder.lower_pipeline(std::move(pipe), std::move(head), dh));
   // bundle tail and sinks (to gather all output signals)
@@ -176,8 +211,7 @@ auto ir::PlanBuilder::add_node(Box<Operator> op, element_type_tag input,
                                element_type_tag output) -> size_t {
   // Query parallelizability and partition keys before moving the operator. The
   // planner picks the exact degree of parallelism for replicable operators.
-  auto parallelism
-    = op->parallelizable() ? size_t{std::thread::hardware_concurrency()} : 1;
+  auto parallelism = op->parallelizable() ? resolve_op_parallelism(par_) : 1;
   auto partition_keys = op->partition_keys();
   auto node = plan_.operators.size();
   plan_.operators.push_back(PlannedOperator{
@@ -380,6 +414,74 @@ auto ir::Plan::upstream_branch(size_t op) const -> std::vector<bool> {
     }
   }
   return marked;
+}
+
+namespace {
+
+/// Parse a single parallelism value: `disabled`, `max`, `fused`, or a
+/// non-negative integer.
+auto parse_parallelism(std::string_view value)
+  -> std::optional<ir::Parallelism> {
+  value = detail::trim(value);
+  if (value == "disabled") {
+    return ir::parallelism::Disabled{};
+  }
+  if (value == "max") {
+    return ir::parallelism::Max{};
+  }
+  if (value == "fused") {
+    return ir::parallelism::Fused{};
+  }
+  auto degree = size_t{};
+  auto* end = value.data() + value.size();
+  auto [ptr, ec] = std::from_chars(value.data(), end, degree);
+  if (ec == std::errc{} and ptr == end) {
+    return degree;
+  }
+  return std::nullopt;
+}
+
+/// Match a `// parallelism: <value>` directive on a single line. ASCII
+/// whitespace is permitted around `//`, `parallelism`, and `:`.
+auto match_parallelism_directive(std::string_view s)
+  -> std::optional<std::string_view> {
+  s = detail::trim(s);
+  if (not s.starts_with("//")) {
+    return std::nullopt;
+  }
+  s.remove_prefix(2);
+  s = detail::trim(s);
+  if (not s.starts_with("parallelism")) {
+    return std::nullopt;
+  }
+  s.remove_prefix(std::string_view{"parallelism"}.size());
+  s = detail::trim(s);
+  if (s.empty() or s.front() != ':') {
+    return std::nullopt;
+  }
+  s.remove_prefix(1);
+  return detail::trim(s);
+}
+
+} // namespace
+
+auto ir::parallelism::resolve(std::string_view source,
+                              Option<std::string_view> flag)
+  -> Option<Parallelism> {
+  // A directive in the source's leading comment lines wins over the flag.
+  for (auto raw_line : detail::split(source, "\n")) {
+    auto line = detail::trim(raw_line);
+    if (auto directive = match_parallelism_directive(line)) {
+      return parse_parallelism(*directive);
+    }
+    if (not line.empty() and not line.starts_with("//")) {
+      break;
+    }
+  }
+  if (flag) {
+    return parse_parallelism(*flag);
+  }
+  return Disabled{};
 }
 
 } // namespace tenzir

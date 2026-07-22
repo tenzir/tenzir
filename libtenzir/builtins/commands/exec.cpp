@@ -109,6 +109,11 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   if (not profile_str.empty()) {
     cfg.profile = std::move(profile_str);
   }
+  auto parallelism_str
+    = caf::get_or(inv.options, "tenzir.exec.parallelism", std::string{});
+  if (not parallelism_str.empty()) {
+    cfg.parallelism = std::move(parallelism_str);
+  }
   auto filename = std::string{};
   auto content = std::string{};
   const auto& args = inv.arguments;
@@ -203,7 +208,10 @@ public:
                    "return a non-zero exit code if any warnings occured")
         .add<std::string>("profile",
                           "write a channel profile to a file (Chrome Trace "
-                          "Format, viewable in ui.perfetto.dev)"));
+                          "Format, viewable in ui.perfetto.dev)")
+        .add<std::string>("parallelism",
+                          "operator parallelism: disabled (default), max, "
+                          "fused, or an integer"));
     auto factory = command::factory{
       {"exec",
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {
