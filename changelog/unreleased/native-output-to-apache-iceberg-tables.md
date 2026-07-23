@@ -9,47 +9,37 @@ prs:
 created: 2026-07-06T11:42:50.790809Z
 ---
 
-The new `to_iceberg` operator writes events into an Apache Iceberg table
-through a REST catalog, replacing the previous recipe of partitioned Parquet
-via `to_s3`, hand-authored table metadata, and a scheduled PyIceberg commit
-job:
+The new `to_iceberg` operator writes events to Apache Iceberg tables through a
+REST catalog:
 
 ```tql
 subscribe "ocsf"
 ocsf::cast
-to_iceberg "security.ocsf", catalog="https://catalog.example.com",
+to_iceberg "security.ocsf",
+  catalog="https://catalog.example.com",
   partition_by=[class_uid, day(time)]
 ```
 
-The operator creates missing tables from the schema of the first arriving
-events (`mode` selects between `create_append`, `create`, and `append`) and
-evolves the table schema continuously: fields the table does not have yet —
-at any nesting depth — are added through a metadata-only schema update before
-any data file carries them, so heterogeneous streams like OCSF converge into
-one wide table without name mappings or manual `ALTER TABLE` steps. Existing
-columns too narrow for the incoming values widen in place where the Iceberg
-spec allows it (`int` to `long`, `float` to `double`); individual values that
-still cannot convert land as null without affecting neighboring rows, except
-in columns the table marks as required, which reject the input with an error
-instead of writing nulls.
+The operator creates missing tables from the first arriving events (`mode`
+selects between `create_append`, `create`, and `append`) and evolves the table
+schema continuously. It adds new fields at any nesting depth through a
+metadata-only schema update before writing data files that carry them, so
+heterogeneous streams like OCSF converge into one wide table without name
+mappings or manual `ALTER TABLE` steps. Existing columns widen in place where
+the Iceberg spec allows it (`int` to `long`, `float` to `double`). Values that
+still do not fit are written as null with a warning; for required columns the
+operator fails with an error instead, so data is never lost silently.
 
-Tables partition via Iceberg's hidden partitioning: `partition_by` accepts
-field paths and the symbolic transforms `year`, `month`, `day`, `hour`,
-`bucket`, and `truncate`, without materializing helper columns. Data files
-are zstd-compressed Parquet with field IDs and per-column metrics, rotated by
-`max_size` and `timeout`, and committed as verified snapshots that retry on
-top of concurrent updates. Partitions buffer in memory under a shared
-`buffer_size` budget before opening data files, so high partition
-cardinality degrades file sizes gracefully instead of thrashing open
-writers. S3 and S3-compatible object stores are supported
-via `aws_iam`, `s3_endpoint`, and `s3_path_style`; catalogs taking bearer
-tokens authenticate via `token`. AWS-managed catalogs work through
-`catalog_aws_service`: `glue` targets the AWS Glue Data Catalog and
-`s3tables` targets Amazon S3 Tables, signing catalog requests with SigV4
-from the same `aws_iam` credentials. Google-hosted catalogs (BigLake) work with
-one credential for both the catalog and `gs://` storage: pass a
-service-account key via `gcp_service_account_key`, or set `gcp_auth=true` to
-use Application Default Credentials.
+`partition_by` uses Iceberg's hidden partitioning: it accepts field paths and
+the transforms `year`, `month`, `day`, `hour`, `bucket`, and `truncate`,
+without materializing helper columns. Data files are zstd-compressed Parquet
+with field IDs and per-column metrics, rotated by `max_size` and `timeout` and
+committed as Iceberg snapshots that retry on top of concurrent updates.
+Partitions buffer under a shared `buffer_size` budget, so high partition
+cardinality produces fewer, larger files instead of many small ones.
 
-The operator ships as experimental: delivery is at-least-once, upgrading to
-exactly-once automatically once pipeline checkpointing lands.
+The operator connects to S3 and S3-compatible object stores (`aws_iam`,
+`s3_endpoint`, `s3_path_style`), catalogs taking bearer tokens (`token`), AWS
+Glue and Amazon S3 Tables (`catalog_aws_service`), and Google BigLake with
+`gs://` storage (`gcp_service_account_key`, or `gcp_auth=true` for Application
+Default Credentials).
