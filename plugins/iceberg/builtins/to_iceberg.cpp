@@ -80,6 +80,14 @@ constexpr auto max_streaming_writers = size_t{64};
 /// of high-cardinality partition keys with tiny rows could otherwise grow
 /// that overhead without bound until `timeout`.
 constexpr auto max_open_partitions = size_t{4096};
+/// Upper bound on staged data files awaiting a commit. Eviction stages
+/// files without committing (a cascade must not become a commit storm) and
+/// normally only arms the commit timer, so a sustained burst of unique
+/// partition keys would otherwise accumulate staged file handles until
+/// `timeout`. At the cap, the files commit immediately. Only effective
+/// before checkpointing takes over; from then on the checkpoint cadence
+/// bounds staged files, and committing early would break exactly-once.
+constexpr auto max_pending_files = size_t{1024};
 
 TENZIR_ENUM(mode, create_append, create, append);
 TENZIR_ENUM(aws_catalog_service, glue, s3tables);
@@ -1666,7 +1674,11 @@ private:
       closed_any = true;
     }
     if (closed_any and not checkpointing_) {
-      arm_commit_timer(ctx);
+      if (pending_files_.size() >= max_pending_files) {
+        co_await commit_staged(pending_files_, ctx);
+      } else {
+        arm_commit_timer(ctx);
+      }
     }
   }
 
