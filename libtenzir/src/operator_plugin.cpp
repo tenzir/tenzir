@@ -355,6 +355,24 @@ public:
     return "GenericIr";
   }
 
+  auto display_name() const -> std::string override {
+    return desc_->name;
+  }
+
+  auto parallelizable() const -> bool override {
+    if (desc_->parallelizable_when) {
+      return (*desc_->parallelizable_when)(materialize_args());
+    }
+    return desc_->parallelizable;
+  }
+
+  auto partition_keys() const -> std::vector<ast::expression> override {
+    if (not desc_->partition_keys) {
+      return {};
+    }
+    return (*desc_->partition_keys)(materialize_args());
+  }
+
   auto copy() const -> Box<ir::Operator> override {
     return GenericIr{*this};
   }
@@ -398,18 +416,10 @@ public:
     return failure::promise();
   }
 
-  auto spawn(element_type_tag input) const -> AnyOperator override {
-    auto spawner = std::optional<AnySpawn>{};
-    if (desc_->spawner) {
-      auto noop_dh = null_diagnostic_handler{};
-      auto ctx = DescribeCtx{args_,  named_args_,     pipeline_,
-                             *desc_, main_location(), noop_dh};
-      auto result = (*desc_->spawner)(input, ctx);
-      TENZIR_ASSERT(result);
-      if (*result) {
-        spawner = std::move(**result);
-      }
-    }
+  /// Materialize a typed argument bundle from the parsed args, named args,
+  /// pipeline, filter, location, and order. Shared by `spawn()`,
+  /// `parallelizable()`, and `partition_keys()`.
+  auto materialize_args() const -> Any {
     auto args = desc_->make_args();
     for (auto [idx, arg] : detail::enumerate(args_)) {
       match(
@@ -460,6 +470,22 @@ public:
     if (desc_->set_order) {
       (*desc_->set_order)(args, order_);
     }
+    return args;
+  }
+
+  auto spawn(element_type_tag input) const -> AnyOperator override {
+    auto spawner = std::optional<AnySpawn>{};
+    if (desc_->spawner) {
+      auto noop_dh = null_diagnostic_handler{};
+      auto ctx = DescribeCtx{args_,  named_args_,     pipeline_,
+                             *desc_, main_location(), noop_dh};
+      auto result = (*desc_->spawner)(input, ctx);
+      TENZIR_ASSERT(result);
+      if (*result) {
+        spawner = std::move(**result);
+      }
+    }
+    auto args = materialize_args();
     auto with_name = [&](AnyOperator op) -> AnyOperator {
       match(op, [&](auto& op) {
         op->with_name(desc_->name);

@@ -8,7 +8,7 @@ warning: unexpected assignment
   |     ~~~~~~~ 
   |
 
-warning: expected `bool`, but got `null`
+warning: expected `bool`, got `null`
  --> tests/language/expr/assignment_in_condition.tql:6:5
   |
 6 | if ($x = 42) { }

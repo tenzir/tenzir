@@ -221,6 +221,7 @@ class plugin2 final : public virtual operator_plugin2<drop_operator2>,
 public:
   auto describe() const -> Description override {
     auto d = Describer<DropArgs, Drop>{};
+    d.parallelizable();
     auto fields = d.variadic("fields", &DropArgs::fields, "field");
     d.validate([=](DescribeCtx& ctx) -> Empty {
       auto values = ctx.get_all(fields);

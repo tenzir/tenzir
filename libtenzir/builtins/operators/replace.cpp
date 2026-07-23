@@ -377,6 +377,7 @@ struct replace : public virtual operator_plugin2<replace_operator>,
                  public virtual OperatorPlugin {
   auto describe() const -> Description override {
     auto d = Describer<ReplaceArgs, Replace>{};
+    d.parallelizable();
     auto what = d.named("what", &ReplaceArgs::what);
     auto with = d.named("with", &ReplaceArgs::with);
     d.optional_variadic("fields", &ReplaceArgs::path, "field");

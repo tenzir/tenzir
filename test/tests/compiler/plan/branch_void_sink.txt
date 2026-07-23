@@ -1,0 +1,7 @@
+c0: {input} -- version
+c1: pass -- discard
+c2: pass -- to_stdout
+
+links:
+  c0 --split-> c1 c2
+  c1 c2 --gather-signals-> {output}

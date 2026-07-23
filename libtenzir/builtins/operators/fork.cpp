@@ -7,9 +7,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/async.hpp"
-#include "tenzir/operator_plugin.hpp"
+#include "tenzir/compile_ctx.hpp"
+#include "tenzir/ir.hpp"
+#include "tenzir/panic.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/substitute_ctx.hpp"
 
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/scope_linked.hpp>
@@ -280,38 +283,89 @@ private:
   located<pipeline> pipe_;
 };
 
-struct ForkArgs {
-  located<ir::pipeline> pipe;
+struct ForkIrArgs {
+  location keyword;
+  location pipe_location;
+  ir::pipeline pipe;
+
+  friend auto inspect(auto& f, ForkIrArgs& x) -> bool {
+    return f.object(x).fields(f.field("keyword", x.keyword),
+                              f.field("pipe_location", x.pipe_location),
+                              f.field("pipe", x.pipe));
+  }
 };
 
-class Fork final : public Operator<table_slice, table_slice> {
+class ForkIr final : public ir::Operator {
 public:
-  explicit Fork(ForkArgs args) : args_{std::move(args)} {
+  ForkIr() = default;
+
+  explicit ForkIr(ForkIrArgs args) : args_{std::move(args)} {
   }
 
-  auto start(OpCtx& ctx) -> Task<void> override {
-    if (not started_) {
-      co_await ctx.spawn_sub<table_slice>(int64_t{0}, args_.pipe.inner);
-      started_ = true;
-    }
+  auto name() const -> std::string override {
+    return "fork_ir";
   }
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    if (auto sub = ctx.get_sub(int64_t{0})) {
-      auto& pipe = as<SubHandle<table_slice>>(*sub);
-      std::ignore = co_await pipe.push(input);
+  auto copy() const -> Box<ir::Operator> override {
+    return ForkIr{args_};
+  }
+
+  auto move() && -> Box<ir::Operator> override {
+    return ForkIr{std::move(args_)};
+  }
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
+    return args_.pipe.substitute(ctx, instantiate);
+  }
+
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<element_type_tag> override {
+    if (input.is_not<table_slice>()) {
+      diagnostic::error("`fork` expects events as input")
+        .primary(args_.keyword)
+        .emit(dh);
+      return failure::promise();
     }
-    co_await push(std::move(input));
+    TRY(auto branch_ty, args_.pipe.infer_type(input, dh));
+    if (branch_ty.is_not<void>()) {
+      diagnostic::error("`fork` subpipeline must end in a sink")
+        .primary(args_.pipe_location)
+        .emit(dh);
+      return failure::promise();
+    }
+    return tag_v<table_slice>;
+  }
+
+  auto spawn(element_type_tag) const -> AnyOperator override {
+    panic("cannot spawn fork; it must be lowered into the plan");
+  }
+
+  auto plan(ir::PlanBuilder& builder, ir::PlanPorts input,
+            diagnostic_handler& dh) && -> failure_or<ir::PlanPorts> override {
+    // Broadcast the input once: one lane continues the main pipeline unchanged,
+    // the other drives the side-effect subpipeline.
+    auto src = builder.into_single(input);
+    auto ty = tag_v<table_slice>;
+    auto passthrough = builder.add_identity(ty);
+    auto side_effect = builder.add_identity(ty);
+    TRY(auto tail, builder.lower_pipeline(
+                     std::move(args_.pipe),
+                     ir::PlanPorts{ir::PlanPort{side_effect, ty}}, dh));
+    TENZIR_ASSERT(tail.empty());
+    builder.add_broadcast(src, {passthrough, side_effect});
+    return ir::PlanPorts{ir::PlanPort{passthrough, ty}};
+  }
+
+  friend auto inspect(auto& f, ForkIr& x) -> bool {
+    return f.apply(x.args_);
   }
 
 private:
-  ForkArgs args_;
-  bool started_ = false;
+  ForkIrArgs args_;
 };
 
-class fork_plugin final : public virtual operator_plugin2<fork_operator>,
-                          public virtual OperatorPlugin {
+class fork_plugin final : public virtual operator_plugin2<fork_operator> {
 public:
   auto name() const -> std::string override {
     return "tql2.fork";
@@ -325,33 +379,48 @@ public:
           .parse(inv, ctx));
     return std::make_unique<fork_operator>(std::move(pipe));
   }
+};
 
-  auto describe() const -> Description override {
-    auto d = Describer<ForkArgs, Fork>{};
-    auto pipe = d.pipeline(&ForkArgs::pipe, SubOptimize::fork);
-    d.validate([pipe](DescribeCtx& ctx) -> Empty {
-      TRY(auto p, ctx.get(pipe));
-      auto output = p.inner.infer_type(tag_v<table_slice>, ctx);
-      if (output.is_error()) {
-        return {};
-      }
-      if (output->is_not<void>()) {
-        diagnostic::error("subpipeline must end in a sink")
-          .primary(p.source)
-          .emit(ctx);
-      }
-      return {};
-    });
-    return d.invariant_order();
+class fork_ir_plugin final : public virtual operator_compiler_plugin {
+public:
+  auto name() const -> std::string override {
+    return "fork";
+  }
+
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<ir::CompileResult> override {
+    auto args = ForkIrArgs{};
+    args.keyword = inv.op.get_location();
+    if (inv.args.size() != 1) {
+      diagnostic::error("`fork` expects exactly one pipeline argument")
+        .primary(args.keyword)
+        .hint("use `fork { … }`")
+        .emit(ctx);
+      return failure::promise();
+    }
+    auto* pipe_expr = try_as<ast::pipeline_expr>(inv.args.front());
+    if (not pipe_expr) {
+      diagnostic::error("`fork` expects a pipeline argument `{{ … }}`")
+        .primary(inv.args.front())
+        .emit(ctx);
+      return failure::promise();
+    }
+    args.pipe_location = pipe_expr->get_location();
+    TRY(auto pipe_ir, std::move(pipe_expr->inner).compile(ctx));
+    args.pipe = std::move(pipe_ir);
+    return ForkIr{std::move(args)};
   }
 };
 
 using internal_fork_source_plugin
   = operator_inspection_plugin<internal_fork_source_operator>;
+using fork_ir_inspection_plugin = inspection_plugin<ir::Operator, ForkIr>;
 
 } // namespace
 
 } // namespace tenzir::plugins::fork
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::fork::fork_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::fork::fork_ir_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::fork::fork_ir_inspection_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::fork::internal_fork_source_plugin)

@@ -550,6 +550,18 @@ public:
       = d.named("write_timeout", &DeduplicateArgs::write_timeout);
     auto read_timeout = d.named("read_timeout", &DeduplicateArgs::read_timeout);
     auto count_field = d.named("count_field", &DeduplicateArgs::count_field);
+    d.parallelizable([](const DeduplicateArgs& args) -> bool {
+      // parallelize when `distance` is not used
+      return not args.distance;
+    });
+    d.partition_keys(
+      [](const DeduplicateArgs& args) -> std::vector<ast::expression> {
+        if (args.keys.empty()) {
+          // The default dedup key is the whole row (`this`).
+          return {ast::expression{ast::this_{location::unknown}}};
+        }
+        return args.keys;
+      });
     d.validate([=](DescribeCtx& ctx) -> Empty {
       auto key_values = ctx.get_all(keys);
       auto key_exprs = std::vector<ast::expression>{};

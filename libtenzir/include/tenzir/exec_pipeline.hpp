@@ -34,12 +34,14 @@ struct exec_config {
   bool dump_ir = false;
   bool dump_inst_ir = false;
   bool dump_opt_ir = false;
+  bool dump_ir_plan = false;
 
   bool multi = false;
   bool strict = false;
   bool neo = true;
   bool legacy = false;
   std::optional<std::string> profile;
+  std::optional<std::string> parallelism;
 };
 
 auto exec_pipeline(Arc<const Source> source, diagnostic_handler& dh,

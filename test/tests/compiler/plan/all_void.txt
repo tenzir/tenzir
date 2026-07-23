@@ -1,0 +1,1 @@
+c0: {input} -- version -- discard -- {output}
