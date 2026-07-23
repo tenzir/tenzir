@@ -1245,35 +1245,63 @@ private:
         if (not list_source) {
           return type_mismatch();
         }
-        // The values child covers the array's entire buffer range, so the
-        // original offsets remain valid for the converted values. That
-        // range may also hold values no list slot references, so the
-        // element's required check runs on the flattened result below, not
-        // inside the recursion.
         auto const& element = target->type()->field(0);
-        auto values
-          = project_column(list_source->values(), element->WithNullable(true),
-                           path + "[]", list_source->values()->length(),
-                           nullptr, ctx);
+        // Project only values that live rows reference: a sliced batch's
+        // child buffer extends beyond the slice, and null rows may span
+        // arbitrary ranges. Recursing over the whole buffer would let a
+        // required nested field reject the batch over values no written row
+        // references. When the buffer holds exactly the referenced range,
+        // keep it as-is to preserve the zero-copy path.
+        auto const exact = list_source->offset() == 0
+                           and list_source->null_count() == 0
+                           and list_source->value_offset(0) == 0
+                           and list_source->value_offset(list_source->length())
+                                 == list_source->values()->length();
+        auto flat
+          = exact ? list_source->values() : check(list_source->Flatten());
+        auto values = project_column(flat, element->WithNullable(true),
+                                     path + "[]", flat->length(), nullptr, ctx);
         if (not values) {
           return nullptr;
         }
-        auto result = std::make_shared<arrow::ListArray>(
-          arrow::list(element), list_source->length(),
-          list_source->data()->buffers[1], std::move(values),
-          list_source->null_bitmap(), list_source->data()->null_count,
-          list_source->offset());
-        if (not element->nullable() and result->values()->null_count() > 0) {
-          auto flat = check(result->Flatten());
-          if (flat->null_count() > 0) {
-            diagnostic::error("column `{}[]` is required in the Iceberg "
-                              "table but the input holds null elements",
-                              path)
-              .primary(args_.operator_location)
-              .emit(ctx.dh());
-            done_ = true;
-            return nullptr;
+        // Every projected value is referenced now, so the element's
+        // nullability check needs no flattening.
+        if (not element->nullable() and values->null_count() > 0) {
+          diagnostic::error("column `{}[]` is required in the Iceberg "
+                            "table but the input holds null elements",
+                            path)
+            .primary(args_.operator_location)
+            .emit(ctx.dh());
+          done_ = true;
+          return nullptr;
+        }
+        auto result = std::shared_ptr<arrow::ListArray>{};
+        if (exact) {
+          result = std::make_shared<arrow::ListArray>(
+            arrow::list(element), list_source->length(),
+            list_source->data()->buffers[1], std::move(values), nullptr, 0, 0);
+        } else {
+          // The flattened values dropped unreferenced ranges, so the
+          // offsets compact accordingly, with null rows as empty ranges.
+          auto offsets = arrow::Int32Builder{};
+          check(offsets.Reserve(list_source->length() + 1));
+          auto offset = int32_t{0};
+          offsets.UnsafeAppend(offset);
+          for (auto i = int64_t{0}; i < list_source->length(); ++i) {
+            if (list_source->IsValid(i)) {
+              offset += list_source->value_length(i);
+            }
+            offsets.UnsafeAppend(offset);
           }
+          auto offsets_array = check(offsets.Finish());
+          auto bitmap = std::shared_ptr<arrow::Buffer>{};
+          if (list_source->null_count() > 0) {
+            bitmap = check(arrow::compute::IsValid(source)).array()->buffers[1];
+          }
+          result = std::make_shared<arrow::ListArray>(
+            arrow::list(element), list_source->length(),
+            offsets_array->data()->buffers[1], std::move(values),
+            std::move(bitmap), list_source->null_count(), 0);
         }
         if (required and nulls_under_valid_parent(result, parent) > 0) {
           return fail_required("the input holds null lists for it");
