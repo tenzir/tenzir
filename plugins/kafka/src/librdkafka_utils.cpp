@@ -302,6 +302,24 @@ private:
   diagnostic_handler& dh_;
 };
 
+/// Callback that records producer delivery-report failures for later reporting.
+class delivery_report_callback final : public RdKafka::DeliveryReportCb {
+public:
+  /// Constructs a callback that forwards failures into `state`.
+  explicit delivery_report_callback(
+    std::shared_ptr<kafka_delivery_report_state> state)
+    : state_{std::move(state)} {
+  }
+
+  /// Records the delivery outcome of one produced message.
+  auto dr_cb(RdKafka::Message& message) -> void override {
+    state_->record(message);
+  }
+
+private:
+  std::shared_ptr<kafka_delivery_report_state> state_;
+};
+
 /// Callback that preserves committed offsets during partition rebalance.
 class rebalance_callback final : public RdKafka::RebalanceCb {
 public:
@@ -580,6 +598,15 @@ auto make_producer_configuration(record const& options,
   cfg.event_callback = std::make_shared<error_event_callback>(dh);
   if (auto err
       = set_conf_callback(*cfg.conf, "event_cb", cfg.event_callback.get());
+      err) {
+    return err;
+  }
+
+  cfg.delivery_state = std::make_shared<kafka_delivery_report_state>();
+  cfg.delivery_callback
+    = std::make_shared<delivery_report_callback>(cfg.delivery_state);
+  if (auto err
+      = set_conf_callback(*cfg.conf, "dr_cb", cfg.delivery_callback.get());
       err) {
     return err;
   }

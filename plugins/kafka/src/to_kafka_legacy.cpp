@@ -15,10 +15,12 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/resolve.hpp>
 
+#include <chrono>
 #include <condition_variable>
 #include <deque>
 #include <mutex>
 #include <thread>
+#include <tuple>
 #include <variant>
 
 namespace tenzir::plugins::kafka::legacy {
@@ -164,6 +166,15 @@ public:
     }
   }
 
+  // Flushes outstanding messages so that the delivery reports for the final
+  // in-flight batch are served. The delivery failures they record are surfaced
+  // by the operator on its own thread via `configuration::take_delivery_error`,
+  // because a `diagnostic::error` emitted from a worker thread during teardown
+  // does not reliably abort the pipeline.
+  auto finish() -> void {
+    std::ignore = producer_.flush(std::chrono::seconds{10});
+  }
+
   auto send_with_expression(table_slice const& slice) -> void {
     auto const& ms = eval(args_.message, slice, dh_);
     for (auto const& s : ms) {
@@ -258,9 +269,27 @@ auto to_kafka_operator::operator()(generator<table_slice> input,
   }
   co_yield ctrl.resolve_secrets_must_yield(
     configure_or_request(args_.options, *config, ctrl.diagnostics()));
+  // Register the delivery-report callback before any producer is created so
+  // that asynchronous delivery failures are captured rather than dropped.
+  if (auto err = config->enable_delivery_reports(); err.valid()) {
+    diagnostic::error(std::move(err)).primary(args_.op).emit(dh);
+    co_return;
+  }
+  // Surfaces the first asynchronous delivery failure (e.g. a broker-side
+  // "message too large") as a hard error. Always called on the operator thread
+  // so that the emitted diagnostic reliably aborts the pipeline. Returns true
+  // if an error was emitted.
+  auto emit_delivery_error = [&] {
+    if (auto e = config->take_delivery_error(); e.valid()) {
+      diagnostic::error(std::move(e)).primary(args_.op).emit(dh);
+      return true;
+    }
+    return false;
+  };
   if (args_.jobs == 0) {
-    // Single-threaded path.
-    auto worker = produce_worker::make(std::move(*config), args_, dh);
+    // Single-threaded path. Copy the configuration so `config` retains the
+    // shared delivery-report callback for `emit_delivery_error` below.
+    auto worker = produce_worker::make(*config, args_, dh);
     if (not worker) {
       co_return;
     }
@@ -270,8 +299,13 @@ auto to_kafka_operator::operator()(generator<table_slice> input,
         continue;
       }
       worker->send(slice);
+      if (emit_delivery_error()) {
+        co_return;
+      }
       co_yield {};
     }
+    worker->finish();
+    emit_delivery_error();
   } else {
     // Multi-threaded path.
     auto sync = produce_synchronizer{};
@@ -280,7 +314,9 @@ auto to_kafka_operator::operator()(generator<table_slice> input,
     auto guard = detail::scope_guard{[&]() noexcept {
       sync.shutdown();
       for (auto& thread : threads) {
-        thread.join();
+        if (thread.joinable()) {
+          thread.join();
+        }
       }
     }};
     for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
@@ -297,6 +333,7 @@ auto to_kafka_operator::operator()(generator<table_slice> input,
           }
           worker->send(slice);
         }
+        worker->finish();
       });
     }
     for (auto const& slice : input) {
@@ -307,7 +344,21 @@ auto to_kafka_operator::operator()(generator<table_slice> input,
       for (auto _ : sync.put(slice)) {
         co_yield {};
       }
+      // Delivery reports are served on the worker threads; surface any failure
+      // here so it aborts the pipeline while input is still being produced.
+      if (emit_delivery_error()) {
+        break;
+      }
     }
+    // Stop the workers and wait for their final flushes so that all delivery
+    // reports have been served, then surface any remaining failure.
+    sync.shutdown();
+    for (auto& thread : threads) {
+      if (thread.joinable()) {
+        thread.join();
+      }
+    }
+    emit_delivery_error();
   }
 }
 
