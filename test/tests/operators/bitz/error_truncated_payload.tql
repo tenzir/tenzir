@@ -1,0 +1,6 @@
+---
+error: true
+---
+from_stdin {
+  read_bitz
+}
