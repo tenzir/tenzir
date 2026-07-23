@@ -87,6 +87,7 @@ private:
         } else {
           error(errors);
         }
+        return;
       }
       then();
     } else {
@@ -96,6 +97,7 @@ private:
         } else {
           error(std::move(state_), errors);
         }
+        return;
       }
       then(std::move(state_));
     }
