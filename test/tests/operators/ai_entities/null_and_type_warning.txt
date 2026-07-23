@@ -1,0 +1,32 @@
+{
+  m: "ping",
+  ai: {
+    entities: [
+      {
+        text: "ping",
+        label: "word",
+        start: 0,
+        end: 4,
+        score: 0.9525741268224334,
+      },
+    ],
+  },
+}
+{
+  m: null,
+  ai: {
+    entities: null,
+  },
+}
+{
+  m: 42,
+  ai: {
+    entities: null,
+  },
+}
+warning: `field` must evaluate to `string`
+ --> tests/operators/ai_entities/null_and_type_warning.tql:7:20
+  |
+7 | ai::entities field=m, model="inputs/gliner", labels=["word"]
+  |                    ~ 
+  |

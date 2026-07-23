@@ -29,6 +29,8 @@
   robin-map,
   libunwind,
   xxhash,
+  onnxruntime,
+  sentencepiece,
   rabbitmq-c,
   libnats-c,
   yaml-cpp,
@@ -87,6 +89,14 @@ in
     libpcap
     libunwind
     libnats-c
+  ]
+  # Neither onnxruntime nor sentencepiece build in pkgsStatic; the gliner
+  # plugin disables itself when they are absent.
+  ++ lib.optionals (!isStatic) [
+    onnxruntime
+    sentencepiece
+  ]
+  ++ [
     rabbitmq-c
     rdkafka
     cyrus_sasl

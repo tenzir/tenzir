@@ -1,0 +1,8 @@
+---
+timeout: 60
+---
+
+// The fixture model (inputs/gliner) deterministically tags every word with
+// the first label at score sigmoid(3.0).
+from {m: "alice visited berlin"}
+ai::entities field=m, model="inputs/gliner", labels=["name", "city"]

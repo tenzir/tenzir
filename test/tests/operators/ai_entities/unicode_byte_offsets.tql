@@ -1,0 +1,9 @@
+---
+timeout: 60
+---
+
+// Span offsets are UTF-8 byte offsets: "Zoë" is 4 bytes, so the second word
+// starts at byte 5.
+from {m: "Zoë päßt"}
+ai::entities field=m, model="inputs/gliner", labels=["word"]
+select spans=ai.entities

@@ -1,0 +1,28 @@
+{
+  m: "alice visited berlin",
+  ai: {
+    entities: [
+      {
+        text: "alice",
+        label: "name",
+        start: 0,
+        end: 5,
+        score: 0.9525741268224334,
+      },
+      {
+        text: "visited",
+        label: "name",
+        start: 6,
+        end: 13,
+        score: 0.9525741268224334,
+      },
+      {
+        text: "berlin",
+        label: "name",
+        start: 14,
+        end: 20,
+        score: 0.9525741268224334,
+      },
+    ],
+  },
+}
