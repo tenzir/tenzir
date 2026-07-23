@@ -422,7 +422,12 @@ public:
   auto add_channel(std::vector<size_t> from, std::vector<size_t> to,
                    ChannelKind kind) -> void;
 
-  /// Add a channel and inferring its kind:
+  /// Add a channel and infer its kind:
+  /// - when connecting input/output, direct is used
+  /// - otherwise infered from parallelism of upstream and downstream.
+  auto add_channel(size_t from, size_t to) -> void;
+
+  /// Add a channel and infer its kind:
   /// - when connecting input/output, direct is used
   /// - many-to-one infers gather,
   /// - one-to-one infers depending on parallleism of upstream and downstream.
