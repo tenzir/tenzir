@@ -11,10 +11,8 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/metric_handler.hpp"
 #include "tenzir/modules.hpp"
-#include "tenzir/parser_interface.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/source.hpp"
-#include "tenzir/tql/parser.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/detail/stringification_inspector.hpp>
@@ -226,14 +224,12 @@ auto pipeline::optimize(expression const& filter, event_order order) const
     if (opt.filter) {
       current_filter = std::move(*opt.filter);
     } else if (current_filter != trivially_true_expression()) {
-      // TODO: We just want to create a `where {current}` operator. However,
-      // we currently only have the interface for parsing this from a string.
-      auto diag = null_diagnostic_handler{};
-      auto pi
-        = tql::make_parser_interface(fmt::format("{}", current_filter), diag);
-      const auto* where_plugin = plugins::find<operator_parser_plugin>("where");
-      TENZIR_ASSERT(where_plugin);
-      result.push_back(where_plugin->parse_operator(*pi));
+      // Materialize the residual filter as a `where` operator.
+      auto factories = plugins::get<where_factory_plugin>();
+      const auto factory = factories.begin();
+      TENZIR_ASSERT(factory != factories.end());
+      result.push_back((*factory)->make_where_operator(
+        located<expression>{std::move(current_filter), location::unknown}));
       current_filter = trivially_true_expression();
     }
     if (opt.replacement) {
