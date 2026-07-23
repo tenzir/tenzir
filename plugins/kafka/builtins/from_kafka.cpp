@@ -1327,6 +1327,10 @@ private:
       }
       auto batch = co_await queue.next_batch(
         max_messages - pending_messages.size(), wait);
+      // `next_batch` performs a synchronous librdkafka poll. Explicitly
+      // reschedule afterwards so one source cannot monopolize an I/O executor
+      // thread and prevent other Kafka sources from ever starting.
+      co_await folly::coro::co_reschedule_on_current_executor;
       if (perf_enabled_) {
         add_perf_counter(
           perf_.fetch_next_batch_wait_ns,
