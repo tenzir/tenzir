@@ -10,6 +10,7 @@
 #include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/data.hpp>
+#include <tenzir/detail/feather.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/make_byte_reader.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -21,10 +22,8 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/io/memory.h>
-#include <arrow/ipc/reader.h>
 #include <arrow/ipc/writer.h>
 #include <arrow/util/compression.h>
-#include <arrow/util/key_value_metadata.h>
 
 #include <algorithm>
 #include <array>
@@ -193,43 +192,20 @@ private:
   auto parse_message(std::span<std::byte const> message,
                      Push<table_slice>& push, diagnostic_handler& dh) const
     -> Task<void> {
-    auto input = std::make_shared<arrow::io::BufferReader>(
-      arrow::Buffer::Wrap(message.data(), message.size()));
-    auto reader_result = arrow::ipc::RecordBatchStreamReader::Open(
-      input, arrow_ipc_read_options());
-    if (not reader_result.ok()) {
-      emit(diagnostic::error("failed to decode BITZ payload as Feather stream")
-             .note("{}", reader_result.status().ToStringWithoutContextLines()),
-           dh);
-      co_return;
+    // A BITZ message payload is a complete, self-contained Feather stream, so
+    // we hand the already-buffered message to the shared Feather decoder as a
+    // single chunk. The chunk view is non-owning; `message` stays valid until
+    // this task completes.
+    auto payload = [](chunk_ptr chunk) -> generator<chunk_ptr> {
+      co_yield std::move(chunk);
+    };
+    auto chunk = chunk::make(message, []() noexcept {});
+    for (auto&& slice : detail::parse_feather(payload(std::move(chunk)), dh)) {
+      if (slice.rows() == 0) {
+        continue;
+      }
+      co_await push(std::move(slice));
     }
-    auto reader = reader_result.MoveValueUnsafe();
-    while (true) {
-      auto next = reader->ReadNext();
-      if (not next.ok()) {
-        emit(diagnostic::error("failed to read record batch from BITZ payload")
-               .note("{}", next.status().ToStringWithoutContextLines()),
-             dh);
-        co_return;
-      }
-      if (not next->batch) {
-        break;
-      }
-      auto validate_status = next->batch->Validate();
-      TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
-      auto const& metadata = next->batch->schema()->metadata();
-      if (not metadata
-          or std::find(metadata->keys().begin(), metadata->keys().end(),
-                       "TENZIR:name:0")
-               == metadata->keys().end()) {
-        emit(diagnostic::error("not implemented")
-               .note("cannot convert Feather without Tenzir metadata"),
-             dh);
-        co_return;
-      }
-      co_await push(table_slice{next->batch});
-    }
-    std::ignore = reader->Close();
   }
 
   ReadBitzArgs args_;
@@ -353,52 +329,6 @@ private:
   std::shared_ptr<arrow::util::Codec> codec_;
 };
 
-// Decodes a BITZ payload (a Zstd-compressed Feather IPC stream) into slices.
-auto decode_bitz_payload(chunk_ptr message, diagnostic_handler& dh)
-  -> generator<table_slice> {
-  auto input = std::make_shared<arrow::io::BufferReader>(
-    arrow::Buffer::Wrap(message->data(), message->size()));
-  auto reader_result = arrow::ipc::RecordBatchStreamReader::Open(
-    input, arrow_ipc_read_options());
-  if (not reader_result.ok()) {
-    diagnostic::error("failed to decode BITZ payload as Feather stream")
-      .note("{}", reader_result.status().ToStringWithoutContextLines())
-      .emit(dh);
-    co_return;
-  }
-  auto reader = reader_result.MoveValueUnsafe();
-  while (true) {
-    auto next = reader->ReadNext();
-    if (not next.ok()) {
-      diagnostic::error("failed to read record batch from BITZ payload")
-        .note("{}", next.status().ToStringWithoutContextLines())
-        .emit(dh);
-      co_return;
-    }
-    if (not next->batch) {
-      break;
-    }
-    auto validate_status = next->batch->Validate();
-    TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
-    auto const& metadata = next->batch->schema()->metadata();
-    if (not metadata
-        or std::find(metadata->keys().begin(), metadata->keys().end(),
-                     "TENZIR:name:0")
-             == metadata->keys().end()) {
-      diagnostic::error("not implemented")
-        .note("cannot convert Feather without Tenzir metadata")
-        .emit(dh);
-      co_return;
-    }
-    auto slice = table_slice{next->batch};
-    if (slice.rows() == 0) {
-      continue;
-    }
-    co_yield std::move(slice);
-  }
-  std::ignore = reader->Close();
-}
-
 // Serializes a slice into a BITZ payload (a Zstd-compressed Feather IPC stream).
 auto encode_bitz_payload(table_slice input, diagnostic_handler& dh)
   -> Option<chunk_ptr> {
@@ -474,6 +404,28 @@ auto encode_bitz_payload(table_slice input, diagnostic_handler& dh)
   return chunk::make(buffer_result.MoveValueUnsafe());
 }
 
+// Yields exactly `remaining` bytes pulled from `byte_reader` in bounded pieces,
+// decrementing `remaining` as bytes are produced. Yields an empty chunk for
+// backpressure and stops early if the upstream is exhausted.
+template <class ByteReader>
+auto take_bytes(ByteReader& byte_reader, uint64_t& remaining)
+  -> generator<chunk_ptr> {
+  constexpr auto piece = size_t{1} << 16;
+  while (remaining > 0) {
+    auto want = detail::narrow<size_t>(std::min<uint64_t>(remaining, piece));
+    auto chunk = byte_reader(want);
+    if (not chunk) {
+      co_yield {};
+      continue;
+    }
+    if (chunk->size() == 0) {
+      co_return;
+    }
+    remaining -= chunk->size();
+    co_yield std::move(chunk);
+  }
+}
+
 // Old-executor operator that reads a BITZ stream into table slices.
 class read_bitz_operator final : public crtp_operator<read_bitz_operator> {
 public:
@@ -524,20 +476,31 @@ public:
       auto message_length = uint64_t{};
       std::memcpy(&message_length, header->data(), sizeof(uint64_t));
       message_length = detail::to_host_order(message_length);
-      auto message = byte_reader(message_length);
-      while (not message) {
-        co_yield {};
-        message = byte_reader(message_length);
-      }
-      if (message->size() < message_length) {
-        diagnostic::error("unexpected message length {}", message->size())
-          .note("expected {}", message_length)
-          .emit(ctrl.diagnostics());
-        co_return;
-      }
-      for (auto&& slice :
-           decode_bitz_payload(std::move(message), ctrl.diagnostics())) {
+      // A BITZ message payload is exactly one self-contained Feather stream. We
+      // stream the framed payload into the shared Feather decoder instead of
+      // buffering the whole message, bounding it by the message length.
+      auto remaining = message_length;
+      for (auto&& slice : detail::parse_feather(
+             take_bytes(byte_reader, remaining), ctrl.diagnostics())) {
         co_yield std::move(slice);
+      }
+      // Drain any payload bytes the decoder did not consume so that the next
+      // magic read stays aligned with the message frame.
+      while (remaining > 0) {
+        auto tail = byte_reader(
+          detail::narrow<size_t>(std::min<uint64_t>(remaining, 1u << 16)));
+        if (not tail) {
+          co_yield {};
+          continue;
+        }
+        if (tail->size() == 0) {
+          diagnostic::error("unexpected message length {}",
+                            message_length - remaining)
+            .note("expected {}", message_length)
+            .emit(ctrl.diagnostics());
+          co_return;
+        }
+        remaining -= tail->size();
       }
     }
   }
