@@ -19,7 +19,6 @@
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/socket.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -148,12 +147,10 @@ struct TcpFrom {
     };
   }
 
-  auto substitute(ir::pipeline& pipeline, ConnectionInfo& info,
-                  OpCtx& ctx) const -> bool {
-    auto env = substitute_ctx::env_t{};
-    env[args_.peer_info] = std::move(info.peer_record);
-    return static_cast<bool>(
-      pipeline.substitute(substitute_ctx{ctx, &env}, true));
+  auto bind(ir::pipeline& pipeline, ConnectionInfo& info, OpCtx& ctx) const
+    -> void {
+    TENZIR_UNUSED(ctx);
+    pipeline.bind(args_.peer_info, std::move(info.peer_record));
   }
 
   auto pipeline() -> located<ir::pipeline>& {

@@ -24,7 +24,6 @@
 #include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/secret_resolution.hpp"
-#include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tls_options.hpp"
 #include "tenzir/variant.hpp"
 
@@ -345,16 +344,9 @@ public:
       std::move(message),
       [&](RequestStarted msg) -> Task<void> {
         auto pipeline = args_.parser.inner;
-        auto env = substitute_ctx::env_t{};
-        env[args_.request] = make_request_context(msg.metadata);
-        if (not pipeline.substitute(substitute_ctx{ctx, &env}, true)) {
-          diagnostic::warning("failed to prepare parser pipeline for request")
-            .primary(args_.endpoint)
-            .note("request path: {}", msg.metadata.path)
-            .emit(ctx);
-          msg.response_signal->send(500); // internal server error
-          co_return;
-        }
+        // Bind the request context as a `let` binding; it is resolved when the
+        // subpipeline is instantiated during planning.
+        pipeline.bind(args_.request, make_request_context(msg.metadata));
         auto decompressor
           = Option<std::shared_ptr<arrow::util::Decompressor>>{None{}};
         if (not msg.content_encoding.empty()) {

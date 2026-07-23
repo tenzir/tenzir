@@ -14,6 +14,7 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/ir_if.hpp"
 #include "tenzir/ir_match.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/rebatch.hpp"
 #include "tenzir/session.hpp"
@@ -492,6 +493,14 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
     TRY(result);
   }
   return ir::pipeline{std::move(lets), std::move(operators)};
+}
+
+auto ir::pipeline::bind(let_id id, ast::constant::kind value) -> void {
+  // Prepend so the binding is in scope for all subsequent `let`s and operators,
+  // matching the semantics of a base-environment binding.
+  auto value_ex
+    = ast::expression{ast::constant{std::move(value), location::unknown}};
+  lets.insert(lets.begin(), let{ast::identifier{}, value_ex, id});
 }
 
 auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)

@@ -188,6 +188,7 @@ class compile_ctx;
 class SourceMap;
 struct Source;
 class substitute_ctx;
+class base_ctx;
 class finalize_ctx;
 
 namespace ir {

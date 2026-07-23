@@ -16,7 +16,6 @@
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -113,10 +112,9 @@ struct UnixSocketAccept {
     co_return AcceptedInfo{.transport = Connection{std::move(*transport)}};
   }
 
-  auto substitute(ir::pipeline& pipeline, AcceptedInfo&, OpCtx& ctx) const
-    -> bool {
-    return static_cast<bool>(
-      pipeline.substitute(substitute_ctx{{ctx}, nullptr}, true));
+  auto bind(ir::pipeline&, AcceptedInfo&, OpCtx&) const -> void {
+    // No per-connection bindings to inject; the subpipeline is instantiated
+    // during planning.
   }
 
   auto make_connection_state(folly::coro::Transport&, AcceptedInfo&,

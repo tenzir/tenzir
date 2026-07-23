@@ -16,12 +16,12 @@
 #include "tenzir/async/routing.hpp"
 #include "tenzir/async/select_set.hpp"
 #include "tenzir/async_secret_resolution.hpp"
+#include "tenzir/base_ctx.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
-#include "tenzir/substitute_ctx.hpp"
 
 #include <folly/Demangle.h>
 #include <folly/OperationCancelled.h>
@@ -815,35 +815,17 @@ private:
       // same executor such that all legs contribute to the same metrics.
       next_subpipeline_id_ += 1;
     }
-    // Instantiate for the case where it was not instantiated yet.
-    if (not pipe.substitute(substitute_ctx{base_ctx{parent_dh, *reg_}, nullptr},
-                            true)) {
-      // We just emitted an error. Either we return some placeholder no-op
-      // handle now, or we just sleep and wait for cancellation. For now, we
-      // pick the simple option, but we might need to reconsider how we want to
-      // handle such cases eventually.
-      co_await wait_forever();
-      TENZIR_UNREACHABLE();
-    }
-    // Optimize one more time in case it wasn't yet, or we just instantiated.
-    auto opt
-      = std::move(pipe).optimize(ir::optimize_filter{}, event_order::ordered);
-    pipe = std::move(opt.replacement);
-    if (not opt.filter.empty()) {
-      auto offset = pipe.operators.size();
-      for (auto& expr : opt.filter) {
-        pipe.operators.push_back(make_where_ir(std::move(expr)));
-      }
-      std::rotate(pipe.operators.begin(), pipe.operators.begin() + offset,
-                  pipe.operators.end());
-    }
     auto output = pipe.infer_type(input, parent_dh);
     // The caller is responsible for passing a well-typed pipeline
     TENZIR_ASSERT(output);
-    auto plan = ir::Plan::from(std::move(pipe), input, parent_dh);
-    // The caller passed a well-typed pipeline and optimizations are
-    // type-preserving, so planning cannot fail here.
-    TENZIR_ASSERT(plan);
+    auto plan
+      = ir::make_plan(std::move(pipe), input, base_ctx{parent_dh, *reg_});
+    if (not plan) {
+      // Instantiation emitted a diagnostic. Keep the subpipeline alive doing
+      // nothing until cancellation, rather than tearing down the parent.
+      co_await wait_forever();
+      TENZIR_UNREACHABLE();
+    }
     // The plan may end up empty if every operator elides; the plan runner then
     // inserts a single identity operator. Account for at least one operator
     // when naming the boundary channel.
@@ -1740,7 +1722,7 @@ private:
     // Per-instance input and output endpoints, computed during wiring.
     auto inputs = std::vector<Option<AnyOpPull>>(operators_.size());
     auto outputs = std::vector<Option<AnyOpPush>>(operators_.size());
-    // An empty plan still needs at least one operator to drive. `Plan::from`
+    // An empty plan still needs at least one operator to drive. `make_plan`
     // inserts an identity for empty pipelines, so this is only a safety net;
     // when it triggers there is no `input`/`output` port to honor, so the lone
     // identity is both source and sink.

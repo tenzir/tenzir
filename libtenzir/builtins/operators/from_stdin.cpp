@@ -14,7 +14,6 @@
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/plugin/register.hpp"
-#include "tenzir/substitute_ctx.hpp"
 
 #include <folly/ScopeGuard.h>
 #include <folly/coro/BoundedQueue.h>
@@ -226,13 +225,6 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     auto pipe = args_.pipe.inner;
-    if (not pipe.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
-      diagnostic::error("failed to substitute pipeline")
-        .primary(args_.pipe)
-        .emit(ctx);
-      done_ = true;
-      co_return;
-    }
     bytes_read_counter_
       = ctx.make_counter(MetricsLabel{"operator", "from_stdin"},
                          MetricsDirection::read, MetricsVisibility::external_,

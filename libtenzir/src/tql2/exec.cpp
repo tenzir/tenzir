@@ -2281,28 +2281,24 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     fmt::print("{:#?}\n", ir);
     return not ctx.has_failure();
   }
-  // Instantiate the IR.
-  auto sub_ctx = substitute_ctx{b_ctx, nullptr};
-  TRY(ir.substitute(sub_ctx, true));
+  // The IR is instantiated (its `let` bindings resolved and non-deterministic
+  // arguments substituted) later, as part of `ir::make_plan`. The
+  // `--dump-inst-ir` debug output instantiates a copy to show that stage.
   if (cfg.dump_inst_ir) {
-    fmt::print("{:#?}\n", ir);
+    auto inst = ir;
+    TRY(inst.substitute(substitute_ctx{b_ctx, nullptr}, true));
+    fmt::print("{:#?}\n", inst);
     return not ctx.has_failure();
   }
-  if (ir.operators.empty()) {
-    // TODO
-    diagnostic::error("empty pipeline is not supported yet").emit(ctx);
-    return failure::promise();
-  }
-  // Type check the instantiated IR and add implicit sources before sinks.
-  // During probing, suppress diagnostics for input types that do not match.
+  // Type check the IR and add implicit sources before sinks. During probing,
+  // suppress diagnostics for input types that do not match. Type inference does
+  // not depend on substitution, so we can run it on the un-instantiated IR.
   auto parse_implicit = [&](std::string_view definition,
                             location override) -> failure_or<ir::pipeline> {
     TRY(auto ast,
         parse_pipeline_with_location_override(definition, override, ctx));
     auto implicit_root = compile_ctx::make_root(b_ctx, source_map);
-    TRY(auto pipe, std::move(ast).compile(implicit_root));
-    TRY(pipe.substitute(sub_ctx, true));
-    return pipe;
+    return std::move(ast).compile(implicit_root);
   };
   auto null_dh = null_diagnostic_handler{};
   auto output = Option<element_type_tag>{};
@@ -2354,18 +2350,17 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
       return failure::promise();
     }
   }
-  // Optimize the IR.
-  auto opt
-    = std::move(ir).optimize(ir::optimize_filter{}, event_order::ordered);
-  // TODO: Can this happen?
-  TENZIR_ASSERT(opt.filter.empty());
-  ir = std::move(opt.replacement);
+  // The optimized IR is produced as part of `ir::make_plan`. The
+  // `--dump-opt-ir` debug output instantiates and optimizes the IR to show
+  // that stage before lowering it into the plan DAG.
   if (cfg.dump_opt_ir) {
-    fmt::print("{:#?}\n", ir);
+    TRY(auto opt, ir::instantiate(std::move(ir), b_ctx));
+    fmt::print("{:#?}\n", ir::optimize(std::move(opt)));
     return not ctx.has_failure();
   }
-  // Build the executable plan from the IR.
-  auto plan = ir::Plan::from(std::move(ir), tag_v<void>, ctx, parallelism);
+  // Build the executable plan from the IR. This instantiates and optimizes the
+  // pipeline before lowering it into the plan DAG.
+  auto plan = ir::make_plan(std::move(ir), tag_v<void>, b_ctx, parallelism);
   // Do not proceed to execution if there has been an error.
   if (ctx.has_failure()) {
     return false;

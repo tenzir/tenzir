@@ -134,10 +134,15 @@ auto count_instances(ir::Plan const& plan, std::vector<size_t> const& operators)
 
 } // namespace
 
-auto ir::Plan::from(pipeline pipe, element_type_tag input,
-                    diagnostic_handler& dh, Parallelism parallelism)
-  -> failure_or<Plan> {
-  // optimize
+auto ir::instantiate(pipeline pipe, base_ctx ctx) -> failure_or<pipeline> {
+  // Resolve `let` bindings and substitute non-deterministic arguments. This is
+  // the single substitution point for all pipelines, including subpipelines
+  // that inject runtime values via `pipeline::bind`.
+  TRY(pipe.substitute(substitute_ctx{ctx, nullptr}, true));
+  return pipe;
+}
+
+auto ir::optimize(pipeline pipe) -> pipeline {
   TENZIR_ASSERT(pipe.lets.empty());
   auto opt = std::move(pipe).optimize(optimize_filter{}, event_order::ordered);
   TENZIR_ASSERT(opt.replacement.lets.empty());
@@ -145,12 +150,19 @@ auto ir::Plan::from(pipeline pipe, element_type_tag input,
   for (auto& expr : opt.filter) {
     pipe.operators.insert(pipe.operators.begin(), make_where_ir(expr));
   }
+  return pipe;
+}
+
+auto ir::make_plan(pipeline pipe, element_type_tag input, base_ctx ctx,
+                   Parallelism parallelism) -> failure_or<Plan> {
+  TRY(pipe, instantiate(std::move(pipe), ctx));
+  pipe = optimize(std::move(pipe));
   // construct plan
   auto plan = Plan{};
   plan.operators.reserve(pipe.operators.size());
   auto builder = PlanBuilder{plan, parallelism};
   auto head = PlanPorts{PlanPort{.node = PlanPort::input, .type = input}};
-  TRY(auto tail, builder.lower_pipeline(std::move(pipe), std::move(head), dh));
+  TRY(auto tail, builder.lower_pipeline(std::move(pipe), std::move(head), ctx));
   // bundle tail and sinks (to gather all output signals)
   auto outputs = find_sinks(plan);
   auto has_sinks = not outputs.empty();

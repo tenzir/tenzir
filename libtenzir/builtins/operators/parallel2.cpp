@@ -10,7 +10,6 @@
 #include "tenzir/async/routing.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin/register.hpp"
-#include "tenzir/substitute_ctx.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
 
@@ -44,10 +43,6 @@ public:
     rows_assigned_.resize(jobs_, 0);
     for (auto i = uint64_t{0}; i < jobs_; ++i) {
       auto copy = pipe_;
-      auto sub_ctx = substitute_ctx{base_ctx{ctx.dh(), ctx.reg()}, nullptr};
-      if (not copy.substitute(sub_ctx, true)) {
-        co_return;
-      }
       if (fuse_) {
         co_await ctx.spawn_sub_fused<table_slice>(data{int64_t(i)},
                                                   std::move(copy));
@@ -128,10 +123,6 @@ public:
   auto start(OpCtx& ctx) -> Task<void> {
     for (auto i = uint64_t{0}; i < jobs_; ++i) {
       auto copy = pipe_;
-      auto sub_ctx = substitute_ctx{base_ctx{ctx.dh(), ctx.reg()}, nullptr};
-      if (not copy.substitute(sub_ctx, true)) {
-        co_return;
-      }
       if (fuse_) {
         co_await ctx.spawn_sub_fused<void>(data{int64_t(i)}, std::move(copy));
       } else {
