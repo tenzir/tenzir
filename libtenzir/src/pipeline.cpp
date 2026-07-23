@@ -13,7 +13,6 @@
 #include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/source.hpp"
-#include "tenzir/tql/parser.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/detail/stringification_inspector.hpp>
@@ -129,30 +128,6 @@ pipeline::pipeline(std::vector<operator_ptr> operators) {
   }
 }
 
-auto pipeline::parse(std::string source, diagnostic_handler& diag)
-  -> std::optional<pipeline> {
-  auto parsed = tql::parse(
-    *Source::new_source(std::move(source), "<input>", false), diag);
-  if (not parsed) {
-    return {};
-  }
-  return tql::to_pipeline(std::move(*parsed));
-}
-
-auto pipeline::internal_parse(std::string_view repr)
-  -> caf::expected<pipeline> {
-  return tql::parse_internal(std::string{repr});
-}
-
-auto pipeline::internal_parse_as_operator(std::string_view repr)
-  -> caf::expected<operator_ptr> {
-  auto result = internal_parse(repr);
-  if (not result) {
-    return std::move(result.error());
-  }
-  return std::make_unique<pipeline>(std::move(*result));
-}
-
 void pipeline::append(operator_ptr op) {
   if (auto* sub_pipeline = dynamic_cast<pipeline*>(&*op)) {
     auto sub_ops = std::move(*sub_pipeline).unwrap();
@@ -249,13 +224,12 @@ auto pipeline::optimize(expression const& filter, event_order order) const
     if (opt.filter) {
       current_filter = std::move(*opt.filter);
     } else if (current_filter != trivially_true_expression()) {
-      // TODO: We just want to create a `where {current}` operator. However,
-      // we currently only have the interface for parsing this from a string.
-      auto pipe = tql::parse_internal(fmt::format("where {}", current_filter));
-      TENZIR_ASSERT(pipe);
-      auto ops = std::move(*pipe).unwrap();
-      TENZIR_ASSERT(ops.size() == 1);
-      result.push_back(std::move(ops[0]));
+      // Materialize the residual filter as a `where` operator.
+      auto factories = plugins::get<where_factory_plugin>();
+      const auto factory = factories.begin();
+      TENZIR_ASSERT(factory != factories.end());
+      result.push_back((*factory)->make_where_operator(
+        located<expression>{std::move(current_filter), location::unknown}));
       current_filter = trivially_true_expression();
     }
     if (opt.replacement) {
