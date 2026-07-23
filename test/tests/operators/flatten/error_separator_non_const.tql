@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {a: {b: 1}, s: "_"}
+flatten s

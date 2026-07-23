@@ -10,14 +10,17 @@
 
 #include "tenzir/detail/string_literal.hpp"
 #include "tenzir/multi_series.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/operator.hpp"
 #include "tenzir/plugin/printer.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/plugin_api.hpp"
+#include "tenzir/variant.hpp"
 
 #include <optional>
+#include <span>
 
 namespace tenzir {
 
@@ -155,6 +158,47 @@ class function_plugin : public virtual plugin {
 public:
   using evaluator = function_use::evaluator;
 
+  /// Describes a positional argument accepted by a function used in operator
+  /// position.
+  struct PositionalArgument {
+    std::string name;
+    bool optional = false;
+    /// The expected type, or `nullopt` if unconstrained.
+    std::optional<type> value_type;
+  };
+
+  /// Describes a named argument accepted by a function used in operator
+  /// position.
+  struct NamedArgument {
+    std::string name;
+    bool required = false;
+    /// The expected type, or `nullopt` if unconstrained.
+    std::optional<type> value_type;
+  };
+
+  /// A function argument is either positional or named.
+  using Argument = variant<PositionalArgument, NamedArgument>;
+
+  /// The operator-facing argument contract of a function that can be used in
+  /// operator position. The arguments exclude the implicit leading `this`.
+  struct Signature {
+    std::vector<Argument> arguments;
+
+    /// Verify the operator-facing arguments of an operator-position invocation
+    /// against this signature. The arguments exclude the implicit leading
+    /// `this`; `op_loc` is the location of the operator name, used for
+    /// diagnostics about missing arguments. Performs structural checks
+    /// (positional arity, unknown / duplicate / missing-required named
+    /// arguments) and, for arguments that are constant and carry a declared
+    /// `value_type`, a type check. Emits diagnostics and returns failure on any
+    /// error.
+    ///
+    /// This must run after `let` bindings have been substituted, so that
+    /// `let`-bound constants pass the constant check.
+    auto verify(std::span<const ast::expression> args, location op_loc,
+                session ctx) const -> failure_or<void>;
+  };
+
   virtual auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr>
     = 0;
@@ -162,6 +206,15 @@ public:
   virtual auto function_name() const -> std::string;
 
   virtual auto is_deterministic() const -> bool = 0;
+
+  /// If set, this function may be used in operator position; the returned
+  /// `Signature` describes its operator-facing arguments (excluding the
+  /// implicit leading `this`). An invocation `… | f(args)` is compiled as
+  /// `this = f(this, args)`, so the function must return a record. Defaults to
+  /// none.
+  virtual auto usable_as_operator() const -> Option<Signature> {
+    return None{};
+  }
 };
 
 class aggregation_instance {

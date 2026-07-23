@@ -213,10 +213,50 @@ private:
   event_order order_;
 };
 
+/// A function that opted into operator position via `usable_as_operator()`,
+/// used in operator position. Evaluates the (already `this`-injected) function
+/// call per input slice and emits the resulting record series parts as events,
+/// preserving each part's own schema name and dropping `null_type` parts. Unlike
+/// `SetIr`, it neither preserves the input schema name nor the row count.
+class FunctionAsOperatorIr final : public Operator {
+public:
+  FunctionAsOperatorIr();
+
+  explicit FunctionAsOperatorIr(ast::expression call);
+
+  auto name() const -> std::string override;
+
+  auto copy() const -> Box<Operator> override;
+
+  auto move() && -> Box<Operator> override;
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override;
+
+  auto spawn(element_type_tag input) && -> Option<AnyOperator> override;
+
+  auto optimize(optimize_filter filter,
+                event_order order) && -> optimize_result override;
+
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<std::optional<element_type_tag>> override;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, FunctionAsOperatorIr& x) -> bool;
+
+private:
+  ast::expression call_;
+  event_order order_;
+};
+
 } // namespace ir
 
 /// Create a `set` IR operator from assignments.
 auto make_set_ir(std::vector<ast::assignment> assignments) -> Box<ir::Operator>;
+
+/// Create a function-as-operator IR operator from a `this`-injected function
+/// call expression.
+auto make_function_as_operator_ir(ast::expression call) -> Box<ir::Operator>;
 
 /// Create a `where` operator with the given expression.
 auto make_where_ir(ast::expression filter) -> Box<ir::Operator>;

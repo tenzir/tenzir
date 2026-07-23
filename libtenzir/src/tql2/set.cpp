@@ -277,9 +277,18 @@ auto assign(const ast::field_path& left, series right, const table_slice& input,
     result = {record_type{},
               make_struct_array(result.length(), nullptr, {}, record_type{})};
   }
-  result.type.assign_metadata(input.schema());
+  if (result.type.name().empty()) {
+    // Partial assignments produce an unnamed intermediate record, and an
+    // unnamed full-`this` value (e.g. a record literal) should keep the input's
+    // schema identity. Only a full replacement with an already-named record
+    // (e.g. `this = ocsf::cast(…)`) adopts its own name and attributes.
+    result.type.assign_metadata(input.schema());
+  }
+  // The schema-level metadata (schema name and attributes) must match
+  // `result.type`, which is either the input's metadata (copied above) or, for
+  // a full replacement with a named record, the value's own metadata.
   auto schema = arrow::schema(result.array->type()->fields(),
-                              to_record_batch(input)->schema()->metadata());
+                              result.type.to_arrow_schema()->metadata());
   auto slice = table_slice{
     record_batch_from_struct_array(std::move(schema),
                                    as<arrow::StructArray>(*result.array)),

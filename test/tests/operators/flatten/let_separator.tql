@@ -1,0 +1,4 @@
+let $sep = "_"
+
+from {a: {b: 1, c: 2}}
+flatten $sep

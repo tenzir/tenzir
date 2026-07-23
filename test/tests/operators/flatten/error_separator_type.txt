@@ -1,0 +1,6 @@
+error: argument `separator` must be of type `string` (got `int64`)
+ --> tests/operators/flatten/error_separator_type.tql:6:9
+  |
+6 | flatten 5
+  |         ^ 
+  |

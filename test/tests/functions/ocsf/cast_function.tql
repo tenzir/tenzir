@@ -1,0 +1,15 @@
+// `ocsf::cast` used as a function returns the cast record as a value, which can
+// be assigned to a field rather than replacing the event.
+from {
+  metadata: {
+    version: "1.5.0",
+  },
+  class_uid: 1001,
+  activity_id: 1,
+}
+casted = ocsf::cast(this, null_fill=true)
+this = {
+  class_uid: casted.class_uid,
+  activity_id: casted.activity_id,
+  activity_name: casted.activity_name,
+}

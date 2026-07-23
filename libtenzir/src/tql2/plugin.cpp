@@ -9,9 +9,16 @@
 #include "tenzir/tql2/plugin.hpp"
 
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/similarity.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
+#include "tenzir/type.hpp"
+
+#include <ranges>
+#include <unordered_set>
 
 namespace tenzir {
 
@@ -136,6 +143,145 @@ auto function_plugin::function_name() const -> std::string {
   auto result = name();
   if (result.starts_with("tql2.")) {
     result.erase(0, 5);
+  }
+  return result;
+}
+
+namespace {
+
+/// Verify a single operator-position argument. When a function is used as an
+/// operator, its operator-facing arguments are parsed by `argument_parser2`
+/// inside `make_function`, which requires compile-time constants; a non-const
+/// argument would compile here but fail during per-slice evaluation and silently
+/// drop events. We therefore reject any argument that is not statically
+/// evaluable, and additionally type-check those that carry a declared type.
+auto verify_argument(std::string_view name,
+                     const std::optional<type>& value_type,
+                     const ast::expression& expr, session ctx)
+  -> failure_or<void> {
+  auto value = try_const_eval(expr, ctx);
+  if (not value) {
+    diagnostic::error("argument `{}` must be a constant", name)
+      .primary(expr)
+      .emit(ctx);
+    return failure::promise();
+  }
+  if (value_type and not type_check(*value_type, *value)) {
+    auto actual = type::infer(*value);
+    auto actual_str
+      = actual ? fmt::format("{}", *actual) : std::string{"unknown"};
+    diagnostic::error("argument `{}` must be of type `{}` (got `{}`)", name,
+                      fmt::format("{}", *value_type), actual_str)
+      .primary(expr)
+      .emit(ctx);
+    return failure::promise();
+  }
+  return {};
+}
+
+} // namespace
+
+auto function_plugin::Signature::verify(std::span<const ast::expression> args,
+                                        location op_loc, session ctx) const
+  -> failure_or<void> {
+  using PositionalArgument = function_plugin::PositionalArgument;
+  using NamedArgument = function_plugin::NamedArgument;
+  auto result = failure_or<void>{};
+  auto fail = [&] {
+    result = failure::promise();
+  };
+  // Partition the declared arguments into positional and named.
+  auto positionals = std::vector<const PositionalArgument*>{};
+  auto nameds = std::vector<const NamedArgument*>{};
+  for (const auto& arg : arguments) {
+    arg.match(
+      [&](const PositionalArgument& p) {
+        positionals.push_back(&p);
+      },
+      [&](const NamedArgument& n) {
+        nameds.push_back(&n);
+      });
+  }
+  auto seen = std::unordered_set<std::string>{};
+  auto positional_idx = size_t{0};
+  for (const auto& arg : args) {
+    const auto* assignment = try_as<ast::assignment>(arg);
+    if (assignment) {
+      // Named argument: `name=value`.
+      auto selector = ast::selector::try_from(assignment->left);
+      const auto* sel
+        = selector ? try_as<ast::field_path>(&*selector) : nullptr;
+      if (not sel or sel->has_this() or sel->path().size() != 1
+          or sel->path()[0].has_question_mark) {
+        diagnostic::error("invalid name").primary(assignment->left).emit(ctx);
+        fail();
+        continue;
+      }
+      const auto& name = sel->path()[0].id.name;
+      auto it = std::ranges::find(nameds, name, &NamedArgument::name);
+      if (it == nameds.end()) {
+        auto builder
+          = diagnostic::error("named argument `{}` does not exist", name)
+              .primary(assignment->left);
+        if (not nameds.empty()) {
+          const auto& best = *std::ranges::max_element(
+            nameds, {}, [&](const NamedArgument* candidate) {
+              return detail::calculate_similarity(name, candidate->name);
+            });
+          if (detail::calculate_similarity(name, best->name) > -10) {
+            builder = std::move(builder).hint("did you mean `{}`?", best->name);
+          }
+        }
+        std::move(builder).emit(ctx);
+        fail();
+        continue;
+      }
+      if (not seen.insert(name).second) {
+        diagnostic::error("duplicate named argument `{}`", name)
+          .primary(arg.get_location())
+          .emit(ctx);
+        fail();
+        continue;
+      }
+      if (verify_argument(name, (*it)->value_type, assignment->right, ctx)
+            .is_error()) {
+        fail();
+      }
+      continue;
+    }
+    // Positional argument.
+    if (positional_idx >= positionals.size()) {
+      diagnostic::error("did not expect more positional arguments")
+        .primary(arg)
+        .emit(ctx);
+      fail();
+      continue;
+    }
+    const auto* positional = positionals[positional_idx];
+    ++positional_idx;
+    if (verify_argument(positional->name, positional->value_type, arg, ctx)
+          .is_error()) {
+      fail();
+    }
+  }
+  // Report any required positional arguments that were not provided.
+  for (auto i = positional_idx; i < positionals.size(); ++i) {
+    if (not positionals[i]->optional) {
+      diagnostic::error("expected additional positional argument `{}`",
+                        positionals[i]->name)
+        .primary(op_loc)
+        .emit(ctx);
+      fail();
+    }
+  }
+  // Report any required named arguments that were not provided.
+  for (const auto* named : nameds) {
+    if (named->required and not seen.contains(named->name)) {
+      diagnostic::error("required argument `{}` was not provided", named->name)
+        .primary(op_loc)
+        .emit(ctx);
+      fail();
+    }
   }
   return result;
 }
