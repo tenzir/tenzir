@@ -10,6 +10,7 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/location.hpp"
 #include "tenzir/plugin/base.hpp"
 
 #include <string>
@@ -56,5 +57,14 @@ using operator_inspection_plugin = inspection_plugin<operator_base, Operator>;
 template <class Operator>
 class operator_plugin : public virtual operator_inspection_plugin<Operator>,
                         public virtual operator_parser_plugin {};
+
+/// Builds a `where` legacy operator from an already normalized and validated
+/// expression.
+class where_factory_plugin : public virtual plugin {
+public:
+  virtual auto make_where_operator(located<expression> expr) const
+    -> operator_ptr
+    = 0;
+};
 
 } // namespace tenzir
