@@ -287,29 +287,37 @@ auto ir::PlanBuilder::add_channel(std::vector<size_t> from,
   });
 }
 
-auto ir::PlanBuilder::add_channel(const PlanPorts& from, size_t to) -> void {
-  TENZIR_ASSERT(not from.empty());
-  if (from[0].node == PlanPort::input) {
-    auto to_op = plan_.operators[to];
-    if (to_op.parallelism > 1 or not to_op.partition_keys.empty()) {
-      // When {input} should be scattered/shuffled, we have to inject an
-      // identity operator, because the input channel must `Direct`.
-      auto identity = add_identity(to_op.input);
-      add_channel({from[0].node}, {identity}, ChannelKind::Direct);
-      auto kind
-        = derive_channel_kind(plan_.operators[identity], plan_.operators[to]);
-      add_channel({identity}, {to}, kind);
+auto ir::PlanBuilder::add_channel(size_t from, size_t to) -> void {
+  if (from == PlanPort::input) {
+    if (plan_.operators[to].parallelism > 1) {
+      // input is `Direct`, but downstream is fanned-out: inject identity
+      auto identity = add_identity(plan_.operators[to].input);
+      add_channel({PlanPort::input}, {identity}, ChannelKind::Direct);
+      add_channel(identity, to);
       return;
     }
-    add_channel({from[0].node}, {to}, ChannelKind::Direct);
+    add_channel({PlanPort::input}, {to}, ChannelKind::Direct);
     return;
   }
   if (to == PlanPort::output) {
-    TENZIR_ASSERT_EQ(from.size(), 1);
-    add_channel({from[0].node}, {to}, ChannelKind::Direct);
+    add_channel({from}, {to}, ChannelKind::Direct);
     return;
   }
+  auto kind = derive_channel_kind(plan_.operators[from], plan_.operators[to]);
+  add_channel({from}, {to}, kind);
+}
+
+auto ir::PlanBuilder::add_channel(const PlanPorts& from, size_t to) -> void {
+  TENZIR_ASSERT(not from.empty());
   if (from.size() > 1) {
+    TENZIR_ASSERT(to != PlanPort::output);
+    if (plan_.operators[to].parallelism > 1) {
+      // from must be gathered, but downstream is also fanned-out: inject identity
+      auto identity = add_identity(from.front().type);
+      add_channel(from, identity);
+      add_channel(identity, to);
+      return;
+    }
     // gather
     auto froms = std::vector<size_t>{};
     froms.reserve(from.size());
@@ -319,9 +327,7 @@ auto ir::PlanBuilder::add_channel(const PlanPorts& from, size_t to) -> void {
     add_channel(std::move(froms), {to}, ChannelKind::Gather);
     return;
   }
-  auto kind
-    = derive_channel_kind(plan_.operators[from[0].node], plan_.operators[to]);
-  add_channel({from[0].node}, {to}, kind);
+  add_channel(from[0].node, to);
 }
 
 auto ir::PlanBuilder::add_broadcast(PlanPort from, std::vector<size_t> to)
