@@ -13,6 +13,7 @@
 #include "tenzir/multi_series.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/plugin/register.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
