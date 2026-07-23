@@ -6,19 +6,18 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
+#include <tenzir/argument_parser2.hpp>
 #include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/make_byte_reader.hpp>
 #include <tenzir/operator_plugin.hpp>
-#include <tenzir/parser_interface.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/read_detection.hpp>
 #include <tenzir/secret.hpp>
 #include <tenzir/table_slice.hpp>
-#include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/io/memory.h>
@@ -475,152 +474,128 @@ auto encode_bitz_payload(table_slice input, diagnostic_handler& dh)
   return chunk::make(buffer_result.MoveValueUnsafe());
 }
 
-class bitz_parser final : public plugin_parser {
+// Old-executor operator that reads a BITZ stream into table slices.
+class read_bitz_operator final : public crtp_operator<read_bitz_operator> {
 public:
-  bitz_parser() = default;
+  read_bitz_operator() = default;
 
   auto name() const -> std::string override {
-    return "bitz";
+    return "read_bitz";
   }
 
   auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> std::optional<generator<table_slice>> override {
-    return std::invoke(
-      [](auto byte_reader,
-         operator_control_plane& ctrl) -> generator<table_slice> {
-        while (true) {
-          auto magic = byte_reader(BITZ_MAGIC.size());
-          while (not magic) {
-            co_yield {};
-            magic = byte_reader(BITZ_MAGIC.size());
-          }
-          if (magic->size() < BITZ_MAGIC.size()) {
-            if (magic->size() != 0) {
-              diagnostic::error("unexpected BITZ magic length {}",
-                                magic->size())
-                .note("expected {}", BITZ_MAGIC.size())
-                .emit(ctrl.diagnostics());
-            }
-            co_return;
-          }
-          if (std::memcmp(magic->data(), BITZ_MAGIC.data(), BITZ_MAGIC.size())
-              != 0) {
-            diagnostic::error("unexpected BITZ magic")
-              .note("expected {}",
-                    std::string_view{BITZ_MAGIC.data(), BITZ_MAGIC.size()})
-              .emit(ctrl.diagnostics());
-            co_return;
-          }
-          auto header = byte_reader(sizeof(uint64_t));
-          while (not header) {
-            co_yield {};
-            header = byte_reader(sizeof(uint64_t));
-          }
-          if (header->size() < sizeof(uint64_t)) {
-            diagnostic::error("unexpected BITZ header length {}",
-                              header->size())
-              .note("expected {}", sizeof(uint64_t))
-              .emit(ctrl.diagnostics());
-            co_return;
-          }
-          auto message_length = uint64_t{};
-          std::memcpy(&message_length, header->data(), sizeof(uint64_t));
-          message_length = detail::to_host_order(message_length);
-          auto message = byte_reader(message_length);
-          while (not message) {
-            co_yield {};
-            message = byte_reader(message_length);
-          }
-          if (message->size() < message_length) {
-            diagnostic::error("unexpected message length {}", message->size())
-              .note("expected {}", message_length)
-              .emit(ctrl.diagnostics());
-            co_return;
-          }
-          for (auto&& slice :
-               decode_bitz_payload(std::move(message), ctrl.diagnostics())) {
-            co_yield std::move(slice);
-          }
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    co_yield {};
+    auto byte_reader = make_byte_reader(std::move(input));
+    while (true) {
+      auto magic = byte_reader(BITZ_MAGIC.size());
+      while (not magic) {
+        co_yield {};
+        magic = byte_reader(BITZ_MAGIC.size());
+      }
+      if (magic->size() < BITZ_MAGIC.size()) {
+        if (magic->size() != 0) {
+          diagnostic::error("unexpected BITZ magic length {}", magic->size())
+            .note("expected {}", BITZ_MAGIC.size())
+            .emit(ctrl.diagnostics());
         }
-      },
-      make_byte_reader(std::move(input)), ctrl);
+        co_return;
+      }
+      if (std::memcmp(magic->data(), BITZ_MAGIC.data(), BITZ_MAGIC.size())
+          != 0) {
+        diagnostic::error("unexpected BITZ magic")
+          .note("expected {}",
+                std::string_view{BITZ_MAGIC.data(), BITZ_MAGIC.size()})
+          .emit(ctrl.diagnostics());
+        co_return;
+      }
+      auto header = byte_reader(sizeof(uint64_t));
+      while (not header) {
+        co_yield {};
+        header = byte_reader(sizeof(uint64_t));
+      }
+      if (header->size() < sizeof(uint64_t)) {
+        diagnostic::error("unexpected BITZ header length {}", header->size())
+          .note("expected {}", sizeof(uint64_t))
+          .emit(ctrl.diagnostics());
+        co_return;
+      }
+      auto message_length = uint64_t{};
+      std::memcpy(&message_length, header->data(), sizeof(uint64_t));
+      message_length = detail::to_host_order(message_length);
+      auto message = byte_reader(message_length);
+      while (not message) {
+        co_yield {};
+        message = byte_reader(message_length);
+      }
+      if (message->size() < message_length) {
+        diagnostic::error("unexpected message length {}", message->size())
+          .note("expected {}", message_length)
+          .emit(ctrl.diagnostics());
+        co_return;
+      }
+      for (auto&& slice :
+           decode_bitz_payload(std::move(message), ctrl.diagnostics())) {
+        co_yield std::move(slice);
+      }
+    }
   }
 
-  friend auto inspect(auto& f, bitz_parser& x) -> bool {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, read_bitz_operator& x) -> bool {
     return f.object(x).fields();
   }
 };
 
-class bitz_printer final : public plugin_printer {
+// Old-executor operator that writes table slices as a BITZ stream.
+class write_bitz_operator final : public crtp_operator<write_bitz_operator> {
 public:
-  bitz_printer() = default;
+  write_bitz_operator() = default;
 
   auto name() const -> std::string override {
-    return "bitz";
+    return "write_bitz";
   }
 
-  auto instantiate(type input_schema, operator_control_plane& ctrl) const
-    -> caf::expected<std::unique_ptr<printer_instance>> override {
-    (void)input_schema;
-    return printer_instance::make(
-      // NOLINTNEXTLINE(cppcoreguidelines-avoid-capturing-lambda-coroutines)
-      [&ctrl](table_slice slice) -> generator<chunk_ptr> {
-        if (slice.rows() == 0) {
-          co_yield {};
-          co_return;
-        }
-        auto payload
-          = encode_bitz_payload(std::move(slice), ctrl.diagnostics());
-        if (not payload) {
-          co_return;
-        }
-        auto total_size = detail::to_network_order(
-          detail::narrow<uint64_t>((*payload)->size()));
-        co_yield chunk::copy(BITZ_MAGIC.data(), BITZ_MAGIC.size());
-        co_yield chunk::copy(&total_size, sizeof(total_size));
-        co_yield std::move(*payload);
-      });
+  auto operator()(generator<table_slice> input,
+                  operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    co_yield {};
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      auto payload = encode_bitz_payload(std::move(slice), ctrl.diagnostics());
+      if (not payload) {
+        co_return;
+      }
+      auto total_size = detail::to_network_order(
+        detail::narrow<uint64_t>((*payload)->size()));
+      co_yield chunk::copy(BITZ_MAGIC.data(), BITZ_MAGIC.size());
+      co_yield chunk::copy(&total_size, sizeof(total_size));
+      co_yield std::move(*payload);
+    }
   }
 
-  auto allows_joining() const -> bool override {
-    return true;
-  };
-
-  auto prints_utf8() const -> bool override {
-    return false;
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
   }
 
-  friend auto inspect(auto& f, bitz_printer& x) -> bool {
+  friend auto inspect(auto& f, write_bitz_operator& x) -> bool {
     return f.object(x).fields();
   }
 };
 
-class plugin final : public virtual parser_plugin<bitz_parser>,
-                     public virtual printer_plugin<bitz_printer> {
-  auto name() const -> std::string override {
-    return "bitz";
-  }
-
-  auto parse_parser(parser_interface& p) const
-    -> std::unique_ptr<plugin_parser> override {
-    auto parser = argument_parser{"bitz", "https://tenzir.com/docs/"
-                                          "formats/bitz"};
-    parser.parse(p);
-    return std::make_unique<bitz_parser>();
-  }
-
-  auto parse_printer(parser_interface& p) const
-    -> std::unique_ptr<plugin_printer> override {
-    auto parser = argument_parser{"bitz", "https://tenzir.com/docs/"
-                                          "formats/bitz"};
-    parser.parse(p);
-    return std::make_unique<bitz_printer>();
-  }
-};
-
-class read_bitz_plugin final : public virtual operator_factory_plugin,
-                               public virtual ReadOperatorPlugin {
+class read_bitz_plugin final
+  : public virtual operator_plugin2<read_bitz_operator>,
+    public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "read_bitz";
@@ -634,12 +609,8 @@ public:
 
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    TENZIR_UNUSED(inv, ctx);
-    auto diag = null_diagnostic_handler{};
-    auto p = tql::make_parser_interface("bitz", diag);
-    const auto* plugin = plugins::find<operator_parser_plugin>("read");
-    TENZIR_ASSERT(plugin);
-    return plugin->parse_operator(*p);
+    TRY(argument_parser2::operator_(name()).parse(inv, ctx));
+    return std::make_unique<read_bitz_operator>();
   }
 
   auto read_properties() const -> read_properties_t override {
@@ -658,8 +629,9 @@ public:
   }
 };
 
-class write_bitz_plugin final : public virtual operator_factory_plugin,
-                                public virtual OperatorPlugin {
+class write_bitz_plugin final
+  : public virtual operator_plugin2<write_bitz_operator>,
+    public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "write_bitz";
@@ -673,18 +645,13 @@ public:
 
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    TENZIR_UNUSED(inv, ctx);
-    auto diag = null_diagnostic_handler{};
-    auto p = tql::make_parser_interface("bitz", diag);
-    const auto* plugin = plugins::find<operator_parser_plugin>("write");
-    TENZIR_ASSERT(plugin);
-    return plugin->parse_operator(*p);
+    TRY(argument_parser2::operator_(name()).parse(inv, ctx));
+    return std::make_unique<write_bitz_operator>();
   }
 };
 
 } // namespace
 } // namespace tenzir::plugins::bitz
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::bitz::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::bitz::read_bitz_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::bitz::write_bitz_plugin)
