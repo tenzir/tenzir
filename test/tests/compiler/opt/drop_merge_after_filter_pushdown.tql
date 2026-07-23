@@ -1,0 +1,4 @@
+from {a: 1, b: 2, keep: true}
+drop a
+where keep == true
+drop b

@@ -71,6 +71,9 @@ public:
   virtual auto
   optimize(optimize_filter filter, event_order order) && -> optimize_result;
 
+  /// Try to merge `successor` into this operator.
+  virtual auto try_merge_successor(Operator& successor) -> bool;
+
   /// Return the executable matching this operator.
   ///
   /// The implementation may assume that the operator was previously
@@ -201,6 +204,8 @@ public:
 
   auto optimize(optimize_filter filter,
                 event_order order) && -> optimize_result override;
+
+  auto try_merge_successor(Operator& successor) -> bool override;
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<element_type_tag> override;
