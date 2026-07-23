@@ -1,0 +1,5 @@
+{
+  raw: "ABC abc",
+  single: "XBC abc",
+  multiple: "XBC X",
+}

@@ -1,0 +1,6 @@
+error: `base` must be 10 or 16
+ --> tests/functions/string/replace_const_eval_error.tql:9:33
+  |
+9 | raw = raw.replace(int("1", base=2), "x")
+  |                                 ^ 
+  |

@@ -1,0 +1,12 @@
+from {
+  raw: "src=192.0.2.1 user=alice",
+  needle: "192.0.2.1",
+  marker: "<ip>",
+},
+{
+  raw: "src=198.51.100.2 user=bob",
+  needle: "bob",
+  marker: "<user>",
+}
+
+raw = raw.replace(needle, marker)

@@ -1,0 +1,27 @@
+{
+  raw: "x x",
+  patterns: [
+    "a",
+    "b",
+  ],
+  marker: "x",
+}
+{
+  raw: null,
+  patterns: null,
+  marker: "x",
+}
+{
+  raw: null,
+  patterns: [
+    "null",
+  ],
+  marker: null,
+}
+{
+  raw: null,
+  patterns: [
+    null,
+  ],
+  marker: "x",
+}

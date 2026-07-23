@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+from {
+  raw: "abc",
+}
+
+raw = raw.replace(int("1", base=2), "x")

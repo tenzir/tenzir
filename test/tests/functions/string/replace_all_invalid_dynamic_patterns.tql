@@ -1,0 +1,6 @@
+from {
+  raw: "port 8080",
+  patterns: [80],
+}
+
+raw = raw.replace_all(patterns, "x")

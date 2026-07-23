@@ -1,0 +1,6 @@
+from {
+  raw: "ABC abc",
+}
+
+single = raw.replace("a".to_upper(), "x".to_upper())
+multiple = raw.replace_all(["a".to_upper(), "abc"], "x".to_upper())

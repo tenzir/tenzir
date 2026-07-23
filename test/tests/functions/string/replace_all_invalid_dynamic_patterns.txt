@@ -1,0 +1,12 @@
+{
+  raw: null,
+  patterns: [
+    80,
+  ],
+}
+warning: `replace_all` expected `list<string>`, but got `list<int64>`
+ --> tests/functions/string/replace_all_invalid_dynamic_patterns.tql:6:23
+  |
+6 | raw = raw.replace_all(patterns, "x")
+  |                       ~~~~~~~~ 
+  |

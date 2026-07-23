@@ -1,0 +1,22 @@
+from {
+  raw: "a b",
+  patterns: ["a", "b"],
+  marker: "x",
+},
+{
+  raw: "keep me",
+  patterns: null,
+  marker: "x",
+},
+{
+  raw: "null replacement",
+  patterns: ["null"],
+  marker: null,
+},
+{
+  raw: "null pattern",
+  patterns: [null.string()],
+  marker: "x",
+}
+
+raw = raw.replace_all(patterns, marker)
