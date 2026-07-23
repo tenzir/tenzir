@@ -17,6 +17,7 @@
 #include "tenzir/detail/available_memory.hpp"
 #include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/fbs/utils.hpp"
+#include "tenzir/flatbuffer.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/partition_synopsis.hpp"
@@ -974,8 +975,24 @@ auto partition_transformer(
           ps_builder.add_partition_synopsis(synopsis->Union());
           auto ps_offset = ps_builder.Finish();
           fbs::FinishPartitionSynopsisBuffer(builder, ps_offset);
+          auto ps_chunk = fbs::release(builder);
+          // When the index reads synopses without verification, transformed
+          // synopses must be verified here so the write-once guarantee also
+          // holds for partitions produced by rebuilds and transforms.
+          if (self->state().synopsis_opts.skip_synopsis_verification) {
+            if (auto checked
+                = flatbuffer<fbs::PartitionSynopsis>::make(chunk_ptr{ps_chunk});
+                not checked) {
+              stream_data.synopsis_chunks = caf::make_error(
+                ec::format_error,
+                fmt::format("failed to verify transformed partition "
+                            "synopsis: {}",
+                            checked.error()));
+              return;
+            }
+          }
           stream_data.synopsis_chunks->emplace_back(
-            std::make_tuple(partition_data.id, fbs::release(builder)));
+            std::make_tuple(partition_data.id, std::move(ps_chunk)));
         }
       }();
       store_or_fulfill(self, std::move(stream_data));
