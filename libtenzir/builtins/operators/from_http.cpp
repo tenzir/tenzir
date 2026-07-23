@@ -29,7 +29,6 @@
 #include <tenzir/secret_resolution.hpp>
 #include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/series_builder.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/set.hpp>
@@ -1157,12 +1156,9 @@ private:
     auto pipeline = ir::pipeline{};
     if (args_.parser) {
       pipeline = args_.parser->inner;
-      auto env = substitute_ctx::env_t{};
-      env[args_.response] = make_response_context(*response_);
-      if (not pipeline.substitute(substitute_ctx{ctx, &env}, true)) {
-        lifecycle_ = Lifecycle::done;
-        co_return;
-      }
+      // Bind the response context as a `let` binding; it is resolved when the
+      // subpipeline is instantiated during planning.
+      pipeline.bind(args_.response, make_response_context(*response_));
     } else {
       auto const* plugin = static_cast<const operator_factory_plugin*>(nullptr);
       if (auto value = http::find(response_->headers, "content-type");

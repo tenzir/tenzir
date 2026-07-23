@@ -15,7 +15,6 @@
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/session.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/parser.hpp>
 
 #include <folly/CancellationToken.h>
@@ -160,13 +159,6 @@ public:
         co_return;
       }
       pipe = std::move(*default_printer);
-    }
-    if (not pipe.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
-      diagnostic::error("failed to substitute pipeline")
-        .primary(args_.self)
-        .emit(ctx);
-      done_ = true;
-      co_return;
     }
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_stdout"},

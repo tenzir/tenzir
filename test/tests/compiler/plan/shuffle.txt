@@ -1,1 +1,1 @@
-c0: {input} -- from -x- deduplicate xN partitioned >- to_stdout -- {output}
+c0: {input} -- from -x- deduplicate(x4, keyed) >- to_stdout -- {output}

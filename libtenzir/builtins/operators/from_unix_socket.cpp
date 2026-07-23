@@ -16,7 +16,6 @@
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -69,10 +68,9 @@ struct UnixSocketFrom {
     return {};
   }
 
-  auto substitute(ir::pipeline& pipeline, ConnectionInfo&, OpCtx& ctx) const
-    -> bool {
-    return static_cast<bool>(
-      pipeline.substitute(substitute_ctx{{ctx}, nullptr}, true));
+  auto bind(ir::pipeline&, ConnectionInfo&, OpCtx&) const -> void {
+    // No per-connection bindings to inject; the subpipeline is instantiated
+    // during planning.
   }
 
   auto pipeline() -> located<ir::pipeline>& {

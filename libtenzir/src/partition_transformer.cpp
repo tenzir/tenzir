@@ -12,6 +12,7 @@
 #include "tenzir/async/future_util.hpp"
 #include "tenzir/async/mail.hpp"
 #include "tenzir/atomic.hpp"
+#include "tenzir/base_ctx.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/available_memory.hpp"
@@ -26,7 +27,6 @@
 #include "tenzir/query_context.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/store.hpp"
-#include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/exec.hpp"
 #include "tenzir/try.hpp"
 
@@ -437,8 +437,6 @@ auto compile_table_slice_transform(ast::pipeline ast, diagnostic_handler& dh)
   auto b_ctx = base_ctx{ctx.dh(), ctx.reg()};
   auto root = compile_ctx::make_root(b_ctx);
   TRY(auto ir, std::move(ast).compile(root));
-  auto sub_ctx = substitute_ctx{b_ctx, nullptr};
-  TRY(ir.substitute(sub_ctx, true));
   TRY(auto output, ir.infer_type(tag_v<table_slice>, dh));
   if (not output.is<table_slice>()) {
     diagnostic::error("partition transform: pipeline must produce events, "
@@ -447,7 +445,7 @@ auto compile_table_slice_transform(ast::pipeline ast, diagnostic_handler& dh)
       .emit(dh);
     return failure::promise();
   }
-  auto plan = ir::Plan::from(std::move(ir), tag_v<table_slice>, dh);
+  auto plan = ir::make_plan(std::move(ir), tag_v<table_slice>, b_ctx);
   if (ctx.has_failure()) {
     return failure::promise();
   }

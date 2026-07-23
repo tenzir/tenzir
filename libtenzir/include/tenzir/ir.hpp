@@ -169,6 +169,14 @@ struct pipeline {
 
   pipeline(std::vector<let> lets, std::vector<Box<Operator>> operators);
 
+  /// Prepend a `let` binding that binds `id` to the constant `value`.
+  ///
+  /// Used by operators such as `each`, `group`, and `window` to hand a runtime
+  /// value to their subpipeline: instead of substituting the value eagerly,
+  /// they inject it as a binding that is resolved when the subpipeline is
+  /// instantiated (during planning).
+  auto bind(let_id id, ast::constant::kind value) -> void;
+
   /// @see Operator
   auto substitute(substitute_ctx ctx, bool instantiate) -> failure_or<void>;
 
@@ -347,16 +355,6 @@ struct Plan {
   std::vector<PlannedOperator> operators;
   std::vector<PlannedChannel> channels;
 
-  /// Build a plan from an already-instantiated pipeline.
-  ///
-  /// This optimizes the pipeline, threads element types starting from `input`,
-  /// and records one node per operator with its parallelism and partition
-  /// keys. The operators are not spawned yet; spawning is deferred to the
-  /// executor.
-  static auto
-  from(pipeline pipe, element_type_tag input, diagnostic_handler& dh,
-       Parallelism parallelism = parallelism::Disabled{}) -> failure_or<Plan>;
-
   auto input_type() const -> element_type_tag;
 
   auto output_type() const -> element_type_tag;
@@ -384,6 +382,28 @@ struct Plan {
 /// maximal linear chains (printed inline with channel glyphs) plus a `links:`
 /// section listing the non-linear cross-chain edges.
 auto fmt_ir_plan(const Plan& plan) -> std::string;
+
+/// Instantiate a compiled pipeline: resolve its `let` bindings and substitute
+/// non-deterministic arguments (e.g. `now()`). This is the single
+/// instantiation point shared by `make_plan` and the `--dump-opt-ir` output.
+auto instantiate(pipeline pipe, base_ctx ctx) -> failure_or<pipeline>;
+
+/// Optimize an instantiated pipeline, applying transformations such as
+/// predicate pushdown and operator elision. Any filter left over after
+/// optimization is reinserted as leading `where` operators. Expects the
+/// pipeline to be instantiated, i.e., to have no remaining `let` bindings.
+auto optimize(pipeline pipe) -> pipeline;
+
+/// Build a plan from a compiled pipeline.
+///
+/// This instantiates the pipeline (resolving `let` bindings and substituting
+/// non-deterministic arguments), optimizes it, threads element types starting
+/// from `input`, and records one node per operator with its parallelism and
+/// partition keys. The operators are not spawned yet; spawning is deferred to
+/// the executor.
+auto make_plan(pipeline pipe, element_type_tag input, base_ctx ctx,
+               Parallelism parallelism = parallelism::Disabled{})
+  -> failure_or<Plan>;
 
 /// Incrementally builds a `Plan` while lowering a pipeline. Operators receive
 /// a reference to it from `Operator::plan` and use it to append nodes and wire

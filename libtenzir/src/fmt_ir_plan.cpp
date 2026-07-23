@@ -9,6 +9,7 @@
 #include "tenzir/ir.hpp"
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include <algorithm>
 #include <optional>
@@ -92,13 +93,22 @@ auto link_kind_name(ir::ChannelKind kind) -> std::string_view {
 }
 
 /// The minimal, stable label for a planned operator node.
+///
+/// Non-default properties are appended as a single parenthesized, comma-
+/// separated annotation group: `x<n>` for the number of parallel instances,
+/// and `keyed` when input is partitioned by key. Operators with no such
+/// properties carry no parentheses.
 auto plan_node_label(const ir::PlannedOperator& node) -> std::string {
   auto label = node.op->display_name();
+  auto annotations = std::vector<std::string>{};
   if (node.parallelism > 1) {
-    label += " xN";
+    annotations.push_back(fmt::format("x{}", node.parallelism));
   }
   if (not node.partition_keys.empty()) {
-    label += " partitioned";
+    annotations.emplace_back("keyed");
+  }
+  if (not annotations.empty()) {
+    label += fmt::format("({})", fmt::join(annotations, ", "));
   }
   return label;
 }

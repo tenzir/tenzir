@@ -14,7 +14,6 @@
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/secret_resolution.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
 
 namespace tenzir::plugins::from_ftp {
@@ -80,10 +79,6 @@ public:
       co_return;
     }
     auto pipeline = args_.parser.inner;
-    if (not pipeline.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
-      lifecycle_ = Lifecycle::done;
-      co_return;
-    }
     auto resolved_tls = tls.resolve(ctx.actor_system().config(), ctx);
     if (not resolved_tls) {
       lifecycle_ = Lifecycle::done;
