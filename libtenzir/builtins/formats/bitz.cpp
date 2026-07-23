@@ -69,6 +69,10 @@ public:
         auto header = consume(sizeof(message_length_type));
         std::memcpy(&message_length_, header.data(), sizeof(message_length_));
         message_length_ = detail::to_host_order(message_length_);
+        if (message_length_ == 0) {
+          emit(diagnostic::error("unexpected empty BITZ message"), ctx.dh());
+          co_return;
+        }
         state_ = State::message;
       }
       if (state_ == State::message) {

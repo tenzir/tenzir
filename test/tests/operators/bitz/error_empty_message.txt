@@ -1,0 +1,6 @@
+error: unexpected empty BITZ message
+ --> tests/operators/bitz/error_empty_message.tql:5:3
+  |
+5 |   read_bitz
+  |   ^^^^^^^^^ 
+  |
