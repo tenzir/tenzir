@@ -1,0 +1,7 @@
+error: unexpected message length 408
+ --> tests/operators/bitz/error_truncated_payload.tql:5:3
+  |
+5 |   read_bitz
+  |   ^^^^^^^^^ 
+  |
+  = note: expected 409
