@@ -42,7 +42,7 @@ public:
   }
 };
 
-/// @see operator_parser_plugin
+/// @see operator_plugin
 class loader_parser_plugin : public virtual plugin {
 public:
   virtual auto parse_loader(parser_interface& p) const

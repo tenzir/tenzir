@@ -242,14 +242,6 @@ class plugin final : public virtual operator_plugin<partitions_operator>,
                      public virtual operator_factory_plugin,
                      public virtual OperatorPlugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {
-      .source = true,
-      .transformation = false,
-      .sink = false,
-    };
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto expr = std::optional<ast::expression>{};

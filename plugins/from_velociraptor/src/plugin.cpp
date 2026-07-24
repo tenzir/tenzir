@@ -229,12 +229,6 @@ public:
     return caf::none;
   }
 
-  auto signature() const -> operator_signature override {
-    return {
-      .source = true,
-    };
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = operator_args{};
@@ -334,10 +328,6 @@ public:
 
   auto name() const -> std::string override {
     return "from_velociraptor";
-  }
-
-  auto operator_name() const -> std::string override {
-    return "velociraptor";
   }
 
 private:

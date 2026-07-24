@@ -103,10 +103,6 @@ class Plugin final : public virtual operator_plugin<sockets_operator>,
                      public virtual operator_factory_plugin,
                      public virtual OperatorPlugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.source = true};
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_("sockets").parse(inv, ctx));

@@ -414,10 +414,6 @@ public:
 class plugin final : public virtual operator_plugin<decapsulate_operator>,
                      public virtual function_plugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
   auto is_deterministic() const -> bool override {
     return true;
   }

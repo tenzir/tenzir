@@ -125,10 +125,6 @@ private:
 class tql1_plugin final : public virtual operator_plugin<where_operator>,
                           public virtual where_factory_plugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
   auto make_where_operator(located<expression> expr) const
     -> operator_ptr override {
     auto normalized_and_validated = normalize_and_validate(expr.inner);

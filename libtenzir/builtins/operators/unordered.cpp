@@ -154,14 +154,6 @@ class plugin final : public virtual operator_plugin<unordered_operator>,
                      public virtual operator_factory_plugin,
                      public virtual operator_compiler_plugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {
-      .source = true,
-      .transformation = true,
-      .sink = true,
-    };
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto pipe = located<pipeline>{};

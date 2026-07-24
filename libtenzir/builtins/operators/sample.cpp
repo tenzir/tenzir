@@ -234,14 +234,6 @@ class plugin final : public virtual operator_plugin<sample_operator>,
                      public virtual operator_factory_plugin,
                      public virtual OperatorPlugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
-  auto operator_name() const -> std::string override {
-    return "sample";
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto str = std::optional<located<std::string>>{};

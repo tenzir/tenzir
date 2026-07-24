@@ -42,7 +42,10 @@ auto make_plugins() -> generator<table_slice> {
     add_plugin_type<context_plugin>(plugin, types, "context");
     add_plugin_type<loader_parser_plugin>(plugin, types, "loader");
     add_plugin_type<metrics_plugin>(plugin, types, "metrics");
-    add_plugin_type<operator_parser_plugin>(plugin, types, "operator");
+    if (plugin.as<operator_factory_plugin>()
+        or plugin.as<operator_compiler_plugin>()) {
+      types.data("operator");
+    }
     add_plugin_type<parser_parser_plugin>(plugin, types, "parser");
     add_plugin_type<printer_parser_plugin>(plugin, types, "printer");
     add_plugin_type<rest_endpoint_plugin>(plugin, types, "rest_endpoint");
@@ -142,10 +145,6 @@ class Plugin final : public virtual operator_plugin<plugins_operator>,
                      public virtual operator_factory_plugin,
                      public virtual OperatorPlugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.source = true};
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     argument_parser2::operator_("plugins").parse(inv, ctx).ignore();

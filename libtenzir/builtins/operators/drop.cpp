@@ -131,9 +131,6 @@ private:
 
 class plugin final : public virtual operator_plugin<drop_operator> {
 public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
 };
 
 class drop_operator2 final : public crtp_operator<drop_operator2> {

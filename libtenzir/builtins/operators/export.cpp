@@ -479,10 +479,6 @@ class export_plugin final : public virtual operator_plugin<export_operator>,
                             public virtual operator_factory_plugin,
                             public virtual OperatorPlugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.source = true};
-  }
-
   auto describe() const -> Description override {
     auto d = Describer<ExportArgs, Export>{ExportArgs{
       .filter = {},
@@ -541,17 +537,12 @@ public:
   }
 };
 
-class diagnostics_plugin final : public virtual operator_parser_plugin,
-                                 public virtual operator_factory_plugin,
+class diagnostics_plugin final : public virtual operator_factory_plugin,
                                  public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "diagnostics";
   };
-
-  auto signature() const -> operator_signature override {
-    return {.source = true};
-  }
 
   auto describe() const -> Description override {
     auto d = Describer<ExportArgs, Export>{ExportArgs{
@@ -609,17 +600,12 @@ public:
   }
 };
 
-class metrics_plugin final : public virtual operator_parser_plugin,
-                             public virtual operator_factory_plugin,
+class metrics_plugin final : public virtual operator_factory_plugin,
                              public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "metrics";
   };
-
-  auto signature() const -> operator_signature override {
-    return {.source = true};
-  }
 
   auto describe() const -> Description override {
     auto d = Describer<ExportArgs, Export>{ExportArgs{

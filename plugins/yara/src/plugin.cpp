@@ -679,10 +679,6 @@ public:
     yr_finalize();
   }
 
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
   auto describe() const -> Description override {
     auto d = Describer<YaraArgs, Yara>{};
     auto rules = d.positional("rules", &YaraArgs::rules, "string|list<string>");

@@ -147,9 +147,6 @@ private:
 
 class plugin final : public virtual operator_plugin<hash_operator> {
 public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
 };
 
 } // namespace

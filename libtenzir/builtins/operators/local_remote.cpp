@@ -131,8 +131,7 @@ auto location_name(operator_location location) -> std::string_view {
 }
 
 template <detail::string_literal Name, operator_location Location>
-class plugin final : public virtual operator_parser_plugin,
-                     public virtual operator_factory_plugin,
+class plugin final : public virtual operator_factory_plugin,
                      public virtual operator_compiler_plugin {
 public:
   auto initialize([[maybe_unused]] const record& plugin_config,
@@ -147,14 +146,6 @@ public:
                                          no_location_overrides.error()));
     }
     return {};
-  }
-
-  auto signature() const -> operator_signature override {
-    return {
-      .source = true,
-      .transformation = true,
-      .sink = true,
-    };
   }
 
   auto name() const -> std::string override {

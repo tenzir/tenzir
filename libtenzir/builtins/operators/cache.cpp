@@ -1434,7 +1434,6 @@ private:
 using cache_ir_plugin = inspection_plugin<ir::Operator, CacheIr>;
 
 class cache_plugin final : public virtual operator_factory_plugin,
-                           public virtual operator_parser_plugin,
                            public virtual component_plugin,
                            public virtual operator_compiler_plugin {
 public:
@@ -1470,14 +1469,6 @@ public:
     -> component_plugin_actor override {
     return self->spawn<caf::linked>(caf::actor_from_state<cache_manager>,
                                     cache_capacity_);
-  }
-
-  auto signature() const -> operator_signature override {
-    return {
-      .source = true,
-      .transformation = true,
-      .sink = true,
-    };
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

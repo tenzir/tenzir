@@ -234,10 +234,6 @@ public:
     return "repeat";
   }
 
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto count = std::optional<uint64_t>{};

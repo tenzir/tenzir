@@ -309,9 +309,6 @@ private:
 
 class plugin final : public virtual operator_plugin<delay_operator> {
 public:
-  auto signature() const -> operator_signature override {
-    return {.source = true};
-  }
 };
 
 class plugin2 final : public virtual operator_plugin2<delay_operator2>,

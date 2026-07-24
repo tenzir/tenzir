@@ -253,9 +253,6 @@ private:
 
 class plugin final : public virtual operator_plugin<sort_operator> {
 public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
 };
 
 // -- TQL2 implementation below ------------------------------------------------

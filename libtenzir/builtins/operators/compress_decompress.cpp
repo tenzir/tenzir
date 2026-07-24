@@ -414,10 +414,6 @@ auto get_extensions(std::string_view method_name) -> std::vector<std::string> {
 class compress_plugin final : public virtual operator_plugin<compress_operator>,
                               public virtual operator_factory_plugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
   auto name() const -> std::string override {
     return method_name_.empty() ? "compress" : "compress_" + method_name_;
   }
@@ -501,10 +497,6 @@ class decompress_plugin final
   : public virtual operator_plugin<decompress_operator>,
     public virtual operator_factory_plugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
   decompress_plugin() = default;
 
   decompress_plugin(std::string method_name)

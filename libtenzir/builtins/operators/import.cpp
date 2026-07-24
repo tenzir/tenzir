@@ -282,10 +282,6 @@ class plugin final : public virtual operator_plugin<import_operator>,
                      public virtual operator_factory_plugin,
                      public virtual OperatorPlugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.sink = true};
-  }
-
   auto describe() const -> Description override {
     auto d = Describer<ImportArgs, Import>{};
     return d.invariant_order_filter();

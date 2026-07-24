@@ -541,21 +541,12 @@ private:
   std::optional<located<buffer_policy>> policy_ = {};
 };
 
-class buffer_plugin final : public virtual operator_parser_plugin,
-                            public virtual operator_factory_plugin,
+class buffer_plugin final : public virtual operator_factory_plugin,
                             public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "buffer";
   };
-
-  auto signature() const -> operator_signature override {
-    return {
-      .source = false,
-      .transformation = true,
-      .sink = false,
-    };
-  }
 
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
