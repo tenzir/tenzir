@@ -54,7 +54,18 @@ auto parse_feather(generator<chunk_ptr> input, diagnostic_handler& dh)
     auto required_size
       = detail::narrow_cast<size_t>(stream_decoder.next_required_size());
     if (required_size == 0) {
-      co_return;
+      // The current IPC stream is complete. The input may contain further
+      // concatenated streams that `byte_reader` still holds, because we only
+      // ever feed the decoder exactly `required_size` bytes. Reset the decoder
+      // and continue; the next read requests the magic bytes of a new stream,
+      // and if the input is exhausted the short/empty-payload path below
+      // terminates normally.
+      auto reset_result = stream_decoder.Reset();
+      TENZIR_ASSERT(reset_result.ok(), reset_result.ToString().c_str());
+      // Reset the trailing-byte counter so bytes from the finished stream do
+      // not bleed into diagnostics about a malformed subsequent stream.
+      truncated_bytes = 0;
+      continue;
     }
     auto payload = byte_reader(required_size);
     if (not payload) {

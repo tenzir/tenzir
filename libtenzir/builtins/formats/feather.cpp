@@ -849,7 +849,15 @@ private:
       auto required_size
         = detail::narrow_cast<size_t>(stream_decoder_->next_required_size());
       if (required_size == 0) {
-        co_return;
+        // The current IPC stream is complete. Reset the decoder so that any
+        // concatenated streams still buffered in `buffer_` are decoded too;
+        // we only ever feed exactly `required_size` bytes, so their bytes are
+        // retained. The next read requests a new stream's magic bytes, and if
+        // the input is exhausted the short/empty-payload path below returns.
+        auto reset_result = stream_decoder_->Reset();
+        TENZIR_ASSERT(reset_result.ok(), reset_result.ToString().c_str());
+        truncated_bytes_ = 0;
+        continue;
       }
       auto payload = take(required_size);
       if (not payload) {
