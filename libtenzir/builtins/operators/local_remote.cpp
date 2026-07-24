@@ -161,24 +161,6 @@ public:
     return std::string{Name.str()};
   };
 
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto result = p.parse_operator();
-    if (not result.inner) {
-      diagnostic::error("failed to parse operator")
-        .primary(result.source)
-        .throw_();
-    }
-    if (auto* pipe = dynamic_cast<pipeline*>(result.inner.get())) {
-      auto ops = std::move(*pipe).unwrap();
-      for (auto& op : ops) {
-        op = std::make_unique<local_remote_operator>(std::move(op), Location);
-      }
-      return std::make_unique<pipeline>(std::move(ops));
-    }
-    return std::make_unique<local_remote_operator>(std::move(result.inner),
-                                                   Location);
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto pipe = located<pipeline>{};

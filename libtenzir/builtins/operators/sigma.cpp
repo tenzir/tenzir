@@ -877,32 +877,6 @@ public:
     });
     return d.without_optimize();
   }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"sigma", "https://tenzir.com/docs/"
-                                           "reference/operators"};
-    auto refresh_interval = duration{std::chrono::seconds{5}};
-    auto refresh_interval_arg = std::optional<located<std::string>>{};
-    auto path = std::string{};
-    parser.add("--refresh-interval", refresh_interval_arg,
-               "<refresh-interval>");
-    parser.add(path, "<rule-or-directory>");
-    parser.parse(p);
-    if (refresh_interval_arg) {
-      if (not parsers::duration(refresh_interval_arg->inner,
-                                refresh_interval)) {
-        diagnostic::error("refresh interval is not a valid duration")
-          .primary(refresh_interval_arg->source)
-          .throw_();
-      }
-      if (refresh_interval <= duration::zero()) {
-        diagnostic::error("`refresh_interval` must be a positive duration")
-          .primary(refresh_interval_arg->source)
-          .throw_();
-      }
-    }
-    return std::make_unique<sigma_operator>(refresh_interval, std::move(path));
-  }
 };
 
 } // namespace

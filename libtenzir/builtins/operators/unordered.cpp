@@ -162,16 +162,6 @@ public:
     };
   }
 
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto result = p.parse_operator();
-    if (not result.inner) {
-      diagnostic::error("failed to parse operator")
-        .primary(result.source)
-        .throw_();
-    }
-    return std::make_unique<unordered_operator>(std::move(result.inner));
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto pipe = located<pipeline>{};

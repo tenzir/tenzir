@@ -315,81 +315,6 @@ public:
   }
 
 private:
-  auto parse_pipeline() -> std::vector<located<operator_ptr>> {
-    if (legacy_accept(parsers::eoi)) {
-      return {};
-    }
-    auto result = std::vector<located<operator_ptr>>{};
-    while (true) {
-      result.push_back(parse_operator());
-      if (not accept_operator_sep()) {
-        if (legacy_accept(parsers::eoi)) {
-          break;
-        }
-        throw_at_current("expected end of operator here");
-      }
-    }
-    return result;
-  }
-
-  auto parse_operator() -> located<operator_ptr> override {
-    // TODO: Where to put parse statement end?
-    if (auto name = accept<identifier>()) {
-      return parse_operator(std::move(*name));
-    }
-    throw_at_current("expected operator name");
-  }
-
-  auto parse_operator(identifier ident) -> located<operator_ptr> {
-    auto const* plugin = plugins::find_operator(ident.name);
-    if (not plugin) {
-      diagnostic::error("no such operator: `{}`", ident.name)
-        .primary(ident.source)
-        .docs("https://tenzir.com/docs/operators")
-        .throw_();
-    }
-    try {
-      // TODO: Replace check with assert.
-      if (auto op = plugin->parse_operator(*this)) {
-        return {
-          std::move(op),
-          location{
-            ident.source.begin,
-            current_pos() // TODO
-          },
-        };
-      }
-    } catch (const diagnostic& diag) {
-      // Forward diagnostic errors.
-      throw;
-    } catch (...) {
-      diagnostic::error("internal error: {} operator "
-                        "threw unexpected exception",
-                        ident.name)
-        .primary(ident.source)
-        .throw_();
-    }
-    // TODO: Remove this legacy fallback.
-    auto [rest, op] = plugin->make_operator({current_, end_});
-    auto op_end = rest.data();
-    while (*(op_end - 1) == ' ' or *(op_end - 1) == '|') {
-      --op_end;
-    }
-    auto source = location::unknown;
-    if (not internal_) {
-      source.begin = ident.source.begin;
-      source.end = detail::narrow<size_t>(op_end - source_.data());
-    }
-    if (not op) {
-      diagnostic::error("could not parse `{}` operator", ident.name)
-        .primary(source)
-        .note(fmt::to_string(op.error()))
-        .throw_();
-    }
-    current_ = op_end;
-    return {std::move(*op), source};
-  }
-
   auto parse_primary_expr() -> expression {
     auto start = current_;
     if (auto result = parsers::data.apply(current_, end_)) {
@@ -518,13 +443,6 @@ private:
     return {};
   }
 
-  [[nodiscard]] auto accept_operator_sep() -> std::optional<location> {
-    if (auto x = accept_with_span('|')) {
-      return x->second;
-    }
-    return {};
-  }
-
   auto accept_integer() -> std::optional<expression> {
     if (auto result = accept_with_span(parsers::i64)) {
       return expression{result->first, result->second};
@@ -569,16 +487,6 @@ public:
       end_{source_.data() + source_.size()},
       diag_{diag},
       internal_{internal} {
-  }
-
-  auto parse() -> std::optional<std::vector<located<operator_ptr>>> {
-    try {
-      (void)legacy_accept("#!" >> *(parsers::any - '\n'));
-      return parse_pipeline();
-    } catch (const diagnostic& diag) {
-      diag_.emit(diag);
-      return {};
-    }
   }
 };
 

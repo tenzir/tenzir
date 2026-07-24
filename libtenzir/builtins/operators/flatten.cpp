@@ -109,16 +109,6 @@ public:
         });
       });
   }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser
-      = argument_parser{"flatten", "https://tenzir.com/docs/operators/flatten"};
-    auto sep = std::optional<located<std::string>>{};
-    parser.add(sep, "<separator>");
-    parser.parse(p);
-    auto separator = (sep) ? sep->inner : default_flatten_separator;
-    return std::make_unique<flatten_operator>(separator);
-  }
 };
 
 } // namespace

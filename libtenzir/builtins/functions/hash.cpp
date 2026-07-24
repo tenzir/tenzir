@@ -150,62 +150,6 @@ public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
   }
-
-  auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
-      parsers::optional_ws_or_comment, parsers::extractor_list;
-    const auto* f = pipeline.begin();
-    const auto* const l = pipeline.end();
-    const auto options = option_set_parser{{{"salt", 's'}}};
-    const auto option_parser = (required_ws_or_comment >> options);
-    auto parsed_options = std::unordered_map<std::string, data>{};
-    if (not option_parser(f, l, parsed_options)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to parse hash "
-                                                      "operator options: '{}'",
-                                                      pipeline)),
-      };
-    }
-    const auto extractor_parser = optional_ws_or_comment >> extractor_list
-                                  >> optional_ws_or_comment
-                                  >> end_of_pipeline_operator;
-    auto parsed_extractors = std::vector<std::string>{};
-    if (not extractor_parser(f, l, parsed_extractors)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to parse hash "
-                                                      "operator extractor: "
-                                                      "'{}'",
-                                                      pipeline)),
-      };
-    }
-    auto config = configuration{};
-    config.field = parsed_extractors.front();
-    config.out = parsed_extractors.front() + "_hashed";
-    for (const auto& [key, value] : parsed_options) {
-      auto value_str = try_as<std::string>(&value);
-      if (not value_str) {
-        return {
-          std::string_view{f, l},
-          caf::make_error(ec::syntax_error, fmt::format("invalid option value "
-                                                        "string for "
-                                                        "pseudonymize "
-                                                        "operator: "
-                                                        "'{}'",
-                                                        value)),
-        };
-      }
-      if (key == "s" or key == "salt") {
-        config.salt = *value_str;
-      }
-    }
-    return {
-      std::string_view{f, l},
-      std::make_unique<hash_operator>(std::move(config)),
-    };
-  }
 };
 
 } // namespace

@@ -717,30 +717,6 @@ public:
     args.rules = std::move(*rule_strings);
     return std::make_unique<yara_operator>(std::move(args));
   }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto args = operator_args{};
-    while (auto arg = p.accept_shell_arg()) {
-      if (arg) {
-        if (arg->inner == "-C" or arg->inner == "--compiled-rules") {
-          args.compiled_rules = true;
-        } else if (arg->inner == "-f" or arg->inner == "--fast-scan") {
-          args.fast_scan = true;
-        } else {
-          args.rules.push_back(std::move(arg->inner));
-        }
-      }
-    }
-    if (args.rules.empty()) {
-      diagnostic::error("no rules provided").throw_();
-    }
-    if (args.compiled_rules and args.rules.size() != 1) {
-      diagnostic::error("can't accept multiple rules in compiled form")
-        .hint("provide exactly one rule argument")
-        .throw_();
-    }
-    return std::make_unique<yara_operator>(std::move(args));
-  }
 };
 
 } // namespace

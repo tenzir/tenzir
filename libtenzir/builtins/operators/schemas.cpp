@@ -140,13 +140,6 @@ public:
     return {.source = true};
   }
 
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"schemas", "https://tenzir.com/docs/"
-                                             "operators/schemas"};
-    parser.parse(p);
-    return std::make_unique<schemas_operator>();
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     argument_parser2::operator_("schemas").parse(inv, ctx).ignore();

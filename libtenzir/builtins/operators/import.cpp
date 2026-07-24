@@ -291,15 +291,6 @@ public:
     return d.invariant_order_filter();
   }
 
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{
-      "import",
-      "https://tenzir.com/docs/operators/import",
-    };
-    parser.parse(p);
-    return std::make_unique<import_operator>();
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     argument_parser2::operator_("import").parse(inv, ctx).ignore();

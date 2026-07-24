@@ -475,18 +475,6 @@ public:
     return std::make_unique<files_operator>(std::move(args));
   }
 
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"files", "https://tenzir.com/docs/"
-                                           "operators/files"};
-    auto args = files_args{};
-    parser.add(args.path, "<path>");
-    parser.add("-r,--recurse-directories", args.recurse_directories);
-    parser.add("--follow-directory-symlink", args.follow_directory_symlink);
-    parser.add("--skip-permission-denied", args.skip_permission_denied);
-    parser.parse(p);
-    return std::make_unique<files_operator>(std::move(args));
-  }
-
   auto describe() const -> Description override {
     auto d = Describer<FilesArgs, Files>{};
     d.positional("dir", &FilesArgs::path);

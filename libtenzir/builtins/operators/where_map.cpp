@@ -136,23 +136,6 @@ public:
     expr.inner = std::move(*normalized_and_validated);
     return std::make_unique<where_operator>(std::move(expr));
   }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"where", "https://tenzir.com/docs/"
-                                           "operators/where"};
-    auto expr = located<tenzir::expression>{};
-    parser.add(expr, "<expr>");
-    parser.parse(p);
-    auto normalized_and_validated = normalize_and_validate(expr.inner);
-    if (not normalized_and_validated) {
-      diagnostic::error("invalid expression")
-        .primary(expr.source)
-        .docs("https://tenzir.com/language/expressions")
-        .throw_();
-    }
-    expr.inner = std::move(*normalized_and_validated);
-    return std::make_unique<where_operator>(std::move(expr));
-  }
 };
 
 class where_assert_operator final

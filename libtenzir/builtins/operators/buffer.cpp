@@ -557,40 +557,6 @@ public:
     };
   }
 
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"buffer", "https://tenzir.com/docs/"
-                                            "operators/buffer"};
-    auto capacity = located<uint64_t>{};
-    auto policy_str = std::optional<located<std::string>>{};
-    parser.add(capacity, "<capacity>");
-    parser.add("--policy", policy_str, "<block|drop>");
-    parser.parse(p);
-    if (capacity.inner == 0) {
-      // TODO: It'd be nice to underline the entire operator's definition here
-      // instead of just the capacity, but there is no easy way to get that
-      // location currently.
-      diagnostic::error("capacity must be greater than zero")
-        .primary(capacity.source)
-        .throw_();
-    }
-    auto policy = std::optional<located<buffer_policy>>{};
-    if (policy_str) {
-      const auto parsed_policy = from_string<buffer_policy>(policy_str->inner);
-      if (not parsed_policy) {
-        diagnostic::error("policy must be 'block' or 'drop'")
-          .primary(policy_str->source)
-          .throw_();
-      }
-      policy = {*parsed_policy, policy_str->source};
-    }
-    const auto id = uuid::random();
-    auto result = std::make_unique<pipeline>();
-    result->append(std::make_unique<write_buffer_operator>(id));
-    result->append(
-      std::make_unique<read_buffer_operator>(id, capacity, policy));
-    return result;
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto capacity = located<uint64_t>{};

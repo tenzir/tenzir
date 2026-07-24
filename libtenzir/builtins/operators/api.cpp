@@ -223,18 +223,6 @@ public:
     return {.source = true};
   }
 
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto endpoint = std::string{};
-    auto request_body = std::optional<std::string>{};
-    auto parser
-      = argument_parser{"api", "https://tenzir.com/docs/operators/api"};
-    parser.add(endpoint, "<command>");
-    parser.add(request_body, "<request-body>");
-    parser.parse(p);
-    return std::make_unique<api_operator>(
-      std::move(endpoint), request_body ? std::move(*request_body) : "{}");
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto endpoint = located<std::string>{};

@@ -250,37 +250,6 @@ public:
     };
   }
 
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{
-      "partitions",
-      "https://tenzir.com/docs/operators/partitions",
-    };
-    auto expr = std::optional<located<tenzir::expression>>{};
-    auto experimental_include_ranges = std::optional<location>{};
-    parser.add(expr, "<expr>");
-    // This option is a temporary workaround to allow for inspecting the min and
-    // max time values of partitions in setups where these values differ from
-    // the import timestamps. A proper solution for this should be implemented
-    // as a standalone operator that takes a field or type extractor and returns
-    // indexes relevant for it.
-    parser.add("--experimental-include-ranges", experimental_include_ranges);
-    parser.parse(p);
-    if (not expr) {
-      return std::make_unique<partitions_operator>(
-        trivially_true_expression(), experimental_include_ranges.has_value());
-    }
-    auto normalized_and_validated = normalize_and_validate(expr->inner);
-    if (not normalized_and_validated) {
-      diagnostic::error("invalid expression")
-        .primary(expr->source)
-        .docs("https://tenzir.com/language/expressions")
-        .throw_();
-    }
-    expr->inner = std::move(*normalized_and_validated);
-    return std::make_unique<partitions_operator>(
-      std::move(expr->inner), experimental_include_ranges.has_value());
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto expr = std::optional<ast::expression>{};

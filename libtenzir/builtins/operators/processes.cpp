@@ -115,13 +115,6 @@ public:
     return std::make_unique<processes_operator>();
   }
 
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"processes", "https://tenzir.com/docs/"
-                                               "operators/processes"};
-    parser.parse(p);
-    return std::make_unique<processes_operator>();
-  }
-
   auto describe() const -> Description override {
     auto d = Describer<ProcessesArgs, Processes>{};
     return d.without_optimize();

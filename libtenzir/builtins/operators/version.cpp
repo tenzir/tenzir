@@ -247,13 +247,6 @@ public:
     return {.source = true};
   }
 
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"version", "https://tenzir.com/docs/"
-                                             "operators/version"};
-    parser.parse(p);
-    return std::make_unique<version_operator>();
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     argument_parser2::operator_("version").parse(inv, ctx).ignore();

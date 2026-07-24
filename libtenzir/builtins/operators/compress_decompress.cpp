@@ -427,16 +427,6 @@ public:
     : method_name_{std::move(method_name)} {
   }
 
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"compress",
-                                  "https://tenzir.com/docs/operators/compress"};
-    auto args = operator_args{};
-    parser.add(args.type, "<type>");
-    parser.add("--level", args.level, "<level>");
-    parser.parse(p);
-    return std::make_unique<compress_operator>(std::move(args));
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = operator_args{
@@ -523,15 +513,6 @@ public:
 
   auto name() const -> std::string override {
     return method_name_.empty() ? "decompress" : "decompress_" + method_name_;
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"decompress", "https://tenzir.com/docs/"
-                                                "operators/decompress"};
-    auto args = operator_args{};
-    parser.add(args.type, "<type>");
-    parser.parse(p);
-    return std::make_unique<decompress_operator>(std::move(args));
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

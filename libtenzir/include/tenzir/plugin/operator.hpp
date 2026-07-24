@@ -19,7 +19,6 @@
 
 namespace tenzir {
 
-class parser_interface;
 struct operator_signature;
 
 // -- operator plugin ----------------------------------------------------------
@@ -37,12 +36,6 @@ public:
 
   /// @returns the signature of the operator.
   virtual auto signature() const -> operator_signature = 0;
-
-  /// @throws diagnostic
-  virtual auto parse_operator(parser_interface& p) const -> operator_ptr;
-
-  virtual auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>>;
 };
 
 using operator_serialization_plugin = serialization_plugin<operator_base>;

@@ -63,16 +63,6 @@ public:
     return {.transformation = true};
   }
 
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"unflatten", "https://tenzir.com/docs/"
-                                               "operators/unflatten"};
-    auto sep = std::optional<located<std::string>>{};
-    parser.add(sep, "<separator>");
-    parser.parse(p);
-    auto separator = (sep) ? sep->inner : default_unflatten_separator;
-    return std::make_unique<unflatten_operator>(separator);
-  }
-
   auto is_deterministic() const -> bool override {
     return true;
   }

@@ -113,13 +113,6 @@ public:
     return std::make_unique<sockets_operator>();
   }
 
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"sockets", "https://tenzir.com/docs/"
-                                             "operators/sockets"};
-    parser.parse(p);
-    return std::make_unique<sockets_operator>();
-  }
-
   auto describe() const -> Description override {
     auto d = Describer<SocketsArgs, Sockets>{};
     return d.without_optimize();

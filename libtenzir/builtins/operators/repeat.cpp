@@ -238,16 +238,6 @@ public:
     return {.transformation = true};
   }
 
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto repetitions = std::optional<uint64_t>{};
-    auto parser = argument_parser{"repeat", "https://tenzir.com/docs/"
-                                            "operators/repeat"};
-    parser.add(repetitions, "<count>");
-    parser.parse(p);
-    return std::make_unique<repeat_operator>(
-      repetitions.value_or(std::numeric_limits<uint64_t>::max()));
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto count = std::optional<uint64_t>{};

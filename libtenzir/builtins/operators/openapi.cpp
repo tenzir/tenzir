@@ -186,13 +186,6 @@ public:
     return std::make_unique<openapi_operator>();
   }
 
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"openapi", "https://tenzir.com/docs/"
-                                             "operators/openapi"};
-    parser.parse(p);
-    return std::make_unique<openapi_operator>();
-  }
-
   auto describe() const -> Description override {
     auto d = Describer<OpenapiArgs, Openapi>{};
     return d.without_optimize();
