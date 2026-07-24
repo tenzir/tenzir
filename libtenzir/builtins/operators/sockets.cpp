@@ -103,20 +103,9 @@ class Plugin final : public virtual operator_plugin<sockets_operator>,
                      public virtual operator_factory_plugin,
                      public virtual OperatorPlugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.source = true};
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_("sockets").parse(inv, ctx));
-    return std::make_unique<sockets_operator>();
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"sockets", "https://tenzir.com/docs/"
-                                             "operators/sockets"};
-    parser.parse(p);
     return std::make_unique<sockets_operator>();
   }
 

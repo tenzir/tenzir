@@ -10,6 +10,7 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/location.hpp"
 #include "tenzir/plugin/base.hpp"
 
 #include <string>
@@ -18,43 +19,25 @@
 
 namespace tenzir {
 
-class parser_interface;
-struct operator_signature;
-
 // -- operator plugin ----------------------------------------------------------
-
-/// Deriving from this plugin will add an operator with the name of this plugin
-/// to the pipeline parser. Derive from this class when you want to introduce an
-/// alias to existing operators. This plugin itself does not add a new operator,
-/// but only a parser for it. For most use cases: @see operator_plugin
-class operator_parser_plugin : public virtual plugin {
-public:
-  /// @returns the name of the operator
-  virtual auto operator_name() const -> std::string {
-    return name();
-  }
-
-  /// @returns the signature of the operator.
-  virtual auto signature() const -> operator_signature = 0;
-
-  /// @throws diagnostic
-  virtual auto parse_operator(parser_interface& p) const -> operator_ptr;
-
-  virtual auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>>;
-};
 
 using operator_serialization_plugin = serialization_plugin<operator_base>;
 
 template <class Operator>
 using operator_inspection_plugin = inspection_plugin<operator_base, Operator>;
 
-/// This plugin adds a new operator with the name `Operator::name()` and
-/// internal systems. Most operator plugins should use this class, but if you
-/// only want to add an alias to existing operators, use
-/// `operator_parser_plugin` instead.
+/// This plugin registers the (de)serialization for an operator type. Derive
+/// from it to make an operator's state inspectable and serializable.
 template <class Operator>
-class operator_plugin : public virtual operator_inspection_plugin<Operator>,
-                        public virtual operator_parser_plugin {};
+class operator_plugin : public virtual operator_inspection_plugin<Operator> {};
+
+/// Builds a `where` legacy operator from an already normalized and validated
+/// expression.
+class where_factory_plugin : public virtual plugin {
+public:
+  virtual auto make_where_operator(located<expression> expr) const
+    -> operator_ptr
+    = 0;
+};
 
 } // namespace tenzir

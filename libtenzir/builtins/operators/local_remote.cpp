@@ -131,8 +131,7 @@ auto location_name(operator_location location) -> std::string_view {
 }
 
 template <detail::string_literal Name, operator_location Location>
-class plugin final : public virtual operator_parser_plugin,
-                     public virtual operator_factory_plugin,
+class plugin final : public virtual operator_factory_plugin,
                      public virtual operator_compiler_plugin {
 public:
   auto initialize([[maybe_unused]] const record& plugin_config,
@@ -149,35 +148,9 @@ public:
     return {};
   }
 
-  auto signature() const -> operator_signature override {
-    return {
-      .source = true,
-      .transformation = true,
-      .sink = true,
-    };
-  }
-
   auto name() const -> std::string override {
     return std::string{Name.str()};
   };
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto result = p.parse_operator();
-    if (not result.inner) {
-      diagnostic::error("failed to parse operator")
-        .primary(result.source)
-        .throw_();
-    }
-    if (auto* pipe = dynamic_cast<pipeline*>(result.inner.get())) {
-      auto ops = std::move(*pipe).unwrap();
-      for (auto& op : ops) {
-        op = std::make_unique<local_remote_operator>(std::move(op), Location);
-      }
-      return std::make_unique<pipeline>(std::move(ops));
-    }
-    return std::make_unique<local_remote_operator>(std::move(result.inner),
-                                                   Location);
-  }
 
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {

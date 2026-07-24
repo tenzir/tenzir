@@ -131,32 +131,6 @@ private:
 
 class plugin final : public virtual operator_plugin<drop_operator> {
 public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
-  auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
-      parsers::optional_ws_or_comment, parsers::extractor_list;
-    const auto* f = pipeline.begin();
-    const auto* const l = pipeline.end();
-    const auto p = required_ws_or_comment >> extractor_list
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
-    auto config = configuration{};
-    if (not p(f, l, config.fields)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to parse drop "
-                                                      "operator: '{}'",
-                                                      pipeline)),
-      };
-    }
-    return {
-      std::string_view{f, l},
-      std::make_unique<drop_operator>(std::move(config)),
-    };
-  }
 };
 
 class drop_operator2 final : public crtp_operator<drop_operator2> {

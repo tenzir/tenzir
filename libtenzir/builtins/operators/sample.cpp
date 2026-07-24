@@ -234,14 +234,6 @@ class plugin final : public virtual operator_plugin<sample_operator>,
                      public virtual operator_factory_plugin,
                      public virtual OperatorPlugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
-  auto operator_name() const -> std::string override {
-    return "sample";
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto str = std::optional<located<std::string>>{};
@@ -270,38 +262,6 @@ public:
           .primary(str.value())
           .emit(ctx);
         return failure::promise();
-      }
-      args.fn = mode_.value();
-    }
-    return std::make_unique<sample_operator>(std::move(args));
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto str = std::optional<located<std::string>>{};
-    auto args = operator_args{};
-    auto parser
-      = argument_parser{"sample", "https://tenzir.com/docs/operators/sample"};
-    parser.add("--period", args.period, "<period>");
-    parser.add("--mode", str, "<string>");
-    parser.add("--min-events", args.min_events, "<uint>");
-    parser.add("--max-rate", args.max_rate, "<uint>");
-    parser.add("--max-samples", args.max_samples, "<uint>");
-    parser.parse(p);
-    if (args.period->inner <= duration::zero()) {
-      diagnostic::error("`period` must be a positive duration")
-        .primary(args.period.value())
-        .throw_();
-    }
-    if (not str) {
-      args.fn = mode::ln;
-    } else {
-      auto mode_ = from_string<mode>(str->inner);
-      if (not mode_) {
-        diagnostic::error("unsupported `mode`: {}", str->inner)
-          .hint(
-            R"(`mode` must be one of `"ln"`, `"log2"`, `"log10"` or `"sqrt"`)")
-          .primary(str.value())
-          .throw_();
       }
       args.fn = mode_.value();
     }

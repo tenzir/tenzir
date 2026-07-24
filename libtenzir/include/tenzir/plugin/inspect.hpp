@@ -13,7 +13,7 @@
 //
 // It is extracted from plugin.hpp to break the circular dependency:
 //   - pipeline.hpp needs plugin_serialize/plugin_inspect
-//   - plugin.hpp needs pipeline.hpp for operator_signature, operator_ptr, etc.
+//   - plugin.hpp needs pipeline.hpp for operator_ptr, etc.
 //
 // The serialization_plugin and inspection_plugin class templates are defined in
 // plugin/base.hpp, which includes this header.

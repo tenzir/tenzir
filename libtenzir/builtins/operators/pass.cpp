@@ -70,15 +70,6 @@ class plugin final : public virtual operator_plugin<pass_operator>,
                      public virtual operator_factory_plugin,
                      public virtual OperatorPlugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    argument_parser{"pass", "https://tenzir.com/docs/operators/pass"}.parse(p);
-    return std::make_unique<pass_operator>();
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     argument_parser2::operator_("pass").parse(inv, ctx).ignore();

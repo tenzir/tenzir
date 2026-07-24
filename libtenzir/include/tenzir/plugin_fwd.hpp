@@ -31,10 +31,6 @@ class component_plugin;
 
 class command_plugin;
 
-// -- operator (plugin/operator.hpp) -------------------------------------------
-
-class operator_parser_plugin;
-
 // -- loader (plugin/loader.hpp) -----------------------------------------------
 
 class plugin_loader;

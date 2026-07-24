@@ -282,22 +282,9 @@ class plugin final : public virtual operator_plugin<import_operator>,
                      public virtual operator_factory_plugin,
                      public virtual OperatorPlugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.sink = true};
-  }
-
   auto describe() const -> Description override {
     auto d = Describer<ImportArgs, Import>{};
     return d.invariant_order_filter();
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{
-      "import",
-      "https://tenzir.com/docs/operators/import",
-    };
-    parser.parse(p);
-    return std::make_unique<import_operator>();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

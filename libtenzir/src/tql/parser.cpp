@@ -103,23 +103,6 @@ struct lexer_traits<bool> {
   }
 };
 
-auto get_aliases_global()
-  -> std::pair<std::mutex, std::unordered_map<std::string, std::string>>& {
-  static auto x
-    = std::pair<std::mutex, std::unordered_map<std::string, std::string>>{};
-  return x;
-}
-
-auto resolve_alias(const std::string& name) -> std::optional<std::string> {
-  auto& [mutex, map] = get_aliases_global();
-  auto lock = std::unique_lock{mutex};
-  auto it = map.find(name);
-  if (it == map.end()) {
-    return std::nullopt;
-  }
-  return it->second;
-}
-
 class parser final : public parser_interface {
 private:
   [[nodiscard]] auto legacy_accept(auto p) {
@@ -332,100 +315,6 @@ public:
   }
 
 private:
-  auto parse_pipeline() -> std::vector<located<operator_ptr>> {
-    if (legacy_accept(parsers::eoi)) {
-      return {};
-    }
-    auto result = std::vector<located<operator_ptr>>{};
-    while (true) {
-      result.push_back(parse_operator());
-      if (not accept_operator_sep()) {
-        if (legacy_accept(parsers::eoi)) {
-          break;
-        }
-        throw_at_current("expected end of operator here");
-      }
-    }
-    return result;
-  }
-
-  auto parse_operator() -> located<operator_ptr> override {
-    // TODO: Where to put parse statement end?
-    if (auto name = accept<identifier>()) {
-      return parse_operator(std::move(*name));
-    }
-    throw_at_current("expected operator name");
-  }
-
-  auto parse_operator(identifier ident) -> located<operator_ptr> {
-    auto const* plugin = plugins::find_operator(ident.name);
-    if (auto definition = resolve_alias(ident.name)) {
-      if (plugin) {
-        diagnostic::error(
-          "ambiguous operator: `{}` is a plugin, but also an alias", ident.name)
-          .primary(ident.source)
-          .throw_();
-      }
-      auto copy = recursed_;
-      auto inserted = copy.emplace(ident.name).second;
-      if (not inserted) {
-        diagnostic::error("operator `{}` is self-recursive", ident.name)
-          .primary(ident.source)
-          .throw_();
-      }
-      auto result
-        = parser{*definition, diag_, true, std::move(copy)}.parse_pipeline();
-      auto pipe = std::make_unique<pipeline>(to_pipeline(std::move(result)));
-      return located<operator_ptr>{std::move(pipe), ident.source};
-    }
-    if (not plugin) {
-      diagnostic::error("no such operator: `{}`", ident.name)
-        .primary(ident.source)
-        .docs("https://tenzir.com/docs/operators")
-        .throw_();
-    }
-    try {
-      // TODO: Replace check with assert.
-      if (auto op = plugin->parse_operator(*this)) {
-        return {
-          std::move(op),
-          location{
-            ident.source.begin,
-            current_pos() // TODO
-          },
-        };
-      }
-    } catch (const diagnostic& diag) {
-      // Forward diagnostic errors.
-      throw;
-    } catch (...) {
-      diagnostic::error("internal error: {} operator "
-                        "threw unexpected exception",
-                        ident.name)
-        .primary(ident.source)
-        .throw_();
-    }
-    // TODO: Remove this legacy fallback.
-    auto [rest, op] = plugin->make_operator({current_, end_});
-    auto op_end = rest.data();
-    while (*(op_end - 1) == ' ' or *(op_end - 1) == '|') {
-      --op_end;
-    }
-    auto source = location::unknown;
-    if (not internal_) {
-      source.begin = ident.source.begin;
-      source.end = detail::narrow<size_t>(op_end - source_.data());
-    }
-    if (not op) {
-      diagnostic::error("could not parse `{}` operator", ident.name)
-        .primary(source)
-        .note(fmt::to_string(op.error()))
-        .throw_();
-    }
-    current_ = op_end;
-    return {std::move(*op), source};
-  }
-
   auto parse_primary_expr() -> expression {
     auto start = current_;
     if (auto result = parsers::data.apply(current_, end_)) {
@@ -554,13 +443,6 @@ private:
     return {};
   }
 
-  [[nodiscard]] auto accept_operator_sep() -> std::optional<location> {
-    if (auto x = accept_with_span('|')) {
-      return x->second;
-    }
-    return {};
-  }
-
   auto accept_integer() -> std::optional<expression> {
     if (auto result = accept_with_span(parsers::i64)) {
       return expression{result->first, result->second};
@@ -595,29 +477,16 @@ private:
   const char* end_;
   diagnostic_handler& diag_;
   bool internal_;
-  std::unordered_set<std::string> recursed_;
 
 public:
   /// Create a new parser from `source`. The `internal` flag disables setting
   /// `location`.
-  explicit parser(std::string source, diagnostic_handler& diag, bool internal,
-                  std::unordered_set<std::string> recursed)
+  explicit parser(std::string source, diagnostic_handler& diag, bool internal)
     : source_{std::move(source)},
       current_{source_.data()},
       end_{source_.data() + source_.size()},
       diag_{diag},
-      internal_{internal},
-      recursed_{std::move(recursed)} {
-  }
-
-  auto parse() -> std::optional<std::vector<located<operator_ptr>>> {
-    try {
-      (void)legacy_accept("#!" >> *(parsers::any - '\n'));
-      return parse_pipeline();
-    } catch (const diagnostic& diag) {
-      diag_.emit(diag);
-      return {};
-    }
+      internal_{internal} {
   }
 };
 
@@ -625,46 +494,7 @@ public:
 
 auto make_parser_interface(std::string source, diagnostic_handler& diag)
   -> std::unique_ptr<parser_interface> {
-  return std::make_unique<parser>(std::move(source), diag, true,
-                                  std::unordered_set<std::string>{});
-}
-
-auto parse(Source const& source, diagnostic_handler& diag)
-  -> std::optional<std::vector<located<operator_ptr>>> {
-  auto recursed = std::unordered_set<std::string>{};
-  return parser{source.text, diag, false, recursed}.parse();
-}
-
-auto parse_internal(std::string source) -> caf::expected<pipeline> {
-  auto [pipe, diags] = parse_internal_with_diags(std::move(source));
-  if (not pipe) {
-    return caf::make_error(
-      ec::parse_error, fmt::format("could not parse pipeline: {::?}", diags));
-  }
-  return std::move(*pipe);
-}
-
-auto parse_internal_with_diags(std::string source)
-  -> std::pair<std::optional<pipeline>, std::vector<diagnostic>> {
-  auto diag = collecting_diagnostic_handler{};
-  auto recursed = std::unordered_set<std::string>{};
-  auto ops = parser{std::move(source), diag, true, recursed}.parse();
-  return {ops ? to_pipeline(std::move(*ops)) : std::optional<pipeline>{},
-          std::move(diag).collect()};
-}
-
-void set_operator_aliases(std::unordered_map<std::string, std::string> map) {
-  auto& [mutex, x] = get_aliases_global();
-  auto lock = std::unique_lock{mutex};
-  x = std::move(map);
-}
-
-auto to_pipeline(std::vector<located<operator_ptr>> ops) -> pipeline {
-  auto result = std::vector<operator_ptr>{};
-  for (auto& op : ops) {
-    result.push_back(std::move(op.inner));
-  }
-  return pipeline{std::move(result)};
+  return std::make_unique<parser>(std::move(source), diag, true);
 }
 
 } // namespace tenzir::tql

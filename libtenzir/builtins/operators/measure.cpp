@@ -223,22 +223,6 @@ class plugin final : public virtual operator_plugin<measure_operator>,
                      public virtual operator_factory_plugin,
                      public virtual OperatorPlugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    bool real_time = false;
-    bool cumulative = false;
-    auto parser = argument_parser{"measure", "https://tenzir.com/docs/"
-                                             "operators/measure"};
-    parser.add("--real-time", real_time);
-    parser.add("--cumulative", cumulative);
-    parser.parse(p);
-    return std::make_unique<measure_operator>(real_time, cumulative,
-                                              schema::name_only);
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     bool real_time = false;

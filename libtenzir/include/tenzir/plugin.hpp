@@ -74,26 +74,3 @@ auto loaded_config_files() -> const std::vector<std::filesystem::path>&;
 
 // -- aspect plugin ------------------------------------------------------------
 #include "tenzir/plugin/aspect.hpp"
-
-// -- template function definitions -------------------------------------------
-
-namespace tenzir::plugins {
-
-inline auto find_operator(std::string_view name) noexcept
-  -> const operator_parser_plugin* {
-  for (const auto* plugin : get<operator_parser_plugin>()) {
-    const auto current_name = plugin->operator_name();
-    const auto match
-      = std::equal(current_name.begin(), current_name.end(), name.begin(),
-                   name.end(), [](const char lhs, const char rhs) {
-                     return std::tolower(static_cast<unsigned char>(lhs))
-                            == std::tolower(static_cast<unsigned char>(rhs));
-                   });
-    if (match) {
-      return plugin;
-    }
-  }
-  return nullptr;
-}
-
-} // namespace tenzir::plugins
