@@ -63,11 +63,12 @@ public:
     // Clear the view explicitly so that using a moved-from chunk_ptr behaves
     // like using a null chunk_ptr instead of silently reading freed memory.
     proxy(proxy&& other) noexcept
-      : ptr_{std::move(other.ptr_)}, view_{std::exchange(other.view_, {})} {
+      : ptr_{std::exchange(other.ptr_, {})},
+        view_{std::exchange(other.view_, {})} {
     }
 
     auto operator=(proxy&& other) noexcept -> proxy& {
-      ptr_ = std::move(other.ptr_);
+      ptr_ = std::exchange(other.ptr_, {});
       view_ = std::exchange(other.view_, {});
       return *this;
     }
