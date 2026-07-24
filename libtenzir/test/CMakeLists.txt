@@ -21,6 +21,26 @@ list(SORT test_headers)
 
 # Add tenzir-unit-test executable.
 add_executable(tenzir-unit-test ${test_sources} ${test_headers})
+if (TENZIR_ENABLE_STATIC_EXECUTABLE
+    AND NOT "${TENZIR_ALLOCATOR}" STREQUAL "none"
+    AND NOT APPLE)
+  target_sources(
+    tenzir-unit-test PRIVATE "${PROJECT_SOURCE_DIR}/tenzir/operator_new.cpp"
+                             "${PROJECT_SOURCE_DIR}/tenzir/malloc.cpp")
+  target_link_options(
+    tenzir-unit-test
+    BEFORE
+    PRIVATE
+    LINKER:--wrap=malloc
+    LINKER:--wrap=calloc
+    LINKER:--wrap=realloc
+    LINKER:--wrap=reallocarray
+    LINKER:--wrap=aligned_alloc
+    LINKER:--wrap=malloc_usable_size
+    LINKER:--wrap=memalign
+    LINKER:--wrap=posix_memalign
+    LINKER:--wrap=free)
+endif ()
 TenzirTargetEnableTooling(tenzir-unit-test)
 target_link_libraries(
   tenzir-unit-test PRIVATE tenzir::test tenzir::libtenzir tenzir::internal
