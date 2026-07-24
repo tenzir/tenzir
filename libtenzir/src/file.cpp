@@ -70,7 +70,7 @@ caf::expected<void> file::open(open_mode mode, bool append) {
   }
   if (append) {
     flags |= O_APPEND;
-  } else if (mode != read_only) {
+  } else if (mode == write_only) {
     flags |= O_TRUNC;
   }
   errno = 0;

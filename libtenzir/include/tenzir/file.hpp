@@ -56,7 +56,10 @@ public:
   /// Opens the file.
   /// @param mode How to open the file. If not equal to `read_only`, the
   ///             function attempts to create non-existing parent directories.
-  /// @param append If `false`, the first write truncates the file.
+  ///             Opening an existing file in `write_only` mode truncates it
+  ///             unless *append* is `true`; `read_write` opens are
+  ///             non-destructive.
+  /// @param append If `true`, all writes go to the end of the file.
   /// @returns `true` on success.
   caf::expected<void> open(open_mode mode = read_write, bool append = false);
 
