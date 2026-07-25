@@ -9,13 +9,51 @@
 #pragma once
 
 #include <string_view>
-#include <utility>
 
 namespace tenzir {
 
-/// The return type of `std::forward_like<T>(u)`.
+template <typename T, typename U>
+struct transfer_qualifiers {
+private:
+  using R = std::remove_reference_t<T>;
+  using U0 = std::remove_reference_t<U>;
+  using U1 = std::conditional_t<std::is_const_v<R>, std::add_const_t<U0>, U0>;
+  using U2
+    = std::conditional_t<std::is_volatile_v<R>, std::add_volatile_t<U1>, U1>;
+  using U3 = std::conditional_t<std::is_lvalue_reference_v<T>,
+                                std::add_lvalue_reference_t<U2>, U2>;
+  using U4 = std::conditional_t<std::is_rvalue_reference_v<T>,
+                                std::add_rvalue_reference_t<U3>, U3>;
+
+public:
+  using type = U4;
+};
+
+template <typename T, typename U>
+struct forward_like_type {
+  constexpr static bool needs_const
+    = std::is_const_v<std::remove_reference_t<T>>
+      or std::is_const_v<std::remove_reference_t<U>>;
+  constexpr static bool lvalue_ref = std::is_lvalue_reference_v<T>;
+  using P = std::remove_const_t<std::remove_reference_t<U>>;
+  using with_const = std::conditional_t<needs_const, const P, P>;
+
+public:
+  using type = std::conditional_t<lvalue_ref, with_const&, with_const&&>;
+};
+
+template <typename T, typename U>
+using forward_like_type_t = typename forward_like_type<T, U>::type;
+
+// NOLINTBEGIN
+template <typename T, typename U>
+constexpr auto forward_like(U&& u) noexcept -> forward_like_type_t<T, U> {
+  return static_cast<forward_like_type_t<T, U>>(u);
+}
+// NOLINTEND
+
 template <class T, class U>
-using ForwardLike = decltype(std::forward_like<T>(std::declval<U>()));
+using ForwardLike = forward_like_type_t<T, U>;
 
 /// Returns a human-readable name for type `T`.
 template <typename T>

@@ -131,4 +131,23 @@ concept none_of = not one_of<T, Ts...>;
 template <class T>
 concept unqualified = std::same_as<T, std::remove_cvref_t<T>>;
 
+template <typename T>
+concept complete = requires(T t) { requires sizeof(T) > 0; };
+
+namespace detail {
+
+template <typename T, template <typename...> class C>
+struct instantiation_of_impl : std::false_type {};
+
+template <template <typename...> class C, typename... Args>
+struct instantiation_of_impl<C<Args...>, C> : std::true_type {};
+
+} // namespace detail
+
+template <typename T, template <typename...> class C>
+concept instantiation_of = detail::instantiation_of_impl<T, C>::value;
+
+template <typename T, template <typename...> class... Cs>
+concept instantiation_of_one_of = (instantiation_of<T, Cs> or ...);
+
 } // namespace tenzir::concepts
