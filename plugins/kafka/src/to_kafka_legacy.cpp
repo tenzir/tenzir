@@ -12,14 +12,20 @@
 
 #include <tenzir/argument_parser2.hpp>
 #include <tenzir/as_bytes.hpp>
+#include <tenzir/error.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/resolve.hpp>
 
+#include <caf/error.hpp>
+#include <fmt/format.h>
+
+#include <chrono>
 #include <condition_variable>
 #include <deque>
 #include <mutex>
 #include <thread>
 #include <variant>
+#include <vector>
 
 namespace tenzir::plugins::kafka::legacy {
 
@@ -164,6 +170,26 @@ public:
     }
   }
 
+  // Flushes outstanding messages so that the delivery reports for the final
+  // in-flight batch are served. The delivery failures they record are surfaced
+  // by the operator on its own thread via `configuration::take_delivery_error`,
+  // because a `diagnostic::error` emitted from a worker thread during teardown
+  // does not reliably abort the pipeline. Returns an error if the queue did not
+  // drain, which means the outcome of the remaining messages is unknown and
+  // must not be reported as success either.
+  auto finish() -> caf::error {
+    constexpr auto timeout = std::chrono::seconds{10};
+    if (auto err = producer_.flush(timeout); err.valid()) {
+      return caf::make_error(
+        ec::unspecified,
+        fmt::format("failed to flush produced Kafka messages for topic `{}` "
+                    "within {}s: {} messages are still pending and may not "
+                    "have been delivered",
+                    args_.topic, timeout.count(), producer_.queue_size()));
+    }
+    return {};
+  }
+
   auto send_with_expression(table_slice const& slice) -> void {
     auto const& ms = eval(args_.message, slice, dh_);
     for (auto const& s : ms) {
@@ -258,9 +284,27 @@ auto to_kafka_operator::operator()(generator<table_slice> input,
   }
   co_yield ctrl.resolve_secrets_must_yield(
     configure_or_request(args_.options, *config, ctrl.diagnostics()));
+  // Register the delivery-report callback before any producer is created so
+  // that asynchronous delivery failures are captured rather than dropped.
+  if (auto err = config->enable_delivery_reports(); err.valid()) {
+    diagnostic::error(std::move(err)).primary(args_.op).emit(dh);
+    co_return;
+  }
+  // Surfaces the first asynchronous delivery failure (e.g. a broker-side
+  // "message too large") as a hard error. Always called on the operator thread
+  // so that the emitted diagnostic reliably aborts the pipeline. Returns true
+  // if an error was emitted.
+  auto emit_delivery_error = [&] {
+    if (auto e = config->take_delivery_error(); e.valid()) {
+      diagnostic::error(std::move(e)).primary(args_.op).emit(dh);
+      return true;
+    }
+    return false;
+  };
   if (args_.jobs == 0) {
-    // Single-threaded path.
-    auto worker = produce_worker::make(std::move(*config), args_, dh);
+    // Single-threaded path. Copy the configuration so `config` retains the
+    // shared delivery-report callback for `emit_delivery_error` below.
+    auto worker = produce_worker::make(*config, args_, dh);
     if (not worker) {
       co_return;
     }
@@ -270,11 +314,24 @@ auto to_kafka_operator::operator()(generator<table_slice> input,
         continue;
       }
       worker->send(slice);
+      if (emit_delivery_error()) {
+        co_return;
+      }
       co_yield {};
+    }
+    // The final flush serves the delivery reports for the last in-flight batch,
+    // so check for a recorded failure afterwards. It describes the actual cause
+    // and therefore takes precedence over an incomplete flush.
+    auto flush_error = worker->finish();
+    if (not emit_delivery_error() and flush_error.valid()) {
+      diagnostic::error(std::move(flush_error)).primary(args_.op).emit(dh);
     }
   } else {
     // Multi-threaded path.
     auto sync = produce_synchronizer{};
+    // One slot per worker, written only by that worker and published by the
+    // join below, so no additional synchronization is needed.
+    auto flush_errors = std::vector<caf::error>(args_.jobs);
     auto threads = std::vector<std::thread>{};
     threads.reserve(args_.jobs);
     auto guard = detail::scope_guard{[&]() noexcept {
@@ -284,7 +341,7 @@ auto to_kafka_operator::operator()(generator<table_slice> input,
       }
     }};
     for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
-      threads.emplace_back([&, sdh = ctrl.shared_diagnostics()]() mutable {
+      threads.emplace_back([&, i, sdh = ctrl.shared_diagnostics()]() mutable {
         caf::detail::set_thread_name("kafka_produce");
         auto worker = produce_worker::make(*config, args_, sdh);
         if (not worker) {
@@ -297,8 +354,10 @@ auto to_kafka_operator::operator()(generator<table_slice> input,
           }
           worker->send(slice);
         }
+        flush_errors[i] = worker->finish();
       });
     }
+    auto failed = false;
     for (auto const& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
@@ -306,6 +365,24 @@ auto to_kafka_operator::operator()(generator<table_slice> input,
       }
       for (auto _ : sync.put(slice)) {
         co_yield {};
+      }
+      // Delivery reports are served on the worker threads; surface any failure
+      // here so it aborts the pipeline while input is still being produced.
+      if (emit_delivery_error()) {
+        failed = true;
+        break;
+      }
+    }
+    // Stop the workers and wait for their final flushes so that all delivery
+    // reports have been served, then surface any remaining failure.
+    guard.trigger();
+    if (failed or emit_delivery_error()) {
+      co_return;
+    }
+    for (auto& flush_error : flush_errors) {
+      if (flush_error.valid()) {
+        diagnostic::error(std::move(flush_error)).primary(args_.op).emit(dh);
+        break;
       }
     }
   }

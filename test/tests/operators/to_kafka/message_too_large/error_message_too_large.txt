@@ -1,0 +1,3 @@
+error: failed to deliver Kafka message to `to_kafka_toolarge`: Broker: Message size too large
+  = note: message.size=2011 bytes
+  = hint: raise `message.max.bytes` on the client and the broker's `message.max.bytes` / topic `max.message.bytes`, or reduce the event size
