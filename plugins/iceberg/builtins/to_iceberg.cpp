@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/plugins/iceberg/catalog.hpp"
+#include "tenzir/plugins/iceberg/detail/projection.hpp"
 #include "tenzir/plugins/iceberg/restore.hpp"
 
 #include <tenzir/amazon.hpp>
@@ -1416,21 +1417,25 @@ private:
         if (conversion == Conversion::narrowing) {
           auto const fits = convertible_mask(source, *target->type());
           if (fits->true_count() < source->length() - source->null_count()) {
-            // Some values overflow the narrower integer, or a double
-            // holds a fraction. Failing values were non-null, so for a
-            // required field they always count against valid rows.
-            if (required) {
+            // Mask every physical failure before casting, including values
+            // hidden beneath null parent records. Only failures in live rows
+            // violate a required field or warrant a warning.
+            auto const visible_failures
+              = projection::count_visible_conversion_failures(fits, parent);
+            if (required and visible_failures > 0) {
               return fail_required(fmt::format(
                 "some of its `{}` values cannot convert to the "
                 "table's `{}`",
                 source->type()->ToString(), target->type()->ToString()));
             }
-            warn_once(fmt::format("column `{}` has `{}` values that cannot "
-                                  "convert to the table's `{}`; writing nulls "
-                                  "for those rows",
-                                  path, source->type()->ToString(),
-                                  target->type()->ToString()),
-                      ctx);
+            if (visible_failures > 0) {
+              warn_once(fmt::format("column `{}` has `{}` values that cannot "
+                                    "convert to the table's `{}`; writing "
+                                    "nulls for those rows",
+                                    path, source->type()->ToString(),
+                                    target->type()->ToString()),
+                        ctx);
+            }
             source
               = check(arrow::compute::IfElse(
                         fits, source, arrow::MakeNullScalar(source->type())))
