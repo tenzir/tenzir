@@ -479,10 +479,6 @@ class export_plugin final : public virtual operator_plugin<export_operator>,
                             public virtual operator_factory_plugin,
                             public virtual OperatorPlugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.source = true};
-  }
-
   auto describe() const -> Description override {
     auto d = Describer<ExportArgs, Export>{ExportArgs{
       .filter = {},
@@ -504,38 +500,6 @@ public:
       return {};
     });
     return d.optimize_filter(&ExportArgs::filter);
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"export", "https://tenzir.com/docs/"
-                                            "operators/export"};
-    auto retro = false;
-    auto live = false;
-    auto internal = false;
-    auto parallel = std::optional<located<uint64_t>>{};
-    parser.add("--retro", retro);
-    parser.add("--live", live);
-    parser.add("--internal", internal);
-    parser.add("--parallel", parallel, "<level>");
-    parser.parse(p);
-    if (not live) {
-      retro = true;
-    }
-    if (parallel and parallel->inner == 0) {
-      diagnostic::error("parallel level must be greater than zero")
-        .primary(parallel->source)
-        .throw_();
-      return nullptr;
-    }
-    return std::make_unique<export_operator>(
-      expression{
-        predicate{
-          meta_extractor{meta_extractor::internal},
-          relational_operator::equal,
-          data{internal},
-        },
-      },
-      export_mode{retro, live, internal, parallel ? parallel->inner : 3, true});
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -573,17 +537,12 @@ public:
   }
 };
 
-class diagnostics_plugin final : public virtual operator_parser_plugin,
-                                 public virtual operator_factory_plugin,
+class diagnostics_plugin final : public virtual operator_factory_plugin,
                                  public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "diagnostics";
   };
-
-  auto signature() const -> operator_signature override {
-    return {.source = true};
-  }
 
   auto describe() const -> Description override {
     auto d = Describer<ExportArgs, Export>{ExportArgs{
@@ -606,38 +565,6 @@ public:
       return {};
     });
     return d.optimize_filter(&ExportArgs::filter);
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"diagnostics", "https://tenzir.com/docs/"
-                                                 "operators/diagnostics"};
-    auto live = false;
-    auto retro = false;
-    const auto internal = true;
-    auto parallel = std::optional<located<uint64_t>>{};
-    parser.add("--live", live);
-    parser.add("--retro", retro);
-    parser.add("--parallel", parallel, "<level>");
-    parser.parse(p);
-    if (not live) {
-      retro = true;
-    }
-    return std::make_unique<export_operator>(
-      expression{
-        conjunction{
-          predicate{
-            meta_extractor{meta_extractor::internal},
-            relational_operator::equal,
-            data{internal},
-          },
-          predicate{
-            meta_extractor{meta_extractor::schema},
-            relational_operator::equal,
-            data{"tenzir.diagnostic"},
-          },
-        },
-      },
-      export_mode{retro, live, internal, parallel ? parallel->inner : 3});
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -673,17 +600,12 @@ public:
   }
 };
 
-class metrics_plugin final : public virtual operator_parser_plugin,
-                             public virtual operator_factory_plugin,
+class metrics_plugin final : public virtual operator_factory_plugin,
                              public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "metrics";
   };
-
-  auto signature() const -> operator_signature override {
-    return {.source = true};
-  }
 
   auto describe() const -> Description override {
     auto d = Describer<ExportArgs, Export>{ExportArgs{
@@ -719,46 +641,6 @@ public:
       return {};
     });
     return d.optimize_filter(&ExportArgs::filter);
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"metrics", "https://tenzir.com/docs/"
-                                             "operators/metrics"};
-    auto name = std::optional<std::string>{};
-    auto live = false;
-    auto retro = false;
-    const auto internal = true;
-    auto parallel = std::optional<located<uint64_t>>{};
-    parser.add(name, "<name>");
-    parser.add("--live", live);
-    parser.add("--retro", retro);
-    parser.add("--parallel", parallel, "<level>");
-    parser.parse(p);
-    if (not live) {
-      retro = true;
-    }
-    static const auto all_metrics = [] {
-      auto result = pattern::make("tenzir\\.metrics\\..*");
-      TENZIR_ASSERT(result);
-      return std::move(*result);
-    }();
-    return std::make_unique<export_operator>(
-      expression{
-        conjunction{
-          predicate{
-            meta_extractor{meta_extractor::internal},
-            relational_operator::equal,
-            data{internal},
-          },
-          predicate{
-            meta_extractor{meta_extractor::schema},
-            relational_operator::equal,
-            name ? data{fmt::format("tenzir.metrics.{}", *name)}
-                 : data{all_metrics},
-          },
-        },
-      },
-      export_mode{retro, live, internal, parallel ? parallel->inner : 3});
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

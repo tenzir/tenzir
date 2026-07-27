@@ -376,6 +376,11 @@ cmake_dependent_option(
   TENZIR_ENABLE_STATIC_EXECUTABLE "Link Tenzir statically."
   "$ENV{TENZIR_ENABLE_STATIC_EXECUTABLE}" "NOT BUILD_SHARED_LIBS" OFF)
 if (TENZIR_ENABLE_STATIC_EXECUTABLE)
+  # fizz discovers libsodium through its bundled FindSodium module. Ensure it
+  # selects the static archive before its package configuration is loaded.
+  set(sodium_USE_STATIC_LIBS
+      ON
+      CACHE BOOL "enable to statically link against sodium" FORCE)
   # Not desired on darwin.
   if ("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
     # This works with clang as well, so we don't need an extra condition here.

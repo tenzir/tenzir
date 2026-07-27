@@ -1,0 +1,6 @@
+error: header values must be `string` or `secret`
+ --> tests/operators/from_splunk/error_invalid_header_value.tql:9:11
+  |
+9 |   headers={Authorization: 42}
+  |           ^^^^^^^^^^^^^^^^^^^ 
+  |

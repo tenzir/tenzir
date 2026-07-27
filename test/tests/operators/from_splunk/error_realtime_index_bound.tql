@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+from_splunk "https://splunk.example.com:8089",
+  search="fixture",
+  earliest="-15m",
+  latest="-5m",
+  options={index_earliest: "rt-15m"},
+  headers={Authorization: "Splunk test-token"}

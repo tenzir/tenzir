@@ -521,19 +521,6 @@ class plugin final : public virtual operator_plugin<unroll_operator>,
                      public virtual operator_factory_plugin,
                      public virtual OperatorPlugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"unroll", "https://tenzir.com/docs/"
-                                            "operators/unroll"};
-    auto field = located<std::string>{};
-    parser.add(field, "<field>");
-    parser.parse(p);
-    return std::make_unique<unroll_operator>(std::move(field));
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto field = ast::field_path{};

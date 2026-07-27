@@ -23,6 +23,7 @@
 #include <tenzir/index.hpp>
 #include <tenzir/node.hpp>
 #include <tenzir/partition_synopsis.hpp>
+#include <tenzir/partition_transformer.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/query_context.hpp>
@@ -134,10 +135,20 @@ struct statistics {
   size_t num_rebuilding = {};
   size_t num_completed = {};
   size_t num_results = {};
+  size_t num_quarantined = {};
 };
+
+/// Identifies a single rebuild run so continuations from a superseded run can
+/// detect that they no longer apply, mirroring the compactor's `run_id`.
+enum class run_id : uint64_t {};
 
 /// The state of an in-progress rebuild.
 struct run {
+  /// Distinguishes this run from any run that starts after it. Continuations
+  /// launched for this run must check their captured id against
+  /// `rebuilder_state::run->id` before touching `run->` state, since `run`
+  /// may have been reset and re-emplaced for a new run by the time they fire.
+  run_id id = {};
   std::vector<partition_info> remaining_partitions = {};
   struct statistics statistics = {};
   start_options options = {};
@@ -171,6 +182,26 @@ struct rebuilder_state {
   rebuilder_actor::pointer self = {};
   catalog_actor catalog = {};
   index_actor index = {};
+  importer_actor importer = {};
+
+  /// Emits a `tenzir.metrics.rebuild_quarantine` event; unset if no importer
+  /// is registered. Only used on demand, when a partition is quarantined, so
+  /// it deliberately does not run on the periodic metrics timer like the
+  /// `tenzir.metrics.rebuild` builder below.
+  std::optional<series_builder> quarantine_builder = {};
+
+  /// Emits a metric event recording that `partition` was quarantined for
+  /// `error`. A no-op if no importer is registered.
+  void report_quarantine(const uuid& partition, const caf::error& error) {
+    if (not importer or not quarantine_builder) {
+      return;
+    }
+    auto event = quarantine_builder->record();
+    event.field("timestamp", time::clock::now());
+    event.field("partition", fmt::to_string(partition));
+    event.field("error", fmt::to_string(error));
+    self->mail(quarantine_builder->finish_assert_one_slice()).send(importer);
+  }
 
   /// Constants read once from the system configuration.
   size_t max_partition_size = 0u;
@@ -182,36 +213,74 @@ struct rebuilder_state {
   std::optional<struct run> run = {};
   bool stopping = false;
 
+  /// A snapshot of the most recently completed rebuild run, kept around so
+  /// `rebuild show` still has something to report once `run` is reset. Only
+  /// the latest run is remembered; it is overwritten the next time a run
+  /// finishes.
+  std::optional<struct run> last_run = {};
+
+  /// Counter to distinguish between successive rebuild runs.
+  run_id next_run = {};
+
+  /// Partitions quarantined for an unrecoverable format error, and the
+  /// rendered error that caused the quarantine. Kept independently of
+  /// `run`/`last_run` (which only ever remember the most recent run's
+  /// statistics) so `rebuild show` continues to report every quarantined
+  /// partition across runs for the lifetime of the process; this set is
+  /// in-memory only and does not survive a node restart.
+  std::unordered_map<uuid, std::string> quarantined_partitions = {};
+
   /// Runtime byte estimates for legacy partitions that do not have persisted
   /// `approx_bytes` metadata yet.
   std::unordered_map<type, uint64_t> approx_bytes_per_event = {};
 
-  /// Shows the status of a currently ongoing rebuild.
-  auto status(status_verbosity) -> record {
-    if (not run) {
-      return {};
-    }
-    return {
+  /// Describes a single run's statistics and options, shared between the
+  /// live `current-run` and the historical `last-run` status entries.
+  static auto describe_run(const struct run& run) -> record {
+    return record{
       {"partitions",
        record{
-         {"total", run->statistics.num_total},
-         {"transforming", run->statistics.num_rebuilding},
-         {"transformed", run->statistics.num_completed},
-         {"remaining",
-          run->statistics.num_total - run->statistics.num_completed},
-         {"results", run->statistics.num_results},
+         {"total", run.statistics.num_total},
+         {"transforming", run.statistics.num_rebuilding},
+         {"transformed", run.statistics.num_completed},
+         {"remaining", run.statistics.num_total - run.statistics.num_completed},
+         {"results", run.statistics.num_results},
+         {"quarantined", run.statistics.num_quarantined},
        }},
       {"options",
        record{
-         {"all", run->options.all},
-         {"undersized", run->options.undersized},
-         {"parallel", run->options.parallel},
-         {"max-partitions", run->options.max_partitions},
-         {"expression", fmt::to_string(run->options.expression)},
-         {"detached", run->options.detached},
-         {"automatic", run->options.automatic},
+         {"all", run.options.all},
+         {"undersized", run.options.undersized},
+         {"parallel", run.options.parallel},
+         {"max-partitions", run.options.max_partitions},
+         {"expression", fmt::to_string(run.options.expression)},
+         {"detached", run.options.detached},
+         {"automatic", run.options.automatic},
        }},
     };
+  }
+
+  /// Shows the status of a currently ongoing rebuild, plus the last
+  /// completed run if there is one.
+  auto status([[maybe_unused]] status_verbosity verbosity) -> record {
+    auto result = record{};
+    if (run) {
+      result["current-run"] = describe_run(*run);
+    }
+    if (last_run) {
+      result["last-run"] = describe_run(*last_run);
+    }
+    result["quarantined-size"] = quarantined_partitions.size();
+    auto quarantined = list{};
+    quarantined.reserve(quarantined_partitions.size());
+    for (const auto& [partition, error] : quarantined_partitions) {
+      quarantined.emplace_back(record{
+        {"uuid", fmt::to_string(partition)},
+        {"error", error},
+      });
+    }
+    result["quarantined"] = std::move(quarantined);
+    return result;
   }
 
   void learn_size_estimate(const partition_info& partition) {
@@ -282,6 +351,9 @@ struct rebuilder_state {
       return rp;
     }
     run.emplace();
+    const auto this_run = next_run;
+    next_run = static_cast<run_id>(static_cast<uint64_t>(next_run) + 1);
+    run->id = this_run;
     run->options = std::move(options);
     TENZIR_DEBUG("{} requests {}{} partitions matching the expression {}",
                  *self, run->options.all ? "all" : "outdated",
@@ -307,17 +379,22 @@ struct rebuilder_state {
       for (auto&& rp : std::exchange(run->stop_requests, {})) {
         rp.deliver();
       }
+      // Any run ending completes a pending stop, so the flag must not leak
+      // into the next run: a stale `stopping` would make the corrupt-
+      // partition handler silently drop the healthy remainder of a failed
+      // batch instead of requeuing it.
+      stopping = false;
       if (run->options.detached) {
-        run.reset();
+        last_run = std::exchange(run, std::nullopt);
         return;
       }
       if (err.valid()) {
         rp.deliver(std::move(err));
-        run.reset();
+        last_run = std::exchange(run, std::nullopt);
         return;
       }
       rp.deliver();
-      run.reset();
+      last_run = std::exchange(run, std::nullopt);
     };
     if (run->options.detached) {
       rp.deliver();
@@ -328,7 +405,13 @@ struct rebuilder_state {
     self->mail(atom::candidates_v, std::move(query_context))
       .request(catalog, caf::infinite)
       .then(
-        [this, finish](catalog_lookup_result& lookup_result) mutable {
+        [this, finish, this_run](catalog_lookup_result& lookup_result) mutable {
+          if (not run or run->id != this_run) {
+            TENZIR_DEBUG("{} abandons candidate lookup for a superseded "
+                         "rebuild run",
+                         *self);
+            return;
+          }
           TENZIR_ASSERT(run->statistics.num_total == 0);
           for (auto& [type, result] : lookup_result.candidate_infos) {
             std::erase_if(result.partition_infos,
@@ -396,14 +479,32 @@ struct rebuilder_state {
                                                           self),
                              caf::infinite, caf::policy::select_all_tag)
             .then(
-              [finish]() mutable {
+              [this, finish, this_run]() mutable {
+                if (not run or run->id != this_run) {
+                  TENZIR_DEBUG("{} abandons completion of a superseded "
+                               "rebuild run",
+                               *self);
+                  return;
+                }
                 finish({});
               },
-              [finish](caf::error& error) mutable {
+              [this, finish, this_run](caf::error& error) mutable {
+                if (not run or run->id != this_run) {
+                  TENZIR_DEBUG("{} abandons completion of a superseded "
+                               "rebuild run",
+                               *self);
+                  return;
+                }
                 finish(std::move(error));
               });
         },
-        [finish](caf::error& error) mutable {
+        [this, finish, this_run](caf::error& error) mutable {
+          if (not run or run->id != this_run) {
+            TENZIR_DEBUG("{} abandons candidate lookup for a superseded "
+                         "rebuild run",
+                         *self);
+            return;
+          }
           finish(std::move(error));
         });
     return rp;
@@ -543,6 +644,7 @@ struct rebuilder_state {
     auto selected_partitions = current_run_partitions;
     auto retry_partitions = current_run_partitions;
     const auto num_partitions = current_run_partitions.size();
+    const auto this_run = run->id;
     self
       ->mail(atom::apply_v, std::move(*rebatch),
              std::move(current_run_partitions), keep_original_partition::no,
@@ -550,7 +652,14 @@ struct rebuilder_state {
       .request(index, caf::infinite)
       .then(
         [this, rp, selected_partitions = std::move(selected_partitions),
-         num_partitions](partition_apply_result& result) mutable {
+         num_partitions, this_run](partition_apply_result& result) mutable {
+          if (not run or run->id != this_run) {
+            TENZIR_DEBUG("{} abandons rebuild continuation for a superseded "
+                         "run",
+                         *self);
+            rp.deliver();
+            return;
+          }
           if (result.input_partitions.empty()
               and result.output_partitions.empty()) {
             TENZIR_DEBUG("{} skipped {} partitions as they are already being "
@@ -614,7 +723,70 @@ struct rebuilder_state {
                       atom::rebuild_v);
         },
         [this, retry_partitions = std::move(retry_partitions), num_partitions,
-         rp](caf::error& error) mutable {
+         this_run, rp](caf::error& error) mutable {
+          if (not run or run->id != this_run) {
+            TENZIR_DEBUG("{} abandons rebuild continuation for a superseded "
+                         "run",
+                         *self);
+            rp.deliver();
+            return;
+          }
+          // The partition transformer attributes a store decode failure
+          // (e.g. a corrupt/truncated store file) to the specific partition
+          // it came from (see `store_error_partition`), so a batch failure
+          // never needs to be treated as "some partition in here is
+          // corrupt" — we can drop exactly the culprit and retry the rest
+          // of the batch normally. The partition is also quarantined by the
+          // catalog below so it is never selected as a rebuild candidate
+          // again; without that, a future run would reselect it and fail
+          // again instead of being skipped.
+          if (const auto corrupt = store_error_partition(error)) {
+            const auto it
+              = std::find_if(retry_partitions.begin(), retry_partitions.end(),
+                             [&](const partition_info& partition) {
+                               return partition.uuid == *corrupt;
+                             });
+            TENZIR_ASSERT(it != retry_partitions.end());
+            report_quarantine(*corrupt, error);
+            ++run->statistics.num_quarantined;
+            quarantined_partitions[*corrupt] = fmt::to_string(error);
+            retry_partitions.erase(it);
+            run->statistics.num_rebuilding -= num_partitions;
+            // Fire the quarantine mail and only log its outcome here: the
+            // catalog's mailbox already orders this erase before any future
+            // candidate query, so the run can continue immediately below
+            // without waiting for the response.
+            self
+              ->mail(atom::erase_v, atom::extract_v, *corrupt,
+                     fmt::to_string(error))
+              .request(catalog, caf::infinite)
+              .then(
+                [this, corrupt = *corrupt](atom::done) {
+                  TENZIR_DEBUG("{} quarantined partition {} in the catalog",
+                               *self, corrupt);
+                },
+                [this, corrupt = *corrupt](const caf::error& quarantine_err) {
+                  TENZIR_WARN("{} failed to quarantine partition {} in the "
+                              "catalog: {}",
+                              *self, corrupt, quarantine_err);
+                });
+            if (stopping) {
+              // A stop request already decided not to touch any partition
+              // beyond the ones currently rebuilding, so don't requeue the
+              // survivors of this batch or pick up more work; just drop
+              // them from this run's accounting and let this worker finish.
+              run->statistics.num_total -= 1 + retry_partitions.size();
+              rp.deliver();
+              return;
+            }
+            run->remaining_partitions.insert(run->remaining_partitions.begin(),
+                                             retry_partitions.begin(),
+                                             retry_partitions.end());
+            run->statistics.num_total -= 1;
+            rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
+                        atom::rebuild_v);
+            return;
+          }
           TENZIR_WARN("{} failed to rebuild partitions: {}", *self, error);
           run->remaining_partitions.insert(run->remaining_partitions.begin(),
                                            retry_partitions.begin(),
@@ -682,6 +854,16 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
   }
   if (auto importer
       = self->system().registry().get<importer_actor>("tenzir.importer")) {
+    self->state().importer = importer;
+    self->state().quarantine_builder = series_builder{type{
+      "tenzir.metrics.rebuild_quarantine",
+      record_type{
+        {"timestamp", time_type{}},
+        {"partition", string_type{}},
+        {"error", string_type{}},
+      },
+      {{"internal"}},
+    }};
     auto builder = series_builder{type{
       "tenzir.metrics.rebuild",
       record_type{
@@ -854,6 +1036,35 @@ rebuild_stop_command(const invocation& inv, caf::actor_system& sys) {
   return result;
 }
 
+caf::message rebuild_show_command(const invocation&, caf::actor_system& sys) {
+  // Create a scoped actor for interaction with the actor system and connect to
+  // the node.
+  auto self = caf::scoped_actor{sys};
+  auto rebuilder = get_rebuilder(sys);
+  if (not rebuilder) {
+    return caf::make_message(std::move(rebuilder.error()));
+  }
+  auto err = caf::error{};
+  self->mail(atom::status_v, status_verbosity::debug, duration::max())
+    .request(*rebuilder, caf::infinite)
+    .receive(
+      [&](const record& status) {
+        auto yaml = to_yaml(status);
+        if (not yaml) {
+          err = std::move(yaml.error());
+          return;
+        }
+        fmt::print("{}\n", *yaml);
+      },
+      [&](caf::error& error) {
+        err = std::move(error);
+      });
+  if (err.valid()) {
+    return caf::make_message(std::move(err));
+  }
+  return {};
+}
+
 /// An example plugin.
 class plugin final : public virtual command_plugin,
                      public virtual component_plugin {
@@ -906,11 +1117,14 @@ public:
       command::opts("?tenzir.rebuild")
         .add<bool>("detached,d", "exit immediately instead of waiting for the "
                                  "rebuild to be stopped"));
+    rebuild->add_subcommand("show", "shows the current rebuild status",
+                            command::opts("?tenzir.rebuild"));
     auto factory = command::factory{
       {"rebuild start", rebuild_start_command},
       // Make 'tenzir rebuild' an alias for 'tenzir rebuild start'.
       {"rebuild", rebuild_start_command},
       {"rebuild stop", rebuild_stop_command},
+      {"rebuild show", rebuild_show_command},
     };
     return {std::move(rebuild), std::move(factory)};
   }

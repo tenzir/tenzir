@@ -1,0 +1,8 @@
+from {
+  x: "not a time",
+}, {
+  x: "still not a time",
+}, {
+  x: "also not a time",
+}
+x = x.time()

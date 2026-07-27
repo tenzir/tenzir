@@ -1,0 +1,6 @@
+error: `retry_delay` must be a non-negative duration
+  --> tests/operators/from_splunk/error_negative_retry_delay.tql:10:15
+   |
+10 |   retry_delay=-1s
+   |               ^^^ 
+   |

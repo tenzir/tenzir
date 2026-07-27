@@ -1,0 +1,6 @@
+fixtures:
+  - splunk:
+      seed_auth_events: true
+timeout: 600
+skip:
+  on: fixture-unavailable

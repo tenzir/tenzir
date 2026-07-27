@@ -99,6 +99,32 @@ auto make_slice(int64_t rows) -> table_slice {
   return b.finish_assert_one_slice();
 }
 
+// Builds a `table_slice` with a single `key` column filled with `values`.
+auto make_key_slice(std::vector<int64_t> values) -> table_slice {
+  auto b = series_builder{};
+  for (auto v : values) {
+    b.record().field("key", v);
+  }
+  return b.finish_assert_one_slice();
+}
+
+// An `ast::expression` selecting a top-level field by name.
+auto make_field_expr(std::string name) -> ast::expression {
+  return ast::expression{
+    ast::root_field{ast::identifier{std::move(name), location::unknown}}};
+}
+
+// Extracts the values of a single-column `int64` slice into a vector.
+auto extract_int64_column(const table_slice& slice) -> std::vector<int64_t> {
+  auto out = std::vector<int64_t>{};
+  auto batch = to_record_batch(slice);
+  auto array = std::static_pointer_cast<arrow::Int64Array>(batch->column(0));
+  for (auto i = int64_t{0}; i < array->length(); ++i) {
+    out.push_back(array->Value(i));
+  }
+  return out;
+}
+
 // Runs a task body on the global CPU executor. The gather merge loop uses an
 // `async_scope`, which spawns lane-pull tasks onto the current executor; those
 // tasks must run concurrently with the merger blocking on `next()`, so we need
@@ -155,36 +181,45 @@ TEST("scatter distributes rows across lanes and broadcasts signals") {
   });
 }
 
-TEST("scatter stops routing data to a closed lane") {
+TEST("broadcast sends every slice to all lanes") {
   run([&]() -> Task<void> {
-    auto [push, pulls] = make_scatter(2, slice_factory(), ChannelId{});
-    // Retire lane 1 up front.
-    static_cast<ScatterPush&>(*push).close_lane(1);
-    check_eq(static_cast<ScatterPush&>(*push).open_lanes(), size_t{1});
+    auto [push, pulls] = make_broadcast(2, slice_factory(), ChannelId{});
     co_await folly::coro::collectAll(
       [&]() -> Task<void> {
-        for (auto i = 0; i < 3; ++i) {
+        // Four single-row slices; each lane should receive all four rows.
+        for (auto i = 0; i < 4; ++i) {
           co_await (*push)(OperatorMsg<table_slice>{make_slice(1)});
         }
+        co_await (*push)(OperatorMsg<table_slice>{Signal{EndOfData{}}});
+        // Drop the broadcast to close all lanes.
         push = {};
       }(),
       [&]() -> Task<void> {
         auto rows = int64_t{0};
+        auto got_signal = false;
         while (auto msg = co_await (*pulls[0])()) {
           if (auto* slice = try_as<table_slice>(*msg)) {
             rows += slice->rows();
+          } else {
+            check(is<Signal>(*msg));
+            got_signal = true;
           }
         }
-        check_eq(rows, int64_t{3});
+        check_eq(rows, int64_t{4});
+        check(got_signal);
       }(),
       [&]() -> Task<void> {
         auto rows = int64_t{0};
+        auto got_signal = false;
         while (auto msg = co_await (*pulls[1])()) {
           if (auto* slice = try_as<table_slice>(*msg)) {
             rows += slice->rows();
+          } else {
+            got_signal = true;
           }
         }
-        check_eq(rows, int64_t{0});
+        check_eq(rows, int64_t{4});
+        check(got_signal);
       }());
   });
 }
@@ -256,39 +291,6 @@ TEST("gather emits end-of-data exactly once after all lanes deliver it") {
         }
         check_eq(data_rows, int64_t{2});
         check_eq(eod, 1);
-      }());
-  });
-}
-
-TEST("scatter keeps a fair slice on one lane after closing a lane") {
-  // Regression test: a retired lane must not skew the adaptive fairness check.
-  // With four lanes and lane 3 closed, sending 300 rows levels the three open
-  // lanes to [100, 100, 100]. A subsequent 10-row slice stays within the
-  // fairness factor on a single lane instead of fragmenting across all three.
-  run([&]() -> Task<void> {
-    auto [push, pulls] = make_scatter(4, slice_factory(), ChannelId{});
-    static_cast<ScatterPush&>(*push).close_lane(3);
-    co_await folly::coro::collectAll(
-      [&]() -> Task<void> {
-        co_await (*push)(OperatorMsg<table_slice>{make_slice(300)});
-        co_await (*push)(OperatorMsg<table_slice>{make_slice(10)});
-        push = {};
-      }(),
-      [&]() -> Task<void> {
-        auto rows_per_lane = std::multiset<int64_t>{};
-        for (auto& pull : pulls) {
-          auto rows = int64_t{0};
-          while (auto msg = co_await (*pull)()) {
-            if (auto* slice = try_as<table_slice>(*msg)) {
-              rows += slice->rows();
-            }
-          }
-          rows_per_lane.insert(rows);
-        }
-        // Lane 3 is retired (0 rows); the 10-row slice lands entirely on one
-        // of the three open lanes, taking it to 110.
-        auto expected = std::multiset<int64_t>{0, 100, 100, 110};
-        check(rows_per_lane == expected);
       }());
   });
 }
@@ -396,6 +398,108 @@ TEST("distribute_adaptive omits zero-row assignments") {
   auto result = distribute_adaptive(0, rows_assigned);
   CHECK(result.empty());
   CHECK_EQUAL(rows_assigned, (std::vector<uint64_t>{0, 0, 0}));
+}
+
+TEST("shuffle routes rows by hash of partition keys") {
+  // Rows with equal `key` values must all land on the same lane. We collect
+  // each lane's seen values, then verify:
+  //   * every input value was delivered to exactly one lane,
+  //   * lanes are disjoint (no key crosses lanes),
+  //   * signals are broadcast to every lane.
+  auto dh = null_diagnostic_handler{};
+  auto keys = std::vector<ast::expression>{make_field_expr("key")};
+  auto values = std::vector<int64_t>{};
+  for (auto i = int64_t{0}; i < 60; ++i) {
+    values.push_back(i % 20); // 20 distinct keys, three copies each.
+  }
+  auto lane_values = std::vector<std::multiset<int64_t>>(3);
+  auto lane_got_signal = std::vector<bool>(3, false);
+  run([&]() -> Task<void> {
+    auto [push, pulls]
+      = make_shuffle(3, std::move(keys), dh, slice_factory(), ChannelId{});
+    auto drain = [&](size_t lane) {
+      return [&, lane, pull = std::move(pulls[lane])]() mutable -> Task<void> {
+        while (auto msg = co_await (*pull)()) {
+          if (auto* slice = try_as<table_slice>(*msg)) {
+            for (auto v : extract_int64_column(*slice)) {
+              lane_values[lane].insert(v);
+            }
+          } else {
+            lane_got_signal[lane] = true;
+          }
+        }
+      };
+    };
+    co_await folly::coro::collectAll(
+      [&]() -> Task<void> {
+        co_await (*push)(OperatorMsg<table_slice>{make_key_slice(values)});
+        co_await (*push)(OperatorMsg<table_slice>{Signal{EndOfData{}}});
+        push = {};
+      }(),
+      drain(0)(), drain(1)(), drain(2)());
+  });
+  // Every row was delivered to exactly one lane.
+  auto total_delivered = size_t{0};
+  for (const auto& seen : lane_values) {
+    total_delivered += seen.size();
+  }
+  check_eq(total_delivered, values.size());
+  // Each key value lives on exactly one lane.
+  auto lane_keys = std::vector<std::set<int64_t>>(3);
+  for (auto lane = size_t{0}; lane < 3; ++lane) {
+    for (auto v : lane_values[lane]) {
+      lane_keys[lane].insert(v);
+    }
+  }
+  for (auto i = size_t{0}; i < 3; ++i) {
+    for (auto j = i + 1; j < 3; ++j) {
+      auto intersection = std::vector<int64_t>{};
+      std::set_intersection(lane_keys[i].begin(), lane_keys[i].end(),
+                            lane_keys[j].begin(), lane_keys[j].end(),
+                            std::back_inserter(intersection));
+      check(intersection.empty());
+    }
+  }
+  // Every duplicate lands next to its siblings: each seen key appears three
+  // times on its owning lane.
+  for (const auto& seen : lane_values) {
+    for (auto v : std::set<int64_t>{seen.begin(), seen.end()}) {
+      check_eq(seen.count(v), size_t{3});
+    }
+  }
+  // Signal broadcast to every lane.
+  for (auto got : lane_got_signal) {
+    check(got);
+  }
+}
+
+TEST("shuffle with a single lane forwards everything") {
+  auto dh = null_diagnostic_handler{};
+  auto keys = std::vector<ast::expression>{make_field_expr("key")};
+  run([&]() -> Task<void> {
+    auto [push, pulls]
+      = make_shuffle(1, std::move(keys), dh, slice_factory(), ChannelId{});
+    co_await folly::coro::collectAll(
+      [&]() -> Task<void> {
+        co_await (*push)(
+          OperatorMsg<table_slice>{make_key_slice({1, 2, 3, 4, 5})});
+        co_await (*push)(OperatorMsg<table_slice>{Signal{EndOfData{}}});
+        push = {};
+      }(),
+      [&]() -> Task<void> {
+        auto rows = int64_t{0};
+        auto got_signal = false;
+        while (auto msg = co_await (*pulls[0])()) {
+          if (auto* slice = try_as<table_slice>(*msg)) {
+            rows += slice->rows();
+          } else {
+            got_signal = true;
+          }
+        }
+        check_eq(rows, int64_t{5});
+        check(got_signal);
+      }());
+  });
 }
 
 TEST("hash_runs partitions all rows in order") {

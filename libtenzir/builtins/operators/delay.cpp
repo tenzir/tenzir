@@ -309,28 +309,6 @@ private:
 
 class plugin final : public virtual operator_plugin<delay_operator> {
 public:
-  auto signature() const -> operator_signature override {
-    return {.source = true};
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto speed = std::optional<located<double>>{};
-    auto start = std::optional<time>{};
-    auto field = located<std::string>{};
-    auto parser = argument_parser{"delay", "https://tenzir.com/docs/"
-                                           "operators/delay"};
-    parser.add("--speed", speed, "<factor>");
-    parser.add("--start", start, "<time>");
-    parser.add(field, "<field>");
-    parser.parse(p);
-    if (speed and speed->inner <= 0.0) {
-      diagnostic::error("`--speed` must be greater than 0")
-        .primary(speed.value())
-        .throw_();
-    }
-    return std::make_unique<delay_operator>(std::move(field),
-                                            speed ? speed->inner : 1.0, start);
-  }
 };
 
 class plugin2 final : public virtual operator_plugin2<delay_operator2>,

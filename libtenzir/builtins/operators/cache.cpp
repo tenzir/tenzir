@@ -1434,7 +1434,6 @@ private:
 using cache_ir_plugin = inspection_plugin<ir::Operator, CacheIr>;
 
 class cache_plugin final : public virtual operator_factory_plugin,
-                           public virtual operator_parser_plugin,
                            public virtual component_plugin,
                            public virtual operator_compiler_plugin {
 public:
@@ -1470,68 +1469,6 @@ public:
     -> component_plugin_actor override {
     return self->spawn<caf::linked>(caf::actor_from_state<cache_manager>,
                                     cache_capacity_);
-  }
-
-  auto signature() const -> operator_signature override {
-    return {
-      .source = true,
-      .transformation = true,
-      .sink = true,
-    };
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"cache", "https://tenzir.com/docs/"
-                                           "operators/cache"};
-    auto id = located<std::string>{};
-    auto mode = std::optional<located<std::string>>{};
-    auto capacity = std::optional<located<uint64_t>>{};
-    auto read_timeout = std::optional<located<duration>>{};
-    auto write_timeout = std::optional<located<duration>>{};
-    parser.add(id, "<id>");
-    parser.add("--mode", mode, "<read|write|readwrite>");
-    parser.add("--capacity", capacity, "<capacity>");
-    parser.add("--read-timeout", read_timeout, "<duration>");
-    parser.add("--write-timeout", write_timeout, "<duration>");
-    parser.parse(p);
-    if (mode
-        and (mode->inner != "read" and mode->inner != "write"
-             and mode->inner != "readwrite")) {
-      diagnostic::error("unknown mode `{}`", mode->inner)
-        .note("available modes: read, write, readwrite")
-        .primary(mode->source)
-        .throw_();
-    }
-    if (not capacity) {
-      capacity.emplace(std::numeric_limits<uint64_t>::max(), location::unknown);
-    }
-    if (not read_timeout) {
-      read_timeout.emplace(cache_lifetime_, location::unknown);
-    } else if (read_timeout->inner <= duration::zero()) {
-      diagnostic::error("read timeout must be a positive duration")
-        .primary(read_timeout->source)
-        .throw_();
-    }
-    if (not write_timeout) {
-      write_timeout.emplace(duration::zero(), location::unknown);
-    } else if (write_timeout->inner <= duration::zero()) {
-      diagnostic::error("write timeout must be a positive duration")
-        .primary(write_timeout->source)
-        .throw_();
-    }
-    if (not mode or mode->inner == "readwrite") {
-      auto result = std::make_unique<pipeline>();
-      result->append(std::make_unique<write_cache_operator>(id));
-      result->append(std::make_unique<read_cache_operator>(
-        std::move(id), *capacity, read_timeout->inner, write_timeout->inner));
-      return result;
-    }
-    if (mode->inner == "write") {
-      return std::make_unique<write_cache_operator>(
-        std::move(id), *capacity, read_timeout->inner, write_timeout->inner);
-    }
-    TENZIR_ASSERT(mode->inner == "read");
-    return std::make_unique<read_cache_operator>(std::move(id));
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

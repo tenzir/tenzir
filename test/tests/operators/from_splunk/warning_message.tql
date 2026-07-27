@@ -1,0 +1,15 @@
+---
+fixtures:
+  - http_server:
+      expected:
+        - method: POST
+          path: /splunk/warning-message/services/search/v2/jobs/export
+          body: search=search%20index%3Dmain&earliest_time=-15m&latest_time=-5m&output_mode=json&preview=false
+---
+
+from_splunk env("HTTP_FIXTURE_SPLUNK_WARNING_MESSAGE_URL"),
+  search="search index=main",
+  earliest="-15m",
+  latest="-5m",
+  headers={Authorization: "Splunk test-token"},
+  tls=false

@@ -70,10 +70,6 @@ private:
 class plugin final : public virtual operator_plugin<flatten_operator>,
                      public virtual function_plugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
   auto is_deterministic() const -> bool override {
     return true;
   }
@@ -108,16 +104,6 @@ public:
           return series{flattened.schema, flattened.array};
         });
       });
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser
-      = argument_parser{"flatten", "https://tenzir.com/docs/operators/flatten"};
-    auto sep = std::optional<located<std::string>>{};
-    parser.add(sep, "<separator>");
-    parser.parse(p);
-    auto separator = (sep) ? sep->inner : default_flatten_separator;
-    return std::make_unique<flatten_operator>(separator);
   }
 };
 

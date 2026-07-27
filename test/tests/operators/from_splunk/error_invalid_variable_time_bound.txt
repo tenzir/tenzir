@@ -1,0 +1,6 @@
+error: expected `string` or `time` for `latest`
+  --> tests/operators/from_splunk/error_invalid_variable_time_bound.tql:10:10
+   |
+10 |   latest=$latest,
+   |          ^^^^^^^ got `record`
+   |

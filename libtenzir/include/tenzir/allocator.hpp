@@ -842,7 +842,8 @@ public:
         std::_Exit(EXIT_FAILURE);
         return 0;
       }
-      return Traits::usable_size(storage_ptr);
+      return Traits::usable_size(storage_ptr)
+             - tag.source_identifier.alignment().value();
     }
     return Traits::usable_size(ptr);
   }

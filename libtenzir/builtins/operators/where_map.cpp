@@ -122,25 +122,13 @@ private:
   located<expression> expr_;
 };
 
-class tql1_plugin final : public virtual operator_plugin<where_operator> {
+class tql1_plugin final : public virtual operator_plugin<where_operator>,
+                          public virtual where_factory_plugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"where", "https://tenzir.com/docs/"
-                                           "operators/where"};
-    auto expr = located<tenzir::expression>{};
-    parser.add(expr, "<expr>");
-    parser.parse(p);
+  auto make_where_operator(located<expression> expr) const
+    -> operator_ptr override {
     auto normalized_and_validated = normalize_and_validate(expr.inner);
-    if (not normalized_and_validated) {
-      diagnostic::error("invalid expression")
-        .primary(expr.source)
-        .docs("https://tenzir.com/language/expressions")
-        .throw_();
-    }
+    TENZIR_ASSERT(normalized_and_validated);
     expr.inner = std::move(*normalized_and_validated);
     return std::make_unique<where_operator>(std::move(expr));
   }

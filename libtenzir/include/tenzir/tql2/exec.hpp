@@ -29,6 +29,7 @@ struct OperatorProfileEntry {
   std::string operator_id;
   std::string name;
   uint64_t input_bytes = 0;
+  uint64_t input_capacity = 0;
   double cpu = 0.0;
   uint64_t task_count = 0;
   uint64_t bytes_in = 0;

@@ -414,10 +414,6 @@ public:
 class plugin final : public virtual operator_plugin<decapsulate_operator>,
                      public virtual function_plugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
   auto is_deterministic() const -> bool override {
     return true;
   }
@@ -437,14 +433,6 @@ public:
           return series::null(null_type{}, series.length());
         });
       });
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{name(), fmt::format("https://tenzir.com/docs/"
-                                                      "operators/{}",
-                                                      name())};
-    parser.parse(p);
-    return std::make_unique<decapsulate_operator>();
   }
 
 private:

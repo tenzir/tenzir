@@ -18,6 +18,7 @@
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/overload.hpp"
+#include "tenzir/error.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/fbs/table_slice.hpp"
 #include "tenzir/ids.hpp"
@@ -459,10 +460,19 @@ auto verify_column(const arrow::Array& arr,
   return false;
 }
 
-/// Verifies that an `arrow::RecordBatch`'s types are supported by Tenzir.
+/// Verifies that an `arrow::RecordBatch`'s types are supported by Tenzir, and
+/// that its buffers are internally consistent. Unlike `ValidateFull()`,
+/// `Validate()` is a cheap, non-recursive structural check, so it is run
+/// unconditionally rather than gated behind `TENZIR_ENABLE_ASSERTIONS` --
+/// externally-sourced record batches (e.g. read back from a store file) are
+/// exactly the case where corruption is expected to occur.
 [[maybe_unused]] auto
 verify_record_batch(const arrow::RecordBatch& record_batch)
   -> std::expected<void, table_slice::creation_error> {
+  if (auto status = record_batch.Validate(); not status.ok()) {
+    return std::unexpected(
+      table_slice::creation_error{.message = status.ToString()});
+  }
   auto error = std::optional<table_slice::creation_error>{};
   for (const auto& column : record_batch.columns()) {
     if (not verify_column(*column, error)) {
@@ -935,13 +945,18 @@ auto size(const table_slice& slice) -> uint64_t {
 // -- operations ---------------------------------------------------------------
 
 table_slice concatenate(std::vector<table_slice> slices) {
+  return check(try_concatenate(std::move(slices)));
+}
+
+auto try_concatenate(std::vector<table_slice> slices)
+  -> caf::expected<table_slice> {
   slices.erase(std::remove_if(slices.begin(), slices.end(),
                               [](const auto& slice) {
                                 return slice.rows() == 0;
                               }),
                slices.end());
   if (slices.empty()) {
-    return {};
+    return table_slice{};
   }
   if (slices.size() == 1) {
     return std::move(slices[0]);
@@ -961,13 +976,28 @@ table_slice concatenate(std::vector<table_slice> slices) {
 
   for (const auto& slice : slices) {
     auto batch = to_record_batch(slice);
+    // A malformed slice (e.g. deserialized from a corrupt source) can carry a
+    // record batch whose child arrays disagree with its schema; both the
+    // struct-array conversion and the append can reject it, and neither is a
+    // programming error in this function.
+    auto struct_array = batch->ToStructArray();
+    if (not struct_array.ok()) {
+      return caf::make_error(
+        ec::format_error,
+        fmt::format("failed to concatenate table slices: {}",
+                    struct_array.status().ToStringWithoutContextLines()));
+    }
     auto status = append_array(*builder, as<record_type>(schema),
-                               *check(batch->ToStructArray()));
-    TENZIR_ASSERT(status.ok());
+                               *struct_array.ValueUnsafe());
+    if (not status.ok()) {
+      return caf::make_error(
+        ec::format_error, fmt::format("failed to concatenate table slices: {}",
+                                      status.ToStringWithoutContextLines()));
+    }
   }
   const auto rows = builder->length();
   if (rows == 0) {
-    return {};
+    return table_slice{};
   }
   const auto array = finish(*builder);
   auto batch = record_batch_from_struct_array(std::move(arrow_schema), *array);

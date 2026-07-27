@@ -36,7 +36,8 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr), this](auto eval, session ctx) {
-        return map_series(eval(expr), [&](series value) {
+        auto failed = std::optional<std::string>{};
+        auto result = map_series(eval(expr), [&](series value) {
           const auto f = detail::overload{
             [](const arrow::NullArray& arg) {
               auto b = arrow::DoubleBuilder{tenzir::arrow_memory_pool()};
@@ -75,10 +76,9 @@ public:
                   check(b.Append(result));
                   continue;
                 }
-                diagnostic::warning("failed to parse string")
-                  .primary(expr)
-                  .note(fmt::format("tried to convert: {}", arg.GetView(row)))
-                  .emit(ctx);
+                if (not failed) {
+                  failed = std::string{arg.GetView(row)};
+                }
                 check(b.AppendNull());
               }
               return finish(b);
@@ -95,6 +95,13 @@ public:
             };
           return series{double_type{}, match(*value.array, f)};
         });
+        if (failed) {
+          diagnostic::warning("failed to parse string")
+            .primary(expr)
+            .note(fmt::format("tried to convert: {}", *failed))
+            .emit(ctx);
+        }
+        return result;
       });
   }
 };

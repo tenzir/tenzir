@@ -1,0 +1,11 @@
+created: 2026-07-21
+title: Splunk search input
+intro: >-
+  The new `from_splunk` operator lets nodes run bounded searches against a Splunk
+  Search Head and emit results as events. `to_clickhouse` now re-batches events before
+  insert for higher throughput and supports writing directly into JSON columns. This
+  release also makes nodes resilient to corrupt or truncated partitions, quarantining
+  them instead of crashing repeatedly.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.7.0

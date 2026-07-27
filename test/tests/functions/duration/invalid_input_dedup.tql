@@ -1,0 +1,8 @@
+from {
+  x: "not a duration",
+}, {
+  x: "still not a duration",
+}, {
+  x: "also not a duration",
+}
+x = x.duration()

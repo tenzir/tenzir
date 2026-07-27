@@ -259,33 +259,6 @@ class plugin final : public virtual operator_plugin<batch_operator>,
                      public virtual operator_factory_plugin,
                      public virtual OperatorPlugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"batch", "https://tenzir.com/docs/"
-                                           "operators/batch"};
-    auto limit = std::optional<located<uint64_t>>{};
-    auto timeout = std::optional<located<duration>>{};
-    parser.add(limit, "<limit>");
-    parser.add("-t,--timeout", timeout, "<limit>");
-    parser.parse(p);
-    if (limit and limit->inner == 0) {
-      diagnostic::error("batch size must not be 0")
-        .primary(limit->source)
-        .throw_();
-    }
-    if (timeout and timeout->inner <= duration::zero()) {
-      diagnostic::error("timeout must be a positive duration")
-        .primary(timeout->source)
-        .throw_();
-    }
-    return std::make_unique<batch_operator>(
-      limit ? limit->inner : defaults::import::table_slice_size,
-      timeout ? timeout->inner : duration::max(), event_order::ordered);
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto limit = std::optional<located<uint64_t>>{};

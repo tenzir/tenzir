@@ -19,6 +19,7 @@
 #include "tenzir/error.hpp"
 #include "tenzir/fbs/type.hpp"
 #include "tenzir/legacy_type.hpp"
+#include "tenzir/logger.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/try.hpp"
@@ -3094,13 +3095,24 @@ record_type::resolve_key_suffix(std::string_view key,
   }
   while (not index.empty()) {
     auto& [record, remaining_keys] = history.back();
-    TENZIR_ASSERT(record);
-    const auto* fields = record->fields();
-    TENZIR_ASSERT(fields);
+    // A damaged or non-canonical type (e.g. a partition synopsis read back
+    // from a corrupt file) may contain a record without a field vector. Such
+    // a record cannot contain the key we are looking for, so treat it like
+    // an empty record instead of asserting; this code runs in the catalog,
+    // where an assertion failure takes down the whole node. Note that we
+    // cannot print the offending type itself: formatting a record without
+    // fields would dereference the very null vector we are guarding against.
+    const auto* fields = record ? record->fields() : nullptr;
+    if (not fields) {
+      TENZIR_WARN("encountered record type without fields while resolving "
+                  "key suffix `{}` with prefix `{}`; treating it as an empty "
+                  "record",
+                  key, prefix);
+    }
     // This is our exit condition: If we arrived at the end of a record, we
     // need to step out one layer. We must also reset the target key at this
     // point.
-    if (index.back() >= fields->size()) {
+    if (not fields or index.back() >= fields->size()) {
       history.pop_back();
       index.pop_back();
       if (not index.empty()) {
@@ -3108,7 +3120,7 @@ record_type::resolve_key_suffix(std::string_view key,
       }
       continue;
     }
-    const auto* field = record->fields()->Get(index.back());
+    const auto* field = fields->Get(index.back());
     TENZIR_ASSERT(field);
     const auto* field_name = field->name();
     TENZIR_ASSERT(field_name);
@@ -3195,13 +3207,19 @@ generator<offset> record_type::resolve_type_extractor(
   };
   while (not index.empty()) {
     const auto* record = history.back();
-    TENZIR_ASSERT(record);
-    const auto* fields = record->fields();
-    TENZIR_ASSERT(fields);
+    // See the matching comment in `resolve_key_suffix`: a damaged type may
+    // contain a record without a field vector; treat it like an empty record
+    // instead of asserting.
+    const auto* fields = record ? record->fields() : nullptr;
+    if (not fields) {
+      TENZIR_WARN("encountered record type without fields while resolving "
+                  "type extractor `:{}`; treating it as an empty record",
+                  type_extractor);
+    }
     // This is our exit condition: If we arrived at the end of a record, we
     // need to step out one layer. We must also reset the target key at this
     // point.
-    if (index.back() >= fields->size()) {
+    if (not fields or index.back() >= fields->size()) {
       history.pop_back();
       index.pop_back();
       if (not index.empty()) {
@@ -3209,7 +3227,7 @@ generator<offset> record_type::resolve_type_extractor(
       }
       continue;
     }
-    const auto* field = record->fields()->Get(index.back());
+    const auto* field = fields->Get(index.back());
     TENZIR_ASSERT(field);
     const auto* field_type = field->type_nested_root();
     TENZIR_ASSERT(field_type);

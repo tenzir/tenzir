@@ -1,0 +1,6 @@
+error: `max_retry_count` must be <= 4294967295
+  --> tests/operators/from_splunk/error_max_retry_count_overflow.tql:10:19
+   |
+10 |   max_retry_count=5000000000
+   |                   ^^^^^^^^^^ 
+   |

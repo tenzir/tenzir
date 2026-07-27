@@ -164,6 +164,11 @@ using catalog_actor = typed_actor_fwd<
   auto(atom::get, std::string, expression)->caf::result<std::vector<table_slice>>,
   // Erase a single partition synopsis.
   auto(atom::erase, uuid)->caf::result<atom::ok>,
+  // Quarantine a single partition: move its store file aside into a
+  // "quarantined" directory (for postmortem inspection), delete its other
+  // on-disk files, and erase it from the catalog, all as one operation. The
+  // `std::string` is the rendered error that triggered the quarantine.
+  auto(atom::erase, atom::extract, uuid, std::string)->caf::result<atom::done>,
   // Atomatically replace a set of partititon synopses with another.
   auto(atom::replace, std::vector<uuid>, std::vector<partition_synopsis_pair>)
     ->caf::result<atom::ok>,

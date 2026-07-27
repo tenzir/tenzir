@@ -582,6 +582,9 @@ struct ChannelStats {
   data in;
   data out;
 
+  /// Total capacity in bytes across all channels sharing these stats.
+  std::atomic<size_t> capacity{0};
+
   /// Backpressure intervals recorded by the sender.
   struct BackpressureEvent {
     std::chrono::steady_clock::time_point start;
@@ -1076,6 +1079,12 @@ protected:
     return make_profiled_channel<table_slice>(std::move(id), events_limit);
   }
 
+  auto make_routing_events(ChannelId id)
+    -> PushPull<OperatorMsg<table_slice>> override {
+    return make_profiled_channel<table_slice>(std::move(id),
+                                              events_routing_limit);
+  }
+
   auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> override {
     return make_profiled_channel<chunk_ptr>(std::move(id), bytes_limit);
   }
@@ -1148,6 +1157,9 @@ private:
         (*stats)->record_backpressure = record_backpressure_;
         channels_.push_back(ChannelProfile{id, *stats, tag_v<T>});
       }
+      // Accumulate capacity across all channels sharing this ID (e.g. the
+      // lanes of a routing exchange).
+      (*stats)->capacity.fetch_add(max_bytes, std::memory_order::relaxed);
     }
     auto shared = std::make_shared<OpChannel<T>>(std::move(id), max_bytes,
                                                  std::move(stats));
@@ -1195,11 +1207,14 @@ private:
   static constexpr auto void_limit = 0;
   static constexpr auto events_limit = 0;
   static constexpr auto bytes_limit = 0;
+  static constexpr auto events_routing_limit = 0;
 #else
   // Memory limit per channel type.
   static constexpr auto void_limit = 1_Ki;
-  static constexpr auto events_limit = 100_Mi;
-  static constexpr auto bytes_limit = 100_Mi;
+  static constexpr auto events_limit = 32_Mi;
+  static constexpr auto bytes_limit = 32_Mi;
+  // Per-lane memory limit for routing (scatter, gather, shuffle, broadcast).
+  static constexpr auto events_routing_limit = 1_Mi;
 #endif
 };
 
@@ -1715,6 +1730,7 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
   struct OpStats {
     std::string name;
     Option<size_t> input_bytes;
+    Option<size_t> input_capacity;
     Option<size_t> bytes_in;
     Option<size_t> bytes_out;
     Option<size_t> batches_in;
@@ -1728,8 +1744,11 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
     Option<size_t> task_count;
   };
   auto set = []<class T>(Option<T>& field, T value) {
-    TENZIR_ASSERT(field.is_none());
-    field = value;
+    if (field.is_none()) {
+      field = value;
+    } else {
+      *field += value;
+    }
   };
   auto ops = std::unordered_map<OpId, OpStats>{};
   auto is_child_of = [](OpId const& child, OpId const& parent) -> bool {
@@ -1758,6 +1777,7 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
     auto events_out = prof.stats->out.events.load(std::memory_order::relaxed);
     auto signals_in = prof.stats->in.signals.load(std::memory_order::relaxed);
     auto signals_out = prof.stats->out.signals.load(std::memory_order::relaxed);
+    auto capacity = prof.stats->capacity.load(std::memory_order::relaxed);
     auto clamp_sub = [](size_t a, size_t b) {
       return a >= b ? a - b : 0;
     };
@@ -1777,6 +1797,7 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
       set(r.events_in, events_out);
       set(r.signals_in, signals_out);
       set(r.input_bytes, clamp_sub(bytes_in, bytes_out));
+      set(r.input_capacity, capacity);
     }
   }
   // Collect executor stats per operator.
@@ -1818,6 +1839,7 @@ auto build_profiler_snapshot(std::span<ChannelProfile const> channel_profiles,
       .operator_id = id.value,
       .name = s.name,
       .input_bytes = static_cast<uint64_t>(get(s.input_bytes)),
+      .input_capacity = static_cast<uint64_t>(get(s.input_capacity)),
       .cpu = cpu_usage,
       .task_count = delta(get(s.task_count), old.task_count),
       .bytes_in = delta(get(s.bytes_in), old.bytes_in),
@@ -2183,6 +2205,7 @@ auto build_profiler_slices(ProfilerSnapshot const& snapshot,
       {"operator_id", string_type{}},
       {"name", string_type{}},
       {"input_bytes", uint64_type{}},
+      {"input_capacity", uint64_type{}},
       {"cpu", double_type{}},
       {"task_count", uint64_type{}},
       {"bytes_in", uint64_type{}},
@@ -2206,6 +2229,7 @@ auto build_profiler_slices(ProfilerSnapshot const& snapshot,
       row.field("operator_id").data(op.operator_id);
       row.field("name").data(op.name);
       row.field("input_bytes").data(op.input_bytes);
+      row.field("input_capacity").data(op.input_capacity);
       row.field("cpu").data(op.cpu);
       row.field("task_count").data(op.task_count);
       row.field("bytes_in").data(op.bytes_in);

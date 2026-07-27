@@ -273,6 +273,7 @@ public:
           std::make_shared<arrow::TimestampType>(arrow::TimeUnit::NANO),
           arrow_memory_pool()};
         check(b.Reserve(eval.length()));
+        auto failed = std::optional<std::string>{};
         for (auto& arg : eval(expr)) {
           auto f = detail::overload{
             [&](const arrow::NullArray& arg) {
@@ -291,7 +292,9 @@ public:
                 if (parsers::time(arg.GetView(i), result)) {
                   check(b.Append(result.time_since_epoch().count()));
                 } else {
-                  // TODO: Warning.
+                  if (not failed) {
+                    failed = std::string{arg.GetView(i)};
+                  }
                   check(b.AppendNull());
                 }
               }
@@ -305,6 +308,12 @@ public:
             },
           };
           match(*arg.array, f);
+        }
+        if (failed) {
+          diagnostic::warning("`time` failed to parse string")
+            .primary(expr)
+            .note(fmt::format("tried to convert: {}", *failed))
+            .emit(ctx);
         }
         return series{time_type{}, finish(b)};
       });

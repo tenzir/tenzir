@@ -61,7 +61,20 @@ void importer::flush(std::optional<type> schema) {
         auto concat_buffer_size = size_t{0};
         auto concat_buffer = std::vector<table_slice>{};
         const auto rotate_buffer = [&] {
-          auto events = concatenate(std::move(concat_buffer));
+          auto events_result = try_concatenate(std::move(concat_buffer));
+          if (not events_result) {
+            // At least one buffered slice is malformed (e.g. its record batch
+            // disagrees with its schema). We cannot tell which one, so we
+            // drop this buffer: losing one buffer of events is preferable to
+            // terminating the importer and with it the whole node.
+            TENZIR_ERROR("{} drops buffer of {} events because they failed "
+                         "to concatenate: {}",
+                         *self, concat_buffer_size, events_result.error());
+            concat_buffer_size = 0;
+            concat_buffer.clear();
+            return;
+          }
+          auto events = std::move(*events_result);
           TENZIR_ASSERT(events.rows() > 0);
           events.import_time(time::clock::now());
           if (not is_internal) {

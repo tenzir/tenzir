@@ -1,0 +1,16 @@
+{
+  x: null,
+}
+{
+  x: null,
+}
+{
+  x: null,
+}
+warning: failed to parse string
+ --> tests/functions/duration/invalid_input_dedup.tql:8:5
+  |
+8 | x = x.duration()
+  |     ~ 
+  |
+  = note: tried to convert: not a duration

@@ -1,0 +1,7 @@
+error: Splunk search failed: The search could not be parsed.
+  --> tests/operators/from_splunk/fatal_message.tql:12:10
+   |
+12 |   search="| rest /services/missing",
+   |          ^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+   |
+   = note: search: | rest /services/missing

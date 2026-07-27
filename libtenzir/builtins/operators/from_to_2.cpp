@@ -18,7 +18,6 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/prepend_token.hpp>
 #include <tenzir/scope_linked.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql/fwd.hpp>

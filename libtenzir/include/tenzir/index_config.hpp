@@ -49,6 +49,35 @@ struct index_config {
   std::vector<rule> rules = {};
   double default_fp_rate = defaults::fp_rate;
 
+  /// The number of worker threads used to load partition synopses from disk
+  /// when the index starts up. Zero selects a default derived from the hardware
+  /// concurrency. Loading is dominated by I/O latency (especially on networked
+  /// storage such as NFS), so values above the core count can further reduce
+  /// startup time by keeping more requests in flight.
+  size_t load_concurrency = 0;
+
+  /// When set, Bloom-filter sketches are not deserialized when loading the
+  /// catalog at startup. Only string and IP fields use Bloom filters; the
+  /// corresponding fields are still registered, but with no synopsis, so the
+  /// catalog conservatively treats predicates on them as candidates (it may
+  /// return false positives, never false negatives). This drastically lowers
+  /// resident memory and startup cost for nodes with very many partitions, at
+  /// the price of coarser pruning for equality predicates on these
+  /// high-cardinality fields. Numeric and duration min/max synopses and time
+  /// synopses are never deferred, so range pruning (e.g. on a timestamp field)
+  /// is unaffected.
+  bool lazy_sketches = false;
+
+  /// When set, partition synopses are not verified when read from disk at
+  /// startup, and are instead verified once when written. Verification
+  /// recursively walks the entire FlatBuffers buffer, faulting in all of its
+  /// pages; skipping it on read avoids reading sketch payloads that are never
+  /// decoded (see `lazy_sketches`) and is the dominant startup cost on
+  /// networked storage. This trades robustness against on-disk corruption for
+  /// faster startup, so it should only be enabled when the storage backend is
+  /// trusted.
+  bool skip_synopsis_verification = false;
+
   template <class Inspector>
   friend auto inspect(Inspector& f, index_config& x) {
     return detail::apply_all(f, x.rules, x.default_fp_rate);

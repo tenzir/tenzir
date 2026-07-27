@@ -223,6 +223,15 @@ public:
     }
   }
 
+  /// Creates an events channel for a routing exchange (scatter, gather,
+  /// shuffle, or broadcast). Routing channels use a dedicated per-channel
+  /// limit and are expected to share one `ChannelId` across all lanes of an
+  /// exchange so their profiling stats collate into a single metric.
+  auto make_routing_channel(ChannelId id)
+    -> PushPull<OperatorMsg<table_slice>> {
+    return make_routing_events(std::move(id));
+  }
+
   /// Returns a per-operator CPU executor.
   virtual auto make_executor(OpId id, std::string name)
     -> folly::Executor::KeepAlive<>
@@ -256,6 +265,10 @@ protected:
   virtual auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;
 
   virtual auto make_events(ChannelId id) -> PushPull<OperatorMsg<table_slice>>
+    = 0;
+
+  virtual auto make_routing_events(ChannelId id)
+    -> PushPull<OperatorMsg<table_slice>>
     = 0;
 
   virtual auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> = 0;

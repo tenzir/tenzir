@@ -46,6 +46,10 @@ rec {
     ../test/tests/operators/from_http/tls_skip_peer_verification.tql
     ../test/tests/operators/from_http/url_without_scheme.tql
 
+    # from_splunk TLS CA lookup failures
+    ../test/tests/operators/from_splunk/tls.tql
+    ../test/tests/operators/from_splunk/tls_skip_peer_verification.tql
+
     # accept_http is flaky in the sandbox.
     ../test/tests/operators/accept_http
 

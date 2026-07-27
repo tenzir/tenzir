@@ -75,7 +75,7 @@ public:
   virtual auto prints_utf8() const -> bool = 0;
 };
 
-/// @see operator_parser_plugin
+/// @see operator_plugin
 class printer_parser_plugin : public virtual plugin {
 public:
   virtual auto parse_printer(parser_interface& p) const

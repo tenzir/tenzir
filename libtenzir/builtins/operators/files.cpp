@@ -459,10 +459,6 @@ class plugin final : public virtual operator_plugin<files_operator>,
                      public virtual operator_factory_plugin,
                      public virtual OperatorPlugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.source = true};
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = files_args{};
@@ -472,18 +468,6 @@ public:
           .named("follow_symlinks", args.follow_directory_symlink)
           .named("skip_permission_denied", args.skip_permission_denied)
           .parse(inv, ctx));
-    return std::make_unique<files_operator>(std::move(args));
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"files", "https://tenzir.com/docs/"
-                                           "operators/files"};
-    auto args = files_args{};
-    parser.add(args.path, "<path>");
-    parser.add("-r,--recurse-directories", args.recurse_directories);
-    parser.add("--follow-directory-symlink", args.follow_directory_symlink);
-    parser.add("--skip-permission-denied", args.skip_permission_denied);
-    parser.parse(p);
     return std::make_unique<files_operator>(std::move(args));
   }
 

@@ -65,7 +65,7 @@ public:
   }
 };
 
-/// @see operator_parser_plugin
+/// @see operator_plugin
 class parser_parser_plugin : public virtual plugin {
 public:
   virtual auto parse_parser(parser_interface& p) const

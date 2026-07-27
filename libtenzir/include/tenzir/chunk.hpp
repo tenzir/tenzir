@@ -54,6 +54,27 @@ public:
       : ptr_{std::move(ptr)}, view_{view} {
     }
 
+    proxy(const proxy&) = default;
+    auto operator=(const proxy&) -> proxy& = default;
+
+    // The implicit member-wise move would null `ptr_` but leave `view_`
+    // intact, making a moved-from proxy indistinguishable from a valid
+    // non-owning view while it no longer keeps the pointed-to data alive.
+    // Clear the view explicitly so that using a moved-from chunk_ptr behaves
+    // like using a null chunk_ptr instead of silently reading freed memory.
+    proxy(proxy&& other) noexcept
+      : ptr_{std::exchange(other.ptr_, {})},
+        view_{std::exchange(other.view_, {})} {
+    }
+
+    auto operator=(proxy&& other) noexcept -> proxy& {
+      ptr_ = std::exchange(other.ptr_, {});
+      view_ = std::exchange(other.view_, {});
+      return *this;
+    }
+
+    ~proxy() = default;
+
     auto view() const noexcept -> view_type {
       return view_;
     }

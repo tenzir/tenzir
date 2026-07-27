@@ -1,0 +1,7 @@
+error: real-time Splunk searches are not supported
+ --> tests/operators/from_splunk/error_realtime_index_bound.tql:9:11
+  |
+9 |   options={index_earliest: "rt-15m"},
+  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^ `index_earliest` uses a real-time bound
+  |
+  = note: use a finite time bound instead

@@ -101,6 +101,29 @@ TEST("as_bytes") {
   CHECK_EQUAL(bytes, as_bytes(x));
 }
 
+TEST("moved-from chunk_ptr is empty") {
+  auto x = chunk::make(std::string{"foobarbaz"});
+  REQUIRE(x);
+  // Move construction must not leave the source pointing at data it no
+  // longer keeps alive.
+  auto y = std::move(x);
+  CHECK(y);
+  CHECK(not x);                             // NOLINT(bugprone-use-after-move)
+  CHECK_EQUAL(as_bytes(x).size(), 0u);      // NOLINT(bugprone-use-after-move)
+  CHECK_EQUAL(as_bytes(x).data(), nullptr); // NOLINT(bugprone-use-after-move)
+  // The same holds for move assignment.
+  auto z = chunk::make(std::string{"quxquux"});
+  z = std::move(y);
+  CHECK(z);
+  CHECK(not y);                        // NOLINT(bugprone-use-after-move)
+  CHECK_EQUAL(as_bytes(y).size(), 0u); // NOLINT(bugprone-use-after-move)
+  // Slices of a moved-from chunk_ptr are unaffected.
+  auto s = z->slice(3, 3);
+  auto w = std::move(z);
+  CHECK_EQUAL(s->size(), 3u);
+  CHECK_EQUAL(w->size(), 9u);
+}
+
 namespace {
 
 struct fixture : public fixtures::filesystem {

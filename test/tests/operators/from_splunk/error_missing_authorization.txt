@@ -1,0 +1,6 @@
+error: `headers` must contain an `Authorization` header
+ --> tests/operators/from_splunk/error_missing_authorization.tql:9:11
+  |
+9 |   headers={Accept: "application/json"}
+  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |

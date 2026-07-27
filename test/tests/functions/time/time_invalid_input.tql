@@ -1,0 +1,4 @@
+from {
+  x: "definitely not a time",
+}
+x = x.time()

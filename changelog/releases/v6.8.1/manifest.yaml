@@ -1,0 +1,10 @@
+created: 2026-07-24
+title: Store Integrity and Timestamp Fixes
+intro: >-
+  This release fixes two defects that could write corrupt data into persisted store
+  files and keeps subscribers running when a publisher finishes. It also improves
+  timestamp handling across the board, from datetime literals with timezone offsets
+  to clearer warnings for unparsable values.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.8.0

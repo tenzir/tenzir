@@ -73,8 +73,13 @@ auto get_proxy_settings() -> const proxy_settings&;
 
 /// Returns the comma-separated no-proxy list handed to backend APIs. This
 /// preserves the user-provided `tenzir.no-proxy` list but prepends Tenzir's
-/// implicit loopback bypass entries.
+/// implicit loopback and link-local IPv4/IPv6 bypass entries.
 auto effective_no_proxy(proxy_settings const& settings) -> std::string;
+
+/// Returns the no-proxy list for a specific target host. When a scoped IPv6
+/// literal matches a CIDR entry, this includes its unscoped literal as well so
+/// libcurl versions that do not CIDR-match zone identifiers bypass the proxy.
+auto effective_no_proxy_for_target(std::string_view host) -> std::string;
 
 /// Returns true when `host` matches the `no-proxy` bypass list.
 ///

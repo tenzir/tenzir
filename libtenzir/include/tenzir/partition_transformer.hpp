@@ -17,6 +17,7 @@
 #include <caf/typed_event_based_actor.hpp>
 
 #include <filesystem>
+#include <optional>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -151,6 +152,14 @@ struct partition_transformer_state {
   std::variant<std::monostate, stores_are_finished, transformer_is_finished>
     shutdown_state;
 };
+
+/// Extracts the uuid of the partition a store read error is attributed to,
+/// if the error carries one. Errors from decoding a partition's store (e.g.
+/// a corrupt/truncated backing file) are tagged with the offending
+/// partition's uuid so that callers processing a batch of partitions (e.g.
+/// the rebuilder) can identify exactly which partition failed instead of
+/// having to treat the whole batch as suspect.
+auto store_error_partition(const caf::error& err) -> std::optional<uuid>;
 
 /// Spawns a PARTITION TRANSFORMER actor with the given parameters.
 ///

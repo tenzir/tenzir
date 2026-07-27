@@ -1,0 +1,6 @@
+error: `earliest` must not be empty
+ --> tests/operators/from_splunk/error_empty_variable_time_bound.tql:9:12
+  |
+9 |   earliest=$earliest,
+  |            ^^^^^^^^^ 
+  |

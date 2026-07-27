@@ -100,7 +100,6 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
                   use_neo_executor ? R"(from_stdin { read_json })"
                                    : cfg.implicit_events_source);
   cfg.multi = caf::get_or(inv.options, "tenzir.exec.multi", cfg.multi);
-  cfg.legacy = caf::get_or(inv.options, "tenzir.legacy", cfg.legacy);
   cfg.strict = caf::get_or(inv.options, "tenzir.exec.strict", cfg.strict);
   auto profile_str
     = caf::get_or(inv.options, "tenzir.exec.profile", std::string{});

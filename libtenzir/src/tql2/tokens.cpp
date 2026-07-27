@@ -134,7 +134,8 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
       ->* [] { return tk::ip; }
     | ignore(+digit >> '-' >> +digit >> '-' >> +digit
         >> *(alnum | ':' | '+' | '-') >> ~('.' >> +digit)
-        >> ~('Z' | (('+' | '-') >> +digit)))
+        >> ~(ch<'Z'> | lit{"GMT"} | lit{"UTC"} | lit{"UT"}
+          | ((ch<'+'> | '-') >> +digit >> ~(ch<':'> >> +digit))))
       ->* [] { return tk::datetime; }
     | ignore(digit >> *digit_us >> -('.' >> digit >> *digit_us) >> -identifier)
       ->* [] { return tk::scalar; }

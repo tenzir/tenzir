@@ -48,8 +48,15 @@ void continue_query(auto self, const uuid& query_id) {
     self->state().running_extractions.erase(it);
     return;
   }
-  state.num_hits += slice->rows();
-  self->mail(std::move(*slice))
+  if (not *slice) {
+    TENZIR_WARN("{} failed to extract query {}: {}", *self, query_id,
+                slice->error());
+    state.rp.deliver(std::move(slice->error()));
+    self->state().running_extractions.erase(it);
+    return;
+  }
+  state.num_hits += slice->value().rows();
+  self->mail(std::move(slice->value()))
     .request(state.sink, caf::infinite)
     .then(
       [self, query_id] {
@@ -87,7 +94,11 @@ caf::result<uint64_t>
 handle_query(const auto& self, const query_context& query_context) {
   TENZIR_DEBUG("{} got a query: {}", *self, query_context);
   const auto start = std::chrono::steady_clock::now();
-  const auto schema = self->state().store->schema();
+  auto schema_result = self->state().store->schema();
+  if (not schema_result) {
+    return std::move(schema_result.error());
+  }
+  const auto& schema = *schema_result;
   const auto tailored_expr = tailor(query_context.expr, schema);
   if (not tailored_expr) {
     // In case the query was delegated from an active partition the
@@ -131,22 +142,35 @@ handle_query(const auto& self, const query_context& query_context) {
 
 } // namespace
 
-type base_store::schema() const {
-  for (const auto& slice : slices()) {
-    return slice.schema();
+caf::expected<type> base_store::schema() const {
+  for (auto&& slice : slices()) {
+    if (not slice) {
+      return std::move(slice.error());
+    }
+    return slice->schema();
   }
-  return {};
+  return type{};
 }
 
-generator<uint64_t> base_store::count(expression expr, ids selection) const {
-  for (const auto& slice : slices()) {
-    co_yield count_matching(slice, expr, selection);
+generator<caf::expected<uint64_t>>
+base_store::count(expression expr, ids selection) const {
+  for (auto&& slice : slices()) {
+    if (not slice) {
+      co_yield std::move(slice.error());
+      co_return;
+    }
+    co_yield count_matching(*slice, expr, selection);
   }
 }
 
-generator<table_slice> base_store::extract(expression expr) const {
-  for (const auto& slice : slices()) {
-    if (auto filtered_slice = filter(slice, expr)) {
+generator<caf::expected<table_slice>>
+base_store::extract(expression expr) const {
+  for (auto&& slice : slices()) {
+    if (not slice) {
+      co_yield std::move(slice.error());
+      co_return;
+    }
+    if (auto filtered_slice = filter(*slice, expr)) {
       co_yield std::move(*filtered_slice);
     }
   }
@@ -191,11 +215,21 @@ default_passive_store_actor::behavior_type default_passive_store(
     },
     [self](atom::erase, const ids& selection) -> caf::result<uint64_t> {
       // For new, partition-local stores we know that we always erase
-      // everything.
-      const auto num_events = self->state().store->num_events();
+      // everything. Erasing must also work for a corrupt store whose event
+      // count cannot be determined anymore — deleting the broken file is
+      // exactly the remediation path — so a count failure only degrades the
+      // reported number of erased events to zero.
+      const auto num_events_result = self->state().store->num_events();
+      if (not num_events_result) {
+        TENZIR_WARN("{} failed to count events of store scheduled for "
+                    "erasure: {}",
+                    *self, num_events_result.error());
+      }
+      const auto num_events
+        = num_events_result ? *num_events_result : uint64_t{0};
       TENZIR_DEBUG("{} erases {} events", *self, num_events);
       TENZIR_UNUSED(selection);
-      TENZIR_ASSERT_EXPENSIVE(rank(selection) == 0
+      TENZIR_ASSERT_EXPENSIVE(not num_events_result or rank(selection) == 0
                               or rank(selection) == num_events);
       auto rp = self->make_response_promise<uint64_t>();
       self->mail(atom::erase_v, self->state().path)
@@ -226,15 +260,23 @@ default_active_store_actor::behavior_type default_active_store(
     [self](atom::query,
            const query_context& query_context) -> caf::result<uint64_t> {
       TENZIR_DEBUG("{} starts working on query {}", *self, query_context.id);
-      if (self->state().store->num_events() == 0) {
+      const auto num_events = self->state().store->num_events();
+      if (not num_events) {
+        return num_events.error();
+      }
+      if (*num_events == 0) {
         return 0ull;
       }
       return handle_query<default_active_store_actor>(self, query_context);
     },
-    [self](atom::erase, const ids& selection) {
+    [self](atom::erase, const ids& selection) -> caf::result<uint64_t> {
       // For new, partition-local stores we know that we always erase
       // everything.
-      const auto num_events = self->state().store->num_events();
+      const auto num_events_result = self->state().store->num_events();
+      if (not num_events_result) {
+        return num_events_result.error();
+      }
+      const auto num_events = *num_events_result;
       TENZIR_UNUSED(selection);
       TENZIR_ASSERT_EXPENSIVE(rank(selection) == 0
                               or rank(selection) == num_events);
@@ -289,14 +331,18 @@ default_active_store_actor::behavior_type default_active_store(
     },
     [self](atom::get) -> caf::result<std::vector<table_slice>> {
       auto result = std::vector<table_slice>{};
-      for (auto slice : self->state().store->slices()) {
-        result.push_back(std::move(slice));
+      for (auto&& slice : self->state().store->slices()) {
+        if (not slice) {
+          return std::move(slice.error());
+        }
+        result.push_back(std::move(*slice));
       }
       return result;
     },
     [self](atom::status, status_verbosity, duration) {
+      const auto num_events = self->state().store->num_events();
       return record{
-        {"events", self->state().store->num_events()},
+        {"events", num_events ? *num_events : uint64_t{0}},
         {"path", self->state().path.string()},
         {"store-type", self->state().store_type},
       };

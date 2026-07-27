@@ -1,0 +1,6 @@
+error: `search` must not be empty
+ --> tests/operators/from_splunk/error_empty_search.tql:6:10
+  |
+6 |   search="",
+  |          ^^ 
+  |

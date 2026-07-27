@@ -1,0 +1,6 @@
+error: real-time Splunk searches are not supported
+ --> tests/operators/from_splunk/error_realtime_rt_option.tql:9:11
+  |
+9 |   options={rt_queue_size: 1000},
+  |           ^^^^^^^^^^^^^^^^^^^^^ `options` contains the real-time parameter `rt_queue_size`
+  |

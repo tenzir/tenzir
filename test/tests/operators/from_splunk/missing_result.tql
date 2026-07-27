@@ -1,0 +1,10 @@
+---
+fixtures: [http_server]
+---
+
+from_splunk env("HTTP_FIXTURE_SPLUNK_MISSING_RESULT_URL"),
+  search="fixture",
+  earliest="-15m",
+  latest="-5m",
+  headers={Authorization: "Splunk test-token"},
+  tls=false

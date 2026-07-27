@@ -1,0 +1,6 @@
+error: real-time Splunk searches are not supported
+ --> tests/operators/from_splunk/error_realtime_option.tql:9:11
+  |
+9 |   options={indexedRealtime: true},
+  |           ^^^^^^^^^^^^^^^^^^^^^^^ `options` contains the real-time parameter `indexedRealtime`
+  |

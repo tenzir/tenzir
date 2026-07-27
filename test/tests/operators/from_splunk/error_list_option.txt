@@ -1,0 +1,7 @@
+error: list-valued Splunk options are not supported
+ --> tests/operators/from_splunk/error_list_option.tql:9:11
+  |
+9 |   options={rf: ["host", "source"]},
+  |           ^^^^^^^^^^^^^^^^^^^^^^^^ `options.rf` contains a list
+  |
+  = note: pass a single value for `rf`

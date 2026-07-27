@@ -14,6 +14,7 @@
 #include <tenzir/chunk.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/data.hpp>
+#include <tenzir/detail/feather.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/fwd.hpp>
@@ -57,20 +58,25 @@ auto emit_with_location(DiagnosticBuilder&& diag, DiagnosticHandler& dh,
   std::forward<DiagnosticBuilder>(diag).emit(dh);
 }
 
+// Partitions written by VAST (supported indefinitely since partition
+// version 2, see `config.cpp.in`) carry `VAST:`-prefixed schema metadata
+// instead of `TENZIR:`; the type deserialization accepts both prefixes (see
+// the prefix parser in `type.cpp`), so envelope detection must as well.
+
 template <class Metadata>
 auto has_tenzir_name_metadata(std::shared_ptr<Metadata> const& metadata)
   -> bool {
   return metadata
-         and std::find(metadata->keys().begin(), metadata->keys().end(),
-                       "TENZIR:name:0")
-               != metadata->keys().end();
+         and std::ranges::any_of(metadata->keys(), [](std::string const& key) {
+               return key == "TENZIR:name:0" or key == "VAST:name:0";
+             });
 }
 
 template <class Metadata>
 auto has_tenzir_metadata(std::shared_ptr<Metadata> const& metadata) -> bool {
   return metadata
          and std::ranges::any_of(metadata->keys(), [](std::string const& key) {
-               return key.starts_with("TENZIR:");
+               return key.starts_with("TENZIR:") or key.starts_with("VAST:");
              });
 }
 
@@ -232,24 +238,62 @@ class passive_feather_store final : public passive_store {
     return {};
   }
 
-  [[nodiscard]] auto slices() const -> generator<table_slice> override {
+  [[nodiscard]] auto slices() const
+    -> generator<caf::expected<table_slice>> override {
     if (not chunk_) {
       co_return;
     }
     auto decode_result = decode_ipc_file(make_chunk_view());
     if (not decode_result) {
-      TENZIR_ASSERT(false, "failed to decode feather store after load");
+      co_yield caf::make_error(ec::format_error,
+                               fmt::format("failed to decode feather store "
+                                           "after load: {}",
+                                           decode_result.error()));
       co_return;
     }
     auto batches = std::move(*decode_result);
     auto offset = id{};
     auto schema = schema_;
     for (auto it = batches.begin(); it != batches.end(); ++it) {
-      auto batch = check(std::move(*it));
-      TENZIR_ASSERT(batch);
+      auto batch_result = std::move(*it);
+      if (not batch_result) {
+        co_yield std::move(batch_result.error());
+        co_return;
+      }
+      auto batch = std::move(*batch_result);
+      // A damaged store can decode as a valid Arrow IPC file whose batches
+      // are not store envelopes (e.g. a missing or non-struct `event`
+      // column); `unwrap_record_batch` would dereference the missing column,
+      // so validate the envelope shape first.
+      if (not is_store_envelope(batch)) {
+        co_yield caf::make_error(ec::format_error,
+                                 "record batch in feather store is not a "
+                                 "valid store envelope");
+        co_return;
+      }
+      // `is_store_envelope` only inspects the schema and `try_from` below
+      // only validates the unwrapped `event` batch, so corrupt array data in
+      // the envelope itself (e.g. an undersized `import_time` buffer) would
+      // still assert in `derive_import_time`. Structurally validate the
+      // whole envelope batch before taking it apart.
+      if (auto status = batch->Validate(); not status.ok()) {
+        co_yield caf::make_error(
+          ec::format_error,
+          fmt::format("record batch in feather store failed validation: {}",
+                      status.ToStringWithoutContextLines()));
+        co_return;
+      }
       auto import_time_column = batch->GetColumnByName("import_time");
-      auto slice = schema ? table_slice{unwrap_record_batch(batch), *schema}
-                          : table_slice{unwrap_record_batch(batch)};
+      auto slice_result
+        = schema ? table_slice::try_from(unwrap_record_batch(batch), *schema)
+                 : table_slice::try_from(unwrap_record_batch(batch));
+      if (not slice_result) {
+        co_yield caf::make_error(ec::format_error,
+                                 fmt::format("failed to read record batch: {}",
+                                             slice_result.error().message));
+        co_return;
+      }
+      auto slice = std::move(*slice_result);
       if (not schema) {
         schema = slice.schema();
         schema_ = schema;
@@ -261,21 +305,29 @@ class passive_feather_store final : public passive_store {
     }
   }
 
-  [[nodiscard]] auto num_events() const -> uint64_t override {
+  [[nodiscard]] auto num_events() const -> caf::expected<uint64_t> override {
     if (not num_events_) {
-      num_events_ = count_rows();
+      auto rows = count_rows();
+      if (not rows) {
+        return std::move(rows.error());
+      }
+      num_events_ = *rows;
     }
     return *num_events_;
   }
 
-  [[nodiscard]] auto schema() const -> type override {
+  [[nodiscard]] auto schema() const -> caf::expected<type> override {
     if (schema_) {
       return *schema_;
     }
     for (const auto& slice : slices()) {
-      return slice.schema();
+      if (not slice) {
+        return slice.error();
+      }
+      return slice->schema();
     }
-    TENZIR_ASSERT(false, "store must not be empty");
+    return caf::make_error(ec::format_error,
+                           "failed to derive schema from empty feather store");
   }
 
 private:
@@ -284,13 +336,24 @@ private:
     return chunk_->slice(0, chunk_->size());
   }
 
-  [[nodiscard]] auto count_rows() const -> uint64_t {
+  [[nodiscard]] auto count_rows() const -> caf::expected<uint64_t> {
     auto reader_result = arrow::ipc::RecordBatchFileReader::Open(
       as_arrow_file(make_chunk_view()), arrow_ipc_read_options());
-    check(reader_result.status());
+    if (not reader_result.ok()) {
+      return caf::make_error(
+        ec::format_error,
+        fmt::format("failed to open feather store for counting: {}",
+                    reader_result.status().ToStringWithoutContextLines()));
+    }
     auto reader = reader_result.MoveValueUnsafe();
-    auto rows = check(reader->CountRows());
-    return detail::narrow_cast<uint64_t>(rows);
+    auto rows = reader->CountRows();
+    if (not rows.ok()) {
+      return caf::make_error(
+        ec::format_error,
+        fmt::format("failed to count rows of feather store: {}",
+                    rows.status().ToStringWithoutContextLines()));
+    }
+    return detail::narrow_cast<uint64_t>(rows.MoveValueUnsafe());
   }
 
   chunk_ptr chunk_;
@@ -372,14 +435,15 @@ public:
     return chunk::make(buffer.MoveValueUnsafe());
   }
 
-  [[nodiscard]] auto slices() const -> generator<table_slice> override {
+  [[nodiscard]] auto slices() const
+    -> generator<caf::expected<table_slice>> override {
     rebatch();
     for (auto& slice : slices_) {
       co_yield slice;
     }
   }
 
-  [[nodiscard]] auto num_events() const -> uint64_t override {
+  [[nodiscard]] auto num_events() const -> caf::expected<uint64_t> override {
     return num_events_;
   }
 
@@ -442,8 +506,15 @@ private:
 auto make_table_slice(std::shared_ptr<arrow::RecordBatch> batch,
                       diagnostic_handler& dh, location operator_location)
   -> std::optional<table_slice> {
-  auto validate_status = batch->Validate();
-  TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+  // Feather input is externally sourced, so a batch that decodes but fails
+  // structural validation is malformed input, not a programming error.
+  if (auto status = batch->Validate(); not status.ok()) {
+    emit_with_location(diagnostic::error("Feather input contains an invalid "
+                                         "record batch")
+                         .note("{}", status.ToStringWithoutContextLines()),
+                       dh, operator_location);
+    return std::nullopt;
+  }
   if (is_store_envelope(batch)) {
     auto import_time_column = batch->GetColumnByName("import_time");
     auto unwrapped = ensure_tenzir_name_metadata(
@@ -483,76 +554,6 @@ public:
 
   std::queue<std::shared_ptr<arrow::RecordBatch>> record_batch_buffer;
 };
-
-auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
-  -> generator<table_slice> {
-  auto byte_reader = make_byte_reader(std::move(input));
-  auto listener = std::make_shared<callback_listener>();
-  auto stream_decoder
-    = arrow::ipc::StreamDecoder(listener, arrow_ipc_read_options());
-  auto truncated_bytes = size_t{0};
-  auto decoded_once = false;
-  while (true) {
-    auto required_size
-      = detail::narrow_cast<size_t>(stream_decoder.next_required_size());
-    if (required_size == 0) {
-      co_return;
-    }
-    auto payload = byte_reader(required_size);
-    if (not payload) {
-      co_yield {};
-      continue;
-    }
-    truncated_bytes += payload->size();
-    if (payload->size() < required_size) {
-      if (truncated_bytes != 0 and payload->size() != 0) {
-        // Ideally this always would be just a warning, but the stream decoder
-        // happily continues to consume invalid bytes. E.g., trying to read a
-        // JSON file with this parser will just swallow all bytes, emitting this
-        // one error at the very end. Not a single time does consuming a buffer
-        // actually fail. We should probably look into limiting the memory usage
-        // here, as the stream decoder will keep consumed-but-not-yet-converted
-        // buffers in memory.
-        diagnostic::warning("truncated {} trailing bytes", truncated_bytes)
-          .severity(decoded_once ? severity::warning : severity::error)
-          .emit(ctrl.diagnostics());
-      }
-      co_return;
-    }
-    auto decode_result
-      = stream_decoder.Consume(as_arrow_buffer(std::move(payload)));
-    if (not decode_result.ok()) {
-      diagnostic::error("{}", decode_result.ToStringWithoutContextLines())
-        .note("failed to decode the byte stream into a record batch")
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    while (not listener->record_batch_buffer.empty()) {
-      decoded_once = true;
-      truncated_bytes = 0;
-      auto batch = listener->record_batch_buffer.front();
-      listener->record_batch_buffer.pop();
-      auto validate_status = batch->Validate();
-      TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
-      // We check whether the name metadatum from Tenzir's conversion to record
-      // batches is still present. If it is not, then we stop parsing because we
-      // cannot feasibly continue.
-      // TODO: Implement a best-effort conversion for record batches coming from
-      // other tools to Tenzir's supported subset and required metadata.
-      const auto& metadata = batch->schema()->metadata();
-      if (not metadata
-          or std::find(metadata->keys().begin(), metadata->keys().end(),
-                       "TENZIR:name:0")
-               == metadata->keys().end()) {
-        diagnostic::error("not implemented")
-          .note("cannot convert Feather without Tenzir metadata")
-          .emit(ctrl.diagnostics());
-        co_return;
-      }
-      co_yield table_slice(batch);
-    }
-  }
-}
 
 auto print_feather(
   table_slice input, operator_control_plane& ctrl,
@@ -622,7 +623,7 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    return parse_feather(std::move(input), ctrl);
+    return detail::parse_feather(std::move(input), ctrl.diagnostics());
   }
 
   friend auto inspect(auto& f, feather_parser& x) -> bool {

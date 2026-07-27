@@ -1,0 +1,6 @@
+error: `headers` must be a record
+ --> tests/operators/from_splunk/error_invalid_headers.tql:9:11
+  |
+9 |   headers="Authorization: Splunk test-token"
+  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |

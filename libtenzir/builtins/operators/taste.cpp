@@ -99,19 +99,6 @@ class plugin final : public virtual operator_plugin<taste_operator>,
                      public virtual operator_factory_plugin,
                      public virtual OperatorPlugin {
 public:
-  auto signature() const -> operator_signature override {
-    return {.transformation = true};
-  }
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"taste", "https://tenzir.com/docs/"
-                                           "operators/taste"};
-    auto count = std::optional<uint64_t>{};
-    parser.add(count, "<limit>");
-    parser.parse(p);
-    return std::make_unique<taste_operator>(count.value_or(10));
-  }
-
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto count = std::optional<uint64_t>{};

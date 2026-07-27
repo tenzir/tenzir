@@ -133,6 +133,28 @@ caf::error convert(const data& src, index_config& dst) {
       dst.rules.push_back(std::move(rule));
     }
   }
+  if (auto load_concurrency = try_get<int64_t>(*rec, "load-concurrency")) {
+    if (*load_concurrency && **load_concurrency > 0) {
+      dst.load_concurrency = static_cast<size_t>(**load_concurrency);
+    }
+  } else {
+    return std::move(load_concurrency.error());
+  }
+  if (auto lazy_sketches = try_get<bool>(*rec, "lazy-sketches")) {
+    if (*lazy_sketches) {
+      dst.lazy_sketches = **lazy_sketches;
+    }
+  } else {
+    return std::move(lazy_sketches.error());
+  }
+  if (auto skip_synopsis_verification
+      = try_get<bool>(*rec, "skip-synopsis-verification")) {
+    if (*skip_synopsis_verification) {
+      dst.skip_synopsis_verification = **skip_synopsis_verification;
+    }
+  } else {
+    return std::move(skip_synopsis_verification.error());
+  }
   return caf::none;
 }
 
