@@ -1,0 +1,4 @@
+data dir exists: True
+writer failed: True
+rows: [1]
+snapshots: 1

@@ -45,8 +45,11 @@ to_iceberg "{TABLE}", catalog="{catalog_uri}", mode="create_append", max_size=1
     writer.stdin.flush()
     # Wait for the writer to create the table and commit the first row, so
     # that its in-memory table handle predates the external evolution below.
+    # The deadline carries generous headroom: an ASan-instrumented debug
+    # build on a loaded machine has been measured taking close to 30s for
+    # the first commit.
     catalog = RestCatalog("test", uri=catalog_uri)
-    deadline = time.monotonic() + 30
+    deadline = time.monotonic() + 120
     while time.monotonic() < deadline:
         try:
             if catalog.load_table(TABLE).scan().to_arrow().num_rows >= 1:
@@ -70,7 +73,7 @@ to_iceberg "{TABLE}", catalog="{catalog_uri}", mode="create_append", max_size=1
     # The running writer now needs the same column: its schema update
     # conflicts, and the retry against the reloaded table is a no-op.
     writer.stdin.write(json.dumps({"id": 3, "extra": 7}) + "\n")
-    _, stderr = writer.communicate(timeout=30)
+    _, stderr = writer.communicate(timeout=120)
     print(f"writer exited with {writer.returncode}")
     if writer.returncode != 0:
         raise RuntimeError(stderr)

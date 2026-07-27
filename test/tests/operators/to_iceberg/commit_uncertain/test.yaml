@@ -1,0 +1,12 @@
+suite: to-iceberg-commit-uncertain
+fixtures: [iceberg_rest]
+timeout: 300
+# Skipped pending an upstream iceberg-cpp fix. A commit whose success
+# response is lost is reported as a transient IOError rather than
+# CommitStateUnknown, and iceberg-cpp deletes the manifest list during its
+# cleanup. The server keeps the committed snapshot but it now references a
+# deleted manifest, so the table is unreadable and the operator's
+# uncertain-commit resolution never fires. See the repository note
+# iceberg-cpp-unknown-commit-state.md. Remove this skip once the upstream
+# fix lands to enforce exactly-once across lost commit responses.
+skip: "blocked on upstream iceberg-cpp lost-commit-response handling (see iceberg-cpp-unknown-commit-state.md)"

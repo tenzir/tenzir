@@ -1,0 +1,7 @@
+// Rows whose partition sources are null must land in the null partition,
+// never drop. The second row nulls all three sources at once, covering
+// the identity, day, and bucket transforms in one partition tuple.
+from {id: 1, ts: 2026-03-01T10:00:00Z, region: "eu", msg: "full"},
+     {id: null, ts: null, region: null, msg: "nullkeys"}
+to_iceberg "partns.nullkeys", catalog=env("ICEBERG_REST_URI"),
+  partition_by=[region, day(ts), bucket(id, 8)]
