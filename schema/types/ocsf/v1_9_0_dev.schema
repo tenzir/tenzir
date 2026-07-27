@@ -36,10 +36,14 @@ type _ocsf.v1_9_0_dev.object.account = record{
 
 // The Actor object contains details about the user, role, application, service,
 // or process that initiated or performed a specific activity. Note that Actor
-// is not the threat actor of a campaign but may be part of a campaign.
+// is not the threat actor of a campaign but may be part of a campaign. When the
+// initiator of the activity is an autonomous AI agent, apply the
+// <code>ai_operation</code> profile and populate
+// <code>ai_operation.ai_agent</code> rather than describing the agent here.
 type _ocsf.v1_9_0_dev.object.actor = record{
   app_name: string #optional,
   app_uid: string #optional,
+  application: _ocsf.v1_9_0_dev.object.application #recommended,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional,
   iam_role: _ocsf.v1_9_0_dev.object.iam_role #optional,
   idp: _ocsf.v1_9_0_dev.object.idp #optional,
@@ -145,6 +149,24 @@ type _ocsf.v1_9_0_dev.object.agent = record{
   uid_alt: string #optional,
   vendor_name: string #optional,
   version: string #optional,
+}
+
+// An autonomous AI agent that performs tasks under delegated authority.
+// Distinguished from the OCSF agent object (which describes security sensors
+// such as EDR and DLP tools) and from human principals. An AI agent has a
+// stable logical identity across runs and a restart-sensitive instance
+// identity. The agent owns its model; the ai_model attribute captures which
+// model was backing the agent at the time of action.
+type _ocsf.v1_9_0_dev.object.ai_agent = record{
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended,
+  charter: _ocsf.v1_9_0_dev.object.file #optional,
+  instance_uid: string #recommended,
+  name: string #recommended,
+  type: string #optional,
+  type_id: int64 #recommended #enum=486c4c56 #sibling=type,
+  uid: string #recommended,
+  uid_numeric: int64 #optional,
+  version: string #recommended,
 }
 
 // The AI Model object describes the characteristics of an AI/ML model. Examples
@@ -266,6 +288,7 @@ type _ocsf.v1_9_0_dev.object.application = record{
   labels: list<string> #optional,
   name: string #recommended,
   owner: _ocsf.v1_9_0_dev.object.user #recommended,
+  product: _ocsf.v1_9_0_dev.object.product #optional,
   region: string #optional #profile=cloud,
   resource_relationship: _ocsf.v1_9_0_dev.object.graph #optional,
   risk_level: string #optional,
@@ -296,8 +319,8 @@ type _ocsf.v1_9_0_dev.object.assessment = record{
   uid_numeric: int64 #optional,
 }
 
-// The MITRE ATT&CK® & ATLAS™ object describes the tactic, technique, sub-
-// technique & mitigation associated to an attack.
+// The Attack object describes the tactic, technique, sub-technique & mitigation
+// associated to an attack.
 type _ocsf.v1_9_0_dev.object.attack = record{
   mitigation: _ocsf.v1_9_0_dev.object.mitigation #optional,
   sub_technique: _ocsf.v1_9_0_dev.object.sub_technique #recommended,
@@ -305,6 +328,28 @@ type _ocsf.v1_9_0_dev.object.attack = record{
   tactics: list<_ocsf.v1_9_0_dev.object.tactic> #optional,
   technique: _ocsf.v1_9_0_dev.object.technique #recommended,
   version: string #recommended,
+}
+
+// A cryptographic attestation that an event has not been altered since it was
+// produced and was produced by the holder of a verifiable identity, providing
+// integrity, authenticity, and non-repudiation. The attestation is computed
+// over a canonical serialization of the event: the entire event, including the
+// attestation's own <code>authority_uid</code>, <code>chain_uid</code>, and
+// <code>prev_event</code> attributes, and excluding only the attestation's
+// <code>fingerprint</code> and <code>signatures</code>. Because
+// <code>prev_event</code> is inside the serialized content, deleting or
+// altering an event in a chain breaks the fingerprint and signatures of the
+// event that references it. An attestation may carry more than one signature
+// (for example, a co-signature, notary, or witness over the same event). The
+// verifiable identity is a technical credential, such as a key or certificate,
+// and is not an attribution of any person, organization, or state.
+type _ocsf.v1_9_0_dev.object.attestation = record{
+  authority_uid: string #recommended,
+  chain_uid: string #recommended,
+  fingerprint: _ocsf.v1_9_0_dev.object.fingerprint #recommended,
+  prev_event: _ocsf.v1_9_0_dev.object.prev_event #recommended,
+  signatures: list<_ocsf.v1_9_0_dev.object.digital_signature> #recommended,
+  uid: string #optional,
 }
 
 // An Authentication Factor object describes a category of methods used for
@@ -433,11 +478,8 @@ type _ocsf.v1_9_0_dev.object.check = record{
 }
 
 // The CIS Benchmark object describes best practices for securely configuring IT
-// systems, software, networks, and cloud infrastructure as defined by the <a
-// target='_blank' href='https://www.cisecurity.org/cis-benchmarks/'>Center for
-// Internet Security</a>. See also <a target='_blank'
-// href='https://www.cisecurity.org/insights/blog/getting-to-know-the-cis-
-// benchmarks'>Getting to Know the CIS Benchmarks</a>.
+// systems, software, networks, and cloud infrastructure as defined by the
+// Center for Internet Security. See also Getting to Know the CIS Benchmarks.
 type _ocsf.v1_9_0_dev.object.cis_benchmark = record{
   cis_controls: list<_ocsf.v1_9_0_dev.object.cis_control> #recommended,
   desc: string #optional,
@@ -445,10 +487,9 @@ type _ocsf.v1_9_0_dev.object.cis_benchmark = record{
 }
 
 // The CIS Benchmark Result object contains information as defined by the Center
-// for Internet Security (<a target='_blank'
-// href='https://www.cisecurity.org/cis-benchmarks/'>CIS</a>) benchmark result.
-// CIS Benchmarks are a collection of best practices for securely configuring IT
-// systems, software, networks, and cloud infrastructure.
+// for Internet Security (CIS) benchmark result. CIS Benchmarks are a collection
+// of best practices for securely configuring IT systems, software, networks,
+// and cloud infrastructure.
 type _ocsf.v1_9_0_dev.object.cis_benchmark_result = record{
   desc: string #optional,
   name: string #required,
@@ -458,9 +499,8 @@ type _ocsf.v1_9_0_dev.object.cis_benchmark_result = record{
 
 // The CIS Control (aka Critical Security Control) object describes a
 // prioritized set of actions to protect your organization and data from cyber-
-// attack vectors. The <a target='_blank'
-// href='https://www.cisecurity.org/controls'>CIS Controls</a> are defined by
-// the Center for Internet Security.
+// attack vectors. The CIS Controls are defined by the Center for Internet
+// Security.
 type _ocsf.v1_9_0_dev.object.cis_control = record{
   desc: string #optional,
   name: string #required,
@@ -468,9 +508,9 @@ type _ocsf.v1_9_0_dev.object.cis_control = record{
 }
 
 // The CIS Critical Security Control (CSC) contains information as defined by
-// the Center for Internet Security Critical Security Control <a target='_blank'
-// href='https://www.cisecurity.org/controls'>(CIS CSC)</a>. Prioritized set of
-// actions to protect your organization and data from cyber-attack vectors.
+// the Center for Internet Security Critical Security Controls (CIS CSC).
+// Prioritized set of actions to protect your organization and data from cyber-
+// attack vectors.
 type _ocsf.v1_9_0_dev.object.cis_csc = record{
   control: string #required,
   version: string #recommended,
@@ -568,9 +608,8 @@ type _ocsf.v1_9_0_dev.object.cpu_info = record{
 }
 
 // The Common Vulnerabilities and Exposures (CVE) object represents publicly
-// disclosed cybersecurity vulnerabilities defined in CVE Program catalog (<a
-// target='_blank' href='https://cve.mitre.org/'>CVE</a>). There is one CVE
-// Record for each vulnerability in the catalog.
+// disclosed cybersecurity vulnerabilities defined in CVE Program catalog (CVE).
+// There is one CVE Record for each vulnerability in the catalog.
 type _ocsf.v1_9_0_dev.object.cve = record{
   created_time: time #epochtime #recommended,
   created_time_dt: time #optional #profile=datetime,
@@ -590,10 +629,9 @@ type _ocsf.v1_9_0_dev.object.cve = record{
   uid: string #required,
 }
 
-// The Common Vulnerability Scoring System (<a target='_blank'
-// href='https://www.first.org/cvss/'>CVSS</a>) object provides a way to capture
-// the principal characteristics of a vulnerability and produce a numerical
-// score reflecting its severity.
+// The Common Vulnerability Scoring System (CVSS) object provides a way to
+// capture the principal characteristics of a vulnerability and produce a
+// numerical score reflecting its severity.
 type _ocsf.v1_9_0_dev.object.cvss = record{
   base_score: double #required,
   depth: string #recommended,
@@ -608,15 +646,14 @@ type _ocsf.v1_9_0_dev.object.cvss = record{
 
 // The CWE object represents a weakness in a software system that can be
 // exploited by a threat actor to perform an attack. The CWE object is based on
-// the <a target='_blank' href='https://cwe.mitre.org/'>Common Weakness
-// Enumeration (CWE)</a> catalog.
+// the Common Weakness Enumeration (CWE) catalog.
 type _ocsf.v1_9_0_dev.object.cwe = record{
   caption: string #optional,
   src_url: string #optional,
   uid: string #required,
 }
 
-// The MITRE D3FEND™ Tactic object describes the tactic ID and/or name that is
+// The Defensive Tactic object describes the tactic ID and/or name that is
 // associated to an attack.
 type _ocsf.v1_9_0_dev.object.d3f_tactic = record{
   name: string #recommended,
@@ -625,7 +662,7 @@ type _ocsf.v1_9_0_dev.object.d3f_tactic = record{
   uid_numeric: int64 #optional,
 }
 
-// The MITRE D3FEND™ Technique object describes the leaf defensive technique ID
+// The Defensive Technique object describes the leaf defensive technique ID
 // and/or name associated to a countermeasure.
 type _ocsf.v1_9_0_dev.object.d3f_technique = record{
   name: string #recommended,
@@ -634,8 +671,8 @@ type _ocsf.v1_9_0_dev.object.d3f_technique = record{
   uid_numeric: int64 #optional,
 }
 
-// The MITRE D3FEND™ object describes the tactic & technique associated with a
-// countermeasure.
+// The Defensive Countermeasure object describes the tactic & technique
+// associated with a countermeasure.
 type _ocsf.v1_9_0_dev.object.d3fend = record{
   d3f_tactic: _ocsf.v1_9_0_dev.object.d3f_tactic #recommended,
   d3f_technique: _ocsf.v1_9_0_dev.object.d3f_technique #recommended,
@@ -759,6 +796,28 @@ type _ocsf.v1_9_0_dev.object.dce_rpc = record{
   rpc_interface: _ocsf.v1_9_0_dev.object.rpc_interface #required,
 }
 
+// A durable authorization context that a principal issues to a delegate (e.g.,
+// an application, automated process, service account, or AI agent),
+// representing delegated authority to act on the principal's behalf. Persists
+// independently of any single trace, session, or workflow instance, so the same
+// delegation can be referenced across many events. The principal and delegate
+// themselves are identified by the other objects on the event carrying this
+// delegation, such as <code>actor.user</code> or <code>actor.iam_role</code>
+// for the principal and <code>ai_operation.ai_agent</code> for an AI delegate.
+// The <code>delegation</code> object itself only carries the durable
+// identifiers used to correlate across those events. Delegations reference a
+// parent via <code>parent_uid</code>, forming a directed acyclic graph (DAG) of
+// re-delegations that supports lineage queries across the chain of authority.
+// This authority graph is distinct from any agent instantiation or
+// orchestration hierarchy, which may or may not coincide with it.
+type _ocsf.v1_9_0_dev.object.delegation = record{
+  created_time: time #epochtime #recommended,
+  created_time_dt: time #optional #profile=datetime,
+  issuer_uid: string #recommended,
+  parent_uid: string #optional,
+  uid: string #required,
+}
+
 // The Device object represents an addressable computer system or host, which is
 // typically connected to a computer network and participates in the
 // transmission or processing of data within the computer network.
@@ -865,14 +924,14 @@ type _ocsf.v1_9_0_dev.object.device_hw_info = record{
 // or application.
 type _ocsf.v1_9_0_dev.object.digital_signature = record{
   algorithm: string #optional,
-  algorithm_id: int64 #required #enum=27bb51c5 #sibling=algorithm,
+  algorithm_id: int64 #required #enum=6dcdaf2a #sibling=algorithm,
   certificate: _ocsf.v1_9_0_dev.object.certificate #recommended,
   created_time: time #epochtime #optional,
   created_time_dt: time #optional #profile=datetime,
   developer_uid: string #optional,
   digest: _ocsf.v1_9_0_dev.object.fingerprint #optional,
   serialization: string #optional,
-  serialization_id: int64 #recommended #enum=e7a0fb42 #sibling=serialization,
+  serialization_id: int64 #recommended #enum=4219758d #sibling=serialization,
   state: string #optional,
   state_id: int64 #optional #enum=70ec1806 #sibling=state,
 }
@@ -1105,8 +1164,7 @@ type _ocsf.v1_9_0_dev.object.environment_variable = record{
 // The Exploit Prediction Scoring System (EPSS) object describes the estimated
 // probability a vulnerability will be exploited. EPSS is a community-driven
 // effort to combine descriptive information about vulnerabilities (CVEs) with
-// evidence of actual exploitation in-the-wild. (<a target='_blank'
-// href='https://www.first.org/epss/'>EPSS</a>).
+// evidence of actual exploitation in-the-wild.
 type _ocsf.v1_9_0_dev.object.epss = record{
   created_time: time #epochtime #recommended,
   created_time_dt: time #optional #profile=datetime,
@@ -1119,6 +1177,7 @@ type _ocsf.v1_9_0_dev.object.epss = record{
 // triggered a security detection.
 type _ocsf.v1_9_0_dev.object.evidences = record{
   actor: _ocsf.v1_9_0_dev.object.actor #recommended,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #recommended,
   api: _ocsf.v1_9_0_dev.object.api #recommended,
   connection_info: _ocsf.v1_9_0_dev.object.network_connection_info #recommended,
   container: _ocsf.v1_9_0_dev.object.container #recommended,
@@ -1153,8 +1212,7 @@ type _ocsf.v1_9_0_dev.object.evidences = record{
 
 // The OCSF Schema Extension object provides detailed information about the
 // schema extension used to construct the event. The schema extensions are
-// registered in the <a target='_blank' href='https://github.com/ocsf/ocsf-
-// schema/blob/main/extensions.md'>extensions.md</a> file.
+// registered in the <code>extensions.md</code> file.
 type _ocsf.v1_9_0_dev.object.extension = record{
   name: string #recommended,
   uid: string #recommended,
@@ -1292,6 +1350,10 @@ type _ocsf.v1_9_0_dev.object.finding_info = record{
 type _ocsf.v1_9_0_dev.object.fingerprint = record{
   algorithm: string #optional,
   algorithm_id: int64 #required #enum=57a1e569 #sibling=algorithm,
+  encoding: string #optional,
+  encoding_id: int64 #recommended #enum=d52f217f #sibling=encoding,
+  serialization: string #optional,
+  serialization_id: int64 #optional #enum=4219758d #sibling=serialization,
   value: string #required,
 }
 
@@ -1631,8 +1693,6 @@ type _ocsf.v1_9_0_dev.object.keyboard_info = record{
 // including the initial reconnaissance and planning stages up to the final
 // objective of the attacker. It provides a detailed description of each phase
 // and its associated activities within the broader context of a cyber attack.
-// See <a target='_blank' href='https://www.lockheedmartin.com/en-
-// us/capabilities/cyber/cyber-kill-chain.html'>Cyber Kill Chain®</a>.
 type _ocsf.v1_9_0_dev.object.kill_chain_phase = record{
   phase: string #recommended,
   phase_id: int64 #required #enum=31424365 #sibling=phase,
@@ -2108,6 +2168,22 @@ type _ocsf.v1_9_0_dev.object.node = record{
   uid: string #required,
 }
 
+// Represents a note or a comment in the system. Notes can be used to provide
+// additional context, explanations, or observations related to an event,
+// object, or any other entity in the system. They can be created and modified
+// by users to capture important information that may not be directly
+// represented in the structured data.
+type _ocsf.v1_9_0_dev.object.note = record{
+  comment: string #required,
+  created_time: time #epochtime #recommended,
+  created_time_dt: time #optional #profile=datetime,
+  modified_time: time #epochtime #recommended,
+  modified_time_dt: time #optional #profile=datetime,
+  owner: _ocsf.v1_9_0_dev.object.user #recommended,
+  title: string #optional,
+  uid: string #optional,
+}
+
 // An unordered collection of attributes. It defines a set of attributes
 // available in all objects. It can be also used as a generic object to log
 // objects that are not otherwise defined by the schema.
@@ -2342,6 +2418,14 @@ type _ocsf.v1_9_0_dev.object.port_info = record{
   protocol_num: int64 #optional,
 }
 
+// The Previous Event object references the previous event in a chain of events.
+// Refer to specific usage.
+type _ocsf.v1_9_0_dev.object.prev_event = record{
+  fingerprint: _ocsf.v1_9_0_dev.object.fingerprint #optional,
+  type_uid: int64 #recommended,
+  uid: string #required,
+}
+
 // The Privilege Attack Info object groups privileges by the potential attack
 // they could enable. It maps specific privileges to MITRE ATT&CK techniques,
 // helping identify security risks associated with granted permissions.
@@ -2364,6 +2448,7 @@ type _ocsf.v1_9_0_dev.object.privilege_info = record{
 
 // The Process object describes a running instance of a launched program.
 type _ocsf.v1_9_0_dev.object.process_nonrecursive = record{
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
   ancestry: list<_ocsf.v1_9_0_dev.object.process_entity> #optional,
   auid: int64 #optional #profile=linux/linux_users #extension=linux,
   cmd_line: string #recommended,
@@ -2376,6 +2461,7 @@ type _ocsf.v1_9_0_dev.object.process_nonrecursive = record{
   euid: int64 #optional #profiles=linux/linux_users|macos/macos_users #profile_extensions=linux/linux_users:linux|macos/macos_users:macos,
   file: _ocsf.v1_9_0_dev.object.file #recommended,
   group: _ocsf.v1_9_0_dev.object.group #recommended #profile=linux/linux_users,
+  hosted_ai_agent_list: list<_ocsf.v1_9_0_dev.object.ai_agent> #optional #profile=ai_operation,
   hosted_services: list<_ocsf.v1_9_0_dev.object.win_service> #optional #extension=win,
   integrity: string #optional,
   integrity_id: int64 #optional #enum=18f0f537 #sibling=integrity,
@@ -2400,6 +2486,7 @@ type _ocsf.v1_9_0_dev.object.process_nonrecursive = record{
 
 // The Process object describes a running instance of a launched program.
 type _ocsf.v1_9_0_dev.object.process = record{
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
   ancestry: list<_ocsf.v1_9_0_dev.object.process_entity> #optional,
   auid: int64 #optional #profile=linux/linux_users #extension=linux,
   cmd_line: string #recommended,
@@ -2412,6 +2499,7 @@ type _ocsf.v1_9_0_dev.object.process = record{
   euid: int64 #optional #profiles=linux/linux_users|macos/macos_users #profile_extensions=linux/linux_users:linux|macos/macos_users:macos,
   file: _ocsf.v1_9_0_dev.object.file #recommended,
   group: _ocsf.v1_9_0_dev.object.group #recommended #profile=linux/linux_users,
+  hosted_ai_agent_list: list<_ocsf.v1_9_0_dev.object.ai_agent> #optional #profile=ai_operation,
   hosted_services: list<_ocsf.v1_9_0_dev.object.win_service> #optional #extension=win,
   integrity: string #optional,
   integrity_id: int64 #optional #enum=18f0f537 #sibling=integrity,
@@ -2687,8 +2775,7 @@ type _ocsf.v1_9_0_dev.object.scan = record{
 // identity provisioning and management across cloud-based platforms. It
 // standardizes user and group provisioning details, enabling identity
 // synchronization and lifecycle management with compatible Identity Providers
-// (IdPs) and applications. SCIM is defined in <a target='_blank'
-// href='https://datatracker.ietf.org/doc/html/rfc7643'>RFC-7634</a>
+// (IdPs) and applications. SCIM is defined in RFC 7634.
 type _ocsf.v1_9_0_dev.object.scim = record{
   auth_protocol: string #optional,
   auth_protocol_id: int64 #optional #enum=2bc60b78 #sibling=auth_protocol,
@@ -3066,9 +3153,7 @@ type _ocsf.v1_9_0_dev.object.tsig = record{
 // Location Information (PLI), and other metadata of Unmanned Aerial Systems
 // (UAS) and other unmanned and drone systems used in Remote ID. Remote ID is
 // defined in the Standard Specification for Remote ID and Tracking (ASTM
-// Designation: F3411-22a) <a target='_blank' href='https://cdn.standards.iteh.a
-// i/samples/112830/71297057ac42432880a203654f213709/ASTM-F3411-22a.pdf'>ASTM
-// F3411-22a</a>.
+// Designation: F3411-22a).
 type _ocsf.v1_9_0_dev.object.unmanned_aerial_system = record{
   hw_info: _ocsf.v1_9_0_dev.object.device_hw_info #optional,
   location: _ocsf.v1_9_0_dev.object.location #recommended,
@@ -3366,8 +3451,11 @@ type _ocsf.v1_9_0_dev.account_change = record{
   activity_id: int64 #required #enum=f937429c #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #recommended,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   auth_factors: list<_ocsf.v1_9_0_dev.object.auth_factor> #optional,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
@@ -3379,6 +3467,7 @@ type _ocsf.v1_9_0_dev.account_change = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -3393,6 +3482,7 @@ type _ocsf.v1_9_0_dev.account_change = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -3433,6 +3523,7 @@ type _ocsf.v1_9_0_dev.admin_group_query = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -3489,13 +3580,10 @@ type _ocsf.v1_9_0_dev.admin_group_query = record{
 
 // Airborne Broadcast Activity events report the activity of any aircraft or
 // unmanned system as reported and tracked by Automatic Dependent Surveillance -
-// Broadcast (ADS-B) receivers. Based on the ADS-B standards described in <a
-// target='_blank' href='https://www.ecfr.gov/current/title-14/chapter-
-// I/subchapter-F/part-91#91.225'>Code of Federal Regulations (CFR) Title 14
-// Chapter I Subchapter F Part 91</a> and in other general Federal Aviation
-// Administration (FAA) supplemental orders and guidance described <a
-// target='_blank' href='https://www.faa.gov/about/office_org/headquarters_offic
-// es/avs/offices/afx/afs/afs400/afs410/ads-b'>here</a>.
+// Broadcast (ADS-B) receivers. Based on the ADS-B standards described in Code
+// of Federal Regulations (CFR) Title 14 Chapter I Subchapter F Part 91 and in
+// other general Federal Aviation Administration (FAA) supplemental orders and
+// guidance.
 type _ocsf.v1_9_0_dev.airborne_broadcast_activity = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control #enum=10af4c36 #sibling=action,
@@ -3505,6 +3593,7 @@ type _ocsf.v1_9_0_dev.airborne_broadcast_activity = record{
   aircraft: _ocsf.v1_9_0_dev.object.aircraft #recommended,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d020dee1 #sibling=category_name,
@@ -3573,9 +3662,11 @@ type _ocsf.v1_9_0_dev.api_activity = record{
   activity_id: int64 #required #enum=885ca710 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #required,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
   ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #required,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=530c5aa6 #sibling=category_name,
@@ -3586,6 +3677,7 @@ type _ocsf.v1_9_0_dev.api_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -3645,8 +3737,11 @@ type _ocsf.v1_9_0_dev.application_error = record{
   activity_id: int64 #required #enum=ad2083d3 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=530c5aa6 #sibling=category_name,
@@ -3657,6 +3752,7 @@ type _ocsf.v1_9_0_dev.application_error = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -3669,6 +3765,7 @@ type _ocsf.v1_9_0_dev.application_error = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -3704,9 +3801,13 @@ type _ocsf.v1_9_0_dev.application_lifecycle = record{
   activity_id: int64 #required #enum=6f3fbbbf #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
-  app: _ocsf.v1_9_0_dev.object.product #required,
+  app: _ocsf.v1_9_0_dev.object.product #optional,
+  application: _ocsf.v1_9_0_dev.object.application #recommended,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=530c5aa6 #sibling=category_name,
@@ -3717,6 +3818,7 @@ type _ocsf.v1_9_0_dev.application_lifecycle = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -3729,6 +3831,7 @@ type _ocsf.v1_9_0_dev.application_lifecycle = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -3781,6 +3884,7 @@ type _ocsf.v1_9_0_dev.application_security_posture_finding = record{
   assignee: _ocsf.v1_9_0_dev.object.user #optional #profile=incident,
   assignee_group: _ocsf.v1_9_0_dev.object.group #optional #profile=incident,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=11fb8fb7 #sibling=category_name,
@@ -3811,6 +3915,7 @@ type _ocsf.v1_9_0_dev.application_security_posture_finding = record{
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
+  notes: list<_ocsf.v1_9_0_dev.object.note> #optional,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_9_0_dev.object.policy #optional #profile=security_control,
@@ -3862,8 +3967,11 @@ type _ocsf.v1_9_0_dev.authentication = record{
   activity_id: int64 #required #enum=9d6d9258 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #recommended,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   auth_factors: list<_ocsf.v1_9_0_dev.object.auth_factor> #optional,
   auth_protocol: string #recommended,
   auth_protocol_id: int64 #recommended #enum=2bc60b78 #sibling=auth_protocol,
@@ -3879,6 +3987,7 @@ type _ocsf.v1_9_0_dev.authentication = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -3901,6 +4010,7 @@ type _ocsf.v1_9_0_dev.authentication = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -3940,8 +4050,11 @@ type _ocsf.v1_9_0_dev.authorize_session = record{
   activity_id: int64 #required #enum=9861ed01 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #recommended,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=8c353181 #sibling=category_name,
@@ -3952,6 +4065,7 @@ type _ocsf.v1_9_0_dev.authorize_session = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -3970,6 +4084,7 @@ type _ocsf.v1_9_0_dev.authorize_session = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -4013,6 +4128,7 @@ type _ocsf.v1_9_0_dev.base_event = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=22f6b234 #sibling=category_name,
@@ -4070,8 +4186,11 @@ type _ocsf.v1_9_0_dev.clipboard_activity = record{
   activity_id: int64 #required #enum=3ab16722 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #required,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=81e233a1 #sibling=category_name,
@@ -4083,6 +4202,7 @@ type _ocsf.v1_9_0_dev.clipboard_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #required,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -4095,6 +4215,7 @@ type _ocsf.v1_9_0_dev.clipboard_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -4137,6 +4258,7 @@ type _ocsf.v1_9_0_dev.cloud_resources_inventory_info = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -4213,6 +4335,7 @@ type _ocsf.v1_9_0_dev.compliance_finding = record{
   assignee: _ocsf.v1_9_0_dev.object.user #optional #profile=incident,
   assignee_group: _ocsf.v1_9_0_dev.object.group #optional #profile=incident,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=11fb8fb7 #sibling=category_name,
@@ -4244,6 +4367,7 @@ type _ocsf.v1_9_0_dev.compliance_finding = record{
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
+  notes: list<_ocsf.v1_9_0_dev.object.note> #optional,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_9_0_dev.object.policy #optional #profile=security_control,
@@ -4292,6 +4416,7 @@ type _ocsf.v1_9_0_dev.device_config_state = record{
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   assessments: list<_ocsf.v1_9_0_dev.object.assessment> #optional,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -4366,6 +4491,7 @@ type _ocsf.v1_9_0_dev.data_security_finding = record{
   assignee: _ocsf.v1_9_0_dev.object.user #optional #profile=incident,
   assignee_group: _ocsf.v1_9_0_dev.object.group #optional #profile=incident,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=11fb8fb7 #sibling=category_name,
@@ -4400,6 +4526,7 @@ type _ocsf.v1_9_0_dev.data_security_finding = record{
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
+  notes: list<_ocsf.v1_9_0_dev.object.note> #optional,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_9_0_dev.object.policy #optional #profile=security_control,
@@ -4446,9 +4573,11 @@ type _ocsf.v1_9_0_dev.datastore_activity = record{
   activity_id: int64 #required #enum=6e8dcc90 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #required,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
   ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=530c5aa6 #sibling=category_name,
@@ -4461,6 +4590,7 @@ type _ocsf.v1_9_0_dev.datastore_activity = record{
   count: int64 #optional,
   database: _ocsf.v1_9_0_dev.object.database #recommended,
   databucket: _ocsf.v1_9_0_dev.object.databucket #recommended,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -4533,6 +4663,7 @@ type _ocsf.v1_9_0_dev.detection_finding = record{
   assignee: _ocsf.v1_9_0_dev.object.user #optional #profile=incident,
   assignee_group: _ocsf.v1_9_0_dev.object.group #optional #profile=incident,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=11fb8fb7 #sibling=category_name,
@@ -4563,6 +4694,7 @@ type _ocsf.v1_9_0_dev.detection_finding = record{
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional,
   message: string #recommended,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
+  notes: list<_ocsf.v1_9_0_dev.object.note> #optional,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_9_0_dev.object.policy #optional #profile=security_control,
@@ -4610,6 +4742,7 @@ type _ocsf.v1_9_0_dev.device_config_state_change = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -4675,8 +4808,11 @@ type _ocsf.v1_9_0_dev.device_power_state_activity = record{
   activity_id: int64 #required #enum=73c3cc1b #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=81e233a1 #sibling=category_name,
@@ -4687,6 +4823,7 @@ type _ocsf.v1_9_0_dev.device_power_state_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #required,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -4699,6 +4836,7 @@ type _ocsf.v1_9_0_dev.device_power_state_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -4734,10 +4872,13 @@ type _ocsf.v1_9_0_dev.dhcp_activity = record{
   activity_id: int64 #required #enum=ddbf6206 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   app_name: string #optional,
   app_protocol_name: string #optional,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=b5486cae #sibling=category_name,
@@ -4750,6 +4891,7 @@ type _ocsf.v1_9_0_dev.dhcp_activity = record{
   connection_info: _ocsf.v1_9_0_dev.object.network_connection_info #recommended,
   count: int64 #optional,
   cumulative_traffic: _ocsf.v1_9_0_dev.object.network_traffic #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -4767,6 +4909,7 @@ type _ocsf.v1_9_0_dev.dhcp_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   network_observation_point: _ocsf.v1_9_0_dev.object.network_endpoint #optional,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
@@ -4817,11 +4960,14 @@ type _ocsf.v1_9_0_dev.dns_activity = record{
   activity_id: int64 #required #enum=a0f62244 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   answers: list<_ocsf.v1_9_0_dev.object.dns_answer> #recommended,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   app_name: string #optional,
   app_protocol_name: string #optional,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authority: list<_ocsf.v1_9_0_dev.object.dns_resource_record> #optional,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
@@ -4835,6 +4981,7 @@ type _ocsf.v1_9_0_dev.dns_activity = record{
   connection_info: _ocsf.v1_9_0_dev.object.network_connection_info #optional,
   count: int64 #optional,
   cumulative_traffic: _ocsf.v1_9_0_dev.object.network_traffic #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -4852,6 +4999,7 @@ type _ocsf.v1_9_0_dev.dns_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   network_observation_point: _ocsf.v1_9_0_dev.object.network_endpoint #optional,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
@@ -4910,9 +5058,7 @@ type _ocsf.v1_9_0_dev.dns_activity = record{
 // reported by the UAS platforms themselves, by Counter-UAS (CUAS) systems, or
 // other remote monitoring or sensing infrastructure. Based on the Remote ID
 // defined in Standard Specification for Remote ID and Tracking (ASTM
-// Designation: F3411-22a) <a target='_blank' href='https://cdn.standards.iteh.a
-// i/samples/112830/71297057ac42432880a203654f213709/ASTM-F3411-22a.pdf'>ASTM
-// F3411-22a</a>
+// Designation: F3411-22a).
 type _ocsf.v1_9_0_dev.drone_flights_activity = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control #enum=10af4c36 #sibling=action,
@@ -4921,6 +5067,7 @@ type _ocsf.v1_9_0_dev.drone_flights_activity = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   auth_protocol: string #optional,
   auth_protocol_id: int64 #optional #enum=a9f825d2 #sibling=auth_protocol,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
@@ -4993,9 +5140,12 @@ type _ocsf.v1_9_0_dev.email_activity = record{
   activity_id: int64 #required #enum=0d26064b #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
   attempt: int64 #optional,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   banner: string #optional,
   category_name: string #optional,
@@ -5008,6 +5158,7 @@ type _ocsf.v1_9_0_dev.email_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   direction: string #optional,
   direction_id: int64 #required #enum=d9778f4e #sibling=direction,
@@ -5026,6 +5177,7 @@ type _ocsf.v1_9_0_dev.email_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   message_trace_uid: string #recommended,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
@@ -5067,6 +5219,7 @@ type _ocsf.v1_9_0_dev.email_file_activity = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=b5486cae #sibling=category_name,
@@ -5127,6 +5280,7 @@ type _ocsf.v1_9_0_dev.email_url_activity = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=b5486cae #sibling=category_name,
@@ -5189,8 +5343,11 @@ type _ocsf.v1_9_0_dev.entity_management = record{
   activity_id: int64 #required #enum=6f0712fc #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #recommended,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=8c353181 #sibling=category_name,
@@ -5202,6 +5359,7 @@ type _ocsf.v1_9_0_dev.entity_management = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -5218,6 +5376,7 @@ type _ocsf.v1_9_0_dev.entity_management = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -5255,8 +5414,11 @@ type _ocsf.v1_9_0_dev.event_log_activity = record{
   activity_id: int64 #required #enum=2d5c2bbb #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #recommended,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=81e233a1 #sibling=category_name,
@@ -5267,6 +5429,7 @@ type _ocsf.v1_9_0_dev.event_log_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -5285,6 +5448,7 @@ type _ocsf.v1_9_0_dev.event_log_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -5327,6 +5491,7 @@ type _ocsf.v1_9_0_dev.live_evidence_info = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -5389,8 +5554,11 @@ type _ocsf.v1_9_0_dev.file_system_activity = record{
   activity_id: int64 #required #enum=23f21e3e #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #required,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=81e233a1 #sibling=category_name,
@@ -5404,6 +5572,7 @@ type _ocsf.v1_9_0_dev.file_system_activity = record{
   connection_uid: string #optional,
   count: int64 #optional,
   create_mask: string #recommended,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #required,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -5419,6 +5588,7 @@ type _ocsf.v1_9_0_dev.file_system_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -5444,7 +5614,6 @@ type _ocsf.v1_9_0_dev.file_system_activity = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=570eddc6 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
-  updated_file: _ocsf.v1_9_0_dev.object.file #recommended,
 }
 
 // File Hosting Activity events report the actions taken by file management
@@ -5459,8 +5628,11 @@ type _ocsf.v1_9_0_dev.file_hosting_activity = record{
   activity_id: int64 #required #enum=7e81eae3 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #required,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=530c5aa6 #sibling=category_name,
@@ -5472,6 +5644,7 @@ type _ocsf.v1_9_0_dev.file_hosting_activity = record{
   confidence_score: int64 #optional #profile=security_control,
   connection_info: _ocsf.v1_9_0_dev.object.network_connection_info #optional,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -5491,6 +5664,7 @@ type _ocsf.v1_9_0_dev.file_hosting_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -5520,7 +5694,6 @@ type _ocsf.v1_9_0_dev.file_hosting_activity = record{
   type_name: string #optional,
   type_uid: int64 #required #enum=8ad2d96d #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
-  updated_file: _ocsf.v1_9_0_dev.object.file #optional,
 }
 
 // File Query events report information about files that are present on the
@@ -5533,6 +5706,7 @@ type _ocsf.v1_9_0_dev.file_query = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -5586,18 +5760,18 @@ type _ocsf.v1_9_0_dev.file_query = record{
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
 }
 
-// File Remediation Activity events report on attempts at remediating files. It
-// follows the MITRE countermeasures defined by the D3FEND™ <a target='_blank'
-// href='https://d3fend.mitre.org/'>Matrix</a>. Sub-techniques will include
-// File, such as File Removal or Restore File.
+// File Remediation Activity events report on attempts at remediating files.
+// Sub-techniques of countermeasures will include File, such as File Removal or
+// Restore File.
 type _ocsf.v1_9_0_dev.file_remediation_activity = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control #enum=10af4c36 #sibling=action,
-  activity_id: int64 #required #enum=59805f1c #sibling=activity_name,
+  activity_id: int64 #required #enum=af6b0f11 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=15bf35ac #sibling=category_name,
@@ -5648,7 +5822,7 @@ type _ocsf.v1_9_0_dev.file_remediation_activity = record{
   time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
-  type_uid: int64 #required #enum=039b71ae #sibling=type_name,
+  type_uid: int64 #required #enum=68ebf14d #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
 }
 
@@ -5662,6 +5836,7 @@ type _ocsf.v1_9_0_dev.folder_query = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -5723,10 +5898,13 @@ type _ocsf.v1_9_0_dev.ftp_activity = record{
   activity_id: int64 #required #enum=bf16b78e #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   app_name: string #optional,
   app_protocol_name: string #optional,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=b5486cae #sibling=category_name,
@@ -5742,6 +5920,7 @@ type _ocsf.v1_9_0_dev.ftp_activity = record{
   connection_info: _ocsf.v1_9_0_dev.object.network_connection_info #recommended,
   count: int64 #optional,
   cumulative_traffic: _ocsf.v1_9_0_dev.object.network_traffic #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -5758,6 +5937,7 @@ type _ocsf.v1_9_0_dev.ftp_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   name: string #recommended,
   network_observation_point: _ocsf.v1_9_0_dev.object.network_endpoint #optional,
@@ -5817,8 +5997,11 @@ type _ocsf.v1_9_0_dev.group_management = record{
   activity_id: int64 #required #enum=ac2f2668 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #recommended,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=8c353181 #sibling=category_name,
@@ -5829,6 +6012,7 @@ type _ocsf.v1_9_0_dev.group_management = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -5845,6 +6029,7 @@ type _ocsf.v1_9_0_dev.group_management = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -5888,10 +6073,13 @@ type _ocsf.v1_9_0_dev.http_activity = record{
   activity_id: int64 #required #enum=6931e595 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   app_name: string #optional,
   app_protocol_name: string #optional,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=b5486cae #sibling=category_name,
@@ -5904,6 +6092,7 @@ type _ocsf.v1_9_0_dev.http_activity = record{
   connection_info: _ocsf.v1_9_0_dev.object.network_connection_info #recommended,
   count: int64 #optional,
   cumulative_traffic: _ocsf.v1_9_0_dev.object.network_traffic #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -5924,6 +6113,7 @@ type _ocsf.v1_9_0_dev.http_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   network_observation_point: _ocsf.v1_9_0_dev.object.network_endpoint #optional,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
@@ -5990,6 +6180,7 @@ type _ocsf.v1_9_0_dev.iam_analysis_finding = record{
   assignee: _ocsf.v1_9_0_dev.object.user #optional #profile=incident,
   assignee_group: _ocsf.v1_9_0_dev.object.group #optional #profile=incident,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=11fb8fb7 #sibling=category_name,
@@ -6020,6 +6211,7 @@ type _ocsf.v1_9_0_dev.iam_analysis_finding = record{
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
+  notes: list<_ocsf.v1_9_0_dev.object.note> #optional,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
   permission_analysis_results: list<_ocsf.v1_9_0_dev.object.permission_analysis_result> #recommended,
@@ -6073,6 +6265,7 @@ type _ocsf.v1_9_0_dev.incident_finding = record{
   assignee: _ocsf.v1_9_0_dev.object.user #optional,
   assignee_group: _ocsf.v1_9_0_dev.object.group #optional,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=11fb8fb7 #sibling=category_name,
@@ -6103,6 +6296,7 @@ type _ocsf.v1_9_0_dev.incident_finding = record{
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
+  notes: list<_ocsf.v1_9_0_dev.object.note> #optional,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_9_0_dev.object.policy #optional #profile=security_control,
@@ -6148,6 +6342,7 @@ type _ocsf.v1_9_0_dev.device_inventory_info = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -6206,6 +6401,7 @@ type _ocsf.v1_9_0_dev.job_query = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -6267,8 +6463,11 @@ type _ocsf.v1_9_0_dev.kernel_activity = record{
   activity_id: int64 #required #enum=c803e8c0 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #required,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=81e233a1 #sibling=category_name,
@@ -6279,6 +6478,7 @@ type _ocsf.v1_9_0_dev.kernel_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #required,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -6292,6 +6492,7 @@ type _ocsf.v1_9_0_dev.kernel_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -6327,8 +6528,11 @@ type _ocsf.v1_9_0_dev.kernel_extension_activity = record{
   activity_id: int64 #required #enum=967f5042 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #required,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=81e233a1 #sibling=category_name,
@@ -6339,6 +6543,7 @@ type _ocsf.v1_9_0_dev.kernel_extension_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #required,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -6352,6 +6557,7 @@ type _ocsf.v1_9_0_dev.kernel_extension_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -6389,6 +6595,7 @@ type _ocsf.v1_9_0_dev.kernel_object_query = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -6452,8 +6659,11 @@ type _ocsf.v1_9_0_dev.memory_activity = record{
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #required,
   actual_permissions: int64 #recommended,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   base_address: string #recommended,
   category_name: string #optional,
@@ -6465,6 +6675,7 @@ type _ocsf.v1_9_0_dev.memory_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #required,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -6477,6 +6688,7 @@ type _ocsf.v1_9_0_dev.memory_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -6515,8 +6727,11 @@ type _ocsf.v1_9_0_dev.module_activity = record{
   activity_id: int64 #required #enum=134834f9 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #required,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=81e233a1 #sibling=category_name,
@@ -6527,6 +6742,7 @@ type _ocsf.v1_9_0_dev.module_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #required,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -6539,6 +6755,7 @@ type _ocsf.v1_9_0_dev.module_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   module: _ocsf.v1_9_0_dev.object.module #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
@@ -6576,6 +6793,7 @@ type _ocsf.v1_9_0_dev.module_query = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -6637,10 +6855,13 @@ type _ocsf.v1_9_0_dev.network_activity = record{
   activity_id: int64 #required #enum=e00d0884 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   app_name: string #optional,
   app_protocol_name: string #optional,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=b5486cae #sibling=category_name,
@@ -6653,6 +6874,7 @@ type _ocsf.v1_9_0_dev.network_activity = record{
   connection_info: _ocsf.v1_9_0_dev.object.network_connection_info #recommended,
   count: int64 #optional,
   cumulative_traffic: _ocsf.v1_9_0_dev.object.network_traffic #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -6671,6 +6893,7 @@ type _ocsf.v1_9_0_dev.network_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   network_observation_point: _ocsf.v1_9_0_dev.object.network_endpoint #optional,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
@@ -6723,6 +6946,7 @@ type _ocsf.v1_9_0_dev.network_connection_query = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -6787,10 +7011,13 @@ type _ocsf.v1_9_0_dev.network_file_activity = record{
   activity_id: int64 #required #enum=b69c64d3 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #required,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   app_name: string #optional,
   app_protocol_name: string #optional,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=b5486cae #sibling=category_name,
@@ -6803,6 +7030,7 @@ type _ocsf.v1_9_0_dev.network_file_activity = record{
   connection_info: _ocsf.v1_9_0_dev.object.network_connection_info #optional,
   count: int64 #optional,
   cumulative_traffic: _ocsf.v1_9_0_dev.object.network_traffic #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -6821,6 +7049,7 @@ type _ocsf.v1_9_0_dev.network_file_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   network_observation_point: _ocsf.v1_9_0_dev.object.network_endpoint #optional,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
@@ -6863,18 +7092,17 @@ type _ocsf.v1_9_0_dev.network_file_activity = record{
 }
 
 // Network Remediation Activity events report on attempts at remediating
-// computer networks. It follows the MITRE countermeasures defined by the
-// D3FEND™ <a target='_blank' href='https://d3fend.mitre.org/'>Matrix</a>.
-// Techniques and Sub-techniques will include Network, such as Network Isolation
-// or Network Traffic Filtering.
+// computer networks. Techniques and Sub-techniques of countermeasures will
+// include Network, such as Network Isolation or Network Traffic Filtering.
 type _ocsf.v1_9_0_dev.network_remediation_activity = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control #enum=10af4c36 #sibling=action,
-  activity_id: int64 #required #enum=59805f1c #sibling=activity_name,
+  activity_id: int64 #required #enum=af6b0f11 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=15bf35ac #sibling=category_name,
@@ -6925,7 +7153,7 @@ type _ocsf.v1_9_0_dev.network_remediation_activity = record{
   time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
-  type_uid: int64 #required #enum=4bfd7868 #sibling=type_name,
+  type_uid: int64 #required #enum=0215e8b7 #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
 }
 
@@ -6938,6 +7166,7 @@ type _ocsf.v1_9_0_dev.networks_query = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -7000,10 +7229,13 @@ type _ocsf.v1_9_0_dev.ntp_activity = record{
   activity_id: int64 #required #enum=3c5d56e1 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   app_name: string #optional,
   app_protocol_name: string #optional,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=b5486cae #sibling=category_name,
@@ -7017,6 +7249,7 @@ type _ocsf.v1_9_0_dev.ntp_activity = record{
   count: int64 #optional,
   cumulative_traffic: _ocsf.v1_9_0_dev.object.network_traffic #optional,
   delay: int64 #recommended,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   dispersion: int64 #recommended,
   disposition: string #optional #profile=security_control,
@@ -7033,6 +7266,7 @@ type _ocsf.v1_9_0_dev.ntp_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   network_observation_point: _ocsf.v1_9_0_dev.object.network_endpoint #optional,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
@@ -7092,6 +7326,7 @@ type _ocsf.v1_9_0_dev.osint_inventory_info = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -7151,6 +7386,7 @@ type _ocsf.v1_9_0_dev.operating_system_patch_state = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -7210,8 +7446,11 @@ type _ocsf.v1_9_0_dev.peripheral_activity = record{
   activity_id: int64 #required #enum=a9654517 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #required,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=81e233a1 #sibling=category_name,
@@ -7222,6 +7461,7 @@ type _ocsf.v1_9_0_dev.peripheral_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #required,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -7234,6 +7474,7 @@ type _ocsf.v1_9_0_dev.peripheral_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -7271,6 +7512,7 @@ type _ocsf.v1_9_0_dev.peripheral_device_query = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -7333,9 +7575,11 @@ type _ocsf.v1_9_0_dev.process_activity = record{
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #required,
   actual_permissions: int64 #recommended,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
   ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=81e233a1 #sibling=category_name,
@@ -7346,6 +7590,7 @@ type _ocsf.v1_9_0_dev.process_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #required,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -7403,6 +7648,7 @@ type _ocsf.v1_9_0_dev.process_query = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -7457,18 +7703,17 @@ type _ocsf.v1_9_0_dev.process_query = record{
 }
 
 // Process Remediation Activity events report on attempts at remediating
-// processes. It follows the MITRE countermeasures defined by the D3FEND™ <a
-// target='_blank' href='https://d3fend.mitre.org/'>Matrix</a>. Sub-techniques
-// will include Process, such as Process Termination or Kernel-based Process
-// Isolation.
+// processes. Sub-techniques of countermeasures will include Process Eviction,
+// such as Process Termination or Kernel-based Process Isolation.
 type _ocsf.v1_9_0_dev.process_remediation_activity = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control #enum=10af4c36 #sibling=action,
-  activity_id: int64 #required #enum=59805f1c #sibling=activity_name,
+  activity_id: int64 #required #enum=af6b0f11 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=15bf35ac #sibling=category_name,
@@ -7519,7 +7764,7 @@ type _ocsf.v1_9_0_dev.process_remediation_activity = record{
   time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
-  type_uid: int64 #required #enum=4d3bb5fa #sibling=type_name,
+  type_uid: int64 #required #enum=726bf3bf #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
 }
 
@@ -7531,10 +7776,13 @@ type _ocsf.v1_9_0_dev.rdp_activity = record{
   activity_id: int64 #required #enum=c7138a4e #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   app_name: string #optional,
   app_protocol_name: string #optional,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   capabilities: list<string> #optional,
   category_name: string #optional,
@@ -7549,6 +7797,7 @@ type _ocsf.v1_9_0_dev.rdp_activity = record{
   connection_info: _ocsf.v1_9_0_dev.object.network_connection_info #recommended,
   count: int64 #optional,
   cumulative_traffic: _ocsf.v1_9_0_dev.object.network_traffic #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #optional,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -7567,6 +7816,7 @@ type _ocsf.v1_9_0_dev.rdp_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   network_observation_point: _ocsf.v1_9_0_dev.object.network_endpoint #optional,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
@@ -7614,16 +7864,16 @@ type _ocsf.v1_9_0_dev.rdp_activity = record{
 }
 
 // Remediation Activity events report on attempts at remediating a compromised
-// device or computer network. It follows the MITRE countermeasures defined by
-// the D3FEND™ <a target='_blank' href='https://d3fend.mitre.org/'>Matrix</a>.
+// device or computer network.
 type _ocsf.v1_9_0_dev.remediation_activity = record{
   action: string #optional #profile=security_control,
   action_id: int64 #recommended #profile=security_control #enum=10af4c36 #sibling=action,
-  activity_id: int64 #required #enum=59805f1c #sibling=activity_name,
+  activity_id: int64 #required #enum=af6b0f11 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=15bf35ac #sibling=category_name,
@@ -7673,7 +7923,7 @@ type _ocsf.v1_9_0_dev.remediation_activity = record{
   time_dt: time #optional #profile=datetime,
   timezone_offset: int64 #recommended,
   type_name: string #optional,
-  type_uid: int64 #required #enum=100e8da3 #sibling=type_name,
+  type_uid: int64 #required #enum=29dd9f2e #sibling=type_name,
   unmapped: null #variant #must_be_record #optional #nullify_empty_records,
 }
 
@@ -7694,8 +7944,11 @@ type _ocsf.v1_9_0_dev.role_management = record{
   activity_id: int64 #required #enum=7e2d77a8 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #recommended,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=8c353181 #sibling=category_name,
@@ -7706,6 +7959,7 @@ type _ocsf.v1_9_0_dev.role_management = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -7721,6 +7975,7 @@ type _ocsf.v1_9_0_dev.role_management = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -7763,8 +8018,11 @@ type _ocsf.v1_9_0_dev.scan_activity = record{
   activity_id: int64 #required #enum=95731a68 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=530c5aa6 #sibling=category_name,
@@ -7776,6 +8034,7 @@ type _ocsf.v1_9_0_dev.scan_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -7788,6 +8047,7 @@ type _ocsf.v1_9_0_dev.scan_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   num_detections: int64 #recommended,
   num_files: int64 #recommended,
@@ -7835,8 +8095,11 @@ type _ocsf.v1_9_0_dev.scheduled_job_activity = record{
   activity_id: int64 #required #enum=bc1d4407 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=81e233a1 #sibling=category_name,
@@ -7847,6 +8110,7 @@ type _ocsf.v1_9_0_dev.scheduled_job_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #required,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -7860,6 +8124,7 @@ type _ocsf.v1_9_0_dev.scheduled_job_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -7895,8 +8160,11 @@ type _ocsf.v1_9_0_dev.script_activity = record{
   activity_id: int64 #required #enum=66771317 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #required,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=81e233a1 #sibling=category_name,
@@ -7907,6 +8175,7 @@ type _ocsf.v1_9_0_dev.script_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #required,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -7919,6 +8188,7 @@ type _ocsf.v1_9_0_dev.script_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -7958,6 +8228,7 @@ type _ocsf.v1_9_0_dev.security_finding = record{
   analytic: _ocsf.v1_9_0_dev.object.analytic #recommended,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=11fb8fb7 #sibling=category_name,
@@ -8031,6 +8302,7 @@ type _ocsf.v1_9_0_dev.service_query = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -8093,6 +8365,7 @@ type _ocsf.v1_9_0_dev.user_session_query = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -8154,10 +8427,13 @@ type _ocsf.v1_9_0_dev.smb_activity = record{
   activity_id: int64 #required #enum=69549665 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   app_name: string #optional,
   app_protocol_name: string #optional,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=b5486cae #sibling=category_name,
@@ -8173,6 +8449,7 @@ type _ocsf.v1_9_0_dev.smb_activity = record{
   count: int64 #optional,
   cumulative_traffic: _ocsf.v1_9_0_dev.object.network_traffic #optional,
   dce_rpc: _ocsf.v1_9_0_dev.object.dce_rpc #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   dialect: string #recommended,
   disposition: string #optional #profile=security_control,
@@ -8190,6 +8467,7 @@ type _ocsf.v1_9_0_dev.smb_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   network_observation_point: _ocsf.v1_9_0_dev.object.network_endpoint #optional,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
@@ -8248,6 +8526,7 @@ type _ocsf.v1_9_0_dev.software_inventory_info = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -8308,10 +8587,13 @@ type _ocsf.v1_9_0_dev.ssh_activity = record{
   activity_id: int64 #required #enum=e00d0884 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   app_name: string #optional,
   app_protocol_name: string #optional,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   auth_type: string #recommended,
   auth_type_id: int64 #recommended #enum=6c82203f #sibling=auth_type,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
@@ -8327,6 +8609,7 @@ type _ocsf.v1_9_0_dev.ssh_activity = record{
   connection_info: _ocsf.v1_9_0_dev.object.network_connection_info #recommended,
   count: int64 #optional,
   cumulative_traffic: _ocsf.v1_9_0_dev.object.network_traffic #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -8343,6 +8626,7 @@ type _ocsf.v1_9_0_dev.ssh_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   network_observation_point: _ocsf.v1_9_0_dev.object.network_endpoint #optional,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
@@ -8396,6 +8680,7 @@ type _ocsf.v1_9_0_dev.startup_item_query = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -8457,10 +8742,13 @@ type _ocsf.v1_9_0_dev.tunnel_activity = record{
   activity_id: int64 #required #enum=26ecf1ca #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   app_name: string #optional,
   app_protocol_name: string #optional,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=b5486cae #sibling=category_name,
@@ -8473,6 +8761,7 @@ type _ocsf.v1_9_0_dev.tunnel_activity = record{
   connection_info: _ocsf.v1_9_0_dev.object.network_connection_info #optional,
   count: int64 #optional,
   cumulative_traffic: _ocsf.v1_9_0_dev.object.network_traffic #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -8488,6 +8777,7 @@ type _ocsf.v1_9_0_dev.tunnel_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   network_observation_point: _ocsf.v1_9_0_dev.object.network_endpoint #optional,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
@@ -8543,8 +8833,11 @@ type _ocsf.v1_9_0_dev.user_access_management = record{
   activity_id: int64 #required #enum=7731ff86 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #recommended,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=8c353181 #sibling=category_name,
@@ -8555,6 +8848,7 @@ type _ocsf.v1_9_0_dev.user_access_management = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -8570,6 +8864,7 @@ type _ocsf.v1_9_0_dev.user_access_management = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -8613,6 +8908,7 @@ type _ocsf.v1_9_0_dev.user_inventory_info = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -8679,8 +8975,11 @@ type _ocsf.v1_9_0_dev.user_management = record{
   activity_id: int64 #required #enum=b07d4ebb #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #recommended,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   auth_factors: list<_ocsf.v1_9_0_dev.object.auth_factor> #recommended,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
@@ -8692,6 +8991,7 @@ type _ocsf.v1_9_0_dev.user_management = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -8707,6 +9007,7 @@ type _ocsf.v1_9_0_dev.user_management = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -8751,6 +9052,7 @@ type _ocsf.v1_9_0_dev.user_query = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -8824,6 +9126,7 @@ type _ocsf.v1_9_0_dev.vulnerability_finding = record{
   assignee: _ocsf.v1_9_0_dev.object.user #optional #profile=incident,
   assignee_group: _ocsf.v1_9_0_dev.object.group #optional #profile=incident,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=11fb8fb7 #sibling=category_name,
@@ -8853,6 +9156,7 @@ type _ocsf.v1_9_0_dev.vulnerability_finding = record{
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
+  notes: list<_ocsf.v1_9_0_dev.object.note> #optional,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_9_0_dev.object.policy #optional #profile=security_control,
@@ -8898,8 +9202,11 @@ type _ocsf.v1_9_0_dev.web_resource_access_activity = record{
   activity_id: int64 #required #enum=f39082ef #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=530c5aa6 #sibling=category_name,
@@ -8910,6 +9217,7 @@ type _ocsf.v1_9_0_dev.web_resource_access_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -8924,6 +9232,7 @@ type _ocsf.v1_9_0_dev.web_resource_access_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -8969,8 +9278,11 @@ type _ocsf.v1_9_0_dev.web_resources_activity = record{
   activity_id: int64 #required #enum=3a9c8da6 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=530c5aa6 #sibling=category_name,
@@ -8981,6 +9293,7 @@ type _ocsf.v1_9_0_dev.web_resources_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #recommended #profile=host,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -8996,6 +9309,7 @@ type _ocsf.v1_9_0_dev.web_resources_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -9043,6 +9357,7 @@ type _ocsf.v1_9_0_dev.prefetch_query = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -9108,8 +9423,11 @@ type _ocsf.v1_9_0_dev.registry_key_activity = record{
   activity_id: int64 #required #enum=1a1516c5 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #required,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=81e233a1 #sibling=category_name,
@@ -9121,6 +9439,7 @@ type _ocsf.v1_9_0_dev.registry_key_activity = record{
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
   create_mask: string #recommended,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #required,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -9133,6 +9452,7 @@ type _ocsf.v1_9_0_dev.registry_key_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   open_mask: int64 #recommended,
@@ -9173,6 +9493,7 @@ type _ocsf.v1_9_0_dev.registry_key_query = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -9234,8 +9555,11 @@ type _ocsf.v1_9_0_dev.registry_value_activity = record{
   activity_id: int64 #required #enum=86ac137a #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #required,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=81e233a1 #sibling=category_name,
@@ -9246,6 +9570,7 @@ type _ocsf.v1_9_0_dev.registry_value_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #required,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -9258,6 +9583,7 @@ type _ocsf.v1_9_0_dev.registry_value_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -9297,6 +9623,7 @@ type _ocsf.v1_9_0_dev.registry_value_query = record{
   actor: _ocsf.v1_9_0_dev.object.actor #optional #profile=host,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=d5a2741d #sibling=category_name,
@@ -9358,8 +9685,11 @@ type _ocsf.v1_9_0_dev.windows_resource_activity = record{
   activity_id: int64 #required #enum=53856bb0 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #required,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=81e233a1 #sibling=category_name,
@@ -9370,6 +9700,7 @@ type _ocsf.v1_9_0_dev.windows_resource_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #required,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -9382,6 +9713,7 @@ type _ocsf.v1_9_0_dev.windows_resource_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
@@ -9418,8 +9750,11 @@ type _ocsf.v1_9_0_dev.windows_service_activity = record{
   activity_id: int64 #required #enum=474252c4 #sibling=activity_name,
   activity_name: string #optional,
   actor: _ocsf.v1_9_0_dev.object.actor #required,
+  ai_agent: _ocsf.v1_9_0_dev.object.ai_agent #optional #profile=ai_operation,
+  ai_model: _ocsf.v1_9_0_dev.object.ai_model #recommended #profile=ai_operation,
   api: _ocsf.v1_9_0_dev.object.api #optional #profile=cloud,
   attacks: list<_ocsf.v1_9_0_dev.object.attack> #optional #profile=security_control,
+  attestation_list: list<_ocsf.v1_9_0_dev.object.attestation> #optional #profile=record_integrity,
   authorizations: list<_ocsf.v1_9_0_dev.object.authorization> #optional #profile=security_control,
   category_name: string #optional,
   category_uid: int64 #required #enum=81e233a1 #sibling=category_name,
@@ -9430,6 +9765,7 @@ type _ocsf.v1_9_0_dev.windows_service_activity = record{
   confidence_id: int64 #recommended #profile=security_control #enum=89eb6fbb #sibling=confidence,
   confidence_score: int64 #optional #profile=security_control,
   count: int64 #optional,
+  delegation: _ocsf.v1_9_0_dev.object.delegation #optional #profile=ai_operation,
   device: _ocsf.v1_9_0_dev.object.device #required,
   disposition: string #optional #profile=security_control,
   disposition_id: int64 #recommended #profile=security_control #enum=81df8127 #sibling=disposition,
@@ -9442,10 +9778,12 @@ type _ocsf.v1_9_0_dev.windows_service_activity = record{
   malware: list<_ocsf.v1_9_0_dev.object.malware> #optional #profile=security_control,
   malware_scan_info: _ocsf.v1_9_0_dev.object.malware_scan_info #optional #profile=security_control,
   message: string #recommended,
+  message_context: _ocsf.v1_9_0_dev.object.message_context #optional #profile=ai_operation,
   metadata: _ocsf.v1_9_0_dev.object.metadata #required,
   observables: list<_ocsf.v1_9_0_dev.object.observable> #recommended,
   osint: list<_ocsf.v1_9_0_dev.object.osint> #required #profile=osint,
   policy: _ocsf.v1_9_0_dev.object.policy #optional #profile=security_control,
+  prev_win_service: _ocsf.v1_9_0_dev.object.win_service #recommended #extension=win,
   raw_data: string #optional,
   raw_data_hash: _ocsf.v1_9_0_dev.object.fingerprint #optional,
   raw_data_size: int64 #optional,
