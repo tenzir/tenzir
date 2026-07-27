@@ -31,6 +31,13 @@ class callback_listener : public arrow::ipc::Listener {
 public:
   callback_listener() = default;
 
+  auto OnSchemaDecoded(std::shared_ptr<arrow::Schema> schema)
+    -> arrow::Status override {
+    static_cast<void>(schema);
+    schema_decoded = true;
+    return arrow::Status::OK();
+  }
+
   auto OnRecordBatchDecoded(std::shared_ptr<arrow::RecordBatch> record_batch)
     -> arrow::Status override {
     record_batch_buffer.push(std::move(record_batch));
@@ -38,6 +45,9 @@ public:
   }
 
   std::queue<std::shared_ptr<arrow::RecordBatch>> record_batch_buffer;
+  // Whether the current stream's schema has been decoded since the last reset.
+  // Distinguishes trailing garbage from a genuinely corrupt new stream.
+  bool schema_decoded = false;
 };
 
 } // namespace
@@ -50,9 +60,6 @@ auto parse_feather(generator<chunk_ptr> input, diagnostic_handler& dh)
     = arrow::ipc::StreamDecoder(listener, arrow_ipc_read_options());
   auto truncated_bytes = size_t{0};
   auto decoded_once = false;
-  // Whether the current stream (since the last reset) has not yet yielded a
-  // record batch. Used to tell trailing garbage apart from a corrupt stream.
-  auto stream_fresh = true;
   while (true) {
     auto required_size
       = detail::narrow_cast<size_t>(stream_decoder.next_required_size());
@@ -68,7 +75,7 @@ auto parse_feather(generator<chunk_ptr> input, diagnostic_handler& dh)
       // Reset the trailing-byte counter so bytes from the finished stream do
       // not bleed into diagnostics about a malformed subsequent stream.
       truncated_bytes = 0;
-      stream_fresh = true;
+      listener->schema_decoded = false;
       continue;
     }
     auto payload = byte_reader(required_size);
@@ -95,10 +102,11 @@ auto parse_feather(generator<chunk_ptr> input, diagnostic_handler& dh)
     auto decode_result
       = stream_decoder.Consume(as_arrow_buffer(std::move(payload)));
     if (not decode_result.ok()) {
-      if (decoded_once and stream_fresh) {
+      if (decoded_once and not listener->schema_decoded) {
         // We already decoded at least one complete stream and the bytes that
-        // follow do not form a valid new stream. Treat them as trailing
-        // garbage instead of failing hard.
+        // follow do not even form a valid new stream schema. Treat them as
+        // trailing garbage instead of failing hard. Once a new stream's schema
+        // has decoded, a later failure is genuine corruption.
         if (truncated_bytes != 0) {
           diagnostic::warning("truncated {} trailing bytes", truncated_bytes)
             .emit(dh);
@@ -112,7 +120,6 @@ auto parse_feather(generator<chunk_ptr> input, diagnostic_handler& dh)
     }
     while (not listener->record_batch_buffer.empty()) {
       decoded_once = true;
-      stream_fresh = false;
       truncated_bytes = 0;
       auto batch = listener->record_batch_buffer.front();
       listener->record_batch_buffer.pop();

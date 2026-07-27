@@ -546,6 +546,13 @@ class callback_listener : public arrow::ipc::Listener {
 public:
   callback_listener() = default;
 
+  auto OnSchemaDecoded(std::shared_ptr<arrow::Schema> schema)
+    -> arrow::Status override {
+    TENZIR_UNUSED(schema);
+    schema_decoded = true;
+    return arrow::Status::OK();
+  }
+
   auto OnRecordBatchDecoded(std::shared_ptr<arrow::RecordBatch> record_batch)
     -> arrow::Status override {
     record_batch_buffer.push(std::move(record_batch));
@@ -553,6 +560,9 @@ public:
   }
 
   std::queue<std::shared_ptr<arrow::RecordBatch>> record_batch_buffer;
+  // Whether the current stream's schema has been decoded since the last reset.
+  // Distinguishes trailing garbage from a genuinely corrupt new stream.
+  bool schema_decoded = false;
 };
 
 auto print_feather(
@@ -857,7 +867,7 @@ private:
         auto reset_result = stream_decoder_->Reset();
         TENZIR_ASSERT(reset_result.ok(), reset_result.ToString().c_str());
         truncated_bytes_ = 0;
-        stream_fresh_ = true;
+        listener_->schema_decoded = false;
         continue;
       }
       auto payload = take(required_size);
@@ -867,10 +877,11 @@ private:
       truncated_bytes_ += payload->size();
       auto decode_result = stream_decoder_->Consume(as_arrow_buffer(payload));
       if (not decode_result.ok()) {
-        if (decoded_once_ and stream_fresh_) {
+        if (decoded_once_ and not listener_->schema_decoded) {
           // We already decoded at least one complete stream and the bytes that
-          // follow do not form a valid new stream. Treat them as trailing
-          // garbage instead of failing hard.
+          // follow do not even form a valid new stream schema. Treat them as
+          // trailing garbage instead of failing hard. Once a new stream's
+          // schema has decoded, a later failure is genuine corruption.
           auto trailing_bytes = truncated_bytes_ + available();
           if (trailing_bytes != 0) {
             emit_with_location(diagnostic::warning("truncated Feather input")
@@ -894,7 +905,6 @@ private:
       }
       while (not listener_->record_batch_buffer.empty()) {
         decoded_once_ = true;
-        stream_fresh_ = false;
         truncated_bytes_ = 0;
         auto batch = listener_->record_batch_buffer.front();
         listener_->record_batch_buffer.pop();
@@ -948,9 +958,6 @@ private:
   size_t offset_ = 0;
   size_t truncated_bytes_ = 0;
   bool decoded_once_ = false;
-  // Whether the current stream (since the last reset) has not yet yielded a
-  // record batch. Used to tell trailing garbage apart from a corrupt stream.
-  bool stream_fresh_ = true;
   bool done_ = false;
   ReadFeatherMode mode_ = ReadFeatherMode::undecided;
   std::vector<chunk_ptr> file_chunks_;
