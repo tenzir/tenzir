@@ -13,7 +13,6 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline_metrics.hpp"
-#include "tenzir/substitute_ctx.hpp"
 
 #include <folly/coro/Retry.h>
 #include <folly/executors/GlobalExecutor.h>
@@ -45,10 +44,6 @@ public:
     evb_ = folly::getGlobalIOExecutor()->getEventBase();
     TENZIR_ASSERT(evb_);
     auto pipeline = std::move(impl_.printer().inner);
-    if (not pipeline.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
-      finish();
-      co_return;
-    }
     events_write_counter_
       = ctx.make_counter(impl_.events_metric_label(), MetricsDirection::write,
                          MetricsVisibility::external_, MetricsUnit::events);

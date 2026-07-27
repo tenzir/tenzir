@@ -9,6 +9,7 @@
 #include "tenzir/ir.hpp"
 
 #include "tenzir/async.hpp"
+#include "tenzir/base_ctx.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
@@ -810,6 +811,14 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
   return ir::pipeline{std::move(lets), std::move(operators)};
 }
 
+auto ir::pipeline::bind(let_id id, ast::constant::kind value) -> void {
+  // Prepend so the binding is in scope for all subsequent `let`s and operators,
+  // matching the semantics of a base-environment binding.
+  auto value_ex
+    = ast::expression{ast::constant{std::move(value), location::unknown}};
+  lets.insert(lets.begin(), let{ast::identifier{}, value_ex, id});
+}
+
 auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
   -> failure_or<void> {
   if (instantiate) {
@@ -858,19 +867,35 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::pipeline::spawn(element_type_tag input) && -> std::vector<AnyOperator> {
-  // TODO: Assert that we were instantiated, or instantiate ourselves?
-  TENZIR_ASSERT(lets.empty());
-  // TODO: This is probably not the right place for optimizations.
-  auto opt = std::move(*this).optimize(optimize_filter{}, event_order::ordered);
+auto ir::instantiate(pipeline pipe, base_ctx ctx) -> failure_or<pipeline> {
+  // Resolve `let` bindings and substitute non-deterministic arguments. This is
+  // the single substitution point for all pipelines, including subpipelines
+  // that inject runtime values via `pipeline::bind`.
+  TRY(pipe.substitute(substitute_ctx{ctx, nullptr}, true));
+  TENZIR_ASSERT(pipe.lets.empty());
+  // Optimize the now-instantiated pipeline. Any filter left over after
+  // optimization is reinserted as leading `where` operators.
+  auto opt = std::move(pipe).optimize(optimize_filter{}, event_order::ordered);
   TENZIR_ASSERT(opt.replacement.lets.empty());
-  // TODO: Should we really ignore this here?
-  (void)opt.order;
+  pipe = std::move(opt.replacement);
+  // Prepend the leftover filters as leading `where` operators, preserving their
+  // relative order (inserting one-by-one at the front would reverse them).
+  auto where_ops = std::vector<Box<Operator>>{};
+  where_ops.reserve(opt.filter.size());
   for (auto& expr : opt.filter) {
-    opt.replacement.operators.insert(opt.replacement.operators.begin(),
-                                     make_where_ir(expr));
+    where_ops.push_back(make_where_ir(std::move(expr)));
   }
-  *this = std::move(opt.replacement);
+  pipe.operators.insert(pipe.operators.begin(),
+                        std::move_iterator{where_ops.begin()},
+                        std::move_iterator{where_ops.end()});
+  return pipe;
+}
+
+auto ir::pipeline::spawn(element_type_tag input) && -> std::vector<AnyOperator> {
+  // The caller is responsible for instantiating and optimizing the
+  // pipeline via `ir::instantiate` before spawning, so there must be no
+  // remaining `let` bindings here.
+  TENZIR_ASSERT(lets.empty());
   auto result = std::vector<AnyOperator>{};
   for (auto& op : operators) {
     // We already checked, there should be no diagnostics here.

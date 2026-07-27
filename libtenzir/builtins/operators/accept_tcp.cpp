@@ -24,7 +24,6 @@
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/socket.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -314,8 +313,7 @@ struct TcpAccept {
     };
   }
 
-  auto substitute(ir::pipeline& pipeline, AcceptedInfo& info, OpCtx& ctx)
-    -> bool {
+  auto bind(ir::pipeline& pipeline, AcceptedInfo& info, OpCtx& ctx) -> void {
     auto peer_record = record{
       {"ip", info.peer_ip},
       {"port", info.peer_port},
@@ -339,10 +337,7 @@ struct TcpAccept {
         peer_resolution_warning_emitted_ = true;
       }
     }
-    auto env = substitute_ctx::env_t{};
-    env[args_.peer_info] = std::move(peer_record);
-    return static_cast<bool>(
-      pipeline.substitute(substitute_ctx{ctx, &env}, true));
+    pipeline.bind(args_.peer_info, std::move(peer_record));
   }
 
   auto make_connection_state(folly::coro::Transport& transport, AcceptedInfo&,

@@ -16,7 +16,6 @@
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/session.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/parser.hpp>
 
 #include <folly/coro/BoundedQueue.h>
@@ -338,10 +337,6 @@ public:
         co_return;
       }
       parser = std::move(*default_parser);
-    }
-    if (not parser.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
-      done_ = true;
-      co_return;
     }
     auto snaplen
       = args_.snaplen ? args_.snaplen->inner : uint64_t{pcap::maximum_snaplen};

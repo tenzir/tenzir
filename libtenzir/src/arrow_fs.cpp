@@ -18,7 +18,6 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/fs_url_template.hpp"
 #include "tenzir/glob.hpp"
-#include "tenzir/substitute_ctx.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/set.hpp"
@@ -161,21 +160,12 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
       }
       file_state.istream = open.istream.MoveValueUnsafe();
       auto pipe = base_args_.pipe.inner;
-      auto env = substitute_ctx::env_t{
-        {
-          base_args_.file_info,
-          record{
-            {"path", file_state.path},
-            {"mtime", file_state.mtime},
-          },
-        },
+      // Bind the file info as a `let` binding
+      auto f_info = record{
+        {"path", file_state.path},
+        {"mtime", file_state.mtime},
       };
-      auto sub_result = pipe.substitute({ctx, &env}, true);
-      if (not sub_result) {
-        processing_[*slot].reset();
-        start_job_in_slot(*slot, ctx);
-        co_return;
-      }
+      pipe.bind(base_args_.file_info, f_info);
       co_await ctx.spawn_sub<chunk_ptr>(open.job_id, std::move(pipe));
       // Queue the first read.
       enqueue_task(ctx,

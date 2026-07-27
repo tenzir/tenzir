@@ -12,7 +12,6 @@
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/view3.hpp>
@@ -101,14 +100,8 @@ protected:
           continue;
         }
       } else {
-        auto key_kind = constant_from_key(group.key);
-        auto env = substitute_ctx::env_t{};
-        env[args_.let] = std::move(key_kind);
-        auto sub_ctx = substitute_ctx{ctx, &env};
         auto copy = args_.pipe.inner;
-        if (not copy.substitute(sub_ctx, true)) {
-          continue;
-        }
+        copy.bind(args_.let, constant_from_key(group.key));
         seen_keys_.emplace(group.key);
         sub = co_await ctx.spawn_sub(group.key, std::move(copy),
                                      tag_v<table_slice>);

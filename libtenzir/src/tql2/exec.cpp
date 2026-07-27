@@ -2281,11 +2281,10 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     fmt::print("{:#?}\n", ir);
     return not ctx.has_failure();
   }
-  // Instantiate the IR.
-  auto sub_ctx = substitute_ctx{b_ctx, nullptr};
-  TRY(ir.substitute(sub_ctx, true));
   if (cfg.dump_inst_ir) {
-    fmt::print("{:#?}\n", ir);
+    auto inst = ir;
+    TRY(inst.substitute(substitute_ctx{b_ctx, nullptr}, true));
+    fmt::print("{:#?}\n", inst);
     return not ctx.has_failure();
   }
   if (ir.operators.empty()) {
@@ -2300,9 +2299,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     TRY(auto ast,
         parse_pipeline_with_location_override(definition, override, ctx));
     auto implicit_root = compile_ctx::make_root(b_ctx, source_map);
-    TRY(auto pipe, std::move(ast).compile(implicit_root));
-    TRY(pipe.substitute(sub_ctx, true));
-    return pipe;
+    return std::move(ast).compile(implicit_root);
   };
   auto null_dh = null_diagnostic_handler{};
   auto output = Option<element_type_tag>{};
@@ -2354,12 +2351,9 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
       return failure::promise();
     }
   }
-  // Optimize the IR.
-  auto opt
-    = std::move(ir).optimize(ir::optimize_filter{}, event_order::ordered);
-  // TODO: Can this happen?
-  TENZIR_ASSERT(opt.filter.empty());
-  ir = std::move(opt.replacement);
+  // Instantiate and optimize the IR. This is the single instantiation point;
+  // the `--dump-opt-ir` debug output shows the result of this stage.
+  TRY(ir, ir::instantiate(std::move(ir), b_ctx));
   if (cfg.dump_opt_ir) {
     fmt::print("{:#?}\n", ir);
     return not ctx.has_failure();

@@ -123,6 +123,14 @@ struct pipeline {
 
   pipeline(std::vector<let> lets, std::vector<Box<Operator>> operators);
 
+  /// Prepend a `let` binding that binds `id` to the constant `value`.
+  ///
+  /// Used by operators such as `each`, `group`, and `window` to hand a runtime
+  /// value to their subpipeline: instead of substituting the value eagerly,
+  /// they inject it as a binding that is resolved when the subpipeline is
+  /// instantiated.
+  auto bind(let_id id, ast::constant::kind value) -> void;
+
   /// @see Operator
   auto substitute(substitute_ctx ctx, bool instantiate) -> failure_or<void>;
 
@@ -220,6 +228,14 @@ auto make_set_ir(std::vector<ast::assignment> assignments) -> Box<ir::Operator>;
 
 /// Create a `where` operator with the given expression.
 auto make_where_ir(ast::expression filter) -> Box<ir::Operator>;
+
+namespace ir {
+
+/// Instantiate a compiled pipeline: resolve its `let` bindings, substitute
+/// non-deterministic arguments (e.g. `now()`), and optimize the result.
+auto instantiate(pipeline pipe, base_ctx ctx) -> failure_or<pipeline>;
+
+} // namespace ir
 
 template <>
 inline constexpr auto enable_default_formatter<ir::pipeline> = true;

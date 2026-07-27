@@ -23,7 +23,6 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -211,10 +210,6 @@ public:
       co_await folly::coro::co_withCancellation(token, accept_loop(ctx));
     });
     auto pipeline = std::move(args_.printer.inner);
-    if (not pipeline.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
-      co_await request_stop();
-      co_return;
-    }
     co_await ctx.spawn_sub<table_slice>(sub_key_, std::move(pipeline));
     co_return;
   }

@@ -15,7 +15,6 @@
 #include "tenzir/pipeline_executor.hpp"
 #include "tenzir/scope_linked.hpp"
 #include "tenzir/source.hpp"
-#include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/exec.hpp"
 #include "tenzir/view.hpp"
 
@@ -217,12 +216,7 @@ public:
     active_workers_ = workers_.size();
     for (auto i = size_t{0}; i < args_.over.inner.size(); ++i) {
       auto pipe = args_.pipe.inner;
-      auto env = substitute_ctx::env_t{};
-      env[args_.over_id] = as_constant_kind(args_.over.inner[i]);
-      if (not pipe.substitute(substitute_ctx{ctx, &env}, true)) {
-        done_ = true;
-        co_return;
-      }
+      pipe.bind(args_.over_id, as_constant_kind(args_.over.inner[i]));
       co_await ctx.spawn_sub<table_slice>(data{detail::narrow<int64_t>(i)},
                                           std::move(pipe));
     }

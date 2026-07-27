@@ -15,12 +15,12 @@
 #include "tenzir/async/mail.hpp"
 #include "tenzir/async/select_set.hpp"
 #include "tenzir/async_secret_resolution.hpp"
+#include "tenzir/base_ctx.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
-#include "tenzir/substitute_ctx.hpp"
 
 #include <folly/Demangle.h>
 #include <folly/OperationCancelled.h>
@@ -812,28 +812,14 @@ private:
       // same executor such that all legs contribute to the same metrics.
       next_subpipeline_id_ += 1;
     }
-    // Instantiate for the case where it was not instantiated yet.
-    if (not pipe.substitute(substitute_ctx{base_ctx{parent_dh, *reg_}, nullptr},
-                            true)) {
-      // We just emitted an error. Either we return some placeholder no-op
-      // handle now, or we just sleep and wait for cancellation. For now, we
-      // pick the simple option, but we might need to reconsider how we want to
-      // handle such cases eventually.
+    // Instantiate and optimize.
+    auto instantiated
+      = ir::instantiate(std::move(pipe), base_ctx{parent_dh, *reg_});
+    if (not instantiated) {
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
-    // Optimize one more time in case it wasn't yet, or we just instantiated.
-    auto opt
-      = std::move(pipe).optimize(ir::optimize_filter{}, event_order::ordered);
-    pipe = std::move(opt.replacement);
-    if (not opt.filter.empty()) {
-      auto offset = pipe.operators.size();
-      for (auto& expr : opt.filter) {
-        pipe.operators.push_back(make_where_ir(std::move(expr)));
-      }
-      std::rotate(pipe.operators.begin(), pipe.operators.begin() + offset,
-                  pipe.operators.end());
-    }
+    pipe = std::move(*instantiated);
     auto output = pipe.infer_type(input, parent_dh);
     // The caller is responsible for passing a well-typed pipeline that
     // type-checks against `input`. And since optimizations are type-preserving,
