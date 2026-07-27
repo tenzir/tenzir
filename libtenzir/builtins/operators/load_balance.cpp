@@ -217,8 +217,11 @@ public:
     for (auto i = size_t{0}; i < args_.over.inner.size(); ++i) {
       auto pipe = args_.pipe.inner;
       pipe.bind(args_.over_id, as_constant_kind(args_.over.inner[i]));
-      co_await ctx.spawn_sub<table_slice>(data{detail::narrow<int64_t>(i)},
-                                          std::move(pipe));
+      if (not co_await ctx.plan_and_spawn_sub<table_slice>(
+            data{detail::narrow<int64_t>(i)}, std::move(pipe))) {
+        done_ = true;
+        co_return;
+      }
     }
   }
 

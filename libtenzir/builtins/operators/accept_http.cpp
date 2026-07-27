@@ -344,9 +344,19 @@ public:
       std::move(message),
       [&](RequestStarted msg) -> Task<void> {
         auto pipeline = args_.parser.inner;
-        // Bind the request context as a `let` binding; it is resolved when the
-        // subpipeline is instantiated.
+        // Bind the request context in the parser subpipeline for this request
         pipeline.bind(args_.request, make_request_context(msg.metadata));
+        auto request_dh = null_diagnostic_handler{};
+        auto plan = ir::make_plan(std::move(pipeline), tag_v<chunk_ptr>,
+                                  base_ctx{request_dh, ctx.reg()});
+        if (not plan) {
+          diagnostic::warning("failed to prepare parser pipeline for request")
+            .primary(args_.endpoint)
+            .note("request path: {}", msg.metadata.path)
+            .emit(ctx);
+          msg.response_signal->send(500); // internal server error
+          co_return;
+        }
         auto decompressor
           = Option<std::shared_ptr<arrow::util::Decompressor>>{None{}};
         if (not msg.content_encoding.empty()) {
@@ -366,8 +376,8 @@ public:
                                       .finished = msg.response_signal,
                                       .bytes_read = std::move(bytes_read)});
         }
-        co_await ctx.spawn_sub<chunk_ptr>(request_id, std::move(pipeline),
-                                          DiagnosticBehavior::ErrorToWarning);
+        co_await ctx.spawn_sub(request_id, std::move(*plan),
+                               DiagnosticBehavior::ErrorToWarning);
       },
       [&](RequestBody body) -> Task<void> {
         auto chunk = std::move(body.chunk);

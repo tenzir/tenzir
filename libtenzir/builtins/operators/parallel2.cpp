@@ -43,11 +43,10 @@ public:
     rows_assigned_.resize(jobs_, 0);
     for (auto i = uint64_t{0}; i < jobs_; ++i) {
       auto copy = pipe_;
-      if (fuse_) {
-        co_await ctx.spawn_sub_fused<table_slice>(data{int64_t(i)},
-                                                  std::move(copy));
-      } else {
-        co_await ctx.spawn_sub<table_slice>(data{int64_t(i)}, std::move(copy));
+      if (not co_await ctx.plan_and_spawn_sub<table_slice>(
+            data{int64_t(i)}, std::move(copy), DiagnosticBehavior::Unchanged,
+            fuse_)) {
+        co_return;
       }
     }
   }
@@ -123,10 +122,10 @@ public:
   auto start(OpCtx& ctx) -> Task<void> {
     for (auto i = uint64_t{0}; i < jobs_; ++i) {
       auto copy = pipe_;
-      if (fuse_) {
-        co_await ctx.spawn_sub_fused<void>(data{int64_t(i)}, std::move(copy));
-      } else {
-        co_await ctx.spawn_sub<void>(data{int64_t(i)}, std::move(copy));
+      if (not co_await ctx.plan_and_spawn_sub<void>(
+            data{int64_t(i)}, std::move(copy), DiagnosticBehavior::Unchanged,
+            fuse_)) {
+        co_return;
       }
     }
   }

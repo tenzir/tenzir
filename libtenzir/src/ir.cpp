@@ -338,9 +338,15 @@ public:
   auto start(OpCtx& ctx) -> Task<void> {
     // Spawn subpipelines if they are not already spawned (due to restore).
     if (not ctx.get_sub(true).is_some()) {
-      co_await ctx.spawn_sub<table_slice>(true, args_.consequence);
+      if (not co_await ctx.plan_and_spawn_sub<table_slice>(true,
+                                                           args_.consequence)) {
+        co_return;
+      }
       if (args_.alternative) {
-        co_await ctx.spawn_sub<table_slice>(false, *args_.alternative);
+        if (not co_await ctx.plan_and_spawn_sub<table_slice>(
+              false, *args_.alternative)) {
+          co_return;
+        }
       }
     }
   }
@@ -883,7 +889,8 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::instantiate(pipeline pipe, base_ctx ctx) -> failure_or<pipeline> {
+auto ir::make_plan(pipeline pipe, element_type_tag input, base_ctx ctx)
+  -> failure_or<Plan> {
   // Resolve `let` bindings and substitute non-deterministic arguments. This is
   // the single substitution point for all pipelines, including subpipelines
   // that inject runtime values via `pipeline::bind`.
@@ -896,12 +903,19 @@ auto ir::instantiate(pipeline pipe, base_ctx ctx) -> failure_or<pipeline> {
   pipe = std::move(opt.replacement);
   // Prepend the leftover filters as leading `where` operators.
   pipe.prepend(std::move(opt.filter));
-  return pipe;
+  // Type-check the instantiated pipeline against `input`. Performing this here
+  // means spawning the resulting `Plan` can no longer fail.
+  TRY(auto output, pipe.infer_type(input, ctx));
+  return Plan{std::move(pipe), input, output};
+}
+
+auto ir::Plan::spawn() && -> std::vector<AnyOperator> {
+  return std::move(pipe_).spawn(input_);
 }
 
 auto ir::pipeline::spawn(element_type_tag input) && -> std::vector<AnyOperator> {
   // The caller is responsible for instantiating and optimizing the
-  // pipeline via `ir::instantiate` before spawning, so there must be no
+  // pipeline via `ir::make_plan` before spawning, so there must be no
   // remaining `let` bindings here.
   TENZIR_ASSERT(lets.empty());
   auto result = std::vector<AnyOperator>{};

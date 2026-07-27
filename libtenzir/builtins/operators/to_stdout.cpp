@@ -179,7 +179,11 @@ public:
       folly::NetworkSocket::fromFd(STDOUT_FILENO));
     // Avoid closing the process-global stdout when the writer shuts down.
     writer_->setCloseCallback([](folly::NetworkSocket) {});
-    co_await ctx.spawn_sub<table_slice>(caf::none, std::move(pipe));
+    if (not co_await ctx.plan_and_spawn_sub<table_slice>(caf::none,
+                                                         std::move(pipe))) {
+      done_ = true;
+      co_return;
+    }
     TENZIR_ASSERT(ctx.get_sub(caf::none));
   }
 

@@ -355,7 +355,11 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "from_nic"},
                          MetricsDirection::read, MetricsVisibility::external_,
                          MetricsUnit::events);
-    co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(parser));
+    if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(caf::none,
+                                                       std::move(parser))) {
+      done_ = true;
+      co_return;
+    }
     auto io_executor = ctx.io_executor();
     auto* evb = io_executor->getEventBase();
     ctx.spawn_task(folly::coro::co_withExecutor(

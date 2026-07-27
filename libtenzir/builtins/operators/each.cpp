@@ -42,7 +42,11 @@ struct EachImpl {
     // Bind `$this` to the current event as a `let` binding
     auto copy = args_.pipe.inner;
     copy.bind(args_.this_id, materialize(input));
-    co_await ctx.spawn_sub<void>(data{next_key_}, std::move(copy));
+    if (not co_await ctx.plan_and_spawn_sub<void>(data{next_key_},
+                                                  std::move(copy))) {
+      // planning emitted a diagnostic; the pipeline will be torn down.
+      co_return;
+    }
     next_key_ += 1;
     running_subs_ += 1;
   }

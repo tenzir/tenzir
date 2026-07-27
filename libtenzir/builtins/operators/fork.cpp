@@ -291,7 +291,10 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     if (not started_) {
-      co_await ctx.spawn_sub<table_slice>(int64_t{0}, args_.pipe.inner);
+      if (not co_await ctx.plan_and_spawn_sub<table_slice>(int64_t{0},
+                                                           args_.pipe.inner)) {
+        co_return;
+      }
       started_ = true;
     }
   }

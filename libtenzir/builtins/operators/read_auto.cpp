@@ -257,8 +257,10 @@ private:
     TENZIR_ASSERT(ast);
     auto pipe = std::move(*ast).compile(root);
     TENZIR_ASSERT(pipe);
-    co_await ctx.spawn_sub<chunk_ptr>(int64_t{0}, std::move(*pipe),
-                                      DiagnosticBehavior::Unchanged);
+    if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(
+          int64_t{0}, std::move(*pipe), DiagnosticBehavior::Unchanged)) {
+      co_return;
+    }
     for (auto& chunk : buffered_) {
       co_await push_to_selected(std::move(chunk), ctx);
     }

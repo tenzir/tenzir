@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/async/fwd.hpp"
+#include "tenzir/base_ctx.hpp"
 #include "tenzir/element_type.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -247,9 +248,59 @@ auto make_where_ir(ast::expression filter) -> Box<ir::Operator>;
 
 namespace ir {
 
-/// Instantiate a compiled pipeline: resolve its `let` bindings, substitute
-/// non-deterministic arguments (e.g. `now()`), and optimize the result.
-auto instantiate(pipeline pipe, base_ctx ctx) -> failure_or<pipeline>;
+/// A `Plan` is an instantiated, optimized, and type-checked pipeline that is
+/// ready to spawned.
+///
+/// It is produced exclusively by `ir::make_plan`, which performs all fallible
+/// validation (resolving `let` bindings, substituting non-deterministic
+/// arguments, optimizing, and type-checking) up front. Spawning a `Plan` can
+/// therefore not fail. A `Plan` carries the element type it was validated
+/// against and the type it produces.
+class Plan {
+public:
+  Plan(const Plan&) = default;
+  Plan(Plan&&) = default;
+  auto operator=(const Plan&) -> Plan& = default;
+  auto operator=(Plan&&) -> Plan& = default;
+  ~Plan() = default;
+
+  /// The element type this plan was validated against.
+  auto input_type() const -> element_type_tag {
+    return input_;
+  }
+
+  /// The element type this plan produces
+  auto output_type() const -> element_type_tag {
+    return output_;
+  }
+
+  /// Spawn a chain of operators
+  auto spawn() && -> std::vector<AnyOperator>;
+
+  /// Access the underlying instantiated pipeline, e.g. for debug output.
+  auto pipe() const -> const pipeline& {
+    return pipe_;
+  }
+
+private:
+  friend auto make_plan(pipeline pipe, element_type_tag input, base_ctx ctx)
+    -> failure_or<Plan>;
+
+  Plan(pipeline pipe, element_type_tag input, element_type_tag output)
+    : pipe_{std::move(pipe)}, input_{input}, output_{output} {
+  }
+
+  pipeline pipe_;
+  element_type_tag input_;
+  element_type_tag output_;
+};
+
+/// Instantiate and validate a compiled pipeline against `input`: resolve its
+/// `let` bindings, substitute non-deterministic arguments (e.g. `now()`),
+/// optimize the result, and type-check it against `input`. Returns a `Plan`
+/// that can be spawned without further failure.
+auto make_plan(pipeline pipe, element_type_tag input, base_ctx ctx)
+  -> failure_or<Plan>;
 
 } // namespace ir
 

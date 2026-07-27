@@ -102,9 +102,12 @@ protected:
       } else {
         auto copy = args_.pipe.inner;
         copy.bind(args_.let, constant_from_key(group.key));
+        sub = co_await ctx.plan_and_spawn_sub<table_slice>(group.key,
+                                                           std::move(copy));
+        if (not sub) {
+          continue;
+        }
         seen_keys_.emplace(group.key);
-        sub = co_await ctx.spawn_sub(group.key, std::move(copy),
-                                     tag_v<table_slice>);
       }
       TENZIR_ASSERT(sub);
       std::ignore

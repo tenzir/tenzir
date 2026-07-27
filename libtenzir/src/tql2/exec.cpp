@@ -2300,7 +2300,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
         parse_pipeline_with_location_override(definition, override, ctx));
     // Reuse the main compilation root so that `let_id`s are drawn from a single
     // namespace. The implicit pipeline is merged into the user IR and
-    // instantiated together with it by `ir::instantiate` below, so its `let`
+    // instantiated together with it by `ir::make_plan` below, so its `let`
     // bindings must not collide with the user pipeline's IDs.
     return std::move(ast).compile(root);
   };
@@ -2346,15 +2346,14 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
       return failure::promise();
     }
   }
-  // Instantiate and optimize the IR. This is the single instantiation point;
-  // the `--dump-opt-ir` debug output shows the result of this stage.
-  TRY(ir, ir::instantiate(std::move(ir), b_ctx));
+  // Instantiate, optimize, and type-check the IR into a plan.
+  TRY(auto plan, ir::make_plan(std::move(ir), tag_v<void>, b_ctx));
   if (cfg.dump_opt_ir) {
-    fmt::print("{:#?}\n", ir);
+    fmt::print("{:#?}\n", plan.pipe());
     return not ctx.has_failure();
   }
-  // Spawn operators from the IR.
-  auto spawned = std::move(ir).spawn(tag_v<void>);
+  // Spawn operators from the plan.
+  auto spawned = std::move(plan).spawn();
   // Do not proceed to execution if there has been an error.
   if (ctx.has_failure()) {
     return false;

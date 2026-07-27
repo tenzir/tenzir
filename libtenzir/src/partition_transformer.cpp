@@ -437,8 +437,8 @@ auto compile_table_slice_transform(ast::pipeline ast, diagnostic_handler& dh)
   auto b_ctx = base_ctx{ctx.dh(), ctx.reg()};
   auto root = compile_ctx::make_root(b_ctx);
   TRY(auto ir, std::move(ast).compile(root));
-  TRY(ir, ir::instantiate(std::move(ir), b_ctx));
-  TRY(auto output, ir.infer_type(tag_v<table_slice>, dh));
+  TRY(auto plan, ir::make_plan(std::move(ir), tag_v<table_slice>, b_ctx));
+  auto output = plan.output_type();
   if (not output.is<table_slice>()) {
     diagnostic::error("partition transform: pipeline must produce events, "
                       "got {}",
@@ -446,7 +446,7 @@ auto compile_table_slice_transform(ast::pipeline ast, diagnostic_handler& dh)
       .emit(dh);
     return failure::promise();
   }
-  auto spawned = std::move(ir).spawn(tag_v<table_slice>);
+  auto spawned = std::move(plan).spawn();
   if (ctx.has_failure()) {
     return failure::promise();
   }

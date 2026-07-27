@@ -151,7 +151,11 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    co_await ctx.spawn_sub<table_slice>(caf::none, std::move(pipeline));
+    if (not co_await ctx.plan_and_spawn_sub<table_slice>(caf::none,
+                                                         std::move(pipeline))) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
     upload_task_.emplace(ctx.spawn_task(upload_loop(ctx)));
     co_return;
   }

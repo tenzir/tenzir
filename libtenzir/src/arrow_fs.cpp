@@ -166,7 +166,12 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
         {"mtime", file_state.mtime},
       };
       pipe.bind(base_args_.file_info, f_info);
-      co_await ctx.spawn_sub<chunk_ptr>(open.job_id, std::move(pipe));
+      if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(open.job_id,
+                                                         std::move(pipe))) {
+        processing_[*slot].reset();
+        start_job_in_slot(*slot, ctx);
+        co_return;
+      }
       // Queue the first read.
       enqueue_task(ctx,
                    [job_id = open.job_id,
@@ -703,6 +708,12 @@ auto ToArrowFsOperator::process(table_slice input, OpCtx& ctx) -> Task<void> {
       auto guard = co_await state_.lock();
       auto& kts = guard->key_to_sub;
       if (auto it = kts.find(key); it == kts.end()) {
+        auto plan
+          = ir::make_plan(base_args_.pipe.inner, tag_v<table_slice>, ctx);
+        if (not plan) {
+          // Instantiation emitted a diagnostic; the pipeline will be torn down.
+          co_return;
+        }
         sub_key = next_sub_key_++;
         auto part = Partition{};
         part.key = key;
@@ -711,7 +722,7 @@ auto ToArrowFsOperator::process(table_slice input, OpCtx& ctx) -> Task<void> {
         kts.emplace(key, sub_key);
         // Hold the lock across `spawn_sub` so concurrent `process_sub`
         // callers see the partition in the map before the sub can emit.
-        co_await ctx.spawn_sub<table_slice>(sub_key, base_args_.pipe.inner);
+        co_await ctx.spawn_sub(sub_key, std::move(*plan));
         // Drive deadline-based rotation independently of incoming data.
         if (template_.has_uuid()) {
           auto cancel_token = pit->second.cancel_timeout.getToken();

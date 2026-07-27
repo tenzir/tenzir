@@ -197,7 +197,11 @@ public:
         TENZIR_ASSERT(next_sub_id_ <= static_cast<uint64_t>(
                         std::numeric_limits<int64_t>::max()));
         auto key = data{int64_t{static_cast<int64_t>(next_sub_id_++)}};
-        co_await ctx.spawn_sub<chunk_ptr>(key, std::move(parser));
+        if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(key,
+                                                           std::move(parser))) {
+          request_stop();
+          co_return;
+        }
         auto sub = ctx.get_sub(make_view(key));
         if (not sub) {
           request_stop();

@@ -210,7 +210,11 @@ public:
       co_await folly::coro::co_withCancellation(token, accept_loop(ctx));
     });
     auto pipeline = std::move(args_.printer.inner);
-    co_await ctx.spawn_sub<table_slice>(sub_key_, std::move(pipeline));
+    if (not co_await ctx.plan_and_spawn_sub<table_slice>(sub_key_,
+                                                         std::move(pipeline))) {
+      co_await request_stop();
+      co_return;
+    }
     co_return;
   }
 

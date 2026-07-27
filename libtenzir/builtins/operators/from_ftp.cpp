@@ -127,7 +127,11 @@ public:
                          MetricsDirection::read, MetricsVisibility::external_,
                          MetricsUnit::events);
     download_.emplace(session_->start_download(download_buffer_capacity));
-    co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(pipeline));
+    if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(caf::none,
+                                                       std::move(pipeline))) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
     co_return;
   }
 

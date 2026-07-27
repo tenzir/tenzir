@@ -233,7 +233,11 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "from_stdin"},
                          MetricsDirection::read, MetricsVisibility::external_,
                          MetricsUnit::events);
-    co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(pipe));
+    if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(caf::none,
+                                                       std::move(pipe))) {
+      done_ = true;
+      co_return;
+    }
     ctx.spawn_task(folly::coro::co_withExecutor(
       ctx.io_executor(), read_stdin(chunk_queue_, ctx.dh())));
   }

@@ -52,7 +52,11 @@ public:
         = ctx.make_counter(*label, MetricsDirection::write,
                            MetricsVisibility::external_, MetricsUnit::bytes);
     }
-    co_await ctx.spawn_sub<table_slice>(sub_key_, std::move(pipeline));
+    if (not co_await ctx.plan_and_spawn_sub<table_slice>(sub_key_,
+                                                         std::move(pipeline))) {
+      finish();
+      co_return;
+    }
     co_return;
   }
 

@@ -1194,8 +1194,11 @@ private:
       TENZIR_TRACE("from_http inferred parser `{}` for `{}`", plugin->name(),
                    pagination_.current_url);
     }
-    co_await ctx.spawn_sub(pagination_.page_count, std::move(pipeline),
-                           tag_v<chunk_ptr>);
+    if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(pagination_.page_count,
+                                                       std::move(pipeline))) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
   }
 
   auto push_error_field(Push<table_slice>& push, OpCtx& ctx) -> Task<void> {

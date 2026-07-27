@@ -741,37 +741,30 @@ private:
     co_return {};
   }
 
-  auto spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input,
-                 DiagnosticBehavior diag_behavior)
-    -> Task<AnySubHandle&> override {
+  auto spawn_sub(SubKey key, ir::Plan plan, DiagnosticBehavior diag_behavior,
+                 bool fused) -> Task<AnySubHandle&> override {
     switch (diag_behavior) {
       case DiagnosticBehavior::Unchanged:
-        return spawn_sub_impl(std::move(key), std::move(pipe), input, false,
-                              dh_, folly::CancellationToken{}, *dh_);
+        return spawn_sub_impl(std::move(key), std::move(plan), fused, dh_,
+                              folly::CancellationToken{});
       case DiagnosticBehavior::ErrorToWarning: {
         auto cancel_source = std::make_shared<folly::CancellationSource>();
         auto sub_cancel_token = cancel_source->getToken();
         return spawn_sub_impl(
-          std::move(key), std::move(pipe), input, false,
+          std::move(key), std::move(plan), fused,
           Arc<DiagHandler>{std::in_place_type<ErrorDemotingDiagHandler>, *dh_,
                            std::move(cancel_source)},
-          sub_cancel_token, *dh_);
+          sub_cancel_token);
       }
       case DiagnosticBehavior::WarningToError: {
         return spawn_sub_impl(
-          std::move(key), std::move(pipe), input, false,
+          std::move(key), std::move(plan), fused,
           Arc<DiagHandler>{std::in_place_type<WarningPromotingDiagHandler>,
                            *dh_, nullptr},
-          folly::CancellationToken{}, *dh_);
+          folly::CancellationToken{});
       }
     }
     TENZIR_UNREACHABLE();
-  }
-
-  auto spawn_sub_fused(SubKey key, ir::pipeline pipe, element_type_tag input)
-    -> Task<AnySubHandle&> override {
-    return spawn_sub_impl(std::move(key), std::move(pipe), input, true, dh_,
-                          folly::CancellationToken{}, *dh_);
   }
 
   auto make_closed_sub(SubKey key, element_type_tag input, PipeId sub_id,
@@ -801,10 +794,10 @@ private:
     return it->second.handle;
   }
 
-  auto spawn_sub_impl(SubKey key, ir::pipeline pipe, element_type_tag input,
-                      bool fused, Arc<DiagHandler> sub_dh,
-                      folly::CancellationToken sub_cancel_token,
-                      DiagHandler& parent_dh) -> Task<AnySubHandle&> {
+  auto
+  spawn_sub_impl(SubKey key, ir::Plan plan, bool fused, Arc<DiagHandler> sub_dh,
+                 folly::CancellationToken sub_cancel_token)
+    -> Task<AnySubHandle&> {
     auto sub_id = id_.sub(next_subpipeline_id_);
     if (not fused) {
       // For the parallel operator, which is currently the only user of the
@@ -812,29 +805,18 @@ private:
       // same executor such that all legs contribute to the same metrics.
       next_subpipeline_id_ += 1;
     }
-    // Instantiate and optimize.
-    auto instantiated
-      = ir::instantiate(std::move(pipe), base_ctx{parent_dh, *reg_});
-    if (not instantiated) {
-      co_await wait_forever();
-      TENZIR_UNREACHABLE();
-    }
-    pipe = std::move(*instantiated);
-    auto output = pipe.infer_type(input, parent_dh);
-    // The caller is responsible for passing a well-typed pipeline that
-    // type-checks against `input`. And since optimizations are type-preserving,
-    // we know that this cannot fail.
-    TENZIR_ASSERT(output);
-    auto spawned = std::move(pipe).spawn(input);
+    auto input = plan.input_type();
+    auto output = plan.output_type();
+    auto spawned = std::move(plan).spawn();
     if (spawned.empty()) {
-      TENZIR_ASSERT(*output == input);
+      TENZIR_ASSERT(output == input);
       spawned.push_back(make_identity_operator(input));
     }
     auto [from_control_sender, from_control_receiver]
       = channel<FromControl>(16);
     auto [to_control_sender, to_control_receiver] = channel<ToControl>(16);
     auto [runner, push_sub, pull_sub] = match(
-      std::tie(input, *output),
+      std::tie(input, output),
       [&]<class In, class Out>(
         tag<In>, tag<Out>) -> std::tuple<Task<void>, AnyOpPush, AnyOpPull> {
         auto chain

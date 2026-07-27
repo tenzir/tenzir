@@ -49,8 +49,10 @@ public:
           or ctx.get_sub(static_cast<int64_t>(i)).is_some()) {
         continue;
       }
-      co_await ctx.spawn_sub<table_slice>(static_cast<int64_t>(i),
-                                          args_.branches[i]);
+      if (not co_await ctx.plan_and_spawn_sub<table_slice>(
+            static_cast<int64_t>(i), args_.branches[i])) {
+        co_return;
+      }
     }
   }
 

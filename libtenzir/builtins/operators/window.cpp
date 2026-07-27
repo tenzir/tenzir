@@ -183,10 +183,13 @@ protected:
         // Bind the window record as a `let` binding
         auto copy = args_.pipe.inner;
         copy.bind(args_.let, ast::constant::kind{std::move(rec)});
+        sub = co_await ctx.plan_and_spawn_sub<table_slice>(data{start},
+                                                           std::move(copy));
+        if (not sub) {
+          continue;
+        }
         seen_.insert(start);
         open_.emplace(start, WindowState{end, now});
-        sub = co_await ctx.spawn_sub(data{start}, std::move(copy),
-                                     tag_v<table_slice>);
       }
       TENZIR_ASSERT(sub);
       if (auto it = open_.find(start); it != open_.end()) {

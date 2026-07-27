@@ -157,7 +157,10 @@ struct EveryImpl {
   }
 
   auto spawn_new(OpCtx& ctx) -> Task<void> {
-    co_await ctx.spawn_sub<Input>(next_sub_id_, args_.pipe.inner);
+    if (not co_await ctx.plan_and_spawn_sub<Input>(next_sub_id_,
+                                                   args_.pipe.inner)) {
+      co_return;
+    }
     next_sub_id_ += 1;
   }
 
