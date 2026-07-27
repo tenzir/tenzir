@@ -107,6 +107,19 @@ auto parse_feather(generator<chunk_ptr> input, diagnostic_handler& dh)
         // follow do not even form a valid new stream schema. Treat them as
         // trailing garbage instead of failing hard. Once a new stream's schema
         // has decoded, a later failure is genuine corruption.
+        // Drain and count the bytes still buffered upstream so the diagnostic
+        // reports everything we discard, not just what reached the decoder.
+        constexpr auto piece = size_t{1} << 16;
+        while (true) {
+          auto extra = byte_reader(piece);
+          if (not extra) {
+            continue;
+          }
+          truncated_bytes += extra->size();
+          if (extra->size() < piece) {
+            break;
+          }
+        }
         if (truncated_bytes != 0) {
           diagnostic::warning("truncated {} trailing bytes", truncated_bytes)
             .emit(dh);
