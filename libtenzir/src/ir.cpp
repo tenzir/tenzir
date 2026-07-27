@@ -129,15 +129,6 @@ auto get_porting_hint(const ast::entity& op) -> std::string_view {
                                                        : std::string_view{};
 }
 
-auto merge_compiled_pipeline(std::vector<ir::let>& lets,
-                             std::vector<Box<ir::Operator>>& operators,
-                             ir::pipeline pipe) -> void {
-  lets.insert(lets.end(), std::move_iterator{pipe.lets.begin()},
-              std::move_iterator{pipe.lets.end()});
-  operators.insert(operators.end(), std::move_iterator{pipe.operators.begin()},
-                   std::move_iterator{pipe.operators.end()});
-}
-
 class Set final : public Operator<table_slice, table_slice> {
 public:
   Set(std::vector<ast::assignment> assignments, event_order order)
@@ -681,8 +672,7 @@ auto ir::CompileResult::unwrap() && -> pipeline {
 auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
   // TODO: Or do we assume that entities are already resolved?
   TRY(resolve_entities(*this, ctx));
-  auto lets = std::vector<ir::let>{};
-  auto operators = std::vector<Box<ir::Operator>>{};
+  auto acc = ir::pipeline{};
   auto scope = ctx.open_scope();
   for (auto& stmt : body) {
     auto result = match(
@@ -724,8 +714,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             // were not defined, for example because it can then introduce those
             // bindings by itself.
             TRY(auto compiled, op.ir_plugin->compile(x, ctx));
-            merge_compiled_pipeline(lets, operators,
-                                    std::move(compiled).unwrap());
+            acc.append(std::move(compiled).unwrap());
             return {};
           },
           [&](const user_defined_operator& op) -> failure_or<void> {
@@ -757,7 +746,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             // we pre-bound above before substitution copied them in.
             auto udo_ctx = ctx.without_env();
             TRY(auto pipe, std::move(substituted).compile(udo_ctx));
-            merge_compiled_pipeline(lets, operators, std::move(pipe));
+            acc.append(std::move(pipe));
             return {};
           });
       },
@@ -765,7 +754,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
         TRY(x.left.bind(ctx));
         TRY(resolve_assignment_left(x, ctx));
         TRY(x.right.bind(ctx));
-        operators.push_back(make_set_ir(std::move(x)));
+        acc.operators.push_back(make_set_ir(std::move(x)));
         return {};
       },
       [&](ast::let_stmt x) -> failure_or<void> {
@@ -778,7 +767,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
         }
         TRY(x.expr.bind(ctx));
         auto id = scope.let(std::string{x.name_without_dollar()});
-        lets.emplace_back(std::move(x.name), std::move(x.expr), id);
+        acc.lets.emplace_back(std::move(x.name), std::move(x.expr), id);
         return {};
       },
       [&](ast::if_stmt x) -> failure_or<void> {
@@ -791,12 +780,12 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
           TRY(auto pipe, std::move(x.else_->pipe).compile(ctx));
           args.alternative.emplace(std::move(pipe));
         }
-        operators.emplace_back(IfIr{std::move(args)});
+        acc.operators.emplace_back(IfIr{std::move(args)});
         return {};
       },
       [&](ast::match_stmt x) -> failure_or<void> {
         TRY(auto op, make_match_ir(std::move(x), ctx));
-        operators.push_back(std::move(op));
+        acc.operators.push_back(std::move(op));
         return {};
       },
       [&](ast::type_stmt x) -> failure_or<void> {
@@ -808,7 +797,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
       });
     TRY(result);
   }
-  return ir::pipeline{std::move(lets), std::move(operators)};
+  return acc;
 }
 
 auto ir::pipeline::bind(let_id id, ast::constant::kind value) -> void {
@@ -817,6 +806,33 @@ auto ir::pipeline::bind(let_id id, ast::constant::kind value) -> void {
   auto value_ex
     = ast::expression{ast::constant{std::move(value), location::unknown}};
   lets.insert(lets.begin(), let{ast::identifier{}, value_ex, id});
+}
+
+auto ir::pipeline::prepend(pipeline other) -> void {
+  lets.insert(lets.begin(), std::move_iterator{other.lets.begin()},
+              std::move_iterator{other.lets.end()});
+  operators.insert(operators.begin(),
+                   std::move_iterator{other.operators.begin()},
+                   std::move_iterator{other.operators.end()});
+}
+
+auto ir::pipeline::prepend(optimize_filter filter) -> void {
+  operators.insert_range(operators.begin(),
+                         filter | std::views::as_rvalue
+                           | std::views::transform(make_where_ir));
+}
+
+auto ir::pipeline::append(pipeline other) -> void {
+  lets.insert(lets.end(), std::move_iterator{other.lets.begin()},
+              std::move_iterator{other.lets.end()});
+  operators.insert(operators.end(), std::move_iterator{other.operators.begin()},
+                   std::move_iterator{other.operators.end()});
+}
+
+auto ir::pipeline::append(optimize_filter filter) -> void {
+  operators.insert_range(operators.end(),
+                         filter | std::views::as_rvalue
+                           | std::views::transform(make_where_ir));
 }
 
 auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
@@ -878,16 +894,8 @@ auto ir::instantiate(pipeline pipe, base_ctx ctx) -> failure_or<pipeline> {
   auto opt = std::move(pipe).optimize(optimize_filter{}, event_order::ordered);
   TENZIR_ASSERT(opt.replacement.lets.empty());
   pipe = std::move(opt.replacement);
-  // Prepend the leftover filters as leading `where` operators, preserving their
-  // relative order (inserting one-by-one at the front would reverse them).
-  auto where_ops = std::vector<Box<Operator>>{};
-  where_ops.reserve(opt.filter.size());
-  for (auto& expr : opt.filter) {
-    where_ops.push_back(make_where_ir(std::move(expr)));
-  }
-  pipe.operators.insert(pipe.operators.begin(),
-                        std::move_iterator{where_ops.begin()},
-                        std::move_iterator{where_ops.end()});
+  // Prepend the leftover filters as leading `where` operators.
+  pipe.prepend(std::move(opt.filter));
   return pipe;
 }
 

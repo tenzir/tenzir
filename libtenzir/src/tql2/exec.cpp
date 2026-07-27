@@ -2318,11 +2318,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   if (implicit_source) {
     TRY(auto implicit,
         parse_implicit(*implicit_source, implicit_source_location));
-    ir.lets.insert(ir.lets.begin(), std::move_iterator{implicit.lets.begin()},
-                   std::move_iterator{implicit.lets.end()});
-    ir.operators.insert(ir.operators.begin(),
-                        std::move_iterator{implicit.operators.begin()},
-                        std::move_iterator{implicit.operators.end()});
+    ir.prepend(std::move(implicit));
     TRY(output, ir.infer_type(tag_v<void>, ctx));
   }
   if (output.is_none()) {
@@ -2334,11 +2330,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     auto sink_def = output->is<table_slice>() ? cfg.implicit_events_sink
                                               : cfg.implicit_bytes_sink;
     TRY(auto implicit, parse_implicit(sink_def, implicit_sink_location));
-    ir.lets.insert(ir.lets.end(), std::move_iterator{implicit.lets.begin()},
-                   std::move_iterator{implicit.lets.end()});
-    ir.operators.insert(ir.operators.end(),
-                        std::move_iterator{implicit.operators.begin()},
-                        std::move_iterator{implicit.operators.end()});
+    ir.append(std::move(implicit));
     TRY(output, ir.infer_type(tag_v<void>, ctx));
     TENZIR_ASSERT(output.is_some());
     // TODO: This is a problem with the implicit sink config.

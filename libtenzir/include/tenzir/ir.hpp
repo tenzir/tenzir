@@ -131,6 +131,22 @@ struct pipeline {
   /// instantiated.
   auto bind(let_id id, ast::constant::kind value) -> void;
 
+  /// Move `other`'s `let` bindings and operators to the front of this pipeline,
+  /// preserving their relative order.
+  auto prepend(pipeline other) -> void;
+
+  /// Prepend the given filter expressions as leading `where` operators,
+  /// preserving their relative order.
+  auto prepend(optimize_filter filter) -> void;
+
+  /// Move `other`'s `let` bindings and operators to the back of this pipeline,
+  /// preserving their relative order.
+  auto append(pipeline other) -> void;
+
+  /// Append the given filter expressions as trailing `where` operators,
+  /// preserving their relative order.
+  auto append(optimize_filter filter) -> void;
+
   /// @see Operator
   auto substitute(substitute_ctx ctx, bool instantiate) -> failure_or<void>;
 

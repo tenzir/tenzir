@@ -138,9 +138,7 @@ public:
       = [&](ir::pipeline& branch, ir::optimize_filter f) -> event_order {
       auto opt = std::move(branch).optimize(std::move(f), order);
       branch = std::move(opt.replacement);
-      branch.operators.insert_range(branch.operators.begin(),
-                                    opt.filter
-                                      | std::views::transform(make_where_ir));
+      branch.prepend(std::move(opt.filter));
       return opt.order;
     };
     auto result_order = order;
