@@ -65,7 +65,8 @@ auto inspect(Inspector& f, send_initial_dbstate& x) {
 //  TODO: Move into separate header.
 caf::error
 extract_partition_synopsis(const std::filesystem::path& partition_path,
-                           const std::filesystem::path& partition_synopsis_path);
+                           const std::filesystem::path& partition_synopsis_path,
+                           bool verify = false);
 
 /// Flatbuffer integration. Note that this is only one-way, restoring
 /// the index state needs additional runtime information.

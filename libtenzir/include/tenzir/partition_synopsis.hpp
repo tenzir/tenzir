@@ -47,6 +47,13 @@ struct partition_synopsis final : public caf::ref_counted {
   /// @related buffered_synopsis
   void shrink();
 
+  /// Drops the Bloom-filter sketches (string and IP fields), matching what
+  /// `unpack` does with `lazy_sketches`: field-level sketches are kept as null
+  /// entries and type-level Bloom-filter sketches are removed. Min/max, time,
+  /// and bool synopses are retained. Used to keep newly merged synopses out of
+  /// resident memory when lazy sketches are enabled.
+  void defer_bloom_filters();
+
   /// Estimate the memory footprint of this partition synopsis.
   /// @returns A best-effort estimate of the amount of memory used by this
   ///          synopsis.
@@ -94,7 +101,7 @@ struct partition_synopsis final : public caf::ref_counted {
 
   FRIEND_ATTRIBUTE_NODISCARD friend caf::error
   unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis&,
-         partition_synopsis&);
+         partition_synopsis&, bool lazy_sketches);
 
   // Returns a raw pointer to a deep copy of this partition synopsis.
   // For use by the `caf::intrusive_cow_ptr`.
@@ -104,6 +111,19 @@ private:
   // Cached memory usage.
   mutable std::atomic<size_t> memusage_ = 0ull;
 };
+
+/// Unpacks a partition synopsis from its FlatBuffers representation.
+/// @param x The serialized partition synopsis.
+/// @param ps The synopsis to populate.
+/// @param lazy_sketches When set, Bloom-filter sketches (string and IP fields)
+/// are not deserialized. Such fields are still registered with a null synopsis
+/// so that the catalog conservatively treats predicates on them as candidates
+/// (never a false negative), trading sketch-based pruning for much lower
+/// resident memory and faster startup. Min/max, time, and bool synopses are
+/// always loaded.
+[[nodiscard]] caf::error
+unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
+       partition_synopsis& ps, bool lazy_sketches = false);
 
 /// Some quantitative information about a partition.
 struct partition_info {
