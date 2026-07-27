@@ -1,0 +1,8 @@
+error: failed to decode Feather input
+  --> tests/operators/read_feather/valid_then_corrupt_batch.tql:10:3
+   |
+10 |   read_feather
+   |   ^^^^^^^^^^^^ 
+   |
+   = note: IOError: Invalid flatbuffers message.
+   = note: failed to decode the byte stream into a record batch

@@ -1,0 +1,6 @@
+// Two complete Feather IPC streams concatenated into one input must both be
+// decoded. The decoder resets at each stream's end-of-stream marker and
+// continues with the buffered bytes of the next stream.
+from_file f"{env("TENZIR_INPUTS")}/feather/concatenated_streams.feather" {
+  read_feather
+}

@@ -1,0 +1,6 @@
+// A complete Feather IPC stream followed by trailing bytes that look like a
+// valid IPC message frame but fail to decode must not fail hard: the already
+// decoded stream is emitted and the trailing bytes are reported as a warning.
+from_file f"{env("TENZIR_INPUTS")}/feather/valid_then_corrupt_stream.feather" {
+  read_feather
+}

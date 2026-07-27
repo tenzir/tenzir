@@ -31,6 +31,13 @@ class callback_listener : public arrow::ipc::Listener {
 public:
   callback_listener() = default;
 
+  auto OnSchemaDecoded(std::shared_ptr<arrow::Schema> schema)
+    -> arrow::Status override {
+    static_cast<void>(schema);
+    schema_decoded = true;
+    return arrow::Status::OK();
+  }
+
   auto OnRecordBatchDecoded(std::shared_ptr<arrow::RecordBatch> record_batch)
     -> arrow::Status override {
     record_batch_buffer.push(std::move(record_batch));
@@ -38,6 +45,9 @@ public:
   }
 
   std::queue<std::shared_ptr<arrow::RecordBatch>> record_batch_buffer;
+  // Whether the current stream's schema has been decoded since the last reset.
+  // Distinguishes trailing garbage from a genuinely corrupt new stream.
+  bool schema_decoded = false;
 };
 
 } // namespace
@@ -54,7 +64,19 @@ auto parse_feather(generator<chunk_ptr> input, diagnostic_handler& dh)
     auto required_size
       = detail::narrow_cast<size_t>(stream_decoder.next_required_size());
     if (required_size == 0) {
-      co_return;
+      // The current IPC stream is complete. The input may contain further
+      // concatenated streams that `byte_reader` still holds, because we only
+      // ever feed the decoder exactly `required_size` bytes. Reset the decoder
+      // and continue; the next read requests the magic bytes of a new stream,
+      // and if the input is exhausted the short/empty-payload path below
+      // terminates normally.
+      auto reset_result = stream_decoder.Reset();
+      TENZIR_ASSERT(reset_result.ok(), reset_result.ToString().c_str());
+      // Reset the trailing-byte counter so bytes from the finished stream do
+      // not bleed into diagnostics about a malformed subsequent stream.
+      truncated_bytes = 0;
+      listener->schema_decoded = false;
+      continue;
     }
     auto payload = byte_reader(required_size);
     if (not payload) {
@@ -80,6 +102,30 @@ auto parse_feather(generator<chunk_ptr> input, diagnostic_handler& dh)
     auto decode_result
       = stream_decoder.Consume(as_arrow_buffer(std::move(payload)));
     if (not decode_result.ok()) {
+      if (decoded_once and not listener->schema_decoded) {
+        // We already decoded at least one complete stream and the bytes that
+        // follow do not even form a valid new stream schema. Treat them as
+        // trailing garbage instead of failing hard. Once a new stream's schema
+        // has decoded, a later failure is genuine corruption.
+        // Drain and count the bytes still buffered upstream so the diagnostic
+        // reports everything we discard, not just what reached the decoder.
+        constexpr auto piece = size_t{1} << 16;
+        while (true) {
+          auto extra = byte_reader(piece);
+          if (not extra) {
+            continue;
+          }
+          truncated_bytes += extra->size();
+          if (extra->size() < piece) {
+            break;
+          }
+        }
+        if (truncated_bytes != 0) {
+          diagnostic::warning("truncated {} trailing bytes", truncated_bytes)
+            .emit(dh);
+        }
+        co_return;
+      }
       diagnostic::error("{}", decode_result.ToStringWithoutContextLines())
         .note("failed to decode the byte stream into a record batch")
         .emit(dh);

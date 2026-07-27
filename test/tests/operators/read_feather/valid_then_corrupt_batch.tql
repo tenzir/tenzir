@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+// A complete Feather IPC stream followed by a second stream whose schema
+// decodes but whose record batch is corrupt must fail hard: once a new
+// stream has begun, a decode error is genuine corruption and must not be
+// silently downgraded to a trailing-bytes warning.
+from_file f"{env("TENZIR_INPUTS")}/feather/valid_then_corrupt_batch.feather" {
+  read_feather
+}
