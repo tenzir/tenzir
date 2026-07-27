@@ -1,0 +1,5 @@
+// Regression test: a user pipeline `let` and an implicit-sink `let` must draw
+// their `let_id`s from a single namespace. If they collide, instantiation
+// trips an internal assertion. The implicit sink is configured in tenzir.yaml.
+let $p = "x"
+from {a: $p}

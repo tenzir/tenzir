@@ -1,0 +1,10 @@
+tenzir:
+  # Exercise the IR ("neo") executor, whose `exec_with_ir` path merges implicit
+  # source/sink pipelines into the user IR before instantiation.
+  neo: true
+  exec:
+    # An implicit sink that itself declares a `let`. Together with a user
+    # pipeline that also declares one, this used to allocate colliding
+    # `let_id`s (each compiled with a fresh root numbering from 1), tripping
+    # `TENZIR_ASSERT(inserted)` during instantiation.
+    implicit-events-sink: 'let $s = "!" | set marker=$s | to_stdout { write_json compact=true }'

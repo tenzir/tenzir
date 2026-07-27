@@ -2298,8 +2298,11 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
                             location override) -> failure_or<ir::pipeline> {
     TRY(auto ast,
         parse_pipeline_with_location_override(definition, override, ctx));
-    auto implicit_root = compile_ctx::make_root(b_ctx, source_map);
-    return std::move(ast).compile(implicit_root);
+    // Reuse the main compilation root so that `let_id`s are drawn from a single
+    // namespace. The implicit pipeline is merged into the user IR and
+    // instantiated together with it by `ir::instantiate` below, so its `let`
+    // bindings must not collide with the user pipeline's IDs.
+    return std::move(ast).compile(root);
   };
   auto null_dh = null_diagnostic_handler{};
   auto output = Option<element_type_tag>{};
