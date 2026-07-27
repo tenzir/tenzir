@@ -1,0 +1,19 @@
+// Exercises every edge of the conversion matrix in one batch. The first
+// row's `l` forces the column to uint64 so all rows share one schema:
+//   l   uint64 -> long:  2^64-1 nulls, 2^63-1 is the last value that fits
+//   dl  double -> long:  fractions and 2^63 null, -2^63 is exact
+//   i   double -> int:   2^31 nulls, 2^31-1 fits
+//   s   int64  -> string un-parsed: the whole column nulls with a warning
+//   n   string -> long   un-parsed: the whole column nulls with a warning
+//   ts  time   -> timestamptz: nanoseconds truncate to microseconds
+//   dur duration -> long: the nanosecond count, sign preserved
+//   x   null   -> long:  null-typed input null-fills silently
+from {k: 1, l: 18446744073709551615, dl: 1.0, i: 1.0, s: 10, n: "42",
+      ts: 2026-02-01T00:00:00.123456789Z, dur: 2s, x: null},
+     {k: 2, l: 9223372036854775807, dl: 1.5, i: 2147483647.0, s: 11, n: "43",
+      ts: 2026-02-01T00:00:01Z, dur: 1500ms, x: null},
+     {k: 3, l: 1, dl: -9223372036854775808.0, i: 2147483648.0, s: 12, n: "44",
+      ts: 2026-02-01T00:00:02Z, dur: 0s, x: null},
+     {k: 4, l: 2, dl: 9223372036854775808.0, i: 1.5, s: 13, n: "45",
+      ts: 2026-02-01T00:00:03Z, dur: -1s, x: null}
+to_iceberg "convertns.matrix", catalog=env("ICEBERG_REST_URI")

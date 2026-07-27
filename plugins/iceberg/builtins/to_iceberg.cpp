@@ -33,12 +33,14 @@
 #include <arrow/compute/api_scalar.h>
 #include <arrow/compute/api_vector.h>
 #include <arrow/compute/cast.h>
+#include <arrow/compute/exec.h>
 #include <arrow/util/byte_size.h>
 #include <folly/coro/UnboundedQueue.h>
 #include <iceberg/data/data_writer.h>
 #include <iceberg/table.h>
 
 #include <algorithm>
+#include <limits>
 #include <ranges>
 #include <span>
 #include <string>
@@ -154,29 +156,100 @@ auto has_parameter(PartitionTransform transform) -> bool {
          or transform == PartitionTransform::truncate;
 }
 
-/// Casts `source` to the target type of `options`, collecting the pieces
-/// into `out`. Arrow casts are all-or-nothing per array, so a single bad
-/// value would fail the whole column; this bisects around the rows the cast
-/// kernel rejects (numeric overflow, unparsable strings) in
-/// O(failures * log rows) casts and nulls only those.
-auto cast_valid_rows(std::shared_ptr<arrow::Array> const& source,
-                     arrow::compute::CastOptions const& options,
-                     std::vector<std::shared_ptr<arrow::Array>>& out,
-                     int64_t& failures) -> void {
-  auto cast = arrow::compute::Cast(source, options);
-  if (cast.ok()) {
-    out.push_back(cast->make_array());
-    return;
+/// How an input column may convert into a differently-typed table column.
+/// The operator only converts along the documented type mapping: numeric
+/// conversions within the {int, long, float, double} family, timestamp
+/// unit and zone adjustment, and durations as their nanosecond count.
+/// Everything else is a type mismatch that null-fills the column with a
+/// warning; in particular, parsing strings into numbers or stringifying
+/// values stays in the pipeline, where explicit functions such as `int()`
+/// keep the choice visible.
+enum class Conversion {
+  /// No supported conversion between the two types.
+  none,
+  /// A single cast that cannot fail on any value: timestamp unit and zone
+  /// adjustment, a duration to its nanosecond count, or a number to
+  /// floating point.
+  direct,
+  /// A cast into a narrower integer that single values can fail through
+  /// numeric overflow or a fractional double; failed values become null.
+  narrowing,
+};
+
+auto classify_conversion(arrow::DataType const& source,
+                         arrow::DataType const& target) -> Conversion {
+  auto const from_number = source.id() == arrow::Type::INT64
+                           or source.id() == arrow::Type::UINT64
+                           or source.id() == arrow::Type::DOUBLE;
+  switch (target.id()) {
+    case arrow::Type::INT32:
+      return from_number ? Conversion::narrowing : Conversion::none;
+    case arrow::Type::INT64:
+      if (source.id() == arrow::Type::DURATION) {
+        return Conversion::direct;
+      }
+      return from_number ? Conversion::narrowing : Conversion::none;
+    case arrow::Type::FLOAT:
+    case arrow::Type::DOUBLE:
+      return from_number ? Conversion::direct : Conversion::none;
+    case arrow::Type::TIMESTAMP:
+      return source.id() == arrow::Type::TIMESTAMP ? Conversion::direct
+                                                   : Conversion::none;
+    default:
+      return Conversion::none;
   }
-  if (source->length() == 1) {
-    failures += 1;
-    out.push_back(
-      check(arrow::MakeArrayOfNull(options.to_type.GetSharedPtr(), 1)));
-    return;
+}
+
+/// Computes which values of `source` a narrowing conversion into `target`
+/// can hold: integers within the target's range and doubles that are
+/// integral and in range. Nulls stay null in the mask. This judgment
+/// never defers to the cast kernel's own range check, which accepts a
+/// double holding exactly 2^63 into `long` and saturates it — the int64
+/// maximum rounds up to 2^63 as a double. The double bounds here are the
+/// exactly representable 2^31 and 2^63 with the upper bound excluded, so
+/// every value that passes fits.
+auto convertible_mask(std::shared_ptr<arrow::Array> const& source,
+                      arrow::DataType const& target)
+  -> std::shared_ptr<arrow::BooleanArray> {
+  auto const call
+    = [](char const* function, std::vector<arrow::Datum> const& args) {
+        return check(arrow::compute::CallFunction(function, args));
+      };
+  auto const to_int32 = target.id() == arrow::Type::INT32;
+  auto fits = arrow::Datum{};
+  switch (source->type()->id()) {
+    case arrow::Type::INT64: {
+      fits = call("and",
+                  {call("greater_equal",
+                        {source, arrow::Datum{static_cast<int64_t>(
+                                   std::numeric_limits<int32_t>::min())}}),
+                   call("less_equal",
+                        {source, arrow::Datum{static_cast<int64_t>(
+                                   std::numeric_limits<int32_t>::max())}})});
+      break;
+    }
+    case arrow::Type::UINT64: {
+      auto const max
+        = to_int32 ? static_cast<uint64_t>(std::numeric_limits<int32_t>::max())
+                   : static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+      fits = call("less_equal", {source, arrow::Datum{max}});
+      break;
+    }
+    case arrow::Type::DOUBLE: {
+      auto const lo
+        = to_int32 ? static_cast<double>(std::numeric_limits<int32_t>::min())
+                   : static_cast<double>(std::numeric_limits<int64_t>::min());
+      auto const in_range
+        = call("and", {call("greater_equal", {source, arrow::Datum{lo}}),
+                       call("less", {source, arrow::Datum{-lo}})});
+      fits = call("and",
+                  {call("equal", {call("floor", {source}), source}), in_range});
+      break;
+    }
+    default:
+      TENZIR_UNREACHABLE();
   }
-  auto const half = source->length() / 2;
-  cast_valid_rows(source->Slice(0, half), options, out, failures);
-  cast_valid_rows(source->Slice(half), options, out, failures);
+  return std::static_pointer_cast<arrow::BooleanArray>(fits.make_array());
 }
 
 /// Counts nulls in `array` at rows where `parent` is valid. Nulls under a
@@ -1201,6 +1274,16 @@ private:
                 ctx);
       return null_column();
     };
+    // A null-typed source carries no values at all: null literals, or a
+    // field the input only ever holds nulls for. That is legitimate null
+    // data for any target — scalar, list, or struct — so it null-fills
+    // without the type-mismatch warning.
+    if (source->type()->id() == arrow::Type::NA) {
+      if (not may_null_fill()) {
+        return fail_required("the input holds null values for it");
+      }
+      return null_column();
+    }
     switch (target->type()->id()) {
       case arrow::Type::STRUCT: {
         auto const* struct_source = try_as<arrow::StructArray>(*source);
@@ -1323,39 +1406,49 @@ private:
           }
           return source;
         }
-        if (not arrow::compute::CanCast(*source->type(), *target->type())) {
+        auto const conversion
+          = classify_conversion(*source->type(), *target->type());
+        if (conversion == Conversion::none) {
           return type_mismatch();
         }
         auto options = arrow::compute::CastOptions::Safe(target->type());
         options.allow_time_truncate = true;
-        auto cast = arrow::compute::Cast(source, options);
-        if (cast.ok()) {
-          auto result = cast->make_array();
-          if (required and nulls_under_valid_parent(result, parent) > 0) {
-            return fail_required("the input holds null values for it");
+        if (conversion == Conversion::narrowing) {
+          auto const fits = convertible_mask(source, *target->type());
+          if (fits->true_count() < source->length() - source->null_count()) {
+            // Some values overflow the narrower integer, or a double
+            // holds a fraction. Failing values were non-null, so for a
+            // required field they always count against valid rows.
+            if (required) {
+              return fail_required(fmt::format(
+                "some of its `{}` values cannot convert to the "
+                "table's `{}`",
+                source->type()->ToString(), target->type()->ToString()));
+            }
+            warn_once(fmt::format("column `{}` has `{}` values that cannot "
+                                  "convert to the table's `{}`; writing nulls "
+                                  "for those rows",
+                                  path, source->type()->ToString(),
+                                  target->type()->ToString()),
+                      ctx);
+            source
+              = check(arrow::compute::IfElse(
+                        fits, source, arrow::MakeNullScalar(source->type())))
+                  .make_array();
           }
-          return result;
         }
-        // The cast exists but some values cannot convert, e.g. numeric
-        // overflow or unparsable strings; null only the offending rows.
-        // Failing values were non-null, so for a required field they always
-        // count against valid rows.
-        if (required) {
-          return fail_required(fmt::format(
-            "some of its `{}` values cannot convert to the "
-            "table's `{}`",
-            source->type()->ToString(), target->type()->ToString()));
+        auto cast = arrow::compute::Cast(source, options);
+        if (not cast.ok()) {
+          // Conversions in the matrix cannot fail per value once
+          // narrowing masked its out-of-domain rows; reaching this is a
+          // type-level surprise, handled like any unsupported pair.
+          return type_mismatch();
         }
-        auto pieces = std::vector<std::shared_ptr<arrow::Array>>{};
-        auto failures = int64_t{0};
-        cast_valid_rows(source, options, pieces, failures);
-        warn_once(fmt::format("column `{}` has `{}` values that cannot "
-                              "convert to the table's `{}`; writing nulls "
-                              "for those rows",
-                              path, source->type()->ToString(),
-                              target->type()->ToString()),
-                  ctx);
-        return check(arrow::Concatenate(pieces));
+        auto result = cast->make_array();
+        if (required and nulls_under_valid_parent(result, parent) > 0) {
+          return fail_required("the input holds null values for it");
+        }
+        return result;
       }
     }
   }
