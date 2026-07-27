@@ -338,6 +338,14 @@ public:
       }
       parser = std::move(*default_parser);
     }
+    // Plan the parser before touching the interface so that a planning failure
+    // is not masked by an interface setup failure and no interface is activated
+    // for an invalid pipeline.
+    auto plan = ir::make_plan(std::move(parser), tag_v<chunk_ptr>, ctx);
+    if (not plan) {
+      done_ = true;
+      co_return;
+    }
     auto snaplen
       = args_.snaplen ? args_.snaplen->inner : uint64_t{pcap::maximum_snaplen};
     auto capture_snaplen = detail::narrow_cast<uint32_t>(snaplen);
@@ -355,11 +363,7 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "from_nic"},
                          MetricsDirection::read, MetricsVisibility::external_,
                          MetricsUnit::events);
-    if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(caf::none,
-                                                       std::move(parser))) {
-      done_ = true;
-      co_return;
-    }
+    co_await ctx.spawn_sub(caf::none, std::move(*plan));
     auto io_executor = ctx.io_executor();
     auto* evb = io_executor->getEventBase();
     ctx.spawn_task(folly::coro::co_withExecutor(
