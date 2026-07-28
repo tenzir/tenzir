@@ -8,10 +8,7 @@
 
 #include "tenzir/plugins/iceberg/detail/projection.hpp"
 
-#include <tenzir/arrow_utils.hpp>
 #include <tenzir/detail/assert.hpp>
-
-#include <arrow/compute/api_scalar.h>
 
 namespace tenzir::plugins::iceberg::projection {
 
@@ -19,13 +16,17 @@ auto count_visible_conversion_failures(
   std::shared_ptr<arrow::BooleanArray> const& convertible,
   std::shared_ptr<arrow::Array> const& parent) -> int64_t {
   TENZIR_ASSERT(not parent or parent->length() == convertible->length());
-  auto failures = check(arrow::compute::Invert(convertible));
-  if (parent and parent->null_count() > 0) {
-    auto valid = check(arrow::compute::IsValid(parent));
-    failures = check(arrow::compute::And(failures, valid));
+  if (not parent or parent->null_count() == 0) {
+    return convertible->false_count();
   }
-  return std::static_pointer_cast<arrow::BooleanArray>(failures.make_array())
-    ->true_count();
+  auto failures = int64_t{0};
+  for (auto index = int64_t{0}; index < convertible->length(); ++index) {
+    if (parent->IsValid(index) and convertible->IsValid(index)
+        and not convertible->Value(index)) {
+      ++failures;
+    }
+  }
+  return failures;
 }
 
 } // namespace tenzir::plugins::iceberg::projection
