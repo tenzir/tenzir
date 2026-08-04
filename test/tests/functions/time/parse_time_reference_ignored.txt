@@ -12,38 +12,38 @@ warning: `parse_time` ignores `reference` because the format includes a complete
   --> tests/functions/time/parse_time_reference_ignored.tql:10:13
    |
 10 |   reference=2026-06-24T00:00:00Z,
-   |             ~~~~~~~~~~~~~~~~~~~~ 
+   |             ~~~~~~~~~~~~~~~~~~~~
    ⋮
  9 |   "%Y-%m-%d",
-   |   ---------- 
+   |   ----------
    |
 
 warning: `parse_time` ignores `reference` because the format includes a complete date
   --> tests/functions/time/parse_time_reference_ignored.tql:14:13
    |
 14 |   reference=2026-06-24T00:00:00Z,
-   |             ~~~~~~~~~~~~~~~~~~~~ 
+   |             ~~~~~~~~~~~~~~~~~~~~
    ⋮
 13 |   "%4Y-%m-%d",
-   |   ----------- 
+   |   -----------
    |
 
 warning: `parse_time` ignores `reference` because the format includes a complete date
   --> tests/functions/time/parse_time_reference_ignored.tql:18:13
    |
 18 |   reference=2026-06-24T00:00:00Z,
-   |             ~~~~~~~~~~~~~~~~~~~~ 
+   |             ~~~~~~~~~~~~~~~~~~~~
    ⋮
 17 |   "%Y %j %H:%M:%S",
-   |   ---------------- 
+   |   ----------------
    |
 
 warning: `parse_time` ignores `reference` because the format includes a complete date
   --> tests/functions/time/parse_time_reference_ignored.tql:25:13
    |
 25 |   reference=2026-06-24T00:00:00Z,
-   |             ~~~~~~~~~~~~~~~~~~~~ 
+   |             ~~~~~~~~~~~~~~~~~~~~
    ⋮
 24 |   "%Y-%m-%d %V",
-   |   ------------- 
+   |   -------------
    |

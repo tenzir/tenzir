@@ -2,7 +2,7 @@ error: argument `value` must be of type `string` (got `ip`)
  --> tests/operators/udo/args/udo-args-named-typed-ip-literal.tql:7:28
   |
 7 | argspkg::typed_named value=1.2.3.4
-  |                            ^^^^^^^ 
+  |                            ^^^^^^^
   |
   = usage: argspkg::typed_named [value=string]
   = note: parameters:

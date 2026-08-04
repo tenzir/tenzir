@@ -22,6 +22,6 @@ warning: discarded reordered IPFIX data set
  --> tests/operators/read_netflow/mixed_chunks.tql:3:3
   |
 3 |   read_netflow
-  |   ------------ 
+  |   ------------
   |
   = note: template 258 was not established by the delayed message

@@ -5,5 +5,5 @@ warning: `parse_time` cannot fill missing date fields because `reference` is nul
  --> tests/functions/time/parse_time_null_reference.tql:7:13
   |
 7 |   reference=null,
-  |             ~~~~ 
+  |             ~~~~
   |

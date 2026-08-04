@@ -64,5 +64,5 @@ warning: dropping `end_time_dt` because profile `datetime` is not enabled
  --> tests/operators/ocsf/cast/unspecified_profile_field.tql:2:1
   |
 2 | ocsf::cast null_fill=true
-  | ~~~~~~~~~~ 
+  | ~~~~~~~~~~
   |

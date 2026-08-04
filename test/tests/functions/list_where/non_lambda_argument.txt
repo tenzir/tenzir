@@ -2,7 +2,7 @@ error: expected a lambda
  --> tests/functions/list_where/non_lambda_argument.tql:8:13
   |
 8 | y = x.where(null)
-  |             ^^^^ 
+  |             ^^^^
   |
   = usage: where(list:list, predicate:any => bool)
   = docs: https://tenzir.com/docs/reference/functions/where

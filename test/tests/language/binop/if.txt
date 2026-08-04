@@ -13,7 +13,7 @@ warning: expected `bool`, but got `null`
  --> tests/language/binop/if.tql:3:29
   |
 3 |   "false_if_null": false if null,
-  |                             ~~~~ 
+  |                             ~~~~
   |
   = hint: this will be treated as `false`
 
@@ -21,7 +21,7 @@ warning: expected `bool`, but got `null`
  --> tests/language/binop/if.tql:6:27
   |
 6 |   "null_if_null": null if null,
-  |                           ~~~~ 
+  |                           ~~~~
   |
   = hint: this will be treated as `false`
 
@@ -29,6 +29,6 @@ warning: expected `bool`, but got `null`
  --> tests/language/binop/if.tql:9:27
   |
 9 |   "true_if_null": true if null,
-  |                           ~~~~ 
+  |                           ~~~~
   |
   = hint: this will be treated as `false`

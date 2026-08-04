@@ -89,12 +89,12 @@ warning: ignoring extensions for events where `metadata.extensions` is not a lis
  --> tests/operators/ocsf/cast/wrong_inner_type_extensions.tql:9:1
   |
 9 | ocsf::cast null_fill=true
-  | ~~~~~~~~~~ 
+  | ~~~~~~~~~~
   |
 
 warning: expected type `record` for `metadata.extensions[]`, but got `int64`
  --> tests/operators/ocsf/cast/wrong_inner_type_extensions.tql:9:1
   |
 9 | ocsf::cast null_fill=true
-  | ~~~~~~~~~~ 
+  | ~~~~~~~~~~
   |

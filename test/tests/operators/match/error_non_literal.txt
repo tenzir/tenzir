@@ -2,6 +2,6 @@ error: match patterns must be constant expressions
  --> tests/operators/match/error_non_literal.tql:7:3
   |
 7 |   other => {
-  |   ^^^^^ 
+  |   ^^^^^
   |
   = hint: use a literal, a constant expression, or `_`

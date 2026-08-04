@@ -2,7 +2,7 @@ error: expected additional positional argument `prefix`
  --> tests/language/expr/ufcs_error.tql:6:12
   |
 6 |   x: "abc".starts_with(),
-  |            ^^^^^^^^^^^ 
+  |            ^^^^^^^^^^^
   |
   = usage: starts_with(x:string, prefix:string, [ignore_case=bool])
   = docs: https://tenzir.com/docs/reference/functions/starts_with
@@ -11,7 +11,7 @@ error: expected additional positional argument `prefix`
  --> tests/language/expr/ufcs_error.tql:7:6
   |
 7 |   y: starts_with("abc"),
-  |      ^^^^^^^^^^^ 
+  |      ^^^^^^^^^^^
   |
   = usage: starts_with(x:string, prefix:string, [ignore_case=bool])
   = docs: https://tenzir.com/docs/reference/functions/starts_with

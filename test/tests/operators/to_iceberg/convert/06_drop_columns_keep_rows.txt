@@ -2,40 +2,40 @@ warning: cannot represent column in Iceberg: n: cannot represent a column whose 
  --> tests/operators/to_iceberg/convert/06_drop_columns_keep_rows.tql:8:1
   |
 8 | to_iceberg "convertns.drops", catalog=env("ICEBERG_REST_URI")
-  | ~~~~~~~~~~ 
+  | ~~~~~~~~~~
   |
 
 warning: cannot represent column in Iceberg: r.a: cannot represent a column whose values are all null
  --> tests/operators/to_iceberg/convert/06_drop_columns_keep_rows.tql:8:1
   |
 8 | to_iceberg "convertns.drops", catalog=env("ICEBERG_REST_URI")
-  | ~~~~~~~~~~ 
+  | ~~~~~~~~~~
   |
 
 warning: cannot represent column in Iceberg: r.b: cannot represent a column whose values are all null
  --> tests/operators/to_iceberg/convert/06_drop_columns_keep_rows.tql:8:1
   |
 8 | to_iceberg "convertns.drops", catalog=env("ICEBERG_REST_URI")
-  | ~~~~~~~~~~ 
+  | ~~~~~~~~~~
   |
 
 warning: cannot represent column in Iceberg: r: record has no representable fields
  --> tests/operators/to_iceberg/convert/06_drop_columns_keep_rows.tql:8:1
   |
 8 | to_iceberg "convertns.drops", catalog=env("ICEBERG_REST_URI")
-  | ~~~~~~~~~~ 
+  | ~~~~~~~~~~
   |
 
 warning: column `n` does not exist in the table and will be dropped
  --> tests/operators/to_iceberg/convert/06_drop_columns_keep_rows.tql:8:1
   |
 8 | to_iceberg "convertns.drops", catalog=env("ICEBERG_REST_URI")
-  | ~~~~~~~~~~ 
+  | ~~~~~~~~~~
   |
 
 warning: column `r` does not exist in the table and will be dropped
  --> tests/operators/to_iceberg/convert/06_drop_columns_keep_rows.tql:8:1
   |
 8 | to_iceberg "convertns.drops", catalog=env("ICEBERG_REST_URI")
-  | ~~~~~~~~~~ 
+  | ~~~~~~~~~~
   |

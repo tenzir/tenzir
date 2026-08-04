@@ -2,6 +2,6 @@ error: use `|` to separate match arm alternatives
  --> tests/operators/match/error_comma_alternatives.tql:7:3
   |
 7 |   "a", "b" => {
-  |   ^^^ 
+  |   ^^^
   |
   = hint: commas are not separators for match arm alternatives

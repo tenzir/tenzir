@@ -20,6 +20,6 @@ warning: Splunk search returned WARN: Some search peers did not return results.
   --> tests/operators/from_splunk/warning_message.tql:11:10
    |
 11 |   search="search index=main",
-   |          ~~~~~~~~~~~~~~~~~~~ 
+   |          ~~~~~~~~~~~~~~~~~~~
    |
    = note: search: search index=main

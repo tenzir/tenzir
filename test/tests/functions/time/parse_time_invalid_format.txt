@@ -5,8 +5,8 @@ warning: failed to parse timestamp
  --> tests/functions/time/parse_time_invalid_format.tql:5:5
   |
 5 | x = x.parse_time("%d-%d-%d")
-  |     ~ 
+  |     ~
   ⋮
 5 | x = x.parse_time("%d-%d-%d")
-  |                  ---------- 
+  |                  ----------
   |

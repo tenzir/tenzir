@@ -11,5 +11,5 @@ warning: dropping input due to rate limit
  --> tests/operators/throttle/drop_excess.tql:3:34
   |
 3 | throttle rate=3, window=1h, drop=true
-  |                                  ~~~~ 
+  |                                  ~~~~
   |

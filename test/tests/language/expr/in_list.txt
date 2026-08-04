@@ -76,12 +76,12 @@ warning: got incompatible types for `in`: `string in list<duration>`
  --> tests/language/expr/in_list.tql:4:10
   |
 4 | exists = x in y
-  |          ~~~~~~ 
+  |          ~~~~~~
   |
 
 warning: got incompatible types for `in`: `string in list<duration>`
  --> tests/language/expr/in_list.tql:5:14
   |
 5 | not_exists = x not in y
-  |              ~~~~~~~~~~ 
+  |              ~~~~~~~~~~
   |

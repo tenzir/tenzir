@@ -20,7 +20,7 @@ warning: csv parser: csv parser found too few values in a line
  --> tests/operators/xsv/auto_fill_warning.tql:2:5
   |
 2 |     read_csv
-  |     ~~~~~~~~ 
+  |     ~~~~~~~~
   |
   = note: line 3
   = note: line 3 has 2 values, but should have 4 values

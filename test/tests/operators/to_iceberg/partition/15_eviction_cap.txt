@@ -2,5 +2,5 @@ warning: buffered partition data exceeds `buffer_size` (1 bytes); closing the la
   --> tests/operators/to_iceberg/partition/15_eviction_cap.tql:12:1
    |
 12 | to_iceberg "partns.burst", catalog=env("ICEBERG_REST_URI"),
-   | ~~~~~~~~~~ 
+   | ~~~~~~~~~~
    |

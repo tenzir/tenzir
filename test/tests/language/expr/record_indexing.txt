@@ -34,7 +34,7 @@ warning: field `y` not found
  --> tests/language/expr/record_indexing.tql:9:7
   |
 9 | z = x[y]
-  |       ~ 
+  |       ~
   |
   = hint: did you mean `x`?
   = hint: append `?` to suppress this warning
@@ -59,7 +59,7 @@ warning: field `x` not found
  --> tests/language/expr/record_indexing.tql:9:5
   |
 9 | z = x[y]
-  |     ~ 
+  |     ~
   |
   = hint: did you mean `y`?
   = hint: append `?` to suppress this warning

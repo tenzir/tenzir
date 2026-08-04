@@ -10,5 +10,5 @@ warning: `window` dropped 1 late event(s) that arrived after their window had cl
  --> tests/operators/window/late_drop.tql:7:20
   |
 7 | window size=2s, on=ts {
-  |                    ~~ 
+  |                    ~~
   |

@@ -2,5 +2,5 @@ error: `cache mode="read"` must be used as a source
  --> tests/operators/cache/read_requires_source.tql:5:1
   |
 5 | cache "read-misuse", mode="read"
-  | ^^^^^ 
+  | ^^^^^
   |

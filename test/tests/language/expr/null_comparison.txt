@@ -58,6 +58,6 @@ warning: binary operator `in` not implemented for `int64` and `null`
   --> tests/language/expr/null_comparison.tql:26:22
    |
 26 | invalid_membership = 5 in null
-   |                      ~~~~~~~~~ 
+   |                      ~~~~~~~~~
    |
    = hint: the result of this expression is `null`

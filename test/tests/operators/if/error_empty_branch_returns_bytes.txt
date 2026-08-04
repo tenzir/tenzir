@@ -2,5 +2,5 @@ error: branches must not return bytes
  --> tests/operators/if/error_empty_branch_returns_bytes.tql:8:4
   |
 8 | if true {}
-  |    ^^^^ 
+  |    ^^^^
   |

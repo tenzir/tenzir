@@ -5,5 +5,5 @@ error: cannot specify `external_id` when explicitly disabling `role`
    |        ^^^^ explicitly disabled
    ⋮
 10 |   external_id="ext"
-   |               ^^^^^ 
+   |               ^^^^^
    |

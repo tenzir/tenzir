@@ -2,5 +2,5 @@ error: `resolution` must be non-zero
  --> tests/operators/chart/resolution_zero.tql:6:37
   |
 6 | chart_bar x=a, y=sum(b), resolution=0s
-  |                                     ^^ 
+  |                                     ^^
   |

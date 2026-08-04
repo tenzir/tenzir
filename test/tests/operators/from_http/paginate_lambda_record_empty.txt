@@ -15,6 +15,6 @@ warning: `paginate` request record must not be empty
  --> tests/operators/from_http/paginate_lambda_record_empty.tql:6:13
   |
 6 |   paginate=(x => x.next),
-  |             ~~~~~~~~~~~ 
+  |             ~~~~~~~~~~~
   |
   = note: stopping pagination

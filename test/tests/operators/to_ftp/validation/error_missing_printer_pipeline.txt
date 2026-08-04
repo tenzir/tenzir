@@ -2,7 +2,7 @@ error: required subpipeline was not provided
  --> tests/operators/to_ftp/validation/error_missing_printer_pipeline.tql:5:1
   |
 5 | to_ftp "ftp://127.0.0.1:21/upload.ndjson"
-  | ^^^^^^ 
+  | ^^^^^^
   |
   = usage: to_ftp url:string, [tls=record]
   = docs: https://tenzir.com/docs/reference/operators/to_ftp

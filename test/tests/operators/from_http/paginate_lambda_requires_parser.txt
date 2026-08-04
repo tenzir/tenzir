@@ -2,6 +2,6 @@ error: could not infer parser for URL path `/infer/unknown.bin`
  --> tests/operators/from_http/paginate_lambda_requires_parser.tql:7:1
   |
 7 | from_http env("HTTP_FIXTURE_INFER_UNKNOWN_EXTENSION_URL"),
-  | ^^^^^^^^^ 
+  | ^^^^^^^^^
   |
   = hint: pass an explicit parser pipeline

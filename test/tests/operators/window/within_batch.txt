@@ -10,5 +10,5 @@ warning: `window` dropped 1 late event(s) that arrived after their window had cl
   --> tests/operators/window/within_batch.tql:10:20
    |
 10 | window size=2s, on=ts {
-   |                    ~~ 
+   |                    ~~
    |

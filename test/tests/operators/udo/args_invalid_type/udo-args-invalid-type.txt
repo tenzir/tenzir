@@ -2,6 +2,6 @@ error: invalid type `invalid_kind` for parameter `value` in operator `invalid_ty
  --> inputs/package-roots/udo-args-invalid-type/argspkg_invalid_type/operators/invalid_type.tql:5:13
   |
 5 |       type: invalid_kind
-  |             ^^^^^^^^^^^^ 
+  |             ^^^^^^^^^^^^
   |
   = note: type aliases are not allowed

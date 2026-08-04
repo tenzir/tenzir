@@ -20,12 +20,12 @@ warning: HTTP error 503, attempt 1/3, retrying after 0s
   --> tests/operators/from_splunk/retry_503.tql:11:13
    |
 11 | from_splunk env("HTTP_FIXTURE_SPLUNK_RETRY_503_URL"),
-   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    |
 
 warning: HTTP error 503, attempt 2/3, retrying after 0s
   --> tests/operators/from_splunk/retry_503.tql:11:13
    |
 11 | from_splunk env("HTTP_FIXTURE_SPLUNK_RETRY_503_URL"),
-   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    |

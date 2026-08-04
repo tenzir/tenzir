@@ -2,7 +2,7 @@ error: read_netflow expects binary message events
  --> tests/operators/read_netflow/validation/error_peer_not_record.tql:6:1
   |
 6 | read_netflow
-  | ^^^^^^^^^^^^ 
+  | ^^^^^^^^^^^^
   |
   = note: expected `{data: blob, peer?: {ip: ip, port: int64}}`
   = hint: provide one complete NetFlow or IPFIX message in each `data` field

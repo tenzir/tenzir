@@ -28,7 +28,7 @@ warning: field `content` not found
  --> tests/functions/parse_leef/syslog.tql:4:11
   |
 4 | content = content.parse_leef()
-  |           ~~~~~~~ 
+  |           ~~~~~~~
   |
   = hint: append `?` to suppress this warning
 
@@ -36,5 +36,5 @@ warning: `parse_leef` expected `string`, got `null`
  --> tests/functions/parse_leef/syslog.tql:4:11
   |
 4 | content = content.parse_leef()
-  |           ~~~~~~~~~~~~~~~~~~~~ 
+  |           ~~~~~~~~~~~~~~~~~~~~
   |

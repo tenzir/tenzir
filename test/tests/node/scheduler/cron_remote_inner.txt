@@ -32,5 +32,5 @@ warning: `remote` has no effect in the new executor
  --> tests/node/scheduler/cron_remote_inner.tql:2:3
   |
 2 |   remote {
-  |   ~~~~~~ 
+  |   ~~~~~~
   |

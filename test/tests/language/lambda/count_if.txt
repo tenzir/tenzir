@@ -50,12 +50,12 @@ warning: expected `list`, but got `string`
   --> tests/language/lambda/count_if.tql:10:15
    |
 10 | num_strings = xs.count_if(x => type_of(x).kind == "string")
-   |               ~~ 
+   |               ~~
    |
 
 warning: expected `list`, but got `string`
   --> tests/language/lambda/count_if.tql:11:12
    |
 11 | num_ints = xs.count_if(x => type_of(x).kind == "int64")
-   |            ~~ 
+   |            ~~
    |

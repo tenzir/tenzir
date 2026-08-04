@@ -9,7 +9,7 @@ warning: malformed NetFlow message
   --> tests/operators/read_netflow/udp.tql:15:1
    |
 15 | read_netflow
-   | ~~~~~~~~~~~~ 
+   | ~~~~~~~~~~~~
    |
    = note: peer: 127.0.0.1:45555
    = note: truncated NetFlow v5 header

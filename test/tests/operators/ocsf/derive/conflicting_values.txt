@@ -11,6 +11,6 @@ warning: found inconsistency between `activity_id` and `activity_name`
   --> tests/operators/ocsf/derive/conflicting_values.tql:13:1
    |
 13 | ocsf::derive
-   | ~~~~~~~~~~~~ 
+   | ~~~~~~~~~~~~
    |
    = note: got 1 ("Create") and "Delete" (4)

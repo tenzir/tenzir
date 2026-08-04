@@ -13,5 +13,5 @@ on input event: {'x': 1}
  --> tests/operators/python/runtime_error_chained.tql:6:1
   |
 6 | python "try:\n    raise ValueError('inner')\nexcept ValueError as err:\n    raise RuntimeError('outer') from err"
-  | ^^^^^^ 
+  | ^^^^^^
   |

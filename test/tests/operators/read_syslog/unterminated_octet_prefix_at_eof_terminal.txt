@@ -2,5 +2,5 @@ error: failed to parse octet-counting length prefix
   --> tests/operators/read_syslog/unterminated_octet_prefix_at_eof_terminal.tql:10:1
    |
 10 | read_syslog octet_counting=true
-   | ----------- 
+   | -----------
    |

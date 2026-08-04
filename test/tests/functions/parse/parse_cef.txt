@@ -21,5 +21,5 @@ warning: incorrect field count in CEF event
  --> tests/functions/parse/parse_cef.tql:3:5
   |
 3 | y = x.parse_cef()
-  |     ~~~~~~~~~~~~~ 
+  |     ~~~~~~~~~~~~~
   |

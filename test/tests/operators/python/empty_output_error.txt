@@ -7,5 +7,5 @@ RuntimeError: Empty output not allowed
  --> tests/operators/python/empty_output_error.tql:6:1
   |
 6 | python "self.clear()"
-  | ^^^^^^ 
+  | ^^^^^^
   |

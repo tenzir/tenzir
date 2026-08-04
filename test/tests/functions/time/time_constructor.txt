@@ -10,5 +10,5 @@ warning: `year` expected `time`, but got `int64`
  --> tests/functions/time/time_constructor.tql:9:16
   |
 9 | invalid_year = x.year()
-  |                ~ 
+  |                ~
   |

@@ -12,6 +12,6 @@ warning: field `x` not found
  --> tests/functions/otherwise/mixed_middle.tql:3:5
   |
 3 | z = x.otherwise(-1)
-  |     ~ 
+  |     ~
   |
   = hint: append `?` to suppress this warning

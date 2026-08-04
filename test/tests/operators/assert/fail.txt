@@ -2,5 +2,5 @@ warning: assertion failure
  --> tests/operators/assert/fail.tql:4:8
   |
 4 | assert value == 1337
-  |        ~~~~~~~~~~~~~ 
+  |        ~~~~~~~~~~~~~
   |

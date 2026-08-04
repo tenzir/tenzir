@@ -26,14 +26,14 @@ warning: expected `bool`, got `null`
   --> tests/language/lambda/where.tql:11:20
    |
 11 | xs = xs.where(x => x > 1 and x < 4)
-   |                    ~~~~~~~~~~~~~~~ 
+   |                    ~~~~~~~~~~~~~~~
    |
 
 warning: binary operator `gt` not implemented for `string` and `int64`
   --> tests/language/lambda/where.tql:11:20
    |
 11 | xs = xs.where(x => x > 1 and x < 4)
-   |                    ~~~~~ 
+   |                    ~~~~~
    |
    = hint: the result of this expression is `null`
 
@@ -41,7 +41,7 @@ warning: binary operator `lt` not implemented for `string` and `int64`
   --> tests/language/lambda/where.tql:11:30
    |
 11 | xs = xs.where(x => x > 1 and x < 4)
-   |                              ~~~~~ 
+   |                              ~~~~~
    |
    = hint: the result of this expression is `null`
 
@@ -49,5 +49,5 @@ warning: expected `list`, got `string`
   --> tests/language/lambda/where.tql:11:6
    |
 11 | xs = xs.where(x => x > 1 and x < 4)
-   |      ~~ 
+   |      ~~
    |

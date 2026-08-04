@@ -5,5 +5,5 @@ error: cannot use non-literal `token` with `_dry_run`
   |                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^ not literal
   ⋮
 6 | to_sentinelone_data_lake "https://example.com", token=secret("S1_FIXTURE_TOKEN"), _dry_run=true
-  |                                                                                            ^^^^ 
+  |                                                                                            ^^^^
   |

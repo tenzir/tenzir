@@ -19,5 +19,5 @@ warning: expected record, got int64
  --> tests/language/expr/record_spread.tql:4:15
   |
 4 | z = {...x, ...42, ...y}
-  |               ~~ 
+  |               ~~
   |

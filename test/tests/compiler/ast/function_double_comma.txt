@@ -2,5 +2,5 @@ error: duplicate comma
  --> tests/compiler/ast/function_double_comma.tql:5:9
   |
 5 | a = b(c,,)
-  |         ^ 
+  |         ^
   |

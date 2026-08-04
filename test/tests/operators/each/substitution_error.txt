@@ -2,6 +2,6 @@ error: expected positive integer, got `-1`
  --> tests/operators/each/substitution_error.tql:7:8
   |
 7 |   head $this.limit
-  |        ^^^^^^^^^^^ 
+  |        ^^^^^^^^^^^
   |
   = docs: https://tenzir.com/docs/reference/operators/head

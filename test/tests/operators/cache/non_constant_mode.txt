@@ -2,5 +2,5 @@ error: `mode` must be a constant
  --> tests/operators/cache/non_constant_mode.tql:5:31
   |
 5 | cache "non-const-mode", mode=("read" if random() < 0.5 else "write")
-  |                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |

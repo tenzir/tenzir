@@ -2,5 +2,5 @@ error: `live=true` does not support `show`
  --> tests/operators/from_mysql/live_with_show_error.tql:6:17
   |
 6 |            show="columns",
-  |                 ^^^^^^^^^ 
+  |                 ^^^^^^^^^
   |

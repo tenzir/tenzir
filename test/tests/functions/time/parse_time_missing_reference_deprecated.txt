@@ -8,12 +8,12 @@ warning: `parse_time` parsed a timestamp without a year as 1970; this is depreca
  --> tests/functions/time/parse_time_missing_reference_deprecated.tql:6:18
   |
 6 | syslog_default = syslog.parse_time("%b %e %H:%M:%S")
-  |                  ~~~~~~ 
+  |                  ~~~~~~
   |
 
 warning: `parse_time` parsed a timestamp without a year as 1970; this is deprecated and will become an error in a future release
  --> tests/functions/time/parse_time_missing_reference_deprecated.tql:7:21
   |
 7 | time_only_default = time_only.parse_time("%H:%M:%S")
-  |                     ~~~~~~~~~ 
+  |                     ~~~~~~~~~
   |

@@ -13,7 +13,7 @@ warning: field `y` not found
  --> tests/operators/sort/multi_field.tql:2:10
   |
 2 | sort x, -y
-  |          ~ 
+  |          ~
   |
   = hint: did you mean `x`?
   = hint: append `?` to suppress this warning

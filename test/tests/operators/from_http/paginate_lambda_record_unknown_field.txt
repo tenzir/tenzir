@@ -18,6 +18,6 @@ warning: unknown field `unexpected` in `paginate` request record
  --> tests/operators/from_http/paginate_lambda_record_unknown_field.tql:6:13
   |
 6 |   paginate=(x => x.next),
-  |             ~~~~~~~~~~~ 
+  |             ~~~~~~~~~~~
   |
   = note: stopping pagination

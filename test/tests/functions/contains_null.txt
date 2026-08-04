@@ -67,6 +67,6 @@ warning: field `x` not found
   --> tests/functions/contains_null.tql:11:17
    |
 11 | contains_null = x.contains_null()
-   |                 ~ 
+   |                 ~
    |
    = hint: append `?` to suppress this warning

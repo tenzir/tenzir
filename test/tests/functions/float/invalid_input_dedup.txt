@@ -11,6 +11,6 @@ warning: failed to parse string
  --> tests/functions/float/invalid_input_dedup.tql:8:5
   |
 8 | x = x.float()
-  |     ~ 
+  |     ~
   |
   = note: tried to convert: not a float

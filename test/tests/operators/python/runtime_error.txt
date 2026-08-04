@@ -6,5 +6,5 @@ on input event: {'x': 1}
  --> tests/operators/python/runtime_error.tql:6:1
   |
 6 | python "raise RuntimeError('boom')"
-  | ^^^^^^ 
+  | ^^^^^^
   |

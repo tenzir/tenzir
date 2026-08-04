@@ -2,5 +2,5 @@ error: unicode codepoint out of range
  --> tests/language/expr/escape/basic/out_of_range.tql:6:7
   |
 6 |   x: "\u{FFFFFF}",
-  |       ^^^^^^^^^^ 
+  |       ^^^^^^^^^^
   |

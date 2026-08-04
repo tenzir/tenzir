@@ -6,5 +6,5 @@ warning: expected `record`, got `int64`
  --> tests/functions/flatten/wrong_type.tql:2:13
   |
 2 | y = flatten(x)
-  |             ~ 
+  |             ~
   |

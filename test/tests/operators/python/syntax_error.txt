@@ -5,5 +5,5 @@ SyntaxError: invalid syntax
  --> tests/operators/python/syntax_error.tql:6:1
   |
 6 | python "if True print(1)"
-  | ^^^^^^ 
+  | ^^^^^^
   |

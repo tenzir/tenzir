@@ -2,5 +2,5 @@ error: subpipeline must not produce bytes
  --> tests/operators/every/bytes_output.tql:5:10
   |
 5 | every 1s {
-  |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |

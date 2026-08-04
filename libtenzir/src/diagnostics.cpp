@@ -154,18 +154,18 @@ public:
                    src->source->origin, line, col + 1);
         fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
       }
-      fmt::print(stream_, "{}{}{}{} |{} {}\n",
+      fmt::print(stream_, "{}{}{}{} |{}{}\n",
                  std::string(indent_width - std::to_string(line).size(), ' '),
-                 bold, blue, line, reset, src->lines[line_idx]);
+                 bold, blue, line, reset, spaced(src->lines[line_idx]));
       // TODO: This doesn't respect multi-line spans.
       auto count = std::max(uint32_t{1},
                             annotation.source.end - annotation.source.begin);
       auto pseudo_severity
         = annotation.primary ? diag.severity : severity::note;
-      fmt::print(stream_, "{} {}{}| {}{}{} {}{}\n", indent, bold, blue,
+      fmt::print(stream_, "{} {}{}| {}{}{}{}{}\n", indent, bold, blue,
                  color(pseudo_severity), std::string(col, ' '),
-                 std::string(count, symbol(pseudo_severity)), annotation.text,
-                 reset);
+                 std::string(count, symbol(pseudo_severity)),
+                 spaced(annotation.text), reset);
       previous_source = annotation.source.source_index;
     }
     if (previous_source) {
@@ -175,8 +175,10 @@ public:
       auto lines = detail::split(note.message, "\n");
       for (auto& line : lines) {
         if (&line == &lines.front()) {
-          fmt::print(stream_, "{} {}{}={} {}:{} {}\n", indent, bold, blue,
-                     uncolor, note.kind, reset, line);
+          fmt::print(stream_, "{} {}{}={} {}:{}{}\n", indent, bold, blue,
+                     uncolor, note.kind, reset, spaced(line));
+        } else if (line.empty()) {
+          fmt::print(stream_, "\n");
         } else {
           auto kind_spaces = std::string(fmt::to_string(note.kind).size(), ' ');
           fmt::print(stream_, "{}   {}  {}\n", indent, kind_spaces, line);
@@ -194,6 +196,15 @@ private:
     const Source* source;
     std::span<const std::string_view> lines;
   };
+
+  /// Prepends a space to `text`, unless it is empty. Used to avoid emitting
+  /// trailing whitespace for lines with an empty trailing component.
+  static auto spaced(std::string_view text) -> std::string {
+    if (text.empty()) {
+      return {};
+    }
+    return fmt::format(" {}", text);
+  }
 
   static auto symbol(severity s) -> char {
     switch (s) {

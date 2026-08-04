@@ -14,19 +14,19 @@ warning: encountered only `src_port` or `dst_port` but not both
  --> tests/functions/community_id/basic.tql:5:29
   |
 5 |                    src_port=52482, proto="tcp"),
-  |                             ~~~~~ 
+  |                             ~~~~~
   |
 
 warning: encountered only `src_port` or `dst_port` but not both
  --> tests/functions/community_id/basic.tql:7:29
   |
 7 |                    dst_port=749, proto="tcp"),
-  |                             ~~~ 
+  |                             ~~~
   |
 
 warning: `proto` must be `tcp`, `udp`, `icmp`, or `icmp6`
   --> tests/functions/community_id/basic.tql:11:26
    |
 11 |                    proto="XXX"),
-   |                          ~~~~~ 
+   |                          ~~~~~
    |

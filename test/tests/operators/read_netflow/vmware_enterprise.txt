@@ -16,7 +16,7 @@ warning: unknown NetFlow information element
  --> tests/operators/read_netflow/vmware_enterprise.tql:2:3
   |
 2 |   read_netflow
-  |   ------------ 
+  |   ------------
   |
   = note: template 256 preserves unknown fields as blobs
 
@@ -24,6 +24,6 @@ warning: discarded reordered IPFIX data set
  --> tests/operators/read_netflow/vmware_enterprise.tql:2:3
   |
 2 |   read_netflow
-  |   ------------ 
+  |   ------------
   |
   = note: template 264 was not established by the delayed message

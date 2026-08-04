@@ -5,8 +5,8 @@ warning: field `a` may only be dropped once
  --> tests/operators/drop/duplicate.tql:8:6
   |
 8 | drop a, a
-  |      ~ 
+  |      ~
   ⋮
 8 | drop a, a
-  |         ~ 
+  |         ~
   |

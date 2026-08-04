@@ -2,5 +2,5 @@ error: `pad_start` expected single character for padding, but got `ab` with leng
  --> tests/functions/string/pad_start_multi_char_error.tql:7:35
   |
 7 |   multi_pad: "test".pad_start(10, "ab")
-  |                                   ^^^^ 
+  |                                   ^^^^
   |

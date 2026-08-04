@@ -10,5 +10,5 @@ warning: `window` dropped 1 late event(s) that arrived after their window had cl
  --> tests/operators/window/close_boundary.tql:8:20
   |
 8 | window size=2s, on=ts {
-  |                    ~~ 
+  |                    ~~
   |

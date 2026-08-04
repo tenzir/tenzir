@@ -2,6 +2,6 @@ error: OData `@odata.deltaLink` URL points to an untrusted origin
  --> tests/operators/from_microsoft_graph/error_untrusted_delta_link.tql:9:1
   |
 9 | from_microsoft_graph "users",
-  | ^^^^^^^^^^^^^^^^^^^^ 
+  | ^^^^^^^^^^^^^^^^^^^^
   |
   = note: delta origin: https://example.invalid

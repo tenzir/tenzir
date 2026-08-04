@@ -11,6 +11,6 @@ warning: `int` failed to convert some string
  --> tests/functions/int/invalid_input_dedup.tql:8:5
   |
 8 | x = x.int()
-  |     ~ 
+  |     ~
   |
   = note: tried to convert: not an int

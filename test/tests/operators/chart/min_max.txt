@@ -2,8 +2,8 @@ error: `x_min` must be less than `x_max`
  --> tests/operators/chart/min_max.tql:6:28
   |
 6 | chart_area x=x, y=y, x_min=1, x_max=0
-  |                            ^ 
+  |                            ^
   ⋮
 6 | chart_area x=x, y=y, x_min=1, x_max=0
-  |                                     ^ 
+  |                                     ^
   |

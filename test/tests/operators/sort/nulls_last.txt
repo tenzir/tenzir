@@ -13,7 +13,7 @@ warning: field `y` not found
  --> tests/operators/sort/nulls_last.tql:2:7
   |
 2 | sort -y
-  |       ~ 
+  |       ~
   |
   = hint: did you mean `x`?
   = hint: append `?` to suppress this warning
