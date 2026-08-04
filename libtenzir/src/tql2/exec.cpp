@@ -256,14 +256,7 @@ public:
       visit(let->expr);
       auto value = const_eval(let->expr, ctx_);
       if (value) {
-        map_[std::move(name)] = tenzir::match(
-          std::move(*value),
-          [](auto x) -> ast::constant::kind {
-            return x;
-          },
-          [](const pattern&) -> ast::constant::kind {
-            TENZIR_UNREACHABLE();
-          });
+        map_[std::move(name)] = ast::constant::make(*value);
       } else {
         failure_ = value.error();
         map_[std::move(name)] = std::nullopt;
@@ -294,7 +287,7 @@ public:
       // Variable exists but there was an error during evaluation.
       return;
     }
-    x = ast::constant{*it->second, x.get_location()};
+    x = ast::constant{it->second->value, x.get_location()};
   }
 
   void load_balance(ast::invocation& x) {
@@ -347,9 +340,9 @@ public:
     // We now expand the pipeline once for each entry in the list, replacing
     // the original variable with the list items.
     auto original = std::move(*it->second);
-    auto entries = std::get_if<list>(&original);
+    auto entries = std::get_if<list>(&original.value);
     if (not entries) {
-      auto got = original.match([]<class T>(const T&) {
+      auto got = original.value.match([]<class T>(const T&) {
         return type_kind::of<data_to_type_t<T>>;
       });
       emit(diagnostic::error("expected a list, got `{}`", got).primary(*var));
@@ -361,17 +354,10 @@ public:
       *it->second = std::move(original);
       return;
     }
-    for (auto& entry : *entries) {
-      auto f = detail::overload{
-        [](const auto& x) -> ast::constant::kind {
-          return x;
-        },
-        [](const pattern&) -> ast::constant::kind {
-          TENZIR_UNREACHABLE();
-        },
-      };
-      auto constant = tenzir::match(entry, f);
-      map_.insert_or_assign(std::string{var->name_without_dollar()}, constant);
+    for (const auto& entry : *entries) {
+      map_.insert_or_assign(
+        std::string{var->name_without_dollar()},
+        ast::constant::make(located<data>{entry, original.source}));
       auto pipe_copy = *pipe;
       visit(pipe_copy);
       x.args.emplace_back(std::move(pipe_copy));
@@ -411,7 +397,7 @@ public:
 
 private:
   failure_or<void> failure_;
-  std::unordered_map<std::string, std::optional<ast::constant::kind>> map_;
+  std::unordered_map<std::string, std::optional<ast::constant>> map_;
   session ctx_;
 };
 

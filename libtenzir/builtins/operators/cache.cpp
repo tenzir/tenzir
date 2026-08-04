@@ -1272,7 +1272,7 @@ public:
       return failure::promise();
     }
     TRY(auto value, const_eval(*args_.mode, dh));
-    auto* str = try_as<std::string>(value);
+    auto* str = try_as<std::string>(value.inner);
     if (not str) {
       diagnostic::error("expected `string` for mode argument")
         .primary(*args_.mode)
@@ -1342,7 +1342,7 @@ public:
     auto args = CacheArgs{};
     {
       TRY(auto value, const_eval(args_.id, ctx));
-      auto* str = try_as<std::string>(value);
+      auto* str = try_as<std::string>(value.inner);
       if (not str) {
         diagnostic::error("expected `string` for cache id")
           .primary(args_.id)
@@ -1353,9 +1353,9 @@ public:
     }
     if (args_.capacity) {
       TRY(auto value, const_eval(*args_.capacity, ctx));
-      if (auto* val = try_as<uint64_t>(value)) {
+      if (auto* val = try_as<uint64_t>(value.inner)) {
         args.capacity = located<uint64_t>{*val, args_.capacity->get_location()};
-      } else if (auto* val = try_as<int64_t>(value)) {
+      } else if (auto* val = try_as<int64_t>(value.inner)) {
         if (*val < 0) {
           diagnostic::error("capacity must not be negative")
             .primary(*args_.capacity)
@@ -1373,7 +1373,7 @@ public:
     }
     if (args_.read_timeout) {
       TRY(auto value, const_eval(*args_.read_timeout, ctx));
-      auto* val = try_as<duration>(value);
+      auto* val = try_as<duration>(value.inner);
       if (not val) {
         diagnostic::error("expected `duration` for read_timeout")
           .primary(*args_.read_timeout)
@@ -1394,7 +1394,7 @@ public:
     }
     if (args_.write_timeout) {
       TRY(auto value, const_eval(*args_.write_timeout, ctx));
-      auto* val = try_as<duration>(value);
+      auto* val = try_as<duration>(value.inner);
       if (not val) {
         diagnostic::error("expected `duration` for write_timeout")
           .primary(*args_.write_timeout)

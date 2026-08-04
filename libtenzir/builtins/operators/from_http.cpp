@@ -314,7 +314,7 @@ auto validate_paginate(Option<ast::expression> const& expr,
   }
   TRY(auto value, const_eval(*expr, dh));
   return match(
-    value,
+    value.inner,
     [&](std::string const& mode) -> failure_or<Option<pagination_spec>> {
       auto pagination_mode = http::parse_pagination_mode(mode);
       if (not pagination_mode) {

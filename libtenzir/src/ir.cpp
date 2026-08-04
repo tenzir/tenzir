@@ -342,16 +342,8 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
         return failure::promise();
       }
       TRY(auto value, const_eval(let.expr, ctx));
-      // TODO: Clean this up. Should probably make `const_eval` return it.
-      auto converted = match(
-        value,
-        [](auto& x) -> ast::constant::kind {
-          return std::move(x);
-        },
-        [](pattern&) -> ast::constant::kind {
-          TENZIR_UNREACHABLE();
-        });
-      auto inserted = env.try_emplace(let.id, std::move(converted)).second;
+      auto constant = ast::constant::make(value);
+      auto inserted = env.try_emplace(let.id, std::move(constant)).second;
       TENZIR_ASSERT(inserted);
     }
     // Update each operator with the produced bindings.

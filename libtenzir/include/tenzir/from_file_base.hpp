@@ -243,8 +243,9 @@ public:
       }
       if (path_field_) {
         slice = assign(path_field_->first,
-                       data_to_series(path_field_->second, slice.rows()), slice,
-                       ctrl.diagnostics());
+                       data_to_series(path_field_->second,
+                                      detail::narrow<int64_t>(slice.rows())),
+                       slice, ctrl.diagnostics());
       }
       // We wait for a response in order to get backpressure.
       ctrl.set_waiting(true);

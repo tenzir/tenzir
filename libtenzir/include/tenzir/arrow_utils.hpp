@@ -47,8 +47,12 @@ finish(T& x, std::source_location location = std::source_location::current()) {
   return std::static_pointer_cast<concrete_array_type>(array);
 }
 
-auto data_to_series(const data& value, int64_t length) -> series;
-auto data_to_series(const data& value, uint64_t length) -> series;
+/// Converts a value into a series with `length` copies of it.
+///
+/// Takes a view rather than a `data` so that callers do not have to materialize
+/// an owning value. A `data` converts implicitly; the viewed value must outlive
+/// the call.
+auto data_to_series(data_view2 value, int64_t length) -> series;
 
 // -- column builder helpers --------------------------------------------------
 

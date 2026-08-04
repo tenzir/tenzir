@@ -290,7 +290,7 @@ auto const_eval_match_expression(ast::expression const& expr, location source,
       .emit(dh);
     return failure::promise();
   }
-  return *value;
+  return std::move(value->inner);
 }
 
 auto is_irrefutable_match_pattern(ast::match_pattern const& pattern) -> bool;

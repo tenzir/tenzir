@@ -110,7 +110,7 @@ public:
         [](const auto&) -> std::optional<std::string> {
           return std::nullopt;
         }};
-      auto result = tenzir::match(evaluated, f);
+      auto result = tenzir::match(evaluated.inner, f);
       if (not result) {
         diagnostic::error("expected `string` or `int`")
           .primary(offset->get_location())

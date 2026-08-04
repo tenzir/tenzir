@@ -14,8 +14,7 @@ substitute_ctx::substitute_ctx(base_ctx ctx, const env_t* env)
   : ctx_{ctx}, env_{env} {
 }
 
-auto substitute_ctx::get(let_id id) const
-  -> std::optional<ast::constant::kind> {
+auto substitute_ctx::get(let_id id) const -> std::optional<ast::constant> {
   if (not env_) {
     return std::nullopt;
   }
@@ -26,8 +25,7 @@ auto substitute_ctx::get(let_id id) const
   return it->second;
 }
 
-auto substitute_ctx::env() const
-  -> std::unordered_map<let_id, ast::constant::kind> {
+auto substitute_ctx::env() const -> std::unordered_map<let_id, ast::constant> {
   if (not env_) {
     return {};
   }

@@ -510,7 +510,8 @@ public:
         if (instantiate or expr.is_deterministic(ctx)) {
           // Handle boolean flags for named arguments.
           if (is_named and is<Setter<located<bool>>>(setter)) {
-            TRY(auto value, const_eval(expr, ctx));
+            TRY(auto constant, const_eval(expr, ctx));
+            auto value = std::move(constant.inner);
             auto* boolean = try_as<bool>(value);
             if (not boolean) {
               diagnostic::error("expected bool but got {}", "TODO")
@@ -522,7 +523,8 @@ public:
             arg = located{*boolean, expr.get_location()};
             return {};
           }
-          TRY(auto value, const_eval(expr, ctx));
+          TRY(auto constant, const_eval(expr, ctx));
+          auto value = std::move(constant.inner);
           if (auto* integer = try_as<int64_t>(value);
               integer and is<Setter<located<uint64_t>>>(setter)) {
             if (*integer < 0) {

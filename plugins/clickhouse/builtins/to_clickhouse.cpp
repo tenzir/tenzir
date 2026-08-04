@@ -122,7 +122,7 @@ public:
     };
     auto uri = std::string{};
     auto requests = std::vector<secret_request>{};
-    auto has_uri = args_.uri && args_.uri->inner != secret::make_literal("");
+    auto has_uri = args_.uri and args_.uri->inner != secret::make_literal("");
     if (has_uri) {
       requests.push_back(make_secret_request("uri", *args_.uri, uri, dh));
     } else {
@@ -982,7 +982,7 @@ public:
         if (auto table = ctx.get(table_arg)) {
           auto sp = session_provider::make(ctx);
           if (auto table_name = try_const_eval(*table, sp.as_session())) {
-            if (const auto* s = try_as<std::string>(*table_name)) {
+            if (const auto* s = try_as<std::string>(table_name->inner)) {
               (void)validate_table_name<true>(*s, table->get_location(), ctx);
             } else {
               diagnostic::error("`table` must be a `string`")

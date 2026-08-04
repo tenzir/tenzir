@@ -18,19 +18,19 @@ namespace tenzir {
 
 namespace {
 
-auto contains_extension_type(const data& x) -> bool {
+auto contains_extension_type(data_view2 x) -> bool {
   return match(
     x,
-    [](const record& x) {
-      for (auto& y : x) {
+    [](const view<record>& x) {
+      for (auto y : x) {
         if (contains_extension_type(y.second)) {
           return true;
         }
       }
       return false;
     },
-    [](const list& x) {
-      for (auto& y : x) {
+    [](const view<list>& x) {
+      for (auto y : x) {
         if (contains_extension_type(y)) {
           return true;
         }
@@ -38,35 +38,33 @@ auto contains_extension_type(const data& x) -> bool {
       return false;
     },
     []<class T>(const T&) -> bool {
-      if constexpr (concepts::one_of<T, map, pattern>) {
+      using data_type = materialize_t<T>;
+      if constexpr (concepts::one_of<data_type, map, pattern>) {
         TENZIR_UNREACHABLE();
       } else {
-        return extension_type<data_to_type_t<T>>;
+        return extension_type<data_to_type_t<data_type>>;
       }
     });
 }
 
 } // namespace
 
-auto data_to_series(const data& value, int64_t length) -> series {
+auto data_to_series(data_view2 value, int64_t length) -> series {
+  TENZIR_ASSERT(length >= 0);
   if (is<caf::none_t>(value)) {
     return series::null(null_type{}, length);
   }
-  TENZIR_ASSERT(length >= 0);
-  if (contains_extension_type(value)) {
-    // We currently cannot convert extension types to scalars.
-    auto b = series_builder{};
-    if (length == 0) {
-      // Still need to get the correct type.
-      b.data(value);
-      return b.finish_assert_one_array().slice(0, 0);
-    }
-    for (auto i = int64_t{0}; i < length; ++i) {
-      b.data(value);
-    }
-    return b.finish_assert_one_array();
-  }
   auto b = series_builder{};
+  if (contains_extension_type(value)) {
+    // We currently cannot convert extension types to scalars, so we append one
+    // row at a time. An empty series still needs one row to infer the type.
+    for (auto i = int64_t{0}; i < std::max(length, int64_t{1}); ++i) {
+      b.data(value);
+    }
+    auto s = b.finish_assert_one_array();
+    return length == 0 ? s.slice(0, 0) : s;
+  }
+  // Build the value once and replicate the resulting scalar.
   b.data(value);
   auto s = b.finish_assert_one_array();
   return series{
@@ -74,10 +72,6 @@ auto data_to_series(const data& value, int64_t length) -> series {
     check(arrow::MakeArrayFromScalar(*check(s.array->GetScalar(0)), length,
                                      tenzir::arrow_memory_pool())),
   };
-}
-
-auto data_to_series(const data& value, uint64_t length) -> series {
-  return data_to_series(value, detail::narrow<int64_t>(length));
 }
 
 arrow::Status

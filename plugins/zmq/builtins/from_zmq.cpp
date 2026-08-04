@@ -112,7 +112,7 @@ public:
         request_stop();
         co_return;
       }
-      auto* str = try_as<std::string>(&*prefix);
+      auto* str = try_as<std::string>(prefix->inner);
       if (not str) {
         request_stop();
         diagnostic::error("`prefix` must be a constant string")
@@ -335,7 +335,7 @@ public:
       if (auto prefix = ctx.get(prefix_arg)) {
         auto noop_dh = null_diagnostic_handler{};
         auto value = const_eval(*prefix, noop_dh);
-        if (not value or not is<std::string>(*value)) {
+        if (not value or not is<std::string>(value->inner)) {
           diagnostic::error("`prefix` must be a constant string")
             .primary(prefix->get_location())
             .emit(ctx);

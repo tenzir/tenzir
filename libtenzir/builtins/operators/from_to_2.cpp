@@ -224,7 +224,7 @@ public:
     TRY(auto value, const_eval(expr, ctx));
     using ret = std::variant<bool, failure_or<operator_ptr>>;
     auto result = match(
-      value,
+      value.inner,
       [&](const record&) -> ret {
         events.push_back(expr);
         return true;
@@ -233,7 +233,7 @@ public:
         return create_pipeline_from_uri<true>(path, std::move(inv), ctx, docs);
       },
       [&](const auto&) -> ret {
-        const auto t = type::infer(value);
+        const auto t = type::infer(value.inner);
         diagnostic::error("expected `string`, or `record`")
           .primary(expr, "got `{}`", t ? t->kind() : type_kind{})
           .docs(docs)
@@ -247,15 +247,15 @@ public:
       return failure::promise();
     }
     for (auto& expr : inv.args | std::views::drop(1)) {
-      TRY(value, const_eval(expr, ctx));
+      TRY(auto value, const_eval(expr, ctx));
       result = match(
-        value,
+        value.inner,
         [&](const record&) -> ret {
           events.push_back(expr);
           return true;
         },
         [&](const auto&) -> ret {
-          const auto t = type::infer(value);
+          const auto t = type::infer(value.inner);
           diagnostic::error("expected `string`, or `record`")
             .primary(expr, "got `{}`", t ? t->kind() : type_kind{})
             .docs(docs)
@@ -297,12 +297,12 @@ public:
     auto& expr = inv.args[0];
     TRY(auto value, const_eval(expr, ctx));
     return match(
-      value,
+      value.inner,
       [&](std::string& path) -> failure_or<operator_ptr> {
         return create_pipeline_from_uri<false>(path, std::move(inv), ctx, docs);
       },
       [&](auto&) -> failure_or<operator_ptr> {
-        auto t = type::infer(value);
+        auto t = type::infer(value.inner);
         diagnostic::error("expected `string`")
           .primary(inv.args[0], "got `{}`", t ? t->kind() : type_kind{})
           .docs(docs)

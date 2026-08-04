@@ -720,7 +720,7 @@ auto validate_aggregates(const config& cfg, session ctx) -> failure_or<void> {
 auto evaluate_options(config& cfg, session ctx) -> failure_or<void> {
   if (cfg.frequency_expr) {
     TRY(auto value, const_eval(*cfg.frequency_expr, ctx));
-    auto* dur = try_as<duration>(value);
+    auto* dur = try_as<duration>(value.inner);
     if (not dur) {
       diagnostic::error("expected duration for `frequency`")
         .primary(*cfg.frequency_expr)
@@ -737,7 +737,7 @@ auto evaluate_options(config& cfg, session ctx) -> failure_or<void> {
   }
   if (cfg.mode_expr) {
     TRY(auto value, const_eval(*cfg.mode_expr, ctx));
-    auto* str = try_as<std::string>(value);
+    auto* str = try_as<std::string>(value.inner);
     if (not str) {
       diagnostic::error("expected string for `mode`")
         .primary(*cfg.mode_expr)

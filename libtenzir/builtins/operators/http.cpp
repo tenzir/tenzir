@@ -586,7 +586,7 @@ auto validate_paginate(std::optional<ast::expression> expr, session ctx)
   }
   TRY(auto value, const_eval(*expr, ctx));
   return match(
-    value,
+    value.inner,
     [&](const std::string& mode) -> failure_or<std::optional<pagination_spec>> {
       if (mode != "link") {
         diagnostic::error("unsupported pagination mode: `{}`", mode)
@@ -600,7 +600,7 @@ auto validate_paginate(std::optional<ast::expression> expr, session ctx)
          expr->get_location()}};
     },
     [&](const auto&) -> failure_or<std::optional<pagination_spec>> {
-      const auto ty = type::infer(value);
+      const auto ty = type::infer(value.inner);
       diagnostic::error("expected `paginate` to be `string` or `lambda`")
         .primary(*expr, "got `{}`", ty ? ty->kind() : type_kind{})
         .hint("`paginate` must be `\"link\"` or a lambda")

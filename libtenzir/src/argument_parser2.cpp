@@ -110,17 +110,18 @@ auto argument_parser2::parse(const ast::entity& self,
                  .primary(expr));
           return;
         }
-        auto value = const_eval(expr, ctx);
-        if (not value) {
-          result = value.error();
+        auto constant = const_eval(expr, ctx);
+        if (not constant) {
+          result = constant.error();
           return;
         }
+        auto value = std::move(constant->inner);
         // TODO: Make this more beautiful.
         auto storage = T{};
-        auto cast = try_as<T>(&*value);
+        auto cast = try_as<T>(&value);
         if constexpr (std::same_as<T, uint64_t>) {
           if (not cast) {
-            auto* other = try_as<int64_t>(&*value);
+            auto* other = try_as<int64_t>(&value);
             if (other) {
               if (*other < 0) {
                 emit(diagnostic::error("expected positive integer, got `{}`",
@@ -135,29 +136,29 @@ auto argument_parser2::parse(const ast::entity& self,
         }
         if constexpr (std::same_as<T, secret>) {
           if (not cast) {
-            auto* other = try_as<std::string>(&*value);
+            auto* other = try_as<std::string>(&value);
             if (other) {
               value = secret::make_literal(*other);
-              cast = try_as<secret>(&*value);
+              cast = try_as<secret>(&value);
             }
           }
         }
         if (not cast) {
           emit(diagnostic::error("expected argument of type `{}`, but got `{}`",
                                  type_kind::of<data_to_type_t<T>>,
-                                 type_kind_of_data(*value))
+                                 type_kind_of_data(value))
                  .primary(expr));
           return;
         }
         set(located{std::move(*cast), expr.get_location()});
       },
       [&](setter<located<data>>& set) {
-        auto value = const_eval(expr, ctx);
-        if (not value) {
-          result = value.error();
+        auto constant = const_eval(expr, ctx);
+        if (not constant) {
+          result = constant.error();
           return;
         }
-        set(located{std::move(*value), expr.get_location()});
+        set(located{std::move(*constant).inner, expr.get_location()});
       },
       [&](setter<ast::expression>& set) {
         set(expr);
@@ -245,15 +246,16 @@ auto argument_parser2::parse(const ast::entity& self,
         const auto& expr = assignment.right;
         it->set.match(
           [&]<data_type T>(setter<located<T>>& set) {
-            auto value = const_eval(expr, ctx);
-            if (not value) {
-              result = value.error();
+            auto constant = const_eval(expr, ctx);
+            if (not constant) {
+              result = constant.error();
               return;
             }
-            auto cast = try_as<T>(&*value);
+            auto value = std::move(constant->inner);
+            auto cast = try_as<T>(&value);
             if constexpr (std::same_as<T, uint64_t>) {
               if (not cast) {
-                auto* other = try_as<int64_t>(&*value);
+                auto* other = try_as<int64_t>(&value);
                 if (other) {
                   if (*other < 0) {
                     emit(diagnostic::error(
@@ -262,16 +264,16 @@ auto argument_parser2::parse(const ast::entity& self,
                     return;
                   }
                   value = static_cast<uint64_t>(*other);
-                  cast = try_as<T>(&*value);
+                  cast = try_as<T>(&value);
                 }
               }
             }
             if constexpr (std::same_as<T, secret>) {
               if (not cast) {
-                auto* other = try_as<std::string>(&*value);
+                auto* other = try_as<std::string>(&value);
                 if (other) {
                   value = secret::make_literal(*other);
-                  cast = try_as<secret>(&*value);
+                  cast = try_as<secret>(&value);
                 }
               }
             }
@@ -280,19 +282,19 @@ auto argument_parser2::parse(const ast::entity& self,
               emit(diagnostic::error("expected argument of type `{}`, but got "
                                      "`{}`",
                                      type_kind::of<data_to_type_t<T>>,
-                                     type_kind_of_data(*value))
+                                     type_kind_of_data(value))
                      .primary(expr));
               return;
             }
             set(located{std::move(*cast), expr.get_location()});
           },
           [&](setter<located<data>>& set) {
-            auto value = const_eval(expr, ctx);
-            if (not value) {
-              result = value.error();
+            auto constant = const_eval(expr, ctx);
+            if (not constant) {
+              result = constant.error();
               return;
             }
-            set(located{std::move(*value), expr.get_location()});
+            set(located{std::move(*constant).inner, expr.get_location()});
           },
           [&](setter<ast::expression>& set) {
             set(expr);

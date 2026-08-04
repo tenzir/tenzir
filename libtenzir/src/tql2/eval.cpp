@@ -171,20 +171,20 @@ auto const_eval_series(const ast::expression& expr, diagnostic_handler& dh)
 }
 
 auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
-  -> failure_or<data> {
+  -> failure_or<located<data>> {
   TRY(auto part, const_eval_series(expr, dh));
-  return materialize(view_at(*part.array, 0));
+  return located{materialize(view_at(*part.array, 0)), expr.get_location()};
 }
 
 auto try_const_eval(const ast::expression& expr, session ctx)
-  -> std::optional<data> {
-  return trace_panic(expr, [&] -> std::optional<data> {
+  -> Option<located<data>> {
+  return trace_panic(expr, [&] -> Option<located<data>> {
     if (not expr.is_deterministic(ctx.reg())) {
       // TODO: This check is not ideal, as it is a bit too broad, and
       // incorrectly marks short-circuited expressions like `random() if false`
       // as non-deterministic just because they contain a call to a
       // non-deterministic function.
-      return {};
+      return None{};
     }
     auto const_dh = collecting_diagnostic_handler{};
     auto const_sp = session_provider::make(const_dh);
@@ -192,7 +192,7 @@ auto try_const_eval(const ast::expression& expr, session ctx)
       std::move(const_dh).forward_to(ctx);
       return std::move(*result);
     }
-    return {};
+    return None{};
   });
 }
 

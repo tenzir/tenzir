@@ -239,7 +239,7 @@ public:
       return;
     }
     x.ref = std::move(path);
-    x.value = std::move(value).unwrap();
+    x.value = std::move(value).unwrap().inner;
   }
 
   void visit(ast::invocation& x) {

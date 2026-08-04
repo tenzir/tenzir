@@ -15,6 +15,7 @@
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/try.hpp"
+#include "tenzir/view.hpp"
 
 #include <caf/binary_serializer.hpp>
 #include <caf/detail/type_list.hpp>
@@ -283,6 +284,12 @@ auto type_def::operator=(type_def const& other) -> type_def& {
 auto type_def::get_location() const -> location {
   return match(*kind, [](const auto& x) -> location {
     return x.get_location();
+  });
+}
+
+auto constant::as_view() const -> data_view2 {
+  return value.match([](const auto& x) -> data_view2 {
+    return make_view(x);
   });
 }
 
@@ -667,7 +674,7 @@ public:
   void visit(ast::expression& x) {
     if (auto* var = try_as<ast::dollar_var>(x)) {
       if (auto value = ctx_.get(var->let)) {
-        x = ast::constant{std::move(*value), var->get_location()};
+        x = ast::constant{std::move(value->value), var->get_location()};
       } else {
         result_ = ast::substitute_result::some_remaining;
       }

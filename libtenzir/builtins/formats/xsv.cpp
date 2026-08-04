@@ -193,7 +193,7 @@ auto extract_header(ast::expression& header_expr,
   TRY(auto header_data, const_eval(header_expr, ctx));
   using ret_t = failure_or<std::vector<std::string>>;
   return match(
-    header_data,
+    header_data.inner,
     [&](const std::string& s) -> ret_t {
       return parse_header(s, header_expr.get_location(), opts, quoting_options,
                           ctx);
@@ -230,7 +230,7 @@ auto extract_header(ast::expression& header_expr,
       return fields;
     },
     [&](const auto&) -> ret_t {
-      const auto t = type::infer(header_data);
+      const auto t = type::infer(header_data.inner);
       diagnostic::error("`header` must be a `string` or `list<string>`")
         .primary(header_expr, "got `{}`", t ? t->kind() : type_kind{})
         .emit(ctx);
@@ -1017,7 +1017,7 @@ public:
       if (not result) {
         co_return;
       }
-      auto header_data = std::move(*result);
+      auto header_data = std::move(result->inner);
       auto maybe_header = match(
         header_data,
         [&](const std::string& s) -> failure_or<std::vector<std::string>> {

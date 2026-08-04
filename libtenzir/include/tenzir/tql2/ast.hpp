@@ -25,6 +25,12 @@
 #include <type_traits>
 #include <unordered_map>
 
+namespace tenzir {
+
+struct data_view2;
+
+} // namespace tenzir
+
 namespace tenzir::detail {
 
 /// This function makes a value dependant on the type paramater `T` and can
@@ -179,6 +185,19 @@ struct constant {
     : value{std::move(value)}, source{source} {
   }
 
+  /// Builds a constant from a `data` value and its source location.
+  static auto make(located<data> value) -> constant {
+    return constant{match(
+                      std::move(value.inner),
+                      [](auto x) -> kind {
+                        return std::move(x);
+                      },
+                      [](pattern) -> kind {
+                        TENZIR_UNREACHABLE();
+                      }),
+                    value.source};
+  }
+
   kind value;
   location source;
 
@@ -200,6 +219,12 @@ struct constant {
       return x;
     });
   }
+
+  /// Returns a non-owning view of the value.
+  ///
+  /// Unlike `as_data()`, this does not copy the value. The view borrows from
+  /// this constant, which must outlive it.
+  auto as_view() const -> data_view2;
 
   auto get_location() const -> location {
     return source;

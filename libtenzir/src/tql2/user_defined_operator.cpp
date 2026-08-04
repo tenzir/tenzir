@@ -576,7 +576,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
       if (not value) {
         return;
       }
-      auto* str = try_as<std::string>(&*value);
+      auto* str = try_as<std::string>(&value->inner);
       if (not str) {
         return;
       }
@@ -592,10 +592,10 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
     }
     auto diag_loc = explicit_location.value_or(expr.get_location());
     if (auto value = try_const_eval(expr, ctx)) {
-      if (type_check(*param.value_type, *value)) {
+      if (type_check(*param.value_type, value->inner)) {
         return {};
       }
-      auto actual_type = type::infer(*value);
+      auto actual_type = type::infer(value->inner);
       auto actual_str = actual_type ? fmt::format("{}", *actual_type)
                                     : std::string{"unknown"};
       diagnostic::error("argument `{}` must be of type `{}` (got `{}`)",

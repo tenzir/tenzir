@@ -735,8 +735,7 @@ auto extract_pattern_definitions(std::optional<ast::expression> expr,
     return grok_parser::pattern_definitions_type{};
   }
   TRY(auto d, const_eval(*expr, ctx));
-  return extract_pattern_definitions(
-    std::optional{located{std::move(d), expr->get_location()}}, ctx);
+  return extract_pattern_definitions(std::optional{std::move(d)}, ctx);
 }
 
 auto make_grok_parser(located<std::string> pattern,

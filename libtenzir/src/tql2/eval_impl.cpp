@@ -798,7 +798,9 @@ auto evaluator::eval(ast::assignment const& x, ActiveRows const& active)
 auto evaluator::eval(ast::constant const& x, ActiveRows const& active)
   -> multi_series {
   TENZIR_UNUSED(active);
-  return to_series(x.as_data());
+  // Evaluate through a view: the constant outlives this call, so there is no
+  // need to materialize an owning copy of its value.
+  return data_to_series(x.as_view(), length_);
 }
 
 auto evaluator::eval(ast::pkg_dollar_var const& x, ActiveRows const& active)

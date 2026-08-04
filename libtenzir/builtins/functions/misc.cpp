@@ -126,10 +126,10 @@ public:
           .parse(inv, ctx));
     if (auto key = try_const_eval(expr, ctx)) {
       auto value = std::optional<std::string>{};
-      const auto* typed_key = try_as<std::string>(*key);
+      const auto* typed_key = try_as<std::string>(key->inner);
       if (not typed_key) {
         diagnostic::warning("expected `string`, got `{}`",
-                            type::infer(key).value_or(type{}).kind())
+                            type::infer(key->inner).value_or(type{}).kind())
           .primary(expr)
           .emit(ctx);
       } else if (auto it = env_.find(*typed_key); it != env_.end()) {
@@ -388,10 +388,11 @@ public:
           .positional("field", needle, "string")
           .parse(inv, ctx));
     if (auto const_needle = try_const_eval(needle, ctx)) {
-      auto* str = try_as<std::string>(*const_needle);
+      auto* str = try_as<std::string>(const_needle->inner);
       if (not str) {
-        diagnostic::error("expected `string`, but got `{}`",
-                          type::infer(*const_needle).value_or(type{}).kind())
+        diagnostic::error(
+          "expected `string`, but got `{}`",
+          type::infer(const_needle->inner).value_or(type{}).kind())
           .primary(needle)
           .emit(ctx);
       }

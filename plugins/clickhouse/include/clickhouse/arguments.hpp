@@ -443,7 +443,7 @@ struct operator_arguments {
     }
     auto sp = session_provider::make(ctx);
     if (auto table_name = try_const_eval(res.table, sp.as_session())) {
-      if (const auto* s = try_as<std::string>(*table_name)) {
+      if (const auto* s = try_as<std::string>(table_name->inner)) {
         if (not validate_table_name<true>(*s, res.table.get_location(), ctx)) {
           return failure::promise();
         }

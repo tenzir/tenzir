@@ -888,7 +888,7 @@ public:
     TRY(auto result, const_eval(regex, ctx));
     auto failed = false;
     match(
-      result,
+      result.inner,
       [&](std::string x) {
         args.split_at_regex = located{std::move(x), regex.get_location()};
       },
@@ -947,7 +947,7 @@ public:
     TRY(auto result, const_eval(separator, ctx));
     auto failed = false;
     match(
-      result,
+      result.inner,
       [&](std::string x) {
         args.split_at_string = located{
           std::move(x),

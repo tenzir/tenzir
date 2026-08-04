@@ -761,10 +761,10 @@ public:
     // Optimization: If the condition is a constant, we evaluate it and return
     // the appropriate branch only.
     if (auto pred = try_const_eval(pred_expr, ctx)) {
-      const auto* typed_pred = try_as<bool>(*pred);
+      const auto* typed_pred = try_as<bool>(pred->inner);
       if (not typed_pred) {
         diagnostic::error("expected `bool`, but got `{}`",
-                          type::infer(*pred).value_or(type{}).kind())
+                          type::infer(pred->inner).value_or(type{}).kind())
           .primary(pred_expr)
           .emit(ctx);
         return failure::promise();
