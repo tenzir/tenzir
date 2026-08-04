@@ -553,6 +553,8 @@ private:
   MatchArgs args_;
 };
 
+TENZIR_REGISTER_PLUGIN(inspection_plugin<ir::Operator, MatchIr>)
+
 } // namespace
 
 auto make_match_ir(ast::match_stmt x, compile_ctx& ctx)
@@ -603,10 +605,6 @@ auto make_match_ir(ast::match_stmt x, compile_ctx& ctx)
     return failure::promise();
   }
   return Box<ir::Operator>{MatchIr{std::move(args)}};
-}
-
-auto make_match_ir_inspection_plugin() -> plugin* {
-  return new inspection_plugin<ir::Operator, MatchIr>{};
 }
 
 } // namespace tenzir

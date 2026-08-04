@@ -294,6 +294,11 @@ add_library(libtenzir ${libtenzir_sources})
 TenzirTargetEnableTooling(libtenzir)
 add_library(tenzir::libtenzir ALIAS libtenzir)
 
+# A handful of plugins are part of libtenzir itself rather than of the builtins
+# archive, because the library's own code depends on them. Enabling the builtin
+# flavor of TENZIR_REGISTER_PLUGIN lets them register like any other builtin.
+target_compile_definitions(libtenzir PRIVATE TENZIR_ENABLE_BUILTINS)
+
 add_library(libtenzir_builtins STATIC ${libtenzir_builtins_sources})
 TenzirTargetEnableTooling(libtenzir_builtins)
 target_compile_definitions(libtenzir_builtins PRIVATE TENZIR_ENABLE_BUILTINS)

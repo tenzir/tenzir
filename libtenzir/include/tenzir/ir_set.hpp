@@ -12,8 +12,7 @@
 
 namespace tenzir {
 
-/// Compile a TQL `match` statement into its native IR operator.
-auto make_match_ir(ast::match_stmt stmt, compile_ctx& ctx)
-  -> failure_or<Box<ir::Operator>>;
+/// Create a `set` IR operator with the given assignment.
+auto make_set_ir(ast::assignment assignment) -> Box<ir::Operator>;
 
 } // namespace tenzir

@@ -12,8 +12,8 @@
 
 namespace tenzir {
 
-/// Compile a TQL `match` statement into its native IR operator.
-auto make_match_ir(ast::match_stmt stmt, compile_ctx& ctx)
+/// Compile a TQL `if` statement into its native IR operator.
+auto make_if_ir(ast::if_stmt stmt, compile_ctx& ctx)
   -> failure_or<Box<ir::Operator>>;
 
 } // namespace tenzir

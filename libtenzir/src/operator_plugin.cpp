@@ -740,20 +740,6 @@ auto OperatorPlugin::compile(ast::invocation inv, compile_ctx ctx) const
   return ir;
 }
 
-// TODO: Clean this up. We might want to be able to just use
-// `TENZIR_REGISTER_PLUGINS` also from `libtenzir` itself.
-auto register_plugins_somewhat_hackily = std::invoke([]() {
-  auto ptr
-    = plugin_ptr::make_builtin(new inspection_plugin<ir::Operator, GenericIr>{},
-                               [](plugin* plugin) {
-                                 delete plugin;
-                               },
-                               nullptr, {});
-  const auto it = std::ranges::upper_bound(plugins::get_mutable(), ptr);
-  plugins::get_mutable().insert(it, std::move(ptr));
-  return std::monostate{};
-});
-
 auto OperatorPlugin::describe_shared() const
   -> std::shared_ptr<const Description> {
   std::call_once(desc_init_flag_, [this] {
@@ -779,3 +765,7 @@ auto OperatorPlugin::describe_shared() const
 }
 
 } // namespace tenzir::_::operator_plugin
+
+TENZIR_REGISTER_PLUGIN(
+  tenzir::inspection_plugin<tenzir::ir::Operator,
+                            tenzir::_::operator_plugin::GenericIr>)
