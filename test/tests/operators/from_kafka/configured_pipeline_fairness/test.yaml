@@ -1,0 +1,9 @@
+suite: from-kafka-configured-pipeline-fairness
+fixtures:
+  - kafka:
+      topic: from_kafka_configured_pipeline_fairness
+      partitions: 1
+      messages: 0
+timeout: 90
+skip:
+  on: fixture-unavailable
