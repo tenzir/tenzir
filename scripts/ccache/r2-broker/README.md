@@ -166,8 +166,13 @@ manually once, or push a change under `scripts/ccache/r2-broker/`.
 
 The workflow deploys the Worker and stores these Worker secrets:
 
-- `CLOUDFLARE_API_TOKEN`
+- `R2_API_TOKEN`
 - `R2_PARENT_ACCESS_KEY_ID`
+
+The Worker secret is deliberately not named `CLOUDFLARE_API_TOKEN`:
+wrangler-action overwrites that environment variable with its `apiToken`
+input (the deploy token) before uploading secrets, so a Worker secret with
+that name would silently receive the wrong token.
 
 The Worker URL is usually:
 

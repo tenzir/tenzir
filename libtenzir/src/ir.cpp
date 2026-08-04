@@ -9,6 +9,7 @@
 #include "tenzir/ir.hpp"
 
 #include "tenzir/async.hpp"
+#include "tenzir/base_ctx.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
@@ -126,15 +127,6 @@ auto get_porting_hint(const ast::entity& op) -> std::string_view {
                                     &porting_hint::legacy_name);
   return it != std::ranges::end(unported_replacements) ? it->message
                                                        : std::string_view{};
-}
-
-auto merge_compiled_pipeline(std::vector<ir::let>& lets,
-                             std::vector<Box<ir::Operator>>& operators,
-                             ir::pipeline pipe) -> void {
-  lets.insert(lets.end(), std::move_iterator{pipe.lets.begin()},
-              std::move_iterator{pipe.lets.end()});
-  operators.insert(operators.end(), std::move_iterator{pipe.operators.begin()},
-                   std::move_iterator{pipe.operators.end()});
 }
 
 class Set final : public Operator<table_slice, table_slice> {
@@ -346,9 +338,15 @@ public:
   auto start(OpCtx& ctx) -> Task<void> {
     // Spawn subpipelines if they are not already spawned (due to restore).
     if (not ctx.get_sub(true).is_some()) {
-      co_await ctx.spawn_sub<table_slice>(true, args_.consequence);
+      if (not co_await ctx.plan_and_spawn_sub<table_slice>(true,
+                                                           args_.consequence)) {
+        co_return;
+      }
       if (args_.alternative) {
-        co_await ctx.spawn_sub<table_slice>(false, *args_.alternative);
+        if (not co_await ctx.plan_and_spawn_sub<table_slice>(
+              false, *args_.alternative)) {
+          co_return;
+        }
       }
     }
   }
@@ -680,8 +678,7 @@ auto ir::CompileResult::unwrap() && -> pipeline {
 auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
   // TODO: Or do we assume that entities are already resolved?
   TRY(resolve_entities(*this, ctx));
-  auto lets = std::vector<ir::let>{};
-  auto operators = std::vector<Box<ir::Operator>>{};
+  auto acc = ir::pipeline{};
   auto scope = ctx.open_scope();
   for (auto& stmt : body) {
     auto result = match(
@@ -723,8 +720,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             // were not defined, for example because it can then introduce those
             // bindings by itself.
             TRY(auto compiled, op.ir_plugin->compile(x, ctx));
-            merge_compiled_pipeline(lets, operators,
-                                    std::move(compiled).unwrap());
+            acc.append(std::move(compiled).unwrap());
             return {};
           },
           [&](const user_defined_operator& op) -> failure_or<void> {
@@ -756,7 +752,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
             // we pre-bound above before substitution copied them in.
             auto udo_ctx = ctx.without_env();
             TRY(auto pipe, std::move(substituted).compile(udo_ctx));
-            merge_compiled_pipeline(lets, operators, std::move(pipe));
+            acc.append(std::move(pipe));
             return {};
           });
       },
@@ -764,7 +760,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
         TRY(x.left.bind(ctx));
         TRY(resolve_assignment_left(x, ctx));
         TRY(x.right.bind(ctx));
-        operators.push_back(make_set_ir(std::move(x)));
+        acc.operators.push_back(make_set_ir(std::move(x)));
         return {};
       },
       [&](ast::let_stmt x) -> failure_or<void> {
@@ -777,7 +773,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
         }
         TRY(x.expr.bind(ctx));
         auto id = scope.let(std::string{x.name_without_dollar()});
-        lets.emplace_back(std::move(x.name), std::move(x.expr), id);
+        acc.lets.emplace_back(std::move(x.name), std::move(x.expr), id);
         return {};
       },
       [&](ast::if_stmt x) -> failure_or<void> {
@@ -790,12 +786,12 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
           TRY(auto pipe, std::move(x.else_->pipe).compile(ctx));
           args.alternative.emplace(std::move(pipe));
         }
-        operators.emplace_back(IfIr{std::move(args)});
+        acc.operators.emplace_back(IfIr{std::move(args)});
         return {};
       },
       [&](ast::match_stmt x) -> failure_or<void> {
         TRY(auto op, make_match_ir(std::move(x), ctx));
-        operators.push_back(std::move(op));
+        acc.operators.push_back(std::move(op));
         return {};
       },
       [&](ast::type_stmt x) -> failure_or<void> {
@@ -807,7 +803,42 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
       });
     TRY(result);
   }
-  return ir::pipeline{std::move(lets), std::move(operators)};
+  return acc;
+}
+
+auto ir::pipeline::bind(let_id id, ast::constant::kind value) -> void {
+  // Prepend so the binding is in scope for all subsequent `let`s and operators,
+  // matching the semantics of a base-environment binding.
+  auto value_ex
+    = ast::expression{ast::constant{std::move(value), location::unknown}};
+  lets.insert(lets.begin(), let{ast::identifier{}, value_ex, id});
+}
+
+auto ir::pipeline::prepend(pipeline other) -> void {
+  lets.insert(lets.begin(), std::move_iterator{other.lets.begin()},
+              std::move_iterator{other.lets.end()});
+  operators.insert(operators.begin(),
+                   std::move_iterator{other.operators.begin()},
+                   std::move_iterator{other.operators.end()});
+}
+
+auto ir::pipeline::prepend(optimize_filter filter) -> void {
+  operators.insert_range(operators.begin(),
+                         filter | std::views::as_rvalue
+                           | std::views::transform(make_where_ir));
+}
+
+auto ir::pipeline::append(pipeline other) -> void {
+  lets.insert(lets.end(), std::move_iterator{other.lets.begin()},
+              std::move_iterator{other.lets.end()});
+  operators.insert(operators.end(), std::move_iterator{other.operators.begin()},
+                   std::move_iterator{other.operators.end()});
+}
+
+auto ir::pipeline::append(optimize_filter filter) -> void {
+  operators.insert_range(operators.end(),
+                         filter | std::views::as_rvalue
+                           | std::views::transform(make_where_ir));
 }
 
 auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
@@ -858,19 +889,35 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::pipeline::spawn(element_type_tag input) && -> std::vector<AnyOperator> {
-  // TODO: Assert that we were instantiated, or instantiate ourselves?
-  TENZIR_ASSERT(lets.empty());
-  // TODO: This is probably not the right place for optimizations.
-  auto opt = std::move(*this).optimize(optimize_filter{}, event_order::ordered);
+auto ir::make_plan(pipeline pipe, element_type_tag input, base_ctx ctx)
+  -> failure_or<Plan> {
+  // Resolve `let` bindings and substitute non-deterministic arguments. This is
+  // the single substitution point for all pipelines, including subpipelines
+  // that inject runtime values via `pipeline::bind`.
+  TRY(pipe.substitute(substitute_ctx{ctx, nullptr}, true));
+  TENZIR_ASSERT(pipe.lets.empty());
+  // Optimize the now-instantiated pipeline. Any filter left over after
+  // optimization is reinserted as leading `where` operators.
+  auto opt = std::move(pipe).optimize(optimize_filter{}, event_order::ordered);
   TENZIR_ASSERT(opt.replacement.lets.empty());
-  // TODO: Should we really ignore this here?
-  (void)opt.order;
-  for (auto& expr : opt.filter) {
-    opt.replacement.operators.insert(opt.replacement.operators.begin(),
-                                     make_where_ir(expr));
-  }
-  *this = std::move(opt.replacement);
+  pipe = std::move(opt.replacement);
+  // Prepend the leftover filters as leading `where` operators.
+  pipe.prepend(std::move(opt.filter));
+  // Type-check the instantiated pipeline against `input`. Performing this here
+  // means spawning the resulting `Plan` can no longer fail.
+  TRY(auto output, pipe.infer_type(input, ctx));
+  return Plan{std::move(pipe), input, output};
+}
+
+auto ir::Plan::spawn() && -> std::vector<AnyOperator> {
+  return std::move(pipe_).spawn(input_);
+}
+
+auto ir::pipeline::spawn(element_type_tag input) && -> std::vector<AnyOperator> {
+  // The caller is responsible for instantiating and optimizing the
+  // pipeline via `ir::make_plan` before spawning, so there must be no
+  // remaining `let` bindings here.
+  TENZIR_ASSERT(lets.empty());
   auto result = std::vector<AnyOperator>{};
   for (auto& op : operators) {
     // We already checked, there should be no diagnostics here.

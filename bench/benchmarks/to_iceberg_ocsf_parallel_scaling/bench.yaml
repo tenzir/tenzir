@@ -1,0 +1,29 @@
+name: to_iceberg_ocsf_parallel_scaling
+description: >-
+  Measure sustained Parquet write scaling for one Iceberg table across 50
+  class/day partitions. The workload writes 6,553,600 sparse OCSF events in
+  4,096-event schema-homogeneous batches and compares 1 and 4 partition-routed
+  to_iceberg instances.
+tags:
+  benchmark: iceberg
+  dataset: ocsf-1.8
+  input: synthetic-repeat
+  workload: parallel-scaling
+inputs:
+  main:
+    path: ocsf/iceberg-1.8-seeds.ndjson
+    source:
+      url: ../../fixtures/iceberg/ocsf-1.8-seeds.ndjson
+      num_events: 6553600
+env:
+  TENZIR_CONSOLE_FORMAT: none
+fixtures:
+  - iceberg:
+      inputs: [main]
+      expected_events: 6553600
+      expected_seed_events: 25
+      batch_size: 4096
+runtime:
+  warmup_runs: 0
+  measurement_runs: 3
+  timeout_seconds: 3600

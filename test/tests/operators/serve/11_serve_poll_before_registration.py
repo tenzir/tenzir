@@ -29,6 +29,7 @@ import os
 import shlex
 import socket
 import subprocess
+import tempfile
 import threading
 import time
 import urllib.error
@@ -53,7 +54,9 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def _post(url: str, path: str, body: dict | None = None) -> tuple[int, dict]:
+def _post(
+    url: str, path: str, body: dict | None = None, timeout: float = 30
+) -> tuple[int, dict]:
     data = json.dumps(body or {}).encode()
     req = urllib.request.Request(
         f"{url}{API}{path}",
@@ -62,28 +65,35 @@ def _post(url: str, path: str, body: dict | None = None) -> tuple[int, dict]:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=30) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, json.loads(r.read().decode() or "{}")
     except urllib.error.HTTPError as e:
         return e.code, json.loads(e.read().decode() or "{}")
 
 
-def _wait_for_api(proc: subprocess.Popen[str], url: str, timeout: int = 60) -> None:
+def _wait_for_api(
+    proc: subprocess.Popen[str], url: str, log_path: Path, timeout: int = 60
+) -> None:
+    def log_tail() -> str:
+        try:
+            return log_path.read_text(errors="replace")[-2000:]
+        except OSError:
+            return "<no server output captured>"
+
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if proc.poll() is not None:
-            _, stderr = proc.communicate()
             raise RuntimeError(
-                f"web server exited with {proc.returncode}: {stderr[-2000:]}"
+                f"web server exited with {proc.returncode}: {log_tail()}"
             )
         try:
-            status, _ = _post(url, "/ping")
+            status, _ = _post(url, "/ping", timeout=1)
             if status == 200:
                 return
         except (urllib.error.URLError, ConnectionError, OSError):
             pass
         time.sleep(0.2)
-    raise RuntimeError("REST API did not come up")
+    raise RuntimeError(f"REST API did not come up: {log_tail()}")
 
 
 def start_web_server(
@@ -93,25 +103,31 @@ def start_web_server(
     tenzir_ctl = str(Path(binary[0]).with_name("tenzir-ctl"))
     endpoint = env["TENZIR_NODE_CLIENT_ENDPOINT"]
     port = _free_port()
-    proc = subprocess.Popen(
-        [
-            tenzir_ctl,
-            "--bare-mode",
-            "--console-verbosity=warning",
-            f"--endpoint={endpoint}",
-            "web",
-            "server",
-            "--mode=dev",
-            "--bind=127.0.0.1",
-            f"--port={port}",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+    log_path = Path(tempfile.gettempdir()) / f"web-server-{SUFFIX}.log"
+    with log_path.open("w") as log_file:
+        proc = subprocess.Popen(
+            [
+                tenzir_ctl,
+                "--bare-mode",
+                "--console-verbosity=warning",
+                # The default connection timeout of 5 minutes silently outlasts
+                # the readiness window below when the node is stalled. Fail
+                # fast instead so the retry surfaces the actual error.
+                "--connection-timeout=30s",
+                f"--endpoint={endpoint}",
+                "web",
+                "server",
+                "--mode=dev",
+                "--bind=127.0.0.1",
+                f"--port={port}",
+            ],
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
     api_url = f"http://127.0.0.1:{port}"
     try:
-        _wait_for_api(proc, api_url)
+        _wait_for_api(proc, api_url, log_path)
     except Exception:
         if proc.poll() is None:
             proc.kill()

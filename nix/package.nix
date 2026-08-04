@@ -118,14 +118,15 @@ rec {
       # plugins.
       tenzir =
         let
-          tenzir-plugins-source =
-            if builtins.pathExists ./../contrib/tenzir-plugins/README.md then
-              builtins.path {
-                path = ./../contrib/tenzir-plugins;
-                name = "tenzir-plugins-source";
-              }
-            else
-              pkgs.callPackage ./tenzir/plugins/source.nix { };
+          # The proprietary plugins live under engine/plugins/ alongside the
+          # open-source plugins. The flake is referenced through the enclosing
+          # git repository, so its source includes the whole repository and the
+          # path stays inside it. Only the names in ./tenzir/plugins/names.nix
+          # are pulled from here as proprietary plugins.
+          tenzir-plugins-source = builtins.path {
+            path = ./../plugins;
+            name = "tenzir-plugins-source";
+          };
           pkg = tenzir-de.override {
             inherit tenzir-plugins-source;
           };

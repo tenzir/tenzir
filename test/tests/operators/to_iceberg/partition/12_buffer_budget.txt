@@ -1,0 +1,6 @@
+warning: buffered partition data exceeds `buffer_size` (1 bytes); closing the largest buffer early, which may produce small files
+  --> tests/operators/to_iceberg/partition/12_buffer_budget.tql:14:1
+   |
+14 | to_iceberg "partns.many", catalog=env("ICEBERG_REST_URI"), mode="append",
+   | ~~~~~~~~~~ 
+   |

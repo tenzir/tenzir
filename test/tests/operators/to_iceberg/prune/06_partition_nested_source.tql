@@ -1,0 +1,10 @@
+// Create a table whose partition spec references a nested source column.
+from {
+  id: 9000,
+  kind: "a",
+  payload_a: "seeded",
+  meta: {region: "eu"},
+  ts: 2026-01-01T00:02:00Z,
+}
+to_iceberg "prunens.part_events", catalog=env("ICEBERG_REST_URI"),
+  partition_by=[meta.region]

@@ -1,0 +1,10 @@
+table {
+  1: id: optional long
+  2: time: optional timestamptz
+  3: meta: optional struct<4: level: optional string, 6: tags: optional list<string>>
+  5: severity: optional long
+  8: net: optional struct<9: src_ip: optional string>
+}
+snapshots: 2
+1 None {'level': 'info', 'tags': None} None
+2 5 {'level': 'warn', 'tags': ['a', 'b']} {'src_ip': '10.0.0.1'}

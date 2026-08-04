@@ -100,12 +100,12 @@ public:
         auto conn_id = next_conn_id_++;
         auto info = impl_.make_connection_info(*transport, ctx);
         auto pipeline_copy = impl_.pipeline().inner;
-        if (not impl_.substitute(pipeline_copy, info, ctx)) {
+        impl_.bind(pipeline_copy, info, ctx);
+        if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(
+              data{int64_t(conn_id)}, std::move(pipeline_copy))) {
           close_stream_transport(std::move(transport));
           co_return;
         }
-        co_await ctx.spawn_sub<chunk_ptr>(data{int64_t(conn_id)},
-                                          std::move(pipeline_copy));
         current_conn_id_ = conn_id;
         current_connection_ = Connection{std::move(*transport)};
         auto bytes_read_counter

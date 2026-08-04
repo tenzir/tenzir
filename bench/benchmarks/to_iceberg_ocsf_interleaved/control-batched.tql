@@ -1,0 +1,15 @@
+---
+bench:
+  id: control-batched
+  description: Read the prepared mixed OCSF batches, then discard them. Regroups interleaved slices with unordered batching first.
+  tags:
+    regrouping: unordered-batch
+    layout: control
+    expected_tables: "0"
+---
+from_file env("BENCHMARK_ICEBERG_INPUT_PATH"), mmap=true {
+  read_bitz
+}
+repeat int(env("BENCHMARK_ICEBERG_STREAM_REPETITIONS"))
+unordered { batch 4096 }
+discard

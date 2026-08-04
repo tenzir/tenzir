@@ -2,11 +2,6 @@
 	path = plugins/web/aux/restinio
 	url = https://github.com/Stiffstream/restinio
 	shallow = true
-[submodule "contrib/tenzir-plugins"]
-	path = contrib/tenzir-plugins
-	url = git@github.com:tenzir/tenzir-plugins
-	shallow = false
-	update = rebase
 [submodule "libtenzir/aux/simdjson"]
 	path = libtenzir/aux/simdjson
 	url = https://github.com/simdjson/simdjson
@@ -46,4 +41,8 @@
 [submodule "libtenzir/aux/facebook/proxygen"]
 	path = libtenzir/aux/facebook/proxygen
 	url = https://github.com/tenzir/proxygen
+	shallow = true
+[submodule "plugins/iceberg/aux/iceberg-cpp"]
+	path = plugins/iceberg/aux/iceberg-cpp
+	url = https://github.com/apache/iceberg-cpp
 	shallow = true

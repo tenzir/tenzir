@@ -1,0 +1,9 @@
+// Both rows parse into one batch, so `head 1` slices it: the unreferenced
+// tail of the list's child buffer holds a null in the required struct
+// child, and the write must only judge the referenced row.
+from_file "inputs/iceberg/required-list.ndjson" {
+  read_ndjson
+}
+head 1
+to_iceberg "testns.required_list", catalog=env("ICEBERG_REST_URI"),
+  mode="append"

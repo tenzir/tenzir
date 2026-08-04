@@ -118,8 +118,10 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    co_await ctx.spawn_sub<Input>(int64_t{0}, args_.pipe.inner,
-                                  DiagnosticBehavior::WarningToError);
+    if (not co_await ctx.plan_and_spawn_sub<Input>(
+          int64_t{0}, args_.pipe.inner, DiagnosticBehavior::WarningToError)) {
+      co_return;
+    }
   }
 
   auto process(Input input, Push<Output>& push, OpCtx& ctx)
@@ -154,8 +156,10 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    co_await ctx.spawn_sub<Input>(int64_t{0}, args_.pipe.inner,
-                                  DiagnosticBehavior::WarningToError);
+    if (not co_await ctx.plan_and_spawn_sub<Input>(
+          int64_t{0}, args_.pipe.inner, DiagnosticBehavior::WarningToError)) {
+      co_return;
+    }
   }
 
   auto process(Input input, OpCtx& ctx) -> Task<void> override {
@@ -178,8 +182,10 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    co_await ctx.spawn_sub<void>(int64_t{0}, args_.pipe.inner,
-                                 DiagnosticBehavior::WarningToError);
+    if (not co_await ctx.plan_and_spawn_sub<void>(
+          int64_t{0}, args_.pipe.inner, DiagnosticBehavior::WarningToError)) {
+      co_return;
+    }
   }
 
   auto state() -> OperatorState override {
@@ -208,8 +214,10 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    co_await ctx.spawn_sub<void>(int64_t{0}, args_.pipe.inner,
-                                 DiagnosticBehavior::WarningToError);
+    if (not co_await ctx.plan_and_spawn_sub<void>(
+          int64_t{0}, args_.pipe.inner, DiagnosticBehavior::WarningToError)) {
+      co_return;
+    }
   }
 
   auto state() -> OperatorState override {

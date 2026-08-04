@@ -11,7 +11,6 @@
 #include <tenzir/ir.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/view3.hpp>
 
 namespace tenzir::plugins::each {
@@ -40,15 +39,14 @@ struct EachImpl {
   }
 
   auto spawn_for(record_view3 input, OpCtx& ctx) -> Task<void> {
-    auto env = substitute_ctx::env_t{};
-    env[args_.this_id] = materialize(input);
-    auto sub_ctx = substitute_ctx{ctx, &env};
+    // Bind `$this` to the current event as a `let` binding
     auto copy = args_.pipe.inner;
-    if (not copy.substitute(sub_ctx, true)) {
-      co_await assert_cancelled();
-      TENZIR_UNREACHABLE();
+    copy.bind(args_.this_id, materialize(input));
+    if (not co_await ctx.plan_and_spawn_sub<void>(data{next_key_},
+                                                  std::move(copy))) {
+      // planning emitted a diagnostic; the pipeline will be torn down.
+      co_return;
     }
-    co_await ctx.spawn_sub<void>(data{next_key_}, std::move(copy));
     next_key_ += 1;
     running_subs_ += 1;
   }

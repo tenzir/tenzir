@@ -224,6 +224,12 @@ auto decode_ipc_file(chunk_ptr chunk) -> caf::expected<
 }
 
 class passive_feather_store final : public passive_store {
+public:
+  explicit passive_feather_store(bool validate_batches)
+    : validate_batches_{validate_batches} {
+  }
+
+private:
   [[nodiscard]] auto load(chunk_ptr chunk) -> caf::error override {
     TENZIR_ASSERT(chunk);
     if (auto decode_result = decode_ipc_file(chunk->slice(0, chunk->size()));
@@ -276,7 +282,9 @@ class passive_feather_store final : public passive_store {
       // the envelope itself (e.g. an undersized `import_time` buffer) would
       // still assert in `derive_import_time`. Structurally validate the
       // whole envelope batch before taking it apart.
-      if (auto status = batch->Validate(); not status.ok()) {
+      auto status
+        = validate_batches_ ? batch->ValidateFull() : batch->Validate();
+      if (not status.ok()) {
         co_yield caf::make_error(
           ec::format_error,
           fmt::format("record batch in feather store failed validation: {}",
@@ -359,6 +367,7 @@ private:
   chunk_ptr chunk_;
   mutable std::optional<uint64_t> num_events_;
   mutable std::optional<type> schema_;
+  bool validate_batches_ = false;
 };
 
 class active_feather_store final : public active_store {
@@ -1193,6 +1202,8 @@ class plugin final : public virtual parser_plugin<feather_parser>,
       arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD))};
     compression_level_ = get_or(global_config, "tenzir.zstd-compression-level",
                                 default_compression_level);
+    TRY(validate_store_batches_,
+        try_get_or(global_config, "tenzir.validate-store-batches", false));
     return {};
   }
 
@@ -1222,7 +1233,8 @@ class plugin final : public virtual parser_plugin<feather_parser>,
 
   [[nodiscard]] auto make_passive_store() const
     -> caf::expected<std::unique_ptr<passive_store>> override {
-    return std::make_unique<store::passive_feather_store>();
+    return std::make_unique<store::passive_feather_store>(
+      validate_store_batches_);
   }
 
   [[nodiscard]] auto make_active_store() const
@@ -1232,6 +1244,7 @@ class plugin final : public virtual parser_plugin<feather_parser>,
 
 private:
   int64_t compression_level_ = 0;
+  bool validate_store_batches_ = false;
 };
 
 class read_plugin final

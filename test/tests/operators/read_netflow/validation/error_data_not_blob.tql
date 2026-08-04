@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {data: "not-a-blob"}
+read_netflow

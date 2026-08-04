@@ -1,0 +1,6 @@
+warning: column `l` has type `string` but the table expects `int64`; writing nulls instead
+  --> tests/operators/to_iceberg/convert/04_no_row_loss.tql:15:1
+   |
+15 | to_iceberg "convertns.integrity", catalog=env("ICEBERG_REST_URI"), max_size=1
+   | ~~~~~~~~~~ 
+   |

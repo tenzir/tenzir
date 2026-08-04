@@ -1,0 +1,7 @@
+rows: 66
+0 a seed-a None
+1 b None seed-b
+2 a narrow None
+65 a narrow None
+2 file(s) with columns: ['id', 'kind', 'payload_a', 'ts']
+1 file(s) with columns: ['id', 'kind', 'payload_b', 'ts']

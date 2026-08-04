@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {peer: {ip: 127.0.0.1, port: 2055}}
+read_netflow

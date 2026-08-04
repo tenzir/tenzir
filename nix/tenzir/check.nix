@@ -31,13 +31,6 @@ stdenvNoCC.mkDerivation {
             -j $NIX_BUILD_CORES \
             ${path}/test
         fi
-        if [ -d "${path}/test-legacy/tests" ]; then
-          echo "running ${path} legacy integration tests"
-          tenzir-test \
-            --root "${src}/test-legacy" \
-            -j $NIX_BUILD_CORES \
-            ${path}/test-legacy
-        fi
       '';
     in
     ''
@@ -57,6 +50,8 @@ stdenvNoCC.mkDerivation {
       export TMPDIR=$PWD/tmp
       reqs=(--no-deps ${tenzirPythonPkgs.tenzir-wheels}/*.whl)
       export TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS="''${reqs[*]}"
+      # Remove tests that want networking
+      rm -rf test/tests/operators/sockets
       ${template "."}
       ${lib.concatMapStrings template (map (x: x.src or x) (builtins.concatLists unchecked.plugins))}
     '';

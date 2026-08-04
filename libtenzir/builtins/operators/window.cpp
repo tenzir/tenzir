@@ -16,7 +16,6 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/view3.hpp>
@@ -181,16 +180,16 @@ protected:
         auto rec = record{};
         rec.emplace("start", data{start});
         rec.emplace("end", data{end});
-        auto env = substitute_ctx::env_t{};
-        env[args_.let] = ast::constant::kind{std::move(rec)};
+        // Bind the window record as a `let` binding
         auto copy = args_.pipe.inner;
-        if (not copy.substitute(substitute_ctx{ctx, &env}, true)) {
+        copy.bind(args_.let, ast::constant::kind{std::move(rec)});
+        sub = co_await ctx.plan_and_spawn_sub<table_slice>(data{start},
+                                                           std::move(copy));
+        if (not sub) {
           continue;
         }
         seen_.insert(start);
         open_.emplace(start, WindowState{end, now});
-        sub = co_await ctx.spawn_sub(data{start}, std::move(copy),
-                                     tag_v<table_slice>);
       }
       TENZIR_ASSERT(sub);
       if (auto it = open_.find(start); it != open_.end()) {

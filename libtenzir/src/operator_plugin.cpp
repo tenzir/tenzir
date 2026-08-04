@@ -659,9 +659,7 @@ public:
           auto sub = std::move(pipeline_->pipeline.inner)
                        .optimize(ir::optimize_filter{}, event_order::ordered);
           // fork is filter barrier
-          sub.replacement.operators.insert_range(
-            sub.replacement.operators.begin(),
-            sub.filter | std::views::transform(make_where_ir));
+          sub.replacement.prepend(std::move(sub.filter));
           pipeline_->pipeline.inner = std::move(sub.replacement);
           // only relax upstream ordering if both branches are ok with unordered
           order = stronger_event_order(order, sub.order);
@@ -687,9 +685,7 @@ public:
     if (pipeline_ and desc_->pipeline
         and desc_->pipeline->sub_optimize == SubOptimize::from_downstream) {
       // special case: down stream is the subpipeline
-      pipeline_->pipeline.inner.operators.insert_range(
-        pipeline_->pipeline.inner.operators.begin(),
-        optimization.filter_self | std::views::transform(make_where_ir));
+      pipeline_->pipeline.inner.prepend(std::move(optimization.filter_self));
       optimization.filter_self.clear();
     }
     if (not optimization.drop) {

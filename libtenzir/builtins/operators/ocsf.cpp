@@ -9,7 +9,8 @@
 #include "tenzir/ocsf.hpp"
 
 #include "tenzir/collect.hpp"
-#include "tenzir/concept/printable/tenzir/json.hpp"
+#include "tenzir/concept/printable/tenzir/json2.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/ocsf_enums.hpp"
@@ -62,6 +63,16 @@ public:
     return false;
   }
 
+  auto materialize() const -> std::vector<std::string> {
+    auto result = std::vector<std::string>{};
+    result.reserve(length_);
+    for (auto i = int64_t{0}; i < length_; ++i) {
+      auto value = view_at(*array_, begin_ + i);
+      result.emplace_back(value ? std::string{*value} : std::string{});
+    }
+    return result;
+  }
+
 private:
   const arrow::StringArray* array_{nullptr};
   int64_t begin_{0};
@@ -87,18 +98,30 @@ auto make_string_list_function(std::shared_ptr<arrow::ListArray> list) -> auto {
   };
 }
 
+/// Caches the null arrays created when back-filling missing schema fields, so
+/// that repeated batches with the same layout share a single set of buffers
+/// instead of allocating fresh ones per batch. Entries depend on the enabled
+/// profiles and extensions, so the cache is invalidated when those change.
+struct null_fill_cache {
+  std::vector<std::string> profiles;
+  std::vector<std::string> extensions;
+  std::unordered_map<type, std::pair<type, std::shared_ptr<arrow::Array>>>
+    arrays;
+};
+
 class caster {
 public:
   caster(location self, diagnostic_handler& dh, string_list profiles,
          string_list extensions, bool preserve_variants, bool null_fill,
-         bool timestamp_to_ms)
+         bool timestamp_to_ms, null_fill_cache& cache)
     : self_{self},
       dh_{dh},
       profiles_{profiles},
       extensions_{extensions},
       preserve_variants_{preserve_variants},
       null_fill_{null_fill},
-      timestamp_to_ms_{timestamp_to_ms} {
+      timestamp_to_ms_{timestamp_to_ms},
+      cache_{cache} {
   }
 
   auto cast(const table_slice& slice, const type& ty, std::string_view name)
@@ -348,11 +371,20 @@ private:
       }
       if (null_fill_) {
         // No warning if the a target field does not exist.
-        auto cast_ty = cast_type(field.type);
+        auto [it, inserted] = cache_.arrays.try_emplace(field.type);
+        auto& [cast_ty, nulls] = it->second;
+        if (inserted) {
+          cast_ty = cast_type(field.type);
+        }
+        // We need the exact length because the arrays end up as top-level
+        // record batch columns, which may not be longer than the batch.
+        if (not nulls or nulls->length() != input.array->length()) {
+          nulls = check(arrow::MakeArrayOfNull(cast_ty.to_arrow_type(),
+                                               input.array->length(),
+                                               tenzir::arrow_memory_pool()));
+        }
         fields.emplace_back(field.name, cast_ty);
-        field_arrays.push_back(check(
-          arrow::MakeArrayOfNull(cast_ty.to_arrow_type(), input.array->length(),
-                                 tenzir::arrow_memory_pool())));
+        field_arrays.push_back(nulls);
         continue;
       }
     }
@@ -433,22 +465,18 @@ private:
       }
     }
     input = resolve_enumerations(std::move(input));
-    auto printer = json_printer{{.style = no_style(), .oneline = true}};
-    auto buffer = std::string{};
-    match(*input.array, [&](const auto& array) {
-      for (auto value : values3(array)) {
-        if (not value) {
-          // Preserve nulls instead of rendering them as a string.
-          check(builder.AppendNull());
-          continue;
-        }
-        auto it = std::back_inserter(buffer);
-        auto success = printer.print(it, *value);
-        TENZIR_ASSERT(success);
-        check(builder.Append(buffer));
-        buffer.clear();
+    auto printer = json_printer2{{.style = no_style(), .oneline = true}};
+    for (auto value : values3(*input.array)) {
+      if (is<caf::none_t>(value)) {
+        // Preserve nulls instead of rendering them as a string.
+        check(builder.AppendNull());
+        continue;
       }
-    });
+      printer.load_new(value);
+      auto bytes = printer.bytes();
+      check(builder.Append(reinterpret_cast<const char*>(bytes.data()),
+                           detail::narrow<int32_t>(bytes.size())));
+    }
     return {string_type{}, finish(builder)};
   }
 
@@ -459,6 +487,7 @@ private:
   bool preserve_variants_;
   bool null_fill_;
   bool timestamp_to_ms_;
+  null_fill_cache& cache_;
 };
 
 struct metadata {
@@ -759,8 +788,8 @@ auto process_derive_slice(const table_slice& slice, location self,
 
 auto process_cast_slice(const table_slice& slice, location self,
                         diagnostic_handler& dh, bool preserve_variants,
-                        bool null_fill, bool timestamp_to_ms)
-  -> std::vector<table_slice> {
+                        bool null_fill, bool timestamp_to_ms,
+                        null_fill_cache& cache) -> std::vector<table_slice> {
   auto result = std::vector<table_slice>{};
   if (slice.rows() == 0) {
     result.emplace_back();
@@ -896,9 +925,19 @@ auto process_cast_slice(const table_slice& slice, location self,
       return;
     }
     auto type_name = "ocsf." + schema->mangled_class_name;
+    if (null_fill) {
+      auto current_profiles = profiles.materialize();
+      auto current_extensions = extensions.materialize();
+      if (cache.profiles != current_profiles
+          or cache.extensions != current_extensions) {
+        cache.arrays.clear();
+        cache.profiles = std::move(current_profiles);
+        cache.extensions = std::move(current_extensions);
+      }
+    }
     result.push_back(
       caster{self, dh, profiles, extensions, preserve_variants, null_fill,
-             timestamp_to_ms}
+             timestamp_to_ms, cache}
         .cast(subslice(slice, begin, end), schema->type, type_name));
   };
   for (; end < class_array->length(); ++end) {
@@ -1633,10 +1672,11 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
+    auto cache = null_fill_cache{};
     for (auto&& slice : input) {
-      auto output
-        = process_cast_slice(slice, self_, ctrl.diagnostics(),
-                             preserve_variants_, null_fill_, timestamp_to_ms_);
+      auto output = process_cast_slice(slice, self_, ctrl.diagnostics(),
+                                       preserve_variants_, null_fill_,
+                                       timestamp_to_ms_, cache);
       for (auto&& out : output) {
         co_yield std::move(out);
       }
@@ -1683,7 +1723,7 @@ public:
     -> Task<void> override {
     auto output = process_cast_slice(input, args_.operator_location, ctx.dh(),
                                      not args_.encode_variants, args_.null_fill,
-                                     args_.timestamp_to_ms);
+                                     args_.timestamp_to_ms, cache_);
     for (auto&& out : output) {
       co_await push(std::move(out));
     }
@@ -1691,6 +1731,7 @@ public:
 
 private:
   CastArgs args_;
+  null_fill_cache cache_;
 };
 
 struct TrimArgs {

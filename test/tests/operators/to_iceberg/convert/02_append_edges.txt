@@ -1,0 +1,34 @@
+warning: column `l` has `uint64` values that cannot convert to the table's `int64`; writing nulls for those rows
+  --> tests/operators/to_iceberg/convert/02_append_edges.tql:19:1
+   |
+19 | to_iceberg "convertns.matrix", catalog=env("ICEBERG_REST_URI")
+   | ~~~~~~~~~~ 
+   |
+
+warning: column `s` has type `int64` but the table expects `string`; writing nulls instead
+  --> tests/operators/to_iceberg/convert/02_append_edges.tql:19:1
+   |
+19 | to_iceberg "convertns.matrix", catalog=env("ICEBERG_REST_URI")
+   | ~~~~~~~~~~ 
+   |
+
+warning: column `n` has type `string` but the table expects `int64`; writing nulls instead
+  --> tests/operators/to_iceberg/convert/02_append_edges.tql:19:1
+   |
+19 | to_iceberg "convertns.matrix", catalog=env("ICEBERG_REST_URI")
+   | ~~~~~~~~~~ 
+   |
+
+warning: column `dl` has `double` values that cannot convert to the table's `int64`; writing nulls for those rows
+  --> tests/operators/to_iceberg/convert/02_append_edges.tql:19:1
+   |
+19 | to_iceberg "convertns.matrix", catalog=env("ICEBERG_REST_URI")
+   | ~~~~~~~~~~ 
+   |
+
+warning: column `i` has `double` values that cannot convert to the table's `int32`; writing nulls for those rows
+  --> tests/operators/to_iceberg/convert/02_append_edges.tql:19:1
+   |
+19 | to_iceberg "convertns.matrix", catalog=env("ICEBERG_REST_URI")
+   | ~~~~~~~~~~ 
+   |

@@ -15,7 +15,6 @@
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/session.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/parser.hpp>
 
 #include <folly/CancellationToken.h>
@@ -161,13 +160,6 @@ public:
       }
       pipe = std::move(*default_printer);
     }
-    if (not pipe.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
-      diagnostic::error("failed to substitute pipeline")
-        .primary(args_.self)
-        .emit(ctx);
-      done_ = true;
-      co_return;
-    }
     bytes_write_counter_
       = ctx.make_counter(MetricsLabel{"operator", "to_stdout"},
                          MetricsDirection::write, MetricsVisibility::external_,
@@ -187,7 +179,11 @@ public:
       folly::NetworkSocket::fromFd(STDOUT_FILENO));
     // Avoid closing the process-global stdout when the writer shuts down.
     writer_->setCloseCallback([](folly::NetworkSocket) {});
-    co_await ctx.spawn_sub<table_slice>(caf::none, std::move(pipe));
+    if (not co_await ctx.plan_and_spawn_sub<table_slice>(caf::none,
+                                                         std::move(pipe))) {
+      done_ = true;
+      co_return;
+    }
     TENZIR_ASSERT(ctx.get_sub(caf::none));
   }
 

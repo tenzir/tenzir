@@ -1,0 +1,11 @@
+columns: ['k', 'labels', 'msg', 'obs', 'unmapped']
+rows: 9
+1 base | None | None | None
+2 labels add | ['a', 'b'] | None | None
+3 labels null | None | None | None
+4 labels empty | [] | None | None
+5 unmapped add | None | {'cnt': 7, 'note': 'x'} | None
+6 unmapped null fields | None | {'cnt': None, 'note': None} | None
+7 obs add | None | None | [{'typ': 'ip', 'val': '1.2.3.4'}]
+8 obs null fields | None | None | [{'typ': None, 'val': None}]
+9 obs empty | None | None | []

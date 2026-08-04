@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from {x: 1}
+to_iceberg "awsns.events", catalog="https://example.invalid/iceberg",
+  catalog_aws_service="invalid", aws_iam={region: "us-east-1"}

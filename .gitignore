@@ -9,6 +9,7 @@
 
 # Direnv
 .envrc
+justfile
 
 # Build artifacts
 *.egg-info/
@@ -38,8 +39,10 @@ venv/
 /python/*/build
 /python/tenzir/src/tenzir/bundled
 
-# VScode built artifacts
+# editor configs
 /.vscode/
+/.zed/
+/.helix/
 
 #cmake artifacts
 .cmake/

@@ -98,6 +98,9 @@ void add_root_opts(command& cmd) {
   cmd.options.add<duration>("?tenzir", "rebuild-interval",
                             "timespan after which an automatic rebuild is "
                             "triggered (default: 30min)");
+  cmd.options.add<bool>("?tenzir", "validate-store-batches",
+                        "fully validate persisted batches read by exports and "
+                        "rebuilds");
 }
 
 auto make_start_command() {

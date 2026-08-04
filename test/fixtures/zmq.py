@@ -108,6 +108,13 @@ def zmq() -> FixtureHandle:
         "ZMQ_FILE": capture_path,
     }
 
+    def _helper_diagnostics() -> str:
+        status = "is still running"
+        if proc.poll() is not None:
+            status = f"exited with code {proc.returncode}"
+        log = Path(helper_log_path).read_text(errors="replace")
+        return f"helper {status}; helper log: {log!r}"
+
     def _assert_test(
         *,
         test: Path,
@@ -123,10 +130,17 @@ def zmq() -> FixtureHandle:
             received = Path(capture_path).read_text(errors="replace")
             if assertions.received_contains in received:
                 return
+            if proc.poll() is not None:
+                raise AssertionError(
+                    f"{test.name}: expected fixture capture to contain "
+                    f"{assertions.received_contains!r}, got {received!r}; "
+                    f"{_helper_diagnostics()}"
+                )
             if time.monotonic() >= deadline:
                 raise AssertionError(
                     f"{test.name}: expected fixture capture to contain "
-                    f"{assertions.received_contains!r}, got {received!r}"
+                    f"{assertions.received_contains!r}, got {received!r}; "
+                    f"{_helper_diagnostics()}"
                 )
             time.sleep(_ASSERTION_WAIT_INTERVAL)
 

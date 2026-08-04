@@ -361,8 +361,10 @@ public:
       co_await catch_cancellation(wait_forever());
       co_await force_stop();
     });
-    co_await ctx.spawn_sub<table_slice>(sub_key_,
-                                        std::move(args_.printer.inner));
+    if (not co_await ctx.plan_and_spawn_sub<table_slice>(
+          sub_key_, std::move(args_.printer.inner))) {
+      co_return;
+    }
     lifecycle_ = Lifecycle::running;
     co_return;
   }

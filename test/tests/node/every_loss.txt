@@ -1,1 +1,1 @@
-ok: all 120 events delivered
+ok: all batches delivered exactly once

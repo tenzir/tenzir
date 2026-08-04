@@ -292,7 +292,10 @@ public:
     }
     // Spawn writer sub-pipeline.
     auto pipeline = args_.printer.inner;
-    co_await ctx.spawn_sub<table_slice>(sub_key(), std::move(pipeline));
+    if (not co_await ctx.plan_and_spawn_sub<table_slice>(sub_key(),
+                                                         std::move(pipeline))) {
+      co_return;
+    }
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {

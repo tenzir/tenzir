@@ -1,0 +1,3 @@
+snapshots: 1
+partitions: 70
+rows: 70

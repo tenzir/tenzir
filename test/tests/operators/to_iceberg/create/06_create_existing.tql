@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// mode="create" refuses to touch an existing table.
+from {id: 5}
+to_iceberg "createns.events", catalog=env("ICEBERG_REST_URI"), mode="create"

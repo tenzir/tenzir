@@ -1,0 +1,7 @@
+error: failed to decode NetFlow byte stream
+ --> tests/operators/read_netflow/validation/error_stream_decode.tql:6:3
+  |
+6 |   read_netflow
+  |   ^^^^^^^^^^^^ 
+  |
+  = note: invalid NetFlow set length 3

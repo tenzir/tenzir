@@ -41,8 +41,14 @@ in
   # Extra Packages.
   arrow-adbc-cpp = prevPkgs.callPackage ./arrow-adbc-cpp { };
   arrow-adbc-go = prevPkgs.callPackage ./arrow-adbc-go { };
+  # Pinned to the commit that apache/iceberg-cpp vendors; upstream nixpkgs
+  # has no avro-cpp with the CMake package config iceberg-cpp consumes.
+  avro-cpp = prevPkgs.callPackage ./iceberg-cpp/avro-cpp.nix { };
   clickhouse-cpp = prevPkgs.callPackage ./clickhouse-cpp { };
   fluent-bit = prevPkgs.callPackage ./fluent-bit { };
+  # Resolved via finalPkgs so it builds against Tenzir's arrow-cpp override.
+  iceberg-cpp = finalPkgs.callPackage ./iceberg-cpp { };
+  nanoarrow = prevPkgs.callPackage ./iceberg-cpp/nanoarrow.nix { };
   pfs = prevPkgs.callPackage ./pfs { };
   proxygen = finalPkgs.callPackage ./proxygen { };
   speeve = prevPkgs.callPackage ./speeve { };

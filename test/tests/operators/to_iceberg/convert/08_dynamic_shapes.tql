@@ -1,0 +1,16 @@
+// OCSF-shaped columns through their whole lifecycle: a list of strings
+// (`labels`), a free-form record (`unmapped`), and a list of structs
+// (`obs`) each appear mid-stream — evolving the table dynamically — and
+// later arrive as null or empty while staying present in the input.
+// Every shape keeps its row: null-typed columns null-fill, empty lists
+// stay empty lists, and struct fields that are all null land as nulls.
+from {k: 1, msg: "base"},
+     {k: 2, msg: "labels add", labels: ["a", "b"]},
+     {k: 3, msg: "labels null", labels: null},
+     {k: 4, msg: "labels empty", labels: []},
+     {k: 5, msg: "unmapped add", unmapped: {cnt: 7, note: "x"}},
+     {k: 6, msg: "unmapped null fields", unmapped: {cnt: null, note: null}},
+     {k: 7, msg: "obs add", obs: [{typ: "ip", val: "1.2.3.4"}]},
+     {k: 8, msg: "obs null fields", obs: [{typ: null, val: null}]},
+     {k: 9, msg: "obs empty", obs: []}
+to_iceberg "convertns.shapes", catalog=env("ICEBERG_REST_URI")

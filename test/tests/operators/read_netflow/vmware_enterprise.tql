@@ -1,0 +1,6 @@
+from_file f"{env("TENZIR_INPUTS")}/netflow/vmware_vds.ipfix" {
+  read_netflow
+}
+head 1
+select netflow, source_ipv4_address, destination_ipv4_address,
+  flow_start_milliseconds, pen_6876_ie_890

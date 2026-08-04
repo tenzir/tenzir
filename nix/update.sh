@@ -6,7 +6,6 @@ dir=$(dirname "$(readlink -f "$0")")
 
 command -v nix >/dev/null && {
   echo "Updating with the local Nix installation..."
-  "${dir}/update-plugins.sh"
   "${dir}/update-impl.sh"
   exit $?
 }

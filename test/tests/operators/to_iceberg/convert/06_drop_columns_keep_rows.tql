@@ -1,0 +1,8 @@
+// Unrepresentable fields drop as columns, never as rows. The first event
+// keeps only `k` once its all-null field and its record of all-null
+// fields drop from the derived schema. The second event carries nothing
+// representable at all and must still land as a row of nulls in the
+// table the first event created.
+from {k: 1, n: null, r: {a: null, b: null}},
+     {n: null, r: {a: null, b: null}}
+to_iceberg "convertns.drops", catalog=env("ICEBERG_REST_URI")

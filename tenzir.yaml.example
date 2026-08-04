@@ -288,6 +288,11 @@ tenzir:
   # Zstd compression level applied to the Feather store backend.
   # zstd-compression-level: <default>
 
+  # Fully validate every record batch read from a persisted Feather store.
+  # This detects invalid values such as malformed UTF-8 at the cost of an
+  # additional full scan during exports and rebuilds.
+  validate-store-batches: false
+
   # Override the control endpoint when connecting to a self-hosted instance of
   # the Tenzir Platform. This takes precedence over endpoints embedded in
   # platform tokens.

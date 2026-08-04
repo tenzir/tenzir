@@ -1,0 +1,14 @@
+{
+  netflow: {
+    version: 10,
+    record_type: "options",
+    export_time: 2021-05-26T20:53:36Z,
+    sequence_number: 7396,
+    observation_domain_id: 0,
+    template_id: 256,
+  },
+  private_enterprise_number: 3054,
+  information_element_id: 192,
+  information_element_data_type: 13,
+  information_element_name: "threatType",
+}

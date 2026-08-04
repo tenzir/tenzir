@@ -3,18 +3,17 @@
 
 from __future__ import annotations
 
+import json
 import os
+import select
 import subprocess
-import sys
-import time
-from concurrent.futures import ThreadPoolExecutor
 
 NUM_ROUNDS = 8
 ROUNDS_PER_WAVE = 1
 ROWS_PER_IMPORT = 100
 EXPORTS_PER_ROUND = 2
 COMMAND_TIMEOUT = 30
-IMPORT_SETTLE_DELAY = 0.01
+READY_ROUND = -1
 
 
 class Executor:
@@ -22,7 +21,7 @@ class Executor:
         self._binary = os.environ["TENZIR_PYTHON_FIXTURE_BINARY"]
         self._endpoint = os.environ.get("TENZIR_PYTHON_FIXTURE_ENDPOINT")
 
-    def run(self, pipeline: str) -> subprocess.CompletedProcess[bytes]:
+    def command(self, pipeline: str) -> list[str]:
         cmd = [
             self._binary,
             "--bare-mode",
@@ -31,8 +30,11 @@ class Executor:
         if self._endpoint:
             cmd.append(f"--endpoint={self._endpoint}")
         cmd.append(pipeline)
+        return cmd
+
+    def run(self, pipeline: str) -> subprocess.CompletedProcess[bytes]:
         return subprocess.run(
-            cmd,
+            self.command(pipeline),
             timeout=COMMAND_TIMEOUT,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -52,72 +54,82 @@ import
 
 def make_export_pipeline(round_index: int) -> str:
     return f"""
-export
-where round == {round_index}
-head 1
+export live=true, retro=true
+where round == {READY_ROUND} or round == {round_index}
+deduplicate round
+head 2
 to_stdout {{
-  write_lines
+  write_ndjson
 }}
 """
 
 
+def stop(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+
+
+def wait_for_ready(process: subprocess.Popen[bytes]) -> None:
+    assert process.stdout is not None
+    ready, _, _ = select.select([process.stdout], [], [], COMMAND_TIMEOUT)
+    if not ready:
+        stop(process)
+        _, stderr = process.communicate()
+        raise AssertionError(
+            f"export did not observe readiness sentinel: {stderr.decode()}"
+        )
+    line = process.stdout.readline()
+    if not line:
+        _, stderr = process.communicate()
+        raise AssertionError(
+            f"export stopped before readiness sentinel: {stderr.decode()}"
+        )
+    assert json.loads(line)["round"] == READY_ROUND, line.decode()
+
+
+def assert_export(process: subprocess.Popen[bytes], round_index: int) -> None:
+    stdout, stderr = process.communicate(timeout=COMMAND_TIMEOUT)
+    assert process.returncode == 0, stderr.decode()
+    assert [json.loads(line) for line in stdout.splitlines()] == [
+        {"round": round_index, "x": 0}
+    ], stdout.decode()
+
+
 def run_round(round_index: int) -> None:
     executor = Executor()
-    import_processes: list[subprocess.Popen[bytes]] = []
     rounds = [round_index * 10 + offset for offset in range(ROUNDS_PER_WAVE)]
-    for current_round in rounds:
-        import_processes.append(
+    exports = [
+        (
+            current_round,
             subprocess.Popen(
-                [
-                    executor._binary,
-                    "--bare-mode",
-                    "--console-verbosity=warning",
-                    *(
-                        [f"--endpoint={executor._endpoint}"]
-                        if executor._endpoint
-                        else []
-                    ),
-                    make_import_pipeline(current_round),
-                ],
+                executor.command(make_export_pipeline(current_round)),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-            )
+            ),
         )
-    # Start exports while the imports are still flushing their batches.
-    time.sleep(IMPORT_SETTLE_DELAY)
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        futures = [
-            pool.submit(executor.run, make_export_pipeline(current_round))
-            for current_round in rounds
-            for _ in range(EXPORTS_PER_ROUND)
-        ]
-        for future in futures:
-            try:
-                future.result()
-            except subprocess.CalledProcessError as error:
-                print(f"round {round_index} export failed", file=sys.stderr)
-                if error.stdout:
-                    print(error.stdout.decode(), file=sys.stderr)
-                if error.stderr:
-                    print(error.stderr.decode(), file=sys.stderr)
-                raise
-    for current_round, import_process in zip(rounds, import_processes, strict=True):
-        stdout, stderr = import_process.communicate(timeout=COMMAND_TIMEOUT)
-        if import_process.returncode != 0:
-            print(f"round {current_round} import failed", file=sys.stderr)
-            if stdout:
-                print(stdout.decode(), file=sys.stderr)
-            if stderr:
-                print(stderr.decode(), file=sys.stderr)
-            raise subprocess.CalledProcessError(
-                import_process.returncode,
-                import_process.args,
-                stdout,
-                stderr,
-            )
+        for current_round in rounds
+        for _ in range(EXPORTS_PER_ROUND)
+    ]
+    try:
+        for _, export in exports:
+            wait_for_ready(export)
+        for current_round in rounds:
+            executor.run(make_import_pipeline(current_round))
+        for current_round, export in exports:
+            assert_export(export, current_round)
+    finally:
+        for _, export in exports:
+            stop(export)
 
 
 def main() -> None:
+    # This stored sentinel confirms each export is live before its import starts.
+    Executor().run(make_import_pipeline(READY_ROUND))
     for round_index in range(NUM_ROUNDS):
         run_round(round_index)
     print("ok")

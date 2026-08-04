@@ -1,0 +1,5 @@
+partition class_uid=1001 time_day=2026-01-01: 2 rows in 1 file(s)
+partition class_uid=1001 time_day=2026-01-02: 1 rows in 1 file(s)
+partition class_uid=1001 time_day=2026-01-03: 1 rows in 1 file(s)
+partition class_uid=4001 time_day=2026-01-01: 2 rows in 2 file(s)
+total rows: 6

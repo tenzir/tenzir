@@ -567,6 +567,46 @@ struct EvalBinOp<Op, null_type, R> {
   }
 };
 
+template <ast::binary_op Op, concrete_type L>
+  requires((Op == ast::binary_op::gt or Op == ast::binary_op::geq
+            or Op == ast::binary_op::lt or Op == ast::binary_op::leq)
+           and (std::same_as<L, null_type>
+                or (basic_type<L>
+                    and caf::detail::is_complete<BinOpKernel<Op, L, L>>)))
+struct EvalBinOp<Op, L, null_type> {
+  static auto eval(const type_to_arrow_array_t<L>& l, const arrow::NullArray& r,
+                   auto&&, ActiveRows const& active)
+    -> std::shared_ptr<arrow::BooleanArray> {
+    TENZIR_UNUSED(r);
+    constexpr auto result = result_if_both_null(Op);
+    auto b = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+    check(b.Reserve(l.length()));
+    for (auto i = int64_t{0}; i < l.length(); ++i) {
+      if (not active.is_active(i) or not l.IsNull(i)) {
+        check(b.AppendNull());
+      } else if constexpr (result) {
+        check(b.Append(*result));
+      } else {
+        check(b.AppendNull());
+      }
+    }
+    return finish(b);
+  }
+};
+
+template <ast::binary_op Op, concrete_type R>
+  requires((Op == ast::binary_op::gt or Op == ast::binary_op::geq
+            or Op == ast::binary_op::lt or Op == ast::binary_op::leq)
+           and not std::same_as<R, null_type> and basic_type<R>
+           and caf::detail::is_complete<BinOpKernel<Op, R, R>>)
+struct EvalBinOp<Op, null_type, R> {
+  static auto eval(const arrow::NullArray& l, const type_to_arrow_array_t<R>& r,
+                   auto&& warn, ActiveRows const& active)
+    -> std::shared_ptr<arrow::BooleanArray> {
+    return EvalBinOp<Op, R, null_type>::eval(r, l, warn, active);
+  }
+};
+
 template <ast::binary_op Op>
   requires(Op == ast::binary_op::eq or Op == ast::binary_op::neq)
 struct EvalBinOp<Op, ip_type, ip_type> {
@@ -719,6 +759,10 @@ auto eval_op_typed(evaluator& self, ast::binary_expr const& x,
       active);
     auto ot = type::from_arrow(*oa->type());
     return series{std::move(ot), std::move(oa)};
+  } else if constexpr (is_arithmetic(Op)
+                       and (std::same_as<L, null_type>
+                            or std::same_as<R, null_type>)) {
+    return series::null(null_type{}, left.length());
   } else {
     if (active.as_constant() != false) {
       diagnostic::warning("binary operator `{}` not implemented for `{}` and "

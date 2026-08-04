@@ -1,0 +1,2 @@
+rows before EOF: 1
+writer exited with 0

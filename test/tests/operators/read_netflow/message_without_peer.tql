@@ -1,0 +1,8 @@
+from {
+  data: "000a001c0000000000000000000000070002000c0100000100080004".decode_hex(),
+}, {
+  data: "000a001800000001000000000000000701000008c0000201".decode_hex(),
+}
+read_netflow
+select version = netflow.version, exporter = netflow.exporter?,
+  source_ipv4_address

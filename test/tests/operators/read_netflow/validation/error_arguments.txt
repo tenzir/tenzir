@@ -1,0 +1,8 @@
+error: too many positional arguments
+ --> tests/operators/read_netflow/validation/error_arguments.tql:5:14
+  |
+5 | read_netflow 42
+  |              ^^ 
+  |
+  = usage: read_netflow
+  = docs: https://tenzir.com/docs/reference/operators/read_netflow

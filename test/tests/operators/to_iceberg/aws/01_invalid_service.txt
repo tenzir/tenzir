@@ -1,0 +1,6 @@
+error: `catalog_aws_service` must be `glue` or `s3tables`
+ --> tests/operators/to_iceberg/aws/01_invalid_service.tql:7:23
+  |
+7 |   catalog_aws_service="invalid", aws_iam={region: "us-east-1"}
+  |                       ^^^^^^^^^ got `invalid`
+  |

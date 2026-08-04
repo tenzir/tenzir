@@ -6,7 +6,9 @@ project(
   LANGUAGES CXX)
 
 find_package(Arrow QUIET REQUIRED CONFIG)
-if (NOT ARROW_GCS OR NOT ${ARROW_GCS} STREQUAL "ON")
+# ARROW_GCS is "ON" or "TRUE" depending on how Arrow was configured; test
+# truthiness, not one exact spelling.
+if (NOT ARROW_GCS)
   message(
     WARNING
       "Disabling gcs plugin because the ARROW_GCS flag is not found/enabled. You probably need to enable ARROW_GCS when installing Apache Arrow."

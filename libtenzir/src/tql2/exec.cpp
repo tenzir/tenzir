@@ -2281,11 +2281,10 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     fmt::print("{:#?}\n", ir);
     return not ctx.has_failure();
   }
-  // Instantiate the IR.
-  auto sub_ctx = substitute_ctx{b_ctx, nullptr};
-  TRY(ir.substitute(sub_ctx, true));
   if (cfg.dump_inst_ir) {
-    fmt::print("{:#?}\n", ir);
+    auto inst = ir;
+    TRY(inst.substitute(substitute_ctx{b_ctx, nullptr}, true));
+    fmt::print("{:#?}\n", inst);
     return not ctx.has_failure();
   }
   if (ir.operators.empty()) {
@@ -2299,10 +2298,11 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
                             location override) -> failure_or<ir::pipeline> {
     TRY(auto ast,
         parse_pipeline_with_location_override(definition, override, ctx));
-    auto implicit_root = compile_ctx::make_root(b_ctx, source_map);
-    TRY(auto pipe, std::move(ast).compile(implicit_root));
-    TRY(pipe.substitute(sub_ctx, true));
-    return pipe;
+    // Reuse the main compilation root so that `let_id`s are drawn from a single
+    // namespace. The implicit pipeline is merged into the user IR and
+    // instantiated together with it by `ir::make_plan` below, so its `let`
+    // bindings must not collide with the user pipeline's IDs.
+    return std::move(ast).compile(root);
   };
   auto null_dh = null_diagnostic_handler{};
   auto output = Option<element_type_tag>{};
@@ -2321,11 +2321,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   if (implicit_source) {
     TRY(auto implicit,
         parse_implicit(*implicit_source, implicit_source_location));
-    ir.lets.insert(ir.lets.begin(), std::move_iterator{implicit.lets.begin()},
-                   std::move_iterator{implicit.lets.end()});
-    ir.operators.insert(ir.operators.begin(),
-                        std::move_iterator{implicit.operators.begin()},
-                        std::move_iterator{implicit.operators.end()});
+    ir.prepend(std::move(implicit));
     TRY(output, ir.infer_type(tag_v<void>, ctx));
   }
   if (output.is_none()) {
@@ -2337,11 +2333,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     auto sink_def = output->is<table_slice>() ? cfg.implicit_events_sink
                                               : cfg.implicit_bytes_sink;
     TRY(auto implicit, parse_implicit(sink_def, implicit_sink_location));
-    ir.lets.insert(ir.lets.end(), std::move_iterator{implicit.lets.begin()},
-                   std::move_iterator{implicit.lets.end()});
-    ir.operators.insert(ir.operators.end(),
-                        std::move_iterator{implicit.operators.begin()},
-                        std::move_iterator{implicit.operators.end()});
+    ir.append(std::move(implicit));
     TRY(output, ir.infer_type(tag_v<void>, ctx));
     TENZIR_ASSERT(output.is_some());
     // TODO: This is a problem with the implicit sink config.
@@ -2354,18 +2346,14 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
       return failure::promise();
     }
   }
-  // Optimize the IR.
-  auto opt
-    = std::move(ir).optimize(ir::optimize_filter{}, event_order::ordered);
-  // TODO: Can this happen?
-  TENZIR_ASSERT(opt.filter.empty());
-  ir = std::move(opt.replacement);
+  // Instantiate, optimize, and type-check the IR into a plan.
+  TRY(auto plan, ir::make_plan(std::move(ir), tag_v<void>, b_ctx));
   if (cfg.dump_opt_ir) {
-    fmt::print("{:#?}\n", ir);
+    fmt::print("{:#?}\n", plan.pipe());
     return not ctx.has_failure();
   }
-  // Spawn operators from the IR.
-  auto spawned = std::move(ir).spawn(tag_v<void>);
+  // Spawn operators from the plan.
+  auto spawned = std::move(plan).spawn();
   // Do not proceed to execution if there has been an error.
   if (ctx.has_failure()) {
     return false;

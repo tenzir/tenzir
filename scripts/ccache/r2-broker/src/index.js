@@ -74,7 +74,10 @@ async function verifyGithubOidcToken(token, env) {
 
 async function createTemporaryCredentials(env) {
   const accountId = requireEnv(env, "CLOUDFLARE_ACCOUNT_ID");
-  const apiToken = requireEnv(env, "CLOUDFLARE_API_TOKEN");
+  // Named R2_API_TOKEN rather than CLOUDFLARE_API_TOKEN: wrangler-action
+  // overwrites CLOUDFLARE_API_TOKEN in its environment with the deploy token,
+  // so a Worker secret with that name can never receive the R2 token.
+  const apiToken = requireEnv(env, "R2_API_TOKEN");
   const bucket = requireEnv(env, "R2_BUCKET");
   const parentAccessKeyId = requireEnv(env, "R2_PARENT_ACCESS_KEY_ID");
   const ttlSeconds = Number(env.R2_TEMP_CREDENTIAL_TTL_SECONDS || "3600");

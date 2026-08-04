@@ -72,13 +72,20 @@ struct retention_policy {
     if (not schema.attribute("internal")) {
       return true;
     }
-    if (schema.name() == "tenzir.diagnostic") {
+    // Match a schema itself or any of its children, mirroring the type
+    // matching of the compaction rules derived from this policy.
+    const auto matches = [name = schema.name()](std::string_view type) {
+      return name == type
+             or (name.size() > type.size() and name.starts_with(type)
+                 and name[type.size()] == '.');
+    };
+    if (matches("tenzir.diagnostic")) {
       return diagnostics_period > duration::zero();
     }
-    if (schema.name() == "tenzir.metrics.operator") {
+    if (matches("tenzir.metrics.operator")) {
       return operator_metrics_period > duration::zero();
     }
-    if (schema.name() == "tenzir.metrics.operator_profile") {
+    if (matches("tenzir.metrics.operator_profile")) {
       return operator_profile_metrics_period > duration::zero();
     }
     if (schema.name().starts_with("tenzir.metrics.")) {

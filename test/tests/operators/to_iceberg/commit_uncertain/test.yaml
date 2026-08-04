@@ -1,0 +1,9 @@
+suite: to-iceberg-commit-uncertain
+fixtures: [iceberg_rest]
+timeout: 300
+skip:
+  on: fixture-unavailable
+# A commit whose success response is lost must not duplicate or lose rows.
+# The bundled iceberg-cpp reports the no-response case as CommitStateUnknown
+# and preserves the commit artifacts (see aux/iceberg-cpp.patch); the
+# operator then resolves the unknown outcome against the reloaded table.

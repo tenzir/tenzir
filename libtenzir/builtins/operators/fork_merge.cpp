@@ -49,8 +49,10 @@ public:
           or ctx.get_sub(static_cast<int64_t>(i)).is_some()) {
         continue;
       }
-      co_await ctx.spawn_sub<table_slice>(static_cast<int64_t>(i),
-                                          args_.branches[i]);
+      if (not co_await ctx.plan_and_spawn_sub<table_slice>(
+            static_cast<int64_t>(i), args_.branches[i])) {
+        co_return;
+      }
     }
   }
 
@@ -138,9 +140,7 @@ public:
       = [&](ir::pipeline& branch, ir::optimize_filter f) -> event_order {
       auto opt = std::move(branch).optimize(std::move(f), order);
       branch = std::move(opt.replacement);
-      branch.operators.insert_range(branch.operators.begin(),
-                                    opt.filter
-                                      | std::views::transform(make_where_ir));
+      branch.prepend(std::move(opt.filter));
       return opt.order;
     };
     auto result_order = order;

@@ -118,16 +118,16 @@ public:
         TENZIR_ASSERT(transport_evb);
         auto conn_id = next_conn_id_++;
         auto pipeline_copy = impl_.pipeline().inner;
-        if (not impl_.substitute(pipeline_copy, accepted.info, ctx)) {
+        impl_.bind(pipeline_copy, accepted.info, ctx);
+        auto key = sub_key_for(conn_id);
+        if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(
+              std::move(key), std::move(pipeline_copy),
+              DiagnosticBehavior::ErrorToWarning)) {
           close_stream_transport(std::move(transport));
           release_connection_slot();
           maybe_finish_draining();
           co_return;
         }
-        auto key = sub_key_for(conn_id);
-        co_await ctx.spawn_sub<chunk_ptr>(std::move(key),
-                                          std::move(pipeline_copy),
-                                          DiagnosticBehavior::ErrorToWarning);
         auto state
           = impl_.make_connection_state(*transport, accepted.info, ctx);
         auto bytes_read_counter

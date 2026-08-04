@@ -21,6 +21,19 @@ namespace tenzir {
 
 /// Pushes results from series_builder and coordinates builder timeouts between
 /// `Operator::process_task()` and `Operator::await_task()`.
+///
+/// The timeout store is a single-slot mailbox with latest-wins semantics:
+/// pushing a result replaces a pending timeout instead of taking the minimum.
+/// This is only correct because every push must carry the minimum remaining
+/// wait across all deadlines the operator tracks, which
+/// `series_builder::YieldReadyResult::merge()` guarantees by merging deadlines
+/// by minimum.
+///
+/// Once `wait()` has dequeued a timeout, it is committed to sleeping for that
+/// duration: a shorter deadline pushed during the sleep does not preempt it,
+/// and a later one makes the wakeup stale. Operators therefore must not rely
+/// on wakeups arriving on time and instead re-check their deadlines in
+/// `process_task()`, rescheduling any remaining wait.
 class SeriesPusher {
 public:
   using duration = std::chrono::steady_clock::duration;

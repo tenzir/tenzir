@@ -1,0 +1,6 @@
+warning: column `id` has `uint64` values that cannot convert to the table's `int64`; writing nulls for those rows
+ --> tests/operators/to_iceberg/append/08_cast_overflow.tql:8:1
+  |
+8 | to_iceberg "testns.events", catalog=env("ICEBERG_REST_URI")
+  | ~~~~~~~~~~ 
+  |

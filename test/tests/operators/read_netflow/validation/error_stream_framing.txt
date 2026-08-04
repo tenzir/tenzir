@@ -1,0 +1,8 @@
+error: failed to frame NetFlow byte stream
+ --> tests/operators/read_netflow/validation/error_stream_framing.tql:6:3
+  |
+6 |   read_netflow
+  |   ^^^^^^^^^^^^ 
+  |
+  = note: unsupported NetFlow version 6
+  = note: safe resynchronization is impossible for an unframed byte stream

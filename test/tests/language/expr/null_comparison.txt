@@ -1,0 +1,63 @@
+{
+  x: null,
+  eq_literal: true,
+  eq_left: true,
+  eq_right: true,
+  eq_typed: true,
+  neq_literal: false,
+  neq_left: false,
+  neq_right: false,
+  neq_typed: false,
+  gt_literal: null,
+  gt_left: null,
+  gt_right: null,
+  gt_typed: null,
+  geq_literal: true,
+  geq_left: true,
+  geq_right: true,
+  geq_typed: true,
+  lt_literal: null,
+  lt_left: null,
+  lt_right: null,
+  lt_typed: null,
+  leq_literal: true,
+  leq_left: true,
+  leq_right: true,
+  leq_typed: true,
+  invalid_membership: null,
+}
+{
+  x: 1,
+  eq_literal: true,
+  eq_left: false,
+  eq_right: false,
+  eq_typed: false,
+  neq_literal: false,
+  neq_left: true,
+  neq_right: true,
+  neq_typed: true,
+  gt_literal: null,
+  gt_left: null,
+  gt_right: null,
+  gt_typed: null,
+  geq_literal: true,
+  geq_left: null,
+  geq_right: null,
+  geq_typed: null,
+  lt_literal: null,
+  lt_left: null,
+  lt_right: null,
+  lt_typed: null,
+  leq_literal: true,
+  leq_left: null,
+  leq_right: null,
+  leq_typed: null,
+  invalid_membership: null,
+}
+warning: binary operator `in` not implemented for `int64` and `null`
+  --> tests/language/expr/null_comparison.tql:26:22
+   |
+26 | invalid_membership = 5 in null
+   |                      ~~~~~~~~~ 
+   |
+   = hint: the result of this expression is `null`

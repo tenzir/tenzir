@@ -16,6 +16,7 @@
   libbacktrace,
   clickhouse-cpp,
   empty-libgcc_eh,
+  iceberg-cpp,
   flatbuffers,
   fluent-bit,
   protobuf,
@@ -84,6 +85,7 @@ in
     libbacktrace
     clickhouse-cpp
     fluent-bit
+    iceberg-cpp
     libpcap
     libunwind
     libnats-c

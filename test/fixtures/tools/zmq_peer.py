@@ -42,6 +42,11 @@ def main() -> int:
         socket.bind(args.endpoint)
     else:
         socket.connect(args.endpoint)
+    print(
+        f"ready: role={args.role} mode={args.mode} endpoint={args.endpoint} "
+        f"subscribe_prefix={args.subscribe_prefix!r}",
+        flush=True,
+    )
     Path(args.ready_file).touch()
     time.sleep(_STARTUP_SETTLE_SECONDS)
     try:
@@ -62,6 +67,7 @@ def main() -> int:
                 with capture_path.open("ab") as capture:
                     capture.write(payload)
                     capture.write(b"\n")
+                print(f"captured {len(payload)} bytes", flush=True)
     finally:
         socket.close()
         context.term()

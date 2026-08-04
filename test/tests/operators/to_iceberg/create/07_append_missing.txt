@@ -1,0 +1,7 @@
+error: Iceberg table `createns.missing` does not exist
+ --> tests/operators/to_iceberg/create/07_append_missing.tql:7:12
+  |
+7 | to_iceberg "createns.missing", catalog=env("ICEBERG_REST_URI"), mode="append"
+  |            ^^^^^^^^^^^^^^^^^^ 
+  |
+  = note: use `mode="create_append"` to create missing tables

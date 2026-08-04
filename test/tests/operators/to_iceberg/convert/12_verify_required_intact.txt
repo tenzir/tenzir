@@ -1,0 +1,2 @@
+rows: 0
+snapshots: 0

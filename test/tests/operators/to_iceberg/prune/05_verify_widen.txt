@@ -1,0 +1,7 @@
+rows: 195
+widened rows: 1
+1128 a aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+rows with null payload_b: 193
+1 file(s) with columns: ['id', 'kind', 'payload_a', 'payload_b', 'ts']
+3 file(s) with columns: ['id', 'kind', 'payload_a', 'ts']
+1 file(s) with columns: ['id', 'kind', 'payload_b', 'ts']

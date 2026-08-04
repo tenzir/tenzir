@@ -1,0 +1,17 @@
+table {
+  1: class_uid: optional long
+  2: time: optional timestamptz
+  3: msg: optional string
+}
+[
+  1000: class_uid: identity(1)
+  1001: time_day: day(2)
+]
+partition class_uid=1001 time_day=2026-01-01: 2 rows
+partition class_uid=1001 time_day=2026-01-02: 1 rows
+partition class_uid=4001 time_day=2026-01-01: 1 rows
+1001 2026-01-01T10:00:00+00:00 a
+1001 2026-01-01T11:00:00+00:00 b
+1001 2026-01-02T10:00:00+00:00 c
+4001 2026-01-01T10:30:00+00:00 d
+pruned scan plans 1 data file(s)

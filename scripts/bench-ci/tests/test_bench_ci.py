@@ -612,6 +612,32 @@ def test_find_latest_run_with_artifact_uses_recent_successful_run(
     assert run["headSha"] == "wanted"
 
 
+def test_list_workflow_runs_spans_renamed_workflow_files(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    queried: list[str] = []
+
+    def fake_gh_json(args: list[str]) -> object:
+        workflow = args[args.index("--workflow") + 1]
+        queried.append(workflow)
+        # GitHub keys runs by workflow file path, so a baseline at a commit
+        # built before the rename is only reachable under the old name.
+        if workflow == "engine.yaml":
+            raise common_module.GhCommandError(
+                1, ["gh", *args], stderr="could not find any workflows named"
+            )
+        return [{"databaseId": 7, "headSha": "old", "event": "push"}]
+
+    monkeypatch.setattr(find_build_run_module, "gh_json", fake_gh_json)
+
+    runs = find_build_run_module.list_workflow_runs(
+        "tenzir/mono", filters=["--commit", "old"], limit=5
+    )
+
+    assert queried == ["engine.yaml", "tenzir.yaml"]
+    assert [run["databaseId"] for run in runs] == [7]
+
+
 def test_normalize_reports_uses_benchmark_and_implementation_ids() -> None:
     report = Report(
         path=Path("/tmp/report.json"),

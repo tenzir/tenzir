@@ -3,3 +3,5 @@ phase2-rebuild-quarantines-corrupt-partition: ok
 phase3-healthy-data-survives: ok
 phase4-second-rebuild-skips-quarantined: ok
 phase5-non-envelope-store-quarantined: ok
+phase6-export-validates-full-batch: ok
+phase7-rebuild-validates-full-batch: ok

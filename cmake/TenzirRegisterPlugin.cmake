@@ -499,6 +499,39 @@ function (TenzirExportCompileCommands)
     return()
   endif ()
 
+  # Additionally link into the git root when it differs from CMAKE_SOURCE_DIR,
+  # i.e., when this project is checked out as part of a larger repository.
+  set(_tenzir_compile_commands_byproducts
+      "${CMAKE_SOURCE_DIR}/compile_commands.json")
+  set(_tenzir_compile_commands_extra_commands)
+  set(_tenzir_compile_commands_comment_suffix "")
+  find_package(Git QUIET)
+  if (GIT_FOUND)
+    execute_process(
+      COMMAND "${GIT_EXECUTABLE}" rev-parse --show-toplevel
+      WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+      OUTPUT_VARIABLE _tenzir_git_toplevel
+      OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET
+      RESULT_VARIABLE _tenzir_git_toplevel_result)
+    if (_tenzir_git_toplevel_result EQUAL 0 AND NOT "${_tenzir_git_toplevel}"
+                                                STREQUAL "${CMAKE_SOURCE_DIR}")
+      list(APPEND _tenzir_compile_commands_byproducts
+           "${CMAKE_SOURCE_DIR}/../compile_commands.json")
+      list(
+        APPEND
+        _tenzir_compile_commands_extra_commands
+        COMMAND
+        ${CMAKE_COMMAND}
+        -E
+        create_symlink
+        "${CMAKE_BINARY_DIR}/compile_commands.json"
+        "${CMAKE_SOURCE_DIR}/../compile_commands.json")
+      set(_tenzir_compile_commands_comment_suffix " and ${CMAKE_SOURCE_DIR}/..")
+    endif ()
+    unset(_tenzir_git_toplevel)
+    unset(_tenzir_git_toplevel_result)
+  endif ()
+
   # Link once when configuring the build to make the compilation database
   # immediately available.
   execute_process(
@@ -506,6 +539,13 @@ function (TenzirExportCompileCommands)
       ${CMAKE_COMMAND} -E create_symlink
       "${CMAKE_BINARY_DIR}/compile_commands.json"
       "${CMAKE_SOURCE_DIR}/compile_commands.json")
+  if (_tenzir_compile_commands_extra_commands)
+    execute_process(
+      COMMAND
+        ${CMAKE_COMMAND} -E create_symlink
+        "${CMAKE_BINARY_DIR}/compile_commands.json"
+        "${CMAKE_SOURCE_DIR}/../compile_commands.json")
+  endif ()
 
   # Link again when building the specified target. Keep this as a custom target
   # instead of an output-based command so each build directory can relink the
@@ -515,13 +555,19 @@ function (TenzirExportCompileCommands)
   # without forcing an explicit reconfigure first.
   add_custom_target(
     compilation-database
-    BYPRODUCTS "${CMAKE_SOURCE_DIR}/compile_commands.json"
+    BYPRODUCTS ${_tenzir_compile_commands_byproducts}
     COMMAND
       ${CMAKE_COMMAND} -E create_symlink
       "${CMAKE_BINARY_DIR}/compile_commands.json"
       "${CMAKE_SOURCE_DIR}/compile_commands.json"
-    COMMENT "Linking compilation database for ${ARGV0} to ${CMAKE_SOURCE_DIR}")
+      ${_tenzir_compile_commands_extra_commands}
+    COMMENT
+      "Linking compilation database for ${ARGV0} to ${CMAKE_SOURCE_DIR}${_tenzir_compile_commands_comment_suffix}"
+  )
   add_dependencies(${ARGV0} compilation-database)
+  unset(_tenzir_compile_commands_byproducts)
+  unset(_tenzir_compile_commands_extra_commands)
+  unset(_tenzir_compile_commands_comment_suffix)
 endfunction ()
 
 function (TenzirRegisterPlugin)

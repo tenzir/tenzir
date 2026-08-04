@@ -475,26 +475,24 @@ private:
   std::string source_;
   const char* current_;
   const char* end_;
-  diagnostic_handler& diag_;
   bool internal_;
 
 public:
   /// Create a new parser from `source`. The `internal` flag disables setting
   /// `location`.
-  explicit parser(std::string source, diagnostic_handler& diag, bool internal)
+  explicit parser(std::string source, bool internal)
     : source_{std::move(source)},
       current_{source_.data()},
       end_{source_.data() + source_.size()},
-      diag_{diag},
       internal_{internal} {
   }
 };
 
 } // namespace
 
-auto make_parser_interface(std::string source, diagnostic_handler& diag)
+auto make_parser_interface(std::string source, diagnostic_handler&)
   -> std::unique_ptr<parser_interface> {
-  return std::make_unique<parser>(std::move(source), diag, true);
+  return std::make_unique<parser>(std::move(source), true);
 }
 
 } // namespace tenzir::tql

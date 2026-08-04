@@ -1,0 +1,1 @@
+ok: delivered JSON after subscriber registration

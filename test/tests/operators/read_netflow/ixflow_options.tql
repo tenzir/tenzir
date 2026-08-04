@@ -1,0 +1,7 @@
+from_file f"{env("TENZIR_INPUTS")}/netflow/threats.ixflow" {
+  read_netflow
+}
+where netflow.record_type == "options"
+head 1
+select netflow, private_enterprise_number, information_element_id,
+  information_element_data_type, information_element_name

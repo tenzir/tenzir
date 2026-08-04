@@ -1,0 +1,23 @@
+table {
+  1: class_uid: optional long
+  2: time: optional timestamptz
+  3: msg: optional string
+  4: severity: optional long
+}
+[
+  1000: class_uid: identity(1)
+  1001: time_day: day(2)
+]
+partition class_uid=1001 time_day=2026-01-01: 2 rows
+partition class_uid=1001 time_day=2026-01-02: 1 rows
+partition class_uid=1001 time_day=2026-01-03: 2 rows
+partition class_uid=1001 time_day=None: 1 rows
+partition class_uid=4001 time_day=2026-01-01: 2 rows
+a 2026-01-01T10:00:00+00:00 None
+b 2026-01-01T11:00:00+00:00 None
+c 2026-01-02T10:00:00+00:00 None
+d 2026-01-01T10:30:00+00:00 None
+e 2026-01-03T09:00:00+00:00 None
+f 2026-01-01T12:00:00+00:00 None
+g None None
+h 2026-01-03T10:00:00+00:00 3

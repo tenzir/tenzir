@@ -11,9 +11,51 @@ import time
 from pathlib import Path
 from typing import Any
 
-from common import TARGET_METADATA_ARTIFACTS, gh_api, gh_json
+from common import TARGET_METADATA_ARTIFACTS, GhCommandError, gh_api, gh_json
 
 HEX_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$", re.IGNORECASE)
+
+# GitHub keys a workflow by its file path, so renaming the file starts a fresh
+# run history: every run created before the rename stays attached to the old
+# path and is invisible to `gh run list --workflow engine.yaml`. Baselines are
+# resolved at arbitrary past commits, so keep querying the historical name too.
+# Newest name first, which also keeps ordering right for the latest-run lookup:
+# the rename is a point in time, so every engine.yaml run postdates every
+# tenzir.yaml one. Drop the old entry once no baseline reaches back that far.
+WORKFLOW_FILES = ("engine.yaml", "tenzir.yaml")
+
+RUN_FIELDS = "databaseId,status,conclusion,headSha,url,displayTitle,event"
+
+
+def list_workflow_runs(
+    repo: str, *, filters: list[str], limit: int
+) -> list[dict[str, Any]]:
+    """List runs across the current and historical workflow file names."""
+    collected: list[dict[str, Any]] = []
+    for workflow in WORKFLOW_FILES:
+        try:
+            runs = gh_json(
+                [
+                    "run",
+                    "list",
+                    "--repo",
+                    repo,
+                    "--workflow",
+                    workflow,
+                    *filters,
+                    "--json",
+                    RUN_FIELDS,
+                    "--limit",
+                    str(limit),
+                ],
+            )
+        except GhCommandError:
+            # A name that no longer exists in the repository is not an error
+            # here; it just contributes no runs.
+            continue
+        if isinstance(runs, list):
+            collected.extend(runs)
+    return collected
 
 
 class ArtifactUnavailableError(RuntimeError):
@@ -49,23 +91,8 @@ def resolve_commit_sha(repo: str, ref: str) -> str:
 def find_run(repo: str, ref: str, *, event: str | None = None) -> dict[str, Any]:
     sha = resolve_commit_sha(repo, ref)
     expected_event = event or infer_event_for_ref(repo, ref)
-    runs = gh_json(
-        [
-            "run",
-            "list",
-            "--repo",
-            repo,
-            "--workflow",
-            "tenzir.yaml",
-            "--commit",
-            sha,
-            "--json",
-            "databaseId,status,conclusion,headSha,url,displayTitle,event",
-            "--limit",
-            "20",
-        ],
-    )
-    if not isinstance(runs, list) or not runs:
+    runs = list_workflow_runs(repo, filters=["--commit", sha], limit=20)
+    if not runs:
         raise RuntimeError(f"no Tenzir workflow run found for {sha}")
     filtered = [run for run in runs if run.get("headSha") == sha]
     if expected_event is not None:
@@ -86,25 +113,10 @@ def find_latest_run_with_artifact(
     artifact_name: str,
     limit: int = 50,
 ) -> dict[str, Any]:
-    runs = gh_json(
-        [
-            "run",
-            "list",
-            "--repo",
-            repo,
-            "--workflow",
-            "tenzir.yaml",
-            "--branch",
-            branch,
-            "--event",
-            event,
-            "--json",
-            "databaseId,status,conclusion,headSha,url,displayTitle,event",
-            "--limit",
-            str(limit),
-        ],
+    runs = list_workflow_runs(
+        repo, filters=["--branch", branch, "--event", event], limit=limit
     )
-    if not isinstance(runs, list) or not runs:
+    if not runs:
         raise RuntimeError(
             f"no Tenzir workflow runs found for branch {branch} ({event})"
         )

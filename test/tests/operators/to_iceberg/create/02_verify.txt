@@ -1,0 +1,16 @@
+location: True
+table {
+  1: id: optional long
+  2: time: optional timestamptz
+  3: src_ip: optional string
+  4: net: optional string
+  5: dur: optional long
+  6: meta: optional struct<7: level: optional string, 8: tags: optional list<string>>
+}
+sort_order: [
+  2 ASC NULLS FIRST
+]
+write.metadata.metrics.column.time: full
+write.metadata.metrics.default: counts
+1 2026-01-01T00:00:00+00:00 192.168.0.1 10.0.0.0/8 90000000000 {'level': 'info', 'tags': ['a', 'b']}
+2 2026-01-01T00:00:01+00:00 ::1 192.168.0.0/16 1000000 {'level': 'warn', 'tags': []}

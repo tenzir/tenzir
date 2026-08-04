@@ -14,7 +14,6 @@
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/secret_resolution.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
 
 namespace tenzir::plugins::from_ftp {
@@ -79,8 +78,8 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    auto pipeline = args_.parser.inner;
-    if (not pipeline.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
+    auto plan = ir::make_plan(args_.parser.inner, tag_v<chunk_ptr>, ctx);
+    if (not plan) {
       lifecycle_ = Lifecycle::done;
       co_return;
     }
@@ -132,7 +131,7 @@ public:
                          MetricsDirection::read, MetricsVisibility::external_,
                          MetricsUnit::events);
     download_.emplace(session_->start_download(download_buffer_capacity));
-    co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(pipeline));
+    co_await ctx.spawn_sub(caf::none, std::move(*plan));
     co_return;
   }
 

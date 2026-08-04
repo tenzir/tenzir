@@ -1,0 +1,9 @@
+// Bucket, truncate, and nested identity transforms. PyIceberg recomputes
+// the expected bucket and truncate values independently in the next step,
+// cross-checking the spec's Murmur3 hash.
+from {id: 1, name: "alpha", meta: {region: "eu"}},
+     {id: 2, name: "alps", meta: {region: "eu"}},
+     {id: 3, name: "beta", meta: {region: "us"}},
+     {id: 4, name: "alto", meta: {region: "us"}}
+to_iceberg "partns.hashed", catalog=env("ICEBERG_REST_URI"),
+  partition_by=[bucket(id, 4), truncate(name, 2), meta.region]

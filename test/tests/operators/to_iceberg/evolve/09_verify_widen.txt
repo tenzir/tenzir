@@ -1,0 +1,6 @@
+table {
+  1: id: optional long
+  2: score: optional double
+  3: message: optional string
+}
+3000000000 1.5 wide

@@ -78,7 +78,7 @@ protected:
   auto spawn(OpCtx& ctx) -> Task<void> {
     cron_fired_ = false;
     sub_finished_ = false;
-    co_await ctx.spawn_sub<void>(next_sub_key_++, args_.pipe.inner);
+    co_await ctx.plan_and_spawn_sub<void>(next_sub_key_++, args_.pipe.inner);
   }
 
 private:

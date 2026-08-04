@@ -1,0 +1,13 @@
+[
+  1000: id_bucket_4: bucket[4](1)
+  1001: name_trunc_2: truncate[2](2)
+  1002: meta.region: identity(4)
+]
+partition tuples match PyIceberg transforms: True
+0 al eu
+2 al us
+3 be us
+1 alpha eu
+2 alps eu
+3 beta us
+4 alto us

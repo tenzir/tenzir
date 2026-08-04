@@ -12,6 +12,7 @@
 #include "tenzir/diagnostics.hpp"
 
 #include <aws/core/client/ClientConfiguration.h>
+#include <aws/core/config/AWSProfileConfigLoader.h>
 #include <aws/core/endpoint/AWSPartitions.h>
 #include <aws/core/http/standard/StandardHttpRequest.h>
 #include <aws/core/utils/StringUtils.h>
@@ -92,6 +93,16 @@ auto resolve_region(Option<std::string> explicit_region,
   if (auto region = detail::getenv("AWS_DEFAULT_REGION");
       region and not region->empty()) {
     return *region;
+  }
+  // A named profile carries its own region in the shared config file; the
+  // SDK default below only consults `AWS_PROFILE`, not the profile the user
+  // selected explicitly.
+  if (credentials and not credentials->profile.empty()) {
+    auto profile
+      = Aws::Config::GetCachedConfigProfile(Aws::String{credentials->profile});
+    if (const auto& region = profile.GetRegion(); not region.empty()) {
+      return std::string{region};
+    }
   }
   return std::string{Aws::Client::ClientConfiguration{}.region};
 }

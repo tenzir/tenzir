@@ -16,7 +16,6 @@
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/session.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/parser.hpp>
 
 #include <folly/coro/BoundedQueue.h>
@@ -339,7 +338,11 @@ public:
       }
       parser = std::move(*default_parser);
     }
-    if (not parser.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
+    // Plan the parser before touching the interface so that a planning failure
+    // is not masked by an interface setup failure and no interface is activated
+    // for an invalid pipeline.
+    auto plan = ir::make_plan(std::move(parser), tag_v<chunk_ptr>, ctx);
+    if (not plan) {
       done_ = true;
       co_return;
     }
@@ -360,7 +363,7 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "from_nic"},
                          MetricsDirection::read, MetricsVisibility::external_,
                          MetricsUnit::events);
-    co_await ctx.spawn_sub<chunk_ptr>(caf::none, std::move(parser));
+    co_await ctx.spawn_sub(caf::none, std::move(*plan));
     auto io_executor = ctx.io_executor();
     auto* evb = io_executor->getEventBase();
     ctx.spawn_task(folly::coro::co_withExecutor(

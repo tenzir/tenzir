@@ -11,6 +11,7 @@
 #include "tenzir/as_bytes.hpp"
 #include "tenzir/concept/printable/core/printer.hpp"
 #include "tenzir/concept/printable/tenzir/json_printer_options.hpp"
+#include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/base64.hpp"
 #include "tenzir/view3.hpp"
@@ -92,13 +93,13 @@ public:
       return;
     }
     builder_.append('"');
-    builder_.append_raw(fmt::format("{}", x));
+    builder_.append_raw(to_string(x));
     builder_.append('"');
   }
 
   auto operator()(view3<time> x) -> void {
     builder_.append('"');
-    builder_.append_raw(fmt::format("{}", x));
+    builder_.append_raw(to_string(x));
     builder_.append('"');
   }
 
@@ -121,13 +122,13 @@ public:
 
   auto operator()(view3<ip> x) -> void {
     builder_.append('"');
-    builder_.append_raw(fmt::format("{}", x));
+    builder_.append_raw(to_string(x));
     builder_.append('"');
   }
 
   auto operator()(view3<subnet> x) -> void {
     builder_.append('"');
-    builder_.append_raw(fmt::format("{}", x));
+    builder_.append_raw(to_string(x));
     builder_.append('"');
   }
 

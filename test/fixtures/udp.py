@@ -53,14 +53,13 @@ def udp() -> FixtureHandle:
         raise RuntimeError("udp fixture option `initial_delay` must be non-negative")
     if opts.source_port < 0 or opts.source_port > 65535:
         raise RuntimeError("udp fixture option `source_port` must be in [0, 65535]")
-    port = find_free_port(sock_type=socket.SOCK_DGRAM)
-    endpoint = f"{_HOST}:{port}"
     stop_event = threading.Event()
     state = _UdpState()
     server_sock: socket.socket | None = None
     if opts.mode == "server":
         server_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        server_sock.bind((_HOST, port))
+        server_sock.bind((_HOST, 0))
+        port = server_sock.getsockname()[1]
         server_sock.settimeout(0.2)
         worker = threading.Thread(
             target=_run_server_worker,
@@ -72,6 +71,7 @@ def udp() -> FixtureHandle:
             daemon=True,
         )
     else:
+        port = find_free_port(sock_type=socket.SOCK_DGRAM)
         payloads = _client_payloads(opts)
         worker = threading.Thread(
             target=_run_client_worker,
@@ -85,6 +85,7 @@ def udp() -> FixtureHandle:
             },
             daemon=True,
         )
+    endpoint = f"{_HOST}:{port}"
     worker.start()
 
     def _assert_test(

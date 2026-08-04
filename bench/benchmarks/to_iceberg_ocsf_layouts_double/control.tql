@@ -1,0 +1,13 @@
+---
+bench:
+  id: control
+  description: Read the doubled prepared mixed OCSF workload, then discard it.
+  tags:
+    layout: control
+    expected_tables: "0"
+---
+from_file env("BENCHMARK_ICEBERG_INPUT_PATH"), mmap=true {
+  read_bitz
+}
+repeat int(env("BENCHMARK_ICEBERG_STREAM_REPETITIONS"))
+discard

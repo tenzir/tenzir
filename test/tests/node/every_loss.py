@@ -3,15 +3,15 @@
 
 """Reproduce TNZ-668: every loses batches when subpipeline is slow.
 
-A managed pipeline uses ``every 1s { delay ... | import }`` where the
-delay makes the subpipeline outlive the window boundary.  While the old
-subpipeline is still alive, ``every`` cannot start the next one, so
-events arriving in that gap are dropped.
+A managed pipeline uses ``every 250ms { delay ... | import }`` where the
+delay makes the subpipeline outlive the window boundary. While the old
+subpipeline is still alive, ``every`` must apply backpressure rather than
+drop a later batch.
 
-The test publishes 120 events at 20ms intervals (~2.4s), spanning
-multiple ``every 1s`` windows.  A 1.5s delay inside the subpipeline
-ensures it outlives the window by 500ms, creating a gap where the bug
-drops events.  A loss-free run delivers all 120 events to storage.
+The test confirms that the subscriber has registered, then publishes a
+one-event batch, waits for the window to close, and publishes a separate
+120-event batch. The 2s delay leaves a wide gap where the latter batch must be
+retained. A loss-free run imports every sequence number exactly once.
 """
 
 from __future__ import annotations
@@ -135,14 +135,20 @@ try:
     web_proc, api = start_web_server(node.env)
     tenzir = Executor.from_env(node.env)
 
-    # Subscriber: every 1s, delay events by 1.5s (outliving the 1s window
-    # by 500ms), then import.  The delay simulates a slow sink like
+    # Subscriber: every 250ms, delay events by 2s (outliving the window by
+    # 1.75s), then import. The delay simulates a slow sink like
     # to_http with retries.
     create_pipeline(
         api,
         'subscribe "tpc.raw"\n'
-        "every 1s {\n"
-        "  this = {...this, _ts: 2025-01-01T00:00:01.5}\n"
+        "fork {\n"
+        "  where seq == -2\n"
+        '  @name = "every-loss-ready"\n'
+        "  import\n"
+        "}\n"
+        "where seq != -2\n"
+        "every 250ms {\n"
+        "  this = {...this, _ts: 2025-01-01T00:00:02}\n"
         "  delay _ts, start=2025-01-01T00:00:00, speed=1.0\n"
         "  drop _ts\n"
         '  @name = "every-loss"\n'
@@ -151,39 +157,66 @@ try:
         name="every-loss-repro",
     )
 
-    # Publish 120 events at 20ms intervals (~2.4s total), spanning
-    # multiple `every 1s` windows.
+    # Wait for a probe to reach the immediate fork branch. This proves that
+    # the same subscriber that feeds `every` has registered before the
+    # one-shot seed starts the timing-sensitive scenario.
+    ready_count = 0
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        probe = tenzir.run('from {seq: -2}\npublish "tpc.raw"\n')
+        assert probe.returncode == 0, f"probe publish failed: {probe.stderr.decode()}"
+        ready = tenzir.run(
+            "export\n"
+            'where @name == "every-loss-ready"\n'
+            "summarize count=count()\n"
+            "write_ndjson\n"
+        )
+        assert ready.returncode == 0, (
+            f"readiness export failed: {ready.stderr.decode()}"
+        )
+        ready_count = json.loads(ready.stdout.decode().strip()).get("count", 0)
+        if ready_count:
+            break
+        time.sleep(0.1)
+    assert ready_count, "subscriber did not register within 10 seconds"
+
+    # Finalizing the first publisher flushes a distinct batch immediately.
+    # When the second publisher starts, `every` has already closed its first
+    # window but its slow subpipeline is still running.
+    seed = tenzir.run('from {seq: -1}\npublish "tpc.raw"\n')
+    assert seed.returncode == 0, f"seed publish failed: {seed.stderr.decode()}"
+    time.sleep(1)
     result = tenzir.run(
-        'every 20ms { from {} }\nhead 120\nenumerate seq\npublish "tpc.raw"\n'
+        'from {}\nrepeat 120\nenumerate seq\nbatch 120\npublish "tpc.raw"\n'
     )
     assert result.returncode == 0, f"publish failed: {result.stderr.decode()}"
 
-    # Poll until the import count stabilises (no new events for 1s).
+    # Wait for the expected terminal state, not for a temporarily unchanged
+    # count while a delayed subpipeline is still running.
     count = 0
-    prev_count = -1
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 15
     while time.monotonic() < deadline:
-        time.sleep(0.5)
         r = tenzir.run(
             "export\n"
             'where @name == "every-loss"\n'
             "summarize count=count()\n"
             "write_ndjson\n"
         )
-        if r.returncode == 0:
-            try:
-                count = json.loads(r.stdout.decode().strip()).get("count", 0)
-            except (json.JSONDecodeError, ValueError):
-                pass
-        if count > 0 and count == prev_count:
+        assert r.returncode == 0, f"export failed: {r.stderr.decode()}"
+        count = json.loads(r.stdout.decode().strip()).get("count", 0)
+        if count == 121:
             break
-        prev_count = count
+        time.sleep(0.2)
 
-    if count != 120:
-        print(f"FAIL: expected 120 events, got {count}")
-        raise SystemExit(1)
+    assert count == 121, f"timed out waiting for 121 events, got {count}"
+    rows = tenzir.run('export\nwhere @name == "every-loss"\nsort seq\nwrite_ndjson\n')
+    assert rows.returncode == 0, f"export failed: {rows.stderr.decode()}"
+    assert [row["seq"] for row in map(json.loads, rows.stdout.splitlines())] == [
+        -1,
+        *range(120),
+    ]
 
-    print(f"ok: all 120 events delivered")
+    print("ok: all batches delivered exactly once")
 
 finally:
     if web_proc:

@@ -1,0 +1,27 @@
+name: to_iceberg_ocsf_homogeneous
+description: >-
+  Append 10,027,008 prepared sparse OCSF events to a class-sized or unified-wide
+  Iceberg table in 153 batches and measure the schema-width throughput tax.
+tags:
+  benchmark: iceberg
+  dataset: ocsf-1.8
+  input: synthetic-repeat
+  workload: homogeneous
+inputs:
+  main:
+    path: ocsf/iceberg-1.8-seeds.ndjson
+    source:
+      url: ../../fixtures/iceberg/ocsf-1.8-seeds.ndjson
+      num_events: 10027008
+env:
+  TENZIR_CONSOLE_FORMAT: none
+fixtures:
+  - iceberg:
+      inputs: [main]
+      expected_events: 10027008
+      expected_seed_events: 25
+      batch_size: 65536
+runtime:
+  warmup_runs: 0
+  measurement_runs: 3
+  timeout_seconds: 3600

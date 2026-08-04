@@ -43,6 +43,8 @@ def _request_json(
     method: str,
     url: str,
     body: dict[str, Any] | None = None,
+    *,
+    timeout: float = 5,
 ) -> tuple[int, dict[str, Any]]:
     payload = None
     headers: dict[str, str] = {}
@@ -51,7 +53,7 @@ def _request_json(
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(url, data=payload, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(request, timeout=5) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             text = response.read().decode("utf-8", errors="replace")
             return int(response.status), _decode_json_or_empty(text)
     except urllib.error.HTTPError as exc:
@@ -76,16 +78,26 @@ def _delete_pipeline(base_url: str, pipeline_id: str) -> None:
 def _wait_for_server(base_url: str, process: subprocess.Popen[str]) -> None:
     deadline = time.time() + 20
     last_status: int | None = None
+    last_body: dict[str, Any] | None = None
     last_error: str | None = None
     while time.time() < deadline:
         if process.poll() is not None:
             break
         try:
-            status, _ = _request_json("POST", f"{base_url}{API_PREFIX}/ping", {})
+            # `/ping` only proves that the web server is listening. Listing
+            # pipelines additionally waits for the pipeline-manager endpoint
+            # that this test exercises, without creating anything to clean up.
+            status, body = _request_json(
+                "POST",
+                f"{base_url}{API_PREFIX}/pipeline/list",
+                {},
+                timeout=1,
+            )
             last_status = status
-            if status == 200:
+            last_body = body
+            if status == 200 and isinstance(body.get("pipelines"), list):
                 return
-        except urllib.error.URLError as exc:
+        except (urllib.error.URLError, OSError) as exc:
             # The socket may not be open yet while the web server starts.
             last_error = str(exc)
         time.sleep(0.2)
@@ -97,9 +109,9 @@ def _wait_for_server(base_url: str, process: subprocess.Popen[str]) -> None:
             stderr = ""
     details: list[str] = []
     if last_status is not None:
-        details.append(f"last /ping status: {last_status}")
+        details.append(f"last /pipeline/list response: {last_status} {last_body}")
     if last_error:
-        details.append(f"last /ping error: {last_error}")
+        details.append(f"last /pipeline/list error: {last_error}")
     if stderr.strip():
         details.append(f"stderr: {stderr.strip()}")
     suffix = f"; {'; '.join(details)}" if details else ""
@@ -591,7 +603,11 @@ def _check_invalid_action_rejected(base_url: str) -> None:
                 "name": "invalid-action",
             },
         )
-        assert status == 200, body
+        assert status == 200, {
+            "operation": "create pipeline for invalid-action check",
+            "status": status,
+            "body": body,
+        }
         created_id = str(body.get("id", ""))
         assert created_id, body
         status, body = _post_api(

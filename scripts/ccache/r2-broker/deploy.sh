@@ -112,6 +112,6 @@ printf '%s' "${r2_parent_access_key_id}" |
   wrangler secret put R2_PARENT_ACCESS_KEY_ID --config "${config_file}"
 
 printf '%s' "${r2_api_token}" |
-  wrangler secret put CLOUDFLARE_API_TOKEN --config "${config_file}"
+  wrangler secret put R2_API_TOKEN --config "${config_file}"
 
 wrangler deploy --config "${config_file}"

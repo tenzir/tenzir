@@ -14,6 +14,8 @@
   x12: null,
   x13: null,
   x14: null,
+  x15: null,
+  x16: null,
 }
 warning: integer overflow
  --> tests/language/expr/add.tql:6:6
@@ -43,11 +45,3 @@ warning: integer overflow
 15 | x12 = int("-9223372036854775808") + -1
    |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
    |
-
-warning: binary operator `add` not implemented for `null` and `int64`
-  --> tests/language/expr/add.tql:16:7
-   |
-16 | x13 = null + 1
-   |       ~~~~~~~~ 
-   |
-   = hint: the result of this expression is `null`

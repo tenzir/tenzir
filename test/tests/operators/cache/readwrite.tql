@@ -1,0 +1,5 @@
+// In the default `readwrite` mode, `cache` writes its input into the named
+// cache and then replays it downstream, so the pipeline behaves transparently.
+from {x: 2}, {x: 1}, {x: 3}
+cache "readwrite-roundtrip"
+sort x

@@ -1,0 +1,15 @@
+// One malformed event among 100 must not cost a single row. Event 50
+// carries a string where the table holds a long; only that cell nulls,
+// with a warning, while the other 99 rows keep their values. max_size=1
+// rotates and commits a data file per event, so later events stream in
+// while earlier commits are still being processed.
+from {v: 0}
+repeat 100
+enumerate k
+if k == 50 {
+  l = "boom"
+} else {
+  l = k
+}
+drop v
+to_iceberg "convertns.integrity", catalog=env("ICEBERG_REST_URI"), max_size=1

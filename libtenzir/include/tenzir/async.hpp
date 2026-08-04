@@ -146,37 +146,39 @@ public:
     -> Task<failure_or<void>>
     = 0;
 
-  /// Spawn a subpipeline with the given key and input type.
+  /// Spawn a subpipeline from an already-instantiated `Plan`.
   ///
-  /// The returned handle allows you to push data in. Data flowing out of the
+  /// The plan carries its input element type, so no type parameter is needed.
+  /// The returned handle allows you to push data in; data flowing out of the
   /// subpipeline is routed through the `process_sub` function of the operator.
+  /// When a typed handle is required, narrow the result with
+  /// `as<SubHandle<Input>>`; most callers instead fetch it later via `get_sub`.
   ///
   /// When the pipeline completes, `finish_sub` is called.
+  ///
+  /// When `fused` is true, the subpipeline shares the parent's executor so that
+  /// all legs contribute to the same metrics (used by the `parallel` operator).
   virtual auto
-  spawn_sub(SubKey key, ir::pipeline pipe, element_type_tag input,
-            DiagnosticBehavior diag_behavior = DiagnosticBehavior::Unchanged)
-    -> Task<AnySubHandle&>
+  spawn_sub(SubKey key, ir::Plan plan,
+            DiagnosticBehavior diag_behavior = DiagnosticBehavior::Unchanged,
+            bool fused = false) -> Task<AnySubHandle&>
     = 0;
 
+  /// Instantiate `pipe` for element type `Input` and spawn it as a
+  /// subpipeline. This combines `ir::make_plan` and `spawn_sub`. Returns `None`
+  /// if instantiation fails (a diagnostic has then already been emitted);
+  /// otherwise the spawned sub handle.
   template <class Input>
-  auto
-  spawn_sub(SubKey key, ir::pipeline pipe,
-            DiagnosticBehavior diag_behavior = DiagnosticBehavior::Unchanged)
-    -> Task<SubHandle<Input>&> {
-    co_return as<SubHandle<Input>>(co_await spawn_sub(
-      std::move(key), std::move(pipe), tag_v<Input>, diag_behavior));
-  }
-
-  virtual auto
-  spawn_sub_fused(SubKey key, ir::pipeline pipe, element_type_tag input)
-    -> Task<AnySubHandle&>
-    = 0;
-
-  template <class Input>
-  auto spawn_sub_fused(SubKey key, ir::pipeline pipe)
-    -> Task<SubHandle<Input>&> {
-    co_return as<SubHandle<Input>>(
-      co_await spawn_sub_fused(std::move(key), std::move(pipe), tag_v<Input>));
+  auto plan_and_spawn_sub(SubKey key, ir::pipeline pipe,
+                          DiagnosticBehavior diag_behavior
+                          = DiagnosticBehavior::Unchanged,
+                          bool fused = false) -> Task<Option<AnySubHandle&>> {
+    auto plan = ir::make_plan(std::move(pipe), tag_v<Input>, *this);
+    if (not plan) {
+      co_return None{};
+    }
+    co_return co_await spawn_sub(std::move(key), std::move(*plan),
+                                 diag_behavior, fused);
   }
 
   virtual auto get_sub(SubKeyView key) -> Option<AnySubHandle&> = 0;

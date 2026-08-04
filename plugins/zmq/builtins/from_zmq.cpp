@@ -19,7 +19,6 @@
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -195,14 +194,14 @@ public:
           payload = std::move(*stripped);
         }
         auto parser = args_.parser.inner;
-        if (not parser.substitute(substitute_ctx{{ctx}, nullptr}, true)) {
-          request_stop();
-          co_return;
-        }
         TENZIR_ASSERT(next_sub_id_ <= static_cast<uint64_t>(
                         std::numeric_limits<int64_t>::max()));
         auto key = data{int64_t{static_cast<int64_t>(next_sub_id_++)}};
-        co_await ctx.spawn_sub<chunk_ptr>(key, std::move(parser));
+        if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(key,
+                                                           std::move(parser))) {
+          request_stop();
+          co_return;
+        }
         auto sub = ctx.get_sub(make_view(key));
         if (not sub) {
           request_stop();

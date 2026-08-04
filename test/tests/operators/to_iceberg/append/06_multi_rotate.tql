@@ -1,0 +1,6 @@
+// Multiple rotations in one pipeline commit one snapshot per data file.
+// Regression test: committing through a stale table handle used to lose
+// every snapshot after the first one silently.
+from {id: 5, message: "five", ts: 2026-01-01T00:00:05Z}
+repeat 3
+to_iceberg "testns.events", catalog=env("ICEBERG_REST_URI"), max_size=1

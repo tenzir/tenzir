@@ -1,0 +1,18 @@
+---
+fixtures:
+  - udp:
+      mode: client
+      payload_sequence_hex:
+        - "00050001"
+        - "0005000100002710000003e8000000000000002a010240050102030405060708090a0b0c000d000e0000000f00000010000023280000251c00110012001211140015001617180000"
+      interval: 0.2
+      initial_delay: 1.0
+      source_port: 45555
+timeout: 60
+---
+
+accept_udp env("UDP_ENDPOINT"), binary=true
+read_netflow
+head 1
+select version = netflow.version, exporter_ip = netflow.exporter.ip,
+  source_ipv4_address, destination_ipv4_address, packet_delta_count

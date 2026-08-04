@@ -29,7 +29,6 @@
 #include <tenzir/secret_resolution.hpp>
 #include <tenzir/secret_resolution_utilities.hpp>
 #include <tenzir/series_builder.hpp>
-#include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/set.hpp>
@@ -1157,12 +1156,8 @@ private:
     auto pipeline = ir::pipeline{};
     if (args_.parser) {
       pipeline = args_.parser->inner;
-      auto env = substitute_ctx::env_t{};
-      env[args_.response] = make_response_context(*response_);
-      if (not pipeline.substitute(substitute_ctx{ctx, &env}, true)) {
-        lifecycle_ = Lifecycle::done;
-        co_return;
-      }
+      // Bind the response context as a `let` binding
+      pipeline.bind(args_.response, make_response_context(*response_));
     } else {
       auto const* plugin = static_cast<const operator_factory_plugin*>(nullptr);
       if (auto value = http::find(response_->headers, "content-type");
@@ -1199,8 +1194,11 @@ private:
       TENZIR_TRACE("from_http inferred parser `{}` for `{}`", plugin->name(),
                    pagination_.current_url);
     }
-    co_await ctx.spawn_sub(pagination_.page_count, std::move(pipeline),
-                           tag_v<chunk_ptr>);
+    if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(pagination_.page_count,
+                                                       std::move(pipeline))) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
   }
 
   auto push_error_field(Push<table_slice>& push, OpCtx& ctx) -> Task<void> {

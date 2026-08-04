@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+// A `partition_by` that does not match the existing table's spec fails
+// instead of silently writing a different layout.
+from {class_uid: 1001, time: 2026-01-04T00:00:00Z, msg: "x"}
+to_iceberg "partns.events", catalog=env("ICEBERG_REST_URI"),
+  partition_by=[class_uid]

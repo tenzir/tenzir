@@ -1,0 +1,5 @@
+from \
+  {start_time: 2024-01-01T00:00:00Z, end_time: 2024-01-01T00:00:01Z}, \
+  {start_time: null, end_time: null}, \
+  {other: 42}
+duration = (end_time? - start_time?).count_milliseconds().round()

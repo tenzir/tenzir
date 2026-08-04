@@ -16,10 +16,14 @@ Phase 4: a second `rebuild --all` does not retry the quarantined partition.
 Phase 5: a store file that is a valid Arrow IPC file but not a store
          envelope (e.g. a plain feather file) is quarantined as well
          instead of crashing the node on the missing `event` column.
+Phase 6: an export skips a structurally valid batch with malformed UTF-8
+         when full store-batch validation is enabled.
+Phase 7: a rebuild quarantines that fully-invalid batch.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import subprocess
@@ -61,6 +65,7 @@ class NodeController:
             *node_binary,
             "--bare-mode",
             "--console-verbosity=warning",
+            "--validate-store-batches=true",
             f"--state-directory={self.state_dir}",
             f"--cache-directory={self.cache_dir}",
             "--endpoint=localhost:0",
@@ -136,8 +141,6 @@ def export_count(tenzir: Executor, schema: str) -> int:
         f'export\nwhere @name == "{schema}"\nsummarize count=count()\nwrite_ndjson\n'
     )
     assert r.returncode == 0, f"export failed: {r.stderr.decode()}"
-    import json
-
     return json.loads(r.stdout.decode().strip()).get("count", 0)
 
 
@@ -146,8 +149,6 @@ def partition_uuids(tenzir: Executor, schema: str) -> list[str]:
         f'partitions\nwhere schema == "{schema}"\nselect uuid\nwrite_ndjson\n'
     )
     assert r.returncode == 0, f"partitions failed: {r.stderr.decode()}"
-    import json
-
     return [
         json.loads(line)["uuid"]
         for line in r.stdout.decode().splitlines()
@@ -241,5 +242,68 @@ try:
     assert "quarantined-size: 1" in r.stdout, f"unexpected status:\n{r.stdout}"
     assert good_uuids[0] in r.stdout, f"quarantined uuid missing:\n{r.stdout}"
     print("phase5-non-envelope-store-quarantined: ok")
+
+    # --- Phase 6: full batch validation rejects invalid UTF-8 -------------
+
+    # Create a new healthy partition and a structurally valid, uncompressed
+    # store envelope for the same schema. Corrupting a string value in place
+    # leaves its offsets and buffers structurally sound, so Arrow's Validate()
+    # accepts it while ValidateFull() rejects the malformed UTF-8.
+    r = tenzir.run(
+        'from {payload: "healthy"}\n@name = "quarantine.invalid_utf8"\nimport\n'
+    )
+    assert r.returncode == 0, f"import failed: {r.stderr.decode()}"
+    malformed_store = node.root / "invalid-utf8.feather"
+    marker = "VALID_UTF8"
+    r = tenzir.run(
+        f'from {{payload: "{marker}"}}\n'
+        '@name = "quarantine.invalid_utf8"\n'
+        "event = this\n"
+        "this = {import_time: now(), event: event}\n"
+        f"to_file {json.dumps(str(malformed_store))} {{\n"
+        '  write_feather compression_type="uncompressed"\n'
+        "}\n"
+    )
+    assert r.returncode == 0, f"failed to create store envelope: {r.stderr.decode()}"
+    malformed_bytes = malformed_store.read_bytes()
+    marker_bytes = marker.encode()
+    assert malformed_bytes.count(marker_bytes) == 1, (
+        "expected one uncompressed marker in generated store"
+    )
+    malformed_store.write_bytes(
+        malformed_bytes.replace(marker_bytes, b"\xff" + marker_bytes[1:])
+    )
+    node.stop()
+    node.start()
+    tenzir = Executor.from_env(node.env)
+    invalid_uuids = partition_uuids(tenzir, "quarantine.invalid_utf8")
+    assert len(invalid_uuids) == 1, f"expected one invalid partition: {invalid_uuids}"
+    node.stop()
+    store_file = node.state_dir / "archive" / f"{invalid_uuids[0]}.feather"
+    assert store_file.exists(), f"store file not found: {store_file}"
+    store_file.write_bytes(malformed_store.read_bytes())
+    node.start()
+    tenzir = Executor.from_env(node.env)
+    r = tenzir.run(
+        'export\nwhere @name == "quarantine.invalid_utf8"\n'
+        "summarize count=count()\nwrite_ndjson\n"
+    )
+    assert r.returncode == 0, f"export failed: {r.stderr.decode()}"
+    assert json.loads(r.stdout.decode())["count"] == 0, (
+        "export unexpectedly accepted invalid UTF-8"
+    )
+    assert node.alive(), "node died while exporting invalid UTF-8"
+    print("phase6-export-validates-full-batch: ok")
+
+    # --- Phase 7: rebuild quarantines a fully-invalid batch ----------------
+
+    r = run_ctl(node, "rebuild", "--all")
+    assert r.returncode == 0, f"rebuild failed: {r.stderr}"
+    assert node.alive(), "node died during rebuild of invalid UTF-8"
+    r = run_ctl(node, "rebuild", "show")
+    assert r.returncode == 0, f"rebuild show failed: {r.stderr}"
+    assert "quarantined-size: 1" in r.stdout, f"unexpected status:\n{r.stdout}"
+    assert invalid_uuids[0] in r.stdout, f"quarantined uuid missing:\n{r.stdout}"
+    print("phase7-rebuild-validates-full-batch: ok")
 finally:
     node.cleanup()

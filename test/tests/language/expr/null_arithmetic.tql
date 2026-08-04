@@ -1,0 +1,9 @@
+from {}
+add_left = null + 1
+add_right = 1 + null
+sub_left = null - 1
+sub_right = 1 - null
+mul_left = null * 1
+mul_right = 1 * null
+div_left = null / 1
+div_right = 1 / null

@@ -24,7 +24,6 @@
 #include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/secret_resolution.hpp"
-#include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tls_options.hpp"
 #include "tenzir/variant.hpp"
 
@@ -345,9 +344,12 @@ public:
       std::move(message),
       [&](RequestStarted msg) -> Task<void> {
         auto pipeline = args_.parser.inner;
-        auto env = substitute_ctx::env_t{};
-        env[args_.request] = make_request_context(msg.metadata);
-        if (not pipeline.substitute(substitute_ctx{ctx, &env}, true)) {
+        // Bind the request context in the parser subpipeline for this request
+        pipeline.bind(args_.request, make_request_context(msg.metadata));
+        auto request_dh = null_diagnostic_handler{};
+        auto plan = ir::make_plan(std::move(pipeline), tag_v<chunk_ptr>,
+                                  base_ctx{request_dh, ctx.reg()});
+        if (not plan) {
           diagnostic::warning("failed to prepare parser pipeline for request")
             .primary(args_.endpoint)
             .note("request path: {}", msg.metadata.path)
@@ -374,8 +376,8 @@ public:
                                       .finished = msg.response_signal,
                                       .bytes_read = std::move(bytes_read)});
         }
-        co_await ctx.spawn_sub<chunk_ptr>(request_id, std::move(pipeline),
-                                          DiagnosticBehavior::ErrorToWarning);
+        co_await ctx.spawn_sub(request_id, std::move(*plan),
+                               DiagnosticBehavior::ErrorToWarning);
       },
       [&](RequestBody body) -> Task<void> {
         auto chunk = std::move(body.chunk);

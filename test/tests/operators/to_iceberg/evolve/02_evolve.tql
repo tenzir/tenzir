@@ -1,0 +1,12 @@
+// New fields at every level evolve the table schema: a top-level column,
+// a field nested in an existing struct, and a whole new record. A column
+// that cannot be represented is still dropped with a warning.
+from {
+  id: 2,
+  time: 2026-01-01T00:00:01Z,
+  severity: 5,
+  meta: {level: "warn", tags: ["a", "b"]},
+  net: {src_ip: 10.0.0.1},
+  ghost: null,
+}
+to_iceberg "evolvens.events", catalog=env("ICEBERG_REST_URI")

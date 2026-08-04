@@ -1,0 +1,5 @@
+// Values that do not fit the table's `int` and `float` columns widen the
+// table schema (int → long, float → double) instead of writing nulls; the
+// id below overflows a 32-bit int.
+from {id: 3000000000, score: 1.5, message: "wide"}
+to_iceberg "evolvens.narrow", catalog=env("ICEBERG_REST_URI"), mode="append"

@@ -1,0 +1,6 @@
+error: column `l` is required in the Iceberg table but some of its `uint64` values cannot convert to the table's `int64`
+  --> tests/operators/to_iceberg/convert/11_required_overflow.tql:12:1
+   |
+12 | to_iceberg "convertns.required", catalog=env("ICEBERG_REST_URI")
+   | ^^^^^^^^^^ 
+   |

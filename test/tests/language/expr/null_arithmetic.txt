@@ -1,0 +1,10 @@
+{
+  add_left: null,
+  add_right: null,
+  sub_left: null,
+  sub_right: null,
+  mul_left: null,
+  mul_right: null,
+  div_left: null,
+  div_right: null,
+}

@@ -1,0 +1,4 @@
+// Columns that cannot be represented in Iceberg are dropped with a warning;
+// the remaining columns of the event are written.
+from {id: 4, time: 2026-01-01T00:00:03Z, ghost: null, meta: {level: "info"}}
+to_iceberg "createns.events", catalog=env("ICEBERG_REST_URI")

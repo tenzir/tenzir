@@ -101,19 +101,6 @@ RUN ./scripts/debian/install-dev-dependencies.sh && \
     rm -rf /tmp/custom-packages && \
     rm -rf /var/lib/apt/lists/*
 
-# Tenzir
-COPY changelog ./changelog
-COPY cmake ./cmake
-COPY libtenzir ./libtenzir
-COPY libtenzir_test ./libtenzir_test
-COPY python ./python
-COPY schema ./schema
-COPY scripts ./scripts
-COPY tenzir ./tenzir
-COPY plugins ./plugins
-COPY CMakeLists.txt LICENSE README.md VERSIONING.md \
-     tenzir.yaml.example version.json ./
-
 # -- development ---------------------------------------------------------------
 
 FROM dependencies AS development
@@ -129,6 +116,21 @@ ENV TENZIR_CACHE_DIRECTORY="/var/cache/tenzir" \
     TENZIR_STATE_DIRECTORY="/var/lib/tenzir" \
     TENZIR_LOG_FILE="/var/log/tenzir/server.log" \
     TENZIR_ENDPOINT="0.0.0.0"
+
+# Tenzir sources. Copied in the development stage (not dependencies) so the
+# published dependency image carries only third-party build inputs — never
+# Tenzir or proprietary-plugin source.
+COPY changelog ./changelog
+COPY cmake ./cmake
+COPY libtenzir ./libtenzir
+COPY libtenzir_test ./libtenzir_test
+COPY python ./python
+COPY schema ./schema
+COPY scripts ./scripts
+COPY tenzir ./tenzir
+COPY plugins ./plugins
+COPY CMakeLists.txt LICENSE README.md VERSIONING.md \
+     tenzir.yaml.example version.json ./
 
 # Additional arguments to be passed to CMake.
 ARG TENZIR_BUILD_OPTIONS
@@ -166,15 +168,9 @@ VOLUME ["/var/lib/tenzir"]
 ENTRYPOINT ["tenzir"]
 CMD ["--help"]
 
-# -- plugins -------------------------------------------------------------------
+# -- tenzir-untested -----------------------------------------------------------
 
-FROM development AS plugins-source
-
-WORKDIR /tmp/tenzir
-
-# -- tenzir-de -----------------------------------------------------------------
-
-FROM runtime-base AS tenzir-de
+FROM runtime-base AS tenzir-untested
 
 # When changing these, make sure to also update the entries in the flake.nix
 # file.
@@ -190,6 +186,10 @@ COPY --from=development --chown=tenzir:tenzir /opt/tenzir-runtime/ /opt/tenzir/
 COPY --from=development --chown=tenzir:tenzir /var/cache/tenzir/ /var/cache/tenzir/
 COPY --from=development --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir/
 COPY --from=development --chown=tenzir:tenzir /var/log/tenzir/ /var/log/tenzir/
+
+# The build toolchain's libstdc++ is newer than the distro's; ship its
+# runtime so that objects referencing newer GLIBCXX symbols load.
+COPY --from=build-base /usr/local/lib64/libstdc++.so.6* /usr/local/lib64/
 
 COPY --from=arrow-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=aws-sdk-cpp-package /tmp/*.deb /tmp/custom-packages/
@@ -254,7 +254,9 @@ RUN apt-get update && \
       login \
       util-linux && \
     rm -rf /tmp/custom-packages && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    echo /usr/local/lib64 > /etc/ld.so.conf.d/000-gcc-toolchain.conf && \
+    ldconfig
 
 USER tenzir:tenzir
 
@@ -267,193 +269,9 @@ RUN tenzir 'version'
 ENTRYPOINT ["tenzir"]
 CMD ["--help"]
 
-# -- tenzir-node-de ------------------------------------------------------------
+# -- tenzir-integration --------------------------------------------------------
 
-FROM tenzir-de AS tenzir-node-de
-
-ENTRYPOINT ["tenzir-node"]
-
-# -- third-party-plugins -------------------------------------------------------------------
-
-FROM plugins-source AS compaction-plugin
-
-COPY contrib/tenzir-plugins/compaction ./contrib/tenzir-plugins/compaction
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S contrib/tenzir-plugins/compaction -B build-compaction -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-compaction --parallel && \
-    DESTDIR=/plugin/compaction cmake --install build-compaction --component Runtime && \
-    rm -rf build-compaction
-
-FROM plugins-source AS context-plugin
-
-COPY contrib/tenzir-plugins/context ./contrib/tenzir-plugins/context
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S contrib/tenzir-plugins/context -B build-context -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-context --parallel && \
-    DESTDIR=/plugin/context cmake --install build-context --component Runtime && \
-    rm -rf build-context
-
-FROM plugins-source AS from_sentinelone_data_lake-plugin
-
-COPY contrib/tenzir-plugins/from_sentinelone_data_lake ./contrib/tenzir-plugins/from_sentinelone_data_lake
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S contrib/tenzir-plugins/from_sentinelone_data_lake -B build-from_sentinelone_data_lake -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-from_sentinelone_data_lake --parallel && \
-    DESTDIR=/plugin/from_sentinelone_data_lake cmake --install build-from_sentinelone_data_lake --component Runtime && \
-    rm -rf build-from_sentinelone_data_lake
-
-FROM plugins-source AS microsoft_graph-plugin
-
-COPY contrib/tenzir-plugins/microsoft_graph ./contrib/tenzir-plugins/microsoft_graph
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S contrib/tenzir-plugins/microsoft_graph -B build-microsoft_graph -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-microsoft_graph --parallel && \
-    DESTDIR=/plugin/microsoft_graph cmake --install build-microsoft_graph --component Runtime && \
-    rm -rf build-microsoft_graph
-
-FROM plugins-source AS pipeline-manager-plugin
-
-COPY contrib/tenzir-plugins/pipeline-manager ./contrib/tenzir-plugins/pipeline-manager
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S contrib/tenzir-plugins/pipeline-manager -B build-pipeline-manager -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-pipeline-manager --parallel && \
-    DESTDIR=/plugin/pipeline-manager cmake --install build-pipeline-manager --component Runtime && \
-    rm -rf build-pipeline-manager
-
-FROM plugins-source AS packages-plugin
-
-# TODO: We can't run the packages integration tests here at the moment, since
-# they require the context and pipeline-manager plugins to be available.
-COPY contrib/tenzir-plugins/packages ./contrib/tenzir-plugins/packages
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S contrib/tenzir-plugins/packages -B build-packages -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-packages --parallel && \
-    DESTDIR=/plugin/packages cmake --install build-packages --component Runtime && \
-    rm -rf build-packages
-
-FROM plugins-source AS platform-plugin
-
-COPY contrib/tenzir-plugins/platform ./contrib/tenzir-plugins/platform
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S contrib/tenzir-plugins/platform -B build-platform -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-platform --parallel && \
-    DESTDIR=/plugin/platform cmake --install build-platform --component Runtime && \
-    rm -rf build-platform
-
-FROM plugins-source AS snowflake-plugin
-
-COPY contrib/tenzir-plugins/snowflake ./contrib/tenzir-plugins/snowflake
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S contrib/tenzir-plugins/snowflake -B build-snowflake -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-snowflake --parallel && \
-    DESTDIR=/plugin/snowflake cmake --install build-snowflake --component Runtime && \
-    rm -rf build-snowflake
-
-FROM plugins-source AS to_amazon_security_lake-plugin
-
-COPY contrib/tenzir-plugins/to_amazon_security_lake ./contrib/tenzir-plugins/to_amazon_security_lake
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S contrib/tenzir-plugins/to_amazon_security_lake -B build-to_amazon_security_lake -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-to_amazon_security_lake --parallel && \
-    DESTDIR=/plugin/to_amazon_security_lake cmake --install build-to_amazon_security_lake --component Runtime && \
-    rm -rf build-to_amazon_security_lake
-
-FROM plugins-source AS to_azure_log_analytics-plugin
-
-COPY contrib/tenzir-plugins/to_azure_log_analytics ./contrib/tenzir-plugins/to_azure_log_analytics
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S contrib/tenzir-plugins/to_azure_log_analytics -B build-to_azure_log_analytics -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-to_azure_log_analytics --parallel && \
-    DESTDIR=/plugin/to_azure_log_analytics cmake --install build-to_azure_log_analytics --component Runtime && \
-    rm -rf build-to_azure_log_analytics
-
-FROM plugins-source AS to_splunk-plugin
-
-COPY contrib/tenzir-plugins/to_splunk ./contrib/tenzir-plugins/to_splunk
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S contrib/tenzir-plugins/to_splunk -B build-to_splunk -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-to_splunk --parallel && \
-    DESTDIR=/plugin/to_splunk cmake --install build-to_splunk --component Runtime && \
-    rm -rf build-to_splunk
-
-FROM plugins-source AS to_google_secops-plugin
-
-COPY contrib/tenzir-plugins/to_google_secops ./contrib/tenzir-plugins/to_google_secops
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S contrib/tenzir-plugins/to_google_secops -B build-to_google_secops -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
-      -D CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH};/opt/google-cloud-cpp" && \
-    cmake --build build-to_google_secops --parallel && \
-    DESTDIR=/plugin/to_google_secops cmake --install build-to_google_secops --component Runtime && \
-    rm -rf build-to_google_secops
-
-FROM plugins-source AS to_google_cloud_logging-plugin
-
-COPY contrib/tenzir-plugins/to_google_cloud_logging ./contrib/tenzir-plugins/to_google_cloud_logging
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S contrib/tenzir-plugins/to_google_cloud_logging -B build-to_google_cloud_logging -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
-      -D CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH};/opt/google-cloud-cpp" && \
-    cmake --build build-to_google_cloud_logging --parallel && \
-    DESTDIR=/plugin/to_google_cloud_logging cmake --install build-to_google_cloud_logging --component Runtime && \
-    rm -rf build-to_google_cloud_logging
-
-FROM plugins-source AS to_sentinelone_data_lake-plugin
-
-COPY contrib/tenzir-plugins/to_sentinelone_data_lake ./contrib/tenzir-plugins/to_sentinelone_data_lake
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S contrib/tenzir-plugins/to_sentinelone_data_lake -B build-to_sentinelone_data_lake -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-to_sentinelone_data_lake --parallel && \
-    DESTDIR=/plugin/to_sentinelone_data_lake cmake --install build-to_sentinelone_data_lake --component Runtime && \
-    rm -rf build-to_sentinelone_data_lake
-
-FROM plugins-source AS vast-plugin
-
-COPY contrib/tenzir-plugins/vast ./contrib/tenzir-plugins/vast
-RUN --mount=target=/ccache,type=cache,from=cache-context \
-    cmake -S contrib/tenzir-plugins/vast -B build-vast -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-    cmake --build build-vast --parallel && \
-    DESTDIR=/plugin/vast cmake --install build-vast --component Runtime && \
-    rm -rf build-vast
-
-# -- tenzir-ce-untested --------------------------------------------------------
-
-FROM tenzir-de AS tenzir-ce-untested
-
-COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
-COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
-COPY --from=from_sentinelone_data_lake-plugin --chown=tenzir:tenzir /plugin/from_sentinelone_data_lake /
-COPY --from=microsoft_graph-plugin --chown=tenzir:tenzir /plugin/microsoft_graph /
-COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
-COPY --from=packages-plugin --chown=tenzir:tenzir /plugin/packages /
-COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
-COPY --from=snowflake-plugin --chown=tenzir:tenzir /plugin/snowflake /
-COPY --from=to_amazon_security_lake-plugin --chown=tenzir:tenzir /plugin/to_amazon_security_lake /
-COPY --from=to_azure_log_analytics-plugin --chown=tenzir:tenzir /plugin/to_azure_log_analytics /
-COPY --from=to_splunk-plugin --chown=tenzir:tenzir /plugin/to_splunk /
-COPY --from=to_google_secops-plugin --chown=tenzir:tenzir /plugin/to_google_secops /
-COPY --from=to_google_cloud_logging-plugin --chown=tenzir:tenzir /plugin/to_google_cloud_logging /
-COPY --from=to_sentinelone_data_lake-plugin --chown=tenzir:tenzir /plugin/to_sentinelone_data_lake /
-COPY --from=vast-plugin --chown=tenzir:tenzir /plugin/vast /
-
-USER tenzir:tenzir
-
-# -- tenzir-ce-integration -----------------------------------------------------
-
-FROM tenzir-ce-untested AS tenzir-ce-integration
+FROM tenzir-untested AS tenzir-integration
 
 COPY --chown=tenzir:tenzir test/ ./test
 RUN XDG_CACHE_HOME=/tmp XDG_DATA_HOME=/tmp \
@@ -467,31 +285,28 @@ RUN XDG_CACHE_HOME=/tmp XDG_DATA_HOME=/tmp \
     -j $(nproc) && \
     echo "success" > /tmp/tenzir-integration-result
 
-# -- tenzir-ce -----------------------------------------------------------------
+# -- tenzir-tested -------------------------------------------------------------
 
-FROM tenzir-ce-untested AS tenzir-ce
-COPY --from=tenzir-ce-integration /tmp/tenzir-integration-result /tmp/tenzir-integration-result
+# Gate the published images on the integration tests by depending on their
+# result artifact.
+FROM tenzir-untested AS tenzir-tested
+COPY --from=tenzir-integration /tmp/tenzir-integration-result /tmp/tenzir-integration-result
 
-# -- tenzir-node-ce ------------------------------------------------------------
+# -- tenzir-node ---------------------------------------------------------------
 
-FROM tenzir-ce AS tenzir-node-ce
+FROM tenzir-tested AS tenzir-node
 
 ENTRYPOINT ["tenzir-node"]
 
-# -- tenzir-demo --------------------------------------------------------------
+# -- tenzir-demo ---------------------------------------------------------------
 
-FROM tenzir-node-ce AS tenzir-demo
+FROM tenzir-node AS tenzir-demo
 
 COPY /scripts/install-demo-node-package.tql /tmp/install-demo-node-package.tql
 ENV TENZIR_DEMAND__MAX_BATCHES=3 \
     TENZIR_START__COMMANDS="exec --file /tmp/install-demo-node-package.tql"
 
-# -- tenzir-node -----------------------------------------------------------------
+# -- tenzir --------------------------------------------------------------------
 
-FROM tenzir-node-ce AS tenzir-node
-
-# -- tenzir ----------------------------------------------------------------------
-
-# As a last stage we re-introduce the community edition as tenzir so that it's
-# the default when not specifying a build target.
-FROM tenzir-ce AS tenzir
+# The default target when none is specified.
+FROM tenzir-tested AS tenzir

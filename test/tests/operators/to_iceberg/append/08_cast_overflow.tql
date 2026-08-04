@@ -1,0 +1,8 @@
+// One value overflows Iceberg's signed long. Only that row's cell lands as
+// null; the neighboring row in the same batch keeps its value. Both rows
+// carry uint64 ids (the subtraction keeps the first one in uint64 range).
+from {id: 18446744073709551615 - 18446744073709551614, message: "fits",
+      ts: 2026-01-01T00:00:07Z},
+     {id: 18446744073709551615, message: "overflows",
+      ts: 2026-01-01T00:00:08Z}
+to_iceberg "testns.events", catalog=env("ICEBERG_REST_URI")

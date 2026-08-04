@@ -1,0 +1,5 @@
+---
+error: true
+---
+from {x: 1}
+cache "non-const-mode", mode=("read" if random() < 0.5 else "write")

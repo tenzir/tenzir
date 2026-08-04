@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {data: b"\x00\x05", peer: "127.0.0.1:2055"}
+read_netflow

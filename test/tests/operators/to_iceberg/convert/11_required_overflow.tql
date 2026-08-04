@@ -1,0 +1,12 @@
+---
+error: true
+---
+
+// A required table column rejects the whole write when any of its values
+// cannot convert: nulling them would corrupt the table's contract, so the
+// operator stops with an error instead — integrity over availability.
+// The overflowing value comes first so the column is uint64 for the whole
+// batch and both rows share one slice.
+from {k: 2, l: 18446744073709551615},
+     {k: 1, l: 1}
+to_iceberg "convertns.required", catalog=env("ICEBERG_REST_URI")

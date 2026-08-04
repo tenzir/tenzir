@@ -38,7 +38,8 @@ auto assume_role_with_credentials(const resolved_aws_credentials& base_creds,
   -> caf::expected<sts_credentials>;
 
 // TODO: Move to the shared Amazon module as `tenzir::amazon`.
-/// Loads credentials from an AWS CLI profile, including SSO-backed profiles.
+/// Loads credentials from an AWS CLI profile, including credential-process and
+/// SSO-backed profiles.
 auto load_profile_credentials(const std::string& profile)
   -> caf::expected<sts_credentials>;
 

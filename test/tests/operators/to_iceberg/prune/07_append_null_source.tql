@@ -1,0 +1,9 @@
+// Append rows that never carry `meta`: the whole column is null, but the
+// partition spec sources `meta.region`, so the data file must keep the
+// `meta` ancestor instead of pruning it.
+from {id: 9001, kind: "a", payload_a: "null-region", ts: 2026-01-01T00:02:01Z}
+repeat 8
+enumerate seq
+id = seq + 9001
+drop seq
+to_iceberg "prunens.part_events", catalog=env("ICEBERG_REST_URI")

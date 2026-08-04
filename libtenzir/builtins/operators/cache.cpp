@@ -9,15 +9,18 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
+#include <tenzir/async/fetch_node.hpp>
 #include <tenzir/async/mail.hpp>
 #include <tenzir/compile_ctx.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/flat_map.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
+#include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/node.hpp>
 #include <tenzir/operator_plugin.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/session.hpp>
@@ -26,6 +29,7 @@
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/tql2/registry.hpp>
 #include <tenzir/uuid.hpp>
 
 #include <arrow/util/byte_size.h>
@@ -864,10 +868,16 @@ private:
 
 struct CacheArgs {
   std::string id;
-  std::string mode = "readwrite";
-  std::optional<located<uint64_t>> capacity;
-  std::optional<located<duration>> read_timeout;
-  std::optional<located<duration>> write_timeout;
+  Option<located<uint64_t>> capacity;
+  Option<located<duration>> read_timeout;
+  Option<located<duration>> write_timeout;
+
+  friend auto inspect(auto& f, CacheArgs& x) -> bool {
+    return f.object(x).fields(f.field("id", x.id),
+                              f.field("capacity", x.capacity),
+                              f.field("read_timeout", x.read_timeout),
+                              f.field("write_timeout", x.write_timeout));
+  }
 };
 
 class WriteCacheSink final : public Operator<table_slice, void> {
@@ -878,13 +888,18 @@ public:
   auto start(OpCtx& ctx) -> Task<void> override {
     TENZIR_DEBUG("WriteCacheSink: entering start(), id='{}', "
                  "has_read_timeout={}, has_write_timeout={}, has_capacity={}",
-                 args_.id, args_.read_timeout.has_value(),
-                 args_.write_timeout.has_value(), args_.capacity.has_value());
+                 args_.id, args_.read_timeout.is_some(),
+                 args_.write_timeout.is_some(), args_.capacity.is_some());
     co_await OperatorBase::start(ctx);
-    auto cache_manager = ctx.actor_system().registry().get<cache_manager_actor>(
-      "tenzir.cache-manager");
+    auto cache_manager_result
+      = co_await fetch_actor_from_node<cache_manager_actor>(
+        "cache-manager", location::unknown, ctx.actor_system(), ctx.dh());
+    if (not cache_manager_result) {
+      done_ = true;
+      co_return;
+    }
+    auto cache_manager = std::move(*cache_manager_result);
     TENZIR_DEBUG("WriteCacheSink: cache_manager={}", bool{cache_manager});
-    TENZIR_ASSERT(cache_manager);
     auto capacity = args_.capacity ? args_.capacity->inner
                                    : std::numeric_limits<uint64_t>::max();
     auto capacity_loc
@@ -989,9 +1004,14 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await OperatorBase::start(ctx);
-    auto cache_manager = ctx.actor_system().registry().get<cache_manager_actor>(
-      "tenzir.cache-manager");
-    TENZIR_ASSERT(cache_manager);
+    auto cache_manager_result
+      = co_await fetch_actor_from_node<cache_manager_actor>(
+        "cache-manager", location::unknown, ctx.actor_system(), ctx.dh());
+    if (not cache_manager_result) {
+      done_ = true;
+      co_return;
+    }
+    auto cache_manager = std::move(*cache_manager_result);
     auto result
       = co_await async_mail(atom::get_v, args_.id, /*exclusive=*/false)
           .request(cache_manager);
@@ -1052,9 +1072,14 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await OperatorBase::start(ctx);
-    auto cache_manager = ctx.actor_system().registry().get<cache_manager_actor>(
-      "tenzir.cache-manager");
-    TENZIR_ASSERT(cache_manager);
+    auto cache_manager_result
+      = co_await fetch_actor_from_node<cache_manager_actor>(
+        "cache-manager", location::unknown, ctx.actor_system(), ctx.dh());
+    if (not cache_manager_result) {
+      done_ = true;
+      co_return;
+    }
+    auto cache_manager = std::move(*cache_manager_result);
     auto capacity = args_.capacity ? args_.capacity->inner
                                    : std::numeric_limits<uint64_t>::max();
     auto capacity_loc
@@ -1197,22 +1222,28 @@ private:
 
 // -- IR operator and compiler plugin ------------------------------------------
 
+struct CacheArgsRaw {
+  ast::expression id;
+  Option<ast::expression> mode;
+  Option<ast::expression> capacity;
+  Option<ast::expression> read_timeout;
+  Option<ast::expression> write_timeout;
+
+  friend auto inspect(auto& f, CacheArgsRaw& x) -> bool {
+    return f.object(x).fields(f.field("id", x.id), f.field("mode", x.mode),
+                              f.field("capacity", x.capacity),
+                              f.field("read_timeout", x.read_timeout),
+                              f.field("write_timeout", x.write_timeout));
+  }
+};
+
 class CacheIr final : public ir::Operator {
 public:
   CacheIr() = default;
 
-  CacheIr(location op_loc, ast::expression id,
-          std::optional<ast::expression> mode,
-          std::optional<ast::expression> capacity,
-          std::optional<ast::expression> read_timeout,
-          std::optional<ast::expression> write_timeout,
-          duration default_read_timeout)
+  CacheIr(location op_loc, CacheArgsRaw args, duration default_read_timeout)
     : op_loc_{op_loc},
-      id_{std::move(id)},
-      mode_{std::move(mode)},
-      capacity_{std::move(capacity)},
-      read_timeout_{std::move(read_timeout)},
-      write_timeout_{std::move(write_timeout)},
+      args_{std::move(args)},
       default_read_timeout_{default_read_timeout} {
   }
 
@@ -1220,180 +1251,184 @@ public:
     return "cache_ir";
   }
 
-  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
-    -> failure_or<element_type_tag> override {
-    if (not mode_value_) {
-      diagnostic::error("`cache --mode` must be a constant")
-        .primary(op_loc_)
+  // Resolve the cache mode from its argument expression.
+  //
+  // `infer_type` may be called before `substitute` (e.g. during implicit
+  // source/sink probing in the compiler), so the mode cannot be resolved lazily
+  // in `substitute`. The mode must be a constant string, so we evaluate it from
+  // its expression on demand instead.
+  auto resolve_mode(diagnostic_handler& dh) const -> failure_or<std::string> {
+    if (not args_.mode) {
+      return std::string{"readwrite"};
+    }
+    // The mode must be a constant so that every `infer_type` probe and `spawn`
+    // observe the same value. Reject non-deterministic expressions such as
+    // `random()` or `now()`, which `const_eval` would otherwise re-evaluate
+    // (potentially differently) on each call.
+    if (not args_.mode->is_deterministic(*global_registry())) {
+      diagnostic::error("`mode` must be a constant")
+        .primary(*args_.mode)
         .emit(dh);
       return failure::promise();
     }
-    if (*mode_value_ == "write") {
+    TRY(auto value, const_eval(*args_.mode, dh));
+    auto* str = try_as<std::string>(value);
+    if (not str) {
+      diagnostic::error("expected `string` for mode argument")
+        .primary(*args_.mode)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (*str != "read" and *str != "write" and *str != "readwrite") {
+      diagnostic::error("unknown mode `{}`", *str)
+        .note("available modes: read, write, readwrite")
+        .primary(*args_.mode)
+        .emit(dh);
+      return failure::promise();
+    }
+    return std::move(*str);
+  }
+
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<element_type_tag> override {
+    TRY(auto mode, resolve_mode(dh));
+    if (mode == "write") {
       if (input.is_not<table_slice>()) {
-        diagnostic::error("`cache --mode write` expects events as input")
+        diagnostic::error("`cache mode=\"write\"` expects events as input")
           .primary(op_loc_)
           .emit(dh);
         return failure::promise();
       }
       return tag_v<void>;
     }
-    if (*mode_value_ == "read") {
+    if (mode == "read") {
       if (input.is_not<void>()) {
-        diagnostic::error("`cache --mode read` must be used as a source")
+        diagnostic::error("`cache mode=\"read\"` must be used as a source")
           .primary(op_loc_)
           .emit(dh);
         return failure::promise();
       }
       return tag_v<table_slice>;
     }
-    if (*mode_value_ == "readwrite") {
-      if (input.is_not<table_slice>()) {
-        diagnostic::error("`cache` expects events as input")
-          .primary(op_loc_)
-          .emit(dh);
-        return failure::promise();
-      }
-      return tag_v<table_slice>;
+    TENZIR_ASSERT(mode == "readwrite");
+    if (input.is_not<table_slice>()) {
+      diagnostic::error("`cache` expects events as input")
+        .primary(op_loc_)
+        .emit(dh);
+      return failure::promise();
     }
-    diagnostic::error("unknown cache mode `{}`", *mode_value_)
-      .primary(op_loc_)
-      .emit(dh);
-    return failure::promise();
+    return tag_v<table_slice>;
   }
 
   auto substitute(substitute_ctx ctx, bool instantiate)
     -> failure_or<void> override {
-    TRY(id_.substitute(ctx));
-    if (mode_) {
-      TRY(mode_->substitute(ctx));
+    TRY(args_.id.substitute(ctx));
+    if (args_.mode) {
+      TRY(args_.mode->substitute(ctx));
     }
-    if (capacity_) {
-      TRY(capacity_->substitute(ctx));
+    if (args_.capacity) {
+      TRY(args_.capacity->substitute(ctx));
     }
-    if (read_timeout_) {
-      TRY(read_timeout_->substitute(ctx));
+    if (args_.read_timeout) {
+      TRY(args_.read_timeout->substitute(ctx));
     }
-    if (write_timeout_) {
-      TRY(write_timeout_->substitute(ctx));
-    }
-    // Resolve mode.
-    if (mode_) {
-      if (instantiate or mode_->is_deterministic(ctx)) {
-        TRY(auto value, const_eval(*mode_, ctx));
-        auto* str = try_as<std::string>(value);
-        if (not str) {
-          diagnostic::error("expected `string` for mode argument")
-            .primary(*mode_)
-            .emit(ctx);
-          return failure::promise();
-        }
-        if (*str != "read" and *str != "write" and *str != "readwrite") {
-          diagnostic::error("unknown mode `{}`", *str)
-            .note("available modes: read, write, readwrite")
-            .primary(*mode_)
-            .emit(ctx);
-          return failure::promise();
-        }
-        mode_value_ = std::move(*str);
-      }
-    } else {
-      mode_value_ = "readwrite";
+    if (args_.write_timeout) {
+      TRY(args_.write_timeout->substitute(ctx));
     }
     if (not instantiate) {
       return {};
     }
-    // Resolve remaining arguments to concrete values.
+    // Resolve the raw argument expressions into concrete values.
+    auto args = CacheArgs{};
     {
-      TRY(auto value, const_eval(id_, ctx));
+      TRY(auto value, const_eval(args_.id, ctx));
       auto* str = try_as<std::string>(value);
       if (not str) {
         diagnostic::error("expected `string` for cache id")
-          .primary(id_)
+          .primary(args_.id)
           .emit(ctx);
         return failure::promise();
       }
-      id_value_ = std::move(*str);
+      args.id = std::move(*str);
     }
-    if (capacity_) {
-      TRY(auto value, const_eval(*capacity_, ctx));
+    if (args_.capacity) {
+      TRY(auto value, const_eval(*args_.capacity, ctx));
       if (auto* val = try_as<uint64_t>(value)) {
-        capacity_value_ = located<uint64_t>{*val, capacity_->get_location()};
+        args.capacity = located<uint64_t>{*val, args_.capacity->get_location()};
       } else if (auto* val = try_as<int64_t>(value)) {
         if (*val < 0) {
           diagnostic::error("capacity must not be negative")
-            .primary(*capacity_)
+            .primary(*args_.capacity)
             .emit(ctx);
           return failure::promise();
         }
-        capacity_value_ = located<uint64_t>{static_cast<uint64_t>(*val),
-                                            capacity_->get_location()};
+        args.capacity = located<uint64_t>{static_cast<uint64_t>(*val),
+                                          args_.capacity->get_location()};
       } else {
         diagnostic::error("expected `uint64` for capacity")
-          .primary(*capacity_)
+          .primary(*args_.capacity)
           .emit(ctx);
         return failure::promise();
       }
     }
-    if (read_timeout_) {
-      TRY(auto value, const_eval(*read_timeout_, ctx));
+    if (args_.read_timeout) {
+      TRY(auto value, const_eval(*args_.read_timeout, ctx));
       auto* val = try_as<duration>(value);
       if (not val) {
         diagnostic::error("expected `duration` for read_timeout")
-          .primary(*read_timeout_)
+          .primary(*args_.read_timeout)
           .emit(ctx);
         return failure::promise();
       }
       if (*val <= duration::zero()) {
         diagnostic::error("read_timeout must be greater than zero")
-          .primary(*read_timeout_)
+          .primary(*args_.read_timeout)
           .emit(ctx);
         return failure::promise();
       }
-      read_timeout_value_
-        = located<duration>{*val, read_timeout_->get_location()};
+      args.read_timeout
+        = located<duration>{*val, args_.read_timeout->get_location()};
+    } else {
+      args.read_timeout
+        = located<duration>{default_read_timeout_, location::unknown};
     }
-    if (write_timeout_) {
-      TRY(auto value, const_eval(*write_timeout_, ctx));
+    if (args_.write_timeout) {
+      TRY(auto value, const_eval(*args_.write_timeout, ctx));
       auto* val = try_as<duration>(value);
       if (not val) {
         diagnostic::error("expected `duration` for write_timeout")
-          .primary(*write_timeout_)
+          .primary(*args_.write_timeout)
           .emit(ctx);
         return failure::promise();
       }
       if (*val <= duration::zero()) {
         diagnostic::error("write_timeout must be greater than zero")
-          .primary(*write_timeout_)
+          .primary(*args_.write_timeout)
           .emit(ctx);
         return failure::promise();
       }
-      write_timeout_value_
-        = located<duration>{*val, write_timeout_->get_location()};
+      args.write_timeout
+        = located<duration>{*val, args_.write_timeout->get_location()};
     }
+    args_resolved_ = std::move(args);
     return {};
   }
 
   auto spawn(element_type_tag input) const -> AnyOperator override {
-    TENZIR_ASSERT(mode_value_);
-    TENZIR_ASSERT(id_value_);
-    auto args = CacheArgs{};
-    args.id = *id_value_;
-    args.mode = *mode_value_;
-    args.capacity = capacity_value_;
-    args.read_timeout
-      = read_timeout_value_
-          ? read_timeout_value_
-          : located<duration>{default_read_timeout_, location::unknown};
-    args.write_timeout = write_timeout_value_;
-    if (*mode_value_ == "write") {
+    TENZIR_ASSERT(args_resolved_);
+    auto null_dh = null_diagnostic_handler{};
+    auto mode = resolve_mode(null_dh);
+    TENZIR_ASSERT(mode);
+    auto args = *args_resolved_;
+    if (*mode == "write") {
       TENZIR_ASSERT(input.is<table_slice>());
       return WriteCacheSink{std::move(args)}.with_name("cache");
     }
-    if (*mode_value_ == "read") {
+    if (*mode == "read") {
       TENZIR_ASSERT(input.is<void>());
       return ReadCacheSource{std::move(args)}.with_name("cache");
     }
-    TENZIR_ASSERT(*mode_value_ == "readwrite");
+    TENZIR_ASSERT(*mode == "readwrite");
     TENZIR_ASSERT(input.is<table_slice>());
     return CacheReadwrite{std::move(args)}.with_name("cache");
   }
@@ -1404,31 +1439,17 @@ public:
 
   friend auto inspect(auto& f, CacheIr& x) -> bool {
     return f.object(x).fields(
-      f.field("op_loc", x.op_loc_), f.field("id", x.id_),
-      f.field("mode", x.mode_), f.field("capacity", x.capacity_),
-      f.field("read_timeout", x.read_timeout_),
-      f.field("write_timeout", x.write_timeout_),
+      f.field("op_loc", x.op_loc_), f.field("args", x.args_),
       f.field("default_read_timeout", x.default_read_timeout_),
-      f.field("mode_value", x.mode_value_), f.field("id_value", x.id_value_),
-      f.field("capacity_value", x.capacity_value_),
-      f.field("read_timeout_value", x.read_timeout_value_),
-      f.field("write_timeout_value", x.write_timeout_value_));
+      f.field("args_resolved", x.args_resolved_));
   }
 
 private:
   location op_loc_;
-  ast::expression id_;
-  std::optional<ast::expression> mode_;
-  std::optional<ast::expression> capacity_;
-  std::optional<ast::expression> read_timeout_;
-  std::optional<ast::expression> write_timeout_;
+  CacheArgsRaw args_;
   duration default_read_timeout_ = {};
-  // Resolved values (set during substitute with instantiate=true).
-  std::optional<std::string> mode_value_;
-  std::optional<std::string> id_value_;
-  std::optional<located<uint64_t>> capacity_value_;
-  std::optional<located<duration>> read_timeout_value_;
-  std::optional<located<duration>> write_timeout_value_;
+  // Resolved arguments (set during substitute).
+  Option<CacheArgs> args_resolved_;
 };
 
 using cache_ir_plugin = inspection_plugin<ir::Operator, CacheIr>;
@@ -1548,42 +1569,32 @@ public:
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
     -> failure_or<ir::CompileResult> override {
-    auto id = ast::expression{};
-    auto mode = std::optional<ast::expression>{};
-    auto capacity = std::optional<ast::expression>{};
-    auto read_timeout = std::optional<ast::expression>{};
-    auto write_timeout = std::optional<ast::expression>{};
+    auto raw = CacheArgsRaw{};
     auto provider = session_provider::make(ctx);
     auto loc = inv.op.get_location();
     TRY(argument_parser2::operator_("cache")
-          .positional("id", id, "string")
-          .named("mode", mode, "string")
-          .named("capacity", capacity, "uint64")
-          .named("read_timeout", read_timeout, "duration")
-          .named("write_timeout", write_timeout, "duration")
+          .positional("id", raw.id, "string")
+          .named("mode", raw.mode, "string")
+          .named("capacity", raw.capacity, "uint64")
+          .named("read_timeout", raw.read_timeout, "duration")
+          .named("write_timeout", raw.write_timeout, "duration")
           .parse(operator_factory_invocation{std::move(inv.op),
                                              std::move(inv.args)},
                  provider.as_session()));
-    TRY(id.bind(ctx));
-    if (mode) {
-      TRY(mode->bind(ctx));
+    TRY(raw.id.bind(ctx));
+    if (raw.mode) {
+      TRY(raw.mode->bind(ctx));
     }
-    if (capacity) {
-      TRY(capacity->bind(ctx));
+    if (raw.capacity) {
+      TRY(raw.capacity->bind(ctx));
     }
-    if (read_timeout) {
-      TRY(read_timeout->bind(ctx));
+    if (raw.read_timeout) {
+      TRY(raw.read_timeout->bind(ctx));
     }
-    if (write_timeout) {
-      TRY(write_timeout->bind(ctx));
+    if (raw.write_timeout) {
+      TRY(raw.write_timeout->bind(ctx));
     }
-    return CacheIr{loc,
-                   std::move(id),
-                   std::move(mode),
-                   std::move(capacity),
-                   std::move(read_timeout),
-                   std::move(write_timeout),
-                   cache_lifetime_};
+    return CacheIr{loc, std::move(raw), cache_lifetime_};
   }
 
 private:

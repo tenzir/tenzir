@@ -1,0 +1,27 @@
+{
+  events: 28,
+  schema: "netflow.ipfix",
+}
+{
+  events: 18,
+  schema: "netflow.ipfix",
+}
+{
+  events: 18,
+  schema: "netflow.ipfix",
+}
+{
+  events: 88,
+  schema: "netflow.v5",
+}
+{
+  events: 29,
+  schema: "netflow.v9",
+}
+warning: discarded reordered IPFIX data set
+ --> tests/operators/read_netflow/mixed_chunks.tql:3:3
+  |
+3 |   read_netflow
+  |   ------------ 
+  |
+  = note: template 258 was not established by the delayed message

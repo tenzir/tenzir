@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {data: b"not-a-message", peer: {ip: "127.0.0.1", port: 2055}}
+read_netflow

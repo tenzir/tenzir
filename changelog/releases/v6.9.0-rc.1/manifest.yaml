@@ -1,0 +1,11 @@
+created: 2026-07-31
+title: Native Apache Iceberg output
+intro: >-
+  The new `to_iceberg` operator writes events directly into Apache Iceberg tables
+  through a REST catalog, creating and evolving the table schema as heterogeneous
+  streams arrive. This release also speeds up node startup for very large catalogs
+  while lowering memory use, and substantially reduces the processor and memory cost
+  of `ocsf::cast`.
+source:
+  mode: snapshot-prerelease
+  previous_stable: v6.8.1

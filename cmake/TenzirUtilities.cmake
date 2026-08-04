@@ -11,11 +11,7 @@ endfunction ()
 # Treats target as a system dependency.
 function (TenzirSystemizeTarget tgt)
   message(STATUS "Treating ${tgt} as a system dependency")
-  get_target_property(_includes ${tgt} INTERFACE_INCLUDE_DIRECTORIES)
-  set_property(
-    TARGET ${tgt}
-    APPEND
-    PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_includes}")
+  set_target_properties("${tgt}" PROPERTIES SYSTEM ON)
 endfunction ()
 
 # Retrives a textual representation of the current month.

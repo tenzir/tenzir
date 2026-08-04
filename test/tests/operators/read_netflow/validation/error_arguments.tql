@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+read_netflow 42

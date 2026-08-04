@@ -1,0 +1,13 @@
+warning: cannot represent column in Iceberg: ghost: cannot represent a column whose values are all null
+ --> tests/operators/to_iceberg/create/05_drop_unrepresentable.tql:4:1
+  |
+4 | to_iceberg "createns.events", catalog=env("ICEBERG_REST_URI")
+  | ~~~~~~~~~~ 
+  |
+
+warning: column `ghost` does not exist in the table and will be dropped
+ --> tests/operators/to_iceberg/create/05_drop_unrepresentable.tql:4:1
+  |
+4 | to_iceberg "createns.events", catalog=env("ICEBERG_REST_URI")
+  | ~~~~~~~~~~ 
+  |

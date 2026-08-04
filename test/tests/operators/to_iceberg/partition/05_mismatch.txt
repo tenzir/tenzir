@@ -1,0 +1,7 @@
+error: the table is partitioned by [identity(class_uid), day(time)], but `partition_by` requests [identity(class_uid)]
+ --> tests/operators/to_iceberg/partition/05_mismatch.tql:9:16
+  |
+9 |   partition_by=[class_uid]
+  |                ^^^^^^^^^^^ 
+  |
+  = note: the partition spec of an existing table cannot be changed by this operator; drop `partition_by` to append to the table as-is
