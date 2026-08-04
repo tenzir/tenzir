@@ -8,4 +8,6 @@ from {
   "true_or_false": true or false,
   "true_or_null": true or null,
   "true_or_true": true or true,
+  "false_or_typed_null": false or (1 < null),
+  "true_or_typed_null": true or (1 < null),
 }

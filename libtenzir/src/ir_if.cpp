@@ -80,18 +80,15 @@ public:
       auto const sliced_input = subslice(input, start, end);
       auto const typed_predicate = predicate.as<bool_type>();
       if (not typed_predicate) {
-        diagnostic::warning("expected `bool`, but got `{}`",
-                            predicate.type.kind())
-          .primary(args_.condition)
-          .emit(ctx);
+        if (not is<null_type>(predicate.type)) {
+          diagnostic::warning("expected `bool`, but got `{}`",
+                              predicate.type.kind())
+            .primary(args_.condition)
+            .emit(ctx);
+        }
         TENZIR_ASSERT(sliced_input.rows() > 0);
         false_events.push_back(sliced_input);
         continue;
-      }
-      if (typed_predicate->array->null_count() > 0) {
-        diagnostic::warning("expected `bool`, but got `null`")
-          .primary(args_.condition)
-          .emit(ctx);
       }
       auto [lhs, rhs] = partition(sliced_input, *typed_predicate->array);
       TENZIR_ASSERT(lhs.rows() + rhs.rows() == sliced_input.rows());

@@ -1,0 +1,4 @@
+from {xs: [1, 2, 3]}
+literal = xs.where(x => null)
+nullable = xs.where(x => x < null)
+invalid = xs.where(x => 1)

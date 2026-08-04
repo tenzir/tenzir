@@ -358,11 +358,6 @@ auto make_where_function(function_invocation inv, session ctx)
                     return;
                   }
                   all_true = false;
-                  if (pred.array->null_count() > 0) {
-                    diagnostic::warning("expected `bool`, got `null`")
-                      .primary(args.lambda.body)
-                      .emit(ctx);
-                  }
                   if (pred.array->true_count() == 0) {
                     ids.append_bits(false, pred.length());
                     return;
@@ -371,6 +366,10 @@ auto make_where_function(function_invocation inv, session ctx)
                   for (const auto& elem : *pred.array) {
                     ids.append_bit(elem.value_or(false));
                   }
+                },
+                [&](const null_type&) {
+                  all_true = false;
+                  ids.append_bits(false, result.length());
                 },
                 [&](const auto&) {
                   diagnostic::warning("expected `bool`, got `{}`",

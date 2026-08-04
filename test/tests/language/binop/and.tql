@@ -8,4 +8,6 @@ from {
   "true_and_false": true and false,
   "true_and_null": true and null,
   "true_and_true": true and true,
+  "false_and_typed_null": false and (1 < null),
+  "true_and_typed_null": true and (1 < null),
 }

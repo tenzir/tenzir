@@ -166,15 +166,12 @@ public:
     for (const auto& pred : eval(*lambda_, subject, ctx)) {
       const auto typed_pred = pred.as<bool_type>();
       if (not typed_pred) {
-        diagnostic::warning("expected `bool`, got `{}`", pred.type.kind())
-          .primary(lambda_->body)
-          .emit(ctx);
+        if (not is<null_type>(pred.type)) {
+          diagnostic::warning("expected `bool`, got `{}`", pred.type.kind())
+            .primary(lambda_->body)
+            .emit(ctx);
+        }
         continue;
-      }
-      if (typed_pred->array->null_count() > 0) {
-        diagnostic::warning("expected `bool`, got `null`")
-          .primary(lambda_->body)
-          .emit(ctx);
       }
       count_ += typed_pred->array->true_count();
     }

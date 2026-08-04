@@ -1,0 +1,4 @@
+from {xs: [1, 2, 3]}
+literal = xs.count_if(x => null)
+nullable = xs.count_if(x => x < null)
+invalid = xs.count_if(x => 1)

@@ -8,4 +8,7 @@ from {
   "true_if_false": true if false,
   "true_if_null": true if null,
   "true_if_true": true if true,
+  "false_if_typed_null": false if 1 < null,
+  "null_if_typed_null": null if 1 < null,
+  "true_if_typed_null": true if 1 < null,
 }

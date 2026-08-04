@@ -1,0 +1,16 @@
+{
+  xs: [
+    1,
+    2,
+    3,
+  ],
+  literal: [],
+  nullable: [],
+  invalid: [],
+}
+warning: expected `bool`, got `int64`
+ --> tests/language/lambda/where_null_predicate.tql:4:25
+  |
+4 | invalid = xs.where(x => 1)
+  |                         ~
+  |

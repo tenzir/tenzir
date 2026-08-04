@@ -759,9 +759,8 @@ auto eval_op_typed(evaluator& self, ast::binary_expr const& x,
       active);
     auto ot = type::from_arrow(*oa->type());
     return series{std::move(ot), std::move(oa)};
-  } else if constexpr (is_arithmetic(Op)
-                       and (std::same_as<L, null_type>
-                            or std::same_as<R, null_type>)) {
+  } else if constexpr (std::same_as<L, null_type>
+                       or std::same_as<R, null_type>) {
     return series::null(null_type{}, left.length());
   } else {
     if (active.as_constant() != false) {
@@ -1059,13 +1058,13 @@ auto eval_if(evaluator& self, ast::binary_expr const& x,
     auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
     check(builder.Reserve(self.length()));
     auto warned_cond_type = false;
-    auto warned_cond_null = false;
     auto cond_offset = int64_t{0};
     for (auto& cond_part : cond_ms) {
       auto typed = cond_part.as<bool_type>();
       if (not typed) {
         for (auto i = int64_t{0}; i < cond_part.length(); ++i) {
-          if (not warned_cond_type and active.is_active(cond_offset + i)) {
+          if (not warned_cond_type and not is<null_type>(cond_part.type)
+              and active.is_active(cond_offset + i)) {
             warned_cond_type = true;
             diagnostic::warning("expected `bool`, but got `{}`",
                                 cond_part.type.kind())
@@ -1081,13 +1080,6 @@ auto eval_if(evaluator& self, ast::binary_expr const& x,
       for (auto i = int64_t{0}; i < typed->array->length(); ++i) {
         auto active_row = active.is_active(cond_offset + i);
         auto is_null = typed->array->IsNull(i);
-        if (not warned_cond_null and active_row and is_null) {
-          warned_cond_null = true;
-          diagnostic::warning("expected `bool`, but got `null`")
-            .primary(x.right)
-            .hint("use `else` to provide a fallback value")
-            .emit(self.ctx());
-        }
         builder.UnsafeAppend(active_row and not is_null
                              and typed->array->GetView(i));
       }

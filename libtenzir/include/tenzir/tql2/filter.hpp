@@ -26,9 +26,11 @@ inline auto filter2(const table_slice& slice, const ast::expression& expr,
     TENZIR_ASSERT(part.array);
     auto array = try_as<arrow::BooleanArray>(&*part.array);
     if (not array) {
-      diagnostic::warning("expected `bool`, got `{}`", part.type.kind())
-        .primary(expr)
-        .emit(dh);
+      if (not is<null_type>(part.type)) {
+        diagnostic::warning("expected `bool`, got `{}`", part.type.kind())
+          .primary(expr)
+          .emit(dh);
+      }
       for (auto i = int64_t{0}; i < part.array->length(); ++i) {
         check(mask_builder.Append(false));
       }

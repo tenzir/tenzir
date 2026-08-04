@@ -181,18 +181,15 @@ private:
           auto const start = std::exchange(end, end + predicate.length());
           auto const typed_predicate = predicate.as<bool_type>();
           if (not typed_predicate) {
-            diagnostic::warning("expected `bool`, but got `{}`",
-                                predicate.type.kind())
-              .primary(*arm.guard)
-              .emit(ctx);
+            if (not is<null_type>(predicate.type)) {
+              diagnostic::warning("expected `bool`, but got `{}`",
+                                  predicate.type.kind())
+                .primary(*arm.guard)
+                .emit(ctx);
+            }
             std::fill(guard_mask.begin() + start, guard_mask.begin() + end,
                       false);
             continue;
-          }
-          if (typed_predicate->array->null_count() > 0) {
-            diagnostic::warning("expected `bool`, but got `null`")
-              .primary(*arm.guard)
-              .emit(ctx);
           }
           auto const& array = *typed_predicate->array;
           for (auto row = start; row < end; ++row) {

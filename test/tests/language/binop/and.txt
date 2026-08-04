@@ -8,4 +8,6 @@
   true_and_false: false,
   true_and_null: null,
   true_and_true: true,
+  false_and_typed_null: false,
+  true_and_typed_null: null,
 }

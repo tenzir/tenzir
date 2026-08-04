@@ -23,4 +23,9 @@ leq_literal = null <= null
 leq_left = null <= x
 leq_right = x <= null
 leq_typed = int(null) <= x
-invalid_membership = 5 in null
+membership_null_rhs = 5 in null
+not_membership_null_rhs = 5 not in null
+literal_null_including = null in [int(null), 1]
+typed_null_including = int(null) in [int(null), 1]
+literal_null_missing = null in [1, 2]
+typed_null_missing = int(null) in [1, 2]

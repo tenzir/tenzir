@@ -24,7 +24,12 @@
   leq_left: true,
   leq_right: true,
   leq_typed: true,
-  invalid_membership: null,
+  membership_null_rhs: null,
+  not_membership_null_rhs: null,
+  literal_null_including: true,
+  typed_null_including: true,
+  literal_null_missing: false,
+  typed_null_missing: false,
 }
 {
   x: 1,
@@ -52,12 +57,10 @@
   leq_left: null,
   leq_right: null,
   leq_typed: null,
-  invalid_membership: null,
+  membership_null_rhs: null,
+  not_membership_null_rhs: null,
+  literal_null_including: true,
+  typed_null_including: true,
+  literal_null_missing: false,
+  typed_null_missing: false,
 }
-warning: binary operator `in` not implemented for `int64` and `null`
-  --> tests/language/expr/null_comparison.tql:26:22
-   |
-26 | invalid_membership = 5 in null
-   |                      ~~~~~~~~~
-   |
-   = hint: the result of this expression is `null`

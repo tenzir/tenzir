@@ -1,6 +1,9 @@
-from {x: 1}, {x: 2}
+from {id: null}
 if null {
   y = "yes"
 } else {
   y = "no"
+}
+if id >= 1 and id <= 8 {
+  status = "valid"
 }

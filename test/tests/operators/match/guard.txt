@@ -24,6 +24,11 @@
   action: "page",
 }
 {
+  status: 502,
+  retries: null,
+  action: "page",
+}
+{
   status: 503,
   retries: 2,
   action: "retry",

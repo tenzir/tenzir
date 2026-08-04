@@ -7,4 +7,12 @@
   mul_right: null,
   div_left: null,
   div_right: null,
+  typed_add_left: null,
+  typed_add_right: null,
+  typed_sub_left: null,
+  typed_sub_right: null,
+  typed_mul_left: null,
+  typed_mul_right: null,
+  typed_div_left: null,
+  typed_div_right: null,
 }
