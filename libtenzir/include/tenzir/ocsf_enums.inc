@@ -2271,6 +2271,14 @@
   {"762d0e6b", {
     {6007, "Scan Activity"},
   }},
+  {"76d9973a", {
+    {0, "Unknown"},
+    {1, "Low"},
+    {2, "Medium"},
+    {3, "High"},
+    {4, "Very High"},
+    {99, "Other"},
+  }},
   {"76fac8d7", {
     {0, "Unknown"},
     {1, "Split Tunnel"},
@@ -3563,6 +3571,17 @@
     {600203, "Application Lifecycle: Start"},
     {600204, "Application Lifecycle: Stop"},
     {600299, "Application Lifecycle: Other"},
+  }},
+  {"c39a1a96", {
+    {0, "Unknown"},
+    {1, "Network"},
+    {2, "Endpoint"},
+    {3, "Email"},
+    {4, "IAM"},
+    {5, "Proxy"},
+    {6, "Threat Intel"},
+    {7, "Application"},
+    {99, "Other"},
   }},
   {"c5a7dfbe", {
     {0, "Unknown"},
