@@ -2,6 +2,19 @@ The new `to_iceberg` operator writes events directly into Apache Iceberg tables 
 
 ## 🚀 Features
 
+### Automatic NetFlow and IPFIX decoding
+
+The new `read_netflow` operator automatically decodes NetFlow v5, NetFlow v9, and IPFIX from byte streams and binary message events, including UDP envelopes:
+
+```tql
+accept_udp "0.0.0.0:2055", binary=true
+read_netflow
+```
+
+The operator learns templates independently for each exporter, emits options records, decodes standard and enterprise information elements to native values, and preserves unknown elements as blobs. This allows one pipeline to process mixed NetFlow and IPFIX traffic without selecting a protocol version up front.
+
+*By @mavam and @codex.*
+
 ### Faster, lower-memory catalog loading at startup
 
 Nodes with a very large number of partitions now start up faster and with a smaller memory footprint.
@@ -35,6 +48,12 @@ The operator creates missing tables from the first arriving events (`mode` selec
 The operator connects to S3 and S3-compatible object stores (`aws_iam`, `s3_endpoint`, `s3_path_style`), catalogs taking bearer tokens (`token`), AWS Glue and Amazon S3 Tables (`catalog_aws_service`), and Google BigLake with `gs://` storage (`gcp_service_account_key`, or `gcp_auth=true` for Application Default Credentials).
 
 *By @zedoraps.*
+
+### OCSF 1.9.0 support
+
+Tenzir now supports OCSF `1.9.0` and all earlier bundled stable versions. It also includes preview support for OCSF `1.10.0-dev`.
+
+*By @mavam and @codex.*
 
 ### Optionally validate batches read from persisted stores
 
@@ -71,6 +90,20 @@ AWS_PROFILE=analytics tenzir 'from {x: 1} | to_s3 "s3://bucket/x.json"'
 If your node runs with `AWS_PROFILE` set unintentionally, it now authenticates with that profile instead of `default`—unset the variable to keep the old behavior.
 
 *By @zedoraps.*
+
+### Consistent null propagation in TQL
+
+TQL binary expressions now propagate `null` consistently. Arithmetic operators return `null` without a warning when either operand is `null`. This lets expressions operate directly on optional fields:
+
+```tql
+duration = (end_time? - start_time?).count_milliseconds().round()
+```
+
+If either timestamp is missing, `duration` evaluates to `null`. Comparisons now handle literal `null` consistently with null values in typed fields. Other binary operations with a `null`-typed operand also return `null` without a warning after applying any operator-specific null semantics. Unsupported operations on concrete non-null types still produce a warning.
+
+Predicate positions now treat `null` as falsy without a warning. Only `true` selects a branch, matches a guard, passes a filter, or contributes to `count_if`. A `null` result follows the false or non-matching path but remains `null`; it does not become the boolean value `false`. Assertions continue to warn because they deliberately report failed invariants.
+
+*By @mavam and @codex.*
 
 ### Consistent value formatting in direct JSON sink output
 
