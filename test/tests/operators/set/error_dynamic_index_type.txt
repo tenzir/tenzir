@@ -1,0 +1,21 @@
+{
+  key: 1,
+  value: 1,
+}
+{
+  key: null,
+  value: 2,
+}
+warning: assignment index must be a string, but got `int64`
+ --> tests/operators/set/error_dynamic_index_type.tql:2:3
+  |
+2 | a[key] = move value
+  |   ~~~
+  |
+
+warning: assignment index must be a string, but got `null`
+ --> tests/operators/set/error_dynamic_index_type.tql:2:3
+  |
+2 | a[key] = move value
+  |   ~~~
+  |

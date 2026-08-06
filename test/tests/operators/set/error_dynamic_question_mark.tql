@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {key: "x", value: 2}
+a[key]? = value

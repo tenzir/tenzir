@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+let $key = 1
+from {value: 2}
+a[$key] = value

@@ -1,0 +1,12 @@
+from {key: "x", value: 1, events: {x: 10}}, {key: "y", value: 2, events: {x: 20}},
+     {key: "x", value: 3, events: {x: 30}}, {key: "y", value: 4, events: {x: 40}}
+batch 4
+unordered {
+  set nested[key][key].value = value, original = 1, moved = move value
+  select result[key] = moved, nested = nested, original = original, moved = moved, x = move events.x, key = key
+}
+assert result[key] == moved and nested[key][key].value == moved
+measure
+assert events == 2
+drop timestamp
+discard

@@ -8,7 +8,7 @@
 
 #include <tenzir/async.hpp>
 #include <tenzir/compile_ctx.hpp>
-#include <tenzir/ir.hpp>
+#include <tenzir/ir_set.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/set.hpp>
@@ -18,7 +18,7 @@ namespace tenzir::plugins::set_select {
 namespace {
 
 auto make_select_assignments(std::vector<ast::expression> args,
-                             diagnostic_handler& dh)
+                             diagnostic_handler& dh, bool dynamic)
   -> failure_or<std::vector<ast::assignment>> {
   auto assignments = std::vector<ast::assignment>{};
   assignments.reserve(1 + args.size());
@@ -27,9 +27,14 @@ auto make_select_assignments(std::vector<ast::expression> args,
     ast::record{location::unknown, {}, location::unknown});
   for (auto& arg : args) {
     if (auto* assignment = std::get_if<ast::assignment>(&*arg.kind)) {
-      auto selector = ast::selector::try_from(assignment->left);
-      auto* field = selector ? try_as<ast::field_path>(&*selector) : nullptr;
-      if (not field) {
+      if (dynamic) {
+        if (is<ast::meta>(assignment->left)) {
+          diagnostic::error("expected selector")
+            .primary(assignment->left)
+            .emit(dh);
+          return failure::promise();
+        }
+      } else if (not ast::field_path::try_from(assignment->left)) {
         diagnostic::error("expected selector")
           .primary(assignment->left)
           .emit(dh);
@@ -94,7 +99,7 @@ public:
         return failure::promise();
       }
       TRY(assignment->left.bind(ctx));
-      TRY(resolve_assignment_left(*assignment, ctx));
+      TRY(validate_assignment_target(assignment->left, ctx));
       TRY(assignment->right.bind(ctx));
       assignments.push_back(std::move(*assignment));
     }
@@ -112,7 +117,7 @@ public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(auto assignments,
-        make_select_assignments(std::move(inv.args), ctx.dh()));
+        make_select_assignments(std::move(inv.args), ctx.dh(), false));
     return std::make_unique<set_operator>(std::move(assignments));
   }
 
@@ -122,7 +127,8 @@ public:
       TRY(arg.bind(ctx));
     }
     auto& dh = static_cast<diagnostic_handler&>(ctx);
-    TRY(auto assignments, make_select_assignments(std::move(inv.args), dh));
+    TRY(auto assignments,
+        make_select_assignments(std::move(inv.args), dh, true));
     return make_set_ir(std::move(assignments));
   }
 };

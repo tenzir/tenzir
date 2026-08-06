@@ -250,7 +250,7 @@ auto ast::pipeline::compile(compile_ctx ctx) && -> failure_or<ir::pipeline> {
       },
       [&](ast::assignment x) -> failure_or<void> {
         TRY(x.left.bind(ctx));
-        TRY(resolve_assignment_left(x, ctx));
+        TRY(validate_assignment_target(x.left, ctx));
         TRY(x.right.bind(ctx));
         acc.operators.push_back(make_set_ir(std::move(x)));
         return {};

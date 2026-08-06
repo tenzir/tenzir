@@ -1,0 +1,6 @@
+error: left side of `=` must be a field path or metadata reference
+ --> tests/operators/set/error_constant_let_index_type.tql:7:1
+  |
+7 | a[$key] = value
+  | ^^^^^^^
+  |

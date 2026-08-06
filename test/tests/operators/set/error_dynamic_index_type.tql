@@ -1,0 +1,2 @@
+from {key: 1, value: 1}, {key: null, value: 2}
+a[key] = move value

@@ -1,0 +1,6 @@
+error: left side of `=` must be a field path or metadata reference
+ --> tests/operators/set/error_dynamic_question_mark.tql:6:1
+  |
+6 | a[key]? = value
+  | ^^^^^^
+  |
