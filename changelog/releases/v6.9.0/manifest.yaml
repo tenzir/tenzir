@@ -7,5 +7,5 @@ intro: >-
   while lowering memory use, and substantially reduces the processor and memory cost
   of `ocsf::cast`.
 source:
-  mode: snapshot-prerelease
+  mode: promote-prerelease
   previous_stable: v6.8.1

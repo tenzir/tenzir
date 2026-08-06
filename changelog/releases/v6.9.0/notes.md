@@ -2,6 +2,12 @@ The new `to_iceberg` operator writes events directly into Apache Iceberg tables 
 
 ## 🚀 Features
 
+### Assign fields using dynamic keys
+
+Assignments can now use an expression to determine a field name for each event. For example, `result[key] = value` assigns `value` to the field of `result` named by `key`. Dynamic keys must be strings; invalid runtime keys produce a warning and leave the affected event unchanged.
+
+*By @raxyte.*
+
 ### Automatic NetFlow and IPFIX decoding
 
 The new `read_netflow` operator automatically decodes NetFlow v5, NetFlow v9, and IPFIX from byte streams and binary message events, including UDP envelopes:
