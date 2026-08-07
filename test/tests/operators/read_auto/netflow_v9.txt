@@ -1,0 +1,4 @@
+{
+  events: 29,
+  schema: "netflow.v9",
+}

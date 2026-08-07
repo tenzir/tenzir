@@ -1,0 +1,6 @@
+from_file f"{env("TENZIR_INPUTS")}/netflow/cisco.nfv9" {
+  split_bytes 1
+  read_auto
+}
+measure
+drop timestamp, schema_id

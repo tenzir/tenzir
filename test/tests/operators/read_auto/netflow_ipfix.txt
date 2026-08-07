@@ -1,0 +1,8 @@
+{
+  events: 28,
+  schema: "netflow.ipfix",
+}
+{
+  events: 18,
+  schema: "netflow.ipfix",
+}

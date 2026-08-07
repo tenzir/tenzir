@@ -17,6 +17,7 @@
 #include "tenzir/multi_series_builder.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/read_detection.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/view3.hpp"
 
@@ -499,7 +500,7 @@ private:
   SeriesPusher pusher_;
 };
 
-class Plugin final : public virtual OperatorPlugin {
+class Plugin final : public virtual ReadOperatorPlugin {
 public:
   auto name() const -> std::string override {
     return "tql2.read_netflow";
@@ -510,6 +511,28 @@ public:
       = Describer<ReadNetflowArgs, ReadNetflowStream, ReadNetflowEvents>{};
     description.operator_location(&ReadNetflowArgs::operator_location);
     return description.without_optimize();
+  }
+
+  auto read_detection_candidates() const
+    -> std::vector<read_detection_candidate> override {
+    return {
+      read_detection::candidate(
+        "read_netflow", read_detection::specificity::magic,
+        [](read_detection_input input) {
+          auto decoder = Decoder{};
+          auto framed = decoder.frame(as_bytes(input.bytes), input.eof);
+          switch (framed.status) {
+            case FrameStatus::ready:
+            case FrameStatus::ambiguous:
+              return read_detection::match();
+            case FrameStatus::incomplete:
+              return read_detection::need_more();
+            case FrameStatus::error:
+              return read_detection::reject();
+          }
+          TENZIR_UNREACHABLE();
+        }),
+    };
   }
 };
 

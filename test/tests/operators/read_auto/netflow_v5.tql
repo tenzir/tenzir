@@ -1,0 +1,5 @@
+from_file f"{env("TENZIR_INPUTS")}/netflow/unusual_traffic.nfv5" {
+  read_auto
+}
+measure
+drop timestamp, schema_id

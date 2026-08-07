@@ -46,6 +46,14 @@ Use `d.without_optimize()` otherwise.
 Use `d.spawner(...)` only when validation or instantiation depends on the input
 type.
 
+## Reader auto-detection
+
+When you add a parser, account for `read_auto` in the same change. If the format
+can be identified reliably, add automatic detection and integration tests under
+`test/tests/operators/read_auto`. Include incremental-input coverage when
+applicable. Otherwise, explain in the change description why automatic
+detection is unsafe.
+
 ## Diagnostics
 
 If diagnostics need the operator location, store it in `Args` and register it:
