@@ -138,9 +138,22 @@ def _wait_for_cluster(
             return
         last_detail = (result.stderr or result.stdout or "").strip() or "no output"
         time.sleep(poll_interval_seconds)
+    diagnostics = []
+    for description, command in (
+        ("docker compose ps", ["ps"]),
+        (f"docker compose logs {service}", ["logs", "--no-color", service]),
+    ):
+        result = _run(
+            [*base_args, *command],
+            cwd=cwd,
+            description=description,
+            check=False,
+        )
+        detail = "\n".join(filter(None, [result.stdout, result.stderr])).strip()
+        diagnostics.append(f"{description}:\n{detail or 'no output'}")
     raise RuntimeError(
         "kafka fixture did not become ready within "
-        f"{timeout_seconds:.0f}s: {last_detail}",
+        f"{timeout_seconds:.0f}s: {last_detail}\n\n" + "\n\n".join(diagnostics),
     )
 
 
