@@ -1,0 +1,6 @@
+// A lag-2 peak at the upper search bound has anti-correlated neighbors that
+// must not cancel it.
+from {times: [2024-01-01T00:00:00, 2024-01-01T00:00:10,
+              2024-01-01T00:00:20]}
+beat = times.dominant_period(resolution=5s)
+select period = beat.period, strength = round(beat.strength * 100) / 100

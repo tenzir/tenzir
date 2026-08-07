@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {times: [2024-01-01T00:00:00, 2024-01-01T00:00:30]}
+select beat = times.dominant_period(resolution=0s)

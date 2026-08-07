@@ -1,0 +1,9 @@
+{
+  ys: null,
+}
+warning: expected list of `int`, `uint`, `double`, or `duration`
+ --> tests/functions/periodogram/wrong_type.tql:2:13
+  |
+2 | select ys = xs.periodogram()
+  |             ~~
+  |

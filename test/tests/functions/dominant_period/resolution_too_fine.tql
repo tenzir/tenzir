@@ -1,0 +1,3 @@
+// One year at nanosecond resolution exceeds the bin cap.
+from {times: [2024-01-01T00:00:00, 2025-01-01T00:00:00, 2025-06-01T00:00:00]}
+select beat = times.dominant_period(resolution=1ns)

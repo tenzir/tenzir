@@ -1,0 +1,21 @@
+{
+  beat: null,
+}
+{
+  beat: {
+    period: null,
+    strength: 0.0,
+  },
+}
+{
+  beat: {
+    period: null,
+    strength: 0.0,
+  },
+}
+{
+  beat: {
+    period: null,
+    strength: 0.0,
+  },
+}

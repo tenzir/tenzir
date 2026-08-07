@@ -1,0 +1,4 @@
+from {kind: "nan", xs: [1.0, "nan".float(), 2.0]},
+     {kind: "positive infinity", xs: [1.0, "inf".float(), 2.0]},
+     {kind: "negative infinity", xs: [1.0, "-inf".float(), 2.0]}
+select kind, ys = xs.periodogram()

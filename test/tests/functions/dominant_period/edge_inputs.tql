@@ -1,0 +1,5 @@
+from {times: null},
+     {times: []},
+     {times: [2024-01-01T00:00:00]},
+     {times: [2024-01-01T00:00:00, 2024-01-01T00:00:00, 2024-01-01T00:00:00]}
+select beat = times.dominant_period(resolution=5s)

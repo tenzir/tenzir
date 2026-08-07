@@ -1,0 +1,2 @@
+from {xs: [3, 3, 3, 3]}
+select ys = xs.periodogram()

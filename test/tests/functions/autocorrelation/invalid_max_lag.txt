@@ -1,0 +1,6 @@
+error: `max_lag` must be at least 1
+ --> tests/functions/autocorrelation/invalid_max_lag.tql:6:40
+  |
+6 | select ys = xs.autocorrelation(max_lag=0)
+  |                                        ^
+  |

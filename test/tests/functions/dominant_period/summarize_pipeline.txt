@@ -1,0 +1,7 @@
+{
+  beat: {
+    period: 30s,
+    strength: 0.92,
+  },
+  samples: 12,
+}

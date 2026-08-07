@@ -1,0 +1,4 @@
+{
+  period: 6000d,
+  strength: 0.95,
+}

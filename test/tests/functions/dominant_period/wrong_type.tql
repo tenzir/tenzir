@@ -1,0 +1,2 @@
+from {times: [1, 2, 3]}
+select beat = times.dominant_period(resolution=5s)

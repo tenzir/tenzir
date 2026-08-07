@@ -1,0 +1,2 @@
+from {xs: [1, -1, 1, -1, 1, -1, 1, -1]}
+select n = xs.autocorrelation().length()

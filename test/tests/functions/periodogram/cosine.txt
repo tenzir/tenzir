@@ -1,0 +1,36 @@
+{
+  ys: [
+    {
+      period: 16.0,
+      power: 0.0,
+    },
+    {
+      period: 8.0,
+      power: 0.0,
+    },
+    {
+      period: 5.333333333333333,
+      power: 0.0,
+    },
+    {
+      period: 4.0,
+      power: 4.0,
+    },
+    {
+      period: 3.2,
+      power: 0.0,
+    },
+    {
+      period: 2.6666666666666665,
+      power: 0.0,
+    },
+    {
+      period: 2.2857142857142856,
+      power: 0.0,
+    },
+    {
+      period: 2.0,
+      power: 0.0,
+    },
+  ],
+}

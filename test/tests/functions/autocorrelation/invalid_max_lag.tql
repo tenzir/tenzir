@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {xs: [1, 2, 3]}
+select ys = xs.autocorrelation(max_lag=0)

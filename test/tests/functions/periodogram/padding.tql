@@ -1,0 +1,5 @@
+from {xs: [0, 1, 0, 1, 0, 1]}
+select ys = xs.periodogram().map(r => {
+  period: round(r.period * 1000) / 1000,
+  power: round(r.power * 1000) / 1000,
+})

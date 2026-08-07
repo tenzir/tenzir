@@ -1,0 +1,6 @@
+error: `resolution` must be positive
+ --> tests/functions/dominant_period/resolution_zero.tql:6:48
+  |
+6 | select beat = times.dominant_period(resolution=0s)
+  |                                                ^^
+  |

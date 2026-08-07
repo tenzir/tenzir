@@ -1,0 +1,19 @@
+{
+  ys: null,
+}
+{
+  ys: [],
+}
+{
+  ys: [],
+}
+{
+  ys: null,
+}
+warning: list contains null values
+ --> tests/functions/periodogram/edge_inputs.tql:2:13
+  |
+2 | select ys = xs.periodogram()
+  |             ~~
+  |
+  = note: periodogram requires a gap-free series

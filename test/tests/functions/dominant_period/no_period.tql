@@ -1,0 +1,4 @@
+// Irregular timestamps without periodic structure.
+from {times: [2024-01-01T00:00:00, 2024-01-01T00:00:07, 2024-01-01T00:00:19, 2024-01-01T00:00:23, 2024-01-01T00:01:01, 2024-01-01T00:01:23, 2024-01-01T00:01:41, 2024-01-01T00:02:29, 2024-01-01T00:02:43, 2024-01-01T00:03:31, 2024-01-01T00:04:11, 2024-01-01T00:04:53]}
+beat = times.dominant_period(resolution=5s)
+select period = beat.period, strength = round(beat.strength * 100) / 100

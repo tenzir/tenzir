@@ -1,0 +1,19 @@
+{
+  kind: "nan",
+  ys: null,
+}
+{
+  kind: "positive infinity",
+  ys: null,
+}
+{
+  kind: "negative infinity",
+  ys: null,
+}
+warning: list contains non-finite values
+ --> tests/functions/periodogram/non_finite.tql:4:19
+  |
+4 | select kind, ys = xs.periodogram()
+  |                   ~~
+  |
+  = note: periodogram requires finite samples and powers

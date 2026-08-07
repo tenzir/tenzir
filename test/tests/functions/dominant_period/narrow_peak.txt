@@ -1,0 +1,4 @@
+{
+  period: 10s,
+  strength: 0.57,
+}

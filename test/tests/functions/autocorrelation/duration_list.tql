@@ -1,0 +1,2 @@
+from {xs: [1s, 2s, 1s, 2s]}
+select ys = xs.autocorrelation(max_lag=2)

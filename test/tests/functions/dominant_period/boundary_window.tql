@@ -1,0 +1,7 @@
+// The maximum lag has only a partial scoring window and must not beat the 15s
+// fundamental.
+from {times: [2024-01-01T00:00:00, 2024-01-01T00:00:15,
+              2024-01-01T00:00:30, 2024-01-01T00:00:45,
+              2024-01-01T00:01:00]}
+beat = times.dominant_period(resolution=5s)
+select period = beat.period, strength = round(beat.strength * 100) / 100

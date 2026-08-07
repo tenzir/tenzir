@@ -1,0 +1,10 @@
+{
+  beat: null,
+}
+warning: `resolution` is too fine for the time span
+ --> tests/functions/dominant_period/resolution_too_fine.tql:3:15
+  |
+3 | select beat = times.dominant_period(resolution=1ns)
+  |               ~~~~~
+  |
+  = note: the span must cover at most 1048576 bins

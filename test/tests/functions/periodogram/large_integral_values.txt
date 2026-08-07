@@ -1,0 +1,39 @@
+{
+  kind: "int",
+  ys: [
+    {
+      period: 4.0,
+      power: 0.0,
+    },
+    {
+      period: 2.0,
+      power: 1.0,
+    },
+  ],
+}
+{
+  kind: "uint",
+  ys: [
+    {
+      period: 4.0,
+      power: 0.0,
+    },
+    {
+      period: 2.0,
+      power: 1.0,
+    },
+  ],
+}
+{
+  kind: "duration",
+  ys: [
+    {
+      period: 4.0,
+      power: 0.0,
+    },
+    {
+      period: 2.0,
+      power: 1.0,
+    },
+  ],
+}
