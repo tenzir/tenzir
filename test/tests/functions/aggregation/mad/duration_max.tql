@@ -1,0 +1,4 @@
+from {x: nanoseconds(int("-9223372036854775807"))},
+  {x: nanoseconds(9223372036854775807)}
+summarize mad_value=mad(x)
+select mad_nanoseconds=count_nanoseconds(mad_value)

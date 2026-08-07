@@ -6,10 +6,12 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/series_builder_view3.hpp>
+#include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -18,6 +20,7 @@
 #include <tenzir/view3.hpp>
 
 #include <arrow/compute/api.h>
+#include <arrow/record_batch.h>
 
 namespace tenzir::plugins::list {
 
@@ -496,6 +499,146 @@ public:
   }
 };
 
+class deltas final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "deltas";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(function_invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function(name())
+          .positional("xs", expr, "list")
+          .parse(inv, ctx));
+    return function_use::make(
+      [expr = std::move(expr)](evaluator eval, session ctx) -> multi_series {
+        return map_series(eval(expr), [&](series subject) -> series {
+          if (is<null_type>(subject.type)) {
+            return series::null(list_type{null_type{}}, subject.length());
+          }
+          auto const lists = subject.as<list_type>();
+          if (not lists) {
+            diagnostic::warning("expected `list`, but got `{}`",
+                                subject.type.kind())
+              .primary(expr)
+              .emit(ctx);
+            return series::null(null_type{}, subject.length());
+          }
+          auto const value_type = lists->type.value_type();
+          auto const value_kind = value_type.kind();
+          if (not value_kind.is_any<null_type, int64_type, uint64_type,
+                                    double_type, duration_type, time_type>()) {
+            diagnostic::warning("expected a list of numbers, durations, or "
+                                "times, but got a list of `{}`",
+                                value_kind)
+              .primary(expr)
+              .emit(ctx);
+            return series::null(null_type{}, subject.length());
+          }
+          auto const& array = *lists->array;
+          auto const num_rows = array.length();
+          // Gather the operands of all within-row adjacent pairs, so that
+          // pairs spanning list boundaries are never evaluated and cannot
+          // emit spurious warnings.
+          auto lhs_indices = arrow::Int64Builder{};
+          auto rhs_indices = arrow::Int64Builder{};
+          for (auto row = int64_t{0}; row < num_rows; ++row) {
+            if (array.IsNull(row)) {
+              continue;
+            }
+            auto const row_begin = array.value_offset(row);
+            auto const row_length = array.value_length(row);
+            for (auto i = int64_t{1}; i < row_length; ++i) {
+              check(lhs_indices.Append(row_begin + i));
+              check(rhs_indices.Append(row_begin + i - 1));
+            }
+          }
+          auto const num_deltas = lhs_indices.length();
+          // Compute all differences in one shot by evaluating `l - r` over
+          // the gathered operands. This reuses the binary operator kernels,
+          // including `time - time -> duration` and the overflow checks.
+          auto delta = series{};
+          if (num_deltas > 0 and not value_kind.is<null_type>()) {
+            auto const flat = array.values();
+            auto const lhs
+              = check(arrow::compute::Take(flat, finish(lhs_indices)));
+            auto const rhs
+              = check(arrow::compute::Take(flat, finish(rhs_indices)));
+            auto const schema = type{"tenzir.deltas", record_type{
+                                                        {"l", value_type},
+                                                        {"r", value_type},
+                                                      }};
+            auto const slice = table_slice{
+              arrow::RecordBatch::Make(schema.to_arrow_schema(), num_deltas,
+                                       arrow::ArrayVector{lhs.make_array(),
+                                                          rhs.make_array()}),
+              schema,
+            };
+            auto const loc = expr.get_location();
+            auto const sub = ast::expression{ast::binary_expr{
+              ast::expression{ast::root_field{ast::identifier{"l", loc}}},
+              ast::binary_op::sub,
+              ast::expression{ast::root_field{ast::identifier{"r", loc}}},
+            }};
+            auto result = tenzir::eval(sub, slice, ctx.dh());
+            TENZIR_ASSERT(result.parts().size() == 1);
+            delta = std::move(result.part(0));
+            TENZIR_ASSERT(delta.length() == num_deltas);
+          }
+          // When no pairs exist, derive the same bare type that the
+          // subtraction kernels would produce, so that the output schema does
+          // not depend on list lengths even for aliased element types.
+          auto const delta_type = [&] {
+            if (delta.array) {
+              return delta.type;
+            }
+            if (value_kind.is_any<time_type, duration_type>()) {
+              return type{duration_type{}};
+            }
+            if (value_kind.is<int64_type>()) {
+              return type{int64_type{}};
+            }
+            if (value_kind.is<uint64_type>()) {
+              return type{uint64_type{}};
+            }
+            if (value_kind.is<double_type>()) {
+              return type{double_type{}};
+            }
+            return type{null_type{}};
+          }();
+          auto const result_type = list_type{delta_type};
+          auto const builder
+            = result_type.make_arrow_builder(arrow_memory_pool());
+          auto delta_pos = int64_t{0};
+          for (auto row = int64_t{0}; row < num_rows; ++row) {
+            if (array.IsNull(row)) {
+              check(builder->AppendNull());
+              continue;
+            }
+            check(builder->Append());
+            auto const row_length = array.value_length(row);
+            if (row_length < 2) {
+              continue;
+            }
+            if (value_kind.is<null_type>()) {
+              check(builder->value_builder()->AppendNulls(row_length - 1));
+              continue;
+            }
+            check(append_array_slice(*builder->value_builder(), delta_type,
+                                     *delta.array, delta_pos, row_length - 1));
+            delta_pos += row_length - 1;
+          }
+          return series{type{result_type}, finish(*builder)};
+        });
+      });
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::list
@@ -507,3 +650,4 @@ TENZIR_REGISTER_PLUGIN(concatenate)
 TENZIR_REGISTER_PLUGIN(add)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::list::remove)
 TENZIR_REGISTER_PLUGIN(zip)
+TENZIR_REGISTER_PLUGIN(deltas)

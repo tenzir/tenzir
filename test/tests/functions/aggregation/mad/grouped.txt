@@ -1,0 +1,8 @@
+{
+  key: "a",
+  mad_value: 1.0,
+}
+{
+  key: "b",
+  mad_value: 10.0,
+}

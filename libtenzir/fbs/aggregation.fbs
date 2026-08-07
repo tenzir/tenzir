@@ -46,6 +46,34 @@ table StddevVariance {
   state: StddevVarianceState;
 }
 
+enum MadState : short {
+  None,
+  Failed,
+  Duration,
+  Numeric,
+}
+
+table Mad {
+  values: [Data] (required);
+  state: MadState;
+}
+
+enum SkewnessState : short {
+  None,
+  Failed,
+  Duration,
+  Numeric,
+}
+
+table Skewness {
+  count: ulong;
+  mean: double;
+  m2: double;
+  m3: double;
+  values: [double] (required);
+  state: SkewnessState;
+}
+
 table FirstLast {
   result: Data (required);
 }

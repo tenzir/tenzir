@@ -1,0 +1,2 @@
+from {xs: [10, 5, 20]}
+ys = deltas(xs)

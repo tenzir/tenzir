@@ -1,0 +1,6 @@
+// Zero-dispersion input is the perfectly regular beacon case: both methods
+// must return 0.0, not null, so that `abs(skew) <= threshold` stays true.
+from {x: 5},
+  {x: 5},
+  {x: 5}
+summarize moment=skewness(x), bowley=skewness(x, method="bowley")

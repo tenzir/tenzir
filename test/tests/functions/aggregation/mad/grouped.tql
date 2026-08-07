@@ -1,0 +1,8 @@
+from {key: "a", x: 1},
+  {key: "b", x: 10},
+  {key: "a", x: 2},
+  {key: "b", x: 20},
+  {key: "a", x: 3},
+  {key: "b", x: 60}
+summarize key, mad_value=mad(x)
+sort key

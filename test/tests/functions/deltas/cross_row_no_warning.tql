@@ -1,0 +1,6 @@
+// Pairs that span list boundaries must never be evaluated: the two adjacent
+// singleton lists would otherwise trigger a spurious overflow warning for
+// INT64_MIN - INT64_MAX, a difference the user never asked for.
+from {xs: [9223372036854775807]},
+  {xs: [-9223372036854775807]}
+xs = xs.deltas()

@@ -1,0 +1,6 @@
+{
+  int_result: null,
+  duration_result: null,
+  int_result_type: "double",
+  duration_result_type: "double",
+}

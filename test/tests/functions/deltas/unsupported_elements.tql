@@ -1,0 +1,2 @@
+from {xs: ["a", "b", "c"]}
+result = xs.deltas()

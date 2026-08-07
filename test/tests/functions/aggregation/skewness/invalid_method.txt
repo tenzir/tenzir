@@ -1,0 +1,6 @@
+error: expected `method` to be `moment` or `bowley`, got `pearson`
+ --> tests/functions/aggregation/skewness/invalid_method.tql:6:35
+  |
+6 | summarize skew=skewness(x, method="pearson")
+  |                                   ^^^^^^^^^
+  |

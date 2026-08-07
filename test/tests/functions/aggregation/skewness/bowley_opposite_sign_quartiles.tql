@@ -1,0 +1,9 @@
+// Normalized quartile gaps keep both the numerator and the denominator
+// finite when the quartiles themselves have opposite signs near the float64
+// limit, where `q3 - q1` overflows to infinity.
+from {x: -1.7e308},
+  {x: -1.2e308},
+  {x: 1.0e308},
+  {x: 1.6e308}
+summarize skew=skewness(x, method="bowley")
+skew = round(skew * 10000) / 10000

@@ -1,0 +1,14 @@
+{
+  xs: [
+    "a",
+    "b",
+    "c",
+  ],
+  result: null,
+}
+warning: expected a list of numbers, durations, or times, but got a list of `string`
+ --> tests/functions/deltas/unsupported_elements.tql:2:10
+  |
+2 | result = xs.deltas()
+  |          ~~
+  |

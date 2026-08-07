@@ -1,0 +1,7 @@
+// The exact median deviation is 9223372036854775807.5ns, which exceeds the
+// duration representation. The result must be null.
+from {x: nanoseconds(int("-9223372036854775808"))},
+  {x: nanoseconds(int("-9223372036854775808"))},
+  {x: nanoseconds(9223372036854775807)},
+  {x: nanoseconds(9223372036854775807)}
+summarize mad_value=mad(x)

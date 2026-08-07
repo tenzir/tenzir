@@ -1,0 +1,4 @@
+from {x: 1s},
+  {x: 2s},
+  {x: 10s}
+summarize mad_value=mad(x)

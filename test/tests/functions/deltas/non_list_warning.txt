@@ -1,0 +1,10 @@
+{
+  x: 42,
+  result: null,
+}
+warning: expected `list`, but got `int64`
+ --> tests/functions/deltas/non_list_warning.tql:2:10
+  |
+2 | result = x.deltas()
+  |          ~
+  |

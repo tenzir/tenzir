@@ -1,0 +1,4 @@
+from {x: 5},
+  {x: 5},
+  {x: 5}
+summarize mad_value=mad(x)

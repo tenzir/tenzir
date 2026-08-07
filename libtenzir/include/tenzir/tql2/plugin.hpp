@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/string_literal.hpp"
 #include "tenzir/multi_series.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/operator.hpp"
 #include "tenzir/plugin/printer.hpp"
@@ -187,6 +188,12 @@ public:
   virtual auto make_aggregation(function_invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>>
     = 0;
+
+  /// Returns the output type for regular list calls when it can be inferred
+  /// from the list element type.
+  virtual auto list_call_result_type(type const&) const -> Option<type> {
+    return None{};
+  }
 };
 
 /// This adapter transforms a legacy parser object to an operator.

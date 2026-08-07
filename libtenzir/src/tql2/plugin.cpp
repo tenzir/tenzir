@@ -66,8 +66,8 @@ auto aggregation_plugin::make_function(function_invocation inv,
   adjusted_call.args.front() = inner_selector;
   TRY(auto fn, this->make_aggregation(function_invocation{adjusted_call}, ctx));
   return function_use::make(
-    [fn = std::move(fn), subject_arg = std::move(subject_arg)](
-      evaluator eval, session ctx) mutable -> multi_series {
+    [fn = std::move(fn), subject_arg = std::move(subject_arg),
+     this](evaluator eval, session ctx) mutable -> multi_series {
       return map_series(eval(subject_arg), [&](series subject) -> series {
         if (is<null_type>(subject.type)) {
           return series::null(null_type{}, subject.length());
@@ -92,7 +92,8 @@ auto aggregation_plugin::make_function(function_invocation inv,
                                    arrow::ArrayVector{lists->array->values()}),
           dummy_type,
         };
-        auto builder = series_builder{};
+        auto result_type = list_call_result_type(lists->type.value_type());
+        auto builder = series_builder{result_type ? &*result_type : nullptr};
         for (auto i = int64_t{}; i < lists->array->length(); ++i) {
           if (lists->array->IsNull(i)) {
             builder.null();

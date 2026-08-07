@@ -1,0 +1,2 @@
+from {xs: [1s, 3s, 10s]}
+xs = xs.deltas()

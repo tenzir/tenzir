@@ -1,0 +1,9 @@
+{
+  intervals: [
+    1min,
+    1min,
+    1min,
+    1min,
+  ],
+  interval_skew: 0.0,
+}

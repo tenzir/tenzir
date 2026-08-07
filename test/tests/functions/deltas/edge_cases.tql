@@ -1,0 +1,5 @@
+from {xs: []},
+  {xs: [1]},
+  {xs: null},
+  {xs: [1, null, 3]}
+xs = xs.deltas()

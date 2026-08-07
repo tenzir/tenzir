@@ -1,0 +1,5 @@
+from {x: float("-inf")},
+  {x: float("-inf")},
+  {x: float("inf")},
+  {x: float("inf")}
+summarize skew=skewness(x, method="bowley")

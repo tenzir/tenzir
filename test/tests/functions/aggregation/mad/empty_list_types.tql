@@ -1,0 +1,9 @@
+from {
+  ints: [1].where(x => false),
+  durations: [1s].where(x => false),
+}
+int_result = ints.mad()
+duration_result = durations.mad()
+int_result_type = type_of(int_result).kind
+duration_result_type = type_of(duration_result).kind
+drop ints, durations

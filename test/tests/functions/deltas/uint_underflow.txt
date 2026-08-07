@@ -1,0 +1,12 @@
+{
+  xs: [
+    null,
+    7,
+  ],
+}
+warning: integer overflow
+ --> tests/functions/deltas/uint_underflow.tql:2:6
+  |
+2 | xs = xs.deltas()
+  |      ~~
+  |

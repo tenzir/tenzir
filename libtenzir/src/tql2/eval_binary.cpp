@@ -327,7 +327,11 @@ struct BinOpKernel<ast::binary_op::sub, time_type, time_type> {
   using result = duration;
 
   static auto evaluate(time l, time r) -> std::variant<result, const char*> {
-    return l - r;
+    if (auto check = checked_sub(l.time_since_epoch().count(),
+                                 r.time_since_epoch().count())) {
+      return duration{check.value()};
+    }
+    return "time subtraction overflow";
   }
 };
 

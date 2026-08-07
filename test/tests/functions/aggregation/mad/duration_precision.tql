@@ -1,0 +1,4 @@
+from {x: nanoseconds(9007199254740992)},
+  {x: nanoseconds(9007199254740993)},
+  {x: nanoseconds(9007199254740994)}
+summarize mad_value=mad(x)

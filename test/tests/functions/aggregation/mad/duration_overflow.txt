@@ -1,0 +1,3 @@
+{
+  mad_value: null,
+}

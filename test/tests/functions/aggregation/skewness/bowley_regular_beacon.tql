@@ -1,0 +1,12 @@
+// End-to-end beacon cadence check: perfectly regular check-ins have
+// zero-dispersion intervals, where Bowley skewness hits its q3 == q1
+// degenerate case and must return 0.0.
+from {t: 2024-01-01T00:00:00},
+  {t: 2024-01-01T00:01:00},
+  {t: 2024-01-01T00:02:00},
+  {t: 2024-01-01T00:03:00},
+  {t: 2024-01-01T00:04:00}
+summarize times=collect(t)
+intervals = times.sort().deltas()
+interval_skew = intervals.skewness(method="bowley")
+drop times

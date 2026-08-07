@@ -1,0 +1,6 @@
+{
+  int_mad: 1.0,
+  int_min_mad: 1.0,
+  uint_mad: 1.0,
+  uint_max_mad: 1.0,
+}

@@ -1,0 +1,8 @@
+// Compute finite gaps directly so close values near the float64 limit retain
+// their relative spacing.
+from {x: 1.0e308},
+  {x: 1.0000000000000002e308},
+  {x: 1.0000000000000004e308},
+  {x: 1.0000000000000016e308}
+summarize skew=skewness(x, method="bowley")
+skew = round(skew * 10000) / 10000

@@ -1,0 +1,6 @@
+from {x: 1},
+  {x: 1},
+  {x: 1},
+  {x: 10}
+summarize skew=skewness(x)
+skew = round(skew * 10000) / 10000

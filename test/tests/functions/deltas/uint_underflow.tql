@@ -1,0 +1,2 @@
+from {xs: [uint(5), uint(3), uint(10)]}
+xs = xs.deltas()

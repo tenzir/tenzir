@@ -1,0 +1,8 @@
+// The centered numerator keeps Bowley skewness finite for values near the
+// float64 limit, where the naive `q3 + q1 - 2*q2` overflows to infinity.
+from {x: 1.0e308},
+  {x: 1.1e308},
+  {x: 1.2e308},
+  {x: 1.7e308}
+summarize skew=skewness(x, method="bowley")
+skew = round(skew * 10000) / 10000

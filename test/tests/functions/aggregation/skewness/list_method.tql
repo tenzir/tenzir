@@ -1,0 +1,4 @@
+from {xs: [1, 1, 1, 10]},
+  {xs: [1, 2, 3]}
+skew = xs.skewness()
+skew = round(skew * 10000) / 10000
