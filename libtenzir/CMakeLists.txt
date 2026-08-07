@@ -647,7 +647,12 @@ if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
       PRIVATE $<BUILD_LOCAL_INTERFACE:${_tenzir_proxygen_server_target}>)
   endif ()
 else ()
+  # System proxygen is a shared package, so its targets do leak into the export
+  # set as `$<LINK_ONLY:...>`. Declare the dependency so that consumers of the
+  # installed package can recreate those imported targets.
   target_link_libraries(libtenzir_builtins PRIVATE ${_tenzir_proxygen_target})
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+         "\nfind_package(proxygen REQUIRED CONFIG)")
   if (_tenzir_proxygen_server_target)
     target_link_libraries(libtenzir_builtins
                           PRIVATE ${_tenzir_proxygen_server_target})
@@ -713,6 +718,9 @@ if (LINUX)
     find_package(libbacktrace REQUIRED)
     string(APPEND TENZIR_FIND_DEPENDENCY_LIST
            "\nfind_package(libbacktrace REQUIRED)")
+    # libbacktrace has no CMake config, so consumers of the installed package
+    # need our find module to resolve the dependency declared above.
+    provide_find_module(libbacktrace)
     set(TENZIR_USE_BOOST_STACKTRACE_LINK 0)
     set(TENZIR_USE_BOOST_STACKTRACE_BACKTRACE 1)
     target_link_libraries(libtenzir PUBLIC libbacktrace::libbacktrace)
