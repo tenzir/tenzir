@@ -20,6 +20,7 @@
 #include <boost/url/parse.hpp>
 #include <boost/url/url.hpp>
 
+#include <algorithm>
 #include <cctype>
 #include <charconv>
 #include <limits>
@@ -206,13 +207,25 @@ unwrap_clickhouse_type_call(std::string_view text, std::string_view name)
   return text.substr(name.size() + 1, text.size() - name.size() - 2);
 }
 
-/// Returns the index of the first entry in `columns` whose `.inner` equals
-/// `name`, or `None` if absent. Used to look up a field name in the `json=` and
-/// `low_cardinality=` argument lists.
-inline auto index_of(std::span<const located<std::string>> columns,
-                     std::string_view name) -> Option<size_t> {
+/// A top-level or nested field path, as a sequence of identifier segments
+/// (e.g. `["file", "xattributes"]` for `file.xattributes`). Kept as segments
+/// rather than a joined dotted string so it can be compared directly,
+/// segment-by-segment, against the `path_type` accumulated while recursively
+/// walking a schema (see `transformers.hpp`'s `path_type`).
+using field_path_type = std::vector<std::string>;
+
+/// Renders a field path as a dotted string for diagnostics.
+inline auto to_dotted_string(std::span<const std::string> path) -> std::string {
+  return fmt::format("{}", fmt::join(path, "."));
+}
+
+/// Returns the index of the first entry in `columns` whose segments equal
+/// `path`, or `None` if absent. Used to look up a field path in the `json=`
+/// and `low_cardinality=` argument lists.
+inline auto index_of(std::span<const located<field_path_type>> columns,
+                     std::span<const std::string_view> path) -> Option<size_t> {
   for (size_t i = 0; i < columns.size(); ++i) {
-    if (columns[i].inner == name) {
+    if (std::ranges::equal(columns[i].inner, path)) {
       return i;
     }
   }
@@ -290,36 +303,49 @@ inline auto validate_table_name(std::string_view table, location table_loc,
 }
 
 // `json=` and `low_cardinality=` each accept either a single field selector or
-// a list of field selectors. Extracts the validated, de-duplicated set of
-// top-level column names. `argument_name` selects the argument named in
-// diagnostics. The caller must ensure the expression was actually provided
-// (i.e. `expr.kind` is set).
+// a list of field selectors, where each selector may be a top-level or nested
+// (dotted) field path. Extracts the validated, de-duplicated set of field
+// paths. `argument_name` selects the argument named in diagnostics. The
+// caller must ensure the expression was actually provided (i.e. `expr.kind`
+// is set).
 inline auto
 parse_field_list_argument(const ast::expression& expr, diagnostic_handler& dh,
                           std::string_view argument_name = "json")
-  -> failure_or<std::vector<located<std::string>>> {
-  auto result = std::vector<located<std::string>>{};
+  -> failure_or<std::vector<located<field_path_type>>> {
+  auto result = std::vector<located<field_path_type>>{};
   auto add = [&](const ast::expression& e) -> failure_or<void> {
     auto sel = ast::field_path::try_from(e);
-    if (not sel or sel->has_this() or sel->path().size() != 1) {
-      diagnostic::error("`{}` expects a top-level field", argument_name)
+    if (not sel or sel->has_this()) {
+      diagnostic::error("`{}` expects a field", argument_name)
         .primary(e.get_location())
         .emit(dh);
       return failure::promise();
     }
-    const auto name = std::string{sel->path().front().id.name};
-    if (not validate_identifier(name)) {
-      emit_invalid_identifier<true>(argument_name, name, sel->get_location(),
-                                    dh);
-      return failure::promise();
+    auto path = field_path_type{};
+    path.reserve(sel->path().size());
+    for (const auto& segment : sel->path()) {
+      if (segment.has_question_mark) {
+        diagnostic::error("`{}` does not support optional field access",
+                          argument_name)
+          .primary(segment.id.get_location())
+          .emit(dh);
+        return failure::promise();
+      }
+      const auto name = std::string{segment.id.name};
+      if (not validate_identifier(name)) {
+        emit_invalid_identifier<true>(argument_name, name,
+                                      segment.id.get_location(), dh);
+        return failure::promise();
+      }
+      path.push_back(name);
     }
     for (const auto& existing : result) {
-      if (existing.inner == name) {
+      if (existing.inner == path) {
         // De-duplicate silently.
         return {};
       }
     }
-    result.push_back({name, sel->get_location()});
+    result.push_back({std::move(path), sel->get_location()});
     return {};
   };
   if (const auto* list = try_as<ast::list>(expr)) {
@@ -342,7 +368,7 @@ parse_field_list_argument(const ast::expression& expr, diagnostic_handler& dh,
 // Backwards-compatible alias for the `json=` argument.
 inline auto
 parse_json_field_argument(const ast::expression& expr, diagnostic_handler& dh)
-  -> failure_or<std::vector<located<std::string>>> {
+  -> failure_or<std::vector<located<field_path_type>>> {
   return parse_field_list_argument(expr, dh, "json");
 }
 

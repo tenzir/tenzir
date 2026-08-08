@@ -8,14 +8,19 @@
 
 #pragma once
 
+#include "clickhouse/arguments.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/detail/stable_map.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/generator.hpp"
+#include "tenzir/series.hpp"
 #include "tenzir/table_slice.hpp"
 
 #include <clickhouse/columns/column.h>
+
+#include <algorithm>
+#include <span>
 
 namespace tenzir::plugins::clickhouse {
 
@@ -108,6 +113,16 @@ auto is_json_transformer(const transformer& t) -> bool;
 auto to_json_string_array(const arrow::Array& array)
   -> std::shared_ptr<arrow::Array>;
 
+/// Recursively rewrites `array` (of Tenzir type `type`), replacing every
+/// field that `trafo` targets a ClickHouse `JSON` column for — at any nesting
+/// depth, through records and lists alike — with its opaque JSON-string
+/// rendering (a field already of type `string` is left unchanged, assumed to
+/// already be JSON). Returns `None` if nothing needed rewriting, so callers
+/// can cheaply detect the no-op case.
+auto prepare_json_fields(const tenzir::type& type,
+                         std::shared_ptr<arrow::Array> array,
+                         const transformer& trafo) -> Option<series>;
+
 struct transformer_record : transformer {
   using schema_transformations
     = detail::stable_map<std::string, std::unique_ptr<transformer>>;
@@ -145,14 +160,44 @@ struct transformer_record : transformer {
 
 auto remove_non_significant_whitespace(std::string_view str) -> std::string;
 
-auto type_to_clickhouse_typename(path_type& path, tenzir::type t, bool nullable,
-                                 diagnostic_handler& dh)
-  -> failure_or<std::string>;
+/// Maps `t` to its ClickHouse type name. A field becomes a `JSON` column,
+/// bypassing the normal per-kind mapping (and the `null_type` error below),
+/// when either its accumulated `path` matches an entry in `json_paths` or its
+/// type itself carries the `variant` attribute (e.g. OCSF fields whose shape
+/// is not statically known, such as `file.xattributes`) — regardless of
+/// nesting depth or of `t`'s concrete kind. `json_seen` (parallel to
+/// `json_paths`) is marked for each `json_paths` entry actually matched by
+/// path (not for `variant`-attributed matches, since those were not
+/// requested explicitly). A field whose `path` matches an entry in
+/// `low_cardinality_paths` is instead wrapped as `LowCardinality(<inner>)`;
+/// `low_cardinality_seen` (parallel to `low_cardinality_paths`) is marked the
+/// same way. Both `_seen` spans let the caller detect entries missing from
+/// the schema.
+auto type_to_clickhouse_typename(
+  path_type& path, tenzir::type t, bool nullable, diagnostic_handler& dh,
+  std::span<const located<field_path_type>> json_paths = {},
+  std::span<char> json_seen = {},
+  std::span<const located<field_path_type>> low_cardinality_paths = {},
+  std::span<char> low_cardinality_seen = {}) -> failure_or<std::string>;
 
-auto plain_clickhouse_tuple_elements(path_type& path, const record_type& record,
-                                     diagnostic_handler& dh,
-                                     std::string_view primary = "")
-  -> failure_or<std::string>;
+/// Returns whether `t` (or anything nested inside it, at any depth) would be
+/// mapped to a ClickHouse `JSON` column by `type_to_clickhouse_typename` —
+/// i.e. its accumulated `path` matches an entry in `json_paths`, or its type
+/// carries both the `variant` and `must_be_record` attributes. Used to reject
+/// a primary key that contains JSON anywhere inside it, without relying on
+/// string-matching the rendered typename (which would also match field names
+/// that happen to contain "JSON").
+auto contains_json_column(path_type& path, const tenzir::type& t,
+                          std::span<const located<field_path_type>> json_paths)
+  -> bool;
+
+auto plain_clickhouse_tuple_elements(
+  path_type& path, const record_type& record, diagnostic_handler& dh,
+  std::string_view primary = "",
+  std::span<const located<field_path_type>> json_paths = {},
+  std::span<char> json_seen = {},
+  std::span<const located<field_path_type>> low_cardinality_paths = {},
+  std::span<char> low_cardinality_seen = {}) -> failure_or<std::string>;
 
 auto make_functions_from_clickhouse(path_type& path,
                                     const std::string_view clickhouse_typename,

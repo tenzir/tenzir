@@ -23,6 +23,7 @@
 #include <clickhouse/columns/enum.h>
 #include <clickhouse/columns/ip4.h>
 #include <clickhouse/columns/ip6.h>
+#include <clickhouse/columns/json.h>
 #include <clickhouse/columns/nullable.h>
 #include <clickhouse/columns/numeric.h>
 #include <clickhouse/columns/string.h>
@@ -312,6 +313,7 @@ auto infer_type(::clickhouse::TypeRef const& type_ref, value_path path,
     case ::clickhouse::Type::UInt128:
     case ::clickhouse::Type::Enum8:
     case ::clickhouse::Type::Enum16:
+    case ::clickhouse::Type::JSON:
       return type{string_type{}};
     case ::clickhouse::Type::Date:
     case ::clickhouse::Type::Date32:
@@ -375,7 +377,6 @@ auto infer_type(::clickhouse::TypeRef const& type_ref, value_path path,
     case ::clickhouse::Type::MultiPolygon:
     case ::clickhouse::Type::Nullable:
     case ::clickhouse::Type::LowCardinality:
-    case ::clickhouse::Type::JSON:
       return None{};
   }
   return None{};
@@ -568,7 +569,8 @@ auto build_column(normalized_column const& column,
 
 template <class Column>
   requires concepts::one_of<Column, ::clickhouse::ColumnString,
-                            ::clickhouse::ColumnFixedString>
+                            ::clickhouse::ColumnFixedString,
+                            ::clickhouse::ColumnJSON>
 auto build_column(normalized_column const& column, Column const& values,
                   value_path const&, diagnostic_handler&) -> series {
   auto builder = series_builder{column.output_type};

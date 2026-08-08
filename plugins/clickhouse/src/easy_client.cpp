@@ -193,25 +193,21 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
         ? unquote_identifier_component(args_.primary->inner)
         : args_.primary->inner;
   auto path = path_type{};
-  // Build the top-level column list. Fields named in `json` become ClickHouse
-  // `JSON` columns regardless of their inferred type; all other fields map as
-  // usual. This intentionally diverges from `plain_clickhouse_tuple_elements`,
-  // which is also used for nested records and `from_clickhouse`.
-  /// TODO: This should really be merged with the transformer itself. Its an
-  /// (almost) duplicate of `make_record_functions_from_clickhouse`
-  const auto json_index = [&](std::string_view name) -> Option<size_t> {
-    return index_of(args_.json, name);
-  };
-  auto json_seen = std::vector<bool>(args_.json.size(), false);
-  // Fields named in `low_cardinality` are wrapped as `LowCardinality(<inner>)`,
-  // where the inner type is the normally inferred type. Unlike `json`, the
-  // inner type cannot be synthesized for absent fields, so every listed column
-  // must be present in the first event (enforced after the loop below).
-  const auto low_cardinality_index = [&](std::string_view name) {
-    return index_of(args_.low_cardinality, name);
-  };
+  // Build the top-level column list. Fields named in `json` (at any nesting
+  // depth), and fields whose type carries both the `variant` and
+  // `must_be_record` attributes (e.g. OCSF fields whose shape is not
+  // statically known but is guaranteed to be an object), become ClickHouse
+  // `JSON` columns regardless of their inferred type; fields named in
+  // `low_cardinality` (at any nesting depth) become `LowCardinality(<inner>)`;
+  // all other fields map as usual. `type_to_clickhouse_typename` (used here
+  // and recursively for nested records) applies all three rules uniformly at
+  // every depth.
+  auto json_seen = std::vector<char>(args_.json.size(), false);
+  // Unlike `json`, a `low_cardinality` field's inner type cannot be
+  // synthesized when absent, so every listed path must be present in the
+  // first event (enforced after the loop below).
   auto low_cardinality_seen
-    = std::vector<bool>(args_.low_cardinality.size(), false);
+    = std::vector<char>(args_.low_cardinality.size(), false);
   auto clickhouse_columns = std::string{"("};
   auto first = true;
   const auto append_column = [&](std::string_view name, std::string_view type) {
@@ -226,38 +222,40 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
   for (auto [k, t] : schema.fields()) {
     const auto is_primary = k == primary_name;
     primary_found |= is_primary;
-    if (auto idx = json_index(k)) {
-      json_seen[*idx] = true;
-      append_column(k, "JSON");
-      continue;
-    }
     path.push_back(k);
+    if (is_primary and contains_json_column(path, t, args_.json)) {
+      diagnostic::error(
+        "a `JSON` column cannot be the primary key or contain one")
+        .primary(*args_.primary, "column `{}` contains a `JSON` field",
+                 primary_name)
+        .emit(dh_);
+      return failure::promise();
+    }
     TRY(auto clickhouse_typename,
-        type_to_clickhouse_typename(path, t, not is_primary, dh_));
+        type_to_clickhouse_typename(path, t, not is_primary, dh_, args_.json,
+                                    json_seen, args_.low_cardinality,
+                                    low_cardinality_seen));
     path.pop_back();
     TENZIR_ASSERT(not clickhouse_typename.empty());
-    if (auto idx = low_cardinality_index(k)) {
-      low_cardinality_seen[*idx] = true;
-      if (not is_lowcardinality_supported_inner(clickhouse_typename)) {
-        diagnostic::error("column `{}` cannot be a `LowCardinality` column", k)
-          .primary(args_.low_cardinality[*idx])
-          .note("`LowCardinality` is only supported for `string` columns, but "
-                "`{}` has the ClickHouse type `{}`",
-                k, clickhouse_typename)
-          .emit(dh_);
-        return failure::promise();
-      }
-      clickhouse_typename
-        = fmt::format("LowCardinality({})", clickhouse_typename);
-    }
     append_column(k, clickhouse_typename);
   }
-  // `json` columns absent from the first slice are still created, as plain
-  // `JSON` columns.
+  // `json` paths absent from the first slice are still created, as plain
+  // `JSON` columns. This is only possible for top-level paths: a nested path
+  // whose parent record is absent has no column to attach to.
   for (size_t i = 0; i < args_.json.size(); ++i) {
-    if (not json_seen[i]) {
-      append_column(args_.json[i].inner, "JSON");
+    if (json_seen[i]) {
+      continue;
     }
+    if (args_.json[i].inner.size() != 1) {
+      diagnostic::error("`json` column `{}` is missing from the first event",
+                        to_dotted_string(args_.json[i].inner))
+        .primary(args_.json[i])
+        .note("a nested column's parent record must be present in the first "
+              "event")
+        .emit(dh_);
+      return failure::promise();
+    }
+    append_column(args_.json[i].inner.front(), "JSON");
   }
   // `low_cardinality` columns must be present in the first event: their inner
   // type is inferred from the data and cannot be synthesized when missing.
@@ -265,7 +263,7 @@ auto easy_client::remote_create_table(const tenzir::record_type& schema,
     if (not low_cardinality_seen[i]) {
       diagnostic::error("`low_cardinality` column `{}` is missing from the "
                         "first event",
-                        args_.low_cardinality[i].inner)
+                        to_dotted_string(args_.low_cardinality[i].inner))
         .primary(args_.low_cardinality[i])
         .note("the column's inner type cannot be inferred when creating the "
               "table")

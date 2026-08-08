@@ -12,6 +12,7 @@
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/concept/printable/tenzir/json2.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/series.hpp"
 #include "tenzir/view3.hpp"
 
 #include <arrow/builder.h>
@@ -1255,9 +1256,118 @@ auto to_json_string_array(const arrow::Array& array)
   return finish(builder);
 }
 
-auto type_to_clickhouse_typename(path_type& path, tenzir::type t, bool nullable,
-                                 diagnostic_handler& dh)
-  -> failure_or<std::string> {
+auto prepare_json_fields(const tenzir::type& type,
+                         std::shared_ptr<arrow::Array> array,
+                         const transformer& trafo) -> Option<series> {
+  if (is_json_transformer(trafo)) {
+    if (type.kind().is<string_type>()) {
+      return None{};
+    }
+    return series{string_type{}, to_json_string_array(*array)};
+  }
+  if (const auto* record_trafo
+      = dynamic_cast<const transformer_record*>(&trafo)) {
+    const auto* rt = try_as<record_type>(type);
+    if (not rt) {
+      return None{};
+    }
+    const auto& struct_array = as<arrow::StructArray>(*array);
+    auto fields = std::vector<series_field>{};
+    fields.reserve(rt->num_fields());
+    auto any_changed = false;
+    for (auto [k, t, arr] : columns_of(*rt, struct_array)) {
+      const auto child_trafo = record_trafo->transfrom_and_index_for(k).trafo;
+      if (not child_trafo) {
+        // Unknown to the target table; `prepare_slice`'s top-level loop
+        // already warns and drops such columns, so leave nested ones as-is
+        // here (only top-level unknown columns are ever dropped).
+        fields.emplace_back(k, series{t, arr.Slice(0)});
+        continue;
+      }
+      auto child_array = arr.Slice(0);
+      if (auto replaced = prepare_json_fields(t, child_array, *child_trafo)) {
+        any_changed = true;
+        fields.emplace_back(k, *std::move(replaced));
+      } else {
+        fields.emplace_back(k, series{t, std::move(child_array)});
+      }
+    }
+    if (not any_changed) {
+      return None{};
+    }
+    return series{make_record_series(fields, struct_array)};
+  }
+  if (const auto* array_trafo
+      = dynamic_cast<const transformer_array*>(&trafo)) {
+    const auto* lt = try_as<list_type>(type);
+    if (not lt) {
+      return None{};
+    }
+    const auto& list_array = as<arrow::ListArray>(*array);
+    auto replaced = prepare_json_fields(lt->value_type(), list_array.values(),
+                                        *array_trafo->data_transform);
+    if (not replaced) {
+      return None{};
+    }
+    return series{
+      dangerously_rejoin_list_series(*std::move(replaced), list_array)};
+  }
+  return None{};
+}
+
+auto contains_json_column(path_type& path, const tenzir::type& t,
+                          std::span<const located<field_path_type>> json_paths)
+  -> bool {
+  if (index_of(json_paths, path)) {
+    return true;
+  }
+  if (t.attribute("variant") and t.attribute("must_be_record")) {
+    return true;
+  }
+  if (const auto* r = try_as<record_type>(t)) {
+    for (auto [k, ft] : r->fields()) {
+      path.push_back(k);
+      const auto found = contains_json_column(path, ft, json_paths);
+      path.pop_back();
+      if (found) {
+        return true;
+      }
+    }
+    return false;
+  }
+  if (const auto* l = try_as<list_type>(t)) {
+    return contains_json_column(path, l->value_type(), json_paths);
+  }
+  return false;
+}
+
+auto type_to_clickhouse_typename(
+  path_type& path, tenzir::type t, bool nullable, diagnostic_handler& dh,
+  std::span<const located<field_path_type>> json_paths,
+  std::span<char> json_seen,
+  std::span<const located<field_path_type>> low_cardinality_paths,
+  std::span<char> low_cardinality_seen) -> failure_or<std::string> {
+  // A field becomes a `JSON` column, bypassing the normal per-kind mapping
+  // below (including the `null_type` error), when it was explicitly named in
+  // `json=` (at any nesting depth) or when its type itself carries both the
+  // `variant` and `must_be_record` attributes — e.g. OCSF fields whose shape
+  // is not statically known but is guaranteed to be an object, such as
+  // `file.xattributes`, which are typed `null` with these attributes for as
+  // long as no concrete data has been seen for them. Variants without
+  // `must_be_record` (e.g. OCSF `data`, `evidence`, `access_result`) may
+  // legitimately hold scalars or arrays, which `transformer_json` cannot
+  // represent (it only accepts JSON objects), so they are left to the normal
+  // per-kind mapping below instead. This check is independent of `t`'s
+  // concrete kind: a variant field could in principle already carry a
+  // concrete type (e.g. once real data replaced the null) and should still
+  // become `JSON` rather than being type-mapped normally.
+  if (auto idx = index_of(json_paths, path)) {
+    json_seen[*idx] = true;
+    return std::string{"JSON"};
+  }
+  if (t.attribute("variant") and t.attribute("must_be_record")) {
+    return std::string{"JSON"};
+  }
   const auto f = detail::overload{
     [nullable]<typename T>(const T&) -> failure_or<std::string>
       requires requires {
@@ -1266,8 +1376,11 @@ auto type_to_clickhouse_typename(path_type& path, tenzir::type t, bool nullable,
     {
       return tenzir_to_clickhouse_trait<T>::clickhouse_typename(nullable);
     },
-    [&dh, &path](const record_type& r) -> failure_or<std::string> {
-      TRY(auto tup, plain_clickhouse_tuple_elements(path, r, dh));
+    [&dh, &path, json_paths, json_seen, low_cardinality_paths,
+     low_cardinality_seen](const record_type& r) -> failure_or<std::string> {
+      TRY(auto tup, plain_clickhouse_tuple_elements(
+                      path, r, dh, "", json_paths, json_seen,
+                      low_cardinality_paths, low_cardinality_seen));
       if (tup == "()") {
         diagnostic::error("column `{}` is an empty record, which is not "
                           "supported",
@@ -1278,9 +1391,11 @@ auto type_to_clickhouse_typename(path_type& path, tenzir::type t, bool nullable,
       }
       return "Tuple" + tup;
     },
-    [&dh, nullable, &path](const list_type& l) -> failure_or<std::string> {
-      TRY(auto vt,
-          type_to_clickhouse_typename(path, l.value_type(), nullable, dh));
+    [&dh, nullable, &path, json_paths, json_seen, low_cardinality_paths,
+     low_cardinality_seen](const list_type& l) -> failure_or<std::string> {
+      TRY(auto vt, type_to_clickhouse_typename(
+                     path, l.value_type(), nullable, dh, json_paths, json_seen,
+                     low_cardinality_paths, low_cardinality_seen));
       TENZIR_ASSERT(not vt.empty());
       return "Array(" + vt + ")";
     },
@@ -1308,19 +1423,45 @@ auto type_to_clickhouse_typename(path_type& path, tenzir::type t, bool nullable,
       return failure::promise();
     },
     };
-  return match(t, f);
+  TRY(auto clickhouse_typename, match(t, f));
+  // A field becomes `LowCardinality(<inner>)` when explicitly named in
+  // `low_cardinality=`, at any nesting depth. Unlike `json=`, this cannot be
+  // synthesized for absent fields, so every listed path must be present in
+  // the first event (enforced by the caller once `low_cardinality_seen` is
+  // fully populated).
+  if (auto idx = index_of(low_cardinality_paths, path)) {
+    low_cardinality_seen[*idx] = true;
+    if (not is_lowcardinality_supported_inner(clickhouse_typename)) {
+      diagnostic::error("column `{}` cannot be a `LowCardinality` column",
+                        fmt::join(path, "."))
+        .primary(low_cardinality_paths[*idx])
+        .note("`LowCardinality` is only supported for `string` columns, but "
+              "`{}` has the ClickHouse type `{}`",
+              fmt::join(path, "."), clickhouse_typename)
+        .emit(dh);
+      return failure::promise();
+    }
+    clickhouse_typename
+      = fmt::format("LowCardinality({})", clickhouse_typename);
+  }
+  return clickhouse_typename;
 }
 
-auto plain_clickhouse_tuple_elements(path_type& path, const record_type& record,
-                                     diagnostic_handler& dh,
-                                     std::string_view primary)
-  -> failure_or<std::string> {
+auto plain_clickhouse_tuple_elements(
+  path_type& path, const record_type& record, diagnostic_handler& dh,
+  std::string_view primary,
+  std::span<const located<field_path_type>> json_paths,
+  std::span<char> json_seen,
+  std::span<const located<field_path_type>> low_cardinality_paths,
+  std::span<char> low_cardinality_seen) -> failure_or<std::string> {
   auto res = std::string{"("};
   auto first = true;
   for (auto [k, t] : record.fields()) {
     const auto is_primary = k == primary;
     path.push_back(k);
-    TRY(auto nested, type_to_clickhouse_typename(path, t, not is_primary, dh));
+    TRY(auto nested, type_to_clickhouse_typename(
+                       path, t, not is_primary, dh, json_paths, json_seen,
+                       low_cardinality_paths, low_cardinality_seen));
     path.pop_back();
     TENZIR_ASSERT(not nested.empty());
     if (not first) {

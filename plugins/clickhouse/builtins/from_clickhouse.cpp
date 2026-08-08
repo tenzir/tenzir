@@ -261,6 +261,11 @@ private:
       // wide tables.
       query.SetSetting("preferred_block_size_bytes",
                        {"0", ::clickhouse::QuerySettingsField::IMPORTANT});
+      // `block_to_table_slice` cannot decode ClickHouse's native `JSON`
+      // column type; this makes the server send such columns as plain
+      // strings instead, matching how `to_clickhouse` writes JSON columns.
+      query.SetSetting("output_format_native_write_json_as_string",
+                       {"1", ::clickhouse::QuerySettingsField::IMPORTANT});
       query.OnDataCancelable([&](::clickhouse::Block const& block) {
         if (runtime_->should_cancel()) {
           return false;

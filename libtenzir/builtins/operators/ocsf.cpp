@@ -170,11 +170,16 @@ private:
 
   auto cast_type(const type& ty) -> type {
     if (ty.attribute("variant")) {
+      // Preserve the schema's own attributes (`variant`, `must_be_record`, ...)
+      // on the result so that downstream consumers (e.g. `to_clickhouse`) can
+      // still identify this as a variant field, even though its actual shape
+      // is not statically known.
+      auto attributes = collect(ty.attributes());
       if (not preserve_variants_) {
-        return type{string_type{}};
+        return type{string_type{}, std::move(attributes)};
       }
       // We don't know the actual type, so we just use `null`.
-      return type{null_type{}};
+      return type{null_type{}, std::move(attributes)};
     }
     if (timestamp_to_ms_ and ty.attribute("epochtime")) {
       TENZIR_ASSERT(ty.kind().is<time_type>());
@@ -197,6 +202,14 @@ private:
       = ty.attribute("nullify_empty_records").has_value();
     if (ty.attribute("variant")) {
       TENZIR_ASSERT(is<null_type>(ty));
+      // Preserve the schema's own attributes (`variant`, `must_be_record`,
+      // ...) on every value returned below, so that downstream consumers
+      // (e.g. `to_clickhouse`) can still identify this as a variant field
+      // regardless of what concrete shape (or absence of data) it ends up
+      // with. These attributes belong to `ty` (the target schema's declared
+      // type), not to `input.type` (the source data's type), which never
+      // carried them to begin with.
+      auto attributes = collect(ty.attributes());
       if (ty.attribute("must_be_record")
           and not input.type.kind().is_any<null_type, record_type>()
           // Strings are also allowed so that `ocsf::apply` is idempotent.
@@ -205,23 +218,29 @@ private:
                             path, input.type.kind())
           .primary(self_)
           .emit(dh_);
-        auto result_ty
-          = preserve_variants_ ? type{null_type{}} : type{string_type{}};
+        auto result_ty = preserve_variants_
+                           ? type{null_type{}, std::move(attributes)}
+                           : type{string_type{}, std::move(attributes)};
         return series{result_ty, check(arrow::MakeArrayOfNull(
                                    result_ty.to_arrow_type(), input.length(),
                                    tenzir::arrow_memory_pool()))};
       }
       if (not preserve_variants_) {
-        return print_json(input, nullify_empty_records);
+        auto result = print_json(input, nullify_empty_records);
+        return series{type{result.type, std::move(attributes)},
+                      std::move(result.array)};
       }
       if (nullify_empty_records) {
         if (auto* record_ty = try_as<record_type>(input.type)) {
           if (record_ty->num_fields() == 0) {
-            return series::null(record_type{}, input.length());
+            auto result = series::null(record_type{}, input.length());
+            return series{type{result.type, std::move(attributes)},
+                          std::move(result.array)};
           }
         }
       }
-      return input;
+      return series{type{input.type, std::move(attributes)},
+                    std::move(input.array)};
     }
     if (ty.attribute("epochtime")) {
       TENZIR_ASSERT(is<time_type>(ty));

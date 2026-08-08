@@ -491,10 +491,10 @@ public:
       primary = {args_.primary->path().front().id.name,
                  args_.primary->get_location()};
     }
-    auto json_columns = std::vector<located<std::string>>{};
+    auto json_columns = std::vector<located<field_path_type>>{};
     if (args_.json.kind) {
       // The `json` argument was already validated during parsing, so
-      // re-extracting the column names here cannot fail. These only affect
+      // re-extracting the field paths here cannot fail. These only affect
       // table *creation* (the columns are created as `JSON`); the worker
       // discovers which columns are JSON from the actual table and serializes
       // accordingly.
@@ -502,7 +502,7 @@ public:
       TENZIR_ASSERT(parsed);
       json_columns = std::move(*parsed);
     }
-    auto low_cardinality_columns = std::vector<located<std::string>>{};
+    auto low_cardinality_columns = std::vector<located<field_path_type>>{};
     if (args_.low_cardinality.kind) {
       // The `low_cardinality` argument was already validated during parsing, so
       // re-extracting the column names here cannot fail.
@@ -794,16 +794,19 @@ private:
   }
 
   /// Rewrites `slice` for insertion into the target table described by `tr`:
-  /// - top-level fields that target a ClickHouse `JSON` column are replaced
-  /// with
-  ///   their opaque JSON-string rendering (a field already of type `string` is
-  ///   left unchanged, assumed to be JSON);
+  /// - fields that target a ClickHouse `JSON` column, at any nesting depth
+  ///   (top-level or nested inside records/lists), are replaced with their
+  ///   opaque JSON-string rendering (a field already of type `string` is left
+  ///   unchanged, assumed to be JSON);
   /// - top-level columns the table does not accept (unknown, or generated
   ///   `MATERIALIZED`/`ALIAS` columns) are dropped with a warning.
   ///
   /// Dropping table-absent columns here — before the by-schema grouping in
   /// `insert_table` — lets events that differ only in such columns collapse
-  /// into one schema and batch together.
+  /// into one schema and batch together. Pre-serializing JSON fields at any
+  /// depth (not just top-level) similarly lets events that differ only in the
+  /// shape of a nested JSON-bound field (e.g. OCSF's `file.xattributes`)
+  /// collapse into one schema.
   static auto
   prepare_slice(const table_slice& slice, const transformer_record& tr,
                 diagnostic_handler& dh, location operator_location)
@@ -836,10 +839,10 @@ private:
         changed = true;
         continue;
       }
-      if (is_json_transformer(*trafo)
-          and not column.type.kind().is<string_type>()) {
-        fields.emplace_back(column.name, type{string_type{}});
-        arrays.push_back(to_json_string_array(column.array));
+      if (auto replaced
+          = prepare_json_fields(column.type, column.array.Slice(0), *trafo)) {
+        fields.emplace_back(column.name, replaced->type);
+        arrays.push_back(std::move(replaced->array));
         changed = true;
       } else {
         fields.emplace_back(column.name, column.type);
@@ -1010,18 +1013,25 @@ public:
         }
         if (auto json = ctx.get(json_arg)) {
           // `json` serves two purposes: when creating a table it forces the
-          // listed columns to the ClickHouse `JSON` type, and in all modes it
-          // makes the operator serialize the listed top-level fields to opaque
-          // JSON strings before insertion. The latter collapses heterogeneous
-          // input into a single Tenzir schema so batching can coalesce it, and
-          // is essential on the high-volume `mode = "append"` path.
+          // listed fields (at any nesting depth) to the ClickHouse `JSON`
+          // type, and in all modes it makes the operator serialize the
+          // listed top-level fields to opaque JSON strings before insertion.
+          // The latter collapses heterogeneous input into a single Tenzir
+          // schema so batching can coalesce it, and is essential on the
+          // high-volume `mode = "append"` path.
           if (auto columns = parse_json_field_argument(*json, ctx)) {
             if (auto primary = ctx.get(primary_arg)) {
+              // `primary` is always a top-level field (validated above). Any
+              // `json` entry rooted at `primary`, whether an exact match or
+              // nested beneath it, would place a `JSON`-typed value inside
+              // the primary key's `Tuple`, which ClickHouse cannot use as a
+              // sort key.
               const auto primary_name
                 = std::string{primary->path().front().id.name};
               for (const auto& column : *columns) {
-                if (column.inner == primary_name) {
-                  diagnostic::error("a `JSON` column cannot be the primary key")
+                if (column.inner.front() == primary_name) {
+                  diagnostic::error("a `JSON` column cannot be the primary "
+                                    "key or nested beneath it")
                     .primary(column.source)
                     .primary(primary->get_location())
                     .emit(ctx);
@@ -1042,7 +1052,7 @@ public:
           }
           if (auto columns = parse_field_list_argument(*low_cardinality, ctx,
                                                        "low_cardinality")) {
-            // A column cannot be both a `JSON` and a `LowCardinality` column.
+            // A field cannot be both a `JSON` and a `LowCardinality` column.
             if (auto json = ctx.get(json_arg)) {
               if (auto json_columns = parse_json_field_argument(*json, ctx)) {
                 for (const auto& lc : *columns) {
@@ -1050,7 +1060,7 @@ public:
                     if (lc.inner == jc.inner) {
                       diagnostic::error("column `{}` cannot be both `json` and "
                                         "`low_cardinality`",
-                                        lc.inner)
+                                        to_dotted_string(lc.inner))
                         .primary(lc.source)
                         .primary(jc.source)
                         .emit(ctx);
