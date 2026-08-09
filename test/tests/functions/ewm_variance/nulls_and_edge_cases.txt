@@ -1,0 +1,35 @@
+{
+  keep: [
+    null,
+    null,
+    2.0000000000000004,
+    2.0000000000000004,
+    3.1428571428571432,
+  ],
+  ignore: [
+    null,
+    null,
+    2.0,
+    2.0,
+    3.714285714285713,
+  ],
+  alpha_one: [
+    null,
+    null,
+    null,
+  ],
+  alpha_one_biased: [
+    0.0,
+    0.0,
+    0.0,
+  ],
+  constant: [
+    null,
+    0.0,
+    0.0,
+  ],
+  empty: [],
+  single: [
+    null,
+  ],
+}

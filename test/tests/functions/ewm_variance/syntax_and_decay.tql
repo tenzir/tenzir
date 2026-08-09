@@ -1,0 +1,13 @@
+// Expected values agree with pandas 3.0.5 to within floating-point rounding:
+//   import pandas as pd
+//   s = pd.Series([1.0, 2.0, 3.0, 4.0])
+//   s.ewm(alpha=0.5).var()
+//   s.ewm(span=3).var()
+//   s.ewm(com=1).var()
+//   s.ewm(halflife=1).var()
+from {xs: [1, 2, 3, 4]}
+select method = xs.ewm_variance(alpha=0.5),
+       function_call = ewm_variance(xs, alpha=0.5),
+       span = xs.ewm_variance(span=3),
+       com = xs.ewm_variance(com=1),
+       halflife = xs.ewm_variance(halflife=1)

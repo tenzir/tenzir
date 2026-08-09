@@ -1,0 +1,31 @@
+// Expected values were generated with pandas 3.0.5:
+//   import numpy as np
+//   import pandas as pd
+//   s = pd.Series([1.0, np.nan, 3.0])
+//   early_null = pd.DatetimeIndex(["2020-01-01", "2020-01-02", "2020-01-04"])
+//   late_null = pd.DatetimeIndex(["2020-01-01", "2020-01-03", "2020-01-04"])
+//   s.ewm(halflife="1D", times=early_null, ignore_na=False).mean()
+//   s.ewm(halflife="1D", times=early_null, ignore_na=True).mean()
+//   s.ewm(halflife="1D", times=late_null, ignore_na=False).mean()
+//   s.ewm(halflife="1D", times=late_null, ignore_na=True).mean()
+from {
+  xs: [1, null, 3],
+  early_null: [
+    2020-01-01T00:00:00,
+    2020-01-02T00:00:00,
+    2020-01-04T00:00:00,
+  ],
+  late_null: [
+    2020-01-01T00:00:00,
+    2020-01-03T00:00:00,
+    2020-01-04T00:00:00,
+  ],
+}
+select early_absolute = xs.ewma(
+         halflife=1d, times=early_null, ignore_nulls=false),
+       early_relative = xs.ewma(
+         halflife=1d, times=early_null, ignore_nulls=true),
+       late_absolute = xs.ewma(
+         halflife=1d, times=late_null, ignore_nulls=false),
+       late_relative = xs.ewma(
+         halflife=1d, times=late_null, ignore_nulls=true)

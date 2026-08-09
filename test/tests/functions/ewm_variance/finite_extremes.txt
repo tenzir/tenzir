@@ -1,0 +1,28 @@
+{
+  forgotten: [
+    0.0,
+    0.0,
+  ],
+  time_decay: [
+    0.0,
+    3.7330544740128754e+99,
+  ],
+  debiased: [
+    null,
+    0.5000000000000001,
+  ],
+  deep_debiased: [
+    null,
+    0.5,
+  ],
+  reset: [
+    0.0,
+    null,
+    0.0,
+    0.25,
+  ],
+  nearby: [
+    null,
+    2.0,
+  ],
+}

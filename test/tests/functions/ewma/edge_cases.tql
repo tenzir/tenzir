@@ -1,0 +1,5 @@
+from {kind: "empty", xs: []},
+     {kind: "singleton", xs: [42]},
+     {kind: "null list", xs: null},
+     {kind: "all null", xs: [null, null]}
+select kind, result = xs.ewma(alpha=0.5)

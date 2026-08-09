@@ -1,0 +1,55 @@
+error: expected `alpha` to be finite and in (0.0, 1.0]
+ --> tests/functions/ewma/invalid_decay.tql:6:35
+  |
+6 | select alpha_zero = xs.ewma(alpha=0),
+  |                                   ^
+  |
+
+error: expected `alpha` to be finite and in (0.0, 1.0]
+ --> tests/functions/ewma/invalid_decay.tql:7:36
+  |
+7 |        alpha_large = xs.ewma(alpha=1.1),
+  |                                    ^^^
+  |
+
+error: expected `span` to be finite and at least 1
+ --> tests/functions/ewma/invalid_decay.tql:8:34
+  |
+8 |        span_small = xs.ewma(span=0.5),
+  |                                  ^^^
+  |
+
+error: expected `com` to be finite and non-negative
+ --> tests/functions/ewma/invalid_decay.tql:9:35
+  |
+9 |        com_negative = xs.ewma(com=-1),
+  |                                   ^^
+  |
+
+error: expected `halflife` to be finite and positive
+  --> tests/functions/ewma/invalid_decay.tql:10:41
+   |
+10 |        halflife_zero = xs.ewma(halflife=0),
+   |                                         ^
+   |
+
+error: expected `halflife` to be positive
+  --> tests/functions/ewma/invalid_decay.tql:11:50
+   |
+11 |        halflife_duration_zero = xs.ewma(halflife=0s, times=[]),
+   |                                                  ^^
+   |
+
+error: expected `halflife` to be positive
+  --> tests/functions/ewma/invalid_decay.tql:12:54
+   |
+12 |        halflife_duration_negative = xs.ewma(halflife=-1s, times=[]),
+   |                                                      ^^^
+   |
+
+error: expected `number` for `alpha`
+  --> tests/functions/ewma/invalid_decay.tql:13:35
+   |
+13 |        wrong_type = xs.ewma(alpha="invalid")
+   |                                   ^^^^^^^^^
+   |

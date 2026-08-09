@@ -1,0 +1,27 @@
+// Expected values were generated with pandas 3.0.5:
+//   import numpy as np
+//   import pandas as pd
+//   leading = pd.Series([np.nan, 1.0, 3.0])
+//   irregular = pd.DatetimeIndex(["2020-01-01", "2020-01-03", "2020-01-04"])
+//   leading.ewm(halflife="1D", times=irregular).mean()
+//   all_null = pd.Series([np.nan, np.nan, np.nan])
+//   regular = pd.DatetimeIndex(["2020-01-01", "2020-01-02", "2020-01-03"])
+//   all_null.ewm(halflife="1D", times=regular).mean()
+from {
+  kind: "leading null",
+  xs: [null, 1, 3],
+  times: [
+    2020-01-01T00:00:00,
+    2020-01-03T00:00:00,
+    2020-01-04T00:00:00,
+  ],
+}, {
+  kind: "all null",
+  xs: [null, null, null],
+  times: [
+    2020-01-01T00:00:00,
+    2020-01-02T00:00:00,
+    2020-01-03T00:00:00,
+  ],
+}
+select kind, result = xs.ewma(halflife=1d, times=times)

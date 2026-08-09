@@ -1,0 +1,18 @@
+// Expected values agree with pandas 3.0.5 to within floating-point rounding:
+//   import numpy as np
+//   import pandas as pd
+//   s = pd.Series([1.0, np.nan, 3.0, np.nan, 5.0])
+//   s.ewm(alpha=0.5, ignore_na=False).var()
+//   s.ewm(alpha=0.5, ignore_na=True).var()
+//   pd.Series([1.0, 2.0, 3.0]).ewm(com=0).var()
+//   pd.Series([1.0, 2.0, 3.0]).ewm(com=0).var(bias=True)
+//   pd.Series([2.0, 2.0, 2.0]).ewm(alpha=0.5).var()
+//   pd.Series([42.0]).ewm(alpha=0.5).var()
+from {xs: [1, null, 3, null, 5]}
+select keep = xs.ewm_variance(alpha=0.5),
+       ignore = xs.ewm_variance(alpha=0.5, ignore_nulls=true),
+       alpha_one = [1, 2, 3].ewm_variance(com=0),
+       alpha_one_biased = [1, 2, 3].ewm_variance(com=0, bias=true),
+       constant = [2, 2, 2].ewm_variance(alpha=0.5),
+       empty = [].ewm_variance(alpha=0.5),
+       single = [42].ewm_variance(alpha=0.5)

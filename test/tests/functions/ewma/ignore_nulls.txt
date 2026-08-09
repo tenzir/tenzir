@@ -1,0 +1,22 @@
+{
+  adjust_true_absolute: [
+    1.0,
+    1.0,
+    2.6,
+  ],
+  adjust_true_relative: [
+    1.0,
+    1.0,
+    2.3333333333333335,
+  ],
+  adjust_false_absolute: [
+    1.0,
+    1.0,
+    2.3333333333333335,
+  ],
+  adjust_false_relative: [
+    1.0,
+    1.0,
+    2.0,
+  ],
+}

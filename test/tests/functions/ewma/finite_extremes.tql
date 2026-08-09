@@ -1,0 +1,8 @@
+// A normalized weighted mean of finite values must remain finite even when its
+// unnormalized numerator would overflow.
+from {kind: "equal maxima", xs: [1.7976931348623157e308, 1.7976931348623157e308]},
+     {kind: "large values", xs: [1.6e308, 1.7e308]},
+     {kind: "opposite signs", xs: [-1.7976931348623157e308, 1.7976931348623157e308]}
+select kind,
+       adjusted = xs.ewma(alpha=0.5),
+       recursive = xs.ewma(alpha=0.5, adjust=false)

@@ -1,0 +1,55 @@
+error: expected `alpha` to be finite and in (0.0, 1.0]
+ --> tests/functions/ewma/non_finite_decay.tql:6:34
+  |
+6 | select alpha_nan = xs.ewma(alpha="nan".float()),
+  |                                  ^^^^^^^^^^^^^
+  |
+
+error: expected `span` to be finite and at least 1
+ --> tests/functions/ewma/non_finite_decay.tql:7:32
+  |
+7 |        span_nan = xs.ewma(span="nan".float()),
+  |                                ^^^^^^^^^^^^^
+  |
+
+error: expected `com` to be finite and non-negative
+ --> tests/functions/ewma/non_finite_decay.tql:8:30
+  |
+8 |        com_nan = xs.ewma(com="nan".float()),
+  |                              ^^^^^^^^^^^^^
+  |
+
+error: expected `halflife` to be finite and positive
+ --> tests/functions/ewma/non_finite_decay.tql:9:40
+  |
+9 |        halflife_nan = xs.ewma(halflife="nan".float()),
+  |                                        ^^^^^^^^^^^^^
+  |
+
+error: expected `alpha` to be finite and in (0.0, 1.0]
+  --> tests/functions/ewma/non_finite_decay.tql:10:39
+   |
+10 |        alpha_infinite = xs.ewma(alpha="inf".float()),
+   |                                       ^^^^^^^^^^^^^
+   |
+
+error: expected `span` to be finite and at least 1
+  --> tests/functions/ewma/non_finite_decay.tql:11:37
+   |
+11 |        span_infinite = xs.ewma(span="inf".float()),
+   |                                     ^^^^^^^^^^^^^
+   |
+
+error: expected `com` to be finite and non-negative
+  --> tests/functions/ewma/non_finite_decay.tql:12:35
+   |
+12 |        com_infinite = xs.ewma(com="inf".float()),
+   |                                   ^^^^^^^^^^^^^
+   |
+
+error: expected `halflife` to be finite and positive
+  --> tests/functions/ewma/non_finite_decay.tql:13:45
+   |
+13 |        halflife_infinite = xs.ewma(halflife="inf".float())
+   |                                             ^^^^^^^^^^^^^
+   |

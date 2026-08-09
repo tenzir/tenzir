@@ -1,0 +1,15 @@
+// Expected values were generated with pandas 3.0.5:
+//   import pandas as pd
+//   s = pd.Series([1.0, 2.0, 3.0, 4.0])
+//   s.ewm(alpha=0.5).mean()
+//   s.ewm(span=3).mean()
+//   s.ewm(com=1).mean()
+//   s.ewm(halflife=1).mean()
+//   s.ewm(com=0).mean()
+from {xs: [1, 2, 3, 4]}
+select method = xs.ewma(alpha=0.5),
+       function_call = ewma(xs, alpha=0.5),
+       span = xs.ewma(span=3),
+       com = xs.ewma(com=1),
+       halflife = xs.ewma(halflife=1),
+       zero_com = xs.ewma(com=0)

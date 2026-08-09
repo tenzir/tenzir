@@ -1,0 +1,13 @@
+---
+error: true
+---
+
+from {xs: [1, 2, 3]}
+select alpha_zero = xs.ewma(alpha=0),
+       alpha_large = xs.ewma(alpha=1.1),
+       span_small = xs.ewma(span=0.5),
+       com_negative = xs.ewma(com=-1),
+       halflife_zero = xs.ewma(halflife=0),
+       halflife_duration_zero = xs.ewma(halflife=0s, times=[]),
+       halflife_duration_negative = xs.ewma(halflife=-1s, times=[]),
+       wrong_type = xs.ewma(alpha="invalid")

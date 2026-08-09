@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// Only `ewm_variance` and `ewm_stddev` accept `bias`.
+from {xs: [1, 2, 3]}
+select result = xs.ewma(alpha=0.5, bias=true)

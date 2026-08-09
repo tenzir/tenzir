@@ -1,0 +1,16 @@
+{
+  kind: "leading null",
+  result: [
+    null,
+    1.0,
+    2.3333333333333335,
+  ],
+}
+{
+  kind: "all null",
+  result: [
+    null,
+    null,
+    null,
+  ],
+}

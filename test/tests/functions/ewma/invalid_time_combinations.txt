@@ -1,0 +1,20 @@
+error: `times` requires a duration `halflife`
+  --> tests/functions/ewma/invalid_time_combinations.tql:10:27
+   |
+10 |          alpha=0.5, times=times),
+   |                           ^^^^^
+   |
+
+error: `halflife` with a duration requires `times`
+  --> tests/functions/ewma/invalid_time_combinations.tql:12:19
+   |
+12 |          halflife=1d),
+   |                   ^^
+   |
+
+error: `adjust=false` is incompatible with `times`
+  --> tests/functions/ewma/invalid_time_combinations.tql:14:43
+   |
+14 |          halflife=1d, times=times, adjust=false)
+   |                                           ^^^^^
+   |

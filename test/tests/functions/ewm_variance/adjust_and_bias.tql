@@ -1,0 +1,12 @@
+// Expected values agree with pandas 3.0.5 to within floating-point rounding:
+//   import pandas as pd
+//   s = pd.Series([1.0, 2.0, 3.0, 4.0])
+//   s.ewm(alpha=0.5).var()
+//   s.ewm(alpha=0.5).var(bias=True)
+//   s.ewm(alpha=0.5, adjust=False).var()
+//   s.ewm(alpha=0.5, adjust=False).var(bias=True)
+from {xs: [1, 2, 3, 4]}
+select default_unbiased = xs.ewm_variance(alpha=0.5),
+       biased = xs.ewm_variance(alpha=0.5, bias=true),
+       unadjusted = xs.ewm_variance(alpha=0.5, adjust=false),
+       unadjusted_biased = xs.ewm_variance(alpha=0.5, adjust=false, bias=true)

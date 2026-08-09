@@ -1,0 +1,19 @@
+// Expected values were verified against the weighted-moment definition with
+// weights 2^(-(t_n - t_i) / halflife) and the debiasing factor
+// W1^2 / (W1^2 - W2).
+from {
+  xs: [1, 2, 3],
+  regular: [
+    2020-01-01T00:00:00,
+    2020-01-02T00:00:00,
+    2020-01-03T00:00:00,
+  ],
+  irregular: [
+    2020-01-01T00:00:00,
+    2020-01-03T00:00:00,
+    2020-01-04T00:00:00,
+  ],
+}
+select regular = xs.ewm_variance(halflife=1d, times=regular),
+       irregular = xs.ewm_variance(halflife=1d, times=irregular),
+       biased = xs.ewm_variance(halflife=1d, times=irregular, bias=true)

@@ -1,0 +1,30 @@
+// Expected values were generated with pandas 3.0.5:
+//   import pandas as pd
+//   s = pd.Series([1.0, 2.0, 3.0])
+//   regular = pd.DatetimeIndex(["2020-01-01", "2020-01-02", "2020-01-03"])
+//   irregular = pd.DatetimeIndex(["2020-01-01", "2020-01-03", "2020-01-04"])
+//   repeated = pd.DatetimeIndex(["2020-01-01", "2020-01-01", "2020-01-02"])
+//   s.ewm(halflife="1D", times=regular).mean()
+//   s.ewm(halflife="1D", times=irregular).mean()
+//   s.ewm(halflife="1D", times=repeated).mean()
+from {
+  xs: [1, 2, 3],
+  regular: [
+    2020-01-01T00:00:00,
+    2020-01-02T00:00:00,
+    2020-01-03T00:00:00,
+  ],
+  irregular: [
+    2020-01-01T00:00:00,
+    2020-01-03T00:00:00,
+    2020-01-04T00:00:00,
+  ],
+  repeated: [
+    2020-01-01T00:00:00,
+    2020-01-01T00:00:00,
+    2020-01-02T00:00:00,
+  ],
+}
+select regular = xs.ewma(halflife=1d, times=regular),
+       irregular = xs.ewma(halflife=1d, times=irregular),
+       repeated = xs.ewma(halflife=1d, times=repeated)

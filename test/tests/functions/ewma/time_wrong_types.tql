@@ -1,0 +1,3 @@
+from {kind: "non-list", xs: [1, 2], times: 42},
+     {kind: "wrong elements", xs: [1, 2], times: [1, 2]}
+select kind, result = xs.ewma(halflife=1d, times=times)

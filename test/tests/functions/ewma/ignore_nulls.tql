@@ -1,0 +1,17 @@
+// Expected values were generated with pandas 3.0.5:
+//   import numpy as np
+//   import pandas as pd
+//   s = pd.Series([1.0, np.nan, 3.0])
+//   s.ewm(alpha=0.5, adjust=True, ignore_na=False).mean()
+//   s.ewm(alpha=0.5, adjust=True, ignore_na=True).mean()
+//   s.ewm(alpha=0.5, adjust=False, ignore_na=False).mean()
+//   s.ewm(alpha=0.5, adjust=False, ignore_na=True).mean()
+from {xs: [1, null, 3]}
+select adjust_true_absolute = xs.ewma(
+         alpha=0.5, adjust=true, ignore_nulls=false),
+       adjust_true_relative = xs.ewma(
+         alpha=0.5, adjust=true, ignore_nulls=true),
+       adjust_false_absolute = xs.ewma(
+         alpha=0.5, adjust=false, ignore_nulls=false),
+       adjust_false_relative = xs.ewma(
+         alpha=0.5, adjust=false, ignore_nulls=true)

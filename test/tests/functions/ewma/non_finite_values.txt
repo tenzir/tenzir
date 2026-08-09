@@ -1,0 +1,24 @@
+{
+  nan_mean: [
+    1.0,
+    1.0,
+    2.6,
+  ],
+  nan_variance: [
+    null,
+    null,
+    2.0000000000000004,
+  ],
+  inf_mean: [
+    null,
+    null,
+    5.0,
+    5.666666666666667,
+  ],
+  inf_variance: [
+    null,
+    null,
+    null,
+    0.5,
+  ],
+}

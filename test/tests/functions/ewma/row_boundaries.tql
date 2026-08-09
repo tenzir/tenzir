@@ -1,0 +1,4 @@
+// Each list starts with a fresh EWMA state.
+from {xs: [1, 3]},
+     {xs: [10, 30]}
+result = xs.ewma(alpha=0.5)

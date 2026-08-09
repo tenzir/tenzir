@@ -1,0 +1,14 @@
+from {
+  kind: "mismatched lengths",
+  xs: [1, 2],
+  times: [2020-01-01T00:00:00],
+}, {
+  kind: "null timestamp",
+  xs: [1, 2],
+  times: [2020-01-01T00:00:00, null],
+}, {
+  kind: "descending timestamps",
+  xs: [1, 2],
+  times: [2020-01-02T00:00:00, 2020-01-01T00:00:00],
+}
+select kind, result = xs.ewma(halflife=1d, times=times)

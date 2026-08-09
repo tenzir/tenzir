@@ -1,0 +1,21 @@
+{
+  kind: "empty",
+  result: [],
+}
+{
+  kind: "singleton",
+  result: [
+    42.0,
+  ],
+}
+{
+  kind: "null list",
+  result: null,
+}
+{
+  kind: "all null",
+  result: [
+    null,
+    null,
+  ],
+}

@@ -1,0 +1,14 @@
+---
+error: true
+---
+
+from {
+  xs: [1, 2],
+  times: [2020-01-01T00:00:00, 2020-01-02T00:00:00],
+}
+select times_without_duration = xs.ewma(
+         alpha=0.5, times=times),
+       duration_without_times = xs.ewma(
+         halflife=1d),
+       unadjusted_times = xs.ewma(
+         halflife=1d, times=times, adjust=false)

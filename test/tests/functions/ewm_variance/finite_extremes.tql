@@ -1,0 +1,34 @@
+// Keep weighted deltas stable when raw differences or debiasing factors exceed
+// the directly representable range.
+from {
+  extremes: [1.7976931348623157e308, -1.7976931348623157e308],
+  large: [1e200, -1e200],
+  nearby: [1e16, 10000000000000002.0],
+  times: [2020-01-01T00:00:00.000000, 2020-01-01T00:00:00.000001],
+  debias_times: [
+    2020-01-01T00:00:00.000000000,
+    2020-01-01T00:00:00.000000060,
+  ],
+  deep_debias_times: [
+    2020-01-01T00:00:00.000000000,
+    2020-01-01T00:00:00.000001025,
+  ],
+  reset_times: [
+    2020-01-01T00:00:00.000000000,
+    2020-01-01T00:00:00.000000000,
+    2020-01-01T00:00:00.000002000,
+    2020-01-01T00:00:00.000002000,
+  ],
+}
+select forgotten = extremes.ewm_variance(alpha=1, bias=true),
+       time_decay = large.ewm_variance(halflife=1ns, times=times, bias=true),
+       debiased = [0, 1].ewm_variance(halflife=1ns, times=debias_times),
+       deep_debiased = [0, 1].ewm_variance(
+         halflife=1ns, times=deep_debias_times),
+       reset = [
+         1.7976931348623157e308,
+         -1.7976931348623157e308,
+         0.0,
+         1.0,
+       ].ewm_variance(halflife=1ns, times=reset_times, bias=true),
+       nearby = nearby.ewm_variance(alpha=0.5)

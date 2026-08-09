@@ -1,0 +1,9 @@
+error: named argument `bias` does not exist
+ --> tests/functions/ewma/no_bias_option.tql:7:36
+  |
+7 | select result = xs.ewma(alpha=0.5, bias=true)
+  |                                    ^^^^
+  |
+  = hint: did you mean `span`?
+  = usage: ewma(xs:list, [alpha=number, span=number, com=number, halflife=number or duration, times=list, adjust=bool, ignore_nulls=bool])
+  = docs: https://tenzir.com/docs/reference/functions/ewma

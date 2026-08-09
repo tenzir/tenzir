@@ -1,0 +1,6 @@
+error: expected exactly one of `alpha`, `span`, `com`, or `halflife`
+ --> tests/functions/ewma/missing_decay.tql:6:10
+  |
+6 | result = xs.ewma()
+  |          ^^^^^^^^^
+  |

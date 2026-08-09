@@ -1,0 +1,6 @@
+// The elapsed time exceeds the range of a signed nanosecond duration.
+from {
+  xs: [1, 2],
+  times: [1900-01-01T00:00:00, 2262-01-01T00:00:00],
+}
+result = xs.ewma(halflife=1d, times=times)

@@ -1,0 +1,10 @@
+// Expected values are the square roots of the ewm_variance time_decay test.
+from {
+  xs: [1, 2, 3],
+  times: [
+    2020-01-01T00:00:00,
+    2020-01-03T00:00:00,
+    2020-01-04T00:00:00,
+  ],
+}
+select std = xs.ewm_stddev(halflife=1d, times=times)

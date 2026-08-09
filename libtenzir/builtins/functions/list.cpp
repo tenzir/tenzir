@@ -22,6 +22,8 @@
 #include <arrow/compute/api.h>
 #include <arrow/record_batch.h>
 
+#include <string_view>
+
 namespace tenzir::plugins::list {
 
 namespace {

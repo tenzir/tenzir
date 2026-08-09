@@ -1,0 +1,13 @@
+---
+error: true
+---
+
+from {xs: [1, 2, 3]}
+select alpha_nan = xs.ewma(alpha="nan".float()),
+       span_nan = xs.ewma(span="nan".float()),
+       com_nan = xs.ewma(com="nan".float()),
+       halflife_nan = xs.ewma(halflife="nan".float()),
+       alpha_infinite = xs.ewma(alpha="inf".float()),
+       span_infinite = xs.ewma(span="inf".float()),
+       com_infinite = xs.ewma(com="inf".float()),
+       halflife_infinite = xs.ewma(halflife="inf".float())

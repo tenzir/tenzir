@@ -1,0 +1,4 @@
+from {kind: "int64", xs: [1, 2, 3]},
+     {kind: "uint64", xs: [1.uint(), 2.uint(), 3.uint()]},
+     {kind: "double", xs: [1.0, 2.0, 3.0]}
+select kind, result = xs.ewma(span=3)

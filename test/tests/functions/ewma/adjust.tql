@@ -1,0 +1,9 @@
+// Expected values were generated with pandas 3.0.5:
+//   import pandas as pd
+//   s = pd.Series([1.0, 2.0, 3.0, 4.0])
+//   s.ewm(alpha=0.5, adjust=True).mean()
+//   s.ewm(alpha=0.5, adjust=False).mean()
+from {xs: [1, 2, 3, 4]}
+select default_adjust = xs.ewma(alpha=0.5),
+       adjust_true = xs.ewma(alpha=0.5, adjust=true),
+       adjust_false = xs.ewma(alpha=0.5, adjust=false)
