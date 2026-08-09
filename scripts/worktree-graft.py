@@ -10,7 +10,7 @@ Usage as a worktrunk pre-start hook in `.config/wt.toml`:
   warm-build-state = "wt step copy-ignored"
 
   [[pre-start]]
-  repair-worktree-metadata = "scripts/worktree-graft.py {{ worktree_path }}"
+  repair-worktree-metadata = "engine/scripts/worktree-graft.py {{ worktree_path }}"
 
 What it does:
   - Copies tracked file timestamps (preserves build cache validity)
@@ -52,11 +52,11 @@ if TYPE_CHECKING:
 
 # Build directory patterns to detect (relative to worktree root)
 BUILD_DIR_PATTERNS = [
-    "build/*/*",  # Nested presets: build/xcode/release, build/clang/debug
-    "build/*",  # Flat presets: build/release, build/debug, build/RelWithDebInfo
-    "build",  # Single build directory
-    ".build",  # Alternative convention
-    "_build",  # Another alternative
+    "engine/build/*/*",  # Nested presets: build/xcode/release, build/clang/debug
+    "engine/build/*",  # Flat presets: build/release, build/debug, build/RelWithDebInfo
+    "engine/build",  # Single build directory
+    "engine/.build",  # Alternative convention
+    "engine/_build",  # Another alternative
 ]
 
 # Precompiled headers embed absolute source paths, so copied artifacts must be
@@ -402,6 +402,7 @@ def validate_worktrees(source: Path, target: Path) -> str | None:
 class SubmoduleInfo:
     """Information about a submodule."""
 
+    name: str
     path: str
 
 
@@ -477,13 +478,14 @@ def get_submodule_info(worktree_path: Path) -> list[SubmoduleInfo]:
     if result.returncode != 0 or not result.stdout.strip():
         return []
 
-    submodule_paths: list[str] = []
+    submodules: list[SubmoduleInfo] = []
     for line in result.stdout.strip().split("\n"):
         # Format: submodule.<name>.path <path>
-        _, path = line.split(maxsplit=1)
-        submodule_paths.append(path)
+        key, path = line.split(maxsplit=1)
+        name = key.removeprefix("submodule.").removesuffix(".path")
+        submodules.append(SubmoduleInfo(name=name, path=path))
 
-    return [SubmoduleInfo(path=path) for path in submodule_paths]
+    return submodules
 
 
 def get_git_modules_dir(worktree_path: Path) -> Path | None:
@@ -991,7 +993,7 @@ class SubmoduleTask(Task):
     description = "copying submodules"
 
     def __init__(self) -> None:
-        self._submodules_to_copy: list[tuple[str, Path, Path]] = []
+        self._submodules_to_copy: list[tuple[SubmoduleInfo, Path, Path]] = []
         self._git_modules_dir: Path | None = None
 
     def should_run(self, source: Path, target: Path) -> bool:
@@ -1021,10 +1023,10 @@ class SubmoduleTask(Task):
             src = source / info.path
             dst = target / info.path
             src_populated = self._has_entries(src)
-            dst_empty = not self._has_entries(dst)
+            dst_initialized = (dst / ".git").exists()
 
-            if src_populated and dst_empty:
-                self._submodules_to_copy.append((info.path, src, dst))
+            if src_populated and not dst_initialized:
+                self._submodules_to_copy.append((info, src, dst))
             elif not src_populated:
                 _LOGGER.debug(
                     f"Skipping unpopulated submodule {info.path}; "
@@ -1048,14 +1050,14 @@ class SubmoduleTask(Task):
         def ignore_git(directory: str, files: list[str]) -> list[str]:
             return [".git"] if ".git" in files else []
 
-        def copy_submodule(args: tuple[str, Path, Path]) -> None:
-            submodule_path, src, dst = args
+        def copy_submodule(args: tuple[SubmoduleInfo, Path, Path]) -> None:
+            info, src, dst = args
             # Safety check: never modify source directory
             if dst.is_relative_to(source):
                 raise RuntimeError(f"Refusing to copy into source tree: {dst}")
             if dst.exists():
                 shutil.rmtree(dst)
-            _LOGGER.debug(f"Copying submodule {submodule_path}")
+            _LOGGER.debug(f"Copying submodule {info.path}")
 
             # Copy working tree files (exclude .git) with retry
             for attempt in range(3):
@@ -1065,55 +1067,59 @@ class SubmoduleTask(Task):
                 except (shutil.Error, OSError) as e:
                     if attempt == 2:
                         raise
-                    _LOGGER.debug(f"Retrying copy of {submodule_path}: {e}")
+                    _LOGGER.debug(f"Retrying copy of {info.path}: {e}")
                     if dst.exists():
                         shutil.rmtree(dst)
                     time.sleep(0.1)
 
-            # Copy git data from shared modules to create standalone .git/ directory
-            if self._git_modules_dir:
-                src_git_dir = self._git_modules_dir / submodule_path
-                dst_git_dir = dst / ".git"
-                if src_git_dir.exists():
-                    for attempt in range(3):
-                        try:
-                            shutil.copytree(src_git_dir, dst_git_dir, symlinks=True)
-                            break
-                        except (shutil.Error, OSError) as e:
-                            if attempt == 2:
-                                raise
-                            _LOGGER.debug(
-                                f"Retrying .git copy for {submodule_path}: {e}"
-                            )
-                            if dst_git_dir.exists():
-                                shutil.rmtree(dst_git_dir)
-                            time.sleep(0.1)
+            # Git stores submodules by their configured names, which may differ
+            # from their worktree paths after moving them within a monorepo.
+            if self._git_modules_dir is None:
+                raise RuntimeError("Could not locate the shared submodule Git data")
+            src_git_dir = self._git_modules_dir / info.name
+            if not src_git_dir.exists():
+                raise RuntimeError(
+                    f"Could not locate Git data for submodule {info.path}: "
+                    f"{src_git_dir}"
+                )
+            dst_git_dir = dst / ".git"
+            for attempt in range(3):
+                try:
+                    shutil.copytree(src_git_dir, dst_git_dir, symlinks=True)
+                    break
+                except (shutil.Error, OSError) as e:
+                    if attempt == 2:
+                        raise
+                    _LOGGER.debug(f"Retrying .git copy for {info.path}: {e}")
+                    if dst_git_dir.exists():
+                        shutil.rmtree(dst_git_dir)
+                    time.sleep(0.1)
 
-                    # Make all files writable (git pack files are read-only)
-                    for f in dst_git_dir.rglob("*"):
-                        if f.is_file():
-                            with contextlib.suppress(OSError):
-                                f.chmod(f.stat().st_mode | 0o200)
+            # Make all files writable (git pack files are read-only)
+            for f in dst_git_dir.rglob("*"):
+                if f.is_file():
+                    with contextlib.suppress(OSError):
+                        f.chmod(f.stat().st_mode | 0o200)
 
-                    # Remove core.worktree - not needed when .git is inside working tree
-                    config_file = dst_git_dir / "config"
-                    # Run from a safe repo cwd. If core.worktree is stale, running
-                    # git commands from `dst` itself can fail before config editing.
-                    unset_result = run_git(
-                        [
-                            "config",
-                            "-f",
-                            str(config_file),
-                            "--unset-all",
-                            "core.worktree",
-                        ],
-                        cwd=source,
-                    )
-                    if unset_result.returncode != 0:
-                        _LOGGER.debug(
-                            f"Could not unset core.worktree in {config_file}: "
-                            f"{_stderr_text(unset_result.stderr).strip()}"
-                        )
+            # Remove core.worktree - not needed when .git is inside working tree
+            config_file = dst_git_dir / "config"
+            # Run from a safe repo cwd. If core.worktree is stale, running
+            # git commands from `dst` itself can fail before config editing.
+            unset_result = run_git(
+                [
+                    "config",
+                    "-f",
+                    str(config_file),
+                    "--unset-all",
+                    "core.worktree",
+                ],
+                cwd=source,
+            )
+            if unset_result.returncode != 0:
+                _LOGGER.debug(
+                    f"Could not unset core.worktree in {config_file}: "
+                    f"{_stderr_text(unset_result.stderr).strip()}"
+                )
 
         with ThreadPoolExecutor(max_workers=4) as executor:
             list(executor.map(copy_submodule, self._submodules_to_copy))
@@ -1153,7 +1159,7 @@ class SubmoduleTask(Task):
                 retry_on_index_lock=True,
             )
             if checkout_result.returncode != 0:
-                _LOGGER.warning(
+                raise RuntimeError(
                     f"Failed to checkout submodule {path} at {commit}: "
                     f"{_stderr_text(checkout_result.stderr).strip()}"
                 )
@@ -1262,7 +1268,7 @@ class BuildTask(Task):
     def _symlink_cmake_presets(self, source: Path, target: Path) -> None:
         """Symlink CMakeUserPresets.json if it exists in source parent."""
         user_presets_src = source.parent / "CMakeUserPresets.json"
-        user_presets_dst = target / "CMakeUserPresets.json"
+        user_presets_dst = target / "engine" / "CMakeUserPresets.json"
         if user_presets_src.exists() and not user_presets_dst.exists():
             with contextlib.suppress(OSError):
                 user_presets_dst.symlink_to(user_presets_src)
