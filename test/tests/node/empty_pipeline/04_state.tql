@@ -1,0 +1,11 @@
+// The empty pipeline must run to completion instead of failing with an
+// internal error. See TNZ-886.
+every 100ms {
+  api "/pipeline/list"
+  unroll pipelines
+  where pipelines.id == "00000000-0000-0000-0000-00000000e001"
+  where pipelines.state != "running"
+}
+head 1
+select state = pipelines.state, error = pipelines.error, \
+  diagnostics = pipelines.diagnostics.length()

@@ -1,0 +1,2 @@
+// A pipeline that contains no operators is a valid no-op that produces no
+// output and succeeds.

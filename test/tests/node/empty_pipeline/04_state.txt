@@ -1,0 +1,5 @@
+{
+  state: "completed",
+  error: "",
+  diagnostics: 0,
+}

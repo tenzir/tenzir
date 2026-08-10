@@ -1920,6 +1920,12 @@ struct GracefulStopRequested {};
 auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
                   caf::actor_system& sys, DiagHandler& dh,
                   Notify* graceful_stop) -> Task<void> {
+  if (pipeline.size() == 0) {
+    // A pipeline without operators is a no-op. There is nothing to wire up, so
+    // we complete immediately instead of creating channels for operators that
+    // do not exist.
+    co_return;
+  }
   auto id = new_pipe_id();
   auto [push_input, pull_input]
     = exec_ctx.make_channel<void>(ChannelId::first(id.op(0)));

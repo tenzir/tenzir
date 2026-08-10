@@ -2273,11 +2273,8 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     fmt::print("{:#?}\n", inst);
     return not ctx.has_failure();
   }
-  if (ir.operators.empty()) {
-    // TODO
-    diagnostic::error("empty pipeline is not supported yet").emit(ctx);
-    return failure::promise();
-  }
+  // An empty pipeline is a valid no-op: it has `void` input and output, so no
+  // implicit source or sink is added below and execution completes right away.
   // Type check the instantiated IR and add implicit sources before sinks.
   // During probing, suppress diagnostics for input types that do not match.
   auto parse_implicit = [&](std::string_view definition,

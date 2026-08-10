@@ -1,0 +1,4 @@
+suite: empty-pipeline
+runner: tenzir
+fixtures: [node]
+timeout: 60

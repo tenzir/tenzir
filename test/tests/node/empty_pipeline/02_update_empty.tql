@@ -1,0 +1,7 @@
+// Comment out the entire definition. The update must be accepted, because an
+// empty pipeline is a no-op.
+api "/pipeline/update", {
+  id: "00000000-0000-0000-0000-00000000e001",
+  definition: "// neo\n// from {}\n// discard",
+}
+discard

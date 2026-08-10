@@ -1,0 +1,6 @@
+// Create a regular pipeline that we later update to an empty definition.
+api "/pipeline/create", {
+  id: "00000000-0000-0000-0000-00000000e001",
+  definition: "// neo\nfrom {}\ndiscard",
+}
+discard
