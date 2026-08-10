@@ -1,0 +1,9 @@
+created: 2026-08-10
+title: Advanced cadence and periodicity analysis
+intro: >-
+  This release adds advanced cadence and periodicity analysis for security telemetry,
+  including exponentially weighted statistics and automatic NetFlow detection. It
+  also expands ClickHouse JSON support and improves OCSF interoperability.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.9.0
