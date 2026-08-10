@@ -5,6 +5,7 @@
 }:
 let
   packageDrvPath = builtins.unsafeDiscardOutputDependency package.unchecked.drvPath;
+  vendoredSpdx = ../vendored.spdx;
 in
 pkgs.writeScriptBin "generate" ''
   #!${pkgs.runtimeShell}
@@ -16,7 +17,7 @@ pkgs.writeScriptBin "generate" ''
   mkdir -p "$(dirname "$OUTPUT")"
   echo "Writing intermediate files to $TMP"
   echo "Converting vendored spdx info from KV to JSON"
-  ${pkgs.python3Packages.spdx-tools}/bin/pyspdxtools -i vendored.spdx -o $TMP/vendored.spdx.json
+  ${pkgs.python3Packages.spdx-tools}/bin/pyspdxtools -i ${vendoredSpdx} -o $TMP/vendored.spdx.json
   echo "Deriving SPDX from the Nix package"
   ${sbomnix}/bin/sbomnix --buildtime ${packageDrvPath} \
     --spdx=$TMP/nix.spdx.json \

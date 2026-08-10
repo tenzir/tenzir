@@ -24,12 +24,11 @@ the SIGTERM shutdown path drains them properly.
 
 from __future__ import annotations
 
+import http.client
 import json
-import os
 import shlex
 import socket
 import subprocess
-import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -74,17 +73,42 @@ def _post(url: str, path: str, body: dict | None = None) -> tuple[int, dict]:
         return e.code, json.loads(e.read().decode() or "{}")
 
 
-def _wait_for_api(url: str, timeout: int = 20) -> None:
+def _wait_for_api(
+    proc: subprocess.Popen[str],
+    url: str,
+    *,
+    port: int,
+    endpoint: str,
+    timeout: int = 20,
+) -> None:
     deadline = time.monotonic() + timeout
+    last_error: Exception | None = None
     while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            break
         try:
             status, _ = _post(url, "/ping")
             if status == 200:
                 return
-        except (urllib.error.URLError, ConnectionError, OSError):
-            pass
+        except (http.client.HTTPException, json.JSONDecodeError) as err:
+            # A non-API response means that this process did not claim the
+            # selected port. Retry the complete allocation and startup.
+            last_error = err
+            break
+        except (urllib.error.URLError, ConnectionError, OSError) as err:
+            last_error = err
         time.sleep(0.2)
-    raise RuntimeError("REST API did not come up")
+    _terminate(proc)
+    returncode = proc.returncode
+    _, stderr = proc.communicate()
+    details = [f"port: {port}", f"node endpoint: {endpoint}"]
+    if returncode is not None:
+        details.append(f"exit code: {returncode}")
+    if last_error is not None:
+        details.append(f"last response error: {last_error!r}")
+    if stderr:
+        details.append(f"stderr:\n{stderr}")
+    raise RuntimeError("REST API did not come up (" + "; ".join(details) + ")")
 
 
 # ---------------------------------------------------------------------------
@@ -97,26 +121,35 @@ def start_web_server(env: dict[str, str]) -> tuple[subprocess.Popen[str], str]:
     binary = shlex.split(env["TENZIR_NODE_CLIENT_BINARY"])
     tenzir_ctl = str(Path(binary[0]).with_name("tenzir-ctl"))
     endpoint = env["TENZIR_NODE_CLIENT_ENDPOINT"]
-    port = _free_port()
-    proc = subprocess.Popen(
-        [
-            tenzir_ctl,
-            "--bare-mode",
-            "--console-verbosity=warning",
-            f"--endpoint={endpoint}",
-            "web",
-            "server",
-            "--mode=dev",
-            "--bind=127.0.0.1",
-            f"--port={port}",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
+    errors = []
+    for _ in range(3):
+        port = _free_port()
+        proc = subprocess.Popen(
+            [
+                tenzir_ctl,
+                "--bare-mode",
+                "--console-verbosity=warning",
+                f"--endpoint={endpoint}",
+                "web",
+                "server",
+                "--mode=dev",
+                "--bind=127.0.0.1",
+                f"--port={port}",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        api_url = f"http://127.0.0.1:{port}"
+        try:
+            _wait_for_api(proc, api_url, port=port, endpoint=endpoint)
+        except RuntimeError as err:
+            errors.append(str(err))
+            continue
+        return proc, api_url
+    raise RuntimeError(
+        "failed to start REST API after 3 attempts:\n" + "\n".join(errors)
     )
-    api_url = f"http://127.0.0.1:{port}"
-    _wait_for_api(api_url)
-    return proc, api_url
 
 
 def create_pipeline(
@@ -185,93 +218,10 @@ def wait_for_count(
 
 
 # ---------------------------------------------------------------------------
-# Node lifecycle helpers
-# ---------------------------------------------------------------------------
-
-
-class NodeController:
-    def __init__(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory(prefix="shutdown-node-")
-        self.root = Path(self.temp_dir.name)
-        self.state_dir = self.root / "state"
-        self.cache_dir = self.root / "cache"
-        self.state_dir.mkdir(parents=True, exist_ok=True)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.proc: subprocess.Popen[str] | None = None
-        self.env: dict[str, str] = {}
-
-    def start(self) -> dict[str, str]:
-        pid_lock = self.state_dir / "pid.lock"
-        pid_lock.unlink(missing_ok=True)
-        node_binary = shlex.split(os.environ["TENZIR_NODE_BINARY"])
-        env = os.environ.copy()
-        cmd = [
-            *node_binary,
-            "--bare-mode",
-            "--console-verbosity=warning",
-            f"--state-directory={self.state_dir}",
-            f"--cache-directory={self.cache_dir}",
-            "--endpoint=localhost:0",
-            "--print-endpoint",
-            "--no-autostart",  # When restarting, don't resume pipelines
-        ]
-        if package_dirs := env.get("TENZIR_PACKAGE_DIRS"):
-            cmd.append(f"--package-dirs={package_dirs}")
-        self.proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-            env=env,
-            cwd=Path(__file__).parent,
-            start_new_session=True,
-        )
-        assert self.proc.stdout is not None
-        endpoint = self.proc.stdout.readline().strip()
-        if not endpoint:
-            returncode = self.proc.poll()
-            stderr = ""
-            if self.proc.stderr is not None:
-                stderr = self.proc.stderr.read()
-            detail = []
-            if returncode is not None:
-                detail.append(f"exit code {returncode}")
-            if stderr:
-                detail.append(f"stderr:\n{stderr}")
-            raise RuntimeError(
-                "failed to obtain endpoint from tenzir-node "
-                f"({'; '.join(detail) if detail else 'no additional diagnostics available'})"
-            )
-        self.env = {
-            "TENZIR_NODE_CLIENT_ENDPOINT": endpoint,
-            "TENZIR_NODE_CLIENT_BINARY": os.environ["TENZIR_BINARY"],
-            "TENZIR_NODE_CLIENT_TIMEOUT": os.environ.get("TENZIR_TIMEOUT", "120"),
-            "TENZIR_NODE_STATE_DIRECTORY": str(self.state_dir),
-            "TENZIR_NODE_CACHE_DIRECTORY": str(self.cache_dir),
-        }
-        return self.env
-
-    def stop(self) -> None:
-        if self.proc is not None:
-            _terminate(self.proc)
-            if self.proc.stdout is not None:
-                self.proc.stdout.close()
-            if self.proc.stderr is not None:
-                self.proc.stderr.close()
-            self.proc = None
-        self.env = {}
-
-    def cleanup(self) -> None:
-        self.stop()
-        self.temp_dir.cleanup()
-
-
-# ---------------------------------------------------------------------------
 # Test
 # ---------------------------------------------------------------------------
 
-node = NodeController()
+node = acquire_fixture("node")
 web_proc = None
 
 
@@ -280,8 +230,7 @@ def stop_and_restart() -> Executor:
     if web_proc:
         _terminate(web_proc)
         web_proc = None
-    node.stop()
-    node.start()
+    node.restart()
     return Executor.from_env(node.env)
 
 
@@ -473,4 +422,4 @@ try:
 finally:
     if web_proc:
         _terminate(web_proc)
-    node.cleanup()
+    node.stop()
