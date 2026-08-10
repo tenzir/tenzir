@@ -37,9 +37,9 @@ Got questions? We're here to help. Join our friendly community Discord server
 where you'll find a thriving group of enthusiasts that love the intersection of
 data infrastructure and security operations.
 
-<a href="https://discord.gg/tenzir" alt="Tenzir Discord community">
+<a href="https://discord.gg/xqbDgVTCxZ" alt="Tenzir Discord community">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://invidget.switchblade.xyz/tenzir">
-  <img alt="Tenzir Discord community" src="https://invidget.switchblade.xyz/tenzir?theme=light">
+  <source media="(prefers-color-scheme: dark)" srcset="https://invidget.switchblade.xyz/xqbDgVTCxZ">
+  <img alt="Tenzir Discord community" src="https://invidget.switchblade.xyz/xqbDgVTCxZ?theme=light">
 </picture>
 </a>

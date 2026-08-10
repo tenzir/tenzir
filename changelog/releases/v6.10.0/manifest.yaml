@@ -1,0 +1,9 @@
+created: 2026-08-10
+title: Native time-series analytics for beacon detection
+intro: >-
+  This release brings research-grade beacon and anomaly detection into TQL with cadence
+  analysis, periodicity detection, and exponentially weighted statistics. It also
+  improves automatic NetFlow ingestion and ClickHouse JSON interoperability.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.9.0
