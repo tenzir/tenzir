@@ -1,0 +1,4 @@
+from {src: {a: 1, b: 2}}, {src: {a: 3, b: 4}}
+batch 2
+slice begin=1
+unroll src

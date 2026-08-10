@@ -1,0 +1,24 @@
+from {
+  events: [
+    {
+      src: {hostname: "a", extra: 1},
+      dst: {hostname: "da", extra: 1},
+      empty: {hostname: "a"},
+    },
+    {
+      src: null,
+      dst: {hostname: "db", extra: 2},
+      empty: {hostname: "b"},
+    },
+    {
+      src: {hostname: "c", extra: 3},
+      dst: {hostname: "dc", extra: 3},
+      empty: {hostname: "c"},
+    },
+  ],
+}
+unroll events
+slice begin=1
+events.src = events.src.select_matching("^hostname$")
+events.dst = events.dst.drop_matching("^extra$")
+events.empty = events.empty.select_matching("^missing$")

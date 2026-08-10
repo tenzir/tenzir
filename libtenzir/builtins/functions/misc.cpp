@@ -14,6 +14,7 @@
 #include <tenzir/detail/heterogeneous_string_hash.hpp>
 #include <tenzir/detail/stable_map.hpp>
 #include <tenzir/plugin/register.hpp>
+#include <tenzir/series.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -647,19 +648,14 @@ public:
             return series::null(null_type{}, array.length());
           },
           [&](const arrow::StructArray& array) -> series {
-            auto arrays = arrow::ArrayVector{};
-            auto fields = arrow::FieldVector{};
-            for (const auto& [field, array] : std::views::zip(
-                   array.struct_type()->fields(), array.fields())) {
-              if (pattern.search(field->name()) == select) {
-                fields.push_back(field);
-                arrays.push_back(array);
+            auto fields = std::vector<series_field>{};
+            for (const auto& [field, field_array] : std::views::zip(
+                   as<record_type>(value.type).fields(), array.fields())) {
+              if (pattern.search(field.name) == select) {
+                fields.push_back({field.name, {field.type, field_array}});
               }
             }
-            auto result = std::make_shared<arrow::StructArray>(
-              arrow::struct_(fields), array.length(), std::move(arrays),
-              array.null_bitmap(), array.null_count(), array.offset());
-            return {type::from_arrow(*result->type()), std::move(result)};
+            return make_record_series(fields, array);
           },
           [&](const auto&) -> series {
             diagnostic::warning("expected `record`, got `{}`",

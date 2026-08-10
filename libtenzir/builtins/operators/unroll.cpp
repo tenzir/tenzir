@@ -19,6 +19,7 @@
 #include <tenzir/option.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -26,6 +27,7 @@
 #include <tenzir/try.hpp>
 
 #include <algorithm>
+#include <array>
 #include <limits>
 
 namespace tenzir::plugins::unroll {
@@ -186,15 +188,16 @@ auto unroll(const table_slice& slice, const offset& offset, bool unordered,
       auto transformation = indexed_transformation::function_type{
         [&](struct record_type::field field,
             std::shared_ptr<arrow::Array>) noexcept {
-          auto replacement = std::make_shared<arrow::StructArray>(
-            arrow::struct_({sa.struct_type()->field(i)}), sa.length(),
-            std::vector{sa.field(i)}, sa.null_bitmap(), sa.null_count(),
-            sa.offset());
-          auto replacement_type = type{record_type{{rt->field(i)}}};
+          auto replacement_fields = std::array{
+            series_field{rt->field(i).name,
+                         {rt->field(i).type, sa.field(detail::narrow<int>(i))}},
+          };
+          auto replacement = make_record_series(replacement_fields, sa);
+          auto replacement_type = type{replacement.type};
           replacement_type.assign_metadata(field.type);
           field.type = std::move(replacement_type);
           return indexed_transformation::result_type{
-            {std::move(field), std::move(replacement)},
+            {std::move(field), std::move(replacement.array)},
           };
         }};
       auto transformations = std::vector<indexed_transformation>{};

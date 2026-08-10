@@ -1,0 +1,20 @@
+{
+  events: {
+    src: null,
+    dst: {
+      hostname: "db",
+    },
+    empty: {},
+  },
+}
+{
+  events: {
+    src: {
+      hostname: "c",
+    },
+    dst: {
+      hostname: "dc",
+    },
+    empty: {},
+  },
+}
