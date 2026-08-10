@@ -223,7 +223,7 @@ def _definition_tags(definition: object) -> dict[str, str]:
 def _repo_root(definition: object) -> Path:
     path = Path(getattr(definition, "path", Path.cwd())).resolve()
     for candidate in path.parents:
-        if (candidate / ".git").exists() and (candidate / "bench").is_dir():
+        if (candidate / "bench").is_dir():
             return candidate
     raise RuntimeError(f"failed to find repository root from {path}")
 
