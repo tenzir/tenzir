@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import re
 import shutil
 import socket
@@ -209,6 +210,24 @@ def _create_table(
             "properties": {},
         },
     )
+
+
+def _grant_table_access(
+    runtime: str, container_id: str, tables: dict[str, TableState]
+) -> None:
+    for table in tables.values():
+        _run(
+            [
+                runtime,
+                "exec",
+                container_id,
+                "chmod",
+                "-R",
+                "a+rwX",
+                str(table.location),
+            ],
+            description=f"grant benchmark client access to Iceberg table {table.location}",
+        )
 
 
 def _definition_tags(definition: object) -> dict[str, str]:
@@ -626,6 +645,7 @@ def iceberg() -> FixtureHandle:
         / uuid.uuid4().hex
     ).resolve()
     warehouse.mkdir(parents=True, exist_ok=True)
+    warehouse.chmod(0o777)
     container_name = f"tenzir-bench-iceberg-{uuid.uuid4().hex[:8]}"
     result = _run(
         [
@@ -633,6 +653,12 @@ def iceberg() -> FixtureHandle:
             "run",
             "--rm",
             "--detach",
+            "--user",
+            f"{os.getuid()}:{os.getgid()}",
+            "-v",
+            "/etc/passwd:/etc/passwd:ro",
+            "-v",
+            "/etc/group:/etc/group:ro",
             "--name",
             container_name,
             "-p",
@@ -716,6 +742,7 @@ def iceberg() -> FixtureHandle:
             for table, template in templates.items():
                 _create_table(catalog, namespace, table, template)
             tables = _all_table_states(catalog, namespace)
+            _grant_table_access(runtime, container_id, tables)
             run_states[(phase, run_index)] = RunState(
                 namespace=namespace,
                 tables=tables,
@@ -756,6 +783,7 @@ def iceberg() -> FixtureHandle:
             detail = (completed.stderr or completed.stdout or "").strip() or "no output"
             raise RuntimeError(f"failed to pre-seed Iceberg tables: {detail}")
         tables = _all_table_states(catalog, namespace)
+        _grant_table_access(runtime, container_id, tables)
         expected_tables = int(tags["expected_tables"])
         if len(tables) != expected_tables:
             _purge(catalog, namespace, tables)
