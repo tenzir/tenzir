@@ -1,0 +1,4 @@
+tenzir:
+  # The `// parallelism:` directive is only honored by the IR ("neo") executor,
+  # which is not the default.
+  neo: true

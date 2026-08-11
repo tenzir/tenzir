@@ -1,4 +1,4 @@
-error: subpipeline must end in a sink
+error: `fork` subpipeline must end in a sink
  --> tests/operators/fork/error_bytes_output.tql:6:6
   |
 6 | fork { write_json }

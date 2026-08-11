@@ -1,0 +1,1 @@
+c0: {input} -> from -> summarize -> to_stdout -> {output}

@@ -1,0 +1,7 @@
+error: `merge` expects exactly one pipeline argument
+ --> tests/operators/merge/error_two_pipelines.tql:6:1
+  |
+6 | merge { from {y: 1} }, { from {z: 1} }
+  | ^^^^^
+  |
+  = hint: use `merge { … }`

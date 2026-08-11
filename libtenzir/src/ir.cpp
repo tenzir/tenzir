@@ -15,6 +15,7 @@
 #include "tenzir/ir_if.hpp"
 #include "tenzir/ir_match.hpp"
 #include "tenzir/ir_set.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/source.hpp"
@@ -24,6 +25,7 @@
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/set.hpp"
 #include "tenzir/tql2/user_defined_operator.hpp"
+#include "tenzir/type.hpp"
 
 #include <algorithm>
 #include <ranges>
@@ -129,32 +131,6 @@ auto get_porting_hint(const ast::entity& op) -> std::string_view {
 }
 
 } // namespace
-
-auto combine_branch_types(std::optional<element_type_tag> lhs,
-                          std::optional<element_type_tag> rhs, location primary,
-                          diagnostic_handler& dh)
-  -> failure_or<std::optional<element_type_tag>> {
-  if (not lhs) {
-    return rhs;
-  }
-  if (not rhs) {
-    return lhs;
-  }
-  if (*lhs == *rhs) {
-    return lhs;
-  }
-  if (lhs->is<void>()) {
-    return rhs;
-  }
-  if (rhs->is<void>()) {
-    return lhs;
-  }
-  diagnostic::error("incompatible branch output types: {} and {}",
-                    operator_type_name(*lhs), operator_type_name(*rhs))
-    .primary(primary)
-    .emit(dh);
-  return failure::promise();
-}
 
 ir::CompileResult::CompileResult(Box<ir::Operator> op) {
   pipeline_.operators.push_back(std::move(op));
@@ -365,62 +341,27 @@ auto ir::pipeline::substitute(substitute_ctx ctx, bool instantiate)
   return {};
 }
 
-auto ir::make_plan(pipeline pipe, element_type_tag input, base_ctx ctx)
-  -> failure_or<Plan> {
-  // Resolve `let` bindings and substitute non-deterministic arguments. This is
-  // the single substitution point for all pipelines, including subpipelines
-  // that inject runtime values via `pipeline::bind`.
-  TRY(pipe.substitute(substitute_ctx{ctx, nullptr}, true));
-  TENZIR_ASSERT(pipe.lets.empty());
-  // Optimize the now-instantiated pipeline. Any filter left over after
-  // optimization is reinserted as leading `where` operators.
-  auto opt = std::move(pipe).optimize(optimize_filter{}, event_order::ordered);
-  TENZIR_ASSERT(opt.replacement.lets.empty());
-  pipe = std::move(opt.replacement);
-  // Prepend the leftover filters as leading `where` operators.
-  pipe.prepend(std::move(opt.filter));
-  // Type-check the instantiated pipeline against `input`. Performing this here
-  // means spawning the resulting `Plan` can no longer fail.
-  TRY(auto output, pipe.infer_type(input, ctx));
-  return Plan{std::move(pipe), input, output};
-}
-
-auto ir::Plan::spawn() && -> std::vector<AnyOperator> {
-  return std::move(pipe_).spawn(input_);
-}
-
-auto ir::pipeline::spawn(element_type_tag input) && -> std::vector<AnyOperator> {
-  // The caller is responsible for instantiating and optimizing the
-  // pipeline via `ir::make_plan` before spawning, so there must be no
-  // remaining `let` bindings here.
-  TENZIR_ASSERT(lets.empty());
-  auto result = std::vector<AnyOperator>{};
-  for (auto& op : operators) {
-    // We already checked, there should be no diagnostics here.
-    auto dh = null_diagnostic_handler{};
-    auto output = op->infer_type(input, dh);
-    TENZIR_ASSERT(output);
-    result.push_back(op->spawn(input));
-    input = *output;
-  }
-  return result;
-}
-
 auto ir::pipeline::infer_type(element_type_tag input,
                               diagnostic_handler& dh) const
   -> failure_or<element_type_tag> {
+  auto frontier = input;
   for (auto& op : operators) {
-    TRY(input, op->infer_type(input, dh));
-    // TODO: What if we get void in the middle?
+    TRY(frontier, op->infer_type(frontier, dh));
   }
-  return input;
+  return frontier;
 }
 
-auto ir::pipeline::optimize(optimize_filter filter,
-                            event_order order) && -> optimize_result {
+auto ir::pipeline::optimize(optimize_filter filter, event_order order,
+                            const OptimizeCtx& octx) && -> optimize_result {
   auto replacement = pipeline{std::move(lets), {}};
   for (auto& op : std::ranges::reverse_view(operators)) {
-    auto opt = std::move(*op).optimize(std::move(filter), order);
+    // An operator that runs across multiple parallel instances has its output
+    // reordered by the gather that follows it, so its consumer cannot rely on
+    // its order anyway.
+    if (octx.can_any_op_reorder and op->parallelizable()) {
+      order = event_order::unordered;
+    }
+    auto opt = std::move(*op).optimize(std::move(filter), order, octx);
     filter = std::move(opt.filter);
     order = opt.order;
     replacement.operators.insert(
@@ -431,9 +372,9 @@ auto ir::pipeline::optimize(optimize_filter filter,
   return {std::move(filter), order, std::move(replacement)};
 }
 
-auto ir::Operator::optimize(optimize_filter filter,
-                            event_order order) && -> optimize_result {
-  TENZIR_UNUSED(order);
+auto ir::Operator::optimize(optimize_filter filter, event_order order,
+                            const OptimizeCtx& octx) && -> optimize_result {
+  TENZIR_UNUSED(order, octx);
   auto replacement = std::vector<Box<Operator>>{};
   replacement.push_back(std::move(*this).move());
   for (auto& expr : filter) {
@@ -474,6 +415,19 @@ auto ir::Operator::copy() const -> Box<Operator> {
 auto ir::Operator::move() && -> Box<Operator> {
   // TODO: This should be overriden by something like CRTP.
   return copy();
+}
+
+auto ir::Operator::display_name() const -> std::string {
+  auto n = name();
+  if (n.ends_with("_ir")) {
+    n.resize(n.length() - 3);
+  }
+  return n;
+}
+
+auto ir::Operator::infer_type(element_type_tag input, diagnostic_handler&) const
+  -> failure_or<element_type_tag> {
+  return input;
 }
 
 auto operator_compiler_plugin::operator_name() const -> std::string {

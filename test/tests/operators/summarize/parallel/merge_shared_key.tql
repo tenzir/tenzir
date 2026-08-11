@@ -1,0 +1,9 @@
+// parallelism: 6
+// A key that occurs in several fan-in branches must still end up in one
+// instance: every producer hash-partitions into the same downstream lanes.
+from {g: "a", x: 1}, {g: "b", x: 2}
+merge {
+  from {g: "b", x: 3}, {g: "c", x: 4}
+}
+summarize g, total=sum(x), n=count()
+sort g

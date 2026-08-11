@@ -1,0 +1,6 @@
+from {g: 1}
+group g {
+  merge {
+    from {y: 2}
+  }
+}

@@ -46,10 +46,10 @@ public:
     return input;
   }
 
-  auto optimize(ir::optimize_filter filter,
-                event_order /*order*/) && -> ir::optimize_result override {
-    // Relax the upstream ordering requirement and forward the filters
-    // unchanged.
+  auto
+  optimize(ir::optimize_filter filter, event_order /*order*/,
+           const ir::OptimizeCtx& /*octx*/) && -> ir::optimize_result override {
+    // Relax the upstream ordering requirement and forward the filters unchanged
     return {
       std::move(filter),
       event_order::unordered,

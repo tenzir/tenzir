@@ -1,0 +1,7 @@
+// parallelism: 6
+from {g: "a", x: 1},
+     {g: "b", x: 2, extra: true},
+     {g: "a", x: 3, extra: false},
+     {g: "b", x: 4}
+summarize g, total=sum(x)
+sort g

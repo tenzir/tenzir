@@ -1,0 +1,7 @@
+// parallelism: 4,limit_partitions=2
+// Limiting the partitions of keyed operators must not change results: the
+// `summarize` runs on fewer instances, but every row still reaches the
+// instance owning its key.
+from {x: 1, g: "a"}, {x: 2, g: "b"}, {x: 3, g: "a"}, {x: 4, g: "c"}
+summarize g, total=sum(x), n=count()
+sort g

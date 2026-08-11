@@ -1,0 +1,6 @@
+// parallelism: 1
+// A fixed degree of one runs every operator single-instance, so ordering is
+// preserved and the optimize pass must not relax the requirement.
+export
+head 5
+to_stdout

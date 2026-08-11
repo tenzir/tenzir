@@ -1,0 +1,177 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ [1]:233..239 from 0
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     Match {
+       match_keyword: [1]:240..245 from 0,
+       scrutinee: root_field {
+         id: `x` @ [1]:246..247 from 0,
+         has_question_mark: false
+       },
+       arms: [
+         {
+           source: [1]:252..253 from 0,
+           pattern_exprs: [
+             {
+               kind: expression_pattern {
+                 expr: constant int64 1 @ [1]:252..253 from 0
+               }
+             }
+           ],
+           patterns: [
+             {
+               kind: Constant {
+                 value: int64 1
+               }
+             }
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               where_ir {
+-                self: [1]:259..264 from 0,
++                self: [0]:0..0 from 0,
+                 predicate: binary_expr {
+                   left: root_field {
+                     id: `a` @ [1]:265..266 from 0,
+                     has_question_mark: false
+                   },
+                   op: "gt",
+                   right: constant int64 1 @ [1]:269..270 from 0,
+                   location: [1]:265..270 from 0
+                 }
+               },
+               where_ir {
+-                self: [1]:273..278 from 0,
++                self: [0]:0..0 from 0,
+                 predicate: binary_expr {
+                   left: root_field {
+                     id: `b` @ [1]:279..280 from 0,
+                     has_question_mark: false
+                   },
+                   op: "gt",
+                   right: constant int64 2 @ [1]:283..284 from 0,
+                   location: [1]:279..284 from 0
++                }
++              },
++              where_ir {
++                self: [0]:0..0 from 0,
++                predicate: binary_expr {
++                  left: root_field {
++                    id: `c` @ [1]:311..312 from 0,
++                    has_question_mark: false
++                  },
++                  op: "gt",
++                  right: constant int64 3 @ [1]:315..316 from 0,
++                  location: [1]:311..316 from 0
+                 }
+               }
+             ]
+           },
+           wildcard: false
+         },
+         {
+           source: [1]:289..290 from 0,
+           pattern_exprs: [
+             
+           ],
+           patterns: [
+             
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+-              GenericIr {
+-                op: {
+-                  path: [
+-                    `pass` @ [1]:296..300 from 0
+-                  ],
+-                  ref: std::pass/op
+-                },
+-                desc: "pass",
+-                args: [
+-                  
+-                ],
+-                filter: [
+-                  
+-                ],
+-                order: "ordered",
+-                named_args: [
+-                  
+-                ]
++              where_ir {
++                self: [0]:0..0 from 0,
++                predicate: binary_expr {
++                  left: root_field {
++                    id: `c` @ [1]:311..312 from 0,
++                    has_question_mark: false
++                  },
++                  op: "gt",
++                  right: constant int64 3 @ [1]:315..316 from 0,
++                  location: [1]:311..316 from 0
++                }
+               }
+             ]
+           },
+           wildcard: true
+         }
+       ]
+-    },
+-    where_ir {
+-      self: [1]:305..310 from 0,
+-      predicate: binary_expr {
+-        left: root_field {
+-          id: `c` @ [1]:311..312 from 0,
+-          has_question_mark: false
+-        },
+-        op: "gt",
+-        right: constant int64 3 @ [1]:315..316 from 0,
+-        location: [1]:311..316 from 0
+-      }
+     },
+     GenericIr {
+       op: {
+         path: [
+           `discard` @ [1]:317..324 from 0
+         ],
+         ref: std::discard/op
+       },
+       desc: "discard",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }

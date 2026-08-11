@@ -1,0 +1,107 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ [1]:80..86 from 0
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+-        
++        binary_expr {
++          left: root_field {
++            id: `x` @ [1]:110..111 from 0,
++            has_question_mark: false
++          },
++          op: "gt",
++          right: constant int64 1 @ [1]:114..115 from 0,
++          location: [1]:110..115 from 0
++        }
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     merge_ir {
+       keyword: [1]:87..92 from 0,
+       pipe_location: [1]:93..103 from 0,
+       pipe: {
+         lets: [
+           
+         ],
+         operators: [
+           GenericIr {
+             op: {
+               path: [
+                 `export` @ [1]:95..101 from 0
+               ],
+               ref: std::export/op
+             },
+             desc: "export",
+             args: [
+               
+             ],
+             filter: [
+-              
++              binary_expr {
++                left: root_field {
++                  id: `x` @ [1]:110..111 from 0,
++                  has_question_mark: false
++                },
++                op: "gt",
++                right: constant int64 1 @ [1]:114..115 from 0,
++                location: [1]:110..115 from 0
++              }
+             ],
+-            order: "ordered",
++            order: "unordered",
+             named_args: [
+               
+             ]
+           }
+         ]
+-      }
+-    },
+-    where_ir {
+-      self: [1]:104..109 from 0,
+-      predicate: binary_expr {
+-        left: root_field {
+-          id: `x` @ [1]:110..111 from 0,
+-          has_question_mark: false
+-        },
+-        op: "gt",
+-        right: constant int64 1 @ [1]:114..115 from 0,
+-        location: [1]:110..115 from 0
+       }
+     },
+     GenericIr {
+       op: {
+         path: [
+           `discard` @ [1]:116..123 from 0
+         ],
+         ref: std::discard/op
+       },
+       desc: "discard",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }

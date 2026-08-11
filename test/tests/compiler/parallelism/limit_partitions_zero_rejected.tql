@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+// parallelism: 4,limit_partitions=0
+// Zero partitions would leave keyed operators without any instance, so it is
+// rejected up front just like a degree of zero.
+from {x: 1}
+where x > 0

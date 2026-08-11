@@ -1,0 +1,10 @@
+c0: from -> drop(x6)
+c1: from -> drop(x6)
+c2: assert(x6) -> to_stdout -> {output}
+c3: {input} -> pass
+
+links:
+  c0 > c2
+  c1 > c2
+  c3 -> c0
+  c3 -> c1

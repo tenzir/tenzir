@@ -1,0 +1,78 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ [1]:321..327 from 0
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `drop` @ [1]:328..332 from 0
+         ],
+         ref: std::drop/op
+       },
+       desc: "tql2.drop",
+       args: [
+         field_path {
+           expr: root_field {
+             id: `foo` @ [1]:333..336 from 0,
+             has_question_mark: false
+           },
+           has_this: false,
+           path: [
+             {
+               id: `foo` @ [1]:333..336 from 0,
+               has_question_mark: false
+             }
+           ]
+         }
+       ],
+       filter: [
+         
+       ],
+-      order: "ordered",
++      order: "unordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `to_stdout` @ [1]:337..346 from 0
+         ],
+         ref: std::to_stdout/op
+       },
+       desc: "to_stdout",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }

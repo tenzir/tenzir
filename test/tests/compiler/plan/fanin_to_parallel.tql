@@ -1,0 +1,10 @@
+// Fan-in ports wire straight into a parallel downstream. Each producer runs
+// its own exchange into the downstream instances, so no single-instance node
+// sits between them.
+from {x: 1, y: 2}
+drop y
+merge {
+  from {x: 2, y: 3}
+  drop y
+}
+assert x > 0

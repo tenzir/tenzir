@@ -76,13 +76,12 @@ public:
 private:
   auto process_hash(table_slice input, OpCtx& ctx) -> Task<void> {
     auto values = eval(*route_by_, input, ctx.dh());
-    // Find runs of same-bucket rows and push subslices.
-    for (auto [bucket, begin, end] : routing::hash_runs(values, jobs_)) {
-      auto slice = subslice(input, begin, end);
+    // Hash-partition the rows and push at most one slice per bucket.
+    for (auto& [bucket, part] : routing::hash_partition(input, values, jobs_)) {
       auto sub = ctx.get_sub(int64_t(bucket));
       TENZIR_ASSERT(sub);
       auto& pipe = as<SubHandle<table_slice>>(*sub);
-      std::ignore = co_await pipe.push(std::move(slice));
+      std::ignore = co_await pipe.push(std::move(part));
     }
   }
 

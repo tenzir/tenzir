@@ -1,0 +1,3 @@
+// parallelism: 1
+from {x: 1}, {x: 2}
+where x > 1

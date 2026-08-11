@@ -1,0 +1,6 @@
+error: `merge` subpipeline must be a source producing events
+ --> tests/operators/merge/error_bytes_output.tql:6:7
+  |
+6 | merge { from {y: 1} | write_json }
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

@@ -1,5 +1,0 @@
-// The barrier must be optimized away before spawning, so executing it must
-// neither panic nor add a runtime operator. Data passes through unchanged.
-from {x: 1}, {x: 2}, {x: 3}
-optimize_barrier
-where x > 1

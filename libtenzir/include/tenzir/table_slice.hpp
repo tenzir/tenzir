@@ -417,6 +417,12 @@ filter(const table_slice& slice, const ids& hints);
 [[nodiscard]] auto filter(const table_slice& slice,
                           const arrow::BooleanArray& mask) -> table_slice;
 
+/// Selects rows by index, in the given order. Indices may repeat and need not
+/// be sorted. Returns an empty table slice if `rows` is empty.
+/// @pre every index in `rows` is in `[0, slice.rows())`
+[[nodiscard]] auto take_rows(const table_slice& slice,
+                             std::span<const int64_t> rows) -> table_slice;
+
 /// Partitions a table slice into two based on a boolean mask. Rows where the
 /// mask value bit is true go to the first result, others to the second.
 /// The null bitmap of the mask is ignored.

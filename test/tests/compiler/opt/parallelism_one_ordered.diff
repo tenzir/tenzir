@@ -1,0 +1,64 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ [1]:162..168 from 0
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `head` @ [1]:169..173 from 0
+         ],
+         ref: std::head/op
+       },
+       desc: "head",
+       args: [
+         located 5 @ [1]:174..175 from 0
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       op: {
+         path: [
+           `to_stdout` @ [1]:176..185 from 0
+         ],
+         ref: std::to_stdout/op
+       },
+       desc: "to_stdout",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     }
+   ]
+ }

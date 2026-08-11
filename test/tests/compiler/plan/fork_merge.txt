@@ -1,0 +1,10 @@
+c0: {input} -> version -> fork_merge
+c1: head
+c2: tail
+c3: to_stdout -> {output}
+
+links:
+  c0 -> c1
+  c0 -> c2
+  c1 -> c3
+  c2 -> c3

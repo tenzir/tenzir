@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+// parallelism: 0
+// A degree of zero would plan parallelizable operators with no instances at
+// all, so it is rejected up front instead of tripping an assertion later.
+from {x: 1}
+where x > 0

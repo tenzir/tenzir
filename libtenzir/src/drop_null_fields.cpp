@@ -181,21 +181,6 @@ auto fields_to_drop_for_pattern(const null_pattern& pattern,
   return result;
 }
 
-auto take_rows(const table_slice& slice, std::span<const int64_t> rows)
-  -> table_slice {
-  auto builder = arrow::Int64Builder{tenzir::arrow_memory_pool()};
-  check(builder.Reserve(detail::narrow<int64_t>(rows.size())));
-  for (auto row : rows) {
-    builder.UnsafeAppend(row);
-  }
-  auto batch
-    = check(arrow::compute::Take(to_record_batch(slice), finish(builder)))
-        .record_batch();
-  auto result = table_slice{std::move(batch), slice.schema()};
-  result.import_time(slice.import_time());
-  return result;
-}
-
 auto rows_are_contiguous(std::span<const int64_t> rows) -> bool {
   for (auto i = 1uz; i < rows.size(); ++i) {
     if (rows[i] != rows[i - 1] + 1) {

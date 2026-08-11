@@ -11,10 +11,10 @@
 #include "tenzir/async.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/multi_series.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
-#include "tenzir/rebatch.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -29,7 +29,7 @@ namespace {
 struct IfArgs {
   ast::expression condition;
   ir::pipeline consequence;
-  std::optional<ir::pipeline> alternative;
+  Option<ir::pipeline> alternative;
 
   friend auto inspect(auto& f, IfArgs& x) -> bool {
     return f.object(x).fields(f.field("condition", x.condition),
@@ -38,140 +38,58 @@ struct IfArgs {
   }
 };
 
-/// Shared implementation for both transform and sink variants of `if`.
-class IfImpl {
+/// Runtime operator for `if`: evaluates the condition per slice and routes
+/// `true` rows to port 0 (consequence) and `false`/`null` rows to port 1
+/// (alternative). A non-boolean condition routes the whole subslice to the
+/// alternative and emits a diagnostic.
+class IfOp final : public Operator<table_slice, table_slice> {
 public:
-  explicit IfImpl(IfArgs args) : args_{std::move(args)} {
+  explicit IfOp(ast::expression condition) : condition_{std::move(condition)} {
   }
 
-  auto start(OpCtx& ctx) -> Task<void> {
-    // Spawn subpipelines if they are not already spawned (due to restore).
-    if (not ctx.get_sub(true).is_some()) {
-      if (not co_await ctx.plan_and_spawn_sub<table_slice>(true,
-                                                           args_.consequence)) {
-        co_return;
-      }
-      if (args_.alternative) {
-        if (not co_await ctx.plan_and_spawn_sub<table_slice>(
-              false, *args_.alternative)) {
-          co_return;
-        }
-      }
-    }
+  auto needs_output_ports() const -> bool override {
+    return true;
   }
 
-  auto process(table_slice input, OpCtx& ctx, Push<table_slice>* push = nullptr)
-    -> Task<void> {
-    // FIXME: If the inner subpipelines terminate and get erased, this can fail.
-    auto& true_sub = ctx.get_sub(true).unwrap();
-    auto& consequence = as<SubHandle<table_slice>>(true_sub);
-    auto false_sub = ctx.get_sub(false);
-    auto alternative
-      = false_sub ? Option<SubHandle<table_slice>&>{as<SubHandle<table_slice>>(
-                      *false_sub)}
-                  : None{};
-    TENZIR_ASSERT(alternative.is_some() == args_.alternative.has_value());
-    auto true_events = std::vector<table_slice>{};
-    auto false_events = std::vector<table_slice>{};
+  auto process(table_slice, Push<table_slice>&, OpCtx&) -> Task<void> override {
+    TENZIR_UNREACHABLE();
+  }
+
+  auto process(table_slice input, PushPorts<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    auto& dh = ctx.dh();
     auto end = int64_t{0};
-    for (auto const& predicate : eval(args_.condition, input, ctx)) {
-      auto const start = std::exchange(end, end + predicate.length());
+    for (const auto& [predicate] :
+         split_multi_series(eval(condition_, input, dh))) {
+      const auto start = std::exchange(end, end + predicate.length());
       TENZIR_ASSERT(end > start);
-      auto const sliced_input = subslice(input, start, end);
-      auto const typed_predicate = predicate.as<bool_type>();
-      if (not typed_predicate) {
+      const auto sliced = subslice(input, start, end);
+      const auto typed = predicate.as<bool_type>();
+      if (not typed) {
         if (not is<null_type>(predicate.type)) {
           diagnostic::warning("expected `bool`, but got `{}`",
                               predicate.type.kind())
-            .primary(args_.condition)
-            .emit(ctx);
+            .primary(condition_)
+            .emit(dh);
         }
-        TENZIR_ASSERT(sliced_input.rows() > 0);
-        false_events.push_back(sliced_input);
+        co_await push(1, sliced);
         continue;
       }
-      auto [lhs, rhs] = partition(sliced_input, *typed_predicate->array);
-      TENZIR_ASSERT(lhs.rows() + rhs.rows() == sliced_input.rows());
-      if (lhs.rows() > 0) {
-        true_events.push_back(std::move(lhs));
+      // `partition` sends `true` rows to the first slice and `false`/`null`
+      // rows to the second.
+      auto [then_slice, else_slice] = partition(sliced, *typed->array);
+      TENZIR_ASSERT(then_slice.rows() + else_slice.rows() == sliced.rows());
+      if (then_slice.rows() > 0) {
+        co_await push(0, std::move(then_slice));
       }
-      if (rhs.rows() > 0) {
-        false_events.push_back(std::move(rhs));
-      }
-    }
-    if (not consequence_closed_) {
-      for (auto& slice : rebatch(std::move(true_events))) {
-        consequence_closed_
-          = (co_await consequence.push(std::move(slice))).is_err();
+      if (else_slice.rows() > 0) {
+        co_await push(1, std::move(else_slice));
       }
     }
-    if (not alternative_closed_) {
-      for (auto& slice : rebatch(std::move(false_events))) {
-        if (alternative) {
-          alternative_closed_
-            = (co_await alternative->push(std::move(slice))).is_err();
-        } else if (push) {
-          co_await (*push)(std::move(slice));
-        }
-      }
-    }
-  }
-
-  auto state() -> OperatorState {
-    if (consequence_closed_ and alternative_closed_) {
-      return OperatorState::done;
-    }
-    return OperatorState::normal;
   }
 
 private:
-  IfArgs args_;
-  bool consequence_closed_ = false;
-  bool alternative_closed_ = false;
-};
-
-class If final : public Operator<table_slice, table_slice> {
-public:
-  explicit If(IfArgs args) : impl_{std::move(args)} {
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> override {
-    return impl_.start(ctx);
-  }
-
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    return impl_.process(std::move(input), ctx, &push);
-  }
-
-  auto state() -> OperatorState override {
-    return impl_.state();
-  }
-
-private:
-  IfImpl impl_;
-};
-
-/// Sink variant of `if` for when both branches return void.
-class IfSink final : public Operator<table_slice, void> {
-public:
-  explicit IfSink(IfArgs args) : impl_{std::move(args)} {
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> override {
-    return impl_.start(ctx);
-  }
-
-  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    return impl_.process(std::move(input), ctx);
-  }
-
-  auto state() -> OperatorState override {
-    return impl_.state();
-  }
-
-private:
-  IfImpl impl_;
+  ast::expression condition_;
 };
 
 class IfIr final : public ir::Operator {
@@ -203,39 +121,31 @@ public:
     return {};
   }
 
-  auto optimize(ir::optimize_filter filter,
-                event_order order) && -> ir::optimize_result override {
-    // We need to skip `-> void` pipelines, which are invalid to optimize with
-    // the downstream filter.
+  auto
+  optimize(ir::optimize_filter filter, event_order order,
+           const ir::OptimizeCtx& octx) && -> ir::optimize_result override {
+    // A branch that does not return events has no downstream event consumer,
+    // so it inherits neither the downstream filter nor its order requirement.
     auto null_dh = null_diagnostic_handler{};
-    auto outputs_events = [&](ir::pipeline const& pipe) -> bool {
-      auto t = pipe.infer_type(tag_v<table_slice>, null_dh);
-      return t and (*t).is<table_slice>();
-    };
     auto optimize_branch
-      = [&](ir::pipeline& branch, ir::optimize_filter f) -> event_order {
-      auto opt = std::move(branch).optimize(std::move(f), order);
+      = [&](ir::pipeline& branch, const ir::optimize_filter& f) -> event_order {
+      auto ty = branch.infer_type(tag_v<table_slice>, null_dh);
+      auto events = ty and ty->is<table_slice>();
+      auto opt
+        = std::move(branch).optimize(events ? f : ir::optimize_filter{},
+                                     events ? order : event_order::ordered,
+                                     octx);
       branch = std::move(opt.replacement);
-      branch.operators.insert_range(branch.operators.begin(),
-                                    opt.filter
-                                      | std::views::transform(make_where_ir));
+      branch.prepend(std::move(opt.filter));
       return opt.order;
     };
     // Handle downstream filters when there is no explicit `else` branch.
     if (not args_.alternative and not filter.empty()) {
       args_.alternative.emplace(ir::pipeline{});
     }
-    auto cons_filter
-      = outputs_events(args_.consequence) ? filter : ir::optimize_filter{};
-    auto cons_order
-      = optimize_branch(args_.consequence, std::move(cons_filter));
-    auto alt_order = order;
-    if (args_.alternative) {
-      auto alt_filter = outputs_events(*args_.alternative)
-                          ? std::move(filter)
-                          : ir::optimize_filter{};
-      alt_order = optimize_branch(*args_.alternative, std::move(alt_filter));
-    }
+    auto cons_order = optimize_branch(args_.consequence, filter);
+    auto alt_order
+      = args_.alternative ? optimize_branch(*args_.alternative, filter) : order;
     auto replacement = std::vector<Box<ir::Operator>>{};
     replacement.push_back(std::move(*this).move());
     return {
@@ -245,15 +155,32 @@ public:
     };
   }
 
-  auto spawn(element_type_tag input) const -> AnyOperator override {
-    TENZIR_ASSERT(input.is<table_slice>());
-    auto dh = null_diagnostic_handler{};
-    auto output = infer_type(input, dh);
-    TENZIR_ASSERT(output);
-    if ((*output).is<void>()) {
-      return IfSink{args_}.with_name("if");
-    }
-    return If{args_}.with_name("if");
+  auto spawn(element_type_tag) const -> AnyOperator override {
+    return Box<tenzir::Operator<table_slice, table_slice>>{
+      IfOp{args_.condition}.with_name("if")};
+  }
+
+  auto plan(ir::PlanBuilder& builder, ir::PlanPorts input,
+            diagnostic_handler& dh) && -> failure_or<ir::PlanPorts> override {
+    // `if` is a two-output operator: it evaluates the condition per row and
+    // routes each row to exactly one branch (port 0 = consequence for `true`
+    // rows, port 1 = alternative for `false`/`null` rows). Without an explicit
+    // `else`, the alternative branch is empty and forwards unmatched rows
+    // unchanged. Both branch tails are returned so the consumer merges them.
+    auto ty = tag_v<table_slice>;
+    auto consequence = std::move(args_.consequence);
+    auto alternative
+      = args_.alternative ? std::move(*args_.alternative) : ir::pipeline{};
+    auto node = builder.append_node(std::move(*this).move(), ty, ty);
+    builder.add_channels(input, node);
+    TRY(auto tails,
+        builder.lower_subpipeline(node, std::move(consequence),
+                                  ir::PlanPorts{ir::Port{node, 0, ty}}, dh));
+    TRY(auto tail_alt,
+        builder.lower_subpipeline(node, std::move(alternative),
+                                  ir::PlanPorts{ir::Port{node, 1, ty}}, dh));
+    tails.insert(tails.end(), tail_alt.begin(), tail_alt.end());
+    return tails;
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const

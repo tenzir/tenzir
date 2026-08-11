@@ -1,0 +1,2 @@
+from {x: 1, y: 2}, {x: 1, y: 3}
+summarize x, total=sum(y)

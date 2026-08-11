@@ -1,0 +1,7 @@
+error: `merge` expects exactly one pipeline argument
+ --> tests/operators/merge/error_no_pipeline.tql:6:1
+  |
+6 | merge
+  | ^^^^^
+  |
+  = hint: use `merge { … }`

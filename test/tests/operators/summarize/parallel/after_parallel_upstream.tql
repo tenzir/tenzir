@@ -1,0 +1,9 @@
+// parallelism: 6
+// Regression test: the upstream `where` also runs with 4 instances. The channel
+// into `summarize` must still hash-partition by the group key, or each instance
+// would aggregate its own share and emit a partial row per group.
+from {g: "a", v: 1}, {g: "b", v: 2}, {g: "c", v: 3}
+repeat 100
+where v > 0
+summarize g, total=sum(v), n=count()
+sort g

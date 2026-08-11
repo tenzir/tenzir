@@ -1,0 +1,5 @@
+// parallelism: 6
+// A keyless `summarize` is not parallelizable: it must stay single-instance so
+// that there is exactly one global aggregation result.
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}
+summarize total=sum(x), n=count()

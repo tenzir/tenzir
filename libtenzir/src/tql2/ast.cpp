@@ -293,6 +293,21 @@ auto constant::as_view() const -> data_view2 {
   });
 }
 
+auto combine_into_record(std::vector<expression> exprs) -> expression {
+  TENZIR_ASSERT(not exprs.empty());
+  if (exprs.size() == 1) {
+    return std::move(exprs.front());
+  }
+  auto items = std::vector<record::item>{};
+  items.reserve(exprs.size());
+  for (auto i = size_t{0}; i < exprs.size(); ++i) {
+    auto name = identifier{fmt::format("{}", i), location::unknown};
+    items.emplace_back(record::field{std::move(name), std::move(exprs[i])});
+  }
+  return expression{
+    record{location::unknown, std::move(items), location::unknown}};
+}
+
 } // namespace tenzir::ast
 
 namespace tenzir {

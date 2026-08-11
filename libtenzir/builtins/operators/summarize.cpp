@@ -1046,6 +1046,25 @@ public:
     return tag_v<table_slice>;
   }
 
+  auto parallelizable() const -> bool override {
+    // Without group-by keys, there is a single global aggregation state that
+    // all rows must reach. Replicating the operator would yield one partial
+    // result per instance.
+    return not cfg_.groups.empty();
+  }
+
+  auto partition_keys() const -> std::vector<ast::expression> override {
+    // Rows with equal group-by keys must reach the same instance so that each
+    // group's aggregation state lives in exactly one place. We key on the
+    // input expressions rather than the output names.
+    auto result = std::vector<ast::expression>{};
+    result.reserve(cfg_.groups.size());
+    for (const auto& group : cfg_.groups) {
+      result.push_back(group.expr.inner());
+    }
+    return result;
+  }
+
   auto main_location() const -> location override {
     return self_;
   }

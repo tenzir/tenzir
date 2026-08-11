@@ -348,4 +348,62 @@ TEST("partition table slice - row count invariant") {
   CHECK_EQUAL(lhs.rows() + rhs.rows(), slice.rows());
 }
 
+TEST("take_rows selects rows in the given order") {
+  auto slice = make_test_slice();
+  auto rows = std::vector<int64_t>{3, 0, 4};
+  auto result = take_rows(slice, rows);
+  REQUIRE_EQUAL(result.rows(), uint64_t{3});
+  CHECK_EQUAL(materialize(result.at(0, 0)), int64_t{40});
+  CHECK_EQUAL(materialize(result.at(1, 0)), int64_t{10});
+  CHECK_EQUAL(materialize(result.at(2, 0)), int64_t{50});
+}
+
+TEST("take_rows allows repeated indices") {
+  auto slice = make_test_slice();
+  auto rows = std::vector<int64_t>{2, 2, 2};
+  auto result = take_rows(slice, rows);
+  REQUIRE_EQUAL(result.rows(), uint64_t{3});
+  for (auto row = uint64_t{0}; row < result.rows(); ++row) {
+    CHECK_EQUAL(materialize(result.at(row, 0)), int64_t{30});
+  }
+}
+
+TEST("take_rows on no indices yields an empty slice") {
+  auto slice = make_test_slice();
+  auto result = take_rows(slice, {});
+  CHECK_EQUAL(result.rows(), uint64_t{0});
+}
+
+TEST("take_rows preserves schema and import time") {
+  auto slice = make_test_slice();
+  const auto import_time = tenzir::time{std::chrono::seconds{1234567890}};
+  slice.import_time(import_time);
+  slice.offset(42);
+  auto rows = std::vector<int64_t>{1, 3};
+  auto result = take_rows(slice, rows);
+  CHECK_EQUAL(result.schema(), slice.schema());
+  CHECK_EQUAL(result.import_time(), import_time);
+}
+
+TEST("take_rows invalidates the offset for non-contiguous rows") {
+  auto slice = make_test_slice();
+  slice.offset(42);
+  CHECK_EQUAL(take_rows(slice, std::vector<int64_t>{1, 3}).offset(),
+              tenzir::invalid_id);
+  CHECK_EQUAL(take_rows(slice, std::vector<int64_t>{3, 0, 4}).offset(),
+              tenzir::invalid_id);
+  CHECK_EQUAL(take_rows(slice, std::vector<int64_t>{2, 2, 2}).offset(),
+              tenzir::invalid_id);
+}
+
+TEST("take_rows shifts the offset for a contiguous run") {
+  auto slice = make_test_slice();
+  slice.offset(42);
+  CHECK_EQUAL(take_rows(slice, std::vector<int64_t>{1, 2, 3}).offset(),
+              tenzir::id{43});
+  auto without_offset = make_test_slice();
+  CHECK_EQUAL(take_rows(without_offset, std::vector<int64_t>{1, 2}).offset(),
+              tenzir::invalid_id);
+}
+
 } // namespace tenzir

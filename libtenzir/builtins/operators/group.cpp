@@ -50,23 +50,6 @@ auto make_row_groups(multi_series const& keys) -> std::vector<RowGroup> {
   return result;
 }
 
-auto take_rows(table_slice const& input, std::vector<int64_t> const& rows)
-  -> table_slice {
-  TENZIR_ASSERT(not rows.empty());
-  auto builder = arrow::Int64Builder{arrow_memory_pool()};
-  check(builder.Reserve(detail::narrow<int64_t>(rows.size())));
-  for (auto row : rows) {
-    check(builder.Append(row));
-  }
-  auto indices = finish(builder);
-  auto datum = check(arrow::compute::Take(to_record_batch(input), indices));
-  TENZIR_ASSERT(datum.kind() == arrow::Datum::Kind::RECORD_BATCH);
-  auto result = table_slice{datum.record_batch(), input.schema()};
-  result.offset(input.offset());
-  result.import_time(input.import_time());
-  return result;
-}
-
 auto constant_from_key(data const& key) -> ast::constant::kind {
   return match(
     key,
@@ -167,6 +150,10 @@ public:
     d.positional("over", &GroupArgs::over, "expr");
     auto pipe = d.pipeline(&GroupArgs::pipe, SubOptimize::from_downstream,
                            {{"group", &GroupArgs::let}});
+    d.parallelizable();
+    d.partition_keys([](const GroupArgs& args) -> std::vector<ast::expression> {
+      return {args.over};
+    });
     d.spawner([pipe]<class Input>(DescribeCtx& ctx)
                 -> failure_or<Option<SpawnWith<GroupArgs, Input>>> {
       if constexpr (std::same_as<Input, table_slice>) {

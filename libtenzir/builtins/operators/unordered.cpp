@@ -49,13 +49,14 @@ public:
     return pipeline_.infer_type(input, dh);
   }
 
-  auto optimize(ir::optimize_filter filter,
-                event_order /* order */) && -> ir::optimize_result override {
+  auto
+  optimize(ir::optimize_filter filter, event_order /* order */,
+           const ir::OptimizeCtx& octx) && -> ir::optimize_result override {
     // Optimize each sub-operator individually, always passing unordered.
     auto replacement = ir::pipeline{std::move(pipeline_.lets), {}};
     for (auto& op : std::ranges::reverse_view(pipeline_.operators)) {
-      auto opt
-        = std::move(*op).optimize(std::move(filter), event_order::unordered);
+      auto opt = std::move(*op).optimize(std::move(filter),
+                                         event_order::unordered, octx);
       filter = std::move(opt.filter);
       replacement.operators.insert(
         replacement.operators.begin(),

@@ -1,0 +1,6 @@
+error: operator expects events
+ --> tests/operators/merge/error_not_a_source.tql:6:9
+  |
+6 | merge { where x > 0 }
+  |         ^^^^^
+  |

@@ -1,0 +1,1 @@
+c0: {input} -> from -> where(x6) > where(x6) -> to_stdout -> {output}

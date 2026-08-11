@@ -1,0 +1,6 @@
+// A keyed operator always gets a hash-partitioned exchange, even when its
+// upstream runs at the same degree of parallelism. Pairing the lanes directly
+// would bypass the key and spread one logical group over all instances.
+from {x: 1}
+where x > 0
+summarize x, n=count()

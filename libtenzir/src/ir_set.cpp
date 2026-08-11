@@ -454,8 +454,9 @@ auto touched_fields_for_set(const std::vector<ast::assignment>& assignments)
 
 } // namespace
 
-auto ir::SetIr::optimize(ir::optimize_filter filter,
-                         event_order order) && -> ir::optimize_result {
+auto ir::SetIr::optimize(ir::optimize_filter filter, event_order order,
+                         const ir::OptimizeCtx& octx) && -> ir::optimize_result {
+  TENZIR_UNUSED(octx);
   order_ = weaker_event_order(order_, order);
   auto touched_paths = touched_fields_for_set(assignments_);
   auto split = touched_paths

@@ -7,9 +7,11 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/async.hpp"
-#include "tenzir/operator_plugin.hpp"
+#include "tenzir/compile_ctx.hpp"
+#include "tenzir/ir.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/substitute_ctx.hpp"
 
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/scope_linked.hpp>
@@ -280,41 +282,138 @@ private:
   located<pipeline> pipe_;
 };
 
-struct ForkArgs {
-  located<ir::pipeline> pipe;
+/// Runtime operator for `fork`: forwards every slice unchanged to the main
+/// output (port 0) and a copy to the side-effect subpipeline (port 1).
+class ForkOp final : public Operator<table_slice, table_slice> {
+public:
+  auto needs_output_ports() const -> bool override {
+    return true;
+  }
+
+  auto process(table_slice, Push<table_slice>&, OpCtx&) -> Task<void> override {
+    TENZIR_UNREACHABLE();
+  }
+
+  auto process(table_slice input, PushPorts<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    co_await push(0, input);
+    co_await push(1, std::move(input));
+  }
 };
 
-class Fork final : public Operator<table_slice, table_slice> {
+struct ForkIrArgs {
+  location keyword;
+  location pipe_location;
+  ir::pipeline pipe;
+
+  friend auto inspect(auto& f, ForkIrArgs& x) -> bool {
+    return f.object(x).fields(f.field("keyword", x.keyword),
+                              f.field("pipe_location", x.pipe_location),
+                              f.field("pipe", x.pipe));
+  }
+};
+
+class ForkIr final : public ir::Operator {
 public:
-  explicit Fork(ForkArgs args) : args_{std::move(args)} {
+  ForkIr() = default;
+
+  explicit ForkIr(ForkIrArgs args) : args_{std::move(args)} {
   }
 
-  auto start(OpCtx& ctx) -> Task<void> override {
-    if (not started_) {
-      if (not co_await ctx.plan_and_spawn_sub<table_slice>(int64_t{0},
-                                                           args_.pipe.inner)) {
-        co_return;
-      }
-      started_ = true;
-    }
+  auto name() const -> std::string override {
+    return "fork_ir";
   }
 
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    if (auto sub = ctx.get_sub(int64_t{0})) {
-      auto& pipe = as<SubHandle<table_slice>>(*sub);
-      std::ignore = co_await pipe.push(input);
+  auto copy() const -> Box<ir::Operator> override {
+    return ForkIr{args_};
+  }
+
+  auto move() && -> Box<ir::Operator> override {
+    return ForkIr{std::move(args_)};
+  }
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
+    return args_.pipe.substitute(ctx, instantiate);
+  }
+
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<element_type_tag> override {
+    if (input.is_not<table_slice>()) {
+      diagnostic::error("`fork` expects events as input")
+        .primary(args_.keyword)
+        .emit(dh);
+      return failure::promise();
     }
-    co_await push(std::move(input));
+    TRY(auto branch_ty, args_.pipe.infer_type(input, dh));
+    if (branch_ty.is_not<void>()) {
+      diagnostic::error("`fork` subpipeline must end in a sink")
+        .primary(args_.pipe_location)
+        .emit(dh);
+      return failure::promise();
+    }
+    return tag_v<table_slice>;
+  }
+
+  auto
+  optimize(ir::optimize_filter filter, event_order order,
+           const ir::OptimizeCtx& octx) && -> ir::optimize_result override {
+    // The planner lowers the branch inline, so this is the only pass that gets
+    // to optimize it. Without recursing here, optimizer-only operators such as
+    // `unordered` would survive into the plan and panic when spawned.
+    // The branch is an independent sink: `order` is what the main output path
+    // needs, not what the branch's own sink observes. Optimizing the branch
+    // with `order` would let an unordered main path strip a `sort` from the
+    // branch, so the branch starts from `ordered`.
+    auto opt = std::move(args_.pipe).optimize({}, event_order::ordered, octx);
+    args_.pipe = std::move(opt.replacement);
+    // The branch is a sink and has no other upstream than `fork` itself, so a
+    // filter it wants to push up is reinserted at its front.
+    args_.pipe.prepend(std::move(opt.filter));
+    // A downstream filter must not be pushed past `fork`: the branch has to
+    // observe every input row. It stays behind the main output port.
+    auto replacement = std::vector<Box<ir::Operator>>{};
+    replacement.push_back(std::move(*this).move());
+    for (auto& expr : filter) {
+      replacement.push_back(make_where_ir(std::move(expr)));
+    }
+    return {
+      {},
+      stronger_event_order(order, opt.order),
+      ir::pipeline{{}, std::move(replacement)},
+    };
+  }
+
+  auto spawn(element_type_tag) const -> AnyOperator override {
+    return Box<tenzir::Operator<table_slice, table_slice>>{
+      ForkOp{}.with_name("fork")};
+  }
+
+  auto plan(ir::PlanBuilder& builder, ir::PlanPorts input,
+            diagnostic_handler& dh) && -> failure_or<ir::PlanPorts> override {
+    // `fork` is a two-output operator: port 0 continues the main pipeline
+    // unchanged, port 1 drives the side-effect subpipeline.
+    auto ty = tag_v<table_slice>;
+    auto pipe = args_.pipe;
+    auto node = builder.append_node(std::move(*this).move(), ty, ty);
+    builder.add_channels(input, node);
+    TRY(auto tail,
+        builder.lower_subpipeline(node, std::move(pipe),
+                                  ir::PlanPorts{ir::Port{node, 1, ty}}, dh));
+    TENZIR_ASSERT(tail.empty());
+    return ir::PlanPorts{ir::Port{node, 0, ty}};
+  }
+
+  friend auto inspect(auto& f, ForkIr& x) -> bool {
+    return f.apply(x.args_);
   }
 
 private:
-  ForkArgs args_;
-  bool started_ = false;
+  ForkIrArgs args_;
 };
 
-class fork_plugin final : public virtual operator_plugin2<fork_operator>,
-                          public virtual OperatorPlugin {
+class fork_plugin final : public virtual operator_plugin2<fork_operator> {
 public:
   auto name() const -> std::string override {
     return "tql2.fork";
@@ -328,33 +427,48 @@ public:
           .parse(inv, ctx));
     return std::make_unique<fork_operator>(std::move(pipe));
   }
+};
 
-  auto describe() const -> Description override {
-    auto d = Describer<ForkArgs, Fork>{};
-    auto pipe = d.pipeline(&ForkArgs::pipe, SubOptimize::fork);
-    d.validate([pipe](DescribeCtx& ctx) -> Empty {
-      TRY(auto p, ctx.get(pipe));
-      auto output = p.inner.infer_type(tag_v<table_slice>, ctx);
-      if (output.is_error()) {
-        return {};
-      }
-      if (output->is_not<void>()) {
-        diagnostic::error("subpipeline must end in a sink")
-          .primary(p.source)
-          .emit(ctx);
-      }
-      return {};
-    });
-    return d.invariant_order();
+class fork_ir_plugin final : public virtual operator_compiler_plugin {
+public:
+  auto name() const -> std::string override {
+    return "fork";
+  }
+
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<ir::CompileResult> override {
+    auto args = ForkIrArgs{};
+    args.keyword = inv.op.get_location();
+    if (inv.args.size() != 1) {
+      diagnostic::error("`fork` expects exactly one pipeline argument")
+        .primary(args.keyword)
+        .hint("use `fork { … }`")
+        .emit(ctx);
+      return failure::promise();
+    }
+    auto* pipe_expr = try_as<ast::pipeline_expr>(inv.args.front());
+    if (not pipe_expr) {
+      diagnostic::error("`fork` expects a pipeline argument `{{ … }}`")
+        .primary(inv.args.front())
+        .emit(ctx);
+      return failure::promise();
+    }
+    args.pipe_location = pipe_expr->get_location();
+    TRY(auto pipe_ir, std::move(pipe_expr->inner).compile(ctx));
+    args.pipe = std::move(pipe_ir);
+    return ForkIr{std::move(args)};
   }
 };
 
 using internal_fork_source_plugin
   = operator_inspection_plugin<internal_fork_source_operator>;
+using fork_ir_inspection_plugin = inspection_plugin<ir::Operator, ForkIr>;
 
 } // namespace
 
 } // namespace tenzir::plugins::fork
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::fork::fork_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::fork::fork_ir_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::fork::fork_ir_inspection_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::fork::internal_fork_source_plugin)

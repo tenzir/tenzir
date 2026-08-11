@@ -4,3 +4,4 @@ from {foo: 1, bar: "a", idx: 1},
      {foo: 2, bar: "a", idx: 4},
      {foo: 1, bar: "b", idx: 5}
 deduplicate foo, bar
+sort idx

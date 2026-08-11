@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// parallelism: nope
+from {x: 1}
+where x > 0

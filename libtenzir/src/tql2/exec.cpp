@@ -2050,16 +2050,16 @@ auto run_profiler(Profiler const& profiler, TestExecCtx& exec_ctx,
     });
 }
 
-auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
-              DiagHandler& dh, Profiler profiler, bool has_terminal,
-              bool is_hidden, Notify* graceful_stop) -> Task<failure_or<void>> {
-  auto num_ops = chain.size();
+auto run_plan(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
+              Profiler profiler, bool has_terminal, bool is_hidden,
+              Notify* graceful_stop) -> Task<failure_or<void>> {
+  auto num_ops = plan.size();
   LOGW("spawning plan with {} operators", num_ops);
   auto exec_ctx = TestExecCtx{profiler, has_terminal, is_hidden};
   co_await async_scope([&](AsyncScope& scope) -> Task<void> {
     scope.spawn(run_profiler(profiler, exec_ctx, num_ops));
     LOGW("blocking on pipeline");
-    co_await run_pipeline(std::move(chain), exec_ctx, sys, dh, graceful_stop);
+    co_await execute_plan(std::move(plan), exec_ctx, sys, dh, graceful_stop);
     LOGW("blocking on pipeline done");
     scope.cancel();
   });
@@ -2068,22 +2068,22 @@ auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
 
 } // namespace
 
-auto run_plan(OperatorChain<void, void> chain, caf::actor_system& sys,
-              DiagHandler& dh, Profiler profiler, bool is_hidden,
-              Notify* graceful_stop) -> Task<failure_or<void>> {
-  co_return co_await run_plan(std::move(chain), sys, dh, std::move(profiler),
+auto run_plan(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
+              Profiler profiler, bool is_hidden, Notify* graceful_stop)
+  -> Task<failure_or<void>> {
+  co_return co_await run_plan(std::move(plan), sys, dh, std::move(profiler),
                               false, is_hidden, graceful_stop);
 }
 
-auto run_transform(OperatorChain<table_slice, table_slice> chain,
-                   caf::actor_system& sys, DiagHandler& dh, Profiler profiler,
-                   bool is_hidden, PipelineFeeder feed_input,
-                   PipelineDrainer drain_output) -> Task<failure_or<void>> {
+auto run_plan_with_io(ir::Plan plan, caf::actor_system& sys, DiagHandler& dh,
+                      Profiler profiler, bool is_hidden,
+                      PipelineFeeder feed_input, PipelineDrainer drain_output)
+  -> Task<failure_or<void>> {
   auto exec_ctx = TestExecCtx{profiler, /*has_terminal=*/false, is_hidden};
-  auto num_ops = chain.size();
+  auto num_ops = plan.size();
   co_await async_scope([&](AsyncScope& scope) -> Task<void> {
     scope.spawn(run_profiler(profiler, exec_ctx, num_ops));
-    co_await run_bounded_pipeline(std::move(chain), exec_ctx, sys, dh,
+    co_await execute_plan_with_io(std::move(plan), exec_ctx, sys, dh,
                                   std::move(feed_input),
                                   std::move(drain_output));
     scope.cancel();
@@ -2125,7 +2125,7 @@ private:
   failure_or<void> failure_;
 };
 
-auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
+auto run_plan_blocking(ir::Plan plan, caf::actor_system& sys,
                        diagnostic_handler& dh,
                        std::optional<std::string> const& profile_path)
   -> failure_or<void> {
@@ -2149,7 +2149,7 @@ auto run_plan_blocking(OperatorChain<void, void> chain, caf::actor_system& sys,
   auto task = folly::coro::co_invoke([&] -> Task<Option<failure_or<void>>> {
     co_return co_await catch_cancellation(folly::coro::co_withCancellation(
       cancel_source.getToken(),
-      run_plan(std::move(chain), sys, diag_handler, std::move(profiler),
+      run_plan(std::move(plan), sys, diag_handler, std::move(profiler),
                has_terminal, false, &graceful_stop)));
   });
 #if 0
@@ -2236,8 +2236,8 @@ namespace {
 
 // TODO: failure_or<bool> is bad
 auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
-                  caf::actor_system& sys, SourceMap& source_map)
-  -> failure_or<bool> {
+                  caf::actor_system& sys, SourceMap& source_map,
+                  ir::Parallelism parallelism) -> failure_or<bool> {
   auto source_location = ast.get_location();
   auto make_zero_width_location
     = [](location source_location, uint32_t offset) {
@@ -2267,16 +2267,18 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
     fmt::print("{:#?}\n", ir);
     return not ctx.has_failure();
   }
+  // The IR is instantiated (its `let` bindings resolved and non-deterministic
+  // arguments substituted) later, as part of `ir::make_plan`. The
+  // `--dump-inst-ir` debug output instantiates a copy to show that stage.
   if (cfg.dump_inst_ir) {
     auto inst = ir;
     TRY(inst.substitute(substitute_ctx{b_ctx, nullptr}, true));
     fmt::print("{:#?}\n", inst);
     return not ctx.has_failure();
   }
-  // An empty pipeline is a valid no-op: it has `void` input and output, so no
-  // implicit source or sink is added below and execution completes right away.
-  // Type check the instantiated IR and add implicit sources before sinks.
-  // During probing, suppress diagnostics for input types that do not match.
+  // Type check the IR and add implicit sources before sinks. During probing,
+  // suppress diagnostics for input types that do not match. Type inference does
+  // not depend on substitution, so we can run it on the un-instantiated IR.
   auto parse_implicit = [&](std::string_view definition,
                             location override) -> failure_or<ir::pipeline> {
     TRY(auto ast,
@@ -2329,22 +2331,30 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
       return failure::promise();
     }
   }
-  // Instantiate, optimize, and type-check the IR into a plan.
-  TRY(auto plan, ir::make_plan(std::move(ir), tag_v<void>, b_ctx));
+  // The optimized IR is produced as part of `ir::make_plan`. The
+  // `--dump-opt-ir` debug output instantiates and optimizes the IR to show
+  // that stage before lowering it into the plan DAG.
   if (cfg.dump_opt_ir) {
-    fmt::print("{:#?}\n", plan.pipe());
+    TRY(auto opt, ir::instantiate(std::move(ir), b_ctx));
+    auto octx = ir::OptimizeCtx{.can_any_op_reorder
+                                = ir::parallelism::can_reorder(parallelism)};
+    fmt::print("{:#?}\n", ir::optimize(std::move(opt), octx));
     return not ctx.has_failure();
   }
-  // Spawn operators from the plan.
-  auto spawned = std::move(plan).spawn();
+  // Build the executable plan from the IR. This instantiates and optimizes the
+  // pipeline before lowering it into the plan DAG.
+  auto plan = ir::make_plan(std::move(ir), tag_v<void>, b_ctx, parallelism);
   // Do not proceed to execution if there has been an error.
   if (ctx.has_failure()) {
     return false;
   }
-  auto chain = OperatorChain<void, void>::try_from(std::move(spawned))
-                 .expect("we already checked the type");
+  TENZIR_ASSERT(plan);
+  if (cfg.dump_ir_plan) {
+    fmt::print("{}", ir::fmt_ir_plan(*plan));
+    return not ctx.has_failure();
+  }
   // Start the actual execution.
-  TRY(run_plan_blocking(std::move(chain), sys, ctx, cfg.profile));
+  TRY(run_plan_blocking(std::move(*plan), sys, ctx, cfg.profile));
   return true;
 }
 
@@ -2369,9 +2379,20 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
       return not ctx.has_failure();
     }
     if ((cfg.neo and not cfg.dump_pipeline) or cfg.dump_ir or cfg.dump_inst_ir
-        or cfg.dump_opt_ir) {
+        or cfg.dump_opt_ir or cfg.dump_ir_plan) {
       // This new code path will eventually supersede the current one.
-      return exec_with_ir(std::move(parsed), cfg, ctx, sys, source_map);
+      auto flag = cfg.parallelism ? Option<std::string_view>{*cfg.parallelism}
+                                  : Option<std::string_view>{};
+      auto parallelism = ir::parallelism::resolve(source->text, flag);
+      if (not parallelism) {
+        diagnostic::error("invalid parallelism value")
+          .hint("expected `disabled`, `max`, `fused`, or a positive integer, "
+                "optionally followed by `,limit_partitions=<n>`")
+          .emit(ctx);
+        return failure::promise();
+      }
+      return exec_with_ir(std::move(parsed), cfg, ctx, sys, source_map,
+                          *parallelism);
     }
     if (cfg.profile) {
       diagnostic::warning("`--profile` is only supported with `--neo`")

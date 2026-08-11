@@ -1,0 +1,8 @@
+// parallelism: 6
+from {a: 1, b: "x", v: 1},
+     {a: 1, b: "y", v: 2},
+     {a: 2, b: "x", v: 3},
+     {a: 1, b: "x", v: 4},
+     {a: 2, b: "y", v: 5}
+summarize a, b, total=sum(v)
+sort a, b

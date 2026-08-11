@@ -1,0 +1,6 @@
+// parallelism: 6,limit_partitions=2
+// The `limit_partitions` option lowers the bound on the degree of keyed
+// operators without affecting the degree of the rest of the pipeline.
+from {x: 1}, {x: 2}, {x: 1}
+where x > 0
+summarize x, total=sum(x)

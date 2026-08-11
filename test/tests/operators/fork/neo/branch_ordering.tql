@@ -1,0 +1,8 @@
+// The branch is an independent sink, so it keeps its own ordering requirement.
+// The unordered main path must not strip the `sort` inside the branch.
+from {x: 3}, {x: 1}, {x: 2}
+fork {
+  sort x
+  to_stdout
+}
+discard

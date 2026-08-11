@@ -8,14 +8,13 @@
 
 #include "tenzir/async.hpp"
 #include "tenzir/compile_ctx.hpp"
-#include "tenzir/detail/narrow.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
-#include <algorithm>
+#include <iterator>
 #include <ranges>
 
 namespace tenzir::plugins::fork_merge {
@@ -34,71 +33,28 @@ struct ForkMergeArgs {
   }
 };
 
-/// Broadcasts each input slice to all branches. The outputs of the branch
-/// subpipelines are merged into the operator's output by the executor.
-///
-/// Every branch is an events-to-events transformation.
-class ForkMerge final : public Operator<table_slice, table_slice> {
+/// Runtime operator for `fork_merge`: copies every input slice to each of its
+/// N output ports (one per branch).
+class ForkMergeOp final : public Operator<table_slice, table_slice> {
 public:
-  explicit ForkMerge(ForkMergeArgs args) : args_{std::move(args)} {
+  auto needs_output_ports() const -> bool override {
+    return true;
   }
 
-  auto start(OpCtx& ctx) -> Task<void> override {
-    for (auto i = size_t{0}; i < args_.branches.size(); ++i) {
-      if (args_.branches[i].operators.empty()
-          or ctx.get_sub(static_cast<int64_t>(i)).is_some()) {
-        continue;
-      }
-      if (not co_await ctx.plan_and_spawn_sub<table_slice>(
-            static_cast<int64_t>(i), args_.branches[i])) {
-        co_return;
-      }
+  auto process(table_slice, Push<table_slice>&, OpCtx&) -> Task<void> override {
+    TENZIR_UNREACHABLE();
+  }
+
+  auto process(table_slice input, PushPorts<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    for (auto port = size_t{0}; port + 1 < push.size(); ++port) {
+      co_await push(port, input);
+    }
+    if (push.size() > 0) {
+      co_await push(push.size() - 1, std::move(input));
     }
   }
-
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    for (auto i = size_t{0}; i < args_.branches.size(); ++i) {
-      if (closed_[i]) {
-        continue;
-      }
-      auto sub = ctx.get_sub(static_cast<int64_t>(i));
-      if (not sub) {
-        // An empty branch acts as the identity, forwarding its input straight
-        // to the merged output.
-        if (args_.branches[i].operators.empty()) {
-          co_await push(input);
-        } else {
-          closed_[i] = true;
-        }
-        continue;
-      }
-      auto& handle = as<SubHandle<table_slice>>(*sub);
-      closed_[i] = (co_await handle.push(input)).is_err();
-    }
-  }
-
-  auto finish_sub(SubKeyView key, Push<table_slice>&, OpCtx&)
-    -> Task<void> override {
-    auto key_data = materialize(key);
-    auto* index = try_as<int64_t>(key_data);
-    TENZIR_ASSERT(index);
-    closed_[detail::narrow<size_t>(*index)] = true;
-    co_return;
-  }
-
-  auto state() -> OperatorState override {
-    return (not closed_.empty()
-            and std::ranges::all_of(closed_, std::identity{}))
-             ? OperatorState::done
-             : OperatorState::normal;
-  }
-
-private:
-  ForkMergeArgs args_;
-  // A branch is considered closed once its subpipeline terminated. Empty
-  // branches never close on their own; they drain input until end of stream.
-  std::vector<bool> closed_ = std::vector<bool>(args_.branches.size(), false);
 };
 
 class ForkMergeIr final : public ir::Operator {
@@ -128,8 +84,9 @@ public:
     return {};
   }
 
-  auto optimize(ir::optimize_filter filter,
-                event_order order) && -> ir::optimize_result override {
+  auto
+  optimize(ir::optimize_filter filter, event_order order,
+           const ir::OptimizeCtx& octx) && -> ir::optimize_result override {
     // Each branch receives the same input, and their outputs are merged. A
     // downstream filter over the merged output equals the union of that filter
     // applied to each branch, so we can push it into every branch. The residual
@@ -138,7 +95,7 @@ public:
     // cannot push differing filters into it.
     auto optimize_branch
       = [&](ir::pipeline& branch, ir::optimize_filter f) -> event_order {
-      auto opt = std::move(branch).optimize(std::move(f), order);
+      auto opt = std::move(branch).optimize(std::move(f), order, octx);
       branch = std::move(opt.replacement);
       branch.prepend(std::move(opt.filter));
       return opt.order;
@@ -178,9 +135,29 @@ public:
     return tag_v<table_slice>;
   }
 
-  auto spawn(element_type_tag input) const -> AnyOperator override {
-    TENZIR_ASSERT(input.is<table_slice>());
-    return ForkMerge{args_}.with_name("fork_merge");
+  auto spawn(element_type_tag) const -> AnyOperator override {
+    return Box<tenzir::Operator<table_slice, table_slice>>{
+      ForkMergeOp{}.with_name("fork_merge")};
+  }
+
+  auto plan(ir::PlanBuilder& builder, ir::PlanPorts input,
+            diagnostic_handler& dh) && -> failure_or<ir::PlanPorts> override {
+    // `fork_merge` is an N-output operator: it copies each input slice to every
+    // branch (one per output port), and the branch tails are returned so the
+    // consumer gathers them.
+    auto ty = tag_v<table_slice>;
+    auto branches = std::move(args_.branches);
+    auto node = builder.append_node(std::move(*this).move(), ty, ty);
+    builder.add_channels(input, node);
+    auto tails = ir::PlanPorts{};
+    for (auto port = size_t{0}; port < branches.size(); ++port) {
+      TRY(auto tail, builder.lower_subpipeline(
+                       node, std::move(branches[port]),
+                       ir::PlanPorts{ir::Port{node, port, ty}}, dh));
+      tails.insert(tails.end(), std::make_move_iterator(tail.begin()),
+                   std::make_move_iterator(tail.end()));
+    }
+    return tails;
   }
 
   friend auto inspect(auto& f, ForkMergeIr& x) -> bool {

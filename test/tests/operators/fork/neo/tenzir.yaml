@@ -1,0 +1,4 @@
+tenzir:
+  # These tests cover the IR ("neo") executor's port dispatch, which is not the
+  # default executor.
+  neo: true

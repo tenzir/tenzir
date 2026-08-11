@@ -1259,6 +1259,12 @@ inline auto pipeline::get_location() const -> location {
   return result;
 }
 
+/// Combine one or more expressions into a single expression. A lone expression
+/// is returned unchanged; multiple expressions are wrapped into a `record` with
+/// positional field names (`0`, `1`, ...), so hashing or evaluating the
+/// composite is a single operation. Requires a non-empty input.
+auto combine_into_record(std::vector<expression> exprs) -> expression;
+
 } // namespace tenzir::ast
 
 namespace tenzir {

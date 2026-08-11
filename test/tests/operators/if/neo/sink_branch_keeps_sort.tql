@@ -1,0 +1,10 @@
+// The trailing `discard` makes the merged path unordered, which must not
+// delete the `sort` inside the branch that ends in a sink.
+from {x: 3}, {x: 1}, {x: 2}
+if x < 10 {
+  sort x
+  to_stdout
+} else {
+  pass
+}
+discard

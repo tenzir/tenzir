@@ -13,9 +13,9 @@
 
 #include "tenzir/async.hpp"
 #include "tenzir/async/channel.hpp"
-#include "tenzir/async/generator.hpp"
 #include "tenzir/async/notify.hpp"
 #include "tenzir/async/signal.hpp"
+#include "tenzir/operator_id.hpp"
 #include "tenzir/result.hpp"
 
 #include <folly/Executor.h>
@@ -25,69 +25,12 @@
 #include <folly/executors/GlobalExecutor.h>
 
 #include <functional>
-#include <span>
 
 namespace tenzir {
 
-template <class SemiAwaitable, class F>
-auto map_awaitable(SemiAwaitable&& awaitable, F&& f) -> Task<
-  std::invoke_result_t<F, folly::coro::semi_await_result_t<SemiAwaitable>>> {
-  co_return std::invoke(f, co_await std::forward<SemiAwaitable>(awaitable));
-}
-
-/// A sequence of operators with the given input and output.
-template <class Input, class Output>
-class OperatorChain {
-public:
-  OperatorChain(const OperatorChain&) = delete;
-  OperatorChain& operator=(const OperatorChain&) = delete;
-  OperatorChain(OperatorChain&&) = default;
-  OperatorChain& operator=(OperatorChain&&) = default;
-  ~OperatorChain() = default;
-
-  static auto try_from(std::vector<AnyOperator> operators)
-    -> Result<OperatorChain<Input, Output>, std::vector<AnyOperator>> {
-    auto input = operator_type{tag_v<Input>};
-    for (auto& op : operators) {
-      auto next
-        = match(op,
-                [&]<class In, class Out>(
-                  Box<Operator<In, Out>>&) -> std::optional<operator_type> {
-                  if (not input.is<In>()) {
-                    return std::nullopt;
-                  }
-                  return tag_v<Out>;
-                });
-      if (not next) {
-        return Err{std::move(operators)};
-      }
-      input = *next;
-    }
-    if (not input.is<Output>()) {
-      return Err{std::move(operators)};
-    }
-    return OperatorChain{std::move(operators)};
-  }
-
-  auto size() const -> size_t {
-    return operators_.size();
-  }
-
-  auto operator[](size_t index) const -> const AnyOperator& {
-    return operators_[index];
-  }
-
-  auto unwrap() && -> std::vector<AnyOperator> {
-    return std::move(operators_);
-  }
-
-private:
-  explicit OperatorChain(std::vector<AnyOperator> operators)
-    : operators_{std::move(operators)} {
-  }
-
-  std::vector<AnyOperator> operators_;
-};
+namespace ir {
+struct Plan;
+} // namespace ir
 
 struct PostCommit {};
 
@@ -131,63 +74,6 @@ private:
 
 template <class T>
 using VoidToNever = std::conditional_t<std::same_as<T, void>, Never, T>;
-
-struct PipeId;
-struct ChannelId;
-
-struct OpId {
-  std::string value;
-
-  auto sub(size_t index) const -> PipeId;
-
-  auto to(OpId other) const -> ChannelId;
-
-  friend auto format_as(OpId const& self) -> std::string_view {
-    return self.value;
-  }
-
-  auto operator<=>(OpId const& other) const = default;
-};
-
-struct PipeId {
-  std::string value;
-
-  auto op(size_t index) const -> OpId {
-    return OpId{fmt::format("{}/{}", value, index)};
-  }
-
-  friend auto format_as(PipeId const& self) -> std::string_view {
-    return self.value;
-  }
-
-  auto operator<=>(PipeId const& other) const = default;
-};
-
-struct ChannelId {
-  std::string value;
-
-  static auto first(OpId id) -> ChannelId {
-    return ChannelId{fmt::format("_ -> {}", id.value)};
-  }
-
-  static auto last(OpId id) -> ChannelId {
-    return ChannelId{fmt::format("{} -> _", id.value)};
-  }
-
-  friend auto format_as(ChannelId const& self) -> std::string_view {
-    return self.value;
-  }
-
-  auto operator<=>(ChannelId const& other) const = default;
-};
-
-inline auto OpId::sub(size_t index) const -> PipeId {
-  return PipeId{fmt::format("{}-{}", value, index)};
-}
-
-inline auto OpId::to(OpId other) const -> ChannelId {
-  return ChannelId{fmt::format("{} -> {}", value, other.value)};
-}
 
 /// Factory for the channels between operators and optional per-operator
 /// executor creation for profiling.
@@ -290,28 +176,28 @@ public:
   virtual auto failure() -> failure_or<void> = 0;
 };
 
-/// Drives an already-wired chain to completion. The caller owns all IO: the
+/// Drives an already-wired plan to completion. The caller owns all IO: the
 /// upstream/downstream endpoints and the control channels. Higher-level
-/// entry points (`run_pipeline`, `run_bounded_pipeline`) create that plumbing
+/// entry points (`execute_plan`, `execute_plan_with_io`) create that plumbing
 /// and then call this primitive.
 ///
 /// When `fused` is set, the chain runs with fused channels: each input is fully
 /// processed through the entire chain before the next input is pulled.
 template <class Input, class Output>
-auto drive_chain(OperatorChain<Input, Output> chain,
-                 Box<Pull<OperatorMsg<Input>>> pull_upstream,
-                 Box<Push<OperatorMsg<Output>>> push_downstream,
-                 Receiver<FromControl> from_control,
-                 Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
-                 caf::actor_system& sys, DiagHandler& dh, bool fused = false)
+auto drive_plan(ir::Plan plan, Box<Pull<OperatorMsg<Input>>> pull_upstream,
+                Box<Push<OperatorMsg<Output>>> push_downstream,
+                Receiver<FromControl> from_control,
+                Sender<ToControl> to_control, PipeId id, ExecCtx& exec_ctx,
+                caf::actor_system& sys, DiagHandler& dh, bool fused = false)
   -> Task<void>;
 
-/// Runs a closed pipeline without external control. Creates the input/output
-/// channels and the control channels, then drives the chain, handling graceful
-/// stop and control messages.
-auto run_pipeline(OperatorChain<void, void> pipeline, ExecCtx& exec_ctx,
-                  caf::actor_system& sys, DiagHandler& dh,
-                  Notify* graceful_stop = nullptr) -> Task<void>;
+/// Runs a pipeline plan without external control.
+///
+/// Creates the input/output channels and the control operators, then drives
+/// the plan, handling graceful stop and control messages.
+auto execute_plan(ir::Plan plan, ExecCtx& exec_ctx, caf::actor_system& sys,
+                  DiagHandler& dh, Notify* graceful_stop = nullptr)
+  -> Task<void>;
 
 /// Feeds input into a bounded pipeline.
 using PipelineFeeder
@@ -321,17 +207,13 @@ using PipelineFeeder
 using PipelineDrainer
   = std::function<Task<void>(Pull<OperatorMsg<table_slice>>&)>;
 
-/// Runs a bounded `table_slice -> table_slice` chain with caller-provided IO.
+/// Runs a pipeline plan that pull `table_slice` and push `table_slice`.
 ///
-/// Creates the input/output channels and drives the chain. The feeder receives
-/// the input push endpoint and should push all input slices followed by an
-/// `EndOfData` signal; the drainer receives the output pull endpoint and can
-/// process transformed slices incrementally. Unlike `run_pipeline`, there is no
-/// external controller: the only control signal acted on is `no_more_input`,
-/// which cancels the feeder.
-auto run_bounded_pipeline(OperatorChain<table_slice, table_slice> chain,
-                          ExecCtx& exec_ctx, caf::actor_system& sys,
-                          DiagHandler& dh, PipelineFeeder feed_input,
+/// Creates the input/output channels and the control operators, then drives
+/// the plan, handling graceful stop and control messages.
+auto execute_plan_with_io(ir::Plan plan, ExecCtx& exec_ctx,
+                          caf::actor_system& sys, DiagHandler& dh,
+                          PipelineFeeder feed_input,
                           PipelineDrainer drain_output) -> Task<void>;
 
 } // namespace tenzir

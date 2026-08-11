@@ -1,0 +1,16 @@
+{
+  g: "a",
+  total: 4,
+}
+{
+  g: null,
+  total: 11,
+}
+warning: field `g` not found
+ --> tests/operators/summarize/parallel/null_keys.tql:7:11
+  |
+7 | summarize g, total=sum(x)
+  |           ~
+  |
+  = hint: did you mean `x`?
+  = hint: append `?` to suppress this warning

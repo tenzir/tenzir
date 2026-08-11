@@ -1,0 +1,8 @@
+// A single branch is a valid but degenerate shape: the operator ends up with
+// one output port. It still writes to ports, so the executor must drive it
+// through `PushPorts` rather than the single-port `process()` overload it does
+// not implement.
+from {x: 1}, {x: 2}
+fork_merge {
+  summarize s=sum(x)
+}

@@ -1,0 +1,6 @@
+// Two adjacent non-keyed operators at the same degree of parallelism are
+// wired as matched lane-to-lane channels, which run fused: each lane fully
+// processes an input before accepting the next. Fused edges render as `>`.
+from {x: 1}, {x: 2}, {x: 3}
+where x > 0
+where x < 3

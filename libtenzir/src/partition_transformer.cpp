@@ -429,17 +429,16 @@ private:
   std::shared_ptr<partition_source_state> state_;
 };
 
-/// Compile an AST `table_slice -> table_slice` pipeline to a closed operator
-/// chain. Emits diagnostics via `dh` for any failure.
+/// Compile an AST `table_slice -> table_slice` pipeline to an executable plan.
+/// Emits diagnostics via `dh` for any failure.
 auto compile_table_slice_transform(ast::pipeline ast, diagnostic_handler& dh)
-  -> failure_or<OperatorChain<table_slice, table_slice>> {
+  -> failure_or<ir::Plan> {
   auto provider = session_provider::make(dh);
   auto ctx = provider.as_session();
   auto b_ctx = base_ctx{ctx.dh(), ctx.reg()};
   auto root = compile_ctx::make_root(b_ctx);
   TRY(auto ir, std::move(ast).compile(root));
-  TRY(auto plan, ir::make_plan(std::move(ir), tag_v<table_slice>, b_ctx));
-  auto output = plan.output_type();
+  TRY(auto output, ir.infer_type(tag_v<table_slice>, dh));
   if (not output.is<table_slice>()) {
     diagnostic::error("partition transform: pipeline must produce events, "
                       "got {}",
@@ -447,19 +446,12 @@ auto compile_table_slice_transform(ast::pipeline ast, diagnostic_handler& dh)
       .emit(dh);
     return failure::promise();
   }
-  auto spawned = std::move(plan).spawn();
+  auto plan = ir::make_plan(std::move(ir), tag_v<table_slice>, b_ctx);
   if (ctx.has_failure()) {
     return failure::promise();
   }
-  auto chain
-    = OperatorChain<table_slice, table_slice>::try_from(std::move(spawned));
-  if (not chain) {
-    diagnostic::error("partition transform: pipeline could not be wired as "
-                      "table_slice -> table_slice")
-      .emit(dh);
-    return failure::promise();
-  }
-  return std::move(chain).unwrap();
+  TENZIR_ASSERT(plan);
+  return std::move(*plan);
 }
 
 } // namespace
@@ -766,10 +758,10 @@ auto partition_transformer(
             // Compaction and rebuild have no user-facing diagnostic sink, so
             // we log to the server log. The handler is owned by this
             // coroutine frame so its address is stable across awaits and it
-            // outlives every operator inside `run_transform` that references
-            // it.
+            // outlives every operator inside `run_plan_with_io` that
+            // references it.
             auto dh = TransformerDiagHandler{};
-            CO_TRY(auto chain,
+            CO_TRY(auto plan,
                    compile_table_slice_transform(std::move(ast), dh));
             auto loader = partition_loader{
               std::move(input_partitions),
@@ -828,8 +820,8 @@ auto partition_transformer(
                   });
               }
             };
-            CO_TRY(co_await run_transform(
-              std::move(chain), sys, dh, NoProfiler{}, /*is_hidden=*/true,
+            CO_TRY(co_await run_plan_with_io(
+              std::move(plan), sys, dh, NoProfiler{}, /*is_hidden=*/true,
               std::move(feed_input), std::move(drain_output)));
             co_return {};
           }))

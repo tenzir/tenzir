@@ -12,6 +12,7 @@
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -21,12 +22,26 @@
 
 namespace tenzir {
 
-auto combine_branch_types(std::optional<element_type_tag> lhs,
-                          std::optional<element_type_tag> rhs, location primary,
-                          diagnostic_handler& dh)
-  -> failure_or<std::optional<element_type_tag>>;
-
 namespace {
+
+auto combine_branch_types(element_type_tag lhs, element_type_tag rhs,
+                          location primary, diagnostic_handler& dh)
+  -> failure_or<element_type_tag> {
+  if (lhs == rhs) {
+    return lhs;
+  }
+  if (lhs.is<void>()) {
+    return rhs;
+  }
+  if (rhs.is<void>()) {
+    return lhs;
+  }
+  diagnostic::error("incompatible branch output types: {} and {}",
+                    operator_type_name(lhs), operator_type_name(rhs))
+    .primary(primary)
+    .emit(dh);
+  return failure::promise();
+}
 
 struct MatchPattern {
   struct Wildcard {};
@@ -100,51 +115,38 @@ auto make_boolean_array(std::vector<bool> const& mask)
   return finish(builder);
 }
 
-class MatchImpl {
+/// Runtime operator for `match`: routes each row to the first arm whose pattern
+/// matches and whose guard passes (one output port per arm); the mandatory
+/// wildcard arm catches any remaining rows. Mirrors `match`'s first-match
+/// semantics, evaluating the scrutinee and guards once per slice.
+class MatchOp final : public Operator<table_slice, table_slice> {
 public:
-  explicit MatchImpl(MatchArgs args) : args_{std::move(args)} {
+  explicit MatchOp(MatchArgs args) : args_{std::move(args)} {
   }
 
-  auto start(OpCtx& ctx) -> Task<void> {
-    for (auto i = size_t{0}; i < args_.arms.size(); ++i) {
-      if (args_.arms[i].pipeline.operators.empty()
-          or ctx.get_sub(static_cast<int64_t>(i)).is_some()) {
-        continue;
-      }
-      if (not co_await ctx.plan_and_spawn_sub<table_slice>(
-            static_cast<int64_t>(i), args_.arms[i].pipeline)) {
-        co_return;
-      }
+  auto needs_output_ports() const -> bool override {
+    return true;
+  }
+
+  auto process(table_slice, Push<table_slice>&, OpCtx&) -> Task<void> override {
+    TENZIR_UNREACHABLE();
+  }
+
+  auto process(table_slice input, PushPorts<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    for (auto& [lane, slice] : classify(std::move(input), ctx.dh())) {
+      co_await push(lane, std::move(slice));
     }
-  }
-
-  auto process(table_slice input, OpCtx& ctx, Push<table_slice>& push)
-    -> Task<void> {
-    auto emit = [&](table_slice slice) -> Task<void> {
-      co_await push(std::move(slice));
-    };
-    return process_impl(std::move(input), ctx, std::move(emit));
-  }
-
-  auto process(table_slice input, OpCtx& ctx) -> Task<void> {
-    auto drop = [](table_slice) -> Task<void> {
-      co_return;
-    };
-    return process_impl(std::move(input), ctx, std::move(drop));
-  }
-
-  auto state() -> OperatorState {
-    if (std::ranges::all_of(arm_closed_, std::identity{})) {
-      return OperatorState::done;
-    }
-    return OperatorState::normal;
   }
 
 private:
-  template <class Emit>
-  auto process_impl(table_slice input, OpCtx& ctx, Emit emit) -> Task<void> {
+  /// Classifies the rows of `input` into `(arm index, subslice)` runs covering
+  /// each matched row exactly once.
+  auto classify(table_slice input, diagnostic_handler& dh) const
+    -> std::vector<std::pair<size_t, table_slice>> {
+    auto runs = std::vector<std::pair<size_t, table_slice>>{};
     auto matched = std::vector<bool>(input.rows(), false);
-    auto scrutinee = eval(args_.scrutinee, input, ctx);
+    auto scrutinee = eval(args_.scrutinee, input, dh);
     for (auto arm_index = size_t{0}; arm_index < args_.arms.size();
          ++arm_index) {
       auto const& arm = args_.arms[arm_index];
@@ -177,7 +179,7 @@ private:
         auto candidate_input
           = filter(input, *make_boolean_array(candidate_mask));
         auto end = int64_t{0};
-        for (auto const& predicate : eval(*arm.guard, candidate_input, ctx)) {
+        for (auto const& predicate : eval(*arm.guard, candidate_input, dh)) {
           auto const start = std::exchange(end, end + predicate.length());
           auto const typed_predicate = predicate.as<bool_type>();
           if (not typed_predicate) {
@@ -185,7 +187,7 @@ private:
               diagnostic::warning("expected `bool`, but got `{}`",
                                   predicate.type.kind())
                 .primary(*arm.guard)
-                .emit(ctx);
+                .emit(dh);
             }
             std::fill(guard_mask.begin() + start, guard_mask.begin() + end,
                       false);
@@ -207,73 +209,16 @@ private:
           matched[row] = true;
         }
       }
-      if (arm_closed_[arm_index]) {
-        continue;
-      }
       auto filtered = filter(input, *make_boolean_array(arm_mask));
       if (filtered.rows() == 0) {
         continue;
       }
-      auto sub = ctx.get_sub(static_cast<int64_t>(arm_index));
-      if (not sub) {
-        if (args_.arms[arm_index].pipeline.operators.empty()) {
-          co_await emit(std::move(filtered));
-        } else {
-          arm_closed_[arm_index] = true;
-        }
-        continue;
-      }
-      auto& handle = as<SubHandle<table_slice>>(*sub);
-      arm_closed_[arm_index]
-        = (co_await handle.push(std::move(filtered))).is_err();
+      runs.emplace_back(arm_index, std::move(filtered));
     }
+    return runs;
   }
 
   MatchArgs args_;
-  std::vector<bool> arm_closed_ = std::vector<bool>(args_.arms.size(), false);
-};
-
-class Match final : public Operator<table_slice, table_slice> {
-public:
-  explicit Match(MatchArgs args) : impl_{std::move(args)} {
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> override {
-    return impl_.start(ctx);
-  }
-
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    return impl_.process(std::move(input), ctx, push);
-  }
-
-  auto state() -> OperatorState override {
-    return impl_.state();
-  }
-
-private:
-  MatchImpl impl_;
-};
-
-class MatchSink final : public Operator<table_slice, void> {
-public:
-  explicit MatchSink(MatchArgs args) : impl_{std::move(args)} {
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> override {
-    return impl_.start(ctx);
-  }
-
-  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    return impl_.process(std::move(input), ctx);
-  }
-
-  auto state() -> OperatorState override {
-    return impl_.state();
-  }
-
-private:
-  MatchImpl impl_;
 };
 
 auto const_eval_match_expression(ast::expression const& expr, location source,
@@ -505,15 +450,86 @@ public:
     return {};
   }
 
-  auto spawn(element_type_tag input) const -> AnyOperator override {
-    TENZIR_ASSERT(input.is<table_slice>());
-    auto dh = null_diagnostic_handler{};
-    auto output = infer_type(input, dh);
-    TENZIR_ASSERT(output);
-    if ((*output).is<void>()) {
-      return MatchSink{args_}.with_name("match");
+  auto
+  optimize(ir::optimize_filter filter, event_order order,
+           const ir::OptimizeCtx& octx) && -> ir::optimize_result override {
+    // The planner lowers the arms inline, so this is the only pass that gets to
+    // optimize them. Without recursing here, optimizer-only operators such as
+    // `unordered` would survive into the plan and panic when spawned.
+    //
+    // Every row goes to exactly one arm and the arm outputs are merged, so the
+    // downstream filter and order requirement can be pushed into each arm that
+    // still returns events. An arm that does not inherits neither, as it has no
+    // downstream event consumer. The filter is not propagated past `match`,
+    // because the arms may rewrite the fields it refers to.
+    auto null_dh = null_diagnostic_handler{};
+    auto outputs_events = std::vector<bool>{};
+    outputs_events.reserve(args_.arms.size());
+    auto types_known = true;
+    for (const auto& arm : args_.arms) {
+      auto ty = arm.pipeline.infer_type(tag_v<table_slice>, null_dh);
+      types_known = types_known and static_cast<bool>(ty);
+      outputs_events.push_back(ty and ty->is<table_slice>());
     }
-    return Match{args_}.with_name("match");
+    // Pushing into the arms is only complete if we know every arm's output
+    // type. Otherwise the filter stays behind `match`.
+    auto pushed = ir::optimize_filter{};
+    if (types_known) {
+      pushed = std::move(filter);
+      filter.clear();
+    }
+    auto result_order = order;
+    for (auto i = size_t{0}; i < args_.arms.size(); ++i) {
+      auto& arm = args_.arms[i];
+      auto events = outputs_events[i];
+      auto opt = std::move(arm.pipeline)
+                   .optimize(events ? pushed : ir::optimize_filter{},
+                             events ? order : event_order::ordered, octx);
+      arm.pipeline = std::move(opt.replacement);
+      // All arms share `match` as their upstream, so an arm cannot push its
+      // residual filter further up.
+      arm.pipeline.prepend(std::move(opt.filter));
+      result_order = stronger_event_order(result_order, opt.order);
+    }
+    auto replacement = std::vector<Box<ir::Operator>>{};
+    replacement.push_back(std::move(*this).move());
+    for (auto& expr : filter) {
+      replacement.push_back(make_where_ir(std::move(expr)));
+    }
+    return {
+      {},
+      result_order,
+      ir::pipeline{{}, std::move(replacement)},
+    };
+  }
+
+  auto spawn(element_type_tag) const -> AnyOperator override {
+    return Box<tenzir::Operator<table_slice, table_slice>>{
+      MatchOp{args_}.with_name("match")};
+  }
+
+  auto plan(ir::PlanBuilder& builder, ir::PlanPorts input,
+            diagnostic_handler& dh) && -> failure_or<ir::PlanPorts> override {
+    // `match` is an N-output operator with one output port per arm. It
+    // evaluates the scrutinee and guards per row and routes each row to the
+    // first arm that claims it. The arm tails are returned so the consumer
+    // merges them.
+    auto ty = tag_v<table_slice>;
+    auto branches = std::vector<ir::pipeline>{};
+    branches.reserve(args_.arms.size());
+    for (auto& arm : args_.arms) {
+      branches.push_back(std::move(arm.pipeline));
+    }
+    auto node = builder.append_node(std::move(*this).move(), ty, ty);
+    builder.add_channels(input, node);
+    auto tails = ir::PlanPorts{};
+    for (auto port = size_t{0}; port < branches.size(); ++port) {
+      TRY(auto tail, builder.lower_subpipeline(
+                       node, std::move(branches[port]),
+                       ir::PlanPorts{ir::Port{node, port, ty}}, dh));
+      tails.insert(tails.end(), tail.begin(), tail.end());
+    }
+    return tails;
   }
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
@@ -533,8 +549,12 @@ public:
           .emit(dh);
         return failure::promise();
       }
+      if (not result) {
+        result = branch_ty;
+        continue;
+      }
       TRY(result,
-          combine_branch_types(result, branch_ty, args_.match_keyword, dh));
+          combine_branch_types(*result, branch_ty, args_.match_keyword, dh));
     }
     TENZIR_ASSERT(has_wildcard);
     // A match always has a wildcard arm, so at least one branch contributed.

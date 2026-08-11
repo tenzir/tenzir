@@ -128,6 +128,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<AssertArgs, Assert>{};
+    d.parallelizable();
     d.positional("invariant", &AssertArgs::invariant, "bool");
     d.named("message", &AssertArgs::message, "string");
     return d.invariant_order();

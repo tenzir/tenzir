@@ -878,11 +878,16 @@ public:
     return tag_v<table_slice>;
   }
 
-  auto optimize(ir::optimize_filter filter,
-                event_order order) && -> ir::optimize_result override {
+  auto
+  optimize(ir::optimize_filter filter, event_order order,
+           const ir::OptimizeCtx& /*octx*/) && -> ir::optimize_result override {
     // TODO: Shall we avoid optimizing if it doesn't make sense?
     filter.insert(filter.begin(), std::move(predicate_));
     return ir::optimize_result{std::move(filter), order, {}};
+  }
+
+  auto parallelizable() const -> bool override {
+    return true;
   }
 
   friend auto inspect(auto& f, where_ir& x) -> bool {

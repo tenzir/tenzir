@@ -259,6 +259,13 @@ public:
     -> Task<void>
     = 0;
 
+  /// Process a single input item into multiple output ports (opt-in).
+  virtual auto process(Input input, PushPorts<Output>& push, OpCtx& ctx)
+    -> Task<void> {
+    TENZIR_UNUSED(input, push, ctx);
+    panic("operator did not implement multi-output process");
+  }
+
 protected:
   ~OperatorInputOutputBase() = default;
 };
@@ -444,6 +451,14 @@ public:
     return OperatorState::normal;
   }
 
+  /// Whether this operator wants to push to output ports other than 0.
+  ///
+  /// If multiple ports are not needed, this should return false,
+  /// for performance reasons.
+  virtual auto needs_output_ports() const -> bool {
+    return false;
+  }
+
   /// Called to request a graceful shutdown.
   ///
   /// `stop()` means "stop producing new work, but finish draining work that is
@@ -463,7 +478,7 @@ public:
   }
 
   /// Sets the user-facing name of this operator and returns it, so that it can
-  /// be chained at construction, e.g. `IfSink{...}.with_name("if")`. Called by
+  /// be chained at construction, e.g. `IfOp{...}.with_name("if")`. Called by
   /// the spawning machinery with `Description::name`.
   template <class Self>
   auto with_name(this Self&& self, std::string name) -> Self {

@@ -1,0 +1,13 @@
+// The planner lowers the `fork` branch inline, so `fork` must optimize it
+// itself. Otherwise an optimizer-only operator such as `unordered` survives
+// into the plan and panics when the executor spawns it. The branch also pushes
+// a filter to its upstream, which must be reinserted at the branch's front
+// instead of being applied to the main output.
+from {x: 1}, {x: 2}
+fork {
+  unordered {
+    where x > 1
+    discard
+  }
+}
+sort x

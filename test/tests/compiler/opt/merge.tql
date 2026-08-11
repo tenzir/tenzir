@@ -1,0 +1,5 @@
+// merge pushes downstream filters into the source branch and up the main lane.
+export
+merge { export }
+where x > 1
+discard

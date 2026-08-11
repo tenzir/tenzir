@@ -1,0 +1,4 @@
+tenzir:
+  # These tests cover the IR ("neo") executor's branch optimization, which is
+  # not part of the default executor.
+  neo: true

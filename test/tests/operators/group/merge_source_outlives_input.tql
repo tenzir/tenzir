@@ -1,0 +1,14 @@
+// Regression test: an orphan source inside a subpipeline is fed by a void lane
+// from the plan's event broadcast. When the plan input ends while that source is
+// still running, the broadcast must not push `EndOfData` over the void lane: the
+// source has void input and would panic on it. All three events must be emitted.
+from {g: 1}
+group g {
+  merge {
+    from {x: 1s}, {x: 2s}
+    delay x.from_epoch()
+  }
+}
+// Order across the two schemas is racy, so only count the events.
+select ok = true
+summarize events = count()

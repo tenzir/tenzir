@@ -1,0 +1,2 @@
+version
+if name == "x" { discard }

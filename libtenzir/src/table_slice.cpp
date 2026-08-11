@@ -1190,6 +1190,39 @@ auto filter(const table_slice& slice, const arrow::BooleanArray& mask)
   return result;
 }
 
+auto take_rows(const table_slice& slice, std::span<const int64_t> rows)
+  -> table_slice {
+  if (rows.empty()) {
+    return {};
+  }
+  auto builder = arrow::Int64Builder{arrow_memory_pool()};
+  check(builder.Reserve(detail::narrow<int64_t>(rows.size())));
+  for (auto row : rows) {
+    TENZIR_ASSERT(row >= 0);
+    TENZIR_ASSERT(std::cmp_less(row, slice.rows()));
+    builder.UnsafeAppend(row);
+  }
+  auto batch
+    = check(arrow::compute::Take(to_record_batch(slice), finish(builder)))
+        .record_batch();
+  auto result = table_slice{std::move(batch), slice.schema()};
+  // A slice's offset asserts that its rows occupy the dense ID range
+  // `[offset, offset + rows)`. That only holds when the taken rows are a
+  // contiguous ascending run of the input; otherwise we would invent IDs for
+  // reordered, skipped, or duplicated rows. Keep the offset for the contiguous
+  // case and invalidate it otherwise.
+  const auto contiguous
+    = slice.offset() != invalid_id
+      and std::ranges::adjacent_find(rows, [](int64_t lhs, int64_t rhs) {
+            return rhs != lhs + 1;
+          }) == rows.end();
+  if (contiguous) {
+    result.offset(slice.offset() + detail::narrow<id>(rows.front()));
+  }
+  result.import_time(slice.import_time());
+  return result;
+}
+
 namespace {
 
 /// Creates an Arrow ArrayBuilder from an existing DataType, avoiding the

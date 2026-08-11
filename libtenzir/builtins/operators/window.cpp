@@ -45,25 +45,6 @@ struct WindowArgs {
   let_id let;
 };
 
-/// Copies the given `rows` out of `input` into a new table slice. Identical to
-/// the helper in the `group` operator.
-auto take_rows(table_slice const& input, std::vector<int64_t> const& rows)
-  -> table_slice {
-  TENZIR_ASSERT(not rows.empty());
-  auto builder = arrow::Int64Builder{arrow_memory_pool()};
-  check(builder.Reserve(detail::narrow<int64_t>(rows.size())));
-  for (auto row : rows) {
-    check(builder.Append(row));
-  }
-  auto indices = finish(builder);
-  auto datum = check(arrow::compute::Take(to_record_batch(input), indices));
-  TENZIR_ASSERT(datum.kind() == arrow::Datum::Kind::RECORD_BATCH);
-  auto result = table_slice{datum.record_batch(), input.schema()};
-  result.offset(input.offset());
-  result.import_time(input.import_time());
-  return result;
-}
-
 /// Integer division rounding towards negative infinity (unlike C++ `/`, which
 /// truncates towards zero). Correct for pre-epoch (negative) timestamps.
 auto floor_div(int64_t a, int64_t b) -> int64_t {

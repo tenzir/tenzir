@@ -1,0 +1,9 @@
+// The planner lowers match arms inline, so `match` must optimize them itself.
+// Otherwise an optimizer-only operator such as `unordered` survives into the
+// plan and panics when the executor spawns it.
+from {x: 1}, {x: 2}
+match x {
+  1 => { unordered { set arm = "one" } }
+  _ => { optimize_barrier | set arm = "other" }
+}
+sort x

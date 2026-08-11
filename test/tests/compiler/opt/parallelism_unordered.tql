@@ -1,0 +1,8 @@
+// parallelism: 6
+// A parallelizable operator running at a degree greater than one has its output
+// reordered by the gather that follows it, so the optimize pass relaxes its
+// ordering requirement to `unordered`, letting it pick faster unordered code
+// paths. Single-instance operators keep their ordering guarantee.
+export
+drop foo
+to_stdout

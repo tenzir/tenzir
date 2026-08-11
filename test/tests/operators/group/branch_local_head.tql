@@ -1,0 +1,16 @@
+// A `head` inside one arm of a subpipeline's fan-out terminates only that
+// branch. The signal must be consumed at the branch boundary instead of being
+// forwarded to the parent, which would close the whole subpipeline's input and
+// deadlock the fan-in. All three events must still be emitted.
+from {x: 0, g: 1, ts: 0ms.from_epoch()},
+     {x: 1, g: 1, ts: 100ms.from_epoch()},
+     {x: 2, g: 1, ts: 200ms.from_epoch()}
+delay ts
+group g {
+  if x == 0 {
+    head 1
+  } else {
+    pass
+  }
+}
+sort x

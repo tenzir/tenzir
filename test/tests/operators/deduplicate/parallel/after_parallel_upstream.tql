@@ -1,0 +1,8 @@
+// parallelism: 6
+// Regression test: `deduplicate` is keyed, so its input must be
+// hash-partitioned even though the upstream `where` runs with 4 instances too.
+from {g: "a"}, {g: "b"}, {g: "c"}
+repeat 100
+where g != ""
+deduplicate g
+sort g

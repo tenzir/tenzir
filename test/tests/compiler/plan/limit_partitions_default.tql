@@ -1,0 +1,7 @@
+// parallelism: 32
+// A keyed operator is capped at `limit_partitions`, which defaults to 4, even
+// when a larger degree is requested explicitly: both its input exchange and
+// the resulting batch fragmentation grow with the number of partitions.
+from {x: 1}, {x: 2}, {x: 1}
+where x > 0
+summarize x, total=sum(x)
