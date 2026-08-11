@@ -1,0 +1,22 @@
+from {
+  raw: "Hello Alice",
+  needle: "alice",
+  marker: "<user>",
+},
+{
+  raw: "aaaa",
+  needle: "a",
+  marker: "b",
+},
+{
+  raw: "src=192.0.2.1",
+  needle: null,
+  marker: "<ip>",
+},
+{
+  raw: "src=192.0.2.1",
+  needle: "192.0.2.1",
+  marker: null,
+}
+
+raw = raw.replace(needle, marker, max=2, ignore_case=true)

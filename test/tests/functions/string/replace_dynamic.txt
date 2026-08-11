@@ -1,0 +1,10 @@
+{
+  raw: "src=<ip> user=alice",
+  needle: "192.0.2.1",
+  marker: "<ip>",
+}
+{
+  raw: "src=198.51.100.2 user=<user>",
+  needle: "bob",
+  marker: "<user>",
+}

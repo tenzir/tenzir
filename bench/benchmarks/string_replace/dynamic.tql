@@ -1,0 +1,31 @@
+---
+bench:
+  id: replace_dynamic
+  description: Apply 16 passes with per-row patterns and replacements.
+---
+
+from {
+  raw: "alpha bravo ".repeat(32),
+  pattern_1: "alpha",
+  pattern_2: "bravo",
+}
+repeat 100k
+batch 5k
+// Equal-length tokens keep the byte count stable while every pass matches.
+raw = raw.replace(pattern_1, pattern_2)
+raw = raw.replace(pattern_2, pattern_1)
+raw = raw.replace(pattern_1, pattern_2)
+raw = raw.replace(pattern_2, pattern_1)
+raw = raw.replace(pattern_1, pattern_2)
+raw = raw.replace(pattern_2, pattern_1)
+raw = raw.replace(pattern_1, pattern_2)
+raw = raw.replace(pattern_2, pattern_1)
+raw = raw.replace(pattern_1, pattern_2)
+raw = raw.replace(pattern_2, pattern_1)
+raw = raw.replace(pattern_1, pattern_2)
+raw = raw.replace(pattern_2, pattern_1)
+raw = raw.replace(pattern_1, pattern_2)
+raw = raw.replace(pattern_2, pattern_1)
+raw = raw.replace(pattern_1, pattern_2)
+raw = raw.replace(pattern_2, pattern_1)
+discard

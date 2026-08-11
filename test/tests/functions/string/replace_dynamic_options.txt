@@ -1,0 +1,20 @@
+{
+  raw: "Hello <user>",
+  needle: "alice",
+  marker: "<user>",
+}
+{
+  raw: "bbaa",
+  needle: "a",
+  marker: "b",
+}
+{
+  raw: "src=192.0.2.1",
+  needle: null,
+  marker: "<ip>",
+}
+{
+  raw: "src=",
+  needle: "192.0.2.1",
+  marker: null,
+}

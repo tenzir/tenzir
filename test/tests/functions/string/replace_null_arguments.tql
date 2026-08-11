@@ -1,0 +1,33 @@
+from {
+  case: "null subject",
+  subject: null,
+  pattern: "l",
+  replacement: "x",
+  static: null.replace("l", "x"),
+}, {
+  case: "null pattern",
+  subject: "hello",
+  pattern: null,
+  replacement: "x",
+  static: "hello".replace("", "x"),
+}, {
+  case: "null replacement",
+  subject: "hello",
+  pattern: "l",
+  replacement: null,
+  static: "hello".replace("l", ""),
+}, {
+  case: "null replacement without a match",
+  subject: "hello",
+  pattern: "z",
+  replacement: null,
+  static: "hello".replace("z", ""),
+}, {
+  case: "non-null arguments",
+  subject: "hello",
+  pattern: "l",
+  replacement: "x",
+  static: "hello".replace("l", "x"),
+}
+
+dynamic = subject.replace(pattern, replacement)

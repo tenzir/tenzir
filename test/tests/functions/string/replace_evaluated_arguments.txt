@@ -1,0 +1,4 @@
+{
+  raw: "ABC abc",
+  single: "XBC abc",
+}

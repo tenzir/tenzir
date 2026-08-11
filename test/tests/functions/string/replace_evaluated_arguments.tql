@@ -1,0 +1,5 @@
+from {
+  raw: "ABC abc",
+}
+
+single = raw.replace("a".to_upper(), "x".to_upper())

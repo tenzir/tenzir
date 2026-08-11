@@ -1,0 +1,40 @@
+{
+  case: "null subject",
+  subject: null,
+  pattern: "l",
+  replacement: "x",
+  static: null,
+  dynamic: null,
+}
+{
+  case: "null pattern",
+  subject: "hello",
+  pattern: null,
+  replacement: "x",
+  static: "hello",
+  dynamic: "hello",
+}
+{
+  case: "null replacement",
+  subject: "hello",
+  pattern: "l",
+  replacement: null,
+  static: "heo",
+  dynamic: "heo",
+}
+{
+  case: "null replacement without a match",
+  subject: "hello",
+  pattern: "z",
+  replacement: null,
+  static: "hello",
+  dynamic: "hello",
+}
+{
+  case: "non-null arguments",
+  subject: "hello",
+  pattern: "l",
+  replacement: "x",
+  static: "hexxo",
+  dynamic: "hexxo",
+}
