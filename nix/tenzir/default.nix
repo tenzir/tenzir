@@ -252,8 +252,7 @@ let
           ++ extraCmakeFlags;
 
           preConfigure = ''
-            version_build_metadata="N$(basename $out | cut -d'-' -f 1)"
-            cmakeFlagsArray+=("-DTENZIR_VERSION_SUFFIX=$version_build_metadata")
+            version_build_metadata="$(basename $out | cut -d'-' -f 1)"
             cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=$version_build_metadata")
           '';
 
