@@ -272,14 +272,16 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
                        caf::actor_cast<receiver_actor<table_slice>>(self),
                        self->state().mode.internal,
                        /*live=*/self->state().mode.live,
-                       /*recent=*/self->state().mode.retro)
+                       /*recent=*/self->state().mode.retro,
+                       /*eager=*/self->state().mode.eager)
                 .urgent());
   } else {
     subscribe(self->mail(atom::get_v,
                          caf::actor_cast<receiver_actor<table_slice>>(self),
                          self->state().mode.internal,
                          /*live=*/self->state().mode.live,
-                         /*recent=*/self->state().mode.retro));
+                         /*recent=*/self->state().mode.retro,
+                         /*eager=*/self->state().mode.eager));
   }
   // If we're retro, then we can query the catalog immediately.
   if (mode.retro) {

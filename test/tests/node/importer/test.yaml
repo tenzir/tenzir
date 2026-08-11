@@ -1,0 +1,3 @@
+suite: importer
+fixtures: [node]
+timeout: 30
