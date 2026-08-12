@@ -8,6 +8,9 @@ every 1s {
     timestamps=distinct(timestamp),
     operator_ids=distinct(operator_id),
     total_cpu=sum(cpu),
+    min_cpu=min(cpu),
+    min_duration=min(duration),
+    max_duration=max(duration),
     total_head_events_out=sum(head_events_out),
     total_bytes_in=sum(bytes_in),
     total_bytes_out=sum(bytes_out),
@@ -35,6 +38,13 @@ select \
   where_capacity_is_mib_multiple=(where_input_capacity > 0 and \
     (where_input_capacity / 1Mi).floor() * 1Mi == where_input_capacity),
   has_cpu=(total_cpu > 0.0),
+  no_negative_cpu=(min_cpu >= 0.0),
+  // Every row carries the window its counters cover, so that consumers derive
+  // rates from measured time rather than assuming the sampling interval. The
+  // window is never degenerate, and a tick that ran late is not clamped back
+  // to the nominal second.
+  has_duration=(min_duration > 0s),
+  duration_is_plausible=(max_duration < 30s),
   has_bytes_in=(total_bytes_in > 0),
   has_bytes_out=(total_bytes_out > 0),
   has_batches_in=(total_batches_in > 0),

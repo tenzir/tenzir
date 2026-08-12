@@ -217,10 +217,3 @@ auto execute_plan_with_io(ir::Plan plan, ExecCtx& exec_ctx,
                           PipelineDrainer drain_output) -> Task<void>;
 
 } // namespace tenzir
-
-template <>
-struct std::hash<tenzir::OpId> {
-  auto operator()(tenzir::OpId const& id) const -> size_t {
-    return std::hash<std::string>{}(id.value);
-  }
-};

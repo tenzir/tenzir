@@ -13,6 +13,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/exec_pipeline.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/profiler_snapshot.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/variant.hpp"
@@ -23,30 +24,6 @@
 #include <vector>
 
 namespace tenzir {
-
-/// Per-operator aggregated profiling data emitted each tick.
-struct OperatorProfileEntry {
-  std::string operator_id;
-  std::string name;
-  uint64_t input_bytes = 0;
-  uint64_t input_capacity = 0;
-  double cpu = 0.0;
-  uint64_t task_count = 0;
-  uint64_t bytes_in = 0;
-  uint64_t bytes_out = 0;
-  uint64_t batches_in = 0;
-  uint64_t batches_out = 0;
-  uint64_t events_in = 0;
-  uint64_t events_out = 0;
-  uint64_t signals_in = 0;
-  uint64_t signals_out = 0;
-};
-
-/// Aggregated profiler snapshot emitted each tick.
-struct ProfilerSnapshot {
-  time timestamp = {};
-  std::vector<OperatorProfileEntry> operators;
-};
 
 struct NoProfiler {};
 

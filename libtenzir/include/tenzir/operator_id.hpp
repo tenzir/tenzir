@@ -79,3 +79,10 @@ inline auto OpId::to(OpId other) const -> ChannelId {
 }
 
 } // namespace tenzir
+
+template <>
+struct std::hash<tenzir::OpId> {
+  auto operator()(tenzir::OpId const& id) const -> size_t {
+    return std::hash<std::string>{}(id.value);
+  }
+};
