@@ -506,6 +506,14 @@ to_json(const data& x, json_printer_options opts = {});
 /// @returns The parsed YAML as data, or an error.
 caf::expected<data> from_yaml(std::string_view str);
 
+/// Parses a YAML stream that may contain multiple documents.
+/// Unlike `from_yaml`, which parses only the first document of a stream, this
+/// function returns every document. Errors reference the zero-based index of
+/// the offending document where available.
+/// @param str The string containing the YAML stream.
+/// @returns One data instance per YAML document, or an error.
+caf::expected<std::vector<data>> from_yaml_documents(std::string_view str);
+
 /// Loads YAML from a file.
 /// @param file The file to load.
 /// @returns The parsed YAML or an error.

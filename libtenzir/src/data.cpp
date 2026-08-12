@@ -883,6 +883,40 @@ caf::expected<data> from_yaml(std::string_view str) {
   }
 }
 
+caf::expected<std::vector<data>> from_yaml_documents(std::string_view str) {
+  auto nodes = std::vector<YAML::Node>{};
+  try {
+    nodes = YAML::LoadAll(std::string{str});
+  } catch (const YAML::Exception& e) {
+    return caf::make_error(
+      ec::parse_error,
+      fmt::format("failed to parse YAML stream at line {} column {}: {}",
+                  e.mark.line + 1, e.mark.column + 1, e.msg));
+  } catch (const std::logic_error& e) {
+    return caf::make_error(ec::logic_error, e.what());
+  }
+  auto result = std::vector<data>{};
+  result.reserve(nodes.size());
+  for (const auto& node : nodes) {
+    const auto index = result.size();
+    try {
+      result.push_back(parse(node));
+    } catch (const YAML::Exception& e) {
+      return caf::make_error(
+        ec::parse_error,
+        fmt::format("failed to parse YAML document {} at line {} column {}: "
+                    "{}",
+                    index, e.mark.line + 1, e.mark.column + 1, e.msg));
+    } catch (const std::logic_error& e) {
+      return caf::make_error(ec::logic_error,
+                             fmt::format("failed to parse YAML document {}: "
+                                         "{}",
+                                         index, e.what()));
+    }
+  }
+  return result;
+}
+
 caf::expected<data> load_yaml(const std::filesystem::path& file) {
   const auto contents = detail::load_contents(file);
   if (not contents) {

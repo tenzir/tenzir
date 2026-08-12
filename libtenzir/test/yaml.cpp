@@ -82,6 +82,47 @@ TEST("from_yaml - invalid yaml") {
   CHECK_EQUAL(yaml.error(), ec::parse_error);
 }
 
+TEST("from_yaml_documents - single document") {
+  auto docs = unbox(from_yaml_documents("{a: 4.2, b: [foo, bar]}"));
+  REQUIRE_EQUAL(docs.size(), 1u);
+  CHECK_EQUAL(docs[0], (record{{"a", 4.2}, {"b", list{"foo", "bar"}}}));
+}
+
+TEST("from_yaml_documents - multiple documents") {
+  auto str = "a: 1\n---\nb: 2\n---\n- x\n- y\n";
+  auto docs = unbox(from_yaml_documents(str));
+  REQUIRE_EQUAL(docs.size(), 3u);
+  CHECK_EQUAL(docs[0], (record{{"a", 1u}}));
+  CHECK_EQUAL(docs[1], (record{{"b", 2u}}));
+  CHECK_EQUAL(docs[2], (list{"x", "y"}));
+}
+
+TEST("from_yaml_documents - explicit document markers") {
+  auto str = "---\na: 1\n...\n---\nb: 2\n...\n";
+  auto docs = unbox(from_yaml_documents(str));
+  REQUIRE_EQUAL(docs.size(), 2u);
+  CHECK_EQUAL(docs[0], (record{{"a", 1u}}));
+  CHECK_EQUAL(docs[1], (record{{"b", 2u}}));
+}
+
+TEST("from_yaml_documents - empty stream") {
+  auto docs = unbox(from_yaml_documents(""));
+  CHECK_EQUAL(docs.size(), 0u);
+}
+
+TEST("from_yaml_documents - invalid stream") {
+  auto docs = from_yaml_documents("a: 1\n---\n@!#$%^&*()_+\n---\nb: 2\n");
+  REQUIRE(not docs);
+  CHECK_EQUAL(docs.error(), ec::parse_error);
+}
+
+TEST("from_yaml_documents - first document matches from_yaml") {
+  auto str = "a: 1\n---\nb: 2\n";
+  auto docs = unbox(from_yaml_documents(str));
+  REQUIRE_EQUAL(docs.size(), 2u);
+  CHECK_EQUAL(docs[0], unbox(from_yaml(str)));
+}
+
 TEST("to_yaml - basic") {
   auto yaml = unbox(to_yaml(record{{"a", 4.2}, {"b", list{"foo", "bar"}}}));
   auto str = "a: 4.2\nb:\n  - foo\n  - bar";
