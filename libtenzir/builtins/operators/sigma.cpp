@@ -21,6 +21,7 @@
 #include <tenzir/concept/printable/to_string.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/base64.hpp>
+#include <tenzir/detail/flat_map.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/io/read.hpp>
@@ -30,6 +31,7 @@
 #include <tenzir/result.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/session.hpp>
+#include <tenzir/sigma.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/tql2/filter.hpp>
 #include <tenzir/tql2/resolve.hpp>
@@ -42,7 +44,6 @@
 #include <chrono>
 #include <filesystem>
 #include <functional>
-#include <map>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -58,6 +59,8 @@ namespace tenzir::plugins::sigma {
 // the future.
 
 namespace {
+
+namespace ir = tenzir::sigma;
 
 template <class T>
 using ParseResult = Result<T, diagnostic>;
@@ -75,174 +78,45 @@ transform_sigma_string(std::string_view str, std::string_view fmt,
 ParseResult<std::string>
 validate_regex(std::string regex, std::string_view key);
 
-using expression_map = std::map<std::string, ast::expression>;
+using ExpressionMap = detail::flat_map<std::string, ast::expression>;
 
-/// A symbol-table-like parser for Sigma search identifers. In addition to the
-/// exact match as in a symbol table, this parser also performs the additional
-/// syntax "1/all of X" where X can be "them", a search identifier, or a
-/// wildcard pattern. This parsers is effective a predicate operand in the
-/// "condition" field of the "detection" attribute.
-struct search_id_symbol_table : parser_base<search_id_symbol_table> {
-  using attribute = ast::expression;
+/// Helpers to combine lowered sub-expressions when resolving search
+/// identifiers and quantified selectors from the Sigma IR.
+namespace expression_algebra {
 
-  enum class quantifier { all, any };
-
-  /// Constructs a search ID symbol table from an expression map.
-  explicit search_id_symbol_table(const expression_map& exprs) {
-    id.symbols.reserve(exprs.size());
-    for (auto& [key, value] : exprs) {
-      id.symbols.emplace(key, value);
-    }
+/// Joins a set of sub-expressions into a conjunction or disjunction.
+template <ast::binary_op Op>
+auto join(std::vector<ast::expression> xs) -> ast::expression {
+  if (xs.empty()) {
+    return ast::constant{false, location::unknown};
   }
-
-  /// Joins a set of sub-expressions into a conjunction or disjunction.
-  template <ast::binary_op Op>
-  static ast::expression join(std::vector<ast::expression> xs) {
-    if (xs.empty()) {
-      return ast::constant{false, location::unknown};
-    }
-    auto result = std::move(xs[0]);
-    for (auto i = size_t{1}; i < xs.size(); ++i) {
-      result = ast::binary_expr{std::move(result), Op, std::move(xs[i])};
-    }
-    return result;
+  auto result = std::move(xs[0]);
+  for (auto i = size_t{1}; i < xs.size(); ++i) {
+    result = ast::binary_expr{std::move(result), Op, std::move(xs[i])};
   }
+  return result;
+}
 
-  static void flatten(ast::expression x, ast::binary_op op,
-                      std::vector<ast::expression>& result) {
-    if (auto* binary = try_as<ast::binary_expr>(x);
-        binary and binary->op == op) {
-      flatten(std::move(binary->left), op, result);
-      flatten(std::move(binary->right), op, result);
-      return;
-    }
-    result.push_back(std::move(x));
+auto flatten(ast::expression x, ast::binary_op op,
+             std::vector<ast::expression>& result) -> void {
+  if (auto* binary = try_as<ast::binary_expr>(x); binary and binary->op == op) {
+    flatten(std::move(binary->left), op, result);
+    flatten(std::move(binary->right), op, result);
+    return;
   }
+  result.push_back(std::move(x));
+}
 
-  template <ast::binary_op Op>
-  static ast::expression force(ast::expression x) {
-    auto from
-      = Op == ast::binary_op::and_ ? ast::binary_op::or_ : ast::binary_op::and_;
-    auto xs = std::vector<ast::expression>{};
-    flatten(std::move(x), from, xs);
-    return join<Op>(std::move(xs));
-  }
+template <ast::binary_op Op>
+auto force(ast::expression x) -> ast::expression {
+  auto const from
+    = Op == ast::binary_op::and_ ? ast::binary_op::or_ : ast::binary_op::and_;
+  auto xs = std::vector<ast::expression>{};
+  flatten(std::move(x), from, xs);
+  return join<Op>(std::move(xs));
+}
 
-  /// Performs *-wildcard search on all search identifiers.
-  [[nodiscard]] std::vector<ast::expression>
-  search(std::string_view pattern) const {
-    auto result = std::vector<ast::expression>{};
-    for (auto& [sym, expr] : id.symbols) {
-      if (wildcard_match(pattern, sym)) {
-        result.push_back(expr);
-      }
-    }
-    return result;
-  }
-
-  static auto wildcard_match(std::string_view pattern, std::string_view str)
-    -> bool {
-    auto pattern_pos = size_t{0};
-    auto str_pos = size_t{0};
-    auto star_pos = std::string_view::npos;
-    auto backtrack_pos = size_t{0};
-    while (str_pos < str.size()) {
-      if (pattern_pos < pattern.size()
-          and pattern[pattern_pos] == str[str_pos]) {
-        ++pattern_pos;
-        ++str_pos;
-      } else if (pattern_pos < pattern.size() and pattern[pattern_pos] == '*') {
-        star_pos = pattern_pos++;
-        backtrack_pos = str_pos;
-      } else if (star_pos != std::string_view::npos) {
-        pattern_pos = star_pos + 1;
-        str_pos = ++backtrack_pos;
-      } else {
-        return false;
-      }
-    }
-    while (pattern_pos < pattern.size() and pattern[pattern_pos] == '*') {
-      ++pattern_pos;
-    }
-    return pattern_pos == pattern.size();
-  }
-
-  template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& result) const {
-    using namespace parser_literals;
-    // clang-format off
-    auto ws = ignore(*parsers::space);
-    auto pattern = +(parsers::any - parsers::space);
-    auto selection
-      = "them"_p ->* [this] { return search("*"); }
-      | pattern ->* [this](std::string str) { return search(std::move(str)); }
-      ;
-    auto expr
-      = "all of"_p >> ws >> id ->* force<ast::binary_op::and_>
-      | "1 of"_p >> ws >> id ->* force<ast::binary_op::or_>
-      | "all of"_p >> ws >> selection ->* join<ast::binary_op::and_>
-      | "1 of"_p >> ws >> selection ->* join<ast::binary_op::or_>
-      | id
-      | selection ->* join<ast::binary_op::and_>
-      ;
-    // clang-format on
-    return expr(f, l, result);
-  }
-
-  symbol_table<ast::expression> id;
-};
-
-/// Parses the "detection" attribute from a Sigma rule. See the Sigma wiki for
-/// details: https://github.com/Neo23x0/sigma/wiki/Specification#detection
-struct detection_parser : parser_base<detection_parser> {
-  using attribute = ast::expression;
-
-  explicit detection_parser(const expression_map& exprs) : search_id{exprs} {
-  }
-
-  template <ast::binary_op Op>
-  static ast::expression
-  to_expr(std::tuple<ast::expression, std::vector<ast::expression>> expr) {
-    auto& [x, xs] = expr;
-    auto result = std::move(x);
-    for (auto& expr : xs) {
-      result = ast::binary_expr{std::move(result), Op, std::move(expr)};
-    }
-    return result;
-  };
-
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, ast::expression& result) const {
-    using namespace parser_literals;
-    auto ws = ignore(*parsers::space);
-    auto negate = [](ast::expression x) {
-      return ast::unary_expr{{ast::unary_op::not_, {}}, std::move(x)};
-    };
-    rule<Iterator, ast::expression> expr;
-    rule<Iterator, ast::expression> term;
-    rule<Iterator, ast::expression> group;
-    // clang-format off
-    group
-      = '(' >> ws >> ref(expr) >> ws >> ')'
-      | "not"_p >> ws >> '(' >> ws >> (ref(expr) ->* negate) >> ws >> ')'
-      | "not"_p >> ws >> search_id ->* negate
-      | search_id
-      ;
-    auto and_tail = ws >> "and"_p >> ws >> ref(group);
-    auto or_tail = ws >> "or"_p >> ws >> ref(term);
-    term
-      = (group >> *and_tail) ->* to_expr<ast::binary_op::and_>
-      ;
-    expr
-      = (term >> *or_tail >> ws) ->* to_expr<ast::binary_op::or_>
-      ;
-    // clang-format on
-    auto p = expr >> parsers::eoi;
-    return p(f, l, result);
-  }
-
-  search_id_symbol_table search_id;
-};
+} // namespace expression_algebra
 
 /// Transforms a string that may contain Sigma glob wildcards into a regular
 /// expression with respective metacharacters. Sigma patterns are always
@@ -333,16 +207,16 @@ auto make_field_expr(std::string_view name) -> ast::expression {
 }
 
 auto make_constant(data const& value) -> ast::expression {
-  return match(value, detail::overload{
-                        [](pattern const&) -> ast::expression {
-                          TENZIR_UNREACHABLE();
-                        },
-                        []<class T>(T const& x) -> ast::expression
-                          requires(not std::same_as<T, pattern>)
-                        {
-                          return ast::constant{x, location::unknown};
-                        },
-                        });
+  return match(
+    value,
+    [](pattern const&) -> ast::expression {
+      TENZIR_UNREACHABLE();
+    },
+    []<class T>(T const& x) -> ast::expression
+      requires(not std::same_as<T, pattern>)
+    {
+      return ast::constant{x, location::unknown};
+    });
 }
 
 auto make_regex_expr(ast::expression field, std::string regex)
@@ -359,246 +233,266 @@ auto make_binary_expr(ast::expression left, ast::binary_op op,
   return ast::binary_expr{std::move(left), op, std::move(right)};
 }
 
-} // namespace
+// -- lowering: Sigma IR -> TQL expressions -------------------------------
 
-ParseResult<ast::expression> parse_search_id(const data& yaml) {
-  if (auto xs = try_as<record>(&yaml)) {
-    auto result = std::vector<ast::expression>{};
-    for (auto& [key, rhs] : *xs) {
-      auto keys = detail::split(key, "|");
-      auto field = std::string{keys[0]};
-      auto op = ast::binary_op::eq;
-      auto all = false;
-      auto anchor_regex = true;
-      auto transform_regex = std::optional<std::string>{};
-      auto raw_regex = false;
-      auto stringify_for_regex = false;
-      auto contains = false;
-      std::vector<std::function<ParseResult<data>(const data&)>> transforms;
-      for (auto i = keys.begin() + 1; i != keys.end(); ++i) {
-        if (*i == "all") {
-          all = true;
-        } else if (*i == "lt") {
-          op = ast::binary_op::lt;
-        } else if (*i == "lte") {
-          op = ast::binary_op::leq;
-        } else if (*i == "gt") {
-          op = ast::binary_op::gt;
-        } else if (*i == "gte") {
-          op = ast::binary_op::geq;
-        } else if (*i == "contains") {
-          anchor_regex = false;
-          transform_regex = ".*{}.*";
-          contains = true;
-        } else if (*i == "base64") {
-          auto encode = [](const data& x) -> ParseResult<data> {
-            if (const auto* str = try_as<std::string>(&x)) {
-              return detail::base64::encode(*str);
-            }
-            return parse_failure(
-              "Sigma modifier `base64` only works with strings");
-          };
-          transforms.emplace_back(encode);
-        } else if (*i == "base64offset") {
-          auto encode = [](const data& x) -> ParseResult<data> {
-            const auto* str = try_as<std::string>(&x);
-            if (not str) {
-              return parse_failure(
-                "Sigma modifier `base64offset` only works with strings");
-            }
-            static constexpr std::array<size_t, 3> start = {{0, 2, 3}};
-            static constexpr std::array<size_t, 3> end = {{0, 3, 2}};
-            std::vector<std::string> xs(3);
-            for (size_t i = 0; i < 3; ++i) {
-              auto padded = std::string(i, ' ') + *str;
-              auto b64 = detail::base64::encode(padded);
-              auto len = b64.size() - end[(str->size() + i) % 3];
-              xs[i] = b64.substr(start[i], len - start[i]);
-            }
-            return list{xs[0], xs[1], xs[2]};
-          };
-          transforms.emplace_back(encode);
-        } else if (*i == "utf16le" or *i == "wide") {
-          return parse_failure(
-            "Sigma modifier `utf16le`/`wide` is not yet implemented");
-        } else if (*i == "utf16be") {
-          return parse_failure(
-            "Sigma modifier `utf16be` is not yet implemented");
-        } else if (*i == "utf16") {
-          return parse_failure("Sigma modifier `utf16` is not yet implemented");
-        } else if (*i == "startswith") {
-          anchor_regex = false;
-          transform_regex = "^{}.*";
-          stringify_for_regex = true;
-        } else if (*i == "endswith") {
-          anchor_regex = false;
-          transform_regex = ".*{}$";
-          stringify_for_regex = true;
-        } else if (*i == "re") {
-          anchor_regex = false;
-          raw_regex = true;
-        } else if (*i == "cidr") {
-          op = ast::binary_op::in;
-        } else if (*i == "expand") {
-          return parse_failure(
-            "Sigma modifier `expand` is not yet implemented");
-        }
-      }
-      auto modify = [&](const data& x) -> ParseResult<data> {
-        auto result = x;
-        for (const auto& f : transforms) {
-          TRY(auto y, f(result));
-          result = std::move(y);
-        }
-        return result;
-      };
-      auto make_predicate_expr
-        = [&](const data& value) -> ParseResult<ast::expression> {
-        auto make_string_predicate
-          = [&](std::string str) -> ParseResult<ast::expression> {
-          auto fmt = transform_regex.value_or(anchor_regex ? "^{}$" : "{}");
-          if (raw_regex) {
-            auto regex = fmt::format(TENZIR_FMT_RUNTIME(fmt), std::move(str));
-            TRY(auto valid, validate_regex(std::move(regex), key));
-            return make_regex_expr(make_field_expr(field), std::move(valid));
-          }
-          TRY(auto pat, transform_sigma_string(str, fmt, key));
-          return make_regex_expr(make_field_expr(field), std::move(pat));
-        };
-        if (auto str = try_as<std::string>(&value)) {
-          return make_string_predicate(*str);
-        }
-        if (auto values = try_as<list>(&value)) {
-          TENZIR_ASSERT(values->size() == 3);
-          auto disjuncts = std::vector<ast::expression>{};
-          for (const auto& x : *values) {
-            if (auto str = try_as<std::string>(&x); str and transform_regex) {
-              if (raw_regex) {
-                auto regex
-                  = fmt::format(TENZIR_FMT_RUNTIME(*transform_regex), *str);
-                TRY(auto valid, validate_regex(std::move(regex), key));
-                disjuncts.emplace_back(
-                  make_regex_expr(make_field_expr(field), std::move(valid)));
-              } else {
-                TRY(auto pat,
-                    transform_sigma_string(*str, *transform_regex, key));
-                disjuncts.emplace_back(
-                  make_regex_expr(make_field_expr(field), std::move(pat)));
-              }
-            } else if (raw_regex) {
-              auto regex = to_string(x);
-              TRY(auto valid, validate_regex(std::move(regex), key));
-              disjuncts.emplace_back(
-                make_regex_expr(make_field_expr(field), std::move(valid)));
-            } else {
-              auto binary_op
-                = contains and is<subnet>(x) ? ast::binary_op::in : op;
-              disjuncts.emplace_back(make_binary_expr(
-                make_field_expr(field), binary_op, make_constant(x)));
-            }
-          }
-          return search_id_symbol_table::join<ast::binary_op::or_>(
-            std::move(disjuncts));
-        }
-        if (stringify_for_regex or raw_regex) {
-          return make_string_predicate(to_string(value));
-        }
-        if (contains and is<subnet>(value)) {
-          return make_binary_expr(make_field_expr(field), ast::binary_op::in,
-                                  make_constant(value));
-        }
-        return make_binary_expr(make_field_expr(field), op,
-                                make_constant(value));
-      };
-      if (is<record>(rhs)) {
-        return parse_failure(
-          "nested records are not allowed in Sigma selections");
-      }
-      if (auto values = try_as<list>(&rhs)) {
-        auto connective = std::vector<ast::expression>{};
-        for (const auto& value : *values) {
-          if (is<list>(value)) {
-            return parse_failure(
-              "nested lists are not allowed in Sigma selections");
-          }
-          if (is<record>(value)) {
-            return parse_failure(
-              "nested records are not allowed in Sigma selections");
-          }
-          TRY(auto x, modify(value));
-          TRY(auto expr, make_predicate_expr(x));
-          connective.emplace_back(std::move(expr));
-        }
-        result.emplace_back(
-          all ? search_id_symbol_table::join<ast::binary_op::and_>(
-                  std::move(connective))
-              : search_id_symbol_table::join<ast::binary_op::or_>(
-                  std::move(connective)));
-      } else {
-        TRY(auto x, modify(rhs));
-        TRY(auto expr, make_predicate_expr(x));
-        result.emplace_back(std::move(expr));
-      }
-    }
-    return search_id_symbol_table::join<ast::binary_op::and_>(
-      std::move(result));
-  } else if (auto xs = try_as<list>(&yaml)) {
-    auto result = std::vector<ast::expression>{};
-    for (auto& search_id : *xs) {
-      TRY(auto expr, parse_search_id(search_id));
-      result.push_back(std::move(expr));
-    }
-    return search_id_symbol_table::join<ast::binary_op::or_>(std::move(result));
-  } else {
-    return parse_failure(
-      "Sigma search identifier must be a list or record, got `{}`", yaml);
+/// Lowers one detection item (`field|modifiers: value(s)`) into a TQL
+/// expression. The IR has already validated the modifier chain and value
+/// types; this function only implements the executable semantics.
+auto lower_item(ir::DetectionItem const& item) -> ParseResult<ast::expression> {
+  auto const& field = item.field.raw;
+  auto key = field;
+  for (auto const& modifier : item.modifiers) {
+    key += '|';
+    key += modifier;
   }
+  auto op = ast::binary_op::eq;
+  auto all = false;
+  auto anchor_regex = true;
+  auto transform_regex = Option<std::string>{};
+  auto raw_regex = false;
+  auto stringify_for_regex = false;
+  auto contains = false;
+  auto transforms
+    = std::vector<std::function<ParseResult<data>(data const&)>>{};
+  for (auto const& modifier : item.modifiers) {
+    if (modifier == "all") {
+      all = true;
+    } else if (modifier == "lt") {
+      op = ast::binary_op::lt;
+    } else if (modifier == "lte") {
+      op = ast::binary_op::leq;
+    } else if (modifier == "gt") {
+      op = ast::binary_op::gt;
+    } else if (modifier == "gte") {
+      op = ast::binary_op::geq;
+    } else if (modifier == "contains") {
+      anchor_regex = false;
+      transform_regex = ".*{}.*";
+      contains = true;
+    } else if (modifier == "base64") {
+      auto encode = [](data const& x) -> ParseResult<data> {
+        if (auto const* str = try_as<std::string>(&x)) {
+          return detail::base64::encode(*str);
+        }
+        return parse_failure("Sigma modifier `base64` only works with strings");
+      };
+      transforms.emplace_back(encode);
+    } else if (modifier == "base64offset") {
+      auto encode = [](data const& x) -> ParseResult<data> {
+        auto const* str = try_as<std::string>(&x);
+        if (not str) {
+          return parse_failure(
+            "Sigma modifier `base64offset` only works with strings");
+        }
+        static constexpr auto start = std::array<size_t, 3>{0, 2, 3};
+        static constexpr auto end = std::array<size_t, 3>{0, 3, 2};
+        auto xs = std::vector<std::string>(3);
+        for (auto i = size_t{0}; i < 3; ++i) {
+          auto padded = std::string(i, ' ') + *str;
+          auto b64 = detail::base64::encode(padded);
+          auto len = b64.size() - end[(str->size() + i) % 3];
+          xs[i] = b64.substr(start[i], len - start[i]);
+        }
+        return list{xs[0], xs[1], xs[2]};
+      };
+      transforms.emplace_back(encode);
+    } else if (modifier == "startswith") {
+      anchor_regex = false;
+      transform_regex = "^{}.*";
+      stringify_for_regex = true;
+    } else if (modifier == "endswith") {
+      anchor_regex = false;
+      transform_regex = ".*{}$";
+      stringify_for_regex = true;
+    } else if (modifier == "re") {
+      anchor_regex = false;
+      raw_regex = true;
+    } else if (modifier == "cidr") {
+      op = ast::binary_op::in;
+    } else {
+      // The IR validates modifier chains before lowering.
+      return parse_failure("Sigma modifier `{}` is not yet implemented",
+                           modifier);
+    }
+  }
+  auto modify = [&](data const& x) -> ParseResult<data> {
+    auto result = x;
+    for (auto const& transform : transforms) {
+      TRY(auto y, transform(result));
+      result = std::move(y);
+    }
+    return result;
+  };
+  auto make_predicate_expr
+    = [&](data const& value) -> ParseResult<ast::expression> {
+    auto make_string_predicate
+      = [&](std::string str) -> ParseResult<ast::expression> {
+      auto format = transform_regex.unwrap_or(anchor_regex ? "^{}$" : "{}");
+      if (raw_regex) {
+        auto regex = fmt::format(TENZIR_FMT_RUNTIME(format), std::move(str));
+        TRY(auto valid, validate_regex(std::move(regex), key));
+        return make_regex_expr(make_field_expr(field), std::move(valid));
+      }
+      TRY(auto pattern, transform_sigma_string(str, format, key));
+      return make_regex_expr(make_field_expr(field), std::move(pattern));
+    };
+    if (auto const* str = try_as<std::string>(&value)) {
+      return make_string_predicate(*str);
+    }
+    if (auto const* values = try_as<list>(&value)) {
+      // Only the `base64offset` transform produces lists here.
+      TENZIR_ASSERT(values->size() == 3);
+      auto disjuncts = std::vector<ast::expression>{};
+      for (auto const& x : *values) {
+        if (auto const* str = try_as<std::string>(&x);
+            str and transform_regex) {
+          if (raw_regex) {
+            auto regex
+              = fmt::format(TENZIR_FMT_RUNTIME(*transform_regex), *str);
+            TRY(auto valid, validate_regex(std::move(regex), key));
+            disjuncts.emplace_back(
+              make_regex_expr(make_field_expr(field), std::move(valid)));
+          } else {
+            TRY(auto pattern,
+                transform_sigma_string(*str, *transform_regex, key));
+            disjuncts.emplace_back(
+              make_regex_expr(make_field_expr(field), std::move(pattern)));
+          }
+        } else if (raw_regex) {
+          auto regex = to_string(x);
+          TRY(auto valid, validate_regex(std::move(regex), key));
+          disjuncts.emplace_back(
+            make_regex_expr(make_field_expr(field), std::move(valid)));
+        } else {
+          auto binary_op = contains and is<subnet>(x) ? ast::binary_op::in : op;
+          disjuncts.emplace_back(make_binary_expr(make_field_expr(field),
+                                                  binary_op, make_constant(x)));
+        }
+      }
+      return expression_algebra::join<ast::binary_op::or_>(
+        std::move(disjuncts));
+    }
+    if (stringify_for_regex or raw_regex) {
+      return make_string_predicate(to_string(value));
+    }
+    if (contains and is<subnet>(value)) {
+      return make_binary_expr(make_field_expr(field), ast::binary_op::in,
+                              make_constant(value));
+    }
+    return make_binary_expr(make_field_expr(field), op, make_constant(value));
+  };
+  if (item.value_is_list) {
+    auto connective = std::vector<ast::expression>{};
+    for (auto const& value : item.values) {
+      TRY(auto x, modify(value));
+      TRY(auto expr, make_predicate_expr(x));
+      connective.emplace_back(std::move(expr));
+    }
+    return all ? expression_algebra::join<ast::binary_op::and_>(
+                   std::move(connective))
+               : expression_algebra::join<ast::binary_op::or_>(
+                   std::move(connective));
+  }
+  TENZIR_ASSERT(item.values.size() == 1);
+  TRY(auto x, modify(item.values[0]));
+  return make_predicate_expr(x);
 }
 
-ParseResult<ast::expression> parse_rule(const data& yaml) {
-  auto xs = try_as<record>(&yaml);
-  if (not xs) {
-    return parse_failure("Sigma rule must be a record");
-  }
-  // Extract detection attribute.
-  const record* detection;
-  if (auto i = xs->find("detection"); i == xs->end()) {
-    return parse_failure("Sigma rule has no `detection` attribute");
-  } else {
-    detection = try_as<record>(&i->second);
-  }
-  if (not detection) {
-    return parse_failure("Sigma rule attribute `detection` must be a record");
-  }
-  // Resolve all named sub-expression except for "condition".
-  expression_map exprs;
-  for (auto& [key, value] : *detection) {
-    if (key == "condition") {
-      continue;
+/// Lowers a named detection: items within a group are AND-linked, groups are
+/// OR-linked (the YAML list-of-maps form).
+auto lower_detection(ir::Detection const& detection)
+  -> ParseResult<ast::expression> {
+  auto disjuncts = std::vector<ast::expression>{};
+  for (auto const& group : detection.groups) {
+    auto conjuncts = std::vector<ast::expression>{};
+    for (auto const& item : group) {
+      TRY(auto expression, lower_item(item));
+      conjuncts.emplace_back(std::move(expression));
     }
-    TRY(auto expr, parse_search_id(value));
-    exprs[key] = std::move(expr);
+    disjuncts.emplace_back(
+      expression_algebra::join<ast::binary_op::and_>(std::move(conjuncts)));
   }
-  // Extract condition.
-  const std::string* condition;
-  if (auto i = detection->find("condition"); i == detection->end()) {
-    return parse_failure("Sigma rule has no `condition` key");
-  } else {
-    condition = try_as<std::string>(&i->second);
-  }
-  if (not condition) {
-    return parse_failure("Sigma rule `condition` must be a string");
-  }
-  // Parse condition.
-  ast::expression result;
-  detection_parser p{exprs};
-  if (not p(*condition, result)) {
-    return parse_failure("invalid Sigma condition syntax");
+  return expression_algebra::join<ast::binary_op::or_>(std::move(disjuncts));
+}
+
+/// Resolves all search identifiers matching a wildcard pattern, in the
+/// deterministic order of the expression map.
+auto search(ExpressionMap const& expressions, std::string_view pattern)
+  -> std::vector<ast::expression> {
+  auto result = std::vector<ast::expression>{};
+  for (auto const& [name, expression] : expressions) {
+    if (ir::wildcard_match(pattern, name)) {
+      result.push_back(expression);
+    }
   }
   return result;
 }
 
-namespace {
+/// Lowers a parsed condition tree by substituting search identifiers.
+auto lower_condition(ir::Condition const& condition,
+                     ExpressionMap const& expressions)
+  -> ParseResult<ast::expression> {
+  return match(
+    condition.node,
+    [&](ir::Identifier const& x) -> ParseResult<ast::expression> {
+      if (auto i = expressions.find(x.name); i != expressions.end()) {
+        return i->second;
+      }
+      // A bare wildcard pattern AND-links all matching identifiers.
+      return expression_algebra::join<ast::binary_op::and_>(
+        search(expressions, x.name));
+    },
+    [&](ir::Quantified const& x) -> ParseResult<ast::expression> {
+      auto pattern = x.all_identifiers ? std::string_view{"*"} : x.pattern;
+      if (not x.all_identifiers) {
+        if (auto i = expressions.find(x.pattern); i != expressions.end()) {
+          // Quantification over one identifier re-links its internal
+          // structure. (Known v2.1 deviation; corrected in a follow-up.)
+          return x.quantifier == ir::Quantifier::all
+                   ? expression_algebra::force<ast::binary_op::and_>(i->second)
+                   : expression_algebra::force<ast::binary_op::or_>(i->second);
+        }
+      }
+      auto matches = search(expressions, pattern);
+      return x.quantifier == ir::Quantifier::all
+               ? expression_algebra::join<ast::binary_op::and_>(
+                   std::move(matches))
+               : expression_algebra::join<ast::binary_op::or_>(
+                   std::move(matches));
+    },
+    [&](ir::Negation const& x) -> ParseResult<ast::expression> {
+      TRY(auto operand, lower_condition(*x.operand, expressions));
+      return ast::expression{
+        ast::unary_expr{{ast::unary_op::not_, {}}, std::move(operand)}};
+    },
+    [&](ir::Conjunction const& x) -> ParseResult<ast::expression> {
+      TRY(auto left, lower_condition(*x.left, expressions));
+      TRY(auto right, lower_condition(*x.right, expressions));
+      return make_binary_expr(std::move(left), ast::binary_op::and_,
+                              std::move(right));
+    },
+    [&](ir::Disjunction const& x) -> ParseResult<ast::expression> {
+      TRY(auto left, lower_condition(*x.left, expressions));
+      TRY(auto right, lower_condition(*x.right, expressions));
+      return make_binary_expr(std::move(left), ast::binary_op::or_,
+                              std::move(right));
+    });
+}
+
+/// Compiles one YAML document through the typed Sigma IR into an executable
+/// expression: parse and validate, lower named detections, then substitute
+/// them into the condition.
+auto compile_rule(data const& yaml) -> ParseResult<ast::expression> {
+  TRY(auto document, ir::parse_document(yaml));
+  auto const* rule = try_as<ir::DetectionRule>(document.content);
+  TENZIR_ASSERT(rule); // unsupported kinds fail in `parse_document`
+  auto expressions = ExpressionMap{};
+  for (auto const& [name, detection] : rule->detections) {
+    TRY(auto expression, lower_detection(detection));
+    expressions[name] = std::move(expression);
+  }
+  return lower_condition(rule->condition, expressions);
+}
 
 struct RuleEntry {
   data yaml;
@@ -666,7 +560,7 @@ auto load_rules(const std::filesystem::path& path, RuleMap& rules,
       .emit(dh);
     return;
   }
-  auto parsed_rule = parse_rule(*yaml);
+  auto parsed_rule = compile_rule(*yaml);
   if (parsed_rule.is_err()) {
     emit_ignored_rule(path, std::move(parsed_rule).unwrap_err(), dh);
     return;

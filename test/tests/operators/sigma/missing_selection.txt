@@ -1,0 +1,2 @@
+warning: sigma operator ignores rule 'tests/operators/sigma/inputs/missing-selection.yaml'
+  = note: Sigma condition pattern `missing*` matches no search identifier
