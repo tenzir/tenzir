@@ -1,0 +1,5 @@
+// Reading a map column whose rows are all null used to fail an assertion, as
+// such a column has no keys to derive record fields from.
+from_file f"{env("TENZIR_INPUTS")}/parquet/maps.parquet" {
+    read_parquet
+}

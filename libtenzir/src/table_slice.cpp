@@ -30,6 +30,7 @@
 #include "tenzir/type.hpp"
 #include "tenzir/view3.hpp"
 
+#include <arrow/buffer.h>
 #include <arrow/compute/api_vector.h>
 #include <arrow/compute/cast.h>
 #include <arrow/io/api.h>
@@ -287,9 +288,20 @@ auto try_convert_map_to_struct_array(std::shared_ptr<arrow::MapArray> map)
     }
   }
   auto s = builder.finish_assert_one_array();
-  auto r = std::dynamic_pointer_cast<arrow::StructArray>(s.array);
-  TENZIR_ASSERT(r);
-  return r;
+  if (auto r = std::dynamic_pointer_cast<arrow::StructArray>(s.array)) {
+    return r;
+  }
+  // The builder never saw a record, which is the case when every row is null or
+  // when the map has no rows at all. It then infers the null type instead of a
+  // record type. As there are no keys left to derive fields from, such a map
+  // degenerates into an all-null empty record.
+  if (s.array->type_id() == arrow::Type::NA) {
+    return make_struct_array(
+      map->length(),
+      check(arrow::AllocateEmptyBitmap(map->length(), arrow_memory_pool())),
+      arrow::FieldVector{}, arrow::ArrayVector{});
+  }
+  return nullptr;
 };
 
 /// Tries to upgrade some column types to types supported by Tenzir, by

@@ -1,0 +1,12 @@
+{
+  all_null: null,
+  empty: {},
+  mixed: null,
+}
+{
+  all_null: null,
+  empty: {},
+  mixed: {
+    a: "1",
+  },
+}
