@@ -1,0 +1,28 @@
+{
+  x: 1,
+  n: 1,
+  total: 1,
+  begin: 0,
+  finish: 1,
+}
+{
+  x: 2,
+  n: 2,
+  total: 3,
+  begin: 0,
+  finish: 2,
+}
+{
+  x: 3,
+  n: 2,
+  total: 5,
+  begin: 1,
+  finish: 3,
+}
+{
+  x: 4,
+  n: 2,
+  total: 7,
+  begin: 2,
+  finish: 4,
+}

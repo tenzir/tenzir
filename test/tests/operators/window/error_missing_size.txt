@@ -4,5 +4,5 @@ error: required argument `size` was not provided
 6 | window on=ts {
   | ^^^^^^
   |
-  = usage: window size=duration, on=time, [every=duration, tolerance=duration, idle_timeout=duration]
+  = usage: window size=duration|uint, [every=duration|uint, trailing=bool, on=time, trigger=bool, tolerance=duration, idle_timeout=duration]
   = docs: https://tenzir.com/docs/reference/operators/window

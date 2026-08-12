@@ -1,0 +1,8 @@
+// Count windows span event offsets and do not depend on table-slice boundaries.
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}, {x: 5}
+window size=2 {
+  summarize n=count(), total=sum(x)
+  begin = $window.begin
+  finish = $window.finish
+}
+sort begin

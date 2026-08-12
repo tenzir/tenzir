@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {x: 1}
+window size=10min, on=ts, trigger=x == 1 {
+  pass
+}

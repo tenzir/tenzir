@@ -1,0 +1,9 @@
+error: `on` is only valid for duration windows
+ --> tests/operators/window/error_count_on.tql:6:19
+  |
+6 | window size=2, on=ts {
+  |                   ^^
+  ⋮
+6 | window size=2, on=ts {
+  |             -
+  |

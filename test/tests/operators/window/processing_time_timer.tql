@@ -1,0 +1,16 @@
+---
+timeout: 10
+retry: 2
+---
+
+// The first window must close on its wall-clock boundary, well before the next
+// throttled event arrives one second later.
+from {x: 1}, {x: 2}
+batch
+throttle rate=1, window=1s
+received = now()
+window size=100ms {
+  summarize received=min(received)
+  assert now() - received < 500ms
+  discard
+}

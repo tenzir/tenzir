@@ -409,6 +409,10 @@ public:
   explicit Serde(caf::binary_serializer& f) : f_{f} {
   }
 
+  auto is_loading() const -> bool {
+    return is<Ref<caf::binary_deserializer>>(f_);
+  }
+
   template <class T>
   auto operator()(std::string_view name, T& value) {
     auto success = match(f_, [&](auto& f) {

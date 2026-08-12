@@ -1,0 +1,24 @@
+{
+  ts: 1970-01-01T00:10:00Z,
+  bytes: 10,
+  rolling_bytes: 10,
+  events: 1,
+  start: 5min,
+  end: 10min,
+}
+{
+  ts: 1970-01-01T00:12:00Z,
+  bytes: 20,
+  rolling_bytes: 30,
+  events: 2,
+  start: 7min,
+  end: 12min,
+}
+{
+  ts: 1970-01-01T00:16:00Z,
+  bytes: 30,
+  rolling_bytes: 50,
+  events: 2,
+  start: 11min,
+  end: 16min,
+}

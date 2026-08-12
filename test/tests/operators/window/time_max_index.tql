@@ -1,0 +1,9 @@
+// An event at exactly the maximum representable timestamp with a 1ns stride
+// maps to the maximum window index. Iterating the containing windows must not
+// increment past that index. The timestamp is built from representable
+// duration literals to avoid platform-dependent parsing of the full
+// nanosecond count.
+from {ts: (9223372036s + 854775807ns).from_epoch()}
+window size=1ns, on=ts {
+  this = {start: $window.start, end: $window.end}
+}

@@ -1,0 +1,9 @@
+error: `every` must have the same type as `size`
+ --> tests/operators/window/error_mixed_types.tql:6:22
+  |
+6 | window size=2, every=1s {
+  |                      ^^
+  ⋮
+6 | window size=2, every=1s {
+  |             -
+  |

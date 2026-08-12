@@ -1,8 +1,0 @@
----
-error: true
----
-
-from {ts: 0s.from_epoch()}
-window size=1s {
-  summarize n=count()
-}

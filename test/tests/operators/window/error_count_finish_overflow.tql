@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+// The subpipeline emits nothing so that the test output is deterministic:
+// the valid first window must not race its passthrough output against the
+// error from the second window's unrepresentable finish offset.
+from {x: 1}, {x: 2}
+window size=18446744073709551615, every=1 {
+  where false
+}

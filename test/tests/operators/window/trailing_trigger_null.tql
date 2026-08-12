@@ -1,0 +1,9 @@
+// Events whose trigger expression does not evaluate to `bool` never fire, but
+// they remain in the retained history. The operator warns once per batch.
+from {x: 1, fire: true},
+     {x: 2, fire: null},
+     {x: 3, fire: true}
+window size=2, trailing=true, trigger=fire {
+  summarize total=sum(x)
+  this = {...$window.event, total: total}
+}

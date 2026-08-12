@@ -50,11 +50,20 @@ for (auto [a, b] : std::views::zip(vec1, vec2)) { ... }  // Use C++23 std::views
 
 - `detail/narrow.hpp` — `narrow<T>()` (checked, panics on overflow),
   `narrow_cast<T>()` (unchecked)
-- `detail/checked_math.hpp` — `checked_add()`, `checked_sub()`, `checked_mul()`
-  (returns `std::nullopt` on overflow)
+- `checked_math.hpp` — `tenzir::checked_add()`, `checked_sub()`,
+  `checked_mul()` (empty optional on overflow)
 - `detail/saturating_arithmetic.hpp` — `saturating_add()`, `saturating_sub()`,
   `saturating_mul()`
 - `detail/byteswap.hpp` — `to_network_order()`, `to_host_order()`
+
+For arithmetic that can overflow, pick by failure mode: `checked_*` when
+overflow is an error, `saturating_*` when clamping is correct. The saturating
+helpers have chrono overloads for `duration` and `time_point`:
+
+```cpp
+// Clamps to time::min() instead of underflowing (UB) for extreme timestamps.
+auto cutoff = detail::saturating_sub(event_time, window_size);
+```
 
 ## Comparisons
 

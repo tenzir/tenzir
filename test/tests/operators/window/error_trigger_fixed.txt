@@ -1,0 +1,7 @@
+error: `trigger` is only valid for trailing windows
+ --> tests/operators/window/error_trigger_fixed.tql:6:35
+  |
+6 | window size=10min, on=ts, trigger=x == 1 {
+  |                                   ^^^^^^
+  |
+  = hint: set `trailing=true` to run a trailing window

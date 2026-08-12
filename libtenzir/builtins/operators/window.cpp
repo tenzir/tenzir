@@ -11,11 +11,13 @@
 #include <tenzir/async.hpp>
 #include <tenzir/async/task.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/saturating_arithmetic.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/multi_series.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/view3.hpp>
@@ -25,8 +27,12 @@
 #include <folly/coro/UnboundedQueue.h>
 
 #include <chrono>
+#include <deque>
+#include <limits>
 #include <map>
+#include <mutex>
 #include <set>
+#include <string>
 #include <vector>
 
 namespace tenzir::plugins::window {
@@ -34,15 +40,45 @@ namespace tenzir::plugins::window {
 namespace {
 
 using std::chrono::steady_clock;
+using std::chrono::system_clock;
+
+enum class WindowBasis {
+  time,
+  count,
+};
+
+enum class WindowShape {
+  tumbling,
+  hopping,
+  trailing,
+};
+
+enum class WindowClock {
+  event_time,
+  processing_time,
+  sequence,
+};
 
 struct WindowArgs {
-  duration size = {};
-  ast::expression on;
-  Option<duration> every;
+  located<data> size;
+  Option<located<data>> every;
+  bool trailing = false;
+  Option<ast::expression> on;
+  Option<ast::expression> trigger;
   duration tolerance = {};
   Option<duration> idle_timeout;
   located<ir::pipeline> pipe;
   let_id let;
+};
+
+struct WindowConfig {
+  WindowBasis basis = WindowBasis::time;
+  WindowShape shape = WindowShape::tumbling;
+  WindowClock clock = WindowClock::event_time;
+  duration time_size = {};
+  duration time_stride = {};
+  uint64_t count_size = 0;
+  uint64_t count_stride = 0;
 };
 
 /// Integer division rounding towards negative infinity (unlike C++ `/`, which
@@ -56,19 +92,75 @@ auto floor_div(int64_t a, int64_t b) -> int64_t {
   return q;
 }
 
+auto wall_now() -> time {
+  return std::chrono::time_point_cast<duration>(system_clock::now());
+}
+
+auto as_count(located<data> const& value) -> Option<uint64_t> {
+  if (auto count = try_as<uint64_t>(&value.inner)) {
+    return *count;
+  }
+  if (auto count = try_as<int64_t>(&value.inner); count and *count >= 0) {
+    return detail::narrow<uint64_t>(*count);
+  }
+  return None{};
+}
+
+auto resolve_config(WindowArgs const& args) -> WindowConfig {
+  auto result = WindowConfig{};
+  auto time_size = try_as<duration>(&args.size.inner);
+  auto count_size = as_count(args.size);
+  TENZIR_ASSERT(time_size or count_size);
+  if (time_size) {
+    result.basis = WindowBasis::time;
+    result.clock
+      = args.on ? WindowClock::event_time : WindowClock::processing_time;
+    result.time_size = *time_size;
+    result.time_stride = *time_size;
+    if (args.trailing) {
+      result.shape = WindowShape::trailing;
+      if (args.every) {
+        result.time_stride = *try_as<duration>(&args.every->inner);
+      }
+    } else if (args.every) {
+      result.shape = WindowShape::hopping;
+      result.time_stride = *try_as<duration>(&args.every->inner);
+    }
+    return result;
+  }
+  result.basis = WindowBasis::count;
+  result.clock = WindowClock::sequence;
+  result.count_size = *count_size;
+  result.count_stride = *count_size;
+  if (args.trailing) {
+    result.shape = WindowShape::trailing;
+    if (args.every) {
+      result.count_stride = *as_count(*args.every);
+    }
+  } else if (args.every) {
+    result.shape = WindowShape::hopping;
+    result.count_stride = *as_count(*args.every);
+  }
+  return result;
+}
+
 struct TimerTick {
   steady_clock::time_point deadline;
 };
 
-struct WindowState {
+struct TimeWindowState {
   time end;
   steady_clock::time_point last_event;
 };
 
-/// The result of assigning a batch of rows to windows: which rows go into which
-/// window (by window start), plus counts of dropped events and the largest
-/// observed timestamp in the batch.
-struct WindowAssignment {
+struct CountWindowState {
+  uint64_t finish;
+};
+
+/// The result of assigning a batch of rows to event-time windows: which rows go
+/// into which window (by window start), plus counts of dropped events and the
+/// largest observed timestamp in the batch.
+struct TimeWindowAssignment {
   std::map<time, std::vector<int64_t>> groups;
   int64_t late_events = 0;
   int64_t invalid_events = 0;
@@ -77,42 +169,51 @@ struct WindowAssignment {
 
 class WindowBase {
 public:
-  explicit WindowBase(WindowArgs args) : args_{std::move(args)} {
+  explicit WindowBase(WindowArgs args)
+    : args_{std::move(args)}, config_{resolve_config(args_)} {
   }
 
 protected:
+  auto is_trailing() const -> bool {
+    return config_.shape == WindowShape::trailing;
+  }
+
+  auto trailing_sequence() const -> uint64_t {
+    return trailing_sequence_;
+  }
+
   auto start_impl(OpCtx& ctx) -> Task<void> {
-    if (args_.idle_timeout) {
-      // Background timer that wakes at the earliest idle deadline among the
-      // open windows and signals `process_task` via the tick queue.
-      ctx.spawn_task([frontier = frontier_queue_,
-                      ticks = tick_queue_]() mutable -> Task<void> {
-        auto deadline = co_await frontier->dequeue();
-        while (true) {
-          while (auto more = frontier->try_dequeue()) {
-            deadline = std::min(deadline, *more);
-          }
-          co_await sleep_until(deadline);
-          co_await ticks->enqueue(TimerTick{deadline});
-          deadline = co_await frontier->dequeue();
-        }
-      });
-      // After restoring from a checkpoint, windows may already be open. Their
-      // wall-clock idle timestamps cannot be carried across the restart, so we
-      // restart the idle clock from now and arm the timer.
-      if (not open_.empty()) {
-        auto now = steady_clock::now();
-        for (auto& [start, state] : open_) {
-          state.last_event = now;
-        }
-        arm_timer();
-      }
+    if (not needs_timer()) {
+      co_return;
     }
-    co_return;
+    ctx.spawn_task([frontier = frontier_queue_,
+                    ticks = tick_queue_]() mutable -> Task<void> {
+      auto deadline = co_await frontier->dequeue();
+      while (true) {
+        while (auto more = frontier->try_dequeue()) {
+          deadline = std::min(deadline, *more);
+        }
+        co_await sleep_until(deadline);
+        co_await ticks->enqueue(TimerTick{deadline});
+        deadline = co_await frontier->dequeue();
+      }
+    });
+    if (config_.clock == WindowClock::event_time) {
+      auto now = steady_clock::now();
+      for (auto& [start, state] : open_time_) {
+        state.last_event = now;
+      }
+    } else {
+      co_await close_processing_time_windows(ctx, wall_now());
+      prune_time_seen(wall_now());
+    }
+    if (not open_time_.empty()) {
+      arm_timer();
+    }
   }
 
   auto await_task_impl() const -> Task<Any> {
-    if (not args_.idle_timeout) {
+    if (not needs_timer()) {
       co_await wait_forever();
       TENZIR_UNREACHABLE();
     }
@@ -120,12 +221,107 @@ protected:
   }
 
   auto process_impl(table_slice input, OpCtx& ctx) -> Task<void> {
-    auto ts = eval(args_.on, input, ctx);
+    if (config_.shape == WindowShape::trailing) {
+      if (config_.basis == WindowBasis::time) {
+        co_await process_trailing_time(std::move(input), ctx);
+      } else {
+        co_await process_trailing_count(std::move(input), ctx);
+      }
+      co_return;
+    }
+    if (config_.basis == WindowBasis::count) {
+      co_await process_fixed_count(std::move(input), ctx);
+      co_return;
+    }
+    if (config_.clock == WindowClock::event_time) {
+      co_await process_fixed_event_time(std::move(input), ctx);
+    } else {
+      co_await process_fixed_processing_time(std::move(input), ctx);
+    }
+  }
+
+  auto process_task_impl(Any result, OpCtx& ctx) -> Task<void> {
+    std::ignore = result.as<TimerTick>();
+    if (config_.clock == WindowClock::processing_time) {
+      auto now = std::max(wall_now(), current_time_.unwrap_or(time::min()));
+      current_time_ = now;
+      co_await close_processing_time_windows(ctx, now);
+      prune_time_seen(now);
+    } else {
+      auto now = steady_clock::now();
+      auto to_close = std::vector<time>{};
+      for (auto const& [start, state] : open_time_) {
+        if (state.last_event + *args_.idle_timeout <= now) {
+          to_close.push_back(start);
+        }
+      }
+      for (auto start : to_close) {
+        co_await close_time_window(ctx, start);
+      }
+    }
+    if (open_time_.empty()) {
+      timer_idle_ = true;
+    } else {
+      arm_timer();
+    }
+  }
+
+  auto snapshot_impl(Serde& serde) -> void {
+    serde("current_time", current_time_);
+    serde("seen", seen_time_);
+    auto open_starts = std::vector<time>{};
+    open_starts.reserve(open_time_.size());
+    for (auto const& [start, state] : open_time_) {
+      open_starts.push_back(start);
+    }
+    serde("open_starts", open_starts);
+    auto now = steady_clock::now();
+    auto rebuilt_time = std::map<time, TimeWindowState>{};
+    for (auto const& start : open_starts) {
+      auto it = open_time_.find(start);
+      auto last_event = it != open_time_.end() ? it->second.last_event : now;
+      rebuilt_time.emplace(
+        start, TimeWindowState{detail::saturating_add(start, config_.time_size),
+                               last_event});
+    }
+    open_time_ = std::move(rebuilt_time);
+    serde("sequence_offset", sequence_offset_);
+    serde("seen_count", seen_count_);
+    auto open_begins = std::vector<uint64_t>{};
+    open_begins.reserve(open_count_.size());
+    for (auto const& [begin, state] : open_count_) {
+      open_begins.push_back(begin);
+    }
+    serde("open_begins", open_begins);
+    auto rebuilt_count = std::map<uint64_t, CountWindowState>{};
+    for (auto begin : open_begins) {
+      rebuilt_count.emplace(begin,
+                            CountWindowState{begin + config_.count_size});
+    }
+    open_count_ = std::move(rebuilt_count);
+    serde("trailing_rows", trailing_rows_);
+    serde("trailing_times", trailing_times_);
+    serde("trailing_time_origin", trailing_time_origin_);
+    serde("trailing_count_since_fire", trailing_count_since_fire_);
+    serde("trailing_sequence", trailing_sequence_);
+    serde("warned_trailing_cost", warned_trailing_cost_);
+    serde("warned_trailing_children", warned_trailing_children_);
+  }
+
+private:
+  auto needs_timer() const -> bool {
+    if (config_.shape == WindowShape::trailing) {
+      return false;
+    }
+    return config_.clock == WindowClock::processing_time
+           or (config_.clock == WindowClock::event_time and args_.idle_timeout);
+  }
+
+  auto process_fixed_event_time(table_slice input, OpCtx& ctx) -> Task<void> {
+    TENZIR_ASSERT(args_.on);
+    auto ts = eval(*args_.on, input, ctx);
     auto pre_clock = current_time_;
-    // Decide which windows each row belongs to. This is a pure computation over
-    // the current state; the actual routing and clock advance happen below.
-    auto assignment = assign_windows(ts, pre_clock);
-    // Advance the monotonic event-time clock.
+    auto assignment = assign_event_time_windows(ts, pre_clock);
     if (assignment.batch_max) {
       current_time_ = pre_clock ? std::max(*pre_clock, *assignment.batch_max)
                                 : *assignment.batch_max;
@@ -134,168 +330,357 @@ protected:
       diagnostic::warning("`window` dropped {} event(s) where `on` did not "
                           "evaluate to a timestamp",
                           assignment.invalid_events)
-        .primary(args_.on)
+        .primary(*args_.on)
         .emit(ctx);
     }
     if (assignment.late_events > 0) {
       diagnostic::warning("`window` dropped {} late event(s) that arrived "
                           "after their window had closed",
                           assignment.late_events)
-        .primary(args_.on)
+        .primary(*args_.on)
         .emit(ctx);
     }
-    // Route the grouped rows into their windows, spawning new subpipelines as
-    // needed.
-    auto now = steady_clock::now();
-    for (auto& [start, group_rows] : assignment.groups) {
-      auto end = start + args_.size;
-      auto sub_slice = take_rows(input, group_rows);
-      auto sub = ctx.get_sub(make_view(data{start}));
-      if (not sub) {
-        if (open_.contains(start)) {
-          // The subpipeline terminated on its own; drop the stale entry and the
-          // events destined for it.
-          open_.erase(start);
-          continue;
-        }
-        auto rec = record{};
-        rec.emplace("start", data{start});
-        rec.emplace("end", data{end});
-        // Bind the window record as a `let` binding
-        auto copy = args_.pipe.inner;
-        copy.bind(args_.let, ast::constant::kind{std::move(rec)});
-        sub = co_await ctx.plan_and_spawn_sub<table_slice>(data{start},
-                                                           std::move(copy));
-        if (not sub) {
-          continue;
-        }
-        seen_.insert(start);
-        open_.emplace(start, WindowState{end, now});
-      }
-      TENZIR_ASSERT(sub);
-      if (auto it = open_.find(start); it != open_.end()) {
-        it->second.last_event = now;
-      }
-      std::ignore
-        = co_await as<SubHandle<table_slice>>(*sub).push(std::move(sub_slice));
-    }
-    co_await close_passed_windows(ctx);
-    prune_seen();
-    // Arm the idle timer when transitioning from no open windows to some. While
-    // windows stay open we let the timer re-arm itself on each tick instead of
-    // enqueueing on every batch, which keeps the frontier queue small under
-    // high throughput.
-    if (args_.idle_timeout and timer_idle_ and not open_.empty()) {
+    co_await route_time_groups(input, assignment.groups, ctx);
+    co_await close_passed_event_time_windows(ctx);
+    prune_event_time_seen();
+    if (args_.idle_timeout and timer_idle_ and not open_time_.empty()) {
       arm_timer();
     }
   }
 
-  auto process_task_impl(Any result, OpCtx& ctx) -> Task<void> {
-    // `process_task` only fires for the idle timer, which enqueues `TimerTick`s.
-    std::ignore = result.as<TimerTick>();
-    auto now = steady_clock::now();
-    auto to_close = std::vector<time>{};
-    for (const auto& [start, state] : open_) {
-      if (state.last_event + *args_.idle_timeout <= now) {
-        to_close.push_back(start);
+  auto process_fixed_processing_time(table_slice input, OpCtx& ctx)
+    -> Task<void> {
+    auto arrival = std::max(wall_now(), current_time_.unwrap_or(time::min()));
+    current_time_ = arrival;
+    co_await close_processing_time_windows(ctx, arrival);
+    auto groups = std::map<time, std::vector<int64_t>>{};
+    auto row_count = detail::narrow<int64_t>(input.rows());
+    auto [first, last] = time_window_bounds(arrival);
+    // Iterate inclusively without incrementing past `last`, which can be the
+    // maximum index.
+    auto span = static_cast<uint64_t>(last) - static_cast<uint64_t>(first);
+    auto offset = uint64_t{0};
+    do {
+      auto index = static_cast<int64_t>(static_cast<uint64_t>(first) + offset);
+      auto& rows = groups[time_window_start(index)];
+      rows.reserve(input.rows());
+      for (auto row = int64_t{0}; row < row_count; ++row) {
+        rows.push_back(row);
       }
-    }
-    for (auto start : to_close) {
-      co_await close_window(ctx, start);
-    }
-    // The timer consumed its deadline and will block on the frontier queue next,
-    // so re-arm it for the remaining windows (or mark it idle if none remain).
-    if (open_.empty()) {
-      timer_idle_ = true;
-    } else {
+    } while (offset++ != span);
+    co_await route_time_groups(input, groups, ctx);
+    prune_time_seen(arrival);
+    if (timer_idle_ and not open_time_.empty()) {
       arm_timer();
     }
   }
 
-  auto snapshot_impl(Serde& serde) -> void {
-    // The spawned window subpipelines are checkpointed and restored by the
-    // executor; we only persist the bookkeeping needed to keep routing,
-    // late-event detection, and closing consistent with them. Two pieces of
-    // state are intentionally *not* preserved: the per-window wall-clock idle
-    // timestamps (`steady_clock` is not meaningful across a restart, so the
-    // idle clock restarts in `start`) and the in-memory queue/timer state
-    // (re-created in `start`).
-    serde("current_time", current_time_);
-    serde("seen", seen_);
-    // The open windows are (de)serialized through a plain vector of their start
-    // times. We cannot serialize `open_` directly because `WindowState` holds a
-    // wall-clock idle timestamp that is not meaningful across a restart; the
-    // `end` is also redundant (always `start + size`). The reconciliation below
-    // is a no-op when serializing (the vector mirrors the live state) and
-    // rebuilds `open_` when deserializing.
-    auto open_starts = std::vector<time>{};
-    open_starts.reserve(open_.size());
-    for (const auto& [start, state] : open_) {
-      open_starts.push_back(start);
+  auto process_fixed_count(table_slice input, OpCtx& ctx) -> Task<void> {
+    auto row_count = detail::narrow<int64_t>(input.rows());
+    for (auto row = int64_t{0}; row < row_count; ++row) {
+      if (sequence_offset_ == std::numeric_limits<uint64_t>::max()) {
+        diagnostic::error("`window` exhausted its event offset range").emit(ctx);
+        co_return;
+      }
+      auto [first, last] = count_window_bounds(sequence_offset_);
+      for (auto index = first; index <= last; ++index) {
+        auto begin = index * config_.count_stride;
+        if (not co_await route_count_row(input, row, begin, ctx)) {
+          co_return;
+        }
+      }
+      sequence_offset_ += 1;
+      co_await close_passed_count_windows(ctx);
+      prune_count_seen();
     }
-    serde("open_starts", open_starts);
-    auto now = steady_clock::now();
-    auto rebuilt = std::map<time, WindowState>{};
-    for (const auto& start : open_starts) {
-      auto it = open_.find(start);
-      auto last_event = it != open_.end() ? it->second.last_event : now;
-      rebuilt.emplace(start, WindowState{start + args_.size, last_event});
+  }
+
+  auto process_trailing_time(table_slice input, OpCtx& ctx) -> Task<void> {
+    auto timestamps = config_.clock == WindowClock::event_time
+                        ? Option{eval(*args_.on, input, ctx)}
+                        : None{};
+    auto triggers
+      = args_.trigger ? Option{eval(*args_.trigger, input, ctx)} : None{};
+    auto records = multi_series{series{input}};
+    auto invalid_events = int64_t{0};
+    auto regressing_events = int64_t{0};
+    auto invalid_triggers = int64_t{0};
+    auto row_count = detail::narrow<int64_t>(input.rows());
+    for (auto row = int64_t{0}; row < row_count; ++row) {
+      auto event_time = wall_now();
+      if (timestamps) {
+        auto value = materialize(timestamps->view3_at(row));
+        auto timestamp = try_as<time>(&value);
+        if (not timestamp) {
+          invalid_events += 1;
+          continue;
+        }
+        event_time = *timestamp;
+        if (current_time_ and event_time < *current_time_) {
+          regressing_events += 1;
+          continue;
+        }
+      } else if (current_time_ and event_time < *current_time_) {
+        event_time = *current_time_;
+      }
+      current_time_ = event_time;
+      auto cutoff = detail::saturating_sub(event_time, config_.time_size);
+      while (not trailing_times_.empty() and trailing_times_.front() < cutoff) {
+        trailing_times_.pop_front();
+        trailing_rows_.pop_front();
+      }
+      trailing_times_.push_back(event_time);
+      trailing_rows_.push_back(subslice(input, row, row + 1));
+      warn_about_trailing_cost(ctx);
+      auto trigger_matches = evaluate_trigger(triggers, row, invalid_triggers);
+      if (not should_fire_trailing_time(event_time, trigger_matches)) {
+        continue;
+      }
+      auto event = materialize(records.view3_at(row));
+      auto event_record = try_as<record>(&event);
+      TENZIR_ASSERT(event_record);
+      auto window = record{};
+      window.emplace("start", data{cutoff});
+      window.emplace("end", data{event_time});
+      window.emplace("event", data{std::move(*event_record)});
+      co_await run_trailing_window(std::move(window), ctx);
     }
-    open_ = std::move(rebuilt);
+    warn_about_invalid_triggers(invalid_triggers, ctx);
+    if (invalid_events > 0) {
+      diagnostic::warning("`window` dropped {} event(s) where `on` did not "
+                          "evaluate to a timestamp",
+                          invalid_events)
+        .primary(*args_.on)
+        .emit(ctx);
+    }
+    if (regressing_events > 0) {
+      diagnostic::warning("`window` dropped {} event(s) with regressing "
+                          "timestamps",
+                          regressing_events)
+        .primary(*args_.on)
+        .emit(ctx);
+    }
+  }
+
+  auto process_trailing_count(table_slice input, OpCtx& ctx) -> Task<void> {
+    auto triggers
+      = args_.trigger ? Option{eval(*args_.trigger, input, ctx)} : None{};
+    auto records = multi_series{series{input}};
+    auto invalid_triggers = int64_t{0};
+    auto row_count = detail::narrow<int64_t>(input.rows());
+    for (auto row = int64_t{0}; row < row_count; ++row) {
+      if (sequence_offset_ == std::numeric_limits<uint64_t>::max()) {
+        diagnostic::error("`window` exhausted its event offset range").emit(ctx);
+        co_return;
+      }
+      trailing_rows_.push_back(subslice(input, row, row + 1));
+      if (trailing_rows_.size() > config_.count_size) {
+        trailing_rows_.pop_front();
+      }
+      warn_about_trailing_cost(ctx);
+      auto trigger_matches = evaluate_trigger(triggers, row, invalid_triggers);
+      if (not should_fire_trailing_count(trigger_matches)) {
+        sequence_offset_ += 1;
+        continue;
+      }
+      auto event = materialize(records.view3_at(row));
+      auto event_record = try_as<record>(&event);
+      TENZIR_ASSERT(event_record);
+      auto finish = sequence_offset_ + 1;
+      auto begin
+        = finish > config_.count_size ? finish - config_.count_size : 0;
+      auto window = record{};
+      window.emplace("begin", data{begin});
+      window.emplace("finish", data{finish});
+      window.emplace("event", data{std::move(*event_record)});
+      co_await run_trailing_window(std::move(window), ctx);
+      sequence_offset_ += 1;
+    }
+    warn_about_invalid_triggers(invalid_triggers, ctx);
+  }
+
+  /// Applies a duration cadence to trailing-window candidates. The first event
+  /// starts the cadence. Once it elapses, the next event whose trigger matches
+  /// fires the window and starts the next cadence.
+  auto should_fire_trailing_time(time event_time, bool trigger_matches)
+    -> bool {
+    if (not args_.every) {
+      return trigger_matches;
+    }
+    if (not trailing_time_origin_) {
+      trailing_time_origin_ = event_time;
+      return false;
+    }
+    auto origin = trailing_time_origin_->time_since_epoch();
+    if (origin > duration::max() - config_.time_stride
+        or event_time < *trailing_time_origin_ + config_.time_stride
+        or not trigger_matches) {
+      return false;
+    }
+    trailing_time_origin_ = event_time;
+    return true;
+  }
+
+  /// Applies an event-count cadence to trailing-window candidates. Every input
+  /// event advances the cadence. Once it elapses, the next event whose trigger
+  /// matches fires the window and starts the next cadence.
+  auto should_fire_trailing_count(bool trigger_matches) -> bool {
+    if (not args_.every) {
+      return trigger_matches;
+    }
+    if (trailing_count_since_fire_ < config_.count_stride) {
+      trailing_count_since_fire_ += 1;
+    }
+    if (trailing_count_since_fire_ < config_.count_stride
+        or not trigger_matches) {
+      return false;
+    }
+    trailing_count_since_fire_ = 0;
+    return true;
+  }
+
+  /// Decides whether the trailing window can fire for `row`. Without a
+  /// `trigger` argument every event qualifies. Events whose trigger expression
+  /// does not evaluate to `true` never qualify; non-boolean results are counted
+  /// for a batched warning. All events enter retained history and advance an
+  /// optional cadence regardless.
+  auto evaluate_trigger(Option<multi_series> const& triggers, int64_t row,
+                        int64_t& invalid_triggers) const -> bool {
+    if (not triggers) {
+      return true;
+    }
+    auto value = materialize(triggers->view3_at(row));
+    auto flag = try_as<bool>(&value);
+    if (not flag) {
+      invalid_triggers += 1;
+      return false;
+    }
+    return *flag;
+  }
+
+  auto warn_about_invalid_triggers(int64_t invalid_triggers, OpCtx& ctx)
+    -> void {
+    if (invalid_triggers == 0) {
+      return;
+    }
+    diagnostic::warning("`window` did not fire for {} event(s) where "
+                        "`trigger` did not evaluate to `bool`",
+                        invalid_triggers)
+      .primary(*args_.trigger)
+      .emit(ctx);
+  }
+
+  auto run_trailing_window(record window, OpCtx& ctx) -> Task<void> {
+    auto key = data{trailing_sequence_};
+    auto copy = args_.pipe.inner;
+    copy.bind(args_.let, ast::constant::kind{std::move(window)});
+    auto sub
+      = co_await ctx.plan_and_spawn_sub<table_slice>(key, std::move(copy));
+    if (not sub) {
+      // Do not advance the sequence: no child owns this key, and the ordered
+      // output release requires the finished sequences to stay contiguous.
+      co_return;
+    }
+    trailing_in_flight_ += 1;
+    warn_about_trailing_children(ctx);
+    auto& handle = as<SubHandle<table_slice>>(*sub);
+    auto terminated = false;
+    for (auto const& row : trailing_rows_) {
+      if (auto result = co_await handle.push(row); result.is_err()) {
+        terminated = true;
+        break;
+      }
+    }
+    if (not terminated) {
+      co_await handle.close();
+    }
+    trailing_sequence_ += 1;
+  }
+
+  auto warn_about_trailing_cost(OpCtx& ctx) -> void {
+    static constexpr auto warning_threshold = size_t{100'000};
+    if (warned_trailing_cost_ or trailing_rows_.size() < warning_threshold) {
+      return;
+    }
+    diagnostic::warning("`window` retained {} events for trailing evaluation",
+                        trailing_rows_.size())
+      .note("generic trailing windows replay all retained events for every "
+            "window invocation")
+      .emit(ctx);
+    warned_trailing_cost_ = true;
+  }
+
+  auto warn_about_trailing_children(OpCtx& ctx) -> void {
+    static constexpr auto warning_threshold = uint64_t{1'000};
+    if (warned_trailing_children_ or trailing_in_flight_ < warning_threshold) {
+      return;
+    }
+    diagnostic::warning("`window` has {} trailing subpipelines in flight",
+                        trailing_in_flight_)
+      .note("the subpipeline completes slower than events arrive; memory "
+            "grows until it catches up")
+      .emit(ctx);
+    warned_trailing_children_ = true;
+  }
+
+protected:
+  /// Called by the operator variants when a trailing child completes. The
+  /// in-flight count is derived from live children, so it is intentionally not
+  /// serialized and may already be zero after a restore.
+  auto on_trailing_child_finished() -> void {
+    if (trailing_in_flight_ > 0) {
+      trailing_in_flight_ -= 1;
+    }
   }
 
 private:
-  /// Assigns each row of `ts` (the evaluated `on` expression) to the windows
-  /// that contain its event time. A row may land in several windows when
-  /// windows overlap (hopping). Rows whose timestamp is null or not a `time`
-  /// are counted as invalid; rows whose only target windows have already closed
-  /// are counted as late. This function does not mutate operator state.
-  auto assign_windows(const multi_series& ts, Option<time> pre_clock) const
-    -> WindowAssignment {
-    auto result = WindowAssignment{};
-    auto rows = ts.length();
-    // The clock advances per event in stream order. Late-ness is therefore
-    // determined by the events that precede an event in the stream, not by how
-    // events happen to be grouped into batches.
+  /// Assigns each row of `ts` to the fixed event-time windows that contain it.
+  /// The clock advances per event in stream order, independent of slice
+  /// boundaries.
+  auto assign_event_time_windows(multi_series const& ts,
+                                 Option<time> pre_clock) const
+    -> TimeWindowAssignment {
+    auto result = TimeWindowAssignment{};
     auto clock = pre_clock;
-    for (auto row = int64_t{0}; row < rows; ++row) {
+    for (auto row = int64_t{0}; row < ts.length(); ++row) {
       auto value = materialize(ts.view3_at(row));
-      auto t = try_as<time>(&value);
-      if (not t) {
+      auto timestamp = try_as<time>(&value);
+      if (not timestamp) {
         result.invalid_events += 1;
         continue;
       }
-      result.batch_max
-        = result.batch_max ? std::max(*result.batch_max, *t) : *t;
+      result.batch_max = result.batch_max
+                           ? std::max(*result.batch_max, *timestamp)
+                           : *timestamp;
       auto any_open = false;
       auto any_late = false;
-      auto [first, last] = window_bounds(*t);
-      for (auto index = first; index <= last; ++index) {
-        auto start = window_start(index);
-        auto end = start + args_.size;
-        // A window has closed once the clock reached `end + tolerance`. The
-        // clock reflects all preceding events, so an out-of-order event is late
-        // exactly when an earlier event already advanced to its close point.
-        if (clock and *clock >= end + args_.tolerance) {
+      auto [first, last] = time_window_bounds(*timestamp);
+      // Iterate inclusively without incrementing past `last`, which can be the
+      // maximum index. `continue` re-evaluates the do-while condition.
+      auto span = static_cast<uint64_t>(last) - static_cast<uint64_t>(first);
+      auto offset = uint64_t{0};
+      do {
+        auto index
+          = static_cast<int64_t>(static_cast<uint64_t>(first) + offset);
+        auto start = time_window_start(index);
+        auto end = detail::saturating_add(start, config_.time_size);
+        if (clock and *clock >= detail::saturating_add(end, args_.tolerance)) {
           any_late = true;
           continue;
         }
-        if (open_.contains(start)) {
+        if (open_time_.contains(start)) {
           result.groups[start].push_back(row);
           any_open = true;
           continue;
         }
-        // The window has been seen before but is no longer open: its
-        // subpipeline already finished (e.g. via `head`). Drop the event.
-        if (seen_.contains(start)) {
+        if (seen_time_.contains(start)) {
           any_late = true;
           continue;
         }
         result.groups[start].push_back(row);
         any_open = true;
-      }
-      // Advance the clock with this event before processing the next one.
-      clock = clock ? std::max(*clock, *t) : *t;
+      } while (offset++ != span);
+      clock = clock ? std::max(*clock, *timestamp) : *timestamp;
       if (not any_open and any_late) {
         result.late_events += 1;
       }
@@ -303,82 +688,229 @@ private:
     return result;
   }
 
-  /// The window stride: `every` if given, otherwise `size` (tumbling).
-  auto every() const -> duration {
-    return args_.every ? *args_.every : args_.size;
+  auto route_time_groups(table_slice const& input,
+                         std::map<time, std::vector<int64_t>>& groups,
+                         OpCtx& ctx) -> Task<void> {
+    auto now = steady_clock::now();
+    for (auto& [start, rows] : groups) {
+      auto end = detail::saturating_add(start, config_.time_size);
+      auto sub_slice = take_rows(input, rows);
+      auto sub = ctx.get_sub(make_view(data{start}));
+      if (not sub) {
+        if (open_time_.contains(start)) {
+          open_time_.erase(start);
+          continue;
+        }
+        if (seen_time_.contains(start)) {
+          continue;
+        }
+        auto window = record{};
+        window.emplace("start", data{start});
+        window.emplace("end", data{end});
+        auto copy = args_.pipe.inner;
+        copy.bind(args_.let, ast::constant::kind{std::move(window)});
+        sub = co_await ctx.plan_and_spawn_sub<table_slice>(data{start},
+                                                           std::move(copy));
+        if (not sub) {
+          continue;
+        }
+        seen_time_.insert(start);
+        open_time_.emplace(start, TimeWindowState{end, now});
+      }
+      TENZIR_ASSERT(sub);
+      if (auto it = open_time_.find(start); it != open_time_.end()) {
+        it->second.last_event = now;
+      }
+      std::ignore
+        = co_await as<SubHandle<table_slice>>(*sub).push(std::move(sub_slice));
+    }
   }
 
-  /// Returns the inclusive `[first, last]` range of window indices (multiples of
-  /// `every`) whose `[start, start + size)` interval contains `t`. The interval
-  /// is right-open, so an event exactly on a boundary belongs to the next
-  /// window. The computation is correct for pre-epoch (negative) timestamps.
-  auto window_bounds(time t) const -> std::pair<int64_t, int64_t> {
-    auto t_ns = t.time_since_epoch().count();
-    auto every_ns = every().count();
-    auto size_ns = args_.size.count();
-    // Largest window start <= t.
-    auto last = floor_div(t_ns, every_ns);
-    // Smallest window start S with S + size > t.
-    auto first = floor_div(t_ns - size_ns, every_ns) + 1;
+  auto route_count_row(table_slice const& input, int64_t row, uint64_t begin,
+                       OpCtx& ctx) -> Task<bool> {
+    auto sub = ctx.get_sub(make_view(data{begin}));
+    if (not sub) {
+      if (open_count_.contains(begin)) {
+        open_count_.erase(begin);
+        co_return true;
+      }
+      if (seen_count_.contains(begin)) {
+        co_return true;
+      }
+      if (begin > std::numeric_limits<uint64_t>::max() - config_.count_size) {
+        diagnostic::error(
+          "the count window's finish exceeds the event offset range")
+          .primary(args_.size.source, "window begins at offset {} with size {}",
+                   begin, config_.count_size)
+          .emit(ctx);
+        co_return false;
+      }
+      auto finish = begin + config_.count_size;
+      auto window = record{};
+      window.emplace("begin", data{begin});
+      window.emplace("finish", data{finish});
+      auto copy = args_.pipe.inner;
+      copy.bind(args_.let, ast::constant::kind{std::move(window)});
+      sub = co_await ctx.plan_and_spawn_sub<table_slice>(data{begin},
+                                                         std::move(copy));
+      if (not sub) {
+        co_return true;
+      }
+      seen_count_.insert(begin);
+      open_count_.emplace(begin, CountWindowState{finish});
+    }
+    TENZIR_ASSERT(sub);
+    std::ignore = co_await as<SubHandle<table_slice>>(*sub).push(
+      subslice(input, row, row + 1));
+    co_return true;
+  }
+
+  /// The inclusive range of epoch-aligned fixed time-window indices that
+  /// contain `timestamp`.
+  auto time_window_bounds(time timestamp) const -> std::pair<int64_t, int64_t> {
+    auto timestamp_ns = timestamp.time_since_epoch().count();
+    auto stride_ns = config_.time_stride.count();
+    auto size_ns = config_.time_size.count();
+    auto last = floor_div(timestamp_ns, stride_ns);
+    // Near the minimum timestamp, `timestamp_ns - size_ns` is not
+    // representable. All indices below the representable range clamp to the
+    // same minimal window start, so the earliest such index covers them.
+    constexpr auto min_ns = std::numeric_limits<int64_t>::min();
+    auto first = timestamp_ns < min_ns + size_ns
+                   ? floor_div(min_ns, stride_ns)
+                   : floor_div(timestamp_ns - size_ns, stride_ns) + 1;
     return {first, last};
   }
 
-  /// Returns the start time of the window with the given index.
-  auto window_start(int64_t index) const -> time {
-    return time{} + duration{index * every().count()};
+  auto time_window_start(int64_t index) const -> time {
+    return time{}
+           + duration{
+             detail::saturating_mul(index, config_.time_stride.count())};
   }
 
-  auto close_window(OpCtx& ctx, time start) -> Task<void> {
-    open_.erase(start);
+  /// The inclusive range of fixed count-window indices that contain `offset`.
+  /// Count windows start at offset zero, so no pre-stream windows are created.
+  auto count_window_bounds(uint64_t offset) const
+    -> std::pair<uint64_t, uint64_t> {
+    auto last = offset / config_.count_stride;
+    auto first = offset < config_.count_size
+                   ? uint64_t{0}
+                   : (offset - config_.count_size) / config_.count_stride + 1;
+    return {first, last};
+  }
+
+  auto close_time_window(OpCtx& ctx, time start) -> Task<void> {
+    open_time_.erase(start);
     if (auto sub = ctx.get_sub(make_view(data{start}))) {
       co_await as<SubHandle<table_slice>>(*sub).close();
     }
   }
 
-  auto close_passed_windows(OpCtx& ctx) -> Task<void> {
+  auto close_count_window(OpCtx& ctx, uint64_t begin) -> Task<void> {
+    open_count_.erase(begin);
+    if (auto sub = ctx.get_sub(make_view(data{begin}))) {
+      co_await as<SubHandle<table_slice>>(*sub).close();
+    }
+  }
+
+  auto close_passed_event_time_windows(OpCtx& ctx) -> Task<void> {
     if (not current_time_) {
       co_return;
     }
     auto to_close = std::vector<time>{};
-    // `open_` is ordered by start; since `end = start + size` with a constant
-    // `size`, it is also ordered by end. Hence the first window that is not yet
-    // passed marks the end of the closeable prefix.
-    for (const auto& [start, state] : open_) {
-      if (*current_time_ >= state.end + args_.tolerance) {
+    for (auto const& [start, state] : open_time_) {
+      if (*current_time_
+          >= detail::saturating_add(state.end, args_.tolerance)) {
         to_close.push_back(start);
       } else {
         break;
       }
     }
     for (auto start : to_close) {
-      co_await close_window(ctx, start);
+      co_await close_time_window(ctx, start);
     }
   }
 
-  /// Drops entries from `seen_` whose window has been passed by the clock. Late
-  /// events for such windows are already detected against the clock, so the
-  /// bookkeeping is no longer needed.
-  auto prune_seen() -> void {
+  auto close_processing_time_windows(OpCtx& ctx, time now) -> Task<void> {
+    auto to_close = std::vector<time>{};
+    for (auto const& [start, state] : open_time_) {
+      if (now >= state.end) {
+        to_close.push_back(start);
+      } else {
+        break;
+      }
+    }
+    for (auto start : to_close) {
+      co_await close_time_window(ctx, start);
+    }
+  }
+
+  auto close_passed_count_windows(OpCtx& ctx) -> Task<void> {
+    auto to_close = std::vector<uint64_t>{};
+    for (auto const& [begin, state] : open_count_) {
+      if (sequence_offset_ >= state.finish) {
+        to_close.push_back(begin);
+      } else {
+        break;
+      }
+    }
+    for (auto begin : to_close) {
+      co_await close_count_window(ctx, begin);
+    }
+  }
+
+  auto prune_event_time_seen() -> void {
     if (not current_time_) {
       return;
     }
-    while (not seen_.empty()) {
-      auto start = *seen_.begin();
-      auto end = start + args_.size;
-      if (*current_time_ >= end + args_.tolerance) {
-        seen_.erase(seen_.begin());
+    while (not seen_time_.empty()) {
+      auto start = *seen_time_.begin();
+      auto end = detail::saturating_add(start, config_.time_size);
+      if (*current_time_ >= detail::saturating_add(end, args_.tolerance)) {
+        seen_time_.erase(seen_time_.begin());
       } else {
         break;
       }
     }
   }
 
-  /// Schedules the next idle wake-up at the earliest deadline among the open
-  /// windows. Precondition: `idle_timeout` is set and `open_` is not empty.
+  auto prune_time_seen(time now) -> void {
+    while (not seen_time_.empty()) {
+      auto start = *seen_time_.begin();
+      if (now >= detail::saturating_add(start, config_.time_size)) {
+        seen_time_.erase(seen_time_.begin());
+      } else {
+        break;
+      }
+    }
+  }
+
+  auto prune_count_seen() -> void {
+    while (not seen_count_.empty()) {
+      auto begin = *seen_count_.begin();
+      if (sequence_offset_ >= begin + config_.count_size) {
+        seen_count_.erase(seen_count_.begin());
+      } else {
+        break;
+      }
+    }
+  }
+
   auto arm_timer() -> void {
+    TENZIR_ASSERT(not open_time_.empty());
     auto earliest = steady_clock::time_point::max();
-    for (const auto& [start, state] : open_) {
-      earliest = std::min(earliest, state.last_event + *args_.idle_timeout);
+    if (config_.clock == WindowClock::processing_time) {
+      auto delay = detail::saturating_sub(
+        open_time_.begin()->second.end.time_since_epoch(),
+        wall_now().time_since_epoch());
+      earliest = detail::saturating_add(steady_clock::now(),
+                                        std::max(delay, duration::zero()));
+    } else {
+      TENZIR_ASSERT(args_.idle_timeout);
+      for (auto const& [start, state] : open_time_) {
+        earliest = std::min(earliest, detail::saturating_add(
+                                        state.last_event, *args_.idle_timeout));
+      }
     }
     frontier_queue_->enqueue(earliest);
     timer_idle_ = false;
@@ -388,19 +920,33 @@ private:
   using TickQueue = folly::coro::BoundedQueue<TimerTick>;
 
   WindowArgs args_;
-
-  /// Currently open windows, keyed and ordered by window start.
-  std::map<time, WindowState> open_;
-  /// Window starts that have been spawned at some point. Used to avoid
-  /// re-opening a window whose subpipeline already finished.
-  std::set<time> seen_;
-  /// The largest event time observed so far. Moves forward only.
+  WindowConfig config_;
+  std::map<time, TimeWindowState> open_time_;
+  std::set<time> seen_time_;
   Option<time> current_time_;
-  /// Whether the idle timer is currently waiting to be armed (no pending
-  /// wake-up scheduled). Only meaningful when `idle_timeout` is set.
+  std::map<uint64_t, CountWindowState> open_count_;
+  std::set<uint64_t> seen_count_;
+  uint64_t sequence_offset_ = 0;
+  std::deque<table_slice> trailing_rows_;
+  std::deque<time> trailing_times_;
+  Option<time> trailing_time_origin_;
+  uint64_t trailing_count_since_fire_ = 0;
+  uint64_t trailing_sequence_ = 0;
+  uint64_t trailing_in_flight_ = 0;
+  bool warned_trailing_cost_ = false;
+  bool warned_trailing_children_ = false;
   bool timer_idle_ = true;
   Arc<FrontierQueue> frontier_queue_{std::in_place};
   mutable Arc<TickQueue> tick_queue_{std::in_place, 1};
+};
+
+struct TrailingOutputState {
+  // `process_sub` may run concurrently. Keep the critical section limited to
+  // moving Arrow-backed slices into the per-window output buffer.
+  std::mutex mutex;
+  std::map<uint64_t, std::vector<table_slice>> pending;
+  std::set<uint64_t> finished;
+  uint64_t next = 0;
 };
 
 template <class Output>
@@ -434,9 +980,70 @@ public:
     return process_task_impl(std::move(result), ctx);
   }
 
+  auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
+                   OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (not is_trailing()) {
+      co_await push(std::move(slice));
+      co_return;
+    }
+    auto key_data = materialize(key);
+    auto sequence = try_as<uint64_t>(&key_data);
+    TENZIR_ASSERT(sequence);
+    auto guard = std::lock_guard{trailing_output_->mutex};
+    if (*sequence < trailing_output_->next) {
+      co_return;
+    }
+    trailing_output_->pending[*sequence].push_back(std::move(slice));
+  }
+
+  auto finish_sub(SubKeyView key, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    if (not is_trailing()) {
+      co_return;
+    }
+    on_trailing_child_finished();
+    auto key_data = materialize(key);
+    auto sequence = try_as<uint64_t>(&key_data);
+    TENZIR_ASSERT(sequence);
+    auto ready = std::vector<table_slice>{};
+    {
+      auto guard = std::lock_guard{trailing_output_->mutex};
+      if (*sequence < trailing_output_->next) {
+        co_return;
+      }
+      trailing_output_->finished.insert(*sequence);
+      while (trailing_output_->finished.contains(trailing_output_->next)) {
+        auto it = trailing_output_->pending.find(trailing_output_->next);
+        if (it != trailing_output_->pending.end()) {
+          ready.insert(ready.end(), std::make_move_iterator(it->second.begin()),
+                       std::make_move_iterator(it->second.end()));
+          trailing_output_->pending.erase(it);
+        }
+        trailing_output_->finished.erase(trailing_output_->next);
+        trailing_output_->next += 1;
+      }
+    }
+    for (auto& slice : ready) {
+      co_await push(std::move(slice));
+    }
+  }
+
   auto snapshot(Serde& serde) -> void override {
     snapshot_impl(serde);
+    if (serde.is_loading()) {
+      // Subpipelines do not survive a restore. Drop their partial output and
+      // resume ordered release at the first sequence that has not been spawned.
+      auto guard = std::lock_guard{trailing_output_->mutex};
+      trailing_output_->pending.clear();
+      trailing_output_->finished.clear();
+      trailing_output_->next = trailing_sequence();
+    }
   }
+
+private:
+  Arc<TrailingOutputState> trailing_output_{std::in_place};
 };
 
 template <>
@@ -463,6 +1070,14 @@ public:
     return process_task_impl(std::move(result), ctx);
   }
 
+  auto finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(key, ctx);
+    if (is_trailing()) {
+      on_trailing_child_finished();
+    }
+    co_return;
+  }
+
   auto snapshot(Serde& serde) -> void override {
     snapshot_impl(serde);
   }
@@ -476,39 +1091,109 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<WindowArgs>{};
-    auto size = d.named("size", &WindowArgs::size, "duration");
-    d.named("on", &WindowArgs::on, "time");
-    auto every = d.named("every", &WindowArgs::every, "duration");
+    auto size = d.named("size", &WindowArgs::size, "duration|uint");
+    auto every = d.named("every", &WindowArgs::every, "duration|uint");
+    auto trailing = d.named("trailing", &WindowArgs::trailing);
+    auto on = d.named("on", &WindowArgs::on, "time");
+    auto trigger = d.named("trigger", &WindowArgs::trigger, "bool");
     auto tolerance
       = d.named_optional("tolerance", &WindowArgs::tolerance, "duration");
     auto idle = d.named("idle_timeout", &WindowArgs::idle_timeout, "duration");
     auto pipe = d.pipeline(&WindowArgs::pipe, SubOptimize::from_downstream,
                            {{"window", &WindowArgs::let}});
-    d.validate([size, every, tolerance, idle](DescribeCtx& ctx) -> Empty {
-      auto sz = ctx.get(size);
-      if (sz and *sz <= duration::zero()) {
-        diagnostic::error("`size` must be a positive duration")
-          .primary(ctx.get_location(size).value())
+    d.validate([size, every, trailing, on, trigger, tolerance,
+                idle](DescribeCtx& ctx) -> Empty {
+      auto raw_size = ctx.get(size);
+      if (not raw_size) {
+        return {};
+      }
+      auto time_size = try_as<duration>(&raw_size->inner);
+      auto count_size = as_count(*raw_size);
+      auto signed_size = try_as<int64_t>(&raw_size->inner);
+      if (signed_size and *signed_size < 0) {
+        diagnostic::error("`size` must be positive")
+          .primary(raw_size->source)
+          .emit(ctx);
+        return {};
+      }
+      if (not time_size and not count_size) {
+        diagnostic::error("`size` must be a duration or an unsigned integer")
+          .primary(raw_size->source)
+          .emit(ctx);
+        return {};
+      }
+      if ((time_size and *time_size <= duration::zero())
+          or (count_size and *count_size == 0)) {
+        diagnostic::error("`size` must be positive")
+          .primary(raw_size->source)
           .emit(ctx);
       }
-      if (auto e = ctx.get(every)) {
-        if (*e <= duration::zero()) {
-          diagnostic::error("`every` must be a positive duration")
-            .primary(ctx.get_location(every).value())
+      auto raw_every = ctx.get(every);
+      auto is_trailing = ctx.get(trailing).value_or(false);
+      if (raw_every) {
+        auto every_time = try_as<duration>(&raw_every->inner);
+        auto every_count = as_count(*raw_every);
+        auto signed_every = try_as<int64_t>(&raw_every->inner);
+        if (signed_every and *signed_every < 0) {
+          diagnostic::error("`every` must be positive")
+            .primary(raw_every->source)
             .emit(ctx);
-        } else if (sz and *e > *sz) {
+        } else if (not every_time and not every_count) {
+          diagnostic::error("`every` must be a duration or an unsigned integer")
+            .primary(raw_every->source)
+            .emit(ctx);
+        } else if ((time_size and not every_time)
+                   or (count_size and not every_count)) {
+          diagnostic::error("`every` must have the same type as `size`")
+            .primary(raw_every->source)
+            .secondary(raw_size->source)
+            .emit(ctx);
+        } else if ((every_time and *every_time <= duration::zero())
+                   or (every_count and *every_count == 0)) {
+          diagnostic::error("`every` must be positive")
+            .primary(raw_every->source)
+            .emit(ctx);
+        } else if (not is_trailing
+                   and ((time_size and *every_time > *time_size)
+                        or (count_size and *every_count > *count_size))) {
           diagnostic::error("`every` must not be greater than `size`")
-            .primary(ctx.get_location(every).value())
-            .secondary(ctx.get_location(size).value())
+            .primary(raw_every->source)
+            .secondary(raw_size->source)
             .emit(ctx);
         }
       }
-      if (auto t = ctx.get(tolerance); t and *t < duration::zero()) {
+      auto on_value = ctx.get(on);
+      if (ctx.get(trigger) and not is_trailing) {
+        diagnostic::error("`trigger` is only valid for trailing windows")
+          .primary(ctx.get_location(trigger).value())
+          .hint("set `trailing=true` to run a trailing window")
+          .emit(ctx);
+      }
+      auto tolerance_value = ctx.get(tolerance);
+      auto idle_value = ctx.get(idle);
+      if (count_size and on_value) {
+        diagnostic::error("`on` is only valid for duration windows")
+          .primary(ctx.get_location(on).value())
+          .secondary(raw_size->source)
+          .emit(ctx);
+      }
+      auto fixed_event_time = time_size and not is_trailing and on_value;
+      if (tolerance_value and not fixed_event_time) {
+        diagnostic::error(
+          "`tolerance` is only valid for fixed event-time windows")
+          .primary(ctx.get_location(tolerance).value())
+          .emit(ctx);
+      } else if (tolerance_value and *tolerance_value < duration::zero()) {
         diagnostic::error("`tolerance` must not be negative")
           .primary(ctx.get_location(tolerance).value())
           .emit(ctx);
       }
-      if (auto t = ctx.get(idle); t and *t <= duration::zero()) {
+      if (idle_value and not fixed_event_time) {
+        diagnostic::error(
+          "`idle_timeout` is only valid for fixed event-time windows")
+          .primary(ctx.get_location(idle).value())
+          .emit(ctx);
+      } else if (idle_value and *idle_value <= duration::zero()) {
         diagnostic::error("`idle_timeout` must be a positive duration")
           .primary(ctx.get_location(idle).value())
           .emit(ctx);

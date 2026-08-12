@@ -1,0 +1,11 @@
+// A fixed window whose epoch-aligned start falls below the representable
+// timestamp minimum clamps its start instead of overflowing. Assert
+// relational properties because platforms render near-minimum timestamps
+// differently.
+from {ts: (-9223372035s - 1s).from_epoch()}
+window size=1s, on=ts {
+  this = {
+    contains: $window.start <= ts and ts < $window.end,
+    clamped: $window.start.since_epoch() < -9223372036s - 500ms,
+  }
+}

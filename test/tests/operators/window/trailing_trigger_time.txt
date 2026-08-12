@@ -1,0 +1,14 @@
+{
+  ts: 1970-01-01T00:13:00Z,
+  status: "success",
+  prior_failures: 3,
+  start: 8min,
+  end: 13min,
+}
+{
+  ts: 1970-01-01T00:30:00Z,
+  status: "success",
+  prior_failures: 0,
+  start: 25min,
+  end: 30min,
+}

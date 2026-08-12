@@ -60,6 +60,10 @@ Prefer `detail::narrow<T>()` over `static_cast<T>()` when narrowing to catch
 overflow bugs. Use `detail::narrow_cast<T>()` only when the narrowing is
 provably safe.
 
+For arithmetic that can overflow, including `duration` and `time_point` math,
+use `tenzir::checked_*()` when overflow is an error or `detail::saturating_*()`
+when clamping is correct. See Numerics in [utilities.md](utilities.md).
+
 ## Diagnostics and Pipeline Cancellation
 
 Emitting `diagnostic::error(...)` at runtime (i.e., during `start()`,

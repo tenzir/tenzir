@@ -1,0 +1,8 @@
+// The first implementation requires ordered event time and drops regressions.
+from {ts: 2s.from_epoch(), x: 1},
+     {ts: 1s.from_epoch(), x: 2},
+     {ts: 3s.from_epoch(), x: 3}
+window size=5s, trailing=true, on=ts {
+  summarize n=count(), total=sum(x)
+  trigger = $window.event.x
+}

@@ -1,0 +1,10 @@
+// A 3-event count window starts every 2 events. No negative, pre-stream
+// windows are created.
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}, {x: 5}
+batch
+window size=3, every=2 {
+  summarize n=count(), total=sum(x)
+  begin = $window.begin
+  finish = $window.finish
+}
+sort begin

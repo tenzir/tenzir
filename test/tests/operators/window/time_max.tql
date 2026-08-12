@@ -1,0 +1,6 @@
+// A fixed window near the representable timestamp maximum saturates its end
+// and tolerance arithmetic instead of overflowing.
+from {ts: (9223372035s + 854ms).from_epoch()}
+window size=1s, on=ts, tolerance=10s {
+  this = {start: $window.start, end: $window.end}
+}

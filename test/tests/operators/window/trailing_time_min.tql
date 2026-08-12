@@ -1,0 +1,7 @@
+// A trailing window whose start falls below the representable timestamp
+// minimum clamps it instead of overflowing. Assert a relational property
+// because platforms render near-minimum timestamps differently.
+from {ts: (-9223372035s - 1s).from_epoch()}
+window size=1s, trailing=true, on=ts {
+  this = {clamped: $window.start.since_epoch() < -9223372036s - 500ms}
+}

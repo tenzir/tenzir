@@ -1,0 +1,16 @@
+{
+  n: 1,
+  total: 1,
+  trigger: 1,
+}
+{
+  n: 2,
+  total: 4,
+  trigger: 3,
+}
+warning: `window` dropped 1 event(s) with regressing timestamps
+ --> tests/operators/window/trailing_time_regression.tql:5:35
+  |
+5 | window size=5s, trailing=true, on=ts {
+  |                                   ~~
+  |

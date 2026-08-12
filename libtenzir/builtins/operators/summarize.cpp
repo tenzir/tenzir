@@ -15,6 +15,7 @@
 #include <tenzir/async/task.hpp>
 #include <tenzir/box.hpp>
 #include <tenzir/compile_ctx.hpp>
+#include <tenzir/detail/saturating_arithmetic.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/hash/hash_append.hpp>
 #include <tenzir/ir.hpp>
@@ -865,15 +866,6 @@ auto evaluate_options(Config& config, session ctx) -> failure_or<void> {
   return {};
 }
 
-auto saturating_add(steady_clock::time_point base, duration delay)
-  -> steady_clock::time_point {
-  TENZIR_ASSERT(delay >= duration::zero());
-  if (delay >= steady_clock::time_point::max() - base) {
-    return steady_clock::time_point::max();
-  }
-  return base + delay;
-}
-
 class Summarize final : public Operator<table_slice, table_slice> {
 public:
   explicit Summarize(Config config) : state_{std::move(config)} {
@@ -893,7 +885,7 @@ public:
           }
           co_await sleep_until(next_flush);
           co_await tick_queue->enqueue(TimerTick{next_flush});
-          next_flush = saturating_add(next_flush, emit_interval);
+          next_flush = detail::saturating_add(next_flush, emit_interval);
         }
       });
       // A restored snapshot carries the remaining time until the next flush;
@@ -1044,7 +1036,7 @@ private:
 
   auto arm_timer(duration delay) -> void {
     TENZIR_ASSERT(not next_flush_);
-    next_flush_ = saturating_add(steady_clock::now(), delay);
+    next_flush_ = detail::saturating_add(steady_clock::now(), delay);
     publish_frontier(*next_flush_);
   }
 
@@ -1064,7 +1056,7 @@ private:
         co_await push(std::move(slice));
       }
       *next_flush_
-        = saturating_add(*next_flush_, *state_.config().emit_interval);
+        = detail::saturating_add(*next_flush_, *state_.config().emit_interval);
     }
     if (frontier_changed) {
       publish_frontier(*next_flush_);

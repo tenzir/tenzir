@@ -1,0 +1,11 @@
+// The outer cadence selects trailing-window invocations. The inner cadence
+// emits prefix summaries while consuming each independently replayed history.
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}, {x: 5}
+window size=4, every=2, trailing=true {
+  summarize total=sum(x), options={emit: 2, mode: "cumulative"}
+  this = {
+    anchor: $window.event.x,
+    emitted_event: x,
+    total: total,
+  }
+}

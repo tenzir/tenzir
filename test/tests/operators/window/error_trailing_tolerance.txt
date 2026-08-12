@@ -1,0 +1,6 @@
+error: `tolerance` is only valid for fixed event-time windows
+ --> tests/operators/window/error_trailing_tolerance.tql:6:49
+  |
+6 | window size=2s, trailing=true, on=ts, tolerance=1s {
+  |                                                 ^^
+  |

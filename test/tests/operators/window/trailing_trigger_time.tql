@@ -1,0 +1,17 @@
+// A trailing time window with a trigger retains history for all events but
+// fires only for events matching the predicate, preserving the triggering
+// event and its bounded history.
+from {ts: 10min.from_epoch(), status: "failure"},
+     {ts: 11min.from_epoch(), status: "failure"},
+     {ts: 12min.from_epoch(), status: "failure"},
+     {ts: 13min.from_epoch(), status: "success"},
+     {ts: 30min.from_epoch(), status: "success"}
+window size=5min, trailing=true, on=ts, trigger=status == "success" {
+  summarize failures=count_if(status, x => x == "failure")
+  this = {
+    ...$window.event,
+    prior_failures: failures,
+    start: $window.start.since_epoch(),
+    end: $window.end.since_epoch(),
+  }
+}

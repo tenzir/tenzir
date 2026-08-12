@@ -1,0 +1,15 @@
+{
+  anchor: 2,
+  emitted_event: 2,
+  total: 3,
+}
+{
+  anchor: 4,
+  emitted_event: 2,
+  total: 3,
+}
+{
+  anchor: 4,
+  emitted_event: 4,
+  total: 10,
+}

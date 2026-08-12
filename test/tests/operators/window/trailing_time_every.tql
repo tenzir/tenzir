@@ -1,0 +1,17 @@
+// A duration cadence starts with the first event and fires on the first event
+// after each interval elapses.
+from {ts: 10min.from_epoch(), x: 1},
+     {ts: 12min.from_epoch(), x: 2},
+     {ts: 14min.from_epoch(), x: 3},
+     {ts: 16min.from_epoch(), x: 4},
+     {ts: 18min.from_epoch(), x: 5}
+window size=5min, every=3min, trailing=true, on=ts {
+  summarize n=count(), total=sum(x)
+  this = {
+    ...$window.event,
+    n: n,
+    total: total,
+    start: $window.start.since_epoch(),
+    end: $window.end.since_epoch(),
+  }
+}

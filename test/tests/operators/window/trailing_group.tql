@@ -1,0 +1,12 @@
+// An outer group gives every key independent trailing history.
+from {host: "a", x: 1},
+     {host: "b", x: 10},
+     {host: "a", x: 2},
+     {host: "b", x: 20}
+group host {
+  window size=2, trailing=true {
+    summarize total=sum(x)
+    this = {...$window.event, total: total}
+  }
+}
+sort host, x

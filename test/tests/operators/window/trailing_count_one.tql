@@ -1,0 +1,5 @@
+from {x: 1}, {x: 2}, {x: 3}
+window size=1, trailing=true {
+  summarize total=sum(x)
+  this = {...$window.event, total: total}
+}

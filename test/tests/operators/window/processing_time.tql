@@ -1,0 +1,6 @@
+// Omitting `on` selects epoch-aligned processing-time windows. The exact
+// boundary depends on the wall clock, so this test only checks assignment.
+from {x: 1}, {x: 2}, {x: 3}
+window size=1h {
+  summarize n=count()
+}

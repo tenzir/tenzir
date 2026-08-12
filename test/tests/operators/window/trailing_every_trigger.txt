@@ -1,0 +1,16 @@
+{
+  x: 3,
+  fire: true,
+  n: 3,
+  total: 6,
+  begin: 0,
+  finish: 3,
+}
+{
+  x: 6,
+  fire: true,
+  n: 4,
+  total: 18,
+  begin: 2,
+  finish: 6,
+}

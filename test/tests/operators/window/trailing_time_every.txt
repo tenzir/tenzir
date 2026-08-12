@@ -1,0 +1,16 @@
+{
+  ts: 1970-01-01T00:14:00Z,
+  x: 3,
+  n: 3,
+  total: 6,
+  start: 9min,
+  end: 14min,
+}
+{
+  ts: 1970-01-01T00:18:00Z,
+  x: 5,
+  n: 3,
+  total: 12,
+  start: 13min,
+  end: 18min,
+}

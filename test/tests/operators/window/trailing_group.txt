@@ -1,0 +1,20 @@
+{
+  host: "a",
+  x: 1,
+  total: 1,
+}
+{
+  host: "a",
+  x: 2,
+  total: 3,
+}
+{
+  host: "b",
+  x: 10,
+  total: 10,
+}
+{
+  host: "b",
+  x: 20,
+  total: 30,
+}

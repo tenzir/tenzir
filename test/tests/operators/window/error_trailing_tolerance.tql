@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {ts: now()}
+window size=2s, trailing=true, on=ts, tolerance=1s {
+  pass
+}

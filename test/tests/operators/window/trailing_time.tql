@@ -1,0 +1,15 @@
+// Trailing time windows are inclusive at both ends and expose the triggering
+// event for streamstats-style enrichment.
+from {ts: 10min.from_epoch(), bytes: 10},
+     {ts: 12min.from_epoch(), bytes: 20},
+     {ts: 16min.from_epoch(), bytes: 30}
+window size=5min, trailing=true, on=ts {
+  summarize rolling_bytes=sum(bytes), events=count()
+  this = {
+    ...$window.event,
+    rolling_bytes: rolling_bytes,
+    events: events,
+    start: $window.start.since_epoch(),
+    end: $window.end.since_epoch(),
+  }
+}

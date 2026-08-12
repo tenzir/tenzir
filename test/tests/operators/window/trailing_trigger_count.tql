@@ -1,0 +1,17 @@
+// A trigger predicate selects which events fire the trailing window. Every
+// event still enters the retained history and counts toward the offsets.
+from {x: 1, fire: false},
+     {x: 2, fire: false},
+     {x: 3, fire: true},
+     {x: 4, fire: false},
+     {x: 5, fire: true}
+window size=3, trailing=true, trigger=fire {
+  summarize n=count(), total=sum(x)
+  this = {
+    ...$window.event,
+    n: n,
+    total: total,
+    begin: $window.begin,
+    finish: $window.finish,
+  }
+}

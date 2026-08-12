@@ -1,0 +1,18 @@
+{
+  n: 3,
+  total: 6,
+  begin: 0,
+  finish: 3,
+}
+{
+  n: 3,
+  total: 12,
+  begin: 2,
+  finish: 5,
+}
+{
+  n: 1,
+  total: 5,
+  begin: 4,
+  finish: 7,
+}

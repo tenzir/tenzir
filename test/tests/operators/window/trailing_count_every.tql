@@ -1,0 +1,13 @@
+// A count cadence samples the trailing history after every three input events.
+// It can exceed the retained window size.
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}, {x: 5}, {x: 6}, {x: 7}
+window size=2, every=3, trailing=true {
+  summarize n=count(), total=sum(x)
+  this = {
+    ...$window.event,
+    n: n,
+    total: total,
+    begin: $window.begin,
+    finish: $window.finish,
+  }
+}

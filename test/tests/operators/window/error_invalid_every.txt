@@ -1,0 +1,6 @@
+error: `every` must be a duration or an unsigned integer
+ --> tests/operators/window/error_invalid_every.tql:6:22
+  |
+6 | window size=2, every="rows" {
+  |                      ^^^^^^
+  |

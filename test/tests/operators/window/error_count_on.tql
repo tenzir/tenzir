@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {ts: now()}
+window size=2, on=ts {
+  pass
+}

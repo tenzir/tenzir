@@ -1,0 +1,11 @@
+// Duplicate timestamps trigger distinct windows. Events exactly `size` behind
+// the trigger remain in the inclusive trailing interval.
+from {ts: 0s.from_epoch(), x: 1},
+     {ts: 0s.from_epoch(), x: 2},
+     {ts: 5s.from_epoch(), x: 3},
+     {ts: 5s.from_epoch(), x: 4},
+     {ts: 5s.from_epoch(), x: 5}
+window size=5s, trailing=true, on=ts {
+  summarize n=count(), total=sum(x)
+  trigger = $window.event.x
+}

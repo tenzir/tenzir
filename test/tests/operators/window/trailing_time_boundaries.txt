@@ -1,0 +1,25 @@
+{
+  n: 1,
+  total: 1,
+  trigger: 1,
+}
+{
+  n: 2,
+  total: 3,
+  trigger: 2,
+}
+{
+  n: 3,
+  total: 6,
+  trigger: 3,
+}
+{
+  n: 4,
+  total: 10,
+  trigger: 4,
+}
+{
+  n: 5,
+  total: 15,
+  trigger: 5,
+}

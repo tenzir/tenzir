@@ -1,0 +1,8 @@
+// The triggering event and retained history preserve heterogeneous schemas.
+from {kind: "a", x: 1},
+     {kind: "b", y: 2},
+     {kind: "a", x: 3}
+window size=2, trailing=true {
+  summarize n=count()
+  this = {...$window.event, n: n}
+}

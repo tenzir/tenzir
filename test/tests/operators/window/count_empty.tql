@@ -1,0 +1,5 @@
+from {x: 1}
+where false
+window size=2 {
+  summarize n=count()
+}
