@@ -1,0 +1,4 @@
+// The timer does not emit before the first input arrives.
+from {ts: 200ms.from_epoch(), x: 1}
+delay ts
+summarize count=count(), options={emit: 50ms, mode: "reset"}

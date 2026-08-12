@@ -1,0 +1,5 @@
+// Heterogeneous records yield one slice per schema while the shared
+// aggregation state counts across both. We avoid deriving the schemas with
+// `if` because the branch merge does not guarantee a deterministic order.
+from {x: 1}, {y: 2}
+summarize n=count(), options={mode: "cumulative"}

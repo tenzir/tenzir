@@ -1,0 +1,9 @@
+error: `emit` and legacy `frequency` cannot be combined
+ --> tests/operators/summarize/emit-with-frequency.tql:6:41
+  |
+6 | summarize count=count(), options={emit: 1s, frequency: 1s, mode: "reset"}
+  |                                         ^^
+  ⋮
+6 | summarize count=count(), options={emit: 1s, frequency: 1s, mode: "reset"}
+  |                                                        --
+  |

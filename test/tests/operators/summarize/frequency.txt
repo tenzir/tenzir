@@ -1,9 +1,10 @@
 {
   count: 2,
 }
-{
-  count: 1,
-}
-{
-  count: 1,
-}
+warning: `frequency` is deprecated
+ --> tests/operators/summarize/frequency.tql:3:46
+  |
+3 | summarize count=count(), options={frequency: 1s}
+  |                                              ~~
+  |
+  = hint: replace `frequency` with `emit` and set `mode: "reset"`

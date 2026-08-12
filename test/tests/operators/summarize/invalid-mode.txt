@@ -1,0 +1,7 @@
+error: invalid mode `invalid`
+ --> tests/operators/summarize/invalid-mode.tql:6:50
+  |
+6 | summarize count=count(), options={emit: 1, mode: "invalid"}
+  |                                                  ^^^^^^^^^
+  |
+  = hint: expected `reset` or `cumulative`

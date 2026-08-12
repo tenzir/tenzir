@@ -1,0 +1,7 @@
+// Reset mode clears grouped state after each emission.
+from {ts: 0ms.from_epoch(), g: "a", x: 1},
+     {ts: 90ms.from_epoch(), g: "a", x: 2},
+     {ts: 360ms.from_epoch(), g: "b", x: 3},
+     {ts: 660ms.from_epoch(), g: "a", x: 4}
+delay ts
+summarize total=sum(x), g, options={emit: 300ms, mode: "reset"}

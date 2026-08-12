@@ -1,0 +1,6 @@
+error: `emit` duration must be at least 10ms
+ --> tests/operators/summarize/emit-below-minimum.tql:6:41
+  |
+6 | summarize count=count(), options={emit: 1ms, mode: "reset"}
+  |                                         ^^^
+  |

@@ -1,0 +1,5 @@
+// The per-row list evaluation resets the aggregation instance between rows.
+// This must not clear the configured quantile; previously the second row
+// degraded to `quantile(q=0)`, i.e., the minimum.
+from {xs: [1.0, 2.0, 3.0]}, {xs: [4.0, 5.0, 6.0]}
+select q = xs.quantile(q=0.5)

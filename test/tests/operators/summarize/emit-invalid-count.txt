@@ -1,0 +1,6 @@
+error: `emit` event count must be positive
+ --> tests/operators/summarize/emit-invalid-count.tql:6:41
+  |
+6 | summarize count=count(), options={emit: 0, mode: "reset"}
+  |                                         ^
+  |

@@ -1,0 +1,6 @@
+error: `emit` requires `mode` to be set
+ --> tests/operators/summarize/emit-without-mode.tql:6:41
+  |
+6 | summarize count=count(), options={emit: 1}
+  |                                         ^
+  |

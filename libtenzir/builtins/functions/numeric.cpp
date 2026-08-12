@@ -285,7 +285,7 @@ public:
           auto& array = as<type_to_arrow_array_t<Type>>(*arg.array);
           for (auto value : values(ty, array)) {
             if (value) {
-              digest_.nan_add(*value);
+              digest_.finite_add(*value);
             }
           }
         },
@@ -337,18 +337,70 @@ public:
   }
 
   auto save() const -> chunk_ptr override {
-    return {};
+    auto fbb = flatbuffers::FlatBufferBuilder{};
+    const auto fb_state = [&] {
+      switch (state_) {
+        case state::none:
+          return fbs::aggregation::QuantileState::None;
+        case state::failed:
+          return fbs::aggregation::QuantileState::Failed;
+        case state::dur:
+          return fbs::aggregation::QuantileState::Duration;
+        case state::numeric:
+          return fbs::aggregation::QuantileState::Numeric;
+      }
+      TENZIR_UNREACHABLE();
+    }();
+    const auto digest = digest_.save();
+    const auto fb_means = fbb.CreateVector(digest.means);
+    const auto fb_weights = fbb.CreateVector(digest.weights);
+    const auto fb_quantile = fbs::aggregation::CreateQuantile(
+      fbb, fb_state, fb_means, fb_weights, digest.min, digest.max);
+    fbb.Finish(fb_quantile);
+    return chunk::make(fbb.Release());
   }
 
   auto restore(chunk_ptr chunk) noexcept -> bool override {
-    TENZIR_UNUSED(chunk);
-    TENZIR_WARN("restoring `quantile` aggregation instance from snapshot is "
-                "not yet implemented");
+    const auto fb
+      = flatbuffer<fbs::aggregation::Quantile>::make(std::move(chunk));
+    if (not fb) {
+      TENZIR_WARN("failed to restore `quantile` aggregation instance: invalid "
+                  "FlatBuffer");
+      return false;
+    }
+    auto digest = detail::tdigest_state{};
+    digest.means.assign((*fb)->means()->begin(), (*fb)->means()->end());
+    digest.weights.assign((*fb)->weights()->begin(), (*fb)->weights()->end());
+    digest.min = (*fb)->min();
+    digest.max = (*fb)->max();
+    if (not digest_.restore(digest)) {
+      TENZIR_WARN("failed to restore `quantile` aggregation instance: invalid "
+                  "digest state");
+      return false;
+    }
+    switch ((*fb)->state()) {
+      case fbs::aggregation::QuantileState::None:
+        state_ = state::none;
+        return true;
+      case fbs::aggregation::QuantileState::Failed:
+        state_ = state::failed;
+        return true;
+      case fbs::aggregation::QuantileState::Duration:
+        state_ = state::dur;
+        return true;
+      case fbs::aggregation::QuantileState::Numeric:
+        state_ = state::numeric;
+        return true;
+    }
+    TENZIR_WARN(
+      "failed to restore `quantile` aggregation instance: unknown state "
+      "value");
     return false;
   }
 
   auto reset() -> void override {
-    quantile_ = {};
+    // Do not touch `quantile_`: it is configuration from the function
+    // arguments, not accumulated state.
     state_ = state::none;
     digest_.reset();
   }

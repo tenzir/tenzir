@@ -1,0 +1,6 @@
+error: expected int or duration for `emit`
+ --> tests/operators/summarize/emit-invalid-type.tql:6:41
+  |
+6 | summarize count=count(), options={emit: true, mode: "reset"}
+  |                                         ^^^^
+  |

@@ -1,0 +1,6 @@
+error: expected int or duration for `emit`
+ --> tests/operators/summarize/emit-invalid-string.tql:6:41
+  |
+6 | summarize count=count(), options={emit: "invalid", mode: "reset"}
+  |                                         ^^^^^^^^^
+  |

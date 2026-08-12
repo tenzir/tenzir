@@ -1,0 +1,7 @@
+error: mode `update` is no longer supported
+ --> tests/operators/summarize/update-rejected.tql:6:50
+  |
+6 | summarize count=count(), options={emit: 1, mode: "update"}
+  |                                                  ^^^^^^^^
+  |
+  = hint: use `group` followed by `deduplicate` to emit changed groups

@@ -1,0 +1,13 @@
+// parallelism: 6
+// Each group's aggregation state lives in exactly one instance, so the running
+// aggregates per group are identical to the single-instance case. The gather
+// after the parallel instances may interleave events across groups, which we
+// pin with `sort`.
+from {g: "a", x: 1},
+     {g: "b", x: 2},
+     {g: "a", x: 3},
+     {g: "c", x: 4},
+     {g: "b", x: 5},
+     {g: "a", x: 6}
+summarize g, total=sum(x), options={emit: 1, mode: "cumulative"}
+sort g, x

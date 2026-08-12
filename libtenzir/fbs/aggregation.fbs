@@ -99,3 +99,18 @@ table ModeValueCountsEntropy {
 table Count {
   result: long;
 }
+
+enum QuantileState : short {
+  None,
+  Failed,
+  Duration,
+  Numeric,
+}
+
+table Quantile {
+  state: QuantileState;
+  means: [double] (required);
+  weights: [double] (required);
+  min: double;
+  max: double;
+}

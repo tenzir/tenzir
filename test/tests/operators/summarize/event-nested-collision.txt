@@ -1,0 +1,16 @@
+{
+  x: 1,
+  n: 1,
+  stats: {
+    old: true,
+    total: 1,
+  },
+}
+{
+  x: 2,
+  n: 2,
+  stats: {
+    old: false,
+    total: 3,
+  },
+}

@@ -1,0 +1,2 @@
+from {x: 1, g: "a"}, {x: 2, g: "b"}
+summarize renamed=g, options={mode: "cumulative"}

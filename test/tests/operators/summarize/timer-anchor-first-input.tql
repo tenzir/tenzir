@@ -1,0 +1,5 @@
+// The timer starts with the first input event, not operator startup.
+from {ts: 400ms.from_epoch(), x: 1},
+     {ts: 900ms.from_epoch(), x: 1}
+delay ts, start=0ms.from_epoch()
+summarize count=count(), options={emit: 1000ms, mode: "cumulative"}

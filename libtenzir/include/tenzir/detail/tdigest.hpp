@@ -45,6 +45,14 @@
 
 namespace tenzir::detail {
 
+// serialized centroid state of a tdigest, used for snapshotting
+struct tdigest_state {
+  std::vector<double> means;
+  std::vector<double> weights;
+  double min = 0;
+  double max = 0;
+};
+
 class tdigest {
 public:
   explicit tdigest(uint32_t delta = 100, uint32_t buffer_size = 500);
@@ -61,27 +69,27 @@ public:
   // dump internal data, only for debug
   auto dump() const -> void;
 
-  // buffer a single data point, consume internal buffer if full
-  // this function is intensively called and performance critical
-  // call it only if you are sure no NAN exists in input data
+  // Buffer a single finite data point, consuming the internal buffer if full.
+  // This function is intensively called and performance critical. Call it only
+  // if the input data is known to be finite.
   auto add(double value) -> void {
-    TENZIR_ASSERT(not std::isnan(value), "cannot add NAN");
+    TENZIR_ASSERT(std::isfinite(value), "cannot add a non-finite value");
     if (input_.size() == input_.capacity()) [[unlikely]] {
       merge_input();
     }
     input_.push_back(value);
   }
 
-  // skip NAN on adding
+  // Skip non-finite floating-point values when adding.
   template <class T>
-  auto nan_add(T value) -> std::enable_if_t<std::is_floating_point_v<T>> {
-    if (not std::isnan(value)) {
+  auto finite_add(T value) -> std::enable_if_t<std::is_floating_point_v<T>> {
+    if (std::isfinite(value)) {
       add(value);
     }
   }
 
   template <class T>
-  auto nan_add(T value) -> std::enable_if_t<std::is_integral_v<T>> {
+  auto finite_add(T value) -> std::enable_if_t<std::is_integral_v<T>> {
     add(static_cast<double>(value));
   }
 
@@ -102,6 +110,14 @@ public:
 
   // check if this tdigest contains no valid data points
   auto is_empty() const -> bool;
+
+  // serialize the merged centroid state for snapshotting; flushes buffered
+  // input first
+  auto save() const -> tdigest_state;
+
+  // rebuild the digest from a serialized state; returns false and resets the
+  // digest if the state is invalid
+  auto restore(const tdigest_state& state) -> bool;
 
 private:
   // merge input data with current tdigest

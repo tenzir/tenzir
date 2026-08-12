@@ -1,0 +1,12 @@
+// parallelism: 6
+// Timer emission stays single-instance so all groups share the processing-time
+// frontier anchored by the first input event.
+from {ts: 0ms.from_epoch(), g: "a", x: 1},
+     {ts: 90ms.from_epoch(), g: "a", x: 2},
+     {ts: 360ms.from_epoch(), g: "b", x: 3},
+     {ts: 500ms.from_epoch(), g: "b", x: 5},
+     {ts: 650ms.from_epoch(), g: "b", x: 7},
+     {ts: 750ms.from_epoch(), g: "a", x: 4}
+delay ts
+summarize total=sum(x), g, options={emit: 300ms, mode: "reset"}
+sort g, total

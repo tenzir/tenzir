@@ -182,8 +182,8 @@ public:
     auto total_weight = 0.0;
     auto prev_mean = std::numeric_limits<double>::lowest();
     for (const auto& c : tdigests_[current_]) {
-      if (std::isnan(c.mean) or std::isnan(c.weight)) {
-        return std::unexpected("NAN found in tdigest");
+      if (not std::isfinite(c.mean) or not std::isfinite(c.weight)) {
+        return std::unexpected("non-finite value found in tdigest");
       }
       if (c.mean < prev_mean) {
         return std::unexpected("centroid mean decreases");
@@ -364,6 +364,51 @@ public:
     return total_weight_;
   }
 
+  auto centroids() const -> const std::vector<centroid>& {
+    return tdigests_[current_];
+  }
+
+  auto min_value() const -> double {
+    return min_;
+  }
+
+  auto max_value() const -> double {
+    return max_;
+  }
+
+  // rebuild the digest from merged centroids; returns false and resets the
+  // digest if the centroids do not form a valid tdigest
+  auto restore(std::vector<centroid> centroids, double min, double max)
+    -> bool {
+    reset();
+    if (centroids.empty()) {
+      return true;
+    }
+    if (centroids.size() > delta_ or not std::isfinite(min)
+        or not std::isfinite(max) or min > centroids.front().mean
+        or centroids.back().mean > max) {
+      return false;
+    }
+    auto total_weight = 0.0;
+    auto prev_mean = std::numeric_limits<double>::lowest();
+    for (const auto& c : centroids) {
+      if (not std::isfinite(c.mean) or not std::isfinite(c.weight)
+          or c.weight < 1 or c.mean < prev_mean) {
+        return false;
+      }
+      prev_mean = c.mean;
+      total_weight += c.weight;
+      if (not std::isfinite(total_weight)) {
+        return false;
+      }
+    }
+    tdigests_[current_] = std::move(centroids);
+    total_weight_ = total_weight;
+    min_ = min;
+    max_ = max;
+    return true;
+  }
+
 private:
   // must be declared before merger_, see constructor initialization list
   const uint32_t delta_;
@@ -431,6 +476,35 @@ auto tdigest::mean() const -> double {
 
 auto tdigest::is_empty() const -> bool {
   return input_.size() == 0 and impl_->total_weight() == 0;
+}
+
+auto tdigest::save() const -> tdigest_state {
+  merge_input();
+  auto result = tdigest_state{};
+  const auto& centroids = impl_->centroids();
+  result.means.reserve(centroids.size());
+  result.weights.reserve(centroids.size());
+  for (const auto& c : centroids) {
+    result.means.push_back(c.mean);
+    result.weights.push_back(c.weight);
+  }
+  result.min = impl_->min_value();
+  result.max = impl_->max_value();
+  return result;
+}
+
+auto tdigest::restore(const tdigest_state& state) -> bool {
+  input_.resize(0);
+  if (state.means.size() != state.weights.size()) {
+    impl_->reset();
+    return false;
+  }
+  auto centroids = std::vector<centroid>{};
+  centroids.reserve(state.means.size());
+  for (size_t i = 0; i < state.means.size(); ++i) {
+    centroids.push_back(centroid{state.means[i], state.weights[i]});
+  }
+  return impl_->restore(std::move(centroids), state.min, state.max);
 }
 
 auto tdigest::merge_input() const -> void {

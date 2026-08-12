@@ -1,0 +1,2 @@
+from {x: 1}
+summarize count=count(), options={emit: 9223372036s, mode: "reset"}

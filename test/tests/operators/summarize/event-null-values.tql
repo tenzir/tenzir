@@ -1,0 +1,2 @@
+from {x: null}, {x: 2}, {x: 1}
+summarize min=min(x), options={mode: "cumulative"}
