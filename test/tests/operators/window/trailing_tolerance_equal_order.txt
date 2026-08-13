@@ -1,0 +1,7 @@
+{
+  trigger: "second",
+  xs: [
+    "first",
+    "second",
+  ],
+}

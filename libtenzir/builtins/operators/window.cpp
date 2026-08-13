@@ -26,6 +26,7 @@
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/UnboundedQueue.h>
 
+#include <algorithm>
 #include <chrono>
 #include <deque>
 #include <limits>
@@ -155,6 +156,16 @@ struct TimeWindowState {
 
 struct CountWindowState {
   uint64_t finish;
+};
+
+struct TrailingReorderEntry {
+  table_slice row;
+  bool trigger_matches = false;
+
+  friend auto inspect(auto& f, TrailingReorderEntry& x) -> bool {
+    return f.object(x).fields(f.field("row", x.row),
+                              f.field("trigger_matches", x.trigger_matches));
+  }
 };
 
 /// The result of assigning a batch of rows to event-time windows: which rows go
@@ -301,6 +312,7 @@ protected:
     open_count_ = std::move(rebuilt_count);
     serde("trailing_rows", trailing_rows_);
     serde("trailing_times", trailing_times_);
+    serde("trailing_reorder", trailing_reorder_);
     serde("trailing_time_origin", trailing_time_origin_);
     serde("trailing_count_since_fire", trailing_count_since_fire_);
     serde("trailing_sequence", trailing_sequence_);
@@ -401,9 +413,8 @@ private:
                         : None{};
     auto triggers
       = args_.trigger ? Option{eval(*args_.trigger, input, ctx)} : None{};
-    auto records = multi_series{series{input}};
     auto invalid_events = int64_t{0};
-    auto regressing_events = int64_t{0};
+    auto late_events = int64_t{0};
     auto invalid_triggers = int64_t{0};
     auto row_count = detail::narrow<int64_t>(input.rows());
     for (auto row = int64_t{0}; row < row_count; ++row) {
@@ -416,34 +427,33 @@ private:
           continue;
         }
         event_time = *timestamp;
-        if (current_time_ and event_time < *current_time_) {
-          regressing_events += 1;
+        auto reorder_cutoff
+          = current_time_
+              ? Option{detail::saturating_sub(*current_time_, args_.tolerance)}
+              : None{};
+        if (reorder_cutoff and event_time < *reorder_cutoff) {
+          late_events += 1;
           continue;
         }
-      } else if (current_time_ and event_time < *current_time_) {
+        current_time_
+          = current_time_ ? std::max(*current_time_, event_time) : event_time;
+        auto trigger_matches
+          = evaluate_trigger(triggers, row, invalid_triggers);
+        trailing_reorder_.emplace(
+          event_time,
+          TrailingReorderEntry{subslice(input, row, row + 1), trigger_matches});
+        warn_about_trailing_cost(ctx);
+        auto cutoff = detail::saturating_sub(*current_time_, args_.tolerance);
+        co_await drain_trailing_reorder_buffer(cutoff, ctx);
+        continue;
+      }
+      if (current_time_ and event_time < *current_time_) {
         event_time = *current_time_;
       }
       current_time_ = event_time;
-      auto cutoff = detail::saturating_sub(event_time, config_.time_size);
-      while (not trailing_times_.empty() and trailing_times_.front() < cutoff) {
-        trailing_times_.pop_front();
-        trailing_rows_.pop_front();
-      }
-      trailing_times_.push_back(event_time);
-      trailing_rows_.push_back(subslice(input, row, row + 1));
-      warn_about_trailing_cost(ctx);
       auto trigger_matches = evaluate_trigger(triggers, row, invalid_triggers);
-      if (not should_fire_trailing_time(event_time, trigger_matches)) {
-        continue;
-      }
-      auto event = materialize(records.view3_at(row));
-      auto event_record = try_as<record>(&event);
-      TENZIR_ASSERT(event_record);
-      auto window = record{};
-      window.emplace("start", data{cutoff});
-      window.emplace("end", data{event_time});
-      window.emplace("event", data{std::move(*event_record)});
-      co_await run_trailing_window(std::move(window), ctx);
+      co_await process_trailing_time_row(subslice(input, row, row + 1),
+                                         event_time, trigger_matches, ctx);
     }
     warn_about_invalid_triggers(invalid_triggers, ctx);
     if (invalid_events > 0) {
@@ -453,13 +463,56 @@ private:
         .primary(*args_.on)
         .emit(ctx);
     }
-    if (regressing_events > 0) {
-      diagnostic::warning("`window` dropped {} event(s) with regressing "
-                          "timestamps",
-                          regressing_events)
-        .primary(*args_.on)
-        .emit(ctx);
+    warn_about_late_events(late_events, ctx);
+  }
+
+  auto drain_trailing_reorder_buffer(Option<time> cutoff, OpCtx& ctx)
+    -> Task<void> {
+    while (not trailing_reorder_.empty()
+           and (not cutoff or trailing_reorder_.begin()->first <= *cutoff)) {
+      auto entry = trailing_reorder_.extract(trailing_reorder_.begin());
+      auto event_time = entry.key();
+      auto row = std::move(entry.mapped().row);
+      auto trigger_matches = entry.mapped().trigger_matches;
+      co_await process_trailing_time_row(std::move(row), event_time,
+                                         trigger_matches, ctx);
     }
+  }
+
+  auto process_trailing_time_row(table_slice row, time event_time,
+                                 bool trigger_matches, OpCtx& ctx)
+    -> Task<void> {
+    auto cutoff = detail::saturating_sub(event_time, config_.time_size);
+    while (not trailing_times_.empty() and trailing_times_.front() < cutoff) {
+      trailing_times_.pop_front();
+      trailing_rows_.pop_front();
+    }
+    trailing_times_.push_back(event_time);
+    trailing_rows_.push_back(row);
+    warn_about_trailing_cost(ctx);
+    if (not should_fire_trailing_time(event_time, trigger_matches)) {
+      co_return;
+    }
+    auto records = multi_series{series{std::move(row)}};
+    auto event = materialize(records.view3_at(0));
+    auto event_record = try_as<record>(&event);
+    TENZIR_ASSERT(event_record);
+    auto window = record{};
+    window.emplace("start", data{cutoff});
+    window.emplace("end", data{event_time});
+    window.emplace("event", data{std::move(*event_record)});
+    co_await run_trailing_window(std::move(window), ctx);
+  }
+
+  auto warn_about_late_events(int64_t late_events, OpCtx& ctx) -> void {
+    if (late_events == 0) {
+      return;
+    }
+    diagnostic::warning("`window` dropped {} late event(s) that arrived "
+                        "after their window had closed",
+                        late_events)
+      .primary(*args_.on)
+      .emit(ctx);
   }
 
   auto process_trailing_count(table_slice input, OpCtx& ctx) -> Task<void> {
@@ -599,11 +652,12 @@ private:
 
   auto warn_about_trailing_cost(OpCtx& ctx) -> void {
     static constexpr auto warning_threshold = size_t{100'000};
-    if (warned_trailing_cost_ or trailing_rows_.size() < warning_threshold) {
+    auto retained = trailing_rows_.size() + trailing_reorder_.size();
+    if (warned_trailing_cost_ or retained < warning_threshold) {
       return;
     }
     diagnostic::warning("`window` retained {} events for trailing evaluation",
-                        trailing_rows_.size())
+                        retained)
       .note("generic trailing windows replay all retained events for every "
             "window invocation")
       .emit(ctx);
@@ -624,6 +678,14 @@ private:
   }
 
 protected:
+  auto finalize_impl(OpCtx& ctx) -> Task<FinalizeBehavior> {
+    if (config_.shape == WindowShape::trailing
+        and config_.clock == WindowClock::event_time) {
+      co_await drain_trailing_reorder_buffer(None{}, ctx);
+    }
+    co_return FinalizeBehavior::done;
+  }
+
   /// Called by the operator variants when a trailing child completes. The
   /// in-flight count is derived from live children, so it is intentionally not
   /// serialized and may already be zero after a restore.
@@ -929,6 +991,8 @@ private:
   uint64_t sequence_offset_ = 0;
   std::deque<table_slice> trailing_rows_;
   std::deque<time> trailing_times_;
+  /// A multimap preserves arrival order among equal timestamps.
+  std::multimap<time, TrailingReorderEntry> trailing_reorder_;
   Option<time> trailing_time_origin_;
   uint64_t trailing_count_since_fire_ = 0;
   uint64_t trailing_sequence_ = 0;
@@ -978,6 +1042,12 @@ public:
     -> Task<void> override {
     TENZIR_UNUSED(push);
     return process_task_impl(std::move(result), ctx);
+  }
+
+  auto finalize(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<FinalizeBehavior> override {
+    TENZIR_UNUSED(push);
+    return finalize_impl(ctx);
   }
 
   auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
@@ -1068,6 +1138,10 @@ public:
 
   auto process_task(Any result, OpCtx& ctx) -> Task<void> override {
     return process_task_impl(std::move(result), ctx);
+  }
+
+  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
+    return finalize_impl(ctx);
   }
 
   auto finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> override {
@@ -1178,9 +1252,10 @@ public:
           .emit(ctx);
       }
       auto fixed_event_time = time_size and not is_trailing and on_value;
-      if (tolerance_value and not fixed_event_time) {
-        diagnostic::error(
-          "`tolerance` is only valid for fixed event-time windows")
+      auto trailing_event_time = time_size and is_trailing and on_value;
+      if (tolerance_value and not fixed_event_time
+          and not trailing_event_time) {
+        diagnostic::error("`tolerance` requires a duration window with `on`")
           .primary(ctx.get_location(tolerance).value())
           .emit(ctx);
       } else if (tolerance_value and *tolerance_value < duration::zero()) {

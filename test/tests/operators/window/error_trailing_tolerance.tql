@@ -1,8 +1,11 @@
----
-error: true
----
-
-from {ts: now()}
+// A trailing event-time window buffers events until the watermark passes their
+// timestamp by the tolerance, then evaluates them in timestamp order.
+from {ts: 2s.from_epoch(), x: 2},
+     {ts: 1s.from_epoch(), x: 1},
+     {ts: 4s.from_epoch(), x: 4},
+     {ts: 3s.from_epoch(), x: 3},
+     {ts: 1s.from_epoch(), x: 100}
 window size=2s, trailing=true, on=ts, tolerance=1s {
-  pass
+  summarize n=count(), total=sum(x)
+  trigger = $window.event.x
 }

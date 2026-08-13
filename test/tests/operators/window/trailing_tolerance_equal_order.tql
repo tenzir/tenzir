@@ -1,0 +1,10 @@
+// Equal timestamps retain arrival order while waiting in the reorder buffer,
+// and each row keeps the trigger result evaluated on its original input slice.
+from {ts: 2s.from_epoch(), x: "later", fire: false},
+     {ts: 1s.from_epoch(), x: "first", fire: false},
+     {ts: 1s.from_epoch(), x: "second", fire: true},
+     {ts: 4s.from_epoch(), x: "watermark", fire: false}
+window size=10s, trailing=true, on=ts, tolerance=3s, trigger=fire {
+  summarize xs=collect(x)
+  this = {trigger: $window.event.x, xs: xs}
+}

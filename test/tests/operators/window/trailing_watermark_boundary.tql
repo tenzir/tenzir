@@ -1,0 +1,10 @@
+// Events exactly at the watermark are processed immediately. The live source
+// therefore produces a window without waiting for a greater timestamp or
+// end-of-stream.
+every 1h {
+  from {ts: 1s.from_epoch(), x: 1}
+}
+window size=1s, trailing=true, on=ts {
+  pass
+}
+head 1

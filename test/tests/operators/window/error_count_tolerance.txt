@@ -1,4 +1,4 @@
-error: `tolerance` is only valid for fixed event-time windows
+error: `tolerance` requires a duration window with `on`
  --> tests/operators/window/error_count_tolerance.tql:6:26
   |
 6 | window size=2, tolerance=1s {

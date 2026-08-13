@@ -35,3 +35,17 @@ window size=10min, trailing=true, on=ts, trigger=status_id == 1 {
   this = {...$window.event, prior_failures: failures}
 }
 ```
+
+For slightly out-of-order event-time streams, set `tolerance` to the
+maximum expected lateness. The operator reorders events within this bound
+before evaluating each trailing window and reports later events through the
+existing late-event warning:
+
+```tql
+window size=10min, trailing=true, on=ts, tolerance=30s {
+  summarize failures=count_if(status_id, x => x == 2)
+}
+```
+
+The reorder buffer can retain up to `tolerance` worth of events in addition to
+the trailing `size`.

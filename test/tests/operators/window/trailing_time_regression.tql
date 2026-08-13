@@ -1,4 +1,4 @@
-// The first implementation requires ordered event time and drops regressions.
+// Without a tolerance, trailing event-time windows still drop regressions.
 from {ts: 2s.from_epoch(), x: 1},
      {ts: 1s.from_epoch(), x: 2},
      {ts: 3s.from_epoch(), x: 3}

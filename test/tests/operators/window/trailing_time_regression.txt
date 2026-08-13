@@ -8,7 +8,7 @@
   total: 4,
   trigger: 3,
 }
-warning: `window` dropped 1 event(s) with regressing timestamps
+warning: `window` dropped 1 late event(s) that arrived after their window had closed
  --> tests/operators/window/trailing_time_regression.tql:5:35
   |
 5 | window size=5s, trailing=true, on=ts {

@@ -1,6 +1,26 @@
-error: `tolerance` is only valid for fixed event-time windows
- --> tests/operators/window/error_trailing_tolerance.tql:6:49
+{
+  n: 1,
+  total: 1,
+  trigger: 1,
+}
+{
+  n: 2,
+  total: 3,
+  trigger: 2,
+}
+{
+  n: 3,
+  total: 6,
+  trigger: 3,
+}
+{
+  n: 3,
+  total: 9,
+  trigger: 4,
+}
+warning: `window` dropped 1 late event(s) that arrived after their window had closed
+ --> tests/operators/window/error_trailing_tolerance.tql:8:35
   |
-6 | window size=2s, trailing=true, on=ts, tolerance=1s {
-  |                                                 ^^
+8 | window size=2s, trailing=true, on=ts, tolerance=1s {
+  |                                   ~~
   |
