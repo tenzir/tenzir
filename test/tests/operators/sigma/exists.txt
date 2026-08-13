@@ -1,0 +1,10 @@
+{
+  event: {
+    id: "hit",
+  },
+}
+{
+  event: {
+    id: "null-user",
+  },
+}

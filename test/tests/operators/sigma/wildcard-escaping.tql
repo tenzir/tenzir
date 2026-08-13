@@ -1,0 +1,9 @@
+// `+` and `|` are literal characters in Sigma values, and the `*` wildcard
+// matches any character including newlines.
+from {id: "plus-literal", a: "a+b"},
+     {id: "plus-regex-would-match", a: "ab"},
+     {id: "pipe-literal", b: "x|y"},
+     {id: "pipe-alternation-would-match", b: "x"},
+     {id: "newline-wildcard", c: "foo\nbar"}
+sigma "tests/operators/sigma/inputs/wildcard-escaping.yaml"
+select event.id

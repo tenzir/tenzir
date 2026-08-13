@@ -13,6 +13,8 @@
 #include "tenzir/detail/narrow.hpp"
 
 #include <unicode/ucasemap.h>
+#include <unicode/uchar.h>
+#include <unicode/utf8.h>
 #include <unicode/utypes.h>
 
 #include <algorithm>
@@ -24,6 +26,17 @@
 
 namespace tenzir {
 namespace detail {
+
+auto utf8_code_point_isalnum(std::string_view input) noexcept -> bool {
+  auto const length = narrow<int32_t>(input.size());
+  auto offset = int32_t{0};
+  auto code_point = UChar32{};
+  U8_NEXT(input.data(), offset, length, code_point);
+  auto const category = u_charType(code_point);
+  return offset == length
+         and (u_isalnum(code_point) or category == U_LETTER_NUMBER
+              or category == U_OTHER_NUMBER);
+}
 
 auto utf8_fold_case(std::string_view input) -> std::string {
   if (input.empty()) {

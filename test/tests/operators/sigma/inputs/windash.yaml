@@ -1,0 +1,5 @@
+title: windash permutations
+detection:
+  selection:
+    cmdline|windash|contains: ' -p '
+  condition: selection

@@ -1,0 +1,5 @@
+title: windash with many dashes and mid-word dashes
+detection:
+  selection:
+    cmdline|windash|contains: '-a -b -c -d param-name é-p -ä'
+  condition: selection

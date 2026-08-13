@@ -1,0 +1,6 @@
+title: time part modifiers
+detection:
+  selection:
+    ts|hour: 13
+    ts|year: 2024
+  condition: selection

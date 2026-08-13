@@ -1,0 +1,8 @@
+// `all of selection` quantifies over the single matching identifier and uses
+// it as-is: the internal OR of the two maps is preserved, so either field
+// alone matches.
+from {id: "only-x", x: 1},
+     {id: "only-y", y: 2},
+     {id: "none", x: 9, y: 9}
+sigma "tests/operators/sigma/inputs/quantifier-or.yaml"
+select event.id

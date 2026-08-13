@@ -1,0 +1,9 @@
+title: list-valued condition
+detection:
+  sel_a:
+    a: 1
+  sel_b:
+    b: 2
+  condition:
+    - sel_a
+    - sel_b

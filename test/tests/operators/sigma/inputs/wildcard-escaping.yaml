@@ -1,0 +1,9 @@
+title: wildcard escaping and newline semantics
+detection:
+  plus:
+    a: a+b
+  pipe:
+    b: x|y
+  newline:
+    c|contains: foo*bar
+  condition: plus or pipe or newline

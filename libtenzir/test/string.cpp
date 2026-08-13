@@ -24,6 +24,15 @@ TEST("ASCII case-insensitive equality") {
   CHECK(not ascii_icase_equal("abc", "abd"));
 }
 
+TEST("UTF-8 code point alphanumeric classification") {
+  CHECK(utf8_code_point_isalnum("a"));
+  CHECK(utf8_code_point_isalnum("é"));
+  CHECK(utf8_code_point_isalnum("²"));
+  CHECK(utf8_code_point_isalnum("Ⅻ"));
+  CHECK(not utf8_code_point_isalnum("_"));
+  CHECK(not utf8_code_point_isalnum("ab"));
+}
+
 TEST("UTF-8 code point counting") {
   CHECK_EQUAL(utf8_codepoint_count(""), 0u);
   CHECK_EQUAL(utf8_codepoint_count("tenzir"), 6u);

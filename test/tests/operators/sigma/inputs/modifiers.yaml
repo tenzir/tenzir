@@ -13,4 +13,10 @@ detection:
     payload|re: ^cmd.*\.exe$
   prefix:
     msg|startswith: 123
-  condition: numeric or cidr or encoded or offset or regex or prefix
+  chain:
+    msg|contains|startswith: foo
+  all_neq:
+    tag|all|neq:
+      - a
+      - b
+  condition: numeric or cidr or encoded or offset or regex or prefix or chain or all_neq

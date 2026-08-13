@@ -1,0 +1,9 @@
+// Slicing preserves the larger backing list arrays. The keyword scan must
+// inspect only children referenced by the visible rows.
+from {id: "hidden", ctx: {inner: ["backdoor"]}},
+     {id: "direct", msg: "EVIL mega payload"},
+     {id: "nested", ctx: {inner: ["fine", "a Backdoor here"]}},
+     {id: "clean", msg: "benign", n: 42}
+slice begin=1
+sigma "tests/operators/sigma/inputs/keywords.yaml"
+select event.id

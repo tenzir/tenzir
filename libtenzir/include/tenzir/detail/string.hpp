@@ -52,6 +52,11 @@ constexpr inline std::string_view ascii_whitespace = " \t\r\n\f\v";
   return ascii_isalpha(c) or ascii_isdigit(c);
 }
 
+/// Returns whether `input` encodes exactly one alphanumeric Unicode code
+/// point.
+[[nodiscard]] auto utf8_code_point_isalnum(std::string_view input) noexcept
+  -> bool;
+
 /// Returns the full Unicode case folding of `input`.
 ///
 /// Unlike lowercasing, full case folding maps characters so that

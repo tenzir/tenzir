@@ -1,0 +1,8 @@
+title: quantifier semantics
+detection:
+  selection_a:
+    - x: 1
+    - y: 2
+  _internal:
+    z: 3
+  condition: all of selection_* and not 1 of them

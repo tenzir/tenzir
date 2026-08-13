@@ -1,0 +1,6 @@
+title: keyword selection
+detection:
+  keywords:
+    - 'evil*payload'
+    - backdoor
+  condition: keywords

@@ -1,0 +1,6 @@
+title: exists modifier
+detection:
+  selection:
+    user|exists: true
+    missing|exists: false
+  condition: selection

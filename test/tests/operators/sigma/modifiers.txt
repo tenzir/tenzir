@@ -1,6 +1,16 @@
 {
   event: {
+    id: "all-neq",
+  },
+}
+{
+  event: {
     id: "base64",
+  },
+}
+{
+  event: {
+    id: "chain",
   },
 }
 {

@@ -1,0 +1,5 @@
+from {id: "upper", name: "EVIL"},
+     {id: "lower", name: "evil"},
+     {id: "no", name: "evil2"}
+sigma "tests/operators/sigma/inputs/re-flags.yaml"
+select event.id

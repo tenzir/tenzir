@@ -1,0 +1,5 @@
+title: utf16le base64 encoding
+detection:
+  selection:
+    payload|utf16le|base64: cmd
+  condition: selection

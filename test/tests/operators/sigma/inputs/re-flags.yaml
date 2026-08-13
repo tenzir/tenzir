@@ -1,0 +1,5 @@
+title: regex sub-modifiers
+detection:
+  insensitive:
+    name|re|i: ^evil$
+  condition: insensitive

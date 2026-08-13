@@ -10,6 +10,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/bitmap.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/core.hpp>
@@ -25,6 +26,7 @@
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/io/read.hpp>
+#include <tenzir/multi_series.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -41,6 +43,7 @@
 #include <re2/re2.h>
 
 #include <array>
+#include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <functional>
@@ -73,7 +76,8 @@ auto parse_failure(fmt::format_string<Ts...> str, Ts&&... xs)
 
 ParseResult<std::string>
 transform_sigma_string(std::string_view str, std::string_view fmt,
-                       std::string_view key);
+                       std::string_view key, bool case_insensitive,
+                       bool windash);
 
 ParseResult<std::string>
 validate_regex(std::string regex, std::string_view key);
@@ -107,76 +111,104 @@ auto flatten(ast::expression x, ast::binary_op op,
   result.push_back(std::move(x));
 }
 
-template <ast::binary_op Op>
-auto force(ast::expression x) -> ast::expression {
-  auto const from
-    = Op == ast::binary_op::and_ ? ast::binary_op::or_ : ast::binary_op::and_;
-  auto xs = std::vector<ast::expression>{};
-  flatten(std::move(x), from, xs);
-  return join<Op>(std::move(xs));
-}
-
 } // namespace expression_algebra
 
+/// Appends a literal character to a regular expression. Escaping every ASCII
+/// non-alphanumeric character is safe in RE2 and avoids an incomplete
+/// metacharacter blocklist, while bytes of multi-byte UTF-8 sequences must
+/// pass through unmodified.
+auto append_regex_literal(std::string& regex, char c) -> void {
+  auto const byte = static_cast<unsigned char>(c);
+  if (byte < 0x80 and std::isalnum(byte) == 0) {
+    regex += '\\';
+  }
+  regex += c;
+}
+
 /// Transforms a string that may contain Sigma glob wildcards into a regular
-/// expression with respective metacharacters. Sigma patterns are always
-/// case-insensitive.
+/// expression with respective metacharacters. Sigma patterns are
+/// case-insensitive unless the `cased` modifier is present, and Sigma
+/// wildcards match any character including newlines, so the regex enables
+/// dot-matches-newline mode.
+/// Returns whether a `windash` dash or slash at position `i` is
+/// interchangeable: pySigma replaces `-` and `/` matching `\B[-/]\b`, i.e.
+/// at the start of a word, and leaves other occurrences literal.
+auto windash_interchangeable(std::string_view str, size_t i) -> bool {
+  TENZIR_ASSERT(i < str.size() and (str[i] == '-' or str[i] == '/'));
+  auto is_continuation = [](char c) {
+    return (static_cast<unsigned char>(c) & 0xC0u) == 0x80u;
+  };
+  auto is_word = [](std::string_view code_point) {
+    return code_point == "_" or detail::utf8_code_point_isalnum(code_point);
+  };
+  auto boundary_before = true;
+  if (i > 0) {
+    auto begin = i - 1;
+    while (begin > 0 and is_continuation(str[begin])) {
+      --begin;
+    }
+    boundary_before = not is_word(str.substr(begin, i - begin));
+  }
+  auto boundary_after = false;
+  if (i + 1 < str.size()) {
+    auto end = i + 2;
+    while (end < str.size() and is_continuation(str[end])) {
+      ++end;
+    }
+    boundary_after = is_word(str.substr(i + 1, end - i - 1));
+  }
+  return boundary_before and boundary_after;
+}
+
 ParseResult<std::string>
 transform_sigma_string(std::string_view str, std::string_view fmt,
-                       std::string_view key) {
+                       std::string_view key, bool case_insensitive,
+                       bool windash) {
   // The following invariants apply according to the Sigma spec:
-  // - All values are treated as case-insensitive strings
+  // - All values are treated as case-insensitive strings by default
   // - You can use wildcard characters '*' and '?' in strings
   // - Wildcards can be escaped with \, e.g. \*. If some wildcard after a
   //   backslash should be searched, the backslash has to be escaped: \\*.
-  // - Regular expressions are case-sensitive by default
-  // - You don't have to escape characters except the string quotation
-  //   marks '
   auto f = str.begin();
   auto l = str.end();
-  std::string rx;
-  // FIXME: this is a pretty hand-wavy approach to transforming a glob string
-  // to a valid regex. We need to revisit this once we have actual pattern
-  // support in the query language.
+  auto regex = std::string{};
   while (f != l) {
-    const auto c = *f++;
+    // The `windash` modifier makes a word-initial `-` or `/` match any
+    // dash-like character. A single character class avoids the combinatorial
+    // explosion of expanding value permutations.
+    if (windash and (*f == '-' or *f == '/')
+        and windash_interchangeable(str, f - str.begin())) {
+      regex += "[-/\u2013\u2014\u2015]";
+      ++f;
+      continue;
+    }
+    auto const c = *f++;
     switch (c) {
       case '*':
-        rx += ".*";
+        regex += ".*";
         break;
       case '?':
-        rx += '.';
-        break;
-      case '.':
-      case '[':
-      case ']':
-      case '(':
-      case ')':
-      case '{':
-      case '}':
-      case '^':
-      case '$':
-        rx += '\\';
-        rx += c;
+        regex += '.';
         break;
       case '\\':
         if (f != l and (*f == '?' or *f == '*' or *f == '\\')) {
           // Edge-case: The user intended to escape the glob character.
-          rx += '\\';
-          rx += *f++;
+          regex += '\\';
+          regex += *f++;
           break;
         }
-        rx += "\\\\";
+        regex += "\\\\";
         break;
       default:
-        rx += c;
+        append_regex_literal(regex, c);
         break;
     }
   }
-  auto result
-    = fmt.empty()
-        ? fmt::format("(?i:{})", rx)
-        : fmt::format("(?i:{})", fmt::format(TENZIR_FMT_RUNTIME(fmt), rx));
+  auto const* flags = case_insensitive ? "is" : "s";
+  auto result = fmt.empty()
+                  ? fmt::format("(?{}:{})", flags, regex)
+                  : fmt::format("(?{}:{})", flags,
+                                fmt::format(TENZIR_FMT_RUNTIME(fmt), regex));
   return validate_regex(std::move(result), key);
 }
 
@@ -193,17 +225,36 @@ validate_regex(std::string regex, std::string_view key) {
   return regex;
 }
 
+auto make_function_expr(std::string_view name,
+                        std::vector<ast::expression> args) -> ast::expression {
+  return ast::function_call{
+    ast::entity{{ast::identifier{std::string{name}, location::unknown}}},
+    std::move(args), location::unknown, false};
+}
+
+/// Builds the expression that resolves a Sigma field name. Names without
+/// dots become plain field accesses. Dotted names have deterministic
+/// exact-key precedence: the complete name is first tried as an exact
+/// top-level key, and only if it is absent, dots denote nested traversal.
+/// This runtime decision lives in the internal `_sigma_field` function.
 auto make_field_expr(std::string_view name) -> ast::expression {
-  auto parts = detail::split(name, ".");
-  TENZIR_ASSERT(not parts.empty());
-  auto result = ast::expression{ast::root_field{
-    ast::identifier{std::string{parts[0]}, location::unknown}, true}};
-  for (auto part : parts | std::views::drop(1)) {
-    result = ast::field_access{std::move(result), location::unknown, true,
-                               ast::identifier{std::string{part},
-                                               location::unknown}};
+  if (name.find('.') == std::string_view::npos) {
+    return ast::expression{ast::root_field{
+      ast::identifier{std::string{name}, location::unknown}, true}};
   }
-  return result;
+  auto args = std::vector<ast::expression>{};
+  args.emplace_back(ast::this_{location::unknown});
+  args.emplace_back(ast::constant{std::string{name}, location::unknown});
+  return make_function_expr("_sigma_field", std::move(args));
+}
+
+/// Builds the expression testing whether a Sigma field exists, following the
+/// same exact-key precedence as `make_field_expr`.
+auto make_field_exists_expr(std::string_view name) -> ast::expression {
+  auto args = std::vector<ast::expression>{};
+  args.emplace_back(ast::this_{location::unknown});
+  args.emplace_back(ast::constant{std::string{name}, location::unknown});
+  return make_function_expr("_sigma_has", std::move(args));
 }
 
 auto make_constant(data const& value) -> ast::expression {
@@ -238,6 +289,187 @@ auto make_binary_expr(ast::expression left, ast::binary_op op,
 /// Lowers one detection item (`field|modifiers: value(s)`) into a TQL
 /// expression. The IR has already validated the modifier chain and value
 /// types; this function only implements the executable semantics.
+auto encode_utf16(std::string_view str, bool big_endian, bool bom)
+  -> std::string {
+  // Interpret the value as UTF-8 and produce UTF-16 code units. Sigma values
+  // are overwhelmingly ASCII; non-BMP code points produce surrogate pairs.
+  auto units = std::vector<uint16_t>{};
+  if (bom) {
+    units.push_back(0xFEFF);
+  }
+  auto i = size_t{0};
+  while (i < str.size()) {
+    auto const c = static_cast<unsigned char>(str[i]);
+    auto code_point = uint32_t{0};
+    auto length = size_t{1};
+    if (c < 0x80) {
+      code_point = c;
+    } else if ((c >> 5) == 0x6 and i + 1 < str.size()) {
+      code_point = ((c & 0x1Fu) << 6u)
+                   | (static_cast<unsigned char>(str[i + 1]) & 0x3Fu);
+      length = 2;
+    } else if ((c >> 4) == 0xE and i + 2 < str.size()) {
+      code_point = ((c & 0x0Fu) << 12u)
+                   | ((static_cast<unsigned char>(str[i + 1]) & 0x3Fu) << 6u)
+                   | (static_cast<unsigned char>(str[i + 2]) & 0x3Fu);
+      length = 3;
+    } else if ((c >> 3) == 0x1E and i + 3 < str.size()) {
+      code_point = ((c & 0x07u) << 18u)
+                   | ((static_cast<unsigned char>(str[i + 1]) & 0x3Fu) << 12u)
+                   | ((static_cast<unsigned char>(str[i + 2]) & 0x3Fu) << 6u)
+                   | (static_cast<unsigned char>(str[i + 3]) & 0x3Fu);
+      length = 4;
+    } else {
+      code_point = 0xFFFD;
+    }
+    i += length;
+    if (code_point >= 0x10000) {
+      code_point -= 0x10000;
+      units.push_back(static_cast<uint16_t>(0xD800 + (code_point >> 10u)));
+      units.push_back(static_cast<uint16_t>(0xDC00 + (code_point & 0x3FFu)));
+    } else {
+      units.push_back(static_cast<uint16_t>(code_point));
+    }
+  }
+  auto result = std::string{};
+  result.reserve(units.size() * 2);
+  for (auto const unit : units) {
+    if (big_endian) {
+      result.push_back(static_cast<char>(unit >> 8u));
+      result.push_back(static_cast<char>(unit & 0xFFu));
+    } else {
+      result.push_back(static_cast<char>(unit & 0xFFu));
+      result.push_back(static_cast<char>(unit >> 8u));
+    }
+  }
+  return result;
+}
+
+/// The declarative matching semantics of one detection item, derived from
+/// its validated modifier chain.
+struct ItemSemantics {
+  ast::binary_op op = ast::binary_op::eq;
+  /// Set by `neq`.
+  bool negate = false;
+  /// Disabled by `cased`.
+  bool case_insensitive = true;
+  /// Set by `all`.
+  bool value_list_conjunction = false;
+  /// Set by `re`.
+  bool raw_regex = false;
+  /// The `re` sub-modifiers `i`, `m`, and `s`.
+  std::string regex_flags;
+  bool fieldref = false;
+  bool exists = false;
+  bool windash = false;
+  bool contains = false;
+  bool wildcard_prefix = false;
+  bool wildcard_suffix = false;
+  bool stringify_for_regex = false;
+  Option<std::string> time_part;
+  std::vector<std::function<ParseResult<std::vector<data>>(data const&)>>
+    transforms;
+};
+
+auto parse_semantics(ir::DetectionItem const& item)
+  -> ParseResult<ItemSemantics> {
+  auto result = ItemSemantics{};
+  for (auto const& modifier : item.modifiers) {
+    if (modifier == "all") {
+      result.value_list_conjunction = true;
+    } else if (modifier == "lt") {
+      result.op = ast::binary_op::lt;
+    } else if (modifier == "lte") {
+      result.op = ast::binary_op::leq;
+    } else if (modifier == "gt") {
+      result.op = ast::binary_op::gt;
+    } else if (modifier == "gte") {
+      result.op = ast::binary_op::geq;
+    } else if (modifier == "neq") {
+      result.negate = true;
+    } else if (modifier == "cased") {
+      result.case_insensitive = false;
+    } else if (modifier == "exists") {
+      result.exists = true;
+    } else if (modifier == "fieldref") {
+      result.fieldref = true;
+    } else if (modifier == "contains") {
+      result.contains = true;
+      result.wildcard_prefix = true;
+      result.wildcard_suffix = true;
+    } else if (modifier == "startswith") {
+      result.wildcard_suffix = true;
+      result.stringify_for_regex = true;
+    } else if (modifier == "endswith") {
+      result.wildcard_prefix = true;
+      result.stringify_for_regex = true;
+    } else if (modifier == "re") {
+      result.raw_regex = true;
+    } else if (modifier == "i") {
+      result.regex_flags += 'i';
+    } else if (modifier == "m") {
+      result.regex_flags += 'm';
+    } else if (modifier == "s") {
+      result.regex_flags += 's';
+    } else if (modifier == "cidr") {
+      result.op = ast::binary_op::in;
+    } else if (modifier == "windash") {
+      result.windash = true;
+    } else if (modifier == "minute" or modifier == "hour" or modifier == "day"
+               or modifier == "week" or modifier == "month"
+               or modifier == "year") {
+      result.time_part = modifier;
+    } else if (modifier == "base64") {
+      result.transforms.emplace_back(
+        [](data const& x) -> ParseResult<std::vector<data>> {
+          if (auto const* str = try_as<std::string>(&x)) {
+            return std::vector<data>{detail::base64::encode(*str)};
+          }
+          return parse_failure(
+            "Sigma modifier `base64` only works with strings");
+        });
+    } else if (modifier == "base64offset") {
+      result.transforms.emplace_back(
+        [](data const& x) -> ParseResult<std::vector<data>> {
+          auto const* str = try_as<std::string>(&x);
+          if (not str) {
+            return parse_failure(
+              "Sigma modifier `base64offset` only works with strings");
+          }
+          static constexpr auto start = std::array<size_t, 3>{{0, 2, 3}};
+          static constexpr auto end = std::array<size_t, 3>{{0, 3, 2}};
+          auto variants = std::vector<data>{};
+          for (auto i = size_t{0}; i < 3; ++i) {
+            auto padded = std::string(i, ' ') + *str;
+            auto b64 = detail::base64::encode(padded);
+            auto length = b64.size() - end[(str->size() + i) % 3];
+            variants.emplace_back(b64.substr(start[i], length - start[i]));
+          }
+          return variants;
+        });
+    } else if (modifier == "utf16le" or modifier == "wide"
+               or modifier == "utf16be" or modifier == "utf16") {
+      auto const big_endian = modifier == "utf16be";
+      auto const bom = modifier == "utf16";
+      result.transforms.emplace_back(
+        [big_endian, bom](data const& x) -> ParseResult<std::vector<data>> {
+          if (auto const* str = try_as<std::string>(&x)) {
+            return std::vector<data>{encode_utf16(*str, big_endian, bom)};
+          }
+          return parse_failure("Sigma UTF-16 modifiers only work with strings");
+        });
+    } else {
+      // The IR validates modifier chains before lowering.
+      return parse_failure("Sigma modifier `{}` is not yet implemented",
+                           modifier);
+    }
+  }
+  return result;
+}
+
+/// Lowers one detection item (`field|modifiers: value(s)`) into a TQL
+/// expression. The IR has already validated the modifier chain and value
+/// types; this function only implements the executable semantics.
 auto lower_item(ir::DetectionItem const& item) -> ParseResult<ast::expression> {
   auto const& field = item.field.raw;
   auto key = field;
@@ -245,157 +477,163 @@ auto lower_item(ir::DetectionItem const& item) -> ParseResult<ast::expression> {
     key += '|';
     key += modifier;
   }
-  auto op = ast::binary_op::eq;
-  auto all = false;
-  auto anchor_regex = true;
-  auto transform_regex = Option<std::string>{};
-  auto raw_regex = false;
-  auto stringify_for_regex = false;
-  auto contains = false;
-  auto transforms
-    = std::vector<std::function<ParseResult<data>(data const&)>>{};
-  for (auto const& modifier : item.modifiers) {
-    if (modifier == "all") {
-      all = true;
-    } else if (modifier == "lt") {
-      op = ast::binary_op::lt;
-    } else if (modifier == "lte") {
-      op = ast::binary_op::leq;
-    } else if (modifier == "gt") {
-      op = ast::binary_op::gt;
-    } else if (modifier == "gte") {
-      op = ast::binary_op::geq;
-    } else if (modifier == "contains") {
-      anchor_regex = false;
-      transform_regex = ".*{}.*";
-      contains = true;
-    } else if (modifier == "base64") {
-      auto encode = [](data const& x) -> ParseResult<data> {
-        if (auto const* str = try_as<std::string>(&x)) {
-          return detail::base64::encode(*str);
-        }
-        return parse_failure("Sigma modifier `base64` only works with strings");
-      };
-      transforms.emplace_back(encode);
-    } else if (modifier == "base64offset") {
-      auto encode = [](data const& x) -> ParseResult<data> {
-        auto const* str = try_as<std::string>(&x);
-        if (not str) {
-          return parse_failure(
-            "Sigma modifier `base64offset` only works with strings");
-        }
-        static constexpr auto start = std::array<size_t, 3>{0, 2, 3};
-        static constexpr auto end = std::array<size_t, 3>{0, 3, 2};
-        auto xs = std::vector<std::string>(3);
-        for (auto i = size_t{0}; i < 3; ++i) {
-          auto padded = std::string(i, ' ') + *str;
-          auto b64 = detail::base64::encode(padded);
-          auto len = b64.size() - end[(str->size() + i) % 3];
-          xs[i] = b64.substr(start[i], len - start[i]);
-        }
-        return list{xs[0], xs[1], xs[2]};
-      };
-      transforms.emplace_back(encode);
-    } else if (modifier == "startswith") {
-      anchor_regex = false;
-      transform_regex = "^{}.*";
-      stringify_for_regex = true;
-    } else if (modifier == "endswith") {
-      anchor_regex = false;
-      transform_regex = ".*{}$";
-      stringify_for_regex = true;
-    } else if (modifier == "re") {
-      anchor_regex = false;
-      raw_regex = true;
-    } else if (modifier == "cidr") {
-      op = ast::binary_op::in;
-    } else {
-      // The IR validates modifier chains before lowering.
-      return parse_failure("Sigma modifier `{}` is not yet implemented",
-                           modifier);
+  TRY(auto semantics, parse_semantics(item));
+  // Keyword items match every string-valued leaf of the event recursively.
+  if (item.kind == ir::DetectionItem::ItemKind::keyword) {
+    auto disjuncts = std::vector<ast::expression>{};
+    for (auto const& value : item.values) {
+      auto const str
+        = is<std::string>(value) ? as<std::string>(value) : to_string(value);
+      TRY(auto regex,
+          transform_sigma_string(str, ".*{}.*", "<keywords>", true, false));
+      auto args = std::vector<ast::expression>{};
+      args.emplace_back(ast::this_{location::unknown});
+      args.emplace_back(ast::constant{std::move(regex), location::unknown});
+      disjuncts.push_back(
+        make_function_expr("_sigma_keywords", std::move(args)));
     }
+    return expression_algebra::join<ast::binary_op::or_>(std::move(disjuncts));
   }
-  auto modify = [&](data const& x) -> ParseResult<data> {
-    auto result = x;
-    for (auto const& transform : transforms) {
-      TRY(auto y, transform(result));
-      result = std::move(y);
+  // `exists` is the sole modifier and tests field presence.
+  if (semantics.exists) {
+    TENZIR_ASSERT(item.values.size() == 1);
+    auto expr = make_field_exists_expr(field);
+    if (as<bool>(item.values[0])) {
+      return expr;
+    }
+    return ast::expression{
+      ast::unary_expr{{ast::unary_op::not_, {}}, std::move(expr)}};
+  }
+  // Applies the value transforms (UTF-16, Base64) with fan-out.
+  auto modify = [&](data const& x) -> ParseResult<std::vector<data>> {
+    auto variants = std::vector<data>{x};
+    for (auto const& transform : semantics.transforms) {
+      auto next = std::vector<data>{};
+      for (auto const& variant : variants) {
+        TRY(auto expanded, transform(variant));
+        std::ranges::move(expanded, std::back_inserter(next));
+      }
+      variants = std::move(next);
+    }
+    return variants;
+  };
+  // Builds the field expression, wrapping it in a time-part extraction when
+  // a time modifier is present.
+  auto make_lhs = [&]() -> ast::expression {
+    auto expr = make_field_expr(field);
+    if (not semantics.time_part) {
+      return expr;
+    }
+    if (*semantics.time_part == "week") {
+      // There is no dedicated week extractor; use ISO week via formatting.
+      auto format_args = std::vector<ast::expression>{};
+      format_args.emplace_back(std::move(expr));
+      format_args.emplace_back(
+        ast::constant{std::string{"%V"}, location::unknown});
+      auto formatted
+        = make_function_expr("format_time", std::move(format_args));
+      auto int_args = std::vector<ast::expression>{};
+      int_args.emplace_back(std::move(formatted));
+      return make_function_expr("int", std::move(int_args));
+    }
+    auto args = std::vector<ast::expression>{};
+    args.emplace_back(std::move(expr));
+    return make_function_expr(*semantics.time_part, std::move(args));
+  };
+  // Builds the predicate for one concrete (transformed) value.
+  auto make_predicate_expr
+    = [&](data const& value) -> ParseResult<ast::expression> {
+    if (semantics.fieldref) {
+      TENZIR_ASSERT(is<std::string>(value));
+      auto const& referenced_field = as<std::string>(value);
+      auto predicates = std::vector<ast::expression>{};
+      predicates.push_back(make_binary_expr(make_lhs(), ast::binary_op::neq,
+                                            make_constant(caf::none)));
+      predicates.push_back(make_binary_expr(make_field_expr(referenced_field),
+                                            ast::binary_op::neq,
+                                            make_constant(caf::none)));
+      predicates.push_back(make_binary_expr(
+        make_lhs(), semantics.negate ? ast::binary_op::neq : ast::binary_op::eq,
+        make_field_expr(referenced_field)));
+      return expression_algebra::join<ast::binary_op::and_>(
+        std::move(predicates));
+    }
+    if (semantics.raw_regex) {
+      // Non-string scalars are stringified: YAML scalar type inference
+      // cannot distinguish `'46'` from `46`.
+      auto regex
+        = is<std::string>(value) ? as<std::string>(value) : to_string(value);
+      if (not semantics.regex_flags.empty()) {
+        regex
+          = fmt::format("(?{}:{})", semantics.regex_flags, std::move(regex));
+      }
+      TRY(auto valid, validate_regex(std::move(regex), key));
+      return make_regex_expr(make_lhs(), std::move(valid));
+    }
+    auto make_string_predicate
+      = [&](std::string str) -> ParseResult<ast::expression> {
+      auto const fmt = semantics.wildcard_prefix and semantics.wildcard_suffix
+                         ? ".*{}.*"
+                       : semantics.wildcard_prefix ? ".*{}$"
+                       : semantics.wildcard_suffix ? "^{}.*"
+                                                   : "^{}$";
+      TRY(auto pattern,
+          transform_sigma_string(str, fmt, key, semantics.case_insensitive,
+                                 semantics.windash));
+      return make_regex_expr(make_lhs(), std::move(pattern));
+    };
+    if (auto const* str = try_as<std::string>(&value)) {
+      if (semantics.op == ast::binary_op::eq) {
+        return make_string_predicate(*str);
+      }
+      // Ordered comparisons on strings compare values directly.
+      return make_binary_expr(make_lhs(), semantics.op, make_constant(value));
+    }
+    if (semantics.stringify_for_regex) {
+      return make_string_predicate(to_string(value));
+    }
+    if (semantics.contains and is<subnet>(value)) {
+      return make_binary_expr(make_lhs(), ast::binary_op::in,
+                              make_constant(value));
+    }
+    return make_binary_expr(make_lhs(), semantics.op, make_constant(value));
+  };
+  // Lowers one source value: transform fan-out produces a disjunction.
+  auto lower_value = [&](data const& value) -> ParseResult<ast::expression> {
+    TRY(auto variants, modify(value));
+    auto disjuncts = std::vector<ast::expression>{};
+    for (auto const& variant : variants) {
+      TRY(auto expr, make_predicate_expr(variant));
+      disjuncts.push_back(std::move(expr));
+    }
+    return expression_algebra::join<ast::binary_op::or_>(std::move(disjuncts));
+  };
+  auto lower_source_value
+    = [&](data const& value) -> ParseResult<ast::expression> {
+    TRY(auto result, lower_value(value));
+    if (semantics.negate and not semantics.fieldref) {
+      result = ast::expression{
+        ast::unary_expr{{ast::unary_op::not_, {}}, std::move(result)}};
     }
     return result;
   };
-  auto make_predicate_expr
-    = [&](data const& value) -> ParseResult<ast::expression> {
-    auto make_string_predicate
-      = [&](std::string str) -> ParseResult<ast::expression> {
-      auto format = transform_regex.unwrap_or(anchor_regex ? "^{}$" : "{}");
-      if (raw_regex) {
-        auto regex = fmt::format(TENZIR_FMT_RUNTIME(format), std::move(str));
-        TRY(auto valid, validate_regex(std::move(regex), key));
-        return make_regex_expr(make_field_expr(field), std::move(valid));
-      }
-      TRY(auto pattern, transform_sigma_string(str, format, key));
-      return make_regex_expr(make_field_expr(field), std::move(pattern));
-    };
-    if (auto const* str = try_as<std::string>(&value)) {
-      return make_string_predicate(*str);
-    }
-    if (auto const* values = try_as<list>(&value)) {
-      // Only the `base64offset` transform produces lists here.
-      TENZIR_ASSERT(values->size() == 3);
-      auto disjuncts = std::vector<ast::expression>{};
-      for (auto const& x : *values) {
-        if (auto const* str = try_as<std::string>(&x);
-            str and transform_regex) {
-          if (raw_regex) {
-            auto regex
-              = fmt::format(TENZIR_FMT_RUNTIME(*transform_regex), *str);
-            TRY(auto valid, validate_regex(std::move(regex), key));
-            disjuncts.emplace_back(
-              make_regex_expr(make_field_expr(field), std::move(valid)));
-          } else {
-            TRY(auto pattern,
-                transform_sigma_string(*str, *transform_regex, key));
-            disjuncts.emplace_back(
-              make_regex_expr(make_field_expr(field), std::move(pattern)));
-          }
-        } else if (raw_regex) {
-          auto regex = to_string(x);
-          TRY(auto valid, validate_regex(std::move(regex), key));
-          disjuncts.emplace_back(
-            make_regex_expr(make_field_expr(field), std::move(valid)));
-        } else {
-          auto binary_op = contains and is<subnet>(x) ? ast::binary_op::in : op;
-          disjuncts.emplace_back(make_binary_expr(make_field_expr(field),
-                                                  binary_op, make_constant(x)));
-        }
-      }
-      return expression_algebra::join<ast::binary_op::or_>(
-        std::move(disjuncts));
-    }
-    if (stringify_for_regex or raw_regex) {
-      return make_string_predicate(to_string(value));
-    }
-    if (contains and is<subnet>(value)) {
-      return make_binary_expr(make_field_expr(field), ast::binary_op::in,
-                              make_constant(value));
-    }
-    return make_binary_expr(make_field_expr(field), op, make_constant(value));
-  };
-  if (item.value_is_list) {
-    auto connective = std::vector<ast::expression>{};
-    for (auto const& value : item.values) {
-      TRY(auto x, modify(value));
-      TRY(auto expr, make_predicate_expr(x));
-      connective.emplace_back(std::move(expr));
-    }
-    return all ? expression_algebra::join<ast::binary_op::and_>(
-                   std::move(connective))
-               : expression_algebra::join<ast::binary_op::or_>(
-                   std::move(connective));
+  if (not item.value_is_list) {
+    TENZIR_ASSERT(item.values.size() == 1);
+    return lower_source_value(item.values[0]);
   }
-  TENZIR_ASSERT(item.values.size() == 1);
-  TRY(auto x, modify(item.values[0]));
-  return make_predicate_expr(x);
+  auto connective = std::vector<ast::expression>{};
+  for (auto const& value : item.values) {
+    TRY(auto expr, lower_source_value(value));
+    connective.emplace_back(std::move(expr));
+  }
+  // A list with `neq` requires every per-value inequality to hold. In
+  // particular, `all|neq` must not negate a conjunction of equalities, which
+  // would turn it into an almost-always-true disjunction of inequalities.
+  if (semantics.negate or semantics.value_list_conjunction) {
+    return expression_algebra::join<ast::binary_op::and_>(
+      std::move(connective));
+  }
+  return expression_algebra::join<ast::binary_op::or_>(std::move(connective));
 }
 
 /// Lowers a named detection: items within a group are AND-linked, groups are
@@ -421,7 +659,7 @@ auto search(ExpressionMap const& expressions, std::string_view pattern)
   -> std::vector<ast::expression> {
   auto result = std::vector<ast::expression>{};
   for (auto const& [name, expression] : expressions) {
-    if (ir::wildcard_match(pattern, name)) {
+    if (ir::pattern_matches(pattern, name)) {
       result.push_back(expression);
     }
   }
@@ -443,16 +681,11 @@ auto lower_condition(ir::Condition const& condition,
         search(expressions, x.name));
     },
     [&](ir::Quantified const& x) -> ParseResult<ast::expression> {
-      auto pattern = x.all_identifiers ? std::string_view{"*"} : x.pattern;
-      if (not x.all_identifiers) {
-        if (auto i = expressions.find(x.pattern); i != expressions.end()) {
-          // Quantification over one identifier re-links its internal
-          // structure. (Known v2.1 deviation; corrected in a follow-up.)
-          return x.quantifier == ir::Quantifier::all
-                   ? expression_algebra::force<ast::binary_op::and_>(i->second)
-                   : expression_algebra::force<ast::binary_op::or_>(i->second);
-        }
-      }
+      // A quantifier combines the matching search identifiers as-is; it
+      // never rewrites the internal OR/AND linking of a single selection.
+      // `1 of x` over exactly one match is therefore just `x`.
+      auto const pattern
+        = x.all_identifiers ? std::string_view{"*"} : x.pattern;
       auto matches = search(expressions, pattern);
       return x.quantifier == ir::Quantifier::all
                ? expression_algebra::join<ast::binary_op::and_>(
@@ -491,7 +724,13 @@ auto compile_rule(data const& yaml) -> ParseResult<ast::expression> {
     TRY(auto expression, lower_detection(detection));
     expressions[name] = std::move(expression);
   }
-  return lower_condition(rule->condition, expressions);
+  // List-valued conditions are OR-linked queries.
+  auto disjuncts = std::vector<ast::expression>{};
+  for (auto const& condition : rule->conditions) {
+    TRY(auto expr, lower_condition(condition, expressions));
+    disjuncts.push_back(std::move(expr));
+  }
+  return expression_algebra::join<ast::binary_op::or_>(std::move(disjuncts));
 }
 
 struct RuleEntry {
@@ -623,6 +862,254 @@ auto make_sigma_slice(const table_slice& input, const data& yaml,
                                {std::move(event_array), std::move(rule_array)});
   return table_slice{batch, result_schema};
 }
+
+// -- internal runtime functions ------------------------------------------
+
+/// Recursively matches a regular expression against every string-valued leaf
+/// of a series, including strings inside records and lists. Sets `matches[i]`
+/// when any string leaf of row `i` matches. Non-string values are never
+/// coerced.
+auto keyword_match(series const& input, re2::RE2 const& regex,
+                   std::vector<bool>& matches) -> void {
+  TENZIR_ASSERT(std::cmp_equal(input.length(), matches.size()));
+  if (auto const strings = input.as<string_type>()) {
+    auto const& array = *strings->array;
+    for (auto i = int64_t{0}; i < array.length(); ++i) {
+      if (matches[i] or array.IsNull(i)) {
+        continue;
+      }
+      auto const value = array.GetView(i);
+      matches[i] = re2::RE2::FullMatch({value.data(), value.size()}, regex);
+    }
+    return;
+  }
+  if (auto const records = input.as<record_type>()) {
+    // Flattening propagates parent-level nulls into each child so that
+    // values inside null records can never match.
+    auto index = int{0};
+    for (auto const& field : records->type.fields()) {
+      auto child = check(
+        records->array->GetFlattenedField(index, tenzir::arrow_memory_pool()));
+      keyword_match({field.type, std::move(child)}, regex, matches);
+      ++index;
+    }
+    return;
+  }
+  if (auto const lists = input.as<list_type>()) {
+    // `values()` spans the complete child array even for sliced lists. Scan
+    // only the visible child range and translate the row offsets into it.
+    auto const base = lists->array->value_offset(0);
+    auto values = lists->list_values();
+    auto nested = std::vector<bool>{};
+    nested.resize(values.length());
+    keyword_match(values, regex, nested);
+    for (auto i = int64_t{0}; i < lists->length(); ++i) {
+      if (matches[i] or lists->array->IsNull(i)) {
+        continue;
+      }
+      auto const begin = nested.begin() + lists->array->value_offset(i) - base;
+      auto const end
+        = nested.begin() + lists->array->value_offset(i + 1) - base;
+      matches[i] = std::ranges::any_of(begin, end, std::identity{});
+    }
+  }
+}
+
+/// Returns the series of the field with the given name, with parent-level
+/// nulls propagated into the child, or `None` if the field does not exist.
+auto get_record_field(series const& input, std::string_view name)
+  -> Option<series> {
+  auto const records = input.as<record_type>();
+  if (not records) {
+    return None{};
+  }
+  auto index = int{0};
+  for (auto const& field : records->type.fields()) {
+    if (field.name == name) {
+      auto child = check(
+        records->array->GetFlattenedField(index, tenzir::arrow_memory_pool()));
+      return series{field.type, std::move(child)};
+    }
+    ++index;
+  }
+  return None{};
+}
+
+/// Resolves a Sigma field name against a record series with deterministic
+/// exact-key precedence: the complete name is first tried as an exact
+/// top-level key; only if it is absent, dots denote nested traversal.
+auto resolve_sigma_field(series const& input, std::string_view name) -> series {
+  if (auto exact = get_record_field(input, name)) {
+    return std::move(*exact);
+  }
+  auto current = input;
+  for (auto const& part : detail::split(name, ".")) {
+    auto next = get_record_field(current, part);
+    if (not next) {
+      return series::null(null_type{}, input.length());
+    }
+    current = std::move(*next);
+  }
+  return current;
+}
+
+/// Tests whether a Sigma field exists, following the same precedence as
+/// `resolve_sigma_field`. Presence is defined by the field being part of the
+/// schema with a non-null enclosing record, independent of its value.
+auto resolve_sigma_has(series const& input, std::string_view name) -> series {
+  auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+  check(builder.Reserve(input.length()));
+  auto emit_present = [&](series const& parent) {
+    // Present wherever the enclosing record is non-null.
+    auto const records = parent.as<record_type>();
+    TENZIR_ASSERT(records);
+    for (auto i = int64_t{0}; i < parent.length(); ++i) {
+      check(builder.Append(not records->array->IsNull(i)));
+    }
+  };
+  auto emit_absent = [&] {
+    for (auto i = int64_t{0}; i < input.length(); ++i) {
+      check(builder.Append(false));
+    }
+  };
+  auto has_field = [](series const& s, std::string_view field) {
+    auto const records = s.as<record_type>();
+    if (not records) {
+      return false;
+    }
+    return std::ranges::any_of(records->type.fields(), [&](auto const& entry) {
+      return entry.name == field;
+    });
+  };
+  if (has_field(input, name)) {
+    emit_present(input);
+    return series{bool_type{}, finish(builder)};
+  }
+  auto const parts = detail::split(name, ".");
+  auto current = input;
+  for (auto i = size_t{0}; i + 1 < parts.size(); ++i) {
+    auto next = get_record_field(current, parts[i]);
+    if (not next) {
+      emit_absent();
+      return series{bool_type{}, finish(builder)};
+    }
+    current = std::move(*next);
+  }
+  if (has_field(current, parts.back())) {
+    emit_present(current);
+    return series{bool_type{}, finish(builder)};
+  }
+  emit_absent();
+  return series{bool_type{}, finish(builder)};
+}
+
+/// Internal function implementing Sigma keyword selections: matches a regex
+/// recursively against every string-valued leaf of the input.
+class SigmaKeywordsFunction final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "_sigma_keywords";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(function_invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    auto pattern = located<std::string>{};
+    TRY(argument_parser2::function(name())
+          .positional("input", expr, "any")
+          .positional("regex", pattern)
+          .parse(inv, ctx));
+    auto regex = std::make_shared<re2::RE2>(pattern.inner,
+                                            re2::RE2::CannedOptions::Quiet);
+    if (not regex->ok()) {
+      diagnostic::error("failed to parse regex: {}", regex->error())
+        .primary(pattern)
+        .emit(ctx);
+      return failure::promise();
+    }
+    return function_use::make(
+      [expr = std::move(expr),
+       regex = std::move(regex)](evaluator eval, session ctx) -> multi_series {
+        TENZIR_UNUSED(ctx);
+        return map_series(eval(expr), [&](series input) -> multi_series {
+          auto matches = std::vector<bool>(input.length(), false);
+          keyword_match(input, *regex, matches);
+          auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+          check(builder.Reserve(input.length()));
+          for (auto const value : matches) {
+            check(builder.Append(value));
+          }
+          return series{bool_type{}, finish(builder)};
+        });
+      });
+  }
+};
+
+/// Internal function implementing Sigma field resolution with exact-key
+/// precedence over nested traversal.
+class SigmaFieldFunction final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "_sigma_field";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(function_invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    auto field = located<std::string>{};
+    TRY(argument_parser2::function(name())
+          .positional("input", expr, "record")
+          .positional("field", field)
+          .parse(inv, ctx));
+    return function_use::make(
+      [expr = std::move(expr),
+       field = std::move(field)](evaluator eval, session ctx) -> multi_series {
+        TENZIR_UNUSED(ctx);
+        return map_series(eval(expr), [&](series input) -> multi_series {
+          return resolve_sigma_field(input, field.inner);
+        });
+      });
+  }
+};
+
+/// Internal function implementing the Sigma `exists` modifier with the same
+/// field-resolution precedence as `_sigma_field`.
+class SigmaHasFunction final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "_sigma_has";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(function_invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    auto field = located<std::string>{};
+    TRY(argument_parser2::function(name())
+          .positional("input", expr, "record")
+          .positional("field", field)
+          .parse(inv, ctx));
+    return function_use::make(
+      [expr = std::move(expr),
+       field = std::move(field)](evaluator eval, session ctx) -> multi_series {
+        TENZIR_UNUSED(ctx);
+        return map_series(eval(expr), [&](series input) -> multi_series {
+          return resolve_sigma_has(input, field.inner);
+        });
+      });
+  }
+};
 
 class sigma_operator final : public crtp_operator<sigma_operator> {
 public:
@@ -775,3 +1262,6 @@ public:
 } // namespace tenzir::plugins::sigma
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::sigma::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::sigma::SigmaKeywordsFunction)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::sigma::SigmaFieldFunction)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::sigma::SigmaHasFunction)

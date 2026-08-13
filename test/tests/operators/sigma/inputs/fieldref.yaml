@@ -1,0 +1,7 @@
+title: fieldref modifiers
+detection:
+  same:
+    a|fieldref: b
+  different:
+    c|fieldref|neq: d
+  condition: same or different

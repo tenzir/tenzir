@@ -31,34 +31,195 @@ auto parse_failure(fmt::format_string<Ts...> str, Ts&&... xs)
   return Err{diagnostic::error(str, std::forward<Ts>(xs)...).done()};
 }
 
-/// Modifiers whose semantics are implemented by the lowering phase.
-constexpr auto implemented_modifiers = std::array<std::string_view, 12>{
-  "all",    "lt",           "lte",        "gt",       "gte", "contains",
-  "base64", "base64offset", "startswith", "endswith", "re",  "cidr",
+/// All standard v2.1 modifiers, including `re` sub-modifiers.
+constexpr auto known_modifiers = std::array<std::string_view, 31>{
+  "all",    "lt",       "lte",        "gt",           "gte",
+  "neq",    "contains", "startswith", "endswith",     "exists",
+  "cased",  "windash",  "base64",     "base64offset", "utf16le",
+  "wide",   "utf16be",  "utf16",      "re",           "i",
+  "m",      "s",        "expand",     "fieldref",     "cidr",
+  "minute", "hour",     "day",        "week",         "month",
+  "year",
 };
 
-/// Standard v2.1 modifiers that are recognized but not yet implemented.
-/// These fail explicitly instead of being approximated or silently ignored.
-constexpr auto unimplemented_modifiers = std::array<std::string_view, 5>{
-  "utf16le", "wide", "utf16be", "utf16", "expand",
+constexpr auto comparison_modifiers
+  = std::array<std::string_view, 4>{"lt", "lte", "gt", "gte"};
+
+constexpr auto time_part_modifiers = std::array<std::string_view, 6>{
+  "minute", "hour", "day", "week", "month", "year",
 };
 
+constexpr auto string_transform_modifiers = std::array<std::string_view, 5>{
+  "contains", "startswith", "endswith", "windash", "re",
+};
+
+auto is_utf16_modifier(std::string_view modifier) -> bool {
+  return modifier == "utf16le" or modifier == "wide" or modifier == "utf16be"
+         or modifier == "utf16";
+}
+
+/// Validates the complete modifier chain of one detection item: known names,
+/// ordering constraints, type constraints, and conflicting combinations.
 auto validate_modifiers(std::string_view field,
-                        std::vector<std::string> const& modifiers)
+                        std::vector<std::string> const& modifiers,
+                        std::vector<data> const& values, bool value_is_list)
   -> Result<void, diagnostic> {
-  for (auto const& modifier : modifiers) {
-    if (std::ranges::contains(implemented_modifiers, modifier)) {
-      continue;
+  auto count = [&](auto&& predicate) {
+    return std::ranges::count_if(modifiers, predicate);
+  };
+  auto has = [&](std::string_view name) {
+    return std::ranges::contains(modifiers, name);
+  };
+  for (auto i = size_t{0}; i < modifiers.size(); ++i) {
+    auto const& modifier = modifiers[i];
+    if (not std::ranges::contains(known_modifiers, modifier)) {
+      return Err{diagnostic::error("unknown Sigma modifier `{}` for field `{}`",
+                                   modifier, field)
+                   .hint("unsupported modifiers reject the rule; nothing is "
+                         "silently ignored")
+                   .done()};
     }
-    if (std::ranges::contains(unimplemented_modifiers, modifier)) {
-      return parse_failure("Sigma modifier `{}` is not yet implemented",
-                           modifier);
+    // `i`, `m`, and `s` are sub-modifiers of `re` and must directly follow
+    // `re` or another `re` sub-modifier.
+    if (modifier == "i" or modifier == "m" or modifier == "s") {
+      auto const valid
+        = i > 0
+          and (modifiers[i - 1] == "re" or modifiers[i - 1] == "i"
+               or modifiers[i - 1] == "m" or modifiers[i - 1] == "s");
+      if (not valid) {
+        return parse_failure("Sigma modifier `{}` is a sub-modifier of `re` "
+                             "and must directly follow it (field `{}`)",
+                             modifier, field);
+      }
     }
-    return Err{diagnostic::error("unknown Sigma modifier `{}` for field `{}`",
-                                 modifier, field)
-                 .hint("unsupported modifiers reject the rule; nothing is "
-                       "silently ignored")
-                 .done()};
+    // UTF-16 modifiers transform values into raw bytes; an immediately
+    // following Base64 modifier is required to produce a matchable string.
+    // Wildcard modifiers must follow the complete encoding chain because
+    // lowering applies them to the encoded result.
+    if (is_utf16_modifier(modifier)) {
+      auto const followed = i + 1 < modifiers.size()
+                            and (modifiers[i + 1] == "base64"
+                                 or modifiers[i + 1] == "base64offset");
+      if (not followed) {
+        return parse_failure("Sigma modifier `{}` must be immediately followed "
+                             "by `base64` or `base64offset` (field `{}`)",
+                             modifier, field);
+      }
+    }
+    if (std::ranges::contains(string_transform_modifiers, modifier)) {
+      auto const encoding_follows = std::ranges::any_of(
+        modifiers.begin() + detail::narrow<ptrdiff_t>(i + 1), modifiers.end(),
+        [](std::string const& next) {
+          return next == "base64" or next == "base64offset"
+                 or is_utf16_modifier(next);
+        });
+      if (encoding_follows) {
+        return parse_failure("Sigma modifier `{}` must follow encoding "
+                             "modifiers (field `{}`)",
+                             modifier, field);
+      }
+    }
+  }
+  // `exists` must be the only modifier and takes a single boolean.
+  if (has("exists")) {
+    if (modifiers.size() != 1) {
+      return parse_failure("Sigma modifier `exists` cannot be combined with "
+                           "other modifiers (field `{}`)",
+                           field);
+    }
+    if (value_is_list or values.size() != 1 or not is<bool>(values[0])) {
+      return parse_failure("Sigma modifier `exists` requires a single "
+                           "boolean value (field `{}`)",
+                           field);
+    }
+  }
+  // At most one numeric comparison, and `neq` conflicts with them.
+  auto const comparisons = count([](std::string const& modifier) {
+    return std::ranges::contains(comparison_modifiers, modifier);
+  });
+  if (comparisons > 1) {
+    return parse_failure("Sigma modifiers `lt`, `lte`, `gt`, and `gte` are "
+                         "mutually exclusive (field `{}`)",
+                         field);
+  }
+  if (has("neq") and comparisons > 0) {
+    return parse_failure("Sigma modifier `neq` cannot be combined with "
+                         "`lt`, `lte`, `gt`, or `gte` (field `{}`)",
+                         field);
+  }
+  // At most one time-part extraction, and only comparison modifiers may
+  // accompany it.
+  auto const time_parts = count([](std::string const& modifier) {
+    return std::ranges::contains(time_part_modifiers, modifier);
+  });
+  if (time_parts > 1) {
+    return parse_failure("Sigma time modifiers are mutually exclusive "
+                         "(field `{}`)",
+                         field);
+  }
+  if (time_parts > 0) {
+    for (auto const& modifier : modifiers) {
+      if (std::ranges::contains(string_transform_modifiers, modifier)
+          or modifier == "base64" or modifier == "base64offset"
+          or is_utf16_modifier(modifier) or modifier == "cased"
+          or modifier == "fieldref" or modifier == "cidr") {
+        return parse_failure("Sigma time modifiers cannot be combined with "
+                             "`{}` (field `{}`)",
+                             modifier, field);
+      }
+    }
+  }
+  // `fieldref` takes string values naming fields; only `neq` may be added.
+  if (has("fieldref")) {
+    for (auto const& modifier : modifiers) {
+      if (modifier != "fieldref" and modifier != "neq") {
+        return parse_failure("Sigma modifier `fieldref` can only be combined "
+                             "with `neq` (field `{}`)",
+                             field);
+      }
+    }
+    for (auto const& value : values) {
+      if (not is<std::string>(value)) {
+        return parse_failure("Sigma modifier `fieldref` requires string "
+                             "values (field `{}`)",
+                             field);
+      }
+    }
+  }
+  // `all` requires a value list per the specification.
+  if (has("all") and not value_is_list) {
+    return parse_failure("Sigma modifier `all` requires a list of values "
+                         "(field `{}`)",
+                         field);
+  }
+  // `re` cannot be combined with wildcard or encoding transformations.
+  // Non-string scalars are stringified at lowering time: YAML scalar type
+  // inference cannot distinguish `'46'` from `46`, so rejecting numbers
+  // would make numeric-looking regular expressions unrepresentable.
+  if (has("re")) {
+    for (auto const& modifier : modifiers) {
+      if (modifier == "base64" or modifier == "base64offset"
+          or is_utf16_modifier(modifier) or modifier == "windash"
+          or modifier == "contains" or modifier == "startswith"
+          or modifier == "endswith" or modifier == "cased"
+          or modifier == "fieldref" or modifier == "cidr") {
+        return parse_failure("Sigma modifier `re` cannot be combined with "
+                             "`{}` (field `{}`)",
+                             modifier, field);
+      }
+    }
+  }
+  // Unresolved `expand` placeholders fail explicitly: this implementation
+  // provides no placeholder mappings, and inventing them would silently
+  // change match semantics.
+  if (has("expand")) {
+    return Err{
+      diagnostic::error("Sigma modifier `expand` requires placeholder "
+                        "mappings, which are not supported (field `{}`)",
+                        field)
+        .hint("replace the placeholder with concrete values or remove the "
+              "rule from the set")
+        .done()};
   }
   return {};
 }
@@ -71,7 +232,6 @@ auto parse_detection_item(std::string_view key, data const& value)
   for (auto i = keys.begin() + 1; i != keys.end(); ++i) {
     item.modifiers.emplace_back(*i);
   }
-  TRY(validate_modifiers(item.field.raw, item.modifiers));
   if (is<record>(value)) {
     return parse_failure("nested records are not allowed in Sigma selections");
   }
@@ -95,6 +255,8 @@ auto parse_detection_item(std::string_view key, data const& value)
   } else {
     item.values.push_back(value);
   }
+  TRY(validate_modifiers(item.field.raw, item.modifiers, item.values,
+                         item.value_is_list));
   return item;
 }
 
@@ -115,20 +277,57 @@ auto parse_detection(data const& yaml) -> Result<Detection, diagnostic> {
     return result;
   }
   if (auto const* xs = try_as<list>(&yaml)) {
-    for (auto const& element : *xs) {
-      auto const* map = try_as<record>(&element);
-      if (not map) {
-        return parse_failure("Sigma search identifier must be a list or "
-                             "record, got `{}`",
-                             element);
-      }
-      TRY(auto group, parse_group(*map));
-      result.groups.push_back(std::move(group));
+    if (xs->empty()) {
+      return parse_failure(
+        "empty value lists are not allowed in Sigma selections");
     }
+    // A list of maps is a disjunction of conjunctions; a list of scalars is
+    // a keyword selection whose entries are OR-linked. Mixing both forms in
+    // one list has no defined semantics.
+    auto maps = size_t{0};
+    auto scalars = size_t{0};
+    for (auto const& element : *xs) {
+      if (is<record>(element)) {
+        ++maps;
+      } else if (is<list>(element)) {
+        return parse_failure(
+          "nested lists are not allowed in Sigma selections");
+      } else {
+        ++scalars;
+      }
+    }
+    if (maps > 0 and scalars > 0) {
+      return parse_failure("Sigma search identifier must not mix keyword "
+                           "values and maps in one list");
+    }
+    if (maps > 0) {
+      for (auto const& element : *xs) {
+        TRY(auto group, parse_group(as<record>(element)));
+        result.groups.push_back(std::move(group));
+      }
+      return result;
+    }
+    // A list of scalars is a keyword selection: one OR-linked item matched
+    // recursively against every string-valued leaf of the event.
+    auto item = DetectionItem{};
+    item.kind = DetectionItem::ItemKind::keyword;
+    item.value_is_list = true;
+    for (auto const& element : *xs) {
+      item.values.push_back(element);
+    }
+    result.groups.push_back({std::move(item)});
     return result;
   }
-  return parse_failure(
-    "Sigma search identifier must be a list or record, got `{}`", yaml);
+  if (is<caf::none_t>(yaml)) {
+    return parse_failure(
+      "Sigma search identifier must be a list or record, got `{}`", yaml);
+  }
+  // A bare scalar is a single keyword.
+  auto item = DetectionItem{};
+  item.kind = DetectionItem::ItemKind::keyword;
+  item.values.push_back(yaml);
+  result.groups.push_back({std::move(item)});
+  return result;
 }
 
 // -- condition parsing -------------------------------------------------
@@ -279,7 +478,7 @@ auto validate_references(Condition const& condition, DetectionRule const& rule)
   -> Result<void, diagnostic> {
   auto matches_any = [&](std::string_view pattern) {
     return std::ranges::any_of(rule.detections, [&](auto const& entry) {
-      return wildcard_match(pattern, entry.first);
+      return pattern_matches(pattern, entry.first);
     });
   };
   return match(
@@ -302,6 +501,10 @@ auto validate_references(Condition const& condition, DetectionRule const& rule)
     },
     [&](Quantified const& x) -> Result<void, diagnostic> {
       if (x.all_identifiers) {
+        if (not matches_any("*")) {
+          return parse_failure("Sigma condition `them` matches no search "
+                               "identifier");
+        }
         return {};
       }
       if (x.pattern.find('*') != std::string::npos) {
@@ -456,14 +659,39 @@ auto parse_detection_rule(record const& document)
   if (not detection_section) {
     return parse_failure("Sigma rule attribute `detection` must be a record");
   }
-  auto condition = Option<std::string const&>{};
+  // Only the default `sigma` taxonomy is supported; compiling field names
+  // from another taxonomy verbatim would silently change semantics.
+  if (auto taxonomy = get_string(document, "taxonomy");
+      taxonomy and *taxonomy != "sigma") {
+    return parse_failure("Sigma rule uses unsupported taxonomy `{}`; only "
+                         "the default `sigma` taxonomy is supported",
+                         *taxonomy);
+  }
+  auto conditions = std::vector<std::string>{};
+  auto have_condition = false;
   for (auto const& [key, value] : *detection_section) {
     if (key == "condition") {
-      auto const* condition_string = try_as<std::string>(&value);
-      if (not condition_string) {
-        return parse_failure("Sigma rule `condition` must be a string");
+      have_condition = true;
+      // Sigma treats the entries of a list-valued condition as OR-linked
+      // queries; a plain string is one query.
+      if (auto const* condition_string = try_as<std::string>(&value)) {
+        conditions.push_back(*condition_string);
+      } else if (auto const* entries = try_as<list>(&value)) {
+        for (auto const& element : *entries) {
+          auto const* entry = try_as<std::string>(&element);
+          if (not entry) {
+            return parse_failure(
+              "Sigma rule `condition` list entries must be strings");
+          }
+          conditions.push_back(*entry);
+        }
+        if (conditions.empty()) {
+          return parse_failure("Sigma rule `condition` list must not be empty");
+        }
+      } else {
+        return parse_failure(
+          "Sigma rule `condition` must be a string or a list of strings");
       }
-      condition = *condition_string;
       continue;
     }
     TRY(auto detection, parse_detection(value));
@@ -471,11 +699,14 @@ auto parse_detection_rule(record const& document)
       = rule.detections.try_emplace(key, std::move(detection)).second;
     TENZIR_ASSERT(inserted);
   }
-  if (not condition) {
+  if (not have_condition) {
     return parse_failure("Sigma rule has no `condition` key");
   }
-  TRY(rule.condition, parse_condition(*condition));
-  TRY(validate_references(rule.condition, rule));
+  for (auto const& condition : conditions) {
+    TRY(auto parsed, parse_condition(condition));
+    TRY(validate_references(parsed, rule));
+    rule.conditions.push_back(std::move(parsed));
+  }
   return rule;
 }
 
@@ -516,6 +747,16 @@ auto parse_document(data const& yaml) -> Result<Document, diagnostic> {
   }
   TRY(result.content, parse_detection_rule(*document));
   return result;
+}
+
+auto pattern_matches(std::string_view pattern, std::string_view name) -> bool {
+  // Search identifiers beginning with `_` are reserved (e.g. for filter
+  // injection) and are only matched by patterns that themselves start with
+  // `_`. Explicit patterns continue to match the names they name.
+  if (not pattern.starts_with('_') and name.starts_with('_')) {
+    return false;
+  }
+  return wildcard_match(pattern, name);
 }
 
 auto wildcard_match(std::string_view pattern, std::string_view name) -> bool {

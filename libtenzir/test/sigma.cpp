@@ -204,12 +204,130 @@ TEST("sigma ir - empty value lists are rejected") {
   CHECK(document.is_err());
 }
 
-TEST("sigma ir - keyword lists are rejected") {
+TEST("sigma ir - empty keyword lists are rejected") {
   auto document = parse("detection:\n"
-                        "  keywords:\n"
-                        "    - evil\n"
+                        "  keywords: []\n"
                         "  condition: keywords\n");
   CHECK(document.is_err());
+}
+
+TEST("sigma ir - keyword lists parse into keyword items") {
+  auto rule = parse_rule("detection:\n"
+                         "  keywords:\n"
+                         "    - evil\n"
+                         "    - 42\n"
+                         "  condition: keywords\n");
+  auto const& detection = rule.detections.at("keywords");
+  REQUIRE_EQUAL(detection.groups.size(), 1u);
+  REQUIRE_EQUAL(detection.groups[0].size(), 1u);
+  auto const& item = detection.groups[0][0];
+  CHECK(item.kind == sigma::DetectionItem::ItemKind::keyword);
+  CHECK_EQUAL(item.values.size(), 2u);
+}
+
+TEST("sigma ir - mixed keyword and map lists are rejected") {
+  CHECK(parse("detection:\n"
+              "  selection:\n"
+              "    - evil\n"
+              "    - a: 1\n"
+              "  condition: selection\n")
+          .is_err());
+}
+
+TEST("sigma ir - condition list entries are OR-linked queries") {
+  auto rule = parse_rule("detection:\n"
+                         "  selection_a:\n"
+                         "    a: 1\n"
+                         "  selection_b:\n"
+                         "    b: 2\n"
+                         "  condition:\n"
+                         "    - selection_a\n"
+                         "    - selection_b\n");
+  CHECK_EQUAL(rule.conditions.size(), 2u);
+  CHECK(parse("detection:\n"
+              "  selection:\n"
+              "    a: 1\n"
+              "  condition: []\n")
+          .is_err());
+}
+
+TEST("sigma ir - non-default taxonomy is rejected") {
+  CHECK(parse("taxonomy: custom\n"
+              "detection:\n"
+              "  selection:\n"
+              "    a: 1\n"
+              "  condition: selection\n")
+          .is_err());
+  CHECK(parse("taxonomy: sigma\n"
+              "detection:\n"
+              "  selection:\n"
+              "    a: 1\n"
+              "  condition: selection\n")
+          .is_ok());
+}
+
+TEST("sigma ir - modifier chain validation") {
+  auto rule_with = [](std::string_view item) {
+    return fmt::format("detection:\n"
+                       "  selection:\n"
+                       "    {}\n"
+                       "  condition: selection\n",
+                       item);
+  };
+  // `re` sub-modifiers must directly follow `re`.
+  CHECK(parse(rule_with("a|i: x")).is_err());
+  CHECK(parse(rule_with("a|re|i: x")).is_ok());
+  CHECK(parse(rule_with("a|re|i|s|m: x")).is_ok());
+  CHECK(parse(rule_with("a|contains|i: x")).is_err());
+  // UTF-16 modifiers require a following base64 modifier.
+  CHECK(parse(rule_with("a|utf16le: x")).is_err());
+  CHECK(parse(rule_with("a|utf16le|base64: x")).is_ok());
+  CHECK(parse(rule_with("a|wide|base64offset|contains: x")).is_ok());
+  CHECK(parse(rule_with("a|utf16le|contains|base64: x")).is_err());
+  CHECK(parse(rule_with("a|contains|utf16le|base64: x")).is_err());
+  // `exists` stands alone and takes one boolean.
+  CHECK(parse(rule_with("a|exists: true")).is_ok());
+  CHECK(parse(rule_with("a|exists: 1")).is_err());
+  CHECK(parse(rule_with("a|exists|contains: true")).is_err());
+  // Comparison modifiers are mutually exclusive; `neq` conflicts with them.
+  CHECK(parse(rule_with("a|lt|gt: 1")).is_err());
+  CHECK(parse(rule_with("a|neq|lt: 1")).is_err());
+  CHECK(parse(rule_with("a|neq: 1")).is_ok());
+  // `fieldref` combines only with `neq` and takes strings.
+  CHECK(parse(rule_with("a|fieldref: b")).is_ok());
+  CHECK(parse(rule_with("a|fieldref|neq: b")).is_ok());
+  CHECK(parse(rule_with("a|fieldref|contains: b")).is_err());
+  CHECK(parse(rule_with("a|fieldref: 1")).is_err());
+  // Time-part modifiers are mutually exclusive and exclude string mods.
+  CHECK(parse(rule_with("a|hour: 3")).is_ok());
+  CHECK(parse(rule_with("a|hour|minute: 3")).is_err());
+  CHECK(parse(rule_with("a|hour|contains: 3")).is_err());
+  CHECK(parse(rule_with("a|hour|lt: 3")).is_ok());
+  // `all` requires a list of values.
+  CHECK(parse(rule_with("a|all: x")).is_err());
+  // `re` excludes transforms.
+  CHECK(parse(rule_with("a|re|base64: x")).is_err());
+  // Non-string regex scalars are stringified because YAML type inference
+  // cannot distinguish quoted from unquoted scalars.
+  CHECK(parse(rule_with("a|re: 1")).is_ok());
+  // `expand` fails explicitly without placeholder mappings.
+  CHECK(parse(rule_with("a|expand: '%var%'")).is_err());
+  // `windash` and `cased` are accepted.
+  CHECK(parse(rule_with("a|windash|contains: ' -p '")).is_ok());
+  CHECK(parse(rule_with("a|cased: Foo")).is_ok());
+}
+
+TEST("sigma ir - underscore identifiers are excluded from patterns") {
+  CHECK(sigma::pattern_matches("selection_*", "selection_a"));
+  CHECK(not sigma::pattern_matches("*", "_filter"));
+  CHECK(sigma::pattern_matches("_filt*", "_filter"));
+  CHECK(sigma::pattern_matches("_filter", "_filter"));
+  // A rule whose only detections are underscore-prefixed cannot use `them`.
+  CHECK(parse("detection:\n"
+              "  _hidden:\n"
+              "    a: 1\n"
+              "  condition: all of them\n")
+          .is_err());
 }
 
 TEST("sigma ir - missing detection") {

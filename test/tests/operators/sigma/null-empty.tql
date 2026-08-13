@@ -1,0 +1,5 @@
+from {id: "hit", a: null, b: ""},
+     {id: "nonempty", a: null, b: "x"},
+     {id: "set", a: 1, b: ""}
+sigma "tests/operators/sigma/inputs/null-empty.yaml"
+select event.id

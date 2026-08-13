@@ -1,0 +1,8 @@
+// `all of selection_*` matches one selection whose internal OR linking must
+// be preserved; `them` never includes `_`-prefixed identifiers, so
+// `not 1 of them` here is `not selection_a`, making the rule unsatisfiable
+// only when selection_a is the sole eligible detection. The condition is a
+// contradiction and must never match.
+from {id: "x", x: 1}, {id: "z", z: 3}
+sigma "tests/operators/sigma/inputs/quantifier.yaml"
+select event.id

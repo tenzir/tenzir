@@ -1,0 +1,6 @@
+from {id: "hit", user: "root"},
+     {id: "null-user", user: null},
+     {id: "no-user", other: 1},
+     {id: "has-missing", user: "x", missing: 0}
+sigma "tests/operators/sigma/inputs/exists.yaml"
+select event.id

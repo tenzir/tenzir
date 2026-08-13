@@ -1,0 +1,5 @@
+from {id: "a", a: 1},
+     {id: "b", b: 2},
+     {id: "none", a: 9, b: 9}
+sigma "tests/operators/sigma/inputs/condition-list.yaml"
+select event.id

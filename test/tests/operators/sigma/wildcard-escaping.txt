@@ -1,0 +1,15 @@
+{
+  event: {
+    id: "plus-literal",
+  },
+}
+{
+  event: {
+    id: "pipe-literal",
+  },
+}
+{
+  event: {
+    id: "newline-wildcard",
+  },
+}

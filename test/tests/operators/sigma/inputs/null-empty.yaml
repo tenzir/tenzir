@@ -1,0 +1,7 @@
+title: null and empty values
+detection:
+  null_field:
+    a: null
+  empty_field:
+    b: ''
+  condition: null_field and empty_field

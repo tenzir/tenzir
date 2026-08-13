@@ -1,0 +1,9 @@
+// Four word-initial dashes must not reject the rule (no permutation
+// explosion), each may independently appear as `/`, and mid-word dashes stay
+// literal next to both ASCII and Unicode letters.
+from {id: "dashes", cmdline: "run -a -b -c -d param-name é-p -ä"},
+     {id: "mixed", cmdline: "run /a -b /c -d param-name é-p /ä"},
+     {id: "midword-slash", cmdline: "run -a -b -c -d param/name é-p -ä"},
+     {id: "unicode-midword", cmdline: "run -a -b -c -d param-name é/p -ä"}
+sigma "tests/operators/sigma/inputs/windash-multi.yaml"
+select event.id

@@ -44,8 +44,18 @@ struct FieldPath {
   friend auto operator==(FieldPath const&, FieldPath const&) -> bool = default;
 };
 
-/// One `field|modifiers: value(s)` entry of a detection.
+/// One `field|modifiers: value(s)` entry of a detection, or a keyword
+/// predicate without a field.
 struct DetectionItem {
+  enum class ItemKind {
+    /// A predicate over a named field.
+    field,
+    /// A keyword predicate that applies to every string-valued leaf of the
+    /// event, including strings inside nested records and lists.
+    keyword,
+  };
+
+  ItemKind kind = ItemKind::field;
   FieldPath field;
   /// Validated modifier chain in declaration order.
   std::vector<std::string> modifiers;
@@ -128,9 +138,9 @@ struct DetectionRule {
   LogSource log_source;
   /// Named detections in declaration order.
   detail::stable_map<std::string, Detection> detections;
-  /// The parsed condition. (The v2.1 list form is not yet supported and
-  /// rejected during parsing.)
-  Condition condition;
+  /// The parsed conditions. Sigma allows a list-valued `condition` whose
+  /// entries are OR-linked queries; a plain string produces one entry.
+  std::vector<Condition> conditions;
 };
 
 /// A Sigma global filter rule. Not yet supported; parsing preserves the raw
@@ -166,5 +176,10 @@ auto parse_document(data const& yaml) -> Result<Document, diagnostic>;
 
 /// Matches a search-identifier pattern with `*` wildcards against a name.
 auto wildcard_match(std::string_view pattern, std::string_view name) -> bool;
+
+/// Matches a search-identifier pattern against a name with Sigma's reserved
+/// underscore convention: identifiers beginning with `_` are only matched by
+/// patterns that themselves begin with `_`.
+auto pattern_matches(std::string_view pattern, std::string_view name) -> bool;
 
 } // namespace tenzir::sigma

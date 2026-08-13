@@ -1,15 +1,15 @@
 {
   event: {
-    id: "alpha",
+    id: "hit",
   },
 }
 {
   event: {
-    id: "bravo",
+    id: "same-cd",
   },
 }
 {
   event: {
-    id: "both",
+    id: "diff-ab",
   },
 }

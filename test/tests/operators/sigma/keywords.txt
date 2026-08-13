@@ -1,0 +1,10 @@
+{
+  event: {
+    id: "direct",
+  },
+}
+{
+  event: {
+    id: "nested",
+  },
+}

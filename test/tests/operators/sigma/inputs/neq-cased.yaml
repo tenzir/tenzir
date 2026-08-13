@@ -1,0 +1,9 @@
+title: neq and cased
+detection:
+  not_admin:
+    user|neq:
+      - admin
+      - root
+  exact_case:
+    tag|cased: Foo
+  condition: not_admin and exact_case

@@ -1,0 +1,5 @@
+title: dotted field precedence
+detection:
+  selection:
+    a.b: exact
+  condition: selection

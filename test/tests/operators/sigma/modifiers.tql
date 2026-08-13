@@ -4,6 +4,10 @@ from {id: "numeric", count: 45, ip: 10.0.0.1, payload: "x", url: "x"},
      {id: "offset", count: 1, ip: 10.0.0.1, payload: "x", url: "prefix aHR0cDovL suffix"},
      {id: "regex", count: 1, ip: 10.0.0.1, payload: "cmd /c calc.exe", url: "x"},
      {id: "prefix", count: 1, ip: 10.0.0.1, payload: "x", msg: "123abc", url: "x"},
+     {id: "chain", count: 1, ip: 10.0.0.1, payload: "x", msg: "xxfoo", url: "x"},
+     {id: "all-neq", count: 1, ip: 10.0.0.1, payload: "x", tag: "c", url: "x"},
+     {id: "all-neq-a", count: 1, ip: 10.0.0.1, payload: "x", tag: "a", url: "x"},
+     {id: "all-neq-b", count: 1, ip: 10.0.0.1, payload: "x", tag: "b", url: "x"},
      {id: "miss", count: 1, ip: 10.0.0.1, payload: "cmd.exe.bak", url: "x"}
 sigma "tests/operators/sigma/inputs/modifiers.yaml"
 select event.id

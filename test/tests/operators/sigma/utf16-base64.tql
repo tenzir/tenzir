@@ -1,0 +1,4 @@
+from {id: "hit", payload: "YwBtAGQA"},
+     {id: "plain", payload: "cmd"}
+sigma "tests/operators/sigma/inputs/utf16-base64.yaml"
+select event.id
