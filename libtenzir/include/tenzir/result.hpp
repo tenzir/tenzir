@@ -54,6 +54,17 @@ public:
   explicit(false) Result(Err<Error> err) : value_{std::move(err)} {
   }
 
+  /// Constructs an error result from an error that is not yet the error type.
+  ///
+  /// Without this, a `Result<T, variant<A, B>>` cannot be returned as
+  /// `Err{A{...}}`: the caller has to name the union at every failure site even
+  /// though the alternative already determines it.
+  template <class U>
+    requires std::constructible_from<Error, U> and (not std::same_as<U, Error>)
+  explicit(false) Result(Err<U> err)
+    : value_{Err<Error>{Error{std::move(err).unwrap()}}} {
+  }
+
   auto expect(std::string_view msg) && -> Value {
     if (auto value = try_as<VoidToUnit<Value>>(value_)) [[likely]] {
       return unit_to_void(std::move(*value));
