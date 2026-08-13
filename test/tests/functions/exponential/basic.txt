@@ -1,0 +1,21 @@
+{
+  kind: "int",
+  exponential: 1.0,
+  natural_logarithm: 0.0,
+  logarithm: 3.0,
+  power: 8,
+}
+{
+  kind: "uint",
+  exponential: 1.0,
+  natural_logarithm: 0.0,
+  logarithm: 3.0,
+  power: 1000.0,
+}
+{
+  kind: "float",
+  exponential: 1.0,
+  natural_logarithm: 0.0,
+  logarithm: 2.0,
+  power: 25.0,
+}

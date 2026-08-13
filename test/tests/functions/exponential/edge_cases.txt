@@ -1,0 +1,27 @@
+{
+  negative_logarithm: null,
+  zero_logarithm: null,
+  zero_logarithm_base: null,
+  infinite_logarithm_base: null,
+  invalid_logarithm_base: null,
+  fractional_power_of_negative: null,
+  negative_integer_exponent: null,
+  integer_power_overflow: null,
+  exponential_overflow: null,
+  null_exponential: null,
+  null_logarithm: null,
+  null_power: null,
+}
+warning: negative exponent in integer `pow`
+ --> tests/functions/exponential/edge_cases.tql:8:37
+  |
+8 |   negative_integer_exponent: pow(2, -1),
+  |                                     ~~
+  |
+
+warning: integer overflow in `pow`
+ --> tests/functions/exponential/edge_cases.tql:9:34
+  |
+9 |   integer_power_overflow: pow(2, 63),
+  |                                  ~~
+  |

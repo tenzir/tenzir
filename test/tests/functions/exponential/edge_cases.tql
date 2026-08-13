@@ -1,0 +1,14 @@
+from {
+  negative_logarithm: log(-1),
+  zero_logarithm: log(0),
+  zero_logarithm_base: log(8, 0),
+  infinite_logarithm_base: log(8, "inf".float()),
+  invalid_logarithm_base: log(8, 1),
+  fractional_power_of_negative: pow(-1, 0.5),
+  negative_integer_exponent: pow(2, -1),
+  integer_power_overflow: pow(2, 63),
+  exponential_overflow: exp(1000),
+  null_exponential: exp(float(null)),
+  null_logarithm: log(float(null), 2),
+  null_power: pow(float(null), 2),
+}

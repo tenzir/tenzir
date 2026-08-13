@@ -1,0 +1,27 @@
+from {
+  kind: "int",
+  exp_input: 0,
+  natural_input: 1,
+  log_input: 8,
+  base: 2,
+  exponent: 3,
+}, {
+  kind: "uint",
+  exp_input: uint(0),
+  natural_input: uint(1),
+  log_input: uint(1000),
+  base: uint(10),
+  exponent: uint(3),
+}, {
+  kind: "float",
+  exp_input: 0.0,
+  natural_input: 1.0,
+  log_input: 25.0,
+  base: 5.0,
+  exponent: 2.0,
+}
+select kind,
+       exponential=exp_input.exp(),
+       natural_logarithm=natural_input.log(),
+       logarithm=log_input.log(base),
+       power=base.pow(exponent)
