@@ -777,6 +777,41 @@ target_compile_definitions(libtenzir PRIVATE TENZIR_HAS_PROXYGEN=1
 target_compile_definitions(
   libtenzir_builtins PRIVATE TENZIR_HAS_PROXYGEN=1
                              nsel_CONFIG_SELECT_EXPECTED=1)
+
+# Everything a translation unit outside libtenzir needs in order to include
+# `tenzir/http_server.hpp`.
+#
+# The settings above are all PRIVATE so that the rest of libtenzir stays clear
+# of proxygen, which leaves an in-tree consumer that genuinely runs an HTTP
+# server — the deployment, a plugin test — with no way to get them short of
+# repeating the list. `nsel_CONFIG_SELECT_EXPECTED` in particular is not
+# guessable: without it mvfst's `quic/common/Expected.h` selects an
+# implementation that does not compile.
+#
+# Deliberately not exported. The bundled Facebook targets exist only in this
+# build tree, the same reason folly is wrapped in `$<BUILD_LOCAL_INTERFACE:>`.
+add_library(libtenzir_http_server INTERFACE)
+add_library(tenzir::http_server ALIAS libtenzir_http_server)
+target_compile_definitions(
+  libtenzir_http_server INTERFACE TENZIR_HAS_PROXYGEN=1
+                                  nsel_CONFIG_SELECT_EXPECTED=1)
+target_link_libraries(
+  libtenzir_http_server INTERFACE ${_tenzir_proxygen_target}
+                                  proxygen_utils_trace_event_types)
+if (_tenzir_proxygen_server_target)
+  target_link_libraries(libtenzir_http_server
+                        INTERFACE ${_tenzir_proxygen_server_target})
+endif ()
+if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
+  target_include_directories(
+    libtenzir_http_server BEFORE
+    INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/proxygen"
+              "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/proxygen/generated"
+              "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/mvfst"
+              "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/wangle"
+              "${CMAKE_CURRENT_SOURCE_DIR}/aux/facebook/fizz"
+              "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/fizz/fizz/generated")
+endif ()
 # gflags is a transitive dependency of glog (used by folly). We must re-export
 # find_package(gflags) so that plugins can resolve the gflags_shared cmake
 # target that appears in the exported transitive link libraries.
