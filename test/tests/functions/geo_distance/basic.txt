@@ -1,0 +1,25 @@
+{
+  kind: "identical",
+  spherical_m: 0,
+  spheroidal_m: 0,
+}
+{
+  kind: "seattle to los angeles",
+  spherical_m: 1546754,
+  spheroidal_m: 1545043,
+}
+{
+  kind: "across antimeridian",
+  spherical_m: 222390,
+  spheroidal_m: 222638,
+}
+{
+  kind: "nearly antipodal",
+  spherical_m: 20003994,
+  spheroidal_m: 20003008,
+}
+{
+  kind: "mixed numeric types",
+  spherical_m: 157249,
+  spheroidal_m: 156899,
+}

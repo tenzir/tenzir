@@ -1,0 +1,10 @@
+from {
+  null_coordinate: geo_distance(null, 0, 0, 0),
+  null_spheroid: geo_distance(0, 0, 0, 0, spheroid=null),
+  longitude_too_low: geo_distance(-181, 0, 0, 0),
+  longitude_too_high: geo_distance(0, 0, 181, 0),
+  latitude_too_low: geo_distance(0, -91, 0, 0),
+  latitude_too_high: geo_distance(0, 0, 0, 91),
+  nan: geo_distance("nan".float(), 0, 0, 0),
+  infinity: geo_distance(0, 0, "inf".float(), 0),
+}

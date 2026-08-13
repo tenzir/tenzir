@@ -1,0 +1,4 @@
+from {
+  wrong_coordinate: geo_distance("13.405", 52.52, 0, 0),
+  wrong_spheroid: geo_distance(13.405, 52.52, 0, 0, spheroid="yes"),
+}

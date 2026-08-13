@@ -1,0 +1,10 @@
+{
+  null_coordinate: null,
+  null_spheroid: null,
+  longitude_too_low: null,
+  longitude_too_high: null,
+  latitude_too_low: null,
+  latitude_too_high: null,
+  nan: null,
+  infinity: null,
+}

@@ -1,0 +1,36 @@
+from {
+  kind: "identical",
+  lon1: 0,
+  lat1: 0,
+  lon2: 0,
+  lat2: 0,
+}, {
+  kind: "seattle to los angeles",
+  lon1: -122.407628,
+  lat1: 47.578557,
+  lon2: -118.275287,
+  lat2: 34.019056,
+}, {
+  kind: "across antimeridian",
+  lon1: 179,
+  lat1: 0,
+  lon2: -179,
+  lat2: 0,
+}, {
+  kind: "nearly antipodal",
+  lon1: 0,
+  lat1: 0,
+  lon2: 179.9,
+  lat2: 0,
+}, {
+  kind: "mixed numeric types",
+  lon1: uint(0),
+  lat1: uint(0),
+  lon2: 1.0,
+  lat2: 1,
+}
+select kind,
+       spherical_m=int(geo_distance(lon1, lat1, lon2, lat2)),
+       spheroidal_m=int(
+         geo_distance(lon1, lat1, lon2, lat2, spheroid=true),
+       )
