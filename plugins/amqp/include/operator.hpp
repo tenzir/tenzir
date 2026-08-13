@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/tenzir/kvp.hpp>
 #include <tenzir/config.hpp>
@@ -129,11 +131,11 @@ inline auto to_error(const amqp_rpc_reply_t& reply) -> caf::error {
 }
 
 inline auto parse_url(const record& config_, std::string_view str)
-  -> std::optional<record> {
+  -> Option<record> {
   auto info = amqp_connection_info{};
   auto copy = std::string{str};
   if (amqp_parse_url(copy.data(), &info) != AMQP_STATUS_OK) {
-    return std::nullopt;
+    return None{};
   }
   auto result = config_;
   if (info.host != nullptr) {
@@ -441,7 +443,7 @@ public:
 
   /// Consumes a message.
   /// @returns The message from the server.
-  auto consume(std::optional<std::chrono::microseconds> timeout = {})
+  auto consume(Option<std::chrono::microseconds> timeout = {})
     -> caf::expected<chunk_ptr> {
     TENZIR_TRACE("consuming message");
     auto envelope = amqp_envelope_t{};
@@ -567,11 +569,11 @@ private:
 
 /// The arguments for the saver and loader.
 struct connector_args {
-  std::optional<located<uint16_t>> channel;
-  std::optional<located<std::string>> routing_key;
-  std::optional<located<std::string>> exchange;
-  std::optional<located<record>> options;
-  std::optional<located<secret>> url;
+  Option<located<uint16_t>> channel;
+  Option<located<std::string>> routing_key;
+  Option<located<std::string>> exchange;
+  Option<located<record>> options;
+  Option<located<secret>> url;
   location op;
 
   friend auto inspect(auto& f, connector_args& x) -> bool {
@@ -585,7 +587,7 @@ struct connector_args {
 
 /// The arguments for the loader.
 struct loader_args : connector_args {
-  std::optional<located<std::string>> queue;
+  Option<located<std::string>> queue;
   bool passive{false};
   bool durable{false};
   bool exclusive{false};

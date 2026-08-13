@@ -56,7 +56,7 @@ bool line_range::next_timeout(std::chrono::milliseconds timeout) {
   timed_out_ = false;
   if (p) {
     timed_out_ = p->timed_out();
-    p->read_timeout() = std::nullopt;
+    p->read_timeout() = None{};
     // Clear error state if the read timed out
     if (timed_out_) {
       input_.clear();

@@ -1489,7 +1489,7 @@ auto builder_ref::is_protected() -> bool {
 }
 
 series_builder::series_builder(
-  std::optional<std::reference_wrapper<const tenzir::type>> ty)
+  Option<std::reference_wrapper<const tenzir::type>> ty)
   : impl_{std::make_unique<detail::series_builder_impl>()} {
   if (ty) {
     impl_->protect(*ty);

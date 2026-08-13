@@ -759,6 +759,7 @@ private:
   /// reserves `n` rows, and invokes `fill` with an `append` callback. The
   /// callback takes an optional JSON string: `std::nullopt` becomes `{}` for a
   /// plain column and SQL `NULL` for a nullable one.
+  // NOLINTBEGIN(custom-prefer-option): ClickHouse callback boundary.
   auto build(size_t n, auto&& fill) const -> ::clickhouse::ColumnRef {
     if (nullable) {
       auto column = std::make_shared<ColumnNullableT<ColumnJSON>>();
@@ -775,6 +776,7 @@ private:
     });
     return column;
   }
+  // NOLINTEND(custom-prefer-option)
 };
 
 /// Sends Tenzir `time` values to a ClickHouse `DateTime64(N[, 'tz'])` column of
@@ -903,6 +905,7 @@ private:
   /// callback taking an optional tick value. For a plain column a
   /// `std::nullopt` cannot legitimately occur (null rows are dropped) but is
   /// written as 0 defensively.
+  // NOLINTBEGIN(custom-prefer-option): ClickHouse callback boundary.
   auto build(size_t n, auto&& fill) const -> ::clickhouse::ColumnRef {
     if (nullable) {
       auto column
@@ -925,6 +928,7 @@ private:
     });
     return column;
   }
+  // NOLINTEND(custom-prefer-option)
 };
 
 struct transformer_array : transformer {

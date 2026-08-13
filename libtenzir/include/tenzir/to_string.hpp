@@ -8,13 +8,15 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/multi_series.hpp>
 #include <tenzir/view3.hpp>
 
 namespace tenzir {
 
 auto to_string(data_view3 v, location loc, diagnostic_handler& dh)
-  -> std::optional<std::string>;
+  -> Option<std::string>;
 
 /// Converts the given series into strings, using TQL-style printing.
 auto to_string(multi_series ms, location loc, diagnostic_handler& dh)

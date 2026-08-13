@@ -12,6 +12,7 @@
 #include "tenzir/ir.hpp"
 #include "tenzir/let_id.hpp"
 #include "tenzir/location.hpp"
+#include "tenzir/option.hpp"
 
 namespace tenzir {
 
@@ -44,7 +45,7 @@ public:
   [[nodiscard]] auto open_scope() -> scope;
 
   /// Return the `let_id` for the given name, if it exists.
-  auto get(std::string_view name) const -> std::optional<let_id>;
+  auto get(std::string_view name) const -> Option<let_id>;
 
   /// Return the full environment containing all bindings.
   auto env() const -> env_t;

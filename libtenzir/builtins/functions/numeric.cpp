@@ -131,8 +131,8 @@ public:
 
 class count_instance final : public aggregation_instance {
 public:
-  explicit count_instance(std::optional<ast::expression> expr,
-                          std::optional<ast::lambda_expr> lambda)
+  explicit count_instance(Option<ast::expression> expr,
+                          Option<ast::lambda_expr> lambda)
     : expr_{std::move(expr)}, lambda_{std::move(lambda)} {
     if (lambda_ and lambda_->is_unary()) {
       // Aggregation functions do not evaluate their arguments for null values,
@@ -204,8 +204,8 @@ public:
   }
 
 private:
-  std::optional<ast::expression> expr_;
-  std::optional<ast::lambda_expr> lambda_;
+  Option<ast::expression> expr_;
+  Option<ast::lambda_expr> lambda_;
   int64_t count_ = 0;
 };
 
@@ -221,11 +221,11 @@ public:
 
   auto make_aggregation(function_invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
-    auto expr = std::optional<ast::expression>{};
+    auto expr = Option<ast::expression>{};
     TRY(argument_parser2::function("count")
           .positional("x", expr, "any")
           .parse(inv, ctx));
-    return std::make_unique<count_instance>(std::move(expr), std::nullopt);
+    return std::make_unique<count_instance>(std::move(expr), None{});
   }
 };
 
@@ -426,9 +426,9 @@ public:
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
     // TODO: Reconsider whether we want a default here. Maybe positional?
-    auto quantile_opt = std::optional<located<double>>{};
-    auto delta_opt = std::optional<located<int64_t>>{};
-    auto buffer_size_opt = std::optional<located<int64_t>>{};
+    auto quantile_opt = Option<located<double>>{};
+    auto delta_opt = Option<located<int64_t>>{};
+    auto buffer_size_opt = Option<located<int64_t>>{};
     TRY(argument_parser2::function("quantile")
           .positional("x", expr, "number|duration")
           .named("q", quantile_opt)
@@ -448,11 +448,11 @@ public:
       quantile = quantile_opt->inner;
     }
     // TODO: This function probably already exists. If not, it should.
-    auto try_narrow = [](int64_t x) -> std::optional<uint32_t> {
+    auto try_narrow = [](int64_t x) -> Option<uint32_t> {
       if (0 <= x and x <= std::numeric_limits<uint32_t>::max()) {
         return static_cast<uint32_t>(x);
       }
-      return std::nullopt;
+      return None{};
     };
     auto delta = uint32_t{100};
     if (delta_opt) {
@@ -493,8 +493,8 @@ public:
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
     // TODO: Reconsider whether we want a default here. Maybe positional?
-    auto delta_opt = std::optional<located<int64_t>>{};
-    auto buffer_size_opt = std::optional<located<int64_t>>{};
+    auto delta_opt = Option<located<int64_t>>{};
+    auto buffer_size_opt = Option<located<int64_t>>{};
     TRY(argument_parser2::function("median")
           .positional("value", expr, "number|duration")
           // TODO: This is a test for hidden parameters.
@@ -502,11 +502,11 @@ public:
           .named("_buffer_size", buffer_size_opt)
           .parse(inv, ctx));
     // TODO: This function probably already exists. If not, it should.
-    auto try_narrow = [](int64_t x) -> std::optional<uint32_t> {
+    auto try_narrow = [](int64_t x) -> Option<uint32_t> {
       if (0 <= x and x <= std::numeric_limits<uint32_t>::max()) {
         return static_cast<uint32_t>(x);
       }
-      return std::nullopt;
+      return None{};
     };
     auto delta = uint32_t{100};
     if (delta_opt) {

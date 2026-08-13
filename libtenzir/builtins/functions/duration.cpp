@@ -40,7 +40,7 @@ public:
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto b = duration_type::make_arrow_builder(arrow_memory_pool());
         check(b->Reserve(eval.length()));
-        auto failed = std::optional<std::string>{};
+        auto failed = Option<std::string>{};
         for (auto& arg : eval(expr)) {
           const auto f = detail::overload{
             [&](const arrow::NullArray& arg) {
@@ -157,7 +157,7 @@ public:
                     overflow = true;
                     continue;
                   }
-                  check(b->Append(result.value()));
+                  check(b->Append(*result));
                 } else {
                   const auto result
                     = static_cast<double>(v.value()) * unit.count();

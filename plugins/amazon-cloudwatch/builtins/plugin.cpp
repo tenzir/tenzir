@@ -179,7 +179,7 @@ public:
         diagnostic::error("`group` must be a string or a list of strings")
           .primary(group_value.source)
           .emit(ctx);
-        return std::nullopt;
+        return None{};
       }
       if (*group_count == size_t{0} or has_empty_string(group_value)) {
         diagnostic::error("group must not be empty")
@@ -239,7 +239,7 @@ public:
           diagnostic::error("`stream` must be a string or a list of strings")
             .primary(value->source)
             .emit(ctx);
-          return std::nullopt;
+          return None{};
         }
         if (*stream_count == size_t{0} or has_empty_string(*value)) {
           diagnostic::error("stream must not be empty")
@@ -321,35 +321,35 @@ public:
           diagnostic::error("count must be greater than zero")
             .primary(value->source)
             .emit(ctx);
-          return std::nullopt;
+          return None{};
         }
         if (value->inner > max_read_count) {
           diagnostic::error("count must be less than or equal to {}",
                             max_read_count)
             .primary(value->source)
             .emit(ctx);
-          return std::nullopt;
+          return None{};
         }
       }
       if (ctx.get(stream) and ctx.get(stream_prefix)) {
         diagnostic::error("`stream` and `stream_prefix` are mutually exclusive")
           .primary(ctx.get(stream_prefix)->source)
           .emit(ctx);
-        return std::nullopt;
+        return None{};
       }
       if (effective_mode == "live" and ctx.get(stream)
           and *group_count > size_t{1}) {
         diagnostic::error("`stream` requires exactly one group")
           .primary(ctx.get(stream)->source)
           .emit(ctx);
-        return std::nullopt;
+        return None{};
       }
       if (effective_mode == "live" and ctx.get(stream_prefix)
           and *group_count > size_t{1}) {
         diagnostic::error("`stream_prefix` requires exactly one group")
           .primary(ctx.get(stream_prefix)->source)
           .emit(ctx);
-        return std::nullopt;
+        return None{};
       }
       if (effective_mode == "replay") {
         if (not ctx.get(stream)) {
@@ -418,7 +418,7 @@ public:
         diagnostic::error("`stream` is required")
           .primary(group_value.source)
           .emit(ctx);
-        return std::nullopt;
+        return None{};
       }
       if (stream_value->inner.empty()) {
         diagnostic::error("log stream must not be empty")

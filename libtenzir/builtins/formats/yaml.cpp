@@ -123,7 +123,7 @@ auto load_document(multi_series_builder& msb, const std::string& document,
   }
 };
 
-auto parse_loop(generator<std::optional<std::string_view>> lines,
+auto parse_loop(generator<Option<std::string_view>> lines,
                 diagnostic_handler& diag, multi_series_builder::options options)
   -> generator<table_slice> {
   auto dh = transforming_diagnostic_handler{
@@ -280,7 +280,7 @@ public:
 
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> std::optional<generator<table_slice>> override {
+    -> Option<generator<table_slice>> override {
     return parse_loop(to_lines(std::move(input)), ctrl.diagnostics(), options_);
   }
 
@@ -697,7 +697,7 @@ class print_yaml final : public virtual function_plugin {
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    auto include_document_markers = std::optional<location>{};
+    auto include_document_markers = Option<location>{};
     auto parser = argument_parser2::function(name());
     parser.positional("input", expr, "any");
     parser.named("include_document_markers", include_document_markers);

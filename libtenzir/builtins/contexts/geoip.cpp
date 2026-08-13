@@ -804,7 +804,7 @@ public:
   auto make_context(operator_factory_invocation inv, session ctx) const
     -> failure_or<make_context_result> override {
     auto name = located<std::string>{};
-    auto db_path = std::optional<located<std::string>>{};
+    auto db_path = Option<located<std::string>>{};
     auto parser = argument_parser2::context("geoip");
     parser.positional("name", name);
     parser.named("db_path", db_path);

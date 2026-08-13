@@ -72,7 +72,7 @@ let
       ++ (deps.propagatedNativeBuildInputs or [ ])
       ++ [
         pkgs.ccache
-        pkgs.clang-tools
+        pkgs.llvmPackages_22.clang-tools
         pkgs.cmake-format
         pkgs.nixfmt
         pkgs.speeve

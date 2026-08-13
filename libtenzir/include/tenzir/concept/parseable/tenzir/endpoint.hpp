@@ -14,8 +14,8 @@
 #include "tenzir/concept/parseable/string/char_class.hpp"
 #include "tenzir/concept/parseable/tenzir/ip.hpp"
 #include "tenzir/endpoint.hpp"
+#include "tenzir/option.hpp"
 
-#include <optional>
 #include <string>
 #include <utility>
 
@@ -42,7 +42,7 @@ struct EndpointParser : parser_base<EndpointParser> {
     auto ipv6_host = raw(parsers::ipv6 >> ! ipv6_char);
     auto bracketed_ipv6
       = ('['_p >> ipv6_host >> ']'_p >> -(':'_p >> endpoint_port))
-          .then([=](std::string host, std::optional<tenzir::port> port) {
+          .then([=](std::string host, Option<tenzir::port> port) {
             return Endpoint{std::move(host), port};
           });
     auto bare_ipv6 = ipv6_host.then([](std::string host) {

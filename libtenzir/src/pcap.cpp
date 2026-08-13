@@ -108,7 +108,7 @@ auto byteswap(packet_header hdr) -> packet_header {
   return result;
 }
 
-auto need_byte_swap(uint32_t magic) -> std::optional<bool> {
+auto need_byte_swap(uint32_t magic) -> Option<bool> {
   auto swapped = detail::byteswap(magic);
   if (magic == magic_number_1 or magic == magic_number_2) {
     return false;
@@ -116,7 +116,7 @@ auto need_byte_swap(uint32_t magic) -> std::optional<bool> {
   if (swapped == magic_number_1 or swapped == magic_number_2) {
     return true;
   }
-  return std::nullopt;
+  return None{};
 }
 
 } // namespace tenzir::pcap

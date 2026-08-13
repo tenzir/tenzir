@@ -71,16 +71,15 @@ struct opensearch_args {
   uint16_t port{9200};
   located<uint64_t> max_request_size{10 * 1024 * 1024, location::unknown};
 
-  auto
-  add_to(argument_parser2& p, std::optional<located<std::string>>& url_op) {
+  auto add_to(argument_parser2& p, Option<located<std::string>>& url_op) {
     p.positional("url", url_op);
     p.named_optional("keep_actions", keep_actions);
     p.named_optional("max_request_size", max_request_size);
     tls.add_tls_options(p);
   }
 
-  auto validate(std::optional<located<std::string>> url_op,
-                diagnostic_handler& dh) -> failure_or<void> {
+  auto validate(Option<located<std::string>> url_op, diagnostic_handler& dh)
+    -> failure_or<void> {
     TRY(tls.validate(dh));
     if (url_op) {
       url = std::move(*url_op);
@@ -121,7 +120,7 @@ struct opensearch_args {
 };
 
 auto decompress_payload(const http::request& r, diagnostic_handler& dh)
-  -> std::optional<chunk_ptr> {
+  -> Option<chunk_ptr> {
   if (not r.header().has_field("Content-Encoding")) {
     // TODO: Can we take ownership?
     return chunk::copy(r.payload());
@@ -133,7 +132,7 @@ auto decompress_payload(const http::request& r, diagnostic_handler& dh)
     diagnostic::warning("invalid compression type: {}", encoding)
       .note("must be one of `brotli`, `bz2`, `gzip`, `lz4`, `zstd`")
       .emit(dh);
-    return std::nullopt;
+    return None{};
   }
   auto out = std::vector<uint8_t>{};
   out.resize(r.payload().size_bytes() * 2);
@@ -155,7 +154,7 @@ auto decompress_payload(const http::request& r, diagnostic_handler& dh)
       diagnostic::warning("failed to decompress: {}",
                           result.status().ToString())
         .emit(dh);
-      return std::nullopt;
+      return None{};
     }
     TENZIR_ASSERT(std::cmp_less_equal(result->bytes_written, out.size()));
     written += result->bytes_written;
@@ -163,7 +162,7 @@ auto decompress_payload(const http::request& r, diagnostic_handler& dh)
     if (result->need_more_output) {
       if (out.size() == out.max_size()) [[unlikely]] {
         diagnostic::error("failed to resize buffer").emit(dh);
-        return std::nullopt;
+        return None{};
       }
       if (out.size() < out.max_size() / 2) {
         out.resize(out.size() * 2);
@@ -179,7 +178,7 @@ auto decompress_payload(const http::request& r, diagnostic_handler& dh)
         diagnostic::warning("failed to reset decompressor: {}",
                             result.ToString())
           .emit(dh);
-        return std::nullopt;
+        return None{};
       }
     }
   }
@@ -250,7 +249,7 @@ public:
     -> generator<table_slice> {
     co_yield {};
     auto slices = std::vector<table_slice>{};
-    auto stream = std::optional<caf::typed_stream<std::vector<table_slice>>>{};
+    auto stream = Option<caf::typed_stream<std::vector<table_slice>>>{};
     auto [ptr, launch] = ctrl.self().system().spawn_inactive();
 
     auto tls = args_.tls.resolve(ctrl);
@@ -272,6 +271,7 @@ public:
                 R"({"name":"hostname","cluster_name":"opensearch","cluster_uuid":"rTLctDY8SoqcaEkfmuyGFA","version":{"distribution":"opensearch","number":"8.17.0","build_flavor":"default","build_type":"tar","build_hash":"unknown","build_date":"2025-02-21T09:34:11Z","build_snapshot":false,"lucene_version":"9.12.1","minimum_wire_compatibility_version":"7.10.0","minimum_index_compatibility_version":"7.0.0"},"tagline":"Tenzir from_opensearch"})");
             })
           .start([&](const caf::async::consumer_resource<http::request>& c) {
+            // NOLINTBEGIN(custom-prefer-option): reactive API boundary.
             stream
               = c.observe_on(ptr)
                   .flat_map([keep_actions = args_.keep_actions,
@@ -324,6 +324,7 @@ public:
                   })
                   .to_typed_stream<std::vector<table_slice>>(
                     "from_opensearch", std::chrono::seconds{1}, 1);
+            // NOLINTEND(custom-prefer-option)
           });
     if (not server) {
       diagnostic::error("failed to setup http server: {}", server.error())
@@ -389,7 +390,7 @@ struct plugin final
     -> failure_or<operator_ptr> override {
     auto args = opensearch_args{};
     args.op = inv.self.get_location();
-    auto url_op = std::optional<located<std::string>>{};
+    auto url_op = Option<located<std::string>>{};
     auto p = argument_parser2::operator_(name());
     args.add_to(p, url_op);
     TRY(p.parse(inv, ctx));

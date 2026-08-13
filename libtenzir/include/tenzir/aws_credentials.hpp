@@ -8,13 +8,14 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/aws_iam.hpp>
 
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <caf/expected.hpp>
 
 #include <memory>
-#include <optional>
 #include <string>
 
 namespace tenzir {
@@ -34,7 +35,7 @@ auto assume_role_with_credentials(const resolved_aws_credentials& base_creds,
                                   const std::string& role_arn,
                                   const std::string& session_name,
                                   const std::string& external_id,
-                                  const std::optional<std::string>& region)
+                                  const Option<std::string>& region)
   -> caf::expected<sts_credentials>;
 
 // TODO: Move to the shared Amazon module as `tenzir::amazon`.
@@ -79,9 +80,8 @@ auto fetch_web_identity_token(const resolved_web_identity& web_identity)
 /// @param creds Resolved AWS credentials (may be empty)
 /// @param region Optional region for STS calls
 /// @return Credentials provider or error
-auto make_aws_credentials_provider(
-  const std::optional<resolved_aws_credentials>& creds,
-  const std::optional<std::string>& region)
+auto make_aws_credentials_provider(const Option<resolved_aws_credentials>& creds,
+                                   const Option<std::string>& region)
   -> caf::expected<std::shared_ptr<Aws::Auth::AWSCredentialsProvider>>;
 
 } // namespace tenzir

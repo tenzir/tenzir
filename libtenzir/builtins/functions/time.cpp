@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/time.hpp>
@@ -18,7 +20,6 @@
 #include <cerrno>
 #include <chrono>
 #include <ctime>
-#include <optional>
 #include <string_view>
 
 namespace tenzir::plugins::time_ {
@@ -133,12 +134,12 @@ auto fields_match(const std::tm& lhs, const std::tm& rhs) -> bool {
          and lhs.tm_sec == rhs.tm_sec;
 }
 
-auto as_tm(time value) -> std::optional<std::tm> {
+auto as_tm(time value) -> Option<std::tm> {
   auto reference_time = std::chrono::system_clock::to_time_t(
     std::chrono::time_point_cast<std::chrono::system_clock::duration>(value));
   auto reference_tm = std::tm{};
   if (gmtime_r(&reference_time, &reference_tm) == nullptr) {
-    return std::nullopt;
+    return None{};
   }
   return reference_tm;
 }
@@ -173,11 +174,11 @@ auto resolve_missing_year(std::tm& tm, time reference, long offset) -> bool {
     return false;
   }
   const auto reference_year = reference_tm->tm_year + 1900;
-  auto best_year = std::optional<int>{};
-  auto best_delta = std::optional<duration>{};
+  auto best_year = Option<int>{};
+  auto best_delta = Option<duration>{};
   auto search = [&](int radius) {
-    best_year = std::nullopt;
-    best_delta = std::nullopt;
+    best_year = None{};
+    best_delta = None{};
     for (auto year = reference_year - radius; year <= reference_year + radius;
          ++year) {
       auto candidate = tm;
@@ -218,8 +219,8 @@ auto resolve_missing_year(std::tm& tm, time reference, long offset) -> bool {
 
 auto resolve_missing_date(std::tm& tm, const std::tm& reference_tm,
                           time reference, long offset) -> bool {
-  auto best = std::optional<std::tm>{};
-  auto best_delta = std::optional<duration>{};
+  auto best = Option<std::tm>{};
+  auto best_delta = Option<duration>{};
   // Try the reference date and its neighbors so that times of day shortly
   // before or after the reference resolve to the closest instant instead of
   // up to a day away. `timegm` normalizes day 0 and day 32 across month and
@@ -273,7 +274,7 @@ public:
           std::make_shared<arrow::TimestampType>(arrow::TimeUnit::NANO),
           arrow_memory_pool()};
         check(b.Reserve(eval.length()));
-        auto failed = std::optional<std::string>{};
+        auto failed = Option<std::string>{};
         for (auto& arg : eval(expr)) {
           auto f = detail::overload{
             [&](const arrow::NullArray& arg) {
@@ -631,7 +632,7 @@ public:
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto format = located<std::string>{};
-    auto locale = std::optional<located<std::string>>{};
+    auto locale = Option<located<std::string>>{};
     TRY(argument_parser2::function(name())
           .positional("input", subject_expr, "time")
           .positional("format", format)
@@ -689,7 +690,7 @@ public:
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto format = located<std::string>{};
-    auto reference = std::optional<ast::expression>{};
+    auto reference = Option<ast::expression>{};
     TRY(argument_parser2::function(name())
           .positional("input", subject_expr, "string")
           .positional("format", format)

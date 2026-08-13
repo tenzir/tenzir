@@ -9,11 +9,11 @@
 #pragma once
 
 #include "kafka/operator.hpp"
+#include "tenzir/option.hpp"
 
 #include <tenzir/pipeline.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <optional>
 #include <string>
 
 namespace tenzir::plugins::kafka::legacy {
@@ -29,11 +29,11 @@ struct to_kafka_args {
     location::unknown,
     true // method call
   };
-  std::optional<located<std::string>> key;
-  std::optional<located<time>> timestamp;
+  Option<located<std::string>> key;
+  Option<located<time>> timestamp;
   located<record> options;
-  std::optional<located<std::string>> aws_region;
-  std::optional<tenzir::aws_iam_options> aws;
+  Option<located<std::string>> aws_region;
+  Option<tenzir::aws_iam_options> aws;
   uint64_t jobs = 0;
 
   friend auto inspect(auto& f, to_kafka_args& x) -> bool {

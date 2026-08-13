@@ -17,6 +17,8 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/option.hpp"
+
 #include <coroutine>
 #include <exception>
 #include <functional>
@@ -265,7 +267,7 @@ public:
     return unsafe_current() == end();
   }
 
-  auto next() -> std::optional<value_type> {
+  auto next() -> Option<value_type> {
     if (exhausted()) {
       return {};
     }

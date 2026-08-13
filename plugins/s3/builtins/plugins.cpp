@@ -86,9 +86,9 @@ public:
     -> failure_or<operator_ptr> override {
     auto args = s3_args{};
     // Legacy options for backwards compatibility
-    auto role = std::optional<located<std::string>>{};
-    auto external_id = std::optional<located<std::string>>{};
-    auto aws_iam_rec = std::optional<located<record>>{};
+    auto role = Option<located<std::string>>{};
+    auto external_id = Option<located<std::string>>{};
+    auto aws_iam_rec = Option<located<record>>{};
     TRY(argument_parser2::operator_(this->name())
           .positional("uri", args.uri)
           .named("anonymous", args.anonymous)
@@ -179,7 +179,7 @@ public:
   }
 
 private:
-  std::optional<s3_file_config> file_config_ = {};
+  Option<s3_file_config> file_config_ = None{};
 };
 
 using load_plugin = plugin2<s3_loader>;

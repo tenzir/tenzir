@@ -25,7 +25,6 @@
 
 #include <concepts>
 #include <limits>
-#include <optional>
 #include <ranges>
 #include <type_traits>
 
@@ -46,7 +45,7 @@ auto make_active_mask(ActiveRows const& active, int64_t length)
 auto scatter_active_rows(multi_series compressed, ActiveRows const& active,
                          int64_t length) -> multi_series {
   auto result = multi_series{};
-  auto current_type = std::optional<type>{};
+  auto current_type = Option<type>{};
   auto current_builder = std::shared_ptr<arrow::ArrayBuilder>{};
   auto flush_current = [&]() {
     if (not current_type) {
@@ -150,8 +149,7 @@ auto resolve_list_index(Index index, int64_t length) -> Option<int64_t> {
 
 /// Find the best matching field name from available field names.
 auto suggest_field_name(std::string_view requested_field,
-                        const record_type* rec)
-  -> std::optional<std::string_view> {
+                        const record_type* rec) -> Option<std::string_view> {
   auto best_field = std::string_view{};
   auto best_similarity = std::numeric_limits<int64_t>::min();
   for (const auto& field : rec->fields()) {
@@ -166,7 +164,7 @@ auto suggest_field_name(std::string_view requested_field,
     }
   }
   if (best_field.empty() or best_similarity <= -3) {
-    return std::nullopt;
+    return None{};
   }
   return best_field;
 }

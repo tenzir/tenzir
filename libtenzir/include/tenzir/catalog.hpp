@@ -14,6 +14,7 @@
 #include "tenzir/detail/flat_map.hpp"
 #include "tenzir/detail/request_cache.hpp"
 #include "tenzir/expression.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/taxonomies.hpp"
 #include "tenzir/uuid.hpp"
@@ -195,7 +196,7 @@ public:
   /// memory; they are loaded on demand from disk instead.
   bool lazy_sketches = false;
 
-  std::optional<detail::request_cache> cache;
+  Option<detail::request_cache> cache;
 
   tenzir::taxonomies taxonomies = {};
 };

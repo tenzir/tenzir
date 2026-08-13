@@ -11,9 +11,9 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/tql/expression.hpp"
 
-#include <optional>
 #include <string>
 #include <utility>
 
@@ -27,19 +27,19 @@ class parser_interface {
 public:
   virtual ~parser_interface() = default;
 
-  virtual auto accept_shell_arg() -> std::optional<located<std::string>> = 0;
+  virtual auto accept_shell_arg() -> Option<located<std::string>> = 0;
 
-  virtual auto peek_shell_arg() -> std::optional<located<std::string>> = 0;
+  virtual auto peek_shell_arg() -> Option<located<std::string>> = 0;
 
-  virtual auto accept_identifier() -> std::optional<identifier> = 0;
+  virtual auto accept_identifier() -> Option<identifier> = 0;
 
-  virtual auto peek_identifier() -> std::optional<identifier> = 0;
+  virtual auto peek_identifier() -> Option<identifier> = 0;
 
-  virtual auto accept_equals() -> std::optional<location> = 0;
+  virtual auto accept_equals() -> Option<location> = 0;
 
-  virtual auto accept_char(char c) -> std::optional<location> = 0;
+  virtual auto accept_char(char c) -> Option<location> = 0;
 
-  virtual auto peek_char(char c) -> std::optional<location> = 0;
+  virtual auto peek_char(char c) -> Option<location> = 0;
 
   virtual auto parse_expression() -> tql::expression = 0;
 

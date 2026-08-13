@@ -29,7 +29,7 @@ fdinbuf::fdinbuf(int fd, size_t buffer_size)
 // Note that to implement non-blocking reads we cannot simply switch the
 // file descriptor to non-blocking mode because it might refer to stdin, and
 // putting stdin into non-blocking mode will automatically do the same for stdout.
-std::optional<std::chrono::milliseconds>& fdinbuf::read_timeout() {
+Option<std::chrono::milliseconds>& fdinbuf::read_timeout() {
   return read_timeout_;
 }
 

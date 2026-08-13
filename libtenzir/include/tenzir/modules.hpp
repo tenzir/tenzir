@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/module.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/taxonomies.hpp"
 
 namespace tenzir::modules {
@@ -22,7 +23,7 @@ void init(symbol_map mod, symbol_map2 mod2, concepts_map concepts);
 ///
 /// This function lazily convert the schema definitions we have to `type`,
 /// because it turned out that this currently is a bottleneck during startup.
-auto get_schema(std::string_view name) -> std::optional<type>;
+auto get_schema(std::string_view name) -> Option<type>;
 
 /// Get the concepts map.
 /// @returns An empty map if init(...) was not called.

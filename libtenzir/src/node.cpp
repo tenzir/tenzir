@@ -265,7 +265,7 @@ auto spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
       *hiwater,
       *lowater,
       step_size,
-      command ? *command : std::optional<std::string>{},
+      command ? *command : Option<std::string>{},
       std::chrono::seconds{interval},
     };
     if (auto err = validate(disk_monitor_config); err.valid()) {

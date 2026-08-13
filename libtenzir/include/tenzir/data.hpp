@@ -35,7 +35,6 @@
 
 #include <chrono>
 #include <filesystem>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -138,7 +137,7 @@ public:
   /// Constructs data from optional data.
   /// @param x The optional data instance.
   template <class T>
-  data(std::optional<T> x) : data{x ? std::move(*x) : data{}} {
+  data(Option<T> x) : data{x ? std::move(*x) : data{}} {
     // nop
   }
 
@@ -269,8 +268,8 @@ record flatten(const record& r);
 /// @param rt The record type according to which *r* should be flattened.
 /// @returns The flattened record if the nested structure of *r* is a valid
 ///          subset of *rt*.
-std::optional<record> flatten(const record& r, const record_type& rt);
-std::optional<data> flatten(const data& x, const type& t);
+Option<record> flatten(const record& r, const record_type& rt);
+Option<data> flatten(const data& x, const type& t);
 
 /// Merges one record into another such that the source overwrites potential
 /// keys in the destination.
@@ -325,7 +324,7 @@ inline auto descend(const record* r, std::string_view path)
 /// @pre `!path.empty()`
 template <class T>
 auto try_get(const record& r, std::string_view path)
-  -> caf::expected<std::optional<T>> {
+  -> caf::expected<Option<T>> {
   auto result = descend(&r, path);
   if (not result) {
     // Error.
@@ -333,10 +332,10 @@ auto try_get(const record& r, std::string_view path)
   }
   if (not *result) {
     // Entry not found.
-    return std::nullopt;
+    return None{};
   }
   // Attempt conversion.
-  return match(**result, [&](auto& x) -> caf::expected<std::optional<T>> {
+  return match(**result, [&](auto& x) -> caf::expected<Option<T>> {
     using U = std::remove_cvref_t<decltype(x)>;
     if constexpr (std::is_same_v<U, T>) {
       return x;

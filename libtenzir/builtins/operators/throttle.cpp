@@ -31,7 +31,7 @@ struct throttle_args final {
   located<uint64_t> rate;
   located<duration> window{std::chrono::seconds{1}, location::unknown};
   ast::expression weight{ast::constant{uint64_t{1}, location::unknown}};
-  std::optional<location> drop;
+  Option<location> drop;
 
   auto validate(diagnostic_handler& dh) const -> failure_or<void> {
     if (rate.inner == 0) {
@@ -393,7 +393,7 @@ private:
   uint64_t total_ = 0;
   metric_handler throttle_metrics_ = {};
   uint64_t dropped_events_ = 0;
-  Option<std::chrono::steady_clock::time_point> last_emit_ = {};
+  Option<std::chrono::steady_clock::time_point> last_emit_ = None{};
 };
 
 class plugin final : public virtual operator_plugin2<throttle_operator>,

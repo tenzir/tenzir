@@ -22,7 +22,7 @@ namespace {
 template <class In, class Out>
 class generic_mapping_plugin final : public function_plugin {
 public:
-  using function = std::function<auto(ocsf_version, In)->std::optional<Out>>;
+  using function = std::function<auto(ocsf_version, In)->Option<Out>>;
 
   generic_mapping_plugin(std::string name, std::string input_meta,
                          function function, std::string warning_text)
@@ -59,7 +59,7 @@ public:
                            and std::same_as<Array, arrow::UInt64Array>))
             {
               using input_data_type = type_to_data_t<type_from_arrow_t<Array>>;
-              auto warn_value = std::optional<input_data_type>{};
+              auto warn_value = Option<input_data_type>{};
               for (auto i = int64_t{0}; i < arg.length(); ++i) {
                 if (arg.IsNull(i)) {
                   check(b.AppendNull());

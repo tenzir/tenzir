@@ -17,7 +17,7 @@ type annotate_parameters(const type& x, const bloom_filter_parameters& params) {
   return type{x, {{"synopsis", std::move(v)}}};
 }
 
-std::optional<bloom_filter_parameters> parse_parameters(const type& x) {
+Option<bloom_filter_parameters> parse_parameters(const type& x) {
   auto synopsis = x.attribute("synopsis");
   if (not synopsis or synopsis->empty()) {
     return {};

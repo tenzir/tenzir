@@ -22,7 +22,7 @@ namespace tenzir::plugins::abs {
 struct save_abs_args {
   location op;
   located<secret> uri;
-  std::optional<located<secret>> account_key;
+  Option<located<secret>> account_key;
 
   friend auto inspect(auto& f, save_abs_args& x) -> bool {
     return f.object(x).fields(f.field("op", x.op), f.field("uri", x.uri),

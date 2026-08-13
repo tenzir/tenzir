@@ -165,7 +165,7 @@ public:
       // Extract peer information from the sockaddr structure
       auto peer_ip = ip{};
       auto peer_port = uint64_t{0};
-      auto peer_hostname = std::optional<std::string>{};
+      auto peer_hostname = Option<std::string>{};
       if (auto* v4 = try_as<sockaddr_in>(sender_endpoint.sock_addr)) {
         peer_ip = ip::v4(detail::to_host_order(v4->sin_addr.s_addr));
         peer_port = ntohs(v4->sin_port);

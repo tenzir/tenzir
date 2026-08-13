@@ -148,7 +148,7 @@ auto parse_delimiter(std::string_view field) -> std::variant<char, diagnostic> {
 /// Parses the LEEF attributes field as a sequence of key-value pairs.
 auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
                       const detail::quoting_escaping_policy& quoting)
-  -> std::optional<diagnostic> {
+  -> Option<diagnostic> {
   while (not attributes.empty()) {
     auto attr_end = quoting.find_not_in_quotes(attributes, delimiter);
     /// We greedily accept more than one consecutive separator
@@ -195,7 +195,7 @@ auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
 
 [[nodiscard]] auto parse_line(std::string_view line, auto& builder,
                               const detail::quoting_escaping_policy& quoting)
-  -> std::optional<diagnostic> {
+  -> Option<diagnostic> {
   using namespace std::string_view_literals;
   // We first need to find out whether we are LEEF 1.0 or 2.0. The latter has
   // one additional top-level component.
@@ -257,7 +257,7 @@ auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
   return {};
 }
 
-auto parse_loop(generator<std::optional<std::string_view>> lines,
+auto parse_loop(generator<Option<std::string_view>> lines,
                 diagnostic_handler& diag, multi_series_builder::options options)
   -> generator<table_slice> {
   size_t line_counter = 0;
@@ -460,7 +460,7 @@ public:
 
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> std::optional<generator<table_slice>> override {
+    -> Option<generator<table_slice>> override {
     return parse_loop(to_lines(std::move(input)), ctrl.diagnostics(), options_);
   }
 

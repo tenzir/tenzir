@@ -23,13 +23,13 @@
 #include "tenzir/fbs/data.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/operator.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/type.hpp"
 
 #include <caf/config_value.hpp>
 #include <fmt/format.h>
 
 #include <iterator>
-#include <optional>
 #include <simdjson.h>
 #include <stdexcept>
 #include <string_view>
@@ -308,13 +308,13 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
     return match(
       std::tie(x, y),
       detail::overload{
-        [](const auto&, const auto&) -> std::optional<bool> {
+        [](const auto&, const auto&) -> Option<bool> {
           return {};
         },
-        [](const std::string& lhs, const pattern& rhs) -> std::optional<bool> {
+        [](const std::string& lhs, const pattern& rhs) -> Option<bool> {
           return rhs.match(lhs);
         },
-        [](const pattern& lhs, const std::string& rhs) -> std::optional<bool> {
+        [](const pattern& lhs, const std::string& rhs) -> Option<bool> {
           return lhs.match(rhs);
         },
       });
@@ -464,7 +464,7 @@ record flatten(const record& r, size_t max_recursion) {
   return result;
 }
 
-std::optional<record>
+Option<record>
 flatten(const record& r, const record_type& rt, size_t max_recursion) {
   record result;
   if (max_recursion == 0) {
@@ -500,8 +500,7 @@ flatten(const record& r, const record_type& rt, size_t max_recursion) {
   return result;
 }
 
-std::optional<data>
-flatten(const data& x, const type& t, size_t max_recursion) {
+Option<data> flatten(const data& x, const type& t, size_t max_recursion) {
   if (max_recursion == 0) {
     TENZIR_WARN("partially discarding record: recursion limit of {} exceeded",
                 defaults::max_recursion);
@@ -517,11 +516,11 @@ flatten(const data& x, const type& t, size_t max_recursion) {
 
 } // namespace
 
-std::optional<data> flatten(const data& x, const type& t) {
+Option<data> flatten(const data& x, const type& t) {
   return flatten(x, t, defaults::max_recursion);
 }
 
-std::optional<record> flatten(const record& r, const record_type& rt) {
+Option<record> flatten(const record& r, const record_type& rt) {
   return flatten(r, rt, defaults::max_recursion);
 }
 

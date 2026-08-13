@@ -34,10 +34,10 @@ namespace {
 
 using namespace tenzir::pcap;
 
-auto normalized_magic_number(uint32_t raw_magic) -> std::optional<uint32_t> {
+auto normalized_magic_number(uint32_t raw_magic) -> Option<uint32_t> {
   auto need_swap = tenzir::pcap::need_byte_swap(raw_magic);
   if (not need_swap) {
-    return std::nullopt;
+    return None{};
   }
   return *need_swap ? detail::byteswap(raw_magic) : raw_magic;
 }
@@ -96,7 +96,7 @@ auto make_file_header_table_slice(const file_header& header, uint32_t raw_magic)
 }
 
 struct parser_args {
-  std::optional<location> emit_file_headers;
+  Option<location> emit_file_headers;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, parser_args& x) -> bool {
@@ -119,7 +119,7 @@ public:
 
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> std::optional<generator<table_slice>> override {
+    -> Option<generator<table_slice>> override {
     auto make = [](auto& ctrl, generator<chunk_ptr> input,
                    bool emit_file_headers) -> generator<table_slice> {
       // A PCAP file starts with a 24-byte header.
@@ -481,9 +481,9 @@ private:
     return buffer_.size() - offset_;
   }
 
-  auto view(size_t size) const -> std::optional<std::span<const std::byte>> {
+  auto view(size_t size) const -> Option<std::span<const std::byte>> {
     if (available() < size) {
-      return std::nullopt;
+      return None{};
     }
     return std::span<const std::byte>{buffer_.data() + offset_, size};
   }
@@ -498,8 +498,7 @@ private:
   }
 
   auto parse_file_header_bytes(std::span<const std::byte> bytes,
-                               diagnostic_handler& dh)
-    -> std::optional<file_header> {
+                               diagnostic_handler& dh) -> Option<file_header> {
     TENZIR_ASSERT(bytes.size() == sizeof(file_header));
     auto header = file_header{};
     std::memcpy(&header, bytes.data(), bytes.size());
@@ -509,7 +508,7 @@ private:
         .note("visit https://github.com/tenzir/public-roadmap/issues/75")
         .emit(dh);
       failed_ = true;
-      return std::nullopt;
+      return None{};
     }
     auto raw_magic = header.magic_number;
     auto need_swap = tenzir::pcap::need_byte_swap(raw_magic);
@@ -518,7 +517,7 @@ private:
         .note("from `pcap`")
         .emit(dh);
       failed_ = true;
-      return std::nullopt;
+      return None{};
     }
     need_swap_ = *need_swap;
     current_file_header_raw_magic_ = raw_magic;
@@ -598,7 +597,7 @@ private:
           break;
         }
         append_packet(*pending_packet_header_, *bytes);
-        pending_packet_header_ = std::nullopt;
+        pending_packet_header_ = None{};
         consume(bytes->size());
         co_await flush_packets_if_full(push);
         continue;
@@ -639,7 +638,7 @@ private:
   bool need_swap_ = false;
   uint32_t current_file_header_raw_magic_ = magic_number_2;
   file_header current_file_header_{};
-  std::optional<packet_header> pending_packet_header_;
+  Option<packet_header> pending_packet_header_;
   series_builder builder_;
   SeriesPusher pusher_;
 };
@@ -899,7 +898,7 @@ public:
 
 private:
   chunk_metadata metadata_{.content_type = std::string{pcap::content_type}};
-  std::optional<file_header> current_file_header_;
+  Option<file_header> current_file_header_;
   bool failed_ = false;
 };
 
@@ -923,10 +922,9 @@ public:
     auto meta = chunk_metadata{.content_type = std::string{pcap::content_type}};
     return printer_instance::make(
       [&ctrl, input_schema = std::move(input_schema),
-       current_file_header = std::optional<file_header>{},
-       file_header_printed = false, buffer = std::vector<std::byte>{},
-       meta
-       = std::move(meta)](table_slice slice) mutable -> generator<chunk_ptr> {
+       current_file_header = Option<file_header>{}, file_header_printed = false,
+       buffer = std::vector<std::byte>{}, meta = std::move(meta)](
+        table_slice slice) mutable -> generator<chunk_ptr> {
         if (slice.rows() == 0) {
           co_yield {};
           co_return;
@@ -967,7 +965,7 @@ public:
           co_return;
         }
         // Helper function to process a row in a table slice of packets.
-        auto process_packet_row = [&](auto row) -> std::optional<diagnostic> {
+        auto process_packet_row = [&](auto row) -> Option<diagnostic> {
           auto [pkt, linktype] = to_packet_record(row);
           // Generate file header based on first packet or fail if the packet
           // is incompatible with the known file header.

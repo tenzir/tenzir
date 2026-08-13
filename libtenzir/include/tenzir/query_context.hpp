@@ -11,6 +11,7 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/expression.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/typed_actor_view.hpp>
@@ -98,7 +99,7 @@ struct query_context {
   expression expr = {};
 
   /// The initial taste size.
-  std::optional<uint32_t> taste = std::nullopt;
+  Option<uint32_t> taste = None{};
 
   struct priority {
     constexpr static uint64_t normal = 1'000;

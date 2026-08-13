@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
 #include "tenzir/variant.hpp"
 
 #include <fmt/format.h>
@@ -53,7 +54,7 @@ private:
     : data_{data} {
   }
 
-  std::optional<std::pair<const value_path&, segment>> data_;
+  Option<std::pair<const value_path&, segment>> data_;
 };
 
 } // namespace tenzir

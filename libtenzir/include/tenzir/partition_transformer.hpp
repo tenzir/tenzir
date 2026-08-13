@@ -12,12 +12,12 @@
 
 #include "tenzir/active_partition.hpp"
 #include "tenzir/actors.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/tql2/ast.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
 #include <filesystem>
-#include <optional>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -159,7 +159,7 @@ struct partition_transformer_state {
 /// partition's uuid so that callers processing a batch of partitions (e.g.
 /// the rebuilder) can identify exactly which partition failed instead of
 /// having to treat the whole batch as suspect.
-auto store_error_partition(const caf::error& err) -> std::optional<uuid>;
+auto store_error_partition(const caf::error& err) -> Option<uuid>;
 
 /// Spawns a PARTITION TRANSFORMER actor with the given parameters.
 ///

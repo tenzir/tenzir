@@ -63,7 +63,7 @@ public:
                       .emit(ctx);
                     return caf::none;
                   }
-                  array_sum = checked.value();
+                  array_sum = *checked;
                 }
               }
               auto checked = checked_add(self, array_sum);
@@ -71,7 +71,7 @@ public:
                 diagnostic::warning("integer overflow").primary(expr_).emit(ctx);
                 return caf::none;
               }
-              return checked.value();
+              return *checked;
             },
             [&](double self) -> sum_t {
               for (auto i = int64_t{}; i < array.length(); ++i) {
@@ -204,13 +204,13 @@ public:
 
   auto reset() -> void override {
     type_ = {};
-    sum_ = {};
+    sum_ = None{};
   }
 
 private:
   ast::expression expr_;
   type type_;
-  std::optional<sum_t> sum_;
+  Option<sum_t> sum_;
 };
 
 class plugin : public virtual aggregation_plugin {

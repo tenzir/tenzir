@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/arc.hpp>
 #include <tenzir/context.hpp>
 #include <tenzir/data.hpp>
@@ -43,8 +45,8 @@ struct package_source final {
 };
 
 struct package_config final {
-  std::optional<package_source> source;
-  std::optional<std::string> version;
+  Option<package_source> source;
+  Option<std::string> version;
   detail::flat_map<std::string, std::string> inputs;
   record metadata;  // opaque extra data that can be set at install time
   record overrides; // overrides for fields in the package definition
@@ -68,8 +70,8 @@ struct package_config final {
 struct package_input final {
   std::string name; // required to be non-empty
   std::string type; // optional type hint
-  std::optional<std::string> description;
-  std::optional<std::string> default_;
+  Option<std::string> description;
+  Option<std::string> default_;
 
   auto to_record() const -> record;
 
@@ -85,9 +87,9 @@ struct package_input final {
 
 struct package_operator_parameter final {
   std::string name; // required to be non-empty
-  std::optional<std::string> type;
-  std::optional<std::string> description;
-  std::optional<std::string> default_;
+  Option<std::string> type;
+  Option<std::string> description;
+  Option<std::string> default_;
 
   auto to_record() const -> record;
 
@@ -115,10 +117,10 @@ struct package_operator_arguments final {
 };
 
 struct package_operator final {
-  std::optional<std::string> description;
+  Option<std::string> description;
   package_operator_arguments args;
   /// Full source file content (frontmatter + TQL body). Always set.
-  std::optional<Arc<const Source>> file_source;
+  Option<Arc<const Source>> file_source;
   /// View into `file_source->text` covering the raw YAML frontmatter (between
   /// the `---` markers, not including them). Empty when there is no frontmatter.
   std::string_view frontmatter;
@@ -159,11 +161,11 @@ struct package_operator final {
 };
 
 struct package_pipeline final {
-  std::optional<std::string> name;
-  std::optional<std::string> description;
+  Option<std::string> name;
+  Option<std::string> description;
   std::string definition; // required to be non-empty
   bool disabled = false;
-  std::optional<duration> restart_on_error;
+  Option<duration> restart_on_error;
   bool unstoppable = false;
 
   auto to_record() const -> record;
@@ -189,7 +191,7 @@ struct package_pipeline final {
 struct package_context final {
   std::string type
     = "string"; // A type hint for the frontend, ignored by the node.
-  std::optional<std::string> description;
+  Option<std::string> description;
   context_parameter_map arguments = {};
   bool disabled = false;
 
@@ -207,8 +209,8 @@ struct package_context final {
 };
 
 struct package_example final {
-  std::optional<std::string> name;
-  std::optional<std::string> description;
+  Option<std::string> name;
+  Option<std::string> description;
   std::string definition; // required to be non-empty
 
   auto to_record() const -> record;
@@ -253,10 +255,10 @@ using package_examples_list = std::vector<package_example>;
 struct package final {
   std::string id;   // required to be non-empty
   std::string name; // required to be non-empty
-  std::optional<std::string> author;
-  std::optional<std::string> description;
-  std::optional<std::string> package_icon;
-  std::optional<std::string> author_icon;
+  Option<std::string> author;
+  Option<std::string> description;
+  Option<std::string> package_icon;
+  Option<std::string> author_icon;
   std::vector<std::string> categories;
 
   package_inputs_map inputs;
@@ -275,7 +277,7 @@ struct package final {
   // modifying the original package definition directly, by placing them next
   // to each other in a directory, or by including an `overrides` section in
   // the input.
-  std::optional<package_config> config;
+  Option<package_config> config;
 
   static auto parse(const view<record>& data) -> caf::expected<package>;
   static auto parse(const view<record>& data, std::string_view package_path)

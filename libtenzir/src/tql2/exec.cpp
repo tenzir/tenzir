@@ -251,7 +251,7 @@ public:
           .hint("inline the lambda expression at the use site")
           .emit(ctx_);
         failure_ = failure::promise();
-        map_[std::move(name)] = std::nullopt;
+        map_[std::move(name)] = None{};
         it = x.body.erase(it);
         continue;
       }
@@ -261,7 +261,7 @@ public:
         map_[std::move(name)] = ast::constant::make(*value);
       } else {
         failure_ = value.error();
-        map_[std::move(name)] = std::nullopt;
+        map_[std::move(name)] = None{};
       }
       it = x.body.erase(it);
     }
@@ -399,7 +399,7 @@ public:
 
 private:
   failure_or<void> failure_;
-  std::unordered_map<std::string, std::optional<ast::constant>> map_;
+  std::unordered_map<std::string, Option<ast::constant>> map_;
   session ctx_;
 };
 
@@ -412,7 +412,7 @@ auto resolve_let_bindings(ast::pipeline& pipe, session ctx)
 
 auto compile_resolved(ast::pipeline&& pipe, session ctx)
   -> failure_or<pipeline> {
-  auto fail = std::optional<failure>{};
+  auto fail = Option<failure>{};
   auto ops = std::vector<operator_ptr>{};
   for (auto& stmt : pipe.body) {
     auto result = stmt.match(
@@ -1932,7 +1932,7 @@ private:
 
 auto run_plan_blocking(ir::Plan plan, caf::actor_system& sys,
                        diagnostic_handler& dh,
-                       std::optional<std::string> const& profile_path)
+                       Option<std::string> const& profile_path)
   -> failure_or<void> {
   auto profiler = Profiler{};
   if (profile_path) {

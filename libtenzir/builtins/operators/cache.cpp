@@ -736,7 +736,7 @@ public:
       write_timeout_{write_timeout} {
   }
 
-  auto run(std::optional<generator<table_slice>> input,
+  auto run(Option<generator<table_slice>> input,
            operator_control_plane& ctrl) const -> generator<table_slice> {
     TENZIR_ASSERT(source_ != input.has_value());
     const auto cache_manager
@@ -1495,10 +1495,10 @@ public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto id = located<std::string>{};
-    auto mode = std::optional<located<std::string>>{};
-    auto capacity = std::optional<located<uint64_t>>{};
-    auto read_timeout = std::optional<located<duration>>{};
-    auto write_timeout = std::optional<located<duration>>{};
+    auto mode = Option<located<std::string>>{};
+    auto capacity = Option<located<uint64_t>>{};
+    auto read_timeout = Option<located<duration>>{};
+    auto write_timeout = Option<located<duration>>{};
     argument_parser2::operator_("cache")
       .positional("id", id)
       .named("mode", mode)

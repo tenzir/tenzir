@@ -10,6 +10,7 @@
 
 #include "tenzir/chunk.hpp"
 #include "tenzir/generator.hpp"
+#include "tenzir/option.hpp"
 
 namespace tenzir {
 
@@ -97,14 +98,13 @@ inline auto make_byte_reader(generator<chunk_ptr> input) {
 /// input boundaries are aligned. The function returns nullopt whenever it
 /// merges buffers from multiple chunks. This does not indicate completion.
 inline auto make_byte_view_reader(generator<chunk_ptr> input) {
-  return
-    [byte_reader = make_byte_reader(std::move(input))](
-      size_t num_bytes) mutable -> std::optional<std::span<const std::byte>> {
-      if (auto bytes = byte_reader(num_bytes)) {
-        return as_bytes(bytes);
-      }
-      return std::nullopt;
-    };
+  return [byte_reader = make_byte_reader(std::move(input))](
+           size_t num_bytes) mutable -> Option<std::span<const std::byte>> {
+    if (auto bytes = byte_reader(num_bytes)) {
+      return as_bytes(bytes);
+    }
+    return None{};
+  };
 }
 
 } // namespace tenzir

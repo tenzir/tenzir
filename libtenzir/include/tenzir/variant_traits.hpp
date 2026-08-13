@@ -392,14 +392,14 @@ template <concepts::unqualified T, has_variant_traits V>
 auto try_as(V& v) -> std::remove_reference_t<ForwardLike<V, T>>* {
   using bare = std::remove_cvref_t<V>;
   constexpr auto alternative_index = detail::variant_index<bare, T>;
-  // TODO: Otherwise, this should probably return `std::optional`.
+  // TODO: Otherwise, this should probably return `Option`.
   static_assert(
     std::is_reference_v<decltype(detail::variant_get<alternative_index>(v))>);
   const auto current_index = variant_traits<bare>::index(v);
   if (current_index != alternative_index) {
     return nullptr;
   }
-  // TODO: Otherwise, this should probably return `std::optional`.
+  // TODO: Otherwise, this should probably return `Option`.
   static_assert(
     std::is_reference_v<decltype(detail::variant_get<alternative_index>(v))>);
   return &detail::variant_get<alternative_index>(v);

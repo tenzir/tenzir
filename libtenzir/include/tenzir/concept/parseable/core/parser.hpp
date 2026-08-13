@@ -10,6 +10,7 @@
 
 #include "tenzir/concept/support/unused_type.hpp"
 #include "tenzir/concepts.hpp"
+#include "tenzir/option.hpp"
 
 #include <iterator>
 #include <tuple>
@@ -90,10 +91,10 @@ struct parser_base {
 
   template <class Iterator, class D = Derived>
   auto apply(Iterator& f, const Iterator& l) const
-    -> std::optional<typename D::attribute> {
+    -> Option<typename D::attribute> {
     auto result = typename D::attribute{};
     if (not(*this)(f, l, result)) {
-      return std::nullopt;
+      return None{};
     }
     return result;
   }

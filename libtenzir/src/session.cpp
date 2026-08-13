@@ -39,7 +39,7 @@ session_provider::session_provider(diagnostic_handler& dh,
 session::session(session_provider& provider) : provider_{provider} {
 }
 
-auto session::get_failure() const -> std::optional<failure> {
+auto session::get_failure() const -> Option<failure> {
   return provider_.dh_.failure_;
 }
 

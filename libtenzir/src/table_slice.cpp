@@ -395,11 +395,11 @@ auto upgrade_record_batch(const std::shared_ptr<arrow::RecordBatch>& batch)
 /// @returns true if the array is supported, false otherwise. If false, `error`
 ///          will have a value.
 auto verify_column(const arrow::Array& arr,
-                   std::optional<table_slice::creation_error>& error) -> bool;
+                   Option<table_slice::creation_error>& error) -> bool;
 
 template <concrete_type T>
 auto verify_column_impl(const type_to_arrow_array_t<T>* arr,
-                        std::optional<table_slice::creation_error>&) -> bool {
+                        Option<table_slice::creation_error>&) -> bool {
   if (not arr) {
     return false;
   }
@@ -408,8 +408,8 @@ auto verify_column_impl(const type_to_arrow_array_t<T>* arr,
 
 template <>
 auto verify_column_impl<tenzir::record_type>(
-  const arrow::StructArray* arr,
-  std::optional<table_slice::creation_error>& error) -> bool {
+  const arrow::StructArray* arr, Option<table_slice::creation_error>& error)
+  -> bool {
   if (not arr) {
     return false;
   }
@@ -423,8 +423,8 @@ auto verify_column_impl<tenzir::record_type>(
 
 template <>
 auto verify_column_impl<tenzir::list_type>(
-  const arrow::ListArray* arr,
-  std::optional<table_slice::creation_error>& error) -> bool {
+  const arrow::ListArray* arr, Option<table_slice::creation_error>& error)
+  -> bool {
   if (not arr) {
     return false;
   }
@@ -432,8 +432,9 @@ auto verify_column_impl<tenzir::list_type>(
 }
 
 template <>
-auto verify_column_impl<tenzir::map_type>(
-  const arrow::MapArray*, std::optional<table_slice::creation_error>&) -> bool {
+auto verify_column_impl<tenzir::map_type>(const arrow::MapArray*,
+                                          Option<table_slice::creation_error>&)
+  -> bool {
   return false;
 }
 
@@ -445,7 +446,7 @@ using array_type = type_to_arrow_array_t<type_type<I>>;
 
 template <size_t... Is>
 auto verify_column_fold(const arrow::Array& arr,
-                        std::optional<table_slice::creation_error>& error,
+                        Option<table_slice::creation_error>& error,
                         std::index_sequence<Is...>) -> bool {
   return (verify_column_impl<type_type<Is>>(
             dynamic_cast<const array_type<Is>*>(&arr), error)
@@ -453,7 +454,7 @@ auto verify_column_fold(const arrow::Array& arr,
 };
 
 auto verify_column(const arrow::Array& arr,
-                   std::optional<table_slice::creation_error>& error) -> bool {
+                   Option<table_slice::creation_error>& error) -> bool {
   const auto valid = verify_column_fold(
     arr, error,
     std::make_index_sequence<caf::detail::tl_size_v<concrete_types>>{});
@@ -485,7 +486,7 @@ verify_record_batch(const arrow::RecordBatch& record_batch)
     return std::unexpected(
       table_slice::creation_error{.message = status.ToString()});
   }
-  auto error = std::optional<table_slice::creation_error>{};
+  auto error = Option<table_slice::creation_error>{};
   for (const auto& column : record_batch.columns()) {
     if (not verify_column(*column, error)) {
       TENZIR_ASSERT(error);
@@ -565,7 +566,7 @@ state([[maybe_unused]] Slice&& encoded, State&& state) noexcept {
 }
 
 auto create_schema_if_not_exist(std::shared_ptr<arrow::RecordBatch> const& batch,
-                                std::optional<type> schema) -> type {
+                                Option<type> schema) -> type {
   if (schema) {
     TENZIR_ASSERT(is<record_type>(*schema));
     return std::move(*schema);
@@ -588,7 +589,7 @@ table_slice::table_slice() noexcept {
 
 table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
                          const std::shared_ptr<arrow::RecordBatch>& batch,
-                         std::optional<type> schema) noexcept
+                         Option<type> schema) noexcept
   : chunk_{verified_or_none(std::move(chunk), verify)} {
   increment_instances();
   TENZIR_ASSERT(not chunk_ or chunk_->unique());
@@ -634,7 +635,7 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
 }
 
 table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
-                         std::optional<type> schema, enum serialize serialize) {
+                         Option<type> schema, enum serialize serialize) {
   increment_instances();
   TENZIR_ASSERT_EXPENSIVE(verify_record_batch(*record_batch));
   auto valid_schema
@@ -645,9 +646,8 @@ table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch
 }
 
 auto table_slice::try_from(
-  const std::shared_ptr<arrow::RecordBatch>& record_batch,
-  std::optional<type> schema, enum serialize serialize)
-  -> std::expected<table_slice, creation_error> {
+  const std::shared_ptr<arrow::RecordBatch>& record_batch, Option<type> schema,
+  enum serialize serialize) -> std::expected<table_slice, creation_error> {
   auto converted_batch = upgrade_record_batch(record_batch);
   auto valid = verify_record_batch(*converted_batch);
   if (not valid) {
@@ -1159,7 +1159,7 @@ uint64_t rows(const std::vector<table_slice>& slices) {
   return result;
 }
 
-std::optional<table_slice>
+Option<table_slice>
 filter(const table_slice& slice, expression expr, const ids& hints) {
   if (slice.rows() == 0) {
     return {};
@@ -1171,12 +1171,11 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
   return concatenate(std::move(selected));
 }
 
-std::optional<table_slice>
-filter(const table_slice& slice, const expression& expr) {
+Option<table_slice> filter(const table_slice& slice, const expression& expr) {
   return filter(slice, expr, ids{});
 }
 
-std::optional<table_slice> filter(const table_slice& slice, const ids& hints) {
+Option<table_slice> filter(const table_slice& slice, const ids& hints) {
   return filter(slice, expression{}, hints);
 }
 
@@ -1354,11 +1353,10 @@ uint64_t count_matching(const table_slice& slice, const expression& expr,
 }
 
 namespace {
-constexpr static auto enumeration_to_string
-  = [](series s) -> std::optional<series> {
+constexpr static auto enumeration_to_string = [](series s) -> Option<series> {
   auto es = s.as<enumeration_type>();
   if (not es) {
-    return std::nullopt;
+    return None{};
   }
   auto new_type = tenzir::type{string_type{}};
   new_type.assign_metadata(s.type);

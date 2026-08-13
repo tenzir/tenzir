@@ -14,14 +14,14 @@ namespace tenzir::plugins::tune {
 namespace {
 
 struct tune_args {
-  std::optional<located<duration>> idle_after = {};
-  std::optional<located<uint64_t>> min_demand_elements = {};
-  std::optional<located<uint64_t>> max_demand_elements = {};
-  std::optional<located<uint64_t>> max_demand_batches = {};
-  std::optional<located<duration>> min_backoff = {};
-  std::optional<located<duration>> max_backoff = {};
-  std::optional<located<double>> backoff_rate = {};
-  std::optional<located<bool>> detached = {};
+  Option<located<duration>> idle_after = None{};
+  Option<located<uint64_t>> min_demand_elements = None{};
+  Option<located<uint64_t>> max_demand_elements = None{};
+  Option<located<uint64_t>> max_demand_batches = None{};
+  Option<located<duration>> min_backoff = None{};
+  Option<located<duration>> max_backoff = None{};
+  Option<located<double>> backoff_rate = None{};
+  Option<located<bool>> detached = None{};
 
   friend auto inspect(auto& f, tune_args& x) {
     return f.object(x).fields(
@@ -132,7 +132,7 @@ public:
     // TODO: This is only optional because of a bug in the argument parser,
     // which fails for operators that have no positional arguments except for a
     // required pipeline, and have at least one named argument.
-    auto pipe = std::optional<located<pipeline>>{};
+    auto pipe = Option<located<pipeline>>{};
     auto parser = argument_parser2::operator_(name());
     parser.named("idle_after", args.idle_after);
     parser.named("min_demand_elements", args.min_demand_elements);

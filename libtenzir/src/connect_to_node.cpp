@@ -84,8 +84,7 @@ auto get_node_endpoint(const caf::settings& opts) -> caf::expected<Endpoint> {
 
 auto node_connection_timeout(const caf::settings& options) -> caf::timespan;
 
-auto get_retry_delay(const caf::settings& settings)
-  -> std::optional<caf::timespan> {
+auto get_retry_delay(const caf::settings& settings) -> Option<caf::timespan> {
   auto retry_delay
     = caf::get_or<caf::timespan>(settings, "tenzir.connection-retry-delay",
                                  defaults::node_connection_retry_delay);
@@ -96,7 +95,7 @@ auto get_retry_delay(const caf::settings& settings)
 }
 
 auto get_deadline(caf::timespan timeout)
-  -> std::optional<std::chrono::steady_clock::time_point> {
+  -> Option<std::chrono::steady_clock::time_point> {
   if (caf::is_infinite(timeout)) {
     return {};
   }
@@ -129,7 +128,7 @@ check_version(const record& remote_version, const record& cfg) -> bool {
 
 } // namespace detail
 
-std::optional<std::chrono::steady_clock::time_point>
+Option<std::chrono::steady_clock::time_point>
 get_deadline(caf::timespan timeout) {
   if (caf::is_infinite(timeout)) {
     return {};
@@ -137,7 +136,7 @@ get_deadline(caf::timespan timeout) {
   return {std::chrono::steady_clock::now() + timeout};
 }
 
-std::optional<caf::timespan> get_retry_delay(const caf::settings& settings) {
+Option<caf::timespan> get_retry_delay(const caf::settings& settings) {
   auto retry_delay
     = caf::get_or<caf::timespan>(settings, "tenzir.connection-retry-delay",
                                  defaults::node_connection_retry_delay);
@@ -173,8 +172,7 @@ caf::expected<Endpoint> get_node_endpoint(const caf::settings& opts) {
 }
 
 auto connect_to_node(caf::scoped_actor& self, Endpoint endpoint,
-                     caf::timespan timeout,
-                     std::optional<caf::timespan> retry_delay,
+                     caf::timespan timeout, Option<caf::timespan> retry_delay,
                      bool internal_connection) -> caf::expected<node_actor> {
   auto connector_actor = self->spawn(
     connector, retry_delay, detail::get_deadline(timeout), internal_connection);

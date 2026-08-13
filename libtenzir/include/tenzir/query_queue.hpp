@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/actors.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/query_context.hpp"
 #include "tenzir/uuid.hpp"
 
@@ -130,10 +131,10 @@ public:
 
   /// Retrieves the next partition to be scheduled and the related queries and
   /// increments the scheduled counters for the latter.
-  [[nodiscard]] std::optional<entry> next();
+  [[nodiscard]] Option<entry> next();
 
   /// Returns a client handle in case the requested batch has been completed.
-  [[nodiscard]] std::optional<receiver_actor<atom::done>>
+  [[nodiscard]] Option<receiver_actor<atom::done>>
   handle_completion(const uuid& qid);
 
   std::size_t memusage() const;

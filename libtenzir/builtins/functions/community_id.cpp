@@ -23,9 +23,9 @@ struct arguments {
   ast::expression src_ip;
   ast::expression dst_ip;
   ast::expression proto;
-  std::optional<ast::expression> dst_port;
-  std::optional<ast::expression> src_port;
-  std::optional<ast::expression> seed;
+  Option<ast::expression> dst_port;
+  Option<ast::expression> src_port;
+  Option<ast::expression> seed;
 };
 
 class plugin final : public function_plugin {
@@ -113,8 +113,8 @@ public:
           append_nulls();
           continue;
         }
-        auto src_ports = std::optional<basic_series<int64_type>>{};
-        auto dst_ports = std::optional<basic_series<int64_type>>{};
+        auto src_ports = Option<basic_series<int64_type>>{};
+        auto dst_ports = Option<basic_series<int64_type>>{};
         if (src_port_series.type.kind().is_not<null_type>()) {
           src_ports = src_port_series.as<int64_type>();
           if (not src_ports) {
@@ -139,7 +139,7 @@ public:
             continue;
           }
         }
-        auto seeds = std::optional<basic_series<int64_type>>{};
+        auto seeds = Option<basic_series<int64_type>>{};
         if (seed_series.type.kind().is_not<null_type>()) {
           seeds = seed_series.as<int64_type>();
           if (not seeds) {

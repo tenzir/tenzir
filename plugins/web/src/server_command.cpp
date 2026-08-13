@@ -188,7 +188,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
           // is passed using multiple methods.
           // TODO: Attempt to parse lists in query parameters, as in
           // `?x=1,2,3&y=[a,b]`
-          auto maybe_param = std::optional<tenzir::data>{};
+          auto maybe_param = Option<tenzir::data>{};
           if (auto query_param = query_params->get_param(name)) {
             maybe_param = std::string{*query_param};
           }

@@ -76,7 +76,7 @@ caf::expected<server_config> convert_and_validate(configuration config) {
                                          result.webroot));
     }
   } else {
-    result.webroot = std::nullopt;
+    result.webroot = None{};
   }
   if (not result.certfile.empty() and not exists(result.certfile)) {
     return caf::make_error(ec::invalid_argument,

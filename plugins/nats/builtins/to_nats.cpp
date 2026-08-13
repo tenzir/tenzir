@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/option.hpp"
 #include "tenzir_plugins/nats/common.hpp"
 
 #include <tenzir/arc.hpp>
@@ -25,7 +26,6 @@
 #include <chrono>
 #include <limits>
 #include <mutex>
-#include <optional>
 #include <span>
 #include <tuple>
 #include <utility>
@@ -283,7 +283,7 @@ private:
     }
     auto& dh = ctx.dh();
     auto messages = eval(args_.message, input, dh);
-    auto headers = std::optional<multi_series>{};
+    auto headers = Option<multi_series>{};
     if (args_.headers) {
       headers = eval(*args_.headers, input, dh);
     }

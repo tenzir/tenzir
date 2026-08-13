@@ -47,7 +47,7 @@ namespace {
 struct configuration {
   std::string field;
   std::string out;
-  std::optional<std::string> salt;
+  Option<std::string> salt;
 
   /// Support type inspection for easy parsing with convertible.
   template <class Inspector>
@@ -164,7 +164,7 @@ class fun : public virtual function_plugin {
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    auto seed = std::optional<std::string>{};
+    auto seed = Option<std::string>{};
     TRY(argument_parser2::function(name())
           .positional("x", expr, "any")
           .named("seed", seed)

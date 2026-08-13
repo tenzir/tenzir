@@ -8,9 +8,10 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <concepts>
 #include <limits>
-#include <optional>
 #include <type_traits>
 
 namespace tenzir {
@@ -23,12 +24,11 @@ constexpr auto min = std::numeric_limits<T>::lowest();
 
 #define TENZIR_CHECKED_MATH_CHECK(x)                                           \
   if (not(x)) {                                                                \
-    return std::nullopt;                                                       \
+    return None{};                                                             \
   }
 
 template <std::integral X, std::integral Y>
-constexpr auto checked_add(X x, Y y)
-  -> std::optional<std::common_type_t<X, Y>> {
+constexpr auto checked_add(X x, Y y) -> Option<std::common_type_t<X, Y>> {
   static_assert(sizeof(x) == sizeof(y));
   using R = std::common_type_t<X, Y>;
   if constexpr (std::is_signed_v<X> and std::is_signed_v<Y>) {
@@ -66,7 +66,7 @@ constexpr auto checked_add(X x, Y y)
 }
 
 template <std::integral X, std::integral Y>
-constexpr auto checked_sub(X x, Y y) -> std::optional<X> {
+constexpr auto checked_sub(X x, Y y) -> Option<X> {
   static_assert(sizeof(x) == sizeof(y));
   // -> min<X> <= x - y && x - y <= max<X>
   if (y >= 0) {
@@ -101,7 +101,7 @@ constexpr auto checked_sub(X x, Y y) -> std::optional<X> {
 
 template <std::integral X, std::integral Y>
 constexpr auto checked_mul(X x, Y y)
-  -> std::optional<std::conditional_t<std::is_signed_v<X>, X, Y>> {
+  -> Option<std::conditional_t<std::is_signed_v<X>, X, Y>> {
   static_assert(sizeof(x) == sizeof(y));
   if (x == 0 or y == 0) {
     return 0;

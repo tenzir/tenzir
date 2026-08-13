@@ -30,7 +30,7 @@ auto env_mutex = std::mutex{};
 
 } // namespace
 
-std::optional<std::string> getenv(std::string_view var) {
+Option<std::string> getenv(std::string_view var) {
   auto lock = std::scoped_lock{env_mutex};
   // NOLINTNEXTLINE(concurrency-mt-unsafe)
   if (const char* result = ::getenv(var.data())) {

@@ -17,12 +17,11 @@
 
 namespace tenzir {
 
-auto resolved_secret_value::utf8_view() const
-  -> std::optional<std::string_view> {
+auto resolved_secret_value::utf8_view() const -> Option<std::string_view> {
   const auto valid_utf8 = arrow::util::ValidateUTF8(
     reinterpret_cast<const uint8_t*>(value_.data()), value_.size());
   if (not valid_utf8) {
-    return std::nullopt;
+    return None{};
   }
   return std::string_view{
     reinterpret_cast<const char*>(value_.data()),

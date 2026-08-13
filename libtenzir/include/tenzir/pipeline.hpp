@@ -11,6 +11,7 @@
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/operator_control_plane.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/plugin/base.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tag.hpp"
@@ -266,12 +267,12 @@ struct [[nodiscard]] operator_metric {
 
 /// Configures the maximum demand from an operator to its upstream.
 struct demand_settings {
-  std::optional<uint64_t> min_elements = {};
-  std::optional<uint64_t> max_elements = {};
-  std::optional<uint64_t> max_batches = {};
-  std::optional<duration> min_backoff = {};
-  std::optional<duration> max_backoff = {};
-  std::optional<double> backoff_rate = {};
+  Option<uint64_t> min_elements = None{};
+  Option<uint64_t> max_elements = None{};
+  Option<uint64_t> max_batches = None{};
+  Option<duration> min_backoff = None{};
+  Option<duration> max_backoff = None{};
+  Option<double> backoff_rate = None{};
 };
 
 enum class strictness_level { normal, strict };
@@ -363,7 +364,7 @@ public:
   /// `where true` to be `pass`, this can be seen as a corollary of the above,
   /// as the pipeline would otherwise be ill-typed. Similarly, if the input type
   /// is not events, we must return `event_order::ordered` and either
-  /// `std::nullopt` or `trivially_true_expression()`.
+  /// `None{}` or `trivially_true_expression()`.
   ///
   /// # Example
   ///
@@ -466,11 +467,11 @@ auto inspect(Inspector& f, const operator_base& x) -> bool {
 ///
 /// @see operator_base::optimize
 struct optimize_result {
-  std::optional<expression> filter;
+  Option<expression> filter;
   event_order order;
   operator_ptr replacement;
 
-  optimize_result(std::optional<expression> filter, event_order order,
+  optimize_result(Option<expression> filter, event_order order,
                   operator_ptr replacement)
     : filter{std::move(filter)},
       order{order},
@@ -481,7 +482,7 @@ struct optimize_result {
   /// change based on the order in which the input events arrive in.
   static auto order_invariant(const operator_base& op, event_order order)
     -> optimize_result {
-    return optimize_result{std::nullopt, order, op.copy()};
+    return optimize_result{None{}, order, op.copy()};
   }
 };
 
@@ -539,8 +540,8 @@ public:
   auto split_at_void() && -> caf::expected<std::vector<pipeline>>;
 
   /// Returns an operator location that is consistent with all operators of the
-  /// pipeline or `std::nullopt` if there is none.
-  auto infer_location() const -> std::optional<operator_location>;
+  /// pipeline or `None{}` if there is none.
+  auto infer_location() const -> Option<operator_location>;
 
   auto location() const -> operator_location override {
     panic("pipeline::location() must not be called");

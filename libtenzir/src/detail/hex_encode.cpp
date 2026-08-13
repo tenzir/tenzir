@@ -21,7 +21,7 @@ auto encode(const std::string_view input) -> std::string {
   return encoded;
 }
 
-auto decode(const std::string_view input) -> std::optional<std::string> {
+auto decode(const std::string_view input) -> Option<std::string> {
   if (input.empty()) {
     return std::string{};
   }
@@ -30,7 +30,7 @@ auto decode(const std::string_view input) -> std::optional<std::string> {
   try {
     boost::algorithm::unhex(input, std::back_inserter(decoded));
   } catch (boost::algorithm::hex_decode_error& ex) {
-    return std::nullopt;
+    return None{};
   }
   return decoded;
 }

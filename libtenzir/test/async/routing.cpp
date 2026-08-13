@@ -19,11 +19,11 @@
 #ifdef CHECK
 #  undef CHECK
 #endif
+#include "tenzir/option.hpp"
 #include "tenzir/test/test.hpp"
 
 #include <functional>
 #include <numeric>
-#include <optional>
 #include <set>
 #include <vector>
 
@@ -58,7 +58,7 @@ auto key_column(const table_slice& slice) -> multi_series {
 /// bucket. This is what a run-based exchange would push as separate messages.
 auto count_runs(const multi_series& values, uint64_t jobs) -> size_t {
   auto result = size_t{0};
-  auto previous = std::optional<uint64_t>{};
+  auto previous = Option<uint64_t>{};
   for (auto row = int64_t{0}; row < values.length(); ++row) {
     auto bucket = std::hash<data_view3>{}(values.view3_at(row)) % jobs;
     if (previous != bucket) {

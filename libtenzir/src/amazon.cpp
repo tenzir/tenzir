@@ -208,11 +208,9 @@ SignedHttpClient::SignedHttpClient(SignedHttpClientConfig config)
     base_path_.pop_back();
   }
   if (config.sign_requests) {
-    auto creds = config.credentials
-                   ? std::optional{std::move(*config.credentials)}
-                   : std::nullopt;
-    auto provider
-      = make_aws_credentials_provider(creds, std::optional{region_});
+    auto creds
+      = config.credentials ? Option{std::move(*config.credentials)} : None{};
+    auto provider = make_aws_credentials_provider(creds, Option{region_});
     if (not provider) {
       diagnostic::error(provider.error()).throw_();
     }

@@ -10,21 +10,22 @@
 
 #include "tenzir/chunk.hpp"
 #include "tenzir/generator.hpp"
+#include "tenzir/option.hpp"
 
 #include <string_view>
 
 namespace tenzir {
 
 /// Transforms a sequence of bytes into a sequence of lines. The returned
-/// sequence may spuriously contain `std::nullopt`, which shall be ignored. An
+/// sequence may spuriously contain `None{}`, which shall be ignored. An
 /// empty line is translated into an empty string view.
 inline auto to_lines(generator<chunk_ptr> input)
-  -> generator<std::optional<std::string_view>> {
+  -> generator<Option<std::string_view>> {
   auto buffer = std::string{};
   bool ended_on_carriage_return = false;
   for (auto&& chunk : input) {
     if (not chunk or chunk->size() == 0) {
-      co_yield std::nullopt;
+      co_yield None{};
       continue;
     }
     const auto* begin = reinterpret_cast<const char*>(chunk->data());
@@ -55,7 +56,7 @@ inline auto to_lines(generator<chunk_ptr> input)
       begin = current + 1;
     }
     buffer.append(begin, end);
-    co_yield std::nullopt;
+    co_yield None{};
   }
   if (not buffer.empty()) {
     co_yield buffer;

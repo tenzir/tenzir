@@ -27,8 +27,8 @@ auto parse_connector_args(const std::string& name,
                           operator_factory_invocation& inv, session ctx)
   -> failure_or<connector_args> {
   auto args = connector_args{};
-  auto dur = std::optional<located<duration>>{};
-  auto iam_opts = std::optional<located<record>>{};
+  auto dur = Option<located<duration>>{};
+  auto iam_opts = Option<located<record>>{};
   TRY(argument_parser2::operator_(name)
         .positional("queue", args.queue)
         .named("poll_time", dur)

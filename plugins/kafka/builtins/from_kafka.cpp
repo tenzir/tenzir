@@ -20,6 +20,7 @@
 #include "tenzir/detail/string.hpp"
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/json_parser.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/si_literals.hpp"
 
 #include <tenzir/operator_plugin.hpp>
@@ -42,7 +43,6 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <ranges>
 #include <span>
 #include <string_view>
@@ -379,7 +379,7 @@ struct MessageBatch {
   uint64_t seq = 0;
   std::vector<AsyncConsumerQueue::Message> messages;
   std::vector<TopicPartition> eof_partitions;
-  std::optional<std::string> fatal_error;
+  Option<std::string> fatal_error;
   bool assignment_changed = false;
   bool reached_count = false;
   size_t payload_bytes = 0;
@@ -392,14 +392,14 @@ struct TableSliceFrame {
   TopicPartitionOffsets max_offsets;
   size_t message_count = 0;
   std::vector<TopicPartition> eof_partitions;
-  std::optional<std::string> fatal_error;
+  Option<std::string> fatal_error;
   bool assignment_changed = false;
   std::vector<diagnostic> diagnostics;
 };
 
 /// Result wrapper returned by `await_task()` to `process_task()`.
 struct TableSliceResult {
-  std::optional<TableSliceFrame> frame;
+  Option<TableSliceFrame> frame;
   bool end_of_stream = false;
 };
 
@@ -503,12 +503,11 @@ public:
       MetricsDirection::read, MetricsVisibility::external_,
       MetricsUnit::events);
     initialize_perf_tracking();
-    auto aws_iam = args_.aws_iam
-                     ? std::optional<located<record>>{*args_.aws_iam}
-                     : std::nullopt;
+    auto aws_iam
+      = args_.aws_iam ? Option<located<record>>{*args_.aws_iam} : None{};
     auto aws_region = args_.aws_region
-                        ? std::optional<located<std::string>>{*args_.aws_region}
-                        : std::nullopt;
+                        ? Option<located<std::string>>{*args_.aws_region}
+                        : None{};
     auto auth = co_await resolve_aws_iam_auth(
       std::move(aws_iam), std::move(aws_region), ctx,
       AwsIamRegionRequirement::required_with_iam);
@@ -550,7 +549,7 @@ public:
     }
     if (not runtime_.table_slice_queue) {
       co_return TableSliceResult{
-        .frame = std::nullopt,
+        .frame = None{},
         .end_of_stream = true,
       };
     }
@@ -559,7 +558,7 @@ public:
       if (token.isCancellationRequested()) {
         request_pipeline_stop();
         co_return TableSliceResult{
-          .frame = std::nullopt,
+          .frame = None{},
           .end_of_stream = true,
         };
       }
@@ -579,7 +578,7 @@ public:
       if (not next) {
         emit_perf_summary("end_of_stream");
         co_return TableSliceResult{
-          .frame = std::nullopt,
+          .frame = None{},
           .end_of_stream = true,
         };
       }
@@ -590,7 +589,7 @@ public:
       request_pipeline_stop();
       emit_perf_summary("cancelled");
       co_return TableSliceResult{
-        .frame = std::nullopt,
+        .frame = None{},
         .end_of_stream = true,
       };
     }
@@ -787,7 +786,7 @@ private:
 
   /// Owns one subscribed source (consumer plus async queue wrapper).
   struct SubscriptionSource {
-    std::optional<SourceConsumer> source_consumer;
+    Option<SourceConsumer> source_consumer;
     Option<Box<AsyncConsumerQueue>> queue;
     uint64_t observed_assignment_generation = 0;
   };
@@ -817,7 +816,7 @@ private:
     duration base_poll_wait = default_fetch_wait_timeout;
     duration poll_wait = default_fetch_wait_timeout;
     size_t consecutive_empty_timeouts = 0;
-    std::optional<std::chrono::steady_clock::time_point> batch_deadline;
+    Option<std::chrono::steady_clock::time_point> batch_deadline;
   };
 
   /// Starts opt-in perf timing at operator startup.
@@ -831,7 +830,7 @@ private:
   }
 
   /// Parses and validates the configured consumer start offset.
-  auto resolve_start_offset(OpCtx& ctx) const -> std::optional<int64_t> {
+  auto resolve_start_offset(OpCtx& ctx) const -> Option<int64_t> {
     auto offset = int64_t{RdKafka::Topic::OFFSET_STORED};
     if (args_.offset and not parse_offset_value(*args_.offset, offset)) {
       diagnostic::error("invalid `offset` value")
@@ -839,7 +838,7 @@ private:
         .note("must be `beginning`, `end`, `stored`, `<offset>`, or "
               "`-<offset>`")
         .emit(ctx);
-      return std::nullopt;
+      return None{};
     }
     return offset;
   }
@@ -847,13 +846,13 @@ private:
   /// Creates one Kafka consumer with resolved options and callback ownership.
   auto make_source_consumer(OpCtx& ctx, record const& config,
                             ResolvedAwsIamAuth const& auth, int64_t offset)
-    -> Task<std::optional<SourceConsumer>> {
+    -> Task<Option<SourceConsumer>> {
     auto cfg = make_consumer_configuration(config, auth.options,
                                            auth.credentials, offset, ctx.dh());
     if (not cfg) {
       diagnostic::error("failed to create kafka configuration: {}", cfg.error())
         .emit(ctx);
-      co_return std::nullopt;
+      co_return None{};
     }
     auto source_cfg = std::move(*cfg);
     auto user_options = args_.options;
@@ -864,7 +863,7 @@ private:
         = co_await ctx.resolve_secrets(configure_consumer_or_request_secrets(
           source_cfg, user_options, ctx.dh()));
         not ok) {
-      co_return std::nullopt;
+      co_return None{};
     }
     TENZIR_ASSERT(source_cfg.conf);
     auto error = std::string{};
@@ -872,7 +871,7 @@ private:
       = RdKafka::KafkaConsumer::create(source_cfg.conf.get(), error);
     if (raw_consumer == nullptr) {
       diagnostic::error("failed to create kafka consumer: {}", error).emit(ctx);
-      co_return std::nullopt;
+      co_return None{};
     }
     auto source_consumer = SourceConsumer{
       .consumer_cfg = std::move(source_cfg),
@@ -1204,8 +1203,7 @@ private:
   /// Converts polled Kafka messages into one source payload batch.
   auto
   to_fetched_batch(std::vector<AsyncConsumerQueue::Message> fetched_messages,
-                   bool assignment_changed) const
-    -> std::optional<MessageBatch> {
+                   bool assignment_changed) const -> Option<MessageBatch> {
     auto batch = MessageBatch{};
     batch.assignment_changed = assignment_changed;
     batch.messages.reserve(fetched_messages.size());
@@ -1246,7 +1244,7 @@ private:
     if (batch.messages.empty() and batch.eof_partitions.empty()
         and not batch.fatal_error and not batch.assignment_changed
         and not batch.reached_count) {
-      return std::nullopt;
+      return None{};
     }
     batch.seq = runtime_.next_fetch_seq.fetch_add(1, std::memory_order_relaxed);
     return batch;
@@ -1482,12 +1480,12 @@ private:
     }
     auto diag_handler = BufferingDiagnosticHandler{};
     auto* builder_ptr = static_cast<multi_series_builder*>(nullptr);
-    auto standalone_builder = std::optional<multi_series_builder>{};
+    auto standalone_builder = Option<multi_series_builder>{};
     auto builder_opts = multi_series_builder::options{};
     builder_opts.settings.ordered
       = optimization_mode_ == OptimizationMode::ordered;
     builder_opts.settings.raw = args_._raw;
-    auto parser = std::optional<json::ndjson_parser>{};
+    auto parser = Option<json::ndjson_parser>{};
     if (args_._json) {
       parser.emplace("json", diag_handler, builder_opts);
       builder_ptr = &parser->builder;
@@ -1642,7 +1640,7 @@ private:
           and runtime_.builders_finished) {
         if (runtime_.ordered_slices.empty()) {
           co_return TableSliceResult{
-            .frame = std::nullopt,
+            .frame = None{},
             .end_of_stream = true,
           };
         }

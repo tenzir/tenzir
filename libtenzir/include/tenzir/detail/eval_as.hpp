@@ -9,12 +9,12 @@
 #pragma once
 
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/eval.hpp"
 
 #include <concepts>
 #include <functional>
-#include <optional>
 #include <string_view>
 #include <type_traits>
 
@@ -23,9 +23,9 @@ namespace tenzir::detail {
 template <typename T>
 auto eval_as(std::string_view name, ast::expression const& expr,
              table_slice const& slice, diagnostic_handler& dh)
-  -> generator<std::optional<view3<type_to_data_t<T>>>> {
+  -> generator<Option<view3<type_to_data_t<T>>>> {
   return eval_as<T>(name, expr, slice, dh, [] {
-    return std::nullopt;
+    return None{};
   });
 }
 
@@ -33,7 +33,7 @@ template <typename T, class MakeDefault>
 auto eval_as(std::string_view name, ast::expression const& expr,
              table_slice const& slice, diagnostic_handler& dh,
              MakeDefault make_default)
-  -> generator<std::optional<view3<type_to_data_t<T>>>> {
+  -> generator<Option<view3<type_to_data_t<T>>>> {
   auto ms = std::invoke([&] {
     if (expr.get_location()) {
       return eval(expr, slice, dh);

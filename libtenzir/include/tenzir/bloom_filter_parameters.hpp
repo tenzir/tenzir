@@ -10,7 +10,8 @@
 
 #include "tenzir/fwd.hpp"
 
-#include <optional>
+#include "tenzir/option.hpp"
+
 #include <string_view>
 
 namespace tenzir {
@@ -33,10 +34,10 @@ namespace tenzir {
 ///
 /// @relates bloom_filter
 struct bloom_filter_parameters {
-  std::optional<size_t> m; ///< Number of cells/bits.
-  std::optional<size_t> n; ///< Set cardinality.
-  std::optional<size_t> k; ///< Number of hash functions.
-  std::optional<double> p; ///< False-positive probability.
+  Option<size_t> m; ///< Number of cells/bits.
+  Option<size_t> n; ///< Set cardinality.
+  Option<size_t> k; ///< Number of hash functions.
+  Option<double> p; ///< False-positive probability.
 
   friend bool operator==(const bloom_filter_parameters& x,
                          const bloom_filter_parameters& y);
@@ -49,13 +50,13 @@ struct bloom_filter_parameters {
 /// from a specific combination of others. If the correct parameters are
 /// provided, this function computes the remaining ones.
 /// @returns The complete set of parameters
-std::optional<bloom_filter_parameters> evaluate(bloom_filter_parameters xs);
+Option<bloom_filter_parameters> evaluate(bloom_filter_parameters xs);
 
 /// Attempts to Bloom filter parameters of the form `bloom_filter(n,p)`, where
 /// `n` and `p` are floating-point values.
 /// @param x The input to parse.
 /// @returns The parsed Bloom filter parameters.
 /// @relates evaluate
-std::optional<bloom_filter_parameters> parse_parameters(std::string_view x);
+Option<bloom_filter_parameters> parse_parameters(std::string_view x);
 
 } // namespace tenzir

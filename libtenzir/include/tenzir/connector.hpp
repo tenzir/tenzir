@@ -9,13 +9,13 @@
 #pragma once
 
 #include "tenzir/actors.hpp"
+#include "tenzir/option.hpp"
 
 #include <caf/io/middleman_actor.hpp>
 #include <caf/timespan.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <chrono>
-#include <optional>
 
 namespace tenzir {
 
@@ -35,8 +35,8 @@ struct connector_state {
 /// @return actor handle that can be used to connect with a remote Tenzir node.
 connector_actor::behavior_type
 connector(connector_actor::stateful_pointer<connector_state> self,
-          std::optional<caf::timespan> retry_delay,
-          std::optional<std::chrono::steady_clock::time_point> deadline,
+          Option<caf::timespan> retry_delay,
+          Option<std::chrono::steady_clock::time_point> deadline,
           bool internal_connection = false);
 
 } // namespace tenzir

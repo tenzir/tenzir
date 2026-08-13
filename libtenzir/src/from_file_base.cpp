@@ -196,7 +196,7 @@ auto from_file_source::name() const -> std::string {
 
 from_file_sink::from_file_sink(
   from_file_actor parent, event_order order,
-  std::optional<std::pair<ast::field_path, std::string>> path_field)
+  Option<std::pair<ast::field_path, std::string>> path_field)
   : parent_{std::move(parent)},
     order_{order},
     path_field_{std::move(path_field)} {
@@ -585,8 +585,7 @@ auto from_file_state::start_stream(
   if (not pipe.is_closed()) {
     pipe.append(std::make_unique<from_file_sink>(
       self_, order_,
-      args_.path_field ? std::optional{std::pair{*args_.path_field, path}}
-                       : std::nullopt));
+      args_.path_field ? Option{std::pair{*args_.path_field, path}} : None{}));
     pipe = pipe.optimize_if_closed();
   }
   auto executor

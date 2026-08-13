@@ -56,15 +56,15 @@ struct chart_args {
   chart_type ty;
   ast::field_path x;
   call_map y;
-  std::optional<ast::expression> group;
-  std::optional<xlimit> x_min;
-  std::optional<xlimit> x_max;
-  std::optional<located<data>> y_min;
-  std::optional<located<data>> y_max;
-  std::optional<located<duration>> res;
-  std::optional<located<data>> fill;
-  std::optional<location> x_log;
-  std::optional<location> y_log;
+  Option<ast::expression> group;
+  Option<xlimit> x_min;
+  Option<xlimit> x_max;
+  Option<located<data>> y_min;
+  Option<located<data>> y_max;
+  Option<located<duration>> res;
+  Option<located<data>> fill;
+  Option<location> x_log;
+  Option<location> y_log;
   located<uint64_t> limit{100'000, location::unknown};
   located<std::string> position{"grouped", location::unknown};
   expression filter{trivially_true_expression()};
@@ -276,7 +276,7 @@ public:
 
   auto optimize(const expression& filter, event_order) const
     -> optimize_result override {
-    const auto expr = [&]() -> std::optional<expression> {
+    const auto expr = [&]() -> Option<expression> {
       if (args_.x_min and args_.x_max) {
         auto combined = normalize_and_validate(conjunction{
           args_.x_min->legacy_expr,
@@ -291,7 +291,7 @@ public:
       if (args_.x_max) {
         return args_.x_max->legacy_expr;
       }
-      return std::nullopt;
+      return None{};
     };
     auto args = args_;
     if (filter != trivially_true_expression()) {
@@ -321,7 +321,7 @@ public:
     auto& dh = ctrl.diagnostics();
     auto sp = session_provider::make(dh);
     auto s = sp.as_session();
-    auto xty = std::optional<type>{};
+    auto xty = Option<type>{};
     auto groups = group_map{};
     const auto plugins = args_.find_plugins(s);
     if (args_.x_min or args_.x_max) {
@@ -463,7 +463,7 @@ public:
     };
     if (args_.x_min and args_.res) {
       TENZIR_ASSERT(not groups.empty());
-      auto min = std::optional{args_.x_min->rounded};
+      auto min = Option{args_.x_min->rounded};
       const auto& first = groups.begin()->first;
       if (*min != first) {
         fill_at(*min);
@@ -473,7 +473,7 @@ public:
         fill_at(std::move(gap).value());
       }
     }
-    for (auto prev = std::optional<data>{};
+    for (auto prev = Option<data>{};
          const auto& [x, gb] : groups | std::views::take(args_.limit.inner)) {
       if (args_.res) {
         while (auto gap = find_gap(prev, x)) {
@@ -486,7 +486,7 @@ public:
     }
     if (args_.x_max and args_.res) {
       TENZIR_ASSERT(not groups.empty());
-      auto last = std::optional{groups.rbegin()->first};
+      auto last = Option{groups.rbegin()->first};
       const auto& max = args_.x_max->rounded;
       while (auto gap = find_gap(last, max)) {
         last = gap.value();
@@ -682,30 +682,29 @@ public:
     }
   }
 
-  auto find_gap(std::optional<data>& prev, const data& curr) const
-    -> std::optional<data> {
+  auto find_gap(Option<data>& prev, const data& curr) const -> Option<data> {
     if (not prev) {
       prev = curr;
-      return std::nullopt;
+      return None{};
     }
     if (is<caf::none_t>(*prev) or is<caf::none_t>(curr)) {
-      return std::nullopt;
+      return None{};
     }
     auto result = match(
       std::tie(curr, *prev),
-      [&](const duration& c, const duration& p) -> std::optional<data> {
+      [&](const duration& c, const duration& p) -> Option<data> {
         if (c - p > args_.res->inner) {
           return p + args_.res->inner;
         }
-        return std::nullopt;
+        return None{};
       },
-      [&](const time& c, const time& p) -> std::optional<data> {
+      [&](const time& c, const time& p) -> Option<data> {
         if (c - p > args_.res->inner) {
           return p + args_.res->inner;
         }
-        return std::nullopt;
+        return None{};
       },
-      [](const auto&, const auto&) -> std::optional<data> {
+      [](const auto&, const auto&) -> Option<data> {
         TENZIR_UNREACHABLE();
       });
     return result;
@@ -865,8 +864,8 @@ class chart_plugin : public virtual operator_factory_plugin {
       args.limit.inner = 100;
     }
     auto y = ast::expression{};
-    auto x_min = std::optional<located<data>>{};
-    auto x_max = std::optional<located<data>>{};
+    auto x_min = Option<located<data>>{};
+    auto x_max = Option<located<data>>{};
     auto p = argument_parser2::operator_(name());
     if constexpr (Ty == chart_type::bar or Ty == chart_type::pie) {
       p.named("x|label", args.x);

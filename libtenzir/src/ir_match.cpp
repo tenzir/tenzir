@@ -538,7 +538,7 @@ public:
       diagnostic::error("match operator expected events").emit(dh);
       return failure::promise();
     }
-    auto result = std::optional<element_type_tag>{};
+    auto result = Option<element_type_tag>{};
     auto has_wildcard = false;
     for (auto const& arm : args_.arms) {
       has_wildcard = has_wildcard or arm.wildcard;

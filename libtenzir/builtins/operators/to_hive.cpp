@@ -79,18 +79,17 @@ template <class Input, class Output>
 class pipe_wrapper {
 public:
   explicit pipe_wrapper(pipeline pipe, operator_control_plane& ctrl)
-    : input_{std::make_unique<std::optional<Input>>(Input{})},
-      pipe_{std::move(pipe)} {
+    : input_{std::make_unique<Option<Input>>(Input{})}, pipe_{std::move(pipe)} {
     // TODO: Can this fail?
-    auto gen = pipe_.instantiate(
-      std::invoke(
-        [](std::optional<Input>& input) -> generator<Input> {
-          while (input) {
-            co_yield std::exchange(*input, {});
-          }
-        },
-        *input_),
-      ctrl);
+    auto gen
+      = pipe_.instantiate(std::invoke(
+                            [](Option<Input>& input) -> generator<Input> {
+                              while (input) {
+                                co_yield std::exchange(*input, {});
+                              }
+                            },
+                            *input_),
+                          ctrl);
     TENZIR_ASSERT(gen);
     auto cast = std::get_if<generator<Output>>(&*gen);
     TENZIR_ASSERT(cast, fmt::format("expected pipeline {:?} to return {}",
@@ -139,7 +138,7 @@ public:
 private:
   // TODO: Destruction order?
   // Empty optional signals completion.
-  std::unique_ptr<std::optional<Input>> input_;
+  std::unique_ptr<Option<Input>> input_;
   pipeline pipe_;
   generator<Output> gen_;
 };
@@ -411,10 +410,10 @@ public:
     using namespace std::literals;
     auto uri = located<std::string>{};
     auto by_expr = ast::expression{};
-    auto timeout = std::optional<located<duration>>{};
-    auto max_size = std::optional<located<uint64_t>>{};
+    auto timeout = Option<located<duration>>{};
+    auto max_size = Option<located<uint64_t>>{};
     auto format = located<std::string>{};
-    auto compression = std::optional<located<std::string>>{};
+    auto compression = Option<located<std::string>>{};
     TRY(argument_parser2::operator_(name())
           .positional("uri", uri)
           .named("partition_by", by_expr, "list<field>")

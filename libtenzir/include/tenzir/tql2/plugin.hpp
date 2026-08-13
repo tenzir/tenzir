@@ -18,8 +18,6 @@
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/plugin_api.hpp"
 
-#include <optional>
-
 namespace tenzir {
 
 class operator_factory_plugin : public virtual plugin {
@@ -134,7 +132,7 @@ public:
 
     auto length() const -> int64_t;
 
-    auto get_input() const -> std::optional<table_slice>;
+    auto get_input() const -> Option<table_slice>;
 
   private:
     void* self_;
@@ -244,7 +242,7 @@ public:
     auto replacement = parser.optimize(order);
     if (not replacement) {
       return optimize_result{
-        std::nullopt,
+        None{},
         event_order::ordered,
         std::make_unique<parser_adapter>(std::move(parser)),
       };
@@ -253,7 +251,7 @@ public:
     auto cast = dynamic_cast<Parser*>(replacement.get());
     TENZIR_ASSERT(cast);
     return optimize_result{
-      std::nullopt,
+      None{},
       event_order::ordered,
       std::make_unique<parser_adapter>(std::move(*cast)),
     };
@@ -305,8 +303,7 @@ public:
         co_yield std::move(chunk);
       }
     } else {
-      auto state
-        = std::optional<std::pair<std::unique_ptr<printer_instance>, type>>{};
+      auto state = Option<std::pair<std::unique_ptr<printer_instance>, type>>{};
       for (auto&& slice : input) {
         if (slice.rows() == 0) {
           co_yield {};

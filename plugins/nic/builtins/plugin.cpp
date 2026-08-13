@@ -30,7 +30,7 @@ namespace tenzir::plugins::nic {
 
 namespace {
 
-auto make_nics(diagnostic_handler& dh) -> std::optional<table_slice> {
+auto make_nics(diagnostic_handler& dh) -> Option<table_slice> {
   auto err = std::array<char, PCAP_ERRBUF_SIZE>{};
   pcap_if_t* devices = nullptr;
   auto result = pcap_findalldevs(&devices, err.data());
@@ -46,7 +46,7 @@ auto make_nics(diagnostic_handler& dh) -> std::optional<table_slice> {
       .hint("{}", std::string_view{err.data()})
       .hint("pcap_findalldevs")
       .emit(dh);
-    return std::nullopt;
+    return None{};
   }
   TENZIR_ASSERT(result == 0);
   auto builder = series_builder{type{
@@ -103,7 +103,7 @@ auto make_nics(diagnostic_handler& dh) -> std::optional<table_slice> {
                  is_status(PCAP_IF_CONNECTION_STATUS_NOT_APPLICABLE));
   }
   if (builder.length() == 0) {
-    return std::nullopt;
+    return None{};
   }
   return builder.finish_assert_one_slice();
 }
@@ -112,7 +112,7 @@ class load_plugin : public virtual operator_plugin2<nic_loader> {
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> {
     // FIXME: Arg parser doesn't support uint32_t
-    auto snaplen = std::optional<located<uint64_t>>{};
+    auto snaplen = Option<located<uint64_t>>{};
     auto args = loader_args{};
     auto parser = argument_parser2::operator_(name());
     parser.positional("iface", args.iface);

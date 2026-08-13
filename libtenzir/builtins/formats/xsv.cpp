@@ -140,7 +140,7 @@ struct xsv_parser_options {
   bool auto_expand = {};
   bool auto_fill = {};
   bool allow_comments = {};
-  std::optional<std::vector<std::string>> header = {};
+  Option<std::vector<std::string>> header = None{};
   multi_series_builder::options builder_options = {};
 
   friend auto inspect(auto& f, xsv_parser_options& x) -> bool {
@@ -311,8 +311,8 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
   auto get_options(session ctx) -> failure_or<xsv_parser_options> {
     constexpr static auto npos = std::string::npos;
     constexpr static auto overlap
-      = [](const std::optional<located<std::string>>& lhs,
-           const std::optional<located<std::string>>& rhs) {
+      = [](const Option<located<std::string>>& lhs,
+           const Option<located<std::string>>& rhs) {
           return not lhs->inner.empty() and not rhs->inner.empty()
                  and (lhs->inner.find(rhs->inner) != npos
                       or rhs->inner.find(lhs->inner) != npos);
@@ -374,7 +374,7 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
       }
     }
     TRY(auto opts, multi_series_builder_argument_parser::get_options(ctx));
-    auto header = std::optional<std::vector<std::string>>{};
+    auto header = Option<std::vector<std::string>>{};
     auto ret = xsv_parser_options{
       .name = "xsv",
       .field_separator = field_separator_->inner,
@@ -410,12 +410,12 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
 protected:
   std::string name_;
   bool allow_comments_{};
-  std::optional<located<std::string>> header_string_{};
-  std::optional<ast::expression> header_expression_{};
-  std::optional<located<std::string>> field_separator_{};
-  std::optional<located<std::string>> list_separator_{};
-  std::optional<located<std::string>> null_value_{};
-  std::optional<located<std::string>> quotes_
+  Option<located<std::string>> header_string_{};
+  Option<ast::expression> header_expression_{};
+  Option<located<std::string>> field_separator_{};
+  Option<located<std::string>> list_separator_{};
+  Option<located<std::string>> null_value_{};
+  Option<located<std::string>> quotes_
     = located{xsv_parser_options{}.quotes, location::unknown};
   bool auto_expand_{};
   bool auto_fill_{};
@@ -497,8 +497,8 @@ auto add_read_xsv_args(Describer<ReadXsvArgs, Impls...>& d)
 auto validate_quote_conflicts(
   DescribeCtx& ctx, const located<std::string>& quotes,
   const located<std::string>& field_separator,
-  const std::optional<located<std::string>>& list_separator,
-  const std::optional<located<std::string>>& null_value) -> void {
+  const Option<located<std::string>>& list_separator,
+  const Option<located<std::string>>& null_value) -> void {
   for (const char q : quotes.inner) {
     if (field_separator.inner.find(q) != std::string::npos) {
       diagnostic::error("quote character `{}` conflicts with "
@@ -786,12 +786,12 @@ auto parse_line(std::string_view line, std::vector<std::string>& fields,
   }
 }
 
-auto parse_loop(generator<std::optional<std::string_view>> lines,
+auto parse_loop(generator<Option<std::string_view>> lines,
                 operator_control_plane& ctrl, xsv_parser_options args)
   -> generator<table_slice> {
   // Parse header.
   auto it = lines.begin();
-  auto line = std::optional<std::string_view>{};
+  auto line = Option<std::string_view>{};
   size_t line_counter = 0;
   const auto quoting_options = detail::quoting_escaping_policy{
     .quotes = args.quotes,
@@ -1207,7 +1207,7 @@ public:
 
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> std::optional<generator<table_slice>> override {
+    -> Option<generator<table_slice>> override {
     return parse_loop(to_lines(std::move(input)), ctrl, args_);
   }
 
@@ -1424,8 +1424,7 @@ public:
                                        {"list_separator", ls},
                                        {"null_value", nv}});
         auto qs = ctx.get(common.quotes).value_or(ReadXsvArgs{}.quotes);
-        validate_quote_conflicts(ctx, qs, fs, std::optional{ls},
-                                 std::optional{nv});
+        validate_quote_conflicts(ctx, qs, fs, Option{ls}, Option{nv});
         validate_multi_series_builder_args(ctx, common);
         return {};
       });

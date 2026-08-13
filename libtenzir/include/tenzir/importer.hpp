@@ -12,6 +12,7 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/detail/flat_map.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/retention_policy.hpp"
 #include "tenzir/table_slice.hpp"
 
@@ -37,7 +38,7 @@ private:
   /// Process a slice and forward it to the index.
   void handle_slice(table_slice&& slice);
 
-  void flush(std::optional<type> schema = {});
+  void flush(Option<type> schema = {});
 
   /// Pointer to the owning actor.
   importer_actor::pointer self;

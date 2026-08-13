@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
 
@@ -269,17 +270,17 @@ inline auto operator==(const data& l, data_view3 r) -> bool {
 
 template <std::derived_from<arrow::Array> T>
 auto view_at(const T& x, int64_t i)
-  -> std::optional<view3<type_to_data_t<type_from_arrow_t<T>>>> {
+  -> Option<view3<type_to_data_t<type_from_arrow_t<T>>>> {
   TENZIR_ASSERT(0 <= i);
   TENZIR_ASSERT(i < x.length(),
                 "index `{}` is out of range for array of length `{}`", i,
                 x.length());
   if (x.IsNull(i)) {
-    return std::nullopt;
+    return None{};
   }
   if constexpr (std::same_as<T, arrow::NullArray>) {
     TENZIR_UNREACHABLE();
-    return std::nullopt;
+    return None{};
   } else if constexpr (std::same_as<T, arrow::BooleanArray>) {
     return x.GetView(i);
   } else if constexpr (std::same_as<T, arrow::Int64Array>) {
@@ -340,7 +341,7 @@ auto view_at(const T& x, int64_t i)
   } else if constexpr (std::same_as<T, arrow::MapArray>) {
     // TODO: Once we actually get rid of Maps...
     TENZIR_UNREACHABLE();
-    return std::nullopt;
+    return None{};
   } else {
     static_assert(detail::always_false_v<T>, "unhandled type");
   }
@@ -422,7 +423,7 @@ template <typename T>
   requires(not std::same_as<T, arrow::Array>
            and std::derived_from<T, arrow::Array>)
 auto values3(const T& array)
-  -> generator<std::optional<view3<type_to_data_t<type_from_arrow_t<T>>>>> {
+  -> generator<Option<view3<type_to_data_t<type_from_arrow_t<T>>>>> {
   for (auto i = int64_t{0}; i < array.length(); ++i) {
     co_yield view_at(array, i);
   }

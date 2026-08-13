@@ -34,23 +34,23 @@ auto string_to_int = std::invoke([] {
 } // namespace
 
 auto get_ocsf_int_to_string(std::string_view enum_id)
-  -> std::optional<std::reference_wrapper<
+  -> Option<std::reference_wrapper<
     const boost::unordered_flat_map<int64_t, std::string_view>>> {
   auto it = int_to_string.find(enum_id);
   if (it != int_to_string.end()) {
     return std::cref(it->second);
   }
-  return std::nullopt;
+  return None{};
 }
 
 auto get_ocsf_string_to_int(std::string_view enum_id)
-  -> std::optional<std::reference_wrapper<
+  -> Option<std::reference_wrapper<
     const boost::unordered_flat_map<std::string_view, int64_t>>> {
   auto it = string_to_int.find(enum_id);
   if (it != string_to_int.end()) {
     return std::cref(it->second);
   }
-  return std::nullopt;
+  return None{};
 }
 
 } // namespace tenzir

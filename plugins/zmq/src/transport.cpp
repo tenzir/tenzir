@@ -25,7 +25,7 @@ namespace tenzir::plugins::zmq::transport {
 namespace {
 
 auto poll(::zmq::socket_t& socket, short flags,
-          std::optional<std::chrono::milliseconds> timeout = {}) -> bool {
+          Option<std::chrono::milliseconds> timeout = {}) -> bool {
   auto items = std::array<::zmq::pollitem_t, 1>{
     {{socket.handle(), 0, flags, 0}},
   };
@@ -64,7 +64,7 @@ public:
     monitor_socket_.connect(endpoint.c_str());
   }
 
-  auto events(std::optional<std::chrono::milliseconds> timeout = {})
+  auto events(Option<std::chrono::milliseconds> timeout = {})
     -> std::vector<MonitorEvent> {
     auto result = std::vector<MonitorEvent>{};
     if (not poll(monitor_socket_, ZMQ_POLLIN, timeout)) {
@@ -230,8 +230,7 @@ auto Socket::set_subscription_prefix(std::string_view prefix)
 }
 
 auto Socket::send(const chunk_ptr& chunk,
-                  std::optional<std::chrono::milliseconds> timeout)
-  -> caf::error {
+                  Option<std::chrono::milliseconds> timeout) -> caf::error {
   try {
     TENZIR_ASSERT(socket_);
     if (not poll(*socket_, ZMQ_POLLOUT, timeout)) {
@@ -246,7 +245,7 @@ auto Socket::send(const chunk_ptr& chunk,
   }
 }
 
-auto Socket::receive(std::optional<std::chrono::milliseconds> timeout)
+auto Socket::receive(Option<std::chrono::milliseconds> timeout)
   -> caf::expected<chunk_ptr> {
   try {
     TENZIR_ASSERT(socket_);
@@ -266,8 +265,7 @@ auto Socket::receive(std::optional<std::chrono::milliseconds> timeout)
   }
 }
 
-auto Socket::poll_monitor(std::optional<std::chrono::milliseconds> timeout)
-  -> size_t {
+auto Socket::poll_monitor(Option<std::chrono::milliseconds> timeout) -> size_t {
   if (not monitor_) {
     return 0;
   }

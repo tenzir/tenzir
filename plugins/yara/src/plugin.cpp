@@ -170,12 +170,12 @@ private:
 class scanner {
 public:
   static auto make(const rules& rules, scan_options opts = {})
-    -> std::optional<scanner> {
+    -> Option<scanner> {
     // Create scanner from rules.
     auto result = scanner{std::move(opts)};
     auto status = yr_scanner_create(rules.rules_, &result.scanner_);
     if (status == ERROR_INSUFICIENT_MEMORY) {
-      return std::nullopt;
+      return None{};
     }
     TENZIR_ASSERT(status == ERROR_SUCCESS);
     // Set flags.
@@ -323,11 +323,11 @@ private:
 class compiler {
 public:
   /// Constructs a compiler.
-  static auto make() -> std::optional<compiler> {
+  static auto make() -> Option<compiler> {
     auto result = compiler{};
     auto status = yr_compiler_create(&result.compiler_);
     if (status == ERROR_INSUFICIENT_MEMORY) {
-      return std::nullopt;
+      return None{};
     }
     TENZIR_ASSERT(status == ERROR_SUCCESS);
     return result;

@@ -70,22 +70,22 @@ void inverse_fft(std::span<std::complex<double>> data) {
 } // namespace
 
 auto autocorrelation(std::span<double const> xs, int64_t max_lag)
-  -> std::optional<std::vector<double>> {
+  -> Option<std::vector<double>> {
   auto const n = static_cast<int64_t>(xs.size());
   if (n == 0) {
-    return std::nullopt;
+    return None{};
   }
   max_lag = std::min(max_lag, n - 1);
   TENZIR_ASSERT(max_lag >= 0);
   auto scale = 0.0;
   for (auto const x : xs) {
     if (not std::isfinite(x)) {
-      return std::nullopt;
+      return None{};
     }
     scale = std::max(scale, std::abs(x));
   }
   if (scale == 0.0) {
-    return std::nullopt;
+    return None{};
   }
   auto normalized = std::vector<double>{};
   normalized.reserve(xs.size());
@@ -99,7 +99,7 @@ auto autocorrelation(std::span<double const> xs, int64_t max_lag)
     c0 += (x - mean) * (x - mean);
   }
   if (c0 == 0.0 or not std::isfinite(c0)) {
-    return std::nullopt;
+    return None{};
   }
   auto result = std::vector<double>{};
   result.reserve(max_lag + 1);
@@ -124,7 +124,7 @@ auto autocorrelation(std::span<double const> xs, int64_t max_lag)
   for (auto& x : data) {
     auto const power = std::norm(x);
     if (not std::isfinite(power)) {
-      return std::nullopt;
+      return None{};
     }
     x = {power, 0.0};
   }
@@ -133,21 +133,20 @@ auto autocorrelation(std::span<double const> xs, int64_t max_lag)
     auto const coefficient
       = k == 0 ? 1.0 : std::clamp(data[k].real() / c0, -1.0, 1.0);
     if (not std::isfinite(coefficient)) {
-      return std::nullopt;
+      return None{};
     }
     result.push_back(coefficient);
   }
   return result;
 }
 
-auto periodogram(std::span<double const> xs)
-  -> std::optional<periodogram_result> {
+auto periodogram(std::span<double const> xs) -> Option<periodogram_result> {
   auto const n = xs.size();
   auto result = periodogram_result{};
   auto scale = 0.0;
   for (auto const x : xs) {
     if (not std::isfinite(x)) {
-      return std::nullopt;
+      return None{};
     }
     scale = std::max(scale, std::abs(x));
   }
@@ -171,7 +170,7 @@ auto periodogram(std::span<double const> xs)
     auto const centered
       = use_normalized_mean ? (x / scale - normalized_mean) * scale : x - mean;
     if (not std::isfinite(centered)) {
-      return std::nullopt;
+      return None{};
     }
     data.emplace_back(centered, 0.0);
   }
@@ -182,7 +181,7 @@ auto periodogram(std::span<double const> xs)
   for (size_t k = 1; k <= padded / 2; ++k) {
     auto const power = std::norm(data[k]) / static_cast<double>(n);
     if (not std::isfinite(power)) {
-      return std::nullopt;
+      return None{};
     }
     result.power.push_back(power);
   }
@@ -190,18 +189,18 @@ auto periodogram(std::span<double const> xs)
 }
 
 auto dominant_lag(std::span<double const> xs, int64_t min_lag)
-  -> std::optional<std::pair<int64_t, double>> {
+  -> Option<std::pair<int64_t, double>> {
   TENZIR_ASSERT(min_lag >= 1);
   auto const n = static_cast<int64_t>(xs.size());
   auto const max_lag = n / 2;
   if (max_lag < min_lag) {
-    return std::nullopt;
+    return None{};
   }
   // Compute one support coefficient past the candidate range so that the
   // upper-bound lag also has a complete scoring window.
   auto const acf = autocorrelation(xs, max_lag + 1);
   if (not acf) {
-    return std::nullopt;
+    return None{};
   }
   auto const& r = *acf;
   // Score each lag by the sum of positive coefficients in a complete +/-1
@@ -219,7 +218,7 @@ auto dominant_lag(std::span<double const> xs, int64_t min_lag)
     }
   }
   if (best_lag == 0) {
-    return std::nullopt;
+    return None{};
   }
   // Refine to the strongest single lag within the winning window.
   auto peak = best_lag;
@@ -230,7 +229,7 @@ auto dominant_lag(std::span<double const> xs, int64_t min_lag)
     }
   }
   if (r[peak] <= 0.0) {
-    return std::nullopt;
+    return None{};
   }
   return std::pair{peak, r[peak]};
 }

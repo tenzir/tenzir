@@ -11,13 +11,13 @@
 #include "tenzir/aliases.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/legacy_type.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/type.hpp"
 
 #include <caf/error.hpp>
 #include <fmt/format.h>
 
-#include <optional>
 #include <string_view>
 
 using namespace tenzir;
@@ -205,7 +205,7 @@ to_record_algebra(std::string_view name, const data& record_algebra,
                                             "empty 'base', 'implant' or "
                                             "'extend'");
   }
-  std::optional<record_type> merged_base_record{};
+  Option<record_type> merged_base_record{};
   for (const auto& record : record_list) {
     const auto* record_name_ptr = try_as<std::string>(&record);
     if (record_name_ptr == nullptr) {

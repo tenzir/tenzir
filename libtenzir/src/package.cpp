@@ -77,7 +77,7 @@ auto check_unknown_package_key(std::string_view section, std::string_view key)
   if (key == #name) {                                                          \
     const auto* null = try_as<caf::none_t>(&value);                            \
     if (null) {                                                                \
-      result.field = std::nullopt;                                             \
+      result.field = None{};                                                   \
       continue;                                                                \
     }                                                                          \
     /* Convert back to yaml because we don't have access to the raw input      \
@@ -96,7 +96,7 @@ auto check_unknown_package_key(std::string_view section, std::string_view key)
   if (key == std::string_view{name_key}) {                                     \
     const auto* null = try_as<caf::none_t>(&value);                            \
     if (null) {                                                                \
-      result.name = std::nullopt;                                              \
+      result.name = None{};                                                    \
       continue;                                                                \
     }                                                                          \
     const auto* id = try_as<std::string_view>(&value);                         \
@@ -474,9 +474,9 @@ auto parse_parameter_value_type(package_operator_parameter const& param,
                                 std::string_view op_id, session ctx,
                                 diagnostic_handler& dh,
                                 source_origin type_origin = location::unknown)
-  -> failure_or<std::optional<type>> {
+  -> failure_or<Option<type>> {
   if (not param.type or is_field_path_type(param)) {
-    return std::optional<type>{};
+    return Option<type>{};
   }
   auto parsed
     = parse_type_def_with_location_override(*param.type, type_origin, ctx);
@@ -490,11 +490,11 @@ auto parse_parameter_value_type(package_operator_parameter const& param,
   if (value_type.is_error()) {
     return failure::promise();
   }
-  return std::optional<type>{std::move(*value_type)};
+  return Option<type>{std::move(*value_type)};
 }
 
-auto materialize_default_value(data& value,
-                               std::optional<type> const& value_type) -> void {
+auto materialize_default_value(data& value, Option<type> const& value_type)
+  -> void {
   if (not value_type or not is<int64_type>(*value_type)) {
     return;
   }
@@ -551,12 +551,12 @@ auto load_tql_with_frontmatter(std::string_view input)
 auto package_operator::parse(const view<record>& data)
   -> caf::expected<package_operator> {
   auto result = package_operator{};
-  auto positional_source = std::optional<std::string>{};
-  auto named_source = std::optional<std::string>{};
+  auto positional_source = Option<std::string>{};
+  auto named_source = Option<std::string>{};
   auto assign_parameters
     = [&](std::string_view field_name, const auto& field_value,
           std::vector<package_operator_parameter>& target,
-          std::optional<std::string>& source) -> caf::expected<void> {
+          Option<std::string>& source) -> caf::expected<void> {
     if (source) {
       return diagnostic::error("`{}` already defined (previously via `{}`)",
                                field_name, *source)
@@ -701,9 +701,9 @@ auto package_pipeline::parse(const view<record>& data)
       }
       if (on_off) {
         result.restart_on_error
-          = *on_off ? std::optional<
-                        duration>{defaults::packaged_pipeline_restart_on_error}
-                    : std::optional<duration>{std::nullopt};
+          = *on_off
+              ? Option<duration>{defaults::packaged_pipeline_restart_on_error}
+              : Option<duration>{None{}};
         continue;
       }
       TENZIR_ASSERT(retry_delay);
@@ -1422,10 +1422,10 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh,
       return location::unknown;
     };
     auto parse_default_expression = [&](const package_operator_parameter& param,
-                                        std::optional<type> const& value_type)
-      -> failure_or<std::optional<ast::expression>> {
+                                        Option<type> const& value_type)
+      -> failure_or<Option<ast::expression>> {
       if (not param.default_) {
-        return std::optional<ast::expression>{};
+        return Option<ast::expression>{};
       }
       auto yaml_data = from_yaml(*param.default_);
       if (not yaml_data) {
@@ -1465,11 +1465,11 @@ auto build_package_operator_module(const package& pkg, diagnostic_handler& dh,
         if (not ast::selector::try_from(ast::expression{*expr})) {
           return invalid_selector();
         }
-        return std::optional<ast::expression>{std::move(*expr)};
+        return Option<ast::expression>{std::move(*expr)};
       }
       materialize_default_value(*yaml_data, value_type);
       auto expr = make_constant_expression(std::move(*yaml_data));
-      return std::optional<ast::expression>{std::move(expr)};
+      return Option<ast::expression>{std::move(expr)};
     };
     auto parsed = parse(op.tql_body, tql_origin, ctx);
     if (not parsed) {

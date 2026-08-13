@@ -232,7 +232,7 @@ TEST("printable list") {
 }
 
 TEST("optional") {
-  std::optional<int> x;
+  Option<int> x;
   auto p = -printers::integral<int>;
   std::string str;
   CHECK(p(str, x));

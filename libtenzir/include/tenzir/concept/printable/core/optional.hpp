@@ -10,8 +10,7 @@
 
 #include "tenzir/concept/printable/core/printer.hpp"
 #include "tenzir/concept/support/detail/attr_fold.hpp"
-
-#include <optional>
+#include "tenzir/option.hpp"
 
 namespace tenzir {
 
@@ -22,7 +21,7 @@ public:
 
   using attribute
     = std::conditional_t<std::is_same_v<inner_attribute, unused_type>,
-                         unused_type, std::optional<inner_attribute>>;
+                         unused_type, Option<inner_attribute>>;
 
   explicit optional_printer(Printer p) : printer_{std::move(p)} {
   }

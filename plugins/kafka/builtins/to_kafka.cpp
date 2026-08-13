@@ -11,6 +11,7 @@
 #include "kafka/to_kafka_legacy.hpp"
 #include "tenzir/aws_iam.hpp"
 #include "tenzir/concept/printable/tenzir/json2.hpp"
+#include "tenzir/option.hpp"
 
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/atomic.hpp>
@@ -31,7 +32,6 @@
 
 #include <chrono>
 #include <memory>
-#include <optional>
 #include <random>
 #include <span>
 #include <string_view>
@@ -48,27 +48,27 @@ constexpr auto producer_poll_interval = size_t{4096};
 /// `print_ndjson` call with constant boolean options, enabling the optimized
 /// serialization path that bypasses expression evaluation entirely.
 auto try_make_json_printer(ast::expression const& expr)
-  -> std::optional<json_printer2> {
+  -> Option<json_printer2> {
   auto const* const call = try_as<ast::function_call>(expr);
   if (not call) {
-    return std::nullopt;
+    return None{};
   }
   if (not call->fn.ref.resolved()) {
-    return std::nullopt;
+    return None{};
   }
   auto const& segments = call->fn.ref.segments();
   if (segments.size() != 1) {
-    return std::nullopt;
+    return None{};
   }
   auto compact = false;
   if (segments.front() == "print_ndjson") {
     compact = true;
   } else if (segments.front() != "print_json") {
-    return std::nullopt;
+    return None{};
   }
   // The first argument must be `this` (the positional argument).
   if (call->args.empty() or not is<ast::this_>(call->args.front())) {
-    return std::nullopt;
+    return None{};
   }
   // Parse any named options from the remaining arguments.
   auto strip = false;
@@ -79,20 +79,20 @@ auto try_make_json_printer(ast::expression const& expr)
   for (auto const& arg : std::span{call->args}.subspan(1)) {
     auto const* const assignment = try_as<ast::assignment>(arg);
     if (not assignment) {
-      return std::nullopt;
+      return None{};
     }
     auto fp = ast::field_path::try_from(assignment->left);
     if (not fp or fp->path().size() != 1) {
-      return std::nullopt;
+      return None{};
     }
     // The value must be the boolean constant `true`.
     auto const* const val = try_as<ast::constant>(assignment->right);
     if (not val) {
-      return std::nullopt;
+      return None{};
     }
     auto const* const flag = try_as<bool>(val->value);
     if (not flag or not *flag) {
-      return std::nullopt;
+      return None{};
     }
     auto const name = fp->path().front().id.name;
     if (name == "strip") {
@@ -106,7 +106,7 @@ auto try_make_json_printer(ast::expression const& expr)
     } else if (name == "strip_empty_lists") {
       strip_empty_lists = true;
     } else {
-      return std::nullopt;
+      return None{};
     }
   }
   return json_printer2{json_printer_options{
@@ -159,7 +159,7 @@ using InputQueue = folly::coro::BoundedQueue<table_slice>;
 class AsyncKafkaProducer {
 public:
   AsyncKafkaProducer(std::string topic, ast::expression message_expr,
-                     std::optional<ResolvedAwsIamAuth> auth,
+                     Option<ResolvedAwsIamAuth> auth,
                      producer_configuration cfg,
                      Box<RdKafka::Producer> producer,
                      MetricsCounter write_bytes_counter,
@@ -337,10 +337,10 @@ private:
 
   std::string topic_;
   ast::expression message_expr_;
-  std::optional<ResolvedAwsIamAuth> auth_;
+  Option<ResolvedAwsIamAuth> auth_;
   producer_configuration cfg_;      // destroyed after producer_
   Box<RdKafka::Producer> producer_; // destroyed first (declared after cfg_)
-  std::optional<json_printer2> printer_;
+  Option<json_printer2> printer_;
   MetricsCounter write_bytes_counter_;
   MetricsCounter write_events_counter_;
   size_t produced_since_poll_ = 0;
@@ -367,12 +367,11 @@ public:
       },
       MetricsDirection::write, MetricsVisibility::external_,
       MetricsUnit::events);
-    auto aws_iam = args_.aws_iam
-                     ? std::optional<located<record>>{*args_.aws_iam}
-                     : std::nullopt;
+    auto aws_iam
+      = args_.aws_iam ? Option<located<record>>{*args_.aws_iam} : None{};
     auto aws_region = args_.aws_region
-                        ? std::optional<located<std::string>>{*args_.aws_region}
-                        : std::nullopt;
+                        ? Option<located<std::string>>{*args_.aws_region}
+                        : None{};
     auto auth = co_await resolve_aws_iam_auth(
       std::move(aws_iam), std::move(aws_region), ctx,
       AwsIamRegionRequirement::required_with_iam);
@@ -517,8 +516,8 @@ private:
   }
 
   ToKafkaArgs args_;
-  std::optional<ResolvedAwsIamAuth> auth_;
-  std::optional<AsyncKafkaProducer> producer_;
+  Option<ResolvedAwsIamAuth> auth_;
+  Option<AsyncKafkaProducer> producer_;
   MetricsCounter write_bytes_counter_;
   MetricsCounter write_events_counter_;
   std::shared_ptr<InputQueue> input_queue_;

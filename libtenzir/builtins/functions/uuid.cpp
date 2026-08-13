@@ -23,7 +23,8 @@
 #  include <tenzir/detail/boost_uuid_generators.hpp>
 #endif
 
-#include <optional>
+#include "tenzir/option.hpp"
+
 #include <string>
 #include <variant>
 
@@ -52,7 +53,7 @@ public:
 
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
-    auto version_opt = std::optional<located<std::string>>{};
+    auto version_opt = Option<located<std::string>>{};
     TRY(argument_parser2::function("uuid")
           .named("version", version_opt)
           .parse(inv, ctx));

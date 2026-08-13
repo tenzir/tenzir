@@ -10,9 +10,9 @@
 
 #include "tenzir/detail/env.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/test/test.hpp"
 
-#include <optional>
 #include <ranges>
 #include <string>
 #include <vector>
@@ -58,7 +58,7 @@ struct env_fixture {
     previous.emplace_back(std::move(name), detail::getenv(key));
   }
 
-  std::vector<std::pair<std::string, std::optional<std::string>>> previous;
+  std::vector<std::pair<std::string, Option<std::string>>> previous;
 };
 
 } // namespace

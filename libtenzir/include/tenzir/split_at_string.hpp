@@ -10,8 +10,8 @@
 
 #include "tenzir/chunk.hpp"
 #include "tenzir/generator.hpp"
+#include "tenzir/option.hpp"
 
-#include <optional>
 #include <string_view>
 
 namespace tenzir {
@@ -19,11 +19,11 @@ namespace tenzir {
 inline auto
 split_at_string(std::string_view separator, bool include_separator = false) {
   return [separator, include_separator](generator<chunk_ptr> input) mutable
-           -> generator<std::optional<std::string_view>> {
+           -> generator<Option<std::string_view>> {
     auto buffer = std::string{};
     for (auto&& chunk : input) {
       if (not chunk or chunk->size() == 0) {
-        co_yield std::nullopt;
+        co_yield None{};
         continue;
       }
       buffer.append(reinterpret_cast<const char*>(chunk->data()),
@@ -45,7 +45,7 @@ split_at_string(std::string_view separator, bool include_separator = false) {
         current = pos + separator.size();
       }
       buffer = buffer.substr(current);
-      co_yield std::nullopt;
+      co_yield None{};
     }
     if (not buffer.empty()) {
       std::size_t current = 0;

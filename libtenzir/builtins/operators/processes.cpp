@@ -17,11 +17,11 @@ namespace tenzir::plugins::processes {
 
 namespace {
 
-auto make_processes(diagnostic_handler& dh) -> std::optional<table_slice> {
+auto make_processes(diagnostic_handler& dh) -> Option<table_slice> {
   auto system = os::make();
   if (not system) {
     diagnostic::error("failed to create OS shim").emit(dh);
-    return std::nullopt;
+    return None{};
   }
   return system->processes();
 }

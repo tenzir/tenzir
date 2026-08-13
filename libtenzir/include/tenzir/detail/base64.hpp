@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <cstddef>
 #include <ranges>
 #include <string>
@@ -82,16 +84,16 @@ std::string encode(R&& range) {
 // @see decoded_size
 std::pair<size_t, size_t> decode(void* dst, char const* src, size_t len);
 
-/// Tries to decode a Base64-encoded string. Returns `std::nullopt` if the input
+/// Tries to decode a Base64-encoded string. Returns `None{}` if the input
 /// string is not valid.
 template <class T = std::string>
-auto try_decode(std::string_view str) -> std::optional<T> {
+auto try_decode(std::string_view str) -> Option<T> {
   auto result = T{};
   result.resize(decoded_size(str.size()));
   auto [written, read] = decode(result.data(), str.data(), str.size());
   while (read < str.size()) {
     if (str[read] != '=') {
-      return std::nullopt;
+      return None{};
     }
     read += 1;
   }

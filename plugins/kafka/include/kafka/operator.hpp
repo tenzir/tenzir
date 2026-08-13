@@ -12,6 +12,7 @@
 #include "kafka/consumer.hpp"
 #include "kafka/operator_args.hpp"
 #include "kafka/producer.hpp"
+#include "tenzir/option.hpp"
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/aws_iam.hpp>
@@ -83,14 +84,14 @@ configure_or_request(const located<record>& options, kafka::configuration& cfg,
 
 struct loader_args {
   std::string topic;
-  std::optional<located<uint64_t>> count;
-  std::optional<location> exit;
-  std::optional<located<std::string>> offset;
+  Option<located<uint64_t>> count;
+  Option<location> exit;
+  Option<located<std::string>> offset;
   std::uint64_t commit_batch_size = 1000;
   duration commit_timeout = 10s;
   located<record> options;
-  std::optional<located<std::string>> aws_region;
-  std::optional<tenzir::aws_iam_options> aws;
+  Option<located<std::string>> aws_region;
+  Option<tenzir::aws_iam_options> aws;
   location operator_location;
 
   template <class Inspector>
@@ -121,7 +122,7 @@ public:
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     auto& dh = ctrl.diagnostics();
     // Resolve all aws_iam fields; region/profile/session_name may be secrets.
-    auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
+    auto resolved_creds = Option<tenzir::resolved_aws_credentials>{};
     if (args_.aws) {
       resolved_creds.emplace();
       auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
@@ -199,7 +200,7 @@ public:
     auto last_good_message = std::shared_ptr<RdKafka::Message>{};
 
     // Track EOF status per partition for proper multi-partition handling
-    auto partition_count = std::optional<size_t>{};
+    auto partition_count = Option<size_t>{};
     auto eof_partition_count = size_t{0};
 
     while (true) {
@@ -342,11 +343,11 @@ private:
 
 struct saver_args {
   std::string topic;
-  std::optional<located<std::string>> key;
-  std::optional<located<std::string>> timestamp;
+  Option<located<std::string>> key;
+  Option<located<std::string>> timestamp;
   located<record> options;
-  std::optional<located<std::string>> aws_region;
-  std::optional<tenzir::aws_iam_options> aws;
+  Option<located<std::string>> aws_region;
+  Option<tenzir::aws_iam_options> aws;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, saver_args& x) -> bool {
@@ -371,7 +372,7 @@ public:
     -> generator<std::monostate> {
     auto& dh = ctrl.diagnostics();
     // Resolve all aws_iam fields; region/profile/session_name may be secrets.
-    auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
+    auto resolved_creds = Option<tenzir::resolved_aws_credentials>{};
     if (args_.aws) {
       resolved_creds.emplace();
       auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);

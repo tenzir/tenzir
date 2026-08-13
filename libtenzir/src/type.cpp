@@ -426,14 +426,14 @@ type::type(const type& nested,
   // nop
 }
 
-std::optional<type> type::infer(const data& value) noexcept {
-  auto infer_list_element_type = [&](auto&& list) -> std::optional<type> {
+Option<type> type::infer(const data& value) noexcept {
+  auto infer_list_element_type = [&](auto&& list) -> Option<type> {
     // First, find first non-null element for the purposes of comparison
     type first_inferred{};
     auto it = list.begin();
     for (; it != list.end(); ++it) {
       if (auto inferred = infer(*it); not inferred) {
-        return std::nullopt;
+        return None{};
       } else if (*inferred) {
         first_inferred = std::move(*inferred);
         ++it;
@@ -444,74 +444,74 @@ std::optional<type> type::infer(const data& value) noexcept {
     // or the same as the first non-null element
     for (; it != list.end(); ++it) {
       if (auto inferred = infer(*it); not inferred) {
-        return std::nullopt;
+        return None{};
       } else if (*inferred and *inferred != first_inferred) {
-        return std::nullopt;
+        return None{};
       }
     }
     return first_inferred;
   };
   return match(
     value,
-    [](caf::none_t) noexcept -> std::optional<type> {
+    [](caf::none_t) noexcept -> Option<type> {
       return type{};
     },
-    [](const bool&) noexcept -> std::optional<type> {
+    [](const bool&) noexcept -> Option<type> {
       return type{bool_type{}};
     },
-    [](const int64_t&) noexcept -> std::optional<type> {
+    [](const int64_t&) noexcept -> Option<type> {
       return type{int64_type{}};
     },
-    [](const uint64_t&) noexcept -> std::optional<type> {
+    [](const uint64_t&) noexcept -> Option<type> {
       return type{uint64_type{}};
     },
-    [](const double&) noexcept -> std::optional<type> {
+    [](const double&) noexcept -> Option<type> {
       return type{double_type{}};
     },
-    [](const duration&) noexcept -> std::optional<type> {
+    [](const duration&) noexcept -> Option<type> {
       return type{duration_type{}};
     },
-    [](const time&) noexcept -> std::optional<type> {
+    [](const time&) noexcept -> Option<type> {
       return type{time_type{}};
     },
-    [](const std::string&) noexcept -> std::optional<type> {
+    [](const std::string&) noexcept -> Option<type> {
       return type{string_type{}};
     },
-    [](const blob&) noexcept -> std::optional<type> {
+    [](const blob&) noexcept -> Option<type> {
       return type{blob_type{}};
     },
-    [](const secret&) noexcept -> std::optional<type> {
+    [](const secret&) noexcept -> Option<type> {
       return type{secret_type{}};
     },
-    [](const pattern&) noexcept -> std::optional<type> {
+    [](const pattern&) noexcept -> Option<type> {
       return type{string_type{}};
     },
-    [](const ip&) noexcept -> std::optional<type> {
+    [](const ip&) noexcept -> Option<type> {
       return type{ip_type{}};
     },
-    [](const subnet&) noexcept -> std::optional<type> {
+    [](const subnet&) noexcept -> Option<type> {
       return type{subnet_type{}};
     },
-    [](const enumeration&) noexcept -> std::optional<type> {
+    [](const enumeration&) noexcept -> Option<type> {
       // Enumeration types cannot be inferred.
-      return std::nullopt;
+      return None{};
     },
-    [&](const list& list) noexcept -> std::optional<type> {
+    [&](const list& list) noexcept -> Option<type> {
       if (auto elem_type = infer_list_element_type(list); not elem_type) {
-        return std::nullopt;
+        return None{};
       } else {
         return type{list_type{*elem_type}};
       }
     },
-    [&](const map& map) noexcept -> std::optional<type> {
+    [&](const map& map) noexcept -> Option<type> {
       auto key_type = infer_list_element_type(map | std::views::keys);
       auto value_type = infer_list_element_type(map | std::views::values);
       if (not key_type or not value_type) {
-        return std::nullopt;
+        return None{};
       }
       return type{map_type{*key_type, *value_type}};
     },
-    [](const record& record) noexcept -> std::optional<type> {
+    [](const record& record) noexcept -> Option<type> {
       // Record types cannot be inferred from empty records.
       if (record.empty()) {
         return type{record_type{}};
@@ -520,7 +520,7 @@ std::optional<type> type::infer(const data& value) noexcept {
       fields.reserve(record.size());
       for (const auto& field : record) {
         if (auto inferred = infer(field.second); not inferred) {
-          return std::nullopt;
+          return None{};
         } else {
           fields.push_back({field.first, *inferred});
         }
@@ -828,7 +828,7 @@ auto type::to_definition() const noexcept -> record {
   };
 }
 
-auto type::to_legacy_definition(std::optional<std::string> field_name,
+auto type::to_legacy_definition(Option<std::string> field_name,
                                 offset parent_path) const noexcept -> record {
   auto attributes = record{};
   for (const auto& [key, value] : this->attributes()) {
@@ -1071,7 +1071,7 @@ type::resolve_key_or_concept(std::string_view key) const noexcept {
   return rt->resolve_key_or_concept(key, name());
 }
 
-std::optional<offset>
+Option<offset>
 type::resolve_key_or_concept_once(std::string_view key) const noexcept {
   const auto* rt = try_as<record_type>(this);
   if (not rt) {
@@ -1153,8 +1153,7 @@ std::string_view type::name() const& noexcept {
   __builtin_unreachable();
 }
 
-std::optional<std::string_view>
-type::attribute(const char* key) const& noexcept {
+Option<std::string_view> type::attribute(const char* key) const& noexcept {
   const auto* root = &table(transparent::no);
   while (true) {
     switch (root->type_type()) {
@@ -1176,7 +1175,7 @@ type::attribute(const char* key) const& noexcept {
       case fbs::type::Type::list_type:
       case fbs::type::Type::map_type:
       case fbs::type::Type::record_type:
-        return std::nullopt;
+        return None{};
       case fbs::type::Type::enriched_type: {
         const auto* enriched_type = root->type_as_enriched_type();
         if (const auto* attributes = enriched_type->attributes()) {
@@ -2353,7 +2352,7 @@ enumeration_type::fields() const& noexcept {
   return result;
 }
 
-std::optional<uint32_t>
+Option<uint32_t>
 enumeration_type::resolve(std::string_view key) const noexcept {
   const auto* fields = table().type_as_enumeration_type()->fields();
   TENZIR_ASSERT(fields);
@@ -2362,7 +2361,7 @@ enumeration_type::resolve(std::string_view key) const noexcept {
       return field->key();
     }
   }
-  return std::nullopt;
+  return None{};
 }
 
 void enumeration_type::arrow_type::register_extension() noexcept {
@@ -3032,7 +3031,7 @@ generator<offset> record_type::resolve_key_or_concept(
     co_return;
   }
   const auto try_strip_schema_name
-    = [&schema_name](std::string_view key) -> std::optional<std::string_view> {
+    = [&schema_name](std::string_view key) -> Option<std::string_view> {
     if (not key.starts_with(schema_name)) {
       return {};
     }
@@ -3053,16 +3052,15 @@ generator<offset> record_type::resolve_key_or_concept(
   }
 }
 
-std::optional<offset> record_type::resolve_key_or_concept_once(
+Option<offset> record_type::resolve_key_or_concept_once(
   std::string_view key, std::string_view schema_name) const noexcept {
   for (auto&& result : resolve_key_or_concept(key, schema_name)) {
     return result;
   }
-  return std::nullopt;
+  return None{};
 }
 
-std::optional<offset>
-record_type::resolve_key(std::string_view key) const noexcept {
+Option<offset> record_type::resolve_key(std::string_view key) const noexcept {
   return resolve_key_or_concept_once(key, {});
 }
 
@@ -3291,7 +3289,7 @@ generator<offset> record_type::resolve_type_extractor(
   }
 }
 
-std::optional<size_t>
+Option<size_t>
 record_type::resolve_field(std::string_view field) const noexcept {
   const auto* record = table().type_as_record_type();
   TENZIR_ASSERT(record);
@@ -3373,7 +3371,7 @@ record_type::field_view record_type::field(const offset& index) const noexcept {
   };
 }
 
-auto record_type::field(std::string_view name) const -> std::optional<type> {
+auto record_type::field(std::string_view name) const -> Option<type> {
   TRY(auto index, resolve_field(name));
   return field(index).type;
 }
@@ -3477,7 +3475,7 @@ record_type::insert_after(std::vector<struct field> fields) noexcept {
     };
 }
 
-std::optional<record_type> record_type::transform(
+Option<record_type> record_type::transform(
   std::vector<transformation> transformations) const noexcept {
   TENZIR_ASSERT_EXPENSIVE(std::is_sorted(transformations.begin(),
                                          transformations.end()),
@@ -3704,20 +3702,20 @@ record_type flatten(const record_type& type) noexcept {
   return record_type{fields};
 }
 
-auto unify(const type& a, const type& b) -> std::optional<type> {
+auto unify(const type& a, const type& b) -> Option<type> {
   // TODO: This function does not preserve metadata.
   // TODO: Do we want to unify number types?
   auto f = detail::overload{
-    [](const null_type&, const null_type&) -> std::optional<type> {
+    [](const null_type&, const null_type&) -> Option<type> {
       return type{null_type{}};
     },
-    [](const null_type&, const auto& b) -> std::optional<type> {
+    [](const null_type&, const auto& b) -> Option<type> {
       return type{b};
     },
-    [](const auto& a, const null_type&) -> std::optional<type> {
+    [](const auto& a, const null_type&) -> Option<type> {
       return type{a};
     },
-    [](const record_type& a, const record_type& b) -> std::optional<type> {
+    [](const record_type& a, const record_type& b) -> Option<type> {
       auto fields = collect(a.fields());
       for (auto [name, b_ty] : b.fields()) {
         auto it
@@ -3732,26 +3730,25 @@ auto unify(const type& a, const type& b) -> std::optional<type> {
       }
       return type{record_type{fields}};
     },
-    [](const list_type& a, const list_type& b) -> std::optional<type> {
+    [](const list_type& a, const list_type& b) -> Option<type> {
       TRY(auto ty, unify(a.value_type(), b.value_type()));
       return type{list_type{ty}};
     },
-    [](const enumeration_type& a,
-       const enumeration_type& b) -> std::optional<type> {
+    [](const enumeration_type& a, const enumeration_type& b) -> Option<type> {
       if (a != b) {
-        return std::nullopt;
+        return None{};
       }
       return type{a};
     },
-    []<basic_type T>(const T&, const T&) -> std::optional<type> {
+    []<basic_type T>(const T&, const T&) -> Option<type> {
       return type{T{}};
     },
-    [](const map_type&, const map_type&) -> std::optional<type> {
+    [](const map_type&, const map_type&) -> Option<type> {
       TENZIR_UNREACHABLE();
     },
-    []<class A, class B>(const A&, const B&) -> std::optional<type> {
+    []<class A, class B>(const A&, const B&) -> Option<type> {
       static_assert(not std::same_as<A, B>);
-      return std::nullopt;
+      return None{};
     },
   };
   return match(std::tie(a, b), f);

@@ -115,10 +115,10 @@ private:
     auto begin = current_pos();
     auto result = to_parser(p).apply(current_, end_);
     if (result) {
-      return std::optional{
+      return Option{
         std::pair{std::move(*result), location{begin, current_pos()}}};
     }
-    return std::optional<
+    return Option<
       std::pair<std::remove_reference_t<decltype(*result)>, location>>{};
   }
 
@@ -126,15 +126,15 @@ private:
   [[nodiscard]] auto accept() {
     auto parsed = accept_with_span(lexer_traits<T>::parser());
     if (parsed) {
-      return std::optional{
+      return Option{
         lexer_traits<T>::build(std::move(parsed->first), parsed->second)};
     }
-    return std::optional<decltype(lexer_traits<T>::build(
-      std::move(parsed->first), parsed->second))>{};
+    return Option<decltype(lexer_traits<T>::build(std::move(parsed->first),
+                                                  parsed->second))>{};
   }
 
-  [[nodiscard]] auto accept(std::string_view x) -> std::optional<location> {
-    auto impl = [&](auto p) -> std::optional<location> {
+  [[nodiscard]] auto accept(std::string_view x) -> Option<location> {
+    auto impl = [&](auto p) -> Option<location> {
       if (auto result = accept_with_span(p)) {
         return result->second;
       }
@@ -150,7 +150,7 @@ private:
     return impl(std::string{x});
   }
 
-  [[nodiscard]] auto accept(char x) -> std::optional<location> {
+  [[nodiscard]] auto accept(char x) -> Option<location> {
     return accept(std::string_view{&x, 1});
   }
 
@@ -183,15 +183,15 @@ private:
   }
 
 public:
-  auto accept_identifier() -> std::optional<identifier> override {
+  auto accept_identifier() -> Option<identifier> override {
     return accept<identifier>();
   }
 
-  auto peek_identifier() -> std::optional<identifier> override {
+  auto peek_identifier() -> Option<identifier> override {
     return peek<identifier>();
   }
 
-  auto accept_equals() -> std::optional<location> override {
+  auto accept_equals() -> Option<location> override {
     if (auto result = accept_with_span("=" >> not parsers::chr{'='})) {
       return result->second;
     }
@@ -202,14 +202,14 @@ public:
     return parse_expr_prec(0);
   }
 
-  auto accept_shell_arg() -> std::optional<located<std::string>> override {
+  auto accept_shell_arg() -> Option<located<std::string>> override {
     if (auto arg = accept_with_span(parsers::operator_arg)) {
       return located<std::string>{std::move(arg->first), arg->second};
     }
     return {};
   }
 
-  auto peek_shell_arg() -> std::optional<located<std::string>> override {
+  auto peek_shell_arg() -> Option<located<std::string>> override {
     return rollback([&] {
       return accept_shell_arg();
     });
@@ -293,11 +293,11 @@ public:
     throw_at_current("could not parse integer");
   }
 
-  auto accept_char(char c) -> std::optional<location> override {
+  auto accept_char(char c) -> Option<location> override {
     return accept(c);
   }
 
-  auto peek_char(char c) -> std::optional<location> override {
+  auto peek_char(char c) -> Option<location> override {
     return peek(c);
   }
 
@@ -436,14 +436,14 @@ private:
     return lhs;
   }
 
-  [[nodiscard]] auto accept_statement_end() -> std::optional<location> {
+  [[nodiscard]] auto accept_statement_end() -> Option<location> {
     if (auto x = accept_with_span('|' | parsers::eoi)) {
       return x->second;
     }
     return {};
   }
 
-  auto accept_integer() -> std::optional<expression> {
+  auto accept_integer() -> Option<expression> {
     if (auto result = accept_with_span(parsers::i64)) {
       return expression{result->first, result->second};
     }

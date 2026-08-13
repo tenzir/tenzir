@@ -190,7 +190,7 @@ public:
     args.ordered = order == event_order::ordered;
 
     return {
-      std::nullopt, order,
+      None{}, order,
       std::make_unique<from_google_cloud_pubsub_operator>(std::move(args_))};
   }
 

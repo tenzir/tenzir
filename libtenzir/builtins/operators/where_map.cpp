@@ -49,7 +49,7 @@ namespace {
 
 // Selects matching rows from the input.
 class where_operator final
-  : public schematic_operator<where_operator, std::optional<expression>> {
+  : public schematic_operator<where_operator, Option<expression>> {
 public:
   where_operator() = default;
 
@@ -71,7 +71,7 @@ public:
       diagnostic::warning(resolved_expr.error())
         .primary(expr_.source)
         .emit(ctrl.diagnostics());
-      return std::nullopt;
+      return None{};
     }
     auto tailored_expr = tailor(std::move(*resolved_expr), schema);
     // We ideally want to warn when extractors can not be resolved. However,
@@ -81,7 +81,7 @@ public:
       // diagnostic::warning(tailored_expr.error())
       //   .primary(expr_.source)
       //   .emit(ctrl.diagnostics());
-      return std::nullopt;
+      return None{};
     }
     return std::move(*tailored_expr);
   }
@@ -139,8 +139,8 @@ class where_assert_operator final
 public:
   where_assert_operator() = default;
 
-  where_assert_operator(ast::expression expr,
-                        std::optional<ast::expression> msg, bool warn)
+  where_assert_operator(ast::expression expr, Option<ast::expression> msg,
+                        bool warn)
     : expr_{std::move(expr)}, msg_{std::move(msg)}, warn_{warn} {
   }
 
@@ -263,7 +263,7 @@ public:
 
 private:
   ast::expression expr_;
-  std::optional<ast::expression> msg_;
+  Option<ast::expression> msg_;
   bool warn_{};
 };
 
@@ -755,7 +755,7 @@ public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto expr = ast::expression{};
-    auto msg = std::optional<ast::expression>{};
+    auto msg = Option<ast::expression>{};
     TRY(argument_parser2::operator_("assert")
           .positional("invariant", expr, "bool")
           .named("message", msg, "string")
@@ -794,7 +794,7 @@ public:
       // if (filter->array->null_count() > 0) {
       //   diagnostic::warning(…).emit(ctx());
       // }
-      auto start = std::optional<int64_t>{};
+      auto start = Option<int64_t>{};
       for (int64_t i = 0; i < filter->length(); ++i) {
         if (filter->array->IsValid(i) and filter->array->GetView(i)) {
           if (not start) {
@@ -916,8 +916,8 @@ public:
     TRY(argument_parser2::operator_("where")
           .positional("predicate", expr, "bool")
           .parse(inv, ctx));
-    return std::make_unique<where_assert_operator>(std::move(expr),
-                                                   std::nullopt, false);
+    return std::make_unique<where_assert_operator>(std::move(expr), None{},
+                                                   false);
   }
 
   auto compile(ast::invocation inv, compile_ctx ctx) const

@@ -9,13 +9,13 @@
 #pragma once
 
 #include "tenzir/generator.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/plugin/base.hpp"
 #include "tenzir/series.hpp"
 
 #include <arrow/type_fwd.h>
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -35,7 +35,7 @@ public:
 
   virtual auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> std::optional<generator<table_slice>>
+    -> Option<generator<table_slice>>
     = 0;
 
   /// Apply the parser to an array of strings.

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
 #include "tenzir/tls_options.hpp"
 
 #include <tenzir/arc.hpp>
@@ -130,7 +131,7 @@ inline auto to_bin(const msgpack_object& object) {
 inline auto visit(auto f, const msgpack_object& object) {
   switch (object.type) {
     case MSGPACK_OBJECT_NIL:
-      return f(std::nullopt);
+      return f(None{});
     case MSGPACK_OBJECT_BOOLEAN:
       return f(object.via.boolean);
     case MSGPACK_OBJECT_POSITIVE_INTEGER:
@@ -180,8 +181,7 @@ public:
   }
 
   // Opinionated version of `msgpack_unpack_next` that can only yield an object.
-  auto unpack(std::span<const std::byte> bytes)
-    -> std::optional<msgpack_object> {
+  auto unpack(std::span<const std::byte> bytes) -> Option<msgpack_object> {
     auto offset = size_t{0};
     auto result
       = msgpack_unpack_next(&unpacked_,
@@ -190,7 +190,7 @@ public:
     if (result == MSGPACK_UNPACK_SUCCESS) {
       return unpacked_.data;
     }
-    return std::nullopt;
+    return None{};
   }
 
 private:
@@ -198,22 +198,22 @@ private:
 };
 
 /// Reimplementation of flb_time_msgpack_to_time to meet our needs.
-inline auto to_flb_time(const msgpack_object& object) -> std::optional<time> {
+inline auto to_flb_time(const msgpack_object& object) -> Option<time> {
   auto f = detail::overload{
-    [](auto) -> std::optional<time> {
-      return std::nullopt;
+    [](auto) -> Option<time> {
+      return None{};
     },
-    [](uint64_t x) -> std::optional<time> {
+    [](uint64_t x) -> Option<time> {
       auto secs = std::chrono::seconds{x};
       return time{secs};
     },
-    [](double x) -> std::optional<time> {
+    [](double x) -> Option<time> {
       auto secs = double_seconds{x};
       return time{std::chrono::duration_cast<duration>(secs)};
     },
-    [](const msgpack_object_ext& ext) -> std::optional<time> {
+    [](const msgpack_object_ext& ext) -> Option<time> {
       if (ext.type != 0 or ext.size != 8) {
-        return std::nullopt;
+        return None{};
       }
       // Fluent Bit encodes seconds and nanoseconds as two 32-bit unsigned
       // integers into the extension type pointer.
@@ -518,7 +518,7 @@ private:
   }
 
   auto input(const std::string& plugin, const property_map& properties = {})
-    -> std::optional<diagnostic> {
+    -> Option<diagnostic> {
     ffd_ = flb_input(ctx_, plugin.c_str(), nullptr);
     if (ffd_ < 0) {
       return diagnostic::error("failed to setup Fluent Bit `{}` input plugin ",
@@ -541,8 +541,7 @@ private:
   }
 
   auto output(const std::string& plugin, const property_map& properties = {},
-              struct flb_lib_out_cb* callback = nullptr)
-    -> std::optional<diagnostic> {
+              struct flb_lib_out_cb* callback = nullptr) -> Option<diagnostic> {
     auto ffd = flb_output(ctx_, plugin.c_str(), callback);
     if (ffd < 0) {
       return diagnostic::error("failed to setup Fluent Bit `{}` output plugin ",
@@ -564,7 +563,7 @@ private:
   }
 
   /// Starts the engine.
-  auto start() -> std::optional<diagnostic> {
+  auto start() -> Option<diagnostic> {
     TENZIR_ASSERT(ctx_ != nullptr);
     TENZIR_DEBUG("starting Fluent Bit engine");
     auto ret = flb_start(ctx_);
@@ -601,8 +600,7 @@ private:
   }
 
 public:
-  auto restart(std::chrono::milliseconds wait_time)
-    -> std::optional<diagnostic> {
+  auto restart(std::chrono::milliseconds wait_time) -> Option<diagnostic> {
     max_wait_before_stop(wait_time);
     if (not stop()) {
       return diagnostic::error("failed to stop fluentbit engine for restart")
@@ -624,7 +622,7 @@ private:
 auto add(auto field, const msgpack_object& object, diagnostic_handler& dh,
          bool decode = false) -> bool {
   auto f = detail::overload{
-    [&](std::nullopt_t) {
+    [&](None) {
       field.null();
       return true;
     },

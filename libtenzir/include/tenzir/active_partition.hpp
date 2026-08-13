@@ -16,6 +16,7 @@
 #include "tenzir/ids.hpp"
 #include "tenzir/index_config.hpp"
 #include "tenzir/instrumentation.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/plugin_fwd.hpp"
 #include "tenzir/qualified_record_field.hpp"
@@ -96,10 +97,10 @@ struct active_partition_state {
   caf::typed_response_promise<partition_synopsis_ptr> persistence_promise = {};
 
   /// Path where the index state is written.
-  std::optional<std::filesystem::path> persist_path = {};
+  Option<std::filesystem::path> persist_path = None{};
 
   /// Path where the partition synopsis is written.
-  std::optional<std::filesystem::path> synopsis_path = {};
+  Option<std::filesystem::path> synopsis_path = None{};
 
   /// The store backend.
   const store_actor_plugin* store_plugin = {};
@@ -108,7 +109,7 @@ struct active_partition_state {
   store_builder_actor store_builder = {};
 
   /// Access info for the finished store.
-  std::optional<resource> store_file = {};
+  Option<resource> store_file = None{};
 
   /// A once_flag for things that need to be done only once at shutdown.
   std::once_flag shutdown_once = {};

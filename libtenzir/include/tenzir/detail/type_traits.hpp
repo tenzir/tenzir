@@ -20,7 +20,12 @@
 #include <type_traits>
 #include <vector>
 
-namespace tenzir::detail {
+namespace tenzir {
+
+template <class T>
+class Option;
+
+namespace detail {
 
 // -- is_* --------------------------------------------------------------------
 
@@ -121,7 +126,13 @@ struct remove_optional {
 };
 
 template <class T>
+// NOLINTNEXTLINE(custom-prefer-option): std::optional compatibility trait.
 struct remove_optional<std::optional<T>> {
+  using type = T;
+};
+
+template <class T>
+struct remove_optional<Option<T>> {
   using type = T;
 };
 
@@ -150,4 +161,6 @@ struct tl_map_shared_ptr<detail::type_list<Ts...>> {
   using type = detail::type_list<std::shared_ptr<Ts>...>;
 };
 
-} // namespace tenzir::detail
+} // namespace detail
+
+} // namespace tenzir

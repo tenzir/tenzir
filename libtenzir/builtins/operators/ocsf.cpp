@@ -249,11 +249,14 @@ private:
         auto b = arrow::Int64Builder{tenzir::arrow_memory_pool()};
         check(b.Reserve(array.length()));
         for (auto val : values(time_type{}, array)) {
-          b.UnsafeAppendOrNull(val.transform([](time x) {
-            return time_point_cast<std::chrono::milliseconds>(x)
-              .time_since_epoch()
-              .count();
-          }));
+          b.UnsafeAppendOrNull(
+            val
+              .transform([](time x) {
+                return time_point_cast<std::chrono::milliseconds>(x)
+                  .time_since_epoch()
+                  .count();
+              })
+              .to_std());
         }
         return series{int64_type{}, finish(b)};
       }
@@ -516,7 +519,7 @@ struct metadata {
 };
 
 auto extract_metadata(const table_slice& slice, location self,
-                      diagnostic_handler& dh) -> std::optional<metadata> {
+                      diagnostic_handler& dh) -> Option<metadata> {
   auto ty = as<record_type>(slice.schema());
   auto metadata_index = ty.resolve_field("metadata");
   if (not metadata_index) {
@@ -705,9 +708,9 @@ struct ocsf_schema {
   std::string mangled_class_name;
 };
 
-auto get_ocsf_schema(std::optional<std::string_view> version,
-                     std::optional<int64_t> class_uid, location self,
-                     diagnostic_handler& dh) -> std::optional<ocsf_schema> {
+auto get_ocsf_schema(Option<std::string_view> version,
+                     Option<int64_t> class_uid, location self,
+                     diagnostic_handler& dh) -> Option<ocsf_schema> {
   if (not version) {
     diagnostic::warning("dropping events where `metadata.version` is null")
       .primary(self)
@@ -1167,22 +1170,22 @@ private:
         auto int_name = field.name;
         auto string_name = *sibling_attr;
         // Get the enum value (use pre-computed if available).
-        auto enum_value = [&]() -> std::optional<series> {
+        auto enum_value = [&]() -> Option<series> {
           if (auto it = derived_enums.find(int_name);
               it != derived_enums.end()) {
             return std::move(it->second);
           }
-          return std::nullopt;
+          return None{};
         }();
         // Get the derived sibling value if sibling not in input.
-        auto sibling_value = [&]() -> std::optional<series> {
+        auto sibling_value = [&]() -> Option<series> {
           if (not input_lookup.contains(string_name)) {
             if (auto sib_it = derived_siblings.find(string_name);
                 sib_it != derived_siblings.end()) {
               return std::move(sib_it->second);
             }
           }
-          return std::nullopt;
+          return None{};
         }();
         // Emit in alphabetical order to match ocsf::cast schema ordering.
         if (int_name < string_name) {
@@ -1210,14 +1213,14 @@ private:
         auto string_name = field.name;
         auto int_name = rev_it->second;
         // Get the derived enum value if enum not in input.
-        auto enum_value = [&]() -> std::optional<series> {
+        auto enum_value = [&]() -> Option<series> {
           if (not input_lookup.contains(int_name)) {
             if (auto enum_it = derived_enums.find(int_name);
                 enum_it != derived_enums.end()) {
               return std::move(enum_it->second);
             }
           }
-          return std::nullopt;
+          return None{};
         }();
         // Get the sibling value (use pre-computed if available).
         auto sibling_value = [&]() -> series {

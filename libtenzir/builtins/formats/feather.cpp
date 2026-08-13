@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/arrow_table_slice.hpp>
@@ -38,7 +40,6 @@
 #include <caf/expected.hpp>
 
 #include <chrono>
-#include <optional>
 #include <queue>
 #include <string_view>
 
@@ -365,8 +366,8 @@ private:
   }
 
   chunk_ptr chunk_;
-  mutable std::optional<uint64_t> num_events_;
-  mutable std::optional<type> schema_;
+  mutable Option<uint64_t> num_events_;
+  mutable Option<type> schema_;
   bool validate_batches_ = false;
 };
 
@@ -514,7 +515,7 @@ private:
 
 auto make_table_slice(std::shared_ptr<arrow::RecordBatch> batch,
                       diagnostic_handler& dh, location operator_location)
-  -> std::optional<table_slice> {
+  -> Option<table_slice> {
   // Feather input is externally sourced, so a batch that decodes but fails
   // structural validation is malformed input, not a programming error.
   if (auto status = batch->Validate(); not status.ok()) {
@@ -522,7 +523,7 @@ auto make_table_slice(std::shared_ptr<arrow::RecordBatch> batch,
                                          "record batch")
                          .note("{}", status.ToStringWithoutContextLines()),
                        dh, operator_location);
-    return std::nullopt;
+    return None{};
   }
   if (is_store_envelope(batch)) {
     auto import_time_column = batch->GetColumnByName("import_time");
@@ -534,7 +535,7 @@ auto make_table_slice(std::shared_ptr<arrow::RecordBatch> batch,
                                            "types")
                            .note("{}", slice.error().message),
                          dh, operator_location);
-      return std::nullopt;
+      return None{};
     }
     slice->import_time(store::derive_import_time(import_time_column));
     return std::move(*slice);
@@ -546,7 +547,7 @@ auto make_table_slice(std::shared_ptr<arrow::RecordBatch> batch,
                                          "types")
                          .note("{}", slice.error().message),
                        dh, operator_location);
-    return std::nullopt;
+    return None{};
   }
   return std::move(*slice);
 }
@@ -619,9 +620,9 @@ auto print_feather(
 
 class feather_options {
 public:
-  std::optional<located<int64_t>> compression_level;
-  std::optional<located<std::string>> compression_type;
-  std::optional<located<double>> min_space_savings;
+  Option<located<int64_t>> compression_level;
+  Option<located<std::string>> compression_type;
+  Option<located<double>> min_space_savings;
 
   friend auto inspect(auto& f, feather_options& x) -> bool {
     return f.object(x).fields(f.field("compression_level", x.compression_level),
@@ -641,7 +642,7 @@ public:
 
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> std::optional<generator<table_slice>> override {
+    -> Option<generator<table_slice>> override {
     return detail::parse_feather(std::move(input), ctrl.diagnostics());
   }
 

@@ -45,7 +45,7 @@ size_t bool_synopsis::memusage() const {
   return sizeof(bool_synopsis);
 }
 
-std::optional<bool>
+Option<bool>
 bool_synopsis::lookup(relational_operator op, data_view rhs) const {
   if (auto b = try_as<view<bool>>(&rhs)) {
     if (op == relational_operator::equal) {

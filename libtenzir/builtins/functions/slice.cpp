@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -16,7 +18,6 @@
 
 #include <algorithm>
 #include <limits>
-#include <optional>
 #include <utility>
 
 namespace tenzir::plugins::slice {
@@ -36,8 +37,7 @@ public:
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto const normalize_bounds
-      = [](int64_t length, std::optional<int64_t> begin,
-           std::optional<int64_t> end) {
+      = [](int64_t length, Option<int64_t> begin, Option<int64_t> end) {
           auto normalized_begin = begin.value_or(0);
           auto normalized_end = end.value_or(length);
           if (normalized_begin < 0) {
@@ -51,9 +51,9 @@ public:
           return std::pair{normalized_begin, normalized_end};
         };
     auto subject_expr = ast::expression{};
-    auto begin = std::optional<located<int64_t>>{};
-    auto end = std::optional<located<int64_t>>{};
-    auto stride = std::optional<located<int64_t>>{};
+    auto begin = Option<located<int64_t>>{};
+    auto end = Option<located<int64_t>>{};
+    auto stride = Option<located<int64_t>>{};
     TRY(argument_parser2::function(name())
           .positional("x", subject_expr, "string|list")
           .named("begin", begin)
@@ -111,9 +111,10 @@ public:
               auto row_offset = array.value_offset(i);
               auto row_length = array.value_length(i);
               check(builder->Append());
-              auto [row_begin, row_end] = normalize_bounds(
-                row_length, begin ? std::optional{begin->inner} : std::nullopt,
-                end ? std::optional{end->inner} : std::nullopt);
+              auto [row_begin, row_end]
+                = normalize_bounds(row_length,
+                                   begin ? Option{begin->inner} : None{},
+                                   end ? Option{end->inner} : None{});
               if (row_end <= row_begin) {
                 continue;
               }

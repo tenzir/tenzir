@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/async/blocking_executor.hpp>
 #include <tenzir/async/pusher.hpp>
@@ -23,7 +25,6 @@
 #include <folly/coro/CurrentExecutor.h>
 
 #include <limits>
-#include <optional>
 
 #include "operator.hpp"
 
@@ -250,7 +251,7 @@ public:
           .emit(dh);
         return false;
       }
-      auto queue_arguments = std::optional<AmqpFieldTable>{};
+      auto queue_arguments = Option<AmqpFieldTable>{};
       if (args_.queue_arguments) {
         queue_arguments.emplace(args_.queue_arguments->inner);
       }

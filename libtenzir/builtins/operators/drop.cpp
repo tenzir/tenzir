@@ -55,8 +55,8 @@ struct configuration {
 
 /// Drops the specifed fields from the input.
 class drop_operator final
-  : public schematic_operator<
-      drop_operator, std::optional<std::vector<indexed_transformation>>> {
+  : public schematic_operator<drop_operator,
+                              Option<std::vector<indexed_transformation>>> {
 public:
   drop_operator() = default;
 
@@ -74,7 +74,7 @@ public:
                       return dropped_schema == schema.name();
                     });
     if (drop_schema) {
-      return std::nullopt;
+      return None{};
     }
     // Apply the transformation.
     auto transform_fn

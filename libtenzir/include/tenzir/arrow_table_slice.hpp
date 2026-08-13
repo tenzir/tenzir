@@ -12,6 +12,7 @@
 
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/passthrough.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/table_slice.hpp"
 
 #include <arrow/array.h>
@@ -37,7 +38,7 @@ struct arrow_table_slice_state<fbs::table_slice::arrow::v2> {
   std::shared_ptr<arrow::RecordBatch> record_batch;
 
   /// Mapping from column offset to nested Arrow array
-  mutable std::optional<arrow::ArrayVector> flat_columns;
+  mutable Option<arrow::ArrayVector> flat_columns;
   mutable std::mutex flat_columns_mutex;
 
   auto get_flat_columns() const -> const arrow::ArrayVector&;
@@ -134,7 +135,7 @@ auto values(const type& type, const arrow::Array& array) noexcept
 template <concrete_type Type>
 auto values([[maybe_unused]] const Type& type,
             const type_to_arrow_array_t<Type>& arr) noexcept
-  -> generator<std::optional<view3<type_to_data_t<Type>>>> {
+  -> generator<Option<view3<type_to_data_t<Type>>>> {
   for (auto i = int64_t{0}; i < arr.length(); ++i) {
     co_yield view_at(arr, i);
   }

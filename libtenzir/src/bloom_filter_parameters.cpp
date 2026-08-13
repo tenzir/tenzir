@@ -12,15 +12,15 @@
 #include "tenzir/concept/parseable/numeric/integral.hpp"
 #include "tenzir/concept/parseable/numeric/real.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/option.hpp"
 
 #include <cmath>
 #include <cstddef>
-#include <optional>
 #include <string_view>
 
 namespace tenzir {
 
-std::optional<bloom_filter_parameters> evaluate(bloom_filter_parameters xs) {
+Option<bloom_filter_parameters> evaluate(bloom_filter_parameters xs) {
   // Check basic invariants first.
   if (xs.m and *xs.m <= 0) {
     return {};
@@ -77,7 +77,7 @@ std::optional<bloom_filter_parameters> evaluate(bloom_filter_parameters xs) {
   return {};
 }
 
-std::optional<bloom_filter_parameters> parse_parameters(std::string_view x) {
+Option<bloom_filter_parameters> parse_parameters(std::string_view x) {
   using namespace parser_literals;
   using parsers::real;
   using parsers::u64;

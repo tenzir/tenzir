@@ -90,7 +90,7 @@ class plugin final : public virtual rest_endpoint_plugin {
         .endpoint_id = static_cast<uint64_t>(0),
         .method = http_method::post,
         .path = "/ping",
-        .params = std::nullopt,
+        .params = None{},
         .version = api_version::v0,
         .content_type = http_content_type::json,
       },

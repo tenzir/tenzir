@@ -9,10 +9,10 @@
 #pragma once
 
 #include "tenzir/generator.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/plugin/base.hpp"
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -30,7 +30,7 @@ public:
   virtual auto name() const -> std::string = 0;
 
   virtual auto instantiate(operator_control_plane& ctrl) const
-    -> std::optional<generator<chunk_ptr>>
+    -> Option<generator<chunk_ptr>>
     = 0;
 
   virtual auto default_parser() const -> std::string {

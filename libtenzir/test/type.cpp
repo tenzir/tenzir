@@ -232,7 +232,7 @@ TEST("enumeration_type") {
   CHECK_EQUAL(as<enumeration_type>(et).field(2), "third");
   CHECK_EQUAL(as<enumeration_type>(et).field(3), "fourth");
   CHECK_EQUAL(as<enumeration_type>(et).resolve("first"), 0u);
-  CHECK_EQUAL(as<enumeration_type>(et).resolve("second"), std::nullopt);
+  CHECK_EQUAL(as<enumeration_type>(et).resolve("second"), None{});
   CHECK_EQUAL(as<enumeration_type>(et).resolve("third"), 2u);
   CHECK_EQUAL(as<enumeration_type>(et).resolve("fourth"), 3u);
   const auto let = type::from_legacy_type(
@@ -342,8 +342,8 @@ TEST("record_type name resolving") {
   CHECK_EQUAL(rt.resolve_key("i"), offset{0});
   CHECK_EQUAL(rt.resolve_key("r2"), offset{3});
   CHECK_EQUAL(rt.resolve_key("r.a"), (offset{1, 1}));
-  CHECK_EQUAL(rt.resolve_key("a"), std::nullopt);
-  CHECK_EQUAL(rt.resolve_key("r.not"), std::nullopt);
+  CHECK_EQUAL(rt.resolve_key("a"), None{});
+  CHECK_EQUAL(rt.resolve_key("r.not"), None{});
   auto to_vector = [](auto&& rng) {
     std::vector<offset> result{};
     for (auto&& elem : std::forward<decltype(rng)>(rng)) {
@@ -540,9 +540,9 @@ TEST("record type transformation") {
       },
     }},
   }};
-  CHECK_EQUAL(xyz.transform({{{0}, record_type::drop()}}), std::nullopt);
-  CHECK_EQUAL(xyz.transform({{{0, 0}, record_type::drop()}}), std::nullopt);
-  CHECK_EQUAL(xyz.transform({{{0, 0, 0}, record_type::drop()}}), std::nullopt);
+  CHECK_EQUAL(xyz.transform({{{0}, record_type::drop()}}), None{});
+  CHECK_EQUAL(xyz.transform({{{0, 0}, record_type::drop()}}), None{});
+  CHECK_EQUAL(xyz.transform({{{0, 0, 0}, record_type::drop()}}), None{});
 }
 
 TEST("record_type merging") {
@@ -645,16 +645,15 @@ TEST("type inference") {
   CHECK_EQUAL(type::infer(ip{}), ip_type{});
   CHECK_EQUAL(type::infer(subnet{}), subnet_type{});
   // Enumeration types cannot be inferred.
-  CHECK_EQUAL(type::infer(enumeration{0}), std::nullopt);
+  CHECK_EQUAL(type::infer(enumeration{0}), None{});
   // List and map types can only be inferred if the nested values can be
   // inferred.
   CHECK_EQUAL(type::infer(list{}), list_type{type{}});
   CHECK_EQUAL(type::infer(list{caf::none}), list_type{type{}});
   CHECK_EQUAL(type::infer(list{bool{}}), list_type{bool_type{}});
   CHECK_EQUAL(type::infer(list{caf::none, int64_t{}}), list_type{int64_type{}});
-  CHECK_EQUAL(type::infer(list{int64_t{}, uint64_t{}}), std::nullopt);
-  CHECK_EQUAL(type::infer(list{caf::none, int64_t{}, uint64_t{}}),
-              std::nullopt);
+  CHECK_EQUAL(type::infer(list{int64_t{}, uint64_t{}}), None{});
+  CHECK_EQUAL(type::infer(list{caf::none, int64_t{}, uint64_t{}}), None{});
   CHECK_EQUAL(type::infer(map{}), (map_type{type{}, type{}}));
   CHECK_EQUAL(type::infer(map{{caf::none, caf::none}}),
               (map_type{type{}, type{}}));
@@ -744,8 +743,8 @@ TEST("enriched types") {
   CHECK_EQUAL(at.name(), "l1");
   CHECK_EQUAL(at.attribute("first"), "value");
   CHECK_EQUAL(at.attribute("second"), "");
-  CHECK_EQUAL(at.attribute("third"), std::nullopt);
-  CHECK_EQUAL(at.attribute("fourth"), std::nullopt);
+  CHECK_EQUAL(at.attribute("third"), None{});
+  CHECK_EQUAL(at.attribute("fourth"), None{});
   CHECK_EQUAL(fmt::format("{}", at), "l1 #first=value #second");
   const auto aat = type{"l2", at, {{"third", "nestingworks"}}};
   CHECK(is<bool_type>(aat));
@@ -753,7 +752,7 @@ TEST("enriched types") {
   CHECK_EQUAL(aat.attribute("first"), "value");
   CHECK_EQUAL(aat.attribute("second"), "");
   CHECK_EQUAL(aat.attribute("third"), "nestingworks");
-  CHECK_EQUAL(aat.attribute("fourth"), std::nullopt);
+  CHECK_EQUAL(aat.attribute("fourth"), None{});
   CHECK_EQUAL(fmt::format("{}", aat),
               "l2 #first=value #second #third=nestingworks");
   const auto lat = type::from_legacy_type(

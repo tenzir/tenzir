@@ -10,20 +10,21 @@
 
 #include "tenzir/chunk.hpp"
 #include "tenzir/generator.hpp"
+#include "tenzir/option.hpp"
 
 #include <string_view>
 
 namespace tenzir {
 
 /// Converts a stream of chunks into a stream of strings by splitting the input
-/// at null bytes. The returned sequence may spuriously contain `std::nullopt`,
+/// at null bytes. The returned sequence may spuriously contain `None{}`,
 /// which shall be ignored. Consecutive null bytes produce empty sting views.
 inline auto split_nulls(generator<chunk_ptr> input)
-  -> generator<std::optional<std::string_view>> {
+  -> generator<Option<std::string_view>> {
   auto buffer = std::string{};
   for (auto&& chunk : input) {
     if (not chunk or chunk->size() == 0) {
-      co_yield std::nullopt;
+      co_yield None{};
       continue;
     }
     const auto* begin = reinterpret_cast<const char*>(chunk->data());
@@ -42,7 +43,7 @@ inline auto split_nulls(generator<chunk_ptr> input)
       begin = current + 1;
     }
     buffer.append(begin, end);
-    co_yield std::nullopt;
+    co_yield None{};
   }
   if (not buffer.empty()) {
     co_yield buffer;

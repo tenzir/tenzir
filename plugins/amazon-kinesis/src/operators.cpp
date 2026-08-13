@@ -114,7 +114,7 @@ struct ShardInfo {
 
 struct PutRecordsResult {
   std::vector<ToAmazonKinesis::PendingRecord> failed_records;
-  std::optional<std::string> error;
+  Option<std::string> error;
 };
 
 auto kinesis_api_call(amazon::SignedHttpClient& client,
@@ -455,10 +455,8 @@ auto make_kinesis_http_client(Option<located<std::string>> const& aws_region,
                               OpCtx& ctx)
   -> Task<std::shared_ptr<amazon::SignedHttpClient>> {
   auto auth = co_await resolve_aws_iam_auth(
-    aws_iam ? std::optional<located<record>>{*aws_iam} : std::nullopt,
-    aws_region ? std::optional<located<std::string>>{*aws_region}
-               : std::nullopt,
-    ctx);
+    aws_iam ? Option<located<record>>{*aws_iam} : None{},
+    aws_region ? Option<located<std::string>>{*aws_region} : None{}, ctx);
   if (not auth) {
     co_return nullptr;
   }

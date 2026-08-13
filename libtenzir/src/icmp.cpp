@@ -12,7 +12,7 @@
 
 namespace tenzir {
 
-std::optional<icmp_type> dual(icmp_type x) {
+Option<icmp_type> dual(icmp_type x) {
   switch (x) {
     default:
       return {};
@@ -39,7 +39,7 @@ std::optional<icmp_type> dual(icmp_type x) {
   }
 }
 
-std::optional<icmp6_type> dual(icmp6_type x) {
+Option<icmp6_type> dual(icmp6_type x) {
   switch (x) {
     default:
       return {};

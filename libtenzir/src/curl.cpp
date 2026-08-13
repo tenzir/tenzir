@@ -406,13 +406,13 @@ auto url::set(part url_part, std::string_view str, flags fs) -> code {
 }
 
 auto url::get(part url_part, unsigned int flags) const
-  -> std::pair<code, std::optional<std::string>> {
+  -> std::pair<code, Option<std::string>> {
   auto curl_part = static_cast<CURLUPart>(url_part);
   char* content = nullptr;
   auto curl_code = curl_url_get(url_.get(), curl_part, &content, flags);
   auto result = static_cast<code>(curl_code);
   if (result != code::ok or content == nullptr) {
-    return {result, std::nullopt};
+    return {result, None{}};
   }
   auto string = std::string{content};
   curl_free(content);
@@ -441,13 +441,13 @@ auto to_error(url::code code) -> caf::error {
                          fmt::format("curl: {}", to_string(code)));
 }
 
-auto try_unescape(std::string_view str) -> std::optional<std::string> {
+auto try_unescape(std::string_view str) -> Option<std::string> {
   auto* easy = curl_easy_init();
   TENZIR_ASSERT(easy);
   auto length = detail::narrow_cast<int>(str.size());
   auto outlength = 0;
   auto* unescaped = curl_easy_unescape(easy, str.data(), length, &outlength);
-  auto result = std::optional<std::string>{};
+  auto result = Option<std::string>{};
   if (unescaped) {
     result.emplace(unescaped, unescaped + outlength);
     curl_free(unescaped);

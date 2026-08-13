@@ -112,7 +112,7 @@ auto do_not_optimize(const operator_base& op) -> optimize_result {
   // assume `op == head` and `order == unordered`. We would have to show that
   // `head | where filter | sink <=> shuffle | head | where filter | sink`, but
   // this is clearly not the case.
-  return optimize_result{std::nullopt, event_order::ordered, op.copy()};
+  return optimize_result{None{}, event_order::ordered, op.copy()};
 }
 
 pipeline::pipeline(std::vector<operator_ptr> operators) {
@@ -349,7 +349,7 @@ auto pipeline::is_closed() const -> bool {
 
 auto pipeline::split_at_void() && -> caf::expected<std::vector<pipeline>> {
   const auto guess_or_infer_type
-    = [](std::optional<operator_type> input,
+    = [](Option<operator_type> input,
          const operator_ptr& op) -> caf::expected<operator_type> {
     if (input) {
       return op->infer_type(*input);
@@ -363,7 +363,7 @@ auto pipeline::split_at_void() && -> caf::expected<std::vector<pipeline>> {
     return op->infer_type(tag_v<chunk_ptr>);
   };
   auto result = std::vector<pipeline>{};
-  auto input = std::optional<operator_type>{};
+  auto input = Option<operator_type>{};
   for (auto& op : operators_) {
     if (not input or input->is<void>()) {
       result.emplace_back();
@@ -374,14 +374,14 @@ auto pipeline::split_at_void() && -> caf::expected<std::vector<pipeline>> {
   return result;
 }
 
-auto pipeline::infer_location() const -> std::optional<operator_location> {
+auto pipeline::infer_location() const -> Option<operator_location> {
   auto result = operator_location::anywhere;
   for (auto& op : operators_) {
     if (result == operator_location::anywhere) {
       result = op->location();
     } else if (op->location() != operator_location::anywhere
                and op->location() != result) {
-      return std::nullopt;
+      return None{};
     }
   }
   return result;

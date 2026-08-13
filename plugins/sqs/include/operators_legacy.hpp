@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/aws_credentials.hpp>
 #include <tenzir/aws_iam.hpp>
 #include <tenzir/detail/env.hpp>
@@ -49,9 +51,8 @@ auto to_aws_string(chunk_ptr chunk) -> Aws::String {
 class sqs_queue {
 public:
   explicit sqs_queue(located<std::string> name, std::chrono::seconds poll_time,
-                     std::optional<std::string> region,
-                     std::optional<tenzir::resolved_aws_credentials> creds
-                     = std::nullopt)
+                     Option<std::string> region,
+                     Option<tenzir::resolved_aws_credentials> creds = None{})
     : name_{std::move(name)} {
     auto config = Aws::Client::ClientConfiguration{};
     // Set the region if provided.
@@ -133,7 +134,7 @@ public:
   }
 
   /// Deletes a message from the queue.
-  auto delete_message(const auto& message) -> std::optional<diagnostic> {
+  auto delete_message(const auto& message) -> Option<diagnostic> {
     TENZIR_DEBUG("deleting message {}", message.GetMessageId());
     auto request = Aws::SQS::Model::DeleteMessageRequest{};
     request.SetQueueUrl(url_);
@@ -147,7 +148,7 @@ public:
         .note("receipt handle: {}", message.GetReceiptHandle())
         .done();
     }
-    return std::nullopt;
+    return None{};
   }
 
 private:
@@ -175,9 +176,9 @@ private:
 
 struct connector_args {
   located<std::string> queue;
-  std::optional<located<std::chrono::seconds>> poll_time;
-  std::optional<located<std::string>> aws_region;
-  std::optional<tenzir::aws_iam_options> aws;
+  Option<located<std::chrono::seconds>> poll_time;
+  Option<located<std::string>> aws_region;
+  Option<tenzir::aws_iam_options> aws;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, connector_args& x) -> bool {
@@ -198,7 +199,7 @@ public:
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     auto& dh = ctrl.diagnostics();
     // Resolve all secrets from aws_iam configuration.
-    auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
+    auto resolved_creds = Option<tenzir::resolved_aws_credentials>{};
     if (args_.aws) {
       resolved_creds.emplace();
       auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
@@ -209,10 +210,10 @@ public:
         = args_.poll_time ? args_.poll_time->inner : default_poll_time;
       // Use top-level aws_region if provided, otherwise fall back to aws_iam
       auto region = args_.aws_region
-                      ? std::optional{args_.aws_region->inner}
+                      ? Option{args_.aws_region->inner}
                       : (resolved_creds and not resolved_creds->region.empty()
-                           ? std::optional{resolved_creds->region}
-                           : std::nullopt);
+                           ? Option{resolved_creds->region}
+                           : None{});
       auto queue = sqs_queue{args_.queue, poll_time, region, resolved_creds};
       co_yield {};
       while (true) {
@@ -273,7 +274,7 @@ public:
     -> generator<std::monostate> {
     auto& dh = ctrl.diagnostics();
     // Resolve all secrets from aws_iam configuration.
-    auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
+    auto resolved_creds = Option<tenzir::resolved_aws_credentials>{};
     if (args_.aws) {
       resolved_creds.emplace();
       auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
@@ -285,10 +286,10 @@ public:
     try {
       // Use top-level aws_region if provided, otherwise fall back to aws_iam
       auto region = args_.aws_region
-                      ? std::optional{args_.aws_region->inner}
+                      ? Option{args_.aws_region->inner}
                       : (resolved_creds and not resolved_creds->region.empty()
-                           ? std::optional{resolved_creds->region}
-                           : std::nullopt);
+                           ? Option{resolved_creds->region}
+                           : None{});
       queue = std::make_shared<sqs_queue>(args_.queue, poll_time, region,
                                           resolved_creds);
     } catch (diagnostic& d) {

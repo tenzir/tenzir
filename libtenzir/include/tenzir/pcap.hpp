@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
 #include "tenzir/type.hpp"
 
 #include <cstdint>
@@ -84,8 +85,8 @@ auto byteswap(file_header hdr) -> file_header;
 auto byteswap(packet_header hdr) -> packet_header;
 
 /// Determines whether PCAP header values need byte swapping.
-/// @returns `std::nullopt` on invalid magic and boolean otherwise.
-auto need_byte_swap(uint32_t magic) -> std::optional<bool>;
+/// @returns `None{}` on invalid magic and boolean otherwise.
+auto need_byte_swap(uint32_t magic) -> Option<bool>;
 
 /// A container for storing a single coming from the network. Header and data
 /// lay next to each other on the wire.

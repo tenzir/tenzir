@@ -32,11 +32,9 @@ namespace {
 template <class Args>
 auto make_async_sqs_queue(const Args& args, OpCtx& ctx)
   -> Task<std::shared_ptr<AsyncSqsQueue>> {
-  auto aws_iam = args.aws_iam ? std::optional<located<record>>{*args.aws_iam}
-                              : std::nullopt;
-  auto aws_region = args.aws_region
-                      ? std::optional<located<std::string>>{*args.aws_region}
-                      : std::nullopt;
+  auto aws_iam = args.aws_iam ? Option<located<record>>{*args.aws_iam} : None{};
+  auto aws_region
+    = args.aws_region ? Option<located<std::string>>{*args.aws_region} : None{};
   auto auth = co_await resolve_aws_iam_auth(std::move(aws_iam),
                                             std::move(aws_region), ctx);
   if (not auth) {
@@ -85,7 +83,7 @@ auto make_async_sqs_queue(const Args& args, OpCtx& ctx)
   auto creds_opt
     = resolved_creds
         ? Option<tenzir::resolved_aws_credentials>{std::move(*resolved_creds)}
-        : std::nullopt;
+        : None{};
   auto queue
     = std::make_shared<AsyncSqsQueue>(std::move(queue_name), poll_time,
                                       std::move(region), std::move(creds_opt),
@@ -130,7 +128,7 @@ auto FromSqs::start(OpCtx& ctx) -> Task<void> {
     = args_.visibility_timeout
         ? Option{std::chrono::duration_cast<std::chrono::seconds>(
             args_.visibility_timeout->inner)}
-        : std::nullopt;
+        : None{};
   queue_ = co_await make_async_sqs_queue(args_, ctx);
   bytes_read_counter_
     = ctx.make_counter(MetricsLabel{"operator", "from_amazon_sqs"},
@@ -180,7 +178,7 @@ auto parse_epoch_ms(const Aws::String& value) -> Option<time> {
   auto [ptr, ec]
     = std::from_chars(value.data(), value.data() + value.size(), ms);
   if (ec != std::errc{}) {
-    return std::nullopt;
+    return None{};
   }
   return time{std::chrono::milliseconds{ms}};
 }

@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/aliases.hpp"
+#include "tenzir/option.hpp"
 
 #include <caf/actor_system_config.hpp>
 
@@ -23,7 +24,7 @@ namespace tenzir {
 
 struct config_file {
   std::filesystem::path path;
-  std::optional<std::string> plugin;
+  Option<std::string> plugin;
 
   auto operator==(const config_file& rhs) const -> bool = default;
   auto operator<=>(const config_file& rhs) const -> std::strong_ordering

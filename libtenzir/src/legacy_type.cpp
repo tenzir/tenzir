@@ -16,9 +16,9 @@
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/module.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/pattern.hpp"
 
-#include <optional>
 #include <string_view>
 #include <tuple>
 #include <typeindex>
@@ -31,8 +31,7 @@ namespace tenzir {
 legacy_attribute::legacy_attribute(std::string key) : key{std::move(key)} {
 }
 
-legacy_attribute::legacy_attribute(std::string key,
-                                   std::optional<std::string> value)
+legacy_attribute::legacy_attribute(std::string key, Option<std::string> value)
   : key{std::move(key)}, value{std::move(value)} {
 }
 
@@ -287,7 +286,7 @@ priority_merge(const legacy_record_type& lhs, const legacy_record_type& rhs,
   return result.name("");
 }
 
-std::optional<legacy_record_type>
+Option<legacy_record_type>
 remove_field(const legacy_record_type& r, std::vector<std::string_view> path) {
   TENZIR_ASSERT(not path.empty());
   auto result = legacy_record_type{}.name(r.name()).attributes(r.attributes());
@@ -297,11 +296,11 @@ remove_field(const legacy_record_type& r, std::vector<std::string_view> path) {
         path.erase(path.begin());
         const auto* field_rec = try_as<legacy_record_type>(&f.type);
         if (not field_rec) {
-          return std::nullopt;
+          return None{};
         }
         auto new_rec = remove_field(*field_rec, path);
         if (not new_rec) {
-          return std::nullopt;
+          return None{};
         }
         // TODO: Remove this condition if empty records get allowed.
         if (not new_rec->fields.empty()) {
@@ -316,8 +315,7 @@ remove_field(const legacy_record_type& r, std::vector<std::string_view> path) {
   return result;
 }
 
-std::optional<legacy_record_type>
-remove_field(const legacy_record_type& r, offset o) {
+Option<legacy_record_type> remove_field(const legacy_record_type& r, offset o) {
   TENZIR_ASSERT(not o.empty());
   auto result = legacy_record_type{}.name(r.name()).attributes(r.attributes());
   if (o.front() >= r.fields.size()) {

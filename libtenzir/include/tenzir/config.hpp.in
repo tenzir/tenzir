@@ -55,6 +55,7 @@ extern const uint64_t current_partition_version;
 /// end_of_life is not set.
 struct supported_versions {
   std::string_view introduced;
+  // NOLINTNEXTLINE(custom-prefer-option): low-level header cannot include Option.
   std::optional<std::string_view> end_of_life;
 };
 

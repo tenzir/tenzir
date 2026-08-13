@@ -119,14 +119,14 @@ private:
 };
 } // namespace
 
-auto get_schema(std::string_view name) -> std::optional<type> {
+auto get_schema(std::string_view name) -> Option<type> {
   auto& global = get_impl();
   // The critical section here is very small once the type has been converted.
   // This function should thus be fine to call outside of tight loops.
   auto lock = std::unique_lock{global.mutex};
   auto it = global.types.find(name);
   if (it == global.types.end()) {
-    return std::nullopt;
+    return None{};
   }
   return match(
     it->second,

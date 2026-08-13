@@ -77,7 +77,7 @@ unpack_schema(const fbs::partition::LegacyPartition& partition) {
 
 } // namespace
 
-const std::optional<tenzir::record_type>&
+const Option<tenzir::record_type>&
 passive_partition_state::combined_schema() const {
   return combined_schema_;
 }

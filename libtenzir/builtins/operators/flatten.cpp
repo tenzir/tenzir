@@ -77,7 +77,7 @@ public:
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    auto sep = std::optional<std::string>{default_flatten_separator};
+    auto sep = Option<std::string>{default_flatten_separator};
     TRY(argument_parser2::function("flatten")
           .positional("x", expr, "record")
           .positional("separator", sep)

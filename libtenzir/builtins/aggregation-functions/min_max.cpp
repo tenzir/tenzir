@@ -205,13 +205,13 @@ public:
 
   auto reset() -> void override {
     type_ = {};
-    result_ = {};
+    result_ = None{};
   }
 
 private:
   ast::expression expr_ = {};
   type type_ = {};
-  std::optional<result_t> result_ = {};
+  Option<result_t> result_ = None{};
 };
 
 template <mode Mode>

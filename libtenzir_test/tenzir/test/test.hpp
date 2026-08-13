@@ -264,6 +264,15 @@ bool check_eq(const T0& lhs, const T1& rhs,
 namespace tenzir::test {
 
 template <class T>
+T unbox(Option<T> x) {
+  if (not x) {
+    FAIL("unbox() called on None");
+  }
+  return *std::move(x);
+}
+
+template <class T>
+// NOLINTNEXTLINE(custom-prefer-option): third-party test result compatibility.
 T unbox(std::optional<T> x) {
   if (not x) {
     FAIL("x == none");

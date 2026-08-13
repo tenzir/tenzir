@@ -32,24 +32,23 @@ namespace tenzir::detail {
 
 namespace {
 
-auto read_memory_value(const std::filesystem::path& path)
-  -> std::optional<uint64_t> {
+auto read_memory_value(const std::filesystem::path& path) -> Option<uint64_t> {
   auto file = std::ifstream{path};
   auto value = std::string{};
   file >> value;
   if (value.empty() or value == "max") {
-    return std::nullopt;
+    return None{};
   }
   try {
     return std::stoull(value);
   } catch (const std::exception&) {
-    return std::nullopt;
+    return None{};
   }
 }
 
 auto read_cgroup_memory_available(const std::filesystem::path& dir,
                                   std::string source)
-  -> std::optional<available_memory_info> {
+  -> Option<available_memory_info> {
   auto current = read_memory_value(dir / "memory.current");
   auto max = read_memory_value(dir / "memory.max");
   if (not current or not max) {
@@ -57,11 +56,11 @@ auto read_cgroup_memory_available(const std::filesystem::path& dir,
     max = read_memory_value(dir / "memory.limit_in_bytes");
   }
   if (not current or not max) {
-    return std::nullopt;
+    return None{};
   }
   static constexpr auto unlimited_cgroup_limit = uint64_t{1} << 60;
   if (*max >= unlimited_cgroup_limit) {
-    return std::nullopt;
+    return None{};
   }
   if (*current >= *max) {
     return available_memory_info{
@@ -89,7 +88,7 @@ struct cgroup2_mount {
   std::filesystem::path mount_point = {};
 };
 
-auto find_cgroup2_mount() -> std::optional<cgroup2_mount> {
+auto find_cgroup2_mount() -> Option<cgroup2_mount> {
   try {
     for (const auto& mount : pfs::procfs{}.get_task().get_mountinfo()) {
       if (mount.filesystem_type != "cgroup2") {
@@ -102,7 +101,7 @@ auto find_cgroup2_mount() -> std::optional<cgroup2_mount> {
     }
   } catch (const std::exception&) {
   }
-  return std::nullopt;
+  return None{};
 }
 
 auto path_stays_below_root(const std::filesystem::path& path) -> bool {
@@ -138,14 +137,14 @@ auto resolve_cgroup2_path(const cgroup2_mount& mount,
 }
 
 auto cgroup2_memory_available(const std::filesystem::path& path)
-  -> std::optional<available_memory_info> {
+  -> Option<available_memory_info> {
   auto mount = find_cgroup2_mount().value_or(cgroup2_mount{
     .root = "/",
     .mount_point = "/sys/fs/cgroup",
   });
   auto current = resolve_cgroup2_path(mount, path);
   auto root = mount.mount_point.lexically_normal();
-  auto result = std::optional<available_memory_info>{};
+  auto result = Option<available_memory_info>{};
   while (true) {
     if (auto available = read_cgroup_memory_available(current, "cgroup-v2")) {
       if (not result or available->bytes < result->bytes) {
@@ -162,7 +161,7 @@ auto cgroup2_memory_available(const std::filesystem::path& path)
 
 #endif
 
-auto cgroup_memory_available() -> std::optional<available_memory_info> {
+auto cgroup_memory_available() -> Option<available_memory_info> {
 #if TENZIR_LINUX
   try {
     for (const auto& cgroup : pfs::procfs{}.get_task().get_cgroups()) {
@@ -191,7 +190,7 @@ auto cgroup_memory_available() -> std::optional<available_memory_info> {
   return read_cgroup_memory_available("/sys/fs/cgroup", "cgroup");
 }
 
-auto procfs_memory_available() -> std::optional<available_memory_info> {
+auto procfs_memory_available() -> Option<available_memory_info> {
   auto meminfo = std::ifstream{"/proc/meminfo"};
   auto key = std::string{};
   auto value = uint64_t{};
@@ -204,10 +203,10 @@ auto procfs_memory_available() -> std::optional<available_memory_info> {
       };
     }
   }
-  return std::nullopt;
+  return None{};
 }
 
-auto mach_memory_available() -> std::optional<available_memory_info> {
+auto mach_memory_available() -> Option<available_memory_info> {
 #if defined(__APPLE__) && __has_include(<mach/mach.h>)
   static const auto page_size = static_cast<uint64_t>(getpagesize());
   auto vm_count = mach_msg_type_number_t{HOST_VM_INFO64_COUNT};
@@ -215,7 +214,7 @@ auto mach_memory_available() -> std::optional<available_memory_info> {
   if (KERN_SUCCESS
       != host_statistics64(mach_host_self(), HOST_VM_INFO64,
                            reinterpret_cast<host_info64_t>(&vm), &vm_count)) {
-    return std::nullopt;
+    return None{};
   }
   return available_memory_info{
     .bytes
@@ -223,13 +222,13 @@ auto mach_memory_available() -> std::optional<available_memory_info> {
     .source = "mach",
   };
 #else
-  return std::nullopt;
+  return None{};
 #endif
 }
 
 } // namespace
 
-auto available_memory() -> std::optional<available_memory_info> {
+auto available_memory() -> Option<available_memory_info> {
   auto cgroup = cgroup_memory_available();
   auto system = procfs_memory_available();
   if (not system) {

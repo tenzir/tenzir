@@ -37,8 +37,7 @@ auto basic_series<Type>::list_values() const -> series
 }
 
 template <class Type>
-auto basic_series<Type>::field(std::string_view name) const
-  -> std::optional<series>
+auto basic_series<Type>::field(std::string_view name) const -> Option<series>
   requires(std::same_as<Type, record_type>)
 {
   TRY(auto index, type.resolve_field(name));

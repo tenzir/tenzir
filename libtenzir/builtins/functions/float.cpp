@@ -36,7 +36,7 @@ public:
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr), this](auto eval, session ctx) {
-        auto failed = std::optional<std::string>{};
+        auto failed = Option<std::string>{};
         auto result = map_series(eval(expr), [&](series value) {
           const auto f = detail::overload{
             [](const arrow::NullArray& arg) {

@@ -161,6 +161,8 @@ class null_bitmap;
 class null_type;
 class operator_base;
 class operator_box;
+template <class T>
+class Option;
 class parser_interface;
 class passive_store;
 class pattern;
@@ -551,8 +553,10 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID(
     (std::shared_ptr<
       std::unordered_map<tenzir::uuid, tenzir::partition_synopsis_ptr>>))
+  // NOLINTBEGIN(custom-prefer-option): CAF serialization boundary.
   TENZIR_ADD_TYPE_ID(
     (std::unordered_map<std::string, std::optional<std::string>>))
+  // NOLINTEND(custom-prefer-option)
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::partition_synopsis_pair>))
   TENZIR_ADD_TYPE_ID((std::vector<std::filesystem::path>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::expression>))

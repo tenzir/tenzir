@@ -103,7 +103,7 @@ public:
       if (available.empty()) {
         builder = std::move(builder).note("no {} found", type_plural);
       }
-      auto suggestion = std::optional<std::string>{};
+      auto suggestion = Option<std::string>{};
       if (not module_entities.empty()) {
         auto target = path.at(idx).name;
         auto best
@@ -135,7 +135,7 @@ public:
     };
     // Because there currently is no way to bring additional entities into the
     // scope, we can directly dispatch to the registry.
-    auto pkg = std::invoke([&]() -> std::optional<entity_pkg> {
+    auto pkg = std::invoke([&]() -> Option<entity_pkg> {
       // Resolution precedence: cfg (user overrides) -> std (builtins) ->
       // packages (installed)
       for (auto pkg : {std::string{entity_pkg_cfg}, std::string{entity_pkg_std},
@@ -145,7 +145,7 @@ public:
           return pkg;
         }
       }
-      return std::nullopt;
+      return None{};
     });
     if (not pkg) {
       report_not_found(x.path, 0, first_ns);

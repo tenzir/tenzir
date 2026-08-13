@@ -213,7 +213,7 @@ load_symbols(const detail::stable_set<std::filesystem::path>& module_dirs,
   return global_symbols;
 }
 
-auto translate_builtin_type(std::string_view name) -> std::optional<type> {
+auto translate_builtin_type(std::string_view name) -> Option<type> {
   using namespace std::string_view_literals;
   using p = std::pair<std::string_view, type>;
   const static auto m = std::unordered_map<std::string_view, type>{
@@ -234,7 +234,7 @@ auto translate_builtin_type(std::string_view name) -> std::optional<type> {
   if (it != m.end()) {
     return it->second;
   }
-  return std::nullopt;
+  return None{};
 }
 
 caf::expected<symbol_map2>

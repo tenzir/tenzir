@@ -199,8 +199,7 @@ private:
   uint64_t event_count_{};
 };
 
-auto to_option_string_view(
-  std::optional<std::optional<view3<std::string>>> value)
+auto to_option_string_view(Option<Option<view3<std::string>>> value)
   -> Option<Option<std::string_view>> {
   if (not value) {
     return None{};
@@ -312,9 +311,8 @@ public:
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
     input = resolve_enumerations(std::move(input));
-    constexpr auto null_values
-      = []() -> generator<std::optional<view3<std::string>>> {
-      co_yield std::nullopt;
+    constexpr auto null_values = []() -> generator<Option<view3<std::string>>> {
+      co_yield None{};
     };
     auto id = args_.id
                 ? detail::eval_as<string_type>("id", *args_.id, input, ctx.dh())

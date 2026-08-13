@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/atomic.hpp>
 #include <tenzir/aws_iam.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -21,7 +23,6 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -90,21 +91,20 @@ auto add_kafka_connection_diagnostic_notes(diagnostic_builder out,
 
 /// Adds AWS IAM mode/region/profile/role notes when credentials are available.
 auto add_kafka_aws_iam_diagnostic_notes(
-  diagnostic_builder out,
-  std::optional<resolved_aws_credentials> const& credentials)
+  diagnostic_builder out, Option<resolved_aws_credentials> const& credentials)
   -> diagnostic_builder;
 
 /// Creates a consumer configuration from static options plus callback setup.
 auto make_consumer_configuration(record const& options,
-                                 std::optional<aws_iam_options> aws,
-                                 std::optional<resolved_aws_credentials> creds,
+                                 Option<aws_iam_options> aws,
+                                 Option<resolved_aws_credentials> creds,
                                  int64_t offset, diagnostic_handler& dh)
   -> caf::expected<consumer_configuration>;
 
 /// Creates a producer configuration from static options plus callback setup.
 auto make_producer_configuration(record const& options,
-                                 std::optional<aws_iam_options> aws,
-                                 std::optional<resolved_aws_credentials> creds,
+                                 Option<aws_iam_options> aws,
+                                 Option<resolved_aws_credentials> creds,
                                  diagnostic_handler& dh)
   -> caf::expected<producer_configuration>;
 

@@ -21,6 +21,7 @@
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/operator.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/time.hpp"
 #include "tenzir/variant.hpp"
 
@@ -34,7 +35,6 @@
 #include <caf/ref_counted.hpp>
 #include <fmt/core.h>
 
-#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -45,7 +45,7 @@ namespace tenzir {
 /// A qualifier in the form of a key and optional value.
 struct legacy_attribute : detail::totally_ordered<legacy_attribute> {
   legacy_attribute(std::string key = {});
-  legacy_attribute(std::string key, std::optional<std::string> value);
+  legacy_attribute(std::string key, Option<std::string> value);
 
   friend bool operator==(const legacy_attribute& x, const legacy_attribute& y);
 
@@ -57,7 +57,7 @@ struct legacy_attribute : detail::totally_ordered<legacy_attribute> {
   }
 
   std::string key;
-  std::optional<std::string> value;
+  Option<std::string> value;
 };
 
 // -- type hierarchy ----------------------------------------------------------
@@ -706,13 +706,12 @@ priority_merge(const legacy_record_type& lhs, const legacy_record_type& rhs,
 /// @returns A new type without the target field if it exists in `r`.
 /// @pre `!path.empty()`
 /// @relates legacy_record_type
-std::optional<legacy_record_type>
+Option<legacy_record_type>
 remove_field(const legacy_record_type& r, std::vector<std::string_view> path);
 
 /// As above, but use an offset instead of a vector of string to specify
 /// the field to be removed.
-std::optional<legacy_record_type>
-remove_field(const legacy_record_type& r, offset o);
+Option<legacy_record_type> remove_field(const legacy_record_type& r, offset o);
 
 template <>
 class variant_traits<legacy_type> {

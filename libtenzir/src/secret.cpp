@@ -393,7 +393,7 @@ secret_view::secret_view(const secret& s) : impl{s.buffer} {
 
 auto replace_secrets(table_slice slice) -> std::pair<bool, table_slice> {
   auto f = detail::overload{
-    [](const basic_series<secret_type>& s) -> std::optional<series> {
+    [](const basic_series<secret_type>& s) -> Option<series> {
       auto b = arrow::StringBuilder{};
       check(b.Reserve(s.length()));
       for (auto i = int64_t{0}; i < s.array->length(); ++i) {
@@ -405,8 +405,8 @@ auto replace_secrets(table_slice slice) -> std::pair<bool, table_slice> {
       }
       return series{string_type{}, finish(b)};
     },
-    [](const auto&) -> std::optional<series> {
-      return std::nullopt;
+    [](const auto&) -> Option<series> {
+      return None{};
     },
   };
   return replace(std::move(slice), f);

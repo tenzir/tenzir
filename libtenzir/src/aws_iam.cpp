@@ -26,7 +26,7 @@ auto contains_crlf(std::string_view s) -> bool {
 
 /// Helper to assign a secret from a record field.
 auto assign_secret(const located<record>& config, std::string_view key,
-                   std::optional<secret>& x, diagnostic_handler& dh)
+                   Option<secret>& x, diagnostic_handler& dh)
   -> failure_or<void> {
   if (auto it = config.inner.find(key); it != config.inner.end()) {
     if (auto* s = try_as<secret>(it->second.get_data())) {
@@ -51,7 +51,7 @@ auto assign_secret(const located<record>& config, std::string_view key,
 
 /// Helper to parse headers from a record.
 auto parse_headers(const located<record>& config,
-                   std::optional<std::vector<std::pair<std::string, secret>>>& x,
+                   Option<std::vector<std::pair<std::string, secret>>>& x,
                    diagnostic_handler& dh) -> failure_or<void> {
   auto it = config.inner.find("headers");
   if (it == config.inner.end()) {
@@ -360,7 +360,7 @@ auto aws_iam_options::make_secret_requests(resolved_aws_credentials& resolved,
       // Handle path: explicit value, explicit null, or default.
       if (te.path_is_null) {
         // Explicit null: plain text response (no JSON parsing).
-        rte.path = std::nullopt;
+        rte.path = None{};
       } else if (te.path) {
         // Explicit JSON path.
         rte.path = *te.path;
@@ -385,11 +385,10 @@ auto aws_iam_options::make_secret_requests(resolved_aws_credentials& resolved,
 namespace {
 
 /// Checks whether the current auth mode requires an explicit AWS region.
-auto check_region_requirement(
-  const std::optional<aws_iam_options>& aws_iam,
-  const std::optional<located<std::string>>& aws_region,
-  AwsIamRegionRequirement requirement, diagnostic_handler& dh)
-  -> failure_or<void> {
+auto check_region_requirement(const Option<aws_iam_options>& aws_iam,
+                              const Option<located<std::string>>& aws_region,
+                              AwsIamRegionRequirement requirement,
+                              diagnostic_handler& dh) -> failure_or<void> {
   if (not aws_iam) {
     return {};
   }
@@ -407,8 +406,8 @@ auto check_region_requirement(
 
 } // namespace
 
-auto resolve_aws_iam_auth(std::optional<aws_iam_options> aws_iam,
-                          std::optional<located<std::string>> aws_region,
+auto resolve_aws_iam_auth(Option<aws_iam_options> aws_iam,
+                          Option<located<std::string>> aws_region,
                           diagnostic_handler& dh,
                           AwsIamRegionRequirement requirement)
   -> failure_or<ResolvedAwsIamAuth> {
@@ -427,12 +426,12 @@ auto resolve_aws_iam_auth(std::optional<aws_iam_options> aws_iam,
   return result;
 }
 
-auto resolve_aws_iam_auth(std::optional<located<record>> aws_iam,
-                          std::optional<located<std::string>> aws_region,
+auto resolve_aws_iam_auth(Option<located<record>> aws_iam,
+                          Option<located<std::string>> aws_region,
                           diagnostic_handler& dh,
                           AwsIamRegionRequirement requirement)
   -> failure_or<ResolvedAwsIamAuth> {
-  auto parsed = std::optional<aws_iam_options>{};
+  auto parsed = Option<aws_iam_options>{};
   if (aws_iam) {
     TRY(parsed, aws_iam_options::from_record(std::move(*aws_iam), dh));
   }
@@ -440,20 +439,20 @@ auto resolve_aws_iam_auth(std::optional<located<record>> aws_iam,
                               requirement);
 }
 
-auto resolve_aws_iam_auth(std::optional<located<record>> aws_iam,
-                          std::optional<located<std::string>> aws_region,
-                          OpCtx& ctx, AwsIamRegionRequirement requirement)
-  -> Task<std::optional<ResolvedAwsIamAuth>> {
+auto resolve_aws_iam_auth(Option<located<record>> aws_iam,
+                          Option<located<std::string>> aws_region, OpCtx& ctx,
+                          AwsIamRegionRequirement requirement)
+  -> Task<Option<ResolvedAwsIamAuth>> {
   auto auth = resolve_aws_iam_auth(std::move(aws_iam), std::move(aws_region),
                                    ctx.dh(), requirement);
   if (not auth) {
-    co_return std::nullopt;
+    co_return None{};
   }
   if (auth->options and auth->credentials) {
     auto requests
       = auth->options->make_secret_requests(*auth->credentials, ctx.dh());
     if (not co_await ctx.resolve_secrets(std::move(requests))) {
-      co_return std::nullopt;
+      co_return None{};
     }
   }
   co_return std::move(*auth);

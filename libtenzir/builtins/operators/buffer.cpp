@@ -22,7 +22,6 @@
 #include <caf/actor_registry.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
-#include <optional>
 #include <queue>
 
 namespace tenzir::plugins::buffer {
@@ -432,7 +431,7 @@ public:
   read_buffer_operator() = default;
 
   explicit read_buffer_operator(uuid id, located<uint64_t> capacity,
-                                std::optional<located<buffer_policy>> policy)
+                                Option<located<buffer_policy>> policy)
     : id_{id}, capacity_{capacity}, policy_{policy} {
   }
 
@@ -538,7 +537,7 @@ public:
 private:
   uuid id_ = {};
   located<uint64_t> capacity_ = {};
-  std::optional<located<buffer_policy>> policy_ = {};
+  Option<located<buffer_policy>> policy_ = None{};
 };
 
 class buffer_plugin final : public virtual operator_factory_plugin,
@@ -551,7 +550,7 @@ public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto capacity = located<uint64_t>{};
-    auto policy_str = std::optional<located<std::string>>{};
+    auto policy_str = Option<located<std::string>>{};
     argument_parser2::operator_("buffer")
       .positional("capacity", capacity)
       .named("policy", policy_str)
@@ -564,7 +563,7 @@ public:
         .emit(ctx);
       failed = true;
     }
-    auto policy = std::optional<located<buffer_policy>>{};
+    auto policy = Option<located<buffer_policy>>{};
     if (policy_str) {
       const auto parsed_policy = from_string<buffer_policy>(policy_str->inner);
       if (not parsed_policy) {

@@ -29,7 +29,7 @@ constexpr auto extension_to_plugin_map = std::array<map_entry, 2>{{
 }};
 
 auto find_map_entry(std::span<const map_entry> map, std::string_view key)
-  -> std::optional<std::string> {
+  -> Option<std::string> {
   if (auto it = std::ranges::find(map, key,
                                   [](const auto& pair) {
                                     return pair.first;
@@ -37,19 +37,19 @@ auto find_map_entry(std::span<const map_entry> map, std::string_view key)
       it != map.end()) {
     return std::string{it->second};
   }
-  return std::nullopt;
+  return None{};
 }
 } // namespace
 
 auto file_path_to_plugin_name(const std::filesystem::path& path)
-  -> std::optional<std::string> {
+  -> Option<std::string> {
   if (auto name
       = find_map_entry(filename_to_plugin_map, path.filename().string())) {
     return name;
   }
   auto ext = path.extension().string();
   if (ext.size() <= 1) {
-    return std::nullopt;
+    return None{};
   }
   if (auto result = find_map_entry(extension_to_plugin_map, ext)) {
     return result;

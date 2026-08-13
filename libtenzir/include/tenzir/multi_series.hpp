@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/detail/function.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/series.hpp"
 
 namespace tenzir {
@@ -139,7 +140,7 @@ public:
 
   /// Tries to join a `multi_series` into a single `series` by performing type
   /// unification, using a `series_builder`.
-  /// Checks are performed using `unify( type, type ) -> std::optional<type>`
+  /// Checks are performed using `unify( type, type ) -> Option<type>`
   /// @ref multi_series::join_conflict_strategy
   auto to_series(to_series_strategy strategy = to_series_strategy::fail) const
     -> to_series_result;

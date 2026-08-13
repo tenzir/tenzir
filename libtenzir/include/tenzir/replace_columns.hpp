@@ -11,24 +11,23 @@
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/collect.hpp"
 #include "tenzir/detail/enum.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/variant_traits.hpp"
-
-#include <optional>
 
 namespace tenzir {
 
 template <typename F>
 concept replacer_for_erased_series = requires(F f, series s) {
-  { f(s) } -> std::same_as<std::optional<series>>;
+  { f(s) } -> std::same_as<Option<series>>;
 };
 
 template <typename F>
 concept replacer_for_typed_series
   = detail::variant_matcher_for<F, series>
     and requires(F f, basic_series<null_type> s) {
-          { f(s) } -> std::same_as<std::optional<series>>;
+          { f(s) } -> std::same_as<Option<series>>;
         };
 
 TENZIR_ENUM(
@@ -93,7 +92,7 @@ struct replace_visitor {
   F transform;
   transfer_metadata_strategy metadata = transfer_metadata_strategy::preserve;
 
-  auto operator()(const series& s) -> std::optional<series> {
+  auto operator()(const series& s) -> Option<series> {
     if constexpr (replacer_for_erased_series<F>) {
       if (auto outer_transformed = transform(s)) {
         return *outer_transformed;
@@ -106,24 +105,24 @@ struct replace_visitor {
         return *nested_transformed;
       }
     }
-    return std::nullopt;
+    return None{};
   }
 
   template <typename T>
-  auto operator()(const basic_series<T>& s) -> std::optional<series> {
+  auto operator()(const basic_series<T>& s) -> Option<series> {
     return transform(s);
   }
 
-  auto operator()(const basic_series<list_type>& l) -> std::optional<series> {
+  auto operator()(const basic_series<list_type>& l) -> Option<series> {
     auto nested_replacement
       = (*this)(series{l.type.value_type(), l.array->values()});
     if (not nested_replacement) {
-      return std::nullopt;
+      return None{};
     }
     return dangerously_rejoin_list_series(*nested_replacement, *l.array);
   }
 
-  auto operator()(const basic_series<record_type>& r) -> std::optional<series> {
+  auto operator()(const basic_series<record_type>& r) -> Option<series> {
     auto fields = std::vector<series_field>{};
     fields.reserve(r.type.num_fields());
     {
@@ -152,7 +151,7 @@ struct replace_visitor {
       field.data = std::move(*nested_replacement);
     }
     if (not any_replacement) {
-      return std::nullopt;
+      return None{};
     }
     return make_record_series(std::move(fields), *r.array);
   }

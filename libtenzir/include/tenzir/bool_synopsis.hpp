@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
 #include "tenzir/synopsis.hpp"
 
 namespace tenzir {
@@ -23,7 +24,7 @@ public:
 
   void add(const series& x) override;
 
-  [[nodiscard]] std::optional<bool>
+  [[nodiscard]] Option<bool>
   lookup(relational_operator op, data_view rhs) const override;
 
   [[nodiscard]] bool equals(const synopsis& other) const noexcept override;

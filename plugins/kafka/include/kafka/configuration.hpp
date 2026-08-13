@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/aws_iam.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/fwd.hpp>
@@ -36,7 +38,7 @@ public:
   class aws_iam_callback : public RdKafka::OAuthBearerTokenRefreshCb {
   public:
     aws_iam_callback(tenzir::aws_iam_options options,
-                     std::optional<tenzir::resolved_aws_credentials> creds,
+                     Option<tenzir::resolved_aws_credentials> creds,
                      diagnostic_handler& dh)
       : options_{std::move(options)}, creds_{std::move(creds)}, dh_{dh} {
     }
@@ -46,7 +48,7 @@ public:
 
   private:
     tenzir::aws_iam_options options_;
-    std::optional<tenzir::resolved_aws_credentials> creds_;
+    Option<tenzir::resolved_aws_credentials> creds_;
     diagnostic_handler& dh_;
   };
 
@@ -62,10 +64,9 @@ public:
   };
 
   /// Creates a configuration from a record.
-  static auto
-  make(const record& options, std::optional<tenzir::aws_iam_options> aws,
-       std::optional<tenzir::resolved_aws_credentials> creds,
-       diagnostic_handler& dh) -> caf::expected<configuration>;
+  static auto make(const record& options, Option<tenzir::aws_iam_options> aws,
+                   Option<tenzir::resolved_aws_credentials> creds,
+                   diagnostic_handler& dh) -> caf::expected<configuration>;
 
   /// Gets a value for a given key.
   auto get(std::string_view key) const -> caf::expected<std::string>;

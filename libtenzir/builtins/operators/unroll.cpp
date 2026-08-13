@@ -336,85 +336,86 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    const auto get_offset = field_.match<
-      std::function<auto(const table_slice&)->std::optional<offset>>>(
-      [&](const located<std::string>& field) {
-        return [&](const table_slice& slice) -> std::optional<offset> {
-          auto offsets = collect(slice.schema().resolve(field.inner));
-          if (offsets.empty()) {
-            diagnostic::warning("field `{}` not found", field.inner)
-              .primary(field)
-              .emit(ctrl.diagnostics());
-            return {};
-          }
-          if (offsets.size() > 1) {
-            diagnostic::warning("field `{}` resolved multiple times for `{}` "
-                                "and will be ignored",
-                                field.inner, slice.schema().name())
-              .primary(field)
-              .emit(ctrl.diagnostics());
-            return {};
-          }
-          if (offsets.front().empty()) {
+    const auto get_offset
+      = field_.match<std::function<auto(const table_slice&)->Option<offset>>>(
+        [&](const located<std::string>& field) {
+          return [&](const table_slice& slice) -> Option<offset> {
+            auto offsets = collect(slice.schema().resolve(field.inner));
+            if (offsets.empty()) {
+              diagnostic::warning("field `{}` not found", field.inner)
+                .primary(field)
+                .emit(ctrl.diagnostics());
+              return {};
+            }
+            if (offsets.size() > 1) {
+              diagnostic::warning("field `{}` resolved multiple times for `{}` "
+                                  "and will be ignored",
+                                  field.inner, slice.schema().name())
+                .primary(field)
+                .emit(ctrl.diagnostics());
+              return {};
+            }
+            if (offsets.front().empty()) {
+              return offsets.front();
+            }
+            const auto& field_type
+              = as<record_type>(slice.schema()).field(offsets.front()).type;
+            if (is<null_type>(field_type)) {
+              return {};
+            }
+            if (not is<list_type>(field_type)) {
+              diagnostic::warning("expected `list`, but got `{}`",
+                                  field_type.kind())
+                .primary(field)
+                .emit(ctrl.diagnostics());
+              return {};
+            }
             return offsets.front();
-          }
-          const auto& field_type
-            = as<record_type>(slice.schema()).field(offsets.front()).type;
-          if (is<null_type>(field_type)) {
-            return {};
-          }
-          if (not is<list_type>(field_type)) {
-            diagnostic::warning("expected `list`, but got `{}`",
-                                field_type.kind())
-              .primary(field)
-              .emit(ctrl.diagnostics());
-            return {};
-          }
-          return offsets.front();
-        };
-      },
-      [&](const ast::field_path& field) {
-        return [&](const table_slice& slice) {
-          return resolve(field, slice.schema())
-            .match(
-              [&](offset result) -> std::optional<offset> {
-                if (result.empty()) {
+          };
+        },
+        [&](const ast::field_path& field) {
+          return [&](const table_slice& slice) {
+            return resolve(field, slice.schema())
+              .match(
+                [&](offset result) -> Option<offset> {
+                  if (result.empty()) {
+                    return result;
+                  }
+                  const auto& field_type
+                    = as<record_type>(slice.schema()).field(result).type;
+                  if (is<null_type>(field_type)) {
+                    return {};
+                  }
+                  if (not is<list_type>(field_type)
+                      and not is<record_type>(field_type)) {
+                    diagnostic::warning("expected `list` or `record`, but got "
+                                        "`{}`",
+                                        field_type.kind())
+                      .primary(field)
+                      .emit(ctrl.diagnostics());
+                    return {};
+                  }
                   return result;
-                }
-                const auto& field_type
-                  = as<record_type>(slice.schema()).field(result).type;
-                if (is<null_type>(field_type)) {
+                },
+                [&](const resolve_error& err) -> Option<offset> {
+                  err.reason.match(
+                    [&](const resolve_error::field_not_found&) {
+                      diagnostic::warning("field `{}` not found",
+                                          err.ident.name)
+                        .primary(err.ident)
+                        .emit(ctrl.diagnostics());
+                    },
+                    [&](const resolve_error::field_not_found_no_error&) {},
+                    [&](const resolve_error::field_of_non_record& reason) {
+                      diagnostic::warning("type `{}` has no field `{}`",
+                                          reason.type.kind(), err.ident.name)
+                        .primary(err.ident)
+                        .emit(ctrl.diagnostics());
+                    });
                   return {};
-                }
-                if (not is<list_type>(field_type)
-                    and not is<record_type>(field_type)) {
-                  diagnostic::warning("expected `list` or `record`, but got "
-                                      "`{}`",
-                                      field_type.kind())
-                    .primary(field)
-                    .emit(ctrl.diagnostics());
-                  return {};
-                }
-                return result;
-              },
-              [&](const resolve_error& err) -> std::optional<offset> {
-                err.reason.match(
-                  [&](const resolve_error::field_not_found&) {
-                    diagnostic::warning("field `{}` not found", err.ident.name)
-                      .primary(err.ident)
-                      .emit(ctrl.diagnostics());
-                  },
-                  [&](const resolve_error::field_not_found_no_error&) {},
-                  [&](const resolve_error::field_of_non_record& reason) {
-                    diagnostic::warning("type `{}` has no field `{}`",
-                                        reason.type.kind(), err.ident.name)
-                      .primary(err.ident)
-                      .emit(ctrl.diagnostics());
-                  });
-                return {};
-              });
-        };
-      });
+                });
+          };
+        });
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
@@ -441,7 +442,7 @@ public:
     (void)filter;
     auto replacement = std::make_unique<unroll_operator>(*this);
     replacement->unordered_ = order == event_order::unordered;
-    return optimize_result{std::nullopt, order, std::move(replacement)};
+    return optimize_result{None{}, order, std::move(replacement)};
   }
 
   friend auto inspect(auto& f, unroll_operator& x) -> bool {
@@ -466,11 +467,10 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    const auto get_offset
-      = [&](const table_slice& slice) -> std::optional<offset> {
+    const auto get_offset = [&](const table_slice& slice) -> Option<offset> {
       return resolve(args_.field, slice.schema())
         .match(
-          [&](offset result) -> std::optional<offset> {
+          [&](offset result) -> Option<offset> {
             if (result.empty()) {
               return result;
             }
@@ -489,7 +489,7 @@ public:
             }
             return result;
           },
-          [&](const resolve_error& err) -> std::optional<offset> {
+          [&](const resolve_error& err) -> Option<offset> {
             err.reason.match(
               [&](const resolve_error::field_not_found&) {
                 diagnostic::warning("field `{}` not found", err.ident.name)

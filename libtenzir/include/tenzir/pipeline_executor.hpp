@@ -13,6 +13,7 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/location.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/source.hpp"
 #include "tenzir/uuid.hpp"
@@ -35,9 +36,9 @@ struct pipeline_executor_state {
 
   /// The definition of the currently running pipeline; its id matches the
   /// ids on diagnostic locations produced during parsing. Set on spawn.
-  Option<Arc<const Source>> definition = {};
+  Option<Arc<const Source>> definition = None{};
   SourceMap source_map = {};
-  std::optional<pipeline> pipe = {};
+  Option<pipeline> pipe = None{};
   std::vector<exec_node_actor> exec_nodes = {};
   caf::typed_response_promise<void> start_rp = {};
 

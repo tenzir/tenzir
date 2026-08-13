@@ -15,9 +15,9 @@
 #ifdef CHECK
 #  undef CHECK
 #endif
+#include "tenzir/option.hpp"
 #include "tenzir/test/test.hpp"
 
-#include <optional>
 #include <utility>
 #include <vector>
 
@@ -74,7 +74,7 @@ TEST("RawSharedMutex can be moved into place while idle") {
     storage.emplace_back();
     co_await exercise(storage.front());
     co_await exercise(storage.back());
-    auto opt = std::optional<RawSharedMutex>{};
+    auto opt = Option<RawSharedMutex>{};
     opt.emplace();
     co_await exercise(*opt);
   }());

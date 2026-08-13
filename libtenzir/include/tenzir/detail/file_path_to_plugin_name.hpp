@@ -8,8 +8,9 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <filesystem>
-#include <optional>
 
 namespace tenzir::detail {
 
@@ -19,6 +20,6 @@ namespace tenzir::detail {
 /// @param path The path to determine the format plugin name for.
 /// @returns A string determining the format default plugin name for a file.
 auto file_path_to_plugin_name(const std::filesystem::path& path)
-  -> std::optional<std::string>;
+  -> Option<std::string>;
 
 } // namespace tenzir::detail

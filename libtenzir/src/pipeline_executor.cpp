@@ -229,7 +229,7 @@ auto pipeline_executor_state::start() -> caf::result<void> {
     return caf::make_error(ec::logic_error,
                            "pipeline exeuctor can only start once");
   }
-  auto pipe = *std::exchange(this->pipe, std::nullopt);
+  auto pipe = *std::exchange(this->pipe, None{});
   start_rp = self->make_response_promise<void>();
   auto output = pipe.infer_type<void>();
   if (not output) {

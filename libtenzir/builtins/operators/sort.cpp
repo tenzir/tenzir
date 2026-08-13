@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/numeric/integral.hpp>
@@ -24,7 +26,6 @@
 #include <arrow/compute/api_vector.h>
 
 #include <algorithm>
-#include <optional>
 #include <ranges>
 
 namespace tenzir::plugins::sort {
@@ -102,7 +103,7 @@ public:
 
 private:
   auto find_or_create_path(const type& schema, operator_control_plane& ctrl)
-    -> const std::optional<offset>& {
+    -> const Option<offset>& {
     auto key_path = key_field_path_.find(schema);
     if (key_path != key_field_path_.end()) {
       return key_path->second;
@@ -130,7 +131,7 @@ private:
         .note("events of this schema will be discarded")
         .note("from `sort`")
         .emit(ctrl.diagnostics());
-      key_path->second = std::nullopt;
+      key_path->second = None{};
       return key_path->second;
     }
     if (not key_type_) {
@@ -142,7 +143,7 @@ private:
         .note("events of this schema will be discarded")
         .note("from `sort`")
         .emit(ctrl.diagnostics());
-      key_path->second = std::nullopt;
+      key_path->second = None{};
     }
     return key_path->second;
   }
@@ -167,10 +168,10 @@ private:
 
   /// The cached field paths for the sorted-by field per schema. A nullopt value
   /// indicates that sorting is not possible for this schema.
-  std::unordered_map<type, std::optional<offset>> key_field_path_ = {};
+  std::unordered_map<type, Option<offset>> key_field_path_ = {};
 
   /// The type of the sorted-by field.
-  std::optional<type> key_type_ = {};
+  Option<type> key_type_ = None{};
 };
 
 class sort_operator final : public crtp_operator<sort_operator> {

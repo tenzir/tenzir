@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
 #include "tenzir/plugin/base.hpp"
 #include "tenzir/type.hpp"
 
@@ -15,7 +16,6 @@
 
 #include <functional>
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -38,7 +38,7 @@ public:
   virtual auto name() const -> std::string = 0;
 
   virtual auto
-  instantiate(operator_control_plane& ctrl, std::optional<printer_info> info)
+  instantiate(operator_control_plane& ctrl, Option<printer_info> info)
     -> caf::expected<std::function<void(chunk_ptr)>>
     = 0;
 

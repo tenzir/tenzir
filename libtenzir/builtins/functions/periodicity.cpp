@@ -94,7 +94,7 @@ public:
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    auto max_lag = std::optional<located<int64_t>>{};
+    auto max_lag = Option<located<int64_t>>{};
     TRY(argument_parser2::function(name())
           .positional("xs", expr, "list")
           .named("max_lag", max_lag, "int")

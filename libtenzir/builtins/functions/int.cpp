@@ -47,7 +47,7 @@ public:
     }
     return function_use::make([this, expr = std::move(expr),
                                base = base.inner](auto eval, session ctx) {
-      auto failed = std::optional<std::string>{};
+      auto failed = Option<std::string>{};
       auto result = map_series(eval(expr), [&](series value) {
         auto f = detail::overload{
           [](const arrow::NullArray& arg) {

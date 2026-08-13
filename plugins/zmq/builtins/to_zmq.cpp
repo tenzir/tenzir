@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/option.hpp"
 #include "zmq/transport.hpp"
 
 #include <tenzir/async/task.hpp>
@@ -24,7 +25,6 @@
 #include <tenzir/view3.hpp>
 
 #include <chrono>
-#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -50,18 +50,18 @@ struct SinkArgs {
   bool monitor = false;
 };
 
-auto parse_encoding(std::string_view encoding) -> std::optional<Encoding> {
+auto parse_encoding(std::string_view encoding) -> Option<Encoding> {
   if (encoding == "json") {
     return Encoding::json;
   }
   if (encoding == "ndjson") {
     return Encoding::ndjson;
   }
-  return std::nullopt;
+  return None{};
 }
 
 auto evaluate_prefix(const ast::expression& expr, const table_slice& input,
-                     diagnostic_handler& dh) -> std::optional<std::string> {
+                     diagnostic_handler& dh) -> Option<std::string> {
   auto result = eval(expr, input, dh);
   auto* series = [&]() -> const tenzir::series* {
     for (const auto& item : result) {
@@ -77,14 +77,14 @@ auto evaluate_prefix(const ast::expression& expr, const table_slice& input,
       diagnostic::warning("expected `string`, got `null`")
         .primary(expr)
         .emit(dh);
-      return std::nullopt;
+      return None{};
     }
     return std::string{strings->array->Value(0)};
   }
   diagnostic::warning("expected `string`, got `{}`", series->type.kind())
     .primary(expr)
     .emit(dh);
-  return std::nullopt;
+  return None{};
 }
 
 auto serialize_row(Encoding encoding, const table_slice& input)

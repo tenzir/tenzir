@@ -12,6 +12,7 @@
 
 #include "tenzir/chunk.hpp"
 #include "tenzir/concept/printable/print.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
 #include "tenzir/view3.hpp"
@@ -63,7 +64,7 @@ public:
   explicit table_slice(chunk_ptr&& chunk, enum verify verify,
                        const std::shared_ptr<arrow::RecordBatch>& batch
                        = nullptr,
-                       std::optional<type> schema = std::nullopt) noexcept;
+                       Option<type> schema = None{}) noexcept;
 
   /// Construct a table slice from a flattened table slice embedded in a chunk,
   /// and shares the chunk's lifetime.
@@ -84,7 +85,7 @@ public:
   /// @pre `record_batch` must be a RecordBatch that can be represented by
   ///      Tenzir's type system.
   explicit table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
-                       std::optional<type> schema = std::nullopt,
+                       Option<type> schema = None{},
                        enum serialize serialize = serialize::no);
 
   struct creation_error {
@@ -97,7 +98,7 @@ public:
   /// @param Tenzir type for the provided record batch.
   /// @param serialize Whether to store IPC format as a backing.
   static auto try_from(const std::shared_ptr<arrow::RecordBatch>& record_batch,
-                       std::optional<type> schema = std::nullopt,
+                       Option<type> schema = None{},
                        enum serialize serialize = serialize::no)
     -> std::expected<table_slice, creation_error>;
 
@@ -206,7 +207,7 @@ public:
   at(size_type row, size_type column, const type& t) const;
 
   template <concrete_type T>
-  [[nodiscard]] std::optional<view<type_to_data_t<T>>>
+  [[nodiscard]] Option<view<type_to_data_t<T>>>
   at(size_type row, size_type column, const T& t) const {
     auto result = at(row, column, type{t});
     if (is<caf::none_t>(result)) {
@@ -336,7 +337,7 @@ select(const table_slice& slice, expression expr, const ids& hints);
 /// @param hints An ID set for pruning the events that need to be considered.
 /// @returns a new table slice consisting only of events matching the given
 ///          expression.
-std::optional<table_slice>
+Option<table_slice>
 filter(const table_slice& slice, expression expr, const ids& hints);
 
 /// Counts the rows that match an expression.
@@ -396,7 +397,7 @@ ids evaluate(const expression& expr, const table_slice& slice,
 /// @param slice The input table slice.
 /// @param expr The expression to evaluate.
 /// @returns a new table slice consisting only of events matching the given
-[[nodiscard]] std::optional<table_slice>
+[[nodiscard]] Option<table_slice>
 filter(const table_slice& slice, const expression& expr);
 
 /// Produces a new table slice consisting only of events addressed in `hints`.
@@ -407,7 +408,7 @@ filter(const table_slice& slice, const expression& expr);
 ///              slice.
 /// @returns a new table slice consisting only of events matching the given
 ///          expression.
-[[nodiscard]] std::optional<table_slice>
+[[nodiscard]] Option<table_slice>
 filter(const table_slice& slice, const ids& hints);
 
 /// Filters a table slice by a boolean mask, keeping only rows where the mask

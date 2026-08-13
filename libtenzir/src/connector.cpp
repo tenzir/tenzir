@@ -12,14 +12,13 @@
 #include "tenzir/data.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/option.hpp"
 
 #include <caf/io/middleman.hpp>
 #include <caf/io/network/interfaces.hpp>
 #include <caf/openssl/all.hpp>
 #include <caf/sec.hpp>
 #include <fmt/format.h>
-
-#include <optional>
 
 namespace tenzir {
 
@@ -141,20 +140,20 @@ bool is_recoverable_error(const caf::error& err) {
   return is_recoverable_error_enum(err_enum);
 }
 
-std::optional<caf::timespan> calculate_remaining_time(
-  const std::optional<std::chrono::steady_clock::time_point>& deadline) {
+Option<caf::timespan> calculate_remaining_time(
+  const Option<std::chrono::steady_clock::time_point>& deadline) {
   if (not deadline) {
     return caf::infinite;
   }
   const auto now = std::chrono::steady_clock::now();
   if (now >= *deadline) {
-    return std::nullopt;
+    return None{};
   }
   return *deadline - now;
 }
 
 bool should_retry(const caf::error& err,
-                  const std::optional<caf::timespan>& remaining_time,
+                  const Option<caf::timespan>& remaining_time,
                   caf::timespan delay) {
   return remaining_time and *remaining_time > delay
          and is_recoverable_error(err);
@@ -177,10 +176,10 @@ void log_connection_failed(connect_request request, caf::error err,
     err, format_time(retry_delay), format_time(remaining_time));
 }
 
-connector_actor::behavior_type make_no_retry_behavior(
-  connector_actor::stateful_pointer<connector_state> self,
-  std::optional<std::chrono::steady_clock::time_point> deadline,
-  bool internal_connection) {
+connector_actor::behavior_type
+make_no_retry_behavior(connector_actor::stateful_pointer<connector_state> self,
+                       Option<std::chrono::steady_clock::time_point> deadline,
+                       bool internal_connection) {
   auto log_level
     = internal_connection ? spdlog::level::trace : spdlog::level::info;
   return {
@@ -220,8 +219,8 @@ connector_actor::behavior_type make_no_retry_behavior(
 
 connector_actor::behavior_type
 connector(connector_actor::stateful_pointer<connector_state> self,
-          std::optional<caf::timespan> retry_delay,
-          std::optional<std::chrono::steady_clock::time_point> deadline,
+          Option<caf::timespan> retry_delay,
+          Option<std::chrono::steady_clock::time_point> deadline,
           bool internal_connection) {
   self->state().middleman = self->system().has_openssl_manager()
                               ? self->system().openssl_manager().actor_handle()

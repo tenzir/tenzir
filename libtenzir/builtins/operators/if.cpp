@@ -73,7 +73,7 @@ public:
     TENZIR_UNUSED(filter, order);
     // Branching necessarily throws off the event order, so we can allow the
     // nested pipelines to do ordering optimizations.
-    return optimize_result{std::nullopt, event_order::unordered, this->copy()};
+    return optimize_result{None{}, event_order::unordered, this->copy()};
   }
 
   auto operator()(operator_control_plane& ctrl) const
@@ -146,7 +146,7 @@ public:
     TENZIR_UNUSED(filter, order);
     // Branching necessarily throws off the event order, so we can allow the
     // nested pipelines to do ordering optimizations.
-    return optimize_result{std::nullopt, event_order::unordered, this->copy()};
+    return optimize_result{None{}, event_order::unordered, this->copy()};
   }
 
   auto
@@ -202,7 +202,7 @@ public:
          metrics_receiver_actor metrics_receiver, bool is_hidden,
          uint64_t operator_index, std::string pipeline_id,
          ast::expression predicate_expr, located<pipeline> then_pipe,
-         std::optional<located<pipeline>> else_pipe)
+         Option<located<pipeline>> else_pipe)
     : self_{self},
       definition_{std::move(definition)},
       node_{std::move(node)},
@@ -257,8 +257,8 @@ public:
   }
 
 private:
-  auto spawn_branch(std::optional<located<pipeline>> pipe, bool predicate)
-    -> std::optional<located<pipeline_executor_actor>> {
+  auto spawn_branch(Option<located<pipeline>> pipe, bool predicate)
+    -> Option<located<pipeline_executor_actor>> {
     if (not pipe) {
       return {};
     }
@@ -298,8 +298,7 @@ private:
     return located{std::move(handle), pipe->source};
   }
 
-  auto start_branch(std::optional<located<pipeline_executor_actor>> branch)
-    -> void {
+  auto start_branch(Option<located<pipeline_executor_actor>> branch) -> void {
     if (not branch) {
       return;
     }
@@ -500,7 +499,7 @@ private:
   size_t running_branches_ = 0;
   ast::expression predicate_expr_;
   located<pipeline_executor_actor> then_branch_;
-  std::optional<located<pipeline_executor_actor>> else_branch_;
+  Option<located<pipeline_executor_actor>> else_branch_;
 
   static constexpr size_t max_queued = 10;
   std::vector<table_slice> then_inputs_;
@@ -535,7 +534,7 @@ public:
     // Branching necessarily throws off the event order, so we can allow the
     // ested pipelines to do ordering optimizations.
     // TODO: We could push up a disjunction of the two filters.
-    return optimize_result{std::nullopt, event_order::unordered, this->copy()};
+    return optimize_result{None{}, event_order::unordered, this->copy()};
   }
 
   auto
@@ -598,7 +597,7 @@ public:
 
   internal_endif_operator(uuid id, ast::expression predicate,
                           located<pipeline> then_pipe,
-                          std::optional<located<pipeline>> else_pipe)
+                          Option<located<pipeline>> else_pipe)
     : id_{id},
       predicate_{std::move(predicate)},
       then_pipe_{std::move(then_pipe)},
@@ -614,7 +613,7 @@ public:
     TENZIR_UNUSED(filter, order);
     // Branching necessarily throws off the event order, so we can allow the
     // nested pipelines to do ordering optimizations.
-    return optimize_result{std::nullopt, event_order::unordered, this->copy()};
+    return optimize_result{None{}, event_order::unordered, this->copy()};
   }
 
   auto
@@ -686,7 +685,7 @@ private:
   uuid id_ = {};
   ast::expression predicate_;
   located<pipeline> then_pipe_;
-  std::optional<located<pipeline>> else_pipe_;
+  Option<located<pipeline>> else_pipe_;
 };
 
 class if_plugin final : public virtual operator_factory_plugin {
@@ -708,8 +707,8 @@ public:
     auto then_expr = as<ast::pipeline_expr>(std::move(*inv.args[1].kind));
     auto else_expr
       = inv.args.size() == 3
-          ? std::optional{as<ast::pipeline_expr>(std::move(*inv.args[2].kind))}
-          : std::optional<ast::pipeline_expr>{};
+          ? Option{as<ast::pipeline_expr>(std::move(*inv.args[2].kind))}
+          : Option<ast::pipeline_expr>{};
     // A few helper functions to avoid repetition.
     const auto make_pipeline
       = [&](ast::pipeline_expr&& expr) -> failure_or<located<pipeline>> {
@@ -737,7 +736,7 @@ public:
     };
     const auto make_if_pipeline = [&](ast::expression predicate,
                                       located<pipeline> then_pipe,
-                                      std::optional<located<pipeline>> else_pipe
+                                      Option<located<pipeline>> else_pipe
                                       = {}) {
       TENZIR_ASSERT((check(then_pipe.inner.infer_type(tag_v<table_slice>))
                        .is_any<table_slice, void>()),
@@ -806,7 +805,7 @@ public:
     }
     // At this point, we can always compile the pipelines for both branches.
     TRY(auto then_pipe, make_pipeline(std::move(then_expr)));
-    auto else_pipe = std::optional<located<pipeline>>{};
+    auto else_pipe = Option<located<pipeline>>{};
     if (else_expr) {
       TRY(else_pipe, make_pipeline(std::move(*else_expr)));
     }

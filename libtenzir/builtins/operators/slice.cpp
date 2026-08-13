@@ -30,9 +30,8 @@ class slice_operator final : public crtp_operator<slice_operator> {
 public:
   slice_operator() = default;
 
-  explicit slice_operator(std::optional<int64_t> begin,
-                          std::optional<int64_t> end,
-                          std::optional<int64_t> stride)
+  explicit slice_operator(Option<int64_t> begin, Option<int64_t> end,
+                          Option<int64_t> stride)
     : begin_{begin}, end_{end}, stride_{stride} {
   }
 
@@ -319,7 +318,7 @@ public:
       };
     }
     return optimize_result{
-      std::nullopt,
+      None{},
       event_order::ordered,
       copy(),
     };
@@ -333,9 +332,9 @@ public:
   }
 
 private:
-  std::optional<int64_t> begin_ = {};
-  std::optional<int64_t> end_ = {};
-  std::optional<int64_t> stride_ = {};
+  Option<int64_t> begin_ = None{};
+  Option<int64_t> end_ = None{};
+  Option<int64_t> stride_ = None{};
 };
 
 // New executor implementation
@@ -563,9 +562,9 @@ class plugin final : public virtual operator_plugin<slice_operator>,
 public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto begin = std::optional<int64_t>{};
-    auto end = std::optional<int64_t>{};
-    auto stride = std::optional<int64_t>{};
+    auto begin = Option<int64_t>{};
+    auto end = Option<int64_t>{};
+    auto stride = Option<int64_t>{};
     // TODO: Range selector syntax
     TRY(argument_parser2::operator_(name())
           .named("begin", begin)
@@ -603,7 +602,7 @@ public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     TRY(argument_parser2::operator_("reverse").parse(inv, ctx));
-    return std::make_unique<slice_operator>(std::nullopt, std::nullopt, -1);
+    return std::make_unique<slice_operator>(None{}, None{}, -1);
   }
 
   auto describe() const -> Description override {
@@ -636,13 +635,12 @@ public:
 
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto n = std::optional<int64_t>{10};
+    auto n = Option<int64_t>{10};
     TRY(argument_parser2::operator_(name()).positional("n", n).parse(inv, ctx));
     if (Mode == mode::head) {
-      return std::make_unique<slice_operator>(std::nullopt, n, std::nullopt);
+      return std::make_unique<slice_operator>(None{}, n, None{});
     }
-    return std::make_unique<slice_operator>(-n.value(), std::nullopt,
-                                            std::nullopt);
+    return std::make_unique<slice_operator>(-n.value(), None{}, None{});
   }
 };
 

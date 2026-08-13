@@ -8,8 +8,9 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <cstdint>
-#include <optional>
 #include <string>
 
 namespace tenzir::detail {
@@ -19,6 +20,6 @@ struct available_memory_info {
   std::string source = {};
 };
 
-auto available_memory() -> std::optional<available_memory_info>;
+auto available_memory() -> Option<available_memory_info>;
 
 } // namespace tenzir::detail

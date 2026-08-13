@@ -266,13 +266,13 @@ auto parse_time(std::string_view s, const type& seed)
 
 namespace detail::data_builder {
 
-auto best_effort_parser(std::string_view s) -> std::optional<data> {
+auto best_effort_parser(std::string_view s) -> Option<data> {
   tenzir::data res;
   if (parse_as_data<bool_type, int64_type, uint64_type, double_type, time_type,
                     duration_type, subnet_type, ip_type>(s, res)) {
     return res;
   }
-  return std::nullopt;
+  return None{};
 }
 
 auto basic_seeded_parser(std::string_view s, const tenzir::type& seed,

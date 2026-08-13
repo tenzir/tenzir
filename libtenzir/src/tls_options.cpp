@@ -98,24 +98,17 @@ auto query_config(std::string_view name, const caf::actor_system_config& cfg)
 template <typename T>
 auto query_config_or_null(std::string_view name,
                           const caf::actor_system_config& cfg)
-  -> std::optional<located<T>> {
+  -> Option<located<T>> {
   if (auto* x = query_config<T>(name, cfg)) {
     return located{*x, location::unknown};
   }
-  return std::nullopt;
+  return None{};
 }
 
 template <typename T>
-constexpr auto inner(const std::optional<located<T>>& x) -> std::optional<T> {
-  return x.transform([](auto&& x) {
-    return x.inner;
-  });
-};
-
-template <typename T>
-constexpr auto inner(const Option<located<T>>& x) -> std::optional<T> {
+constexpr auto inner(const Option<located<T>>& x) -> Option<T> {
   if (not x) {
-    return std::nullopt;
+    return None{};
   }
   return x->inner;
 }
@@ -124,8 +117,8 @@ constexpr auto inner(const Option<located<T>>& x) -> std::optional<T> {
 
 auto add_tls_client_diagnostic_hints(diagnostic_builder diag, bool tls_enabled,
                                      std::string_view service_name,
-                                     std::optional<uint64_t> plaintext_port,
-                                     std::optional<uint64_t> tls_port)
+                                     Option<uint64_t> plaintext_port,
+                                     Option<uint64_t> tls_port)
   -> diagnostic_builder {
   diag = std::move(diag).note("`tls` is {} for this connection",
                               tls_enabled ? "enabled" : "disabled");
@@ -151,41 +144,41 @@ auto add_tls_client_diagnostic_hints(diagnostic_builder diag, bool tls_enabled,
 }
 
 auto tls_options::get_record_bool(std::string_view key) const
-  -> std::optional<located<bool>> {
+  -> Option<located<bool>> {
   if (not tls_) {
-    return std::nullopt;
+    return None{};
   }
   const auto* rec = try_as<record>(&tls_->inner);
   if (not rec) {
-    return std::nullopt;
+    return None{};
   }
   auto it = rec->find(key);
   if (it == rec->end()) {
-    return std::nullopt;
+    return None{};
   }
   const auto* val = try_as<bool>(&it->second);
   if (not val) {
-    return std::nullopt; // Type mismatch handled in validation
+    return None{}; // Type mismatch handled in validation
   }
   return located{*val, tls_->source};
 }
 
 auto tls_options::get_record_string(std::string_view key) const
-  -> std::optional<located<std::string>> {
+  -> Option<located<std::string>> {
   if (not tls_) {
-    return std::nullopt;
+    return None{};
   }
   const auto* rec = try_as<record>(&tls_->inner);
   if (not rec) {
-    return std::nullopt;
+    return None{};
   }
   auto it = rec->find(key);
   if (it == rec->end()) {
-    return std::nullopt;
+    return None{};
   }
   const auto* val = try_as<std::string>(&it->second);
   if (not val) {
-    return std::nullopt; // Type mismatch handled in validation
+    return None{}; // Type mismatch handled in validation
   }
   return located{*val, tls_->source};
 }
@@ -438,12 +431,12 @@ auto tls_options::validate(std::string_view url, location url_loc,
   // - bool false means disabled
   // - bool true or record means enabled
   // - location::unknown means default/config-derived, not explicitly user-set
-  const auto tls_enabled = [&]() -> std::optional<bool> {
+  const auto tls_enabled = [&]() -> Option<bool> {
     if (not tls_) {
-      return std::nullopt; // Not explicitly set
+      return None{}; // Not explicitly set
     }
     if (tls_->source == location::unknown) {
-      return std::nullopt; // Default or config-derived, not user-provided
+      return None{}; // Default or config-derived, not user-provided
     }
     if (const auto* b = try_as<bool>(&tls_->inner)) {
       return *b;
@@ -452,7 +445,7 @@ auto tls_options::validate(std::string_view url, location url_loc,
     if (is<record>(tls_->inner)) {
       return true;
     }
-    return std::nullopt;
+    return None{};
   }();
   if (tls_enabled.has_value()) {
     if ((url_says_safe and not *tls_enabled)
@@ -477,16 +470,15 @@ auto tls_options::apply_config(const caf::actor_system_config& cfg) -> void {
       tls_ = located{data{*x}, location::unknown};
     }
   }
-  auto merge_bool
-    = [&](std::optional<located<bool>>& slot, std::string_view key) {
-        if (not slot) {
-          if (auto* x = query_config<bool>(key, cfg)) {
-            slot = located{*x, location::unknown};
-          }
-        }
-      };
+  auto merge_bool = [&](Option<located<bool>>& slot, std::string_view key) {
+    if (not slot) {
+      if (auto* x = query_config<bool>(key, cfg)) {
+        slot = located{*x, location::unknown};
+      }
+    }
+  };
   auto merge_string
-    = [&](std::optional<located<std::string>>& slot, std::string_view key) {
+    = [&](Option<located<std::string>>& slot, std::string_view key) {
         if (not slot) {
           if (auto x = query_config_or_null<std::string>(key, cfg)) {
             slot = std::move(*x);
@@ -542,52 +534,49 @@ auto tls_options::get_skip_peer_verification() const -> located<bool> {
   return {false, location::unknown};
 }
 
-auto tls_options::get_cacert() const -> std::optional<located<std::string>> {
+auto tls_options::get_cacert() const -> Option<located<std::string>> {
   if (auto val = get_record_string("cacert")) {
     return val;
   }
   return cacert_;
 }
 
-auto tls_options::get_certfile() const -> std::optional<located<std::string>> {
+auto tls_options::get_certfile() const -> Option<located<std::string>> {
   if (auto val = get_record_string("certfile")) {
     return val;
   }
   return certfile_;
 }
 
-auto tls_options::get_keyfile() const -> std::optional<located<std::string>> {
+auto tls_options::get_keyfile() const -> Option<located<std::string>> {
   if (auto val = get_record_string("keyfile")) {
     return val;
   }
   return keyfile_;
 }
 
-auto tls_options::get_password() const -> std::optional<located<std::string>> {
+auto tls_options::get_password() const -> Option<located<std::string>> {
   if (auto val = get_record_string("password")) {
     return val;
   }
   return password_;
 }
 
-auto tls_options::get_tls_min_version() const
-  -> std::optional<located<std::string>> {
+auto tls_options::get_tls_min_version() const -> Option<located<std::string>> {
   if (auto val = get_record_string("min_version")) {
     return val;
   }
   return tls_min_version_;
 }
 
-auto tls_options::get_tls_ciphers() const
-  -> std::optional<located<std::string>> {
+auto tls_options::get_tls_ciphers() const -> Option<located<std::string>> {
   if (auto val = get_record_string("ciphers")) {
     return val;
   }
   return tls_ciphers_;
 }
 
-auto tls_options::get_tls_client_ca() const
-  -> std::optional<located<std::string>> {
+auto tls_options::get_tls_client_ca() const -> Option<located<std::string>> {
   if (auto val = get_record_string("client_ca")) {
     return val;
   }
@@ -683,7 +672,7 @@ auto TlsConfig::apply_to(curl::easy& easy, std::string_view url) const
 }
 
 auto TlsConfig::make_caf_context(operator_control_plane& ctrl,
-                                 std::optional<caf::uri> uri) const
+                                 Option<caf::uri> uri) const
   -> caf::expected<caf::net::ssl::context> {
   using namespace caf::net;
   auto& dh = ctrl.diagnostics();
@@ -702,11 +691,11 @@ auto TlsConfig::make_caf_context(operator_control_plane& ctrl,
   }
   auto ctx = ssl::context::enable(tls_enabled)
                .and_then(ssl::emplace_context(min_version))
-               .and_then(
-                 ssl::use_private_key_file_if(inner(keyfile), ssl::format::pem))
-               .and_then(ssl::use_certificate_file_if(inner(certfile),
+               .and_then(ssl::use_private_key_file_if(inner(keyfile).to_std(),
                                                       ssl::format::pem))
-               .and_then(ssl::use_password_if(inner(password)));
+               .and_then(ssl::use_certificate_file_if(inner(certfile).to_std(),
+                                                      ssl::format::pem))
+               .and_then(ssl::use_password_if(inner(password).to_std()));
   if (uri) {
     ctx = std::move(ctx).and_then(ssl::use_sni_hostname(std::move(*uri)));
   }
@@ -875,8 +864,8 @@ auto tls_options::resolve(const caf::actor_system_config& cfg,
   // Work on a copy so resolve() is `const` on the operator's stored options.
   auto merged = *this;
   merged.apply_config(cfg);
-  auto to_option =
-    [](std::optional<located<std::string>> x) -> Option<located<std::string>> {
+  auto to_option
+    = [](Option<located<std::string>> x) -> Option<located<std::string>> {
     if (x) {
       return Option<located<std::string>>{std::move(*x)};
     }
@@ -914,8 +903,8 @@ auto tls_options::resolve(std::string_view url, location url_loc,
   TRY(validate(url, url_loc, dh));
   auto merged = *this;
   merged.apply_config(cfg);
-  auto to_option =
-    [](std::optional<located<std::string>> x) -> Option<located<std::string>> {
+  auto to_option
+    = [](Option<located<std::string>> x) -> Option<located<std::string>> {
     if (x) {
       return Option<located<std::string>>{std::move(*x)};
     }

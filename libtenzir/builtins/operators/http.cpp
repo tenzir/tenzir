@@ -96,7 +96,7 @@ auto ensure_host_header(std::unordered_map<std::string, std::string>& headers,
 }
 
 template <typename T>
-constexpr auto inner(const std::optional<located<T>>& x) -> std::optional<T> {
+constexpr auto inner(const Option<located<T>>& x) -> Option<T> {
   return x.transform([](auto&& x) {
     return x.inner;
   });
@@ -104,9 +104,9 @@ constexpr auto inner(const std::optional<located<T>>& x) -> std::optional<T> {
 
 auto try_decompress_body(const std::string_view encoding,
                          const std::span<const std::byte> body,
-                         diagnostic_handler& dh) -> std::optional<blob> {
+                         diagnostic_handler& dh) -> Option<blob> {
   if (encoding.empty()) {
-    return std::nullopt;
+    return None{};
   }
   const auto compression_type
     = arrow::util::Codec::GetCompressionType(std::string{encoding});
@@ -115,7 +115,7 @@ auto try_decompress_body(const std::string_view encoding,
       .hint("must be one of `brotli`, `bz2`, `gzip`, `lz4`, `zstd`")
       .note("skipping decompression")
       .emit(dh);
-    return std::nullopt;
+    return None{};
   }
   auto out = blob{};
   out.resize(body.size_bytes() * 2);
@@ -123,7 +123,7 @@ auto try_decompress_body(const std::string_view encoding,
     compression_type.ValueUnsafe(), arrow::util::kUseDefaultCompressionLevel);
   TENZIR_ASSERT(codec.ok());
   if (not codec.ValueUnsafe()) {
-    return std::nullopt;
+    return None{};
   }
   const auto decompressor = check(codec.ValueUnsafe()->MakeDecompressor());
   auto written = size_t{};
@@ -139,7 +139,7 @@ auto try_decompress_body(const std::string_view encoding,
                           result.status().ToString())
         .note("emitting compressed body")
         .emit(dh);
-      return std::nullopt;
+      return None{};
     }
     TENZIR_ASSERT(std::cmp_less_equal(result->bytes_written, out.size()));
     written += result->bytes_written;
@@ -147,7 +147,7 @@ auto try_decompress_body(const std::string_view encoding,
     if (result->need_more_output) {
       if (out.size() == out.max_size()) [[unlikely]] {
         diagnostic::error("failed to resize buffer").emit(dh);
-        return std::nullopt;
+        return None{};
       }
       if (out.size() < out.max_size() / 2) {
         out.resize(out.size() * 2);
@@ -164,7 +164,7 @@ auto try_decompress_body(const std::string_view encoding,
                             result.ToString())
           .note("emitting compressed body")
           .emit(dh);
-        return std::nullopt;
+        return None{};
       }
     }
   }
@@ -218,7 +218,7 @@ private:
 struct internal_sink final : public crtp_operator<internal_sink> {
   internal_sink() = default;
 
-  internal_sink(http_actor actor, std::optional<expression> filter,
+  internal_sink(http_actor actor, Option<expression> filter,
                 tenzir::location op)
     : actor_{std::move(actor)}, op_{op}, filter_{std::move(filter)} {
   }
@@ -283,7 +283,7 @@ struct internal_sink final : public crtp_operator<internal_sink> {
 private:
   http_actor actor_;
   tenzir::location op_;
-  std::optional<expression> filter_;
+  Option<expression> filter_;
 };
 
 struct http_state {
@@ -442,8 +442,8 @@ auto find_plugin_for_mime(std::string_view mime, location op,
   return failure::promise();
 }
 
-auto make_pipeline(const std::optional<located<pipeline>>& pipe,
-                   const caf::uri& uri, const http::response& r, location oploc,
+auto make_pipeline(const Option<located<pipeline>>& pipe, const caf::uri& uri,
+                   const http::response& r, location oploc,
                    diagnostic_handler& dh) -> failure_or<located<pipeline>> {
   if (pipe) {
     return *pipe;
@@ -497,7 +497,7 @@ auto make_pipeline(const std::optional<located<pipeline>>& pipe,
   return located{pipeline{std::move(v)}, oploc};
 }
 
-auto make_pipeline(const std::optional<located<pipeline>>& pipe,
+auto make_pipeline(const Option<located<pipeline>>& pipe,
                    const http::request& r, location oploc,
                    diagnostic_handler& dh) -> failure_or<located<pipeline>> {
   if (pipe) {
@@ -522,8 +522,8 @@ auto make_pipeline(const std::optional<located<pipeline>>& pipe,
 }
 
 auto spawn_pipeline(operator_control_plane& ctrl, located<pipeline> pipe,
-                    std::optional<expression> filter, chunk_ptr ptr,
-                    bool is_warning) -> http_actor {
+                    Option<expression> filter, chunk_ptr ptr, bool is_warning)
+  -> http_actor {
   TENZIR_TRACE("[http] spawning http_actor");
   // TODO: Figure out why only `from_http` shuts down when spawned as linked
   auto ha = ctrl.self().spawn(caf::actor_from_state<http_state>,
@@ -574,20 +574,20 @@ auto spawn_pipeline(operator_control_plane& ctrl, located<pipeline> pipe,
 
 using pagination_spec = located<tenzir::variant<ast::lambda_expr, std::string>>;
 
-auto validate_paginate(std::optional<ast::expression> expr, session ctx)
-  -> failure_or<std::optional<pagination_spec>> {
+auto validate_paginate(Option<ast::expression> expr, session ctx)
+  -> failure_or<Option<pagination_spec>> {
   if (not expr) {
-    return std::nullopt;
+    return None{};
   }
   if (const auto* lambda = try_as<ast::lambda_expr>(*expr)) {
-    return std::optional<pagination_spec>{
-      {tenzir::variant<ast::lambda_expr, std::string>{*lambda},
-       expr->get_location()}};
+    return Option<pagination_spec>{
+      std::in_place, tenzir::variant<ast::lambda_expr, std::string>{*lambda},
+      expr->get_location()};
   }
   TRY(auto value, const_eval(*expr, ctx));
   return match(
     value.inner,
-    [&](const std::string& mode) -> failure_or<std::optional<pagination_spec>> {
+    [&](const std::string& mode) -> failure_or<Option<pagination_spec>> {
       if (mode != "link") {
         diagnostic::error("unsupported pagination mode: `{}`", mode)
           .primary(*expr)
@@ -595,11 +595,11 @@ auto validate_paginate(std::optional<ast::expression> expr, session ctx)
           .emit(ctx);
         return failure::promise();
       }
-      return std::optional<pagination_spec>{
-        {tenzir::variant<ast::lambda_expr, std::string>{mode},
-         expr->get_location()}};
+      return Option<pagination_spec>{
+        std::in_place, tenzir::variant<ast::lambda_expr, std::string>{mode},
+        expr->get_location()};
     },
-    [&](const auto&) -> failure_or<std::optional<pagination_spec>> {
+    [&](const auto&) -> failure_or<Option<pagination_spec>> {
       const auto ty = type::infer(value.inner);
       diagnostic::error("expected `paginate` to be `string` or `lambda`")
         .primary(*expr, "got `{}`", ty ? ty->kind() : type_kind{})
@@ -609,46 +609,45 @@ auto validate_paginate(std::optional<ast::expression> expr, session ctx)
     });
 }
 
-auto next_url_from_lambda(const std::optional<pagination_spec>& paginate,
+auto next_url_from_lambda(const Option<pagination_spec>& paginate,
                           const table_slice& slice, diagnostic_handler& dh)
-  -> std::optional<std::string> {
+  -> Option<std::string> {
   if (not paginate) {
-    return std::nullopt;
+    return None{};
   }
   const auto* lambda = try_as<ast::lambda_expr>(&paginate->inner);
   if (not lambda) {
-    return std::nullopt;
+    return None{};
   }
   if (slice.rows() != 1) {
     diagnostic::warning("cannot paginate over multiple events")
       .primary(*paginate)
       .note("stopping pagination")
       .emit(dh);
-    return std::nullopt;
+    return None{};
   }
   const auto ms = eval(*lambda, series{slice}, dh);
   const auto val = ms.view3_at(0);
   return match(
     val,
-    [](const caf::none_t&) -> std::optional<std::string> {
+    [](const caf::none_t&) -> Option<std::string> {
       TENZIR_TRACE("[http] finishing pagination");
-      return std::nullopt;
+      return None{};
     },
-    [](const std::string_view& url) -> std::optional<std::string> {
+    [](const std::string_view& url) -> Option<std::string> {
       TENZIR_TRACE("[http] paginating: {}", url);
       return std::string{url};
     },
-    [&](const auto&) -> std::optional<std::string> {
+    [&](const auto&) -> Option<std::string> {
       diagnostic::error("expected `paginate` to be `string`, got `{}`",
                         ms.parts().front().type.kind())
         .primary(*paginate)
         .emit(dh);
-      return std::nullopt;
+      return None{};
     });
 }
 
-auto is_link_pagination(const std::optional<pagination_spec>& paginate)
-  -> bool {
+auto is_link_pagination(const Option<pagination_spec>& paginate) -> bool {
   if (not paginate) {
     return false;
   }
@@ -774,7 +773,7 @@ auto rel_contains_next(std::string_view value) -> bool {
 }
 
 struct next_link_target_result {
-  std::optional<std::string_view> target;
+  Option<std::string_view> target;
   bool malformed = false;
 };
 
@@ -785,17 +784,17 @@ auto next_link_target(std::string_view header) -> next_link_target_result {
     return {};
   }
   if (item.front() != '<') {
-    return {.target = std::nullopt, .malformed = true};
+    return {.target = None{}, .malformed = true};
   }
   const auto uri_end = item.find('>');
   if (uri_end == std::string_view::npos) {
-    return {.target = std::nullopt, .malformed = true};
+    return {.target = None{}, .malformed = true};
   }
   auto target = item.substr(1, uri_end - 1);
   auto params = item.substr(uri_end + 1);
   auto [param_parts, ok] = split_link_params(params);
   if (not ok) {
-    return {.target = std::nullopt, .malformed = true};
+    return {.target = None{}, .malformed = true};
   }
   auto has_next = false;
   for (const auto part : param_parts) {
@@ -822,15 +821,14 @@ auto next_link_target(std::string_view header) -> next_link_target_result {
   return {};
 }
 
-auto next_url_from_link_headers(const std::optional<pagination_spec>& paginate,
+auto next_url_from_link_headers(const Option<pagination_spec>& paginate,
                                 const http::response& response,
                                 const caf::uri& request_uri,
-                                diagnostic_handler& dh)
-  -> std::optional<std::string> {
+                                diagnostic_handler& dh) -> Option<std::string> {
   const auto link_pagination = is_link_pagination(paginate);
   TENZIR_ASSERT(link_pagination);
   if (not link_pagination) {
-    return std::nullopt;
+    return None{};
   }
   auto request_uri_str = request_uri.str();
   const auto base_uri = boost::urls::parse_uri_reference(request_uri_str);
@@ -840,7 +838,7 @@ auto next_url_from_link_headers(const std::optional<pagination_spec>& paginate,
       .primary(*paginate)
       .note("stopping pagination")
       .emit(dh);
-    return std::nullopt;
+    return None{};
   }
   auto malformed = false;
   for (const auto& [name, value] : response.header_fields()) {
@@ -857,7 +855,7 @@ auto next_url_from_link_headers(const std::optional<pagination_spec>& paginate,
             .primary(*paginate)
             .note("stopping pagination")
             .emit(dh);
-          return std::nullopt;
+          return None{};
         }
         auto resolved = boost::urls::url{};
         if (auto result = boost::urls::resolve(*base_uri, *ref, resolved);
@@ -867,7 +865,7 @@ auto next_url_from_link_headers(const std::optional<pagination_spec>& paginate,
             .primary(*paginate)
             .note("stopping pagination")
             .emit(dh);
-          return std::nullopt;
+          return None{};
         }
         return std::string{resolved.buffer()};
       }
@@ -882,7 +880,7 @@ auto next_url_from_link_headers(const std::optional<pagination_spec>& paginate,
       .note("stopping pagination")
       .emit(dh);
   }
-  return std::nullopt;
+  return None{};
 }
 
 auto make_metadata(const http::response& r, const uint64_t len)
@@ -921,26 +919,26 @@ auto make_metadata(const http::request& r, const uint64_t len) -> series {
 
 struct from_http_args {
   tenzir::location op;
-  std::optional<expression> filter;
+  Option<expression> filter;
   located<secret> url;
-  std::optional<located<std::string>> method;
-  std::optional<located<data>> body;
-  std::optional<located<std::string>> encode;
-  std::optional<located<record>> headers;
-  std::optional<ast::field_path> metadata_field;
-  std::optional<ast::field_path> error_field;
-  std::optional<ast::expression> paginate_expr;
-  std::optional<pagination_spec> paginate;
-  std::optional<located<duration>> paginate_delay;
-  std::optional<located<duration>> connection_timeout;
-  std::optional<located<uint64_t>> max_retry_count;
-  std::optional<located<duration>> retry_delay;
-  std::optional<location> server;
-  std::optional<located<record>> responses;
-  std::optional<located<uint64_t>> max_request_size;
-  std::optional<located<uint64_t>> max_connections;
+  Option<located<std::string>> method;
+  Option<located<data>> body;
+  Option<located<std::string>> encode;
+  Option<located<record>> headers;
+  Option<ast::field_path> metadata_field;
+  Option<ast::field_path> error_field;
+  Option<ast::expression> paginate_expr;
+  Option<pagination_spec> paginate;
+  Option<located<duration>> paginate_delay;
+  Option<located<duration>> connection_timeout;
+  Option<located<uint64_t>> max_retry_count;
+  Option<located<duration>> retry_delay;
+  Option<location> server;
+  Option<located<record>> responses;
+  Option<located<uint64_t>> max_request_size;
+  Option<located<uint64_t>> max_connections;
   tls_options ssl{{.tls_default = false, .is_server = true}};
-  std::optional<located<pipeline>> parse;
+  Option<located<pipeline>> parse;
 
   auto add_to(argument_parser2& p) {
     p.positional("url", url);
@@ -1177,7 +1175,7 @@ struct from_http_args {
     return {};
   }
 
-  auto make_method() const -> std::optional<http::method> {
+  auto make_method() const -> Option<http::method> {
     if (not method) {
       return body ? http::method::post : http::method::get;
     }
@@ -1185,7 +1183,7 @@ struct from_http_args {
     if (http::from_string(method->inner, m)) {
       return m;
     }
-    return std::nullopt;
+    return None{};
   }
 
   auto make_headers() const
@@ -1234,7 +1232,7 @@ struct from_http_args {
       return caf::make_error(ec::invalid_configuration,
                              "failed to resolve TLS configuration");
     }
-    return tls->make_caf_context(ctrl, std::nullopt);
+    return tls->make_caf_context(ctrl, None{});
   }
 
   auto make_ssl_context(caf::uri uri, operator_control_plane& ctrl) const
@@ -1289,7 +1287,7 @@ public:
         return std::move(diag).modify().severity(severity::warning).done();
       },
     };
-    auto pull = std::optional<caf::async::consumer_resource<http::request>>{};
+    auto pull = Option<caf::async::consumer_resource<http::request>>{};
     auto url = std::string{};
     auto port = uint16_t{};
     auto req = make_secret_request("url", args_.url, url, dh);
@@ -1767,7 +1765,7 @@ public:
       args.filter = expr;
       return std::make_unique<from_http_client_operator>(std::move(args));
     };
-    return {std::nullopt, event_order::ordered, make_copy()};
+    return {None{}, event_order::ordered, make_copy()};
   }
 
   auto name() const -> std::string override {
@@ -1930,23 +1928,23 @@ struct accept_http final : public virtual operator_factory_plugin {
 struct http_args {
   tenzir::location op;
   ast::expression url;
-  std::optional<ast::expression> method;
-  std::optional<ast::expression> body;
-  std::optional<located<std::string>> encode;
-  std::optional<ast::expression> headers;
-  std::optional<ast::field_path> response_field;
-  std::optional<ast::field_path> metadata_field;
-  std::optional<ast::field_path> error_field;
-  std::optional<ast::expression> paginate_expr;
-  std::optional<pagination_spec> paginate;
+  Option<ast::expression> method;
+  Option<ast::expression> body;
+  Option<located<std::string>> encode;
+  Option<ast::expression> headers;
+  Option<ast::field_path> response_field;
+  Option<ast::field_path> metadata_field;
+  Option<ast::field_path> error_field;
+  Option<ast::expression> paginate_expr;
+  Option<pagination_spec> paginate;
   located<duration> paginate_delay{0s, location::unknown};
   located<uint64_t> parallel{1, location::unknown};
   tls_options ssl{{.tls_default = false}};
   located<duration> connection_timeout{5s, location::unknown};
   uint64_t max_retry_count{};
   located<duration> retry_delay{1s, location::unknown};
-  std::optional<located<pipeline>> parse;
-  std::optional<expression> filter;
+  Option<located<pipeline>> parse;
+  Option<expression> filter;
 
   auto add_to(argument_parser2& p) {
     p.positional("url", url, "string");
@@ -2059,7 +2057,7 @@ struct http_args {
   }
 
   auto make_method(const std::string_view method) const
-    -> std::optional<http::method> {
+    -> Option<http::method> {
     if (method.empty()) {
       if (not this->method and body) {
         return http::method::post;
@@ -2070,7 +2068,7 @@ struct http_args {
     if (http::from_string(method, m)) {
       return m;
     }
-    return std::nullopt;
+    return None{};
   }
 
   auto make_ssl_context(caf::uri uri, operator_control_plane& ctrl) const
@@ -2589,7 +2587,7 @@ public:
   }
 
   static auto
-  eval_optional_string(const std::optional<ast::expression>& expr,
+  eval_optional_string(const Option<ast::expression>& expr,
                        const table_slice& slice, diagnostic_handler& dh)
     -> generator<std::string_view> {
     if (not expr) {
@@ -2636,7 +2634,7 @@ public:
       return copy();
     };
     return {
-      std::nullopt,
+      None{},
       args_.parallel.inner == 1 ? event_order::ordered : event_order::unordered,
       make_copy(),
     };

@@ -20,10 +20,9 @@ using U = uint64_t;
 // These are macros to preserve line numbers.
 #define GOOD(x, y)                                                             \
   static_assert(                                                               \
-    std::same_as<decltype(x),                                                  \
-                 std::optional<std::remove_cvref_t<decltype(y)>>>);            \
+    std::same_as<decltype(x), Option<std::remove_cvref_t<decltype(y)>>>);      \
   CHECK_EQUAL(x, y);
-#define BAD(x) CHECK_EQUAL(x, std::nullopt);
+#define BAD(x) CHECK_EQUAL(x, None{});
 
 TEST("checked_add") {
   // unsigned

@@ -42,8 +42,8 @@ public:
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     located<std::string> plugin;
-    std::optional<tenzir::record> plugin_options;
-    std::optional<tenzir::record> fluentbit_options;
+    Option<tenzir::record> plugin_options;
+    Option<tenzir::record> fluentbit_options;
     auto args = operator_args{};
     parser.positional("plugin", args.plugin)
       .named_optional("options", args.args)
@@ -121,8 +121,8 @@ public:
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     located<std::string> plugin;
-    std::optional<tenzir::record> plugin_options;
-    std::optional<tenzir::record> fluentbit_options;
+    Option<tenzir::record> plugin_options;
+    Option<tenzir::record> fluentbit_options;
     auto args = operator_args{};
     parser.positional("plugin", args.plugin)
       .named_optional("options", args.args)

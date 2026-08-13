@@ -574,7 +574,7 @@ auto FromArrowFsOperator::find_free_slot() const -> Option<size_t> {
       return i;
     }
   }
-  return std::nullopt;
+  return None{};
 }
 
 auto FromArrowFsOperator::find_slot_by_job(uint64_t job_id) const
@@ -584,7 +584,7 @@ auto FromArrowFsOperator::find_slot_by_job(uint64_t job_id) const
       return i;
     }
   }
-  return std::nullopt;
+  return None{};
 }
 
 auto FromArrowFsOperator::is_globbing() const -> bool {
@@ -910,7 +910,7 @@ auto ToArrowFsOperator::find_partition(int64_t sk) -> Task<Option<Partition&>> {
   auto guard = co_await state_.lock();
   auto it = guard->partitions.find(sk);
   if (it == guard->partitions.end()) {
-    co_return std::nullopt;
+    co_return None{};
   }
   co_return it->second;
 }

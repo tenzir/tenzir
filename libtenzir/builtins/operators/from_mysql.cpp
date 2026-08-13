@@ -627,11 +627,11 @@ auto is_result_set_terminator(std::span<std::byte const> pkt) -> bool {
 }
 
 /// Check if packet is an error packet. Returns the error if so.
-auto as_error(std::span<std::byte const> data) -> std::optional<mysql_error> {
+auto as_error(std::span<std::byte const> data) -> Option<mysql_error> {
   if (not data.empty() and data[0] == packet::error) {
     return parse_error_from_packet(data);
   }
-  return std::nullopt;
+  return None{};
 }
 
 /// Returns the base set of client capability flags shared by SSL request and
@@ -1075,7 +1075,7 @@ struct query_config {
   int64_t batch_size = 10000;
 };
 
-using result_row = std::vector<std::optional<std::string>>;
+using result_row = std::vector<Option<std::string>>;
 using prepared_param
   = std::variant<std::monostate, std::string, int64_t, uint64_t>;
 
@@ -1188,12 +1188,12 @@ auto parse_row_as_strings(std::span<std::byte const> data, size_t column_count)
   row.reserve(column_count);
   for (auto i = size_t{0}; i < column_count; ++i) {
     if (reader.at_end()) {
-      row.emplace_back(std::nullopt);
+      row.emplace_back(None{});
       continue;
     }
     if (reader.current_byte() == lenenc::null_marker) {
       reader.skip(1);
-      row.emplace_back(std::nullopt);
+      row.emplace_back(None{});
       continue;
     }
     TRY(auto value, reader.read_lenenc_string());
@@ -1300,7 +1300,7 @@ auto parse_binary_row_as_strings(std::span<std::byte const> data,
     auto is_null
       = (std::to_integer<uint8_t>(null_bitmap[bit_index / 8]) & bit) != 0;
     if (is_null or columns[i].type == mysql_type::null) {
-      row.emplace_back(std::nullopt);
+      row.emplace_back(None{});
       continue;
     }
     TRY(auto value, parse_binary_value_as_string(reader, columns[i]));
@@ -1346,24 +1346,24 @@ auto extract_tracking_candidates(std::vector<result_row> rows)
 
 /// Parse the first row and first column as optional string.
 auto parse_first_optional_string(std::vector<result_row> const& rows)
-  -> MysqlResult<std::optional<std::string>> {
+  -> MysqlResult<Option<std::string>> {
   if (rows.empty()) {
-    return std::optional<std::string>{};
+    return Option<std::string>{};
   }
   if (rows[0].empty()) {
     return Err{mysql_error::protocol("expected at least one column")};
   }
   if (not rows[0][0]) {
-    return std::optional<std::string>{};
+    return Option<std::string>{};
   }
-  return std::optional<std::string>{*rows[0][0]};
+  return Option<std::string>{*rows[0][0]};
 }
 
 /// Parse an optional string as optional unsigned 64-bit integer.
-auto parse_optional_uint64(std::optional<std::string> const& cell)
-  -> MysqlResult<std::optional<uint64_t>> {
+auto parse_optional_uint64(Option<std::string> const& cell)
+  -> MysqlResult<Option<uint64_t>> {
   if (not cell) {
-    return std::optional<uint64_t>{};
+    return Option<uint64_t>{};
   }
   auto value = uint64_t{};
   auto [ptr, ec]
@@ -1372,14 +1372,14 @@ auto parse_optional_uint64(std::optional<std::string> const& cell)
     return Err{
       mysql_error::protocol(fmt::format("invalid uint64 value `{}`", *cell))};
   }
-  return std::optional<uint64_t>{value};
+  return Option<uint64_t>{value};
 }
 
 /// Parse an optional string as optional signed 64-bit integer.
-auto parse_optional_int64(std::optional<std::string> const& cell)
-  -> MysqlResult<std::optional<int64_t>> {
+auto parse_optional_int64(Option<std::string> const& cell)
+  -> MysqlResult<Option<int64_t>> {
   if (not cell) {
-    return std::optional<int64_t>{};
+    return Option<int64_t>{};
   }
   auto value = int64_t{};
   auto [ptr, ec]
@@ -1388,19 +1388,19 @@ auto parse_optional_int64(std::optional<std::string> const& cell)
     return Err{
       mysql_error::protocol(fmt::format("invalid int64 value `{}`", *cell))};
   }
-  return std::optional<int64_t>{value};
+  return Option<int64_t>{value};
 }
 
 /// Parse the first row and first column as optional unsigned 64-bit integer.
 auto parse_first_optional_uint64(std::vector<result_row> const& rows)
-  -> MysqlResult<std::optional<uint64_t>> {
+  -> MysqlResult<Option<uint64_t>> {
   TRY(auto cell, parse_first_optional_string(rows));
   return parse_optional_uint64(cell);
 }
 
 /// Parse the first row and first column as optional signed 64-bit integer.
 auto parse_first_optional_int64(std::vector<result_row> const& rows)
-  -> MysqlResult<std::optional<int64_t>> {
+  -> MysqlResult<Option<int64_t>> {
   TRY(auto cell, parse_first_optional_string(rows));
   return parse_optional_int64(cell);
 }
@@ -1688,15 +1688,15 @@ private:
   }
 
   auto read_next_row_packet()
-    -> Task<MysqlResult<std::optional<std::vector<std::byte>>>> {
+    -> Task<MysqlResult<Option<std::vector<std::byte>>>> {
     CO_TRY(auto row_packet, co_await conn_.read_packet());
     if (is_eof(row_packet)) {
-      co_return std::optional<std::vector<std::byte>>{};
+      co_return Option<std::vector<std::byte>>{};
     }
     if (auto err = as_error(row_packet)) {
       co_return Err{std::move(*err)};
     }
-    co_return std::optional<std::vector<std::byte>>{std::move(row_packet)};
+    co_return Option<std::vector<std::byte>>{std::move(row_packet)};
   }
 
   async_connection conn_;
@@ -1865,7 +1865,7 @@ private:
   }
 
   auto query_max_tracking_value_unsigned()
-    -> Task<MysqlResult<std::optional<uint64_t>>> {
+    -> Task<MysqlResult<Option<uint64_t>>> {
     TENZIR_ASSERT(not tracking_column_.empty());
     TENZIR_ASSERT(not table_name_.empty());
     auto sql = fmt::format("SELECT MAX({}) FROM {}",
@@ -1883,7 +1883,7 @@ private:
   }
 
   auto query_max_tracking_value_raw(std::string_view tracking_column)
-    -> Task<MysqlResult<std::optional<std::string>>> {
+    -> Task<MysqlResult<Option<std::string>>> {
     TENZIR_ASSERT(not tracking_column.empty());
     TENZIR_ASSERT(not table_name_.empty());
     auto sql
@@ -1900,8 +1900,7 @@ private:
     co_return std::move(value).unwrap();
   }
 
-  auto query_max_tracking_value_signed()
-    -> Task<MysqlResult<std::optional<int64_t>>> {
+  auto query_max_tracking_value_signed() -> Task<MysqlResult<Option<int64_t>>> {
     TENZIR_ASSERT(not tracking_column_.empty());
     TENZIR_ASSERT(not table_name_.empty());
     auto sql = fmt::format("SELECT MAX({}) FROM {}",
@@ -1919,7 +1918,7 @@ private:
   }
 
   auto initialize_live(OpCtx& ctx) -> Task<bool> {
-    auto initial_watermark_raw = std::optional<std::string>{};
+    auto initial_watermark_raw = Option<std::string>{};
     // For explicit tracking columns, capture the initial watermark first.
     // This avoids dropping early rows if schema validation takes longer than
     // expected.
@@ -1995,7 +1994,7 @@ private:
   }
 
   template <class Integer>
-  auto stream_live_window(std::optional<Integer> lower, Integer upper,
+  auto stream_live_window(Option<Integer> lower, Integer upper,
                           Push<table_slice>& push, OpCtx& ctx) -> Task<bool> {
     static_assert(std::is_same_v<Integer, int64_t>
                   or std::is_same_v<Integer, uint64_t>);
@@ -2048,7 +2047,7 @@ private:
     if (live_has_watermark_ and upper <= watermark) {
       co_return true;
     }
-    auto lower = std::optional<Integer>{};
+    auto lower = Option<Integer>{};
     if (live_has_watermark_) {
       lower = watermark;
     }

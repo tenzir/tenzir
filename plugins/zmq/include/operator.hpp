@@ -8,13 +8,14 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/chunk.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/uuid.hpp>
 
 #include <memory>
-#include <optional>
 #include <regex>
 #include <string>
 #include <string_view>
@@ -32,10 +33,10 @@ namespace {
 constexpr auto default_endpoint = "tcp://127.0.0.1:5555";
 
 struct saver_args {
-  std::optional<located<std::string>> endpoint;
-  std::optional<location> connect;
-  std::optional<location> listen;
-  std::optional<location> monitor;
+  Option<located<std::string>> endpoint;
+  Option<location> connect;
+  Option<location> listen;
+  Option<location> monitor;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, saver_args& x) -> bool {
@@ -47,12 +48,12 @@ struct saver_args {
 };
 
 struct loader_args {
-  std::optional<located<std::string>> endpoint;
-  std::optional<located<std::string>> filter;
-  std::optional<location> connect;
-  std::optional<location> listen;
-  std::optional<located<std::string>> separator;
-  std::optional<location> monitor;
+  Option<located<std::string>> endpoint;
+  Option<located<std::string>> filter;
+  Option<location> connect;
+  Option<location> listen;
+  Option<located<std::string>> separator;
+  Option<location> monitor;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, loader_args& x) -> bool {
@@ -134,7 +135,7 @@ class connection {
     /// socket.
     /// @returns all available monitoring events or an empty generator if non
     /// are available within the polling window.
-    auto events(std::optional<std::chrono::milliseconds> timeout = {})
+    auto events(Option<std::chrono::milliseconds> timeout = {})
       -> generator<monitor_event> {
       auto ready = connection::poll(monitor_socket_, ZMQ_POLLIN, timeout);
       if (not ready) {
@@ -209,9 +210,8 @@ public:
     }
   }
 
-  auto send(const chunk_ptr& chunk,
-            std::optional<std::chrono::milliseconds> timeout = {})
-    -> caf::error {
+  auto send(const chunk_ptr& chunk, Option<std::chrono::milliseconds> timeout
+                                    = {}) -> caf::error {
     try {
       TENZIR_TRACE("waiting until socket is ready to send");
       if (not poll(socket_, ZMQ_POLLOUT, timeout)) {
@@ -228,7 +228,7 @@ public:
     }
   }
 
-  auto receive(std::optional<std::chrono::milliseconds> timeout = {})
+  auto receive(Option<std::chrono::milliseconds> timeout = {})
     -> caf::expected<chunk_ptr> {
     try {
       TENZIR_TRACE("waiting until socket is ready to receive");
@@ -254,12 +254,11 @@ public:
 
   /// Checks whether the socket is equipped with a monitor
   auto monitored() const -> bool {
-    return monitor_ != std::nullopt;
+    return monitor_ != None{};
   }
 
   /// Returns the number of processed monitoring events.
-  auto poll_monitor(std::optional<std::chrono::milliseconds> timeout = {})
-    -> size_t {
+  auto poll_monitor(Option<std::chrono::milliseconds> timeout = {}) -> size_t {
     auto num_events = size_t{0};
     for (auto&& event : monitor_->events(timeout)) {
       ++num_events;
@@ -301,8 +300,7 @@ private:
   }
 
   static auto poll(::zmq::socket_t& socket, short flags,
-                   std::optional<std::chrono::milliseconds> timeout = {})
-    -> bool {
+                   Option<std::chrono::milliseconds> timeout = {}) -> bool {
     auto items = std::array<::zmq::pollitem_t, 1>{
       {{socket.handle(), 0, flags, 0}},
     };
@@ -355,7 +353,7 @@ private:
   }
 
   ::zmq::socket_t socket_;
-  std::optional<class monitor> monitor_;
+  Option<class monitor> monitor_;
   size_t num_peers_{0};
   std::string separator;
 };

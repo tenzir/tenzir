@@ -104,15 +104,15 @@ struct partial_timestamp {
             .tm_mon = time.tm_mon,
             .tm_year = time.tm_year,
             .tm_gmtoff = time.tm_gmtoff,
-            .tm_zone = time.tm_zone ? std::optional{std::string{time.tm_zone}}
-                                    : std::nullopt};
+            .tm_zone
+            = time.tm_zone ? Option{std::string{time.tm_zone}} : None{}};
   }
 
   /// Returns a possibly-incomplete `partial_timestamp`, with only the fields
   /// initialized for which `is_unset` returned `false`.
   static auto from_tm_with_unset_fields(const std::tm& time, auto is_unset)
     -> partial_timestamp {
-    auto do_field = [&]<typename T, typename U>(std::optional<T>& self_field,
+    auto do_field = [&]<typename T, typename U>(Option<T>& self_field,
                                                 const U& other_field) {
       if (not is_unset(other_field)) {
         self_field = other_field;
@@ -133,8 +133,7 @@ struct partial_timestamp {
   template <typename Clock>
   static auto from_clock_time_point(
     const std::chrono::time_point<Clock, std::chrono::seconds>& tp,
-    std::optional<long> gmtoff, std::optional<std::string> tz)
-    -> partial_timestamp {
+    Option<long> gmtoff, Option<std::string> tz) -> partial_timestamp {
     auto tp_days = std::chrono::floor<std::chrono::days>(tp);
     auto ymd = date::year_month_day{tp_days};
     TENZIR_ASSERT(ymd.ok());
@@ -152,8 +151,7 @@ struct partial_timestamp {
 
   /// Returns a complete `partial_timestamp` corresponding to `tp`, in a timezone.
   static auto from_local_time_point(const date::local_seconds& tp,
-                                    std::optional<long> gmtoff,
-                                    std::optional<std::string> tz)
+                                    Option<long> gmtoff, Option<std::string> tz)
     -> partial_timestamp {
     return from_clock_time_point(tp, gmtoff, std::move(tz));
   }
@@ -301,16 +299,16 @@ struct partial_timestamp {
   }
 
   /// Returns an object of type `std::tm` corresponding to `*this`.
-  /// If `*this` is incomplete, returns `std::nullopt`, and emits an error
+  /// If `*this` is incomplete, returns `None{}`, and emits an error
   /// to `diag`.
-  [[nodiscard]] auto to_tm(diagnostic_handler& diag) -> std::optional<std::tm> {
+  [[nodiscard]] auto to_tm(diagnostic_handler& diag) -> Option<std::tm> {
     if (not is_complete()) {
       diagnostic::error("insufficient information to create a datetime")
         .hint("either provide a year, month, day, hour, and minute, or disable "
               "--strict to use default values")
         .docs(docs)
         .emit(diag);
-      return std::nullopt;
+      return None{};
     }
     return std::tm{.tm_sec = tm_sec.value_or(0),
                    .tm_min = *tm_min,
@@ -327,18 +325,17 @@ struct partial_timestamp {
 
   template <typename Clock>
   [[nodiscard]] auto to_clock_time_point(diagnostic_handler& diag)
-    -> std::tuple<
-      std::optional<std::chrono::time_point<Clock, std::chrono::seconds>>,
-      std::optional<long>, std::optional<std::string>> {
+    -> std::tuple<Option<std::chrono::time_point<Clock, std::chrono::seconds>>,
+                  Option<long>, Option<std::string>> {
     auto tm_value = to_tm(diag);
     if (not tm_value) {
-      return {std::nullopt, std::nullopt, std::nullopt};
+      return {None{}, None{}, None{}};
     }
     auto time = std::chrono::seconds{tm_value->tm_sec + 60 * tm_value->tm_min
                                      + 60 * 60 * tm_value->tm_hour};
     if (time >= std::chrono::seconds{86400} or time < std::chrono::seconds{0}) {
       diagnostic::error("invalid time").note("value: {}", time).emit(diag);
-      return {std::nullopt, std::nullopt, std::nullopt};
+      return {None{}, None{}, None{}};
     }
     auto date = date::year{tm_value->tm_year + 1900}
                 / date::month{static_cast<unsigned>(tm_value->tm_mon + 1)}
@@ -350,7 +347,7 @@ struct partial_timestamp {
               static_cast<unsigned>(date.month()),
               static_cast<unsigned>(date.day()))
         .emit(diag);
-      return {std::nullopt, std::nullopt, std::nullopt};
+      return {None{}, None{}, None{}};
     }
     auto datetime = std::chrono::time_point<Clock, std::chrono::seconds>{
       ymd_to_days<Clock>(date) + time};
@@ -361,24 +358,24 @@ struct partial_timestamp {
   /// (local time_point), UTC offset, and timezone name.
   ///
   /// If `*this` is not complete, the first element of the returned tuple is
-  /// `std::nullopt`.
+  /// `None{}`.
   [[nodiscard]] auto to_local_time_point(diagnostic_handler& diag)
-    -> std::tuple<std::optional<date::local_seconds>, std::optional<long>,
-                  std::optional<std::string>> {
+    -> std::tuple<Option<date::local_seconds>, Option<long>,
+                  Option<std::string>> {
     return to_clock_time_point<date::local_t>(diag);
   }
 
   /// Returns an object of type `std::chrono::sys_seconds` corresponding to
   /// `*this`.
   ///
-  /// If `is_complete()` is `false`, returns `std::nullopt`, and
+  /// If `is_complete()` is `false`, returns `None{}`, and
   /// emits an error to `diag`.
   /// `*this` must be in UTC.
   auto to_system_time_point(diagnostic_handler& diag)
-    -> std::optional<std::chrono::sys_seconds> {
+    -> Option<std::chrono::sys_seconds> {
     auto [tp, _1, _2] = to_clock_time_point<std::chrono::system_clock>(diag);
     if (not tp) {
-      return std::nullopt;
+      return None{};
     }
     TENZIR_ASSERT(is_utc());
     return *tp;
@@ -386,7 +383,7 @@ struct partial_timestamp {
 
   void to_record(record_ref& builder) const {
     auto add_field_if_set
-      = [&]<typename T>(std::string_view name, const std::optional<T>& val,
+      = [&]<typename T>(std::string_view name, const Option<T>& val,
                         std::function<T(T)> mod = std::identity{}) {
           if (val) {
             builder.field(name, mod(*val));
@@ -425,18 +422,18 @@ struct partial_timestamp {
     }
   }
 
-  std::optional<int> tm_sec;
-  std::optional<int> tm_min;
-  std::optional<int> tm_hour;
-  std::optional<int> tm_mday;
-  std::optional<int> tm_mon;
-  std::optional<int> tm_year;
-  std::optional<long> tm_gmtoff;
-  std::optional<std::string> tm_zone;
+  Option<int> tm_sec;
+  Option<int> tm_min;
+  Option<int> tm_hour;
+  Option<int> tm_mday;
+  Option<int> tm_mon;
+  Option<int> tm_year;
+  Option<long> tm_gmtoff;
+  Option<std::string> tm_zone;
 };
 
 auto strptime_partial(diagnostic_handler& diag, const char* input,
-                      const char* format) -> std::optional<partial_timestamp> {
+                      const char* format) -> Option<partial_timestamp> {
   // Using INT_MAX as the placeholder, as it's out-of-range for all the fields,
   // and 0 has a valid meaning for some of them
   // (e.g. 0 seconds is a valid result).
@@ -475,14 +472,14 @@ auto strptime_partial(diagnostic_handler& diag, const char* input,
     diagnostic::error("failed to parse time")
       .hint("input: `{}`, format: `{}`", input, format)
       .emit(diag);
-    return std::nullopt;
+    return None{};
   }
   if (result != input + std::strlen(input)) {
     diagnostic::error("failed to parse time")
       .note("format string not exhaustive (`{}` not parsed)", result)
       .hint("input: `{}`, format: `{}`", input, format)
       .emit(diag);
-    return std::nullopt;
+    return None{};
   }
   return partial_timestamp::from_tm_with_unset_fields(time, is_unset);
 }
@@ -507,7 +504,7 @@ public:
 
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> std::optional<generator<table_slice>> override {
+    -> Option<generator<table_slice>> override {
     (void)input;
     diagnostic::error("`{}` cannot be used here", name())
       .emit(ctrl.diagnostics());

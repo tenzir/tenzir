@@ -8,10 +8,11 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <caf/fwd.hpp>
 
 #include <cstdint>
-#include <optional>
 
 namespace tenzir {
 
@@ -51,12 +52,12 @@ enum class icmp6_type : uint8_t {
 /// @param x The ICMP type.
 /// @returns For a request type, the response type - and vice versa.
 /// @relates icmp_type
-std::optional<icmp_type> dual(icmp_type x);
+Option<icmp_type> dual(icmp_type x);
 
 /// Computes the dual to a given ICMP6 type.
 /// @param x The ICMP6 type.
 /// @returns For a request type, the response type - and vice versa.
 /// @relates icmp6_type
-std::optional<icmp6_type> dual(icmp6_type x);
+Option<icmp6_type> dual(icmp6_type x);
 
 } // namespace tenzir

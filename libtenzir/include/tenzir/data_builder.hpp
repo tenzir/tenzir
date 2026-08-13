@@ -7,12 +7,14 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
+
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/aliases.hpp"
 #include "tenzir/detail/flat_map.hpp"
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/value_path.hpp"
 #include "tsl/robin_map.h"
@@ -40,8 +42,8 @@ namespace detail::data_builder {
 /// If the `data` member optional is empty, that means that the value did not
 /// parse as any type and should remain a string.
 struct data_parsing_result {
-  std::optional<tenzir::data> data;
-  std::optional<tenzir::diagnostic> diagnostic;
+  Option<tenzir::data> data;
+  Option<tenzir::diagnostic> diagnostic;
 
   data_parsing_result() = default;
   data_parsing_result(tenzir::data data_) : data{std::move(data_)} {};
@@ -56,7 +58,7 @@ struct data_parsing_result {
 /// A very basic parser that simply uses `tenzir::parsers` under the hood.
 /// If the returned optional is empty, that means that the value did not parse
 /// as any type and should remain a string.
-auto best_effort_parser(std::string_view s) -> std::optional<data>;
+auto best_effort_parser(std::string_view s) -> Option<data>;
 
 /// A very basic parser that only parses the string according to the `seed`
 /// type. This parser does not support the seed pointing to a structural type

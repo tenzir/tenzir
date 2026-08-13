@@ -36,8 +36,8 @@ namespace {
 
 struct from_s3_args final {
   from_file_args base_args;
-  std::optional<location> anonymous;
-  std::optional<aws_iam_options> aws_iam;
+  Option<location> anonymous;
+  Option<aws_iam_options> aws_iam;
 
   friend auto inspect(auto& f, from_s3_args& x) -> bool {
     return f.object(x).fields(f.field("base_args", x.base_args),
@@ -61,7 +61,7 @@ public:
       make_uri_request(args_.base_args.url, "s3://", uri, dh),
     };
     // Resolve all aws_iam secrets if provided
-    auto resolved_creds = std::optional<resolved_aws_credentials>{};
+    auto resolved_creds = Option<resolved_aws_credentials>{};
     if (args_.aws_iam) {
       resolved_creds.emplace();
       auto aws_reqs = args_.aws_iam->make_secret_requests(*resolved_creds, dh);
@@ -91,8 +91,8 @@ public:
                                   : resolved_creds->session_name;
       // Get region from resolved credentials if available
       const auto region = resolved_creds->region.empty()
-                            ? std::optional<std::string>{}
-                            : std::optional{resolved_creds->region};
+                            ? Option<std::string>{}
+                            : Option{resolved_creds->region};
 
       if (has_web_identity and has_role) {
         // Web identity + role: fetch token and assume role
@@ -225,7 +225,7 @@ public:
     -> optimize_result override {
     auto copy = std::make_unique<from_s3_operator>(*this);
     copy->order_ = order;
-    return optimize_result{std::nullopt, event_order::ordered, std::move(copy)};
+    return optimize_result{None{}, event_order::ordered, std::move(copy)};
   }
 
   friend auto inspect(auto& f, from_s3_operator& x) -> bool {
@@ -261,10 +261,9 @@ protected:
     if (result.is_error()) {
       co_return failure::promise();
     }
-    auto aws_iam = args_.aws_iam
-                     ? std::optional<located<record>>{*args_.aws_iam}
-                     : std::nullopt;
-    resolved_ = co_await resolve_aws_iam_auth(aws_iam, std::nullopt, ctx);
+    auto aws_iam
+      = args_.aws_iam ? Option<located<record>>{*args_.aws_iam} : None{};
+    resolved_ = co_await resolve_aws_iam_auth(aws_iam, None{}, ctx);
     if (not resolved_) {
       co_return failure::promise();
     }
@@ -286,8 +285,8 @@ protected:
     if (args_.anonymous) {
       opts.ConfigureAnonymousCredentials();
     } else {
-      auto creds = resolved_ ? resolved_->credentials : std::nullopt;
-      auto region = std::optional<std::string>{};
+      auto creds = resolved_ ? resolved_->credentials : None{};
+      auto region = Option<std::string>{};
       if (creds and not creds->region.empty()) {
         region = creds->region;
         opts.region = *region;
@@ -404,7 +403,7 @@ protected:
 
 private:
   FromS3Args args_;
-  std::optional<ResolvedAwsIamAuth> resolved_;
+  Option<ResolvedAwsIamAuth> resolved_;
   Option<Aws::S3::S3Client> client_;
 };
 
@@ -414,12 +413,12 @@ class from_s3 final : public operator_plugin2<from_s3_operator>,
     -> failure_or<operator_ptr> override {
     auto args = from_s3_args{};
     // Legacy options for backwards compatibility
-    auto access_key = std::optional<located<secret>>{};
-    auto secret_key = std::optional<located<secret>>{};
-    auto session_token = std::optional<located<secret>>{};
-    auto role = std::optional<located<secret>>{};
-    auto external_id = std::optional<located<secret>>{};
-    auto aws_iam_rec = std::optional<located<record>>{};
+    auto access_key = Option<located<secret>>{};
+    auto secret_key = Option<located<secret>>{};
+    auto session_token = Option<located<secret>>{};
+    auto role = Option<located<secret>>{};
+    auto external_id = Option<located<secret>>{};
+    auto aws_iam_rec = Option<located<record>>{};
     auto p = argument_parser2::operator_(name());
     args.base_args.add_to(p);
     p.named("anonymous", args.anonymous);

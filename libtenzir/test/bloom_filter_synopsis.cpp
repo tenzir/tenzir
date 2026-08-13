@@ -37,7 +37,7 @@ auto make_int64_series(std::vector<int64_t> values) -> series {
 
 TEST("bloom filter parameters : from type") {
   auto t = type{ip_type{}, {{"synopsis", "bloomfilter(1000,0.01)"}}};
-  auto xs = unbox(parse_parameters(t));
+  auto xs = tenzir::test::unbox(parse_parameters(t));
   CHECK_EQUAL(*xs.n, 1000u);
   CHECK_EQUAL(*xs.p, 0.01);
 }
@@ -47,7 +47,7 @@ TEST("bloom filter synopsis") {
   bloom_filter_parameters xs;
   xs.m = 1_k;
   xs.p = 0.1;
-  auto bf = unbox(make_bloom_filter<xxh64>(std::move(xs)));
+  auto bf = tenzir::test::unbox(make_bloom_filter<xxh64>(std::move(xs)));
   bloom_filter_synopsis<int64_t, xxh64> x{type{int64_type{}}, std::move(bf)};
   x.add(make_int64_series({0, 1, 2}));
   auto verify = verifier{&x};
@@ -62,12 +62,12 @@ TEST("bloom filter synopsis - wrong lookup type") {
   bloom_filter_parameters xs;
   xs.m = 1_k;
   xs.p = 0.1;
-  auto bf = unbox(make_bloom_filter<xxh64>(std::move(xs)));
+  auto bf = tenzir::test::unbox(make_bloom_filter<xxh64>(std::move(xs)));
   bloom_filter_synopsis<std::string, xxh64> synopsis{type{string_type{}},
                                                      std::move(bf)};
   auto r1
     = synopsis.lookup(relational_operator::equal, make_data_view(caf::none));
-  CHECK_EQUAL(r1, std::nullopt);
+  CHECK_EQUAL(r1, None{});
   auto r2
     = synopsis.lookup(relational_operator::equal, make_data_view(int64_t{17}));
   CHECK_EQUAL(r2, false);

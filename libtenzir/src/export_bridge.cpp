@@ -44,7 +44,7 @@ struct bridge_state {
   size_t inflight_partitions = {};
   size_t open_partitions = {};
   std::queue<std::pair<partition_info, query_context>> queued_partitions = {};
-  std::optional<std::vector<table_slice>> unpersisted_events = {};
+  Option<std::vector<table_slice>> unpersisted_events = None{};
 
   filesystem_actor filesystem = {};
 

@@ -17,6 +17,7 @@
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/hash/hash.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/secret.hpp"
 
 #include <caf/intrusive_ptr.hpp>
@@ -517,7 +518,7 @@ data_view make_data_view(const T& x) {
 
 /// @relates view_trait
 template <class T>
-data_view make_data_view(const std::optional<T>& x) {
+data_view make_data_view(const Option<T>& x) {
   if (not x) {
     return make_view(caf::none);
   }

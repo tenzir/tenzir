@@ -26,12 +26,12 @@ namespace {
 struct saver_args {
   std::string endpoint;
   std::string to;
-  std::optional<std::string> from;
-  std::optional<std::string> subject;
+  Option<std::string> from;
+  Option<std::string> subject;
   transfer_options transfer_opts;
-  std::optional<located<secret>> username;
-  std::optional<located<secret>> password;
-  std::optional<located<secret>> authzid;
+  Option<located<secret>> username;
+  Option<located<secret>> password;
+  Option<located<secret>> authzid;
 
   bool mime;
 
@@ -222,7 +222,7 @@ class save_plugin final : public virtual operator_plugin2<saver> {
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = saver_args{};
-    auto endpoint = std::optional<std::string>{default_smtp_server};
+    auto endpoint = Option<std::string>{default_smtp_server};
     auto to = located<std::string>{};
     auto parser = argument_parser2::operator_(name());
     parser.positional("recipient", to);

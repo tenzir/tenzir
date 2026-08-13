@@ -9,12 +9,12 @@
 #include "tenzir/amazon.hpp"
 
 #include "tenzir/detail/env.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/test/test.hpp"
 
 #include <aws/core/Aws.h>
 
 #include <algorithm>
-#include <optional>
 #include <ranges>
 #include <string>
 #include <vector>
@@ -56,7 +56,7 @@ struct env_fixture {
     previous.emplace_back(std::move(name), detail::getenv(key));
   }
 
-  std::vector<std::pair<std::string, std::optional<std::string>>> previous;
+  std::vector<std::pair<std::string, Option<std::string>>> previous;
   Aws::SDKOptions aws_options;
 };
 

@@ -195,7 +195,7 @@ bool query_queue::mark_partition_erased(const uuid& pid) {
   return false;
 }
 
-std::optional<query_queue::entry> query_queue::next() {
+Option<query_queue::entry> query_queue::next() {
   while (not partitions.empty()) {
     auto result = std::move(partitions.back());
     partitions.pop_back();
@@ -245,19 +245,19 @@ std::optional<query_queue::entry> query_queue::next() {
       return active;
     }
   }
-  return std::nullopt;
+  return None{};
 }
 
-[[nodiscard]] std::optional<receiver_actor<atom::done>>
+[[nodiscard]] Option<receiver_actor<atom::done>>
 query_queue::handle_completion(const uuid& qid) {
   auto it = queries_.find(qid);
   if (it == queries_.end()) {
     // Queries get removed from the queue when the client signals no more
     // interest.
     TENZIR_DEBUG("index tried to access non-existent query {}", qid);
-    return std::nullopt;
+    return None{};
   }
-  auto result = std::optional<receiver_actor<atom::done>>{};
+  auto result = Option<receiver_actor<atom::done>>{};
   auto& query_state = it->second;
   query_state.completed_partitions++;
   if (query_state.completed_partitions == query_state.requested_partitions) {

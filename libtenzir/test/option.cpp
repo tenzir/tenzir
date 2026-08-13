@@ -53,15 +53,15 @@ TEST("implicit construction from value") {
   CHECK_EQUAL(*opt, 42);
 }
 
-TEST("construction from std::optional with value") {
-  auto sopt = std::optional<int>{10};
+TEST("construction from Option with value") {
+  auto sopt = Option<int>{10};
   auto opt = Option<int>{sopt};
   REQUIRE(opt.is_some());
   CHECK_EQUAL(*opt, 10);
 }
 
-TEST("construction from empty std::optional") {
-  auto sopt = std::optional<int>{};
+TEST("construction from empty Option") {
+  auto sopt = Option<int>{};
   auto opt = Option<int>{sopt};
   CHECK(opt.is_none());
 }
@@ -77,6 +77,15 @@ TEST("construction with move-only type") {
   auto opt = Option<std::unique_ptr<int>>{std::make_unique<int>(42)};
   REQUIRE(opt.is_some());
   CHECK_EQUAL(**opt, 42);
+}
+
+TEST("construction from std::optional") {
+  auto some
+    = Option<int>{std::optional<int>{42}}; // NOLINT(custom-prefer-option)
+  auto none = Option<int>{std::nullopt};   // NOLINT(custom-prefer-none): test.
+  REQUIRE(some.is_some());
+  CHECK_EQUAL(*some, 42);
+  CHECK(none.is_none());
 }
 
 TEST("conversion from option preserves none") {
@@ -146,7 +155,21 @@ TEST("assignment from None resets") {
   CHECK(opt.is_none());
 }
 
+TEST("assignment from std::optional") {
+  auto opt = Option<int>{};
+  opt = std::optional<int>{42}; // NOLINT(custom-prefer-option)
+  REQUIRE(opt.is_some());
+  CHECK_EQUAL(*opt, 42);
+  opt = std::nullopt; // NOLINT(custom-prefer-none): test.
+  CHECK(opt.is_none());
+}
+
 // -- observers ----------------------------------------------------------------
+
+TEST("has_value") {
+  CHECK(Option<int>{42}.has_value());
+  CHECK(not Option<int>{}.has_value());
+}
 
 TEST("is_some_and with matching predicate") {
   auto opt = Option<int>{42};
@@ -204,6 +227,11 @@ TEST("operator-> panics on none") {
 TEST("unwrap on some") {
   auto opt = Option<int>{42};
   CHECK_EQUAL(opt.unwrap(), 42);
+}
+
+TEST("value on some") {
+  auto opt = Option<int>{42};
+  CHECK_EQUAL(opt.value(), 42);
 }
 
 TEST("unwrap panics on none") {
@@ -265,6 +293,19 @@ TEST("unwrap_or on none returns fallback") {
   CHECK_EQUAL(opt.unwrap_or(99), 99);
 }
 
+TEST("value_or") {
+  CHECK_EQUAL(Option<int>{42}.value_or(99), 42);
+  CHECK_EQUAL(Option<int>{}.value_or(99), 99);
+}
+
+TEST("to_std") {
+  auto some = Option<int>{42}.to_std();
+  auto none = Option<int>{}.to_std();
+  REQUIRE(some.has_value());
+  CHECK_EQUAL(*some, 42);
+  CHECK(not none.has_value());
+}
+
 TEST("unwrap_or_else on some returns value") {
   auto opt = Option<int>{42};
   CHECK_EQUAL(opt.unwrap_or_else([] {
@@ -318,6 +359,14 @@ TEST("map changes type") {
   static_assert(std::same_as<decltype(result), Option<std::string>>);
   REQUIRE(result.is_some());
   CHECK_EQUAL(*result, "42");
+}
+
+TEST("transform") {
+  auto result = Option<int>{21}.transform([](int x) {
+    return x * 2;
+  });
+  REQUIRE(result.is_some());
+  CHECK_EQUAL(*result, 42);
 }
 
 TEST("and_then on some returns new option") {
@@ -453,6 +502,14 @@ TEST("option equals value") {
 TEST("option equals none") {
   CHECK(not(Option<int>{42} == None{}));
   CHECK(Option<int>{} == None{});
+}
+
+TEST("option equals std::optional") {
+  // NOLINTBEGIN(custom-prefer-option): std::optional interoperability.
+  CHECK(Option<int>{42} == std::optional<int>{42});
+  CHECK(Option<int>{} == std::optional<int>{});
+  CHECK(not(Option<int>{42} == std::optional<int>{}));
+  // NOLINTEND(custom-prefer-option)
 }
 
 TEST("reversed comparisons") {

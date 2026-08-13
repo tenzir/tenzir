@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/inspect_enum_str.hpp"
 #include "tenzir/detail/pp.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/tag.hpp"
 
 #include <fmt/format.h>
@@ -53,10 +54,10 @@
     TENZIR_UNREACHABLE();                                                      \
   }                                                                            \
   [[maybe_unused]] inline auto adl_from_string(                                \
-    tenzir::tag<name>, std::string_view str) -> std::optional<name> {          \
+    tenzir::tag<name>, std::string_view str) -> Option<name> {                 \
     using enum name;                                                           \
     TENZIR_PP_FOR(TENZIR_ENUM_CHECK, __VA_ARGS__);                             \
-    return std::nullopt;                                                       \
+    return None{};                                                             \
   }                                                                            \
   [[maybe_unused]] auto inspect(auto& f, name& x) -> bool {                    \
     return tenzir::detail::inspect_enum_str(                                   \
@@ -69,7 +70,7 @@ namespace tenzir {
 
 template <class T>
   requires requires { adl_from_string(tag_v<T>, std::string_view{}); }
-auto from_string(std::string_view str) -> std::optional<T> {
+auto from_string(std::string_view str) -> Option<T> {
   return adl_from_string(tag_v<T>, str);
 }
 

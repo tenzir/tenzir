@@ -36,11 +36,11 @@ namespace tenzir::plugins::syslog {
 
 namespace {
 
-auto parse_loop(generator<std::optional<std::string_view>> lines,
+auto parse_loop(generator<Option<std::string_view>> lines,
                 operator_control_plane& ctrl,
                 multi_series_builder::options opts,
-                const std::optional<ast::field_path>& raw_message_field
-                = std::nullopt) -> generator<table_slice> {
+                const Option<ast::field_path>& raw_message_field = None{})
+  -> generator<table_slice> {
   auto dh = transforming_diagnostic_handler{
     ctrl.diagnostics(), [](auto diag) {
       diag.message = fmt::format("syslog parser: {}", diag.message);
@@ -168,12 +168,12 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
 }
 
 inline auto split_octet(generator<chunk_ptr> input, diagnostic_handler& dh)
-  -> generator<std::optional<std::string_view>> {
+  -> generator<Option<std::string_view>> {
   auto buffer = std::string{};
   auto remaining_message_length = size_t{};
   for (auto&& chunk : input) {
     if (not chunk || chunk->size() == 0) {
-      co_yield std::nullopt;
+      co_yield None{};
       continue;
     }
     auto* chunk_begin = reinterpret_cast<const char*>(chunk->data());
@@ -231,7 +231,7 @@ public:
   syslog_parser() = default;
 
   syslog_parser(multi_series_builder::options opts, bool octet_counting,
-                std::optional<ast::field_path> raw_message_field = std::nullopt)
+                Option<ast::field_path> raw_message_field = None{})
     : opts_{std::move(opts)},
       octet_counting_{octet_counting},
       raw_message_field_{std::move(raw_message_field)} {
@@ -243,7 +243,7 @@ public:
 
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> std::optional<generator<table_slice>> override {
+    -> Option<generator<table_slice>> override {
     if (octet_counting_) {
       return parse_loop(split_octet(std::move(input), ctrl.diagnostics()), ctrl,
                         opts_, raw_message_field_);
@@ -261,7 +261,7 @@ public:
 private:
   multi_series_builder::options opts_;
   bool octet_counting_ = false;
-  std::optional<ast::field_path> raw_message_field_;
+  Option<ast::field_path> raw_message_field_;
 };
 
 auto make_root_field(std::string field) -> ast::root_field {
@@ -391,8 +391,8 @@ public:
         }
         auto it = std::back_inserter(buffer);
         const auto format_n = [&](std::string_view name,
-                                  std::optional<std::string_view> str,
-                                  size_t count, const ast::expression& expr) {
+                                  Option<std::string_view> str, size_t count,
+                                  const ast::expression& expr) {
           if (not str or str->empty()) {
             fmt::format_to(it, " -");
             return;
@@ -493,7 +493,7 @@ public:
   auto eval_as(std::string_view name, const ast::expression& expr,
                const table_slice& slice, diagnostic_handler& dh,
                auto make_default) const
-    -> generator<std::optional<view3<type_to_data_t<T>>>> {
+    -> generator<Option<view3<type_to_data_t<T>>>> {
     auto ms = std::invoke([&] {
       if (expr.get_location()) {
         return eval(expr, slice, dh);
@@ -556,9 +556,9 @@ public:
   template <typename T>
   auto eval_as(std::string_view name, const ast::expression& expr,
                const table_slice& slice, diagnostic_handler& dh) const
-    -> generator<std::optional<view3<type_to_data_t<T>>>> {
+    -> generator<Option<view3<type_to_data_t<T>>>> {
     return eval_as<T>(name, expr, slice, dh, [] {
-      return std::nullopt;
+      return None{};
     });
   }
 
@@ -606,7 +606,7 @@ class read_syslog final
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("read_syslog");
     bool octet_counting = false;
-    std::optional<ast::field_path> raw_message_field;
+    Option<ast::field_path> raw_message_field;
     parser.named_optional("octet_counting", octet_counting);
     parser.named("raw_message", raw_message_field);
     auto msb_parser = multi_series_builder_argument_parser{};
@@ -634,7 +634,7 @@ public:
     // nullopt = auto-detect: try octet-counting first, fall back to plain syslog
     // true = require octet-counting prefix, warn if missing
     // false = never parse octet-counting prefix
-    auto octet_counting = std::optional<bool>{};
+    auto octet_counting = Option<bool>{};
     // TODO: Consider adding a `many` option to expect multiple json values.
     auto parser = argument_parser2::function(name());
     parser.positional("input", expr, "string");
@@ -658,9 +658,8 @@ public:
             auto builder = syslog_builder{infuse_new_schema(msb_opts), ctx};
             auto legacy_builder
               = legacy_syslog_builder{infuse_legacy_schema(msb_opts), ctx};
-            auto legacy_structured_builder
-              = legacy_syslog_builder{infuse_legacy_structured_schema(msb_opts),
-                                      ctx, std::nullopt, true};
+            auto legacy_structured_builder = legacy_syslog_builder{
+              infuse_legacy_structured_schema(msb_opts), ctx, None{}, true};
             auto last = builder_tag::syslog_builder;
             auto res = multi_series{};
             /// flushes the current builder, if its not the same as

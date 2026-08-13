@@ -515,10 +515,10 @@ auto enable_stats_impl(const char* env_name) noexcept -> bool {
 }
 
 auto selected_backend_impl(const char* env_name) noexcept
-  -> std::optional<enum backend> {
+  -> Option<enum backend> {
   const auto env_value = ::getenv(env_name);
   if (not env_value) {
-    return std::nullopt;
+    return None{};
   }
   const auto env_str = std::string_view{env_value};
   if (env_str == "jemalloc") {

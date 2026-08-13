@@ -64,7 +64,7 @@ class consume_worker {
 public:
   static auto make(configuration config, from_kafka_args const& args,
                    diagnostic_handler& dh, consume_synchronizer& sync)
-    -> std::optional<consume_worker> {
+    -> Option<consume_worker> {
     if (auto value = config.get("bootstrap.servers")) {
       TENZIR_INFO("kafka connecting to broker: {}", *value);
     }
@@ -73,14 +73,14 @@ public:
       diagnostic::error("failed to create consumer: {}", client.error())
         .primary(args.operator_location)
         .emit(dh);
-      return std::nullopt;
+      return None{};
     }
     TENZIR_INFO("kafka subscribes to topic {}", args.topic);
     if (auto err = client->subscribe({args.topic}); err.valid()) {
       diagnostic::error("failed to subscribe to topic: {}", err)
         .primary(args.operator_location)
         .emit(dh);
-      return std::nullopt;
+      return None{};
     }
     return consume_worker{std::move(*client), args, dh, sync};
   }
@@ -103,7 +103,7 @@ public:
     // Optional distinguishes "no assignment fetched yet" from a legitimate
     // empty assignment (e.g., rebalancing or no partitions), which must not
     // reset EOF tracking.
-    auto assigned_partitions = std::optional<std::unordered_set<int32_t>>{};
+    auto assigned_partitions = Option<std::unordered_set<int32_t>>{};
     auto eof_partitions = std::unordered_set<int32_t>{};
     auto const schema = type{
       "tenzir.kafka",
@@ -251,7 +251,7 @@ auto from_kafka_operator::operator()(operator_control_plane& ctrl) const
   -> generator<table_slice> {
   auto& dh = ctrl.diagnostics();
   // Resolve all aws_iam fields; region/profile/session_name may be secrets.
-  auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
+  auto resolved_creds = Option<tenzir::resolved_aws_credentials>{};
   if (args_.aws) {
     resolved_creds.emplace();
     auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
@@ -363,8 +363,8 @@ auto make_from_kafka(operator_factory_invocation inv, session ctx,
                      const record& defaults) -> failure_or<operator_ptr> {
   auto args = from_kafka_args{};
   args.operator_location = inv.self.get_location();
-  auto offset = std::optional<ast::expression>{};
-  auto iam_opts = std::optional<located<record>>{};
+  auto offset = Option<ast::expression>{};
+  auto iam_opts = Option<located<record>>{};
   TRY(argument_parser2::operator_("from_kafka")
         .positional("topic", args.topic)
         .named("count", args.count)
@@ -407,14 +407,14 @@ auto make_from_kafka(operator_factory_invocation inv, session ctx,
   if (offset) {
     TRY(auto evaluated, const_eval(offset.value(), ctx.dh()));
     constexpr auto f = detail::overload{
-      [](const std::integral auto& value) -> std::optional<std::string> {
+      [](const std::integral auto& value) -> Option<std::string> {
         return fmt::to_string(value);
       },
-      [](const std::string& value) -> std::optional<std::string> {
+      [](const std::string& value) -> Option<std::string> {
         return value;
       },
-      [](const auto&) -> std::optional<std::string> {
-        return std::nullopt;
+      [](const auto&) -> Option<std::string> {
+        return None{};
       }};
     auto result = tenzir::match(evaluated.inner, f);
     if (not result) {

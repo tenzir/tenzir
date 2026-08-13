@@ -14,6 +14,7 @@
 
 #include <optional>
 
+// NOLINTBEGIN(custom-prefer-option): std::optional compatibility helpers.
 namespace tenzir {
 
 template <typename T>
@@ -57,3 +58,4 @@ struct formatter<std::optional<T>> {
 } // namespace fmt
 
 #endif
+// NOLINTEND(custom-prefer-option)

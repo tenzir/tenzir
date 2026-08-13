@@ -12,12 +12,12 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/detail/flat_set.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
 #include <filesystem>
-#include <optional>
 
 namespace tenzir {
 
@@ -32,7 +32,7 @@ struct disk_monitor_config {
   size_t step_size = 1;
 
   /// The command to use to determine file size.
-  std::optional<std::string> scan_binary = std::nullopt;
+  Option<std::string> scan_binary = None{};
 
   /// The timespan between scans.
   std::chrono::seconds scan_interval = std::chrono::seconds{60};

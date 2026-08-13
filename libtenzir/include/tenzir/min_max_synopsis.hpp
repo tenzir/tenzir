@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
 #include "tenzir/synopsis.hpp"
 
 namespace tenzir {
@@ -40,19 +41,19 @@ public:
     }
   }
 
-  [[nodiscard]] std::optional<bool>
+  [[nodiscard]] Option<bool>
   lookup(relational_operator op, data_view rhs) const override {
     auto do_lookup
-      = [this](relational_operator op, data_view xv) -> std::optional<bool> {
+      = [this](relational_operator op, data_view xv) -> Option<bool> {
       if (auto x = try_as<view<T>>(&xv)) {
         return {lookup_impl(op, *x)};
       } else {
         return {};
       }
     };
-    auto membership = [&]() -> std::optional<bool> {
+    auto membership = [&]() -> Option<bool> {
       if (auto xs = try_as<view<list>>(&rhs)) {
-        auto outer_result = std::optional<bool>{false};
+        auto outer_result = Option<bool>{false};
         for (auto x : **xs) {
           auto result = do_lookup(relational_operator::equal, x);
           if (result and *result) {
@@ -108,7 +109,7 @@ public:
         if (min_found and max_found and min_ == max_) {
           return false;
         }
-        return std::nullopt;
+        return None{};
       }
       case relational_operator::equal:
       case relational_operator::not_equal:
@@ -144,7 +145,7 @@ public:
 
 private:
   [[nodiscard]] auto lookup_impl(relational_operator op, const T x) const
-    -> std::optional<bool> {
+    -> Option<bool> {
     // Let *min* and *max* constitute the LHS of the lookup operation and *rhs*
     // be the value to compare with on the RHS. Then, there are 5 possible
     // scenarios to differentiate for the inputs:

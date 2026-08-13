@@ -10,13 +10,13 @@
 
 #include "tenzir/concept/parseable/tenzir/ip.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/option.hpp"
 
-#include <optional>
 #include <string_view>
 
 namespace tenzir {
 
-std::optional<flow>
+Option<flow>
 make_flow(std::string_view src_addr, std::string_view dst_addr,
           uint16_t src_port, uint16_t dst_port, port_type protocol) {
   using parsers::ip;

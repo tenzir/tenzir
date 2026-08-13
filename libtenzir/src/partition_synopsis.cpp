@@ -92,8 +92,8 @@ void partition_synopsis::defer_bloom_filters() {
 }
 
 // TODO: Use a more efficient data structure for rule lookup.
-std::optional<double> get_field_fprate(const index_config& config,
-                                       const qualified_record_field& field) {
+Option<double> get_field_fprate(const index_config& config,
+                                const qualified_record_field& field) {
   for (const auto& [targets, fprate, _] : config.rules) {
     for (const auto& name : targets) {
       if (name.size()
@@ -111,7 +111,7 @@ std::optional<double> get_field_fprate(const index_config& config,
   if (match(field.type(), use_default_fprate)) {
     return config.default_fp_rate;
   }
-  return std::nullopt;
+  return None{};
 }
 
 double get_type_fprate(const index_config& config, const type& type) {

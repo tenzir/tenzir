@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -22,7 +24,6 @@
 #include <arrow/util/bitmap_ops.h>
 
 #include <algorithm>
-#include <optional>
 #include <ranges>
 #include <string_view>
 
@@ -118,8 +119,8 @@ auto eval_sort_predicate(const ast::lambda_expr& cmp, const data& lhs_value,
 auto sort_records_recursive(std::shared_ptr<arrow::Array> array)
   -> std::shared_ptr<arrow::Array>;
 
-auto sort_list(const series& input, const std::optional<table_slice>& scope,
-               bool descending, const std::optional<ast::lambda_expr>& cmp,
+auto sort_list(const series& input, const Option<table_slice>& scope,
+               bool descending, const Option<ast::lambda_expr>& cmp,
                session ctx) -> series {
   auto builder = series_builder{input.type};
   TENZIR_ASSERT(
@@ -279,7 +280,7 @@ public:
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto descending = false;
-    auto cmp = std::optional<ast::lambda_expr>{};
+    auto cmp = Option<ast::lambda_expr>{};
     TRY(argument_parser2::function(name())
           .positional("x", expr, "list|record")
           .named_optional("desc", descending, "bool")
@@ -299,7 +300,7 @@ public:
       return map_series(eval(expr), [call, descending, cmp, ctx,
                                      input = std::move(input),
                                      offset = int64_t{0}](series arg) mutable {
-        auto scope = std::optional<table_slice>{};
+        auto scope = Option<table_slice>{};
         if (input) {
           scope = subslice(*input, offset, offset + arg.length());
         }

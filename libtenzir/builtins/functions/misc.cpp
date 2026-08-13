@@ -126,7 +126,7 @@ public:
           .positional("key", expr, "string")
           .parse(inv, ctx));
     if (auto key = try_const_eval(expr, ctx)) {
-      auto value = std::optional<std::string>{};
+      auto value = Option<std::string>{};
       const auto* typed_key = try_as<std::string>(key->inner);
       if (not typed_key) {
         diagnostic::warning("expected `string`, got `{}`",
@@ -816,7 +816,7 @@ public:
     -> failure_or<function_ptr> override {
     auto subject = ast::expression{};
     auto field = ast::expression{};
-    auto fallback = std::optional<ast::expression>{};
+    auto fallback = Option<ast::expression>{};
     TRY(argument_parser2::function(name())
           .positional("x", subject, "record|list")
           .positional("field", field, "string|int|uint")

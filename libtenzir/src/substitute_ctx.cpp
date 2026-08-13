@@ -14,13 +14,13 @@ substitute_ctx::substitute_ctx(base_ctx ctx, const env_t* env)
   : ctx_{ctx}, env_{env} {
 }
 
-auto substitute_ctx::get(let_id id) const -> std::optional<ast::constant> {
+auto substitute_ctx::get(let_id id) const -> Option<ast::constant> {
   if (not env_) {
-    return std::nullopt;
+    return None{};
   }
   auto it = env_->find(id);
   if (it == env_->end()) {
-    return std::nullopt;
+    return None{};
   }
   return it->second;
 }

@@ -1,0 +1,45 @@
+---
+InheritParentConfig: true
+CustomChecks:
+  - Name: prefer-option
+    Query: |
+      match templateSpecializationTypeLoc(
+        loc(templateSpecializationType(hasDeclaration(
+          classTemplateSpecializationDecl(hasName("::std::optional"))))),
+        unless(isExpansionInSystemHeader())
+      ).bind("optional")
+    Diagnostic:
+      - BindName: optional
+        Message: prefer tenzir::Option<T> over std::optional<T>
+        Level: Warning
+  - Name: prefer-option-ctad
+    Query: |
+      match cxxTemporaryObjectExpr(
+        hasType(classTemplateSpecializationDecl(hasName("::std::optional"))),
+        unless(isExpansionInSystemHeader())
+      ).bind("optional")
+    Diagnostic:
+      - BindName: optional
+        Message: prefer tenzir::Option<T> over std::optional<T>
+        Level: Warning
+  - Name: prefer-option-factory
+    Query: |
+      match callExpr(
+        callee(functionDecl(hasName("::std::make_optional"))),
+        unless(isExpansionInSystemHeader())
+      ).bind("optional")
+    Diagnostic:
+      - BindName: optional
+        Message: prefer tenzir::Option<T> over std::optional<T>
+        Level: Warning
+  - Name: prefer-none
+    Query: |
+      match declRefExpr(
+        to(varDecl(hasName("::std::nullopt"))),
+        unless(isExpansionInSystemHeader())
+      ).bind("nullopt")
+    Diagnostic:
+      - BindName: nullopt
+        Message: prefer tenzir::None over std::nullopt
+        Level: Warning
+...

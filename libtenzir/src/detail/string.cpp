@@ -363,10 +363,10 @@ auto quoting_escaping_policy::unquote_unescape(std::string_view text) const
 
 auto quoting_escaping_policy::split_at_unquoted(std::string_view text,
                                                 char target) const
-  -> std::optional<std::pair<std::string_view, std::string_view>> {
+  -> Option<std::pair<std::string_view, std::string_view>> {
   const auto split_pos = find_not_in_quotes(text, target, 0);
   if (split_pos == text.npos) {
-    return std::nullopt;
+    return None{};
   }
   auto first = text.substr(0, split_pos);
   TENZIR_ASSERT(first.size() + 1 <= text.size());
@@ -376,10 +376,10 @@ auto quoting_escaping_policy::split_at_unquoted(std::string_view text,
 
 auto quoting_escaping_policy::split_at_unquoted(std::string_view text,
                                                 std::string_view target) const
-  -> std::optional<std::pair<std::string_view, std::string_view>> {
+  -> Option<std::pair<std::string_view, std::string_view>> {
   const auto split_pos = find_not_in_quotes(text, target, 0);
   if (split_pos == text.npos) {
-    return std::nullopt;
+    return None{};
   }
   auto first = text.substr(0, split_pos);
   TENZIR_ASSERT(first.size() + target.size() <= text.size());

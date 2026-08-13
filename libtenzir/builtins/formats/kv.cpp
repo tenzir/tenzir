@@ -182,7 +182,7 @@ struct kv_args {
 };
 
 class kv_parser;
-auto parse_loop(generator<std::optional<std::string_view>> input,
+auto parse_loop(generator<Option<std::string_view>> input,
                 operator_control_plane& ctrl, kv_parser parser)
   -> generator<table_slice>;
 
@@ -199,7 +199,7 @@ public:
 
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> std::optional<generator<table_slice>> override {
+    -> Option<generator<table_slice>> override {
     return parse_loop(to_lines(std::move(input)), ctrl, *this);
   }
 
@@ -210,7 +210,7 @@ public:
       std::string_view key;
       std::string_view value;
     };
-    auto previous = std::optional<previous_t>{};
+    auto previous = Option<previous_t>{};
     const auto commit = [this, &event, &previous]() {
       if (not previous) {
         return;
@@ -289,7 +289,7 @@ public:
   kv_args args_;
 };
 
-auto parse_loop(generator<std::optional<std::string_view>> input,
+auto parse_loop(generator<Option<std::string_view>> input,
                 operator_control_plane& ctrl, kv_parser parser)
   -> generator<table_slice> {
   auto dh = transforming_diagnostic_handler{
@@ -617,7 +617,7 @@ private:
       std::string_view key;
       std::string_view value;
     };
-    auto previous = std::optional<previous_t>{};
+    auto previous = Option<previous_t>{};
     const auto commit = [this, &event, &previous]() {
       if (not previous) {
         return;
@@ -805,12 +805,12 @@ public:
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{"kv", docs};
-    auto field_split = std::optional<located<std::string>>{
+    auto field_split = Option<located<std::string>>{
       std::in_place,
       "\\s",
       location::unknown,
     };
-    auto value_split = std::optional<located<std::string>>{
+    auto value_split = Option<located<std::string>>{
       std::in_place,
       "=",
       location::unknown,
@@ -902,12 +902,12 @@ public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
-    auto field_split = std::optional<located<std::string>>{
+    auto field_split = Option<located<std::string>>{
       std::in_place,
       "\\s",
       location::unknown,
     };
-    auto value_split = std::optional<located<std::string>>{
+    auto value_split = Option<located<std::string>>{
       std::in_place,
       "=",
       location::unknown,
@@ -1054,12 +1054,12 @@ public:
     -> failure_or<function_ptr> override {
     auto input = ast::expression{};
     auto parser = argument_parser2::function(name());
-    auto field_split = std::optional<located<std::string>>{
+    auto field_split = Option<located<std::string>>{
       std::in_place,
       "\\s",
       location::unknown,
     };
-    auto value_split = std::optional<located<std::string>>{
+    auto value_split = Option<located<std::string>>{
       std::in_place,
       "=",
       location::unknown,

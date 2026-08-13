@@ -33,7 +33,7 @@ struct file_contents final : public function_plugin {
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto path = located<std::string>{};
-    auto binary = std::optional<location>{};
+    auto binary = Option<location>{};
     TRY(argument_parser2::function(name())
           .positional("path", path)
           .named("binary", binary)

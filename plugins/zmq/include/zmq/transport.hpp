@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/chunk.hpp>
 #include <tenzir/error.hpp>
 
@@ -16,7 +18,6 @@
 
 #include <chrono>
 #include <memory>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <zmq.hpp>
@@ -66,15 +67,13 @@ public:
 
   auto set_subscription_prefix(std::string_view prefix) -> caf::expected<void>;
 
-  auto send(const chunk_ptr& chunk,
-            std::optional<std::chrono::milliseconds> timeout = {})
-    -> caf::error;
+  auto send(const chunk_ptr& chunk, Option<std::chrono::milliseconds> timeout
+                                    = {}) -> caf::error;
 
-  auto receive(std::optional<std::chrono::milliseconds> timeout = {})
+  auto receive(Option<std::chrono::milliseconds> timeout = {})
     -> caf::expected<chunk_ptr>;
 
-  auto poll_monitor(std::optional<std::chrono::milliseconds> timeout = {})
-    -> size_t;
+  auto poll_monitor(Option<std::chrono::milliseconds> timeout = {}) -> size_t;
 
   auto monitored() const -> bool;
 
@@ -94,7 +93,7 @@ private:
   auto make_error() const -> caf::error;
 
   SocketRole role_;
-  std::optional<::zmq::socket_t> socket_;
+  Option<::zmq::socket_t> socket_;
   std::unique_ptr<Monitor> monitor_;
   size_t num_peers_ = 0;
   mutable std::string last_error_;

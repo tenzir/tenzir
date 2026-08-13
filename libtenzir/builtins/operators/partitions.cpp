@@ -244,8 +244,8 @@ class plugin final : public virtual operator_plugin<partitions_operator>,
 public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto expr = std::optional<ast::expression>{};
-    auto experimental_include_ranges = std::optional<location>{};
+    auto expr = Option<ast::expression>{};
+    auto experimental_include_ranges = Option<location>{};
     TRY(argument_parser2::operator_("partitions")
           .positional("predicate", expr, "bool")
           .named("experimental_include_ranges", experimental_include_ranges)

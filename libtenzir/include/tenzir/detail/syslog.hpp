@@ -14,6 +14,7 @@
 
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/option.hpp"
 
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/numeric.hpp>
@@ -66,11 +67,11 @@ struct header {
   uint16_t facility;
   uint16_t severity;
   uint16_t version;
-  std::optional<time> ts;
-  std::optional<std::string> hostname;
-  std::optional<std::string> app_name;
-  std::optional<std::string> process_id;
-  std::optional<std::string> msg_id;
+  Option<time> ts;
+  Option<std::string> hostname;
+  Option<std::string> app_name;
+  Option<std::string> process_id;
+  Option<std::string> msg_id;
 
   friend auto inspect(auto& f, header& x) -> bool {
     return f.object(x).fields(
@@ -262,7 +263,7 @@ struct checkpoint_structured_data_element_parser
     using namespace parser_literals;
     using parsers::printable, parsers::rep, parsers::ch;
     auto sd_id = rep(printable - '=' - ' ' - ']' - '"', 1, 32);
-    auto opt_sd_id = -(sd_id >> +' '_p)->*[](std::optional<std::string> id) {
+    auto opt_sd_id = -(sd_id >> +' '_p)->*[](Option<std::string> id) {
       return id ? *id : checkpoint_default_sdid;
     };
     auto params = checkpoint_params{};
@@ -321,7 +322,7 @@ struct message_content_parser : parser_base<message_content_parser> {
 struct message {
   header hdr;
   std::vector<structured_data_element> data;
-  std::optional<message_content> msg;
+  Option<message_content> msg;
 
   friend auto inspect(auto& f, message& x) -> bool {
     return f.object(x).fields(f.field("hdr", x.hdr), f.field("data", x.data),
@@ -385,12 +386,12 @@ struct message_parser : parser_base<message_parser> {
 
 /// A legacy (RFC 3164) Syslog message.
 struct legacy_message {
-  std::optional<uint16_t> facility;
-  std::optional<uint16_t> severity;
+  Option<uint16_t> facility;
+  Option<uint16_t> severity;
   std::string timestamp;
-  std::optional<std::string> host;
-  std::optional<std::string> tag;
-  std::optional<std::string> process_id;
+  Option<std::string> host;
+  Option<std::string> tag;
+  Option<std::string> process_id;
   std::vector<structured_data_element> data;
   std::string content;
 
@@ -512,15 +513,15 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
       const auto* begin = message.begin();
       const auto* end = message.end();
       if (not tag_parser(begin, end, x.tag, x.process_id)) {
-        x.tag = std::nullopt;
-        x.process_id = std::nullopt;
+        x.tag = None{};
+        x.process_id = None{};
       }
       const auto structured_data_prefix
         = &'['_p
           >> (structured_data_parser{} | checkpoint_structured_data_parser{})
           >> -(' '_p >> message_content_parser{}) >> *' '_p >> parsers::eoi;
       auto data = std::vector<structured_data_element>{};
-      auto msg = std::optional<message_content>{};
+      auto msg = Option<message_content>{};
       if (structured_data_prefix(begin, end, data, msg)) {
         x.data = std::move(data);
         x.content = std::move(msg).value_or("");
@@ -553,7 +554,7 @@ struct cisco_short_datetime {
   uint16_t minute = 0;
   uint16_t second = 0;
   std::string subsecond;
-  std::optional<std::string> timezone;
+  Option<std::string> timezone;
 };
 
 struct cisco_mmdd_datetime {
@@ -705,7 +706,7 @@ struct cisco_short_datetime_parser : parser_base<cisco_short_datetime_parser> {
     auto minute = uint16_t{};
     auto second = uint16_t{};
     auto subsecond = std::string{};
-    auto timezone = std::optional<std::string>{};
+    auto timezone = Option<std::string>{};
     if (not word.with(is_month)(f, l, month)) {
       return false;
     }
@@ -937,7 +938,7 @@ struct cisco_legacy_message_parser : parser_base<cisco_legacy_message_parser> {
     const auto pri_parser
       = '<' >> integral_parser<uint16_t, 3>{}.with(is_prival) >> '>' >> ':';
     const auto seqnum_parser = integral_parser<uint32_t, 9, 1>{};
-    auto parsed_pri = std::optional<uint16_t>{};
+    auto parsed_pri = Option<uint16_t>{};
     auto it = f;
     {
       auto pri = uint16_t{};
@@ -1034,7 +1035,7 @@ struct cisco_legacy_message_parser : parser_base<cisco_legacy_message_parser> {
     }
     std::ignore = ignore(*parsers::space)(it, l, unused);
     auto message = std::string_view{it, l};
-    auto cisco_tag = std::optional<std::string>{};
+    auto cisco_tag = Option<std::string>{};
     if (not message.empty() and message.front() == '%') {
       auto tf = message.begin();
       auto tag = std::string{};

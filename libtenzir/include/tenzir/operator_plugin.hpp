@@ -147,7 +147,7 @@ class Empty {
 public:
   Empty() = default;
 
-  explicit(false) Empty(std::nullopt_t) {
+  explicit(false) Empty(None) {
   }
 };
 
@@ -184,21 +184,21 @@ struct Description {
   std::string docs;
   std::function<auto()->Any> make_args;
   std::vector<Positional> positional;
-  std::optional<Pipeline> pipeline;
-  std::optional<size_t> first_optional;
-  std::optional<size_t> variadic_index;
+  Option<Pipeline> pipeline;
+  Option<size_t> first_optional;
+  Option<size_t> variadic_index;
   std::vector<Named> named;
-  std::optional<Validator> validator;
-  std::optional<Optimizer> optimizer;
-  std::optional<Setter<ir::optimize_filter>> set_filter;
-  std::optional<Setter<location>> set_operator_location;
-  std::optional<Setter<event_order>> set_order;
+  Option<Validator> validator;
+  Option<Optimizer> optimizer;
+  Option<Setter<ir::optimize_filter>> set_filter;
+  Option<Setter<location>> set_operator_location;
+  Option<Setter<event_order>> set_order;
   // FIXME: Document.
-  std::optional<Spawner> spawner;
+  Option<Spawner> spawner;
   std::vector<AnySpawn> spawns;
   bool parallelizable = false;
-  std::optional<std::function<auto(const Any&)->bool>> parallelizable_when;
-  std::optional<PartitionKeys> partition_keys;
+  Option<std::function<auto(const Any&)->bool>> parallelizable_when;
+  Option<PartitionKeys> partition_keys;
 };
 
 class OperatorPlugin : public virtual operator_compiler_plugin {
@@ -248,21 +248,21 @@ private:
 template <class Args, class T>
 auto make_setter(T Args::* ptr) -> auto {
   using Value = decltype(std::invoke([] {
-    if constexpr (detail::is_specialization_of<std::optional, T>::value
+    if constexpr (detail::is_specialization_of<Option, T>::value
                   or detail::is_specialization_of<Option, T>::value) {
       return tag_v<typename T::value_type>;
     } else {
       return tag_v<T>;
     }
   }))::type;
-  if constexpr (std::same_as<T, std::optional<location>>
+  if constexpr (std::same_as<T, Option<location>>
                 or std::same_as<T, Option<location>>) {
     return Setter<located<bool>>{[ptr](Any& args, located<bool> value) {
       if (value.inner) {
         (&args.as<Args>())->*ptr = value.source;
       } else {
-        if constexpr (std::same_as<T, std::optional<location>>) {
-          (&args.as<Args>())->*ptr = std::nullopt;
+        if constexpr (std::same_as<T, Option<location>>) {
+          (&args.as<Args>())->*ptr = None{};
         } else {
           (&args.as<Args>())->*ptr = None{};
         }
@@ -353,9 +353,8 @@ struct PipelineArg {
 class DescribeCtx {
 public:
   DescribeCtx(std::span<const Arg> args, std::span<const NamedArg> named_args,
-              std::optional<const PipelineArg> pipeline,
-              const Description& desc, location operator_location,
-              diagnostic_handler& dh)
+              Option<const PipelineArg> pipeline, const Description& desc,
+              location operator_location, diagnostic_handler& dh)
     : args_{args},
       named_args_{named_args},
       pipeline_{std::move(pipeline)},
@@ -364,13 +363,13 @@ public:
       dh_{&dh} {
   }
 
-  /// Returns the parsed argument value or `std::nullopt` if the caller omitted
+  /// Returns the parsed argument value or `None{}` if the caller omitted
   /// the argument. This also applies to omitted `named_optional(...)`
   /// arguments, even when the destination member in `Args` has a default
   /// initializer. Validation callbacks must apply args-struct defaults
   /// explicitly when they need an effective value.
   template <class Args, class T>
-  auto get(Argument<Args, T> arg) -> std::optional<T> {
+  auto get(Argument<Args, T> arg) -> Option<T> {
     const Arg* value = nullptr;
     switch (arg.type()) {
       case ArgumentType::named: {
@@ -381,59 +380,59 @@ public:
           }
         }
         if (not value) {
-          return std::nullopt;
+          return None{};
         }
         break;
       }
       case ArgumentType::positional: {
         if (arg.index() >= args_.size()) {
-          return std::nullopt;
+          return None{};
         }
         value = &args_[arg.index()];
         break;
       }
       case ArgumentType::pipeline: {
         if (not pipeline_) {
-          return std::nullopt;
+          return None{};
         }
         if constexpr (std::same_as<T, located<ir::pipeline>>) {
           return pipeline_->pipeline;
         } else {
-          return std::nullopt;
+          return None{};
         }
       }
     }
     // Check if still incomplete
     if (is<Incomplete>(*value)) {
-      return std::nullopt;
+      return None{};
     }
     // Extract the value
     return match(
       *value,
-      [](const Incomplete&) -> std::optional<T> {
+      [](const Incomplete&) -> Option<T> {
         TENZIR_UNREACHABLE();
       },
-      []<class U>(const located<U>& v) -> std::optional<T> {
+      []<class U>(const located<U>& v) -> Option<T> {
         if constexpr (std::same_as<T, U>) {
           return v.inner;
         } else if constexpr (std::same_as<T, located<U>>) {
           return v;
         } else {
-          return std::nullopt;
+          return None{};
         }
       },
-      []<class U>(const U& v) -> std::optional<T> {
+      []<class U>(const U& v) -> Option<T> {
         if constexpr (std::same_as<T, U>) {
           return v;
         } else {
-          return std::nullopt;
+          return None{};
         }
       });
   }
 
   template <class Args, class T>
-  auto get_all(Argument<Args, T> arg) -> std::vector<std::optional<T>> {
-    auto result = std::vector<std::optional<T>>{};
+  auto get_all(Argument<Args, T> arg) -> std::vector<Option<T>> {
+    auto result = std::vector<Option<T>>{};
     if (arg.type() != ArgumentType::positional or not desc_->variadic_index
         or arg.index() != *desc_->variadic_index) {
       result.push_back(get(arg));
@@ -446,7 +445,7 @@ public:
   }
 
   template <class Args, class T>
-  auto get_location(Argument<Args, T> arg) -> std::optional<location> {
+  auto get_location(Argument<Args, T> arg) -> Option<location> {
     const Arg* value = nullptr;
     switch (arg.type()) {
       case ArgumentType::named: {
@@ -457,33 +456,33 @@ public:
           }
         }
         if (not value) {
-          return std::nullopt;
+          return None{};
         }
         break;
       }
       case ArgumentType::positional: {
         if (arg.index() >= args_.size()) {
-          return std::nullopt;
+          return None{};
         }
         value = &args_[arg.index()];
         break;
       }
       case ArgumentType::pipeline: {
         if (not pipeline_) {
-          return std::nullopt;
+          return None{};
         }
         return pipeline_->pipeline.source;
       }
     }
     return match(
       *value,
-      [](const Incomplete& v) -> std::optional<location> {
+      [](const Incomplete& v) -> Option<location> {
         return v.expr.get_location();
       },
-      []<class U>(const located<U>& v) -> std::optional<location> {
+      []<class U>(const located<U>& v) -> Option<location> {
         return v.source;
       },
-      [](const auto& v) -> std::optional<location> {
+      [](const auto& v) -> Option<location> {
         return v.get_location();
       });
   }
@@ -532,50 +531,50 @@ public:
 
 private:
   template <class T>
-  static auto get_impl(const Arg& value) -> std::optional<T> {
+  static auto get_impl(const Arg& value) -> Option<T> {
     if (is<Incomplete>(value)) {
-      return std::nullopt;
+      return None{};
     }
     return match(
       value,
-      [](const Incomplete&) -> std::optional<T> {
+      [](const Incomplete&) -> Option<T> {
         TENZIR_UNREACHABLE();
       },
-      []<class U>(const located<U>& v) -> std::optional<T> {
+      []<class U>(const located<U>& v) -> Option<T> {
         if constexpr (std::same_as<T, U>) {
           return v.inner;
         } else if constexpr (std::same_as<T, located<U>>) {
           return v;
         } else {
-          return std::nullopt;
+          return None{};
         }
       },
-      []<class U>(const U& v) -> std::optional<T> {
+      []<class U>(const U& v) -> Option<T> {
         if constexpr (std::same_as<T, U>) {
           return v;
         } else {
-          return std::nullopt;
+          return None{};
         }
       });
   }
 
-  static auto get_location_impl(const Arg& value) -> std::optional<location> {
+  static auto get_location_impl(const Arg& value) -> Option<location> {
     return match(
       value,
-      [](const Incomplete& v) -> std::optional<location> {
+      [](const Incomplete& v) -> Option<location> {
         return v.expr.get_location();
       },
-      []<class U>(const located<U>& v) -> std::optional<location> {
+      []<class U>(const located<U>& v) -> Option<location> {
         return v.source;
       },
-      [](const auto& v) -> std::optional<location> {
+      [](const auto& v) -> Option<location> {
         return v.get_location();
       });
   }
 
   std::span<const Arg> args_;
   std::span<const NamedArg> named_args_;
-  std::optional<const PipelineArg> pipeline_;
+  Option<const PipelineArg> pipeline_;
   const Description* desc_;
   location operator_location_;
   diagnostic_handler* dh_;

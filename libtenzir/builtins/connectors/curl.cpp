@@ -375,8 +375,8 @@ private:
 auto parse_http_args(const std::string& name,
                      const operator_factory_invocation& inv, session ctx)
   -> failure_or<connector_args> {
-  auto form = std::optional<location>{};
-  auto method = std::optional<std::string>{};
+  auto form = Option<location>{};
+  auto method = Option<std::string>{};
   auto args = connector_args{};
   args.transfer_opts.default_protocol = "https";
   auto parser = argument_parser2::operator_(name);

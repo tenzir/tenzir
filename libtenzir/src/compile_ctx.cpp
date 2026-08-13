@@ -29,9 +29,9 @@ auto compile_ctx::open_scope() -> scope {
   return scope{std::move(new_env), this, original_env, root_};
 }
 
-auto compile_ctx::get(std::string_view name) const -> std::optional<let_id> {
+auto compile_ctx::get(std::string_view name) const -> Option<let_id> {
   if (not env_) {
-    return std::nullopt;
+    return None{};
   }
   auto it = env_->find(std::string{name});
   if (it == env_->end()) {

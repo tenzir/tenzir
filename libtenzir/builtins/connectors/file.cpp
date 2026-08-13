@@ -151,9 +151,9 @@ private:
 
 struct loader_args {
   located<std::string> path;
-  std::optional<located<std::chrono::milliseconds>> timeout;
-  std::optional<location> follow;
-  std::optional<location> mmap;
+  Option<located<std::chrono::milliseconds>> timeout;
+  Option<location> follow;
+  Option<location> mmap;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, loader_args& x) -> bool {
@@ -166,9 +166,9 @@ struct loader_args {
 
 struct saver_args {
   located<std::string> path;
-  std::optional<location> append;
-  std::optional<location> real_time;
-  std::optional<location> uds;
+  Option<location> append;
+  Option<location> real_time;
+  Option<location> uds;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, saver_args& x) -> bool {
@@ -229,7 +229,7 @@ public:
   }
 
   auto instantiate(operator_control_plane& ctrl) const
-    -> std::optional<generator<chunk_ptr>> override {
+    -> Option<generator<chunk_ptr>> override {
     auto make = [](std::chrono::milliseconds timeout, fd_wrapper fd,
                    bool following) -> generator<chunk_ptr> {
       co_yield {};
@@ -354,7 +354,7 @@ public:
     return "file";
   }
 
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
+  auto instantiate(operator_control_plane& ctrl, Option<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     // This should not be a `shared_ptr`, but we have to capture `stream` in
     // the returned `std::function`. Also, we capture it in a guard that calls
@@ -570,7 +570,7 @@ public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = loader_args{};
-    auto timeout = std::optional<located<duration>>{};
+    auto timeout = Option<located<duration>>{};
     TRY(argument_parser2::operator_("load_file")
           .positional("path", args.path)
           .named("follow", args.follow)
@@ -609,7 +609,7 @@ public:
   }
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto timeout = std::optional<located<duration>>{};
+    auto timeout = Option<located<duration>>{};
     TRY(argument_parser2::operator_(name())
           .named("timeout", timeout)
           .parse(inv, ctx));

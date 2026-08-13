@@ -12,10 +12,10 @@
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/hash/uniquely_represented.hpp"
 #include "tenzir/ip.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/port.hpp"
 
 #include <functional>
-#include <optional>
 #include <string_view>
 
 namespace tenzir {
@@ -69,7 +69,7 @@ flow make_flow(ip src_addr, ip dst_addr, uint16_t src_port, uint16_t dst_port) {
 /// @param protocol The transport-layer protocol in use.
 /// @return An instance of a flow.
 /// @relates flow
-std::optional<flow>
+Option<flow>
 make_flow(std::string_view src_addr, std::string_view dst_addr,
           uint16_t src_port, uint16_t dst_port, port_type protocol);
 

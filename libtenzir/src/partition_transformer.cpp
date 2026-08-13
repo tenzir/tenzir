@@ -21,6 +21,7 @@
 #include "tenzir/flatbuffer.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/passive_partition.hpp"
 #include "tenzir/pipeline.hpp"
@@ -43,7 +44,6 @@
 #include <atomic>
 #include <filesystem>
 #include <memory>
-#include <optional>
 #include <string>
 
 namespace tenzir {
@@ -56,10 +56,10 @@ struct memory_budget {
   std::string source = {};
 };
 
-auto make_memory_budget() -> std::optional<memory_budget> {
+auto make_memory_budget() -> Option<memory_budget> {
   auto available = detail::available_memory();
   if (not available) {
-    return std::nullopt;
+    return None{};
   }
   return memory_budget{
     .initial_available = available->bytes,
@@ -69,10 +69,10 @@ auto make_memory_budget() -> std::optional<memory_budget> {
 }
 
 auto live_budget_used(const memory_budget& budget)
-  -> std::optional<std::pair<uint64_t, uint64_t>> {
+  -> Option<std::pair<uint64_t, uint64_t>> {
   auto current = detail::available_memory();
   if (not current) {
-    return std::nullopt;
+    return None{};
   }
   const auto used = budget.initial_available > current->bytes
                       ? budget.initial_available - current->bytes
@@ -425,7 +425,7 @@ private:
   std::string partition_path_template_;
   std::filesystem::path archive_dir_;
   filesystem_actor filesystem_;
-  std::optional<memory_budget> memory_budget_;
+  Option<memory_budget> memory_budget_;
   std::shared_ptr<partition_source_state> state_;
 };
 
@@ -456,13 +456,13 @@ auto compile_table_slice_transform(ast::pipeline ast, diagnostic_handler& dh)
 
 } // namespace
 
-auto store_error_partition(const caf::error& err) -> std::optional<uuid> {
+auto store_error_partition(const caf::error& err) -> Option<uuid> {
   if (err != ec::format_error) {
-    return std::nullopt;
+    return None{};
   }
   const auto& ctx = err.context();
   if (ctx.size() < 2 or not ctx.match_element<uuid>(1)) {
-    return std::nullopt;
+    return None{};
   }
   return ctx.get_as<uuid>(1);
 }

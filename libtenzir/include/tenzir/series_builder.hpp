@@ -21,7 +21,6 @@
 #include <chrono>
 #include <iterator>
 #include <memory>
-#include <optional>
 #include <string_view>
 #include <variant>
 #include <vector>
@@ -91,7 +90,7 @@ public:
   using clock = std::chrono::steady_clock;
   using duration = clock::duration;
   /// Initializes the builder, optionally with a given type (see above).
-  series_builder(std::optional<std::reference_wrapper<const tenzir::type>> ty);
+  series_builder(Option<std::reference_wrapper<const tenzir::type>> ty);
   series_builder(const tenzir::type* ty = nullptr);
   series_builder(const tenzir::type& ty) : series_builder(&ty) {
   }

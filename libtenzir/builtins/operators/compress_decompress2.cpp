@@ -428,8 +428,8 @@ public:
     }};
     d.operator_location(&CompressArgs::operator_location);
     auto level = d.named("level", &CompressArgs::level);
-    auto format = std::optional<Argument<CompressArgs, std::string>>{};
-    auto window_bits = std::optional<Argument<CompressArgs, uint64_t>>{};
+    auto format = Option<Argument<CompressArgs, std::string>>{};
+    auto window_bits = Option<Argument<CompressArgs, uint64_t>>{};
     if (method_name_ == "gzip") {
       format = d.named("format", &CompressArgs::gzip_format);
     }
@@ -472,8 +472,8 @@ public:
       auto args = CompressArgs{
         .codec = codec,
         .level = ctx.get(level),
-        .gzip_format = format ? ctx.get(*format) : std::nullopt,
-        .window_bits = window_bits ? ctx.get(*window_bits) : std::nullopt,
+        .gzip_format = format ? ctx.get(*format) : None{},
+        .window_bits = window_bits ? ctx.get(*window_bits) : None{},
       };
       auto result = codec_from_compress_args(args);
       if (not result.ok()) {
@@ -514,7 +514,7 @@ public:
       .gzip_format = {},
     }};
     d.operator_location(&DecompressArgs::operator_location);
-    auto format = std::optional<Argument<DecompressArgs, std::string>>{};
+    auto format = Option<Argument<DecompressArgs, std::string>>{};
     if (method_name_ == "gzip") {
       format = d.named("format", &DecompressArgs::gzip_format);
     }
@@ -532,7 +532,7 @@ public:
       }
       auto args = DecompressArgs{
         .codec = codec,
-        .gzip_format = format ? ctx.get(*format) : std::nullopt,
+        .gzip_format = format ? ctx.get(*format) : None{},
       };
       auto result = codec_from_decompress_args(args);
       if (not result.ok()) {

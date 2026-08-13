@@ -15,6 +15,7 @@
 #include "tenzir/detail/function.hpp"
 #include "tenzir/detail/legacy_deserialize.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/option.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/intrusive_ptr.hpp>
@@ -31,7 +32,7 @@
 namespace tenzir {
 
 struct chunk_metadata {
-  std::optional<std::string> content_type = {};
+  Option<std::string> content_type = None{};
 
   friend auto inspect(auto& f, chunk_metadata& x) -> bool {
     return f.object(x)

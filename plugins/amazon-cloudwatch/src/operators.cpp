@@ -214,11 +214,9 @@ auto make_cloudwatch_http_client(Args const& args, OpCtx& ctx, location primary,
       .primary(primary)
       .throw_();
   }
-  auto aws_iam = args.aws_iam ? std::optional<located<record>>{*args.aws_iam}
-                              : std::nullopt;
-  auto aws_region = args.aws_region
-                      ? std::optional<located<std::string>>{*args.aws_region}
-                      : std::nullopt;
+  auto aws_iam = args.aws_iam ? Option<located<record>>{*args.aws_iam} : None{};
+  auto aws_region
+    = args.aws_region ? Option<located<std::string>>{*args.aws_region} : None{};
   auto auth = Option<ResolvedAwsIamAuth>{};
   if (not token) {
     auth = co_await resolve_aws_iam_auth(std::move(aws_iam),
@@ -391,7 +389,7 @@ auto live_tail_page(
       .log_group = amazon::from_aws_string(event.GetLogGroupIdentifier()),
       .log_stream = amazon::from_aws_string(event.GetLogStreamName()),
       .message = amazon::from_aws_string(event.GetMessage()),
-      .event_id = std::nullopt,
+      .event_id = None{},
     });
   }
   return page;
@@ -666,7 +664,7 @@ auto parse_get_log_events_response(std::string const& body,
       .log_group = log_group,
       .log_stream = log_stream,
       .message = string_from_json(event, "message"),
-      .event_id = std::nullopt,
+      .event_id = None{},
     });
   }
   return page;

@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/multi_series_builder_argument_parser.hpp"
+#include "tenzir/option.hpp"
 
 #include <tenzir/async/pusher.hpp>
 #include <tenzir/detail/overload.hpp>
@@ -22,7 +23,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -356,7 +356,7 @@ private:
   SeriesPusher pusher_;
   size_t buffer_offset_ = 0;
   std::string buffer_;
-  std::optional<multi_series_builder> builder_;
+  Option<multi_series_builder> builder_;
   bool done_ = false;
 };
 

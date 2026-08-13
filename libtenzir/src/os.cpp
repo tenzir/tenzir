@@ -173,8 +173,7 @@ auto linux_os::current_pid() -> int {
   return getpid();
 }
 
-auto linux_os::fetch_processes(std::optional<int> pid_filter)
-  -> std::vector<process> {
+auto linux_os::fetch_processes(Option<int> pid_filter) -> std::vector<process> {
   auto result = std::vector<process>{};
   try {
     auto tasks = state_->procfs.get_processes();
@@ -348,7 +347,7 @@ auto darwin_os::current_pid() -> int {
   return getpid();
 }
 
-auto darwin_os::fetch_processes(std::optional<int> pid_filter)
+auto darwin_os::fetch_processes(Option<int> pid_filter)
   -> std::vector<process> {
   auto num_procs = proc_listpids(PROC_ALL_PIDS, 0, nullptr, 0);
   std::vector<pid_t> pids;

@@ -18,6 +18,7 @@
 #include "tenzir/legacy_type.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/module.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/type.hpp"
 
 #include <string_view>
@@ -31,7 +32,7 @@ struct symbol_resolver {
                   bool lazy = false)
     : global{global},
       local{local},
-      result_module{lazy ? std::optional<module>{} : module{}} {
+      result_module{lazy ? Option<module>{} : module{}} {
   }
 
   caf::expected<legacy_type> lookup(const std::string& key) {
@@ -95,7 +96,7 @@ struct symbol_resolver {
     }
     x.value_type = *y;
     if (is<legacy_record_type>(x.value_type) and not has_skip_attribute(x)) {
-      x.update_attributes({{"skip", std::nullopt}});
+      x.update_attributes({{"skip", None{}}});
     }
     return x;
   }
@@ -241,7 +242,7 @@ struct symbol_resolver {
   symbol_map resolved;
 
 private:
-  std::optional<module> result_module;
+  Option<module> result_module;
 };
 
 struct symbol_map_parser : parser_base<symbol_map_parser> {

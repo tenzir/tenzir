@@ -60,7 +60,7 @@ namespace {
 
 /// Creates an STS client configuration with proper endpoint and proxy settings.
 /// Caches environment variable lookups for efficiency.
-auto make_sts_client_config(const std::optional<std::string>& region)
+auto make_sts_client_config(const Option<std::string>& region)
   -> Aws::Client::ClientConfiguration {
   // Cache environment variables to avoid repeated lookups.
   static const auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL");
@@ -134,7 +134,7 @@ public:
   web_identity_credentials_provider(resolved_web_identity web_identity,
                                     std::string role_arn,
                                     std::string session_name,
-                                    std::optional<std::string> region,
+                                    Option<std::string> region,
                                     std::chrono::seconds refresh_buffer
                                     = std::chrono::minutes{5})
     : web_identity_{std::move(web_identity)},
@@ -240,7 +240,7 @@ private:
   resolved_web_identity web_identity_;
   std::string role_arn_;
   std::string session_name_;
-  std::optional<std::string> region_;
+  Option<std::string> region_;
   std::chrono::seconds refresh_buffer_;
 
   // AWS SDK credential callbacks are synchronous, so a blocking mutex is fine.
@@ -264,7 +264,7 @@ auto assume_role_with_credentials(const resolved_aws_credentials& base_creds,
                                   const std::string& role_arn,
                                   const std::string& session_name,
                                   const std::string& external_id,
-                                  const std::optional<std::string>& region)
+                                  const Option<std::string>& region)
   -> caf::expected<sts_credentials> {
   // Create STS client configuration with cached endpoint settings.
   auto config = make_sts_client_config(region);
@@ -475,9 +475,8 @@ auto fetch_web_identity_token(const resolved_web_identity& web_identity)
   return diagnostic::error("no web identity token source configured").to_error();
 }
 
-auto make_aws_credentials_provider(
-  const std::optional<resolved_aws_credentials>& creds,
-  const std::optional<std::string>& region)
+auto make_aws_credentials_provider(const Option<resolved_aws_credentials>& creds,
+                                   const Option<std::string>& region)
   -> caf::expected<std::shared_ptr<Aws::Auth::AWSCredentialsProvider>> {
   if (not creds) {
     return make_default_aws_credentials_provider_chain();

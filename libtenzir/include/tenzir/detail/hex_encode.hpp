@@ -8,7 +8,8 @@
 
 #pragma once
 
-#include <optional>
+#include "tenzir/option.hpp"
+
 #include <string>
 #include <string_view>
 
@@ -16,6 +17,6 @@ namespace tenzir::detail::hex {
 
 auto encode(const std::string_view input) -> std::string;
 
-auto decode(const std::string_view input) -> std::optional<std::string>;
+auto decode(const std::string_view input) -> Option<std::string>;
 
 } // namespace tenzir::detail::hex

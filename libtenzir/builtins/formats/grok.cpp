@@ -124,7 +124,7 @@ struct pattern {
   std::string raw_pattern;
   location loc;
   // Resolved regex
-  std::optional<boost::regex> resolved_pattern{std::nullopt};
+  Option<boost::regex> resolved_pattern{None{}};
   // List of all the named captures in `resolved_pattern`
   std::vector<std::pair<std::string, capture_type>> named_captures{};
 };
@@ -443,7 +443,7 @@ auto& get_builtin_pattern_store(diagnostic_handler& dh) {
 }
 
 class grok_parser final : public plugin_parser {
-  friend auto parse_loop(generator<std::optional<std::string_view>> input,
+  friend auto parse_loop(generator<Option<std::string_view>> input,
                          diagnostic_handler& dh, grok_parser parser)
     -> generator<table_slice>;
 
@@ -451,7 +451,7 @@ public:
   grok_parser() = default;
 
   using pattern_definitions_type
-    = std::optional<std::variant<located<std::string>, located<record>>>;
+    = Option<std::variant<located<std::string>, located<record>>>;
 
   grok_parser(pattern_definitions_type pattern_definitions,
               located<std::string> pattern, bool indexed_captures,
@@ -481,7 +481,7 @@ public:
 
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> std::optional<generator<table_slice>> override {
+    -> Option<generator<table_slice>> override {
     return parse_loop(to_lines(std::move(input)), ctrl.diagnostics(), *this);
   }
 
@@ -642,7 +642,7 @@ private:
   multi_series_builder::options opts_;
 };
 
-auto parse_loop(generator<std::optional<std::string_view>> input,
+auto parse_loop(generator<Option<std::string_view>> input,
                 diagnostic_handler& dh, grok_parser parser)
   -> generator<table_slice> {
   auto tdh = transforming_diagnostic_handler{
@@ -676,7 +676,7 @@ public:
     -> std::unique_ptr<plugin_parser> override {
     auto parser
       = argument_parser{"grok", "https://tenzir.com/docs/operators/grok"};
-    auto pattern_definitions = std::optional<located<std::string>>{};
+    auto pattern_definitions = Option<located<std::string>>{};
     auto raw_pattern = located<std::string>{};
     auto indexed_captures = false;
     auto include_unnamed = false;
@@ -702,7 +702,7 @@ public:
   }
 };
 
-auto extract_pattern_definitions(std::optional<located<data>> expr,
+auto extract_pattern_definitions(Option<located<data>> expr,
                                  diagnostic_handler& dh)
   -> failure_or<grok_parser::pattern_definitions_type> {
   if (not expr) {
@@ -728,18 +728,17 @@ auto extract_pattern_definitions(std::optional<located<data>> expr,
     });
 }
 
-auto extract_pattern_definitions(std::optional<ast::expression> expr,
-                                 session ctx)
+auto extract_pattern_definitions(Option<ast::expression> expr, session ctx)
   -> failure_or<grok_parser::pattern_definitions_type> {
   if (not expr) {
     return grok_parser::pattern_definitions_type{};
   }
   TRY(auto d, const_eval(*expr, ctx));
-  return extract_pattern_definitions(std::optional{std::move(d)}, ctx);
+  return extract_pattern_definitions(Option{std::move(d)}, ctx);
 }
 
 auto make_grok_parser(located<std::string> pattern,
-                      std::optional<located<data>> pattern_definitions,
+                      Option<located<data>> pattern_definitions,
                       bool indexed_captures, bool include_unnamed,
                       multi_series_builder::options opts,
                       diagnostic_handler& dh) -> failure_or<grok_parser> {
@@ -771,13 +770,11 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     auto noop_dh = null_diagnostic_handler{};
-    auto parser
-      = make_grok_parser(args_.pattern,
-                         args_.pattern_definitions
-                           ? std::optional{*args_.pattern_definitions}
-                           : std::nullopt,
-                         args_.indexed_captures, args_.include_unnamed,
-                         args_.msb_options, noop_dh);
+    auto parser = make_grok_parser(
+      args_.pattern,
+      args_.pattern_definitions ? Option{*args_.pattern_definitions} : None{},
+      args_.indexed_captures, args_.include_unnamed, args_.msb_options,
+      noop_dh);
     if (not parser) {
       co_return;
     }
@@ -878,9 +875,9 @@ private:
   }
 
   ReadGrokArgs args_;
-  std::optional<grok_parser> parser_;
-  std::optional<transforming_diagnostic_handler> dh_;
-  std::optional<multi_series_builder> builder_;
+  Option<grok_parser> parser_;
+  Option<transforming_diagnostic_handler> dh_;
+  Option<multi_series_builder> builder_;
   std::string buffer_;
   bool ended_on_carriage_return_ = false;
   SeriesPusher pusher_;
@@ -929,7 +926,7 @@ public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
-    auto pattern_definitions_expression = std::optional<ast::expression>{};
+    auto pattern_definitions_expression = Option<ast::expression>{};
     auto raw_pattern = located<std::string>{};
     auto indexed_captures = false;
     auto include_unnamed = false;
@@ -975,7 +972,7 @@ public:
     auto pattern = located<std::string>{};
     auto indexed_captures = false;
     auto include_unnamed = false;
-    auto pattern_definitions_expression = std::optional<ast::expression>{};
+    auto pattern_definitions_expression = Option<ast::expression>{};
 
     auto parser = argument_parser2::function("parse_grok");
     parser.positional("input", input, "string");

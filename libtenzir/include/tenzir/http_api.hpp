@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/data.hpp>
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/detail/stable_map.hpp>
@@ -85,7 +87,7 @@ struct rest_endpoint {
   /// Expected parameters, if any.
   // Note that the node will currently only forward basic types and
   // lists of basic types as parameters.
-  std::optional<tenzir::record_type> params;
+  Option<tenzir::record_type> params;
 
   /// Version for that endpoint.
   api_version version;
@@ -97,8 +99,7 @@ struct rest_endpoint {
   friend auto inspect(Inspector& f, rest_endpoint& e) {
     auto params = e.params ? type{*e.params} : type{};
     auto cb = [&] {
-      e.params
-        = params ? as<record_type>(params) : std::optional<record_type>{};
+      e.params = params ? as<record_type>(params) : Option<record_type>{};
       return true;
     };
     return f.object(e)

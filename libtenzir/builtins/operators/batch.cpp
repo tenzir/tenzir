@@ -261,8 +261,8 @@ class plugin final : public virtual operator_plugin<batch_operator>,
 public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto limit = std::optional<located<uint64_t>>{};
-    auto timeout = std::optional<located<duration>>{};
+    auto limit = Option<located<uint64_t>>{};
+    auto timeout = Option<located<duration>>{};
     argument_parser2::operator_("batch")
       .positional("limit", limit)
       .named("timeout", timeout)

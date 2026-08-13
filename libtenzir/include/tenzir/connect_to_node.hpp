@@ -14,6 +14,7 @@
 #include "tenzir/connect_request.hpp"
 #include "tenzir/connector.hpp"
 #include "tenzir/endpoint.hpp"
+#include "tenzir/option.hpp"
 
 #include <caf/event_based_actor.hpp>
 
@@ -27,11 +28,10 @@ auto node_connection_timeout(const caf::settings& options) -> caf::timespan;
 
 auto get_node_endpoint(const caf::settings& opts) -> caf::expected<Endpoint>;
 
-auto get_retry_delay(const caf::settings& settings)
-  -> std::optional<caf::timespan>;
+auto get_retry_delay(const caf::settings& settings) -> Option<caf::timespan>;
 
 auto get_deadline(caf::timespan timeout)
-  -> std::optional<std::chrono::steady_clock::time_point>;
+  -> Option<std::chrono::steady_clock::time_point>;
 
 [[nodiscard]] auto
 check_version(const record& remote_version, const record& cfg) -> bool;
@@ -41,7 +41,7 @@ check_version(const record& remote_version, const record& cfg) -> bool;
 /// Connects to a remote Tenzir server.
 auto connect_to_node(caf::scoped_actor& self, Endpoint endpoint,
                      caf::timespan timeout,
-                     std::optional<caf::timespan> retry_delay = std::nullopt,
+                     Option<caf::timespan> retry_delay = None{},
                      bool internal_connection = false)
   -> caf::expected<node_actor>;
 

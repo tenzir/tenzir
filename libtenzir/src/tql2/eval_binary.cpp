@@ -58,7 +58,7 @@ namespace {
 }
 
 [[maybe_unused]] constexpr auto result_if_both_null(ast::binary_op op)
-  -> std::optional<bool> {
+  -> Option<bool> {
   using enum ast::binary_op;
   switch (op) {
     case eq:
@@ -78,7 +78,7 @@ namespace {
     case in:
     case if_:
     case else_:
-      return std::nullopt;
+      return None{};
   }
   TENZIR_UNREACHABLE();
 }
@@ -242,7 +242,7 @@ struct BinOpKernel<ast::binary_op::add, duration_type, duration_type> {
   static auto evaluate(duration l, duration r)
     -> std::variant<result, const char*> {
     if (auto check = checked_add(l.count(), r.count())) {
-      return duration{check.value()};
+      return duration{*check};
     }
     return "duration addition overflow";
   }
@@ -255,7 +255,7 @@ struct BinOpKernel<ast::binary_op::sub, duration_type, duration_type> {
   static auto evaluate(duration l, duration r)
     -> std::variant<result, const char*> {
     if (auto check = checked_sub(l.count(), r.count())) {
-      return duration{check.value()};
+      return duration{*check};
     }
     return "duration subtraction overflow";
   }
@@ -281,8 +281,8 @@ struct BinOpKernel<ast::binary_op::mul, duration_type, N> {
 
   static auto evaluate(duration l, type_to_data_t<N> r)
     -> std::variant<result, const char*> {
-    if (auto check = checked_mul(l.count(), r); check.has_value()) {
-      return duration{check.value()};
+    if (auto check = checked_mul(l.count(), r)) {
+      return duration{*check};
     }
     return "duration multiplication overflow";
   }
@@ -329,7 +329,7 @@ struct BinOpKernel<ast::binary_op::sub, time_type, time_type> {
   static auto evaluate(time l, time r) -> std::variant<result, const char*> {
     if (auto check = checked_sub(l.time_since_epoch().count(),
                                  r.time_since_epoch().count())) {
-      return duration{check.value()};
+      return duration{*check};
     }
     return "time subtraction overflow";
   }

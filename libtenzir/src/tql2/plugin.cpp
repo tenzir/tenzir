@@ -19,11 +19,11 @@ auto function_use::evaluator::length() const -> int64_t {
   return static_cast<tenzir::evaluator*>(self_)->length();
 }
 
-auto function_use::evaluator::get_input() const -> std::optional<table_slice> {
+auto function_use::evaluator::get_input() const -> Option<table_slice> {
   auto* evaluator = static_cast<tenzir::evaluator*>(self_);
   const auto* input = evaluator->get_input();
   if (not input) {
-    return std::nullopt;
+    return None{};
   }
   return *input;
 }

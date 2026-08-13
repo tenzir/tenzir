@@ -8,27 +8,25 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
 #include "tenzir/synopsis.hpp"
 #include "tenzir/test/test.hpp"
 
 #include <fmt/format.h>
 
-#include <optional>
-
 namespace tenzir::test {
 
 namespace nft {
 
-inline constexpr auto N = std::nullopt;
-inline const auto T = std::optional<bool>{true};
-inline const auto F = std::optional<bool>{false};
+inline constexpr auto N = None{};
+inline const auto T = Option<bool>{true};
+inline const auto F = Option<bool>{false};
 } // namespace nft
 
 struct verifier {
   synopsis* syn;
-  inline void
-  operator()(data_view rhs, std::array<std::optional<bool>, 10> ref) {
-    auto to_string = [](std::optional<bool> x) -> std::string {
+  inline void operator()(data_view rhs, std::array<Option<bool>, 10> ref) {
+    auto to_string = [](Option<bool> x) -> std::string {
       return x ? *x ? "T" : "F" : "N";
     };
     MESSAGE("{} in syn: {}", materialize(rhs), to_string(ref[0]));

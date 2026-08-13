@@ -26,7 +26,7 @@ public:
   assert_throughput_operator(located<uint64_t> min_events,
                              located<duration> within,
                              Option<located<uint64_t>> max_events,
-                             std::optional<located<uint64_t>> retries)
+                             Option<located<uint64_t>> retries)
     : min_events_{min_events},
       within_{within},
       max_events_{max_events},
@@ -100,8 +100,8 @@ public:
 private:
   located<uint64_t> min_events_ = {};
   located<duration> within_ = {};
-  Option<located<uint64_t>> max_events_ = {};
-  std::optional<located<uint64_t>> retries_ = {};
+  Option<located<uint64_t>> max_events_ = None{};
+  Option<located<uint64_t>> retries_ = None{};
 };
 
 struct AssertThroughputArgs final {
@@ -191,7 +191,7 @@ public:
     auto min_events = located<uint64_t>{};
     auto within = located<duration>{};
     auto max_events = Option<located<uint64_t>>{};
-    auto retries = std::optional<located<uint64_t>>{};
+    auto retries = Option<located<uint64_t>>{};
     auto parser = argument_parser2::operator_("assert_throughput");
     parser.positional("min_events", min_events);
     parser.named("max_events", max_events);

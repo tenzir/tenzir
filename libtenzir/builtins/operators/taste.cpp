@@ -52,7 +52,7 @@ public:
     // Note: The `unordered` means that we do not necessarily return the first
     // `limit_` events.
     (void)filter, (void)order;
-    return optimize_result{std::nullopt, event_order::unordered, copy()};
+    return optimize_result{None{}, event_order::unordered, copy()};
   }
 
   friend auto inspect(auto& f, taste_operator& x) -> bool {
@@ -101,7 +101,7 @@ class plugin final : public virtual operator_plugin<taste_operator>,
 public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto count = std::optional<uint64_t>{};
+    auto count = Option<uint64_t>{};
     argument_parser2::operator_("taste")
       .positional("count", count)
       .parse(inv, ctx)

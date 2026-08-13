@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/async.hpp>
 #include <tenzir/box.hpp>
 #include <tenzir/logger.hpp>
@@ -33,7 +35,6 @@
 #include <limits>
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -357,9 +358,8 @@ public:
 
   /// Waits for queue activity and drains up to `max_messages` without blocking.
   [[nodiscard]] auto
-  next_batch(size_t max_messages,
-             std::optional<std::chrono::milliseconds> timeout = std::nullopt)
-    -> folly::coro::Task<MessageBatch> {
+  next_batch(size_t max_messages, Option<std::chrono::milliseconds> timeout
+                                  = None{}) -> folly::coro::Task<MessageBatch> {
     TENZIR_ASSERT(max_messages > 0);
     while (not is_stopped()) {
       auto messages = std::vector<Message>{};
@@ -411,7 +411,7 @@ public:
   }
 
   auto request_stop() -> void {
-    auto promise = std::optional<folly::Promise<folly::Unit>>{};
+    auto promise = Option<folly::Promise<folly::Unit>>{};
     {
       auto guard = std::scoped_lock{state_mutex_};
       if (stopped_) {
@@ -463,7 +463,7 @@ private:
     detail::drain_fd(wakeup_fd_.read);
     // NOTE: Do not call rd_kafka_poll() here. With the high-level consumer,
     // recursive queue serving can assert in librdkafka.
-    auto promise = std::optional<folly::Promise<folly::Unit>>{};
+    auto promise = Option<folly::Promise<folly::Unit>>{};
     {
       auto guard = std::scoped_lock{state_mutex_};
       if (stopped_) {
@@ -636,7 +636,7 @@ private:
   mutable std::mutex state_mutex_;
   bool stopped_ = false;
   std::size_t pending_notifications_ = 0;
-  std::optional<folly::Promise<folly::Unit>> waiter_;
+  Option<folly::Promise<folly::Unit>> waiter_;
 };
 
 } // namespace tenzir::plugins::kafka

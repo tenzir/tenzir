@@ -152,8 +152,7 @@ auto cef_unescape_value(std::string_view text) -> std::string {
 /// The algorithm finds '=' separators and uses the heuristic that a real
 /// separator must be preceded by whitespace + a valid key name, to distinguish
 /// from unescaped '=' embedded in values (e.g., DN strings "CN=foo,O=bar").
-auto parse_extension(std::string_view ext, auto builder)
-  -> std::optional<diagnostic> {
+auto parse_extension(std::string_view ext, auto builder) -> Option<diagnostic> {
   if (ext.empty()) {
     return {};
   }
@@ -249,7 +248,7 @@ auto parse_extension(std::string_view ext, auto builder)
 }
 
 [[nodiscard]] auto parse_line(std::string_view line, location loc, auto& msb)
-  -> std::optional<diagnostic> {
+  -> Option<diagnostic> {
   using namespace std::string_view_literals;
   auto fields = detail::split_escaped(line, "|", "\\", 8);
   if (fields.size() < 7 or fields.size() > 8) {
@@ -290,7 +289,7 @@ auto parse_extension(std::string_view ext, auto builder)
   return {};
 }
 
-auto parse_loop(generator<std::optional<std::string_view>> lines,
+auto parse_loop(generator<Option<std::string_view>> lines,
                 diagnostic_handler& diag, location loc,
                 multi_series_builder::options options)
   -> generator<table_slice> {
@@ -488,7 +487,7 @@ public:
 
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> std::optional<generator<table_slice>> override {
+    -> Option<generator<table_slice>> override {
     return parse_loop(to_lines(std::move(input)), ctrl.diagnostics(), loc_,
                       options_);
   }

@@ -486,7 +486,7 @@ struct request_base {
   std::string serve_id = {};
   std::string continuation_token = {};
   /// Overrides the request-wide default `schema` when set.
-  std::optional<enum schema> schema_override = {};
+  Option<enum schema> schema_override = None{};
 };
 
 struct single_serve_request : request_base, request_meta {};
@@ -1154,14 +1154,14 @@ struct serve_handler_state {
   // Parses and validates an optional `schema` parameter, returning nullopt
   // when it is absent or null.
   static auto try_extract_schema(const tenzir::record& params)
-    -> std::variant<std::optional<enum schema>, parse_error> {
+    -> std::variant<Option<enum schema>, parse_error> {
     auto str = try_get_nullable_string(params, "schema");
     if (auto* err = try_as<parse_error>(str)) {
       return std::move(*err);
     }
     const auto* value = as<const std::string*>(str);
     if (not value) {
-      return std::optional<enum schema>{};
+      return Option<enum schema>{};
     }
     auto opt = from_string<enum schema>(*value);
     if (not opt) {
@@ -1204,7 +1204,7 @@ struct serve_handler_state {
     if (auto* err = try_as<parse_error>(schema)) {
       return std::move(*err);
     }
-    result.schema_override = as<std::optional<enum schema>>(schema);
+    result.schema_override = as<Option<enum schema>>(schema);
     return result;
   }
 
@@ -1257,7 +1257,7 @@ struct serve_handler_state {
     if (auto* err = try_as<parse_error>(schema)) {
       return std::move(*err);
     }
-    if (auto& opt = as<std::optional<enum schema>>(schema)) {
+    if (auto& opt = as<Option<enum schema>>(schema)) {
       result.schema = *opt;
     }
     return result;
@@ -2063,7 +2063,7 @@ public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto id = located<std::string>{};
-    auto buffer_size = std::optional<located<uint64_t>>{};
+    auto buffer_size = Option<located<uint64_t>>{};
     argument_parser2::operator_("serve")
       .positional("id", id)
       .named("buffer_size", buffer_size)

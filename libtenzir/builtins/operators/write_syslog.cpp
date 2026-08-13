@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/eval_as.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -14,7 +16,6 @@
 #include <tenzir/tql2/eval.hpp>
 
 #include <chrono>
-#include <optional>
 #include <ranges>
 #include <string_view>
 #include <utility>
@@ -118,8 +119,8 @@ public:
       }
       auto it = std::back_inserter(buffer);
       const auto format_n
-        = [&](std::string_view name, std::optional<std::string_view> str,
-              size_t count, const ast::expression& expr) {
+        = [&](std::string_view name, Option<std::string_view> str, size_t count,
+              const ast::expression& expr) {
             if (not str or str->empty()) {
               fmt::format_to(it, " -");
               return;

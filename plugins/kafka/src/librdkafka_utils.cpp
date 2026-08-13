@@ -39,7 +39,7 @@ namespace tenzir::plugins::kafka {
 
 namespace {
 
-auto aws_iam_mode(std::optional<resolved_aws_credentials> const& creds) -> const
+auto aws_iam_mode(Option<resolved_aws_credentials> const& creds) -> const
   char* {
   if (not creds) {
     return "none";
@@ -71,7 +71,7 @@ class aws_iam_refresh_callback final
 public:
   /// Constructs a callback with resolved IAM option inputs.
   aws_iam_refresh_callback(aws_iam_options options,
-                           std::optional<resolved_aws_credentials> creds,
+                           Option<resolved_aws_credentials> creds,
                            diagnostic_handler& dh)
     : options_{std::move(options)}, creds_{std::move(creds)}, dh_{dh} {
   }
@@ -250,7 +250,7 @@ public:
 
 private:
   aws_iam_options options_;
-  std::optional<resolved_aws_credentials> creds_;
+  Option<resolved_aws_credentials> creds_;
   diagnostic_handler& dh_;
 };
 
@@ -485,8 +485,7 @@ auto add_kafka_connection_diagnostic_notes(diagnostic_builder out,
 }
 
 auto add_kafka_aws_iam_diagnostic_notes(
-  diagnostic_builder out,
-  std::optional<resolved_aws_credentials> const& credentials)
+  diagnostic_builder out, Option<resolved_aws_credentials> const& credentials)
   -> diagnostic_builder {
   if (not credentials) {
     return out;
@@ -506,8 +505,8 @@ auto add_kafka_aws_iam_diagnostic_notes(
 }
 
 auto make_consumer_configuration(record const& options,
-                                 std::optional<aws_iam_options> aws,
-                                 std::optional<resolved_aws_credentials> creds,
+                                 Option<aws_iam_options> aws,
+                                 Option<resolved_aws_credentials> creds,
                                  int64_t offset, diagnostic_handler& dh)
   -> caf::expected<consumer_configuration> {
   auto cfg = consumer_configuration{};
@@ -563,8 +562,8 @@ auto make_consumer_configuration(record const& options,
 }
 
 auto make_producer_configuration(record const& options,
-                                 std::optional<aws_iam_options> aws,
-                                 std::optional<resolved_aws_credentials> creds,
+                                 Option<aws_iam_options> aws,
+                                 Option<resolved_aws_credentials> creds,
                                  diagnostic_handler& dh)
   -> caf::expected<producer_configuration> {
   auto cfg = producer_configuration{};

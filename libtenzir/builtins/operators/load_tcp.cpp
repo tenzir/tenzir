@@ -81,10 +81,10 @@ struct load_tcp_args {
   tls_options ssl{{.tls_default = false, .is_server = true}};
   located<struct endpoint> endpoint = {};
   located<uint64_t> parallel = {};
-  std::optional<location> connect = {};
-  std::optional<located<uint64_t>> max_buffered_chunks = {};
-  std::optional<located<class pipeline>> pipeline = {};
-  std::optional<ast::field_path> peer_field = {};
+  Option<location> connect = None{};
+  Option<located<uint64_t>> max_buffered_chunks = None{};
+  Option<located<class pipeline>> pipeline = None{};
+  Option<ast::field_path> peer_field = None{};
   bool resolve_hostnames = false;
 
   friend auto inspect(auto& f, load_tcp_args& x) -> bool {
@@ -212,9 +212,9 @@ public:
 
   explicit load_tcp_sink_operator(
     const connection_manager_actor<Elements>& connection_manager,
-    std::optional<ast::field_path> peer_field,
+    Option<ast::field_path> peer_field,
     const boost::asio::ip::tcp::socket::endpoint_type& peer,
-    std::optional<std::string> peer_hostname)
+    Option<std::string> peer_hostname)
     : connection_manager_{connection_manager},
       peer_field_{std::move(peer_field)},
       peer_ip_{peer.address().is_v4()
@@ -297,10 +297,10 @@ public:
 private:
   detail::weak_handle<connection_manager_actor<Elements>> connection_manager_
     = {};
-  std::optional<ast::field_path> peer_field_;
+  Option<ast::field_path> peer_field_;
   ip peer_ip_;
   uint64_t peer_port_;
-  std::optional<std::string> peer_hostname_;
+  Option<std::string> peer_hostname_;
 };
 
 // -- connection-manager actor -------------------------------------------------
@@ -312,11 +312,11 @@ struct connection_manager_state {
   connection_manager_actor<Elements>::pointer self = {};
   /// The definition of the pipeline; set during actor startup. Empty only
   /// before `make_connection_manager` assigns it.
-  Option<Arc<const Source>> definition = {};
+  Option<Arc<const Source>> definition = None{};
   load_tcp_args args = {};
   // Set during actor startup from `args.ssl.resolve()` and used by
   // `handle_connection` to configure each incoming TLS connection.
-  Option<TlsConfig> tls = {};
+  Option<TlsConfig> tls = None{};
   shared_diagnostic_handler diagnostics = {};
   metrics_receiver_actor metrics_receiver = {};
   detail::stable_map<uint64_t, detail::stable_map<uuid, uuid>> metrics_id_map
@@ -328,10 +328,10 @@ struct connection_manager_state {
   // Everything required for the I/O worker.
   std::vector<std::thread> io_workers = {};
   std::shared_ptr<boost::asio::io_context> io_ctx = {};
-  std::optional<boost::asio::ip::tcp::socket> socket = {};
+  Option<boost::asio::ip::tcp::socket> socket = None{};
 
   // Everything required for listening for connections.
-  std::optional<boost::asio::ip::tcp::acceptor> acceptor = {};
+  Option<boost::asio::ip::tcp::acceptor> acceptor = None{};
 
   // Everything needed for back pressure handling.
   static constexpr auto max_buffered_batches = size_t{20};
@@ -354,10 +354,10 @@ struct connection_manager_state {
 
     static constexpr auto read_buffer_size = size_t{65'536};
 
-    std::optional<boost::asio::ip::tcp::socket> socket = {};
-    std::optional<boost::asio::ssl::context> ssl_ctx = {};
-    std::optional<boost::asio::ssl::stream<boost::asio::ip::tcp::socket&>>
-      tls_socket = {};
+    Option<boost::asio::ip::tcp::socket> socket = None{};
+    Option<boost::asio::ssl::context> ssl_ctx = None{};
+    Option<boost::asio::ssl::stream<boost::asio::ip::tcp::socket&>> tls_socket
+      = {};
     pipeline_executor_actor pipeline_executor = {};
 
     // The mutex is protecting the queue of chunks and the response promise, as
@@ -740,7 +740,7 @@ struct connection_manager_state {
     }
     // Resolve the peer endpoint.
     const auto& peer_endpoint = connection->socket->remote_endpoint();
-    auto peer_hostname = std::optional<std::string>{};
+    auto peer_hostname = Option<std::string>{};
     if (args.resolve_hostnames) {
       auto resolver = boost::asio::ip::tcp::resolver{*io_ctx};
       auto ec = boost::system::error_code{};
@@ -1070,7 +1070,7 @@ public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto endpoint = located<std::string>{};
-    auto parallel = std::optional<located<uint64_t>>{};
+    auto parallel = Option<located<uint64_t>>{};
     auto args = load_tcp_args{};
     auto parser = argument_parser2::operator_("load_tcp")
                     .positional("endpoint", endpoint)

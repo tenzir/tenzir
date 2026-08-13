@@ -148,13 +148,12 @@ struct failing_diagnostic_handler : public diagnostic_handler {
 failing_diagnostic_handler dh;
 
 auto schema_fn(std::vector<type> schemas)
-  -> std::function<auto(std::string_view)->std::optional<type>> {
-  return [schemas
-          = std::move(schemas)](std::string_view name) -> std::optional<type> {
+  -> std::function<auto(std::string_view)->Option<type>> {
+  return [schemas = std::move(schemas)](std::string_view name) -> Option<type> {
     auto it = std::ranges::find(schemas, name, [](const type& ty) {
       return ty.name();
     });
-    return it == schemas.end() ? std::nullopt : std::optional{*it};
+    return it == schemas.end() ? None{} : Option{*it};
   };
 }
 

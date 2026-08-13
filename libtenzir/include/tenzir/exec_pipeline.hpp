@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include <tenzir/fwd.hpp>
+#include "tenzir/option.hpp"
 
-#include <optional>
+#include <tenzir/fwd.hpp>
 
 namespace tenzir {
 
@@ -39,8 +39,8 @@ struct exec_config {
   bool multi = false;
   bool strict = false;
   bool neo = true;
-  std::optional<std::string> profile;
-  std::optional<std::string> parallelism;
+  Option<std::string> profile;
+  Option<std::string> parallelism;
 };
 
 auto exec_pipeline(Arc<const Source> source, diagnostic_handler& dh,

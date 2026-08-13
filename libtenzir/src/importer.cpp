@@ -49,7 +49,7 @@ void importer::handle_slice(table_slice&& slice) {
     return;
   }
   const auto is_internal = slice.schema().attribute("internal").has_value();
-  auto events = std::optional<table_slice>{};
+  auto events = Option<table_slice>{};
   for (const auto& subscriber : subscribers) {
     if (subscriber.eager and subscriber.internal == is_internal) {
       if (not events) {
@@ -77,7 +77,7 @@ void importer::handle_slice(table_slice&& slice) {
   }
 }
 
-void importer::flush(std::optional<type> schema) {
+void importer::flush(Option<type> schema) {
   const auto do_flush
     = [&](std::vector<table_slice> events, const bool is_internal) {
         auto concat_buffer_size = size_t{0};

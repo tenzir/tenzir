@@ -183,7 +183,7 @@ auto AsyncSqsQueue::delete_message(const Aws::SQS::Model::Message& message)
       .note("receipt handle: {}", message.GetReceiptHandle())
       .done();
   }
-  co_return std::nullopt;
+  co_return None{};
 }
 
 } // namespace tenzir::plugins::sqs

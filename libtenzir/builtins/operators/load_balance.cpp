@@ -489,7 +489,7 @@ public:
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     TENZIR_UNUSED(filter, order);
-    return optimize_result{std::nullopt, event_order::unordered, copy()};
+    return optimize_result{None{}, event_order::unordered, copy()};
   }
 
   friend auto inspect(auto& f, load_balance& x) -> bool {

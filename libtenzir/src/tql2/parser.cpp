@@ -189,7 +189,7 @@ public:
     expect(tk::lbrace);
     auto consequence = parse_pipeline();
     expect(tk::rbrace);
-    auto alternative = std::optional<ast::if_stmt::else_t>{};
+    auto alternative = Option<ast::if_stmt::else_t>{};
     // We allow newlines before `else`. However, if there is no `else`, then we
     // don't want to consume them.
     auto stash = next_;
@@ -524,7 +524,7 @@ public:
           continue;
         }
       }
-      auto negate = std::optional<location>{};
+      auto negate = Option<location>{};
       if (silent_peek(tk::not_) and silent_peek_n(tk::in, 1)
           and precedence(binary_op::in) >= min_prec) {
         negate = advance();
@@ -1187,7 +1187,7 @@ public:
       .throw_();
   }
 
-  auto accept_constant() -> std::optional<constant> {
+  auto accept_constant() -> Option<constant> {
     if (peek(tk::scalar)) {
       return parse_scalar();
     }
@@ -1219,7 +1219,7 @@ public:
       }
       diagnostic::error("could not parse subnet").primary(token).throw_();
     }
-    return std::nullopt;
+    return None{};
   }
 
   // TODO: This is just a temporary hack.
@@ -1286,7 +1286,7 @@ public:
     }
   }
 
-  auto parse_function_call(std::optional<ast::expression> subject, entity fn)
+  auto parse_function_call(Option<ast::expression> subject, entity fn)
     -> function_call {
     expect(tk::lpar);
     auto scope = ignore_newlines(true);
@@ -1321,7 +1321,7 @@ public:
     }
   }
 
-  auto peek_unary_op() -> std::optional<unary_op> {
+  auto peek_unary_op() -> Option<unary_op> {
 #define X(x, y)                                                                \
   if (peek(tk::x)) {                                                           \
     return unary_op::y;                                                        \
@@ -1330,10 +1330,10 @@ public:
     X(not_, not_);
     X(minus, neg);
 #undef X
-    return std::nullopt;
+    return None{};
   }
 
-  auto peek_binary_op() -> std::optional<binary_op> {
+  auto peek_binary_op() -> Option<binary_op> {
 #define X(x, y)                                                                \
   if (peek(tk::x)) {                                                           \
     return binary_op::y;                                                       \
@@ -1354,7 +1354,7 @@ public:
     X(if_, if_);
     X(else_, else_);
 #undef X
-    return std::nullopt;
+    return None{};
   }
 
   auto at_pipeline_end() -> bool {

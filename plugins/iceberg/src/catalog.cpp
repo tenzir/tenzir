@@ -1267,14 +1267,14 @@ auto table_arrow_schema(ice::Table const& table)
 auto evolve_schema(std::shared_ptr<ice::Table> const& table,
                    record_type const& schema,
                    std::vector<std::string>& dropped_fields)
-  -> Result<std::optional<std::shared_ptr<ice::Table>>> {
+  -> Result<Option<std::shared_ptr<ice::Table>>> {
   TRY(auto current, translate(table->schema()));
   auto additions = std::vector<SchemaAddition>{};
   auto promotions = std::vector<SchemaPromotion>{};
   diff_schema(schema, current->fields(), "", additions, promotions,
               dropped_fields);
   if (additions.empty() and promotions.empty()) {
-    return std::optional<std::shared_ptr<ice::Table>>{};
+    return Option<std::shared_ptr<ice::Table>>{};
   }
   // A schema update is not retryable after a conflicting commit: replaying
   // it against refreshed metadata could apply a different evolution than
@@ -1286,7 +1286,7 @@ auto evolve_schema(std::shared_ptr<ice::Table> const& table,
     if (addition.parent.empty()) {
       update->AddColumn(addition.name, std::move(addition.type));
     } else {
-      update->AddColumn(std::optional<std::string_view>{addition.parent},
+      update->AddColumn(Option<std::string_view>{addition.parent}.to_std(),
                         addition.name, std::move(addition.type));
     }
   }
@@ -1295,7 +1295,7 @@ auto evolve_schema(std::shared_ptr<ice::Table> const& table,
   }
   TRY(translate(update->Commit()));
   TRY(auto committed, translate(transaction->Commit()));
-  return std::optional{std::move(committed)};
+  return Option{std::move(committed)};
 }
 
 auto check_partition_spec(ice::Table const& table,
@@ -1627,8 +1627,8 @@ auto deserialize_data_file(SerializedDataFile const& serialized)
   file->lower_bounds = serialized.lower_bounds;
   file->upper_bounds = serialized.upper_bounds;
   file->split_offsets = serialized.split_offsets;
-  file->sort_order_id = serialized.sort_order_id;
-  file->partition_spec_id = serialized.spec_id;
+  file->sort_order_id = serialized.sort_order_id.to_std();
+  file->partition_spec_id = serialized.spec_id.to_std();
   return file;
 }
 

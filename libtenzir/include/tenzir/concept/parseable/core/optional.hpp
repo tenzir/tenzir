@@ -10,6 +10,7 @@
 
 #include "tenzir/concept/parseable/core/parser.hpp"
 #include "tenzir/concept/support/detail/attr_fold.hpp"
+#include "tenzir/option.hpp"
 
 namespace tenzir {
 
@@ -20,7 +21,7 @@ public:
 
   using attribute
     = std::conditional_t<std::is_same_v<inner_attribute, unused_type>,
-                         unused_type, std::optional<inner_attribute>>;
+                         unused_type, Option<inner_attribute>>;
 
   constexpr explicit optional_parser(Parser p) : parser_{std::move(p)} {
     // nop

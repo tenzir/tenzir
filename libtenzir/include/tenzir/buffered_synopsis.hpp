@@ -10,6 +10,7 @@
 
 #include "tenzir/bloom_filter_parameters.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/synopsis.hpp"
 
 #include <caf/fwd.hpp>
@@ -117,7 +118,7 @@ public:
     return result;
   }
 
-  [[nodiscard]] std::optional<bool>
+  [[nodiscard]] Option<bool>
   lookup(relational_operator op, data_view rhs) const override {
     // This code path should never be reached in normal operation because:
     // 1. Buffered synopses are only used in active partitions

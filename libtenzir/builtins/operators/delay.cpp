@@ -27,7 +27,7 @@ public:
   delay_operator() = default;
 
   explicit delay_operator(located<std::string> field, double speed,
-                          std::optional<time> start) noexcept
+                          Option<time> start) noexcept
     : field_{std::move(field)}, speed_{speed}, start_{start} {
   }
 
@@ -38,7 +38,7 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto resolved_fields = std::unordered_map<type, std::optional<offset>>{};
+    auto resolved_fields = std::unordered_map<type, Option<offset>>{};
     auto start = start_;
     const auto start_time = std::chrono::steady_clock::now();
     for (auto&& slice : input) {
@@ -56,16 +56,16 @@ public:
                               field_.inner, slice.schema())
             .primary(field_)
             .emit(ctrl.diagnostics());
-          resolved_field = resolved_fields.emplace_hint(
-            resolved_field, slice.schema(), std::nullopt);
+          resolved_field = resolved_fields.emplace_hint(resolved_field,
+                                                        slice.schema(), None{});
         } else if (auto t = layout.field(*index).type; not is<time_type>(t)) {
           diagnostic::warning("field `{}` for schema `{}` has type `{}`",
                               field_.inner, slice.schema(), t.kind())
             .note("expected `{}`", type{time_type{}}.kind())
             .primary(field_)
             .emit(ctrl.diagnostics());
-          resolved_field = resolved_fields.emplace_hint(
-            resolved_field, slice.schema(), std::nullopt);
+          resolved_field = resolved_fields.emplace_hint(resolved_field,
+                                                        slice.schema(), None{});
         } else {
           resolved_field = resolved_fields.emplace_hint(resolved_field,
                                                         slice.schema(), *index);
@@ -130,7 +130,7 @@ public:
 private:
   located<std::string> field_;
   double speed_ = 1.0;
-  std::optional<time> start_;
+  Option<time> start_;
 };
 
 class delay_operator2 final : public crtp_operator<delay_operator2> {
@@ -138,7 +138,7 @@ public:
   delay_operator2() = default;
 
   explicit delay_operator2(ast::expression expr, double speed,
-                           std::optional<time> start) noexcept
+                           Option<time> start) noexcept
     : expr_{std::move(expr)}, speed_{speed}, start_{start} {
   }
 
@@ -149,7 +149,7 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto resolved_fields = std::unordered_map<type, std::optional<offset>>{};
+    auto resolved_fields = std::unordered_map<type, Option<offset>>{};
     auto start = start_;
     const auto start_time = std::chrono::steady_clock::now();
     for (auto&& slice : input) {
@@ -223,7 +223,7 @@ public:
 private:
   ast::expression expr_;
   double speed_ = 1.0;
-  std::optional<time> start_;
+  Option<time> start_;
 };
 
 struct DelayArgs {
@@ -304,7 +304,7 @@ private:
   ast::expression expr_;
   double speed_;
   Option<time> start_;
-  std::optional<std::chrono::steady_clock::time_point> start_time_;
+  Option<std::chrono::steady_clock::time_point> start_time_;
 };
 
 class plugin final : public virtual operator_plugin<delay_operator> {
@@ -315,8 +315,8 @@ class plugin2 final : public virtual operator_plugin2<delay_operator2>,
                       public virtual OperatorPlugin {
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto speed = std::optional<located<double>>{};
-    auto start = std::optional<time>{};
+    auto speed = Option<located<double>>{};
+    auto start = Option<time>{};
     auto expr = ast::expression{};
     argument_parser2::operator_("delay")
       .positional("by", expr, "time")

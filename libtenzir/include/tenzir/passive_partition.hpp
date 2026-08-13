@@ -14,6 +14,7 @@
 #include "tenzir/fbs/flatbuffer_container.hpp"
 #include "tenzir/fbs/partition.hpp"
 #include "tenzir/ids.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/qualified_record_field.hpp"
 #include "tenzir/query_context.hpp"
@@ -40,7 +41,7 @@ struct passive_partition_state {
 
   caf::error initialize_from_chunk(const tenzir::chunk_ptr&);
 
-  const std::optional<tenzir::record_type>& combined_schema() const;
+  const Option<tenzir::record_type>& combined_schema() const;
 
   const std::unordered_map<std::string, ids>& type_ids() const;
 
@@ -56,7 +57,7 @@ struct passive_partition_state {
   uuid id = {};
 
   /// The combined type of all columns of this partition.
-  std::optional<record_type> combined_schema_ = {};
+  Option<record_type> combined_schema_ = None{};
 
   /// Maps type names to ids. Used the answer #schema queries.
   std::unordered_map<std::string, ids> type_ids_ = {};
@@ -99,7 +100,7 @@ struct passive_partition_state {
   const fbs::partition::LegacyPartition* flatbuffer = {};
 
   /// The flatbuffer container holding the index data
-  std::optional<fbs::flatbuffer_container> container = {};
+  Option<fbs::flatbuffer_container> container = None{};
 };
 
 // -- flatbuffers --------------------------------------------------------------

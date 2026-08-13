@@ -491,10 +491,9 @@ public:
       done_ = true;
       co_return;
     }
-    auto aws_iam = args_.aws_iam
-                     ? std::optional<located<record>>{*args_.aws_iam}
-                     : std::nullopt;
-    auto auth = co_await resolve_aws_iam_auth(aws_iam, std::nullopt, ctx);
+    auto aws_iam
+      = args_.aws_iam ? Option<located<record>>{*args_.aws_iam} : None{};
+    auto auth = co_await resolve_aws_iam_auth(aws_iam, None{}, ctx);
     if (not auth) {
       done_ = true;
       co_return;
@@ -570,7 +569,7 @@ public:
       // Use the shared live provider for catalog signing and S3 access. The
       // default chain and STS-backed providers refresh expiring credentials,
       // including profiles backed by credential_process.
-      auto region = std::optional<std::string>{};
+      auto region = Option<std::string>{};
       if (not resolved_region.empty()) {
         region = resolved_region;
       }

@@ -62,8 +62,8 @@ public:
       .emit(ctx);
     auto args = loader_args{};
     args.operator_location = inv.self.get_location();
-    auto offset = std::optional<ast::expression>{};
-    auto iam_opts = std::optional<located<record>>{};
+    auto offset = Option<ast::expression>{};
+    auto iam_opts = Option<located<record>>{};
     TRY(argument_parser2::operator_(name())
           .positional("topic", args.topic)
           .named("count", args.count)
@@ -101,14 +101,14 @@ public:
     if (offset) {
       TRY(auto evaluated, const_eval(offset.value(), ctx.dh()));
       constexpr auto f = detail::overload{
-        [](const std::integral auto& value) -> std::optional<std::string> {
+        [](const std::integral auto& value) -> Option<std::string> {
           return fmt::to_string(value);
         },
-        [](const std::string& value) -> std::optional<std::string> {
+        [](const std::string& value) -> Option<std::string> {
           return value;
         },
-        [](const auto&) -> std::optional<std::string> {
-          return std::nullopt;
+        [](const auto&) -> Option<std::string> {
+          return None{};
         }};
       auto result = tenzir::match(evaluated.inner, f);
       if (not result) {
@@ -187,8 +187,8 @@ class save_plugin final : public virtual operator_plugin2<kafka_saver> {
       .primary(inv.self.get_location())
       .emit(ctx);
     auto args = saver_args{};
-    auto ts = std::optional<located<time>>{};
-    auto iam_opts = std::optional<located<record>>{};
+    auto ts = Option<located<time>>{};
+    auto iam_opts = Option<located<record>>{};
     TRY(argument_parser2::operator_(name())
           .positional("topic", args.topic)
           .named("key", args.key)

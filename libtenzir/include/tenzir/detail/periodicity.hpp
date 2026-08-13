@@ -12,9 +12,10 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <complex>
 #include <cstdint>
-#include <optional>
 #include <span>
 #include <utility>
 #include <vector>
@@ -36,7 +37,7 @@ void fft(std::span<std::complex<double>> data);
 /// inputs, avoiding quadratic work on long series.
 /// Returns nullopt if `xs` is empty, constant, or contains non-finite values.
 auto autocorrelation(std::span<double const> xs, int64_t max_lag)
-  -> std::optional<std::vector<double>>;
+  -> Option<std::vector<double>>;
 
 struct periodogram_result {
   /// The zero-padded FFT size N (next power of two >= xs.size()).
@@ -50,8 +51,7 @@ struct periodogram_result {
 /// power of two, FFT, and return the power of the non-DC bins up to Nyquist.
 /// Fewer than two elements yield an empty power vector. Returns nullopt if an
 /// input sample or computed power is non-finite.
-auto periodogram(std::span<double const> xs)
-  -> std::optional<periodogram_result>;
+auto periodogram(std::span<double const> xs) -> Option<periodogram_result>;
 
 /// Finds the dominant periodic lag among lags `min_lag .. n/2`. Lags are
 /// ranked by the sum of positive autocorrelation coefficients in a complete
@@ -63,6 +63,6 @@ auto periodogram(std::span<double const> xs)
 /// or nullopt if the series is degenerate (see `autocorrelation`) or the peak
 /// coefficient is not positive.
 auto dominant_lag(std::span<double const> xs, int64_t min_lag = 2)
-  -> std::optional<std::pair<int64_t, double>>;
+  -> Option<std::pair<int64_t, double>>;
 
 } // namespace tenzir::detail

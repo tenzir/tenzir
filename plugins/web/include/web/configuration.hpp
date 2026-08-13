@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/fwd.hpp>
 #include <tenzir/type.hpp>
 
@@ -93,14 +95,14 @@ public:
   /// Permit cross-site calls from this origin.
   //  If set, the server will insert a `Access-Control-Allow-Origin`
   //  header into every API response.
-  std::optional<std::string> cors_allowed_origin = {};
+  Option<std::string> cors_allowed_origin = None{};
 
   /// Additional headers to be inserted into every server response.
   //  (eg. 'Server: Tenzir 2.4', ...)
   std::unordered_map<std::string, std::string> response_headers;
 
   /// The path from which to serve static files.
-  std::optional<std::filesystem::path> webroot = {};
+  Option<std::filesystem::path> webroot = None{};
 };
 
 /// Validate that the user-provided configuration makes sense.

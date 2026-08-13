@@ -55,6 +55,7 @@ struct tenzir::tryable<arrow::Status> {
   }
 };
 
+// NOLINTBEGIN(custom-prefer-option): std::optional TRY compatibility.
 template <class T>
 struct tenzir::tryable<std::optional<T>> {
   static auto is_success(const std::optional<T>& x) -> bool {
@@ -69,6 +70,7 @@ struct tenzir::tryable<std::optional<T>> {
     return std::nullopt;
   }
 };
+// NOLINTEND(custom-prefer-option)
 
 template <>
 struct tenzir::tryable<caf::error> {

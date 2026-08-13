@@ -94,7 +94,7 @@ auto pipeline_shell_command(const invocation& inv, caf::actor_system& sys)
   TENZIR_ASSERT(endpoint);
   auto identifier
     = static_cast<std::uint32_t>(std::stoul(inv.arguments[1], nullptr));
-  auto node_opt = connect_to_node(self, *endpoint, caf::infinite, std::nullopt,
+  auto node_opt = connect_to_node(self, *endpoint, caf::infinite, None{},
                                   /*internal_connection=*/true);
   if (not node_opt) {
     return caf::make_message(std::move(node_opt.error()));

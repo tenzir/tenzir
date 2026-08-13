@@ -8,9 +8,10 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <chrono>
 #include <cstddef>
-#include <optional>
 #include <streambuf>
 #include <vector>
 
@@ -28,7 +29,7 @@ public:
   /// @pre `buffer_size > putback_area_size`
   explicit fdinbuf(int fd, size_t buffer_size = 8192);
 
-  std::optional<std::chrono::milliseconds>& read_timeout();
+  Option<std::chrono::milliseconds>& read_timeout();
   [[nodiscard]] bool timed_out() const;
 
 protected:
@@ -37,7 +38,7 @@ protected:
 private:
   int fd_;
   std::vector<char> buffer_;
-  std::optional<std::chrono::milliseconds> read_timeout_;
+  Option<std::chrono::milliseconds> read_timeout_;
   bool timeout_fail_; // Was the last read failure caused by a timeout?
 };
 

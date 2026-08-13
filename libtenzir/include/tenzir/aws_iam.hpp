@@ -12,10 +12,10 @@
 #include "tenzir/data.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/location.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/secret.hpp"
 #include "tenzir/secret_resolution.hpp"
 
-#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -31,13 +31,13 @@ struct resolved_token_endpoint {
   std::vector<std::pair<std::string, std::string>> headers;
   /// JSON path to extract the token from the endpoint response.
   /// nullopt means the response is plain text (no JSON parsing).
-  std::optional<std::string> path;
+  Option<std::string> path;
 };
 
 // TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Resolved web identity token configuration.
 struct resolved_web_identity {
-  std::optional<resolved_token_endpoint> token_endpoint;
+  Option<resolved_token_endpoint> token_endpoint;
   std::string token_file;
   std::string token;
 };
@@ -52,19 +52,19 @@ struct resolved_aws_credentials {
   std::string session_token;
   std::string role;
   std::string external_id;
-  std::optional<resolved_web_identity> web_identity;
+  Option<resolved_web_identity> web_identity;
 };
 
 // TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Token endpoint configuration for fetching OIDC tokens via HTTP.
 struct token_endpoint_options {
   /// HTTP endpoint URL to fetch the token from.
-  std::optional<secret> url;
+  Option<secret> url;
   /// HTTP headers for the token endpoint request.
-  std::optional<std::vector<std::pair<std::string, secret>>> headers;
+  Option<std::vector<std::pair<std::string, secret>>> headers;
   /// JSON path to extract the token from endpoint response.
   /// Defaults to ".access_token". Set to null for plain text responses.
-  std::optional<std::string> path;
+  Option<std::string> path;
   /// True if path was explicitly set to null (plain text response).
   bool path_is_null = false;
   /// Source location for diagnostics.
@@ -92,11 +92,11 @@ struct token_endpoint_options {
 /// - Direct token value
 struct web_identity_options {
   /// HTTP endpoint configuration to fetch the token.
-  std::optional<token_endpoint_options> token_endpoint;
+  Option<token_endpoint_options> token_endpoint;
   /// File path containing the token.
-  std::optional<secret> token_file;
+  Option<secret> token_file;
   /// Direct token value.
-  std::optional<secret> token;
+  Option<secret> token;
   /// Source location for diagnostics.
   location loc;
 
@@ -124,23 +124,23 @@ struct web_identity_options {
 /// used across different AWS-related operators (SQS, S3, Kafka MSK, etc.).
 struct aws_iam_options {
   /// AWS region for API requests (optional, SDK uses default resolution).
-  std::optional<secret> region;
+  Option<secret> region;
   /// AWS CLI profile name to use for credentials.
-  std::optional<secret> profile;
+  Option<secret> profile;
   /// IAM role ARN to assume.
-  std::optional<secret> role;
+  Option<secret> role;
   /// Session name for role assumption.
-  std::optional<secret> session_name;
+  Option<secret> session_name;
   /// External ID for role assumption.
-  std::optional<secret> external_id;
+  Option<secret> external_id;
   /// AWS access key ID.
-  std::optional<secret> access_key_id;
+  Option<secret> access_key_id;
   /// AWS secret access key.
-  std::optional<secret> secret_access_key;
+  Option<secret> secret_access_key;
   /// AWS session token for temporary credentials.
-  std::optional<secret> session_token;
+  Option<secret> session_token;
   /// Web identity configuration for OIDC-based authentication.
-  std::optional<web_identity_options> web_identity;
+  Option<web_identity_options> web_identity;
   /// Source location for diagnostics.
   location loc;
 
@@ -197,8 +197,8 @@ enum class AwsIamRegionRequirement {
 // TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Holds parsed IAM options, credential slots, and pending secret requests.
 struct ResolvedAwsIamAuth {
-  std::optional<aws_iam_options> options;
-  std::optional<resolved_aws_credentials> credentials;
+  Option<aws_iam_options> options;
+  Option<resolved_aws_credentials> credentials;
 };
 
 // TODO: Move to the shared Amazon module as `tenzir::amazon`.
@@ -208,27 +208,26 @@ struct ResolvedAwsIamAuth {
 /// 1. validates region requirements,
 /// 2. allocates a credential container when needed,
 /// 3. collects secret requests for later resolution by the caller.
-auto resolve_aws_iam_auth(std::optional<aws_iam_options> aws_iam,
-                          std::optional<located<std::string>> aws_region,
+auto resolve_aws_iam_auth(Option<aws_iam_options> aws_iam,
+                          Option<located<std::string>> aws_region,
                           diagnostic_handler& dh,
                           AwsIamRegionRequirement requirement
                           = AwsIamRegionRequirement::optional)
   -> failure_or<ResolvedAwsIamAuth>;
 
 /// Parses optional `aws_iam` input and then resolves runtime auth state.
-auto resolve_aws_iam_auth(std::optional<located<record>> aws_iam,
-                          std::optional<located<std::string>> aws_region,
+auto resolve_aws_iam_auth(Option<located<record>> aws_iam,
+                          Option<located<std::string>> aws_region,
                           diagnostic_handler& dh,
                           AwsIamRegionRequirement requirement
                           = AwsIamRegionRequirement::optional)
   -> failure_or<ResolvedAwsIamAuth>;
 
 /// Resolves AWS IAM auth and applies secret resolution through `ctx`.
-auto resolve_aws_iam_auth(std::optional<located<record>> aws_iam,
-                          std::optional<located<std::string>> aws_region,
-                          OpCtx& ctx,
+auto resolve_aws_iam_auth(Option<located<record>> aws_iam,
+                          Option<located<std::string>> aws_region, OpCtx& ctx,
                           AwsIamRegionRequirement requirement
                           = AwsIamRegionRequirement::optional)
-  -> Task<std::optional<ResolvedAwsIamAuth>>;
+  -> Task<Option<ResolvedAwsIamAuth>>;
 
 } // namespace tenzir

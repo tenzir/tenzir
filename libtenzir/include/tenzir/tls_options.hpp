@@ -19,7 +19,6 @@
 #include <caf/net/fwd.hpp>
 
 #include <memory>
-#include <optional>
 #include <string_view>
 
 namespace folly {
@@ -38,10 +37,9 @@ auto parse_caf_tls_version(std::string_view version)
 
 auto add_tls_client_diagnostic_hints(diagnostic_builder diag, bool tls_enabled,
                                      std::string_view service_name = {},
-                                     std::optional<uint64_t> plaintext_port
-                                     = std::nullopt,
-                                     std::optional<uint64_t> tls_port
-                                     = std::nullopt) -> diagnostic_builder;
+                                     Option<uint64_t> plaintext_port = None{},
+                                     Option<uint64_t> tls_port = None{})
+  -> diagnostic_builder;
 
 class tls_options;
 
@@ -86,8 +84,8 @@ struct TlsConfig {
   [[nodiscard]] auto update_url(std::string_view url) const -> std::string;
 
   /// Creates a CAF SSL context from the resolved options.
-  auto make_caf_context(operator_control_plane& ctrl,
-                        std::optional<caf::uri> uri = std::nullopt) const
+  auto make_caf_context(operator_control_plane& ctrl, Option<caf::uri> uri
+                                                      = None{}) const
     -> caf::expected<caf::net::ssl::context>;
 
   /// Creates a folly SSL context from the resolved options.
@@ -195,20 +193,19 @@ public:
 
   auto get_tls() const -> located<bool>;
   auto get_skip_peer_verification() const -> located<bool>;
-  auto get_cacert() const -> std::optional<located<std::string>>;
-  auto get_certfile() const -> std::optional<located<std::string>>;
-  auto get_keyfile() const -> std::optional<located<std::string>>;
-  auto get_password() const -> std::optional<located<std::string>>;
-  auto get_tls_min_version() const -> std::optional<located<std::string>>;
-  auto get_tls_ciphers() const -> std::optional<located<std::string>>;
-  auto get_tls_client_ca() const -> std::optional<located<std::string>>;
+  auto get_cacert() const -> Option<located<std::string>>;
+  auto get_certfile() const -> Option<located<std::string>>;
+  auto get_keyfile() const -> Option<located<std::string>>;
+  auto get_password() const -> Option<located<std::string>>;
+  auto get_tls_min_version() const -> Option<located<std::string>>;
+  auto get_tls_ciphers() const -> Option<located<std::string>>;
+  auto get_tls_client_ca() const -> Option<located<std::string>>;
   auto get_tls_require_client_cert() const -> located<bool>;
 
 private:
-  auto get_record_bool(std::string_view key) const
-    -> std::optional<located<bool>>;
+  auto get_record_bool(std::string_view key) const -> Option<located<bool>>;
   auto get_record_string(std::string_view key) const
-    -> std::optional<located<std::string>>;
+    -> Option<located<std::string>>;
   auto validate_tls_record(diagnostic_handler& dh) const -> failure_or<void>;
 
   // Merges `tenzir.tls.*` (and legacy `tenzir.cacert`) node-config defaults
@@ -219,16 +216,16 @@ private:
 
   bool uses_curl_http_ = false;
   bool is_server_ = false;
-  mutable std::optional<located<data>> tls_;
-  mutable std::optional<located<bool>> skip_peer_verification_;
-  mutable std::optional<located<std::string>> cacert_;
-  mutable std::optional<located<std::string>> certfile_;
-  mutable std::optional<located<std::string>> keyfile_;
-  mutable std::optional<located<std::string>> password_;
-  mutable std::optional<located<std::string>> tls_min_version_;
-  mutable std::optional<located<std::string>> tls_ciphers_;
-  mutable std::optional<located<std::string>> tls_client_ca_;
-  mutable std::optional<located<bool>> tls_require_client_cert_;
+  mutable Option<located<data>> tls_;
+  mutable Option<located<bool>> skip_peer_verification_;
+  mutable Option<located<std::string>> cacert_;
+  mutable Option<located<std::string>> certfile_;
+  mutable Option<located<std::string>> keyfile_;
+  mutable Option<located<std::string>> password_;
+  mutable Option<located<std::string>> tls_min_version_;
+  mutable Option<located<std::string>> tls_ciphers_;
+  mutable Option<located<std::string>> tls_client_ca_;
+  mutable Option<located<bool>> tls_require_client_cert_;
 
   friend auto inspect(auto& f, tls_options& x) -> bool {
     return f.object(x).fields(

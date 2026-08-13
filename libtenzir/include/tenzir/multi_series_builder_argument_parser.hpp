@@ -11,6 +11,7 @@
 #include "tenzir/argument_parser.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/multi_series_builder.hpp"
+#include "tenzir/option.hpp"
 
 #include <tenzir/error.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -23,7 +24,7 @@ namespace tenzir {
 /// Parses a selector string like "field" or "field:prefix" into a
 /// policy_selector. Returns nullopt if the format is invalid.
 auto parse_selector_value(std::string_view x)
-  -> std::optional<multi_series_builder::policy_selector>;
+  -> Option<multi_series_builder::policy_selector>;
 
 /// simple utility to parse the command line arguments for a
 /// multi_series_builder's settings and policy
@@ -85,18 +86,18 @@ public:
     = multi_series_builder::policy_default{};
 
   // Policy schema
-  std::optional<located<std::string>> schema_;
+  Option<located<std::string>> schema_;
 
   // Policy selector
-  std::optional<located<std::string>> selector_;
+  Option<located<std::string>> selector_;
 
   // settings
-  std::optional<location> merge_;
-  std::optional<location> schema_only_;
-  std::optional<located<std::string>> unnest_;
-  std::optional<location> raw_;
-  std::optional<duration> timeout_;
-  std::optional<uint64_t> batch_size_;
+  Option<location> merge_;
+  Option<location> schema_only_;
+  Option<located<std::string>> unnest_;
+  Option<location> raw_;
+  Option<duration> timeout_;
+  Option<uint64_t> batch_size_;
 };
 
 // -- Describer integration ----------------------------------------------------

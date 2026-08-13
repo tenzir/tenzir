@@ -12,6 +12,7 @@
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/offset.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view3.hpp"
 
@@ -90,13 +91,13 @@ struct basic_series {
   // TODO: std::get_if, etc.
   template <type_or_concrete_type Other>
     requires(std::same_as<Type, type>)
-  auto as() const -> std::optional<basic_series<Other>> {
+  auto as() const -> Option<basic_series<Other>> {
     if constexpr (std::same_as<Other, tenzir::type>) {
       return *this;
     } else {
       auto other_type = try_as<Other>(&type);
       if (not other_type) {
-        return std::nullopt;
+        return None{};
       }
       // TODO: This could also be a `dynamic_cast`, but that is sometimes broken
       // when calling this from plugins (due to duplicated RTTI information).
@@ -111,7 +112,7 @@ struct basic_series {
   auto list_values() const -> series
     requires(std::same_as<Type, list_type>);
 
-  auto field(std::string_view name) const -> std::optional<series>
+  auto field(std::string_view name) const -> Option<series>
     requires(std::same_as<Type, record_type>);
 
   auto fields() const -> generator<series_field>
@@ -167,8 +168,7 @@ struct basic_series {
 
   template <concrete_type Cast>
     requires(std::same_as<Type, type>)
-  auto values3() const
-    -> generator<std::optional<view3<type_to_data_t<Cast>>>> {
+  auto values3() const -> generator<Option<view3<type_to_data_t<Cast>>>> {
     const auto* ct = try_as<Cast>(&type);
     TENZIR_ASSERT(ct);
     TENZIR_ASSERT(array);
@@ -182,7 +182,7 @@ struct basic_series {
     return tenzir::values3(*array);
   }
 
-  auto values3() const -> generator<std::optional<view3<type_to_data_t<Type>>>>
+  auto values3() const -> generator<Option<view3<type_to_data_t<Type>>>>
     requires(concrete_type<Type>)
   {
     TENZIR_ASSERT(array);
@@ -198,11 +198,11 @@ struct basic_series {
 
   template <concrete_type Cast>
     requires(std::same_as<Type, tenzir::type>)
-  auto values() const -> generator<std::optional<view3<type_to_data_t<Cast>>>> {
+  auto values() const -> generator<Option<view3<type_to_data_t<Cast>>>> {
     return values3<Cast>();
   }
 
-  auto values() const -> generator<std::optional<view3<type_to_data_t<Type>>>>
+  auto values() const -> generator<Option<view3<type_to_data_t<Type>>>>
     requires(concrete_type<Type>)
   {
     return values3();

@@ -21,7 +21,6 @@
 #include <expected>
 #include <map>
 #include <memory>
-#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -181,7 +180,7 @@ struct SerializedDataFile {
   int64_t record_count = 0;
   int64_t file_size = 0;
   /// The partition spec the partition values belong to.
-  std::optional<int32_t> spec_id;
+  Option<int32_t> spec_id;
   std::vector<SerializedLiteral> partition;
   std::map<int32_t, int64_t> column_sizes;
   std::map<int32_t, int64_t> value_counts;
@@ -190,7 +189,7 @@ struct SerializedDataFile {
   std::map<int32_t, std::vector<uint8_t>> lower_bounds;
   std::map<int32_t, std::vector<uint8_t>> upper_bounds;
   std::vector<int64_t> split_offsets;
-  std::optional<int32_t> sort_order_id;
+  Option<int32_t> sort_order_id;
 
   friend auto operator==(SerializedDataFile const&, SerializedDataFile const&)
     -> bool

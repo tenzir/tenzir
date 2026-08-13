@@ -13,6 +13,7 @@
 #include "tenzir/detail/inspection_common.hpp"
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/variant_traits.hpp"
 
 #include <caf/config_value.hpp>
@@ -411,6 +412,7 @@ public:
   }
 
   template <class T>
+  // NOLINTNEXTLINE(custom-prefer-option): legacy serialization boundary.
   result_type apply(std::optional<T>& x) {
     bool is_set = false;
     if (not apply(is_set)) {
@@ -419,6 +421,25 @@ public:
     }
     if (not is_set) {
       x = {};
+      return true;
+    }
+    T v;
+    if (not apply(v)) {
+      return false;
+    }
+    x = v;
+    return true;
+  }
+
+  template <class T>
+  result_type apply(Option<T>& x) {
+    bool is_set = false;
+    if (not apply(is_set)) {
+      x.reset();
+      return false;
+    }
+    if (not is_set) {
+      x.reset();
       return true;
     }
     T v;

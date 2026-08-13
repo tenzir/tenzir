@@ -8,8 +8,9 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <cstdint>
-#include <optional>
 
 namespace tenzir::sketch {
 
@@ -23,10 +24,10 @@ namespace tenzir::sketch {
 /// 4. *(m, p)*
 ///
 struct bloom_filter_config {
-  std::optional<uint64_t> m; ///< Number of cells/bits.
-  std::optional<uint64_t> n; ///< Set cardinality.
-  std::optional<uint64_t> k; ///< Number of hash functions.
-  std::optional<double> p;   ///< False-positive probability.
+  Option<uint64_t> m; ///< Number of cells/bits.
+  Option<uint64_t> n; ///< Set cardinality.
+  Option<uint64_t> k; ///< Number of hash functions.
+  Option<double> p;   ///< False-positive probability.
 };
 
 /// A set of evaluated Bloom filter parameters. Typically, this is the result
@@ -62,6 +63,6 @@ struct bloom_filter_params {
 /// for incredibly small Bloom filters.
 ///
 /// @returns The complete set of parameters
-std::optional<bloom_filter_params> evaluate(bloom_filter_config cfg);
+Option<bloom_filter_params> evaluate(bloom_filter_config cfg);
 
 } // namespace tenzir::sketch

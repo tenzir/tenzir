@@ -14,12 +14,12 @@
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/hash/hasher.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/view3.hpp"
 
 #include <climits>
 #include <cstddef>
 #include <numeric>
-#include <optional>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -203,7 +203,7 @@ template <class HashFunction, template <class> class Hasher,
           policy::partitioning Partitioning>
 auto make_bloom_filter_impl(bloom_filter_parameters ys,
                             std::vector<size_t> seeds)
-  -> std::optional<bloom_filter<HashFunction, Hasher, Partitioning>> {
+  -> Option<bloom_filter<HashFunction, Hasher, Partitioning>> {
   using result_type = bloom_filter<HashFunction, Hasher, Partitioning>;
   using hasher_type = typename result_type::hasher_type;
   TENZIR_TRACE("evaluated bloom filter parameters: {} {} {} {}",
@@ -235,7 +235,7 @@ template <class HashFunction, template <class> class Hasher = double_hasher,
   requires seeded_hasher<Hasher<HashFunction>>
 auto make_bloom_filter(bloom_filter_parameters xs, std::vector<size_t> seeds
                                                    = {})
-  -> std::optional<bloom_filter<HashFunction, Hasher, Partitioning>> {
+  -> Option<bloom_filter<HashFunction, Hasher, Partitioning>> {
   using hasher_type = Hasher<HashFunction>;
   auto ys = evaluate(xs);
   if (not ys) {
@@ -266,7 +266,7 @@ template <class HashFunction, template <class> class Hasher,
           policy::partitioning Partitioning = policy::partitioning::no>
   requires(not seeded_hasher<Hasher<HashFunction>>)
 auto make_bloom_filter(bloom_filter_parameters xs)
-  -> std::optional<bloom_filter<HashFunction, Hasher, Partitioning>> {
+  -> Option<bloom_filter<HashFunction, Hasher, Partitioning>> {
   auto ys = evaluate(xs);
   if (not ys) {
     return {};

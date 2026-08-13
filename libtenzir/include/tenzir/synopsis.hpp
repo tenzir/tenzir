@@ -15,6 +15,7 @@
 #include "tenzir/fbs/synopsis.hpp"
 #include "tenzir/legacy_type.hpp"
 #include "tenzir/operator.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
@@ -25,7 +26,6 @@
 #include <caf/fwd.hpp>
 
 #include <memory>
-#include <optional>
 #include <variant>
 
 namespace tenzir {
@@ -65,7 +65,7 @@ public:
   /// @param rhs The RHS of the predicate.
   /// @pre: The query has already been type-checked.
   /// @returns The evaluation result of `*this op rhs`.
-  [[nodiscard]] virtual std::optional<bool>
+  [[nodiscard]] virtual Option<bool>
   lookup(relational_operator op, data_view rhs) const = 0;
 
   /// @returns A best-effort estimate of the size (in bytes) of this synopsis.

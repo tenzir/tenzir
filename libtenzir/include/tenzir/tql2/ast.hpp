@@ -334,7 +334,7 @@ public:
 
   field_path() = default;
 
-  static auto try_from(ast::expression expr) -> std::optional<field_path>;
+  static auto try_from(ast::expression expr) -> Option<field_path>;
   static auto make(ast::expression expr, bool has_this,
                    std::vector<segment> path) -> field_path {
     return field_path{std::move(expr), has_this, std::move(path)};
@@ -402,7 +402,7 @@ auto collect_refs(const expression& expr) -> Option<ExprRefs>;
 struct selector : variant<meta, field_path> {
   using variant::variant;
 
-  static auto try_from(ast::expression expr) -> std::optional<selector>;
+  static auto try_from(ast::expression expr) -> Option<selector>;
 
   auto get_location() const -> location {
     return match([](auto& x) {
@@ -857,7 +857,7 @@ struct if_stmt {
   if_stmt() = default;
 
   if_stmt(tenzir::location if_kw, expression condition, pipeline then,
-          std::optional<else_t> else_)
+          Option<else_t> else_)
     : condition{std::move(condition)},
       then{std::move(then)},
       else_{std::move(else_)} {
@@ -866,7 +866,7 @@ struct if_stmt {
 
   expression condition;
   pipeline then;
-  std::optional<else_t> else_;
+  Option<else_t> else_;
   tenzir::location location;
 
   friend auto inspect(auto& f, if_stmt& x) -> bool {
@@ -1551,7 +1551,7 @@ private:
   }
 
   template <class T>
-  void go(std::optional<T>& x) {
+  void go(Option<T>& x) {
     if (x) {
       go(*x);
     }

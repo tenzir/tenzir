@@ -41,6 +41,13 @@ inline constexpr auto is_option_v = false;
 template <class T>
 inline constexpr auto is_option_v<Option<T>> = true;
 
+// NOLINTBEGIN(custom-prefer-option): std::optional interoperability.
+template <class T>
+inline constexpr auto is_std_optional_v = false;
+
+template <class T>
+inline constexpr auto is_std_optional_v<std::optional<T>> = true;
+
 template <class T, class U>
 concept EqualityComparable = requires(T const& a, U const& b) {
   { a == b } -> std::convertible_to<bool>;
@@ -56,16 +63,16 @@ template <class T>
 class OptionStorage {
 public:
   OptionStorage() noexcept = default;
-  explicit OptionStorage(std::optional<T> opt) noexcept(
+  constexpr explicit OptionStorage(std::optional<T> opt) noexcept(
     std::is_nothrow_move_constructible_v<std::optional<T>>)
     : inner_{std::move(opt)} {
   }
-  auto is_some() const noexcept -> bool {
+  constexpr auto is_some() const noexcept -> bool {
     return inner_.has_value();
   }
   template <class Self>
   // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward)
-  auto get(this Self&& self) -> decltype(auto) {
+  constexpr auto get(this Self&& self) -> decltype(auto) {
     return std::forward_like<Self>(*self.inner_);
   }
   auto reset() noexcept -> void {
@@ -129,16 +136,17 @@ public:
   Option() noexcept = default;
 
   /// Constructs an empty option from `None`.
-  explicit(false) Option(None) noexcept {
+  constexpr explicit(false) Option(None) noexcept {
   }
 
   /// Constructs from a value (non-reference `T` only).
   template <class U>
-    requires(not std::is_reference_v<T> and std::constructible_from<T, U>
+    requires(not std::is_reference_v<T>
              and not std::same_as<std::remove_cvref_t<U>, None>
              and not std::same_as<std::remove_cvref_t<U>, Option>
-             and not std::same_as<std::remove_cvref_t<U>, std::optional<T>>)
-  explicit(not std::convertible_to<U, T>) Option(U&& value) noexcept(
+             and not std::same_as<std::remove_cvref_t<U>, std::optional<T>>
+             and std::constructible_from<T, U>)
+  constexpr explicit(not std::convertible_to<U, T>) Option(U&& value) noexcept(
     std::is_nothrow_constructible_v<T, U&&>
     and std::is_nothrow_constructible_v<Storage, std::optional<T>>)
     : storage_{std::optional<T>{std::in_place, std::forward<U>(value)}} {
@@ -216,9 +224,21 @@ public:
 
   /// Assigns a value (non-reference `T` only).
   template <class U = T>
-    requires(not std::is_reference_v<T> and std::convertible_to<U, T>)
+    requires(not std::is_reference_v<T> and std::constructible_from<T, U>)
   auto operator=(U&& value) -> Option& {
     storage_.emplace(std::forward<U>(value));
+    return *this;
+  }
+
+  /// Assigns from a `std::optional` (non-reference `T` only).
+  template <class U = T>
+    requires(not std::is_reference_v<T> and std::constructible_from<T, U>)
+  auto operator=(std::optional<U> other) -> Option& {
+    if (other) {
+      storage_.emplace(*std::move(other));
+    } else {
+      storage_.reset();
+    }
     return *this;
   }
 
@@ -233,17 +253,22 @@ public:
   // -- Observers --------------------------------------------------------------
 
   /// Returns whether the option contains a value.
-  explicit operator bool() const noexcept {
+  constexpr explicit operator bool() const noexcept {
     return is_some();
   }
 
   /// Returns whether the option contains a value.
-  auto is_some() const noexcept -> bool {
+  constexpr auto is_some() const noexcept -> bool {
     return storage_.is_some();
   }
 
+  /// Returns whether the option contains a value.
+  auto has_value() const noexcept -> bool {
+    return is_some();
+  }
+
   /// Returns whether the option is empty.
-  auto is_none() const noexcept -> bool {
+  constexpr auto is_none() const noexcept -> bool {
     return not is_some();
   }
 
@@ -277,7 +302,7 @@ public:
 
   /// Accesses the contained value. Panics if empty.
   template <class Self>
-  auto operator*(this Self&& self) -> decltype(auto) {
+  constexpr auto operator*(this Self&& self) -> decltype(auto) {
     if (not self.is_some()) [[unlikely]] {
       panic("called Option::operator* on a None value");
     }
@@ -311,6 +336,14 @@ public:
     return std::forward<Self>(self).storage_.get();
   }
 
+  /// Accesses the contained value. Panics if empty.
+  template <class Self>
+  auto value(this Self&& self, std::source_location loc
+                               = std::source_location::current())
+    -> decltype(auto) {
+    return std::forward<Self>(self).unwrap(loc);
+  }
+
   /// Unwraps the contained value with a custom panic message.
   template <class Self>
   auto expect(this Self&& self, std::string_view msg,
@@ -340,6 +373,33 @@ public:
       return std::forward<Self>(self).storage_.get();
     }
     return static_cast<Value>(std::forward<U>(fallback));
+  }
+
+  /// Returns the contained value, or `fallback` if empty.
+  template <class Self, class U>
+    requires std::convertible_to<U, T>
+  auto value_or(this Self&& self, U&& fallback) -> Value {
+    return std::forward<Self>(self).unwrap_or(std::forward<U>(fallback));
+  }
+
+  /// Converts to `std::optional` for third-party API boundaries.
+  auto to_std() const& -> std::optional<Value>
+    requires(not std::is_reference_v<T> and std::copy_constructible<T>)
+  {
+    if (is_some()) {
+      return std::optional<Value>{std::in_place, storage_.get()};
+    }
+    return std::nullopt; // NOLINT(custom-prefer-none): interoperability.
+  }
+
+  /// Converts to `std::optional` for third-party API boundaries.
+  auto to_std() && -> std::optional<Value>
+    requires(not std::is_reference_v<T> and std::move_constructible<T>)
+  {
+    if (is_some()) {
+      return std::optional<Value>{std::in_place, *std::move(*this)};
+    }
+    return std::nullopt; // NOLINT(custom-prefer-none): interoperability.
   }
 
   /// Returns the contained value, or computes it from `f` if empty.
@@ -385,6 +445,12 @@ public:
                     std::forward<Self>(self).storage_.get())};
     }
     return None{};
+  }
+
+  /// Applies `f` to the contained value, returning `Option<U>`.
+  template <class Self, class F>
+  auto transform(this Self&& self, F&& f) {
+    return std::forward<Self>(self).map(std::forward<F>(f));
   }
 
   /// Applies `f` (which returns `Option<U>`) to the contained value.
@@ -469,10 +535,21 @@ public:
     return lhs.is_none();
   }
 
+  /// Compares against a `std::optional` at third-party API boundaries.
+  template <class U>
+    requires detail::EqualityComparable<Value, U>
+  auto operator==(std::optional<U> const& rhs) const -> bool {
+    if (is_some() != rhs.has_value()) {
+      return false;
+    }
+    return is_none() or **this == *rhs;
+  }
+
   /// An option equals a value iff it is Some and the values are equal.
   template <class U>
     requires(not std::same_as<std::remove_cvref_t<U>, None>
              and not detail::is_option_v<std::remove_cvref_t<U>>
+             and not detail::is_std_optional_v<std::remove_cvref_t<U>>
              and detail::EqualityComparable<Value, U>)
   auto operator==(U const& rhs) const -> bool {
     return is_some() and **this == rhs;
@@ -519,6 +596,15 @@ private:
 
   Storage storage_;
 };
+// NOLINTEND(custom-prefer-option)
+
+/// Unwraps an option and panics if it is empty.
+template <class T>
+[[nodiscard]] auto check(Option<T> result, std::source_location location
+                                           = std::source_location::current())
+  -> T {
+  return std::move(result).unwrap(location);
+}
 
 /// Deduction guide: deduces values, not references.
 template <class T>

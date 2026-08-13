@@ -41,8 +41,7 @@ void argument_parser::add(located<tenzir::expression>& x, std::string meta) {
   });
 }
 
-void argument_parser::add(std::optional<tenzir::expression>& x,
-                          std::string meta) {
+void argument_parser::add(Option<tenzir::expression>& x, std::string meta) {
   if (not first_optional_) {
     first_optional_ = positional_.size();
   }
@@ -55,7 +54,7 @@ void argument_parser::add(std::optional<tenzir::expression>& x,
   });
 }
 
-void argument_parser::add(std::optional<located<tenzir::expression>>& x,
+void argument_parser::add(Option<located<tenzir::expression>>& x,
                           std::string meta) {
   if (not first_optional_) {
     first_optional_ = positional_.size();
@@ -92,7 +91,7 @@ void argument_parser::add(located<tql::expression>& x, std::string meta) {
   });
 }
 
-void argument_parser::add(std::optional<tql::expression>& x, std::string meta) {
+void argument_parser::add(Option<tql::expression>& x, std::string meta) {
   if (not first_optional_) {
     first_optional_ = positional_.size();
   }
@@ -105,7 +104,7 @@ void argument_parser::add(std::optional<tql::expression>& x, std::string meta) {
   });
 }
 
-void argument_parser::add(std::optional<located<tql::expression>>& x,
+void argument_parser::add(Option<located<tql::expression>>& x,
                           std::string meta) {
   if (not first_optional_) {
     first_optional_ = positional_.size();
@@ -162,7 +161,7 @@ void argument_parser::parse_impl(parser_interface& p) const {
       TENZIR_DIAG_ASSERT(arg == p.accept_shell_arg());
       auto split = detail::split(arg->inner, "=", 1);
       auto name = located<std::string_view>{};
-      auto value = std::optional<located<std::string_view>>{};
+      auto value = Option<located<std::string_view>>{};
       if (split.size() == 1) {
         name.inner = arg->inner;
         name.source = arg->source;

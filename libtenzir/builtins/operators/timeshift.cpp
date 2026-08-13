@@ -26,7 +26,7 @@ public:
   timeshift_operator2() = default;
 
   explicit timeshift_operator2(ast::field_path selector, double speed,
-                               std::optional<time> start) noexcept
+                               Option<time> start) noexcept
     : speed_{speed}, selector_{std::move(selector)}, start_{start} {
   }
 
@@ -37,7 +37,7 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto first_time = std::optional<time>{};
+    auto first_time = Option<time>{};
     auto start = start_;
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
@@ -98,7 +98,7 @@ public:
 private:
   double speed_{1.0};
   ast::field_path selector_;
-  std::optional<time> start_;
+  Option<time> start_;
 };
 
 struct TimeshiftArgs {
@@ -169,8 +169,8 @@ private:
 struct plugin2 : operator_plugin2<timeshift_operator2>, virtual OperatorPlugin {
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto speed = std::optional<located<double>>{};
-    auto start = std::optional<time>{};
+    auto speed = Option<located<double>>{};
+    auto start = Option<time>{};
     auto selector = ast::field_path{};
     argument_parser2::operator_("timeshift")
       .positional("field", selector, "time")

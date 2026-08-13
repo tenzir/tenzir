@@ -19,6 +19,7 @@
 #include "tenzir/generator.hpp"
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/offset.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/tag.hpp"
 #include "tenzir/variant_traits.hpp"
 
@@ -260,7 +261,7 @@ public:
   /// Infers a type from a given data.
   /// @note Returns an empty optional if the type cannot be inferred.
   /// @relates data
-  [[nodiscard]] static std::optional<type> infer(const data& value) noexcept;
+  [[nodiscard]] static Option<type> infer(const data& value) noexcept;
 
   /// Constructs a type from a legacy_type.
   /// @relates legacy_type
@@ -306,7 +307,7 @@ public:
   /// @pre *this
   [[nodiscard]] auto to_definition() const noexcept -> record;
   [[nodiscard]] auto
-  to_legacy_definition(std::optional<std::string> field_name = {},
+  to_legacy_definition(Option<std::string> field_name = {},
                        offset parent_path = {}) const noexcept -> record;
 
   /// Creates a type from an Arrow DataType, Field, or Schema.
@@ -348,7 +349,7 @@ public:
 
   /// Resolves a key on a schema.
   /// @returns nullopt if the type is not a valid schema.
-  [[nodiscard]] std::optional<offset>
+  [[nodiscard]] Option<offset>
   resolve_key_or_concept_once(std::string_view key) const noexcept;
 
   /// Enables integration with CAF's type inspection.
@@ -391,12 +392,12 @@ public:
   /// @param key The key of the attribute.
   /// @note If an attribute exists and its value is empty, the result contains
   /// an empty string to. If the attribute does not exists, the result is
-  /// `std::nullopt`.
+  /// `None{}`.
   // TODO: The generated FlatBuffers code does not work with `std::string_view`.
   // Re-evaluate when upgrading to FlatBuffers 2.0
-  [[nodiscard]] std::optional<std::string_view>
+  [[nodiscard]] Option<std::string_view>
   attribute(const char* key) const& noexcept;
-  [[nodiscard]] std::optional<std::string_view>
+  [[nodiscard]] Option<std::string_view>
   attribute(const char* key) and = delete;
 
   /// Returns whether the type has any attributes.
@@ -482,7 +483,7 @@ replace_if_congruent(std::initializer_list<type*> xs, const module& with);
 /// Every type can be unified with `null_type`. Records can be unified if their
 /// overlapping fields can be unified, and lists can be unified if their value
 /// type can be unified.
-auto unify(const type& a, const type& b) -> std::optional<type>;
+auto unify(const type& a, const type& b) -> Option<type>;
 
 // -- null_type ---------------------------------------------------------------
 
@@ -996,8 +997,7 @@ public:
 
   /// Returns the value of the field with the given name, or nullopt if the key
   /// does not exist.
-  [[nodiscard]] std::optional<uint32_t>
-  resolve(std::string_view key) const noexcept;
+  [[nodiscard]] Option<uint32_t> resolve(std::string_view key) const noexcept;
 };
 
 /// An extension type for Arrow representing corresponding to the enumeration
@@ -1324,15 +1324,14 @@ public:
   /// Resolves a key or a concept into an offset.
   /// @note This only matches on full keys, so the key 'x.y'  matches 'x.y.z'
   /// but not 'x.y_other.z' .
-  [[nodiscard]] std::optional<offset>
+  [[nodiscard]] Option<offset>
   resolve_key_or_concept_once(std::string_view key,
                               std::string_view schema_name) const noexcept;
 
   /// Resolves a key into an offset.
   /// @note This only matches on full keys, so the key 'x.y'  matches 'x.y.z'
   /// but not 'x.y_other.z' .
-  [[nodiscard]] std::optional<offset>
-  resolve_key(std::string_view key) const noexcept;
+  [[nodiscard]] Option<offset> resolve_key(std::string_view key) const noexcept;
 
   /// Resolves a key into a list of offsets by suffix matching the given key.
   /// @note This only matches on full keys, so the key 'y.z' matches 'x.y.z' but
@@ -1350,7 +1349,7 @@ public:
   resolve_type_extractor(std::string_view type_extractor) const noexcept;
 
   /// Resolved a field name.
-  [[nodiscard]] std::optional<size_t>
+  [[nodiscard]] Option<size_t>
   resolve_field(std::string_view field) const noexcept;
 
   /// Checks whether a field name is contained in the record.
@@ -1364,7 +1363,7 @@ public:
   /// Returns the field at the given index.
   [[nodiscard]] field_view field(size_t index) const noexcept;
   [[nodiscard]] field_view field(const offset& index) const noexcept;
-  auto field(std::string_view name) const -> std::optional<type>;
+  auto field(std::string_view name) const -> Option<type>;
 
   /// Returns the flat index to a given offset.
   /// @note This is necessary to work with the table_slice API, which does not
@@ -1394,7 +1393,7 @@ public:
   /// field in one go, this may lead to unwanted field duplication.
   /// @pre While this function can operate on non-leaf fields, it requires that
   /// transformations none of the offsets have the same prefix.
-  [[nodiscard]] std::optional<record_type>
+  [[nodiscard]] Option<record_type>
   transform(std::vector<transformation> transformations) const noexcept;
 
   /// Creates a new record by merging two records.

@@ -13,6 +13,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/operator_plugin.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -26,8 +27,8 @@
 namespace tenzir {
 
 struct context_parameter_map
-  : std::unordered_map<std::string, std::optional<std::string>> {
-  using super = std::unordered_map<std::string, std::optional<std::string>>;
+  : std::unordered_map<std::string, Option<std::string>> {
+  using super = std::unordered_map<std::string, Option<std::string>>;
   using super::super;
 
   friend auto inspect(auto& f, context_parameter_map& x) -> bool {
@@ -37,10 +38,10 @@ struct context_parameter_map
 
 struct context_update_args {
   ast::expression key = {};
-  std::optional<ast::expression> value = {};
-  std::optional<located<duration>> create_timeout = {};
-  std::optional<located<duration>> write_timeout = {};
-  std::optional<located<duration>> read_timeout = {};
+  Option<ast::expression> value = None{};
+  Option<located<duration>> create_timeout = None{};
+  Option<located<duration>> write_timeout = None{};
+  Option<located<duration>> read_timeout = None{};
 
   friend auto inspect(auto& f, context_update_args& x) -> bool {
     return f.object(x).fields(f.field("key", x.key), f.field("value", x.value),

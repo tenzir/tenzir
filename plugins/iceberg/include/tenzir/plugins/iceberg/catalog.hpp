@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
 #include "tenzir/plugins/iceberg/types.hpp"
 
 #include <tenzir/type.hpp>
@@ -28,7 +29,6 @@
 #include <iceberg/type_fwd.h>
 
 #include <memory>
-#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -111,14 +111,14 @@ auto same_write_layout(ice::Table const& lhs, ice::Table const& rhs) -> bool;
 /// the incoming values are promoted where the spec allows it (int to long,
 /// float to double); other type conflicts stay untouched, and fields that
 /// cannot be represented are skipped and reported in `dropped_fields` as
-/// `path: reason` strings. Returns the updated table, or `std::nullopt`
+/// `path: reason` strings. Returns the updated table, or `None{}`
 /// when the table already covers every representable field. An error of
 /// kind `conflict` means a concurrent writer updated the table; callers
 /// should reload the table and retry against the fresh schema.
 auto evolve_schema(std::shared_ptr<ice::Table> const& table,
                    record_type const& schema,
                    std::vector<std::string>& dropped_fields)
-  -> Result<std::optional<std::shared_ptr<ice::Table>>>;
+  -> Result<Option<std::shared_ptr<ice::Table>>>;
 
 /// One partition spec field bound against the table schema, ready to compute
 /// partition values.

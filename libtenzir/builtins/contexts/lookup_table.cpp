@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/numeric/bool.hpp>
@@ -38,7 +40,6 @@
 #include <tsl/robin_map.h>
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <utility>
 
@@ -52,12 +53,12 @@ struct LookupTableArgs {
 };
 
 template <typename T>
-auto try_lossless_cast(T x) -> std::optional<T> {
+auto try_lossless_cast(T x) -> Option<T> {
   return x;
 }
 
 template <typename To, typename From>
-auto try_lossless_cast(From from) -> std::optional<To>
+auto try_lossless_cast(From from) -> Option<To>
   requires std::integral<From> and std::integral<To>
            and (not std::same_as<From, To>)
 {
@@ -66,24 +67,24 @@ auto try_lossless_cast(From from) -> std::optional<To>
   if (static_cast<From>(to) != from
       and (detail::is_same_signedness<To, From>::value
            or (to < To{}) != (from < From{}))) {
-    return std::nullopt;
+    return None{};
   }
   return to;
 }
 
 template <typename To, typename From>
-auto try_lossless_cast(From from) -> std::optional<To>
+auto try_lossless_cast(From from) -> Option<To>
   requires(std::floating_point<From> or std::floating_point<To>)
           and (not std::same_as<From, To>)
 {
   if constexpr (std::integral<To>) {
     if (not std::is_signed_v<To> and from < From{}) {
-      return std::nullopt;
+      return None{};
     }
   }
   auto to = static_cast<To>(from);
   if (static_cast<From>(to) != from) {
-    return std::nullopt;
+    return None{};
   }
   return to;
 }
@@ -224,13 +225,13 @@ namespace {
 struct value_data {
   data raw_data;
 
-  std::optional<time> create_timeout;
-  std::optional<time> write_timeout;
+  Option<time> create_timeout;
+  Option<time> write_timeout;
 
   // TODO: read_timeout and read_timeout_duration can move into the same
   // optional as they cannot be set independently
-  std::optional<duration> read_timeout_duration;
-  std::optional<time> read_timeout;
+  Option<duration> read_timeout_duration;
+  Option<time> read_timeout;
 
   auto is_expired(time now) const -> bool {
     return (read_timeout and *read_timeout < now)

@@ -37,9 +37,9 @@ namespace tenzir::plugins::every_cron2 {
 namespace {
 
 template <typename T>
-[[nodiscard]] constexpr auto take(std::optional<T>& x) -> T {
+[[nodiscard]] constexpr auto take(Option<T>& x) -> T {
   TENZIR_ASSERT(x);
-  return std::exchange(x, std::nullopt).value();
+  return std::exchange(x, None{}).value();
 }
 
 using timepoint = decltype(time::clock::now());
@@ -193,8 +193,8 @@ private:
   transceiver_actor::pointer self_;
   shared_diagnostic_handler dh_;
   metrics_receiver_actor metrics_receiver_;
-  std::optional<table_slice> output_;
-  std::optional<table_slice> input_;
+  Option<table_slice> output_;
+  Option<table_slice> input_;
   caf::typed_response_promise<void> done_rp_;
   caf::typed_response_promise<void> push_rp_;
   caf::typed_response_promise<void> internal_push_rp_;
@@ -521,9 +521,9 @@ struct every_cron_operator final : public operator_base {
     co_yield {};
   }
 
-  auto make_cronexpr() const -> std::optional<detail::cron::cronexpr> {
+  auto make_cronexpr() const -> Option<detail::cron::cronexpr> {
     if (args_.is_every) {
-      return std::nullopt;
+      return None{};
     }
     return detail::cron::make_cron(args_.cron.inner);
   }
@@ -559,8 +559,7 @@ struct every_cron_operator final : public operator_base {
   auto
   spawn_pipeline(operator_control_plane& ctrl, const transceiver_actor& hdl,
                  timepoint& start, timepoint& finish,
-                 const std::optional<detail::cron::cronexpr>& cron) const
-    -> void {
+                 const Option<detail::cron::cronexpr>& cron) const -> void {
     const auto now = time::clock::now();
     start = now > finish ? now : finish;
     finish = next_ts(cron, start);
@@ -598,7 +597,7 @@ struct every_cron_operator final : public operator_base {
   auto
   spawn_pipeline(operator_control_plane& ctrl, const transceiver_actor& hdl,
                  timepoint& start, timepoint& finish,
-                 const std::optional<detail::cron::cronexpr>& cron,
+                 const Option<detail::cron::cronexpr>& cron,
                  execution_state& state) const -> void {
     const auto now = time::clock::now();
     start = now > finish ? now : finish;
@@ -663,8 +662,8 @@ struct every_cron_operator final : public operator_base {
     });
   }
 
-  auto next_ts(const std::optional<detail::cron::cronexpr>& cron,
-               timepoint last) const -> timepoint {
+  auto next_ts(const Option<detail::cron::cronexpr>& cron, timepoint last) const
+    -> timepoint {
     if (not cron) {
       return time_point_cast<timepoint::duration>(last + args_.every.inner);
     }

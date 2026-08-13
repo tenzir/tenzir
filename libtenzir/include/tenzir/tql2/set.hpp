@@ -10,6 +10,7 @@
 
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/operator_control_plane.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/tql2/ast.hpp"
 
@@ -88,7 +89,7 @@ public:
     TENZIR_UNUSED(filter);
     auto replacement = std::make_unique<set_operator>(*this);
     replacement->order_ = order;
-    return optimize_result{std::nullopt, order, std::move(replacement)};
+    return optimize_result{None{}, order, std::move(replacement)};
   }
 
   friend auto inspect(auto& f, set_operator& x) -> bool {

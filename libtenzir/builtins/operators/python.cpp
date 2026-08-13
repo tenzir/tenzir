@@ -149,7 +149,7 @@ main()
 
 struct config {
   // Implicit arguments passed to every invocation of `pip install`.
-  std::optional<std::string> implicit_requirements;
+  Option<std::string> implicit_requirements;
 
   // Whether to create a virtualenv environment for the python
   // operator.
@@ -172,10 +172,10 @@ constexpr auto error_pipe_child_fd = 4;
 struct python_runtime {
   std::filesystem::path python_executable;
   bp::environment env = boost::this_process::environment();
-  std::optional<std::filesystem::path> venv;
-  std::optional<std::string> virtual_env;
-  std::optional<std::string> uv_cache_dir;
-  std::optional<std::string> uv_python;
+  Option<std::filesystem::path> venv;
+  Option<std::string> virtual_env;
+  Option<std::string> uv_cache_dir;
+  Option<std::string> uv_python;
 };
 
 struct PythonArgs {
@@ -226,17 +226,16 @@ auto drain_pipe(bp::ipstream& pipe) -> std::string {
 }
 
 auto find_wheel(const std::filesystem::path& directory,
-                std::string_view project)
-  -> std::optional<std::filesystem::path> {
+                std::string_view project) -> Option<std::filesystem::path> {
   auto normalized = std::string{project};
   std::replace(normalized.begin(), normalized.end(), '-', '_');
   const auto prefix = fmt::format("{}-", normalized);
   const auto suffix = std::string{".whl"};
-  auto best_path = std::optional<std::filesystem::path>{};
+  auto best_path = Option<std::filesystem::path>{};
   auto best_name = std::string{};
   std::error_code ec;
   if (not std::filesystem::exists(directory, ec)) {
-    return std::nullopt;
+    return None{};
   }
   for (const auto& entry : std::filesystem::directory_iterator{directory, ec}) {
     if (ec) {
@@ -273,7 +272,7 @@ auto make_subprocess_env(const python_runtime& runtime)
     result.push_back(std::move(entry));
   }
   auto append_missing
-    = [&](std::string_view key, const std::optional<std::string>& value) {
+    = [&](std::string_view key, const Option<std::string>& value) {
         if (not value) {
           return;
         }
@@ -462,18 +461,18 @@ public:
       if (config_.implicit_requirements) {
         implicit_requirements = *config_.implicit_requirements;
       } else {
-        const auto find_wheel = [&](const std::filesystem::path& directory,
-                                    std::string_view project)
-          -> std::optional<std::filesystem::path> {
+        const auto find_wheel
+          = [&](const std::filesystem::path& directory,
+                std::string_view project) -> Option<std::filesystem::path> {
           auto normalized = std::string{project};
           std::replace(normalized.begin(), normalized.end(), '-', '_');
           const auto prefix = fmt::format("{}-", normalized);
           const auto suffix = std::string{".whl"};
-          auto best_path = std::optional<std::filesystem::path>{};
+          auto best_path = Option<std::filesystem::path>{};
           auto best_name = std::string{};
           std::error_code ec;
           if (not std::filesystem::exists(directory, ec)) {
-            return std::nullopt;
+            return None{};
           }
           for (const auto& entry :
                std::filesystem::directory_iterator{directory}) {
@@ -508,9 +507,9 @@ public:
           implicit_requirements = std::string{"tenzir-operator"};
         }
       }
-      auto venv_base_dir = std::optional<std::filesystem::path>{};
+      auto venv_base_dir = Option<std::filesystem::path>{};
       if (not config_.create_venvs) {
-        venv_base_dir = std::nullopt;
+        venv_base_dir = None{};
       } else if (const auto* cache_dir
                  = get_if<std::string>(&ctrl.self().home_system().config(),
                                        "tenzir.cache-directory")) {
@@ -554,7 +553,7 @@ public:
       auto env = bp::environment{boost::this_process::environment()};
       // Automatically create a virtualenv with all requirements preinstalled,
       // unless disabled by node config.
-      auto maybe_venv = std::optional<std::filesystem::path>{};
+      auto maybe_venv = Option<std::filesystem::path>{};
       if (config_.create_venvs) {
         TENZIR_ASSERT(venv_base_dir);
         auto ec = std::error_code{};
@@ -1249,9 +1248,9 @@ public:
 
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto requirements = std::optional<std::string>{};
-    auto code = std::optional<located<secret>>{};
-    auto path = std::optional<located<std::string>>{};
+    auto requirements = Option<std::string>{};
+    auto code = Option<located<secret>>{};
+    auto path = Option<located<std::string>>{};
     auto parser = argument_parser2::operator_("python")
                     .positional("code", code)
                     .named("file", path)

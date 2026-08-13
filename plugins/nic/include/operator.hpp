@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
 #include "tenzir/variant_traits.hpp"
 
 #include <tenzir/argument_parser.hpp>
@@ -38,8 +39,8 @@ namespace {
 
 struct loader_args {
   located<std::string> iface;
-  std::optional<located<uint32_t>> snaplen;
-  std::optional<location> emit_file_headers;
+  Option<located<uint32_t>> snaplen;
+  Option<location> emit_file_headers;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, loader_args& x) -> bool {

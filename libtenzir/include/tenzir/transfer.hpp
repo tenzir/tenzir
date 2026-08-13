@@ -12,6 +12,7 @@
 #include "tenzir/curl.hpp"
 #include "tenzir/generator.hpp"
 #include "tenzir/http.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/tls_options.hpp"
 
 #include <chrono>
@@ -26,10 +27,10 @@ struct transfer_options {
   bool verbose = false;
   std::string default_protocol{};
   std::chrono::milliseconds poll_timeout{100};
-  std::optional<std::string> username = {};
-  std::optional<std::string> password = {};
-  std::optional<std::string> authzid = {};
-  std::optional<std::string> authorization = {};
+  Option<std::string> username = None{};
+  Option<std::string> password = None{};
+  Option<std::string> authzid = None{};
+  Option<std::string> authorization = None{};
   tls_options ssl = {};
 
   friend auto inspect(auto& f, transfer_options& x) -> bool {

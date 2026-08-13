@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -20,7 +22,6 @@
 
 #include <algorithm>
 #include <memory>
-#include <optional>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -31,7 +32,7 @@ namespace tenzir::plugins::map_keys_function {
 namespace {
 
 auto map_names(record_type const& r, ast::lambda_expr const& fn, session ctx)
-  -> std::optional<std::vector<std::string>> {
+  -> Option<std::vector<std::string>> {
   auto keys_builder = arrow::StringBuilder{tenzir::arrow_memory_pool()};
   check(keys_builder.Reserve(detail::narrow<int64_t>(r.num_fields())));
   auto names = std::vector<std::string>{};
@@ -72,7 +73,7 @@ auto map_names(record_type const& r, ast::lambda_expr const& fn, session ctx)
       .primary(fn.body)
       .note("conflicting fields: `{}`", fmt::join(conflicts, "`, `"))
       .emit(ctx);
-    return std::nullopt;
+    return None{};
   }
   return names;
 }

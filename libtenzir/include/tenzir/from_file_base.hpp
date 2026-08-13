@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/actors.hpp>
 #include <tenzir/argument_parser2.hpp>
 #include <tenzir/glob.hpp>
@@ -57,10 +59,10 @@ struct from_file_args {
   located<secret> url;
   bool watch{false};
   located<bool> remove{false, location::unknown};
-  std::optional<ast::lambda_expr> rename;
-  std::optional<ast::field_path> path_field;
-  std::optional<located<duration>> max_age;
-  std::optional<located<pipeline>> pipe;
+  Option<ast::lambda_expr> rename;
+  Option<ast::field_path> path_field;
+  Option<located<duration>> max_age;
+  Option<located<pipeline>> pipe;
 
   auto add_to(argument_parser2& p) -> void;
   auto handle(session ctx) const -> failure_or<pipeline>;
@@ -229,7 +231,7 @@ public:
 
   explicit from_file_sink(
     from_file_actor parent, event_order order,
-    std::optional<std::pair<ast::field_path, std::string>> path_field);
+    Option<std::pair<ast::field_path, std::string>> path_field);
 
   auto name() const -> std::string override;
 
@@ -265,7 +267,7 @@ public:
 
   auto optimize(const expression&, event_order) const
     -> optimize_result override {
-    return optimize_result{std::nullopt, order_, copy()};
+    return optimize_result{None{}, order_, copy()};
   }
 
   friend auto inspect(auto& f, from_file_sink& x) -> bool {
@@ -277,7 +279,7 @@ public:
 private:
   from_file_actor parent_;
   event_order order_{};
-  std::optional<std::pair<ast::field_path, std::string>> path_field_;
+  Option<std::pair<ast::field_path, std::string>> path_field_;
 };
 
 } // namespace tenzir

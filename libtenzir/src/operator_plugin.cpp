@@ -237,7 +237,7 @@ public:
       std::move(d).usage(get_usage(*desc)).docs(desc->docs).emit(ctx);
     };
     // Track which named arguments have been found.
-    auto named_found = std::vector<std::optional<location>>(desc->named.size());
+    auto named_found = std::vector<Option<location>>(desc->named.size());
     // Parse arguments, separating positional from named.
     auto positional_idx = size_t{0};
     auto min_positional
@@ -396,15 +396,15 @@ public:
       }
     }
     for (auto& spawn : desc_->spawns) {
-      auto output = match(
-        spawn,
-        [&]<class Input, class Output>(
-          const Spawn<Input, Output>&) -> std::optional<element_type_tag> {
-          if (input.is<Input>()) {
-            return tag_v<Output>;
-          }
-          return std::nullopt;
-        });
+      auto output
+        = match(spawn,
+                [&]<class Input, class Output>(
+                  const Spawn<Input, Output>&) -> Option<element_type_tag> {
+                  if (input.is<Input>()) {
+                    return tag_v<Output>;
+                  }
+                  return None{};
+                });
       if (output) {
         return *output;
       }
@@ -474,7 +474,7 @@ public:
   }
 
   auto spawn(element_type_tag input) const -> AnyOperator override {
-    auto spawner = std::optional<AnySpawn>{};
+    auto spawner = Option<AnySpawn>{};
     if (desc_->spawner) {
       auto noop_dh = null_diagnostic_handler{};
       auto ctx = DescribeCtx{args_,  named_args_,     pipeline_,
@@ -498,15 +498,15 @@ public:
       }));
     }
     for (auto& spawn : desc_->spawns) {
-      auto result = match(
-        spawn,
-        [&]<class Input, class Output>(
-          const Spawn<Input, Output>& spawn) -> std::optional<AnyOperator> {
-          if (input.is<Input>()) {
-            return spawn(std::move(args));
-          }
-          return std::nullopt;
-        });
+      auto result
+        = match(spawn,
+                [&]<class Input, class Output>(
+                  const Spawn<Input, Output>& spawn) -> Option<AnyOperator> {
+                  if (input.is<Input>()) {
+                    return spawn(std::move(args));
+                  }
+                  return None{};
+                });
       if (result) {
         return with_name(std::move(*result));
       }
@@ -750,7 +750,7 @@ private:
   std::vector<NamedArg> named_args_;
 
   /// Pre-compiled pipeline with source location and let_ids.
-  std::optional<PipelineArg> pipeline_;
+  Option<PipelineArg> pipeline_;
 
   /// The filter passed to `optimize` (only if the operator wants to consume it).
   ir::optimize_filter filter_;

@@ -23,7 +23,6 @@
 #include <fmt/color.h>
 
 #include <iostream>
-#include <optional>
 #include <span>
 #include <string_view>
 #include <unordered_map>
@@ -122,7 +121,7 @@ public:
       indent_width = std::max(indent_width, size_t{1});
     }
     auto indent = std::string(indent_width, ' ');
-    auto previous_source = std::optional<SourceId>{};
+    auto previous_source = Option<SourceId>{};
     for (auto& annotation : diag.annotations) {
       if (not annotation.source) {
         TENZIR_VERBOSE("annotation does not have source: {:?}", annotation);
@@ -234,12 +233,12 @@ private:
   /// beyond the end of the source text.
   static auto
   line_col_indices(std::span<const std::string_view> lines, size_t offset)
-    -> std::optional<std::pair<size_t, size_t>> {
+    -> Option<std::pair<size_t, size_t>> {
     auto line = size_t{0};
     auto col = offset;
     while (true) {
       if (line >= lines.size()) {
-        return std::nullopt;
+        return None{};
       }
       if (col <= lines[line].size()) {
         break;
@@ -331,11 +330,11 @@ auto diagnostic::builder(enum severity s, caf::error err,
       return std::move(*inner).modify().severity(s);
     }
   }
-  auto as_string = [&](size_t i) -> std::optional<std::string_view> {
+  auto as_string = [&](size_t i) -> Option<std::string_view> {
     if (err.context().match_element<std::string>(i)) {
       return err.context().get_as<std::string>(i);
     }
-    return std::nullopt;
+    return None{};
   };
   auto eligible = err.context().size() != 0;
   for (auto i = size_t{0}; i < err.context().size(); ++i) {

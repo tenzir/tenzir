@@ -25,7 +25,7 @@ namespace {
 
 struct ApiArgs {
   located<std::string> endpoint = {};
-  Option<located<record>> request_body = {};
+  Option<located<record>> request_body = None{};
 };
 
 using ApiResult = caf::expected<rest_response>;
@@ -44,7 +44,7 @@ public:
       .canonical_path = fmt::format("POST {} (v0)", endpoint_),
       .json_body = request_body_,
     };
-    auto response = std::optional<rest_response>{};
+    auto response = Option<rest_response>{};
     const auto request_id = std::string{};
     ctrl.self()
       .mail(atom::proxy_v, request, request_id)
@@ -222,7 +222,7 @@ public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto endpoint = located<std::string>{};
-    auto request_body = std::optional<located<record>>{};
+    auto request_body = Option<located<record>>{};
     TRY(argument_parser2::operator_("api")
           .positional("endpoint", endpoint)
           .positional("request_body", request_body)

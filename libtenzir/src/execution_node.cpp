@@ -631,11 +631,11 @@ struct exec_node_state {
   exec_node_name_guard::name_type op_name = {};
 
   /// The instance created by the operator. Must be created at most once.
-  std::optional<generator<Output>> instance = {};
+  Option<generator<Output>> instance = None{};
   /// The output of the operator that was generated at the start of the
   /// execution node. We do not have demand at that time, so we can't directly
   /// send it to its downstream operator.
-  std::optional<Output> start_output;
+  Option<Output> start_output;
 
   /// State required for keeping and sending metrics.
   std::chrono::steady_clock::time_point start_time
@@ -644,7 +644,7 @@ struct exec_node_state {
   operator_metric metrics = {};
 
   /// Whether this execution node is paused, and when it was.
-  std::optional<std::chrono::steady_clock::time_point> paused_at = {};
+  Option<std::chrono::steady_clock::time_point> paused_at = None{};
 
   /// Whether this execution node is currently waiting for a response.
   bool waiting = {};
@@ -675,7 +675,7 @@ struct exec_node_state {
     uint64_t remaining_elements = {};
     uint64_t remaining_batches = {};
   };
-  std::optional<struct demand> demand = {};
+  Option<struct demand> demand = None{};
   bool issue_demand_inflight = {};
 
   caf::typed_response_promise<void> start_rp = {};
@@ -686,7 +686,7 @@ struct exec_node_state {
   double backoff_rate = 2.0;
   duration backoff = duration::zero();
   caf::disposable backoff_disposable = {};
-  std::optional<std::chrono::steady_clock::time_point> idle_since = {};
+  Option<std::chrono::steady_clock::time_point> idle_since = None{};
 
   /// A pointer to te operator control plane passed to this operator during
   /// execution, which acts as an escape hatch to this actor.

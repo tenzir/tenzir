@@ -70,7 +70,7 @@ auto make_serialized_file() -> SerializedDataFile {
     .lower_bounds = {{1, le_bytes(int64_t{1})}},
     .upper_bounds = {{1, le_bytes(int64_t{99})}},
     .split_offsets = {4, 1048576},
-    .sort_order_id = std::nullopt,
+    .sort_order_id = None{},
   };
 }
 
@@ -86,7 +86,7 @@ TEST("data file handles round-trip through their persistable form") {
 TEST("unpartitioned data file handles round-trip") {
   auto serialized = make_serialized_file();
   serialized.partition.clear();
-  serialized.spec_id = std::nullopt;
+  serialized.spec_id = None{};
   auto file = deserialize_data_file(serialized);
   REQUIRE(file.has_value());
   auto roundtripped = serialize_data_file(**file);

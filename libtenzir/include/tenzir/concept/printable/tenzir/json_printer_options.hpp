@@ -8,10 +8,11 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <fmt/color.h>
 
 #include <cstdint>
-#include <optional>
 
 namespace tenzir {
 
@@ -61,7 +62,7 @@ struct json_printer_options {
   bool oneline = false;
 
   /// Disables trailing commas for TQL style output
-  std::optional<bool> trailing_commas = {};
+  Option<bool> trailing_commas = None{};
 
   /// Print numeric rather than human-readable durations.
   bool numeric_durations = false;

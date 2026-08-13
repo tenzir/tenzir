@@ -12,6 +12,7 @@
 #include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/parser_interface.hpp"
 #include "tenzir/tql/expression.hpp"
 
@@ -54,13 +55,13 @@ public:
 
   void add(tenzir::expression& x, std::string meta);
   void add(located<tenzir::expression>& x, std::string meta);
-  void add(std::optional<tenzir::expression>& x, std::string meta);
-  void add(std::optional<located<tenzir::expression>>& x, std::string meta);
+  void add(Option<tenzir::expression>& x, std::string meta);
+  void add(Option<located<tenzir::expression>>& x, std::string meta);
 
   void add(tql::expression& x, std::string meta);
   void add(located<tql::expression>& x, std::string meta);
-  void add(std::optional<tql::expression>& x, std::string meta);
-  void add(std::optional<located<tql::expression>>& x, std::string meta);
+  void add(Option<tql::expression>& x, std::string meta);
+  void add(Option<located<tql::expression>>& x, std::string meta);
 
   template <class T>
   void add(T& x, std::string meta) {
@@ -99,7 +100,7 @@ public:
   }
 
   template <class T>
-  void add(std::optional<T>& x, std::string meta) {
+  void add(Option<T>& x, std::string meta) {
     if (not first_optional_) {
       first_optional_ = positional_.size();
     }
@@ -119,7 +120,7 @@ public:
   }
 
   template <class T>
-  void add(std::optional<located<T>>& x, std::string meta) {
+  void add(Option<located<T>>& x, std::string meta) {
     if (not first_optional_) {
       first_optional_ = positional_.size();
     }
@@ -163,7 +164,7 @@ public:
   }
 
   template <class T>
-  auto add(std::string_view names, std::optional<T>& x, std::string meta) {
+  auto add(std::string_view names, Option<T>& x, std::string meta) {
     named_.push_back(named_t{
       split_names(names),
       std::move(meta),
@@ -174,8 +175,7 @@ public:
   }
 
   template <class T>
-  void
-  add(std::string_view names, std::optional<located<T>>& x, std::string meta) {
+  void add(std::string_view names, Option<located<T>>& x, std::string meta) {
     // TODO: Why does this `static_assert` fail?
     // static_assert(convertible<std::string, T> || std::same_as<T,
     // std::string>);
@@ -200,7 +200,7 @@ public:
     });
   }
 
-  void add(std::string_view names, std::optional<location>& x) {
+  void add(std::string_view names, Option<location>& x) {
     named_.push_back(named_t{
       split_names(names),
       "",
@@ -254,7 +254,7 @@ private:
 
   bool called_parse_ = false;
   std::vector<positional_t> positional_;
-  std::optional<std::size_t> first_optional_;
+  Option<std::size_t> first_optional_;
   std::vector<named_t> named_;
   std::string name_;
   std::string docs_;

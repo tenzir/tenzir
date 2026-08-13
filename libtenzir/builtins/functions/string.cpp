@@ -23,7 +23,6 @@
 #include <algorithm>
 #include <iterator>
 #include <limits>
-#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -64,8 +63,7 @@ auto append_within_limit(std::string& result, std::string_view text,
 auto replace_literal_ignore_case(std::string_view input,
                                  std::string_view folded_pattern,
                                  std::string_view replacement, int64_t max,
-                                 size_t size_limit)
-  -> std::optional<std::string> {
+                                 size_t size_limit) -> Option<std::string> {
   auto result = std::string{};
   auto pos = size_t{0};
   auto count = int64_t{0};
@@ -75,13 +73,13 @@ auto replace_literal_ignore_case(std::string_view input,
     }
     if (not append_within_limit(result, input.substr(pos, s - pos), size_limit)
         or not append_within_limit(result, replacement, size_limit)) {
-      return std::nullopt;
+      return None{};
     }
     pos = e;
     ++count;
   }
   if (not append_within_limit(result, input.substr(pos), size_limit)) {
-    return std::nullopt;
+    return None{};
   }
   return result;
 }
@@ -89,10 +87,10 @@ auto replace_literal_ignore_case(std::string_view input,
 auto replace_literal(std::string_view input, std::string_view pattern,
                      std::string_view replacement, int64_t max,
                      bool ignore_case, size_t size_limit)
-  -> std::optional<std::string> {
+  -> Option<std::string> {
   if (pattern.empty()) {
     if (input.size() > size_limit) {
-      return std::nullopt;
+      return None{};
     }
     return std::string{input};
   }
@@ -111,20 +109,19 @@ auto replace_literal(std::string_view input, std::string_view pattern,
     if (not append_within_limit(result, input.substr(pos, next - pos),
                                 size_limit)
         or not append_within_limit(result, replacement, size_limit)) {
-      return std::nullopt;
+      return None{};
     }
     pos = next + pattern.size();
     ++count;
   }
   if (not append_within_limit(result, input.substr(pos), size_limit)) {
-    return std::nullopt;
+    return None{};
   }
   return result;
 }
 
-auto validate_max_replacements(
-  std::optional<located<int64_t>> const& max_replacements, session ctx)
-  -> void {
+auto validate_max_replacements(Option<located<int64_t>> const& max_replacements,
+                               session ctx) -> void {
   if (max_replacements and max_replacements->inner < 0) {
     diagnostic::error("`max` must be at least 0, but got {}",
                       max_replacements->inner)
@@ -339,12 +336,12 @@ public:
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
-    auto characters = std::optional<std::string>{};
+    auto characters = Option<std::string>{};
     TRY(argument_parser2::function(name())
           .positional("x", subject_expr, "string")
           .positional("chars", characters)
           .parse(inv, ctx));
-    auto options = std::optional<arrow::compute::TrimOptions>{};
+    auto options = Option<arrow::compute::TrimOptions>{};
     if (characters) {
       options.emplace(std::move(*characters));
     }
@@ -403,7 +400,7 @@ public:
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto length_expr = ast::expression{};
-    auto pad_char_arg = std::optional<located<std::string>>{};
+    auto pad_char_arg = Option<located<std::string>>{};
     TRY(argument_parser2::function(name())
           .positional("x", subject_expr, "string")
           .positional("length", length_expr, "int")
@@ -746,7 +743,7 @@ public:
     auto subject_expr = ast::expression{};
     auto pattern_expr = ast::expression{};
     auto replacement_expr = ast::expression{};
-    auto max_replacements = std::optional<located<int64_t>>{};
+    auto max_replacements = Option<located<int64_t>>{};
     auto ignore_case = false;
     auto parser = argument_parser2::function(name());
     parser.positional("x", subject_expr, "string");
@@ -809,7 +806,7 @@ public:
                     continue;
                   }
                   auto result = literal_pattern->empty()
-                                  ? std::optional{std::string{array.Value(i)}}
+                                  ? Option{std::string{array.Value(i)}}
                                   : replace_literal_ignore_case(
                                       array.Value(i), folded_pattern,
                                       *literal_replacement, max,
@@ -991,8 +988,8 @@ public:
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto pattern = located<std::string>{};
-    auto reverse = std::optional<location>{};
-    auto max_splits = std::optional<located<int64_t>>{};
+    auto reverse = Option<location>{};
+    auto max_splits = Option<located<int64_t>>{};
     auto ignore_case = false;
     auto parser = argument_parser2::function(name());
     parser.positional("x", subject_expr, "string")
@@ -1112,7 +1109,7 @@ public:
     auto subject_expr = ast::expression{};
     // TODO: Technically, this could be an expression and not just a constant
     // string.
-    auto separator = std::optional<located<std::string>>{};
+    auto separator = Option<located<std::string>>{};
     TRY(argument_parser2::function(name())
           .positional("x", subject_expr, "list")
           .positional("separator", separator)

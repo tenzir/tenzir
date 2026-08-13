@@ -664,12 +664,12 @@ public:
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    auto xpath = std::optional<located<std::string>>{};
-    auto attr_prefix = std::optional<located<std::string>>{};
-    auto text_key = std::optional<located<std::string>>{};
-    auto key_attr = std::optional<located<std::string>>{};
-    auto max_depth = std::optional<located<int64_t>>{};
-    auto namespaces = std::optional<located<std::string>>{};
+    auto xpath = Option<located<std::string>>{};
+    auto attr_prefix = Option<located<std::string>>{};
+    auto text_key = Option<located<std::string>>{};
+    auto key_attr = Option<located<std::string>>{};
+    auto max_depth = Option<located<int64_t>>{};
+    auto namespaces = Option<located<std::string>>{};
     auto parser = argument_parser2::function(name());
     parser.positional("input", expr, "string");
     parser.named("xpath", xpath);

@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "from_velociraptor/common.hpp"
+#include "tenzir/option.hpp"
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/detail/scope_guard.hpp>
@@ -24,7 +25,6 @@
 #include <grpcpp/security/credentials.h>
 
 #include <chrono>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -232,13 +232,13 @@ public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = operator_args{};
-    auto org_id = std::optional<located<std::string>>{};
-    auto request_name = std::optional<located<std::string>>{};
-    auto max_rows = std::optional<located<uint64_t>>{};
-    auto subscribe = std::optional<located<std::string>>{};
-    auto max_wait = std::optional<located<duration>>{};
-    auto query = std::optional<located<std::string>>{};
-    auto profile = std::optional<located<std::string>>{};
+    auto org_id = Option<located<std::string>>{};
+    auto request_name = Option<located<std::string>>{};
+    auto max_rows = Option<located<uint64_t>>{};
+    auto subscribe = Option<located<std::string>>{};
+    auto max_wait = Option<located<duration>>{};
+    auto query = Option<located<std::string>>{};
+    auto profile = Option<located<std::string>>{};
     argument_parser2::operator_("from_velociraptor")
       .named("request_name", request_name)
       .named("org_id", org_id)

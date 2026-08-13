@@ -9,10 +9,9 @@
 #pragma once
 
 #include "tenzir/bloom_filter.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/synopsis.hpp"
 #include "tenzir/type.hpp"
-
-#include <optional>
 
 namespace tenzir {
 
@@ -47,7 +46,7 @@ public:
     }
   }
 
-  [[nodiscard]] std::optional<bool>
+  [[nodiscard]] Option<bool>
   lookup(relational_operator op, data_view rhs) const override {
     switch (op) {
       default:
@@ -131,6 +130,6 @@ type annotate_parameters(const type& type,
 /// @param x The type whose attributes to parse.
 /// @returns The parsed and evaluated Bloom filter parameters.
 /// @relates bloom_filter_synopsis
-std::optional<bloom_filter_parameters> parse_parameters(const type& x);
+Option<bloom_filter_parameters> parse_parameters(const type& x);
 
 } // namespace tenzir

@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/aws_credentials.hpp>
 #include <tenzir/aws_iam.hpp>
@@ -33,7 +35,7 @@ namespace {
 struct s3_args {
   bool anonymous = {};
   located<secret> uri;
-  std::optional<aws_iam_options> aws_iam;
+  Option<aws_iam_options> aws_iam;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, s3_args& x) -> bool {
@@ -44,7 +46,7 @@ struct s3_args {
 };
 
 auto get_options(const s3_args& args, const arrow::util::Uri& uri,
-                 const std::optional<resolved_aws_credentials>& resolved_creds)
+                 const Option<resolved_aws_credentials>& resolved_creds)
   -> caf::expected<arrow::fs::S3Options> {
   auto opts = arrow::fs::S3Options::FromUri(uri);
   if (not opts.ok()) {
@@ -65,8 +67,8 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
                                 : resolved_creds->session_name;
     // Get region from resolved credentials if available
     const auto region = resolved_creds->region.empty()
-                          ? std::optional<std::string>{}
-                          : std::optional{resolved_creds->region};
+                          ? Option<std::string>{}
+                          : Option{resolved_creds->region};
 
     if (has_web_identity and has_role) {
       // Web identity + role: fetch token and assume role
@@ -166,7 +168,7 @@ public:
       make_uri_request(args_.uri, "s3://", uri, dh),
     };
     // Resolve all aws_iam secrets if provided
-    auto resolved_creds = std::optional<resolved_aws_credentials>{};
+    auto resolved_creds = Option<resolved_aws_credentials>{};
     if (args_.aws_iam) {
       resolved_creds.emplace();
       auto aws_reqs = args_.aws_iam->make_secret_requests(*resolved_creds, dh);
@@ -257,7 +259,7 @@ public:
       make_uri_request(args_.uri, "s3://", uri, dh),
     };
     // Resolve all aws_iam secrets if provided
-    auto resolved_creds = std::optional<resolved_aws_credentials>{};
+    auto resolved_creds = Option<resolved_aws_credentials>{};
     if (args_.aws_iam) {
       resolved_creds.emplace();
       auto aws_reqs = args_.aws_iam->make_secret_requests(*resolved_creds, dh);

@@ -10,6 +10,7 @@
 
 #include "tenzir/base_ctx.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/tql2/ast.hpp"
 
 #include <unordered_map>
@@ -27,7 +28,7 @@ public:
   substitute_ctx(base_ctx ctx, const env_t* env);
 
   /// Return the constant stored for the given `let`, if already known.
-  auto get(let_id id) const -> std::optional<ast::constant>;
+  auto get(let_id id) const -> Option<ast::constant>;
 
   /// Return all constants that can be substituted with this context.
   auto env() const -> env_t;

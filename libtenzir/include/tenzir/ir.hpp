@@ -314,7 +314,7 @@ namespace parallelism {
 /// A value is a degree, optionally followed by comma-separated options:
 /// `<degree>[,limit_partitions=<n>]`. The degree is `disabled`, `max`,
 /// `fused`, or a positive integer. Whitespace around separators is ignored.
-/// Returns `std::nullopt` if a present value fails to parse.
+/// Returns `None{}` if a present value fails to parse.
 auto resolve(std::string_view source, Option<std::string_view> flag)
   -> Option<Parallelism>;
 

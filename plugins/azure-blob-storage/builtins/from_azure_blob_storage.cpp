@@ -29,7 +29,7 @@ namespace {
 
 struct from_abs_args final {
   from_file_args base_args;
-  std::optional<located<secret>> account_key;
+  Option<located<secret>> account_key;
 
   friend auto inspect(auto& f, from_abs_args& x) -> bool {
     return f.object(x).fields(f.field("base_args", x.base_args),
@@ -126,7 +126,7 @@ public:
     -> optimize_result override {
     auto copy = std::make_unique<from_abs_operator>(*this);
     copy->order_ = order;
-    return optimize_result{std::nullopt, event_order::ordered, std::move(copy)};
+    return optimize_result{None{}, event_order::ordered, std::move(copy)};
   }
 
   friend auto inspect(auto& f, from_abs_operator& x) -> bool {
@@ -226,7 +226,7 @@ protected:
               = service_client.GetBlobContainerClient(container);
             auto blob_client = container_client.GetBlobClient(blob_path);
             blob_client.Delete();
-            return std::nullopt;
+            return None{};
           } catch (const Azure::Core::RequestFailedException& e) {
             return e.what();
           }

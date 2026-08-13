@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/actors.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/catalog.hpp>
@@ -45,7 +47,6 @@
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
 
-#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -188,7 +189,7 @@ struct rebuilder_state {
   /// is registered. Only used on demand, when a partition is quarantined, so
   /// it deliberately does not run on the periodic metrics timer like the
   /// `tenzir.metrics.rebuild` builder below.
-  std::optional<series_builder> quarantine_builder = {};
+  Option<series_builder> quarantine_builder = None{};
 
   /// Emits a metric event recording that `partition` was quarantined for
   /// `error`. A no-op if no importer is registered.
@@ -210,14 +211,14 @@ struct rebuilder_state {
   duration rebuild_interval = {};
 
   /// The state of the ongoing rebuild.
-  std::optional<struct run> run = {};
+  Option<struct run> run = None{};
   bool stopping = false;
 
   /// A snapshot of the most recently completed rebuild run, kept around so
   /// `rebuild show` still has something to report once `run` is reset. Only
   /// the latest run is remembered; it is overwritten the next time a run
   /// finishes.
-  std::optional<struct run> last_run = {};
+  Option<struct run> last_run = None{};
 
   /// Counter to distinguish between successive rebuild runs.
   run_id next_run = {};
@@ -385,16 +386,16 @@ struct rebuilder_state {
       // batch instead of requeuing it.
       stopping = false;
       if (run->options.detached) {
-        last_run = std::exchange(run, std::nullopt);
+        last_run = std::exchange(run, None{});
         return;
       }
       if (err.valid()) {
         rp.deliver(std::move(err));
-        last_run = std::exchange(run, std::nullopt);
+        last_run = std::exchange(run, None{});
         return;
       }
       rp.deliver();
-      last_run = std::exchange(run, std::nullopt);
+      last_run = std::exchange(run, None{});
     };
     if (run->options.detached) {
       rp.deliver();

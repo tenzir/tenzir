@@ -236,7 +236,7 @@ public:
 
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto count = std::optional<uint64_t>{};
+    auto count = Option<uint64_t>{};
     argument_parser2::operator_("repeat")
       .positional("count", count)
       .parse(inv, ctx)

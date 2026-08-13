@@ -12,6 +12,7 @@
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/detail/stable_set.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 
@@ -116,7 +117,7 @@ caf::expected<symbol_map> load_symbols(const caf::actor_system_config& cfg);
 auto load_taxonomies(const caf::actor_system_config& cfg)
   -> caf::expected<taxonomies>;
 
-auto translate_builtin_type(std::string_view name) -> std::optional<type>;
+auto translate_builtin_type(std::string_view name) -> Option<type>;
 
 } // namespace tenzir
 

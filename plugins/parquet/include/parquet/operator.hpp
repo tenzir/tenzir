@@ -10,6 +10,7 @@
 
 #include "parquet/chunked_buffer_output_stream.hpp"
 #include "tenzir/arrow_memory_pool.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 #include <tenzir/argument_parser.hpp>
@@ -134,9 +135,9 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
 
 class parquet_options {
 public:
-  std::optional<located<int64_t>> compression_level;
-  std::optional<located<std::string>> compression_type;
-  std::optional<location> times_in_milliseconds;
+  Option<located<int64_t>> compression_level;
+  Option<located<std::string>> compression_type;
+  Option<location> times_in_milliseconds;
 
   friend auto inspect(auto& f, parquet_options& x) -> bool {
     return f.object(x).fields(f.field("compression_level", x.compression_level),

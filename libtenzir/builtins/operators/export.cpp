@@ -507,7 +507,7 @@ public:
     auto live = false;
     auto retro = false;
     auto internal = false;
-    auto parallel = std::optional<located<uint64_t>>{};
+    auto parallel = Option<located<uint64_t>>{};
     argument_parser2::operator_("export")
       .named("live", live)
       .named("retro", retro)
@@ -572,7 +572,7 @@ public:
     auto live = false;
     auto retro = false;
     const auto internal = true;
-    auto parallel = std::optional<located<uint64_t>>{};
+    auto parallel = Option<located<uint64_t>>{};
     TRY(argument_parser2::operator_("diagnostics")
           .named("live", live)
           .named("retro", retro)
@@ -645,11 +645,11 @@ public:
 
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto name = std::optional<located<std::string>>{};
+    auto name = Option<located<std::string>>{};
     auto live = false;
     auto retro = false;
     const auto internal = true;
-    auto parallel = std::optional<located<uint64_t>>{};
+    auto parallel = Option<located<uint64_t>>{};
     TRY(argument_parser2::operator_("metrics")
           .positional("name", name)
           .named("live", live)

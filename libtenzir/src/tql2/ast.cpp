@@ -88,7 +88,7 @@ auto substitute_named_expressions(
   return pipe;
 }
 
-auto field_path::try_from(ast::expression expr) -> std::optional<field_path> {
+auto field_path::try_from(ast::expression expr) -> Option<field_path> {
   // Path is collected in reversed order (outside-in).
   auto has_this = false;
   auto path = std::vector<field_path::segment>{};
@@ -137,12 +137,12 @@ auto field_path::try_from(ast::expression expr) -> std::optional<field_path> {
   }
 }
 
-auto selector::try_from(ast::expression expr) -> std::optional<selector> {
+auto selector::try_from(ast::expression expr) -> Option<selector> {
   return expr.match(
-    [](ast::meta& x) -> std::optional<selector> {
+    [](ast::meta& x) -> Option<selector> {
       return selector{x};
     },
-    [&](auto&) -> std::optional<selector> {
+    [&](auto&) -> Option<selector> {
       return field_path::try_from(std::move(expr));
     });
 }
@@ -314,19 +314,18 @@ namespace tenzir {
 
 namespace {
 
-auto to_field_extractor(const ast::expression& x)
-  -> std::optional<field_extractor> {
+auto to_field_extractor(const ast::expression& x) -> Option<field_extractor> {
   auto p = (parsers::alpha | '_') >> *(parsers::alnum | '_');
   return x.match(
-    [&](const ast::root_field& x) -> std::optional<field_extractor> {
+    [&](const ast::root_field& x) -> Option<field_extractor> {
       if (x.has_question_mark or not p(x.id.name)) {
-        return std::nullopt;
+        return None{};
       }
       return x.id.name;
     },
-    [&](const ast::field_access& x) -> std::optional<field_extractor> {
+    [&](const ast::field_access& x) -> Option<field_extractor> {
       if (x.has_question_mark or not p(x.name.name)) {
-        return std::nullopt;
+        return None{};
       }
       if (std::holds_alternative<ast::this_>(*x.left.kind)) {
         return x.name.name;
@@ -334,20 +333,20 @@ auto to_field_extractor(const ast::expression& x)
       TRY(auto left, to_field_extractor(x.left));
       return std::move(left.field) + "." + x.name.name;
     },
-    [&](const ast::index_expr& x) -> std::optional<field_extractor> {
+    [&](const ast::index_expr& x) -> Option<field_extractor> {
       // Legacy expressions do not differentiate between `this["a.b"]` and
       // `a.b`. We are thus slightly changing the semantics, but this seems fine
       // considering the current alternative of not optimizing such queries.
       if (x.has_question_mark) {
-        return std::nullopt;
+        return None{};
       }
       auto index = try_as<ast::constant>(x.index);
       if (not index) {
-        return std::nullopt;
+        return None{};
       }
       auto string = try_as<std::string>(index->value);
       if (not string) {
-        return std::nullopt;
+        return None{};
       }
       if (is<ast::this_>(x.expr)) {
         return field_extractor{*string};
@@ -355,22 +354,22 @@ auto to_field_extractor(const ast::expression& x)
       TRY(auto expr, to_field_extractor(x.expr));
       return fmt::format("{}.{}", expr.field, *string);
     },
-    [](const auto&) -> std::optional<field_extractor> {
-      return std::nullopt;
+    [](const auto&) -> Option<field_extractor> {
+      return None{};
     });
 }
 
-auto to_operand(const ast::expression& x) -> std::optional<operand> {
-  return x.match<std::optional<operand>>(
+auto to_operand(const ast::expression& x) -> Option<operand> {
+  return x.match<Option<operand>>(
     [](const ast::constant& x) {
       return x.as_data();
     },
-    [](const ast::list& x) -> std::optional<operand> {
+    [](const ast::list& x) -> Option<operand> {
       auto l = list{};
       for (const auto& item : x.items) {
         const auto* i = try_as<ast::expression>(item);
         if (not i or not is<ast::constant>(*i)) {
-          return std::nullopt;
+          return None{};
         }
         l.push_back(as<ast::constant>(*i).as_data());
       }
@@ -387,23 +386,22 @@ auto to_operand(const ast::expression& x) -> std::optional<operand> {
       }
       TENZIR_UNREACHABLE();
     },
-    [](const ast::function_call& x) -> std::optional<operand> {
+    [](const ast::function_call& x) -> Option<operand> {
       // TODO: Make this better.
       if (x.fn.path.size() == 1 and x.fn.path[0].name == "type_id"
           and x.args.size() == 1
           and std::holds_alternative<ast::this_>(*x.args[0].kind)) {
         return meta_extractor{meta_extractor::kind::schema_id};
       }
-      return std::nullopt;
+      return None{};
     },
-    [&](const auto&) -> std::optional<operand> {
+    [&](const auto&) -> Option<operand> {
       TRY(auto field, to_field_extractor(x));
       return operand{field};
     });
 }
 
-auto to_duration_comparable(const ast::expression& e)
-  -> std::optional<operand> {
+auto to_duration_comparable(const ast::expression& e) -> Option<operand> {
   if (auto field = to_field_extractor(e)) {
     return std::move(field).value();
   }
@@ -411,23 +409,23 @@ auto to_duration_comparable(const ast::expression& e)
   if (itime and itime->kind == ast::meta::import_time) {
     return meta_extractor{meta_extractor::kind::import_time};
   }
-  return std::nullopt;
+  return None{};
 }
 
 auto fold_now(const ast::expression& l, const ast::binary_op& op,
-              const ast::expression& r) -> std::optional<operand> {
+              const ast::expression& r) -> Option<operand> {
   // TODO: Evaluate unary_expr to a constant duration
   auto* const constant = std::get_if<ast::constant>(r.kind.get());
   if (not constant) {
-    return std::nullopt;
+    return None{};
   }
   auto* const y = std::get_if<duration>(&constant->value);
   if (not y) {
-    return std::nullopt;
+    return None{};
   }
   auto* const call = std::get_if<ast::function_call>(l.kind.get());
   if (not call or call->fn.path[0].name != "now") {
-    return std::nullopt;
+    return None{};
   }
   if (op == ast::binary_op::add) {
     return operand{data{time::clock::now() + *y}};
@@ -438,7 +436,7 @@ auto fold_now(const ast::expression& l, const ast::binary_op& op,
 
 // @brief Optimize x > now() +- $y <=> x > $now +- $y and x > now() +- $y
 auto optimize_now(const ast::expression& left, const relational_operator& rop,
-                  const ast::expression& right) -> std::optional<expression> {
+                  const ast::expression& right) -> Option<expression> {
   switch (rop) {
     using ro = relational_operator;
     case ro::greater:
@@ -451,15 +449,15 @@ auto optimize_now(const ast::expression& left, const relational_operator& rop,
   }
   auto field = to_duration_comparable(left);
   if (not field) {
-    return std::nullopt;
+    return None{};
   }
   auto* const bexpr = std::get_if<ast::binary_expr>(right.kind.get());
   if (not bexpr) {
-    return std::nullopt;
+    return None{};
   }
   const auto op = bexpr->op;
   if (op != ast::binary_op::add and op != ast::binary_op::sub) {
-    return std::nullopt;
+    return None{};
   }
   if (auto result = fold_now(bexpr->left, op, bexpr->right)) {
     return expression{predicate{std::move(*field), rop, std::move(*result)}};
@@ -469,7 +467,7 @@ auto optimize_now(const ast::expression& left, const relational_operator& rop,
       return expression{predicate{std::move(*field), rop, std::move(*result)}};
     }
   }
-  return std::nullopt;
+  return None{};
 }
 
 } // namespace
@@ -485,7 +483,7 @@ auto split_legacy_expression(const ast::expression& x)
   -> std::pair<expression, ast::expression> {
   return x.match<std::pair<expression, ast::expression>>(
     [&](const ast::binary_expr& y) {
-      auto rel_op = std::invoke([&]() -> std::optional<relational_operator> {
+      auto rel_op = std::invoke([&]() -> Option<relational_operator> {
         switch (y.op) {
           case ast::binary_op::add:
           case ast::binary_op::sub:

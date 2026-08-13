@@ -365,12 +365,12 @@ auto detect_gelf(read_detection_input input) -> read_detection_result {
 }
 
 inline auto split_at_crlf(generator<chunk_ptr> input)
-  -> generator<std::optional<simdjson::padded_string_view>> {
+  -> generator<Option<simdjson::padded_string_view>> {
   auto buffer = std::string{};
   bool ended_on_carriage_return = false;
   for (auto&& chunk : input) {
     if (not chunk or chunk->size() == 0) {
-      co_yield std::nullopt;
+      co_yield None{};
       continue;
     }
     const auto* begin = reinterpret_cast<const char*>(chunk->data());
@@ -404,7 +404,7 @@ inline auto split_at_crlf(generator<chunk_ptr> input)
       begin = current + 1;
     }
     buffer.append(begin, end);
-    co_yield std::nullopt;
+    co_yield None{};
   }
   if (not buffer.empty()) {
     buffer.reserve(buffer.size() + simdjson::SIMDJSON_PADDING);
@@ -412,11 +412,11 @@ inline auto split_at_crlf(generator<chunk_ptr> input)
   }
 }
 inline auto split_at_null(generator<chunk_ptr> input)
-  -> generator<std::optional<simdjson::padded_string_view>> {
+  -> generator<Option<simdjson::padded_string_view>> {
   auto buffer = std::string{};
   for (auto&& chunk : input) {
     if (not chunk or chunk->size() == 0) {
-      co_yield std::nullopt;
+      co_yield None{};
       continue;
     }
     const auto* begin = reinterpret_cast<const char*>(chunk->data());
@@ -438,7 +438,7 @@ inline auto split_at_null(generator<chunk_ptr> input)
       begin = current + 1;
     }
     buffer.append(begin, end);
-    co_yield std::nullopt;
+    co_yield None{};
   }
   if (not buffer.empty()) {
     buffer.reserve(buffer.size() + simdjson::SIMDJSON_PADDING);
@@ -514,8 +514,7 @@ auto split_for_parallelization(generator<chunk_ptr> input, std::byte splitter)
   // The total size of all batches in `current`.
   auto current_size = size_t{0};
   auto next_timeout = time::clock::now() + timeout;
-  auto pop_before_last_linebreak
-    = [&]() -> std::optional<std::vector<chunk_ptr>> {
+  auto pop_before_last_linebreak = [&]() -> Option<std::vector<chunk_ptr>> {
     // We have to search all chunks here because the last newline is not
     // necessarily in the last chunk.
     for (auto& chunk : std::views::reverse(current)) {
@@ -548,7 +547,7 @@ auto split_for_parallelization(generator<chunk_ptr> input, std::byte splitter)
         }
       }
     }
-    return std::nullopt;
+    return None{};
   };
   for (auto&& chunk : input) {
     auto now = time::clock::now();
@@ -716,10 +715,10 @@ auto parse_parallelized(generator<chunk_ptr> input, parser_args args,
       thread.join();
     }
   }};
-  auto pop_output = [&]() -> std::optional<table_slice> {
+  auto pop_output = [&]() -> Option<table_slice> {
     auto outputs_lock = std::unique_lock{outputs_mutex};
     if (outputs.empty()) {
-      return std::nullopt;
+      return None{};
     }
     auto output = std::move(outputs.front());
     outputs.pop_front();
@@ -815,7 +814,7 @@ public:
 
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> std::optional<generator<table_slice>> override {
+    -> Option<generator<table_slice>> override {
     if (args_.jobs > 0) {
       return parse_parallelized(std::move(input), args_, ctrl);
     }
@@ -866,15 +865,15 @@ private:
 };
 
 struct printer_args {
-  std::optional<location> compact_output;
-  std::optional<location> color_output;
-  std::optional<location> monochrome_output;
-  std::optional<location> omit_all;
-  std::optional<location> omit_null_fields;
-  std::optional<location> omit_nulls_in_lists;
-  std::optional<location> omit_empty_objects;
-  std::optional<location> omit_empty_lists;
-  std::optional<location> arrays_of_objects;
+  Option<location> compact_output;
+  Option<location> color_output;
+  Option<location> monochrome_output;
+  Option<location> omit_all;
+  Option<location> omit_null_fields;
+  Option<location> omit_nulls_in_lists;
+  Option<location> omit_empty_objects;
+  Option<location> omit_empty_lists;
+  Option<location> arrays_of_objects;
   bool tql = false;
 
   auto add(argument_parser2& parser, bool add_compact, bool add_arrays,
@@ -1064,11 +1063,11 @@ public:
       multi_series_builder::policy_default{},
     };
     msb_parser.add_all_to_parser(parser);
-    std::optional<location> legacy_precise;
-    std::optional<location> legacy_no_infer;
-    std::optional<location> use_ndjson_mode;
-    std::optional<location> use_gelf_mode;
-    std::optional<location> arrays_of_objects;
+    Option<location> legacy_precise;
+    Option<location> legacy_no_infer;
+    Option<location> use_ndjson_mode;
+    Option<location> use_gelf_mode;
+    Option<location> arrays_of_objects;
     parser.add("--precise", legacy_precise);
     parser.add("--no-infer", legacy_no_infer);
     parser.add("--ndjson", use_ndjson_mode);
@@ -1211,7 +1210,7 @@ public:
       },
     };
     msb_parser.add_settings_to_parser(parser, false, true);
-    std::optional<location> legacy_no_infer;
+    Option<location> legacy_no_infer;
     parser.add("--no-infer", legacy_no_infer);
     parser.parse(p);
     auto dh = collecting_diagnostic_handler{};
@@ -1426,7 +1425,7 @@ public:
     TENZIR_UNUSED(filter, order);
     auto replacement = std::make_unique<write_json>(*this);
     replacement->ordered_ = order == event_order::ordered;
-    return optimize_result{std::nullopt, order, std::move(replacement)};
+    return optimize_result{None{}, order, std::move(replacement)};
   }
 
   friend auto inspect(auto& f, write_json& x) -> bool {
@@ -1884,7 +1883,7 @@ public:
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
-    std::optional<location> arrays_of_objects;
+    Option<location> arrays_of_objects;
     parser.named("arrays_of_objects", arrays_of_objects);
     auto result = parser.parse(inv, ctx);
     auto args = parser_args{"json"};
@@ -2470,7 +2469,7 @@ public:
     -> failure_or<operator_ptr> override {
     // TODO: More options, and consider `null_fields=false` as default.
     auto args = printer_args{};
-    auto n_jobs = std::optional<located<uint64_t>>{};
+    auto n_jobs = Option<located<uint64_t>>{};
     args.tql = tql_;
     auto parser = argument_parser2::operator_("write_json");
     args.add(parser, tql_, not tql_, true);
@@ -2541,7 +2540,7 @@ public:
     -> failure_or<operator_ptr> override {
     auto args = printer_args{};
     args.compact_output = location::unknown;
-    auto n_jobs = std::optional<located<uint64_t>>{};
+    auto n_jobs = Option<located<uint64_t>>{};
     auto parser = argument_parser2::operator_(name());
     args.add(parser, false, true, true);
     parser.named("_jobs", n_jobs);

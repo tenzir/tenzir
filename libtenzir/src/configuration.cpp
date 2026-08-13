@@ -25,6 +25,7 @@
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/factory.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/synopsis_factory.hpp"
 #include "tenzir/type.hpp"
 
@@ -38,7 +39,6 @@
 #include <cctype>
 #include <filesystem>
 #include <iterator>
-#include <optional>
 #include <string_view>
 
 namespace tenzir {
@@ -59,14 +59,14 @@ struct has_extension_type
 /// 2. A "__" translates into the record separator '.'
 /// @pre `!prefix.empty()`
 auto to_config_key(std::string_view key, std::string_view prefix)
-  -> std::optional<std::string> {
+  -> Option<std::string> {
   TENZIR_ASSERT(not prefix.empty());
   // PREFIX_X is the shortest allowed key.
   if (prefix.size() + 2 > key.size()) {
-    return std::nullopt;
+    return None{};
   }
   if (not key.starts_with(prefix) or key[prefix.size()] != '_') {
-    return std::nullopt;
+    return None{};
   }
   auto suffix = key.substr(prefix.size() + 1);
   // From here on, "__" is the record separator and '_' translates into '-'.
@@ -101,7 +101,7 @@ auto to_config_value(std::string_view value)
 
 auto check_yaml_file(const std::filesystem::path& dir,
                      std::string_view basename)
-  -> caf::expected<std::optional<std::filesystem::path>> {
+  -> caf::expected<Option<std::filesystem::path>> {
   auto err = std::error_code{};
   const auto path_yaml = dir / fmt::format("{}.yaml", basename);
   const auto yaml_exists = std::filesystem::exists(path_yaml, err);
@@ -127,7 +127,7 @@ auto check_yaml_file(const std::filesystem::path& dir,
   if (yml_exists) {
     return path_yml;
   }
-  return std::nullopt;
+  return None{};
 };
 
 auto collect_config_files(const std::vector<std::filesystem::path>& dirs,
@@ -481,10 +481,10 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
   if (not config->contains("tenzir.cache-directory")) {
     auto env_path_writable
       = [&](std::string_view key,
-            auto... suffix) -> std::optional<std::filesystem::path> {
+            auto... suffix) -> Option<std::filesystem::path> {
       auto x = detail::getenv(key);
       if (not x) {
-        return std::nullopt;
+        return None{};
       }
       auto path = (std::filesystem::path{*x} / ... / suffix);
       std::error_code ec;
@@ -493,9 +493,9 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
           if (::access(path.string().c_str(), R_OK | W_OK | X_OK) == 0) {
             return path;
           }
-          return std::nullopt;
+          return None{};
         }
-        return std::nullopt;
+        return None{};
       }
       // Try to create.
       ec = {};
@@ -503,7 +503,7 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
       if (not ec) {
         return path;
       }
-      return std::nullopt;
+      return None{};
     };
 #if TENZIR_MACOS
 #  define HOME_CACHE_PATH "Library", "Caches", "tenzir"

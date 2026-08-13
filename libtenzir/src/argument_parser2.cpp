@@ -37,7 +37,7 @@ auto make_pipeline_setter(located<pipeline>& x)
   };
 }
 
-auto make_pipeline_setter(std::optional<located<pipeline>>& x)
+auto make_pipeline_setter(Option<located<pipeline>>& x)
   -> std::function<failure_or<void>(const ast::pipeline_expr&, session)> {
   return [&x](const ast::pipeline_expr& expr, session ctx) -> failure_or<void> {
     TRY(auto pipe, compile(ast::pipeline{expr.inner}, ctx));
@@ -512,24 +512,18 @@ auto argument_parser2::docs() const -> std::string {
 template <class T>
 auto argument_parser2::make_setter(T& x) -> auto {
   using value_type = decltype(std::invoke([] {
-    if constexpr (detail::is_specialization_of<std::optional, T>::value
-                  or detail::is_specialization_of<Option, T>::value) {
+    if constexpr (detail::is_specialization_of<Option, T>::value) {
       return tag_v<typename T::value_type>;
     } else {
       return tag_v<T>;
     }
   }))::type;
-  if constexpr (std::same_as<T, std::optional<location>>
-                or std::same_as<T, Option<location>>) {
+  if constexpr (std::same_as<T, Option<location>>) {
     return setter<located<bool>>{[&x](located<bool> y) {
       if (y.inner) {
         x = y.source;
       } else {
-        if constexpr (std::same_as<T, std::optional<location>>) {
-          x = std::nullopt;
-        } else {
-          x = None{};
-        }
+        x = None{};
       }
     }};
   } else if constexpr (argument_parser_bare_type<value_type>) {
@@ -548,16 +542,6 @@ auto argument_parser2::positional(std::string name, T& x, std::string type)
   -> argument_parser2& {
   TENZIR_ASSERT(not first_optional_, "encountered required positional after "
                                      "optional positional argument");
-  positional_.emplace_back(std::move(name), std::move(type), make_setter(x));
-  return *this;
-}
-
-template <argument_parser_type T>
-auto argument_parser2::positional(std::string name, std::optional<T>& x,
-                                  std::string type) -> argument_parser2& {
-  if (not first_optional_) {
-    first_optional_ = positional_.size();
-  }
   positional_.emplace_back(std::move(name), std::move(type), make_setter(x));
   return *this;
 }
@@ -582,7 +566,7 @@ auto argument_parser2::positional(std::string name, located<pipeline>& x,
 }
 
 auto argument_parser2::positional(std::string name,
-                                  std::optional<located<pipeline>>& x,
+                                  Option<located<pipeline>>& x,
                                   std::string type) -> argument_parser2& {
   if (not first_optional_) {
     first_optional_ = positional_.size();
@@ -607,21 +591,13 @@ auto argument_parser2::named(std::string name, located<pipeline>& x,
 }
 
 template <argument_parser_type T>
-auto argument_parser2::named(std::string name, std::optional<T>& x,
-                             std::string type) -> argument_parser2& {
-  named_.emplace_back(std::move(name), std::move(type), make_setter(x), false);
-  return *this;
-}
-
-template <argument_parser_type T>
 auto argument_parser2::named(std::string name, Option<T>& x, std::string type)
   -> argument_parser2& {
   named_.emplace_back(std::move(name), std::move(type), make_setter(x), false);
   return *this;
 }
 
-auto argument_parser2::named(std::string name,
-                             std::optional<located<pipeline>>& x,
+auto argument_parser2::named(std::string name, Option<located<pipeline>>& x,
                              std::string type) -> argument_parser2& {
   named_.emplace_back(std::move(name), std::move(type), make_pipeline_setter(x),
                       false);
@@ -639,12 +615,6 @@ auto argument_parser2::named_optional(std::string name, located<pipeline>& x,
                                       std::string type) -> argument_parser2& {
   named_.emplace_back(std::move(name), std::move(type), make_pipeline_setter(x),
                       false);
-  return *this;
-}
-
-auto argument_parser2::named(std::string name, std::optional<location>& x,
-                             std::string type) -> argument_parser2& {
-  named_.emplace_back(std::move(name), std::move(type), make_setter(x), false);
   return *this;
 }
 
@@ -670,11 +640,9 @@ struct instantiate_argument_parser_methods {
   struct inner {
     static constexpr auto value = std::tuple{
       static_cast<func<T>>(&argument_parser2::positional)...,
-      static_cast<func<std::optional<T>>>(&argument_parser2::positional)...,
       static_cast<func<Option<T>>>(&argument_parser2::positional)...,
       static_cast<func<T>>(&argument_parser2::named_optional)...,
       static_cast<func<T>>(&argument_parser2::named)...,
-      static_cast<func<std::optional<T>>>(&argument_parser2::named)...,
       static_cast<func<Option<T>>>(&argument_parser2::named)...,
     };
   };

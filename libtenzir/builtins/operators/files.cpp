@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/arc.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/async/blocking_executor.hpp>
@@ -20,7 +22,6 @@
 
 #include <filesystem>
 #include <grp.h>
-#include <optional>
 #include <pwd.h>
 #include <unistd.h>
 #include <vector>
@@ -30,7 +31,7 @@ namespace tenzir::plugins::files {
 namespace {
 
 struct files_args {
-  std::optional<std::string> path = {};
+  Option<std::string> path = None{};
   bool recurse_directories = {};
   bool follow_directory_symlink = {};
   bool skip_permission_denied = {};
@@ -45,7 +46,7 @@ struct files_args {
 };
 
 struct FilesArgs {
-  Option<std::string> path = {};
+  Option<std::string> path = None{};
   bool recurse_directories = {};
   bool follow_directory_symlink = {};
   bool skip_permission_denied = {};
@@ -53,7 +54,7 @@ struct FilesArgs {
 
 auto to_legacy_args(const FilesArgs& args) -> files_args {
   return {
-    .path = args.path ? std::optional<std::string>{*args.path} : std::nullopt,
+    .path = args.path ? Option<std::string>{*args.path} : None{},
     .recurse_directories = args.recurse_directories,
     .follow_directory_symlink = args.follow_directory_symlink,
     .skip_permission_denied = args.skip_permission_denied,
@@ -451,7 +452,7 @@ public:
 
 private:
   files_args args_ = {};
-  mutable Option<Arc<generator<Option<table_slice>>>> listing_ = {};
+  mutable Option<Arc<generator<Option<table_slice>>>> listing_ = None{};
   bool done_ = false;
 };
 

@@ -366,7 +366,7 @@ public:
     -> optimize_result override {
     auto copy = std::make_unique<from_file>(*this);
     copy->order_ = order;
-    return optimize_result{std::nullopt, event_order::ordered, std::move(copy)};
+    return optimize_result{None{}, event_order::ordered, std::move(copy)};
   }
 
   friend auto inspect(auto& f, from_file& x) -> bool {

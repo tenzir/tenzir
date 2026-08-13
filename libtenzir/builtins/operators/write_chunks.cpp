@@ -65,13 +65,12 @@ public:
   }
 
 private:
-  auto select_field(const table_slice& slice, OpCtx& ctx)
-    -> std::optional<series> {
+  auto select_field(const table_slice& slice, OpCtx& ctx) -> Option<series> {
     if (not args_.field.path().empty()) {
       auto resolved = resolve(args_.field, slice);
       if (auto* error = std::get_if<resolve_error>(&resolved)) {
         emit_resolve_error(*error, ctx);
-        return std::nullopt;
+        return None{};
       }
       return std::get<series>(std::move(resolved));
     }
@@ -82,15 +81,15 @@ private:
       diagnostic::warning("expected a field named `data`")
         .primary(args_.operator_location)
         .emit(ctx);
-      return std::nullopt;
+      return None{};
     }
     auto rt = try_as<record_type>(slice.schema());
     if (not rt) {
-      return std::nullopt;
+      return None{};
     }
     auto ty = rt->field("data");
     if (not ty) {
-      return std::nullopt;
+      return None{};
     }
     return series{*ty, column};
   }

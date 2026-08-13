@@ -34,7 +34,7 @@ public:
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    auto spec = std::optional<located<duration>>{};
+    auto spec = Option<located<duration>>{};
     TRY(argument_parser2::function(name())
           .positional("x", expr, "number|duration|time")
           .positional("unit", spec, "duration")

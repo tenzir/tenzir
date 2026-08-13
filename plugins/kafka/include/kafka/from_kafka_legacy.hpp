@@ -9,11 +9,11 @@
 #pragma once
 
 #include "kafka/operator.hpp"
+#include "tenzir/option.hpp"
 
 #include <tenzir/pipeline.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -24,13 +24,13 @@ namespace tenzir::plugins::kafka::legacy {
 // Remove once the legacy executor path is deleted.
 struct from_kafka_args {
   std::string topic;
-  std::optional<located<uint64_t>> count;
-  std::optional<location> exit;
-  std::optional<located<std::string>> offset;
+  Option<located<uint64_t>> count;
+  Option<location> exit;
+  Option<located<std::string>> offset;
   std::uint64_t commit_batch_size = 1000;
   located<record> options;
-  std::optional<located<std::string>> aws_region;
-  std::optional<tenzir::aws_iam_options> aws;
+  Option<located<std::string>> aws_region;
+  Option<tenzir::aws_iam_options> aws;
   location operator_location;
   uint64_t jobs = 1;
 

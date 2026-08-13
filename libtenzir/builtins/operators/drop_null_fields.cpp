@@ -88,7 +88,7 @@ public:
     -> optimize_result override {
     TENZIR_UNUSED(filter);
     return optimize_result{
-      std::nullopt, order,
+      None{}, order,
       std::make_unique<drop_null_fields_operator>(selectors_, order)};
   }
 

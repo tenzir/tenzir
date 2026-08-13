@@ -125,12 +125,12 @@ private:
 
 struct operator_args {
   located<std::string> type = {};
-  std::optional<located<int>> level = {};
+  Option<located<int>> level = None{};
   // used by gzip compress
   located<arrow::util::GZipFormat> gzip_format
     = located{arrow::util::GZipFormat::GZIP, location::unknown};
   // used by gzip & brotli compress
-  std::optional<located<int>> window_bits = {};
+  Option<located<int>> window_bits = None{};
 
   friend auto inspect(auto& f, operator_args& x) -> bool {
     return f.object(x)
@@ -428,17 +428,17 @@ public:
     auto args = operator_args{
       .type = {method_name_, location::unknown},
     };
-    auto level = std::optional<located<int64_t>>{};
+    auto level = Option<located<int64_t>>{};
     auto parser = argument_parser2::operator_(name());
     if (method_name_.empty()) {
       parser.positional("type", args.type);
     }
     parser.named("level", level);
-    auto gzip_format_string = std::optional<located<std::string>>{};
+    auto gzip_format_string = Option<located<std::string>>{};
     if (method_name_ == "gzip") {
       parser.named("format", gzip_format_string);
     }
-    auto window_bits = std::optional<located<uint64_t>>{};
+    auto window_bits = Option<located<uint64_t>>{};
     if (method_name_ == "gzip" or method_name_ == "brotli") {
       parser.named("window_bits", window_bits);
     }

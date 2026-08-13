@@ -104,14 +104,14 @@ struct metric {
 };
 
 auto get_actor_name(const caf::telemetry::metric* metric)
-  -> std::optional<std::string_view> {
+  -> Option<std::string_view> {
   constexpr static auto get_value = [](const auto& label) -> std::string_view {
     return label.name();
   };
   const auto actor_name_it
     = std::ranges::find(metric->labels(), std::string_view{"name"}, get_value);
   if (actor_name_it == metric->labels().end()) {
-    return std::nullopt;
+    return None{};
   }
   return actor_name_it->value();
 }

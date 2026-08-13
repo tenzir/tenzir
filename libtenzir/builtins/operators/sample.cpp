@@ -27,11 +27,11 @@ constexpr uint64_t default_min_events = 30;
 
 struct operator_args {
   mode fn{};
-  std::optional<located<duration>> period{
+  Option<located<duration>> period{
     located{std::chrono::seconds(30), location::unknown}};
-  std::optional<uint64_t> min_events{30};
-  std::optional<uint64_t> max_rate{};
-  std::optional<uint64_t> max_samples{};
+  Option<uint64_t> min_events{30};
+  Option<uint64_t> max_rate{};
+  Option<uint64_t> max_samples{};
 
   friend auto inspect(auto& f, operator_args& x) -> bool {
     return f.object(x)
@@ -236,7 +236,7 @@ class plugin final : public virtual operator_plugin<sample_operator>,
 public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto str = std::optional<located<std::string>>{};
+    auto str = Option<located<std::string>>{};
     auto args = operator_args{};
     TRY(argument_parser2::operator_("sample")
           .positional("period", args.period)

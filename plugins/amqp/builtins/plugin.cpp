@@ -60,7 +60,7 @@ class plugin : public virtual operator_plugin2<Operator> {
     -> failure_or<operator_ptr> override {
     auto args = Args{};
     args.op = inv.self.get_location();
-    auto channel = std::optional<located<uint64_t>>{};
+    auto channel = Option<located<uint64_t>>{};
     auto parser = argument_parser2::operator_(this->name());
     parser.positional("url", args.url);
     parser.named("channel", channel);

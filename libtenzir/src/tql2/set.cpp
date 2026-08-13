@@ -78,7 +78,7 @@ auto assign(std::span<const ast::field_path::segment> left, series right,
     }
     return check(array.Flatten(tenzir::arrow_memory_pool()));
   });
-  auto index = std::optional<size_t>{};
+  auto index = Option<size_t>{};
   for (auto [i, field] : detail::enumerate(new_ty_fields)) {
     if (field.name == left[0].id.name) {
       index = i;
@@ -168,7 +168,7 @@ auto assign(const ast::meta& left, const series& right,
         return original();
       }
       return transform(*array, [&](table_slice slice,
-                                   std::optional<std::string_view> value) {
+                                   Option<std::string_view> value) {
         if (not value) {
           diagnostic::warning("schema name must not be `null`")
             .primary(left)
@@ -201,8 +201,7 @@ auto assign(const ast::meta& left, const series& right,
         copy.import_time(time{});
         return {std::move(copy)};
       }
-      return transform(*array, [&](table_slice slice,
-                                   std::optional<time> value) {
+      return transform(*array, [&](table_slice slice, Option<time> value) {
         if (not value) {
           value = time{};
         } else if (value == time{}) {
@@ -228,8 +227,7 @@ auto assign(const ast::meta& left, const series& right,
           .emit(diag);
         return original();
       }
-      return transform(*values, [&](table_slice slice,
-                                    std::optional<bool> value) {
+      return transform(*values, [&](table_slice slice, Option<bool> value) {
         if (not value) {
           diagnostic::warning("cannot set `@internal` to `null`")
             .primary(left)

@@ -39,10 +39,9 @@ struct ethernet_frame {
   // 2 MAC addresses and the 2-byte EtherType.
   static constexpr size_t header_size = 6 + 6 + 2;
 
-  static auto make(std::span<const std::byte> bytes)
-    -> std::optional<ethernet_frame> {
+  static auto make(std::span<const std::byte> bytes) -> Option<ethernet_frame> {
     if (bytes.size() < header_size) {
-      return std::nullopt;
+      return None{};
     }
     auto result = ethernet_frame{};
     result.dst = mac{bytes.subspan<0, 6>()};
@@ -56,7 +55,7 @@ struct ethernet_frame {
       case ether_type::ieee_802_1aq: {
         size_t min_frame_size = 6 + 6 + 4 + 2;
         if (bytes.size() < min_frame_size) {
-          return std::nullopt;
+          return None{};
         }
         result.outer_vid = to_uint16(bytes.subspan<14, 2>());
         *result.outer_vid &= 0x0FFF; // lower 12 bits only
@@ -66,7 +65,7 @@ struct ethernet_frame {
         if (result.type == ether_type::ieee_802_1aq) {
           min_frame_size += 4;
           if (bytes.size() < min_frame_size) {
-            return std::nullopt;
+            return None{};
           }
           result.inner_vid = to_uint16(bytes.subspan<18, 2>());
           *result.inner_vid &= 0x0FFF; // lower 12 bits only
@@ -78,7 +77,7 @@ struct ethernet_frame {
       case ether_type::ieee_802_1q_db: {
         constexpr size_t min_frame_size = 6 + 6 + 4 + 4 + 2;
         if (bytes.size() < min_frame_size) {
-          return std::nullopt;
+          return None{};
         }
         result.outer_vid = to_uint16(bytes.subspan<14, 2>());
         *result.outer_vid &= 0x0FFF; // lower 12 bits only
@@ -92,10 +91,10 @@ struct ethernet_frame {
     return result;
   }
 
-  mac dst;                             ///< Destination MAC address
-  mac src;                             ///< Source MAC address
-  std::optional<uint16_t> outer_vid{}; ///< Outer 802.1Q tag control information
-  std::optional<uint16_t> inner_vid{}; ///< Outer 802.1Q tag control information
+  mac dst;                      ///< Destination MAC address
+  mac src;                      ///< Source MAC address
+  Option<uint16_t> outer_vid{}; ///< Outer 802.1Q tag control information
+  Option<uint16_t> inner_vid{}; ///< Outer 802.1Q tag control information
   ether_type type{ether_type::invalid}; ///< EtherType
   std::span<const std::byte> payload{}; ///< Payload
 };
@@ -103,7 +102,7 @@ struct ethernet_frame {
 /// An IP packet.
 struct packet {
   static auto make(std::span<const std::byte> bytes, ether_type type)
-    -> std::optional<packet> {
+    -> Option<packet> {
     packet result;
     switch (type) {
       default:
@@ -111,11 +110,11 @@ struct packet {
       case ether_type::ipv4: {
         constexpr size_t ipv4_header_size = 20;
         if (bytes.size() < ipv4_header_size) {
-          return std::nullopt;
+          return None{};
         }
         size_t header_length = (std::to_integer<uint8_t>(bytes[0]) & 0x0f) * 4;
         if (bytes.size() < header_length) {
-          return std::nullopt;
+          return None{};
         }
         result.src = ip::v4(bytes.subspan<12, 4>());
         result.dst = ip::v4(bytes.subspan<16, 4>());
@@ -126,7 +125,7 @@ struct packet {
       case ether_type::ipv6: {
         constexpr size_t ipv6_header_size = 40;
         if (bytes.size() < ipv6_header_size) {
-          return std::nullopt;
+          return None{};
         }
         result.src = ip::v6(bytes.subspan<8, 16>());
         result.dst = ip::v6(bytes.subspan<24, 16>());
@@ -135,7 +134,7 @@ struct packet {
         return result;
       }
     }
-    return std::nullopt;
+    return None{};
   }
 
   ip src{};
@@ -147,7 +146,7 @@ struct packet {
 /// A layer 4 segment.
 struct segment {
   static auto make(std::span<const std::byte> bytes, uint8_t type)
-    -> std::optional<segment> {
+    -> Option<segment> {
     segment result;
     switch (type) {
       default:
@@ -155,14 +154,14 @@ struct segment {
       case IPPROTO_TCP: {
         constexpr size_t min_tcp_header_size = 20;
         if (bytes.size() < min_tcp_header_size) {
-          return std::nullopt;
+          return None{};
         }
         result.src = to_uint16(bytes.subspan<0, 2>());
         result.dst = to_uint16(bytes.subspan<2, 2>());
         result.type = port_type::tcp;
         size_t data_offset = (std::to_integer<uint8_t>(bytes[12]) >> 4) * 4;
         if (bytes.size() < data_offset) {
-          return std::nullopt;
+          return None{};
         }
         result.payload = bytes.subspan(data_offset);
         return result;
@@ -170,7 +169,7 @@ struct segment {
       case IPPROTO_UDP: {
         constexpr size_t udp_header_size = 8;
         if (bytes.size() < udp_header_size) {
-          return std::nullopt;
+          return None{};
         }
         result.src = to_uint16(bytes.subspan<0, 2>());
         result.dst = to_uint16(bytes.subspan<2, 2>());
@@ -181,7 +180,7 @@ struct segment {
       case IPPROTO_ICMP: {
         constexpr size_t icmp_header_size = 8;
         if (bytes.size() < icmp_header_size) {
-          return std::nullopt;
+          return None{};
         }
         auto message_type = std::to_integer<uint8_t>(bytes[0]);
         auto message_code = std::to_integer<uint8_t>(bytes[1]);
@@ -192,7 +191,7 @@ struct segment {
         return result;
       }
     }
-    return std::nullopt;
+    return None{};
   }
 
   uint16_t src{0};
@@ -205,20 +204,20 @@ struct segment {
 /// 1. Reconstruct the header structure into a dedicated structure.
 /// 2. Append the structure to the builder.
 auto parse(record_ref builder, std::span<const std::byte> bytes,
-           frame_type type) -> std::optional<diagnostic> {
+           frame_type type) -> Option<diagnostic> {
   // Parse layer 2.
   auto frame_payload = std::span<const std::byte>{};
   auto frame_type = ether_type::invalid;
   switch (type) {
     default:
       TENZIR_TRACE("failed to parse layer-2 frame");
-      return std::nullopt;
+      return None{};
     case frame_type::ethernet: {
       // Parse Ethernet frame.
       auto frame = ethernet_frame::make(bytes);
       if (not frame) {
         TENZIR_TRACE("failed to parse layer-2 frame");
-        return std::nullopt;
+        return None{};
       }
       auto ether = builder.field("ether").record();
       auto src_str = fmt::to_string(frame->src);
@@ -241,7 +240,7 @@ auto parse(record_ref builder, std::span<const std::byte> bytes,
       constexpr size_t sll2_header_size = 20;
       if (bytes.size() < sll2_header_size) {
         TENZIR_TRACE("skipping invalid SLL2 frame");
-        return std::nullopt;
+        return None{};
       }
       frame_payload = bytes.subspan(sll2_header_size);
       frame_type = static_cast<ether_type>(to_uint16(bytes.subspan<0, 2>()));
@@ -252,7 +251,7 @@ auto parse(record_ref builder, std::span<const std::byte> bytes,
   auto packet = packet::make(frame_payload, frame_type);
   if (not packet) {
     TENZIR_TRACE("failed to parse layer-3 packet");
-    return std::nullopt;
+    return None{};
   }
   auto ip = builder.field("ip").record();
   ip.field("src").data(packet->src);
@@ -262,7 +261,7 @@ auto parse(record_ref builder, std::span<const std::byte> bytes,
   auto segment = segment::make(packet->payload, packet->type);
   if (not segment) {
     TENZIR_TRACE("failed to parse layer-4 segment");
-    return std::nullopt;
+    return None{};
   }
   switch (segment->type) {
     case port_type::icmp: {
@@ -293,17 +292,17 @@ auto parse(record_ref builder, std::span<const std::byte> bytes,
                         segment->type);
   auto cid = community_id::make(conn);
   builder.field("community_id").data(cid);
-  return std::nullopt;
+  return None{};
 }
 
 auto decapsulate(const series& s, diagnostic_handler& dh, bool include_old)
-  -> std::optional<series> {
+  -> Option<series> {
   // Get the packet payload.
   if (s.type.kind().is_not<record_type>()) {
     if (s.type.kind().is_not<null_type>()) {
       diagnostic::warning("expected `record`, got `{}`", s.type.kind()).emit(dh);
     }
-    return std::nullopt;
+    return None{};
   }
   const auto& layout = as<record_type>(s.type);
   const auto linktype_index = layout.resolve_key("linktype");
@@ -311,7 +310,7 @@ auto decapsulate(const series& s, diagnostic_handler& dh, bool include_old)
     diagnostic::warning("got a malformed 'pcap.packet' event")
       .note("schema 'pcap.packet' must have a 'linktype' field")
       .emit(dh);
-    return std::nullopt;
+    return None{};
   }
   const auto linktype_array
     = linktype_index->get(as<arrow::StructArray>(*s.array));
@@ -320,14 +319,14 @@ auto decapsulate(const series& s, diagnostic_handler& dh, bool include_old)
     diagnostic::warning("got a malformed 'pcap.packet' event")
       .note("field 'linktype' not of type uint64")
       .emit(dh);
-    return std::nullopt;
+    return None{};
   }
   const auto data_index = layout.resolve_key("data");
   if (not data_index) {
     diagnostic::warning("got a malformed 'pcap.packet' event")
       .note("schema 'pcap.packet' must have a 'data' field")
       .emit(dh);
-    return std::nullopt;
+    return None{};
   }
   const auto data_array = data_index->get(as<arrow::StructArray>(*s.array));
   const auto data_values = try_as<arrow::BinaryArray>(&*data_array);
@@ -335,7 +334,7 @@ auto decapsulate(const series& s, diagnostic_handler& dh, bool include_old)
     diagnostic::warning("got a malformed 'pcap.packet' event")
       .note("field 'data' not of type blob")
       .emit(dh);
-    return std::nullopt;
+    return None{};
   }
   auto builder = series_builder{};
   for (auto i = 0u; i < s.length(); ++i) {

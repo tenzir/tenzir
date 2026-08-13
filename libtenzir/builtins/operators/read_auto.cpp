@@ -12,6 +12,7 @@
 #include "tenzir/detail/string.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/operator_plugin.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/read_detection.hpp"
@@ -23,7 +24,6 @@
 
 #include <algorithm>
 #include <limits>
-#include <optional>
 #include <ranges>
 #include <string_view>
 
@@ -307,7 +307,7 @@ private:
   std::vector<chunk_ptr> buffered_;
   std::string probe_;
   std::string fallback_pipeline_;
-  std::optional<size_t> selected_;
+  Option<size_t> selected_;
   bool seen_bytes_ = false;
   bool done_ = false;
 };

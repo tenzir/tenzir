@@ -34,9 +34,9 @@ namespace tenzir::plugins::parallel {
 namespace {
 
 template <typename T>
-[[nodiscard]] constexpr auto take(std::optional<T>& x) -> T {
+[[nodiscard]] constexpr auto take(Option<T>& x) -> T {
   TENZIR_ASSERT(x);
-  return std::exchange(x, std::nullopt).value();
+  return std::exchange(x, None{}).value();
 }
 
 struct transceiver_actor_traits final {
@@ -192,7 +192,7 @@ private:
   shared_diagnostic_handler dh_;
   metrics_receiver_actor metrics_receiver_;
   std::deque<table_slice> outputs_;
-  std::optional<table_slice> input_;
+  Option<table_slice> input_;
   caf::typed_response_promise<void> push_rp_;
   std::deque<caf::typed_response_promise<void>> internal_push_rps_;
   caf::typed_response_promise<table_slice> pull_rp_;
@@ -709,7 +709,7 @@ struct parallel final : public operator_plugin2<parallel_operator> {
     -> failure_or<operator_ptr> override {
     auto args = parallel_args{};
     args.op = inv.self.get_location();
-    auto pipe = std::optional<located<pipeline>>{};
+    auto pipe = Option<located<pipeline>>{};
     auto p = argument_parser2::operator_(name())
                .positional("jobs", args.jobs)
                .named_optional("_split_at", args.split_at)

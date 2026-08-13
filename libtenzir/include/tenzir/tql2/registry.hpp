@@ -33,9 +33,9 @@ struct user_defined_operator {
   struct parameter {
     std::string name;
     std::string type_hint;
-    std::optional<std::string> description;
-    std::optional<ast::expression> default_value;
-    std::optional<type> value_type;
+    Option<std::string> description;
+    Option<ast::expression> default_value;
+    Option<type> value_type;
   };
   std::vector<parameter> positional_params;
   std::vector<parameter> named_params;
@@ -88,7 +88,7 @@ private:
 /// A set of entities, with a most one entity per entity namespace.
 struct entity_set {
   const function_plugin* fn;
-  std::optional<operator_def> op;
+  Option<operator_def> op;
   std::unique_ptr<module_def> mod;
   /// The definition of a package `let` binding (the `let` namespace). It is
   /// stored unevaluated and const-evaluated lazily at each reference site,

@@ -12,6 +12,7 @@
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/modules.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -23,7 +24,6 @@
 
 #include <chrono>
 #include <concepts>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -108,7 +108,7 @@ public:
   /// @brief Sets the value of the field to some data or null if the optional is
   /// empty
   template <tenzir::detail::data_builder::non_structured_data_type T>
-  auto data(std::optional<T> d) -> void;
+  auto data(Option<T> d) -> void;
 
   /// @brief sets the value of the field to the contents of a `tenzir::data`
   auto data(const tenzir::data& d) -> void;
@@ -317,7 +317,7 @@ public:
     // selector("event_type", "suricata")
     // => {"event_type": "flow"}
     // => "suricata.flow"
-    std::optional<std::string> naming_prefix = std::nullopt;
+    Option<std::string> naming_prefix = None{};
 
     auto friend inspect(auto& f, policy_selector& x) -> bool {
       return f.object(x).fields(f.field("field_name", x.field_name),
@@ -386,7 +386,7 @@ public:
 
   multi_series_builder(
     options opts, diagnostic_handler& dh,
-    std::function<auto(std::string_view)->std::optional<type>> schema_fn
+    std::function<auto(std::string_view)->Option<type>> schema_fn
     = modules::get_schema,
     data_builder::data_parsing_function parser
     = detail::data_builder::basic_parser)
@@ -396,7 +396,7 @@ public:
 
   multi_series_builder(
     policy_type policy, settings_type settings, diagnostic_handler& dh,
-    std::function<auto(std::string_view)->std::optional<type>> schema_fn
+    std::function<auto(std::string_view)->Option<type>> schema_fn
     = modules::get_schema,
     data_builder::data_parsing_function parser
     = detail::data_builder::basic_parser);
@@ -488,7 +488,7 @@ private:
   // used for quick name -> schema mapping
   detail::flat_map<std::string, tenzir::type> schemas_;
   // used to populate the map above
-  std::function<auto(std::string_view)->std::optional<type>> schema_fn_;
+  std::function<auto(std::string_view)->Option<type>> schema_fn_;
   // builder used in merging mode
   series_builder merging_builder_;
   // builder_raw_ must be constructed after `dh_` as it depends on it
@@ -547,7 +547,7 @@ auto object_generator::data(T d) -> void {
 }
 
 template <tenzir::detail::data_builder::non_structured_data_type T>
-auto object_generator::data(std::optional<T> d) -> void {
+auto object_generator::data(Option<T> d) -> void {
   if (not msb_) {
     return;
   }

@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/option.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async/pusher.hpp>
@@ -31,8 +33,6 @@
 #include <folly/coro/BoundedQueue.h>
 #include <folly/coro/UnboundedQueue.h>
 
-#include <optional>
-
 namespace tenzir::plugins::lines {
 
 namespace {
@@ -45,10 +45,10 @@ struct parser_args {
 
   location self;
   bool binary{false};
-  std::optional<location> skip_empty;
-  std::optional<location> null;
-  std::optional<located<std::string>> split_at_regex;
-  std::optional<located<std::string>> split_at_string;
+  Option<location> skip_empty;
+  Option<location> null;
+  Option<located<std::string>> split_at_regex;
+  Option<located<std::string>> split_at_string;
   bool include_separator{false};
   std::string field_name{"line"};
 
@@ -78,20 +78,20 @@ public:
 
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> std::optional<generator<table_slice>> override {
-    auto make = [](operator_control_plane& ctrl, generator<chunk_ptr> input,
-                   location self, bool binary, bool skip_empty, bool nulls,
-                   std::optional<located<std::string>> split_at_regex,
-                   std::optional<located<std::string>> split_at_string,
-                   bool include_separator,
-                   const std::string& field_name) -> generator<table_slice> {
+    -> Option<generator<table_slice>> override {
+    auto make
+      = [](operator_control_plane& ctrl, generator<chunk_ptr> input,
+           location self, bool binary, bool skip_empty, bool nulls,
+           Option<located<std::string>> split_at_regex,
+           Option<located<std::string>> split_at_string, bool include_separator,
+           const std::string& field_name) -> generator<table_slice> {
       TENZIR_UNUSED(ctrl);
       auto builder = series_builder{};
       auto last_finish = std::chrono::steady_clock::now();
       auto cutter
         = [&]()
             ->std::function<auto(generator<chunk_ptr>)
-                              -> generator<std::optional<std::string_view>>> {
+                              -> generator<Option<std::string_view>>> {
               if (nulls) {
                 return split_nulls;
               }
@@ -879,7 +879,7 @@ public:
     auto args = parser_args{inv.self.get_location()};
     args.field_name = "data";
     auto regex = ast::expression{};
-    auto binary_flag = std::optional<located<bool>>{};
+    auto binary_flag = Option<located<bool>>{};
     TRY(argument_parser2::operator_(name())
           .positional("regex", regex, "string")
           .named("binary", binary_flag)
@@ -938,7 +938,7 @@ public:
     auto args = parser_args{inv.self.get_location()};
     args.field_name = "data";
     auto separator = ast::expression{};
-    auto binary_flag = std::optional<located<bool>>{};
+    auto binary_flag = Option<located<bool>>{};
     TRY(argument_parser2::operator_(name())
           .positional("separator", separator, "string")
           .named("binary", binary_flag)
@@ -985,7 +985,7 @@ public:
 
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto binary_flag = std::optional<located<bool>>{};
+    auto binary_flag = Option<located<bool>>{};
     TRY(argument_parser2::operator_(name())
           .named("binary", binary_flag)
           .parse(inv, ctx));

@@ -9,9 +9,9 @@
 #pragma once
 
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/option.hpp"
 
 #include <memory>
-#include <optional>
 
 namespace tenzir {
 
@@ -33,7 +33,7 @@ private:
 
     void emit(diagnostic d) override;
 
-    std::optional<failure> failure_;
+    Option<failure> failure_;
     diagnostic_handler& dh_;
   };
 
@@ -49,7 +49,7 @@ class session {
 public:
   explicit session(session_provider& provider);
 
-  auto get_failure() const -> std::optional<failure>;
+  auto get_failure() const -> Option<failure>;
 
   auto has_failure() const -> bool;
 

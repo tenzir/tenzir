@@ -297,7 +297,7 @@ private:
         boost::system::error_code ec,
         const boost::asio::ip::tcp::endpoint& endpoint) {
 #if TENZIR_MACOS
-        auto fcntl_error = std::optional<caf::error>{};
+        auto fcntl_error = Option<caf::error>{};
         if (ec == boost::system::errc::success
             and ::fcntl(socket_->native_handle(), F_SETFD, FD_CLOEXEC) == -1) {
           fcntl_error = diagnostic::error("failed to configure TLS socket")
@@ -488,7 +488,7 @@ public:
                                self_)](boost::system::error_code ec,
                                        boost::asio::ip::tcp::socket peer) {
       TENZIR_DEBUG("tcp connector accepted incoming request");
-      auto fcntl_error = std::optional<caf::error>{};
+      auto fcntl_error = Option<caf::error>{};
       if (::fcntl(peer.native_handle(), F_SETFD, FD_CLOEXEC) == -1) {
         fcntl_error = diagnostic::error("failed to configure TLS socket")
                         .hint("{}", detail::describe_errno())
@@ -637,21 +637,19 @@ public:
   // Retry logic members
   duration current_retry_delay_ = {};
   uint32_t current_retry_attempt_ = {};
-  std::optional<connection_params> connect_params_;
-  std::optional<boost::asio::steady_timer> retry_timer_;
+  Option<connection_params> connect_params_;
+  Option<boost::asio::steady_timer> retry_timer_;
   bool is_connected_ = {};
-  std::optional<std::pair<caf::typed_response_promise<void>, chunk_ptr>>
-    pending_write_;
+  Option<std::pair<caf::typed_response_promise<void>, chunk_ptr>> pending_write_;
   std::shared_ptr<boost::asio::io_context> io_ctx_
     = std::make_shared<boost::asio::io_context>();
   boost::asio::executor_work_guard<boost::asio::io_context::executor_type>
     work_guard_ = boost::asio::make_work_guard(*io_ctx_);
   std::thread worker_;
-  std::optional<boost::asio::ip::tcp::socket> socket_;
-  std::optional<boost::asio::ssl::context> ssl_ctx_;
-  std::optional<boost::asio::ssl::stream<boost::asio::ip::tcp::socket&>>
-    tls_socket_;
-  std::optional<boost::asio::ip::tcp::acceptor> acceptor_;
+  Option<boost::asio::ip::tcp::socket> socket_;
+  Option<boost::asio::ssl::context> ssl_ctx_;
+  Option<boost::asio::ssl::stream<boost::asio::ip::tcp::socket&>> tls_socket_;
+  Option<boost::asio::ip::tcp::acceptor> acceptor_;
   caf::typed_response_promise<void> connection_rp_;
   caf::typed_response_promise<void> write_rp_;
   tcp_metrics metrics_ = {};

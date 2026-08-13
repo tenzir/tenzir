@@ -15,10 +15,10 @@
 namespace tenzir {
 namespace {
 auto parse_selector(std::string_view x, location source, diagnostic_handler& dh)
-  -> std::optional<multi_series_builder::policy_selector> {
+  -> Option<multi_series_builder::policy_selector> {
   if (x.empty()) {
     diagnostic::error("selector must not be empty").primary(source).emit(dh);
-    return std::nullopt;
+    return None{};
   }
   auto split = detail::split(x, ":");
   TENZIR_ASSERT(not x.empty());
@@ -28,7 +28,7 @@ auto parse_selector(std::string_view x, location source, diagnostic_handler& dh)
                       x)
       .primary(source)
       .emit(dh);
-    return std::nullopt;
+    return None{};
   }
   if (split.size() == 2) {
     return multi_series_builder::policy_selector{
@@ -44,14 +44,14 @@ auto parse_selector(std::string_view x, location source, diagnostic_handler& dh)
 } // namespace
 
 auto parse_selector_value(std::string_view x)
-  -> std::optional<multi_series_builder::policy_selector> {
+  -> Option<multi_series_builder::policy_selector> {
   if (x.empty()) {
-    return std::nullopt;
+    return None{};
   }
   auto split = detail::split(x, ":");
   TENZIR_ASSERT(not split.empty());
   if (split.size() > 2 or split[0].empty()) {
-    return std::nullopt;
+    return None{};
   }
   if (split.size() == 2) {
     return multi_series_builder::policy_selector{

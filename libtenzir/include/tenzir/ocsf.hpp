@@ -8,8 +8,9 @@
 
 #pragma once
 
+#include "tenzir/option.hpp"
+
 #include <cstdint>
-#include <optional>
 #include <string_view>
 
 namespace tenzir {
@@ -20,23 +21,23 @@ enum class ocsf_version {
 #undef X
 };
 
-auto parse_ocsf_version(std::string_view name) -> std::optional<ocsf_version>;
+auto parse_ocsf_version(std::string_view name) -> Option<ocsf_version>;
 
 auto ocsf_class_name(ocsf_version version, int64_t id)
-  -> std::optional<std::string_view>;
+  -> Option<std::string_view>;
 auto ocsf_class_uid(ocsf_version version, std::string_view name)
-  -> std::optional<int64_t>;
+  -> Option<int64_t>;
 
 auto ocsf_category_name(ocsf_version version, int64_t id)
-  -> std::optional<std::string_view>;
+  -> Option<std::string_view>;
 auto ocsf_category_uid(ocsf_version version, std::string_view name)
-  -> std::optional<int64_t>;
+  -> Option<int64_t>;
 
 // TODO: Types with a trailing 99 belong to the "Other" category, in which case
 // the name is supposed to contain a custom value instead of just using "Other".
 auto ocsf_type_name(ocsf_version version, int64_t id)
-  -> std::optional<std::string_view>;
+  -> Option<std::string_view>;
 auto ocsf_type_uid(ocsf_version version, std::string_view name)
-  -> std::optional<int64_t>;
+  -> Option<int64_t>;
 
 } // namespace tenzir

@@ -133,7 +133,7 @@ struct group_by_key_equal {
 };
 
 struct aggregate_t {
-  std::optional<ast::field_path> dest;
+  Option<ast::field_path> dest;
   ast::function_call call;
 
   friend auto inspect(auto& f, aggregate_t& x) -> bool {
@@ -142,7 +142,7 @@ struct aggregate_t {
 };
 
 struct group_t {
-  std::optional<ast::field_path> dest;
+  Option<ast::field_path> dest;
   ast::field_path expr;
 
   friend auto inspect(auto& f, group_t& x) -> bool {
@@ -164,16 +164,16 @@ struct config {
   /// Unevaluated expression for the `frequency` option. Set by build_config
   /// when parsing options={frequency: <expr>}. Evaluated and written to
   /// `frequency` by evaluate_options() after let-bindings are substituted.
-  std::optional<ast::expression> frequency_expr;
+  Option<ast::expression> frequency_expr;
 
   /// Unevaluated expression for the `mode` option. Set by build_config when
   /// parsing options={mode: <expr>}. Evaluated and written to `mode` by
   /// evaluate_options() after let-bindings are substituted.
-  std::optional<ast::expression> mode_expr;
+  Option<ast::expression> mode_expr;
 
   /// Optional frequency for periodic emission of aggregation results.
   /// Populated by evaluate_options().
-  std::optional<duration> frequency;
+  Option<duration> frequency;
 
   /// Emission mode: "reset", "cumulative", or "update".
   /// Populated by evaluate_options(). Defaults to "reset".
@@ -605,7 +605,7 @@ auto build_config(std::vector<ast::expression> exprs, session ctx)
     }
   };
 
-  auto add_aggregate = [&](std::optional<ast::field_path> dest,
+  auto add_aggregate = [&](Option<ast::field_path> dest,
                            ast::function_call call) {
     auto* fn = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(call));
     if (not fn) {
@@ -627,17 +627,16 @@ auto build_config(std::vector<ast::expression> exprs, session ctx)
     cfg.aggregates.emplace_back(std::move(dest), std::move(call));
   };
 
-  auto add_group
-    = [&](std::optional<ast::field_path> dest, ast::field_path expr) {
-        auto index = -detail::narrow<int64_t>(cfg.groups.size()) - 1;
-        cfg.indices.push_back(index);
-        cfg.groups.emplace_back(std::move(dest), std::move(expr));
-      };
+  auto add_group = [&](Option<ast::field_path> dest, ast::field_path expr) {
+    auto index = -detail::narrow<int64_t>(cfg.groups.size()) - 1;
+    cfg.indices.push_back(index);
+    cfg.groups.emplace_back(std::move(dest), std::move(expr));
+  };
 
   for (auto& arg : exprs) {
     arg.match(
       [&](ast::function_call& arg) {
-        add_aggregate(std::nullopt, std::move(arg));
+        add_aggregate(None{}, std::move(arg));
       },
       [&](ast::assignment& arg) {
         auto selector = ast::selector::try_from(arg.left);
@@ -683,7 +682,7 @@ auto build_config(std::vector<ast::expression> exprs, session ctx)
       [&](auto&) {
         auto selector = ast::field_path::try_from(arg);
         if (selector) {
-          add_group(std::nullopt, std::move(*selector));
+          add_group(None{}, std::move(*selector));
         } else {
           diagnostic::error(
             "expected selector, assignment or aggregation function call")
@@ -862,7 +861,7 @@ public:
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     (void)filter, (void)order;
-    return optimize_result{std::nullopt, event_order::unordered, copy()};
+    return optimize_result{None{}, event_order::unordered, copy()};
   }
 
   friend auto inspect(auto& f, summarize_operator2& x) -> bool {

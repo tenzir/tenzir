@@ -597,10 +597,10 @@ auto update_rules(const std::filesystem::path& path, RuleMap& rules,
 
 auto make_sigma_slice(const table_slice& input, const data& yaml,
                       const ast::expression& rule, diagnostic_handler& dh)
-  -> std::optional<table_slice> {
+  -> Option<table_slice> {
   auto event = filter2(input, rule, dh, false);
   if (event.rows() == 0) {
-    return std::nullopt;
+    return None{};
   }
   auto [event_schema, event_array] = offset{}.get(event);
   auto [rule_schema, rule_array] = [&] {
@@ -733,7 +733,7 @@ class plugin final : public virtual operator_plugin<sigma_operator>,
 public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto refresh_interval = std::optional<located<duration>>{};
+    auto refresh_interval = Option<located<duration>>{};
     auto path = std::string{};
     argument_parser2::operator_("sigma")
       .positional("path", path)

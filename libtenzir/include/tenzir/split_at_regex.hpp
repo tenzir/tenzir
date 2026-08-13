@@ -10,10 +10,10 @@
 
 #include "tenzir/chunk.hpp"
 #include "tenzir/generator.hpp"
+#include "tenzir/option.hpp"
 
 #include <boost/regex.hpp>
 
-#include <optional>
 #include <string_view>
 
 namespace tenzir {
@@ -25,14 +25,14 @@ split_at_regex(std::string_view separator, bool include_separator = false) {
                              | boost::regex_constants::optimize};
   return [exp = std::move(expr),
           include_separator](generator<chunk_ptr> input) mutable
-           -> generator<std::optional<std::string_view>> {
+           -> generator<Option<std::string_view>> {
     auto expr = std::move(exp); // NOLINT
     auto buffer = std::string{};
     auto consumed = true;
     boost::match_results<std::string::const_iterator> what;
     for (auto&& chunk : input) {
       if (not chunk or chunk->size() == 0) {
-        co_yield std::nullopt;
+        co_yield None{};
         continue;
       }
       buffer.append(reinterpret_cast<const char*>(chunk->data()),
@@ -59,7 +59,7 @@ split_at_regex(std::string_view separator, bool include_separator = false) {
         begin = what[0].second + (consumed ? 0 : 1);
       }
       buffer = buffer.substr(current - first);
-      co_yield std::nullopt;
+      co_yield None{};
     }
     if (not buffer.empty()) {
       auto current = buffer.cbegin();

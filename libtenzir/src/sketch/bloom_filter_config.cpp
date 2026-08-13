@@ -23,7 +23,7 @@ bloom_filter_params make(uint64_t m, uint64_t n, uint64_t k, double p) {
 
 } // namespace
 
-std::optional<bloom_filter_params> evaluate(bloom_filter_config cfg) {
+Option<bloom_filter_params> evaluate(bloom_filter_config cfg) {
   // Check basic invariants first.
   if (cfg.m and *cfg.m <= 0) {
     return {};

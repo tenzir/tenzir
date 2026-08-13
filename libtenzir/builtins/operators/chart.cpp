@@ -257,8 +257,8 @@ auto handle_xlimit(ChartArgs<Ty> const& args, ast::binary_op op,
 struct Prepared {
   call_map y;
   plugins_map plugins;
-  std::optional<xlimit> x_min;
-  std::optional<xlimit> x_max;
+  Option<xlimit> x_min;
+  Option<xlimit> x_max;
   location y_loc;
   std::string xpath;
 };
@@ -299,7 +299,7 @@ public:
   }
 
 private:
-  auto prepare(OpCtx& ctx) -> std::optional<Prepared> {
+  auto prepare(OpCtx& ctx) -> Option<Prepared> {
     auto sp = session_provider::make(ctx.dh());
     auto s = sp.as_session();
     auto prep = Prepared{};
@@ -307,20 +307,20 @@ private:
     auto y_copy = args_.y;
     if (auto result = handle_y<Ty>(prep.y, prep.y_loc, args_.res, y_copy, s);
         not result) {
-      return std::nullopt;
+      return None{};
     }
 
     if (args_.x_min) {
       auto result = handle_xlimit(args_, ast::binary_op::geq, *args_.x_min);
       if (not result) {
-        return std::nullopt;
+        return None{};
       }
       prep.x_min = std::move(*result);
     }
     if (args_.x_max) {
       auto result = handle_xlimit(args_, ast::binary_op::leq, *args_.x_max);
       if (not result) {
-        return std::nullopt;
+        return None{};
       }
       prep.x_max = std::move(*result);
     }
@@ -533,7 +533,7 @@ private:
       [&](OrderedGroupMap const& groups) {
         if (prep_->x_min and args_.res) {
           TENZIR_ASSERT(not groups.empty());
-          auto min = std::optional{prep_->x_min->rounded};
+          auto min = Option{prep_->x_min->rounded};
           auto const& first = groups.begin()->first;
           if (*min != first) {
             fill_at(*min);
@@ -543,7 +543,7 @@ private:
             fill_at(std::move(gap).value());
           }
         }
-        for (auto prev = std::optional<data>{};
+        for (auto prev = Option<data>{};
              auto const& [x, gb] :
              groups | std::views::take(args_.limit.inner)) {
           if (args_.res) {
@@ -557,7 +557,7 @@ private:
         }
         if (prep_->x_max and args_.res) {
           TENZIR_ASSERT(not groups.empty());
-          auto last = std::optional{groups.rbegin()->first};
+          auto last = Option{groups.rbegin()->first};
           auto const& max = prep_->x_max->rounded;
           while (auto gap = find_gap(last, max)) {
             last = gap.value();
@@ -682,29 +682,29 @@ private:
     return concatenate(std::move(results));
   }
 
-  auto find_gap(std::optional<data> const& prev, data const& curr) const
-    -> std::optional<data> {
+  auto find_gap(Option<data> const& prev, data const& curr) const
+    -> Option<data> {
     if (not prev) {
-      return std::nullopt;
+      return None{};
     }
     if (is<caf::none_t>(*prev) or is<caf::none_t>(curr)) {
-      return std::nullopt;
+      return None{};
     }
     auto result = match(
       std::tie(curr, *prev),
-      [&](duration const& c, duration const& p) -> std::optional<data> {
+      [&](duration const& c, duration const& p) -> Option<data> {
         if (c - p > args_.res->inner) {
           return p + args_.res->inner;
         }
-        return std::nullopt;
+        return None{};
       },
-      [&](time const& c, time const& p) -> std::optional<data> {
+      [&](time const& c, time const& p) -> Option<data> {
         if (c - p > args_.res->inner) {
           return p + args_.res->inner;
         }
-        return std::nullopt;
+        return None{};
       },
-      [](auto const&, auto const&) -> std::optional<data> {
+      [](auto const&, auto const&) -> Option<data> {
         TENZIR_UNREACHABLE();
       });
     return result;
@@ -858,15 +858,15 @@ private:
   // input
   ChartArgs<Ty> args_;
   // cache
-  std::optional<Prepared> prep_;
+  Option<Prepared> prep_;
   // state
-  std::optional<type> xty_;
+  Option<type> xty_;
   variant<OrderedGroupMap, CategoricalGroupMap> groups_ = OrderedGroupMap{};
 };
 
 // Helper validation for x limit types
 auto validate_x_limit_type(located<data> const& d,
-                           std::optional<located<duration>> const& res,
+                           Option<located<duration>> const& res,
                            DescribeCtx& ctx) -> void {
   if (is<caf::none_t>(d.inner)) {
     diagnostic::error("limit cannot be `null`").primary(d).emit(ctx);
@@ -901,8 +901,8 @@ auto validate_x_limit_type(located<data> const& d,
 
 // Validation for the y expression of non-pie charts (area, bar, line)
 auto validate_y_common(ast::expression const& y,
-                       std::optional<located<duration>> const& res,
-                       DescribeCtx& ctx) -> void {
+                       Option<located<duration>> const& res, DescribeCtx& ctx)
+  -> void {
   match(
     y,
     [&](ast::record const& rec) {

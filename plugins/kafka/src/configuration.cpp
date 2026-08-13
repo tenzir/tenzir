@@ -121,7 +121,7 @@ auto configuration::aws_iam_callback::oauthbearer_token_refresh_cb(
   // Use the shared credential provider which handles all auth methods including
   // web identity.
   auto provider_result
-    = tenzir::make_aws_credentials_provider(creds_, std::optional{region});
+    = tenzir::make_aws_credentials_provider(creds_, Option{region});
   if (not provider_result) {
     diagnostic::error(provider_result.error()).emit(dh_);
     auto err
@@ -217,9 +217,8 @@ auto configuration::error_callback::event_cb(RdKafka::Event& event) -> void {
   }
 }
 
-auto configuration::make(const record& options,
-                         std::optional<aws_iam_options> aws,
-                         std::optional<resolved_aws_credentials> creds,
+auto configuration::make(const record& options, Option<aws_iam_options> aws,
+                         Option<resolved_aws_credentials> creds,
                          diagnostic_handler& dh)
   -> caf::expected<configuration> {
   configuration result;

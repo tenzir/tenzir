@@ -9,10 +9,10 @@
 #pragma once
 
 #include "tenzir/generator.hpp"
+#include "tenzir/option.hpp"
 
 #include <caf/error.hpp>
 
-#include <optional>
 #include <string>
 #include <string_view>
 
@@ -20,14 +20,14 @@ namespace tenzir::detail {
 
 /// A thread-safe wrapper around `::getenv`.
 /// @param var The environment variable.
-/// @returns The copied environment variables contents, or `std::nullopt`.
-[[nodiscard]] std::optional<std::string> getenv(std::string_view var);
+/// @returns The copied environment variables contents, or `None{}`.
+[[nodiscard]] Option<std::string> getenv(std::string_view var);
 
 /// A thread-safe wrapper around `::setenv`.
 /// @param key The environment variable key.
 /// @param value The environment variable value.
 /// @param overwrite Flag to control whether existing keys get overwritten.
-/// @returns The copied environment variables contents, or `std::nullopt`.
+/// @returns The copied environment variables contents, or `None{}`.
 [[nodiscard]] caf::error
 setenv(std::string_view key, std::string_view value, int overwrite = 1);
 

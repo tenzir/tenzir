@@ -12,10 +12,10 @@
 
 #include "tenzir/config.hpp"
 #include "tenzir/ip.hpp"
+#include "tenzir/option.hpp"
 
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -33,13 +33,13 @@ struct process {
   gid_t rgid;
   std::string priority;
   time startup;
-  std::optional<uint64_t> vsize;
-  std::optional<uint64_t> rsize;
-  std::optional<uint64_t> peak_mem;
-  std::optional<uint64_t> swap;
-  std::optional<uint64_t> open_fds;
-  std::optional<duration> utime;
-  std::optional<duration> stime;
+  Option<uint64_t> vsize;
+  Option<uint64_t> rsize;
+  Option<uint64_t> peak_mem;
+  Option<uint64_t> swap;
+  Option<uint64_t> open_fds;
+  Option<duration> utime;
+  Option<duration> stime;
 };
 
 /// A network socket.
@@ -78,7 +78,7 @@ public:
 
 protected:
   virtual auto current_pid() -> int = 0;
-  virtual auto fetch_processes(std::optional<int> pid_filter = std::nullopt)
+  virtual auto fetch_processes(Option<int> pid_filter = None{})
     -> std::vector<process>
     = 0;
   virtual auto fetch_sockets() -> std::vector<net_socket> = 0;
@@ -94,7 +94,7 @@ public:
   ~linux_os() final;
 
   auto current_pid() -> int final;
-  auto fetch_processes(std::optional<int> pid_filterstd = std::nullopt)
+  auto fetch_processes(Option<int> pid_filterstd = None{})
     -> std::vector<process> final;
   auto fetch_sockets() -> std::vector<net_socket> final;
 
@@ -115,7 +115,7 @@ public:
   ~darwin_os() final;
 
   auto current_pid() -> int final;
-  auto fetch_processes(std::optional<int> pid_filter = std::nullopt)
+  auto fetch_processes(Option<int> pid_filter = None{})
     -> std::vector<process> final;
   auto fetch_sockets() -> std::vector<net_socket> final;
 

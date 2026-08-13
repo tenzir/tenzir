@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
+#include "tenzir/option.hpp"
 
 #include <tenzir/allocator.hpp>
 #include <tenzir/arrow_memory_pool.hpp>
@@ -25,7 +26,6 @@
 #include <charconv>
 #include <cstdint>
 #include <fstream>
-#include <optional>
 #include <string>
 #include <string_view>
 
@@ -50,19 +50,19 @@ namespace tenzir::plugins::health_memory {
 namespace {
 
 #if TENZIR_LINUX
-auto read_heap_base_from_proc() -> std::optional<std::uintptr_t> {
-  auto parse_hex = [](std::string_view text) -> std::optional<std::uintptr_t> {
+auto read_heap_base_from_proc() -> Option<std::uintptr_t> {
+  auto parse_hex = [](std::string_view text) -> Option<std::uintptr_t> {
     std::uintptr_t value = 0;
     const auto result
       = std::from_chars(text.data(), text.data() + text.size(), value, 16);
     if (result.ec != std::errc{}) {
-      return std::nullopt;
+      return None{};
     }
     return value;
   };
   std::ifstream maps{"/proc/self/maps"};
   if (not maps) {
-    return std::nullopt;
+    return None{};
   }
   std::string line;
   while (std::getline(maps, line)) {
@@ -88,7 +88,7 @@ auto read_heap_base_from_proc() -> std::optional<std::uintptr_t> {
     }
     return start;
   }
-  return std::nullopt;
+  return None{};
 }
 
 const auto program_break_base = read_heap_base_from_proc();
@@ -248,13 +248,13 @@ auto make_malloc_metrics() -> record {
 
 #if TENZIR_LINUX
 auto parse_proc_kb_value(std::string_view line, std::string_view key)
-  -> std::optional<uint64_t> {
+  -> Option<uint64_t> {
   if (not line.starts_with(key)) {
-    return std::nullopt;
+    return None{};
   }
   const auto key_length = key.size();
   if (line.size() <= key_length or line[key_length] != ':') {
-    return std::nullopt;
+    return None{};
   }
   auto rest = line.substr(key_length + 1);
   while (not rest.empty()
@@ -265,13 +265,13 @@ auto parse_proc_kb_value(std::string_view line, std::string_view key)
   const auto number_sv
     = delimiter == std::string_view::npos ? rest : rest.substr(0, delimiter);
   if (number_sv.empty()) {
-    return std::nullopt;
+    return None{};
   }
   uint64_t value = 0;
   const auto parsed = std::from_chars(
     number_sv.data(), number_sv.data() + number_sv.size(), value);
   if (parsed.ec != std::errc{}) {
-    return std::nullopt;
+    return None{};
   }
   if (delimiter != std::string_view::npos) {
     auto unit = rest.substr(delimiter);
@@ -329,25 +329,25 @@ auto make_procfs_metrics() -> record {
           rec.emplace(std::string{key}, value);
         }
       };
-  auto add_value = [](std::optional<uint64_t>& target, uint64_t value) {
+  auto add_value = [](Option<uint64_t>& target, uint64_t value) {
     if (target) {
       *target += value;
     } else {
       target = value;
     }
   };
-  auto assign_value = [](std::optional<uint64_t>& target, uint64_t value) {
+  auto assign_value = [](Option<uint64_t>& target, uint64_t value) {
     target = value;
   };
-  std::optional<uint64_t> rss;
-  std::optional<uint64_t> pss;
-  std::optional<uint64_t> private_clean;
-  std::optional<uint64_t> private_dirty;
-  std::optional<uint64_t> anonymous_bytes;
-  std::optional<uint64_t> swap;
-  std::optional<uint64_t> shared_hugetlb;
-  std::optional<uint64_t> private_hugetlb;
-  std::optional<uint64_t> hugetlb_total;
+  Option<uint64_t> rss;
+  Option<uint64_t> pss;
+  Option<uint64_t> private_clean;
+  Option<uint64_t> private_dirty;
+  Option<uint64_t> anonymous_bytes;
+  Option<uint64_t> swap;
+  Option<uint64_t> shared_hugetlb;
+  Option<uint64_t> private_hugetlb;
+  Option<uint64_t> hugetlb_total;
   auto parse_smaps_stream = [&](std::istream& stream) {
     std::string line;
     while (std::getline(stream, line)) {
@@ -400,7 +400,7 @@ auto make_procfs_metrics() -> record {
   if (swap) {
     set_record_field(smaps, "swap_bytes", *swap);
   }
-  std::optional<uint64_t> hugetlb_bytes;
+  Option<uint64_t> hugetlb_bytes;
   if (shared_hugetlb) {
     add_value(hugetlb_bytes, *shared_hugetlb);
   }
@@ -413,12 +413,12 @@ auto make_procfs_metrics() -> record {
   if (hugetlb_bytes) {
     set_record_field(smaps, "hugetlb_bytes", *hugetlb_bytes);
   }
-  std::optional<uint64_t> vm_rss;
-  std::optional<uint64_t> vm_data;
-  std::optional<uint64_t> vm_swap;
-  std::optional<uint64_t> rss_anon;
-  std::optional<uint64_t> rss_file;
-  std::optional<uint64_t> rss_shmem;
+  Option<uint64_t> vm_rss;
+  Option<uint64_t> vm_data;
+  Option<uint64_t> vm_swap;
+  Option<uint64_t> rss_anon;
+  Option<uint64_t> rss_file;
+  Option<uint64_t> rss_shmem;
   if (std::ifstream status_file{"/proc/self/status"}) {
     std::string line;
     while (std::getline(status_file, line)) {

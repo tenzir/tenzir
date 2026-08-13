@@ -28,7 +28,7 @@ auto parameter_type_label(const user_defined_operator::parameter& param)
 }
 
 auto parameter_default_string(const ast::expression& expr)
-  -> std::optional<std::string> {
+  -> Option<std::string> {
   if (const auto* constant = try_as<ast::constant>(expr)) {
     auto data_value = constant->as_data();
     if (auto yaml = to_yaml(data_value)) {
@@ -46,7 +46,7 @@ auto parameter_default_string(const ast::expression& expr)
     return fmt::format("{}{}", path->has_this() ? "this." : "",
                        fmt::join(names_range, "."));
   }
-  return std::nullopt;
+  return None{};
 }
 
 auto is_null_constant_expression(const ast::expression& expr) -> bool {
@@ -108,7 +108,7 @@ auto make_usage_string(std::string_view op_name,
 }
 
 auto make_parameter_note(const user_defined_operator& udo)
-  -> std::optional<std::string> {
+  -> Option<std::string> {
   struct row {
     std::string name;
     std::string type;
@@ -192,7 +192,7 @@ auto make_parameter_note(const user_defined_operator& udo)
   update_widths(positional_rows, name_width, type_width, default_width);
   update_widths(named_rows, name_width, type_width, default_width);
   if (positional_rows.empty() and named_rows.empty()) {
-    return std::nullopt;
+    return None{};
   }
   auto note = std::string{"parameters:\n"};
   note += format_section("positional", positional_rows, name_width, type_width,
@@ -449,11 +449,11 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
   auto positional_values = std::vector<positional_value>{};
   positional_values.reserve(udo.positional_params.size());
   auto named_values
-    = std::vector<std::optional<ast::expression>>(udo.named_params.size());
+    = std::vector<Option<ast::expression>>(udo.named_params.size());
   auto named_value_locations
-    = std::vector<std::optional<location>>(udo.named_params.size());
+    = std::vector<Option<location>>(udo.named_params.size());
   auto assignment_locations
-    = std::vector<std::optional<location>>(udo.named_params.size());
+    = std::vector<Option<location>>(udo.named_params.size());
 
   auto name_to_index = std::unordered_map<std::string, size_t>{};
   name_to_index.reserve(udo.named_params.size());
@@ -469,14 +469,14 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
   auto next_arg = size_t{0};
   auto append_positional_argument
     = [&](const user_defined_operator::parameter& param)
-    -> std::optional<failure_or<ast::pipeline>> {
+    -> Option<failure_or<ast::pipeline>> {
     const auto missing_argument
       = next_arg >= inv.args.size()
         or try_as<ast::assignment>(inv.args[next_arg]);
     if (not missing_argument) {
       positional_values.push_back({std::move(inv.args[next_arg]), false});
       ++next_arg;
-      return std::nullopt;
+      return None{};
     }
     if (not param.default_value) {
       diagnostic::error("expected additional positional argument `{}`",
@@ -486,7 +486,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
       return failure::promise();
     }
     positional_values.push_back({*param.default_value, true});
-    return std::nullopt;
+    return None{};
   };
   for (const auto& positional_param : udo.positional_params) {
     if (auto error = append_positional_argument(positional_param)) {
@@ -586,7 +586,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
 
   auto validate_type
     = [&](const user_defined_operator::parameter& param, ast::expression& expr,
-          std::optional<location> explicit_location) -> failure_or<void> {
+          Option<location> explicit_location) -> failure_or<void> {
     if (not param.value_type) {
       return {};
     }
@@ -626,7 +626,7 @@ auto instantiate_user_defined_operator(const user_defined_operator& udo,
       }
     }
     coerce_const_string_to_secret(param, expr);
-    if (not validate_type(param, expr, std::nullopt)) {
+    if (not validate_type(param, expr, None{})) {
       return failure::promise();
     }
     substitutions.emplace(param.name, std::move(expr));

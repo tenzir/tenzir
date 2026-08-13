@@ -16,11 +16,11 @@
 namespace tenzir {
 
 auto to_string(data_view3 v, location loc, diagnostic_handler& dh)
-  -> std::optional<std::string> {
-  using ret_t = std::optional<std::string>;
+  -> Option<std::string> {
+  using ret_t = Option<std::string>;
   const auto f = detail::overload{
     [](view<caf::none_t>) -> ret_t {
-      return std::nullopt;
+      return None{};
     },
     [loc, &dh](view3<blob> b) -> ret_t {
       const auto* begin = reinterpret_cast<const uint8_t*>(b.data());
@@ -34,7 +34,7 @@ auto to_string(data_view3 v, location loc, diagnostic_handler& dh)
       diagnostic::warning("expected `blob` to contain valid UTF-8 data")
         .primary(loc)
         .emit(dh);
-      return std::nullopt;
+      return None{};
     },
     [](const view3<std::string>& s) -> ret_t {
       return std::string{s};

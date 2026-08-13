@@ -31,7 +31,7 @@ namespace {
 
 struct from_gcs_args final {
   from_file_args base_args;
-  std::optional<location> anonymous;
+  Option<location> anonymous;
 
   friend auto inspect(auto& f, from_gcs_args& x) -> bool {
     return f.object(x).fields(f.field("base_args", x.base_args),
@@ -113,7 +113,7 @@ public:
     -> optimize_result override {
     auto copy = std::make_unique<from_gcs_operator>(*this);
     copy->order_ = order;
-    return optimize_result{std::nullopt, event_order::ordered, std::move(copy)};
+    return optimize_result{None{}, event_order::ordered, std::move(copy)};
   }
 
   friend auto inspect(auto& f, from_gcs_operator& x) -> bool {

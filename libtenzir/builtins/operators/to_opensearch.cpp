@@ -33,18 +33,18 @@ namespace {
 struct opensearch_args {
   located<secret> url;
   ast::expression action;
-  std::optional<ast::expression> index;
-  std::optional<ast::expression> doc;
-  std::optional<ast::expression> id;
-  std::optional<located<secret>> user;
-  std::optional<located<secret>> passwd;
+  Option<ast::expression> index;
+  Option<ast::expression> doc;
+  Option<ast::expression> id;
+  Option<located<secret>> user;
+  Option<located<secret>> passwd;
   tls_options ssl;
-  std::optional<location> include_nulls;
-  std::optional<located<uint64_t>> max_content_length
+  Option<location> include_nulls;
+  Option<located<uint64_t>> max_content_length
     = located{5'000'000, location::unknown};
-  std::optional<located<duration>> buffer_timeout
+  Option<located<duration>> buffer_timeout
     = located{std::chrono::seconds{5}, location::unknown};
-  std::optional<location> compress = location::unknown;
+  Option<location> compress = location::unknown;
   location operator_location = location::unknown;
 
   auto add_to(argument_parser2& parser) -> void {
@@ -112,11 +112,10 @@ public:
     event_too_large,
   };
 
-  auto create_metadata(std::string_view action,
-                       std::optional<std::optional<std::string_view>> idx,
-                       std::optional<std::optional<std::string_view>> id,
-                       const opensearch_args& args)
-    -> std::optional<diagnostic> {
+  auto
+  create_metadata(std::string_view action, Option<Option<std::string_view>> idx,
+                  Option<Option<std::string_view>> id,
+                  const opensearch_args& args) -> Option<diagnostic> {
     constexpr auto supported_actions
       = std::array{"create", "delete", "index", "update", "upsert"};
     const auto valid_action
@@ -154,7 +153,7 @@ public:
       printer_.print(it, id.value().value());
     }
     element_text_ += "}}\n";
-    return std::nullopt;
+    return None{};
   }
 
   auto create_doc(std::string_view action, view3<record> doc) {
@@ -238,11 +237,10 @@ private:
 };
 
 auto resolve_str(std::string_view option_name,
-                 const std::optional<ast::expression>& expr,
-                 const table_slice& slice, diagnostic_handler& dh)
-  -> std::optional<series> {
+                 const Option<ast::expression>& expr, const table_slice& slice,
+                 diagnostic_handler& dh) -> Option<series> {
   if (not expr) {
-    return std::nullopt;
+    return None{};
   }
   auto res = eval(*expr, slice, dh);
   auto b = arrow::StringBuilder{};
@@ -258,7 +256,7 @@ auto resolve_str(std::string_view option_name,
         .primary(*expr)
         .emit(dh);
       if (res.parts().size() == 1) {
-        return std::nullopt;
+        return None{};
       }
       check(b.AppendNulls(part.length()));
     }
@@ -412,8 +410,8 @@ public:
         continue;
       }
       slice = resolve_enumerations(std::move(slice));
-      constexpr auto ng = []() -> generator<std::optional<std::string_view>> {
-        co_yield {std::nullopt};
+      constexpr auto ng = []() -> generator<Option<std::string_view>> {
+        co_yield {None{}};
       };
       const auto ids = resolve_str("id", args_.id, slice, dh);
       const auto idxs = resolve_str("index", args_.index, slice, dh);

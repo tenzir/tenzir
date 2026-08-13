@@ -12,6 +12,7 @@
 #include "tenzir/detail/string.hpp"
 #include "tenzir/element_type.hpp"
 #include "tenzir/ir.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/registry.hpp"
@@ -19,7 +20,6 @@
 #include <algorithm>
 #include <charconv>
 #include <cstdint>
-#include <optional>
 #include <ranges>
 #include <span>
 #include <string_view>
@@ -589,20 +589,20 @@ auto parse_parallelism(std::string_view value) -> Option<ir::Parallelism> {
 /// Match a `// parallelism: <value>` directive on a single line. ASCII
 /// whitespace is permitted around `//`, `parallelism`, and `:`.
 auto match_parallelism_directive(std::string_view s)
-  -> std::optional<std::string_view> {
+  -> Option<std::string_view> {
   s = detail::trim(s);
   if (not s.starts_with("//")) {
-    return std::nullopt;
+    return None{};
   }
   s.remove_prefix(2);
   s = detail::trim(s);
   if (not s.starts_with("parallelism")) {
-    return std::nullopt;
+    return None{};
   }
   s.remove_prefix(std::string_view{"parallelism"}.size());
   s = detail::trim(s);
   if (s.empty() or s.front() != ':') {
-    return std::nullopt;
+    return None{};
   }
   s.remove_prefix(1);
   return detail::trim(s);

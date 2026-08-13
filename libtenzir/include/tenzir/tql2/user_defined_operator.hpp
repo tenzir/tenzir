@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -42,7 +43,7 @@ private:
   diagnostic_handler* inner_{};
   std::string op_name_;
   std::string usage_string_;
-  std::optional<std::string> parameter_note_;
+  Option<std::string> parameter_note_;
 };
 
 auto make_operator_name(const ast::entity& entity) -> std::string;

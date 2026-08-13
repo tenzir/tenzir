@@ -75,37 +75,37 @@ class produce_worker {
 public:
   // Takes a fully-configured configuration (secrets already resolved).
   static auto make(configuration config, to_kafka_args const& args,
-                   diagnostic_handler& dh) -> std::optional<produce_worker> {
+                   diagnostic_handler& dh) -> Option<produce_worker> {
     auto p = producer::make(std::move(config));
     if (not p) {
       diagnostic::error(std::move(p).error()).primary(args.op).emit(dh);
-      return std::nullopt;
+      return None{};
     }
     return produce_worker{std::move(*p), args, dh};
   }
 
   static auto try_make_json_printer(ast::expression const& expr)
-    -> std::optional<json_printer2> {
+    -> Option<json_printer2> {
     auto const* const call = try_as<ast::function_call>(expr);
     if (not call) {
-      return std::nullopt;
+      return None{};
     }
     if (not call->fn.ref.resolved()) {
-      return std::nullopt;
+      return None{};
     }
     auto const& segments = call->fn.ref.segments();
     if (segments.size() != 1) {
-      return std::nullopt;
+      return None{};
     }
     auto compact = false;
     if (segments.front() == "print_ndjson") {
       compact = true;
     } else if (segments.front() != "print_json") {
-      return std::nullopt;
+      return None{};
     }
     // The first argument must be `this` (the positional argument).
     if (call->args.empty() or not is<ast::this_>(call->args.front())) {
-      return std::nullopt;
+      return None{};
     }
     // Parse any named options from the remaining arguments.
     auto strip = false;
@@ -116,20 +116,20 @@ public:
     for (auto const& arg : std::span{call->args}.subspan(1)) {
       auto const* const assignment = try_as<ast::assignment>(arg);
       if (not assignment) {
-        return std::nullopt;
+        return None{};
       }
       auto fp = ast::field_path::try_from(assignment->left);
       if (not fp or fp->path().size() != 1) {
-        return std::nullopt;
+        return None{};
       }
       // The value must be the boolean constant `true`.
       auto const* const val = try_as<ast::constant>(assignment->right);
       if (not val) {
-        return std::nullopt;
+        return None{};
       }
       auto const* const flag = try_as<bool>(val->value);
       if (not flag or not *flag) {
-        return std::nullopt;
+        return None{};
       }
       auto const name = fp->path().front().id.name;
       if (name == "strip") {
@@ -143,7 +143,7 @@ public:
       } else if (name == "strip_empty_lists") {
         strip_empty_lists = true;
       } else {
-        return std::nullopt;
+        return None{};
       }
     }
     return json_printer2{json_printer_options{
@@ -223,7 +223,7 @@ private:
   diagnostic_handler& dh_;
   std::string key_;
   time timestamp_;
-  std::optional<json_printer2> printer_;
+  Option<json_printer2> printer_;
 };
 
 } // namespace
@@ -237,7 +237,7 @@ auto to_kafka_operator::operator()(generator<table_slice> input,
   -> generator<std::monostate> {
   auto& dh = ctrl.diagnostics();
   // Resolve all aws_iam fields; region/profile/session_name may be secrets.
-  auto resolved_creds = std::optional<tenzir::resolved_aws_credentials>{};
+  auto resolved_creds = Option<tenzir::resolved_aws_credentials>{};
   if (args_.aws) {
     resolved_creds.emplace();
     auto requests = args_.aws->make_secret_requests(*resolved_creds, dh);
@@ -328,7 +328,7 @@ auto make_to_kafka(operator_factory_invocation inv, session ctx,
                    const record& defaults) -> failure_or<operator_ptr> {
   auto args = to_kafka_args{};
   TRY(resolve_entities(args.message, ctx));
-  auto iam_opts = std::optional<located<record>>{};
+  auto iam_opts = Option<located<record>>{};
   TRY(argument_parser2::operator_("to_kafka")
         .positional("topic", args.topic)
         .named_optional("message", args.message, "blob|string")

@@ -175,7 +175,7 @@ bool test_file_identifier(std::filesystem::path file, const char* identifier) {
 
 namespace tenzir {
 
-std::optional<std::filesystem::path>
+Option<std::filesystem::path>
 store_path_for_partition(const std::filesystem::path& base_path,
                          const uuid& id) {
   std::error_code err{};
@@ -186,7 +186,7 @@ store_path_for_partition(const std::filesystem::path& base_path,
       return candidate;
     }
   }
-  return std::nullopt;
+  return None{};
 }
 
 caf::error

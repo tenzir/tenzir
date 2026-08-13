@@ -508,13 +508,13 @@ struct zeek_log_state {
 
 struct zeek_log : zeek_log_state {
   /// A builder generated from the above metadata.
-  std::optional<series_builder> builder = {};
-  std::optional<record_ref> event = {};
+  Option<series_builder> builder = None{};
+  Option<record_ref> event = None{};
   std::vector<rule<std::string_view::const_iterator, bool>> parsers = {};
   type target_schema = {};
 };
 
-auto parser_impl(generator<std::optional<std::string_view>> lines,
+auto parser_impl(generator<Option<std::string_view>> lines,
                  operator_control_plane& ctrl) -> generator<table_slice> {
   auto log = zeek_log{};
   auto last_finish = std::chrono::steady_clock::now();
@@ -775,7 +775,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
         .note("line {}", line_nr)
         .emit(ctrl.diagnostics());
     }
-    log.event = {};
+    log.event = None{};
   }
   if (log.builder and log.builder->length() > 0) {
     co_yield finish();
@@ -1032,7 +1032,7 @@ private:
           .note("line {}", line_nr_)
           .emit(dh);
         failed_ = true;
-        log_.event = {};
+        log_.event = None{};
         co_return;
       }
       TENZIR_ASSERT_EXPENSIVE(add_ok);
@@ -1043,7 +1043,7 @@ private:
           .note("line {}", line_nr_)
           .emit(dh);
         failed_ = true;
-        log_.event = {};
+        log_.event = None{};
         co_return;
       }
     }
@@ -1054,7 +1054,7 @@ private:
         .note("line {}", line_nr_)
         .emit(dh);
       failed_ = true;
-      log_.event = {};
+      log_.event = None{};
       co_return;
     }
     auto const eoi_ok = parsers::eoi(f, l, unused);
@@ -1064,7 +1064,7 @@ private:
         .note("line {}", line_nr_)
         .emit(dh);
     }
-    log_.event = {};
+    log_.event = None{};
   }
 
   auto ensure_log_builder(diagnostic_handler& dh) -> bool {
@@ -1232,7 +1232,7 @@ public:
 
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> std::optional<generator<table_slice>> override {
+    -> Option<generator<table_slice>> override {
     return parser_impl(to_lines(std::move(input)), ctrl);
   }
 
@@ -1244,9 +1244,9 @@ public:
 class zeek_tsv_printer final : public plugin_printer {
 public:
   struct args {
-    std::optional<char> set_sep;
-    std::optional<std::string> empty_field;
-    std::optional<std::string> unset_field;
+    Option<char> set_sep;
+    Option<std::string> empty_field;
+    Option<std::string> unset_field;
     bool disable_timestamp_tags = false;
 
     friend auto inspect(auto& f, args& x) -> bool {
@@ -1479,7 +1479,7 @@ public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto args = zeek_tsv_printer::args{};
-    auto set_separator = std::optional<located<std::string>>{};
+    auto set_separator = Option<located<std::string>>{};
     TRY(argument_parser2::operator_(name())
           .named("set_separator", set_separator)
           .named("empty_field", args.empty_field)

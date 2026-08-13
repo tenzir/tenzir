@@ -43,8 +43,7 @@ Checks: >
   -readability-redundant-inline-specifier,
   -readability-qualified-auto,
   -readability-uppercase-literal-suffix,
-WarningsAsErrors: >
-  readability-operators-representation,
+WarningsAsErrors: readability-operators-representation,
 HeaderFilterRegex:     '/tenzir/'
 CheckOptions:
   - key:             readability-implicit-bool-conversion.AllowPointerConditions

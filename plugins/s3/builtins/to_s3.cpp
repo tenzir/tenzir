@@ -47,10 +47,9 @@ protected:
     if (not resolved.starts_with("s3://")) {
       resolved = "s3://" + resolved;
     }
-    auto aws_iam = args_.aws_iam
-                     ? std::optional<located<record>>{*args_.aws_iam}
-                     : std::nullopt;
-    resolved_ = co_await resolve_aws_iam_auth(aws_iam, std::nullopt, ctx);
+    auto aws_iam
+      = args_.aws_iam ? Option<located<record>>{*args_.aws_iam} : None{};
+    resolved_ = co_await resolve_aws_iam_auth(aws_iam, None{}, ctx);
     if (not resolved_) {
       co_return failure::promise();
     }
@@ -84,8 +83,8 @@ protected:
     if (args_.anonymous) {
       opts.ConfigureAnonymousCredentials();
     } else {
-      auto creds = resolved_ ? resolved_->credentials : std::nullopt;
-      auto region = std::optional<std::string>{};
+      auto creds = resolved_ ? resolved_->credentials : None{};
+      auto region = Option<std::string>{};
       if (creds and not creds->region.empty()) {
         region = creds->region;
         opts.region = *region;
@@ -155,7 +154,7 @@ protected:
 
 private:
   ToS3Args args_;
-  std::optional<ResolvedAwsIamAuth> resolved_;
+  Option<ResolvedAwsIamAuth> resolved_;
 };
 
 class ToS3Plugin final : public OperatorPlugin {

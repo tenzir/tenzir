@@ -40,7 +40,6 @@
 #include <chrono>
 #include <limits>
 #include <memory>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -758,7 +757,7 @@ public:
         // Validate timeout/retry arguments like the other HTTP operators.
         auto check_non_negative
           = [&](std::string_view name,
-                std::optional<located<duration>> value) -> failure_or<void> {
+                Option<located<duration>> value) -> failure_or<void> {
           if (value and value->inner < duration::zero()) {
             diagnostic::error("`{}` must be a non-negative duration", name)
               .primary(value->source)

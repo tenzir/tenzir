@@ -66,7 +66,7 @@ public:
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    auto sep = std::optional<std::string>{};
+    auto sep = Option<std::string>{};
     TRY(argument_parser2::function(name())
           .positional("x", expr, "any")
           .positional("separator", sep)

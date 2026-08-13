@@ -12,6 +12,7 @@
 #include "tenzir/detail/padded_buffer.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/multi_series_builder.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/simdjson_buffer.hpp"
 
@@ -275,7 +276,7 @@ private:
 
   std::string_view parsed_document_;
   diagnostic_handler& diag_;
-  std::optional<std::size_t> parsed_lines_;
+  Option<std::size_t> parsed_lines_;
 };
 class parser_base {
 public:

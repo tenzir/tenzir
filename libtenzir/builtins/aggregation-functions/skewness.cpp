@@ -299,7 +299,7 @@ public:
   auto make_aggregation(function_invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
-    auto method_opt = std::optional<located<std::string>>{};
+    auto method_opt = Option<located<std::string>>{};
     TRY(argument_parser2::function(name())
           .positional("x", expr, "number|duration")
           .named("method", method_opt)

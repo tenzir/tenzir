@@ -13,6 +13,7 @@
 #include "tenzir/data.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/generator.hpp"
+#include "tenzir/option.hpp"
 
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
@@ -704,7 +705,7 @@ public:
   auto set(part url_part, std::string_view str, flags = {}) -> code;
 
   auto get(part url_part, unsigned int flags = 0) const
-    -> std::pair<code, std::optional<std::string>>;
+    -> std::pair<code, Option<std::string>>;
 
 private:
   struct curl_url_deleter {
@@ -730,7 +731,7 @@ auto to_error(url::code code) -> caf::error;
 /// URL-decodes a string.
 /// @param str The input to decode.
 /// @returns the decoded string.
-auto try_unescape(std::string_view str) -> std::optional<std::string>;
+auto try_unescape(std::string_view str) -> Option<std::string>;
 
 /// URL-encodes a string.
 /// @param str The input to encode.

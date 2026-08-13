@@ -12,6 +12,7 @@
 #include "tenzir/concept/parseable/core.hpp"
 #include "tenzir/concept/parseable/numeric/real.hpp"
 #include "tenzir/concept/parseable/string/char_class.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/time.hpp"
 
 #include <chrono>
@@ -123,7 +124,7 @@ struct compound_duration_parser
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    auto negation = (-parsers::ch<'-'>).then([](std::optional<char> x) -> bool {
+    auto negation = (-parsers::ch<'-'>).then([](Option<char> x) -> bool {
       return x.has_value();
     });
     auto positive_duration
