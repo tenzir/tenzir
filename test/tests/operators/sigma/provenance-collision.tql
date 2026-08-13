@@ -1,0 +1,4 @@
+from {foo: "needle", sigma: "original"}
+sigma path=f"{env("TENZIR_INPUTS")}/provenance-collision.yaml"
+select event_sigma = evidences[0].data.sigma,
+       provenance = evidences[1].sigma

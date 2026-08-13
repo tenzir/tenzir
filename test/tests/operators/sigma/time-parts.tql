@@ -2,4 +2,4 @@ from {id: "hit", ts: 2024-06-01T13:37:00Z},
      {id: "wrong-hour", ts: 2024-06-01T09:37:00Z},
      {id: "wrong-year", ts: 2023-06-01T13:37:00Z}
 sigma path="tests/operators/sigma/inputs/time-parts.yaml"
-select event.id
+select id = evidences[0].data.id

@@ -6,4 +6,4 @@ from {id: "hidden", ctx: {inner: ["backdoor"]}},
      {id: "clean", msg: "benign", n: 42}
 slice begin=1
 sigma path="tests/operators/sigma/inputs/keywords.yaml"
-select event.id
+select id = evidences[0].data.id

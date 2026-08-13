@@ -2,4 +2,4 @@
 // is filtered for SYSTEM, the network rule is not.
 from {id: "system", foo: "alpha", User: "SYSTEM"}
 sigma path="tests/operators/sigma/inputs/filter-any.yaml"
-select event.id, title = rule.title
+select id = evidences[0].data.id, title = policy.name

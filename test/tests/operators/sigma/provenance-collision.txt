@@ -1,0 +1,20 @@
+{
+  event_sigma: "original",
+  provenance: {
+    trace: [
+      {
+        identifier: "selection",
+        matched: true,
+      },
+    ],
+    fields: [
+      {
+        field: "foo",
+        matcher: "equals",
+        case: "insensitive",
+        polarity: "positive",
+        value: "needle",
+      },
+    ],
+  },
+}

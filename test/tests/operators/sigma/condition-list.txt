@@ -1,10 +1,6 @@
 {
-  event: {
-    id: "a",
-  },
+  id: "a",
 }
 {
-  event: {
-    id: "b",
-  },
+  id: "b",
 }

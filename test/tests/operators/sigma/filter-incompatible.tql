@@ -2,4 +2,4 @@
 // filtered and produces a warning.
 from {id: "unfiltered", foo: "alpha", User: "SYSTEM"}
 sigma path="tests/operators/sigma/inputs/filter-incompatible.yaml"
-select event.id
+select id = evidences[0].data.id

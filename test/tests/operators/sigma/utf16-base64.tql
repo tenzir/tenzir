@@ -1,4 +1,4 @@
 from {id: "hit", payload: "YwBtAGQA"},
      {id: "plain", payload: "cmd"}
 sigma path="tests/operators/sigma/inputs/utf16-base64.yaml"
-select event.id
+select id = evidences[0].data.id

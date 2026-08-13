@@ -1,15 +1,9 @@
 {
-  event: {
-    id: "hit",
-  },
+  id: "hit",
 }
 {
-  event: {
-    id: "same-cd",
-  },
+  id: "same-cd",
 }
 {
-  event: {
-    id: "diff-ab",
-  },
+  id: "diff-ab",
 }

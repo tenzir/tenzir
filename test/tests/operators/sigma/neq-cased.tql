@@ -2,4 +2,4 @@ from {id: "hit", user: "guest", tag: "Foo"},
      {id: "is-admin", user: "ADMIN", tag: "Foo"},
      {id: "wrong-case", user: "guest", tag: "foo"}
 sigma path="tests/operators/sigma/inputs/neq-cased.yaml"
-select event.id
+select id = evidences[0].data.id

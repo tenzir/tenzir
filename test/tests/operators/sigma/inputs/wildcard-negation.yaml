@@ -1,0 +1,8 @@
+title: negated bare wildcard
+id: 6a1fef93-3b3a-4cfb-9625-ef7a0f46ddfa
+detection:
+  selection_a:
+    x: 1
+  selection_b:
+    y: 2
+  condition: not selection_*

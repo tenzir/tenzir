@@ -199,6 +199,15 @@ auto compatible(LogSource const& filter, LogSource const& target) -> bool;
 auto apply_filter(DetectionRule rule, FilterRule const& filter, size_t ordinal)
   -> DetectionRule;
 
+/// Renders a condition tree back into Sigma condition syntax.
+auto to_string(Condition const& condition) -> std::string;
+
+/// Serializes a detection rule back into a YAML-equivalent record. The
+/// result reproduces the complete original document with the `detection`
+/// section rebuilt from the IR, so filter-adjusted rules remain losslessly
+/// inspectable.
+auto to_record(DetectionRule const& rule) -> record;
+
 /// Matches a search-identifier pattern with `*` wildcards against a name.
 auto wildcard_match(std::string_view pattern, std::string_view name) -> bool;
 

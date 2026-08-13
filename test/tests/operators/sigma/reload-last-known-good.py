@@ -154,7 +154,7 @@ def start_process(rule: Path) -> subprocess.Popen[str]:
         [
             "from_stdin { read_ndjson }",
             f"sigma path={json.dumps(str(rule))}, refresh_interval=10ms",
-            "select event.id",
+            "select id = evidences[0].data.id",
             "write_ndjson",
         ]
     )

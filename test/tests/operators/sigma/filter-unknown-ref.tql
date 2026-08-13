@@ -1,4 +1,4 @@
 // An unresolvable filter reference leaves targets unfiltered with a warning.
 from {id: "unfiltered", foo: "alpha", User: "SYSTEM"}
 sigma path="tests/operators/sigma/inputs/filter-unknown-ref.yaml"
-select event.id
+select id = evidences[0].data.id

@@ -1,2 +1,5 @@
+// The complete OCSF 1.9.0 Detection Finding shape, minus the creation time
+// and the generated finding ID.
 from {foo: "needle"}, {bar: "needle"}
 sigma path=f"{env("TENZIR_INPUTS")}/basic-rule.yaml"
+drop time, finding_info.uid

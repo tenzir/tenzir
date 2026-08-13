@@ -1,5 +1,3 @@
 {
-  event: {
-    id: "alpha",
-  },
+  id: "alpha",
 }

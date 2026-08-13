@@ -1,7 +1,5 @@
 {
-  event: {
-    id: "alpha",
-  },
+  id: "alpha",
 }
 warning: passing the path positionally is deprecated
  --> tests/operators/sigma/legacy-positional.tql:3:7

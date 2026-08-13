@@ -6,4 +6,4 @@ from {id: "plus-literal", a: "a+b"},
      {id: "pipe-alternation-would-match", b: "x"},
      {id: "newline-wildcard", c: "foo\nbar"}
 sigma path="tests/operators/sigma/inputs/wildcard-escaping.yaml"
-select event.id
+select id = evidences[0].data.id

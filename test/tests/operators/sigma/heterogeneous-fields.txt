@@ -1,0 +1,36 @@
+{
+  fields: [
+    {
+      field: "user",
+      matcher: "equals",
+      case: "insensitive",
+      polarity: "positive",
+      value: "alice",
+    },
+    {
+      field: "count",
+      matcher: "equals",
+      case: "insensitive",
+      polarity: "positive",
+      value: "42",
+    },
+  ],
+}
+{
+  fields: [
+    {
+      field: "user",
+      matcher: "equals",
+      case: "insensitive",
+      polarity: "positive",
+      value: "alice",
+    },
+    {
+      field: "count",
+      matcher: "equals",
+      case: "insensitive",
+      polarity: "positive",
+      value: "42",
+    },
+  ],
+}

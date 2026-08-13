@@ -3,4 +3,4 @@ from {id: "dash", cmdline: "run -p 80"},
      {id: "endash", cmdline: "run – 80"},
      {id: "none", cmdline: "run 80"}
 sigma path="tests/operators/sigma/inputs/windash.yaml"
-select event.id
+select id = evidences[0].data.id

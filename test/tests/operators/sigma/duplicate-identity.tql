@@ -4,4 +4,4 @@ from {id: "conflicted", foo: "alpha"},
      {id: "unrelated", bar: "bravo"},
      {id: "same-id-name", baz: "charlie"}
 sigma path="tests/operators/sigma/inputs/duplicate-identity.yaml"
-select event.id
+select id = evidences[0].data.id

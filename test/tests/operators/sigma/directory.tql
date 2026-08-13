@@ -1,3 +1,4 @@
 from {foo: "needle"}
 sigma path=f"{env("TENZIR_INPUTS")}/directory"
-sort rule.title
+sort policy.name
+select name = policy.name, id = evidences[0].data.foo

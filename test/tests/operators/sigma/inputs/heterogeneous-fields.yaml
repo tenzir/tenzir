@@ -1,0 +1,7 @@
+title: heterogeneous fields
+id: b755714b-ff12-4716-b262-9ef51dbe6e29
+detection:
+  selection:
+    user: alice
+    count: 42
+  condition: selection

@@ -1,15 +1,9 @@
 {
-  event: {
-    id: "plus-literal",
-  },
+  id: "plus-literal",
 }
 {
-  event: {
-    id: "pipe-literal",
-  },
+  id: "pipe-literal",
 }
 {
-  event: {
-    id: "newline-wildcard",
-  },
+  id: "newline-wildcard",
 }

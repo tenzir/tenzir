@@ -4,3 +4,5 @@ from {
   parent: "C:\\Windows\\explorer.exe",
 }
 sigma path="tests/operators/sigma/inputs/wildcards.yaml"
+
+select image = evidences[0].data.image

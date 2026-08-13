@@ -1,15 +1,9 @@
 {
-  event: {
-    id: "alpha",
-  },
+  id: "alpha",
 }
 {
-  event: {
-    id: "bravo",
-  },
+  id: "bravo",
 }
 {
-  event: {
-    id: "both",
-  },
+  id: "both",
 }

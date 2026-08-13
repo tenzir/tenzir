@@ -920,6 +920,111 @@ auto apply_filter(DetectionRule rule, FilterRule const& filter, size_t ordinal)
   return rule;
 }
 
+auto to_string(Condition const& condition) -> std::string {
+  auto render = [](this auto&& self, Condition const& node,
+                   bool parenthesize) -> std::string {
+    return match(
+      node.node,
+      [&](Identifier const& x) -> std::string {
+        return x.name;
+      },
+      [&](Quantified const& x) -> std::string {
+        auto const quantifier
+          = x.quantifier == Quantifier::all ? "all of" : "1 of";
+        auto const target = x.all_identifiers ? "them" : x.pattern.c_str();
+        return fmt::format("{} {}", quantifier, target);
+      },
+      [&](Negation const& x) -> std::string {
+        return fmt::format("not {}", self(*x.operand, true));
+      },
+      [&](Conjunction const& x) -> std::string {
+        auto result
+          = fmt::format("{} and {}", self(*x.left, true), self(*x.right, true));
+        return parenthesize ? fmt::format("({})", result) : result;
+      },
+      [&](Disjunction const& x) -> std::string {
+        auto result
+          = fmt::format("{} or {}", self(*x.left, true), self(*x.right, true));
+        return parenthesize ? fmt::format("({})", result) : result;
+      });
+  };
+  return render(condition, false);
+}
+
+namespace {
+
+auto to_data(DetectionItem const& item) -> std::pair<std::string, data> {
+  auto key = item.field.raw;
+  for (auto const& modifier : item.modifiers) {
+    key += '|';
+    key += modifier;
+  }
+  if (item.value_is_list) {
+    auto values = list{};
+    values.reserve(item.values.size());
+    for (auto const& value : item.values) {
+      values.push_back(value);
+    }
+    return {std::move(key), std::move(values)};
+  }
+  TENZIR_ASSERT(item.values.size() == 1);
+  return {std::move(key), item.values[0]};
+}
+
+auto to_data(Detection const& detection) -> data {
+  auto render_group = [](std::vector<DetectionItem> const& group) -> data {
+    // A group of keyword items renders as a list of scalars.
+    if (group.size() == 1
+        and group[0].kind == DetectionItem::ItemKind::keyword) {
+      if (group[0].value_is_list) {
+        auto values = list{};
+        for (auto const& value : group[0].values) {
+          values.push_back(value);
+        }
+        return values;
+      }
+      return group[0].values[0];
+    }
+    auto result = record{};
+    for (auto const& item : group) {
+      auto [key, value] = to_data(item);
+      result.emplace(std::move(key), std::move(value));
+    }
+    return result;
+  };
+  if (detection.groups.size() == 1) {
+    return render_group(detection.groups[0]);
+  }
+  auto groups = list{};
+  groups.reserve(detection.groups.size());
+  for (auto const& group : detection.groups) {
+    groups.push_back(render_group(group));
+  }
+  return groups;
+}
+
+} // namespace
+
+auto to_record(DetectionRule const& rule) -> record {
+  auto result = rule.metadata.raw;
+  auto detection = record{};
+  for (auto const& [name, value] : rule.detections) {
+    detection.emplace(name, to_data(value));
+  }
+  if (rule.conditions.size() == 1) {
+    detection.emplace("condition", to_string(rule.conditions[0]));
+  } else {
+    auto conditions = list{};
+    conditions.reserve(rule.conditions.size());
+    for (auto const& condition : rule.conditions) {
+      conditions.push_back(to_string(condition));
+    }
+    detection.emplace("condition", std::move(conditions));
+  }
+  result["detection"] = std::move(detection);
+  return result;
+}
+
 auto wildcard_match(std::string_view pattern, std::string_view name) -> bool {
   auto pattern_position = size_t{0};
   auto name_position = size_t{0};

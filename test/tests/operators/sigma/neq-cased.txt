@@ -1,5 +1,3 @@
 {
-  event: {
-    id: "hit",
-  },
+  id: "hit",
 }

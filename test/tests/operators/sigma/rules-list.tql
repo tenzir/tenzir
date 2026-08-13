@@ -12,4 +12,4 @@ detection:
     bar: bravo
   condition: selection
 "#]
-select event.id
+select id = evidences[0].data.id

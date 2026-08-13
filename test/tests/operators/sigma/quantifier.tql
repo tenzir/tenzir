@@ -5,4 +5,4 @@
 // contradiction and must never match.
 from {id: "x", x: 1}, {id: "z", z: 3}
 sigma path="tests/operators/sigma/inputs/quantifier.yaml"
-select event.id
+select id = evidences[0].data.id

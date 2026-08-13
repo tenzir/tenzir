@@ -2,4 +2,4 @@ from {id: "a", a: 1},
      {id: "b", b: 2},
      {id: "none", a: 9, b: 9}
 sigma path="tests/operators/sigma/inputs/condition-list.yaml"
-select event.id
+select id = evidences[0].data.id

@@ -1,4 +1,4 @@
 // The positional path form is deprecated but behaves like `path=`.
 from {id: "alpha", foo: "needle"}
 sigma "tests/operators/sigma/inputs/basic-rule.yaml"
-select event.id
+select id = evidences[0].data.id

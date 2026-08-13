@@ -1,0 +1,16 @@
+{
+  trace: [
+    {
+      identifier: "selection_b",
+      matched: false,
+    },
+  ],
+}
+{
+  trace: [
+    {
+      identifier: "selection_a",
+      matched: false,
+    },
+  ],
+}

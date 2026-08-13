@@ -1,4 +1,4 @@
 // Formatted document labels must not collide with literal file names.
 from {id: "multi-zero"}, {id: "multi-one"}, {id: "literal-suffix"}
 sigma path=["tests/operators/sigma/inputs/document-key", "tests/operators/sigma/inputs/document-key#0"]
-select event.id
+select id = evidences[0].data.id

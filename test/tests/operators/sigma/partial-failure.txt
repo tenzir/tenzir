@@ -1,12 +1,8 @@
 {
-  event: {
-    id: "one",
-  },
+  id: "one",
 }
 {
-  event: {
-    id: "two",
-  },
+  id: "two",
 }
 warning: sigma operator ignores rule 'tests/operators/sigma/inputs/partial-failure.yaml#1'
  --> tests/operators/sigma/partial-failure.tql:5:12

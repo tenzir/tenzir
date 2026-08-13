@@ -1,0 +1,3 @@
+from {user: "alice", count: 42}, {user: "alice", count: 42}
+sigma path=f"{env("TENZIR_INPUTS")}/heterogeneous-fields.yaml"
+select fields = evidences[1].sigma.fields

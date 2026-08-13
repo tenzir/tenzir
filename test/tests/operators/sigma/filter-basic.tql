@@ -4,4 +4,4 @@ from {id: "hit", Image: "c:\\evil.exe", User: "guest"},
      {id: "filtered", Image: "c:\\evil.exe", User: "adm_alice"},
      {id: "no-match", Image: "c:\\good.exe", User: "guest"}
 sigma path="tests/operators/sigma/inputs/filter-basic.yaml"
-select event.id
+select id = evidences[0].data.id

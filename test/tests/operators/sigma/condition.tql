@@ -4,5 +4,5 @@ from {id: "alpha", foo: "alpha", bar: "x", baz: "x"},
      {id: "both", foo: "x", bar: "bravo", baz: "charlie"},
      {id: "miss", foo: "x", bar: "x", baz: "x"}
 sigma path="tests/operators/sigma/inputs/condition.yaml"
-select event.id
-sort event.id
+select id = evidences[0].data.id
+sort id

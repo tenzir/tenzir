@@ -36,8 +36,10 @@
 #include <tenzir/session.hpp>
 #include <tenzir/sigma.hpp>
 #include <tenzir/tql2/ast.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/filter.hpp>
 #include <tenzir/tql2/resolve.hpp>
+#include <tenzir/uuid.hpp>
 
 #include <arrow/record_batch.h>
 #include <fmt/format.h>
@@ -706,11 +708,261 @@ auto lower_condition(ir::Condition const& condition,
     });
 }
 
+// -- OCSF detection findings -------------------------------------------------
+
+/// Compiled matching metadata of one detection item, used to derive match
+/// provenance without re-parsing modifiers.
+struct ItemArtifact {
+  ast::expression expression;
+  std::string field;
+  std::string matcher;
+  bool case_insensitive = true;
+  bool negated = false;
+  bool keyword = false;
+};
+
+/// Compiled artifacts of one named search identifier: the identifier-level
+/// expression plus per-item expressions in group structure (OR of ANDs).
+struct IdentifierArtifact {
+  std::string name;
+  ast::expression expression;
+  std::vector<std::vector<ItemArtifact>> groups;
+};
+
+/// Derives the matcher-kind label of one detection item.
+auto matcher_kind(ir::DetectionItem const& item, ItemSemantics const& semantics)
+  -> std::string {
+  if (item.kind == ir::DetectionItem::ItemKind::keyword) {
+    return "keyword";
+  }
+  if (semantics.exists) {
+    return "exists";
+  }
+  if (semantics.fieldref) {
+    return "fieldref";
+  }
+  if (semantics.raw_regex) {
+    return "regex";
+  }
+  if (semantics.time_part) {
+    return *semantics.time_part;
+  }
+  if (semantics.windash) {
+    return "windash";
+  }
+  if (semantics.contains) {
+    return "contains";
+  }
+  if (semantics.wildcard_suffix and not semantics.wildcard_prefix) {
+    return "startswith";
+  }
+  if (semantics.wildcard_prefix and not semantics.wildcard_suffix) {
+    return "endswith";
+  }
+  switch (semantics.op) {
+    case ast::binary_op::lt:
+      return "lt";
+    case ast::binary_op::leq:
+      return "lte";
+    case ast::binary_op::gt:
+      return "gt";
+    case ast::binary_op::geq:
+      return "gte";
+    case ast::binary_op::in:
+      return "cidr";
+    default:
+      break;
+  }
+  return "equals";
+}
+
+/// Lowers one named detection into its identifier artifact.
+auto lower_identifier_artifact(std::string name, ir::Detection const& detection)
+  -> ParseResult<IdentifierArtifact> {
+  auto result = IdentifierArtifact{};
+  result.name = std::move(name);
+  auto disjuncts = std::vector<ast::expression>{};
+  for (auto const& group : detection.groups) {
+    auto artifacts = std::vector<ItemArtifact>{};
+    auto conjuncts = std::vector<ast::expression>{};
+    for (auto const& item : group) {
+      TRY(auto expression, lower_item(item));
+      TRY(auto semantics, parse_semantics(item));
+      artifacts.push_back(ItemArtifact{
+        expression,
+        item.field.raw,
+        matcher_kind(item, semantics),
+        semantics.case_insensitive,
+        semantics.negate or (semantics.exists and not as<bool>(item.values[0])),
+        item.kind == ir::DetectionItem::ItemKind::keyword,
+      });
+      conjuncts.push_back(std::move(expression));
+    }
+    disjuncts.push_back(
+      expression_algebra::join<ast::binary_op::and_>(std::move(conjuncts)));
+    result.groups.push_back(std::move(artifacts));
+  }
+  result.expression
+    = expression_algebra::join<ast::binary_op::or_>(std::move(disjuncts));
+  return result;
+}
+
+/// Static MITRE ATT&CK tactic identifiers, keyed by their Sigma tag form.
+constexpr auto attack_tactics
+  = std::array<std::pair<std::string_view, std::string_view>, 14>{{
+    {"reconnaissance", "TA0043"},
+    {"resource_development", "TA0042"},
+    {"initial_access", "TA0001"},
+    {"execution", "TA0002"},
+    {"persistence", "TA0003"},
+    {"privilege_escalation", "TA0004"},
+    {"defense_evasion", "TA0005"},
+    {"credential_access", "TA0006"},
+    {"discovery", "TA0007"},
+    {"lateral_movement", "TA0008"},
+    {"collection", "TA0009"},
+    {"command_and_control", "TA0011"},
+    {"exfiltration", "TA0010"},
+    {"impact", "TA0040"},
+  }};
+
+/// Derives the OCSF `attacks` list from a rule's `attack.*` tags.
+auto make_attacks(data const& yaml) -> data {
+  auto const* document = try_as<record>(&yaml);
+  if (not document) {
+    return list{};
+  }
+  auto entry = document->find("tags");
+  if (entry == document->end()) {
+    return list{};
+  }
+  auto const* tags = try_as<list>(&entry->second);
+  if (not tags) {
+    return list{};
+  }
+  auto tactics = list{};
+  auto techniques = std::vector<std::string>{};
+  for (auto const& tag : *tags) {
+    auto const* str = try_as<std::string>(&tag);
+    if (not str or not str->starts_with("attack.")) {
+      continue;
+    }
+    auto const name = std::string_view{*str}.substr(7);
+    if ((name.starts_with('t') or name.starts_with('T')) and name.size() > 1
+        and std::isdigit(static_cast<unsigned char>(name[1])) != 0) {
+      auto technique = std::string{name};
+      technique[0] = 'T';
+      techniques.push_back(std::move(technique));
+      continue;
+    }
+    for (auto const& [tactic, uid] : attack_tactics) {
+      if (name == tactic) {
+        tactics.emplace_back(record{{"uid", std::string{uid}}});
+        break;
+      }
+    }
+  }
+  auto result = list{};
+  if (techniques.empty()) {
+    if (not tactics.empty()) {
+      result.emplace_back(record{{"tactics", tactics}});
+    }
+    return result;
+  }
+  for (auto& technique : techniques) {
+    auto attack = record{};
+    if (not tactics.empty()) {
+      attack.emplace("tactics", tactics);
+    }
+    attack.emplace("technique", record{{"uid", std::move(technique)}});
+    result.push_back(std::move(attack));
+  }
+  return result;
+}
+
+/// Rule-derived finding fragments, cached once per compiled rule revision.
+struct FindingTemplate {
+  int64_t severity_id = 0;
+  Option<std::string> title;
+  std::string analytic_uid;
+  data analytic;
+  data policy;
+  data attacks;
+  data data_sources;
+};
+
+auto make_finding_template(ir::DetectionRule const& rule, data const& yaml)
+  -> FindingTemplate {
+  auto result = FindingTemplate{};
+  // Sigma `level` maps to `severity_id`; a missing level is Unknown.
+  auto const level = rule.metadata.level;
+  if (level == "informational") {
+    result.severity_id = 1;
+  } else if (level == "low") {
+    result.severity_id = 2;
+  } else if (level == "medium") {
+    result.severity_id = 3;
+  } else if (level == "high") {
+    result.severity_id = 4;
+  } else if (level == "critical") {
+    result.severity_id = 5;
+  }
+  result.title = rule.metadata.title;
+  // The analytic identity is the Sigma `id` or a deterministic content
+  // fingerprint.
+  result.analytic_uid = rule.metadata.id.unwrap_or_else([&] {
+    return fmt::format("sigma:{:016x}", hash(yaml));
+  });
+  auto analytic = record{};
+  analytic.emplace("type_id", int64_t{1});
+  analytic.emplace("type", "Rule");
+  analytic.emplace("uid", result.analytic_uid);
+  if (rule.metadata.name) {
+    analytic.emplace("name", *rule.metadata.name);
+  } else if (rule.metadata.title) {
+    analytic.emplace("name", *rule.metadata.title);
+  }
+  result.analytic = std::move(analytic);
+  // `policy` records the exact applied rule; `data` holds the complete
+  // parsed document, including filter adjustments.
+  auto policy = record{};
+  policy.emplace("uid", result.analytic_uid);
+  if (rule.metadata.title) {
+    policy.emplace("name", *rule.metadata.title);
+  }
+  policy.emplace("is_applied", true);
+  policy.emplace("data", ir::to_record(rule));
+  result.policy = std::move(policy);
+  result.attacks = make_attacks(yaml);
+  auto data_sources = list{};
+  if (rule.log_source.category) {
+    data_sources.emplace_back(
+      fmt::format("category={}", *rule.log_source.category));
+  }
+  if (rule.log_source.product) {
+    data_sources.emplace_back(
+      fmt::format("product={}", *rule.log_source.product));
+  }
+  if (rule.log_source.service) {
+    data_sources.emplace_back(
+      fmt::format("service={}", *rule.log_source.service));
+  }
+  result.data_sources = std::move(data_sources);
+  return result;
+}
+
 struct RuleEntry {
   data yaml;
   std::string label;
+  /// The parsed rule before filter application, used to recombine retained
+  /// rules with refreshed filters.
   ir::DetectionRule detection;
+  /// The filter-adjusted rule that actually executes; provenance and the
+  /// applied `policy` derive from it.
+  ir::DetectionRule adjusted;
   ast::expression rule;
+  std::vector<IdentifierArtifact> identifiers;
+  FindingTemplate finding;
 };
 
 /// The collision-free identity of one rule document.
@@ -1056,12 +1308,16 @@ auto parse_source(std::string_view content, std::string const& origin,
   return snapshot;
 }
 
-/// Lowers a detection rule into an executable expression.
-auto lower_rule(ir::DetectionRule const& rule) -> ParseResult<ast::expression> {
+/// Lowers a detection rule into an executable expression plus the
+/// per-identifier artifacts needed for match provenance.
+auto lower_rule_with_artifacts(ir::DetectionRule const& rule)
+  -> ParseResult<std::pair<ast::expression, std::vector<IdentifierArtifact>>> {
+  auto artifacts = std::vector<IdentifierArtifact>{};
   auto expressions = ExpressionMap{};
   for (auto const& [name, detection] : rule.detections) {
-    TRY(auto expression, lower_detection(detection));
-    expressions[name] = std::move(expression);
+    TRY(auto artifact, lower_identifier_artifact(name, detection));
+    expressions[name] = artifact.expression;
+    artifacts.push_back(std::move(artifact));
   }
   // List-valued conditions are OR-linked queries.
   auto disjuncts = std::vector<ast::expression>{};
@@ -1069,7 +1325,15 @@ auto lower_rule(ir::DetectionRule const& rule) -> ParseResult<ast::expression> {
     TRY(auto expr, lower_condition(condition, expressions));
     disjuncts.push_back(std::move(expr));
   }
-  return expression_algebra::join<ast::binary_op::or_>(std::move(disjuncts));
+  return std::pair{
+    expression_algebra::join<ast::binary_op::or_>(std::move(disjuncts)),
+    std::move(artifacts)};
+}
+
+/// Lowers a detection rule into an executable expression.
+auto lower_rule(ir::DetectionRule const& rule) -> ParseResult<ast::expression> {
+  TRY(auto lowered, lower_rule_with_artifacts(rule));
+  return std::move(lowered.first);
 }
 
 /// Resolves global filters against detection rules and lowers every rule
@@ -1275,7 +1539,7 @@ auto assemble_rules(std::vector<SourceSnapshot>& snapshots,
     for (auto index = size_t{0}; index < slot.filters.size(); ++index) {
       rule = ir::apply_filter(std::move(rule), *slot.filters[index], index);
     }
-    auto lowered = lower_rule(rule);
+    auto lowered = lower_rule_with_artifacts(rule);
     if (lowered.is_err()) {
       auto reason = std::move(lowered).unwrap_err();
       handle_failure([&](diagnostic_builder builder) {
@@ -1283,9 +1547,22 @@ auto assemble_rules(std::vector<SourceSnapshot>& snapshots,
       });
       continue;
     }
-    auto expression = std::move(lowered).unwrap();
+    auto [expression, artifacts] = std::move(lowered).unwrap();
     auto provider = session_provider::make(dh);
-    if (not resolve_entities(expression, provider.as_session())) {
+    auto resolved = bool{resolve_entities(expression, provider.as_session())};
+    for (auto& artifact : artifacts) {
+      resolved = resolved
+                 and bool{resolve_entities(artifact.expression,
+                                           provider.as_session())};
+      for (auto& group : artifact.groups) {
+        for (auto& item : group) {
+          resolved = resolved
+                     and bool{resolve_entities(item.expression,
+                                               provider.as_session())};
+        }
+      }
+    }
+    if (not resolved) {
       handle_failure([&](diagnostic_builder builder) {
         std::move(builder).note("failed to resolve sigma rule").emit(dh);
       });
@@ -1294,9 +1571,11 @@ auto assemble_rules(std::vector<SourceSnapshot>& snapshots,
     if (not slot.retained) {
       state.succeeded(slot.key);
     }
+    auto finding = make_finding_template(rule, *slot.yaml);
     slot.snapshot->replacements.insert_or_assign(
-      slot.key,
-      RuleEntry{*slot.yaml, *slot.label, *slot.rule, std::move(expression)});
+      slot.key, RuleEntry{*slot.yaml, *slot.label, *slot.rule, std::move(rule),
+                          std::move(expression), std::move(artifacts),
+                          std::move(finding)});
   }
 }
 
@@ -1450,33 +1729,384 @@ auto update_rules(SigmaSources const& sources, RuleMap& rules,
   }
 }
 
-auto make_sigma_slice(const table_slice& input, const data& yaml,
-                      const ast::expression& rule, diagnostic_handler& dh)
-  -> Option<table_slice> {
-  auto event = filter2(input, rule, dh, false);
-  if (event.rows() == 0) {
-    return None{};
-  }
-  auto [event_schema, event_array] = offset{}.get(event);
-  auto [rule_schema, rule_array] = [&] {
-    auto rule_builder = series_builder{};
-    for (auto i = size_t{0}; i < event.rows(); ++i) {
-      rule_builder.data(yaml);
-    }
-    return rule_builder.finish_assert_one_array();
-  }();
-  const auto result_schema = type{
-    "tenzir.sigma",
-    record_type{
-      {"event", event_schema},
-      {"rule", rule_schema},
+/// One causal decision of the condition trace.
+struct TraceDecision {
+  std::string identifier;
+  bool matched = false;
+};
+
+/// Evaluates a condition tree over per-identifier boolean values.
+template <class ValueOf>
+auto evaluate_condition(ir::Condition const& condition,
+                        ir::DetectionRule const& rule, ValueOf&& value_of)
+  -> bool {
+  return match(
+    condition.node,
+    [&](ir::Identifier const& x) -> bool {
+      if (rule.detections.contains(x.name)) {
+        return value_of(x.name);
+      }
+      // A bare wildcard pattern AND-links all matching identifiers.
+      auto result = false;
+      for (auto const& [name, detection] : rule.detections) {
+        if (not ir::pattern_matches(x.name, name)) {
+          continue;
+        }
+        if (not value_of(name)) {
+          return false;
+        }
+        result = true;
+      }
+      return result;
     },
+    [&](ir::Quantified const& x) -> bool {
+      auto const pattern = x.all_identifiers ? std::string_view{"*"}
+                                             : std::string_view{x.pattern};
+      auto const all = x.quantifier == ir::Quantifier::all;
+      auto result = all;
+      for (auto const& [name, detection] : rule.detections) {
+        if (not ir::pattern_matches(pattern, name)) {
+          continue;
+        }
+        if (all and not value_of(name)) {
+          return false;
+        }
+        if (not all and value_of(name)) {
+          return true;
+        }
+      }
+      return result;
+    },
+    [&](ir::Negation const& x) -> bool {
+      return not evaluate_condition(*x.operand, rule, value_of);
+    },
+    [&](ir::Conjunction const& x) -> bool {
+      return evaluate_condition(*x.left, rule, value_of)
+             and evaluate_condition(*x.right, rule, value_of);
+    },
+    [&](ir::Disjunction const& x) -> bool {
+      return evaluate_condition(*x.left, rule, value_of)
+             or evaluate_condition(*x.right, rule, value_of);
+    });
+}
+
+/// Computes the deterministic causal trace of a condition outcome in IR
+/// order: all required conjunction children, the first successful
+/// disjunction child, and the first required number of successful
+/// quantified identifiers. Negation flips the expected outcome, under which
+/// the dual rules apply. Negative and absence-based decisions are preserved.
+template <class ValueOf>
+auto causal_trace(ir::Condition const& condition, ir::DetectionRule const& rule,
+                  ValueOf&& value_of, bool expected,
+                  std::vector<TraceDecision>& out) -> void {
+  auto emit = [&](std::string_view name) {
+    // Record every identifier once, keeping the first decision.
+    for (auto const& decision : out) {
+      if (decision.identifier == name) {
+        return;
+      }
+    }
+    out.push_back(TraceDecision{std::string{name}, value_of(name)});
   };
-  auto batch
-    = arrow::RecordBatch::Make(result_schema.to_arrow_schema(),
-                               detail::narrow<int64_t>(event.rows()),
-                               {std::move(event_array), std::move(rule_array)});
-  return table_slice{batch, result_schema};
+  match(
+    condition.node,
+    [&](ir::Identifier const& x) {
+      if (rule.detections.contains(x.name)) {
+        emit(x.name);
+        return;
+      }
+      for (auto const& [name, detection] : rule.detections) {
+        if (not ir::pattern_matches(x.name, name)) {
+          continue;
+        }
+        // Bare wildcard patterns AND-link their identifiers. A successful
+        // conjunction requires all identifiers, while a failed one is
+        // explained by its first failing identifier.
+        if (expected) {
+          emit(name);
+          continue;
+        }
+        if (not value_of(name)) {
+          emit(name);
+          break;
+        }
+      }
+    },
+    [&](ir::Quantified const& x) {
+      auto const pattern = x.all_identifiers ? std::string_view{"*"}
+                                             : std::string_view{x.pattern};
+      auto const all = x.quantifier == ir::Quantifier::all;
+      // `all of` requires every identifier; `1 of` is satisfied by the first
+      // matching one. Under an unexpected outcome the duals apply: a failed
+      // `1 of` requires every identifier, a failed `all of` is explained by
+      // the first failing one.
+      auto const exhaustive = all == expected;
+      for (auto const& [name, detection] : rule.detections) {
+        if (not ir::pattern_matches(pattern, name)) {
+          continue;
+        }
+        if (exhaustive) {
+          emit(name);
+          continue;
+        }
+        if (value_of(name) == expected) {
+          emit(name);
+          break;
+        }
+      }
+    },
+    [&](ir::Negation const& x) {
+      causal_trace(*x.operand, rule, value_of, not expected, out);
+    },
+    [&](ir::Conjunction const& x) {
+      if (expected) {
+        causal_trace(*x.left, rule, value_of, true, out);
+        causal_trace(*x.right, rule, value_of, true, out);
+        return;
+      }
+      // A failed conjunction is explained by its first failing child.
+      if (not evaluate_condition(*x.left, rule, value_of)) {
+        causal_trace(*x.left, rule, value_of, false, out);
+        return;
+      }
+      causal_trace(*x.right, rule, value_of, false, out);
+    },
+    [&](ir::Disjunction const& x) {
+      if (not expected) {
+        causal_trace(*x.left, rule, value_of, false, out);
+        causal_trace(*x.right, rule, value_of, false, out);
+        return;
+      }
+      // A satisfied disjunction is explained by its first successful child.
+      if (evaluate_condition(*x.left, rule, value_of)) {
+        causal_trace(*x.left, rule, value_of, true, out);
+        return;
+      }
+      causal_trace(*x.right, rule, value_of, true, out);
+    });
+}
+
+/// Evaluates an expression over a slice into per-row booleans.
+auto eval_boolean(ast::expression const& expression, table_slice const& slice,
+                  diagnostic_handler& dh) -> std::vector<bool> {
+  auto result = std::vector<bool>{};
+  result.reserve(slice.rows());
+  for (auto series : eval(expression, slice, dh).parts()) {
+    if (auto const booleans = series.as<bool_type>()) {
+      for (auto const value : booleans->values()) {
+        result.push_back(value.has_value() and *value);
+      }
+      continue;
+    }
+    result.resize(result.size() + series.length(), false);
+  }
+  TENZIR_ASSERT(std::cmp_equal(result.size(), slice.rows()));
+  return result;
+}
+
+/// Builds one OCSF 1.9.0 Detection Finding per matching row of the input.
+auto build_findings(table_slice const& input, RuleEntry const& entry,
+                    diagnostic_handler& dh) -> std::vector<table_slice> {
+  auto const matched = filter2(input, entry.rule, dh, false);
+  if (matched.rows() == 0) {
+    return {};
+  }
+  // Evaluate identifier and item expressions per slice, lazily for items.
+  auto identifier_values
+    = detail::flat_map<std::string_view, std::vector<bool>>{};
+  for (auto const& identifier : entry.identifiers) {
+    identifier_values.emplace(identifier.name,
+                              eval_boolean(identifier.expression, matched, dh));
+  }
+  auto value_of_at = [&](std::string_view name, size_t row) {
+    auto const entry = identifier_values.find(name);
+    TENZIR_ASSERT(entry != identifier_values.end());
+    return entry->second[row];
+  };
+  auto item_values
+    = std::unordered_map<ast::expression const*, std::vector<bool>>{};
+  auto item_value_at = [&](ItemArtifact const& item, size_t row) {
+    auto entry = item_values.find(&item.expression);
+    if (entry == item_values.end()) {
+      entry = item_values
+                .emplace(&item.expression,
+                         eval_boolean(item.expression, matched, dh))
+                .first;
+    }
+    return entry->second[row];
+  };
+  auto field_values = std::unordered_map<std::string, std::vector<data>>{};
+  auto field_value_at = [&](std::string const& field, size_t row) -> data {
+    auto entry = field_values.find(field);
+    if (entry == field_values.end()) {
+      auto expression = make_field_expr(field);
+      auto provider = session_provider::make(dh);
+      std::ignore = resolve_entities(expression, provider.as_session());
+      auto values = std::vector<data>{};
+      values.reserve(matched.rows());
+      for (auto series : eval(expression, matched, dh).parts()) {
+        for (auto value : series.values()) {
+          values.push_back(materialize(value));
+        }
+      }
+      entry = field_values.emplace(field, std::move(values)).first;
+    }
+    return entry->second[row];
+  };
+  // Assemble one finding per matched row.
+  auto const now = time::clock::now();
+  auto builder = series_builder{};
+  auto row = size_t{0};
+  for (auto event : matched.values()) {
+    auto const event_data = data{materialize(event)};
+    auto value_of = [&](std::string_view name) {
+      return value_of_at(name, row);
+    };
+    // The causal trace over all OR-linked condition entries: the first
+    // satisfied entry explains the match.
+    auto trace = std::vector<TraceDecision>{};
+    for (auto const& condition : entry.adjusted.conditions) {
+      if (evaluate_condition(condition, entry.adjusted, value_of)) {
+        causal_trace(condition, entry.adjusted, value_of, true, trace);
+        break;
+      }
+    }
+    // Field-level matches for positively contributing identifiers: the
+    // first satisfied group of each matched identifier explains it.
+    struct FieldMatch {
+      ItemArtifact const* item;
+      data value;
+    };
+    auto field_matches = std::vector<FieldMatch>{};
+    for (auto const& decision : trace) {
+      if (not decision.matched) {
+        continue;
+      }
+      auto const artifact
+        = std::ranges::find_if(entry.identifiers, [&](auto const& candidate) {
+            return candidate.name == decision.identifier;
+          });
+      if (artifact == entry.identifiers.end()) {
+        continue;
+      }
+      for (auto const& group : artifact->groups) {
+        auto const satisfied
+          = std::ranges::all_of(group, [&](ItemArtifact const& item) {
+              return item_value_at(item, row);
+            });
+        if (not satisfied) {
+          continue;
+        }
+        for (auto const& item : group) {
+          auto value = data{};
+          if (not item.keyword and not item.negated) {
+            value = field_value_at(item.field, row);
+          }
+          field_matches.push_back(FieldMatch{&item, std::move(value)});
+        }
+        break;
+      }
+    }
+    auto const finding_uid = fmt::format("{}", uuid::random());
+    // Build the finding.
+    auto finding = builder.record();
+    finding.field("time").data(now);
+    finding.field("class_uid").data(int64_t{2004});
+    finding.field("category_uid").data(int64_t{2});
+    finding.field("activity_id").data(int64_t{1});
+    finding.field("type_uid").data(int64_t{200401});
+    finding.field("status_id").data(int64_t{1});
+    finding.field("severity_id").data(entry.finding.severity_id);
+    auto metadata_field = finding.field("metadata").record();
+    metadata_field.field("version").data("1.9.0");
+    auto product = metadata_field.field("product").record();
+    product.field("name").data("Tenzir");
+    product.field("vendor_name").data("Tenzir");
+    metadata_field.field("profiles").list().data("security_control");
+    finding.field("action_id").data(int64_t{3});
+    finding.field("disposition_id").data(int64_t{15});
+    if (not as<list>(entry.finding.attacks).empty()) {
+      finding.field("attacks").data(entry.finding.attacks);
+    }
+    finding.field("policy").data(entry.finding.policy);
+    auto info = finding.field("finding_info").record();
+    info.field("uid").data(finding_uid);
+    if (entry.finding.title) {
+      info.field("title").data(*entry.finding.title);
+    }
+    info.field("analytic").data(entry.finding.analytic);
+    if (not as<list>(entry.finding.attacks).empty()) {
+      info.field("attacks").data(entry.finding.attacks);
+    }
+    auto traits = info.field("traits").list();
+    for (auto const& decision : trace) {
+      if (not decision.matched) {
+        continue;
+      }
+      auto trait = traits.record();
+      trait.field("name").data(decision.identifier);
+      trait.field("type").data("sigma:search-identifier");
+    }
+    if (not as<list>(entry.finding.data_sources).empty()) {
+      info.field("data_sources").data(entry.finding.data_sources);
+    }
+    auto observables = finding.field("observables").list();
+    for (auto const& field_match : field_matches) {
+      // Observables come only from positive field matches with a concrete
+      // value; the input is not OCSF, so no type is invented.
+      if (field_match.item->keyword or field_match.item->negated
+          or is<caf::none_t>(field_match.value)) {
+        continue;
+      }
+      auto observable = observables.record();
+      observable.field("name").data(
+        fmt::format("evidences[0].data.{}", field_match.item->field));
+      observable.field("type_id").data(int64_t{0});
+      if (auto const* str = try_as<std::string>(&field_match.value)) {
+        observable.field("value").data(*str);
+      } else {
+        observable.field("value").data(fmt::format("{}", field_match.value));
+      }
+    }
+    auto evidences = finding.field("evidences").list();
+    evidences.record().field("data").data(event_data);
+    auto provenance = evidences.record();
+    provenance.field("name").data("SigmaMatch");
+    provenance.field("data").data(record{});
+    auto sigma_info = provenance.field("sigma").record();
+    auto trace_list = sigma_info.field("trace").list();
+    for (auto const& decision : trace) {
+      auto decision_record = trace_list.record();
+      decision_record.field("identifier").data(decision.identifier);
+      decision_record.field("matched").data(decision.matched);
+    }
+    auto fields_list = sigma_info.field("fields").list();
+    for (auto const& field_match : field_matches) {
+      auto match_record = fields_list.record();
+      if (not field_match.item->keyword) {
+        match_record.field("field").data(field_match.item->field);
+        // Dotted names resolve with exact-key precedence; record the
+        // resolved interpretation when it is ambiguous.
+        if (field_match.item->field.contains('.')) {
+          auto const* event_record = try_as<record>(&event_data);
+          auto const exact = event_record
+                             and event_record->find(field_match.item->field)
+                                   != event_record->end();
+          match_record.field("path").data(exact ? "exact-key" : "nested");
+        }
+      }
+      match_record.field("matcher").data(field_match.item->matcher);
+      match_record.field("case").data(
+        field_match.item->case_insensitive ? "insensitive" : "sensitive");
+      match_record.field("polarity")
+        .data(field_match.item->negated ? "negative" : "positive");
+      if (not field_match.item->keyword and not field_match.item->negated) {
+        match_record.field("value").data(field_match.value);
+      }
+    }
+    ++row;
+  }
+  return builder.finish_as_table_slice("ocsf.detection_finding");
 }
 
 // -- internal runtime functions ------------------------------------------
@@ -1907,9 +2537,8 @@ public:
         last_update = now;
       }
       for (auto const& [_, entry] : rules.entries) {
-        if (auto result
-            = make_sigma_slice(slice, entry.yaml, entry.rule, diagnostics)) {
-          co_yield std::move(*result);
+        for (auto&& result : build_findings(slice, entry, diagnostics)) {
+          co_yield std::move(result);
         }
       }
     }
@@ -1984,9 +2613,8 @@ public:
       last_update_ = now;
     }
     for (auto const& [_, entry] : rules_.entries) {
-      if (auto result
-          = make_sigma_slice(input, entry.yaml, entry.rule, diagnostics)) {
-        co_await push(std::move(*result));
+      for (auto&& result : build_findings(input, entry, diagnostics)) {
+        co_await push(std::move(result));
       }
     }
   }

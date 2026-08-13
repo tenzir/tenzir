@@ -1,10 +1,6 @@
 {
-  event: {
-    id: "upper",
-  },
+  id: "upper",
 }
 {
-  event: {
-    id: "lower",
-  },
+  id: "lower",
 }

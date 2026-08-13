@@ -1,5 +1,3 @@
 {
-  event: {
-    id: "match",
-  },
+  id: "match",
 }

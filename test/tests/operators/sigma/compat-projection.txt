@@ -1,0 +1,15 @@
+{
+  event: {
+    foo: "needle",
+    extra: 42,
+  },
+  rule: {
+    title: "basic sigma rule",
+    detection: {
+      selection: {
+        foo: "needle",
+      },
+      condition: "selection",
+    },
+  },
+}

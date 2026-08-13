@@ -1,0 +1,5 @@
+from {foo: "alpha"}, {foo: "alpha"}
+sigma path="tests/operators/sigma/inputs/finding-uid.yaml"
+uid = finding_info.uid
+assert uid.match_regex(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+summarize unique=count_distinct(uid)

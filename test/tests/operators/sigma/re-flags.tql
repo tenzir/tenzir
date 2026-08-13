@@ -2,4 +2,4 @@ from {id: "upper", name: "EVIL"},
      {id: "lower", name: "evil"},
      {id: "no", name: "evil2"}
 sigma path="tests/operators/sigma/inputs/re-flags.yaml"
-select event.id
+select id = evidences[0].data.id

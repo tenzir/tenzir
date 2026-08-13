@@ -1,0 +1,6 @@
+title: Stable identity rule
+id: 33333333-3333-3333-3333-333333333333
+detection:
+  selection:
+    foo: alpha
+  condition: selection

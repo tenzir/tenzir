@@ -1,14 +1,88 @@
 {
-  event: {
-    foo: "needle",
+  class_uid: 2004,
+  category_uid: 2,
+  activity_id: 1,
+  type_uid: 200401,
+  status_id: 1,
+  severity_id: 0,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Tenzir",
+      vendor_name: "Tenzir",
+    },
+    profiles: [
+      "security_control",
+    ],
   },
-  rule: {
-    title: "basic sigma rule",
-    detection: {
-      selection: {
-        foo: "needle",
+  action_id: 3,
+  disposition_id: 15,
+  policy: {
+    uid: "sigma:c48553581305f815",
+    name: "basic sigma rule",
+    is_applied: true,
+    data: {
+      title: "basic sigma rule",
+      detection: {
+        selection: {
+          foo: "needle",
+        },
+        condition: "selection",
       },
-      condition: "selection",
     },
   },
+  finding_info: {
+    title: "basic sigma rule",
+    analytic: {
+      type_id: 1,
+      type: "Rule",
+      uid: "sigma:c48553581305f815",
+      name: "basic sigma rule",
+    },
+    traits: [
+      {
+        name: "selection",
+        type: "sigma:search-identifier",
+      },
+    ],
+  },
+  observables: [
+    {
+      name: "evidences[0].data.foo",
+      type_id: 0,
+      value: "needle",
+    },
+  ],
+  evidences: [
+    {
+      data: {
+        foo: "needle",
+      },
+      name: null,
+      sigma: null,
+    },
+    {
+      data: {
+        foo: null,
+      },
+      name: "SigmaMatch",
+      sigma: {
+        trace: [
+          {
+            identifier: "selection",
+            matched: true,
+          },
+        ],
+        fields: [
+          {
+            field: "foo",
+            matcher: "equals",
+            case: "insensitive",
+            polarity: "positive",
+            value: "needle",
+          },
+        ],
+      },
+    },
+  ],
 }

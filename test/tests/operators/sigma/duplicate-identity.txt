@@ -1,12 +1,8 @@
 {
-  event: {
-    id: "unrelated",
-  },
+  id: "unrelated",
 }
 {
-  event: {
-    id: "same-id-name",
-  },
+  id: "same-id-name",
 }
 warning: sigma operator ignores rule 'tests/operators/sigma/inputs/duplicate-identity.yaml#0'
  --> tests/operators/sigma/duplicate-identity.tql:6:12

@@ -1,10 +1,6 @@
 {
-  event: {
-    id: "exact-key",
-  },
+  id: "exact-key",
 }
 {
-  event: {
-    id: "nested-only",
-  },
+  id: "nested-only",
 }

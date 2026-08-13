@@ -1,0 +1,4 @@
+// The documented projection restoring the legacy {event, rule} envelope.
+from {foo: "needle", extra: 42}
+sigma path=f"{env("TENZIR_INPUTS")}/basic-rule.yaml"
+this = {event: evidences[0].data, rule: policy.data}

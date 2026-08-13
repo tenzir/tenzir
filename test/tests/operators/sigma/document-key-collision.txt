@@ -1,15 +1,9 @@
 {
-  event: {
-    id: "multi-zero",
-  },
+  id: "multi-zero",
 }
 {
-  event: {
-    id: "multi-one",
-  },
+  id: "multi-one",
 }
 {
-  event: {
-    id: "literal-suffix",
-  },
+  id: "literal-suffix",
 }

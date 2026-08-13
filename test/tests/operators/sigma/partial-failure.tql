@@ -3,4 +3,4 @@
 from {id: "one", foo: "alpha"},
      {id: "two", bar: "bravo"}
 sigma path="tests/operators/sigma/inputs/partial-failure.yaml"
-select event.id
+select id = evidences[0].data.id

@@ -1,6 +1,4 @@
 {
-  event: {
-    id: "system",
-  },
+  id: "system",
   title: "Network rule",
 }

@@ -1,10 +1,6 @@
 {
-  event: {
-    id: "alpha",
-  },
+  id: "alpha",
 }
 {
-  event: {
-    id: "both",
-  },
+  id: "both",
 }

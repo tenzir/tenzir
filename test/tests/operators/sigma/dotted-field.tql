@@ -2,4 +2,4 @@ from {id: "exact-key", "a.b": "exact", a: {b: "nested"}},
      {id: "nested-only", a: {b: "exact"}},
      {id: "collision-miss", "a.b": "other", a: {b: "exact"}}
 sigma path="tests/operators/sigma/inputs/dotted-field.yaml"
-select event.id
+select id = evidences[0].data.id

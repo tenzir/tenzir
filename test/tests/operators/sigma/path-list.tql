@@ -2,4 +2,4 @@
 // overlapping entries are deduplicated, and discovery is deterministic.
 from {id: "alpha", foo: "needle"}
 sigma path=["tests/operators/sigma/inputs/basic-rule.yaml", "tests/operators/sigma/inputs/basic-rule.yaml"]
-select event.id
+select id = evidences[0].data.id

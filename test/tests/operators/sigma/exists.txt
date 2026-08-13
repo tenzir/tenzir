@@ -1,10 +1,38 @@
 {
-  event: {
-    id: "hit",
-  },
+  id: "hit",
+  fields: [
+    {
+      field: "user",
+      matcher: "exists",
+      case: "insensitive",
+      polarity: "positive",
+      value: "root",
+    },
+    {
+      field: "missing",
+      matcher: "exists",
+      case: "insensitive",
+      polarity: "negative",
+      value: null,
+    },
+  ],
 }
 {
-  event: {
-    id: "null-user",
-  },
+  id: "null-user",
+  fields: [
+    {
+      field: "user",
+      matcher: "exists",
+      case: "insensitive",
+      polarity: "positive",
+      value: null,
+    },
+    {
+      field: "missing",
+      matcher: "exists",
+      case: "insensitive",
+      polarity: "negative",
+      value: null,
+    },
+  ],
 }

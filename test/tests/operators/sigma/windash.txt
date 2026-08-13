@@ -1,10 +1,6 @@
 {
-  event: {
-    id: "dash",
-  },
+  id: "dash",
 }
 {
-  event: {
-    id: "slash",
-  },
+  id: "slash",
 }

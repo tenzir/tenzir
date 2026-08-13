@@ -2,4 +2,4 @@ from {id: "alpha", foo: "alpha", bar: "x"},
      {id: "bravo", foo: "x", bar: "bravo"},
      {id: "both", foo: "alpha", bar: "bravo"}
 sigma path="tests/operators/sigma/inputs/all-of.yaml"
-select event.id
+select id = evidences[0].data.id

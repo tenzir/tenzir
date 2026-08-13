@@ -1,40 +1,24 @@
 {
-  event: {
-    id: "all-neq",
-  },
+  id: "all-neq",
 }
 {
-  event: {
-    id: "base64",
-  },
+  id: "base64",
 }
 {
-  event: {
-    id: "chain",
-  },
+  id: "chain",
 }
 {
-  event: {
-    id: "cidr",
-  },
+  id: "cidr",
 }
 {
-  event: {
-    id: "numeric",
-  },
+  id: "numeric",
 }
 {
-  event: {
-    id: "offset",
-  },
+  id: "offset",
 }
 {
-  event: {
-    id: "prefix",
-  },
+  id: "prefix",
 }
 {
-  event: {
-    id: "regex",
-  },
+  id: "regex",
 }

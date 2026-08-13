@@ -1,18 +1,3 @@
 {
-  event: {
-    command: "C:\\Windows\\System32\\rundll32.exe shell32.dll",
-    image: "C:\\Windows\\System32\\rundll32.exe",
-    parent: "C:\\Windows\\explorer.exe",
-  },
-  rule: {
-    title: "wildcard sigma rule",
-    detection: {
-      selection: {
-        "command|contains": "rundll32.exe",
-        "image|endswith": "\\\\rundll32.exe",
-        "parent|startswith": "C:\\\\Windows",
-      },
-      condition: "selection",
-    },
-  },
+  image: "C:\\Windows\\System32\\rundll32.exe",
 }

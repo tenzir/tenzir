@@ -10,5 +10,5 @@ from {id: "numeric", count: 45, ip: 10.0.0.1, payload: "x", url: "x"},
      {id: "all-neq-b", count: 1, ip: 10.0.0.1, payload: "x", tag: "b", url: "x"},
      {id: "miss", count: 1, ip: 10.0.0.1, payload: "cmd.exe.bak", url: "x"}
 sigma path="tests/operators/sigma/inputs/modifiers.yaml"
-select event.id
-sort event.id
+select id = evidences[0].data.id
+sort id

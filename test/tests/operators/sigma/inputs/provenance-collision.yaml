@@ -1,0 +1,6 @@
+title: provenance collision
+id: 87326c6f-cbe8-46fb-af44-171267059fa0
+detection:
+  selection:
+    foo: needle
+  condition: selection
