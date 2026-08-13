@@ -3,8 +3,6 @@ title: Full Sigma v2.1 detection support
 type: feature
 authors:
   - mavam
-prs:
-  - 107
 created: 2026-08-12T17:34:19.422368Z
 ---
 

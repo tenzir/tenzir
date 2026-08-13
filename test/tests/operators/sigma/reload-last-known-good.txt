@@ -1,0 +1,4 @@
+single-document retention: ok
+empty-source retention: ok
+shifted-document retention: ok
+failure warning count: 1 per revision

@@ -25,6 +25,7 @@
 #include <tenzir/detail/flat_map.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
+#include <tenzir/hash/hash.hpp>
 #include <tenzir/io/read.hpp>
 #include <tenzir/multi_series.hpp>
 #include <tenzir/operator_plugin.hpp>
@@ -42,9 +43,11 @@
 #include <fmt/format.h>
 #include <re2/re2.h>
 
+#include <algorithm>
 #include <array>
 #include <cctype>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <ranges>
@@ -761,6 +764,54 @@ struct RuleMap {
   std::unordered_map<RuleKey, size_t, RuleKeyHash> index;
 };
 
+/// Tracks failed source and document revisions to avoid repeating the same
+/// warning on every refresh.
+struct ReloadState {
+  auto should_emit(RuleKey const& key, uint64_t revision) -> bool {
+    if (auto entry = failing_documents.find(key);
+        entry != failing_documents.end() and entry->second == revision) {
+      return false;
+    }
+    failing_documents.insert_or_assign(key, revision);
+    return true;
+  }
+
+  auto should_emit(std::string const& origin, uint64_t revision) -> bool {
+    if (auto entry = failing_sources.find(origin);
+        entry != failing_sources.end() and entry->second == revision) {
+      return false;
+    }
+    failing_sources.insert_or_assign(origin, revision);
+    return true;
+  }
+
+  auto succeeded(RuleKey const& key) -> void {
+    failing_documents.erase(key);
+  }
+
+  auto succeeded(std::string const& origin) -> void {
+    failing_sources.erase(origin);
+  }
+
+  auto prune_documents(std::string const& origin, size_t count) -> void {
+    std::erase_if(failing_documents, [&](auto const& entry) {
+      return entry.first.origin == origin and entry.first.document >= count;
+    });
+  }
+
+  auto reconcile(std::unordered_set<std::string> const& origins) -> void {
+    std::erase_if(failing_documents, [&](auto const& entry) {
+      return not origins.contains(entry.first.origin);
+    });
+    std::erase_if(failing_sources, [&](auto const& entry) {
+      return not origins.contains(entry.first);
+    });
+  }
+
+  std::unordered_map<RuleKey, uint64_t, RuleKeyHash> failing_documents;
+  std::unordered_map<std::string, uint64_t> failing_sources;
+};
+
 /// The normalized rule sources of one operator instance.
 struct SigmaSources {
   /// File and directory paths, in argument order.
@@ -795,10 +846,9 @@ auto make_source_diagnostic_handler(diagnostic_handler& dh, location source)
     }};
 }
 
-auto emit_ignored_rule(std::string_view origin, diagnostic reason,
-                       diagnostic_handler& dh) -> void {
-  auto builder = diagnostic::warning("sigma operator ignores rule '{}'", origin)
-                   .note("{}", reason.message);
+auto append_reason(diagnostic_builder builder, diagnostic const& reason)
+  -> diagnostic_builder {
+  builder = std::move(builder).note("{}", reason.message);
   for (auto const& note : reason.notes) {
     switch (note.kind) {
       case diagnostic_note_kind::note:
@@ -815,45 +865,108 @@ auto emit_ignored_rule(std::string_view origin, diagnostic reason,
         break;
     }
   }
-  std::move(builder).emit(dh);
+  return builder;
 }
 
-/// Compiles every YAML document of one source into rule entries. Multi-
-/// document sources produce one rule per document, keyed by document index.
+/// Copies every previous document artifact of a source into the next rule set.
+/// Returns whether any artifact was retained.
+auto retain_source(RuleMap const& previous, std::string const& origin,
+                   RuleMap& next) -> bool {
+  auto retained = false;
+  for (auto const& [key, entry] : previous.entries) {
+    if (key.origin == origin) {
+      next.insert_or_assign(key, entry);
+      retained = true;
+    }
+  }
+  return retained;
+}
+
+/// Compiles every YAML document of one source. A failing initial load keeps
+/// valid siblings, while a failing reload retains the previous source as one
+/// unit so positional document identities cannot shift.
 auto compile_source(std::string_view content, std::string const& origin,
-                    RuleMap& rules, diagnostic_handler& dh) -> void {
+                    RuleMap& next, RuleMap const& previous, ReloadState& state,
+                    diagnostic_handler& dh) -> void {
+  auto const revision = hash(content);
   auto documents = from_yaml_documents(content);
-  if (not documents) {
-    diagnostic::warning("sigma operator ignores source '{}'", origin)
-      .note("failed to parse yaml: {}", documents.error())
-      .emit(dh);
+  if (not documents or documents->empty()) {
+    auto const retained = retain_source(previous, origin, next);
+    if (state.should_emit(origin, revision)) {
+      auto builder
+        = retained
+            ? diagnostic::warning("sigma operator retains last known good "
+                                  "version of '{}'",
+                                  origin)
+            : diagnostic::warning("sigma operator ignores source '{}'", origin);
+      if (documents) {
+        std::move(builder).note("source contains no YAML documents").emit(dh);
+      } else {
+        std::move(builder)
+          .note("failed to parse yaml: {}", documents.error())
+          .emit(dh);
+      }
+    }
     return;
   }
+  state.succeeded(origin);
+  state.prune_documents(origin, documents->size());
+  auto const had_previous
+    = std::ranges::any_of(previous.entries, [&](auto const& entry) {
+        return entry.first.origin == origin;
+      });
+  auto replacements = RuleMap{};
+  auto failed = false;
   auto const multiple = documents->size() > 1;
   for (auto index = size_t{0}; index < documents->size(); ++index) {
+    auto const key = RuleKey{origin, index};
     auto const label = multiple ? fmt::format("{}#{}", origin, index) : origin;
+    auto handle_failure = [&](auto&& emit_reason) {
+      failed = true;
+      if (not state.should_emit(key, revision)) {
+        return;
+      }
+      auto builder
+        = had_previous
+            ? diagnostic::warning("sigma operator retains last known good "
+                                  "version of source '{}'",
+                                  origin)
+            : diagnostic::warning("sigma operator ignores rule '{}'", label);
+      emit_reason(std::move(builder));
+    };
     auto& document = (*documents)[index];
     if (not is<record>(document)) {
-      diagnostic::warning("sigma operator ignores rule '{}'", label)
-        .note("rule is not a YAML dictionary")
-        .emit(dh);
+      handle_failure([&](diagnostic_builder builder) {
+        std::move(builder).note("rule is not a YAML dictionary").emit(dh);
+      });
       continue;
     }
     auto compiled = compile_rule(document);
     if (compiled.is_err()) {
-      emit_ignored_rule(label, std::move(compiled).unwrap_err(), dh);
+      auto reason = std::move(compiled).unwrap_err();
+      handle_failure([&](diagnostic_builder builder) {
+        append_reason(std::move(builder), reason).emit(dh);
+      });
       continue;
     }
     auto rule = std::move(compiled).unwrap();
     auto provider = session_provider::make(dh);
     if (not resolve_entities(rule, provider.as_session())) {
-      diagnostic::warning("sigma operator ignores rule '{}'", label)
-        .note("failed to resolve sigma rule")
-        .emit(dh);
+      handle_failure([&](diagnostic_builder builder) {
+        std::move(builder).note("failed to resolve sigma rule").emit(dh);
+      });
       continue;
     }
-    rules.insert_or_assign(RuleKey{origin, index},
-                           RuleEntry{std::move(document), std::move(rule)});
+    state.succeeded(key);
+    replacements.insert_or_assign(key, RuleEntry{std::move(document),
+                                                 std::move(rule)});
+  }
+  if (failed and had_previous) {
+    std::ignore = retain_source(previous, origin, next);
+    return;
+  }
+  for (auto& [key, entry] : replacements.entries) {
+    next.insert_or_assign(std::move(key), std::move(entry));
   }
 }
 
@@ -930,35 +1043,50 @@ auto collect_rule_files(std::vector<std::string> const& paths,
 
 /// Loads and compiles all rules from the given sources. Returns false when
 /// file discovery fails, allowing the caller to keep the previous rule set.
-auto load_rules(SigmaSources const& sources, RuleMap& rules,
+auto load_rules(SigmaSources const& sources, RuleMap& next,
+                RuleMap const& previous, ReloadState& state,
                 diagnostic_handler& dh) -> bool {
   auto files = collect_rule_files(sources.paths, dh);
   if (not files) {
     return false;
   }
+  auto origins = std::unordered_set<std::string>{};
   for (auto const& file : *files) {
+    auto const origin = file.string();
+    origins.insert(origin);
     auto content = tenzir::io::read(file);
     if (not content) {
-      diagnostic::warning("sigma operator ignores rule '{}'", file.string())
-        .note("failed to read file: {}", content.error())
-        .emit(dh);
+      auto const retained = retain_source(previous, origin, next);
+      if (state.should_emit(origin, hash(to_string(content.error())))) {
+        auto builder
+          = retained
+              ? diagnostic::warning("sigma operator retains last known good "
+                                    "version of '{}'",
+                                    origin)
+              : diagnostic::warning("sigma operator ignores rule '{}'", origin);
+        std::move(builder)
+          .note("failed to read file: {}", content.error())
+          .emit(dh);
+      }
       continue;
     }
     auto const view = std::string_view{
       reinterpret_cast<char const*>(content->data()), content->size()};
-    compile_source(view, file.string(), rules, dh);
+    compile_source(view, origin, next, previous, state, dh);
   }
   for (auto index = size_t{0}; index < sources.rules.size(); ++index) {
-    compile_source(sources.rules[index], fmt::format("<rules[{}]>", index),
-                   rules, dh);
+    auto const origin = fmt::format("<rules[{}]>", index);
+    origins.insert(origin);
+    compile_source(sources.rules[index], origin, next, previous, state, dh);
   }
+  state.reconcile(origins);
   return true;
 }
 
 auto update_rules(SigmaSources const& sources, RuleMap& rules,
-                  diagnostic_handler& dh) -> void {
+                  ReloadState& state, diagnostic_handler& dh) -> void {
   auto next = RuleMap{};
-  if (load_rules(sources, next, dh)) {
+  if (load_rules(sources, next, rules, state, dh)) {
     rules = std::move(next);
   }
 }
@@ -1385,9 +1513,10 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     auto rules = RuleMap{};
+    auto reload_state = ReloadState{};
     auto diagnostics
       = make_source_diagnostic_handler(ctrl.diagnostics(), sources_.source);
-    update_rules(sources_, rules, diagnostics);
+    update_rules(sources_, rules, reload_state, diagnostics);
     auto last_update = std::chrono::steady_clock::now();
     co_yield {}; // signal that we're done initializing
     for (auto&& slice : input) {
@@ -1399,7 +1528,7 @@ public:
       auto const now = std::chrono::steady_clock::now();
       if (not sources_.paths.empty()
           and now - last_update > refresh_interval_) {
-        update_rules(sources_, rules, diagnostics);
+        update_rules(sources_, rules, reload_state, diagnostics);
         last_update = now;
       }
       for (auto const& [_, entry] : rules.entries) {
@@ -1464,7 +1593,7 @@ public:
                                                : default_refresh_interval;
     auto diagnostics
       = make_source_diagnostic_handler(ctx.dh(), sources_.source);
-    update_rules(sources_, rules_, diagnostics);
+    update_rules(sources_, rules_, reload_state_, diagnostics);
     last_update_ = std::chrono::steady_clock::now();
     co_return;
   }
@@ -1476,7 +1605,7 @@ public:
       = make_source_diagnostic_handler(ctx.dh(), sources_.source);
     auto const now = std::chrono::steady_clock::now();
     if (not sources_.paths.empty() and now - last_update_ > refresh_interval_) {
-      update_rules(sources_, rules_, diagnostics);
+      update_rules(sources_, rules_, reload_state_, diagnostics);
       last_update_ = now;
     }
     for (auto const& [_, entry] : rules_.entries) {
@@ -1492,6 +1621,7 @@ private:
   SigmaSources sources_;
   duration refresh_interval_ = default_refresh_interval;
   RuleMap rules_;
+  ReloadState reload_state_;
   // Rules are reloaded from disk in `start()`, and `last_update_` uses
   // `steady_clock`, so the default no-op snapshot behavior is sufficient.
   std::chrono::steady_clock::time_point last_update_ = {};

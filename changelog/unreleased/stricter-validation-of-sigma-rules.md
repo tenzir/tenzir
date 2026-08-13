@@ -3,8 +3,6 @@ title: Stricter validation of Sigma rules
 type: change
 authors:
   - mavam
-prs:
-  - 106
 created: 2026-08-12T16:32:43.339738Z
 ---
 

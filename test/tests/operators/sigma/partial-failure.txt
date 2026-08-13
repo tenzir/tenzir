@@ -1,0 +1,18 @@
+{
+  event: {
+    id: "one",
+  },
+}
+{
+  event: {
+    id: "two",
+  },
+}
+warning: sigma operator ignores rule 'tests/operators/sigma/inputs/partial-failure.yaml#1'
+ --> tests/operators/sigma/partial-failure.tql:5:12
+  |
+5 | sigma path="tests/operators/sigma/inputs/partial-failure.yaml"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unknown Sigma modifier `frobnicate` for field `foo`
+  = hint: unsupported modifiers reject the rule; nothing is silently ignored

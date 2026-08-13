@@ -1,0 +1,6 @@
+// Loading is failure-isolated: one invalid document in a multi-document
+// source never disables its valid siblings.
+from {id: "one", foo: "alpha"},
+     {id: "two", bar: "bravo"}
+sigma path="tests/operators/sigma/inputs/partial-failure.yaml"
+select event.id

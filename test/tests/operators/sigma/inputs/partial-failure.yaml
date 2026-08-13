@@ -1,0 +1,17 @@
+title: First valid rule
+detection:
+  selection:
+    foo: alpha
+  condition: selection
+---
+title: Broken rule
+detection:
+  selection:
+    foo|frobnicate: alpha
+  condition: selection
+---
+title: Second valid rule
+detection:
+  selection:
+    bar: bravo
+  condition: selection
