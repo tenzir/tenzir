@@ -1,5 +1,5 @@
 from {id: "hit", user: "guest", tag: "Foo"},
      {id: "is-admin", user: "ADMIN", tag: "Foo"},
      {id: "wrong-case", user: "guest", tag: "foo"}
-sigma "tests/operators/sigma/inputs/neq-cased.yaml"
+sigma path="tests/operators/sigma/inputs/neq-cased.yaml"
 select event.id

@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// Exactly one rule source is required.
+from {x: 1}
+sigma

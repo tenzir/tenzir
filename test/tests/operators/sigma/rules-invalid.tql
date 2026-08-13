@@ -1,0 +1,13 @@
+---
+error: true
+---
+
+// Inline rules are compiled at pipeline-construction time; diagnostics
+// anchor at the argument and carry list element and document indices.
+from {x: 1}
+sigma rules=r#"title: broken
+detection:
+  selection:
+    a|frobnicate: 1
+  condition: selection
+"#

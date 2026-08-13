@@ -5,5 +5,5 @@ from {id: "dashes", cmdline: "run -a -b -c -d param-name é-p -ä"},
      {id: "mixed", cmdline: "run /a -b /c -d param-name é-p /ä"},
      {id: "midword-slash", cmdline: "run -a -b -c -d param/name é-p -ä"},
      {id: "unicode-midword", cmdline: "run -a -b -c -d param-name é/p -ä"}
-sigma "tests/operators/sigma/inputs/windash-multi.yaml"
+sigma path="tests/operators/sigma/inputs/windash-multi.yaml"
 select event.id

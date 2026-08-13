@@ -1,0 +1,13 @@
+title: multi-document zero
+id: multi-zero
+detection:
+  selection:
+    id: multi-zero
+  condition: selection
+---
+title: multi-document one
+id: multi-one
+detection:
+  selection:
+    id: multi-one
+  condition: selection

@@ -5,5 +5,5 @@ from {id: "plus-literal", a: "a+b"},
      {id: "pipe-literal", b: "x|y"},
      {id: "pipe-alternation-would-match", b: "x"},
      {id: "newline-wildcard", c: "foo\nbar"}
-sigma "tests/operators/sigma/inputs/wildcard-escaping.yaml"
+sigma path="tests/operators/sigma/inputs/wildcard-escaping.yaml"
 select event.id

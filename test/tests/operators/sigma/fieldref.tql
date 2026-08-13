@@ -5,5 +5,5 @@ from {id: "hit", a: 1, b: 1, c: 2, d: 3},
      {id: "only-a", a: 1},
      {id: "only-c", c: 2},
      {id: "nulls", a: null, b: null, c: null, d: null}
-sigma "tests/operators/sigma/inputs/fieldref.yaml"
+sigma path="tests/operators/sigma/inputs/fieldref.yaml"
 select event.id

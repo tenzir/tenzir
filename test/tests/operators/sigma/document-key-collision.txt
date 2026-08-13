@@ -1,0 +1,15 @@
+{
+  event: {
+    id: "multi-zero",
+  },
+}
+{
+  event: {
+    id: "multi-one",
+  },
+}
+{
+  event: {
+    id: "literal-suffix",
+  },
+}

@@ -1,0 +1,6 @@
+title: literal hash suffix
+id: literal-suffix
+detection:
+  selection:
+    id: literal-suffix
+  condition: selection

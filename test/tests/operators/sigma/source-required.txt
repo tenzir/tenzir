@@ -1,0 +1,7 @@
+error: `sigma` requires exactly one rule source
+ --> tests/operators/sigma/source-required.tql:7:1
+  |
+7 | sigma
+  | ^^^^^
+  |
+  = hint: pass `path=` for rule files and directories or `rules=` for inline YAML rules

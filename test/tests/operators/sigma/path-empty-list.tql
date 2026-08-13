@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// Empty source lists are rejected.
+from {x: 1}
+sigma path=[]

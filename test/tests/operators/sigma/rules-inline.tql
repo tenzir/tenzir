@@ -1,0 +1,17 @@
+// One inline string may hold a multi-document rule collection; no filesystem
+// access happens at runtime.
+from {id: "one", foo: "alpha"},
+     {id: "two", bar: "bravo"}
+sigma rules=r#"title: First
+detection:
+  selection:
+    foo: alpha
+  condition: selection
+---
+title: Second
+detection:
+  selection:
+    bar: bravo
+  condition: selection
+"#
+select event.id

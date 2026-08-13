@@ -4,5 +4,5 @@
 from {id: "only-x", x: 1},
      {id: "only-y", y: 2},
      {id: "none", x: 9, y: 9}
-sigma "tests/operators/sigma/inputs/quantifier-or.yaml"
+sigma path="tests/operators/sigma/inputs/quantifier-or.yaml"
 select event.id

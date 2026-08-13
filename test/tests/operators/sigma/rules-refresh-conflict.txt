@@ -1,0 +1,7 @@
+error: `refresh_interval` cannot be used with `rules`
+ --> tests/operators/sigma/rules-refresh-conflict.tql:7:42
+  |
+7 | sigma rules="title: a", refresh_interval=1s
+  |                                          ^^
+  |
+  = note: embedded rule content cannot change independently of the pipeline

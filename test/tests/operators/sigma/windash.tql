@@ -2,5 +2,5 @@ from {id: "dash", cmdline: "run -p 80"},
      {id: "slash", cmdline: "run /p 80"},
      {id: "endash", cmdline: "run – 80"},
      {id: "none", cmdline: "run 80"}
-sigma "tests/operators/sigma/inputs/windash.yaml"
+sigma path="tests/operators/sigma/inputs/windash.yaml"
 select event.id

@@ -5,5 +5,5 @@ from {id: "hidden", ctx: {inner: ["backdoor"]}},
      {id: "nested", ctx: {inner: ["fine", "a Backdoor here"]}},
      {id: "clean", msg: "benign", n: 42}
 slice begin=1
-sigma "tests/operators/sigma/inputs/keywords.yaml"
+sigma path="tests/operators/sigma/inputs/keywords.yaml"
 select event.id

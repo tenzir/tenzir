@@ -1,0 +1,15 @@
+// `rules` accepts a list of YAML strings forming one rule set.
+from {id: "one", foo: "alpha"},
+     {id: "two", bar: "bravo"}
+sigma rules=[r#"title: First
+detection:
+  selection:
+    foo: alpha
+  condition: selection
+"#, r#"title: Second
+detection:
+  selection:
+    bar: bravo
+  condition: selection
+"#]
+select event.id

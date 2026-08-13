@@ -1,2 +1,7 @@
 warning: sigma operator ignores rule 'tests/operators/sigma/inputs/missing-selection.yaml'
+ --> tests/operators/sigma/missing_selection.tql:2:12
+  |
+2 | sigma path="tests/operators/sigma/inputs/missing-selection.yaml"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
   = note: Sigma condition pattern `missing*` matches no search identifier

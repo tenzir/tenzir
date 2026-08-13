@@ -1,0 +1,6 @@
+error: `path` must not be an empty list
+ --> tests/operators/sigma/path-empty-list.tql:7:12
+  |
+7 | sigma path=[]
+  |            ^^
+  |

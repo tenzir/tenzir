@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// Embedded rule content cannot change independently of the pipeline.
+from {x: 1}
+sigma rules="title: a", refresh_interval=1s

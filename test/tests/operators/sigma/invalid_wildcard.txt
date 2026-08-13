@@ -1,2 +1,7 @@
 warning: sigma operator ignores rule 'tests/operators/sigma/inputs/invalid-wildcard.yaml'
+ --> tests/operators/sigma/invalid_wildcard.tql:2:12
+  |
+2 | sigma path="tests/operators/sigma/inputs/invalid-wildcard.yaml"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
   = note: Sigma condition references unknown search identifier `selection[`

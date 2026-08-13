@@ -52,6 +52,7 @@
 #include <string_view>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -99,16 +100,6 @@ auto join(std::vector<ast::expression> xs) -> ast::expression {
     result = ast::binary_expr{std::move(result), Op, std::move(xs[i])};
   }
   return result;
-}
-
-auto flatten(ast::expression x, ast::binary_op op,
-             std::vector<ast::expression>& result) -> void {
-  if (auto* binary = try_as<ast::binary_expr>(x); binary and binary->op == op) {
-    flatten(std::move(binary->left), op, result);
-    flatten(std::move(binary->right), op, result);
-    return;
-  }
-  result.push_back(std::move(x));
 }
 
 } // namespace expression_algebra
@@ -738,14 +729,77 @@ struct RuleEntry {
   ast::expression rule;
 };
 
-using RuleMap = std::unordered_map<std::string, RuleEntry>;
+/// The collision-free identity of one rule document.
+struct RuleKey {
+  std::string origin;
+  size_t document = 0;
 
-auto emit_ignored_rule(const std::filesystem::path& path, diagnostic reason,
+  friend auto operator==(RuleKey const&, RuleKey const&) -> bool = default;
+};
+
+struct RuleKeyHash {
+  auto operator()(RuleKey const& key) const noexcept -> size_t {
+    auto const origin = std::hash<std::string>{}(key.origin);
+    auto const document = std::hash<size_t>{}(key.document);
+    return origin ^ (document + 0x9e3779b9 + (origin << 6) + (origin >> 2));
+  }
+};
+
+/// Compiled rules in deterministic source order with constant-time updates.
+struct RuleMap {
+  auto insert_or_assign(RuleKey key, RuleEntry entry) -> void {
+    if (auto existing = index.find(key); existing != index.end()) {
+      entries[existing->second].second = std::move(entry);
+      return;
+    }
+    index.emplace(key, entries.size());
+    entries.emplace_back(std::move(key), std::move(entry));
+  }
+
+  /// Argument order, then file-discovery order, then YAML document order.
+  std::vector<std::pair<RuleKey, RuleEntry>> entries;
+  std::unordered_map<RuleKey, size_t, RuleKeyHash> index;
+};
+
+/// The normalized rule sources of one operator instance.
+struct SigmaSources {
+  /// File and directory paths, in argument order.
+  std::vector<std::string> paths;
+  /// Inline YAML rule content, in argument order.
+  std::vector<std::string> rules;
+  /// The source argument, used to locate runtime diagnostics.
+  location source = location::unknown;
+
+  friend auto inspect(auto& f, SigmaSources& x) -> bool {
+    return f.object(x)
+      .pretty_name("SigmaSources")
+      .fields(f.field("paths", x.paths), f.field("rules", x.rules),
+              f.field("source", x.source));
+  }
+};
+
+/// Adds the source argument to diagnostics that do not already have a known
+/// location, including diagnostics produced by nested compilation helpers.
+auto make_source_diagnostic_handler(diagnostic_handler& dh, location source)
+  -> transforming_diagnostic_handler {
+  return transforming_diagnostic_handler{
+    dh, [source](diagnostic diag) {
+      auto const has_location
+        = std::ranges::any_of(diag.annotations, [](auto const& annotation) {
+            return annotation.source != location::unknown;
+          });
+      if (not has_location and source != location::unknown) {
+        diag.annotations.emplace_back(true, "", source);
+      }
+      return diag;
+    }};
+}
+
+auto emit_ignored_rule(std::string_view origin, diagnostic reason,
                        diagnostic_handler& dh) -> void {
-  auto builder
-    = diagnostic::warning("sigma operator ignores rule '{}'", path.string())
-        .note("{}", reason.message);
-  for (const auto& note : reason.notes) {
+  auto builder = diagnostic::warning("sigma operator ignores rule '{}'", origin)
+                   .note("{}", reason.message);
+  for (auto const& note : reason.notes) {
     switch (note.kind) {
       case diagnostic_note_kind::note:
         builder = std::move(builder).note("{}", note.message);
@@ -764,73 +818,148 @@ auto emit_ignored_rule(const std::filesystem::path& path, diagnostic reason,
   std::move(builder).emit(dh);
 }
 
-auto load_rules(const std::filesystem::path& path, RuleMap& rules,
-                diagnostic_handler& dh) -> void {
-  if (std::filesystem::is_directory(path)) {
-    for (const auto& entry : std::filesystem::directory_iterator(path)) {
-      load_rules(entry.path(), rules, dh);
+/// Compiles every YAML document of one source into rule entries. Multi-
+/// document sources produce one rule per document, keyed by document index.
+auto compile_source(std::string_view content, std::string const& origin,
+                    RuleMap& rules, diagnostic_handler& dh) -> void {
+  auto documents = from_yaml_documents(content);
+  if (not documents) {
+    diagnostic::warning("sigma operator ignores source '{}'", origin)
+      .note("failed to parse yaml: {}", documents.error())
+      .emit(dh);
+    return;
+  }
+  auto const multiple = documents->size() > 1;
+  for (auto index = size_t{0}; index < documents->size(); ++index) {
+    auto const label = multiple ? fmt::format("{}#{}", origin, index) : origin;
+    auto& document = (*documents)[index];
+    if (not is<record>(document)) {
+      diagnostic::warning("sigma operator ignores rule '{}'", label)
+        .note("rule is not a YAML dictionary")
+        .emit(dh);
+      continue;
     }
-    return;
+    auto compiled = compile_rule(document);
+    if (compiled.is_err()) {
+      emit_ignored_rule(label, std::move(compiled).unwrap_err(), dh);
+      continue;
+    }
+    auto rule = std::move(compiled).unwrap();
+    auto provider = session_provider::make(dh);
+    if (not resolve_entities(rule, provider.as_session())) {
+      diagnostic::warning("sigma operator ignores rule '{}'", label)
+        .note("failed to resolve sigma rule")
+        .emit(dh);
+      continue;
+    }
+    rules.insert_or_assign(RuleKey{origin, index},
+                           RuleEntry{std::move(document), std::move(rule)});
   }
-  if (path.extension() != ".yml" and path.extension() != ".yaml") {
-    // We silently ignore non-yaml files.
-    return;
-  }
-  auto query = tenzir::io::read(path);
-  if (not query) {
-    diagnostic::warning("sigma operator ignores rule '{}'", path.string())
-      .note("failed to read file: {}", query.error())
-      .emit(dh);
-    return;
-  }
-  auto query_str = std::string_view{
-    reinterpret_cast<const char*>(query->data()),
-    reinterpret_cast<const char*>(query->data() + query->size())}; // NOLINT
-  auto yaml = from_yaml(query_str);
-  if (not yaml) {
-    diagnostic::warning("sigma operator ignores rule '{}'", path.string())
-      .note("failed to parse yaml: {}", yaml.error())
-      .emit(dh);
-    return;
-  }
-  if (not is<record>(*yaml)) {
-    diagnostic::warning("sigma operator ignores rule '{}'", path.string())
-      .note("rule is not a YAML dictionary")
-      .emit(dh);
-    return;
-  }
-  auto parsed_rule = compile_rule(*yaml);
-  if (parsed_rule.is_err()) {
-    emit_ignored_rule(path, std::move(parsed_rule).unwrap_err(), dh);
-    return;
-  }
-  auto rule = std::move(parsed_rule).unwrap();
-  auto provider = session_provider::make(dh);
-  if (not resolve_entities(rule, provider.as_session())) {
-    diagnostic::warning("sigma operator ignores rule '{}'", path.string())
-      .note("failed to resolve sigma rule")
-      .emit(dh);
-    return;
-  }
-  rules[path.string()] = {std::move(*yaml), std::move(rule)};
 }
 
-auto update_rules(const std::filesystem::path& path, RuleMap& rules,
-                  diagnostic_handler& dh) -> void {
-  auto old_rules = std::exchange(rules, {});
-  load_rules(path, rules, dh);
-  for (const auto& [rule_path, rule] : rules) {
-    const auto old_rule = old_rules.find(rule_path);
-    if (old_rule == old_rules.end()) {
-      TENZIR_VERBOSE("added Sigma rule {}", rule_path);
-    } else if (old_rule->second.yaml != rule.yaml) {
-      TENZIR_VERBOSE("updated Sigma rule {}", rule_path);
+/// Discovers rule files across all path entries deterministically:
+/// explicitly named files are always loaded, directories are traversed
+/// recursively in lexicographic order with a `.yaml`/`.yml` filter, and
+/// files reachable through overlapping entries are deduplicated.
+auto collect_rule_files(std::vector<std::string> const& paths,
+                        diagnostic_handler& dh)
+  -> Option<std::vector<std::filesystem::path>> {
+  auto result = std::vector<std::filesystem::path>{};
+  auto seen = std::unordered_set<std::string>{};
+  auto add_file = [&](std::filesystem::path const& path) {
+    auto ec = std::error_code{};
+    auto canonical = std::filesystem::weakly_canonical(path, ec);
+    auto key = ec ? path.string() : canonical.string();
+    if (seen.insert(std::move(key)).second) {
+      result.push_back(path);
+    }
+  };
+  auto visit = [&](auto&& self, std::filesystem::path const& path,
+                   bool explicit_entry) -> bool {
+    auto ec = std::error_code{};
+    auto const is_directory = std::filesystem::is_directory(path, ec);
+    if (ec) {
+      diagnostic::warning("sigma operator failed to reload rules")
+        .note("failed to inspect path '{}': {}", path.string(), ec.message())
+        .emit(dh);
+      return false;
+    }
+    if (is_directory) {
+      auto entries = std::vector<std::filesystem::path>{};
+      auto iterator = std::filesystem::directory_iterator{path, ec};
+      if (ec) {
+        diagnostic::warning("sigma operator failed to reload rules")
+          .note("failed to enumerate directory '{}': {}", path.string(),
+                ec.message())
+          .emit(dh);
+        return false;
+      }
+      auto const end = std::filesystem::directory_iterator{};
+      while (iterator != end) {
+        entries.push_back(iterator->path());
+        iterator.increment(ec);
+        if (ec) {
+          diagnostic::warning("sigma operator failed to reload rules")
+            .note("failed to enumerate directory '{}': {}", path.string(),
+                  ec.message())
+            .emit(dh);
+          return false;
+        }
+      }
+      std::ranges::sort(entries);
+      for (auto const& entry : entries) {
+        if (not self(self, entry, false)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (explicit_entry or path.extension() == ".yaml"
+        or path.extension() == ".yml") {
+      add_file(path);
+    }
+    return true;
+  };
+  for (auto const& path : paths) {
+    if (not visit(visit, path, true)) {
+      return None{};
     }
   }
-  for (const auto& [rule_path, _] : old_rules) {
-    if (not rules.contains(rule_path)) {
-      TENZIR_VERBOSE("removed Sigma rule {}", rule_path);
+  return result;
+}
+
+/// Loads and compiles all rules from the given sources. Returns false when
+/// file discovery fails, allowing the caller to keep the previous rule set.
+auto load_rules(SigmaSources const& sources, RuleMap& rules,
+                diagnostic_handler& dh) -> bool {
+  auto files = collect_rule_files(sources.paths, dh);
+  if (not files) {
+    return false;
+  }
+  for (auto const& file : *files) {
+    auto content = tenzir::io::read(file);
+    if (not content) {
+      diagnostic::warning("sigma operator ignores rule '{}'", file.string())
+        .note("failed to read file: {}", content.error())
+        .emit(dh);
+      continue;
     }
+    auto const view = std::string_view{
+      reinterpret_cast<char const*>(content->data()), content->size()};
+    compile_source(view, file.string(), rules, dh);
+  }
+  for (auto index = size_t{0}; index < sources.rules.size(); ++index) {
+    compile_source(sources.rules[index], fmt::format("<rules[{}]>", index),
+                   rules, dh);
+  }
+  return true;
+}
+
+auto update_rules(SigmaSources const& sources, RuleMap& rules,
+                  diagnostic_handler& dh) -> void {
+  auto next = RuleMap{};
+  if (load_rules(sources, next, dh)) {
+    rules = std::move(next);
   }
 }
 
@@ -1111,20 +1240,154 @@ public:
   }
 };
 
+// -- argument handling -----------------------------------------------------
+
+constexpr auto default_refresh_interval = std::chrono::seconds{5};
+
+/// Converts a `string | list<string>` argument into a non-empty string list.
+auto to_string_list(located<data> const& value, std::string_view name)
+  -> Result<std::vector<std::string>, diagnostic> {
+  if (auto const* str = try_as<std::string>(&value.inner)) {
+    return std::vector<std::string>{*str};
+  }
+  auto const* elements = try_as<list>(&value.inner);
+  if (not elements) {
+    return Err{
+      diagnostic::error("`{}` expected `string` or `list<string>`", name)
+        .primary(value.source)
+        .done()};
+  }
+  if (elements->empty()) {
+    return Err{diagnostic::error("`{}` must not be an empty list", name)
+                 .primary(value.source)
+                 .done()};
+  }
+  auto result = std::vector<std::string>{};
+  result.reserve(elements->size());
+  for (auto const& element : *elements) {
+    auto const* str = try_as<std::string>(&element);
+    if (not str) {
+      return Err{
+        diagnostic::error("`{}` expected `string` or `list<string>`", name)
+          .primary(value.source)
+          .done()};
+    }
+    result.push_back(*str);
+  }
+  return result;
+}
+
+/// Validates the operator arguments and normalizes them into rule sources.
+/// Exactly one source form must be present; `refresh_interval` only applies
+/// to filesystem-backed sources.
+auto normalize_sources(Option<located<std::string>> const& legacy_path,
+                       Option<located<data>> const& path,
+                       Option<located<data>> const& rules,
+                       Option<located<duration>> const& refresh_interval,
+                       location operator_location)
+  -> Result<SigmaSources, diagnostic> {
+  auto const source_count = (legacy_path.is_some() ? 1 : 0)
+                            + (path.is_some() ? 1 : 0)
+                            + (rules.is_some() ? 1 : 0);
+  if (source_count != 1) {
+    return Err{diagnostic::error("`sigma` requires exactly one rule source")
+                 .primary(operator_location)
+                 .hint("pass `path=` for rule files and directories or "
+                       "`rules=` for inline YAML rules")
+                 .done()};
+  }
+  auto result = SigmaSources{.source = operator_location};
+  if (legacy_path) {
+    result.paths.push_back(legacy_path->inner);
+    if (legacy_path->source != location::unknown) {
+      result.source = legacy_path->source;
+    }
+  }
+  if (path) {
+    TRY(result.paths, to_string_list(*path, "path"));
+    if (path->source != location::unknown) {
+      result.source = path->source;
+    }
+  }
+  if (rules) {
+    TRY(result.rules, to_string_list(*rules, "rules"));
+    if (rules->source != location::unknown) {
+      result.source = rules->source;
+    }
+    if (refresh_interval) {
+      return Err{
+        diagnostic::error("`refresh_interval` cannot be used with `rules`")
+          .primary(refresh_interval->source)
+          .note("embedded rule content cannot change independently of the "
+                "pipeline")
+          .done()};
+    }
+  }
+  if (refresh_interval and refresh_interval->inner <= duration::zero()) {
+    return Err{diagnostic::error("`refresh_interval` must be a positive "
+                                 "duration")
+                 .primary(refresh_interval->source)
+                 .done()};
+  }
+  return result;
+}
+
+/// Compiles inline rule content at pipeline-construction time so that
+/// diagnostics anchor at the TQL argument and carry the list element and
+/// YAML document indices.
+auto validate_inline_rules(std::vector<std::string> const& rules,
+                           location source) -> Option<diagnostic> {
+  for (auto index = size_t{0}; index < rules.size(); ++index) {
+    auto documents = from_yaml_documents(rules[index]);
+    if (not documents) {
+      return diagnostic::error("invalid YAML in `rules`")
+        .primary(source)
+        .note("list element {}: {}", index, documents.error())
+        .done();
+    }
+    if (documents->empty()) {
+      return diagnostic::error("invalid Sigma rule in `rules`")
+        .primary(source)
+        .note("list element {}: source contains no YAML documents", index)
+        .done();
+    }
+    for (auto doc = size_t{0}; doc < documents->size(); ++doc) {
+      auto const& document = (*documents)[doc];
+      if (not is<record>(document)) {
+        return diagnostic::error("invalid Sigma rule in `rules`")
+          .primary(source)
+          .note("list element {}, document {}: rule is not a YAML dictionary",
+                index, doc)
+          .done();
+      }
+      auto compiled = compile_rule(document);
+      if (compiled.is_err()) {
+        auto reason = std::move(compiled).unwrap_err();
+        return diagnostic::error("invalid Sigma rule in `rules`")
+          .primary(source)
+          .note("list element {}, document {}: {}", index, doc, reason.message)
+          .done();
+      }
+    }
+  }
+  return None{};
+}
+
 class sigma_operator final : public crtp_operator<sigma_operator> {
 public:
   sigma_operator() = default;
 
-  explicit sigma_operator(duration refresh_interval, std::string path)
-    : refresh_interval_{refresh_interval}, path_{std::move(path)} {
+  sigma_operator(duration refresh_interval, SigmaSources sources)
+    : refresh_interval_{refresh_interval}, sources_{std::move(sources)} {
   }
 
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     auto rules = RuleMap{};
-    auto path = std::filesystem::path{path_};
-    update_rules(path, rules, ctrl.diagnostics());
+    auto diagnostics
+      = make_source_diagnostic_handler(ctrl.diagnostics(), sources_.source);
+    update_rules(sources_, rules, diagnostics);
     auto last_update = std::chrono::steady_clock::now();
     co_yield {}; // signal that we're done initializing
     for (auto&& slice : input) {
@@ -1132,14 +1395,16 @@ public:
         co_yield {};
         continue;
       }
-      auto now = std::chrono::steady_clock::now();
-      if (now - last_update > refresh_interval_) {
-        update_rules(path, rules, ctrl.diagnostics());
+      // Inline rules are part of the operator plan and never change.
+      auto const now = std::chrono::steady_clock::now();
+      if (not sources_.paths.empty()
+          and now - last_update > refresh_interval_) {
+        update_rules(sources_, rules, diagnostics);
         last_update = now;
       }
-      for (const auto& [_, entry] : rules) {
-        if (auto result = make_sigma_slice(slice, entry.yaml, entry.rule,
-                                           ctrl.diagnostics())) {
+      for (auto const& [_, entry] : rules.entries) {
+        if (auto result
+            = make_sigma_slice(slice, entry.yaml, entry.rule, diagnostics)) {
           co_yield std::move(*result);
         }
       }
@@ -1151,9 +1416,10 @@ public:
   }
 
   auto location() const -> operator_location override {
-    // The operator is referring to files, and the user likely assumes that to
-    // be relative to the current process, so we default to local here.
-    return operator_location::local;
+    // Filesystem paths are relative to the process constructing the pipeline.
+    // Inline rules have no local resources and can remain with upstream.
+    return sources_.paths.empty() ? operator_location::anywhere
+                                  : operator_location::local;
   }
 
   auto optimize(expression const& filter, event_order order) const
@@ -1166,40 +1432,56 @@ public:
     return f.object(x)
       .pretty_name("sigma_operator")
       .fields(f.field("refresh_interval", x.refresh_interval_),
-              f.field("path", x.path_));
+              f.field("sources", x.sources_));
   }
 
 private:
   duration refresh_interval_ = {};
-  std::string path_ = {};
+  SigmaSources sources_;
 };
 
 struct SigmaArgs {
-  std::string path;
-  duration refresh_interval = std::chrono::seconds{5};
+  Option<located<std::string>> legacy_path;
+  Option<located<data>> path;
+  Option<located<data>> rules;
+  Option<located<duration>> refresh_interval;
+  location operator_location = location::unknown;
 };
 
 class Sigma final : public Operator<table_slice, table_slice> {
 public:
-  explicit Sigma(SigmaArgs args) : args_{std::move(args)}, path_{args_.path} {
+  explicit Sigma(SigmaArgs args) : args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    update_rules(path_, rules_, ctx.dh());
+    auto sources
+      = normalize_sources(args_.legacy_path, args_.path, args_.rules,
+                          args_.refresh_interval, args_.operator_location);
+    // Argument validation already ran at pipeline-construction time.
+    TENZIR_ASSERT(sources.is_ok());
+    sources_ = std::move(sources).unwrap();
+    refresh_interval_ = args_.refresh_interval ? args_.refresh_interval->inner
+                                               : default_refresh_interval;
+    auto diagnostics
+      = make_source_diagnostic_handler(ctx.dh(), sources_.source);
+    update_rules(sources_, rules_, diagnostics);
     last_update_ = std::chrono::steady_clock::now();
     co_return;
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    auto now = std::chrono::steady_clock::now();
-    if (now - last_update_ > args_.refresh_interval) {
-      update_rules(path_, rules_, ctx.dh());
+    // Inline rules are part of the operator plan and never change.
+    auto diagnostics
+      = make_source_diagnostic_handler(ctx.dh(), sources_.source);
+    auto const now = std::chrono::steady_clock::now();
+    if (not sources_.paths.empty() and now - last_update_ > refresh_interval_) {
+      update_rules(sources_, rules_, diagnostics);
       last_update_ = now;
     }
-    for (const auto& [_, entry] : rules_) {
+    for (auto const& [_, entry] : rules_.entries) {
       if (auto result
-          = make_sigma_slice(input, entry.yaml, entry.rule, ctx.dh())) {
+          = make_sigma_slice(input, entry.yaml, entry.rule, diagnostics)) {
         co_await push(std::move(*result));
       }
     }
@@ -1207,7 +1489,8 @@ public:
 
 private:
   SigmaArgs args_;
-  std::filesystem::path path_;
+  SigmaSources sources_;
+  duration refresh_interval_ = default_refresh_interval;
   RuleMap rules_;
   // Rules are reloaded from disk in `start()`, and `last_update_` uses
   // `steady_clock`, so the default no-op snapshot behavior is sufficient.
@@ -1220,39 +1503,83 @@ class plugin final : public virtual operator_plugin<sigma_operator>,
 public:
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
+    auto legacy_path = Option<located<std::string>>{};
+    auto path = Option<located<data>>{};
+    auto rules = Option<located<data>>{};
     auto refresh_interval = Option<located<duration>>{};
-    auto path = std::string{};
-    argument_parser2::operator_("sigma")
-      .positional("path", path)
-      .named("refresh_interval", refresh_interval)
-      .parse(inv, ctx)
-      .ignore();
-    auto interval
-      = refresh_interval ? refresh_interval->inner : std::chrono::seconds{5};
-    if (refresh_interval and interval <= duration::zero()) {
-      diagnostic::error("`refresh_interval` must be a positive duration")
-        .primary(refresh_interval.value())
-        .emit(ctx);
+    TRY(argument_parser2::operator_("sigma")
+          .positional("legacy_path", legacy_path)
+          .named("path", path)
+          .named("rules", rules)
+          .named("refresh_interval", refresh_interval)
+          .parse(inv, ctx));
+    auto sources = normalize_sources(legacy_path, path, rules, refresh_interval,
+                                     inv.self.get_location());
+    if (sources.is_err()) {
+      std::move(sources).unwrap_err().modify().emit(ctx);
       return failure::promise();
     }
-    return std::make_unique<sigma_operator>(interval, std::move(path));
+    if (legacy_path) {
+      diagnostic::warning("passing the path positionally is deprecated")
+        .primary(legacy_path->source)
+        .hint("use `path={:?}` instead", legacy_path->inner)
+        .emit(ctx);
+    }
+    if (rules) {
+      if (auto error
+          = validate_inline_rules(sources.unwrap().rules, rules->source)) {
+        std::move(*error).modify().emit(ctx);
+        return failure::promise();
+      }
+    }
+    auto const interval
+      = refresh_interval ? refresh_interval->inner : default_refresh_interval;
+    return std::make_unique<sigma_operator>(interval,
+                                            std::move(sources).unwrap());
   }
 
   auto describe() const -> Description override {
     auto d = Describer<SigmaArgs, Sigma>{};
     d.parallelizable();
-    d.positional("path", &SigmaArgs::path);
+    auto legacy_path = d.positional("legacy_path", &SigmaArgs::legacy_path);
+    auto path = d.named("path", &SigmaArgs::path);
+    auto rules = d.named("rules", &SigmaArgs::rules);
     auto refresh_interval
-      = d.named_optional("refresh_interval", &SigmaArgs::refresh_interval);
-    d.validate([refresh_interval](DescribeCtx& ctx) -> Empty {
-      if (auto value = ctx.get(refresh_interval);
-          value and *value <= duration::zero()) {
-        diagnostic::error("`refresh_interval` must be a positive duration")
-          .primary(ctx.get_location(refresh_interval).value())
-          .emit(ctx);
-      }
-      return {};
-    });
+      = d.named("refresh_interval", &SigmaArgs::refresh_interval);
+    d.operator_location(&SigmaArgs::operator_location);
+    d.validate(
+      [legacy_path, path, rules, refresh_interval](DescribeCtx& ctx) -> Empty {
+        auto const legacy_value = ctx.get(legacy_path);
+        auto const path_value = ctx.get(path);
+        auto const rules_value = ctx.get(rules);
+        auto const refresh_value = ctx.get(refresh_interval);
+        auto to_option = [](auto const& value) {
+          using Value = std::remove_cvref_t<decltype(*value)>;
+          return value ? Option<Value>{*value} : Option<Value>{};
+        };
+        auto sources
+          = normalize_sources(to_option(legacy_value), to_option(path_value),
+                              to_option(rules_value), to_option(refresh_value),
+                              ctx.operator_location());
+        if (sources.is_err()) {
+          static_cast<diagnostic_handler&>(ctx).emit(
+            std::move(sources).unwrap_err());
+          return {};
+        }
+        if (legacy_value) {
+          diagnostic::warning("passing the path positionally is deprecated")
+            .primary(legacy_value->source)
+            .hint("use `path={:?}` instead", legacy_value->inner)
+            .emit(ctx);
+        }
+        if (rules_value) {
+          if (auto error = validate_inline_rules(sources.unwrap().rules,
+                                                 rules_value->source)) {
+            static_cast<diagnostic_handler&>(ctx).emit(std::move(*error));
+          }
+        }
+        return {};
+      });
     return d.without_optimize();
   }
 };

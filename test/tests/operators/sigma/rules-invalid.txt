@@ -1,0 +1,7 @@
+error: invalid Sigma rule in `rules`
+ --> tests/operators/sigma/rules-invalid.tql:8:13
+  |
+8 | sigma rules=r#"title: broken
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: list element 0, document 0: unknown Sigma modifier `frobnicate` for field `a`
