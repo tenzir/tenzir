@@ -143,10 +143,24 @@ struct DetectionRule {
   std::vector<Condition> conditions;
 };
 
-/// A Sigma global filter rule. Not yet supported; parsing preserves the raw
-/// document and validation rejects it with an actionable diagnostic.
+/// The target rules of a global filter, referenced by `id` or `name`, or
+/// `any` for every logsource-compatible rule.
+struct FilterTargets {
+  bool any = false;
+  /// Rule `id`s or `name`s, in declaration order.
+  std::vector<std::string> rules;
+};
+
+/// A Sigma global filter rule. Its condition is added conjunctively to every
+/// resolved target rule, scoped by the filter's mandatory `logsource`.
 struct FilterRule {
-  record raw;
+  RuleMetadata metadata;
+  LogSource log_source;
+  FilterTargets targets;
+  /// Named detections of the `filter` section in declaration order.
+  detail::stable_map<std::string, Detection> detections;
+  /// The parsed filter condition.
+  Condition condition;
 };
 
 /// A Sigma correlation rule. Not yet supported; parsing preserves the raw
@@ -173,6 +187,17 @@ auto parse_condition(std::string_view condition)
 /// modifier chains, parses the condition, and checks that every exact
 /// condition reference resolves to a named detection.
 auto parse_document(data const& yaml) -> Result<Document, diagnostic>;
+
+/// Returns whether a filter's log source is compatible with a target rule:
+/// every classifier present in the filter must have the same value in the
+/// target, while the target may be more specific.
+auto compatible(LogSource const& filter, LogSource const& target) -> bool;
+
+/// Applies a global filter to a detection rule by injecting the filter's
+/// detections under a collision-free `_filt_<ordinal>_...` prefix and
+/// AND-linking the rewritten filter condition to every rule condition.
+auto apply_filter(DetectionRule rule, FilterRule const& filter, size_t ordinal)
+  -> DetectionRule;
 
 /// Matches a search-identifier pattern with `*` wildcards against a name.
 auto wildcard_match(std::string_view pattern, std::string_view name) -> bool;

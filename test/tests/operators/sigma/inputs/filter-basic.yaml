@@ -1,0 +1,18 @@
+title: Suspicious process
+id: 6f3e2987-db24-4c78-a860-b4f4095a7095
+logsource:
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: '\evil.exe'
+  condition: selection
+---
+title: Filter administrator accounts
+logsource:
+  category: process_creation
+filter:
+  rules:
+    - 6f3e2987-db24-4c78-a860-b4f4095a7095
+  selection:
+    User|startswith: 'adm_'
+  condition: not selection

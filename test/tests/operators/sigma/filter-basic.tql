@@ -1,0 +1,7 @@
+// The filter condition is AND-linked to the rule: matches from adm_ users
+// are suppressed, everything else still fires.
+from {id: "hit", Image: "c:\\evil.exe", User: "guest"},
+     {id: "filtered", Image: "c:\\evil.exe", User: "adm_alice"},
+     {id: "no-match", Image: "c:\\good.exe", User: "guest"}
+sigma path="tests/operators/sigma/inputs/filter-basic.yaml"
+select event.id

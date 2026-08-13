@@ -1,0 +1,16 @@
+---
+error: true
+---
+
+// Immutable inline filters must lower successfully during pipeline construction.
+let $filter = r#"title: broken filter
+logsource:
+  category: process_creation
+filter:
+  rules: any
+  selection:
+    User|re: '['
+  condition: not selection
+"#
+from {x: 1}
+sigma rules=$filter

@@ -1,7 +1,7 @@
-error: invalid Sigma rule in `rules`
+error: `rules` must not be empty
  --> tests/operators/sigma/rules-empty.tql:6:13
   |
 6 | sigma rules=""
   |             ^^
   |
-  = note: list element 0: source contains no YAML documents
+  = note: list element 0 contains no YAML documents

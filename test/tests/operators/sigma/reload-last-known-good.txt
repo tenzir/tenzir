@@ -1,4 +1,10 @@
 single-document retention: ok
 empty-source retention: ok
 shifted-document retention: ok
+removed filter: ok
+initial broken filter: ok
+mixed-source rollback: ok
+retained identity resolution: ok
+external filter refresh on retained target: ok
+broken-filter retention: ok
 failure warning count: 1 per revision

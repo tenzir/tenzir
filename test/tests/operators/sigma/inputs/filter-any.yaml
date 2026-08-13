@@ -1,0 +1,26 @@
+title: Process rule
+name: process-rule
+logsource:
+  category: process_creation
+detection:
+  selection:
+    foo: alpha
+  condition: selection
+---
+title: Network rule
+name: network-rule
+logsource:
+  category: network_connection
+detection:
+  selection:
+    foo: alpha
+  condition: selection
+---
+title: Filter all process rules
+logsource:
+  category: process_creation
+filter:
+  rules: any
+  selection:
+    User: SYSTEM
+  condition: not selection

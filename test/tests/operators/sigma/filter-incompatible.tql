@@ -1,0 +1,5 @@
+// An explicitly referenced target with an incompatible log source is not
+// filtered and produces a warning.
+from {id: "unfiltered", foo: "alpha", User: "SYSTEM"}
+sigma path="tests/operators/sigma/inputs/filter-incompatible.yaml"
+select event.id

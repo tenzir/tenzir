@@ -1,0 +1,7 @@
+// Duplicate rule identities invalidate only the conflicting documents; the
+// unrelated siblings continue to run, including a rule whose id equals name.
+from {id: "conflicted", foo: "alpha"},
+     {id: "unrelated", bar: "bravo"},
+     {id: "same-id-name", baz: "charlie"}
+sigma path="tests/operators/sigma/inputs/duplicate-identity.yaml"
+select event.id

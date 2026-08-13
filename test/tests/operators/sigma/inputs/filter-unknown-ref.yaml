@@ -1,0 +1,18 @@
+title: Some rule
+id: 11111111-1111-1111-1111-111111111111
+logsource:
+  category: process_creation
+detection:
+  selection:
+    foo: alpha
+  condition: selection
+---
+title: Filter with dangling reference
+logsource:
+  category: process_creation
+filter:
+  rules:
+    - 99999999-9999-9999-9999-999999999999
+  selection:
+    User: SYSTEM
+  condition: not selection

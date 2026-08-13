@@ -1,0 +1,27 @@
+title: First copy
+id: 22222222-2222-2222-2222-222222222222
+detection:
+  selection:
+    foo: alpha
+  condition: selection
+---
+title: Second copy
+id: 22222222-2222-2222-2222-222222222222
+detection:
+  selection:
+    foo: alpha
+  condition: selection
+---
+title: Unrelated rule
+detection:
+  selection:
+    bar: bravo
+  condition: selection
+---
+title: Equal id and name
+id: same-identity
+name: same-identity
+detection:
+  selection:
+    baz: charlie
+  condition: selection

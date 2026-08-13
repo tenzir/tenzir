@@ -397,11 +397,169 @@ TEST("sigma ir - correlation documents fail explicitly") {
           .is_err());
 }
 
-TEST("sigma ir - filter documents fail explicitly") {
-  CHECK(parse("filter:\n"
-              "  rules:\n"
-              "    - some-rule\n")
+namespace {
+
+constexpr auto basic_filter = R"yaml(
+title: Filter administrator accounts
+logsource:
+  category: process_creation
+filter:
+  rules:
+    - 0cb1b399-a086-4312-b7ed-2f2e78a3a628
+  selection:
+    User|startswith: adm_
+  condition: not selection
+)yaml";
+
+auto parse_filter(std::string_view yaml) -> sigma::FilterRule {
+  auto document = parse(yaml);
+  REQUIRE(document.is_ok());
+  auto* filter = try_as<sigma::FilterRule>(document.unwrap().content);
+  REQUIRE(filter != nullptr);
+  return std::move(*filter);
+}
+
+} // namespace
+
+TEST("sigma filter - basic document") {
+  auto filter = parse_filter(basic_filter);
+  CHECK(filter.metadata.title == "Filter administrator accounts");
+  CHECK(filter.log_source.category == "process_creation");
+  CHECK(not filter.targets.any);
+  REQUIRE_EQUAL(filter.targets.rules.size(), 1u);
+  CHECK_EQUAL(filter.targets.rules[0], "0cb1b399-a086-4312-b7ed-2f2e78a3a628");
+  CHECK(filter.detections.contains("selection"));
+}
+
+TEST("sigma filter - rules any") {
+  auto filter = parse_filter("title: t\n"
+                             "logsource:\n"
+                             "  category: c\n"
+                             "filter:\n"
+                             "  rules: any\n"
+                             "  selection:\n"
+                             "    a: 1\n"
+                             "  condition: selection\n");
+  CHECK(filter.targets.any);
+  CHECK(filter.targets.rules.empty());
+}
+
+TEST("sigma filter - required attributes") {
+  // No title.
+  CHECK(parse("logsource:\n"
+              "  category: c\n"
+              "filter:\n"
+              "  rules: [r]\n"
+              "  selection:\n"
+              "    a: 1\n"
+              "  condition: selection\n")
           .is_err());
+  // No logsource.
+  CHECK(parse("title: t\n"
+              "filter:\n"
+              "  rules: [r]\n"
+              "  selection:\n"
+              "    a: 1\n"
+              "  condition: selection\n")
+          .is_err());
+  // No rules.
+  CHECK(parse("title: t\n"
+              "logsource:\n"
+              "  category: c\n"
+              "filter:\n"
+              "  selection:\n"
+              "    a: 1\n"
+              "  condition: selection\n")
+          .is_err());
+  // Empty rules list.
+  CHECK(parse("title: t\n"
+              "logsource:\n"
+              "  category: c\n"
+              "filter:\n"
+              "  rules: []\n"
+              "  selection:\n"
+              "    a: 1\n"
+              "  condition: selection\n")
+          .is_err());
+  // No selection.
+  CHECK(parse("title: t\n"
+              "logsource:\n"
+              "  category: c\n"
+              "filter:\n"
+              "  rules: [r]\n"
+              "  condition: selection\n")
+          .is_err());
+  // No condition.
+  CHECK(parse("title: t\n"
+              "logsource:\n"
+              "  category: c\n"
+              "filter:\n"
+              "  rules: [r]\n"
+              "  selection:\n"
+              "    a: 1\n")
+          .is_err());
+}
+
+TEST("sigma filter - log source subset compatibility") {
+  auto make = [](char const* category, char const* product) {
+    auto result = sigma::LogSource{};
+    if (category != nullptr) {
+      result.category = category;
+    }
+    if (product != nullptr) {
+      result.product = product;
+    }
+    return result;
+  };
+  // Every classifier present in the filter must match; the target may be
+  // more specific.
+  CHECK(sigma::compatible(make("pc", nullptr), make("pc", "windows")));
+  CHECK(sigma::compatible(make(nullptr, nullptr), make("pc", "windows")));
+  CHECK(not sigma::compatible(make("pc", "linux"), make("pc", "windows")));
+  CHECK(not sigma::compatible(make("pc", nullptr), make(nullptr, nullptr)));
+  CHECK(sigma::compatible(make("pc", "windows"), make("pc", "windows")));
+}
+
+TEST("sigma filter - application injects prefixed detections") {
+  auto rule = parse_rule(basic_rule);
+  auto filter = parse_filter(basic_filter);
+  auto const filtered = sigma::apply_filter(rule, filter, 0);
+  CHECK(filtered.detections.contains("_filt_0_selection"));
+  REQUIRE_EQUAL(filtered.conditions.size(), rule.conditions.size());
+  // Every condition entry becomes `(original) and (filter condition)`.
+  auto const* conjunction
+    = try_as<sigma::Conjunction>(filtered.conditions[0].node);
+  REQUIRE(conjunction != nullptr);
+  auto const* negation = try_as<sigma::Negation>(conjunction->right->node);
+  REQUIRE(negation != nullptr);
+  auto const* identifier = try_as<sigma::Identifier>(negation->operand->node);
+  REQUIRE(identifier != nullptr);
+  CHECK_EQUAL(identifier->name, "_filt_0_selection");
+}
+
+TEST("sigma filter - application reserves the generated namespace") {
+  auto rule = parse_rule(basic_rule);
+  auto const colliding_detection = rule.detections.at("selection");
+  auto const inserted
+    = rule.detections.try_emplace("_filt_0_extra", colliding_detection).second;
+  REQUIRE(inserted);
+  auto filter = parse_filter("title: t\n"
+                             "logsource:\n"
+                             "  category: process_creation\n"
+                             "filter:\n"
+                             "  rules: any\n"
+                             "  selection:\n"
+                             "    a: 1\n"
+                             "  condition: all of them\n");
+  auto const filtered = sigma::apply_filter(std::move(rule), filter, 0);
+  CHECK(filtered.detections.contains("_filt_0_extra"));
+  CHECK(filtered.detections.contains("_filt_0__selection"));
+  auto const* conjunction
+    = try_as<sigma::Conjunction>(filtered.conditions[0].node);
+  REQUIRE(conjunction != nullptr);
+  auto const* quantified = try_as<sigma::Quantified>(conjunction->right->node);
+  REQUIRE(quantified != nullptr);
+  CHECK_EQUAL(quantified->pattern, "_filt_0__*");
 }
 
 TEST("sigma condition - operators and precedence") {

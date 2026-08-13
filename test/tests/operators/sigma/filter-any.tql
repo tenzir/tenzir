@@ -1,0 +1,5 @@
+// `rules: any` applies to every logsource-compatible rule: the process rule
+// is filtered for SYSTEM, the network rule is not.
+from {id: "system", foo: "alpha", User: "SYSTEM"}
+sigma path="tests/operators/sigma/inputs/filter-any.yaml"
+select event.id, title = rule.title

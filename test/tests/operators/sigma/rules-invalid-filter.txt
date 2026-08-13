@@ -1,0 +1,7 @@
+error: invalid Sigma rule in `rules`
+  --> tests/operators/sigma/rules-invalid-filter.tql:16:13
+   |
+16 | sigma rules=$filter
+   |             ^^^^^^^
+   |
+   = note: list element 0, document 0: invalid regular expression for Sigma field `User|re`

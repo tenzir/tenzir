@@ -20,6 +20,7 @@
 #include <cmath>
 #include <limits>
 #include <string_view>
+#include <tuple>
 
 namespace tenzir::sigma {
 
@@ -710,6 +711,133 @@ auto parse_detection_rule(record const& document)
   return rule;
 }
 
+/// Parses the `filter` section of a global filter document.
+auto parse_filter_rule(record const& document)
+  -> Result<FilterRule, diagnostic> {
+  auto rule = FilterRule{};
+  rule.metadata.id = get_string(document, "id");
+  rule.metadata.name = get_string(document, "name");
+  rule.metadata.title = get_string(document, "title");
+  rule.metadata.raw = document;
+  if (not rule.metadata.title) {
+    return parse_failure("Sigma filter has no `title` attribute");
+  }
+  if (auto taxonomy = get_string(document, "taxonomy");
+      taxonomy and *taxonomy != "sigma") {
+    return parse_failure("Sigma filter uses unsupported taxonomy `{}`; only "
+                         "the default `sigma` taxonomy is supported",
+                         *taxonomy);
+  }
+  if (not document.contains("logsource")) {
+    return parse_failure("Sigma filter has no `logsource` attribute");
+  }
+  TRY(rule.log_source, parse_log_source(document));
+  auto const* section = [&]() -> record const* {
+    auto entry = document.find("filter");
+    return entry != document.end() ? try_as<record>(&entry->second) : nullptr;
+  }();
+  if (not section) {
+    return parse_failure("Sigma filter attribute `filter` must be a record");
+  }
+  auto have_rules = false;
+  auto condition = Option<std::string const&>{};
+  for (auto const& [key, value] : *section) {
+    if (key == "rules") {
+      have_rules = true;
+      // The v2.1 JSON schema only allows an array, but SigmaHQ documents
+      // `rules: any` for every compatible rule; we accept both.
+      if (auto const* str = try_as<std::string>(&value)) {
+        if (*str != "any") {
+          return parse_failure("Sigma filter `rules` must be `any` or a "
+                               "list of rule ids or names");
+        }
+        rule.targets.any = true;
+        continue;
+      }
+      auto const* entries = try_as<list>(&value);
+      if (not entries or entries->empty()) {
+        return parse_failure("Sigma filter `rules` must be a non-empty list "
+                             "of rule ids or names");
+      }
+      for (auto const& element : *entries) {
+        if (auto const* str = try_as<std::string>(&element)) {
+          rule.targets.rules.push_back(*str);
+          continue;
+        }
+        // YAML type inference may turn UUID-like or numeric references into
+        // non-string scalars; keep their textual form.
+        if (not is<record>(element) and not is<list>(element)
+            and not is<caf::none_t>(element)) {
+          rule.targets.rules.push_back(fmt::format("{}", element));
+          continue;
+        }
+        return parse_failure("Sigma filter `rules` entries must be strings");
+      }
+      continue;
+    }
+    if (key == "condition") {
+      auto const* condition_string = try_as<std::string>(&value);
+      if (not condition_string) {
+        return parse_failure("Sigma filter `condition` must be a string");
+      }
+      condition = *condition_string;
+      continue;
+    }
+    TRY(auto detection, parse_detection(value));
+    auto const inserted
+      = rule.detections.try_emplace(key, std::move(detection)).second;
+    TENZIR_ASSERT(inserted);
+  }
+  if (not have_rules) {
+    return parse_failure("Sigma filter has no `rules` attribute");
+  }
+  if (rule.detections.empty()) {
+    return parse_failure("Sigma filter has no selection");
+  }
+  if (not condition) {
+    return parse_failure("Sigma filter has no `condition` key");
+  }
+  TRY(rule.condition, parse_condition(*condition));
+  // Reference validation reuses the detection-rule logic via a shim.
+  auto shim = DetectionRule{};
+  shim.detections = rule.detections;
+  TRY(validate_references(rule.condition, shim));
+  return rule;
+}
+
+/// Rewrites every identifier and pattern of a filter condition to its
+/// injected `_filt_<ordinal>_`-prefixed name.
+auto prefix_condition(Condition const& condition, std::string const& prefix)
+  -> Condition {
+  return match(
+    condition.node,
+    [&](Identifier const& x) -> Condition {
+      return Condition{Identifier{prefix + x.name}};
+    },
+    [&](Quantified const& x) -> Condition {
+      // `them` inside a filter refers to the filter's own selections.
+      auto result = Quantified{};
+      result.quantifier = x.quantifier;
+      result.pattern = x.all_identifiers ? prefix + "*" : prefix + x.pattern;
+      result.all_identifiers = false;
+      return Condition{std::move(result)};
+    },
+    [&](Negation const& x) -> Condition {
+      return Condition{
+        Negation{ConditionPtr{prefix_condition(*x.operand, prefix)}}};
+    },
+    [&](Conjunction const& x) -> Condition {
+      return Condition{
+        Conjunction{ConditionPtr{prefix_condition(*x.left, prefix)},
+                    ConditionPtr{prefix_condition(*x.right, prefix)}}};
+    },
+    [&](Disjunction const& x) -> Condition {
+      return Condition{
+        Disjunction{ConditionPtr{prefix_condition(*x.left, prefix)},
+                    ConditionPtr{prefix_condition(*x.right, prefix)}}};
+    });
+}
+
 } // namespace
 
 auto parse_condition(std::string_view condition)
@@ -740,10 +868,8 @@ auto parse_document(data const& yaml) -> Result<Document, diagnostic> {
                  .done()};
   }
   if (document->contains("filter")) {
-    result.content = FilterRule{*document};
-    return Err{
-      diagnostic::error("Sigma global filter rules are not yet supported")
-        .done()};
+    TRY(result.content, parse_filter_rule(*document));
+    return result;
   }
   TRY(result.content, parse_detection_rule(*document));
   return result;
@@ -757,6 +883,41 @@ auto pattern_matches(std::string_view pattern, std::string_view name) -> bool {
     return false;
   }
   return wildcard_match(pattern, name);
+}
+
+auto compatible(LogSource const& filter, LogSource const& target) -> bool {
+  auto subset = [](Option<std::string> const& required,
+                   Option<std::string> const& present) {
+    return not required or (present and *required == *present);
+  };
+  return subset(filter.category, target.category)
+         and subset(filter.product, target.product)
+         and subset(filter.service, target.service);
+}
+
+auto apply_filter(DetectionRule rule, FilterRule const& filter, size_t ordinal)
+  -> DetectionRule {
+  // The prefix keeps injected selections out of the rule's own quantifier
+  // patterns: identifiers beginning with `_` are only matched by patterns
+  // that themselves begin with `_`. Extend it until the complete namespace is
+  // free, so filter wildcard patterns cannot also select an existing rule
+  // detection.
+  auto prefix = fmt::format("_filt_{}_", ordinal);
+  while (std::ranges::any_of(rule.detections, [&](auto const& entry) {
+    return entry.first.starts_with(prefix);
+  })) {
+    prefix += '_';
+  }
+  for (auto const& [name, detection] : filter.detections) {
+    std::ignore = rule.detections.try_emplace(prefix + name, detection);
+  }
+  auto const filter_condition = prefix_condition(filter.condition, prefix);
+  // The filter applies conjunctively to every OR-linked condition entry.
+  for (auto& condition : rule.conditions) {
+    condition = Condition{Conjunction{ConditionPtr{std::move(condition)},
+                                      ConditionPtr{filter_condition}}};
+  }
+  return rule;
 }
 
 auto wildcard_match(std::string_view pattern, std::string_view name) -> bool {

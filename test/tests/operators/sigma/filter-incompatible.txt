@@ -1,0 +1,13 @@
+{
+  event: {
+    id: "unfiltered",
+  },
+}
+warning: sigma operator cannot apply filter 'tests/operators/sigma/inputs/filter-incompatible.yaml#1'
+ --> tests/operators/sigma/filter-incompatible.tql:4:12
+  |
+4 | sigma path="tests/operators/sigma/inputs/filter-incompatible.yaml"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: reference `net-rule`: incompatible log source
+  = note: affected rules run unfiltered, which may increase matches

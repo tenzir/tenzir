@@ -1,8 +1,8 @@
 # runner: python
 # fixtures: [local_files]
-# timeout: 30
+# timeout: 60
 
-"""Verify that hot reload retains rules after a source becomes invalid."""
+"""Verify transactional hot reloads of Sigma rules and filters."""
 
 from __future__ import annotations
 
@@ -14,7 +14,6 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
-
 
 VALID_RULE = """\
 title: Valid rule
@@ -61,6 +60,85 @@ detection:
   condition: selection
 """
 )
+
+FILTER_TARGET_RULE = """\
+title: Filter target
+id: 11111111-1111-1111-1111-111111111111
+logsource:
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: '\\evil.exe'
+  condition: selection
+"""
+
+VALID_FILTER_RULE = """\
+title: Administrator filter
+logsource:
+  category: process_creation
+filter:
+  rules: [11111111-1111-1111-1111-111111111111]
+  selection:
+    User|startswith: adm_
+  condition: not selection
+"""
+
+BROKEN_FILTER_RULE = """\
+title: Broken administrator filter
+logsource:
+  category: process_creation
+filter:
+  rules: [11111111-1111-1111-1111-111111111111]
+  selection:
+    User|re: '['
+  condition: not selection
+"""
+
+VALID_FILTERED_RULE = FILTER_TARGET_RULE + "---\n" + VALID_FILTER_RULE
+VALID_MIXED_SOURCE = VALID_RULE + "---\n" + VALID_FILTER_RULE
+BROKEN_MIXED_SOURCE = """\
+title: Broken sibling rule
+detection:
+  selection:
+    foo|re: '['
+  condition: selection
+---
+""" + VALID_FILTER_RULE.replace("adm_", "guest")
+
+IDENTIFIED_RULE = """\
+title: Identified rule
+id: retained-identity
+detection:
+  selection:
+    foo: alpha
+  condition: selection
+"""
+
+BROKEN_RENAMED_RULE = """\
+title: Broken renamed rule
+id: rejected-identity
+detection:
+  selection:
+    foo|re: '['
+  condition: selection
+"""
+
+UNRELATED_RULE = """\
+title: Unrelated rule
+detection:
+  selection:
+    bar: bravo
+  condition: selection
+"""
+
+DUPLICATE_IDENTIFIED_RULE = """\
+title: Duplicate identified rule
+id: retained-identity
+detection:
+  selection:
+    foo: alpha
+  condition: selection
+"""
 
 
 def resolve_tenzir_binary() -> tuple[str, ...]:
@@ -120,16 +198,24 @@ def read_event(
     raise RuntimeError(f"timed out waiting for event {expected_id!r}")
 
 
-def send_event(
-    process: subprocess.Popen[str], event: dict[str, str], diagnostics: list[str]
-) -> None:
+def write_event(process: subprocess.Popen[str], event: dict[str, str]) -> None:
     assert process.stdin is not None
     process.stdin.write(json.dumps(event) + "\n")
     process.stdin.flush()
+
+
+def send_event(
+    process: subprocess.Popen[str], event: dict[str, str], diagnostics: list[str]
+) -> None:
+    write_event(process, event)
     read_event(process, event["id"], diagnostics)
 
 
-def finish_process(process: subprocess.Popen[str], diagnostics: list[str]) -> None:
+def finish_process(
+    process: subprocess.Popen[str],
+    diagnostics: list[str],
+    expected_warning_count: int = 1,
+) -> None:
     assert process.stdin is not None
     process.stdin.close()
     process.wait(timeout=10)
@@ -142,10 +228,10 @@ def finish_process(process: subprocess.Popen[str], diagnostics: list[str]) -> No
         raise RuntimeError(combined_diagnostics)
     warning = "sigma operator retains last known good version of"
     warning_count = combined_diagnostics.count(warning)
-    if warning_count != 1:
+    if warning_count != expected_warning_count:
         raise RuntimeError(
-            f"expected one retention warning, got {warning_count}:\n"
-            f"{combined_diagnostics}"
+            f"expected {expected_warning_count} retention warnings, "
+            f"got {warning_count}:\n{combined_diagnostics}"
         )
 
 
@@ -190,6 +276,252 @@ def test_shifted_document(rule: Path) -> None:
     finish_process(process, diagnostics)
 
 
+def test_removed_filter(rule: Path) -> None:
+    rule.write_text(VALID_FILTERED_RULE)
+    process = start_process(rule)
+    diagnostics: list[str] = []
+    send_event(
+        process,
+        {
+            "id": "unfiltered-user-before-removal",
+            "Image": "c:\\evil.exe",
+            "User": "guest",
+        },
+        diagnostics,
+    )
+    write_event(
+        process,
+        {
+            "id": "filtered-before-removal",
+            "Image": "c:\\evil.exe",
+            "User": "adm_alice",
+        },
+    )
+    send_event(
+        process,
+        {
+            "id": "barrier-before-removal",
+            "Image": "c:\\evil.exe",
+            "User": "guest",
+        },
+        diagnostics,
+    )
+    rule.write_text(FILTER_TARGET_RULE)
+    time.sleep(0.05)
+    send_event(
+        process,
+        {
+            "id": "matched-after-removal",
+            "Image": "c:\\evil.exe",
+            "User": "adm_alice",
+        },
+        diagnostics,
+    )
+    finish_process(process, diagnostics, expected_warning_count=0)
+
+
+def test_initial_broken_filter(root: Path) -> None:
+    sources = root / "initial-broken-filter-sources"
+    sources.mkdir()
+    (sources / "target.yaml").write_text(FILTER_TARGET_RULE)
+    (sources / "filter.yaml").write_text(BROKEN_FILTER_RULE)
+    process = start_process(sources)
+    diagnostics: list[str] = []
+    send_event(
+        process,
+        {
+            "id": "matched-with-initial-broken-filter",
+            "Image": "c:\\evil.exe",
+            "User": "adm_alice",
+        },
+        diagnostics,
+    )
+    finish_process(process, diagnostics, expected_warning_count=0)
+
+
+def test_mixed_source_rollback(root: Path) -> None:
+    sources = root / "mixed-source-rollback"
+    sources.mkdir()
+    (sources / "target.yaml").write_text(FILTER_TARGET_RULE)
+    mixed_source = sources / "mixed.yaml"
+    mixed_source.write_text(VALID_MIXED_SOURCE)
+    process = start_process(sources)
+    diagnostics: list[str] = []
+    send_event(
+        process,
+        {
+            "id": "guest-before-mixed-breakage",
+            "Image": "c:\\evil.exe",
+            "User": "guest",
+        },
+        diagnostics,
+    )
+    write_event(
+        process,
+        {
+            "id": "administrator-before-mixed-breakage",
+            "Image": "c:\\evil.exe",
+            "User": "adm_alice",
+        },
+    )
+    send_event(
+        process,
+        {
+            "id": "barrier-before-mixed-breakage",
+            "Image": "c:\\evil.exe",
+            "User": "guest",
+        },
+        diagnostics,
+    )
+    mixed_source.write_text(BROKEN_MIXED_SOURCE)
+    time.sleep(0.05)
+    write_event(
+        process,
+        {
+            "id": "administrator-after-mixed-breakage",
+            "Image": "c:\\evil.exe",
+            "User": "adm_alice",
+        },
+    )
+    send_event(
+        process,
+        {
+            "id": "guest-after-mixed-breakage",
+            "Image": "c:\\evil.exe",
+            "User": "guest",
+        },
+        diagnostics,
+    )
+    finish_process(process, diagnostics)
+
+
+def test_retained_identity_resolution(root: Path) -> None:
+    sources = root / "retained-identity-resolution"
+    sources.mkdir()
+    identified_rule = sources / "identified.yaml"
+    identified_rule.write_text(IDENTIFIED_RULE)
+    other_rule = sources / "other.yaml"
+    other_rule.write_text(UNRELATED_RULE)
+    process = start_process(sources)
+    diagnostics: list[str] = []
+    send_event(process, {"id": "before-identity-breakage", "foo": "alpha"}, diagnostics)
+    identified_rule.write_text(BROKEN_RENAMED_RULE)
+    time.sleep(0.05)
+    send_event(process, {"id": "after-identity-breakage", "foo": "alpha"}, diagnostics)
+    other_rule.write_text(DUPLICATE_IDENTIFIED_RULE)
+    time.sleep(0.05)
+    send_event(process, {"id": "single-retained-identity", "foo": "alpha"}, diagnostics)
+    send_event(process, {"id": "identity-barrier", "bar": "bravo"}, diagnostics)
+    finish_process(process, diagnostics)
+
+
+def test_external_filter_refresh_on_retained_target(root: Path) -> None:
+    sources = root / "external-filter-refresh"
+    sources.mkdir()
+    target_rule = sources / "target.yaml"
+    target_rule.write_text(FILTER_TARGET_RULE)
+    filter_rule = sources / "filter.yaml"
+    filter_rule.write_text(VALID_FILTER_RULE)
+    process = start_process(sources)
+    diagnostics: list[str] = []
+    send_event(
+        process,
+        {
+            "id": "guest-before-external-refresh",
+            "Image": "c:\\evil.exe",
+            "User": "guest",
+        },
+        diagnostics,
+    )
+    target_rule.write_text(BROKEN_RENAMED_RULE)
+    time.sleep(0.05)
+    send_event(
+        process,
+        {
+            "id": "guest-with-retained-target",
+            "Image": "c:\\evil.exe",
+            "User": "guest",
+        },
+        diagnostics,
+    )
+    filter_rule.write_text(VALID_FILTER_RULE.replace("adm_", "guest"))
+    time.sleep(0.05)
+    write_event(
+        process,
+        {
+            "id": "guest-after-external-refresh",
+            "Image": "c:\\evil.exe",
+            "User": "guest",
+        },
+    )
+    send_event(
+        process,
+        {
+            "id": "administrator-after-external-refresh",
+            "Image": "c:\\evil.exe",
+            "User": "adm_alice",
+        },
+        diagnostics,
+    )
+    finish_process(process, diagnostics)
+
+
+def test_broken_filter_retention(root: Path) -> None:
+    sources = root / "broken-filter-reload-sources"
+    sources.mkdir()
+    (sources / "target.yaml").write_text(FILTER_TARGET_RULE)
+    filter_rule = sources / "filter.yaml"
+    filter_rule.write_text(VALID_FILTER_RULE)
+    process = start_process(sources)
+    diagnostics: list[str] = []
+    send_event(
+        process,
+        {
+            "id": "unfiltered-user-before-breakage",
+            "Image": "c:\\evil.exe",
+            "User": "guest",
+        },
+        diagnostics,
+    )
+    write_event(
+        process,
+        {
+            "id": "filtered-before-breakage",
+            "Image": "c:\\evil.exe",
+            "User": "adm_alice",
+        },
+    )
+    send_event(
+        process,
+        {
+            "id": "barrier-before-breakage",
+            "Image": "c:\\evil.exe",
+            "User": "guest",
+        },
+        diagnostics,
+    )
+    filter_rule.write_text(BROKEN_FILTER_RULE)
+    time.sleep(0.05)
+    write_event(
+        process,
+        {
+            "id": "filtered-after-breakage",
+            "Image": "c:\\evil.exe",
+            "User": "adm_alice",
+        },
+    )
+    send_event(
+        process,
+        {
+            "id": "unfiltered-user-after-breakage",
+            "Image": "c:\\evil.exe",
+            "User": "guest",
+        },
+        diagnostics,
+    )
+    finish_process(process, diagnostics)
+
+
 def main() -> None:
     root = Path(os.environ["FILE_ROOT"]) / "sigma-reload"
     root.mkdir()
@@ -200,6 +532,18 @@ def main() -> None:
     print("empty-source retention: ok")
     test_shifted_document(rule)
     print("shifted-document retention: ok")
+    test_removed_filter(rule)
+    print("removed filter: ok")
+    test_initial_broken_filter(root)
+    print("initial broken filter: ok")
+    test_mixed_source_rollback(root)
+    print("mixed-source rollback: ok")
+    test_retained_identity_resolution(root)
+    print("retained identity resolution: ok")
+    test_external_filter_refresh_on_retained_target(root)
+    print("external filter refresh on retained target: ok")
+    test_broken_filter_retention(root)
+    print("broken-filter retention: ok")
     print("failure warning count: 1 per revision")
 
 

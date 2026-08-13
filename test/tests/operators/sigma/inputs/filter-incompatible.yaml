@@ -1,0 +1,18 @@
+title: Network rule
+name: net-rule
+logsource:
+  category: network_connection
+detection:
+  selection:
+    foo: alpha
+  condition: selection
+---
+title: Process filter targeting a network rule
+logsource:
+  category: process_creation
+filter:
+  rules:
+    - net-rule
+  selection:
+    User: SYSTEM
+  condition: not selection
