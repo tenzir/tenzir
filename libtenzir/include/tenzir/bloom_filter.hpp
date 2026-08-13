@@ -49,12 +49,24 @@ public:
 
   static constexpr policy::partitioning partitioning_policy = Partitioning;
 
+  /// Constructs an empty Bloom filter with a default-constructed hasher.
+  bloom_filter()
+    requires std::is_default_constructible_v<hasher_type>
+  = default;
+
+  /// Constructs a Bloom filter with a fixed size and a default-constructed
+  /// hasher.
+  /// @param size The number of cells/bits in the Bloom filter.
+  explicit bloom_filter(size_t size)
+    requires std::is_default_constructible_v<hasher_type>
+    : bloom_filter{size, hasher_type{}} {
+  }
+
   /// Constructs a Bloom filter with a fixed size and a hasher.
   /// @param size The number of cells/bits in the Bloom filter.
   /// @param hasher The hasher type to generate digests.
-  explicit bloom_filter(size_t size = 0, hasher_type hasher = hasher_type{})
+  bloom_filter(size_t size, hasher_type hasher)
     : hasher_{std::move(hasher)}, bits_(size) {
-    // nop
   }
 
   /// Adds an element to the Bloom filter.

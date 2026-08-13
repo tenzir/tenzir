@@ -107,7 +107,8 @@ WITH_FIXTURE(env_fixture) {
   TEST("region fallback precedence") {
     unset("AWS_REGION");
     unset("AWS_DEFAULT_REGION");
-    auto credentials = resolved_aws_credentials{.region = "us-west-2"};
+    auto credentials = resolved_aws_credentials{};
+    credentials.region = "us-west-2";
     CHECK_EQUAL(amazon::resolve_region(Option<std::string>{"eu-central-1"},
                                        Option{credentials}),
                 "eu-central-1");

@@ -622,7 +622,7 @@ public:
       = d.named_optional("shape", &ExportArgs::shape, "raw|prometheus");
     auto parallel = d.named_optional("parallel", &ExportArgs::parallel);
     d.validate([=](DescribeCtx& ctx) -> Empty {
-      if (auto value = ctx.get(parallel); value and value == 0) {
+      if (auto value = ctx.get(parallel); value and value == uint64_t{0}) {
         diagnostic::error("parallel level must be greater than zero")
           .primary(ctx.get_location(parallel).value())
           .emit(ctx);

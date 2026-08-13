@@ -80,9 +80,10 @@ TEST("construction with move-only type") {
 }
 
 TEST("construction from std::optional") {
-  auto some
-    = Option<int>{std::optional<int>{42}}; // NOLINT(custom-prefer-option)
-  auto none = Option<int>{std::nullopt};   // NOLINT(custom-prefer-none): test.
+  // std::optional interoperability test.
+  // NOLINTNEXTLINE(custom-prefer-option, custom-prefer-option-ctad)
+  auto some = Option<int>{std::optional<int>{42}};
+  auto none = Option<int>{std::nullopt}; // NOLINT(custom-prefer-none): test.
   REQUIRE(some.is_some());
   CHECK_EQUAL(*some, 42);
   CHECK(none.is_none());
@@ -157,7 +158,9 @@ TEST("assignment from None resets") {
 
 TEST("assignment from std::optional") {
   auto opt = Option<int>{};
-  opt = std::optional<int>{42}; // NOLINT(custom-prefer-option)
+  // std::optional interoperability test.
+  // NOLINTNEXTLINE(custom-prefer-option, custom-prefer-option-ctad)
+  opt = std::optional<int>{42};
   REQUIRE(opt.is_some());
   CHECK_EQUAL(*opt, 42);
   opt = std::nullopt; // NOLINT(custom-prefer-none): test.
@@ -505,11 +508,12 @@ TEST("option equals none") {
 }
 
 TEST("option equals std::optional") {
-  // NOLINTBEGIN(custom-prefer-option): std::optional interoperability.
+  // std::optional interoperability test.
+  // NOLINTBEGIN(custom-prefer-option, custom-prefer-option-ctad)
   CHECK(Option<int>{42} == std::optional<int>{42});
   CHECK(Option<int>{} == std::optional<int>{});
   CHECK(not(Option<int>{42} == std::optional<int>{}));
-  // NOLINTEND(custom-prefer-option)
+  // NOLINTEND(custom-prefer-option, custom-prefer-option-ctad)
 }
 
 TEST("reversed comparisons") {

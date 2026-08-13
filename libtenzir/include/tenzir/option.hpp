@@ -41,7 +41,8 @@ inline constexpr auto is_option_v = false;
 template <class T>
 inline constexpr auto is_option_v<Option<T>> = true;
 
-// NOLINTBEGIN(custom-prefer-option): std::optional interoperability.
+// std::optional interoperability.
+// NOLINTBEGIN(custom-prefer-option, custom-prefer-option-ctad)
 template <class T>
 inline constexpr auto is_std_optional_v = false;
 
@@ -596,7 +597,7 @@ private:
 
   Storage storage_;
 };
-// NOLINTEND(custom-prefer-option)
+// NOLINTEND(custom-prefer-option, custom-prefer-option-ctad)
 
 /// Unwraps an option and panics if it is empty.
 template <class T>
