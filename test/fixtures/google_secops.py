@@ -1,5 +1,9 @@
 """Mock ingestion server for to_google_secops integration tests."""
 
+# /// script
+# dependencies = ["cryptography"]
+# ///
+
 from __future__ import annotations
 
 import base64
@@ -11,7 +15,7 @@ import tempfile
 import threading
 import time
 from datetime import datetime
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from typing import Iterator
 from urllib.parse import parse_qs
 
@@ -443,3 +447,486 @@ def google_secops() -> Iterator[dict[str, str]]:
             os.remove(capture_path)
         if os.path.exists(token_capture_path):
             os.remove(token_capture_path)
+
+
+def _make_backpressure_handler(
+    state_path: str, release_path: str
+) -> type[BaseHTTPRequestHandler]:
+    condition = threading.Condition()
+    initial_group_sizes = {
+        "FAIRNESS": 2,
+        "LATE_SUCCESS": 3,
+        "OVERLAP": 2,
+        "PRESERVE": 2,
+        "PROBE400": 3,
+        "RETRY": 2,
+        "RETRY429": 2,
+    }
+    state: dict[str, object] = {
+        "arrivals": 0,
+        "blocked": 0,
+        "max_blocked": 0,
+        "arrival_order": [],
+        "attempts": {},
+        "retry_inflight": {},
+        "max_retry_inflight": {},
+        "initial_arrivals": {},
+        "fairness_retry_order": [],
+        "fairness_stuck_probe_started": False,
+        "fairness_other_initial_sent": False,
+        "progressive_arrivals": 0,
+        "progressive_order": [],
+        "event_bound_batches": [],
+        "preserve_late_at": None,
+        "preserve_probe_third_at": None,
+        "preserve_probe_second_inflight": False,
+        "preserve_late_sent": False,
+        "probe400_late_initials": 0,
+        "probe400_probe_second_inflight": False,
+        "overlap_probe_second_inflight": False,
+        "overlap_late_sent": False,
+        "late_success_probe_second_inflight": False,
+        "late_success_queued_initial_sent": False,
+        "late_success_queued_retry_started": False,
+        "late_success_unblocked_before_probe": False,
+    }
+
+    def write_state() -> None:
+        temporary_path = f"{state_path}.tmp"
+        with open(temporary_path, "w") as file:
+            json.dump(state, file)
+        os.replace(temporary_path, state_path)
+
+    class BackpressureHandler(BaseHTTPRequestHandler):
+        def log_message(self, format: str, *args: object) -> None:
+            pass
+
+        def do_POST(self) -> None:
+            content_length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(content_length)
+            if self.path == "/token":
+                self._json_response(
+                    200,
+                    {
+                        "token_type": "Bearer",
+                        "access_token": _TOKENS_BY_SCOPE[_CLOUD_PLATFORM_SCOPE],
+                        "expires_in": 3600,
+                    },
+                )
+                return
+            if self.headers.get("Content-Encoding", "") == "gzip":
+                raw = gzip.decompress(raw)
+            payload = json.loads(raw)
+            log_type = self.path.split("/logTypes/", 1)[1].split("/", 1)[0]
+            if log_type.startswith("BACKPRESSURE_"):
+                with condition:
+                    state["arrivals"] = int(state["arrivals"]) + 1
+                    state["blocked"] = int(state["blocked"]) + 1
+                    arrival_order = state["arrival_order"]
+                    assert isinstance(arrival_order, list)
+                    arrival_order.append(log_type)
+                    state["max_blocked"] = max(
+                        int(state["max_blocked"]), int(state["blocked"])
+                    )
+                    write_state()
+                while not os.path.exists(release_path):
+                    time.sleep(0.01)
+                with condition:
+                    state["blocked"] = int(state["blocked"]) - 1
+                    write_state()
+                self._json_response(200, {})
+                return
+            if log_type.startswith("PROGRESS_"):
+                with condition:
+                    state["progressive_arrivals"] = (
+                        int(state["progressive_arrivals"]) + 1
+                    )
+                    progressive_order = state["progressive_order"]
+                    assert isinstance(progressive_order, list)
+                    progressive_order.append(log_type)
+                    write_state()
+                while not os.path.exists(release_path):
+                    time.sleep(0.01)
+                self._json_response(200, {})
+                return
+            if log_type == "EVENT_BOUND":
+                logs = payload["inlineSource"]["logs"]
+                with condition:
+                    event_bound_batches = state["event_bound_batches"]
+                    assert isinstance(event_bound_batches, list)
+                    event_bound_batches.append(len(logs))
+                    write_state()
+                while not os.path.exists(release_path):
+                    time.sleep(0.01)
+                self._json_response(200, {})
+                return
+            if log_type in {
+                "FAIRNESS_OTHER",
+                "FAIRNESS_STUCK",
+                "OVERLAP_LATE",
+                "OVERLAP_PROBE",
+                "LATE_SUCCESS_LATE",
+                "LATE_SUCCESS_PROBE",
+                "LATE_SUCCESS_QUEUED",
+                "PERMANENT",
+                "PRESERVE_LATE",
+                "PRESERVE_PROBE",
+                "PROBE400_A",
+                "PROBE400_B",
+                "PROBE400_PROBE",
+                "RETRY_A",
+                "RETRY_B",
+                "RETRY_LONG",
+                "RETRY429_A",
+                "RETRY429_B",
+            }:
+                if log_type.startswith("FAIRNESS_"):
+                    group = "FAIRNESS"
+                elif log_type.startswith("RETRY429_"):
+                    group = "RETRY429"
+                elif log_type.startswith("LATE_SUCCESS_"):
+                    group = "LATE_SUCCESS"
+                elif log_type.startswith("OVERLAP_"):
+                    group = "OVERLAP"
+                elif log_type.startswith("PRESERVE_"):
+                    group = "PRESERVE"
+                elif log_type.startswith("PROBE400_"):
+                    group = "PROBE400"
+                elif log_type in {"RETRY_A", "RETRY_B"}:
+                    group = "RETRY"
+                else:
+                    group = log_type
+                with condition:
+                    attempts = state["attempts"]
+                    assert isinstance(attempts, dict)
+                    attempt = int(attempts.get(log_type, 0)) + 1
+                    attempts[log_type] = attempt
+                    if attempt == 1 and group in initial_group_sizes:
+                        initial_arrivals = state["initial_arrivals"]
+                        assert isinstance(initial_arrivals, dict)
+                        initial_arrivals[group] = (
+                            int(initial_arrivals.get(group, 0)) + 1
+                        )
+                        condition.notify_all()
+                    track_inflight = group in {
+                        "OVERLAP",
+                        "PROBE400",
+                        "RETRY",
+                        "RETRY429",
+                    }
+                    if attempt > 1 and track_inflight:
+                        retry_inflight = state["retry_inflight"]
+                        max_retry_inflight = state["max_retry_inflight"]
+                        assert isinstance(retry_inflight, dict)
+                        assert isinstance(max_retry_inflight, dict)
+                        retry_inflight[group] = int(retry_inflight.get(group, 0)) + 1
+                        max_retry_inflight[group] = max(
+                            int(max_retry_inflight.get(group, 0)),
+                            retry_inflight[group],
+                        )
+                    write_state()
+
+                def finish_retry_attempt() -> None:
+                    if attempt <= 1 or not track_inflight:
+                        return
+                    with condition:
+                        retry_inflight = state["retry_inflight"]
+                        assert isinstance(retry_inflight, dict)
+                        retry_inflight[group] = int(retry_inflight[group]) - 1
+                        write_state()
+
+                def wait_for_initial_group() -> None:
+                    if attempt != 1 or group not in initial_group_sizes:
+                        return
+                    with condition:
+                        initial_arrivals = state["initial_arrivals"]
+                        assert isinstance(initial_arrivals, dict)
+                        assert condition.wait_for(
+                            lambda: (
+                                int(initial_arrivals.get(group, 0))
+                                == initial_group_sizes[group]
+                            ),
+                            timeout=2,
+                        )
+
+                if group == "FAIRNESS":
+                    if attempt == 1:
+                        wait_for_initial_group()
+                        if log_type == "FAIRNESS_OTHER":
+                            # Hold the second initial failure until the first
+                            # request is the active probe. This makes the slot
+                            # that should be rotated away from deterministic.
+                            with condition:
+                                assert condition.wait_for(
+                                    lambda: bool(state["fairness_stuck_probe_started"]),
+                                    timeout=2,
+                                )
+                        self._json_response(
+                            500, {"error": "retry"}, {"Retry-After": "0"}
+                        )
+                        if log_type == "FAIRNESS_OTHER":
+                            with condition:
+                                state["fairness_other_initial_sent"] = True
+                                write_state()
+                                condition.notify_all()
+                    else:
+                        with condition:
+                            retry_order = state["fairness_retry_order"]
+                            assert isinstance(retry_order, list)
+                            retry_order.append(log_type)
+                            if log_type == "FAIRNESS_STUCK" and attempt == 2:
+                                state["fairness_stuck_probe_started"] = True
+                                write_state()
+                                condition.notify_all()
+                                assert condition.wait_for(
+                                    lambda: bool(state["fairness_other_initial_sent"]),
+                                    timeout=2,
+                                )
+                            else:
+                                write_state()
+                        if log_type == "FAIRNESS_STUCK" and attempt == 2:
+                            # Give the coordinator time to queue the other
+                            # failure before this probe closes the cooldown.
+                            time.sleep(0.2)
+                            self._json_response(
+                                500, {"error": "retry"}, {"Retry-After": "0"}
+                            )
+                        else:
+                            self._json_response(200, {})
+                elif group == "PRESERVE":
+                    if log_type == "PRESERVE_PROBE" and attempt == 1:
+                        wait_for_initial_group()
+                        self._json_response(
+                            500, {"error": "retry"}, {"Retry-After": "0"}
+                        )
+                    elif log_type == "PRESERVE_LATE" and attempt == 1:
+                        with condition:
+                            assert condition.wait_for(
+                                lambda: bool(state["preserve_probe_second_inflight"]),
+                                timeout=2,
+                            )
+                            state["preserve_late_at"] = time.monotonic()
+                            write_state()
+                        self._json_response(
+                            429, {"error": "retry"}, {"Retry-After": "2"}
+                        )
+                        with condition:
+                            state["preserve_late_sent"] = True
+                            write_state()
+                            condition.notify_all()
+                    elif log_type == "PRESERVE_PROBE" and attempt == 2:
+                        with condition:
+                            state["preserve_probe_second_inflight"] = True
+                            write_state()
+                            condition.notify_all()
+                            assert condition.wait_for(
+                                lambda: bool(state["preserve_late_sent"]), timeout=2
+                            )
+                        time.sleep(0.2)
+                        self._json_response(
+                            500, {"error": "retry"}, {"Retry-After": "0"}
+                        )
+                    else:
+                        if log_type == "PRESERVE_PROBE" and attempt == 3:
+                            with condition:
+                                state["preserve_probe_third_at"] = time.monotonic()
+                                write_state()
+                        self._json_response(200, {})
+                elif group == "PROBE400":
+                    if attempt == 1:
+                        wait_for_initial_group()
+                        if log_type != "PROBE400_PROBE":
+                            with condition:
+                                assert condition.wait_for(
+                                    lambda: bool(
+                                        state["probe400_probe_second_inflight"]
+                                    ),
+                                    timeout=2,
+                                )
+                        self._json_response(
+                            500, {"error": "retry"}, {"Retry-After": "0"}
+                        )
+                        if log_type != "PROBE400_PROBE":
+                            with condition:
+                                state["probe400_late_initials"] = (
+                                    int(state["probe400_late_initials"]) + 1
+                                )
+                                write_state()
+                                condition.notify_all()
+                    elif log_type == "PROBE400_PROBE":
+                        with condition:
+                            state["probe400_probe_second_inflight"] = True
+                            write_state()
+                            condition.notify_all()
+                            assert condition.wait_for(
+                                lambda: int(state["probe400_late_initials"]) == 2,
+                                timeout=2,
+                            )
+                        time.sleep(0.2)
+                        finish_retry_attempt()
+                        self._json_response(400, {"error": "permanent"})
+                    else:
+                        time.sleep(0.2)
+                        finish_retry_attempt()
+                        self._json_response(200, {})
+                elif group == "LATE_SUCCESS":
+                    if attempt == 1:
+                        wait_for_initial_group()
+                        if log_type == "LATE_SUCCESS_PROBE":
+                            self._json_response(
+                                500, {"error": "retry"}, {"Retry-After": "0"}
+                            )
+                        elif log_type == "LATE_SUCCESS_QUEUED":
+                            with condition:
+                                assert condition.wait_for(
+                                    lambda: bool(
+                                        state["late_success_probe_second_inflight"]
+                                    ),
+                                    timeout=2,
+                                )
+                            self._json_response(
+                                500, {"error": "retry"}, {"Retry-After": "0"}
+                            )
+                            with condition:
+                                state["late_success_queued_initial_sent"] = True
+                                write_state()
+                                condition.notify_all()
+                        else:
+                            with condition:
+                                assert condition.wait_for(
+                                    lambda: (
+                                        bool(
+                                            state["late_success_probe_second_inflight"]
+                                        )
+                                        and bool(
+                                            state["late_success_queued_initial_sent"]
+                                        )
+                                    ),
+                                    timeout=2,
+                                )
+                            time.sleep(0.2)
+                            self._json_response(200, {})
+                    elif log_type == "LATE_SUCCESS_PROBE":
+                        with condition:
+                            state["late_success_probe_second_inflight"] = True
+                            write_state()
+                            condition.notify_all()
+                            unblocked = condition.wait_for(
+                                lambda: bool(
+                                    state["late_success_queued_retry_started"]
+                                ),
+                                timeout=2,
+                            )
+                            state["late_success_unblocked_before_probe"] = unblocked
+                            write_state()
+                        self._json_response(200, {})
+                    else:
+                        with condition:
+                            state["late_success_queued_retry_started"] = True
+                            write_state()
+                            condition.notify_all()
+                        self._json_response(200, {})
+                elif log_type == "PERMANENT":
+                    self._json_response(400, {"error": "permanent"})
+                elif log_type == "RETRY_LONG" and attempt <= 12:
+                    self._json_response(500, {"error": "retry"}, {"Retry-After": "0"})
+                elif group == "OVERLAP":
+                    if attempt == 1:
+                        wait_for_initial_group()
+                        if log_type == "OVERLAP_LATE":
+                            with condition:
+                                assert condition.wait_for(
+                                    lambda: bool(
+                                        state["overlap_probe_second_inflight"]
+                                    ),
+                                    timeout=2,
+                                )
+                        self._json_response(
+                            500, {"error": "retry"}, {"Retry-After": "0"}
+                        )
+                        if log_type == "OVERLAP_LATE":
+                            with condition:
+                                state["overlap_late_sent"] = True
+                                write_state()
+                                condition.notify_all()
+                    elif log_type == "OVERLAP_PROBE":
+                        with condition:
+                            state["overlap_probe_second_inflight"] = True
+                            write_state()
+                            condition.notify_all()
+                            assert condition.wait_for(
+                                lambda: bool(state["overlap_late_sent"]), timeout=2
+                            )
+                        time.sleep(0.2)
+                        finish_retry_attempt()
+                        self._json_response(200, {})
+                    else:
+                        finish_retry_attempt()
+                        self._json_response(200, {})
+                elif attempt == 1:
+                    wait_for_initial_group()
+                    code = 429 if group == "RETRY429" else 500
+                    headers = {"Retry-After": "1"} if code == 429 else {}
+                    self._json_response(code, {"error": "retry"}, headers)
+                else:
+                    # Keep the probe active long enough to detect whether a
+                    # second retry was admitted concurrently.
+                    time.sleep(0.2)
+                    finish_retry_attempt()
+                    self._json_response(200, {})
+                return
+            err = _validate_payload(self.path, payload)
+            if err:
+                self._json_response(400, {"error": err})
+                return
+            self._json_response(200, {})
+
+        def _json_response(
+            self,
+            code: int,
+            obj: dict,  # type: ignore[type-arg]
+            headers: dict[str, str] | None = None,
+        ) -> None:
+            body = json.dumps(obj).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            for name, value in (headers or {}).items():
+                self.send_header(name, value)
+            self.end_headers()
+            self.wfile.write(body)
+
+    write_state()
+    return BackpressureHandler
+
+
+@fixture(name="google_secops_backpressure")
+def google_secops_backpressure() -> Iterator[dict[str, str]]:
+    state_fd, state_path = tempfile.mkstemp(
+        prefix="secops-backpressure-", suffix=".json"
+    )
+    os.close(state_fd)
+    release_path = f"{state_path}.release"
+    server = None
+    thread = None
+    try:
+        handler = _make_backpressure_handler(state_path, release_path)
+        server = ThreadingHTTPServer((_HOST, 0), handler)
+        port = server.server_port
+        token_uri = f"http://{_HOST}:{port}/token"
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        yield {
+            "GOOGLE_SECOPS_BP_URL": f"http://{_HOST}:{port}",
+            "GOOGLE_SECOPS_BP_STATE_FILE": state_path,
+            "GOOGLE_SECOPS_BP_RELEASE_FILE": release_path,
+            "GOOGLE_SECOPS_BP_SERVICE_CREDENTIALS": _service_credentials(token_uri),
+        }
+    finally:
+        if server is not None:
+            server.shutdown()
+        if thread is not None:
+            thread.join(timeout=2)
+        for path in (state_path, release_path):
+            if os.path.exists(path):
+                os.remove(path)

@@ -1,0 +1,17 @@
+bounded_inflight: true
+bounded_total_request_slots: true
+request_batches_respect_event_limit: true
+upstream_blocked: true
+successful_5xx_retry_opens_gate: true
+successful_429_retry_opens_gate: true
+single_probe_during_late_failure: true
+retryable_failures_do_not_drop: true
+non_retryable_response_warns_and_discards: true
+oversized_udm_safe: true
+dry_run_route_pressure_liveness: true
+oversized_event_does_not_evict_partial_batch: true
+late_retry_after_preserved: true
+non_retryable_probe_keeps_retries_serialized: true
+late_success_opens_gate: true
+oldest_partial_batch_flushed_for_capacity: true
+retry_probes_are_fair: true
