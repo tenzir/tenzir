@@ -25,54 +25,33 @@
 #include <string_view>
 #include <thread>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace tenzir {
 
 namespace {
 
-/// Whether the given parallelism strategy requests fused event channels.
-auto is_fused(const ir::Parallelism& parallelism) -> bool {
-  return std::holds_alternative<ir::parallelism::Fused>(parallelism.degree);
-}
-
 auto make_identity_ir() -> Box<ir::Operator>;
-
-/// Resolve the parallelism degree for a parallelizable operator.
-auto resolve_op_parallelism(const ir::parallelism::Degree& degree) -> size_t {
-  return match(
-    degree,
-    [](ir::parallelism::Disabled) -> size_t {
-      return 1;
-    },
-    [](ir::parallelism::Max) -> size_t {
-      return std::max<size_t>(1, std::thread::hardware_concurrency());
-    },
-    [](ir::parallelism::Fused) -> size_t {
-      return 1;
-    },
-    [](size_t degree) -> size_t {
-      return degree;
-    });
-}
 
 } // namespace
 
 auto ir::PlanBuilder::derive_fused(const PlannedOperator& up,
                                    const PlannedOperator& down) const -> bool {
-  // The `Fused` strategy runs every operator single-instance with fused
-  // channels; a matched N:N direct channel also runs fused so each input is
-  // fully processed before the next.
-  if (is_fused(par_)) {
-    return true;
+  switch (par_.fused) {
+    case parallelism::Fusing::all:
+      return true;
+    case parallelism::Fusing::none:
+      return false;
+    case parallelism::Fusing::parallel:
+      // A keyed downstream must receive a hash-partitioned exchange, so its
+      // input is never a direct lane-to-lane channel even at matched
+      // parallelism.
+      if (down.keyed()) {
+        return false;
+      }
+      return up.op->parallelizable() and down.op->parallelizable();
   }
-  // A keyed downstream must receive a hash-partitioned exchange, so its input
-  // is never a direct lane-to-lane channel even at matched parallelism.
-  if (down.keyed()) {
-    return false;
-  }
-  return up.parallelism == down.parallelism and up.parallelism > 1;
+  TENZIR_UNREACHABLE();
 }
 
 namespace {
@@ -123,23 +102,6 @@ auto ir::instantiate(pipeline pipe, base_ctx ctx) -> failure_or<pipeline> {
   return pipe;
 }
 
-auto ir::parallelism::can_reorder(const Parallelism& parallelism) -> bool {
-  return match(
-    parallelism.degree,
-    [](parallelism::Disabled) {
-      return false;
-    },
-    [](parallelism::Fused) {
-      return false;
-    },
-    [](parallelism::Max) {
-      return std::thread::hardware_concurrency() > 1;
-    },
-    [](size_t degree) {
-      return degree > 1;
-    });
-}
-
 auto ir::optimize(pipeline pipe, OptimizeCtx octx) -> pipeline {
   TENZIR_ASSERT(pipe.lets.empty());
   auto opt
@@ -154,8 +116,7 @@ auto ir::make_plan(pipeline pipe, element_type_tag input, base_ctx ctx,
                    Parallelism parallelism) -> failure_or<Plan> {
   TRY(pipe, instantiate(std::move(pipe), ctx));
   pipe = optimize(std::move(pipe),
-                  OptimizeCtx{.can_any_op_reorder
-                              = parallelism::can_reorder(parallelism)});
+                  OptimizeCtx{.can_any_op_reorder = parallelism.degree > 1});
   // construct plan
   auto plan = Plan{};
   plan.operators.reserve(pipe.operators.size());
@@ -265,8 +226,7 @@ auto ir::PlanBuilder::push_node(Box<Operator> op, element_type_tag input,
   // Query parallelizability and partition keys before moving the operator. The
   // planner picks the exact degree of parallelism for replicable operators.
   auto keys = op->partition_keys();
-  auto parallelism
-    = op->parallelizable() ? resolve_op_parallelism(par_.degree) : 1;
+  auto parallelism = op->parallelizable() ? par_.degree : 1;
   if (not keys.empty()) {
     // A keyed operator needs a hash-partitioned exchange on its input: an
     // upstream at degree `n` opens `n * parallelism` channels, and every
@@ -537,17 +497,11 @@ auto parse_positive(std::string_view value) -> Option<T> {
   return result;
 }
 
-/// Parse a parallelism degree: `disabled`, `max`, `fused`, or a positive
-/// integer.
-auto parse_degree(std::string_view value) -> Option<ir::parallelism::Degree> {
-  if (value == "disabled") {
-    return ir::parallelism::Disabled{};
-  }
+/// Parse a parallelism degree: `max`, or a positive integer.
+auto parse_degree(std::string_view value) -> Option<size_t> {
   if (value == "max") {
-    return ir::parallelism::Max{};
-  }
-  if (value == "fused") {
-    return ir::parallelism::Fused{};
+    size_t hw = std::thread::hardware_concurrency();
+    return hw == 0 ? 1 : hw;
   }
   if (auto degree = parse_positive<size_t>(value)) {
     return *degree;
@@ -555,9 +509,28 @@ auto parse_degree(std::string_view value) -> Option<ir::parallelism::Degree> {
   return None{};
 }
 
+/// Parse a `fusing` option value: `all`, `parallel`, or `never`.
+auto parse_fusing(std::string_view value) -> Option<ir::parallelism::Fusing> {
+  if (value == "all") {
+    return ir::parallelism::Fusing::all;
+  }
+  if (value == "parallel") {
+    return ir::parallelism::Fusing::parallel;
+  }
+  if (value == "none") {
+    return ir::parallelism::Fusing::none;
+  }
+  return None{};
+}
+
 /// Parse a parallelism value: a degree, optionally followed by
 /// comma-separated `<key>=<value>` options.
 auto parse_parallelism(std::string_view value) -> Option<ir::Parallelism> {
+  if (detail::trim(value) == "disabled") {
+    return ir::Parallelism{.degree = 1,
+                           .limit_partitions = 1,
+                           .fused = ir::parallelism::Fusing::none};
+  }
   auto parts = detail::split(value, ",");
   TENZIR_ASSERT(not parts.empty());
   auto degree = parse_degree(detail::trim(parts.front()));
@@ -566,6 +539,7 @@ auto parse_parallelism(std::string_view value) -> Option<ir::Parallelism> {
   }
   auto result = ir::Parallelism{.degree = *degree};
   auto seen_limit_partitions = false;
+  auto seen_fusing = false;
   for (auto option : std::span{parts}.subspan(1)) {
     auto separator = option.find('=');
     if (separator == std::string_view::npos) {
@@ -573,15 +547,29 @@ auto parse_parallelism(std::string_view value) -> Option<ir::Parallelism> {
     }
     auto key = detail::trim(option.substr(0, separator));
     auto argument = detail::trim(option.substr(separator + 1));
-    if (key != "limit_partitions" or seen_limit_partitions) {
+    if (key == "limit_partitions") {
+      if (seen_limit_partitions) {
+        return None{};
+      }
+      auto limit = parse_positive<uint16_t>(argument);
+      if (not limit) {
+        return None{};
+      }
+      result.limit_partitions = *limit;
+      seen_limit_partitions = true;
+    } else if (key == "fused") {
+      if (seen_fusing) {
+        return None{};
+      }
+      auto fused = parse_fusing(argument);
+      if (not fused) {
+        return None{};
+      }
+      result.fused = *fused;
+      seen_fusing = true;
+    } else {
       return None{};
     }
-    auto limit = parse_positive<uint16_t>(argument);
-    if (not limit) {
-      return None{};
-    }
-    result.limit_partitions = *limit;
-    seen_limit_partitions = true;
   }
   return result;
 }

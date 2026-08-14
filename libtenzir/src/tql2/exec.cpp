@@ -2143,8 +2143,7 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg, session ctx,
   // that stage before lowering it into the plan DAG.
   if (cfg.dump_opt_ir) {
     TRY(auto opt, ir::instantiate(std::move(ir), b_ctx));
-    auto octx = ir::OptimizeCtx{.can_any_op_reorder
-                                = ir::parallelism::can_reorder(parallelism)};
+    auto octx = ir::OptimizeCtx{.can_any_op_reorder = parallelism.degree > 1};
     fmt::print("{:#?}\n", ir::optimize(std::move(opt), octx));
     return not ctx.has_failure();
   }
@@ -2193,8 +2192,9 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
       auto parallelism = ir::parallelism::resolve(source->text, flag);
       if (not parallelism) {
         diagnostic::error("invalid parallelism value")
-          .hint("expected `disabled`, `max`, `fused`, or a positive integer, "
-                "optionally followed by `,limit_partitions=<n>`")
+          .hint("expected `disabled`, `max`, or a positive integer, "
+                "optionally followed by `,limit_partitions=<n>` and/or "
+                "`,fused=<all|parallel|none>`")
           .emit(ctx);
         return failure::promise();
       }

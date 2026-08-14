@@ -210,8 +210,9 @@ public:
                           "Format, viewable in ui.perfetto.dev)")
         .add<std::string>("parallelism",
                           "operator parallelism: disabled (default), max, "
-                          "fused, or a positive integer, optionally followed "
-                          "by `,limit_partitions=<n>`"));
+                          "or a positive integer, optionally followed "
+                          "by `,limit_partitions=<n>`"
+                          "and/or `,fused=<all|parallel|none>`"));
     auto factory = command::factory{
       {"exec",
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {

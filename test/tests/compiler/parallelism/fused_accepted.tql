@@ -1,5 +1,5 @@
-// parallelism: fused
-// The `fused` strategy runs the whole pipeline single-instance with
+// parallelism: 1, fused=all
+// The `fused=all` option runs the whole pipeline single-instance with
 // run-to-completion channels: every operator fully processes an item before
 // the upstream produces the next one. Results must be identical to normal
 // execution, including for stateful operators like `summarize`.

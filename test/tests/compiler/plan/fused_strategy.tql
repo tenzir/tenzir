@@ -1,7 +1,7 @@
-// parallelism: fused
-// The `fused` strategy runs every operator single-instance and fuses all
-// operator-to-operator channels, regardless of parallelism matching. The
-// external `{input}` and `{output}` edges are never fused.
+// parallelism: 1, fused=all
+// The `fused=all` option fuses all operator-to-operator channels,
+// regardless of parallelism matching. The external `{input}` and `{output}`
+// edges are never fused.
 from {x: 1}
 where x > 0
 summarize x, n=count()

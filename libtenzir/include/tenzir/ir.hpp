@@ -15,7 +15,6 @@
 #include "tenzir/option.hpp"
 #include "tenzir/ref.hpp"
 #include "tenzir/tql2/ast.hpp"
-#include "tenzir/variant.hpp"
 
 #include <concepts>
 #include <limits>
@@ -266,22 +265,18 @@ auto split_filter_by_dependents(ir::optimize_filter filter,
 /// parallelizable operators.
 namespace parallelism {
 
-/// Use a parallelism degree of 1 for all operators. This is the default.
-struct Disabled {};
-
-/// Use `std::thread::hardware_concurrency()` for parallelizable operators.
-struct Max {};
-
-/// Use a parallelism degree of 1, but derive `Direct` event channels as
-/// `DirectFused` so that each input is fully processed before the next.
-struct Fused {};
-
-// A fixed degree is expressed directly as `size_t`. It must be positive: a
-// degree of zero would leave parallelizable operators without any instance.
-
-/// How the planner assigns a degree of parallelism to parallelizable
-/// operators. A `size_t` selects a fixed degree directly.
-using Degree = variant<Disabled, Max, Fused, size_t>;
+/// Controls whether operator-to-operator event channels are fused
+/// (run-to-completion per item).
+enum class Fusing {
+  /// Fuse every operator-to-operator channel. Every operator fully processes
+  /// an item before the upstream produces the next one.
+  all,
+  /// Fuse only matched N:N lane-to-lane channels between parallel operators
+  /// running at the same degree greater than one. This is the default.
+  parallel,
+  /// Never fuse any channel.
+  none,
+};
 
 /// The default value of `Parallelism::limit_partitions`.
 inline constexpr auto default_limit_partitions = uint16_t{4};
@@ -291,17 +286,14 @@ inline constexpr auto default_limit_partitions = uint16_t{4};
 /// How the planner parallelizes a pipeline.
 struct Parallelism {
   /// The degree of parallelism for parallelizable operators.
-  parallelism::Degree degree = parallelism::Disabled{};
+  size_t degree = 1;
 
   /// The upper bound on the degree of keyed operators, i.e., operators whose
   /// input must be hash-partitioned by `partition_keys`.
-  ///
-  /// A keyed operator at degree `m` fed by an upstream at degree `n` requires
-  /// a full `n * m` exchange, and every pushed slice is split into up to `m`
-  /// partitions. Both costs grow with `m` while the useful work per instance
-  /// shrinks, so throughput peaks at a small degree. The limit applies to
-  /// every degree, including one that was requested explicitly.
   uint16_t limit_partitions = parallelism::default_limit_partitions;
+
+  /// Controls whether operator-to-operator event channels are fused.
+  parallelism::Fusing fused = parallelism::Fusing::parallel;
 };
 
 namespace parallelism {
@@ -312,17 +304,12 @@ namespace parallelism {
 /// is present, the result is `Disabled`.
 ///
 /// A value is a degree, optionally followed by comma-separated options:
-/// `<degree>[,limit_partitions=<n>]`. The degree is `disabled`, `max`,
-/// `fused`, or a positive integer. Whitespace around separators is ignored.
+/// `<degree>[,limit_partitions=<n>][,fused=<all|parallel|none>]`. The
+/// degree is `disabled`, `max`, or a positive integer. Whitespace around
+/// separators is ignored.
 /// Returns `None{}` if a present value fails to parse.
 auto resolve(std::string_view source, Option<std::string_view> flag)
   -> Option<Parallelism>;
-
-/// Whether the resolved strategy runs any operator at a degree greater than
-/// one, which is the only case that lets operators reorder events
-/// pipeline-wide. `Disabled`, `Fused`, and a fixed degree of one all keep the
-/// ordering guarantees intact.
-auto can_reorder(const Parallelism& parallelism) -> bool;
 
 } // namespace parallelism
 
