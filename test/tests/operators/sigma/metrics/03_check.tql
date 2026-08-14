@@ -1,0 +1,10 @@
+every 1s {
+  metrics "sigma"
+  where pipeline_id == "00000000-0000-0000-0000-000000000001"
+  summarize \
+    events=sum(events),
+    rule_evaluations=sum(rule_evaluations),
+    matches=sum(matches)
+  where events == 2
+}
+head 1

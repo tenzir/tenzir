@@ -41,8 +41,12 @@ Each finding includes:
 - Detailed matcher, case, polarity, and condition-trace provenance in a second
   evidence entry at `evidences[1].sigma`.
 
-To restore the previous output shape, append this projection:
+The OCSF format remains the default. To emit the previous lightweight output
+shape without constructing an OCSF finding, set `format="plain"`:
 
 ```tql
-this = {event: evidences[0].data, rule: policy.data}
+sigma path="rule.yaml", format="plain"
 ```
+
+This emits a `tenzir.sigma` record with the original event in `event` and the
+matched rule in `rule`.

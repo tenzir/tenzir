@@ -1,0 +1,2 @@
+from {foo: "needle"}, {bar: "needle"}
+sigma path=f"{env("TENZIR_INPUTS")}/basic-rule.yaml", format="plain"

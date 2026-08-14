@@ -1,0 +1,7 @@
+api "/pipeline/create", {
+  id: "00000000-0000-0000-0000-000000000001",
+  definition: r#"from {x: "hit"}, {x: "miss"}
+sigma rules="title: test one\nid: 10000000-0000-4000-8000-000000000001\ndetection:\n  selection:\n    x: hit\n  condition: selection\n---\ntitle: test two\nid: 10000000-0000-4000-8000-000000000002\ndetection:\n  selection:\n    x: hit\n  condition: selection\n"
+discard"#,
+}
+discard

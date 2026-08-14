@@ -1,0 +1,4 @@
+suite: sigma-metrics
+runner: tenzir
+fixtures: [node]
+timeout: 60

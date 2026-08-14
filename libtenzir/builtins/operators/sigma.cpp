@@ -11,6 +11,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/async/metrics.hpp>
 #include <tenzir/bitmap.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/core.hpp>
@@ -62,6 +63,8 @@
 #include <vector>
 
 namespace tenzir::plugins::sigma {
+
+TENZIR_ENUM(sigma_format, ocsf, plain);
 
 // TODO: A lot of code in here is directly copied from
 // src/concept/parseable/expression.cpp. We should factor the implementation in
@@ -1729,6 +1732,25 @@ auto update_rules(SigmaSources const& sources, RuleMap& rules,
   }
 }
 
+const auto sigma_metrics_type = type{
+  "tenzir.metrics.sigma",
+  record_type{
+    {"events", uint64_type{}},
+    {"rule_evaluations", uint64_type{}},
+    {"matches", uint64_type{}},
+  },
+};
+
+/// Emits the processing work and results for one input batch.
+auto emit_processing_metrics(metric_handler& handler, uint64_t events,
+                             uint64_t rules, uint64_t matches) -> void {
+  handler.emit({
+    {"events", events},
+    {"rule_evaluations", events * rules},
+    {"matches", matches},
+  });
+}
+
 /// One causal decision of the condition trace.
 struct TraceDecision {
   std::string identifier;
@@ -1904,13 +1926,35 @@ auto eval_boolean(ast::expression const& expression, table_slice const& slice,
   return result;
 }
 
+/// Wraps matching events and the original Sigma rule in `tenzir.sigma`.
+auto build_plain_matches(table_slice matched, data const& rule)
+  -> std::vector<table_slice> {
+  TENZIR_ASSERT(matched.rows() > 0);
+  auto [event_schema, event_array] = offset{}.get(matched);
+  auto rule_series
+    = data_to_series(rule, detail::narrow<int64_t>(matched.rows()));
+  auto rule_schema = std::move(rule_series.type);
+  auto rule_array = std::move(rule_series.array);
+  auto const result_schema = type{
+    "tenzir.sigma",
+    record_type{
+      {"event", event_schema},
+      {"rule", rule_schema},
+    },
+  };
+  auto batch
+    = arrow::RecordBatch::Make(result_schema.to_arrow_schema(),
+                               detail::narrow<int64_t>(matched.rows()),
+                               {std::move(event_array), std::move(rule_array)});
+  auto result = std::vector<table_slice>{};
+  result.emplace_back(batch, result_schema);
+  return result;
+}
+
 /// Builds one OCSF 1.9.0 Detection Finding per matching row of the input.
-auto build_findings(table_slice const& input, RuleEntry const& entry,
+auto build_findings(table_slice const& matched, RuleEntry const& entry,
                     diagnostic_handler& dh) -> std::vector<table_slice> {
-  auto const matched = filter2(input, entry.rule, dh, false);
-  if (matched.rows() == 0) {
-    return {};
-  }
+  TENZIR_ASSERT(matched.rows() > 0);
   // Evaluate identifier and item expressions per slice, lazily for items.
   auto identifier_values
     = detail::flat_map<std::string_view, std::vector<bool>>{};
@@ -2107,6 +2151,23 @@ auto build_findings(table_slice const& input, RuleEntry const& entry,
     ++row;
   }
   return builder.finish_as_table_slice("ocsf.detection_finding");
+}
+
+/// Matches one rule and builds the configured output representation.
+auto build_output(table_slice const& input, RuleEntry const& entry,
+                  sigma_format format, diagnostic_handler& dh)
+  -> std::vector<table_slice> {
+  auto matched = filter2(input, entry.rule, dh, false);
+  if (matched.rows() == 0) {
+    return {};
+  }
+  switch (format) {
+    case sigma_format::ocsf:
+      return build_findings(matched, entry, dh);
+    case sigma_format::plain:
+      return build_plain_matches(std::move(matched), entry.yaml);
+  }
+  TENZIR_UNREACHABLE();
 }
 
 // -- internal runtime functions ------------------------------------------
@@ -2361,6 +2422,22 @@ public:
 
 constexpr auto default_refresh_interval = std::chrono::seconds{5};
 
+/// Validates the requested Sigma output format.
+auto normalize_format(Option<located<std::string>> const& format)
+  -> Result<sigma_format, diagnostic> {
+  if (not format) {
+    return sigma_format::ocsf;
+  }
+  auto result = from_string<sigma_format>(format->inner);
+  if (not result) {
+    return Err{diagnostic::error("unsupported format")
+                 .primary(format->source)
+                 .note("available formats: `ocsf`, `plain`")
+                 .done()};
+  }
+  return *result;
+}
+
 /// Converts a `string | list<string>` argument into a non-empty string list.
 auto to_string_list(located<data> const& value, std::string_view name)
   -> Result<std::vector<std::string>, diagnostic> {
@@ -2509,8 +2586,11 @@ class sigma_operator final : public crtp_operator<sigma_operator> {
 public:
   sigma_operator() = default;
 
-  sigma_operator(duration refresh_interval, SigmaSources sources)
-    : refresh_interval_{refresh_interval}, sources_{std::move(sources)} {
+  sigma_operator(duration refresh_interval, SigmaSources sources,
+                 sigma_format format)
+    : refresh_interval_{refresh_interval},
+      sources_{std::move(sources)},
+      format_{format} {
   }
 
   auto
@@ -2522,6 +2602,7 @@ public:
     auto diagnostics
       = make_source_diagnostic_handler(ctrl.diagnostics(), sources_.source);
     update_rules(sources_, rules, filter_bank, reload_state, diagnostics);
+    auto metrics = ctrl.metrics(sigma_metrics_type);
     auto last_update = std::chrono::steady_clock::now();
     co_yield {}; // signal that we're done initializing
     for (auto&& slice : input) {
@@ -2536,11 +2617,16 @@ public:
         update_rules(sources_, rules, filter_bank, reload_state, diagnostics);
         last_update = now;
       }
+      auto const events = static_cast<uint64_t>(slice.rows());
+      auto const rule_count = static_cast<uint64_t>(rules.entries.size());
+      auto matches = uint64_t{0};
       for (auto const& [_, entry] : rules.entries) {
-        for (auto&& result : build_findings(slice, entry, diagnostics)) {
+        for (auto&& result : build_output(slice, entry, format_, diagnostics)) {
+          matches += static_cast<uint64_t>(result.rows());
           co_yield std::move(result);
         }
       }
+      emit_processing_metrics(metrics, events, rule_count, matches);
     }
   }
 
@@ -2565,12 +2651,13 @@ public:
     return f.object(x)
       .pretty_name("sigma_operator")
       .fields(f.field("refresh_interval", x.refresh_interval_),
-              f.field("sources", x.sources_));
+              f.field("sources", x.sources_), f.field("format", x.format_));
   }
 
 private:
   duration refresh_interval_ = {};
   SigmaSources sources_;
+  sigma_format format_ = sigma_format::ocsf;
 };
 
 struct SigmaArgs {
@@ -2578,6 +2665,7 @@ struct SigmaArgs {
   Option<located<data>> path;
   Option<located<data>> rules;
   Option<located<duration>> refresh_interval;
+  Option<located<std::string>> format;
   location operator_location = location::unknown;
 };
 
@@ -2593,17 +2681,25 @@ public:
     // Argument validation already ran at pipeline-construction time.
     TENZIR_ASSERT(sources.is_ok());
     sources_ = std::move(sources).unwrap();
+    auto format = normalize_format(args_.format);
+    // Argument validation already ran at pipeline-construction time.
+    TENZIR_ASSERT(format.is_ok());
+    format_ = std::move(format).unwrap();
     refresh_interval_ = args_.refresh_interval ? args_.refresh_interval->inner
                                                : default_refresh_interval;
     auto diagnostics
       = make_source_diagnostic_handler(ctx.dh(), sources_.source);
     update_rules(sources_, rules_, filter_bank_, reload_state_, diagnostics);
+    metrics_ = make_metric_handler(ctx, sigma_metrics_type);
     last_update_ = std::chrono::steady_clock::now();
     co_return;
   }
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
+    if (input.rows() == 0) {
+      co_return;
+    }
     // Inline rules are part of the operator plan and never change.
     auto diagnostics
       = make_source_diagnostic_handler(ctx.dh(), sources_.source);
@@ -2612,11 +2708,16 @@ public:
       update_rules(sources_, rules_, filter_bank_, reload_state_, diagnostics);
       last_update_ = now;
     }
+    auto const events = static_cast<uint64_t>(input.rows());
+    auto const rule_count = static_cast<uint64_t>(rules_.entries.size());
+    auto matches = uint64_t{0};
     for (auto const& [_, entry] : rules_.entries) {
-      for (auto&& result : build_findings(input, entry, diagnostics)) {
+      for (auto&& result : build_output(input, entry, format_, diagnostics)) {
+        matches += static_cast<uint64_t>(result.rows());
         co_await push(std::move(result));
       }
     }
+    emit_processing_metrics(metrics_, events, rule_count, matches);
   }
 
 private:
@@ -2626,6 +2727,8 @@ private:
   RuleMap rules_;
   FilterBank filter_bank_;
   ReloadState reload_state_;
+  metric_handler metrics_ = {};
+  sigma_format format_ = sigma_format::ocsf;
   // Rules are reloaded from disk in `start()`, and `last_update_` uses
   // `steady_clock`, so the default no-op snapshot behavior is sufficient.
   std::chrono::steady_clock::time_point last_update_ = {};
@@ -2641,11 +2744,13 @@ public:
     auto path = Option<located<data>>{};
     auto rules = Option<located<data>>{};
     auto refresh_interval = Option<located<duration>>{};
+    auto format = Option<located<std::string>>{};
     TRY(argument_parser2::operator_("sigma")
           .positional("legacy_path", legacy_path)
           .named("path", path)
           .named("rules", rules)
           .named("refresh_interval", refresh_interval)
+          .named("format", format)
           .parse(inv, ctx));
     auto sources = normalize_sources(legacy_path, path, rules, refresh_interval,
                                      inv.self.get_location());
@@ -2666,10 +2771,16 @@ public:
         return failure::promise();
       }
     }
+    auto normalized_format = normalize_format(format);
+    if (normalized_format.is_err()) {
+      std::move(normalized_format).unwrap_err().modify().emit(ctx);
+      return failure::promise();
+    }
     auto const interval
       = refresh_interval ? refresh_interval->inner : default_refresh_interval;
-    return std::make_unique<sigma_operator>(interval,
-                                            std::move(sources).unwrap());
+    return std::make_unique<sigma_operator>(
+      interval, std::move(sources).unwrap(),
+      std::move(normalized_format).unwrap());
   }
 
   auto describe() const -> Description override {
@@ -2680,40 +2791,47 @@ public:
     auto rules = d.named("rules", &SigmaArgs::rules);
     auto refresh_interval
       = d.named("refresh_interval", &SigmaArgs::refresh_interval);
+    auto format = d.named("format", &SigmaArgs::format, "ocsf|plain");
     d.operator_location(&SigmaArgs::operator_location);
-    d.validate(
-      [legacy_path, path, rules, refresh_interval](DescribeCtx& ctx) -> Empty {
-        auto const legacy_value = ctx.get(legacy_path);
-        auto const path_value = ctx.get(path);
-        auto const rules_value = ctx.get(rules);
-        auto const refresh_value = ctx.get(refresh_interval);
-        auto to_option = [](auto const& value) {
-          using Value = std::remove_cvref_t<decltype(*value)>;
-          return value ? Option<Value>{*value} : Option<Value>{};
-        };
-        auto sources
-          = normalize_sources(to_option(legacy_value), to_option(path_value),
-                              to_option(rules_value), to_option(refresh_value),
-                              ctx.operator_location());
-        if (sources.is_err()) {
-          static_cast<diagnostic_handler&>(ctx).emit(
-            std::move(sources).unwrap_err());
-          return {};
-        }
-        if (legacy_value) {
-          diagnostic::warning("passing the path positionally is deprecated")
-            .primary(legacy_value->source)
-            .hint("use `path={:?}` instead", legacy_value->inner)
-            .emit(ctx);
-        }
-        if (rules_value) {
-          if (auto error = validate_inline_rules(sources.unwrap().rules,
-                                                 rules_value->source)) {
-            static_cast<diagnostic_handler&>(ctx).emit(std::move(*error));
-          }
-        }
+    d.validate([legacy_path, path, rules, refresh_interval,
+                format](DescribeCtx& ctx) -> Empty {
+      auto const legacy_value = ctx.get(legacy_path);
+      auto const path_value = ctx.get(path);
+      auto const rules_value = ctx.get(rules);
+      auto const refresh_value = ctx.get(refresh_interval);
+      auto to_option = [](auto const& value) {
+        using Value = std::remove_cvref_t<decltype(*value)>;
+        return value ? Option<Value>{*value} : Option<Value>{};
+      };
+      auto sources
+        = normalize_sources(to_option(legacy_value), to_option(path_value),
+                            to_option(rules_value), to_option(refresh_value),
+                            ctx.operator_location());
+      if (sources.is_err()) {
+        static_cast<diagnostic_handler&>(ctx).emit(
+          std::move(sources).unwrap_err());
         return {};
-      });
+      }
+      if (legacy_value) {
+        diagnostic::warning("passing the path positionally is deprecated")
+          .primary(legacy_value->source)
+          .hint("use `path={:?}` instead", legacy_value->inner)
+          .emit(ctx);
+      }
+      if (rules_value) {
+        if (auto error = validate_inline_rules(sources.unwrap().rules,
+                                               rules_value->source)) {
+          static_cast<diagnostic_handler&>(ctx).emit(std::move(*error));
+        }
+      }
+      auto const format_value = ctx.get(format);
+      if (auto normalized = normalize_format(to_option(format_value));
+          normalized.is_err()) {
+        static_cast<diagnostic_handler&>(ctx).emit(
+          std::move(normalized).unwrap_err());
+      }
+      return {};
+    });
     return d.without_optimize();
   }
 };
