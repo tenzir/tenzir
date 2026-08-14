@@ -1,0 +1,8 @@
+created: 2026-08-14
+title: Sigma 2.1 and YARA-X detection
+intro: >-
+  This release expands detection engineering with full Sigma v2.1 support and YARA-X
+  findings while adding richer streaming analytics, windows, and parallel execution.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.10.0
