@@ -79,6 +79,23 @@ RUN apt-get update && \
     ./build-arrow-adbc-package.sh
 RUN dpkg -c /tmp/arrow-adbc*.deb
 
+# -- yara-x-package ------------------------------------------------------------
+
+FROM build-base AS yara-x-package
+
+ENV RUSTUP_HOME=/opt/rustup \
+    CARGO_HOME=/opt/cargo \
+    PATH=/opt/cargo/bin:$PATH
+COPY scripts/build-yara-x-capi.sh scripts/
+RUN apt-get update && \
+    apt-get -y --no-install-recommends install \
+      ca-certificates curl openssl pkg-config && \
+    curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+      https://sh.rustup.rs \
+      | sh -s -- -y --profile minimal --default-toolchain 1.91.1 && \
+    scripts/build-yara-x-capi.sh /usr/local && \
+    rm -rf /var/lib/apt/lists/*
+
 # -- dependencies --------------------------------------------------------------
 
 FROM build-base AS dependencies
@@ -94,7 +111,11 @@ COPY --from=jemalloc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=arrow-adbc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=rdkafka-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=yara-x-package /usr/local/include/yara_x.h /usr/local/include/
+COPY --from=yara-x-package /usr/local/lib/libyara_x_capi.* /usr/local/lib/
+COPY --from=yara-x-package /usr/local/lib/pkgconfig/yara_x_capi.pc /usr/local/lib/pkgconfig/
 
+COPY ./scripts/build-yara-x-capi.sh ./scripts/
 COPY ./scripts/debian/install-dev-dependencies.sh ./scripts/debian/
 RUN ./scripts/debian/install-dev-dependencies.sh && \
     apt-get -y --no-install-recommends install /tmp/custom-packages/*.deb && \
@@ -199,6 +220,7 @@ COPY --from=jemalloc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=google-cloud-cpp-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=arrow-adbc-package /tmp/*.deb /tmp/custom-packages/
 COPY --from=rdkafka-package /tmp/*.deb /tmp/custom-packages/
+COPY --from=yara-x-package /usr/local/lib/libyara_x_capi.so* /usr/local/lib/
 
 RUN apt-get update && \
     apt-get -y --no-install-recommends install \
@@ -238,7 +260,6 @@ RUN apt-get update && \
       libunwind8 \
       libxxhash-dev \
       libyaml-cpp0.8 \
-      libyara10 \
       libzmq5 \
       liblz4-1 \
       libzstd1 \

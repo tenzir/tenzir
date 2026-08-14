@@ -52,12 +52,8 @@ let
         "plugins/s3"
         "plugins/sqs"
         "plugins/web"
-        "plugins/zmq"
-      ]
-      # Temporarily disable yara on the static mac build because of issues
-      # building protobufc.
-      ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [
         "plugins/yara"
+        "plugins/zmq"
       ];
 
       tenzirPluginNames = import ./plugins/names.nix;

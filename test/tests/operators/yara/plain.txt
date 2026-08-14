@@ -1,0 +1,12 @@
+{
+  input: b"MALWARE",
+  rule: {
+    identifier: "contains_malware",
+    namespace: "default",
+    tags: [],
+    meta: {},
+    patterns: [
+      "$a",
+    ],
+  },
+}

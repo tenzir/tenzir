@@ -1,0 +1,13 @@
+---
+error: true
+---
+
+from_stdin {
+  yara rules=r#"
+import "vt"
+rule unsupported {
+  condition:
+    true
+}
+"#
+}

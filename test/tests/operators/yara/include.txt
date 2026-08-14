@@ -1,0 +1,69 @@
+{
+  class_uid: 2004,
+  category_uid: 2,
+  activity_id: 1,
+  type_uid: 200401,
+  status_id: 1,
+  severity_id: 0,
+  confidence_id: 0,
+  action_id: 3,
+  disposition_id: 15,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Tenzir",
+      vendor_name: "Tenzir",
+    },
+    profiles: [
+      "security_control",
+    ],
+  },
+  finding_info: {
+    title: "YARA match: included",
+    analytic: {
+      uid: "yara:default:included",
+      name: "included",
+      type_id: 1,
+      type: "Rule",
+    },
+  },
+  policy: {
+    uid: "yara:default:included",
+    name: "included",
+    type: "YARA rule",
+    is_applied: true,
+    data: {
+      identifier: "included",
+      namespace: "default",
+      tags: [],
+      meta: {},
+      patterns: [
+        "$a",
+      ],
+    },
+  },
+  evidences: [
+    {
+      uid: "sha256:c77a4910d506fabde27cc281a5a48ed9e9a8f75f721eac77918ab30a3181b2be",
+      name: "Scanned byte stream",
+      data: {
+        input: {
+          size: 8,
+          sha256: "c77a4910d506fabde27cc281a5a48ed9e9a8f75f721eac77918ab30a3181b2be",
+        },
+        matches_complete: true,
+        matches: [
+          {
+            pattern: "$a",
+            offset: 0,
+            length: 8,
+            data: {
+              encoding: "base64",
+              value: "SU5DTFVERUQ=",
+            },
+          },
+        ],
+      },
+    },
+  ],
+}

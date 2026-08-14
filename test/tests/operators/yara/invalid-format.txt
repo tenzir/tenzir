@@ -1,0 +1,7 @@
+error: unsupported format
+ --> tests/operators/yara/invalid-format.tql:6:51
+  |
+6 |   yara rules="rule x { condition: true }", format="native"
+  |                                                   ^^^^^^^^
+  |
+  = note: available formats: `ocsf`, `plain`

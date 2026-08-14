@@ -95,7 +95,7 @@ let
         pkgs.openssl
         pkgs.just
         test-deps.tenzir-test
-        pkgs.yara
+        pkgs.yara-x
       ]
       ++ clang-shims
       ++ lib.optionals pkgs.stdenv.isLinux [

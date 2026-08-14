@@ -1,4 +1,6 @@
 from_stdin {
   split_bytes 4
-  yara ["inputs/yara/basic.yar"]
+  yara path=[f"{env("TENZIR_INPUTS")}/yara/basic.yar"]
 }
+drop time, metadata.uid, finding_info.uid, finding_info.created_time,
+     policy.uid, finding_info.analytic.uid

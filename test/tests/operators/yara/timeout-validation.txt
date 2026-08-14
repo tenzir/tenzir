@@ -1,0 +1,6 @@
+error: `timeout` must use whole-second precision
+ --> tests/operators/yara/timeout-validation.tql:6:52
+  |
+6 |   yara rules="rule x { condition: true }", timeout=100ms
+  |                                                    ^^^^^
+  |

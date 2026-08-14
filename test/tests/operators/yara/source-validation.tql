@@ -1,0 +1,19 @@
+---
+error: true
+---
+
+from_stdin {
+  yara
+}
+
+from_stdin {
+  yara path="a", rules="rule x { condition: true }"
+}
+
+from_stdin {
+  yara path=[]
+}
+
+from_stdin {
+  yara "a"
+}

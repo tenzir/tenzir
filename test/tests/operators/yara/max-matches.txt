@@ -1,0 +1,83 @@
+{
+  class_uid: 2004,
+  category_uid: 2,
+  activity_id: 1,
+  type_uid: 200401,
+  status_id: 1,
+  severity_id: 0,
+  confidence_id: 0,
+  action_id: 3,
+  disposition_id: 15,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Tenzir",
+      vendor_name: "Tenzir",
+    },
+    profiles: [
+      "security_control",
+    ],
+  },
+  finding_info: {
+    title: "YARA match: many",
+    analytic: {
+      name: "many",
+      type_id: 1,
+      type: "Rule",
+    },
+  },
+  policy: {
+    name: "many",
+    type: "YARA rule",
+    is_applied: true,
+    data: {
+      identifier: "many",
+      namespace: "default",
+      tags: [],
+      meta: {},
+      patterns: [
+        "$a",
+      ],
+    },
+  },
+  evidences: [
+    {
+      uid: "sha256:ed02457b5c41d964dbd2f2a609d63fe1bb7528dbe55e1abf5b52c249cd735797",
+      name: "Scanned byte stream",
+      data: {
+        input: {
+          size: 6,
+          sha256: "ed02457b5c41d964dbd2f2a609d63fe1bb7528dbe55e1abf5b52c249cd735797",
+        },
+        matches_complete: false,
+        matches: [
+          {
+            pattern: "$a",
+            offset: 0,
+            length: 2,
+            data: {
+              encoding: "base64",
+              value: "YWE=",
+            },
+          },
+          {
+            pattern: "$a",
+            offset: 1,
+            length: 2,
+            data: {
+              encoding: "base64",
+              value: "YWE=",
+            },
+          },
+        ],
+      },
+    },
+  ],
+}
+warning: YARA-X match evidence is incomplete
+ --> tests/operators/yara/max-matches.tql:2:3
+  |
+2 |   yara rules=r#"
+  |   ~~~~
+  |
+  = note: YARA-X match evidence is truncated for rule 'many' and pattern '$a' because more than `max_matches_per_pattern=2` matches were found

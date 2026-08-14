@@ -1,0 +1,4 @@
+from_stdin {
+  split_bytes 4
+  yara path=f"{env("TENZIR_INPUTS")}/yara/basic.yar", format="plain"
+}

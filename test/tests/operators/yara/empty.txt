@@ -1,10 +1,55 @@
 {
-  rule: {
-    identifier: "empty_file",
-    namespace: "default",
-    tags: [],
-    meta: {},
-    strings: {},
+  class_uid: 2004,
+  category_uid: 2,
+  activity_id: 1,
+  type_uid: 200401,
+  status_id: 1,
+  severity_id: 0,
+  confidence_id: 0,
+  action_id: 3,
+  disposition_id: 15,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Tenzir",
+      vendor_name: "Tenzir",
+    },
+    profiles: [
+      "security_control",
+    ],
   },
-  matches: {},
+  finding_info: {
+    title: "YARA match: empty_file",
+    analytic: {
+      name: "empty_file",
+      type_id: 1,
+      type: "Rule",
+    },
+  },
+  policy: {
+    name: "empty_file",
+    type: "YARA rule",
+    is_applied: true,
+    data: {
+      identifier: "empty_file",
+      namespace: "default",
+      tags: [],
+      meta: {},
+      patterns: [],
+    },
+  },
+  evidences: [
+    {
+      uid: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      name: "Scanned byte stream",
+      data: {
+        input: {
+          size: 0,
+          sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        },
+        matches_complete: true,
+        matches: [],
+      },
+    },
+  ],
 }

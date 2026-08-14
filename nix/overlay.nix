@@ -87,6 +87,6 @@ in
   restinio = callFunction ./overrides/restinio.nix { inherit (prevPkgs) restinio; };
   thrift = callFunction ./overrides/thrift.nix { inherit (prevPkgs) thrift; };
   wangle = callFunction ./overrides/wangle.nix { inherit (prevPkgs) wangle; };
-  yara = callFunction ./overrides/yara.nix { inherit (prevPkgs) yara; };
+  yara-x = callFunction ./overrides/yara-x.nix { };
   zeromq = callFunction ./overrides/zeromq.nix { inherit (prevPkgs) zeromq; };
 }

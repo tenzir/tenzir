@@ -1,0 +1,13 @@
+{
+  matches_complete: false,
+  match_count: 7001,
+  first_has_data: true,
+  last_has_data: false,
+}
+warning: YARA-X match evidence is incomplete
+ --> tests/operators/yara/match-data-budget.tql:2:3
+  |
+2 |   yara rules=r#"
+  |   ~~~~
+  |
+  = note: YARA-X match data is omitted after its Base64 encoding exceeds 16777216 bytes across the scanned input

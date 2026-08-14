@@ -1,0 +1,14 @@
+---
+error: true
+---
+
+from_stdin {
+  yara rules=r#"
+rule marker {
+  strings:
+    $marker = "12345"
+  condition:
+    $marker
+}
+"#, max_input_size=4
+}

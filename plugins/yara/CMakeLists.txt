@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.30...4.0 FATAL_ERROR)
 
 project(
   yara
-  DESCRIPTION "Yara plugin for Tenzir"
+  DESCRIPTION "YARA-X plugin for Tenzir"
   LANGUAGES CXX)
 
 # Enable unit testing. Note that it is necessary to include CTest in the
@@ -15,14 +15,13 @@ find_package(Tenzir REQUIRED)
 TenzirRegisterPlugin(TARGET yara ENTRYPOINT src/plugin.cpp)
 
 find_package(PkgConfig REQUIRED QUIET)
-pkg_check_modules(yara REQUIRED IMPORTED_TARGET yara)
-dependency_summary("libyara" PkgConfig::yara "Dependencies")
-target_link_libraries(yara PUBLIC PkgConfig::yara)
+pkg_check_modules(yara_x_capi REQUIRED IMPORTED_TARGET "yara_x_capi>=1.19.0")
+dependency_summary("YARA-X" PkgConfig::yara_x_capi "Dependencies")
+target_link_libraries(yara PUBLIC PkgConfig::yara_x_capi)
 
-# libyara.a needs flags indicated by the `.private` pkg-config sections, but
-# those are not exposed as part of the IMPORTED_TARGET.
+# The static library needs the flags in the `.private` pkg-config section,
+# which CMake does not expose through the imported target.
 if (TENZIR_ENABLE_STATIC_EXECUTABLE)
-  # NOTE: Despite the claims of the docs, `XXX_STATIC_LINK_LIBRARIES`
-  # doesn't exist, so we have to use `yara_STATIC_LIBRARIES`.
-  target_link_libraries(PkgConfig::yara INTERFACE ${yara_STATIC_LIBRARIES})
+  target_link_libraries(PkgConfig::yara_x_capi
+                        INTERFACE ${yara_x_capi_STATIC_LIBRARIES})
 endif ()

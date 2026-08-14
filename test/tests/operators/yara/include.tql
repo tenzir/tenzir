@@ -1,0 +1,6 @@
+from_stdin {
+  yara rules=r#"
+include "include.inc"
+"#, include_dirs=[f"{env("TENZIR_INPUTS")}/yara"]
+}
+drop time, metadata.uid, finding_info.uid, finding_info.created_time

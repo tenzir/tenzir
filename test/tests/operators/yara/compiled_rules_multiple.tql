@@ -3,5 +3,5 @@ error: true
 ---
 
 from_stdin {
-  yara ["a", "b"], compiled_rules=true
+  yara path="a", compiled_rules=true
 }

@@ -1,0 +1,20 @@
+let $source = r#"
+rule inline_rule : inline_tag {
+  meta:
+    description = "Inline detection"
+    integer = 42
+    float = 4.2
+    enabled = true
+  strings:
+    $wide = "WIDE" wide
+    $regex = /malw[a-z]+/ nocase
+  condition:
+    $wide or $regex
+}
+"#
+from_stdin {
+  split_bytes 3
+  yara rules=[$source]
+}
+drop time, metadata.uid, finding_info.uid, finding_info.created_time,
+     policy.uid, finding_info.analytic.uid

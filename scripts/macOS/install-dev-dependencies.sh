@@ -46,5 +46,5 @@ brew install --overwrite \
   uv \
   xxhash \
   yaml-cpp \
-  yara \
+  yara-x \
   yarn

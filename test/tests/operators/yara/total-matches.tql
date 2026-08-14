@@ -1,0 +1,12 @@
+from_stdin {
+  yara rules=r#"
+rule many {
+  strings:
+    $a = "aaaa"
+  condition:
+    #a > 10000
+}
+"#, max_matches_per_pattern=999999
+}
+select matches_complete=evidences[0].data.matches_complete,
+       match_count=evidences[0].data.matches.length()

@@ -1,0 +1,27 @@
+error: unsupported YARA-X module
+ --> tests/operators/yara/banned-module.tql:6:14
+  |
+6 |   yara rules=r#"
+  |              ^
+  |
+  = note: diagnostic code: E100
+  = note: error[E100]: unsupported YARA-X module
+           --> <rules[0]>:2:1
+            |
+          2 | import "vt"
+            | ^^^^^^^^^^^ Tenzir does not provide the runtime data required by this module
+
+warning: invariant boolean expression
+ --> tests/operators/yara/banned-module.tql:6:14
+  |
+6 |   yara rules=r#"
+  |              ~
+  |
+  = note: diagnostic code: invariant_expr
+  = note: warning[invariant_expr]: invariant boolean expression
+           --> <rules[0]>:5:5
+            |
+          5 |     true
+            |     ---- this expression is always true
+            |
+            = note: rule `unsupported` is always `true`

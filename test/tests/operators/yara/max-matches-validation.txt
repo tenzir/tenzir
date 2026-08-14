@@ -1,0 +1,7 @@
+error: `max_matches_per_pattern` must be less than 1000000
+ --> tests/operators/yara/max-matches-validation.tql:6:68
+  |
+6 |   yara rules="rule x { condition: true }", max_matches_per_pattern=1000000
+  |                                                                    ^^^^^^^
+  |
+  = note: YARA-X cannot report whether its internal match storage limit was reached

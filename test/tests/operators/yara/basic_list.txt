@@ -1,21 +1,67 @@
 {
-  rule: {
-    identifier: "contains_malware",
-    namespace: "default",
-    tags: [],
-    meta: {},
-    strings: {
-      "$a": "MALWARE",
+  class_uid: 2004,
+  category_uid: 2,
+  activity_id: 1,
+  type_uid: 200401,
+  status_id: 1,
+  severity_id: 0,
+  confidence_id: 0,
+  action_id: 3,
+  disposition_id: 15,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Tenzir",
+      vendor_name: "Tenzir",
     },
-  },
-  matches: {
-    "$a": [
-      {
-        data: b"MALWARE",
-        base: 0,
-        offset: 0,
-        match_length: 7,
-      },
+    profiles: [
+      "security_control",
     ],
   },
+  finding_info: {
+    title: "YARA match: contains_malware",
+    analytic: {
+      name: "contains_malware",
+      type_id: 1,
+      type: "Rule",
+    },
+  },
+  policy: {
+    name: "contains_malware",
+    type: "YARA rule",
+    is_applied: true,
+    data: {
+      identifier: "contains_malware",
+      namespace: "default",
+      tags: [],
+      meta: {},
+      patterns: [
+        "$a",
+      ],
+    },
+  },
+  evidences: [
+    {
+      uid: "sha256:d789d09c824e58b32812a9bd684eb065e4422de629261c3fd1e39ce0e1d28112",
+      name: "Scanned byte stream",
+      data: {
+        input: {
+          size: 7,
+          sha256: "d789d09c824e58b32812a9bd684eb065e4422de629261c3fd1e39ce0e1d28112",
+        },
+        matches_complete: true,
+        matches: [
+          {
+            pattern: "$a",
+            offset: 0,
+            length: 7,
+            data: {
+              encoding: "base64",
+              value: "TUFMV0FSRQ==",
+            },
+          },
+        ],
+      },
+    },
+  ],
 }

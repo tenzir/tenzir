@@ -1,0 +1,7 @@
+error: YARA input exceeds `max_input_size=4`
+ --> tests/operators/yara/max-input-size.tql:6:3
+  |
+6 |   yara rules=r#"
+  |   ^^^^
+  |
+  = note: the operator buffers one finite byte stream before scanning

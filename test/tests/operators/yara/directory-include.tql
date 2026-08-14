@@ -1,0 +1,5 @@
+from_stdin {
+  yara path=f"{env("TENZIR_INPUTS")}/yara/include-directory"
+}
+drop time, metadata.uid, finding_info.uid, finding_info.created_time,
+     policy.uid, finding_info.analytic.uid

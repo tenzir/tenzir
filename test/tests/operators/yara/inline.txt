@@ -1,0 +1,79 @@
+{
+  class_uid: 2004,
+  category_uid: 2,
+  activity_id: 1,
+  type_uid: 200401,
+  status_id: 1,
+  severity_id: 0,
+  confidence_id: 0,
+  action_id: 3,
+  disposition_id: 15,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Tenzir",
+      vendor_name: "Tenzir",
+    },
+    profiles: [
+      "security_control",
+    ],
+    labels: [
+      "inline_tag",
+    ],
+  },
+  finding_info: {
+    title: "YARA match: inline_rule",
+    desc: "Inline detection",
+    analytic: {
+      name: "inline_rule",
+      type_id: 1,
+      type: "Rule",
+    },
+  },
+  policy: {
+    name: "inline_rule",
+    type: "YARA rule",
+    is_applied: true,
+    data: {
+      identifier: "inline_rule",
+      namespace: "default",
+      tags: [
+        "inline_tag",
+      ],
+      meta: {
+        description: "Inline detection",
+        integer: 42,
+        float: 4.2,
+        enabled: true,
+      },
+      patterns: [
+        "$regex",
+        "$wide",
+      ],
+    },
+  },
+  evidences: [
+    {
+      uid: "sha256:2f293f67aa33f2ce247b28d6fb2fef2623cfde731f96b3d7f84ae74e9e192bdd",
+      name: "Scanned byte stream",
+      data: {
+        input: {
+          size: 7,
+          sha256: "2f293f67aa33f2ce247b28d6fb2fef2623cfde731f96b3d7f84ae74e9e192bdd",
+        },
+        matches_complete: true,
+        matches: [
+          {
+            pattern: "$regex",
+            offset: 0,
+            length: 7,
+            data: {
+              encoding: "base64",
+              value: "bWFsd2FyZQ==",
+            },
+          },
+        ],
+      },
+    },
+  ],
+}

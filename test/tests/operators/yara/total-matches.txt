@@ -1,0 +1,11 @@
+{
+  matches_complete: false,
+  match_count: 10000,
+}
+warning: YARA-X match evidence is incomplete
+ --> tests/operators/yara/total-matches.tql:2:3
+  |
+2 |   yara rules=r#"
+  |   ~~~~
+  |
+  = note: YARA-X match evidence is truncated because more than 10000 matches were found across the scanned input

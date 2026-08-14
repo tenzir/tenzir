@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from_stdin {
+  yara rules="rule x { condition: true }", max_matches_per_pattern=1000000
+}

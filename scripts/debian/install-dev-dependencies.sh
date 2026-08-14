@@ -50,7 +50,6 @@ apt-get -y --no-install-recommends install \
   libunwind-dev \
   libxxhash-dev \
   libyaml-cpp-dev \
-  libyara-dev \
   liblz4-dev \
   libzstd-dev \
   lsb-release \
@@ -58,6 +57,7 @@ apt-get -y --no-install-recommends install \
   ncat \
   nmap \
   ninja-build \
+  openssl \
   pandoc \
   parallel \
   pkg-config \
@@ -69,8 +69,18 @@ apt-get -y --no-install-recommends install \
   python3-venv \
   robin-map-dev \
   socat \
-  wget \
-  yara
+  wget
+
+if ! pkg-config --exists 'yara_x_capi >= 1.19.0'; then
+  export RUSTUP_HOME=/opt/rustup
+  export CARGO_HOME=/opt/cargo
+  export PATH="$CARGO_HOME/bin:$PATH"
+  curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+    https://sh.rustup.rs |
+    sh -s -- -y --profile minimal --default-toolchain 1.91.1
+  root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+  "$root/scripts/build-yara-x-capi.sh" /usr/local
+fi
 
 # yarn (via npm, since the yarn apt repo has an expired GPG key)
 mkdir -p /etc/apt/keyrings

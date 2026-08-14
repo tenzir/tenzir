@@ -7,7 +7,7 @@
   perl,
   procps,
   socat,
-  yara,
+  yara-x,
   uv,
   parallel,
   openssl,
@@ -66,7 +66,7 @@ rec {
     # not provide all the flags that are used in stdenv phases. We just add it
     # to the PATH in the checkPhase directly as a workaround.
     #toybox
-    yara
+    yara-x
     uv
     parallel
     openssl

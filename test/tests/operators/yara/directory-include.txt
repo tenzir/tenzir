@@ -1,0 +1,134 @@
+{
+  class_uid: 2004,
+  category_uid: 2,
+  activity_id: 1,
+  type_uid: 200401,
+  status_id: 1,
+  severity_id: 0,
+  confidence_id: 0,
+  action_id: 3,
+  disposition_id: 15,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Tenzir",
+      vendor_name: "Tenzir",
+    },
+    profiles: [
+      "security_control",
+    ],
+  },
+  finding_info: {
+    title: "YARA match: directory_include_alpha",
+    analytic: {
+      name: "directory_include_alpha",
+      type_id: 1,
+      type: "Rule",
+    },
+  },
+  policy: {
+    name: "directory_include_alpha",
+    type: "YARA rule",
+    is_applied: true,
+    data: {
+      identifier: "directory_include_alpha",
+      namespace: "default",
+      tags: [],
+      meta: {},
+      patterns: [
+        "$a",
+      ],
+    },
+  },
+  evidences: [
+    {
+      uid: "sha256:7a7205f31a1571be03581d685c97c092b2d932d32f477a90a4058a8530b47c96",
+      name: "Scanned byte stream",
+      data: {
+        input: {
+          size: 10,
+          sha256: "7a7205f31a1571be03581d685c97c092b2d932d32f477a90a4058a8530b47c96",
+        },
+        matches_complete: true,
+        matches: [
+          {
+            pattern: "$a",
+            offset: 0,
+            length: 5,
+            data: {
+              encoding: "base64",
+              value: "QUxQSEE=",
+            },
+          },
+        ],
+      },
+    },
+  ],
+}
+{
+  class_uid: 2004,
+  category_uid: 2,
+  activity_id: 1,
+  type_uid: 200401,
+  status_id: 1,
+  severity_id: 0,
+  confidence_id: 0,
+  action_id: 3,
+  disposition_id: 15,
+  metadata: {
+    version: "1.9.0",
+    product: {
+      name: "Tenzir",
+      vendor_name: "Tenzir",
+    },
+    profiles: [
+      "security_control",
+    ],
+  },
+  finding_info: {
+    title: "YARA match: directory_include_beta",
+    analytic: {
+      name: "directory_include_beta",
+      type_id: 1,
+      type: "Rule",
+    },
+  },
+  policy: {
+    name: "directory_include_beta",
+    type: "YARA rule",
+    is_applied: true,
+    data: {
+      identifier: "directory_include_beta",
+      namespace: "default",
+      tags: [],
+      meta: {},
+      patterns: [
+        "$a",
+      ],
+    },
+  },
+  evidences: [
+    {
+      uid: "sha256:7a7205f31a1571be03581d685c97c092b2d932d32f477a90a4058a8530b47c96",
+      name: "Scanned byte stream",
+      data: {
+        input: {
+          size: 10,
+          sha256: "7a7205f31a1571be03581d685c97c092b2d932d32f477a90a4058a8530b47c96",
+        },
+        matches_complete: true,
+        matches: [
+          {
+            pattern: "$a",
+            offset: 6,
+            length: 4,
+            data: {
+              encoding: "base64",
+              value: "QkVUQQ==",
+            },
+          },
+        ],
+      },
+    },
+  ],
+}

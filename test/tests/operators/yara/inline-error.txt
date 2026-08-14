@@ -1,0 +1,12 @@
+error: unknown identifier `missing_identifier`
+ --> tests/operators/yara/inline-error.tql:6:14
+  |
+6 |   yara rules=r#"
+  |              ^
+  |
+  = note: diagnostic code: E009
+  = note: error[E009]: unknown identifier `missing_identifier`
+           --> <rules[0]>:4:5
+            |
+          4 |     missing_identifier
+            |     ^^^^^^^^^^^^^^^^^^ this identifier has not been declared

@@ -33,7 +33,7 @@
   rabbitmq-c,
   libnats-c,
   yaml-cpp,
-  yara,
+  yara-x,
   jansson,
   rdkafka,
   cyrus_sasl,
@@ -101,10 +101,8 @@ in
   ]
   ++ lib.optionals stdenv.isLinux [ pfs ]
   ++ lib.optionals (stdenv.cc.isClang && isStatic) [ empty-libgcc_eh ]
-  ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [
-    yara
-    jansson
-  ];
+  ++ [ yara-x ]
+  ++ lib.optionals (!(stdenv.hostPlatform.isDarwin && isStatic)) [ jansson ];
 
   propagatedBuildInputs = [
     arrow-cpp

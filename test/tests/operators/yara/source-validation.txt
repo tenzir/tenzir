@@ -1,0 +1,8 @@
+error: too many positional arguments
+  --> tests/operators/yara/source-validation.tql:18:8
+   |
+18 |   yara "a"
+   |        ^^^
+   |
+   = usage: yara [path=any, rules=any, fast_scan=bool, timeout=duration, max_input_size=int, max_matches_per_pattern=int, include_dirs=any, format=ocsf|plain]
+   = docs: https://tenzir.com/docs/reference/operators/yara

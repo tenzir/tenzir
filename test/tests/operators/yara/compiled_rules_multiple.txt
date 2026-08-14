@@ -1,7 +1,8 @@
-error: can't accept multiple rules in compiled form
- --> tests/operators/yara/compiled_rules_multiple.tql:6:8
+error: named argument `compiled_rules` does not exist
+ --> tests/operators/yara/compiled_rules_multiple.tql:6:18
   |
-6 |   yara ["a", "b"], compiled_rules=true
-  |        ^^^^^^^^^^
+6 |   yara path="a", compiled_rules=true
+  |                  ^^^^^^^^^^^^^^
   |
-  = hint: provide exactly one rule argument
+  = usage: yara [path=any, rules=any, fast_scan=bool, timeout=duration, max_input_size=int, max_matches_per_pattern=int, include_dirs=any, format=ocsf|plain]
+  = docs: https://tenzir.com/docs/reference/operators/yara
