@@ -1,0 +1,7 @@
+error: invalid output `invalid`
+ --> tests/operators/summarize/invalid-output.tql:6:43
+  |
+6 | summarize count=count(), options={output: "invalid"}
+  |                                           ^^^^^^^^^
+  |
+  = hint: expected `summary`, `trigger`, or `events`

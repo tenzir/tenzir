@@ -1,0 +1,40 @@
+{
+  seq: 1,
+  ts: 1970-01-01T00:00:00Z,
+  value: 10,
+  avg: 10.0,
+  samples: 1,
+  trigger: 1,
+}
+{
+  seq: 1,
+  ts: 1970-01-01T00:00:00Z,
+  value: 10,
+  avg: 15.0,
+  samples: 2,
+  trigger: 2,
+}
+{
+  seq: 2,
+  ts: 1970-01-01T00:02:00Z,
+  value: 20,
+  avg: 15.0,
+  samples: 2,
+  trigger: 2,
+}
+{
+  seq: 2,
+  ts: 1970-01-01T00:02:00Z,
+  value: 20,
+  avg: 25.0,
+  samples: 2,
+  trigger: 3,
+}
+{
+  seq: 3,
+  ts: 1970-01-01T00:06:00Z,
+  value: 30,
+  avg: 25.0,
+  samples: 2,
+  trigger: 3,
+}

@@ -1,0 +1,2 @@
+from {g: "a", x: 1}, {g: "b", x: 2}
+summarize g, options={output: "events"}

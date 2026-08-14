@@ -1,0 +1,24 @@
+{
+  seq: 1,
+  g: "a",
+  x: 1,
+  total: 4,
+}
+{
+  seq: 2,
+  g: "b",
+  x: 2,
+  total: 6,
+}
+{
+  seq: 3,
+  g: "a",
+  x: 3,
+  total: 4,
+}
+{
+  seq: 4,
+  g: "b",
+  x: 4,
+  total: 6,
+}

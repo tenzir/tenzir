@@ -24,6 +24,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/session.hpp>
+#include <tenzir/si_literals.hpp>
 #include <tenzir/substitute_ctx.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -146,6 +147,7 @@ struct Group {
 
 TENZIR_ENUM(Emission, final, event, timer);
 TENZIR_ENUM(Mode, reset, cumulative);
+TENZIR_ENUM(Output, summary, trigger, events);
 
 struct Config {
   std::vector<Aggregate> aggregates;
@@ -166,11 +168,16 @@ struct Config {
   /// substitution by evaluate_options().
   Option<ast::expression> mode_expr;
 
+  /// Unevaluated expression for the `output` option. Evaluated after let
+  /// substitution by evaluate_options().
+  Option<ast::expression> output_expr;
+
   /// The legacy `frequency` option, retained only for migration diagnostics.
   Option<ast::expression> legacy_frequency_expr;
 
   Emission emission = Emission::final;
   Mode mode = Mode::reset;
+  Output output = Output::summary;
   int64_t emit_every = 1;
   Option<duration> emit_interval;
 
@@ -178,10 +185,10 @@ struct Config {
     return f.object(x).fields(
       f.field("aggregates", x.aggregates), f.field("groups", x.groups),
       f.field("indices", x.indices), f.field("emit_expr", x.emit_expr),
-      f.field("mode_expr", x.mode_expr),
+      f.field("mode_expr", x.mode_expr), f.field("output_expr", x.output_expr),
       f.field("legacy_frequency_expr", x.legacy_frequency_expr),
       f.field("emission", x.emission), f.field("mode", x.mode),
-      f.field("emit_every", x.emit_every),
+      f.field("output", x.output), f.field("emit_every", x.emit_every),
       f.field("emit_interval", x.emit_interval));
   }
 };
@@ -191,6 +198,9 @@ using GroupMap = tsl::robin_map<GroupKey, Value, GroupKeyHash, GroupKeyEqual>;
 
 struct Bucket {
   std::vector<Box<aggregation_instance>> aggregations;
+  /// Derived values for final event replay. These are populated only after the
+  /// input ends and are intentionally excluded from checkpoints.
+  Option<std::vector<data>> final_values;
 };
 
 /// Returns the generated field name for an unnamed aggregate.
@@ -420,29 +430,58 @@ public:
     return result;
   }
 
-  auto enrich(table_slice const& event, session ctx)
+  auto cache_final_values() -> void {
+    TENZIR_ASSERT(config_.output == Output::events);
+    for (auto it = groups_.begin(); it != groups_.end(); ++it) {
+      auto& bucket = it.value();
+      TENZIR_ASSERT(not bucket.final_values);
+      auto values = std::vector<data>{};
+      values.reserve(bucket.aggregations.size());
+      for (auto const& aggregation : bucket.aggregations) {
+        values.push_back(aggregation->get());
+      }
+      bucket.final_values = std::move(values);
+    }
+  }
+
+  auto enrich(table_slice const& events, session ctx)
     -> std::vector<table_slice> {
-    TENZIR_ASSERT(event.rows() == 1);
     if (config_.aggregates.empty()) {
-      return {event};
+      return {events};
     }
     auto group_values = std::vector<multi_series>{};
     group_values.reserve(config_.groups.size());
     for (auto& group : config_.groups) {
-      group_values.push_back(eval(group.expr.inner(), event, ctx));
+      group_values.push_back(eval(group.expr.inner(), events, ctx));
+    }
+    auto builders = std::vector<series_builder>{};
+    builders.reserve(config_.aggregates.size());
+    for (auto i = size_t{0}; i < config_.aggregates.size(); ++i) {
+      builders.emplace_back();
     }
     auto key = GroupKeyView{};
     key.reserve(config_.groups.size());
-    for (auto&& group : group_values) {
-      key.emplace_back(group.view3_at(0));
-    }
-    auto it = groups_.find(key);
-    TENZIR_ASSERT(it != groups_.end());
-    auto builders = std::vector<series_builder>{};
-    builders.reserve(config_.aggregates.size());
-    for (auto const& aggregation : it.value().aggregations) {
-      auto& builder = builders.emplace_back();
-      builder.data(aggregation->get());
+    auto const total_rows = detail::narrow<int64_t>(events.rows());
+    for (auto row = int64_t{0}; row < total_rows; ++row) {
+      key.clear();
+      for (auto&& group : group_values) {
+        key.emplace_back(group.view3_at(row));
+      }
+      auto it = groups_.find(key);
+      TENZIR_ASSERT(it != groups_.end());
+      if (config_.output == Output::events) {
+        TENZIR_ASSERT(it.value().final_values);
+        TENZIR_ASSERT(it.value().final_values->size() == builders.size());
+        for (auto [value, builder] :
+             std::views::zip(*it.value().final_values, builders)) {
+          builder.data(value);
+        }
+      } else {
+        for (auto [aggregation, builder] :
+             std::views::zip(it.value().aggregations, builders)) {
+          builder.data(aggregation->get());
+        }
+      }
     }
     auto values = std::vector<multi_series>{};
     values.reserve(builders.size());
@@ -450,9 +489,13 @@ public:
       values.emplace_back(builder.finish());
     }
     auto result = std::vector<table_slice>{};
+    auto begin = int64_t{0};
     for (auto parts : split_multi_series(values)) {
+      TENZIR_ASSERT(not parts.empty());
+      auto end = begin + parts.front().length();
+      auto output = subslice(events, begin, end);
+      begin = end;
       TENZIR_ASSERT(parts.size() == config_.aggregates.size());
-      auto output = event;
       for (auto i = size_t{0}; i < config_.aggregates.size(); ++i) {
         output = assign(aggregate_destination(config_.aggregates[i]),
                         std::move(parts[i]), output, ctx);
@@ -644,6 +687,8 @@ auto build_config(std::vector<ast::expression> exprs, session ctx)
         config.emit_expr = field->expr;
       } else if (name == "mode") {
         config.mode_expr = field->expr;
+      } else if (name == "output") {
+        config.output_expr = field->expr;
       } else if (name == "frequency") {
         config.legacy_frequency_expr = field->expr;
       } else {
@@ -765,7 +810,8 @@ auto validate_aggregates(Config const& config, session ctx)
 /// cumulative mode, one emitted summary per missed tick.
 constexpr auto min_emit_interval = duration{std::chrono::milliseconds{10}};
 
-/// Resolves the emission policy and aggregation mode after let substitution.
+/// Resolves the emission boundary, aggregation state, and output policy after
+/// let substitution.
 auto evaluate_options(Config& config, session ctx) -> failure_or<void> {
   if (config.emit_expr and config.legacy_frequency_expr) {
     diagnostic::error("`emit` and legacy `frequency` cannot be combined")
@@ -801,6 +847,70 @@ auto evaluate_options(Config& config, session ctx) -> failure_or<void> {
       return failure::promise();
     }
   }
+  if (config.output_expr) {
+    TRY(auto value, const_eval(*config.output_expr, ctx));
+    auto* str = try_as<std::string>(value.inner);
+    if (not str) {
+      diagnostic::error("expected string for `output`")
+        .primary(*config.output_expr)
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (*str == "summary") {
+      config.output = Output::summary;
+    } else if (*str == "trigger") {
+      config.output = Output::trigger;
+    } else if (*str == "events") {
+      config.output = Output::events;
+    } else {
+      diagnostic::error("invalid output `{}`", *str)
+        .primary(*config.output_expr)
+        .hint("expected `summary`, `trigger`, or `events`")
+        .emit(ctx);
+      return failure::promise();
+    }
+  }
+  auto finish = [&]() -> failure_or<void> {
+    if (not config.output_expr) {
+      config.output = config.emission == Emission::event ? Output::trigger
+                                                         : Output::summary;
+    }
+    if (config.output == Output::events
+        and config.emission != Emission::final) {
+      auto const& cadence
+        = config.emit_expr ? *config.emit_expr : *config.legacy_frequency_expr;
+      diagnostic::error("output `events` currently requires final emission")
+        .primary(cadence)
+        .secondary(*config.output_expr)
+        .hint("remove the `emit` or `frequency` option")
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (config.output_expr and config.output == Output::summary
+        and config.emission == Emission::event) {
+      diagnostic::error(
+        "output `summary` is not yet supported with count-based emission")
+        .primary(*config.output_expr)
+        .secondary(*config.emit_expr)
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (config.output_expr and config.output == Output::trigger
+        and config.emission != Emission::event) {
+      diagnostic::error("output `trigger` requires count-based emission")
+        .primary(*config.output_expr)
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (config.emit_expr and config.emission != Emission::final
+        and not config.mode_expr) {
+      diagnostic::error("`emit` requires `mode` to be set")
+        .primary(*config.emit_expr)
+        .emit(ctx);
+      return failure::promise();
+    }
+    return {};
+  };
   if (config.legacy_frequency_expr) {
     TRY(auto value, const_eval(*config.legacy_frequency_expr, ctx));
     auto* interval = try_as<duration>(value.inner);
@@ -823,13 +933,7 @@ auto evaluate_options(Config& config, session ctx) -> failure_or<void> {
       .emit(ctx);
     config.emission = Emission::timer;
     config.emit_interval = *interval;
-    return {};
-  }
-  if (config.emit_expr and not config.mode_expr) {
-    diagnostic::error("`emit` requires `mode` to be set")
-      .primary(*config.emit_expr)
-      .emit(ctx);
-    return failure::promise();
+    return finish();
   }
   if (config.emit_expr) {
     TRY(auto value, const_eval(*config.emit_expr, ctx));
@@ -842,7 +946,7 @@ auto evaluate_options(Config& config, session ctx) -> failure_or<void> {
       }
       config.emission = Emission::event;
       config.emit_every = *count;
-      return {};
+      return finish();
     }
     if (auto* interval = try_as<duration>(value.inner)) {
       if (*interval < min_emit_interval) {
@@ -853,17 +957,25 @@ auto evaluate_options(Config& config, session ctx) -> failure_or<void> {
       }
       config.emission = Emission::timer;
       config.emit_interval = *interval;
-      return {};
+      return finish();
     }
-    diagnostic::error("expected int or duration for `emit`")
+    if (auto* boundary = try_as<std::string>(value.inner);
+        boundary and *boundary == "final") {
+      config.emission = Emission::final;
+      return finish();
+    }
+    diagnostic::error("expected int, duration, or `final` for `emit`")
       .primary(*config.emit_expr)
       .emit(ctx);
     return failure::promise();
   }
-  if (config.mode_expr) {
+  // Preserve the existing shorthand: setting only `mode` means count-based
+  // trigger output with a boundary of one event. An explicit output policy
+  // keeps the default final boundary.
+  if (config.mode_expr and not config.output_expr) {
     config.emission = Emission::event;
   }
-  return {};
+  return finish();
 }
 
 class Summarize final : public Operator<table_slice, table_slice> {
@@ -872,6 +984,19 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    // TODO: Support checkpointing for final event output once executor
+    // snapshots can reference durable spill or sidecar storage.
+    if (state_.config().output == Output::events
+        and ctx.checkpoint_settings()) {
+      checkpointing_rejected_ = true;
+      TENZIR_ASSERT(state_.config().output_expr);
+      diagnostic::error(
+        "`summarize` with output `events` does not support checkpointing")
+        .primary(*state_.config().output_expr)
+        .note("final event output buffers input until the finite input ends")
+        .emit(ctx);
+      co_return;
+    }
     provider_.emplace(session_provider::make(ctx.dh()));
     if (state_.config().emission == Emission::timer) {
       TENZIR_ASSERT(state_.config().emit_interval);
@@ -897,10 +1022,24 @@ public:
     co_return;
   }
 
+  auto state() -> OperatorState override {
+    return checkpointing_rejected_ ? OperatorState::done
+                                   : OperatorState::normal;
+  }
+
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
-    TENZIR_UNUSED(ctx);
-    if (input.rows() == 0) {
+    if (checkpointing_rejected_ or input.rows() == 0) {
+      co_return;
+    }
+    if (state_.config().output == Output::events) {
+      if (not state_.config().aggregates.empty()) {
+        state_.add(input, provider_->as_session());
+      }
+      buffered_bytes_
+        = detail::saturating_add(buffered_bytes_, input.approx_bytes());
+      buffered_.push_back(std::move(input));
+      warn_about_buffering(ctx);
       co_return;
     }
     if (state_.config().emission == Emission::event) {
@@ -952,6 +1091,18 @@ public:
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(ctx);
+    if (checkpointing_rejected_) {
+      co_return FinalizeBehavior::done;
+    }
+    if (state_.config().output == Output::events) {
+      state_.cache_final_values();
+      for (auto const& events : buffered_) {
+        for (auto& slice : state_.enrich(events, provider_->as_session())) {
+          co_await push(std::move(slice));
+        }
+      }
+      co_return FinalizeBehavior::done;
+    }
     if (state_.config().emission == Emission::event) {
       if (events_since_emit_ > 0) {
         TENZIR_ASSERT(pending_event_.rows() == 1);
@@ -1040,6 +1191,21 @@ private:
     publish_frontier(*next_flush_);
   }
 
+  auto warn_about_buffering(OpCtx& ctx) -> void {
+    using namespace si_literals;
+    static constexpr auto warning_threshold = uint64_t{512_Mi};
+    if (warned_about_buffering_ or buffered_bytes_ < warning_threshold) {
+      return;
+    }
+    diagnostic::warning("`summarize` buffered approximately {} MiB with "
+                        "`output: \"events\"`",
+                        buffered_bytes_ / 1_Mi)
+      .note("event output starts only after the finite input ends")
+      .hint("use `window` or reduce the input population to bound memory use")
+      .emit(ctx);
+    warned_about_buffering_ = true;
+  }
+
   auto flush_until(steady_clock::time_point deadline, Push<table_slice>& push)
     -> Task<void> {
     if (not next_flush_) {
@@ -1064,8 +1230,12 @@ private:
   }
 
   AggregationState state_;
+  bool checkpointing_rejected_ = false;
   int64_t events_since_emit_ = 0;
   table_slice pending_event_;
+  std::vector<table_slice> buffered_;
+  uint64_t buffered_bytes_ = 0;
+  bool warned_about_buffering_ = false;
   Option<session_provider> provider_;
   Option<steady_clock::time_point> next_flush_;
   Option<duration> restored_timer_remaining_;
@@ -1100,6 +1270,9 @@ public:
     }
     if (config_.mode_expr) {
       TRY(config_.mode_expr->substitute(ctx));
+    }
+    if (config_.output_expr) {
+      TRY(config_.output_expr->substitute(ctx));
     }
     if (config_.legacy_frequency_expr) {
       TRY(config_.legacy_frequency_expr->substitute(ctx));
@@ -1136,9 +1309,11 @@ public:
     // result per instance. Timer emission also requires one instance because
     // replicas arm independent processing-time frontiers when they receive
     // their first rows. Counted event emission requires one instance to keep
-    // a pipeline-wide event count. Final and per-event emission can use
-    // hash-partitioning because it routes each group to exactly one instance.
-    return not config_.groups.empty() and config_.emission != Emission::timer
+    // a pipeline-wide event count. Event output also uses one instance to
+    // preserve input order. Other final and per-event emission can use hash
+    // partitioning because it routes each group to exactly one instance.
+    return not config_.groups.empty() and config_.output != Output::events
+           and config_.emission != Emission::timer
            and (config_.emission != Emission::event or config_.emit_every == 1);
   }
 

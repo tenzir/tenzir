@@ -1,0 +1,7 @@
+// parallelism: 6
+// Event output uses one operator instance to retain input order.
+from {seq: 1, g: "a", x: 1},
+     {seq: 2, g: "b", x: 2},
+     {seq: 3, g: "a", x: 3},
+     {seq: 4, g: "b", x: 4}
+summarize g, total=sum(x), options={output: "events"}

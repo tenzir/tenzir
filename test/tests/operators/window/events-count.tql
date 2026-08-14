@@ -1,0 +1,7 @@
+from {seq: 1, x: 1}, {seq: 2, x: 2}, {seq: 3, x: 3},
+     {seq: 4, x: 4}, {seq: 5, x: 5}
+window size=2 {
+  summarize total=sum(x), options={output: "events"}
+  begin = $window.begin
+}
+sort seq

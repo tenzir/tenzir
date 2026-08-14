@@ -1,0 +1,30 @@
+{
+  seq: 1,
+  x: 1,
+  total: 3,
+  begin: 0,
+}
+{
+  seq: 2,
+  x: 2,
+  total: 3,
+  begin: 0,
+}
+{
+  seq: 3,
+  x: 3,
+  total: 7,
+  begin: 2,
+}
+{
+  seq: 4,
+  x: 4,
+  total: 7,
+  begin: 2,
+}
+{
+  seq: 5,
+  x: 5,
+  total: 5,
+  begin: 4,
+}

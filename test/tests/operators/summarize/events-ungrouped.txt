@@ -1,0 +1,18 @@
+{
+  seq: 1,
+  value: 10,
+  total: 35,
+  samples: 3,
+}
+{
+  seq: 2,
+  value: 20,
+  total: 35,
+  samples: 3,
+}
+{
+  seq: 3,
+  value: 5,
+  total: 35,
+  samples: 3,
+}

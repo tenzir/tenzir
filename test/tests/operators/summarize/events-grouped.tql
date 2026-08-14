@@ -1,0 +1,9 @@
+from {seq: 1, user: "alice", value: 10, avg: -1, stats: {old: true}},
+     {seq: 2, user: "alice", value: 20, avg: -1, stats: {old: false}},
+     {seq: 3, user: "bob", value: 5, avg: -1, stats: {old: true}},
+     {seq: 4, user: null, value: 7, avg: -1, stats: {old: false}},
+     {seq: 5, user: null, value: 9, avg: -1, stats: {old: true}}
+summarize key=user,
+          avg=mean(value),
+          stats.samples=count(),
+          options={output: "events"}

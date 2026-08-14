@@ -1,0 +1,2 @@
+from {seq: 1, value: 10}, {seq: 2, value: 20}, {seq: 3, value: 5}
+summarize total=sum(value), samples=count(), options={output: "events"}

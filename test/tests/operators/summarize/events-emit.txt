@@ -1,0 +1,10 @@
+error: output `events` currently requires final emission
+ --> tests/operators/summarize/events-emit.tql:6:37
+  |
+6 | summarize n=count(), options={emit: 2, mode: "reset", output: "events"}
+  |                                     ^
+  ⋮
+6 | summarize n=count(), options={emit: 2, mode: "reset", output: "events"}
+  |                                                               --------
+  |
+  = hint: remove the `emit` or `frequency` option

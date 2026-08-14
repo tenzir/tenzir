@@ -1,0 +1,8 @@
+from {seq: 1, ts: 0min.from_epoch(), value: 10},
+     {seq: 2, ts: 2min.from_epoch(), value: 20},
+     {seq: 3, ts: 6min.from_epoch(), value: 30}
+window size=5min, trailing=true, on=ts {
+  summarize avg=mean(value), samples=count(), options={output: "events"}
+  trigger = $window.event.seq
+}
+sort trigger, seq

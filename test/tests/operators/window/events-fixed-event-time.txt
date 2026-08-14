@@ -1,0 +1,21 @@
+{
+  seq: 1,
+  ts: 1970-01-01T00:00:00Z,
+  x: 1,
+  total: 3,
+  start: 0ns,
+}
+{
+  seq: 2,
+  ts: 1970-01-01T00:00:01Z,
+  x: 2,
+  total: 3,
+  start: 0ns,
+}
+{
+  seq: 3,
+  ts: 1970-01-01T00:00:02Z,
+  x: 3,
+  total: 3,
+  start: 2s,
+}

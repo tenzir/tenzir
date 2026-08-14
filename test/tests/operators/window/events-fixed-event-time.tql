@@ -1,0 +1,8 @@
+from {seq: 1, ts: 0s.from_epoch(), x: 1},
+     {seq: 2, ts: 1s.from_epoch(), x: 2},
+     {seq: 3, ts: 2s.from_epoch(), x: 3}
+window size=2s, on=ts {
+  summarize total=sum(x), options={output: "events"}
+  start = $window.start.since_epoch()
+}
+sort seq

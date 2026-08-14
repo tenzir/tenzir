@@ -1,0 +1,50 @@
+{
+  seq: 1,
+  user: "alice",
+  value: 10,
+  avg: 15.0,
+  stats: {
+    old: true,
+    samples: 2,
+  },
+}
+{
+  seq: 2,
+  user: "alice",
+  value: 20,
+  avg: 15.0,
+  stats: {
+    old: false,
+    samples: 2,
+  },
+}
+{
+  seq: 3,
+  user: "bob",
+  value: 5,
+  avg: 5.0,
+  stats: {
+    old: true,
+    samples: 1,
+  },
+}
+{
+  seq: 4,
+  user: null,
+  value: 7,
+  avg: 8.0,
+  stats: {
+    old: false,
+    samples: 2,
+  },
+}
+{
+  seq: 5,
+  user: null,
+  value: 9,
+  avg: 8.0,
+  stats: {
+    old: true,
+    samples: 2,
+  },
+}
