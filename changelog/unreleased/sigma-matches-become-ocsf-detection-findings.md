@@ -3,8 +3,6 @@ title: Sigma matches become OCSF Detection Findings
 type: change
 authors:
   - mavam
-prs:
-  - 116
 created: 2026-08-13T14:03:00.652766Z
 ---
 

@@ -4,8 +4,6 @@ type: feature
 authors:
   - zedoraps
   - codex
-prs:
-  - 6449
 created: 2026-07-15T11:48:18.725554Z
 ---
 
