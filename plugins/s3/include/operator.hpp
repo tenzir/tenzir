@@ -57,95 +57,21 @@ auto get_options(const s3_args& args, const arrow::util::Uri& uri,
   if (args.anonymous) {
     opts->ConfigureAnonymousCredentials();
   } else if (resolved_creds) {
-    const auto has_explicit_creds = not resolved_creds->access_key_id.empty();
-    const auto has_role = not resolved_creds->role.empty();
-    const auto has_profile = not resolved_creds->profile.empty();
-    const auto has_web_identity = resolved_creds->web_identity.has_value();
-    // Get session_name from resolved credentials, default to empty
-    const auto session_name = resolved_creds->session_name.empty()
-                                ? std::string{}
-                                : resolved_creds->session_name;
-    // Get region from resolved credentials if available
-    const auto region = resolved_creds->region.empty()
-                          ? Option<std::string>{}
-                          : Option{resolved_creds->region};
-
-    if (has_web_identity and has_role) {
-      // Web identity + role: fetch token and assume role
-      auto provider
-        = tenzir::make_aws_credentials_provider(resolved_creds, region);
-      if (not provider) {
-        return provider.error();
-      }
-      // Get credentials from the provider (triggers web identity flow)
-      auto aws_creds = (*provider)->GetAWSCredentials();
-      if (aws_creds.IsEmpty()) {
-        return diagnostic::error("failed to obtain AWS credentials via web "
-                                 "identity")
-          .to_error();
-      }
-      opts->ConfigureAccessKey(aws_creds.GetAWSAccessKeyId(),
-                               aws_creds.GetAWSSecretKey(),
-                               aws_creds.GetSessionToken());
-    } else if (has_explicit_creds and has_role) {
-      // Explicit credentials + role: use STS to assume role
-      auto sts_creds = tenzir::assume_role_with_credentials(
-        *resolved_creds, resolved_creds->role, session_name,
-        resolved_creds->external_id, region);
-      if (not sts_creds) {
-        return sts_creds.error();
-      }
-      opts->ConfigureAccessKey(sts_creds->access_key_id,
-                               sts_creds->secret_access_key,
-                               sts_creds->session_token);
-    } else if (has_explicit_creds) {
-      // Explicit credentials only
-      opts->ConfigureAccessKey(resolved_creds->access_key_id,
-                               resolved_creds->secret_access_key,
-                               resolved_creds->session_token);
-    } else if (has_profile and has_role) {
-      // Profile + role: load profile credentials, then assume role
-      auto profile_creds
-        = tenzir::load_profile_credentials(resolved_creds->profile);
-      if (not profile_creds) {
-        return profile_creds.error();
-      }
-      auto base_creds = resolved_aws_credentials{
-        .region = {},
-        .profile = {},
-        .session_name = {},
-        .access_key_id = profile_creds->access_key_id,
-        .secret_access_key = profile_creds->secret_access_key,
-        .session_token = profile_creds->session_token,
-        .role = {},
-        .external_id = {},
-        .web_identity = {},
-      };
-      auto sts_creds = tenzir::assume_role_with_credentials(
-        base_creds, resolved_creds->role, session_name,
-        resolved_creds->external_id, region);
-      if (not sts_creds) {
-        return sts_creds.error();
-      }
-      opts->ConfigureAccessKey(sts_creds->access_key_id,
-                               sts_creds->secret_access_key,
-                               sts_creds->session_token);
-    } else if (has_profile) {
-      // Profile-based credentials only
-      auto profile_creds
-        = tenzir::load_profile_credentials(resolved_creds->profile);
-      if (not profile_creds) {
-        return profile_creds.error();
-      }
-      opts->ConfigureAccessKey(profile_creds->access_key_id,
-                               profile_creds->secret_access_key,
-                               profile_creds->session_token);
-    } else if (has_role) {
-      // Role assumption with default credentials
-      opts->ConfigureAssumeRoleCredentials(resolved_creds->role, session_name,
-                                           resolved_creds->external_id);
+    auto region = resolved_creds->region.empty()
+                    ? Option<std::string>{}
+                    : Option{resolved_creds->region};
+    auto provider
+      = tenzir::make_aws_credentials_provider(resolved_creds, region);
+    if (not provider) {
+      return provider.error();
     }
-    // Otherwise, use default credential chain (no explicit configuration)
+    opts->credentials_provider = std::move(*provider);
+    if (not resolved_creds->access_key_id.empty()
+        or not resolved_creds->profile.empty()) {
+      opts->credentials_kind = arrow::fs::S3CredentialsKind::Explicit;
+    } else if (not resolved_creds->role.empty()) {
+      opts->credentials_kind = arrow::fs::S3CredentialsKind::Role;
+    }
   }
   return opts.MoveValueUnsafe();
 }

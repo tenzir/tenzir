@@ -21,30 +21,6 @@
 namespace tenzir {
 
 // TODO: Move to the shared Amazon module as `tenzir::amazon`.
-/// Holds temporary credentials from STS AssumeRole or profile loading.
-struct sts_credentials {
-  std::string access_key_id;
-  std::string secret_access_key;
-  std::string session_token;
-};
-
-// TODO: Move to the shared Amazon module as `tenzir::amazon`.
-/// Calls STS AssumeRole using base credentials and returns temporary
-/// credentials.
-auto assume_role_with_credentials(const resolved_aws_credentials& base_creds,
-                                  const std::string& role_arn,
-                                  const std::string& session_name,
-                                  const std::string& external_id,
-                                  const Option<std::string>& region)
-  -> caf::expected<sts_credentials>;
-
-// TODO: Move to the shared Amazon module as `tenzir::amazon`.
-/// Loads credentials from an AWS CLI profile, including credential-process and
-/// SSO-backed profiles.
-auto load_profile_credentials(const std::string& profile)
-  -> caf::expected<sts_credentials>;
-
-// TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Creates the default AWS credential provider chain with bounded IMDS latency.
 ///
 /// The returned chain keeps IMDS enabled but constrains metadata lookups to a

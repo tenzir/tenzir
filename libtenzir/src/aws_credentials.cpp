@@ -23,7 +23,6 @@
 #include <aws/core/auth/SSOCredentialsProvider.h>
 #include <aws/identity-management/auth/STSAssumeRoleCredentialsProvider.h>
 #include <aws/sts/STSClient.h>
-#include <aws/sts/model/AssumeRoleRequest.h>
 #include <aws/sts/model/AssumeRoleWithWebIdentityRequest.h>
 
 #include <algorithm>
@@ -260,60 +259,6 @@ public:
 };
 
 } // namespace
-auto assume_role_with_credentials(const resolved_aws_credentials& base_creds,
-                                  const std::string& role_arn,
-                                  const std::string& session_name,
-                                  const std::string& external_id,
-                                  const Option<std::string>& region)
-  -> caf::expected<sts_credentials> {
-  // Create STS client configuration with cached endpoint settings.
-  auto config = make_sts_client_config(region);
-  // Create credentials provider from base credentials.
-  auto base_credentials
-    = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
-      base_creds.access_key_id, base_creds.secret_access_key,
-      base_creds.session_token);
-  // Create STS client.
-  auto sts_client = Aws::STS::STSClient{base_credentials, nullptr, config};
-  // Build AssumeRole request.
-  auto request = Aws::STS::Model::AssumeRoleRequest{};
-  request.SetRoleArn(role_arn);
-  request.SetRoleSessionName(session_name.empty() ? "tenzir-session"
-                                                  : session_name);
-  if (not external_id.empty()) {
-    request.SetExternalId(external_id);
-  }
-  // Perform the AssumeRole call.
-  auto outcome = sts_client.AssumeRole(request);
-  if (not outcome.IsSuccess()) {
-    return diagnostic::error("failed to assume role")
-      .note("role ARN: {}", role_arn)
-      .note("{}", outcome.GetError().GetMessage())
-      .to_error();
-  }
-  // Extract temporary credentials.
-  const auto& creds = outcome.GetResult().GetCredentials();
-  return sts_credentials{
-    .access_key_id = creds.GetAccessKeyId(),
-    .secret_access_key = creds.GetSecretAccessKey(),
-    .session_token = creds.GetSessionToken(),
-  };
-}
-
-auto load_profile_credentials(const std::string& profile)
-  -> caf::expected<sts_credentials> {
-  TENZIR_VERBOSE("using AWS profile {}", profile);
-  auto provider = make_profile_aws_credentials_provider(profile);
-  auto creds = get_profile_credentials(*provider, profile);
-  if (not creds) {
-    return creds.error();
-  }
-  return sts_credentials{
-    .access_key_id = creds->GetAWSAccessKeyId(),
-    .secret_access_key = creds->GetAWSSecretKey(),
-    .session_token = creds->GetSessionToken(),
-  };
-}
 
 auto fetch_web_identity_token(const resolved_web_identity& web_identity)
   -> caf::expected<std::string> {
@@ -515,15 +460,37 @@ auto make_aws_credentials_provider(const Option<resolved_aws_credentials>& creds
     return provider;
   }
   if (has_explicit_creds and has_role) {
-    // Explicit credentials + role: use STS to assume role.
-    auto sts_creds = assume_role_with_credentials(
-      *creds, creds->role, session_name, creds->external_id, region);
-    if (not sts_creds) {
-      return sts_creds.error();
+    // Explicit credentials + role: keep the base credentials provider so the
+    // derived STS session can be refreshed.
+    auto base_provider
+      = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
+        creds->access_key_id, creds->secret_access_key, creds->session_token);
+    auto sts_config = make_sts_client_config(region);
+    auto sts_client = std::make_shared<Aws::STS::STSClient>(
+      base_provider, nullptr, sts_config);
+    auto session = session_name.empty() ? "tenzir-session" : session_name;
+    // The SDK also uses this value as AssumeRole's DurationSeconds. Preserve
+    // the one-hour AWS default used by the previous direct request.
+    constexpr auto session_duration_seconds = 3600;
+    auto provider
+      = std::make_shared<Aws::Auth::STSAssumeRoleCredentialsProvider>(
+        creds->role, session, creds->external_id, session_duration_seconds,
+        sts_client);
+    auto assumed_creds = provider->GetAWSCredentials();
+    if (assumed_creds.IsEmpty()) {
+      return diagnostic::error("failed to assume role with explicit "
+                               "credentials")
+        .note("role ARN: {}", creds->role)
+        .hint("check that the credentials can call `sts:AssumeRole`")
+        .to_error();
     }
-    return std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
-      sts_creds->access_key_id, sts_creds->secret_access_key,
-      sts_creds->session_token);
+    if (assumed_creds.IsExpired()) {
+      return diagnostic::error(
+               "assume-role provider returned expired credentials")
+        .note("role ARN: {}", creds->role)
+        .to_error();
+    }
+    return provider;
   }
   if (has_explicit_creds) {
     // Explicit credentials only.
