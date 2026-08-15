@@ -71,7 +71,7 @@ struct DispatchState {
   chunk_ptr ready_chunk;
 };
 
-auto make_capture_file_header(int snaplen, int linktype) -> pcap::file_header {
+auto make_capture_file_header(int snaplen, int linktype) -> pcap::FileHeader {
   return {
     // Timestamps have microsecond resolution when using pcap_open_live(). If
     // we want nanosecond resolution, we must switch to pcap_create() and
@@ -147,7 +147,7 @@ public:
     if (not batch_started_at_) {
       batch_started_at_ = std::chrono::steady_clock::now();
     }
-    auto header = pcap::packet_header{
+    auto header = pcap::PacketHeader{
       .timestamp = detail::narrow_cast<uint32_t>(pkt_hdr.ts.tv_sec),
       .timestamp_fraction = detail::narrow_cast<uint32_t>(pkt_hdr.ts.tv_usec),
       .captured_packet_length = pkt_hdr.caplen,

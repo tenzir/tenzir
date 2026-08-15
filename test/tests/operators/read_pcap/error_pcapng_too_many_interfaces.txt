@@ -1,0 +1,3 @@
+error: PCAPNG section exceeds maximum interface count
+  = note: maximum is 4096
+  = note: from `pcapng`

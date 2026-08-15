@@ -132,6 +132,18 @@ TEST("checked_mul") {
   BAD(checked_mul(min<S>, max<S>));
 }
 
+TEST("checked_pow") {
+  GOOD(checked_pow(U(0), 0), U(1));
+  GOOD(checked_pow(U(0), 1), U(0));
+  GOOD(checked_pow(U(10), 19), U(10'000'000'000'000'000'000ULL));
+  BAD(checked_pow(U(10), 20));
+  GOOD(checked_pow(U(2), 63), U(1) << 63);
+  BAD(checked_pow(U(2), 64));
+  GOOD(checked_pow(S(-2), 3), S(-8));
+  GOOD(checked_pow(S(-2), 4), S(16));
+  BAD(checked_pow(S(2), 63));
+}
+
 } // namespace
 
 } // namespace tenzir

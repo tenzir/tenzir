@@ -1,0 +1,18 @@
+{
+  linktype: 1,
+  timestamp: 1970-01-01T00:00:01.500Z,
+  captured_packet_length: 3,
+  original_packet_length: 5,
+  data: b"abc",
+  section_id: 0,
+  interface_id: 0,
+}
+{
+  linktype: 1,
+  timestamp: null,
+  captured_packet_length: 3,
+  original_packet_length: 3,
+  data: b"xyz",
+  section_id: 0,
+  interface_id: 0,
+}

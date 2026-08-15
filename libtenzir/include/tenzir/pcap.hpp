@@ -33,7 +33,7 @@ constexpr uint32_t magic_number_1 = 0xa1b2c3d4;
 constexpr uint32_t magic_number_2 = 0xa1b23c4d;
 
 /// The PCAP file header.
-struct file_header {
+struct FileHeader {
   uint32_t magic_number;
   uint16_t major_version;
   uint16_t minor_version;
@@ -44,16 +44,16 @@ struct file_header {
 } __attribute__((packed));
 
 // The file header length is 24 octets.
-static_assert(sizeof(file_header) == 24);
+static_assert(sizeof(FileHeader) == 24);
 
-auto as_bytes(const file_header& x)
-  -> std::span<const std::byte, sizeof(file_header)>;
+auto as_bytes(FileHeader const& header)
+  -> std::span<std::byte const, sizeof(FileHeader)>;
 
-auto as_writeable_bytes(file_header& x)
-  -> std::span<std::byte, sizeof(file_header)>;
+auto as_writeable_bytes(FileHeader& header)
+  -> std::span<std::byte, sizeof(FileHeader)>;
 
 /// The packet header.
-struct packet_header {
+struct PacketHeader {
   uint32_t timestamp;
   uint32_t timestamp_fraction;
   uint32_t captured_packet_length;
@@ -61,46 +61,47 @@ struct packet_header {
 } __attribute__((packed));
 
 // The packet header length is 16 octets.
-static_assert(sizeof(packet_header) == 16);
+static_assert(sizeof(PacketHeader) == 16);
 
-auto as_bytes(const packet_header& x)
-  -> std::span<const std::byte, sizeof(packet_header)>;
+auto as_bytes(PacketHeader const& header)
+  -> std::span<std::byte const, sizeof(PacketHeader)>;
 
-auto as_writeable_bytes(packet_header& x)
-  -> std::span<std::byte, sizeof(packet_header)>;
+auto as_writeable_bytes(PacketHeader& header)
+  -> std::span<std::byte, sizeof(PacketHeader)>;
 
 // Checks whether a packet header is actually a packet header. This is a
 // heuristic based on the binary shape of the header, not a standard-compliant
 // check. However, it works robustly in practice.
-auto is_file_header(const packet_header& header) -> bool;
+auto is_file_header(PacketHeader const& header) -> bool;
 
 // PCAP files are written out with the system endianness, so we may have to
 // swap bytes whenever the local endianness differs from the trace file. The
 // magic number in the file helps identifying the endianness.
 
 /// Swaps bytes in the file header.
-auto byteswap(file_header hdr) -> file_header;
+auto byteswap(FileHeader header) -> FileHeader;
 
 /// Swaps bytes in the packet header.
-auto byteswap(packet_header hdr) -> packet_header;
+auto byteswap(PacketHeader header) -> PacketHeader;
 
 /// Determines whether PCAP header values need byte swapping.
-/// @returns `None{}` on invalid magic and boolean otherwise.
+///
+/// Returns `None` for an invalid magic number.
 auto need_byte_swap(uint32_t magic) -> Option<bool>;
 
-/// A container for storing a single coming from the network. Header and data
-/// lay next to each other on the wire.
-struct packet_record {
-  packet_header header;
-  std::span<const std::byte> data;
+/// A container for storing a single packet. Header and data lie next to each
+/// other on the wire.
+struct PacketRecord {
+  PacketHeader header;
+  std::span<std::byte const> data;
 };
 
 /// Creates the `pcap.file_header` type.
-/// @relates file_header
+/// @relates FileHeader
 auto file_header_type() -> type;
 
 /// Creates the `pcap.packet` type.
-/// @relates packet_record
+/// @relates PacketRecord
 auto packet_record_type() -> type;
 
 } // namespace tenzir::pcap

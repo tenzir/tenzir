@@ -1,0 +1,6 @@
+from_file f"{env("TENZIR_INPUTS")}/pcap/multi-interface-mixed-endian.pcapng" {
+  read_pcap
+}
+write_pcap
+read_pcap
+drop data?, section_id?, interface_id?

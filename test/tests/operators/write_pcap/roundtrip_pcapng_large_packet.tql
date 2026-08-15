@@ -1,0 +1,13 @@
+from {
+  linktype: uint(1),
+  timestamp: time("2020-01-02T03:04:05.123456789Z"),
+  captured_packet_length: uint(262145),
+  original_packet_length: uint(262145),
+  data: "x".repeat(262145),
+  section_id: uint(0),
+  interface_id: uint(0),
+}
+@name = "pcap.packet"
+write_pcap format="pcapng"
+read_pcap
+drop data?, section_id?, interface_id?

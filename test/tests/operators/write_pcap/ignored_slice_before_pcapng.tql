@@ -1,0 +1,13 @@
+from {ignored: true}, {
+  pcap: {
+    linktype: uint(1),
+    timestamp: time("2020-01-02T03:04:05.123456789Z"),
+    captured_packet_length: uint(1),
+    original_packet_length: uint(1),
+    data: b"\x00",
+  },
+}
+@name = "tenzir.packet"
+write_pcap format="pcapng"
+read_pcap
+drop data?, section_id?, interface_id?

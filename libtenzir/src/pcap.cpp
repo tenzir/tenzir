@@ -12,34 +12,33 @@
 
 namespace tenzir::pcap {
 
-auto as_bytes(const file_header& header)
-  -> std::span<const std::byte, sizeof(file_header)> {
-  const auto* ptr = reinterpret_cast<const std::byte*>(&header);
-  return std::span<const std::byte, sizeof(file_header)>{ptr,
-                                                         sizeof(file_header)};
+auto as_bytes(FileHeader const& header)
+  -> std::span<std::byte const, sizeof(FileHeader)> {
+  auto const* ptr = reinterpret_cast<std::byte const*>(&header);
+  return std::span<std::byte const, sizeof(FileHeader)>{ptr,
+                                                        sizeof(FileHeader)};
 }
 
-auto as_writeable_bytes(file_header& header)
-  -> std::span<std::byte, sizeof(file_header)> {
+auto as_writeable_bytes(FileHeader& header)
+  -> std::span<std::byte, sizeof(FileHeader)> {
   auto* ptr = reinterpret_cast<std::byte*>(&header);
-  return std::span<std::byte, sizeof(file_header)>{ptr, sizeof(file_header)};
+  return std::span<std::byte, sizeof(FileHeader)>{ptr, sizeof(FileHeader)};
 }
 
-auto as_bytes(const packet_header& header)
-  -> std::span<const std::byte, sizeof(packet_header)> {
-  const auto* ptr = reinterpret_cast<const std::byte*>(&header);
-  return std::span<const std::byte, sizeof(packet_header)>{
-    ptr, sizeof(packet_header)};
+auto as_bytes(PacketHeader const& header)
+  -> std::span<std::byte const, sizeof(PacketHeader)> {
+  auto const* ptr = reinterpret_cast<std::byte const*>(&header);
+  return std::span<std::byte const, sizeof(PacketHeader)>{ptr,
+                                                          sizeof(PacketHeader)};
 }
 
-auto as_writeable_bytes(packet_header& header)
-  -> std::span<std::byte, sizeof(packet_header)> {
+auto as_writeable_bytes(PacketHeader& header)
+  -> std::span<std::byte, sizeof(PacketHeader)> {
   auto* ptr = reinterpret_cast<std::byte*>(&header);
-  return std::span<std::byte, sizeof(packet_header)>{ptr,
-                                                     sizeof(packet_header)};
+  return std::span<std::byte, sizeof(PacketHeader)>{ptr, sizeof(PacketHeader)};
 }
 
-auto is_file_header(const packet_header& header) -> bool {
+auto is_file_header(PacketHeader const& header) -> bool {
   // Here they are two headers side by side:
   //
   //                FILE HEADER                      PACKET HEADER
@@ -87,24 +86,26 @@ auto is_file_header(const packet_header& header) -> bool {
   return major_version == 4 and minor_version == 2;
 }
 
-auto byteswap(file_header hdr) -> file_header {
-  auto result = file_header{};
-  result.magic_number = detail::byteswap(hdr.magic_number);
-  result.major_version = detail::byteswap(hdr.major_version);
-  result.minor_version = detail::byteswap(hdr.minor_version);
-  result.reserved1 = detail::byteswap(hdr.reserved1);
-  result.reserved2 = detail::byteswap(hdr.reserved2);
-  result.snaplen = detail::byteswap(hdr.snaplen);
-  result.linktype = detail::byteswap(hdr.linktype);
+auto byteswap(FileHeader header) -> FileHeader {
+  auto result = FileHeader{};
+  result.magic_number = detail::byteswap(header.magic_number);
+  result.major_version = detail::byteswap(header.major_version);
+  result.minor_version = detail::byteswap(header.minor_version);
+  result.reserved1 = detail::byteswap(header.reserved1);
+  result.reserved2 = detail::byteswap(header.reserved2);
+  result.snaplen = detail::byteswap(header.snaplen);
+  result.linktype = detail::byteswap(header.linktype);
   return result;
 }
 
-auto byteswap(packet_header hdr) -> packet_header {
-  auto result = packet_header{};
-  result.timestamp = detail::byteswap(hdr.timestamp);
-  result.timestamp_fraction = detail::byteswap(hdr.timestamp_fraction);
-  result.captured_packet_length = detail::byteswap(hdr.captured_packet_length);
-  result.original_packet_length = detail::byteswap(hdr.original_packet_length);
+auto byteswap(PacketHeader header) -> PacketHeader {
+  auto result = PacketHeader{};
+  result.timestamp = detail::byteswap(header.timestamp);
+  result.timestamp_fraction = detail::byteswap(header.timestamp_fraction);
+  result.captured_packet_length
+    = detail::byteswap(header.captured_packet_length);
+  result.original_packet_length
+    = detail::byteswap(header.original_packet_length);
   return result;
 }
 

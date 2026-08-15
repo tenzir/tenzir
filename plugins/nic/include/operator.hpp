@@ -51,7 +51,7 @@ struct loader_args {
   }
 };
 
-auto make_file_header(int snaplen, int linktype) -> pcap::file_header {
+auto make_file_header(int snaplen, int linktype) -> pcap::FileHeader {
   return {
     // Timestamps have microsecond resolution when using pcap_open_live(). If we
     // want nanosecond resolution, we must stop using pcap_open_live() and
@@ -164,7 +164,7 @@ public:
         auto header = make_file_header(snaplen, linktype);
         co_yield chunk::copy(as_bytes(header));
       }
-      auto header = pcap::packet_header{
+      auto header = pcap::PacketHeader{
         .timestamp = detail::narrow_cast<uint32_t>(pkt_hdr->ts.tv_sec),
         .timestamp_fraction
         = detail::narrow_cast<uint32_t>(pkt_hdr->ts.tv_usec),
@@ -175,9 +175,9 @@ public:
         reinterpret_cast<const std::byte*>(pkt_data),
         static_cast<size_t>(pkt_hdr->caplen)};
       auto buffer_size = buffer.size();
-      buffer.resize(buffer_size + sizeof(pcap::packet_header) + data.size());
+      buffer.resize(buffer_size + sizeof(pcap::PacketHeader) + data.size());
       std::memcpy(buffer.data() + buffer_size, &header, sizeof(header));
-      std::memcpy(buffer.data() + buffer_size + sizeof(pcap::packet_header),
+      std::memcpy(buffer.data() + buffer_size + sizeof(pcap::PacketHeader),
                   data.data(), data.size());
       ++num_buffered_packets;
       ++num_packets;

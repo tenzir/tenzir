@@ -1,0 +1,6 @@
+{
+  linktype: 1,
+  timestamp: 2020-01-02T03:04:05.123456789Z,
+  captured_packet_length: 262145,
+  original_packet_length: 262145,
+}

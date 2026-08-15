@@ -11,6 +11,7 @@
 #include "tenzir/option.hpp"
 
 #include <concepts>
+#include <cstdint>
 #include <limits>
 #include <type_traits>
 
@@ -142,6 +143,31 @@ constexpr auto checked_mul(X x, Y y)
     }
     return x * y;
   }
+}
+
+/// Computes an integer power, returning `None` on overflow.
+template <std::integral T>
+constexpr auto checked_pow(T base, uint64_t exponent) -> Option<T> {
+  auto result = T{1};
+  while (exponent != 0) {
+    if ((exponent & 1) != 0) {
+      auto product = checked_mul(result, base);
+      if (not product) {
+        return None{};
+      }
+      result = *product;
+    }
+    exponent >>= 1;
+    if (exponent == 0) {
+      break;
+    }
+    auto square = checked_mul(base, base);
+    if (not square) {
+      return None{};
+    }
+    base = *square;
+  }
+  return result;
 }
 
 #undef TENZIR_CHECKED_MATH_CHECK

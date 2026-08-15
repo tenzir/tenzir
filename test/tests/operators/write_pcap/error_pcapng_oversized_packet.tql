@@ -1,0 +1,13 @@
+---
+error: true
+---
+
+from {
+  linktype: uint(1),
+  timestamp: time("2020-01-02T03:04:05.123456789Z"),
+  captured_packet_length: uint(67108864),
+  original_packet_length: uint(67108864),
+  data: b"",
+}
+@name = "pcap.packet"
+write_pcap format="pcapng"

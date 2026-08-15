@@ -1,0 +1,15 @@
+from {i: [0, 1, 2]}
+unroll i
+this = {
+  linktype: uint(1),
+  timestamp: time("2020-01-02T03:04:05.123456789Z"),
+  captured_packet_length: uint(600000),
+  original_packet_length: uint(600000),
+  data: "x".repeat(600000),
+  section_id: uint(i),
+  interface_id: uint(i),
+}
+@name = "pcap.packet"
+write_pcap format="pcapng"
+read_pcap
+summarize count=count()

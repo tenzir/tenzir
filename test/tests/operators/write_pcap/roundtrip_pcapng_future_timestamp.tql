@@ -1,0 +1,13 @@
+from {
+  linktype: uint(1),
+  timestamp: time("2200-01-02T03:04:05.123456789Z"),
+  captured_packet_length: uint(1),
+  original_packet_length: uint(1),
+  data: b"\x00",
+  section_id: uint(0),
+  interface_id: uint(0),
+}
+@name = "pcap.packet"
+write_pcap
+read_pcap
+drop data?, section_id?, interface_id?

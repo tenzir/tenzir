@@ -1,0 +1,15 @@
+{
+  linktype: 1,
+  section_id: 0,
+  interface_id: 0,
+}
+{
+  linktype: 101,
+  section_id: 0,
+  interface_id: 1,
+}
+{
+  linktype: 1,
+  section_id: 0,
+  interface_id: 0,
+}
