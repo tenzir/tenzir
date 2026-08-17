@@ -1,0 +1,3 @@
+// Three branches fan out into three lanes and fold back into one.
+version
+fork_merge { head 1 }, { tail 1 }, { pass }

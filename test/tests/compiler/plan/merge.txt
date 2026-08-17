@@ -1,10 +1,11 @@
-c0: version
-c1: version
-c2: to_stdout -> {output}
-c3: {input} -> pass
-
-links:
-  c0 -> c2
-  c1 -> c2
-  c3 -> c0
-  c3 -> c1
+● {input}
+│
+● pass
+├─┐
+● │ version
+│ │
+│ ● version
+├─┘
+● to_stdout
+│
+● {output}

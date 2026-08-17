@@ -3,11 +3,11 @@
 ● version
 │
 ● fork_merge
-├─┐
-● │ head
-│ │
-│ ● tail
-├─┘
+├─┬─┐
+● │ │ head
+│ │ │
+│ ● │ tail
+├─┴─┘
 ● to_stdout
 │
 ● {output}

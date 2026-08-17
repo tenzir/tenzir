@@ -1,1 +1,9 @@
-c0: {input} -> from -> group(x4, keyed) -> to_stdout -> {output}
+● {input}
+│
+● from
+│
+● group(x4, keyed)
+│
+● to_stdout
+│
+● {output}

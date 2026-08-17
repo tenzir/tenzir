@@ -1,0 +1,15 @@
+● {input}
+│
+● version
+│
+● fork_merge
+├─┐
+● │ fork_merge
+├───┐
+● │ │ head
+│ │ │
+│ │ ● tail
+├─┴─┘
+● to_stdout
+│
+● {output}

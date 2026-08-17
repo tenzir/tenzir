@@ -401,9 +401,12 @@ struct Plan {
 
 /// Render a debug text description of a `Plan`.
 ///
-/// The output is intended for snapshot tests: it decomposes the plan DAG into
-/// maximal linear chains (printed inline with channel glyphs) plus a `links:`
-/// section listing the non-linear cross-chain edges.
+/// The output is intended for snapshot tests. It draws the plan DAG as a
+/// `git log --graph`-style lane diagram that flows top-down in data-flow
+/// direction: one node per line, with every channel drawn as a connector line
+/// in between. The plan's external input and output participate as `{input}`
+/// and `{output}` nodes. Channels use box-drawing glyphs; regular channels are
+/// single (`│`, `├─┐`) and fused ones are doubled (`║`, `╠═╗`).
 auto fmt_ir_plan(const Plan& plan) -> std::string;
 
 /// Instantiate a compiled pipeline: resolve its `let` bindings and substitute

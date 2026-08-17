@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
 
@@ -14,6 +15,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <span>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -23,44 +25,236 @@ namespace tenzir {
 
 namespace {
 
-/// The glyph drawn for a regular edge. The distribution (direct/scatter/
-/// gather/shuffle) is not rendered.
-constexpr auto edge_glyph = std::string_view{"->"};
+/// The plan is rendered as a `git log --graph`-style lane diagram that flows
+/// top-down in data-flow direction: one node per line, with the channels drawn
+/// as connector lines in between.
+///
+/// Channels use box-drawing glyphs, single for regular channels and doubled
+/// for fused ones (run-to-completion per item).
 
-/// The glyph drawn for a fused edge (run-to-completion per item).
-constexpr auto fused_edge_glyph = std::string_view{">"};
+/// The glyph marking a node in its own lane.
+constexpr auto node_glyph = std::string_view{"●"};
 
-/// Selects the glyph for a channel based on whether it is fused.
-constexpr auto glyph_for(bool fused) -> std::string_view {
-  return fused ? fused_edge_glyph : edge_glyph;
+constexpr auto vertical(bool fused) -> std::string_view {
+  return fused ? "║" : "│";
 }
 
-/// An inline edge to another node, i.e., one that is drawn within a chain.
-struct InlineEdge {
-  /// Index into `Plan::operators` of the downstream operator.
-  size_t to{};
-  /// Whether the channel behind this edge is fused.
+constexpr auto horizontal(bool fused) -> std::string_view {
+  return fused ? "═" : "─";
+}
+
+/// The corner where a channel leaves the fan-out run downwards. The vertical
+/// and left-horizontal styles can differ.
+constexpr auto corner_down(bool vertical_fused, bool horizontal_fused)
+  -> std::string_view {
+  if (vertical_fused) {
+    return horizontal_fused ? "╗" : "╖";
+  }
+  return horizontal_fused ? "╕" : "┐";
+}
+
+/// The corner where a channel joins the fan-in run from above. The vertical
+/// and left-horizontal styles can differ.
+constexpr auto corner_up(bool vertical_fused, bool horizontal_fused)
+  -> std::string_view {
+  if (vertical_fused) {
+    return horizontal_fused ? "╝" : "╜";
+  }
+  return horizontal_fused ? "╛" : "┘";
+}
+
+/// An intermediate tee of a fan-out or fan-in run. The vertical and horizontal
+/// styles can differ. When the left and right horizontal styles differ (left
+/// single, right fused — which happens when this leg is the rightmost
+/// non-fused one), there is no matching Unicode box-drawing glyph; the left
+/// (single) style is used as the approximation.
+constexpr auto tee_down(bool vertical_fused, bool horizontal_fused)
+  -> std::string_view {
+  if (vertical_fused) {
+    return horizontal_fused ? "╦" : "╥";
+  }
+  return horizontal_fused ? "╤" : "┬";
+}
+
+constexpr auto tee_up(bool vertical_fused, bool horizontal_fused)
+  -> std::string_view {
+  if (vertical_fused) {
+    return horizontal_fused ? "╩" : "╨";
+  }
+  return horizontal_fused ? "╧" : "┴";
+}
+
+/// The tee at the anchor lane of a run, where the vertical and the horizontal
+/// style can differ.
+constexpr auto tee_right(bool vertical_fused, bool horizontal_fused)
+  -> std::string_view {
+  if (vertical_fused) {
+    return horizontal_fused ? "╠" : "╟";
+  }
+  return horizontal_fused ? "╞" : "├";
+}
+
+/// A channel that has been drawn from its source but not yet into its target.
+struct Lane {
+  bool used = false;
+  size_t target = 0;
+  bool fused = false;
+};
+
+/// One participant of a fan-out or fan-in run: its lane and channel style.
+struct Leg {
+  size_t lane{};
   bool fused{};
 };
 
-/// Per-node state derived from the plan's channels.
-///
-/// An edge is drawn inline when it is the only outgoing edge of its source and
-/// the only incoming edge of its target; all other edges end up in the
-/// `links:` section.
-struct Node {
-  /// The number of channels entering and leaving this node.
-  size_t in_degree{};
-  size_t out_degree{};
-  /// The inline predecessor, if any.
-  Option<size_t> prev;
-  /// The inline successor, if any.
-  Option<InlineEdge> next;
-  /// Whether the inline edge from `{input}` exists, and whether it is fused.
-  Option<bool> from_input;
-  /// Whether the inline edge to `{output}` exists, and whether it is fused.
-  Option<bool> to_output;
+/// The lanes currently in flight, indexed by column.
+class LaneSet {
+public:
+  auto operator[](size_t i) -> Lane& {
+    return lanes_[i];
+  }
+
+  auto get(size_t i) const -> Lane {
+    return i < lanes_.size() ? lanes_[i] : Lane{};
+  }
+
+  /// Allocate the leftmost free lane at or after `start`.
+  auto allocate(size_t start) -> size_t {
+    auto i = start;
+    while (i < lanes_.size() and lanes_[i].used) {
+      ++i;
+    }
+    if (i >= lanes_.size()) {
+      lanes_.resize(i + 1);
+    }
+    return i;
+  }
+
+  /// The rightmost lane in use, or `None` if all lanes are free.
+  auto last_used() const -> Option<size_t> {
+    for (auto i = lanes_.size(); i > 0; --i) {
+      if (lanes_[i - 1].used) {
+        return i - 1;
+      }
+    }
+    return None{};
+  }
+
+private:
+  std::vector<Lane> lanes_;
 };
+
+/// Draw the line that carries a node, with `node_glyph` in the node's own lane.
+auto node_line(const LaneSet& lanes, size_t node_lane, std::string_view label)
+  -> std::string {
+  auto width = node_lane;
+  if (const auto last = lanes.last_used()) {
+    width = std::max(width, *last);
+  }
+  auto out = std::string{};
+  for (auto i = size_t{0}; i <= width; ++i) {
+    if (i > 0) {
+      out += ' ';
+    }
+    if (i == node_lane) {
+      out += node_glyph;
+    } else if (const auto lane = lanes.get(i); lane.used) {
+      out += vertical(lane.fused);
+    } else {
+      out += ' ';
+    }
+  }
+  out += ' ';
+  out += label;
+  out += '\n';
+  return out;
+}
+
+/// Draw a line that merely continues all lanes in flight.
+auto plain_line(const LaneSet& lanes) -> std::string {
+  const auto width = lanes.last_used();
+  if (not width) {
+    return {};
+  }
+  auto out = std::string{};
+  for (auto i = size_t{0}; i <= *width; ++i) {
+    if (i > 0) {
+      out += ' ';
+    }
+    if (const auto lane = lanes.get(i); lane.used) {
+      out += vertical(lane.fused);
+    } else {
+      out += ' ';
+    }
+  }
+  out += '\n';
+  return out;
+}
+
+/// Draw a fan-out (`down`) or fan-in (not `down`) run. The legs must be sorted
+/// by lane; the first one is the anchor lane that the run extends from.
+auto fan_line(const LaneSet& lanes, std::span<const Leg> legs, bool down)
+  -> std::string {
+  TENZIR_ASSERT(legs.size() > 1);
+  const auto lo = legs.front().lane;
+  const auto hi = legs.back().lane;
+  const auto leg_at = [&](size_t lane) -> Option<Leg> {
+    const auto it = std::ranges::find(legs, lane, &Leg::lane);
+    if (it == legs.end()) {
+      return None{};
+    }
+    return *it;
+  };
+  // A horizontal run right of column `x` carries all legs beyond it, so it is
+  // fused only if all of them are.
+  const auto run_fused = [&](size_t x) {
+    return std::ranges::all_of(legs, [&](const Leg& leg) {
+      return leg.lane <= x or leg.fused;
+    });
+  };
+  auto width = hi;
+  if (const auto last = lanes.last_used()) {
+    width = std::max(width, *last);
+  }
+  auto out = std::string{};
+  for (auto i = size_t{0}; i <= width; ++i) {
+    if (i > 0) {
+      out += (i - 1 >= lo and i <= hi) ? horizontal(run_fused(i - 1)) : " ";
+    }
+    const auto leg = leg_at(i);
+    if (i == lo) {
+      out += tee_right(leg->fused, run_fused(i));
+    } else if (leg) {
+      const auto last = i == hi;
+      // The left-horizontal style is run_fused(i-1); right is run_fused(i).
+      // run_fused is monotone (left fused ⇒ right fused), so run_fused(i-1)
+      // is the tighter constraint. When the sides disagree (left single,
+      // right fused) there is no matching Unicode glyph; the left (single)
+      // style is used as the approximation, as documented in tee_down/tee_up.
+      const auto horiz_fused = run_fused(i - 1);
+      if (down) {
+        out += last ? corner_down(leg->fused, horiz_fused)
+                    : tee_down(leg->fused, horiz_fused);
+      } else {
+        out += last ? corner_up(leg->fused, horiz_fused)
+                    : tee_up(leg->fused, horiz_fused);
+      }
+    } else if (lo < i and i < hi) {
+      // A run passing over an unrelated lane interrupts it, so that it is
+      // obvious that the two do not merge.
+      out += horizontal(run_fused(i));
+    } else if (const auto lane = lanes.get(i); lane.used) {
+      out += vertical(lane.fused);
+    } else {
+      out += ' ';
+    }
+  }
+  while (not out.empty() and out.back() == ' ') {
+    out.pop_back();
+  }
+  out += '\n';
+  return out;
+}
 
 /// The minimal, stable label for a planned operator node.
 ///
@@ -83,128 +277,165 @@ auto plan_node_label(const ir::PlannedOperator& node) -> std::string {
   return label;
 }
 
+/// An outgoing channel of a node, in port order.
+struct OutEdge {
+  size_t to{};
+  size_t port{};
+  bool fused{};
+};
+
 } // namespace
 
 auto ir::fmt_ir_plan(const ir::Plan& plan) -> std::string {
+  // The plan's external input and output are modeled as two extra nodes right
+  // after the operators, so that boundary channels need no special casing.
   const auto num_ops = plan.operators.size();
-  const auto is_op = [&](size_t x) {
-    return x < num_ops;
+  const auto input_node = num_ops;
+  const auto output_node = num_ops + 1;
+  const auto total = num_ops + 2;
+  const auto node_of = [&](size_t x) {
+    if (x == ir::Port::input) {
+      return input_node;
+    }
+    if (x == ir::Port::output) {
+      return output_node;
+    }
+    return x;
   };
-  auto nodes = std::vector<Node>(num_ops);
+  auto out_edges = std::vector<std::vector<OutEdge>>(total);
+  auto in_degree = std::vector<size_t>(total, 0);
+  auto exists = std::vector<bool>(total, false);
+  for (auto i = size_t{0}; i < num_ops; ++i) {
+    exists[i] = true;
+  }
   for (const auto& c : plan.channels) {
-    if (is_op(c.from)) {
-      ++nodes[c.from].out_degree;
-    }
-    if (is_op(c.to)) {
-      ++nodes[c.to].in_degree;
-    }
+    const auto from = node_of(c.from);
+    const auto to = node_of(c.to);
+    exists[from] = true;
+    exists[to] = true;
+    out_edges[from].push_back({to, c.from_port, c.fused});
+    ++in_degree[to];
   }
-  // Classify every channel as either an inline edge or a link.
-  auto link_channels = std::vector<const ir::Channel*>{};
-  for (const auto& c : plan.channels) {
-    const auto sole_out = is_op(c.from) and nodes[c.from].out_degree == 1;
-    const auto sole_in = is_op(c.to) and nodes[c.to].in_degree == 1;
-    if (c.from == ir::Port::input and sole_in) {
-      nodes[c.to].from_input = c.fused;
-    } else if (c.to == ir::Port::output and sole_out) {
-      nodes[c.from].to_output = c.fused;
-    } else if (sole_out and sole_in) {
-      nodes[c.from].next = InlineEdge{c.to, c.fused};
-      nodes[c.to].prev = c.from;
-    } else {
-      link_channels.push_back(&c);
-    }
-  }
-  // Build maximal chains, starting at the nodes without inline predecessor.
-  // The `visited` bookkeeping guards against cyclic plans, which have no such
-  // node at all; their nodes form chains of their own below.
-  auto chains = std::vector<std::vector<size_t>>{};
-  auto visited = std::vector<bool>(num_ops, false);
-  const auto make_chain = [&](size_t start) {
-    auto chain = std::vector<size_t>{start};
-    visited[start] = true;
-    auto cur = start;
-    while (nodes[cur].next and not visited[nodes[cur].next->to]) {
-      cur = nodes[cur].next->to;
-      visited[cur] = true;
-      chain.push_back(cur);
-    }
-    chains.push_back(std::move(chain));
-  };
-  for (auto u = size_t{0}; u < num_ops; ++u) {
-    if (not nodes[u].prev) {
-      make_chain(u);
-    }
-  }
-  for (auto u = size_t{0}; u < num_ops; ++u) {
-    if (not visited[u]) {
-      make_chain(u);
-    }
-  }
-  // Deterministic chain order by head node index.
-  std::ranges::sort(chains, [](const auto& a, const auto& b) {
-    return a.front() < b.front();
-  });
-  // Map each node to its chain coordinate.
-  auto chain_of = std::vector<size_t>(num_ops, 0);
-  for (auto ci = size_t{0}; ci < chains.size(); ++ci) {
-    for (const auto node : chains[ci]) {
-      chain_of[node] = ci;
-    }
-  }
-  auto out = std::string{};
-  // Print chains.
-  for (auto ci = size_t{0}; ci < chains.size(); ++ci) {
-    const auto& chain = chains[ci];
-    const auto& head = nodes[chain.front()];
-    const auto label = [&](size_t node) {
-      return plan_node_label(plan.operators[node]);
-    };
-    if (head.from_input) {
-      out += fmt::format("c{}: {{input}} {} {}", ci,
-                         glyph_for(*head.from_input), label(chain.front()));
-    } else {
-      out += fmt::format("c{}: {}", ci, label(chain.front()));
-    }
-    for (auto i = size_t{1}; i < chain.size(); ++i) {
-      out += fmt::format(" {} {}", glyph_for(nodes[chain[i - 1]].next->fused),
-                         label(chain[i]));
-    }
-    if (const auto& tail = nodes[chain.back()]; tail.to_output) {
-      out += fmt::format(" {} {{output}}", glyph_for(*tail.to_output));
-    }
-    out += '\n';
-  }
-  // Print links, ordered by the chains they connect. The plan's input sorts
-  // first and its output last.
-  if (not link_channels.empty()) {
-    const auto rank = [&](size_t x) -> size_t {
-      if (x == ir::Port::input) {
-        return 0;
-      }
-      if (x == ir::Port::output) {
-        return chains.size() + 1;
-      }
-      return chain_of[x] + 1;
-    };
-    std::ranges::sort(link_channels, [&](const auto* a, const auto* b) {
-      return std::tuple{rank(a->from), rank(a->to), a->from_port}
-             < std::tuple{rank(b->from), rank(b->to), b->from_port};
+  for (auto& edges : out_edges) {
+    std::ranges::sort(edges, [](const OutEdge& a, const OutEdge& b) {
+      return std::tuple{a.port, a.to} < std::tuple{b.port, b.to};
     });
-    const auto ref = [&](size_t x) -> std::string {
-      if (x == ir::Port::input) {
-        return "{input}";
-      }
-      if (x == ir::Port::output) {
-        return "{output}";
-      }
-      return fmt::format("c{}", chain_of[x]);
-    };
-    out += "\nlinks:\n";
-    for (const auto* c : link_channels) {
-      out += fmt::format("  {} {} {}\n", ref(c->from), glyph_for(c->fused),
-                         ref(c->to));
+  }
+  const auto label = [&](size_t node) -> std::string {
+    if (node == input_node) {
+      return "{input}";
     }
+    if (node == output_node) {
+      return "{output}";
+    }
+    return plan_node_label(plan.operators[node]);
+  };
+  // Nodes without incoming channels are emitted in this order: the plan input
+  // first, then the operators, and the plan output last.
+  const auto root_rank = [&](size_t node) -> size_t {
+    if (node == input_node) {
+      return 0;
+    }
+    if (node == output_node) {
+      return total;
+    }
+    return node + 1;
+  };
+  auto out = std::string{};
+  auto lanes = LaneSet{};
+  auto emitted = std::vector<bool>(total, false);
+  auto pending_in = std::vector<size_t>(total, 0);
+  auto remaining = static_cast<size_t>(std::ranges::count(exists, true));
+  // Whether the last line drawn is already a connector, in which case no plain
+  // continuation line is inserted before the next node.
+  auto connector = false;
+  auto first = true;
+  while (remaining > 0) {
+    // A node can be drawn once all of its incoming channels are in flight.
+    const auto ready = [&](size_t node) {
+      return exists[node] and not emitted[node]
+             and pending_in[node] == in_degree[node];
+    };
+    // Prefer the ready node that occupies the leftmost lane in flight, so that
+    // lanes are consumed in the order they were opened.
+    auto next = Option<size_t>{};
+    if (const auto last = lanes.last_used()) {
+      for (auto lane = size_t{0}; lane <= *last; ++lane) {
+        const auto l = lanes.get(lane);
+        if (l.used and ready(l.target)) {
+          next = l.target;
+          break;
+        }
+      }
+    }
+    if (not next) {
+      // No node is fed by a lane in flight, so pick a source node.
+      for (auto node = size_t{0}; node < total; ++node) {
+        if (ready(node) and (not next or root_rank(node) < root_rank(*next))) {
+          next = node;
+        }
+      }
+    }
+    if (not next) {
+      // Nothing is ready: the plan has a cycle, which should not occur. Draw
+      // the remaining nodes in index order, ignoring their unresolved inputs.
+      for (auto node = size_t{0}; node < total; ++node) {
+        if (exists[node] and not emitted[node]) {
+          next = node;
+          break;
+        }
+      }
+    }
+    TENZIR_ASSERT(next);
+    const auto node = *next;
+    // Collect the lanes feeding this node, left to right.
+    auto legs = std::vector<Leg>{};
+    if (const auto last = lanes.last_used()) {
+      for (auto lane = size_t{0}; lane <= *last; ++lane) {
+        if (const auto l = lanes.get(lane); l.used and l.target == node) {
+          legs.push_back({lane, l.fused});
+        }
+      }
+    }
+    auto node_lane = size_t{};
+    if (legs.size() > 1) {
+      out += fan_line(lanes, legs, false);
+      for (const auto& leg : std::span{legs}.subspan(1)) {
+        lanes[leg.lane] = Lane{};
+      }
+      node_lane = legs.front().lane;
+    } else {
+      if (not first and not connector) {
+        out += plain_line(lanes);
+      }
+      node_lane = legs.empty() ? lanes.allocate(0) : legs.front().lane;
+    }
+    if (not legs.empty()) {
+      lanes[node_lane] = Lane{};
+    }
+    out += node_line(lanes, node_lane, label(node));
+    // Open one lane per outgoing channel; the first port keeps the node's lane.
+    connector = false;
+    const auto& edges = out_edges[node];
+    if (not edges.empty()) {
+      auto next_legs = std::vector<Leg>{};
+      lanes[node_lane] = Lane{true, edges.front().to, edges.front().fused};
+      ++pending_in[edges.front().to];
+      next_legs.push_back({node_lane, edges.front().fused});
+      for (const auto& edge : std::span{edges}.subspan(1)) {
+        const auto lane = lanes.allocate(node_lane + 1);
+        lanes[lane] = Lane{true, edge.to, edge.fused};
+        ++pending_in[edge.to];
+        next_legs.push_back({lane, edge.fused});
+      }
+      if (next_legs.size() > 1) {
+        out += fan_line(lanes, next_legs, true);
+        connector = true;
+      }
+    }
+    emitted[node] = true;
+    first = false;
+    --remaining;
   }
   return out;
 }

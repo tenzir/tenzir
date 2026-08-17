@@ -1,10 +1,13 @@
-c0: {input} -> version -> fork
-c1: discard
-c2: to_stdout
-c3: pass -> {output}
-
-links:
-  c0 -> c1
-  c0 -> c2
-  c1 -> c3
-  c2 -> c3
+● {input}
+│
+● version
+│
+● fork
+├─┐
+● │ to_stdout
+│ │
+│ ● discard
+├─┘
+● pass
+│
+● {output}

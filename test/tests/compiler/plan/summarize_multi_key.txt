@@ -1,1 +1,9 @@
-c0: {input} -> from -> summarize(x4, keyed) -> to_stdout -> {output}
+● {input}
+│
+● from
+│
+● summarize(x4, keyed)
+│
+● to_stdout
+│
+● {output}

@@ -1,1 +1,11 @@
-c0: {input} -> from -> where(x32) -> summarize(x4, keyed) -> to_stdout -> {output}
+● {input}
+│
+● from
+│
+● where(x32)
+│
+● summarize(x4, keyed)
+│
+● to_stdout
+│
+● {output}

@@ -1,1 +1,7 @@
-c0: {input} -> version -> to_stdout -> {output}
+● {input}
+│
+● version
+│
+● to_stdout
+│
+● {output}

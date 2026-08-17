@@ -1,0 +1,4 @@
+// A nested fan-out opens its lane to the right of the outer branch, so its
+// run crosses the outer lane.
+version
+fork_merge { fork_merge { head 1 }, { tail 1 } }, { pass }

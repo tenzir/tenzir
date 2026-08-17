@@ -1,1 +1,11 @@
-c0: {input} -> version -> where(x6) -> head -> to_stdout -> {output}
+● {input}
+│
+● version
+│
+● where(x6)
+│
+● head
+│
+● to_stdout
+│
+● {output}

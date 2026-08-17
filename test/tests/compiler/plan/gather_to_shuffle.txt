@@ -1,6 +1,12 @@
-c0: {input} -> from -> fork_merge
-c1: deduplicate(x4, keyed) -> to_stdout -> {output}
-
-links:
-  c0 -> c1
-  c0 -> c1
+● {input}
+│
+● from
+│
+● fork_merge
+├─┐
+├─┘
+● deduplicate(x4, keyed)
+│
+● to_stdout
+│
+● {output}

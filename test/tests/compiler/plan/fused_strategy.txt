@@ -1,1 +1,11 @@
-c0: {input} -> from > where > summarize > to_stdout -> {output}
+● {input}
+│
+● from
+║
+● where
+║
+● summarize
+║
+● to_stdout
+│
+● {output}
