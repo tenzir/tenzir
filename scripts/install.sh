@@ -112,8 +112,9 @@ elif check doas; then
   sudo="doas"
 fi
 
-# The caller can supply a package URL with an environment variable. This should
-# only be used for testing modifications to the packaging.
+# The caller can supply a package URL with an environment variable, or redirect
+# the store the URL is built from with TENZIR_PACKAGE_URL_BASE below. Both
+# should only be used for testing modifications to the packaging.
 install_method=package
 if [ -n "${TENZIR_PACKAGE_URL:-}" ]; then
   package_url="${TENZIR_PACKAGE_URL}"
@@ -129,7 +130,12 @@ else
     install_method=homebrew
     homebrew_cask="tenzir/tenzir/tenzir"
   fi
-  package_url_base="https://storage.googleapis.com/tenzir-dist-public/packages/main"
+  # The caller can redirect the whole package store instead of naming one
+  # package. A release build uses this to install from its staging prefix,
+  # which is how the installer is exercised against the packages a release is
+  # about to publish rather than against the previous release's.
+  : "${TENZIR_PACKAGE_URL_BASE:=https://storage.googleapis.com/tenzir-dist-public/packages/main}"
+  package_url_base="${TENZIR_PACKAGE_URL_BASE}"
   if [ "${install_method}" = "homebrew" ]; then
     :
   elif [ "${package_format}" = "RPM" ]; then
