@@ -339,6 +339,23 @@ auto tls_options::add_tls_options(argument_parser2& parser) -> void {
     .named("password", password_);
 }
 
+auto tls_options::validate_mtls(diagnostic_handler& dh) const
+  -> failure_or<void> {
+  auto require_client_cert = get_tls_require_client_cert();
+  auto client_ca = get_tls_client_ca();
+  if (require_client_cert.inner and not client_ca) {
+    diagnostic::error(
+      "`tls.client_ca` is required when client certificates are required")
+      .primary(require_client_cert)
+      .emit(dh);
+    return failure::promise();
+  }
+  if (client_ca) {
+    TRY(resolve_regular_file(*client_ca, "client_ca", dh));
+  }
+  return {};
+}
+
 auto tls_options::validate(diagnostic_handler& dh) const -> failure_or<void> {
   // Validate the tls record structure first
   TRY(validate_tls_record(dh));
@@ -380,30 +397,16 @@ auto tls_options::validate(diagnostic_handler& dh) const -> failure_or<void> {
   warn_explicit(tls_client_ca_, "tls_client_ca", "client_ca");
   warn_explicit(tls_require_client_cert_, "tls_require_client_cert",
                 "require_client_cert");
-  if (get_tls().inner and not get_skip_peer_verification().inner) {
-    if (cacert_ and not std::filesystem::exists(cacert_->inner)) {
-      diagnostic::error("the configured CA certificate bundle does not exist")
-        .note("configured location: `{}`", cacert_->inner)
-        .primary(*cacert_)
-        .emit(dh);
-      return failure::promise();
+  if (not is_server_ and get_tls().inner
+      and not get_skip_peer_verification().inner) {
+    if (auto cacert = get_cacert()) {
+      TRY(resolve_regular_file(*cacert, "cacert", dh));
     }
   }
-  // Validate mTLS options
-  if (tls_require_client_cert_ and tls_require_client_cert_->inner
-      and not tls_client_ca_) {
-    diagnostic::error(
-      "`tls_require_client_cert` requires `tls_client_ca` to be set")
-      .primary(*tls_require_client_cert_)
-      .emit(dh);
-    return failure::promise();
-  }
-  if (tls_client_ca_ and not std::filesystem::exists(tls_client_ca_->inner)) {
-    diagnostic::error("the configured client CA certificate does not exist")
-      .note("configured location: `{}`", tls_client_ca_->inner)
-      .primary(*tls_client_ca_)
-      .emit(dh);
-    return failure::promise();
+  // Validate explicit paths now. Cross-option mTLS requirements are checked
+  // by `resolve()` after node-level defaults have been merged.
+  if (auto client_ca = get_tls_client_ca()) {
+    TRY(resolve_regular_file(*client_ca, "client_ca", dh));
   }
   if (skip_peer_verification_) {
     diagnostic::warning(
@@ -465,7 +468,7 @@ auto tls_options::apply_config(const caf::actor_system_config& cfg) -> void {
   // Merge node-config defaults into the cached members. Values explicitly set
   // on the operator (via `tls_` or a legacy top-level option) win and are not
   // overwritten -- this is what the per-getter precedence below encodes.
-  if (not tls_) {
+  if (not tls_ or tls_->source == location::unknown) {
     if (auto* x = query_config<bool>("tenzir.tls.enable", cfg)) {
       tls_ = located{data{*x}, location::unknown};
     }
@@ -783,15 +786,41 @@ auto TlsConfig::make_folly_ssl_context(diagnostic_handler& dh,
     }
   }
   auto should_verify_peer = not skip_verify or require_cert;
-  // Load CA certificate only when peer verification is enabled.
-  if (should_verify_peer and cacert) {
-    TRY(auto path, resolve_regular_file(*cacert, "cacert", dh));
+  if (is_server and require_cert and not tls_client_ca) {
+    diagnostic::error(
+      "`tls.client_ca` is required when client certificates are required")
+      .primary(tls_require_client_cert)
+      .emit(dh);
+    return failure::promise();
+  }
+  auto load_trusted_certificates
+    = [&](located<std::string> const& ca,
+          std::string_view key) -> failure_or<void> {
+    TRY(auto path, resolve_regular_file(ca, key, dh));
     try {
       ctx->loadTrustedCertificates(path.c_str());
     } catch (std::exception const& ex) {
       diagnostic::error("failed to load CA certificate: {}", ex.what())
-        .primary(*cacert)
+        .primary(ca)
         .emit(dh);
+      return failure::promise();
+    }
+    return {};
+  };
+  if (should_verify_peer) {
+    auto loaded_trust_anchor = false;
+    if (is_server) {
+      if (tls_client_ca) {
+        TRY(load_trusted_certificates(*tls_client_ca, "client_ca"));
+        loaded_trust_anchor = true;
+      }
+    } else if (cacert) {
+      TRY(load_trusted_certificates(*cacert, "cacert"));
+      loaded_trust_anchor = true;
+    }
+    if (not loaded_trust_anchor
+        and SSL_CTX_set_default_verify_paths(ctx->getSSLCtx()) != 1) {
+      diagnostic::error("failed to enable default verify paths").emit(dh);
       return failure::promise();
     }
   }
@@ -841,16 +870,15 @@ auto TlsConfig::make_folly_ssl_context(diagnostic_handler& dh,
       return failure::promise();
     }
   }
-  // Set verification mode.
-  if (skip_verify) {
+  // Requiring a client certificate always takes precedence over
+  // `skip_peer_verification` in server mode.
+  if (is_server and require_cert) {
+    ctx->setVerificationOption(
+      folly::SSLContext::SSLVerifyPeerEnum::VERIFY_REQ_CLIENT_CERT);
+  } else if (skip_verify) {
     ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::NO_VERIFY);
   } else {
     ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::VERIFY);
-    if (not cacert
-        and SSL_CTX_set_default_verify_paths(ctx->getSSLCtx()) != 1) {
-      diagnostic::error("failed to enable default verify paths").emit(dh);
-      return failure::promise();
-    }
   }
   return ctx;
 }
@@ -864,6 +892,7 @@ auto tls_options::resolve(const caf::actor_system_config& cfg,
   // Work on a copy so resolve() is `const` on the operator's stored options.
   auto merged = *this;
   merged.apply_config(cfg);
+  TRY(merged.validate_mtls(dh));
   auto to_option
     = [](Option<located<std::string>> x) -> Option<located<std::string>> {
     if (x) {
@@ -885,6 +914,7 @@ auto tls_options::resolve(const caf::actor_system_config& cfg,
   out.tls_ciphers = to_option(merged.get_tls_ciphers());
   out.tls_client_ca = to_option(merged.get_tls_client_ca());
   out.tls_require_client_cert = merged.get_tls_require_client_cert();
+  out.is_server = is_server_;
   out.uses_curl_http = uses_curl_http_;
   out.tls_arg_source = tls_ ? tls_->source : location::unknown;
   return out;
@@ -903,6 +933,7 @@ auto tls_options::resolve(std::string_view url, location url_loc,
   TRY(validate(url, url_loc, dh));
   auto merged = *this;
   merged.apply_config(cfg);
+  TRY(merged.validate_mtls(dh));
   auto to_option
     = [](Option<located<std::string>> x) -> Option<located<std::string>> {
     if (x) {
@@ -921,6 +952,7 @@ auto tls_options::resolve(std::string_view url, location url_loc,
   out.tls_ciphers = to_option(merged.get_tls_ciphers());
   out.tls_client_ca = to_option(merged.get_tls_client_ca());
   out.tls_require_client_cert = merged.get_tls_require_client_cert();
+  out.is_server = is_server_;
   out.uses_curl_http = uses_curl_http_;
   out.tls_arg_source = tls_ ? tls_->source : location::unknown;
   return out;
@@ -936,6 +968,7 @@ auto TlsConfig::defaults() -> TlsConfig {
   out.tls = located{true, location::unknown};
   out.skip_peer_verification = located{false, location::unknown};
   out.tls_require_client_cert = located{false, location::unknown};
+  out.is_server = false;
   out.uses_curl_http = false;
   out.tls_arg_source = location::unknown;
   return out;

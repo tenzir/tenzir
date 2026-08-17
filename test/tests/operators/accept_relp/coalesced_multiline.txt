@@ -1,0 +1,16 @@
+{
+  data: "hello\nworld",
+  peer_ip: 127.0.0.1,
+  peer_port_is_valid: true,
+  relp: {
+    transaction_id: 2,
+  },
+}
+{
+  data: "without trailing newline",
+  peer_ip: 127.0.0.1,
+  peer_port_is_valid: true,
+  relp: {
+    transaction_id: 3,
+  },
+}

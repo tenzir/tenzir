@@ -31,14 +31,11 @@
 #include <folly/CancellationToken.h>
 #include <folly/OperationCancelled.h>
 #include <folly/SocketAddress.h>
-#include <folly/io/IOBuf.h>
 #include <folly/io/async/AsyncServerSocket.h>
-#include <folly/io/async/AsyncSocket.h>
 #include <folly/io/async/AsyncSocketException.h>
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
 
-#include <array>
 #include <cstring>
 #include <limits>
 #include <memory>
@@ -270,9 +267,9 @@ struct TcpAccept {
         if (args_.auto_detect_tls) {
           auto* transport_evb = transport->getEventBase();
           TENZIR_ASSERT(transport_evb);
-          auto probe = co_await folly::coro::co_withExecutor(
-            transport_evb, probe_tls_client_hello(*transport));
-          should_upgrade = probe.is_tls;
+          should_upgrade = co_await folly::coro::co_withExecutor(
+            transport_evb,
+            probe_tls_client_hello(*transport, tls_probe_timeout));
         }
         if (should_upgrade) {
           transport = Box<folly::coro::Transport>{
@@ -397,108 +394,6 @@ struct TcpAccept {
   }
 
 private:
-  struct TlsProbeResult {
-    bool is_tls = false;
-  };
-
-  static auto could_be_tls_client_hello(std::span<std::byte const> bytes)
-    -> bool {
-    if (bytes.empty()) {
-      return false;
-    }
-    if (bytes[0] != std::byte{0x16}) {
-      return false;
-    }
-    if (bytes.size() >= 2 and bytes[1] != std::byte{0x03}) {
-      return false;
-    }
-    if (bytes.size() >= 3 and bytes[2] > std::byte{0x04}) {
-      return false;
-    }
-    if (bytes.size() >= 6 and bytes[5] != std::byte{0x01}) {
-      return false;
-    }
-    return true;
-  }
-
-  static auto looks_like_tls_client_hello(std::span<std::byte const> bytes)
-    -> bool {
-    return bytes.size() >= 6 and could_be_tls_client_hello(bytes);
-  }
-
-  static auto set_pre_received_data(folly::coro::Transport& transport,
-                                    std::span<std::byte const> bytes) -> void {
-    auto* socket = dynamic_cast<folly::AsyncSocket*>(transport.getTransport());
-    if (not socket) {
-      throw folly::AsyncSocketException{
-        folly::AsyncSocketException::INTERNAL_ERROR,
-        "transport is not backed by AsyncSocket",
-      };
-    }
-    socket->setPreReceivedData(
-      folly::IOBuf::copyBuffer(bytes.data(), bytes.size()));
-  }
-
-  static auto probe_tls_client_hello(folly::coro::Transport& transport)
-    -> Task<TlsProbeResult> {
-    auto prefix = std::array<std::byte, 6>{};
-    auto size = size_t{0};
-    auto deadline = std::chrono::steady_clock::now() + tls_probe_timeout;
-    auto throw_timed_out = [] {
-      throw folly::AsyncSocketException{
-        folly::AsyncSocketException::TIMED_OUT,
-        "TLS auto-detect probe timed out",
-      };
-    };
-    auto read_some = [&](size_t min_size) -> Task<void> {
-      while (size < min_size) {
-        auto now = std::chrono::steady_clock::now();
-        if (now >= deadline) {
-          throw_timed_out();
-        }
-        auto timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
-          deadline - now);
-        if (timeout <= std::chrono::milliseconds{0}) {
-          throw_timed_out();
-        }
-        auto* data = reinterpret_cast<unsigned char*>(prefix.data() + size);
-        auto n
-          = co_await transport.read(folly::MutableByteRange{data, 1}, timeout);
-        if (n == 0) {
-          co_return;
-        }
-        size += n;
-        if (not could_be_tls_client_hello(std::span{prefix.data(), size})) {
-          co_return;
-        }
-      }
-    };
-    auto timed_out = false;
-    try {
-      co_await read_some(1);
-      if (size == 0) {
-        co_return {};
-      }
-      if (prefix[0] == std::byte{0x16}) {
-        co_await read_some(prefix.size());
-      }
-    } catch (folly::AsyncSocketException const& ex) {
-      if (ex.getType() != folly::AsyncSocketException::TIMED_OUT) {
-        throw;
-      }
-      timed_out = true;
-    }
-    auto bytes = std::span{prefix.data(), size};
-    if (size > 0) {
-      set_pre_received_data(transport, bytes);
-    }
-    if (looks_like_tls_client_hello(bytes)
-        or (timed_out and could_be_tls_client_hello(bytes))) {
-      co_return TlsProbeResult{.is_tls = true};
-    }
-    co_return {};
-  }
-
   Args args_;
   folly::SocketAddress address_;
   Option<tls_options> tls_;

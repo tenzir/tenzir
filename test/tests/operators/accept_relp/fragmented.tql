@@ -1,0 +1,12 @@
+---
+fixtures:
+  - relp:
+      fragment_size: 1
+      payloads:
+        - fragmented
+timeout: 60
+---
+
+accept_relp env("RELP_ENDPOINT")
+select data, relp
+head 1

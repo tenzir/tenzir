@@ -1,0 +1,15 @@
+---
+fixtures:
+  - relp:
+      coalesce: true
+      payloads:
+        - "hello\nworld"
+        - "without trailing newline"
+timeout: 60
+---
+
+accept_relp env("RELP_ENDPOINT")
+peer_ip = peer.ip
+peer_port_is_valid = peer.port > 0
+select data, peer_ip, peer_port_is_valid, relp.transaction_id
+head 2

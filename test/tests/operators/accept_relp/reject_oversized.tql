@@ -1,0 +1,13 @@
+---
+fixtures:
+  - relp:
+      invalid_first: oversized
+      coalesce: true
+      payloads:
+        - recovered
+timeout: 60
+---
+
+accept_relp env("RELP_ENDPOINT"), max_message_size=64
+select data
+head 1

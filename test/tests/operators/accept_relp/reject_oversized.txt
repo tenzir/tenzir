@@ -1,0 +1,11 @@
+{
+  data: "recovered",
+}
+warning: rejected malformed RELP frame
+  --> tests/operators/accept_relp/reject_oversized.tql:11:13
+   |
+11 | accept_relp env("RELP_ENDPOINT"), max_message_size=64
+   |             ~~~~~~~~~~~~~~~~~~~~
+   |
+   = note: peer: 127.0.0.1
+   = note: reason: RELP frame exceeds `max_message_size` (999999999 > 64)

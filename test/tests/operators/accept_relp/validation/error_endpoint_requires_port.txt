@@ -1,0 +1,6 @@
+error: failed to parse endpoint
+ --> tests/operators/accept_relp/validation/error_endpoint_requires_port.tql:5:13
+  |
+5 | accept_relp "127.0.0.1"
+  |             ^^^^^^^^^^^
+  |

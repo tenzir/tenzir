@@ -12,10 +12,14 @@
 
 #include <folly/coro/Invoke.h>
 #include <folly/coro/Task.h>
+#include <folly/io/IOBuf.h>
 #include <folly/io/async/AsyncSSLSocket.h>
 #include <folly/io/coro/Transport.h>
 #include <folly/io/coro/TransportCallbackBase.h>
 #include <openssl/x509v3.h>
+
+#include <array>
+#include <span>
 
 namespace tenzir {
 
@@ -120,7 +124,82 @@ auto close_transport(folly::coro::Transport transport) -> void {
   });
 }
 
+auto could_be_tls_client_hello(std::span<std::byte const> bytes) -> bool {
+  if (bytes.empty() or bytes[0] != std::byte{0x16}) {
+    return false;
+  }
+  if (bytes.size() >= 2 and bytes[1] != std::byte{0x03}) {
+    return false;
+  }
+  if (bytes.size() >= 3 and bytes[2] > std::byte{0x04}) {
+    return false;
+  }
+  if (bytes.size() >= 6 and bytes[5] != std::byte{0x01}) {
+    return false;
+  }
+  return true;
+}
+
 } // namespace
+
+auto probe_tls_client_hello(folly::coro::Transport& transport,
+                            std::chrono::milliseconds timeout) -> Task<bool> {
+  auto prefix = std::array<std::byte, 6>{};
+  auto size = size_t{0};
+  auto deadline = std::chrono::steady_clock::now() + timeout;
+  auto throw_timed_out = [] {
+    throw folly::AsyncSocketException{
+      folly::AsyncSocketException::TIMED_OUT,
+      "TLS auto-detect probe timed out",
+    };
+  };
+  auto read_some = [&](size_t min_size) -> Task<void> {
+    while (size < min_size) {
+      auto now = std::chrono::steady_clock::now();
+      if (now >= deadline) {
+        throw_timed_out();
+      }
+      auto remaining
+        = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+      if (remaining <= std::chrono::milliseconds{0}) {
+        throw_timed_out();
+      }
+      auto* data = reinterpret_cast<unsigned char*>(prefix.data() + size);
+      auto count
+        = co_await transport.read(folly::MutableByteRange{data, 1}, remaining);
+      if (count == 0) {
+        co_return;
+      }
+      size += count;
+      if (not could_be_tls_client_hello(std::span{prefix.data(), size})) {
+        co_return;
+      }
+    }
+  };
+  auto timed_out = false;
+  try {
+    co_await read_some(1);
+    if (size == 0) {
+      co_return false;
+    }
+    if (prefix[0] == std::byte{0x16}) {
+      co_await read_some(prefix.size());
+    }
+  } catch (folly::AsyncSocketException const& ex) {
+    if (ex.getType() != folly::AsyncSocketException::TIMED_OUT) {
+      throw;
+    }
+    timed_out = true;
+  }
+  auto bytes = std::span{prefix.data(), size};
+  if (not bytes.empty()) {
+    auto* socket = get_socket_transport(transport);
+    socket->setPreReceivedData(
+      folly::IOBuf::copyBuffer(bytes.data(), bytes.size()));
+  }
+  co_return (bytes.size() >= prefix.size() and could_be_tls_client_hello(bytes))
+    or (timed_out and could_be_tls_client_hello(bytes));
+}
 
 auto upgrade_transport_to_tls_client(
   folly::coro::Transport transport,

@@ -1,0 +1,18 @@
+---
+fixtures:
+  - relp:
+      certs: true
+      payloads:
+        - plain
+timeout: 60
+---
+
+let $tls = {
+  certfile: env("RELP_CERTFILE"),
+  keyfile: env("RELP_KEYFILE"),
+  skip_peer_verification: true,
+}
+
+accept_relp env("RELP_ENDPOINT"), tls=$tls, auto_detect_tls=true
+select data, relp
+head 1

@@ -1,0 +1,16 @@
+---
+fixtures:
+  - relp:
+      relp_version: "2,1"
+      payloads:
+        - negotiated
+assertions:
+  fixtures:
+    relp:
+      responses_contain: relp_version=1
+timeout: 60
+---
+
+accept_relp env("RELP_ENDPOINT")
+select data, relp
+head 1

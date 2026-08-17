@@ -10,6 +10,7 @@
 
 #include "tenzir/async/task.hpp"
 
+#include <chrono>
 #include <memory>
 #include <string>
 
@@ -22,6 +23,11 @@ class Transport;
 } // namespace folly
 
 namespace tenzir {
+
+/// Reads enough of an accepted transport to identify a TLS ClientHello, then
+/// restores the consumed prefix for the eventual plaintext or TLS reader.
+auto probe_tls_client_hello(folly::coro::Transport& transport,
+                            std::chrono::milliseconds timeout) -> Task<bool>;
 
 /// Upgrade an existing connected transport to TLS as a client.
 auto upgrade_transport_to_tls_client(

@@ -1,0 +1,16 @@
+---
+fixtures:
+  - relp:
+      invalid_first: overflowing_version
+      payloads:
+        - recovered
+assertions:
+  fixtures:
+    relp:
+      initial_responses_contain: 500 unsupported RELP version
+timeout: 60
+---
+
+accept_relp env("RELP_ENDPOINT")
+select data
+head 1

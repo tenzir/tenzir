@@ -1,0 +1,6 @@
+error: `tls.client_ca` is required when client certificates are required
+ --> tests/operators/accept_relp/validation/error_mtls_without_client_ca.tql:5:35
+  |
+5 | accept_relp "127.0.0.1:2514", tls={require_client_cert: true}
+  |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

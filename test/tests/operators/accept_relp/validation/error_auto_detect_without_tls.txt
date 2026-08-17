@@ -1,0 +1,6 @@
+error: `auto_detect_tls` requires TLS to be enabled
+ --> tests/operators/accept_relp/validation/error_auto_detect_without_tls.tql:5:58
+  |
+5 | accept_relp "127.0.0.1:2514", tls=false, auto_detect_tls=true
+  |                                                          ^^^^
+  |

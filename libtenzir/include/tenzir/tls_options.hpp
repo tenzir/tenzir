@@ -66,6 +66,10 @@ struct TlsConfig {
   Option<located<std::string>> tls_client_ca;
   located<bool> tls_require_client_cert;
 
+  /// Whether the originating `tls_options` was configured for server mode.
+  /// Controls peer-certificate verification and trust-anchor selection.
+  bool is_server = false;
+
   /// Whether the originating `tls_options` was constructed with
   /// `options::uses_curl_http`. Controls scheme rewriting in `update_url`.
   bool uses_curl_http = false;
@@ -207,6 +211,7 @@ private:
   auto get_record_string(std::string_view key) const
     -> Option<located<std::string>>;
   auto validate_tls_record(diagnostic_handler& dh) const -> failure_or<void>;
+  auto validate_mtls(diagnostic_handler& dh) const -> failure_or<void>;
 
   // Merges `tenzir.tls.*` (and legacy `tenzir.cacert`) node-config defaults
   // into the cached members. Used internally by `resolve()`; not exposed

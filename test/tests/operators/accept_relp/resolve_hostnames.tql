@@ -1,0 +1,13 @@
+---
+fixtures:
+  - relp:
+      coalesce: true
+      payloads:
+        - hostname
+timeout: 60
+---
+
+accept_relp env("RELP_ENDPOINT"), resolve_hostnames=true
+has_hostname = peer.hostname != null
+select data, has_hostname
+head 1

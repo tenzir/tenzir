@@ -31,6 +31,8 @@ from . import splunk  # noqa: F401
 from . import platform_ws  # noqa: F401
 from . import prometheus  # noqa: F401
 from . import prometheus_remote_write_mock  # noqa: F401
+from . import relp  # noqa: F401
+from . import rsyslog_relp  # noqa: F401
 from . import http_request  # noqa: F401
 from . import http_paginate  # noqa: F401
 from . import http_server  # noqa: F401
@@ -73,6 +75,8 @@ __all__ = [
     "platform_ws",
     "prometheus",
     "prometheus_remote_write_mock",
+    "relp",
+    "rsyslog_relp",
     "s3",
     "s3_proxy",
     "sentinelone",

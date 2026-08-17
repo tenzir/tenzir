@@ -1,0 +1,6 @@
+error: `max_message_size` must be greater than 0
+ --> tests/operators/accept_relp/validation/error_max_message_size_zero.tql:5:48
+  |
+5 | accept_relp "127.0.0.1:2514", max_message_size=0
+  |                                                ^
+  |

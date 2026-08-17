@@ -1,0 +1,10 @@
+---
+fixtures: [rsyslog_relp]
+skip:
+  on: fixture-unavailable
+timeout: 90
+---
+
+accept_relp env("RSYSLOG_RELP_ENDPOINT")
+select data
+head 1

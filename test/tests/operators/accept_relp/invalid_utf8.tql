@@ -1,0 +1,16 @@
+---
+fixtures:
+  - relp:
+      invalid_utf8: true
+      payloads:
+        - after invalid UTF-8
+assertions:
+  fixtures:
+    relp:
+      responses_contain: "2 rsp 6 200 OK"
+timeout: 60
+---
+
+accept_relp env("RELP_ENDPOINT")
+select data
+head 1

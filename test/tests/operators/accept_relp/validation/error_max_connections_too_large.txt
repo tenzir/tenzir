@@ -1,0 +1,7 @@
+error: `max_connections` is too large
+ --> tests/operators/accept_relp/validation/error_max_connections_too_large.tql:5:47
+  |
+5 | accept_relp "127.0.0.1:2514", max_connections=9223372036854775808
+  |                                               ^^^^^^^^^^^^^^^^^^^
+  |
+  = note: maximum supported value: 9223372036854775807

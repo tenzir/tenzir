@@ -1,0 +1,13 @@
+---
+fixtures:
+  - relp:
+      invalid_first: malformed
+      coalesce: true
+      payloads:
+        - recovered
+timeout: 60
+---
+
+accept_relp env("RELP_ENDPOINT")
+select data
+head 1

@@ -1,0 +1,11 @@
+{
+  data: "recovered",
+}
+warning: rejected malformed RELP frame
+  --> tests/operators/accept_relp/reject_malformed.tql:11:13
+   |
+11 | accept_relp env("RELP_ENDPOINT")
+   |             ~~~~~~~~~~~~~~~~~~~~
+   |
+   = note: peer: 127.0.0.1
+   = note: reason: transaction number must start with a digit

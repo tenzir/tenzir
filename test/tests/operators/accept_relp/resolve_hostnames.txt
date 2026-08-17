@@ -1,0 +1,4 @@
+{
+  data: "hostname",
+  has_hostname: true,
+}

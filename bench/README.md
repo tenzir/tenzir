@@ -25,3 +25,15 @@ benchmarks that use service fixtures, such as `from_kafka_route53`.
 
 Use `--destination s3://BUCKET/PREFIX` only when you intend to publish the
 result as a reference.
+
+## Run the manual RELP benchmark
+
+The `manual/accept_relp_rsyslog` harness measures acknowledged rsyslog delivery
+through `accept_relp`, with optional Syslog and Grok parsing. It targets a local
+Tenzir binary and keeps its Docker fixture, sender, and recorded results
+together:
+
+```sh
+TENZIR_BIN="$(scripts/build.sh --print-build-dir)/bin/tenzir" \
+  bench/manual/accept_relp_rsyslog/run.sh 100000
+```

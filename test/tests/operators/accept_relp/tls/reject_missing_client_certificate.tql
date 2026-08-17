@@ -1,0 +1,26 @@
+---
+fixtures:
+  - relp:
+      tls: true
+      client_cert: true
+      unauthenticated_first: true
+      payloads:
+        - authenticated
+assertions:
+  fixtures:
+    relp:
+      unauthenticated_response_count: 0
+timeout: 60
+---
+
+let $tls = {
+  certfile: env("RELP_CERTFILE"),
+  keyfile: env("RELP_KEYFILE"),
+  client_ca: env("RELP_CAFILE"),
+  require_client_cert: true,
+  skip_peer_verification: true,
+}
+
+accept_relp env("RELP_ENDPOINT"), tls=$tls
+select data, relp
+head 1

@@ -1,0 +1,11 @@
+{
+  data: "recovered",
+}
+warning: rejected unexpected RELP transaction number
+  --> tests/operators/accept_relp/reject_unexpected_transaction.tql:11:13
+   |
+11 | accept_relp env("RELP_ENDPOINT")
+   |             ~~~~~~~~~~~~~~~~~~~~
+   |
+   = note: peer: 127.0.0.1
+   = note: expected: 1, got: 2

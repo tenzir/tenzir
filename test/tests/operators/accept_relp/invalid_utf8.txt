@@ -1,0 +1,10 @@
+{
+  data: "after invalid UTF-8",
+}
+warning: dropped RELP syslog payload with invalid UTF-8
+  --> tests/operators/accept_relp/invalid_utf8.tql:14:13
+   |
+14 | accept_relp env("RELP_ENDPOINT")
+   |             ~~~~~~~~~~~~~~~~~~~~
+   |
+   = note: peer: 127.0.0.1
