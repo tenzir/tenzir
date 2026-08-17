@@ -1,0 +1,9 @@
+created: 2026-08-17
+title: Reliable Syslog ingestion over RELP
+intro: >-
+  Tenzir now receives Syslog reliably over RELP, including TLS and mutual TLS, with
+  bounded acknowledgements and backpressure. This release also adds PCAPNG capture
+  support and strengthens long-running Google SecOps and AWS pipelines.
+source:
+  mode: snapshot-prerelease
+  previous_stable: v6.11.0
