@@ -353,6 +353,13 @@ struct PlannedOperator {
   Box<Operator> op;
   /// The number of runtime instances to spawn for this node.
   size_t parallelism = 1;
+  /// The number of instances to assume when deriving the kind of this node's
+  /// channels. This is the parallelism the node would run at with at least two
+  /// instances available, so that the shape of the plan does not depend on
+  /// whether the pipeline actually runs in parallel. Derived in the node's own
+  /// parallelism scope, which may differ from the scope that adds its
+  /// channels.
+  size_t nominal_parallelism = 1;
   /// The key that constrains how input is partitioned across the instances
   Option<ast::expression> partition_keys;
   /// The element type flowing into this node.
@@ -483,7 +490,7 @@ auto make_plan(pipeline pipe, element_type_tag input, base_ctx ctx,
 class PlanBuilder {
 public:
   explicit PlanBuilder(Plan& plan, Parallelism par = {})
-    : plan_{plan}, par_{par}, scope_stack_{id_entries_} {
+    : plan_{plan}, par_scopes_{par}, scope_stack_{id_entries_} {
   }
 
   /// Add an operator node
@@ -507,6 +514,9 @@ public:
   /// Rewrite all channels's `from` node.
   auto rewrite_from(size_t before, size_t after) -> void;
 
+  /// When ports include an input, inject an identity node that can scatter.
+  auto scatter_external_input(PlanPorts input) -> PlanPorts;
+
   /// Lower a pipeline's operators into the plan, threading `input` through each
   /// via `Operator::plan`. Returns the resulting output frontier.
   auto lower_pipeline(pipeline pipe, PlanPorts input, diagnostic_handler& dh)
@@ -519,10 +529,22 @@ public:
   /// Assign relative operator IDs in logical IR order after planning finishes.
   auto assign_ids() -> void;
 
+  auto push_par_scope(Parallelism par) -> void {
+    par_scopes_.push_back(par);
+  }
+
+  auto par() const& -> const Parallelism& {
+    return par_scopes_.back();
+  }
+
+  auto pop_par_scope() -> void {
+    par_scopes_.pop_back();
+  }
+
 private:
   struct IdEntry {
     size_t plan_node;
-    std::vector<std::vector<IdEntry>> children{};
+    std::vector<std::vector<IdEntry>> children;
   };
 
   struct IdLocation {
@@ -546,7 +568,6 @@ private:
   /// channel-kind decisions use this instead of `PlannedOperator::parallelism`
   /// so that plans at degree one and two agree on which channels are fused and
   /// tiny.
-  auto nominal_parallelism(const PlannedOperator& node) const -> size_t;
 
   /// How a channel between two adjacent planned operators should be realized,
   /// honoring the configured parallelism strategy. The decision only depends on
@@ -556,7 +577,7 @@ private:
                    element_type_tag type) const -> ChannelKind;
 
   Plan& plan_;
-  Parallelism par_;
+  std::vector<Parallelism> par_scopes_;
   /// A tree of operator sequences mirroring the optimized IR. This is separate
   /// from the execution DAG so metrics IDs preserve IR order. Synthetic nodes
   /// are inserted at their physical position relative to neighboring nodes.

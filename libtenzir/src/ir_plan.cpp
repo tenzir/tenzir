@@ -19,7 +19,6 @@
 #include <algorithm>
 #include <charconv>
 #include <cstdint>
-#include <ranges>
 #include <span>
 #include <string_view>
 #include <thread>
@@ -53,24 +52,14 @@ auto derive_parallelism(const ir::Operator& op,
 
 } // namespace
 
-auto ir::PlanBuilder::nominal_parallelism(const PlannedOperator& node) const
-  -> size_t {
-  // Assuming at least two instances makes the shape of the plan, and with it
-  // the kind of every channel, the same whether or not the pipeline actually
-  // runs in parallel.
-  return derive_parallelism(*node.op, node.partition_keys,
-                            std::max<size_t>(par_.degree, 2),
-                            par_.limit_partitions);
-}
-
 auto ir::PlanBuilder::derive_kind(const PlannedOperator& up,
                                   const PlannedOperator& down,
                                   element_type_tag type) const -> ChannelKind {
-  if (par_.fused == parallelism::Fusing::all) {
+  if (par_scopes_.back().fused == parallelism::Fusing::all) {
     return ChannelKind::fused;
   }
-  const auto up_degree = nominal_parallelism(up);
-  const auto down_degree = nominal_parallelism(down);
+  const auto up_degree = up.nominal_parallelism;
+  const auto down_degree = down.nominal_parallelism;
   const auto down_keyed = down.partition_keys and down_degree > 1;
   // A channel pairs lanes directly if both sides run at the same nominal degree
   // and the downstream accepts any row on any instance. A keyed downstream must
@@ -79,7 +68,7 @@ auto ir::PlanBuilder::derive_kind(const PlannedOperator& up,
   const auto matched = up_degree == down_degree and not down_keyed
                        and up.op->parallelizable()
                        and down.op->parallelizable();
-  if (matched and par_.fused == parallelism::Fusing::parallel) {
+  if (matched and par_scopes_.back().fused == parallelism::Fusing::parallel) {
     return ChannelKind::fused;
   }
   // Every remaining channel between multi-instance operators is one of many:
@@ -89,7 +78,8 @@ auto ir::PlanBuilder::derive_kind(const PlannedOperator& up,
   // exempt: it asks for plain buffered channels throughout, and pipelines that
   // request no parallelism at all use it, so the budget would only cost them
   // throughput without bounding anything.
-  if (type.is<table_slice>() and par_.fused != parallelism::Fusing::none
+  if (type.is<table_slice>()
+      and par_scopes_.back().fused != parallelism::Fusing::none
       and (up_degree > 1 or down_degree > 1)) {
     return ChannelKind::tiny;
   }
@@ -272,13 +262,23 @@ auto ir::PlanBuilder::push_node(Box<Operator> op, element_type_tag input,
     = keys.empty()
         ? Option<ast::expression>{}
         : Option<ast::expression>{ast::combine_into_record(std::move(keys))};
-  auto parallelism = derive_parallelism(*op, partition_keys, par_.degree,
-                                        par_.limit_partitions);
+  auto p = par_scopes_.back();
+  auto parallelism
+    = derive_parallelism(*op, partition_keys, p.degree, p.limit_partitions);
+  // Assuming at least two instances makes the shape of the plan, and with it
+  // the kind of every channel, the same whether or not the pipeline actually
+  // runs in parallel. Derive it here, where this node's scope is the active
+  // one: a channel can be added after the scope was popped, and would then see
+  // a degree that this node never runs at.
+  auto nominal_parallelism
+    = derive_parallelism(*op, partition_keys, std::max<size_t>(p.degree, 2),
+                         p.limit_partitions);
   auto node = plan_.operators.size();
   plan_.operators.push_back(PlannedOperator{
     .id = {},
     .op = std::move(op),
     .parallelism = parallelism,
+    .nominal_parallelism = nominal_parallelism,
     .partition_keys = std::move(partition_keys),
     .input = input,
     .output = output,
@@ -344,6 +344,23 @@ auto ir::PlanBuilder::rewrite_from(size_t before, size_t after) -> void {
       channel.from = after;
     }
   }
+}
+
+auto ir::PlanBuilder::scatter_external_input(PlanPorts input) -> PlanPorts {
+  auto external = std::ranges::any_of(input, [](const Port& port) {
+    return port.node == Port::input;
+  });
+  if (not external) {
+    return input;
+  }
+  TENZIR_ASSERT(not input.empty());
+  // The identity is never parallelizable, so it lands at degree one no matter
+  // which parallelism scope is active. That satisfies the single-instance rule
+  // for the external input, and its output port then scatters like any other.
+  auto type = input.front().type;
+  auto node = append_node(make_identity_ir(), type, type);
+  add_channels(input, node);
+  return {Port{node, 0, type}};
 }
 
 namespace {
