@@ -1,0 +1,3 @@
+from_fluent_bit "dummy"
+head 1
+select message

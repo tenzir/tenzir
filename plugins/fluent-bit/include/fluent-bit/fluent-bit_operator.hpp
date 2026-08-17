@@ -34,7 +34,10 @@
 #include <tenzir/plugin.hpp>
 
 #include <arrow/record_batch.h>
+#include <folly/CancellationToken.h>
+#include <folly/coro/Task.h>
 
+#include <concepts>
 #include <cstring>
 #include <queue>
 #include <stdexcept>
@@ -998,8 +1001,16 @@ using FluentBitSourceTaskResult
 struct SourceBridgeLifetime {
   Arc<Atomic<bool>> alive{std::in_place, true};
 
+  SourceBridgeLifetime() = default;
+
+  // Move-only: destroying a moved-from operator must not flip the shared flag.
+  SourceBridgeLifetime(SourceBridgeLifetime&&) = default;
+  auto operator=(SourceBridgeLifetime&&) -> SourceBridgeLifetime& = default;
+
   ~SourceBridgeLifetime() {
-    alive->store(false, std::memory_order_release);
+    if (alive.not_moved_from()) {
+      alive->store(false, std::memory_order_release);
+    }
   }
 };
 
@@ -1030,13 +1041,14 @@ auto collect_fluent_bit_properties(operator_args const& args,
   return requests;
 }
 
+/// Hands `message` to `sender`, retrying until it was accepted or `give_up`
+/// returns true.
+/// @returns whether the message was delivered.
 auto send_blocking(Sender<FluentBitSourceTaskResult>& sender,
                    FluentBitSourceTaskResult message,
-                   Arc<Atomic<bool>> const& stop_requested,
-                   Arc<Atomic<bool>> const& bridge_alive,
+                   std::predicate auto give_up,
                    std::chrono::milliseconds retry_interval) -> bool {
-  while (not stop_requested->load(std::memory_order_acquire)
-         and bridge_alive->load(std::memory_order_acquire)) {
+  while (not give_up()) {
     auto result = sender.try_send(std::move(message));
     if (result.is_ok()) {
       return true;
@@ -1054,38 +1066,40 @@ auto poll_fluent_bit_source(Sender<FluentBitSourceTaskResult> sender,
                             Arc<Atomic<bool>> stop_requested,
                             Arc<Atomic<bool>> bridge_alive,
                             diagnostic_handler& dh) -> void {
+  // A dead bridge means that nobody is reading from the channel anymore, so we
+  // must abandon everything, including the end-of-stream notification. A stop
+  // request in contrast only means that we should stop producing new events;
+  // the operator is still waiting for us to signal that the source ended.
+  auto bridge_dead = [&] {
+    return not bridge_alive->load(std::memory_order_acquire);
+  };
+  auto stop_producing = [&] {
+    return stop_requested->load(std::memory_order_acquire) or bridge_dead();
+  };
   auto engine
     = engine::make_source(args, config, fluent_bit_args, plugin_args, dh);
-  if (not engine) {
-    if (not stop_requested->load(std::memory_order_acquire)
-        and bridge_alive->load(std::memory_order_acquire)) {
-      std::ignore = send_blocking(sender, FluentBitSourceDone{}, stop_requested,
-                                  bridge_alive, args.poll_interval);
+  if (engine) {
+    while (not stop_producing() and engine->running()) {
+      auto chunks = std::vector<chunk_ptr>{};
+      std::ignore = engine->try_consume([&](chunk_ptr& chunk) {
+        chunks.push_back(std::move(chunk));
+      });
+      if (chunks.empty()) {
+        TENZIR_DEBUG("sleeping for {}", args.poll_interval);
+        std::this_thread::sleep_for(args.poll_interval);
+        continue;
+      }
+      if (not send_blocking(sender, FluentBitSourceMessage{std::move(chunks)},
+                            stop_producing, args.poll_interval)) {
+        break;
+      }
     }
-    return;
+    // Tear the engine down before announcing the end of the stream so that the
+    // operator does not finish while Fluent Bit is still shutting down.
+    engine.reset();
   }
-  while (not stop_requested->load(std::memory_order_acquire)
-         and bridge_alive->load(std::memory_order_acquire)
-         and engine->running()) {
-    auto chunks = std::vector<chunk_ptr>{};
-    std::ignore = engine->try_consume([&](chunk_ptr& chunk) {
-      chunks.push_back(std::move(chunk));
-    });
-    if (chunks.empty()) {
-      TENZIR_DEBUG("sleeping for {}", args.poll_interval);
-      std::this_thread::sleep_for(args.poll_interval);
-      continue;
-    }
-    if (not send_blocking(sender, FluentBitSourceMessage{std::move(chunks)},
-                          stop_requested, bridge_alive, args.poll_interval)) {
-      return;
-    }
-  }
-  if (not stop_requested->load(std::memory_order_acquire)
-      and bridge_alive->load(std::memory_order_acquire)) {
-    std::ignore = send_blocking(sender, FluentBitSourceDone{}, stop_requested,
-                                bridge_alive, args.poll_interval);
-  }
+  std::ignore = send_blocking(sender, FluentBitSourceDone{}, bridge_dead,
+                              args.poll_interval);
 }
 
 class FromFluentBit final : public Operator<void, table_slice> {
@@ -1142,6 +1156,20 @@ public:
                     stop_requested = std::move(stop_requested),
                     bridge_alive = std::move(bridge_alive),
                     &dh = ctx.dh()]() mutable -> Task<void> {
+      // The executor only calls `stop()` on a graceful shutdown. A forced
+      // teardown, most notably the one triggered when a downstream operator
+      // such as `head` reports `no_more_input`, instead just cancels all
+      // operator-scoped tasks and then waits for them to join. The polling
+      // loop below runs on a blocking thread and cannot observe cancellation
+      // on its own, so translate the cancellation signal into the flag that
+      // tells the loop that nobody is listening anymore. Without this, the
+      // join never completes and the whole pipeline hangs.
+      auto cancellation = folly::CancellationCallback{
+        co_await folly::coro::co_current_cancellation_token,
+        [bridge_alive]() mutable noexcept {
+          bridge_alive->store(false, std::memory_order_release);
+        },
+      };
       co_await spawn_blocking(
         [sender = std::move(sender), args = std::move(args),
          config = std::move(config),
@@ -1221,8 +1249,10 @@ public:
 
   auto stop(OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
+    // Only ask the polling loop to stop producing events. It still has to
+    // deliver the end-of-stream marker so that this operator can transition to
+    // `OperatorState::done` and the pipeline can shut down.
     stop_requested_->store(true, std::memory_order_release);
-    bridge_lifetime_.alive->store(false, std::memory_order_release);
     co_return;
   }
 
