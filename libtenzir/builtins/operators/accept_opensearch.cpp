@@ -316,10 +316,10 @@ public:
   ~AcceptOpenSearch() noexcept override {
     force_stop();
   }
-  AcceptOpenSearch(const AcceptOpenSearch&) = default;
-  AcceptOpenSearch(AcceptOpenSearch&&) = default;
-  AcceptOpenSearch& operator=(const AcceptOpenSearch&) = default;
-  AcceptOpenSearch& operator=(AcceptOpenSearch&&) = delete;
+  AcceptOpenSearch(AcceptOpenSearch const&) = delete;
+  AcceptOpenSearch(AcceptOpenSearch&&) noexcept = default;
+  auto operator=(AcceptOpenSearch const&) -> AcceptOpenSearch& = delete;
+  auto operator=(AcceptOpenSearch&&) -> AcceptOpenSearch& = delete;
 
   auto start(OpCtx& ctx) -> Task<void> override {
     auto config = co_await make_config(ctx);

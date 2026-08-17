@@ -502,6 +502,11 @@ class Operator : public OperatorBase,
                  public OperatorOutputBase<Output>,
                  public OperatorInputOutputBase<Input, Output> {
 public:
+  Operator() = default;
+  Operator(Operator const&) = delete;
+  auto operator=(Operator const&) -> Operator& = delete;
+  Operator(Operator&&) noexcept = default;
+  auto operator=(Operator&&) noexcept -> Operator& = default;
   virtual ~Operator() = default;
 };
 
