@@ -35,39 +35,8 @@ PACKAGE_ROOT = REPO_DIR / "src" / PACKAGE_NAME
 BUILD_DIR = REPO_DIR / "build"
 
 
-ELF_MAGIC = b"\x7fELF"
-
-
 def _assets_present() -> bool:
     return all((PACKAGE_ROOT / entry).exists() for entry in ASSET_DIRS)
-
-
-def _strip_binaries(root: Path) -> None:
-    """Strip ELF binaries staged for bundling to shrink the wheel.
-
-    The static binaries are built with `dontStrip` in Nix, so they carry full
-    debug info that has no use inside a wheel. Only ELF files are touched:
-    the macOS artefacts are code-signed before they reach us, and stripping a
-    signed Mach-O binary would invalidate its signature.
-    """
-    strip = shutil.which("strip")
-    if strip is None:
-        log.warn("strip not found; bundling unstripped binaries")
-        return
-    for directory in ("bin", "libexec"):
-        base = root / directory
-        if not base.is_dir():
-            continue
-        for path in base.rglob("*"):
-            if path.is_symlink() or not path.is_file():
-                continue
-            with path.open("rb") as handle:
-                if handle.read(4) != ELF_MAGIC:
-                    continue
-            # Files extracted from the Nix-built tarball are read-only.
-            path.chmod(path.stat().st_mode | 0o200)
-            subprocess.run([strip, str(path)], check=True)
-            log.info(f"stripped {path}")
 
 
 def _extract_tarball(tarball: Path) -> None:
@@ -82,8 +51,11 @@ def _extract_tarball(tarball: Path) -> None:
                 child.unlink()
 
         shutil.rmtree(PACKAGE_ROOT / "bundled", ignore_errors=True)
+        # Bundled as built, debug info included: PyPI granted this project a
+        # 200 MB file cap (July 2026), so the wheel no longer needs to strip
+        # the binaries to fit - and an unstripped node gives every
+        # pip-installed deployment usable backtraces.
         _ = shutil.copytree(extracted_root, PACKAGE_ROOT / "bundled")
-        _strip_binaries(PACKAGE_ROOT / "bundled")
 
 
 def _run_nix() -> list[Path]:
