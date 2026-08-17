@@ -71,6 +71,7 @@ in
   cyrus_sasl = callFunction ./overrides/cyrus_sasl.nix { inherit (prevPkgs) cyrus_sasl; };
   fizz = callFunction ./overrides/fizz.nix { inherit (prevPkgs) fizz; };
   folly = callFunction ./overrides/folly.nix { inherit (prevPkgs) folly; };
+  gmp = callFunction ./overrides/gmp.nix { inherit (prevPkgs) gmp; };
   google-cloud-cpp-tenzir = callFunction ./overrides/google-cloud-cpp-tenzir.nix {
     inherit (prevPkgs) google-cloud-cpp;
   };
