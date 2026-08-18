@@ -28,3 +28,11 @@ rules:
   quoted-strings: disable
   trailing-spaces: enable
   truthy: disable
+
+# Helm templates are Go text/template that only becomes YAML once `helm template` has
+# run: `{{- if }}` at the start of a line is not a node, and a value interpolated into
+# a mapping is not a scalar. Nothing here can parse them, and `helm lint` in CI is what
+# does. Everything else in the chart — Chart.yaml, values.yaml, the values files — is
+# ordinary YAML and stays linted.
+ignore: |
+  platform/charts/*/templates/
