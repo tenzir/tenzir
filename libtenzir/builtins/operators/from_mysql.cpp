@@ -2244,7 +2244,6 @@ public:
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
-    co_await OperatorBase::stop(ctx);
     co_await close_client(ctx);
   }
 

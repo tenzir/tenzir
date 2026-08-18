@@ -738,7 +738,6 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    co_await OperatorBase::start(ctx);
     if (args_.jobs == 0) {
       co_return;
     }

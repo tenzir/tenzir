@@ -890,7 +890,6 @@ public:
                  "has_read_timeout={}, has_write_timeout={}, has_capacity={}",
                  args_.id, args_.read_timeout.is_some(),
                  args_.write_timeout.is_some(), args_.capacity.is_some());
-    co_await OperatorBase::start(ctx);
     auto cache_manager_result
       = co_await fetch_actor_from_node<cache_manager_actor>(
         "cache-manager", location::unknown, ctx.actor_system(), ctx.dh());
@@ -1003,7 +1002,6 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    co_await OperatorBase::start(ctx);
     auto cache_manager_result
       = co_await fetch_actor_from_node<cache_manager_actor>(
         "cache-manager", location::unknown, ctx.actor_system(), ctx.dh());
@@ -1071,7 +1069,6 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    co_await OperatorBase::start(ctx);
     auto cache_manager_result
       = co_await fetch_actor_from_node<cache_manager_actor>(
         "cache-manager", location::unknown, ctx.actor_system(), ctx.dh());
