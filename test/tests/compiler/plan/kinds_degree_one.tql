@@ -1,0 +1,10 @@
+// parallelism: 1
+// Channel kinds do not depend on the configured degree of parallelism: this
+// plan has the same fused (`║`) and tiny (`╎`) channels as its degree-two
+// counterpart in `kinds_degree_two.tql`, differing only in the `(x<n>)`
+// annotations.
+from {x: 1}, {x: 2}
+where x > 0
+where x < 3
+summarize x, n=count()
+head 1

@@ -1,0 +1,8 @@
+// parallelism: 2
+// The degree-two counterpart of `kinds_degree_one.tql`. Both plans agree on
+// which channels are fused (`║`) and which are tiny (`╎`).
+from {x: 1}, {x: 2}
+where x > 0
+where x < 3
+summarize x, n=count()
+head 1

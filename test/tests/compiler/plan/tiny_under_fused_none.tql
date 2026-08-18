@@ -1,0 +1,7 @@
+// parallelism: 6,fused=none
+// Without fusing, matched lane-to-lane channels between the two `where`
+// operators are still tiny (`╎`): one channel per lane means their number
+// scales with the degree of parallelism, so each gets a small budget.
+from {x: 1}
+where x > 0
+where x < 3

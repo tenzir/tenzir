@@ -3,7 +3,7 @@
 ● from
 ╎
 ● where(x6)
-║
+╎
 ● where(x6)
 ╎
 ● to_stdout

@@ -15,7 +15,6 @@
 #include "tenzir/option.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/substitute_ctx.hpp"
-#include "tenzir/tql2/registry.hpp"
 
 #include <algorithm>
 #include <charconv>
@@ -33,25 +32,64 @@ namespace {
 
 auto make_identity_ir() -> Box<ir::Operator>;
 
+/// The number of instances that `op` runs at for a given degree of parallelism,
+/// given the operator's combined `partition_keys`.
+auto derive_parallelism(const ir::Operator& op,
+                        const Option<ast::expression>& partition_keys,
+                        size_t degree, size_t limit_partitions) -> size_t {
+  auto p = op.parallelizable() ? degree : 1;
+  // A keyed operator needs a hash-partitioned exchange on its input: an
+  // upstream at degree `n` opens `n * parallelism` channels, and every pushed
+  // slice is split into up to `parallelism` partitions. Unlike the keyless
+  // scatter, which routes a slice to as few lanes as possible, the key fixes
+  // the target instance, so the only way to keep batches large is to keep the
+  // number of partitions small. Limit it, even when a larger degree was asked
+  // for explicitly.
+  if (partition_keys) {
+    p = std::min<size_t>(p, std::max<uint16_t>(1, limit_partitions));
+  }
+  return p;
+}
+
 } // namespace
 
-auto ir::PlanBuilder::derive_fused(const PlannedOperator& up,
-                                   const PlannedOperator& down) const -> bool {
-  switch (par_.fused) {
-    case parallelism::Fusing::all:
-      return true;
-    case parallelism::Fusing::none:
-      return false;
-    case parallelism::Fusing::parallel:
-      // A keyed downstream must receive a hash-partitioned exchange, so its
-      // input is never a direct lane-to-lane channel even at matched
-      // parallelism.
-      if (down.keyed()) {
-        return false;
-      }
-      return up.op->parallelizable() and down.op->parallelizable();
+auto ir::PlanBuilder::nominal_parallelism(const PlannedOperator& node) const
+  -> size_t {
+  // Assuming at least two instances makes the shape of the plan, and with it
+  // the kind of every channel, the same whether or not the pipeline actually
+  // runs in parallel.
+  return derive_parallelism(*node.op, node.partition_keys,
+                            std::max<size_t>(par_.degree, 2),
+                            par_.limit_partitions);
+}
+
+auto ir::PlanBuilder::derive_kind(const PlannedOperator& up,
+                                  const PlannedOperator& down,
+                                  element_type_tag type) const -> ChannelKind {
+  if (par_.fused == parallelism::Fusing::all) {
+    return ChannelKind::fused;
   }
-  TENZIR_UNREACHABLE();
+  const auto up_degree = nominal_parallelism(up);
+  const auto down_degree = nominal_parallelism(down);
+  const auto down_keyed = down.partition_keys and down_degree > 1;
+  // A channel pairs lanes directly if both sides run at the same nominal degree
+  // and the downstream accepts any row on any instance. A keyed downstream must
+  // receive a hash-partitioned exchange, so its input is never a direct
+  // lane-to-lane channel even at matched parallelism.
+  const auto matched = up_degree == down_degree and not down_keyed
+                       and up.op->parallelizable()
+                       and down.op->parallelizable();
+  if (matched and par_.fused == parallelism::Fusing::parallel) {
+    return ChannelKind::fused;
+  }
+  // Every remaining channel between multi-instance operators is one of many:
+  // exchanges open up to `n * m` channels, and unfused lane-to-lane wiring
+  // still opens one per lane. Give them a small budget each so that their
+  // number does not balloon the pipeline's memory usage.
+  if (type.is<table_slice>() and (up_degree > 1 or down_degree > 1)) {
+    return ChannelKind::tiny;
+  }
+  return ChannelKind::regular;
 }
 
 namespace {
@@ -223,36 +261,15 @@ auto ir::PlanBuilder::prepend_node(Box<Operator> op, element_type_tag input,
 
 auto ir::PlanBuilder::push_node(Box<Operator> op, element_type_tag input,
                                 element_type_tag output) -> size_t {
-  // Query parallelizability and partition keys before moving the operator. The
-  // planner picks the exact degree of parallelism for replicable operators.
+  // Query the partition keys and the degree of parallelism before moving the
+  // operator. The planner picks the exact degree for replicable operators.
   auto keys = op->partition_keys();
-  auto parallelism = op->parallelizable() ? par_.degree : 1;
-  if (not keys.empty()) {
-    // A keyed operator needs a hash-partitioned exchange on its input: an
-    // upstream at degree `n` opens `n * parallelism` channels, and every
-    // pushed slice is split into up to `parallelism` partitions. Unlike the
-    // keyless scatter, which routes a slice to as few lanes as possible, the
-    // key fixes the target instance, so the only way to keep batches large is
-    // to keep the number of partitions small. Limit it, even when a larger
-    // degree was asked for explicitly.
-    parallelism = std::min<size_t>(
-      parallelism, std::max<uint16_t>(1, par_.limit_partitions));
-    // Routing evaluates the key expression on the upstream side, independently
-    // from the operator's own evaluation of the same expression. That is only
-    // sound if both evaluations agree, so a non-deterministic key (for example
-    // `deduplicate random()`) must not be spread over multiple instances:
-    // rows with equal actual keys would end up in different instances.
-    const auto& reg = *global_registry();
-    if (not std::ranges::all_of(keys, [&](const ast::expression& key) {
-          return key.is_deterministic(reg);
-        })) {
-      parallelism = 1;
-    }
-  }
   auto partition_keys
     = keys.empty()
         ? Option<ast::expression>{}
         : Option<ast::expression>{ast::combine_into_record(std::move(keys))};
+  auto parallelism = derive_parallelism(*op, partition_keys, par_.degree,
+                                        par_.limit_partitions);
   auto node = plan_.operators.size();
   plan_.operators.push_back(PlannedOperator{
     .id = {},
@@ -275,16 +292,19 @@ auto ir::PlanBuilder::add_channel(Port from, size_t to) -> void {
       return c.from == Port::input;
     }));
   }
-  auto fused = false;
+  // Channels at the plan's external boundary are always regular: they connect
+  // to the surrounding pipeline, which owns their endpoint.
+  auto kind = ChannelKind::regular;
   if (from.node != Port::input and to != Port::output) {
-    fused = derive_fused(plan_.operators[from.node], plan_.operators[to]);
+    kind
+      = derive_kind(plan_.operators[from.node], plan_.operators[to], from.type);
   }
   plan_.channels.push_back(Channel{
     .from = from.node,
     .from_port = from.port,
     .to = to,
     .type = from.type,
-    .fused = fused,
+    .kind = kind,
   });
 }
 

@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -29,38 +30,66 @@ namespace {
 /// top-down in data-flow direction: one node per line, with the channels drawn
 /// as connector lines in between.
 ///
-/// Channels use box-drawing glyphs, single for regular channels and doubled
-/// for fused ones (run-to-completion per item).
+/// Channels use box-drawing glyphs: single for regular channels, doubled for
+/// fused ones (run-to-completion per item), and dashed for tiny ones (one of
+/// many channels, hence a small memory budget each).
+///
+/// Unicode has no dashed tees or corners, so runs involving tiny channels reuse
+/// the single-line connectors; only the straight segments are dashed.
+
+using Kind = ir::ChannelKind;
 
 /// The glyph marking a node in its own lane.
 constexpr auto node_glyph = std::string_view{"●"};
 
-constexpr auto vertical(bool fused) -> std::string_view {
-  return fused ? "║" : "│";
+constexpr auto vertical(Kind kind) -> std::string_view {
+  switch (kind) {
+    case Kind::fused:
+      return "║";
+    case Kind::tiny:
+      return "╎";
+    case Kind::regular:
+      return "│";
+  }
+  TENZIR_UNREACHABLE();
 }
 
-constexpr auto horizontal(bool fused) -> std::string_view {
-  return fused ? "═" : "─";
+constexpr auto horizontal(Kind kind) -> std::string_view {
+  switch (kind) {
+    case Kind::fused:
+      return "═";
+    case Kind::tiny:
+      return "╌";
+    case Kind::regular:
+      return "─";
+  }
+  TENZIR_UNREACHABLE();
+}
+
+/// Whether a glyph for `kind` is drawn with doubled lines. Tiny channels borrow
+/// the single-line connectors.
+constexpr auto doubled(Kind kind) -> bool {
+  return kind == Kind::fused;
 }
 
 /// The corner where a channel leaves the fan-out run downwards. The vertical
 /// and left-horizontal styles can differ.
-constexpr auto corner_down(bool vertical_fused, bool horizontal_fused)
+constexpr auto corner_down(Kind vertical_kind, Kind horizontal_kind)
   -> std::string_view {
-  if (vertical_fused) {
-    return horizontal_fused ? "╗" : "╖";
+  if (doubled(vertical_kind)) {
+    return doubled(horizontal_kind) ? "╗" : "╖";
   }
-  return horizontal_fused ? "╕" : "┐";
+  return doubled(horizontal_kind) ? "╕" : "┐";
 }
 
 /// The corner where a channel joins the fan-in run from above. The vertical
 /// and left-horizontal styles can differ.
-constexpr auto corner_up(bool vertical_fused, bool horizontal_fused)
+constexpr auto corner_up(Kind vertical_kind, Kind horizontal_kind)
   -> std::string_view {
-  if (vertical_fused) {
-    return horizontal_fused ? "╝" : "╜";
+  if (doubled(vertical_kind)) {
+    return doubled(horizontal_kind) ? "╝" : "╜";
   }
-  return horizontal_fused ? "╛" : "┘";
+  return doubled(horizontal_kind) ? "╛" : "┘";
 }
 
 /// An intermediate tee of a fan-out or fan-in run. The vertical and horizontal
@@ -68,43 +97,43 @@ constexpr auto corner_up(bool vertical_fused, bool horizontal_fused)
 /// single, right fused — which happens when this leg is the rightmost
 /// non-fused one), there is no matching Unicode box-drawing glyph; the left
 /// (single) style is used as the approximation.
-constexpr auto tee_down(bool vertical_fused, bool horizontal_fused)
+constexpr auto tee_down(Kind vertical_kind, Kind horizontal_kind)
   -> std::string_view {
-  if (vertical_fused) {
-    return horizontal_fused ? "╦" : "╥";
+  if (doubled(vertical_kind)) {
+    return doubled(horizontal_kind) ? "╦" : "╥";
   }
-  return horizontal_fused ? "╤" : "┬";
+  return doubled(horizontal_kind) ? "╤" : "┬";
 }
 
-constexpr auto tee_up(bool vertical_fused, bool horizontal_fused)
+constexpr auto tee_up(Kind vertical_kind, Kind horizontal_kind)
   -> std::string_view {
-  if (vertical_fused) {
-    return horizontal_fused ? "╩" : "╨";
+  if (doubled(vertical_kind)) {
+    return doubled(horizontal_kind) ? "╩" : "╨";
   }
-  return horizontal_fused ? "╧" : "┴";
+  return doubled(horizontal_kind) ? "╧" : "┴";
 }
 
 /// The tee at the anchor lane of a run, where the vertical and the horizontal
 /// style can differ.
-constexpr auto tee_right(bool vertical_fused, bool horizontal_fused)
+constexpr auto tee_right(Kind vertical_kind, Kind horizontal_kind)
   -> std::string_view {
-  if (vertical_fused) {
-    return horizontal_fused ? "╠" : "╟";
+  if (doubled(vertical_kind)) {
+    return doubled(horizontal_kind) ? "╠" : "╟";
   }
-  return horizontal_fused ? "╞" : "├";
+  return doubled(horizontal_kind) ? "╞" : "├";
 }
 
 /// A channel that has been drawn from its source but not yet into its target.
 struct Lane {
   bool used = false;
   size_t target = 0;
-  bool fused = false;
+  Kind kind = Kind::regular;
 };
 
 /// One participant of a fan-out or fan-in run: its lane and channel style.
 struct Leg {
   size_t lane{};
-  bool fused{};
+  Kind kind{};
 };
 
 /// The lanes currently in flight, indexed by column.
@@ -159,7 +188,7 @@ auto node_line(const LaneSet& lanes, size_t node_lane, std::string_view label)
     if (i == node_lane) {
       out += node_glyph;
     } else if (const auto lane = lanes.get(i); lane.used) {
-      out += vertical(lane.fused);
+      out += vertical(lane.kind);
     } else {
       out += ' ';
     }
@@ -182,7 +211,7 @@ auto plain_line(const LaneSet& lanes) -> std::string {
       out += ' ';
     }
     if (const auto lane = lanes.get(i); lane.used) {
-      out += vertical(lane.fused);
+      out += vertical(lane.kind);
     } else {
       out += ' ';
     }
@@ -205,12 +234,23 @@ auto fan_line(const LaneSet& lanes, std::span<const Leg> legs, bool down)
     }
     return *it;
   };
-  // A horizontal run right of column `x` carries all legs beyond it, so it is
-  // fused only if all of them are.
-  const auto run_fused = [&](size_t x) {
-    return std::ranges::all_of(legs, [&](const Leg& leg) {
-      return leg.lane <= x or leg.fused;
-    });
+  // A horizontal run right of column `x` carries all legs beyond it, so it only
+  // adopts their style if they agree on it; otherwise it stays regular.
+  const auto run_kind = [&](size_t x) {
+    auto beyond = legs | std::views::filter([&](const Leg& leg) {
+                    return leg.lane > x;
+                  });
+    auto it = beyond.begin();
+    if (it == beyond.end()) {
+      return Kind::regular;
+    }
+    const auto kind = it->kind;
+    return std::ranges::all_of(beyond,
+                               [&](const Leg& leg) {
+                                 return leg.kind == kind;
+                               })
+             ? kind
+             : Kind::regular;
   };
   auto width = hi;
   if (const auto last = lanes.last_used()) {
@@ -219,32 +259,30 @@ auto fan_line(const LaneSet& lanes, std::span<const Leg> legs, bool down)
   auto out = std::string{};
   for (auto i = size_t{0}; i <= width; ++i) {
     if (i > 0) {
-      out += (i - 1 >= lo and i <= hi) ? horizontal(run_fused(i - 1)) : " ";
+      out += (i - 1 >= lo and i <= hi) ? horizontal(run_kind(i - 1)) : " ";
     }
     const auto leg = leg_at(i);
     if (i == lo) {
-      out += tee_right(leg->fused, run_fused(i));
+      out += tee_right(leg->kind, run_kind(i));
     } else if (leg) {
       const auto last = i == hi;
-      // The left-horizontal style is run_fused(i-1); right is run_fused(i).
-      // run_fused is monotone (left fused ⇒ right fused), so run_fused(i-1)
-      // is the tighter constraint. When the sides disagree (left single,
-      // right fused) there is no matching Unicode glyph; the left (single)
+      // The left-horizontal style is run_kind(i-1); right is run_kind(i). When
+      // the two sides disagree there is no matching Unicode glyph, so the left
       // style is used as the approximation, as documented in tee_down/tee_up.
-      const auto horiz_fused = run_fused(i - 1);
+      const auto horiz_kind = run_kind(i - 1);
       if (down) {
-        out += last ? corner_down(leg->fused, horiz_fused)
-                    : tee_down(leg->fused, horiz_fused);
+        out += last ? corner_down(leg->kind, horiz_kind)
+                    : tee_down(leg->kind, horiz_kind);
       } else {
-        out += last ? corner_up(leg->fused, horiz_fused)
-                    : tee_up(leg->fused, horiz_fused);
+        out += last ? corner_up(leg->kind, horiz_kind)
+                    : tee_up(leg->kind, horiz_kind);
       }
     } else if (lo < i and i < hi) {
       // A run passing over an unrelated lane interrupts it, so that it is
       // obvious that the two do not merge.
-      out += horizontal(run_fused(i));
+      out += horizontal(run_kind(i));
     } else if (const auto lane = lanes.get(i); lane.used) {
-      out += vertical(lane.fused);
+      out += vertical(lane.kind);
     } else {
       out += ' ';
     }
@@ -281,7 +319,7 @@ auto plan_node_label(const ir::PlannedOperator& node) -> std::string {
 struct OutEdge {
   size_t to{};
   size_t port{};
-  bool fused{};
+  Kind kind{};
 };
 
 } // namespace
@@ -313,7 +351,7 @@ auto ir::fmt_ir_plan(const ir::Plan& plan) -> std::string {
     const auto to = node_of(c.to);
     exists[from] = true;
     exists[to] = true;
-    out_edges[from].push_back({to, c.from_port, c.fused});
+    out_edges[from].push_back({to, c.from_port, c.kind});
     ++in_degree[to];
   }
   for (auto& edges : out_edges) {
@@ -393,7 +431,7 @@ auto ir::fmt_ir_plan(const ir::Plan& plan) -> std::string {
     if (const auto last = lanes.last_used()) {
       for (auto lane = size_t{0}; lane <= *last; ++lane) {
         if (const auto l = lanes.get(lane); l.used and l.target == node) {
-          legs.push_back({lane, l.fused});
+          legs.push_back({lane, l.kind});
         }
       }
     }
@@ -419,14 +457,14 @@ auto ir::fmt_ir_plan(const ir::Plan& plan) -> std::string {
     const auto& edges = out_edges[node];
     if (not edges.empty()) {
       auto next_legs = std::vector<Leg>{};
-      lanes[node_lane] = Lane{true, edges.front().to, edges.front().fused};
+      lanes[node_lane] = Lane{true, edges.front().to, edges.front().kind};
       ++pending_in[edges.front().to];
-      next_legs.push_back({node_lane, edges.front().fused});
+      next_legs.push_back({node_lane, edges.front().kind});
       for (const auto& edge : std::span{edges}.subspan(1)) {
         const auto lane = lanes.allocate(node_lane + 1);
-        lanes[lane] = Lane{true, edge.to, edge.fused};
+        lanes[lane] = Lane{true, edge.to, edge.kind};
         ++pending_in[edge.to];
-        next_legs.push_back({lane, edge.fused});
+        next_legs.push_back({lane, edge.kind});
       }
       if (next_legs.size() > 1) {
         out += fan_line(lanes, next_legs, true);

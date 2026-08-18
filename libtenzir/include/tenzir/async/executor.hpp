@@ -109,13 +109,13 @@ public:
     }
   }
 
-  /// Creates an events channel for a routing exchange (scatter, gather,
-  /// shuffle, or broadcast). Routing channels use a dedicated per-channel
-  /// limit and are expected to share one `ChannelId` across all lanes of an
-  /// exchange so their profiling stats collate into a single metric.
-  auto make_routing_channel(ChannelId id)
-    -> PushPull<OperatorMsg<table_slice>> {
-    return make_routing_events(std::move(id));
+  /// Creates an events channel whose number scales with the degree of
+  /// parallelism (scatter, gather, shuffle, broadcast, or unfused lane-to-lane
+  /// wiring). Tiny channels use a dedicated, small per-channel limit and are
+  /// expected to share one `ChannelId` across all lanes of an exchange so their
+  /// profiling stats collate into a single metric.
+  auto make_tiny_channel(ChannelId id) -> PushPull<OperatorMsg<table_slice>> {
+    return make_tiny_events(std::move(id));
   }
 
   /// Returns a per-operator CPU executor.
@@ -153,7 +153,7 @@ protected:
   virtual auto make_events(ChannelId id) -> PushPull<OperatorMsg<table_slice>>
     = 0;
 
-  virtual auto make_routing_events(ChannelId id)
+  virtual auto make_tiny_events(ChannelId id)
     -> PushPull<OperatorMsg<table_slice>>
     = 0;
 

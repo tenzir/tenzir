@@ -3,10 +3,10 @@
 ● from
 │
 ● fork_merge
-├─┐
-├─┘
+├╌┐
+├╌┘
 ● deduplicate(x4, keyed)
-│
+╎
 ● to_stdout
 │
 ● {output}

@@ -2,10 +2,14 @@
 │
 ● from
 ╎
-● where(x6)
+● where
 ║
-● where(x6)
+● where
 ╎
+● summarize
+╎
+● head
+│
 ● to_stdout
 │
 ● {output}

@@ -1,9 +1,9 @@
 ● {input}
 │
 ● version
-│
+╎
 ● where(x6)
-│
+╎
 ● head
 │
 ● to_stdout

@@ -1,11 +1,11 @@
 ● {input}
 │
 ● from
-│
+╎
 ● where(x6)
-│
+╎
 ● deduplicate(x4, keyed)
-│
+╎
 ● to_stdout
 │
 ● {output}

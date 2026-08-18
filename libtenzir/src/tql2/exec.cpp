@@ -977,10 +977,9 @@ protected:
     return make_profiled_channel<table_slice>(std::move(id), events_limit);
   }
 
-  auto make_routing_events(ChannelId id)
+  auto make_tiny_events(ChannelId id)
     -> PushPull<OperatorMsg<table_slice>> override {
-    return make_profiled_channel<table_slice>(std::move(id),
-                                              events_routing_limit);
+    return make_profiled_channel<table_slice>(std::move(id), events_tiny_limit);
   }
 
   auto make_bytes(ChannelId id) -> PushPull<OperatorMsg<chunk_ptr>> override {
@@ -1105,14 +1104,15 @@ private:
   static constexpr auto void_limit = 0;
   static constexpr auto events_limit = 0;
   static constexpr auto bytes_limit = 0;
-  static constexpr auto events_routing_limit = 0;
+  static constexpr auto events_tiny_limit = 0;
 #else
   // Memory limit per channel type.
   static constexpr auto void_limit = 1_Ki;
   static constexpr auto events_limit = 32_Mi;
   static constexpr auto bytes_limit = 32_Mi;
-  // Per-lane memory limit for routing (scatter, gather, shuffle, broadcast).
-  static constexpr auto events_routing_limit = 1_Mi;
+  // Per-lane memory limit for channels whose number scales with the degree of
+  // parallelism (scatter, gather, shuffle, broadcast, lane-to-lane).
+  static constexpr auto events_tiny_limit = 1_Mi;
 #endif
 };
 

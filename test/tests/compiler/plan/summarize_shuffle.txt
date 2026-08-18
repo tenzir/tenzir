@@ -1,9 +1,9 @@
 ● {input}
 │
 ● from
-│
+╎
 ● summarize(x4, keyed)
-│
+╎
 ● to_stdout
 │
 ● {output}

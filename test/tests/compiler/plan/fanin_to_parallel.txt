@@ -3,15 +3,15 @@
 ● pass
 ├─┐
 ● │ from
-│ │
+╎ │
 ● │ drop(x6)
 ║ │
 ║ ● from
-║ │
+║ ╎
 ║ ● drop(x6)
 ╠═╝
 ● assert(x6)
-│
+╎
 ● to_stdout
 │
 ● {output}

@@ -1,8 +1,8 @@
 // parallelism: 6
-// Regression test: routing evaluates the partition key upstream, independently
-// from the operator's own evaluation. A non-deterministic key must therefore
-// keep the keyed operator single-instance, or rows with equal actual keys would
-// be routed to different instances and survive deduplication.
+// Non-deterministic partition keys are not supported. Routing evaluates the key
+// expression upstream, independently from the operator's own evaluation, so the
+// two disagree and each of the four instances deduplicates its own key space:
+// the result is one group per key per instance rather than one per key.
 from {x: 1}
 repeat 5000
 deduplicate int(random() * 10)

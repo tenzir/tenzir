@@ -271,8 +271,11 @@ enum class Fusing {
   /// Fuse every operator-to-operator channel. Every operator fully processes
   /// an item before the upstream produces the next one.
   all,
-  /// Fuse only matched N:N lane-to-lane channels between parallel operators
-  /// running at the same degree greater than one. This is the default.
+  /// Fuse only those channels that would be matched lane-to-lane channels
+  /// between parallel operators when the pipeline is parallelized, i.e.,
+  /// channels between two parallelizable operators that run at the same
+  /// nominal degree and do not need a hash-partitioned exchange. This is the
+  /// default.
   parallel,
   /// Never fuse any channel.
   none,
@@ -339,6 +342,21 @@ struct PlannedOperator {
   }
 };
 
+/// How a channel between two planned operators is realized physically.
+enum class ChannelKind {
+  /// A regular buffered channel.
+  regular,
+  /// A run-to-completion channel: the sender blocks until the receiver asks for
+  /// the next item, so every item traverses the chain before the next one is
+  /// produced.
+  fused,
+  /// A buffered channel with a small memory limit, used for channels whose
+  /// number grows with the degree of parallelism (scatter, gather, shuffle,
+  /// broadcast, and unfused lane-to-lane channels). Only event channels can be
+  /// tiny.
+  tiny,
+};
+
 /// A directed single edge between operators of the pipeline plan.
 ///
 /// A channel connects one logical output port of an upstream operator to a
@@ -354,8 +372,8 @@ struct Channel {
   size_t to{};
   /// The data type flowing across this channel.
   element_type_tag type;
-  /// Whether the physical channel should be fused (run-to-completion per item).
-  bool fused = false;
+  /// How the physical channel is realized.
+  ChannelKind kind = ChannelKind::regular;
 };
 
 /// The pipeline plan: a DAG of operator stages ready to be spawned and driven
@@ -406,7 +424,8 @@ struct Plan {
 /// direction: one node per line, with every channel drawn as a connector line
 /// in between. The plan's external input and output participate as `{input}`
 /// and `{output}` nodes. Channels use box-drawing glyphs; regular channels are
-/// single (`│`, `├─┐`) and fused ones are doubled (`║`, `╠═╗`).
+/// single (`│`, `├─┐`), fused ones are doubled (`║`, `╠═╗`), and tiny ones are
+/// dashed (`╎`, `├╌┐`).
 auto fmt_ir_plan(const Plan& plan) -> std::string;
 
 /// Instantiate a compiled pipeline: resolve its `let` bindings and substitute
@@ -494,10 +513,18 @@ private:
   auto assign_ids(std::vector<IdEntry> const& entries, std::string_view prefix)
     -> void;
 
-  /// Whether a channel between two adjacent planned operators should be fused,
-  /// honoring the configured parallelism strategy.
-  auto derive_fused(const PlannedOperator& up,
-                    const PlannedOperator& down) const -> bool;
+  /// The number of instances `node` would run at if the pipeline were
+  /// parallelized, i.e., its degree derived with a degree of at least two. All
+  /// channel-kind decisions use this instead of `PlannedOperator::parallelism`
+  /// so that plans at degree one and two agree on which channels are fused and
+  /// tiny.
+  auto nominal_parallelism(const PlannedOperator& node) const -> size_t;
+
+  /// How a channel between two adjacent planned operators should be realized,
+  /// honoring the configured parallelism strategy. The decision only depends on
+  /// the nominal degrees of the two operators, not on the configured degree.
+  auto derive_kind(const PlannedOperator& up, const PlannedOperator& down,
+                   element_type_tag type) const -> ChannelKind;
 
   Plan& plan_;
   Parallelism par_;

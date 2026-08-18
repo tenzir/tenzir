@@ -419,7 +419,7 @@ protected:
     return inner_.make_fused_channel<table_slice>(std::move(id));
   }
 
-  auto make_routing_events(ChannelId id)
+  auto make_tiny_events(ChannelId id)
     -> PushPull<OperatorMsg<table_slice>> override {
     return inner_.make_fused_channel<table_slice>(std::move(id));
   }
@@ -1777,26 +1777,30 @@ private:
     return id_.op(plan_.operators[planned].id);
   }
 
-  /// Create one physical channel for an edge. Single-lane byte/void channels
-  /// are plain; multi-lane event channels are profiled routing channels so
-  /// their per-exchange stats collate; fused edges use fused channels.
-  auto make_channel(const ir::Channel& c, bool routing)
-    -> std::pair<AnyOpPush, AnyOpPull> {
+  /// Create one physical channel for an edge, following the kind that the
+  /// planner assigned: fused edges use fused channels, tiny edges use profiled
+  /// tiny event channels so that their per-exchange stats collate, and all
+  /// others use plain channels.
+  auto make_channel(const ir::Channel& c) -> std::pair<AnyOpPush, AnyOpPull> {
     auto cid = (c.from == ir::Port::input)  ? ChannelId::first(op_id(c.to))
                : (c.to == ir::Port::output) ? ChannelId::last(op_id(c.from))
                                             : op_id(c.from).to(op_id(c.to));
     return match(
       c.type, [&]<class T>(tag<T>) -> std::pair<AnyOpPush, AnyOpPull> {
         auto pp = [&] {
-          if (c.fused) {
-            return exec_ctx_.make_fused_channel<T>(cid);
+          switch (c.kind) {
+            case ir::ChannelKind::fused:
+              return exec_ctx_.make_fused_channel<T>(cid);
+            case ir::ChannelKind::tiny:
+              if constexpr (std::same_as<T, table_slice>) {
+                return exec_ctx_.make_tiny_channel(cid);
+              } else {
+                panic("only event channels can be tiny");
+              }
+            case ir::ChannelKind::regular:
+              return exec_ctx_.make_channel<T>(cid);
           }
-          if constexpr (std::same_as<T, table_slice>) {
-            if (routing) {
-              return exec_ctx_.make_routing_channel(cid);
-            }
-          }
-          return exec_ctx_.make_channel<T>(cid);
+          TENZIR_UNREACHABLE();
         }();
         return {AnyOpPush{std::move(pp.push)}, AnyOpPull{std::move(pp.pull)}};
       });
@@ -1816,9 +1820,8 @@ private:
     TENZIR_ASSERT(n > 0 and m > 0);
     const auto& down = plan_.operators[c.to];
     const auto keyed = down.keyed();
-    const auto routing = n > 1 or m > 1;
     auto connect = [&](size_t i, size_t j) {
-      auto [push, pull] = make_channel(c, routing);
+      auto [push, pull] = make_channel(c);
       ensure_port(out_ports[from[i]], c.from_port,
                   keyed ? down.partition_keys : None{});
       out_ports[from[i]][c.from_port].lanes.push_back(std::move(push));
