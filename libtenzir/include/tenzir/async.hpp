@@ -50,6 +50,7 @@
 #include "tenzir/async/push_pull.hpp"
 #include "tenzir/async/scope.hpp"
 #include "tenzir/element_type.hpp"
+#include "tenzir/hash/hash.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/ref.hpp"
@@ -426,8 +427,53 @@ private:
   chunk_ptr chunk_;
 };
 
+/// Identifies the job of one runtime instance of an operator, that is, the
+/// share of the work that this instance is responsible for.
+///
+/// The planner may replicate a `parallelizable()` operator into `degree`
+/// runtime instances, which are exact clones of each other. Operators that
+/// generate work themselves — sources, most notably — must therefore split
+/// that work deterministically, such that every item is claimed by exactly one
+/// instance. `index` identifies this instance among the `degree` instances of
+/// the same planned operator.
+struct JobId {
+  /// The zero-based index of this instance, always less than `degree`.
+  size_t index = 0;
+
+  /// The total number of instances of this operator, always at least one.
+  size_t total = 1;
+
+  /// Whether `item` belongs to this instance.
+  ///
+  /// The caller must pass a value that is stable over the lifetime of the
+  /// item, so that the same instance claims it again after a rescan or a
+  /// restart.
+  template <class T>
+  auto owns(const T& item) const -> bool {
+    if (total == 1) {
+      return true;
+    }
+    return hash(item) % total == index;
+  }
+
+  friend auto inspect(auto& f, JobId& x) -> bool {
+    return f.object(x).fields(f.field("index", x.index),
+                              f.field("total", x.total));
+  }
+};
+
 class OperatorBase {
 public:
+  /// Called once before the operator starts processing.
+  ///
+  /// Operators that must know how many instances of themselves run in
+  /// parallel override this. All others override the single-argument overload
+  /// below, which this one calls by default.
+  virtual auto start(JobId job, OpCtx& ctx) -> Task<void> {
+    TENZIR_UNUSED(job);
+    co_await start(ctx);
+  }
+
   virtual auto start(OpCtx& ctx) -> Task<void> {
     TENZIR_UNUSED(ctx);
     co_return;

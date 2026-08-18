@@ -541,11 +541,13 @@ private:
 /// [^1]: https://arxiv.org/pdf/1506.08603
 class Runner final : public OpCtx {
 public:
-  Runner(AnyOperator op, std::vector<AnyOpPull> pull_upstream,
+  Runner(AnyOperator op, JobId job,
+         std::vector<AnyOpPull> pull_upstream,
          std::vector<OutputPort> push_downstream,
          Receiver<FromControl> from_control, Sender<ToControl> to_control,
          OpId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
     : op_{std::move(op)},
+      job_{job},
       pull_upstream_{std::move(pull_upstream)},
       push_downstream_{std::move(push_downstream)},
       from_control_{std::move(from_control)},
@@ -1248,7 +1250,7 @@ private:
           TENZIR_ASSERT(ok);
         }
       }
-      co_await base_op().start(*this);
+      co_await base_op().start(job_, *this);
       co_await folly::coro::co_safe_point;
       ensure_await_task();
       for (auto lane = size_t{0}; lane < pull_upstream_.size(); ++lane) {
@@ -1638,6 +1640,7 @@ private:
   }
 
   AnyOperator op_;
+  JobId job_;
   std::vector<AnyOpPull> pull_upstream_;
   std::vector<OutputPort> push_downstream_;
   Receiver<FromControl> from_control_;
@@ -1700,14 +1703,15 @@ private:
 
 namespace {
 
-auto run_operator(AnyOperator op, std::vector<AnyOpPull> pulls,
-                  std::vector<OutputPort> ports,
+auto run_operator(AnyOperator op, JobId job,
+                  std::vector<AnyOpPull> pulls, std::vector<OutputPort> ports,
                   Receiver<FromControl> from_control,
                   Sender<ToControl> to_control, OpId id, ExecCtx& exec_ctx,
                   caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
   co_await folly::coro::co_safe_point;
   auto runner = Runner{
     std::move(op),
+    job,
     std::move(pulls),
     std::move(ports),
     std::move(from_control),
@@ -1856,6 +1860,7 @@ private:
       for (auto k = size_t{0}; k < planned.parallelism; ++k) {
         instances_of[p].push_back(operators_.size());
         instance_of_.push_back(p);
+        job_ids_.push_back(JobId{k, planned.parallelism});
         operators_.push_back(planned.op->spawn(planned.input));
       }
     }
@@ -1891,7 +1896,7 @@ private:
     }
     for (auto index = size_t{0}; index < operators_.size(); ++index) {
       start_operator_task(index, op_id(instance_of_[index]),
-                          std::move(inputs[index]),
+                          job_ids_[index], std::move(inputs[index]),
                           std::move(out_ports[index]));
     }
     for (auto index = size_t{0}; index < operators_.size(); ++index) {
@@ -1900,7 +1905,7 @@ private:
   }
 
   /// Start the runner task for the operator instance at `index`.
-  auto start_operator_task(size_t index, OpId op_id,
+  auto start_operator_task(size_t index, OpId op_id, JobId job_id,
                            std::vector<AnyOpPull> input_pulls,
                            std::vector<OutputPort> ports) -> void {
     auto name = match(operators_[index], [](auto& op) -> std::string {
@@ -1916,8 +1921,9 @@ private:
     });
     auto executor = exec_ctx_.make_executor(op_id, name);
     auto task
-      = run_operator(std::move(operators_[index]), std::move(input_pulls),
-                     std::move(ports), std::move(from_control_receiver),
+      = run_operator(std::move(operators_[index]), job_id,
+                     std::move(input_pulls), std::move(ports),
+                     std::move(from_control_receiver),
                      std::move(to_control_sender), op_id, exec_ctx_, sys_, dh_);
     driver_.add([task = std::move(task), index,
                  executor = std::move(
@@ -2046,6 +2052,8 @@ private:
 
   ir::Plan plan_;
   std::vector<AnyOperator> operators_;
+  std::vector<JobId> job_ids_;
+
   /// Maps a flat instance index in `operators_` to its planned operator index
   /// in `plan_.operators` (and thus its shared `OpId`).
   std::vector<size_t> instance_of_;
