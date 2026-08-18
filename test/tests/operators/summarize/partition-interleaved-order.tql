@@ -1,0 +1,6 @@
+// Interleaved group keys must not change the order in which rows reach an
+// aggregation: `first`, `last`, and `collect` observe the original relative
+// row order within their group.
+from {g: "a", x: 1}, {g: "b", x: 10}, {g: "a", x: 2}, {g: "b", x: 20},
+     {g: "a", x: 3}, {g: "b", x: 30}
+summarize g, first=first(x), last=last(x), all=collect(x), total=sum(x)

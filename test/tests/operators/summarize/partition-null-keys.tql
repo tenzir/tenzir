@@ -1,0 +1,4 @@
+// Null, missing, and present keys form distinct groups, interleaved.
+from {g: "a", x: 1}, {g: null, x: 2}, {x: 3}, {g: "a", x: 4}, {g: null, x: 5},
+     {x: 6}
+summarize g, all=collect(x), total=sum(x)

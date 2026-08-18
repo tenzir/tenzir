@@ -1,0 +1,3 @@
+// A single group forwards the input untouched.
+from {g: "a", x: 1}, {g: "a", x: 2}, {g: "a", x: 3}
+summarize g, first=first(x), last=last(x), all=collect(x), total=sum(x)

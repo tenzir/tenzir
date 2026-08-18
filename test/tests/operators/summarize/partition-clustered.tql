@@ -1,0 +1,5 @@
+// Input that is already clustered by group key takes the zero-copy sub-slice
+// path and must produce the same result as interleaved input.
+from {g: "a", x: 1}, {g: "a", x: 2}, {g: "a", x: 3}, {g: "b", x: 10},
+     {g: "b", x: 20}, {g: "b", x: 30}
+summarize g, first=first(x), last=last(x), all=collect(x), total=sum(x)

@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arc.hpp>
-#include <tenzir/arrow_memory_pool.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
@@ -26,14 +25,13 @@
 #include <tenzir/session.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/substitute_ctx.hpp>
+#include <tenzir/table_slice.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/registry.hpp>
 #include <tenzir/tql2/set.hpp>
 #include <tenzir/type.hpp>
 
-#include <arrow/compute/api_scalar.h>
-#include <arrow/compute/api_vector.h>
 #include <arrow/record_batch.h>
 #include <arrow/type.h>
 #include <folly/coro/BoundedQueue.h>
@@ -42,7 +40,9 @@
 #include <algorithm>
 #include <chrono>
 #include <functional>
+#include <numeric>
 #include <ranges>
+#include <span>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -203,6 +203,117 @@ struct Bucket {
   Option<std::vector<data>> final_values;
 };
 
+/// The largest number of distinct groups per input slice that we keep sizing
+/// the partitioning allocations for. A single unusually diverse slice would
+/// otherwise make every later slice reserve for a peak it never reaches again,
+/// and growing the containers on demand costs less than that.
+constexpr auto max_group_hint = size_t{4096};
+
+/// The rows of a single input slice that belong to one group.
+struct SlicePartition {
+  GroupKey key;
+  table_slice rows;
+};
+
+/// Partitions `slice` into one part per distinct group key, where the key of a
+/// row is the tuple of `group_values` at that row.
+///
+/// Parts are returned in first-seen key order, rows keep their relative order
+/// within a part, and every row appears in exactly one part. Both properties
+/// are load-bearing: the former determines the order in which groups are
+/// emitted, and the latter is what order-sensitive aggregations such as
+/// `first`, `last`, and `collect` observe.
+///
+/// Inputs that are already clustered by key are partitioned into zero-copy
+/// sub-slices. Otherwise the rows are permuted with a single `Take` over the
+/// whole batch, after which every part again is a contiguous, zero-copy
+/// sub-slice of that permutation. This keeps the number of Arrow copies at one
+/// per slice instead of one per group, which matters because interleaved keys
+/// degenerate to one contiguous run per row.
+///
+/// `group_hint` is an estimate for the number of distinct keys, used only to
+/// size the internal allocations.
+///
+/// Requires that every element of `group_values` has `slice.rows()` values.
+auto partition_by_key(table_slice const& slice,
+                      std::span<multi_series const> group_values,
+                      size_t group_hint) -> std::vector<SlicePartition> {
+  auto const total_rows = detail::narrow<int64_t>(slice.rows());
+  if (total_rows == 0) {
+    return {};
+  }
+  // Assign a dense group index to every row in a single pass. Indices are
+  // handed out in first-seen order, so iterating them in order reproduces the
+  // order in which the keys occur in the input.
+  auto index_of = GroupMap<uint32_t>{};
+  index_of.reserve(group_hint);
+  auto keys = std::vector<GroupKey>{};
+  keys.reserve(group_hint);
+  auto row_groups = std::vector<uint32_t>{};
+  row_groups.reserve(static_cast<size_t>(total_rows));
+  auto key = GroupKeyView{};
+  key.reserve(group_values.size());
+  auto previous = uint32_t{0};
+  auto have_previous = false;
+  for (auto row = int64_t{0}; row < total_rows; ++row) {
+    key.clear();
+    for (auto const& values : group_values) {
+      key.emplace_back(values.view3_at(row));
+    }
+    // Comparing against the previous row's key avoids hashing and probing for
+    // clustered inputs; a hash lookup happens only at key transitions.
+    if (have_previous and GroupKeyEqual{}(key, keys[previous])) {
+      row_groups.push_back(previous);
+      continue;
+    }
+    auto it = index_of.find(key);
+    if (it == index_of.end()) {
+      auto const index = detail::narrow<uint32_t>(keys.size());
+      keys.push_back(materialize(key));
+      it = index_of.emplace_hint(it, keys.back(), index);
+    }
+    previous = it->second;
+    have_previous = true;
+    row_groups.push_back(previous);
+  }
+  auto const num_groups = keys.size();
+  auto result = std::vector<SlicePartition>{};
+  result.reserve(num_groups);
+  // Everything lands in one group: forward the input untouched.
+  if (num_groups == 1) {
+    result.push_back({std::move(keys.front()), slice});
+    return result;
+  }
+  // Counting sort by group index. `offsets` ends up holding the exclusive
+  // prefix sums, so group `g` occupies `[offsets[g], offsets[g + 1])` of the
+  // permutation, and the sort being stable preserves the relative row order
+  // within every group.
+  auto offsets = std::vector<int64_t>(num_groups + 1, 0);
+  for (auto group : row_groups) {
+    ++offsets[group + 1];
+  }
+  std::partial_sum(offsets.begin(), offsets.end(), offsets.begin());
+  auto cursors = offsets;
+  auto permutation = std::vector<int64_t>(static_cast<size_t>(total_rows));
+  auto clustered = true;
+  for (auto row = int64_t{0}; row < total_rows; ++row) {
+    auto const target = cursors[row_groups[static_cast<size_t>(row)]]++;
+    clustered = clustered and target == row;
+    permutation[static_cast<size_t>(target)] = row;
+  }
+  // If the permutation is the identity, then the input is already clustered by
+  // key and we can sub-slice it directly instead of copying it.
+  auto const source = clustered ? slice : take_rows(slice, permutation);
+  for (auto group = size_t{0}; group < num_groups; ++group) {
+    result.push_back({
+      std::move(keys[group]),
+      subslice(source, detail::narrow<size_t>(offsets[group]),
+               detail::narrow<size_t>(offsets[group + 1])),
+    });
+  }
+  return result;
+}
+
 /// Returns the generated field name for an unnamed aggregate.
 auto aggregate_name(Aggregate const& aggregate) -> std::string {
   auto const& call = aggregate.call;
@@ -266,90 +377,29 @@ public:
   auto add(table_slice const& slice, session ctx) -> void {
     saw_input_ = true;
     auto group_values = std::vector<multi_series>{};
+    group_values.reserve(config_.groups.size());
     for (auto& group : config_.groups) {
       group_values.push_back(eval(group.expr.inner(), slice, ctx));
     }
-    auto key = GroupKeyView{};
-    key.reserve(config_.groups.size());
-    auto fill_key = [&](int64_t row) {
-      key.clear();
-      for (auto&& group : group_values) {
-        key.emplace_back(group.view3_at(row));
-      }
-    };
-    // Collect the row ranges of every group in this slice first, then update
-    // each group's aggregations exactly once. Aggregation instances evaluate
-    // their argument expression on every update() call, so the number of
-    // updates must be proportional to the number of *distinct groups* per
-    // slice rather than the number of group-key transitions. The latter
-    // degenerates to one transition per row for interleaved inputs, which
-    // makes per-transition updates prohibitively expensive.
-    struct SliceGroup {
-      GroupKey key;
-      std::vector<std::pair<int64_t, int64_t>> runs;
-    };
-    auto slice_groups = std::vector<SliceGroup>{};
-    auto seen = GroupMap<size_t>{};
-    auto find_or_add = [&](GroupKey const& key) -> size_t {
-      auto it = seen.find(key);
-      if (it == seen.end()) {
-        it = seen.emplace_hint(it, key, slice_groups.size());
-        slice_groups.push_back({key, {}});
-      }
-      return it->second;
-    };
-    auto total_rows = detail::narrow<int64_t>(slice.rows());
-    fill_key(0);
-    auto current_key = materialize(key);
-    auto current_index = find_or_add(current_key);
-    auto current_begin = int64_t{0};
-    for (auto row = int64_t{1}; row < total_rows; ++row) {
-      fill_key(row);
-      // Comparing against the current run's key avoids hashing and probing
-      // for every row; a hash lookup happens only at run transitions.
-      if (GroupKeyEqual{}(key, current_key)) {
-        continue;
-      }
-      slice_groups[current_index].runs.emplace_back(current_begin, row);
-      current_key = materialize(key);
-      current_index = find_or_add(current_key);
-      current_begin = row;
-    }
-    slice_groups[current_index].runs.emplace_back(current_begin, total_rows);
-    // Apply the collected rows group by group. Groups are created in
-    // first-seen order, matching the previous behavior.
-    for (auto& sg : slice_groups) {
-      auto it = groups_.find(sg.key);
+    // Partition the slice by group first, then update each group's
+    // aggregations exactly once. Aggregation instances evaluate their argument
+    // expression on every update() call, so the number of updates must be
+    // proportional to the number of *distinct groups* per slice rather than to
+    // the number of group-key transitions. The latter degenerates to one
+    // transition per row for interleaved inputs.
+    auto partitions = partition_by_key(slice, group_values, max_slice_groups_);
+    max_slice_groups_ = std::min(std::max(max_slice_groups_, partitions.size()),
+                                 max_group_hint);
+    // Groups are created in first-seen order, which determines the order in
+    // which they are emitted.
+    for (auto& partition : partitions) {
+      auto it = groups_.find(partition.key);
       if (it == groups_.end()) {
-        it = groups_.emplace_hint(it, std::move(sg.key), make_bucket(ctx));
+        it = groups_.emplace_hint(it, std::move(partition.key),
+                                  make_bucket(ctx));
       }
-      auto rows = std::invoke([&]() -> table_slice {
-        if (sg.runs.size() == 1) {
-          // A single contiguous run needs no gather; slice it zero-copy.
-          auto const [begin, end] = sg.runs.front();
-          return subslice(slice, begin, end);
-        }
-        auto num_rows = int64_t{0};
-        for (auto const [begin, end] : sg.runs) {
-          num_rows += end - begin;
-        }
-        auto b = arrow::Int64Builder{arrow_memory_pool()};
-        check(b.Reserve(num_rows));
-        for (auto const [begin, end] : sg.runs) {
-          for (auto row = begin; row < end; ++row) {
-            b.UnsafeAppend(row);
-          }
-        }
-        auto gathered = table_slice{
-          check(arrow::compute::Take(to_record_batch(slice), tenzir::finish(b)))
-            .record_batch(),
-          slice.schema(),
-        };
-        gathered.import_time(slice.import_time());
-        return gathered;
-      });
       for (auto& aggr : it.value().aggregations) {
-        aggr->update(rows, ctx);
+        aggr->update(partition.rows, ctx);
       }
     }
   }
@@ -659,6 +709,10 @@ private:
   /// after every row, so it never carries state across calls and is
   /// intentionally not part of snapshots.
   Option<Bucket> scratch_bucket_;
+  /// The largest number of distinct groups seen in a single input slice,
+  /// capped at `max_group_hint` and used to size the per-slice partitioning
+  /// allocations. Purely an optimization, hence not part of snapshots.
+  size_t max_slice_groups_ = 0;
   bool saw_input_ = false;
 };
 

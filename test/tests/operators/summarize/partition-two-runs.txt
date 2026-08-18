@@ -1,0 +1,31 @@
+{
+  g: "b",
+  first: 2,
+  last: 7,
+  all: [
+    2,
+    3,
+    7,
+  ],
+  total: 12,
+}
+{
+  g: "a",
+  first: 1,
+  last: 5,
+  all: [
+    1,
+    4,
+    5,
+  ],
+  total: 10,
+}
+{
+  g: "c",
+  first: 6,
+  last: 6,
+  all: [
+    6,
+  ],
+  total: 6,
+}

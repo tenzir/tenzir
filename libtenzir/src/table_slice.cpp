@@ -1146,7 +1146,11 @@ auto subslice(const table_slice& slice, size_t begin, size_t end)
                  detail::narrow_cast<int64_t>(end - begin)),
     slice.schema(),
   };
-  sub_slice.offset(offset + begin);
+  // A slice without a valid offset does not occupy a dense ID range, so there
+  // is nothing to shift; adding to `invalid_id` would wrap around and invent a
+  // bogus range. This happens for slices produced by a non-contiguous
+  // `take_rows`, for example.
+  sub_slice.offset(offset == invalid_id ? invalid_id : offset + begin);
   sub_slice.import_time(slice.import_time());
   return sub_slice;
 }

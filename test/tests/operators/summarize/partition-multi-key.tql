@@ -1,0 +1,4 @@
+// Multi-column group keys with interleaved values.
+from {a: 1, b: "x", v: 1}, {a: 1, b: "y", v: 2}, {a: 2, b: "x", v: 3},
+     {a: 1, b: "x", v: 4}, {a: 2, b: "x", v: 5}, {a: 1, b: "y", v: 6}
+summarize a, b, all=collect(v), total=sum(v)

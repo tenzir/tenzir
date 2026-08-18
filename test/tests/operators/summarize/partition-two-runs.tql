@@ -1,0 +1,6 @@
+// A group that appears as exactly two runs, surrounded by groups that each
+// appear as one. The split group must still see its rows in input order and
+// must still be aggregated in a single update.
+from {g: "a", x: 1}, {g: "b", x: 2}, {g: "b", x: 3}, {g: "a", x: 4},
+     {g: "a", x: 5}, {g: "c", x: 6}, {g: "b", x: 7}
+summarize g, first=first(x), last=last(x), all=collect(x), total=sum(x)

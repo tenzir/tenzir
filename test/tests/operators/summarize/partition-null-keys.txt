@@ -1,0 +1,26 @@
+{
+  g: null,
+  all: [
+    2,
+    3,
+    5,
+    6,
+  ],
+  total: 16,
+}
+{
+  g: "a",
+  all: [
+    1,
+    4,
+  ],
+  total: 5,
+}
+warning: field `g` not found
+ --> tests/operators/summarize/partition-null-keys.tql:4:11
+  |
+4 | summarize g, all=collect(x), total=sum(x)
+  |           ~
+  |
+  = hint: did you mean `x`?
+  = hint: append `?` to suppress this warning
