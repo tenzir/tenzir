@@ -1,0 +1,26 @@
+---
+fixtures:
+  - otlp_grpc:
+      requests:
+        - signal: logs
+          expected_status: DEADLINE_EXCEEDED
+          timeout: 0.001
+          body_string_size: 2000000
+          body:
+            resourceLogs:
+              - scopeLogs:
+                  - logRecords:
+                      - body:
+                          stringValue: replaced by fixture
+        - signal: logs
+          body:
+            resourceLogs:
+              - scopeLogs:
+                  - logRecords:
+                      - body:
+                          stringValue: accepted after deadline
+---
+
+accept_otlp env("OTLP_GRPC_ENDPOINT"), transport="grpc"
+head 1
+select receiver, body=body.string_value

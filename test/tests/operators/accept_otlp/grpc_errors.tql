@@ -1,0 +1,58 @@
+---
+fixtures:
+  - otlp_grpc:
+      requests:
+        - signal: metrics
+          expected_status: UNIMPLEMENTED
+          body: {}
+        - signal: logs
+          metadata:
+            - [x-private-bin, ignored binary metadata]
+          body: {}
+        - signal: logs
+          expected_status: RESOURCE_EXHAUSTED
+          body:
+            resourceLogs:
+              - scopeLogs:
+                  - logRecords:
+                      - body:
+                          stringValue: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        - signal: logs
+          body: {}
+        - signal: logs
+          compression: gzip
+          serialized_size: 256
+          body:
+            resourceLogs:
+              - resource:
+                  attributes:
+                    - key: padding
+                      value:
+                        stringValue: ""
+        - signal: logs
+          compression: gzip
+          serialized_size: 257
+          expected_status: RESOURCE_EXHAUSTED
+          body:
+            resourceLogs:
+              - resource:
+                  attributes:
+                    - key: padding
+                      value:
+                        stringValue: ""
+        - signal: logs
+          body:
+            resourceLogs:
+              - scopeLogs:
+                  - logRecords:
+                      - body:
+                          stringValue: accepted
+---
+
+accept_otlp env("OTLP_GRPC_ENDPOINT"),
+  transport="grpc",
+  signals=["logs"],
+  schema="record",
+  max_message_size=256
+head 1
+select receiver, body=body.string_value

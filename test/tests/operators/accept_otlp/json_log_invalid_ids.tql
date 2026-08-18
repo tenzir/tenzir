@@ -1,0 +1,44 @@
+---
+fixtures:
+  - http_request:
+      requests:
+        - path: /v1/traces
+          headers:
+            Content-Type: application/json
+          expected_status: 400
+          body: '{"resourceSpans":[{"scopeSpans":[{"spans":[{"traceId":"001","spanId":"0011223344556677","name":"invalid","startTimeUnixNano":"1000000000","endTimeUnixNano":"2000000000"}]}]}]}'
+        - path: /v1/logs
+          headers:
+            Content-Type: application/json
+          expected_status: 400
+          body: '{"resourceLogs":[{"scopeLogs":[{"logRecords":[{"body":{"stringValue":"malformed trace ID"},"traceId":"\x","spanId":"0011223344556677"}]}]}]}'
+        - path: /v1/logs
+          headers:
+            Content-Type: application/json
+          expected_status: 200
+          expected_body: "{}"
+          body: '{"resourceLogs":[{"scopeLogs":[{"logRecords":[{"body":{"stringValue":"odd trace ID"},"traceId":"001","spanId":"0011223344556677"}]}]}]}'
+        - path: /v1/logs
+          headers:
+            Content-Type: application/json
+          expected_status: 200
+          expected_body: "{}"
+          body: '{"resourceLogs":[{"scopeLogs":[{"logRecords":[{"body":{"stringValue":"non-hex span ID"},"trace\u0049d":"00112233445566778899aabbccddeeff","spanId":"xyz"}]}]}]}'
+        - path: /v1/logs
+          headers:
+            Content-Type: application/json
+          expected_status: 200
+          expected_body: "{}"
+          body: '{"resourceLogs":[{"scopeLogs":[{"logRecords":[{"body":{"stringValue":"escaped trace ID"},"traceId":"\u00300112233445566778899aabbccddeeff","spanId":"0011223344556677"}]}]}]}'
+        - path: /v1/logs
+          headers:
+            Content-Type: application/json
+          expected_status: 200
+          expected_body: "{}"
+          body: '{"resourceLogs":[{"scopeLogs":[{"logRecords":[{"body":{"stringValue":"non-string span ID"},"traceId":"00112233445566778899aabbccddeeff","spanId":42}]}]}]}'
+          stop_on_connection_drop: true
+---
+
+accept_otlp env("HTTP_REQUEST_ENDPOINT")
+head 4
+select body=body.string_value, trace_id, span_id

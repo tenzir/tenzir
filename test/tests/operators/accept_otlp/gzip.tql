@@ -1,0 +1,22 @@
+---
+fixtures:
+  - http_request:
+      requests:
+        - path: /v1/logs
+          headers:
+            Content-Type: application/x-protobuf
+            Content-Encoding: gzip
+          body_base64: H4sIAAAAAAAAA+OSF5IVkuZkODXLmgEIBDi1+Lh4kjLzEosqFTJSc3LyAQ==
+          expected_status: 400
+        - path: /v1/logs
+          headers:
+            Content-Type: application/x-protobuf
+            Content-Encoding: gzip
+          body_base64: H4sIAAAAAAAAA+OSF5IVkuZkODXLmgEIBDi1+Lh4kjLzEosqFTJSc3LyASRUdFchAAAA
+          expected_status: 200
+          expected_body: ""
+          stop_on_connection_drop: true
+---
+
+accept_otlp env("HTTP_REQUEST_ENDPOINT"), max_message_size=1024
+head 1

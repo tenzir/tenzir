@@ -20,6 +20,9 @@ rec {
   integration =
     ps: with ps; [
       boto3
+      googleapis-common-protos
+      grpcio
+      grpcio-tools
       pyarrow
       python-box
       pyzmq

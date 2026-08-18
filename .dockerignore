@@ -6,6 +6,7 @@
 !/libtenzir/aux/caf/
 !/libtenzir/aux/facebook/
 !/libtenzir/aux/pfs/
+!/libtenzir/aux/opentelemetry-proto/
 !/libtenzir/aux/robin-map/
 !/libtenzir/aux/simdjson/
 CMakeUserPresets.json

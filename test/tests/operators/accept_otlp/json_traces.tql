@@ -1,0 +1,14 @@
+---
+fixtures:
+  - http_request:
+      path: /v1/traces
+      headers:
+        Content-Type: application/json
+      expected_status: 200
+      expected_body: "{}"
+      stop_on_connection_drop: true
+      body: '{"resourceSpans":[{"scopeSpans":[{"scope":{"name":"tracer"},"spans":[{"trace\u0049d":"\u00300112233445566778899aabbccddeeff","spanId":"0011223344556677","parentSpanId":"8899aabbccddeeff","traceState":"vendor=value","name":"GET /","kind":2,"startTimeUnixNano":"1000000000","endTimeUnixNano":"2000000000","attributes":[{"key":"http.request.method","value":{"stringValue":"GET"}}],"events":[{"timeUnixNano":"1500000000","name":"exception","attributes":[{"key":"exception.escaped","value":{"boolValue":false}}]}],"links":[{"traceId":"ffeeddccbbaa99887766554433221100","spanId":"7766554433221100","attributes":[{"key":"link.type","value":{"stringValue":"follows_from"}}]}],"future":{"traceId":"opaque","spanId":17},"status":{"code":1}}]}]}]}'
+---
+
+accept_otlp env("HTTP_REQUEST_ENDPOINT")
+head 1

@@ -199,6 +199,24 @@ string(APPEND TENZIR_FIND_DEPENDENCY_LIST
        "\nfind_package(EXPAT REQUIRED MODULE)")
 dependency_summary("expat" EXPAT::EXPAT "Dependencies")
 
+# -- protobuf (OTLP receiver) --------------------------------------------------
+
+find_package(protobuf CONFIG)
+if (NOT protobuf_FOUND)
+  find_package(Protobuf MODULE REQUIRED)
+endif ()
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(protobuf CONFIG)"
+       "\nif (NOT protobuf_FOUND)" "\n  find_package(Protobuf MODULE REQUIRED)"
+       "\nendif ()")
+dependency_summary("protobuf" protobuf::libprotobuf "Dependencies")
+
+# -- gRPC (OTLP receiver) ------------------------------------------------------
+
+find_package(gRPC 1.51 REQUIRED CONFIG)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+       "\nfind_package(gRPC 1.51 REQUIRED CONFIG)")
+dependency_summary("gRPC" gRPC::grpc++ "Dependencies")
+
 # -- jemalloc ------------------------------------------------------------------
 
 set(TENZIR_ALLOCATOR_NEEDS_JEMALLOC OFF)
@@ -279,10 +297,23 @@ endif ()
 # library, but always loaded when linking against the libtenzir_builtins library.
 file(GLOB_RECURSE libtenzir_builtins_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")
+# A direct child of a builtin category registers a plugin. Nested sources are
+# support translation units owned by the direct child matching their directory.
 foreach (source IN LISTS libtenzir_builtins_sources)
-  file(READ "${source}" lines)
-  if (NOT "${lines}" MATCHES "\n *TENZIR_REGISTER_PLUGIN *\\(.+\\) *[\n$]")
-    message(FATAL_ERROR "builtin ${source} does not register as a plugin")
+  file(RELATIVE_PATH relative_source "${CMAKE_CURRENT_SOURCE_DIR}/builtins"
+       "${source}")
+  if (relative_source MATCHES "^([^/]+)/([^/]+)/")
+    set(owner
+        "${CMAKE_CURRENT_SOURCE_DIR}/builtins/${CMAKE_MATCH_1}/${CMAKE_MATCH_2}.cpp"
+    )
+    if (NOT EXISTS "${owner}")
+      message(FATAL_ERROR "builtin support source ${source} has no owner")
+    endif ()
+  else ()
+    file(READ "${source}" lines)
+    if (NOT "${lines}" MATCHES "\n *TENZIR_REGISTER_PLUGIN *\\(.+\\) *[\n$]")
+      message(FATAL_ERROR "builtin ${source} does not register as a plugin")
+    endif ()
   endif ()
 endforeach ()
 
@@ -299,7 +330,57 @@ add_library(tenzir::libtenzir ALIAS libtenzir)
 # flavor of TENZIR_REGISTER_PLUGIN lets them register like any other builtin.
 target_compile_definitions(libtenzir PRIVATE TENZIR_ENABLE_BUILTINS)
 
-add_library(libtenzir_builtins STATIC ${libtenzir_builtins_sources})
+set(otlp_proto_root "${CMAKE_CURRENT_SOURCE_DIR}/aux/opentelemetry-proto")
+set(otlp_grpc_proto_sources
+    "${otlp_proto_root}/opentelemetry/proto/collector/logs/v1/logs_service.proto"
+    "${otlp_proto_root}/opentelemetry/proto/collector/trace/v1/trace_service.proto"
+    "${otlp_proto_root}/opentelemetry/proto/collector/metrics/v1/metrics_service.proto"
+)
+set(otlp_proto_sources
+    "${otlp_proto_root}/opentelemetry/proto/common/v1/common.proto"
+    "${otlp_proto_root}/opentelemetry/proto/resource/v1/resource.proto"
+    "${otlp_proto_root}/opentelemetry/proto/logs/v1/logs.proto"
+    "${otlp_proto_root}/opentelemetry/proto/trace/v1/trace.proto"
+    "${otlp_proto_root}/opentelemetry/proto/metrics/v1/metrics.proto"
+    ${otlp_grpc_proto_sources})
+add_library(libtenzir_builtins STATIC ${libtenzir_builtins_sources}
+                                      ${otlp_proto_sources})
+set(otlp_proto_binary_dir "${CMAKE_CURRENT_BINARY_DIR}/otlp-proto")
+file(MAKE_DIRECTORY "${otlp_proto_binary_dir}")
+protobuf_generate(
+  TARGET libtenzir_builtins
+  OUT_VAR otlp_proto_generated_files
+  IMPORT_DIRS "${otlp_proto_root}"
+  PROTOC_OUT_DIR "${otlp_proto_binary_dir}")
+if (TENZIR_GRPC_CPP_PLUGIN)
+  if (NOT TARGET gRPC::grpc_cpp_plugin)
+    add_executable(gRPC::grpc_cpp_plugin IMPORTED)
+  endif ()
+  set_target_properties(gRPC::grpc_cpp_plugin
+                        PROPERTIES IMPORTED_LOCATION ${TENZIR_GRPC_CPP_PLUGIN})
+endif ()
+if (NOT TARGET gRPC::grpc_cpp_plugin)
+  add_executable(gRPC::grpc_cpp_plugin IMPORTED)
+  find_program(_grpc_cpp_plugin NAME grpc_cpp_plugin REQUIRED)
+  set_target_properties(gRPC::grpc_cpp_plugin PROPERTIES IMPORTED_LOCATION
+                                                         ${_grpc_cpp_plugin})
+endif ()
+protobuf_generate(
+  PROTOS ${otlp_grpc_proto_sources}
+  OUT_VAR otlp_grpc_generated_files
+  LANGUAGE grpc
+  GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
+  PLUGIN "protoc-gen-grpc=\$<TARGET_FILE:gRPC::grpc_cpp_plugin>"
+  IMPORT_DIRS "${otlp_proto_root}"
+  PROTOC_OUT_DIR "${otlp_proto_binary_dir}")
+target_sources(libtenzir_builtins PRIVATE ${otlp_grpc_generated_files})
+add_custom_target(otlp-proto DEPENDS ${otlp_proto_generated_files}
+                                     ${otlp_grpc_generated_files})
+set_source_files_properties(
+  ${otlp_proto_generated_files} ${otlp_grpc_generated_files}
+  PROPERTIES SKIP_UNITY_BUILD_INCLUSION on)
+target_include_directories(libtenzir_builtins
+                           PRIVATE "${otlp_proto_binary_dir}")
 TenzirTargetEnableTooling(libtenzir_builtins)
 target_compile_definitions(libtenzir_builtins PRIVATE TENZIR_ENABLE_BUILTINS)
 set_property(
@@ -309,8 +390,13 @@ set_property(
 set_target_properties(libtenzir_builtins PROPERTIES OUTPUT_NAME tenzir_builtins)
 add_library(tenzir::libtenzir_builtins ALIAS libtenzir_builtins)
 
-target_link_libraries(libtenzir PRIVATE libtenzir_internal)
-target_link_libraries(libtenzir_builtins PRIVATE libtenzir libtenzir_internal)
+target_link_libraries(
+  libtenzir
+  PRIVATE libtenzir_internal
+  PUBLIC gRPC::grpc++)
+target_link_libraries(
+  libtenzir_builtins PRIVATE libtenzir libtenzir_internal protobuf::libprotobuf
+                             gRPC::grpc++)
 
 # Set the libtenzir SOVERSION to '<256 * (major + 7) + minor>.<patch>' to
 # indicate that libtenzir is considered to have an unstable API and ABI. The +7

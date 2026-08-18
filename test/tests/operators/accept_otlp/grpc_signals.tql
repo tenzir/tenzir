@@ -1,0 +1,42 @@
+---
+fixtures:
+  - otlp_grpc:
+      requests:
+        - signal: logs
+          compression: gzip
+          metadata:
+            - [x-tenant-id, alpha]
+            - [x-tenant-id, beta]
+          body:
+            resourceLogs:
+              - scopeLogs:
+                  - logRecords:
+                      - body:
+                          stringValue: hello grpc
+        - signal: metrics
+          body:
+            resourceMetrics:
+              - scopeMetrics:
+                  - metrics:
+                      - name: temperature
+                        gauge:
+                          dataPoints:
+                            - timeUnixNano: "2000000000"
+                              asDouble: 21.5
+        - signal: traces
+          body:
+            resourceSpans:
+              - scopeSpans:
+                  - spans:
+                      - traceId: ABEiM0RVZneImaq7zN3u/w==
+                        spanId: ABEiM0RVZnc=
+                        name: grpc span
+                        startTimeUnixNano: "1000000000"
+                        endTimeUnixNano: "2000000000"
+---
+
+accept_otlp env("OTLP_GRPC_ENDPOINT"),
+  transport="grpc",
+  include_metadata=["x-tenant-id"]
+head 3
+select receiver, log_body=body?.string_value?, metric_name=metric?.name?, span_name=name?

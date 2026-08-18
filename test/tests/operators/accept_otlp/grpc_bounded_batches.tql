@@ -1,0 +1,26 @@
+---
+fixtures:
+  - otlp_grpc:
+      requests:
+        - signal: logs
+          resource_attribute_string_size: 600000
+          log_record_count: 4
+          body:
+            resourceLogs:
+              - resource:
+                  attributes:
+                    - key: shared
+                      value:
+                        stringValue: seed
+                scopeLogs:
+                  - logRecords:
+                      - body:
+                          stringValue: accepted
+---
+
+accept_otlp env("OTLP_GRPC_ENDPOINT"),
+  transport="grpc",
+  max_message_size=1048576
+measure
+drop timestamp, schema_id, schema
+head 4

@@ -1,0 +1,65 @@
+---
+fixtures:
+  - http_request:
+      requests:
+        - path: /v1/metrics
+          headers:
+            Content-Type: application/json
+          expected_status: 400
+          body: '{"resourceMetrics":[{"scopeMetrics":[{"metrics":[{"name":"unspecified-sum","sum":{"dataPoints":[{"timeUnixNano":"2000000000","asInt":"1"}]}}]}]}]}'
+        - path: /v1/metrics
+          headers:
+            Content-Type: application/json
+          expected_status: 400
+          body: '{"resourceMetrics":[{"scopeMetrics":[{"metrics":[{"name":"unspecified-histogram","histogram":{"aggregationTemporality":0,"dataPoints":[{"timeUnixNano":"2000000000","count":"1","bucketCounts":["1"]}]}}]}]}]}'
+        - path: /v1/metrics
+          headers:
+            Content-Type: application/json
+          expected_status: 400
+          body: '{"resourceMetrics":[{"scopeMetrics":[{"metrics":[{"name":"unspecified-exponential","exponentialHistogram":{"dataPoints":[{"timeUnixNano":"2000000000","count":"1","zeroCount":"1"}]}}]}]}]}'
+        - path: /v1/metrics
+          headers:
+            Content-Type: application/json
+          expected_status: 400
+          body: '{"resourceMetrics":[{"scopeMetrics":[{"metrics":[{"name":"empty-histogram-with-sum","histogram":{"aggregationTemporality":1,"dataPoints":[{"timeUnixNano":"2000000000","count":"0","sum":1}]}}]}]}]}'
+        - path: /v1/metrics
+          headers:
+            Content-Type: application/json
+          expected_status: 400
+          body: '{"resourceMetrics":[{"scopeMetrics":[{"metrics":[{"name":"invalid-zero-threshold","exponentialHistogram":{"aggregationTemporality":1,"dataPoints":[{"timeUnixNano":"2000000000","count":"0","zeroThreshold":"NaN"}]}}]}]}]}'
+        - path: /v1/metrics
+          headers:
+            Content-Type: application/json
+          expected_status: 400
+          body: '{"resourceMetrics":[{"scopeMetrics":[{"metrics":[{"name":"empty-exponential-with-sum","exponentialHistogram":{"aggregationTemporality":1,"dataPoints":[{"timeUnixNano":"2000000000","count":"0","sum":1}]}}]}]}]}'
+        - path: /v1/metrics
+          headers:
+            Content-Type: application/json
+          expected_status: 400
+          body: '{"resourceMetrics":[{"scopeMetrics":[{"metrics":[{"name":"empty-summary-with-sum","summary":{"dataPoints":[{"timeUnixNano":"2000000000","count":"0","sum":1}]}}]}]}]}'
+        - path: /v1/metrics
+          headers:
+            Content-Type: application/json
+          expected_status: 400
+          body: '{"resourceMetrics":[{"scopeMetrics":[{"metrics":[{"name":"invalid-histogram","histogram":{"aggregationTemporality":1,"dataPoints":[{"timeUnixNano":"2000000000","count":"1","bucketCounts":["0","1"],"explicitBounds":["NaN"]}]}}]}]}]}'
+        - path: /v1/metrics
+          headers:
+            Content-Type: application/json
+          expected_status: 400
+          body: '{"resourceMetrics":[{"scopeMetrics":[{"metrics":[{"name":"invalid-coordinate","summary":{"dataPoints":[{"timeUnixNano":"2000000000","quantileValues":[{"quantile":"NaN","value":1}]}]}}]}]}]}'
+        - path: /v1/metrics
+          headers:
+            Content-Type: application/json
+          expected_status: 400
+          body: '{"resourceMetrics":[{"scopeMetrics":[{"metrics":[{"name":"invalid-value","summary":{"dataPoints":[{"timeUnixNano":"2000000000","quantileValues":[{"quantile":0.5,"value":-1}]}]}}]}]}]}'
+        - path: /v1/metrics
+          headers:
+            Content-Type: application/json
+          expected_status: 200
+          expected_body: "{}"
+          stop_on_connection_drop: true
+          body: '{"resourceMetrics":[{"scopeMetrics":[{"metrics":[{"name":"sum","sum":{"aggregationTemporality":2,"isMonotonic":true,"dataPoints":[{"startTimeUnixNano":"1000000000","timeUnixNano":"2000000000","asInt":"42"}]}},{"name":"gauge","gauge":{"dataPoints":[{"startTimeUnixNano":"3000000000","timeUnixNano":"2000000000","asDouble":1.5}]}},{"name":"histogram","histogram":{"aggregationTemporality":1,"dataPoints":[{"timeUnixNano":"2000000000","count":"3","sum":6,"min":1,"max":3,"bucketCounts":["1","2"],"explicitBounds":[2]}]}},{"name":"exponential","exponentialHistogram":{"aggregationTemporality":2,"dataPoints":[{"timeUnixNano":"2000000000","count":"3","sum":6,"scale":2,"zeroCount":"1","positive":{"offset":0,"bucketCounts":["2"]},"zeroThreshold":0.1}]}},{"name":"summary","summary":{"dataPoints":[{"timeUnixNano":"2000000000","count":"2","sum":4,"quantileValues":[{"quantile":0.5,"value":2},{"quantile":1,"value":3}]}]}}]}]}]}'
+---
+
+accept_otlp env("HTTP_REQUEST_ENDPOINT")
+head 5

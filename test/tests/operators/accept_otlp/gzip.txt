@@ -1,0 +1,45 @@
+{
+  resource: {
+    attributes: [],
+    dropped_attributes_count: 0,
+    entity_refs: [],
+    schema_url: null,
+  },
+  scope: {
+    name: null,
+    version: null,
+    attributes: [],
+    dropped_attributes_count: 0,
+    schema_url: null,
+  },
+  receiver: {
+    transport: "http",
+    peer_ip: 127.0.0.1,
+    metadata: [],
+  },
+  time: 1970-01-01T00:00:01Z,
+  observed_time: null,
+  severity_number: 9,
+  severity_text: null,
+  body: {
+    kind: "string",
+    string_value: "binary hello",
+    bool_value: null,
+    int_value: null,
+    double_value: null,
+    bytes_value: null,
+    json_value: null,
+  },
+  attributes: [],
+  dropped_attributes_count: 0,
+  flags: 0,
+  trace_id: null,
+  span_id: null,
+  event_name: null,
+}
+warning: rejected incomplete gzip request
+  --> tests/operators/accept_otlp/gzip.tql:21:13
+   |
+21 | accept_otlp env("HTTP_REQUEST_ENDPOINT"), max_message_size=1024
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |

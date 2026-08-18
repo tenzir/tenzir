@@ -1,0 +1,14 @@
+---
+fixtures:
+  - http_request:
+      path: /v1/logs
+      headers:
+        Content-Type: application/json
+        X-Tenant-Id: acme
+      expected_status: 200
+      expected_body: "{}"
+      body: '{"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"frontend"}},{"key":"service.version","value":{"stringValue":"1.0.0"}}],"entityRefs":[{"schemaUrl":"https://opentelemetry.io/schemas/1.0.0","type":"service","idKeys":["service.name"],"descriptionKeys":["service.version"]}]},"schemaUrl":"https://opentelemetry.io/schemas/1.0.0","scopeLogs":[{"scope":{"name":"example","version":"1.0.0"},"logRecords":[{"body":{"stringValue":"invalid IDs"},"traceId":"0011","spanId":"0000000000000000"},{"timeUnixNano":"1000000000","observedTimeUnixNano":"2000000000","severityNumber":9,"severityText":"INFO","body":{"kvlistValue":{"values":[{"key":"message","value":{"stringValue":"hello"}}]}},"attributes":[{"key":"event.name","value":{"stringValue":"test"}}],"traceId":"00112233445566778899aabbccddeeff","spanId":"0011223344556677","unknownFutureField":true}]}]}]}'
+---
+
+accept_otlp env("HTTP_REQUEST_ENDPOINT"), include_metadata=["x-tenant-id"]
+head 2

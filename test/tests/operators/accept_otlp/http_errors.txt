@@ -1,0 +1,45 @@
+{
+  resource: {
+    attributes: [],
+    dropped_attributes_count: 0,
+    entity_refs: [],
+    schema_url: null,
+  },
+  scope: {
+    name: null,
+    version: null,
+    attributes: [],
+    dropped_attributes_count: 0,
+    schema_url: null,
+  },
+  receiver: {
+    transport: "http",
+    peer_ip: 127.0.0.1,
+    metadata: [],
+  },
+  time: null,
+  observed_time: null,
+  severity_number: 0,
+  severity_text: null,
+  body: {
+    kind: "string",
+    string_value: "valid",
+    bool_value: null,
+    int_value: null,
+    double_value: null,
+    bytes_value: null,
+    json_value: null,
+  },
+  attributes: [],
+  dropped_attributes_count: 0,
+  flags: 0,
+  trace_id: null,
+  span_id: null,
+  event_name: null,
+}
+warning: rejected invalid OTLP request: failed to decode OTLP/JSON
+  --> tests/operators/accept_otlp/http_errors.tql:38:13
+   |
+38 | accept_otlp env("HTTP_REQUEST_ENDPOINT"), signals=["logs"], max_message_size=85
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |

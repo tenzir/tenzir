@@ -1,0 +1,25 @@
+---
+fixtures:
+  - http_request:
+      requests:
+        - path: /v1/metrics
+          headers:
+            Content-Type: application/json
+          expected_status: 200
+          expected_body: "{}"
+          body: '{"resourceMetrics":[{"scopeMetrics":[{"metrics":[{"name":"stale.json.gauge","gauge":{"dataPoints":[{"timeUnixNano":"2000000000","flags":1}]}},{"name":"stale.json.sum","sum":{"aggregationTemporality":2,"dataPoints":[{"timeUnixNano":"2000000000","flags":1}]}},{"name":"stale.json.histogram","histogram":{"aggregationTemporality":1,"dataPoints":[{"timeUnixNano":"2000000000","count":"7","sum":9,"bucketCounts":["1"],"exemplars":[{}],"flags":1}]}},{"name":"stale.json.exponential","exponentialHistogram":{"aggregationTemporality":2,"dataPoints":[{"timeUnixNano":"2000000000","count":"7","sum":9,"zeroThreshold":"NaN","positive":{"bucketCounts":["1"]},"flags":1}]}},{"name":"stale.json.summary","summary":{"dataPoints":[{"timeUnixNano":"2000000000","count":"0","sum":9,"quantileValues":[{"quantile":"NaN","value":-1}],"flags":1}]}}]}]}]}'
+        - path: /v1/metrics
+          headers:
+            Content-Type: application/x-protobuf
+          expected_status: 200
+          expected_body: ""
+          body_base64: CpwBEpkBEiUKFHN0YWxlLnByb3RvYnVmLmdhdWdlKg0KCxkAlDV3AAAAAEABEiUKEnN0YWxlLnByb3RvYnVmLnN1bToPCgsZAJQ1dwAAAABAARACEkkKGHN0YWxlLnByb3RvYnVmLmhpc3RvZ3JhbUotCikZAJQ1dwAAAAAhBwAAAAAAAAApAAAAAAAAIkAyCAEAAAAAAAAAQgBQARAB
+          stop_on_connection_drop: true
+---
+
+accept_otlp env("HTTP_REQUEST_ENDPOINT")
+head 8
+select schema=@name, name=metric.name, flags,
+  int_value=value?.int_value?, double_value=value?.double_value?,
+  count=count?, sum=sum?, bucket_counts=bucket_counts?,
+  quantile_values=quantile_values?

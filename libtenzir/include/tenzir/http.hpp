@@ -254,6 +254,13 @@ auto add_request_body_headers(std::map<std::string, std::string>& headers,
 auto make_decompressor(std::string_view encoding, diagnostic_handler& dh)
   -> Option<std::shared_ptr<arrow::util::Decompressor>>;
 
+/// The output and stream state after decompressing an input chunk.
+struct DecompressChunkResult {
+  blob bytes;
+  /// Whether the decompressor reported a stream boundary at the end of input.
+  bool finished;
+};
+
 /// Decompresses one chunk using a persistent streaming decompressor.
 /// Handles concatenated compressed streams via IsFinished/Reset.
 /// Returns None and emits a warning on failure, or when the decompressed
@@ -263,6 +270,15 @@ auto decompress_chunk(arrow::util::Decompressor& decompressor,
                       size_t max_output_size
                       = std::numeric_limits<size_t>::max())
   -> Result<blob, uint16_t>;
+
+/// Like `decompress_chunk`, but also reports whether the decompressor
+/// recognized a stream boundary at the end of the input.
+auto decompress_chunk_with_status(arrow::util::Decompressor& decompressor,
+                                  std::span<std::byte const> input,
+                                  diagnostic_handler& dh,
+                                  size_t max_output_size
+                                  = std::numeric_limits<size_t>::max())
+  -> Result<DecompressChunkResult, uint16_t>;
 
 /// Like `decompress_chunk`, but keeps simdjson padding available on the
 /// returned buffer so callers can parse directly without another full copy.

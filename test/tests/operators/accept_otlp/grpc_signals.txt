@@ -1,0 +1,39 @@
+{
+  receiver: {
+    transport: "grpc",
+    peer_ip: 127.0.0.1,
+    metadata: [
+      {
+        name: "x-tenant-id",
+        value: "alpha",
+      },
+      {
+        name: "x-tenant-id",
+        value: "beta",
+      },
+    ],
+  },
+  log_body: "hello grpc",
+  metric_name: null,
+  span_name: null,
+}
+{
+  receiver: {
+    transport: "grpc",
+    peer_ip: 127.0.0.1,
+    metadata: [],
+  },
+  log_body: null,
+  metric_name: "temperature",
+  span_name: null,
+}
+{
+  receiver: {
+    transport: "grpc",
+    peer_ip: 127.0.0.1,
+    metadata: [],
+  },
+  log_body: null,
+  metric_name: null,
+  span_name: "grpc span",
+}

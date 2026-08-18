@@ -1,0 +1,39 @@
+---
+fixtures:
+  - http_request:
+      initial_delay: 1.0
+      requests:
+        - method: GET
+          path: /v1/logs
+          headers:
+            Content-Type: application/json
+          expected_status: 405
+        - path: /v1/traces
+          headers:
+            Content-Type: application/json
+          expected_status: 404
+        - path: /v1/logs
+          headers:
+            Content-Type: text/plain
+          expected_status: 415
+        - path: /v1/logs
+          headers:
+            Content-Type: application/json
+          body: '{'
+          expected_status: 400
+        - path: /v1/logs
+          headers:
+            Content-Type: application/json
+          body: '{"resourceLogs":[{"scopeLogs":[{"logRecords":[{"body":{"stringValue":"too large"}}]}]}]}'
+          expected_status: 413
+        - path: /v1/logs
+          headers:
+            Content-Type: application/json
+          body: '{"resourceLogs":[{"scopeLogs":[{"logRecords":[{"body":{"stringValue":"valid"}}]}]}]}'
+          expected_status: 200
+          expected_body: "{}"
+          stop_on_connection_drop: true
+---
+
+accept_otlp env("HTTP_REQUEST_ENDPOINT"), signals=["logs"], max_message_size=85
+head 1

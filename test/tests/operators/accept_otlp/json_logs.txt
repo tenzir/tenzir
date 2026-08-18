@@ -1,0 +1,173 @@
+{
+  resource: {
+    attributes: [
+      {
+        key: "service.name",
+        value: {
+          kind: "string",
+          string_value: "frontend",
+          bool_value: null,
+          int_value: null,
+          double_value: null,
+          bytes_value: null,
+          json_value: null,
+        },
+      },
+      {
+        key: "service.version",
+        value: {
+          kind: "string",
+          string_value: "1.0.0",
+          bool_value: null,
+          int_value: null,
+          double_value: null,
+          bytes_value: null,
+          json_value: null,
+        },
+      },
+    ],
+    dropped_attributes_count: 0,
+    entity_refs: [
+      {
+        schema_url: "https://opentelemetry.io/schemas/1.0.0",
+        type: "service",
+        id_keys: [
+          "service.name",
+        ],
+        description_keys: [
+          "service.version",
+        ],
+      },
+    ],
+    schema_url: "https://opentelemetry.io/schemas/1.0.0",
+  },
+  scope: {
+    name: "example",
+    version: "1.0.0",
+    attributes: [],
+    dropped_attributes_count: 0,
+    schema_url: null,
+  },
+  receiver: {
+    transport: "http",
+    peer_ip: 127.0.0.1,
+    metadata: [
+      {
+        name: "x-tenant-id",
+        value: "acme",
+      },
+    ],
+  },
+  time: null,
+  observed_time: null,
+  severity_number: 0,
+  severity_text: null,
+  body: {
+    kind: "string",
+    string_value: "invalid IDs",
+    bool_value: null,
+    int_value: null,
+    double_value: null,
+    bytes_value: null,
+    json_value: null,
+  },
+  attributes: [],
+  dropped_attributes_count: 0,
+  flags: 0,
+  trace_id: null,
+  span_id: null,
+  event_name: null,
+}
+{
+  resource: {
+    attributes: [
+      {
+        key: "service.name",
+        value: {
+          kind: "string",
+          string_value: "frontend",
+          bool_value: null,
+          int_value: null,
+          double_value: null,
+          bytes_value: null,
+          json_value: null,
+        },
+      },
+      {
+        key: "service.version",
+        value: {
+          kind: "string",
+          string_value: "1.0.0",
+          bool_value: null,
+          int_value: null,
+          double_value: null,
+          bytes_value: null,
+          json_value: null,
+        },
+      },
+    ],
+    dropped_attributes_count: 0,
+    entity_refs: [
+      {
+        schema_url: "https://opentelemetry.io/schemas/1.0.0",
+        type: "service",
+        id_keys: [
+          "service.name",
+        ],
+        description_keys: [
+          "service.version",
+        ],
+      },
+    ],
+    schema_url: "https://opentelemetry.io/schemas/1.0.0",
+  },
+  scope: {
+    name: "example",
+    version: "1.0.0",
+    attributes: [],
+    dropped_attributes_count: 0,
+    schema_url: null,
+  },
+  receiver: {
+    transport: "http",
+    peer_ip: 127.0.0.1,
+    metadata: [
+      {
+        name: "x-tenant-id",
+        value: "acme",
+      },
+    ],
+  },
+  time: 1970-01-01T00:00:01Z,
+  observed_time: 1970-01-01T00:00:02Z,
+  severity_number: 9,
+  severity_text: "INFO",
+  body: {
+    kind: "kvlist",
+    string_value: null,
+    bool_value: null,
+    int_value: null,
+    double_value: null,
+    bytes_value: null,
+    json_value: "{\"kvlistValue\":{\"values\":[{\"key\":\"message\",\"value\":{\"stringValue\":\"hello\"}}]}}",
+  },
+  attributes: [
+    {
+      key: "event.name",
+      value: {
+        kind: "string",
+        string_value: "test",
+        bool_value: null,
+        int_value: null,
+        double_value: null,
+        bytes_value: null,
+        json_value: null,
+      },
+    },
+  ],
+  dropped_attributes_count: 0,
+  flags: 0,
+  trace_id: "00112233445566778899aabbccddeeff",
+  span_id: "0011223344556677",
+  event_name: null,
+}

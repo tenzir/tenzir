@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import base64
 import shutil
-import socket
 import ssl
 import tempfile
 import threading
@@ -29,6 +29,7 @@ class HttpRequestOptions:
     method: str = "POST"
     path: str = "/"
     body: str = '{"value":1}\n'
+    body_base64: str | None = None
     headers: dict[str, str] = field(
         default_factory=lambda: {"Content-Type": "application/json"}
     )
@@ -54,7 +55,7 @@ class HttpRequestOptions:
 class _RequestSpec:
     method: str
     path: str
-    body: str
+    body: bytes
     headers: dict[str, str]
     tls: bool
     expected_status: int | None
@@ -72,7 +73,11 @@ def _to_request_specs(opts: HttpRequestOptions) -> list[_RequestSpec]:
         _RequestSpec(
             method=opts.method,
             path=opts.path,
-            body=opts.body,
+            body=(
+                base64.b64decode(opts.body_base64)
+                if opts.body_base64 is not None
+                else opts.body.encode("utf-8")
+            ),
             headers=dict(opts.headers),
             tls=opts.tls,
             expected_status=opts.expected_status,
@@ -105,33 +110,7 @@ def http_request() -> FixtureHandle:
     request_specs = _to_request_specs(opts)
     first_request_at = time.monotonic() + opts.initial_delay
 
-    def _wait_until_ready(*, tls: bool) -> bool:
-        while not stop_event.is_set():
-            try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                    sock.settimeout(opts.request_timeout)
-                    if not tls:
-                        if sock.connect_ex((_HOST, port)) == 0:
-                            return True
-                        stop_event.wait(opts.retry_delay)
-                        continue
-                    if tls_ca is not None:
-                        context = ssl.create_default_context(cafile=str(tls_ca))
-                    else:
-                        context = ssl.create_default_context()
-                        context.check_hostname = False
-                        context.verify_mode = ssl.CERT_NONE
-                    with context.wrap_socket(sock, server_hostname=_HOST) as tls_sock:
-                        tls_sock.connect((_HOST, port))
-                        return True
-            except (OSError, ssl.SSLError):
-                pass
-            stop_event.wait(opts.retry_delay)
-        return False
-
     def _worker() -> None:
-        if not _wait_until_ready(tls=bool(request_specs and request_specs[0].tls)):
-            return
         remaining_initial_delay = first_request_at - time.monotonic()
         if remaining_initial_delay > 0:
             stop_event.wait(remaining_initial_delay)
@@ -141,7 +120,7 @@ def http_request() -> FixtureHandle:
                 return
             proto = "https" if spec.tls else "http"
             target_url = urljoin(f"{proto}://{endpoint}/", spec.path.lstrip("/"))
-            payload = spec.body.encode("utf-8")
+            payload = spec.body
             headers = dict(spec.headers)
             sent = False
             ssl_context: ssl.SSLContext | None = None

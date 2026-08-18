@@ -1,0 +1,24 @@
+---
+fixtures:
+  - otlp_grpc:
+      tls: true
+      mtls: true
+      requests:
+        - signal: logs
+          body:
+            resourceLogs:
+              - scopeLogs:
+                  - logRecords:
+                      - body:
+                          stringValue: secure grpc
+---
+
+accept_otlp env("OTLP_GRPC_ENDPOINT"),
+  transport="grpc",
+  tls={
+    certfile: env("OTLP_GRPC_TLS_CERTFILE"),
+    client_ca: env("OTLP_GRPC_TLS_CLIENT_CA"),
+    require_client_cert: true,
+  }
+head 1
+select receiver, body=body.string_value

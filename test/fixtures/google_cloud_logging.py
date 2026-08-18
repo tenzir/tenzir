@@ -47,16 +47,29 @@ _EXPECTED_SCOPE = "https://www.googleapis.com/auth/logging.write"
 def _compile_protos(output_dir: str) -> None:
     """Compile the bundled logging protos into Python gRPC stubs."""
     proto_dir = str(Path(__file__).parent / "protos")
-    # grpc_tools ships its own copy of well-known protos and
-    # googleapis-common-protos. We find that include path so the compiler
-    # can resolve imports like google/api/annotations.proto.
+    # grpc_tools ships the well-known Protobuf definitions, while
+    # googleapis-common-protos installs google/api/* and google/rpc/* next to
+    # its Python modules. Add both package roots so protoc can resolve every
+    # transitive import.
+    import google.api
     import grpc_tools
 
-    grpc_tools_include = str(Path(grpc_tools.__file__).parent / "_proto")
+    grpc_tools_include = Path(grpc_tools.__file__).parent / "_proto"
+    googleapis_include = next(
+        (
+            Path(path).parents[1]
+            for path in google.api.__path__
+            if (Path(path) / "annotations.proto").is_file()
+        ),
+        None,
+    )
+    if googleapis_include is None:
+        raise FixtureUnavailable("googleapis-common-protos definitions unavailable")
     args = [
         "grpc_tools.protoc",
         f"--proto_path={proto_dir}",
         f"--proto_path={grpc_tools_include}",
+        f"--proto_path={googleapis_include}",
         f"--python_out={output_dir}",
         f"--grpc_python_out={output_dir}",
         f"{proto_dir}/google/logging/v2/logging.proto",

@@ -294,12 +294,18 @@ CMD ["--help"]
 
 FROM tenzir-untested AS tenzir-integration
 
+COPY --chown=tenzir:tenzir libtenzir/aux/opentelemetry-proto/ \
+    ./libtenzir/aux/opentelemetry-proto/
 COPY --chown=tenzir:tenzir test/ ./test
 RUN XDG_CACHE_HOME=/tmp XDG_DATA_HOME=/tmp \
     TENZIR_BINARY="$PREFIX/bin/tenzir" \
     TENZIR_NODE_BINARY="$PREFIX/bin/tenzir-node" \
     "${PREFIX}/libexec/uv" tool run \
     --python ">=3.12" \
+    --with grpcio \
+    --with grpcio-tools \
+    --with googleapis-common-protos \
+    --with protobuf \
     --with trustme \
     tenzir-test \
     --root test \

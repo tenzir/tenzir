@@ -1,0 +1,21 @@
+---
+fixtures:
+  - http_request:
+      generate_tls_cert: true
+      path: /v1/logs
+      tls: true
+      headers:
+        Content-Type: application/json
+      body: '{"resourceLogs":[{"scopeLogs":[{"logRecords":[{"body":{"stringValue":"secure"}}]}]}]}'
+      expected_status: 200
+      expected_body: "{}"
+      stop_on_connection_drop: true
+---
+
+let $tls = {
+  certfile: env("HTTP_REQUEST_TLS_CERTFILE"),
+  cacert: env("HTTP_REQUEST_TLS_CAFILE"),
+}
+
+accept_otlp env("HTTP_REQUEST_ENDPOINT"), tls=$tls
+head 1

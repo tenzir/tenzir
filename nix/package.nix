@@ -50,8 +50,9 @@ rec {
     ../test/tests/operators/from_splunk/tls.tql
     ../test/tests/operators/from_splunk/tls_skip_peer_verification.tql
 
-    # accept_http is flaky in the sandbox.
+    # HTTP server tests are flaky in the sandbox.
     ../test/tests/operators/accept_http
+    ../test/tests/operators/accept_otlp
 
     # ZMQ hangs
     ../test/tests/operators/accept_zmq/keep_prefix_read_all.tql

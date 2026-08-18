@@ -1,0 +1,2 @@
+# Proxygen server teardown is occasionally flaky under parallel test load.
+retry: 3

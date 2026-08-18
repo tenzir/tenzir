@@ -1,0 +1,21 @@
+---
+fixtures:
+  - http_request:
+      initial_delay: 1.0
+      requests:
+        - path: /v1/logs
+          headers:
+            Content-Type: application/json
+          expected_status: 200
+          expected_body: "{}"
+          body: '{"resourceLogs":[{"scopeLogs":[{"logRecords":[{"body":{"stringValue":"duplicate"},"attributes":[{"key":"event.name","value":{"stringValue":"first"}},{"key":"event.name","value":{"stringValue":"second"}},{"key":"event.name","value":{"stringValue":"third"}}]}]}]}]}'
+        - path: /v1/logs
+          headers:
+            Content-Type: application/json
+          expected_status: 200
+          expected_body: "{}"
+          body: '{"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"frontend"}}]},"scopeLogs":[{"logRecords":[{"body":{"stringValue":"valid"},"attributes":[{"key":"event.name","value":{"stringValue":"tool.call"}},{"key":"process.pid","value":{"intValue":"42"}}]}]}]}]}'
+---
+
+accept_otlp env("HTTP_REQUEST_ENDPOINT"), schema="record"
+head 2

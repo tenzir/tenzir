@@ -1,0 +1,88 @@
+{
+  schema: "otel.metric.gauge",
+  name: "stale.json.gauge",
+  flags: 1,
+  int_value: null,
+  double_value: null,
+  count: null,
+  sum: null,
+  bucket_counts: null,
+  quantile_values: null,
+}
+{
+  schema: "otel.metric.sum",
+  name: "stale.json.sum",
+  flags: 1,
+  int_value: null,
+  double_value: null,
+  count: null,
+  sum: null,
+  bucket_counts: null,
+  quantile_values: null,
+}
+{
+  schema: "otel.metric.histogram",
+  name: "stale.json.histogram",
+  flags: 1,
+  int_value: null,
+  double_value: null,
+  count: null,
+  sum: null,
+  bucket_counts: null,
+  quantile_values: null,
+}
+{
+  schema: "otel.metric.exponential_histogram",
+  name: "stale.json.exponential",
+  flags: 1,
+  int_value: null,
+  double_value: null,
+  count: null,
+  sum: null,
+  bucket_counts: null,
+  quantile_values: null,
+}
+{
+  schema: "otel.metric.summary",
+  name: "stale.json.summary",
+  flags: 1,
+  int_value: null,
+  double_value: null,
+  count: null,
+  sum: null,
+  bucket_counts: null,
+  quantile_values: null,
+}
+{
+  schema: "otel.metric.gauge",
+  name: "stale.protobuf.gauge",
+  flags: 1,
+  int_value: null,
+  double_value: null,
+  count: null,
+  sum: null,
+  bucket_counts: null,
+  quantile_values: null,
+}
+{
+  schema: "otel.metric.sum",
+  name: "stale.protobuf.sum",
+  flags: 1,
+  int_value: null,
+  double_value: null,
+  count: null,
+  sum: null,
+  bucket_counts: null,
+  quantile_values: null,
+}
+{
+  schema: "otel.metric.histogram",
+  name: "stale.protobuf.histogram",
+  flags: 1,
+  int_value: null,
+  double_value: null,
+  count: null,
+  sum: null,
+  bucket_counts: null,
+  quantile_values: null,
+}

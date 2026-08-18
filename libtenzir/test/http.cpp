@@ -171,3 +171,27 @@ TEST("compress request body") {
   };
   CHECK_EQUAL(result, "hello");
 }
+
+TEST("decompress gzip trailer after output limit") {
+  auto dh = null_diagnostic_handler{};
+  auto encoded = http::compress_request_body("hello"s, "gzip", dh);
+  auto decompressor = http::make_decompressor("gzip", dh);
+  REQUIRE(decompressor);
+  REQUIRE(encoded.body.size() > 8);
+  auto const bytes = std::span{
+    reinterpret_cast<std::byte const*>(encoded.body.data()),
+    encoded.body.size(),
+  };
+  auto data = http::decompress_chunk_with_status(
+    **decompressor, bytes.first(bytes.size() - 8), dh, size_t{5});
+  REQUIRE(data);
+  auto decompressed = std::move(data).unwrap();
+  CHECK_EQUAL(decompressed.bytes.size(), 5u);
+  CHECK(not decompressed.finished);
+  auto trailer = http::decompress_chunk_with_status(
+    **decompressor, bytes.last(8), dh, size_t{0});
+  REQUIRE(trailer);
+  auto finished = std::move(trailer).unwrap();
+  CHECK(finished.bytes.empty());
+  CHECK(finished.finished);
+}

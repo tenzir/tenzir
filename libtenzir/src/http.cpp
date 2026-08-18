@@ -645,22 +645,33 @@ auto make_decompressor(std::string_view encoding, diagnostic_handler& dh)
 
 namespace {
 template <class Buffer>
+struct DecompressBufferResult {
+  Buffer bytes;
+  bool finished;
+};
+
+template <class Buffer>
 auto decompress_chunk_impl(arrow::util::Decompressor& decompressor,
                            std::span<std::byte const> input,
                            diagnostic_handler& dh, size_t max_output_size)
-  -> Result<Buffer, uint16_t> {
+  -> Result<DecompressBufferResult<Buffer>, uint16_t> {
   auto out = Buffer{};
-  auto initial_size
+  auto const initial_size
     = std::min(max_output_size, std::max<size_t>(input.size_bytes() * 2, 64));
   out.resize(initial_size);
+  auto scratch = std::byte{};
   auto written = size_t{};
   auto read = size_t{};
+  auto finished = false;
   while (read < input.size_bytes()) {
+    auto const output_size = out.size() - written;
+    auto* output = output_size == 0
+                     ? reinterpret_cast<uint8_t*>(&scratch)
+                     : reinterpret_cast<uint8_t*>(out.data() + written);
     auto result = decompressor.Decompress(
       detail::narrow<int64_t>(input.size_bytes() - read),
       reinterpret_cast<uint8_t const*>(input.data() + read),
-      detail::narrow<int64_t>(out.size() - written),
-      reinterpret_cast<uint8_t*>(out.data() + written));
+      detail::narrow<int64_t>(output_size), output);
     if (not result.ok()) {
       diagnostic::warning("failed to decompress: {}",
                           result.status().ToString())
@@ -685,7 +696,8 @@ auto decompress_chunk_impl(arrow::util::Decompressor& decompressor,
     }
     // Reset gracefully when a compressed stream ends to handle concatenated
     // compressed streams (e.g. multiple gzip members in one body).
-    if (decompressor.IsFinished()) {
+    finished = decompressor.IsFinished();
+    if (finished) {
       if (auto reset = decompressor.Reset(); not reset.ok()) {
         diagnostic::warning("failed to reset decompressor: {}",
                             reset.ToString())
@@ -696,22 +708,45 @@ auto decompress_chunk_impl(arrow::util::Decompressor& decompressor,
     }
   }
   out.resize(written);
-  return out;
+  return DecompressBufferResult<Buffer>{std::move(out), finished};
 }
 } // namespace
 
 auto decompress_chunk(arrow::util::Decompressor& decompressor,
                       std::span<std::byte const> input, diagnostic_handler& dh,
                       size_t max_output_size) -> Result<blob, uint16_t> {
-  return decompress_chunk_impl<blob>(decompressor, input, dh, max_output_size);
+  auto result
+    = decompress_chunk_impl<blob>(decompressor, input, dh, max_output_size);
+  if (result.is_err()) {
+    return Err{std::move(result).unwrap_err()};
+  }
+  return std::move(result).unwrap().bytes;
+}
+
+auto decompress_chunk_with_status(arrow::util::Decompressor& decompressor,
+                                  std::span<std::byte const> input,
+                                  diagnostic_handler& dh,
+                                  size_t max_output_size)
+  -> Result<DecompressChunkResult, uint16_t> {
+  auto result
+    = decompress_chunk_impl<blob>(decompressor, input, dh, max_output_size);
+  if (result.is_err()) {
+    return Err{std::move(result).unwrap_err()};
+  }
+  auto output = std::move(result).unwrap();
+  return DecompressChunkResult{std::move(output.bytes), output.finished};
 }
 
 auto decompress_chunk_simdjson(arrow::util::Decompressor& decompressor,
                                std::span<std::byte const> input,
                                diagnostic_handler& dh, size_t max_output_size)
   -> Result<SimdjsonPaddedBuffer, uint16_t> {
-  return decompress_chunk_impl<SimdjsonPaddedBuffer>(decompressor, input, dh,
-                                                     max_output_size);
+  auto result = decompress_chunk_impl<SimdjsonPaddedBuffer>(
+    decompressor, input, dh, max_output_size);
+  if (result.is_err()) {
+    return Err{std::move(result).unwrap_err()};
+  }
+  return std::move(result).unwrap().bytes;
 }
 
 auto parse_pagination_mode(std::string_view mode) -> Option<PaginationMode> {

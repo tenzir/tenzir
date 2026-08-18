@@ -1,0 +1,26 @@
+---
+fixtures:
+  - http_request:
+      requests:
+        - path: /v1/logs
+          headers:
+            Content-Type: application/x-protobuf
+          body_base64: Ch8SHRIbCQDKmjsAAAAAEAkqDgoMYmluYXJ5IGhlbGxv
+          expected_status: 200
+          expected_body: ""
+        - path: /v1/traces
+          headers:
+            Content-Type: application/x-protobuf
+          body_base64: CkESPxI9ChAAESIzRFVmd4iZqrvM3e7/EggAESIzRFVmdyoLYmluYXJ5IHNwYW4wAjkAypo7AAAAAEEAlDV3AAAAAA==
+          expected_status: 200
+          expected_body: ""
+        - path: /v1/metrics
+          headers:
+            Content-Type: application/x-protobuf
+          body_base64: CikSJxIlCg1iaW5hcnkubWV0cmljKhQKEhkAlDV3AAAAADEqAAAAAAAAAA==
+          expected_status: 200
+          expected_body: ""
+---
+
+accept_otlp env("HTTP_REQUEST_ENDPOINT")
+head 3
