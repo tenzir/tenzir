@@ -9,6 +9,7 @@
 #include "tenzir/detail/available_memory.hpp"
 
 #include "tenzir/config.hpp"
+#include "tenzir/detail/saturating_arithmetic.hpp"
 
 #if defined(__APPLE__) && __has_include(<mach/mach.h>)
 #  include <mach/mach.h>
@@ -27,6 +28,7 @@
 #include <fstream>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 
 namespace tenzir::detail {
 
@@ -46,9 +48,85 @@ auto read_memory_value(const std::filesystem::path& path) -> Option<uint64_t> {
   }
 }
 
-auto read_cgroup_memory_available(const std::filesystem::path& dir,
-                                  std::string source)
-  -> Option<available_memory_info> {
+/// Parses the `key value` lines of a cgroup `memory.stat` file.
+auto read_memory_stat(std::filesystem::path const& path)
+  -> std::unordered_map<std::string, uint64_t> {
+  auto result = std::unordered_map<std::string, uint64_t>{};
+  auto file = std::ifstream{path};
+  auto key = std::string{};
+  auto value = uint64_t{};
+  while (file >> key >> value) {
+    result.emplace(key, value);
+  }
+  return result;
+}
+
+/// Returns the part of a cgroup's charged memory that the kernel can reclaim
+/// without swapping, i.e., evictable clean page cache and reclaimable slab.
+/// Dirty pages and pages under writeback are excluded because they need
+/// writeback first; they sit on the file LRU lists, so they must be subtracted
+/// rather than merely left out. The counters cover the whole subtree, so cache
+/// that a descendant's `memory.min` protects from reclaim counts as reclaimable
+/// here; telling the two apart would mean walking that subtree and reproducing
+/// the kernel's protection distribution on every call.
+auto reclaimable_memory(std::filesystem::path const& dir) -> uint64_t {
+  auto const stat = read_memory_stat(dir / "memory.stat");
+  auto const get = [&](std::string const& key) -> uint64_t {
+    if (auto const it = stat.find(key); it != stat.end()) {
+      return it->second;
+    }
+    return 0;
+  };
+  // cgroup v1 reports every counter twice: once for this cgroup alone and once
+  // for its subtree, prefixed with `total_`. All counters must come from the
+  // same scope as the charge they are subtracted from, because pairing a local
+  // counter with a subtree one treats whatever the descendants hold as
+  // reclaimable. The prefixed counters are reported either way, so their mere
+  // presence says nothing about the scope of `memory.usage_in_bytes`: that
+  // covers the subtree only where hierarchical accounting is enabled. Modern
+  // kernels refuse to disable it, and where the file is missing entirely there
+  // is nothing to suggest a local charge. cgroup v2 has no `total_` variants;
+  // its counters always cover the subtree.
+  auto const v1 = stat.contains("total_cache");
+  auto const subtree
+    = v1 and read_memory_value(dir / "memory.use_hierarchy").value_or(1) != 0;
+  auto const key = [&](char const* v2, char const* local) -> std::string {
+    if (not v1) {
+      return v2;
+    }
+    return subtree ? "total_" + std::string{local} : local;
+  };
+  auto const dirty = get(key("file_dirty", "dirty"));
+  auto const writeback = get(key("file_writeback", "writeback"));
+  auto unreclaimable = saturating_add(dirty, writeback);
+  auto cache = uint64_t{};
+  // Pages pinned with `mlock` move to the unevictable LRU but keep counting
+  // towards the page cache total, so the file LRU lists are what the kernel can
+  // actually reclaim. They hold only pages that are not swap-backed, which
+  // leaves shmem out by construction.
+  auto const inactive_file = key("inactive_file", "inactive_file");
+  if (stat.contains(inactive_file)) {
+    cache = saturating_add(get(key("active_file", "active_file")),
+                           get(inactive_file));
+  } else {
+    // Kernels that omit the lists leave only the aggregate page cache counter,
+    // which does include shmem as well as pinned pages. Subtracting the
+    // unevictable counter can understate what is reclaimable, because it also
+    // covers pinned anonymous pages that the page cache total never included in
+    // the first place.
+    cache = saturating_sub(get(key("file", "cache")),
+                           get(key("unevictable", "unevictable")));
+    unreclaimable = saturating_add(unreclaimable, get(key("shmem", "shmem")));
+  }
+  // Only cgroup v2 breaks the slab down by reclaimability.
+  return saturating_add(saturating_sub(cache, unreclaimable),
+                        get("slab_reclaimable"));
+}
+
+} // namespace
+
+auto read_cgroup_memory_available(std::filesystem::path const& dir)
+  -> Option<uint64_t> {
   auto current = read_memory_value(dir / "memory.current");
   auto max = read_memory_value(dir / "memory.max");
   if (not current or not max) {
@@ -62,17 +140,14 @@ auto read_cgroup_memory_available(const std::filesystem::path& dir,
   if (*max >= unlimited_cgroup_limit) {
     return None{};
   }
-  if (*current >= *max) {
-    return available_memory_info{
-      .bytes = 0,
-      .source = std::move(source),
-    };
-  }
-  return available_memory_info{
-    .bytes = *max - *current,
-    .source = std::move(source),
-  };
+  // Page cache the kernel reclaims under pressure is not memory we hold, so it
+  // must not shrink what we consider available. Without this, mmap-heavy work
+  // like the partition transformer's input loading starves its own budget.
+  auto const consumed = saturating_sub(*current, reclaimable_memory(dir));
+  return saturating_sub(*max, consumed);
 }
+
+namespace {
 
 #if TENZIR_LINUX
 
@@ -144,11 +219,11 @@ auto cgroup2_memory_available(const std::filesystem::path& path)
   });
   auto current = resolve_cgroup2_path(mount, path);
   auto root = mount.mount_point.lexically_normal();
-  auto result = Option<available_memory_info>{};
+  auto result = Option<uint64_t>{};
   while (true) {
-    if (auto available = read_cgroup_memory_available(current, "cgroup-v2")) {
-      if (not result or available->bytes < result->bytes) {
-        result = std::move(available);
+    if (auto available = read_cgroup_memory_available(current)) {
+      if (not result or *available < *result) {
+        result = available;
       }
     }
     if (current == root or current == current.parent_path()) {
@@ -156,7 +231,13 @@ auto cgroup2_memory_available(const std::filesystem::path& path)
     }
     current = current.parent_path();
   }
-  return result;
+  if (not result) {
+    return None{};
+  }
+  return available_memory_info{
+    .bytes = *result,
+    .source = "cgroup-v2",
+  };
 }
 
 #endif
@@ -173,21 +254,27 @@ auto cgroup_memory_available() -> Option<available_memory_info> {
       } else if (std::find(cgroup.controllers.begin(), cgroup.controllers.end(),
                            "memory")
                  != cgroup.controllers.end()) {
-        if (auto result = read_cgroup_memory_available(
-              std::filesystem::path{"/sys/fs/cgroup/memory"} / path,
-              "cgroup-v1")) {
-          return result;
-        }
-        if (auto result = read_cgroup_memory_available(
-              std::filesystem::path{"/sys/fs/cgroup"} / path, "cgroup-v1")) {
-          return result;
+        for (auto const& dir : {std::filesystem::path{"/sys/fs/cgroup/memory"},
+                                std::filesystem::path{"/sys/fs/cgroup"}}) {
+          if (auto result = read_cgroup_memory_available(dir / path)) {
+            return available_memory_info{
+              .bytes = *result,
+              .source = "cgroup-v1",
+            };
+          }
         }
       }
     }
   } catch (const std::exception&) {
   }
 #endif
-  return read_cgroup_memory_available("/sys/fs/cgroup", "cgroup");
+  if (auto result = read_cgroup_memory_available("/sys/fs/cgroup")) {
+    return available_memory_info{
+      .bytes = *result,
+      .source = "cgroup",
+    };
+  }
+  return None{};
 }
 
 auto procfs_memory_available() -> Option<available_memory_info> {
