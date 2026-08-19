@@ -512,7 +512,10 @@ public:
   auto add_channels(const PlanPorts& from, size_t to) -> void;
 
   /// Rewrite all channels's `from` node.
-  auto rewrite_from(size_t before, size_t after) -> void;
+  auto rewrite_channel_from(size_t before, size_t after) -> void;
+
+  /// Find a channel by it's `from` node.
+  auto find_channel_from(size_t from) const -> Option<const Channel&>;
 
   /// When ports include an input, inject an identity node that can scatter.
   auto scatter_external_input(PlanPorts input) -> PlanPorts;

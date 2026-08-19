@@ -1,0 +1,9 @@
+// The block runs as its own plan, whose input carries the file's bytes. Here
+// that input is consumed by `read_json`, while the merged `from` is a source
+// that consumes nothing. The plan input can only feed one operator directly,
+// so the source must receive its signals through a broadcast instead.
+from_file env("FILE_ROOT") + "/single/data.json" {
+  read_json
+  merge { from {injected: true} }
+}
+sort filename?, injected?

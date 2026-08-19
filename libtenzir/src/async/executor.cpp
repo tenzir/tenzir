@@ -541,8 +541,7 @@ private:
 /// [^1]: https://arxiv.org/pdf/1506.08603
 class Runner final : public OpCtx {
 public:
-  Runner(AnyOperator op, JobId job,
-         std::vector<AnyOpPull> pull_upstream,
+  Runner(AnyOperator op, JobId job, std::vector<AnyOpPull> pull_upstream,
          std::vector<OutputPort> push_downstream,
          Receiver<FromControl> from_control, Sender<ToControl> to_control,
          OpId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh)
@@ -1703,8 +1702,8 @@ private:
 
 namespace {
 
-auto run_operator(AnyOperator op, JobId job,
-                  std::vector<AnyOpPull> pulls, std::vector<OutputPort> ports,
+auto run_operator(AnyOperator op, JobId job, std::vector<AnyOpPull> pulls,
+                  std::vector<OutputPort> ports,
                   Receiver<FromControl> from_control,
                   Sender<ToControl> to_control, OpId id, ExecCtx& exec_ctx,
                   caf::actor_system& sys, DiagHandler& dh) -> Task<void> {
@@ -1895,8 +1894,8 @@ private:
       }
     }
     for (auto index = size_t{0}; index < operators_.size(); ++index) {
-      start_operator_task(index, op_id(instance_of_[index]),
-                          job_ids_[index], std::move(inputs[index]),
+      start_operator_task(index, op_id(instance_of_[index]), job_ids_[index],
+                          std::move(inputs[index]),
                           std::move(out_ports[index]));
     }
     for (auto index = size_t{0}; index < operators_.size(); ++index) {
