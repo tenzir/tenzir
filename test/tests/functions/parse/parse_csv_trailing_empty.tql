@@ -1,0 +1,4 @@
+from { 
+  common: "1,2,".parse_csv(header = "a,b,c"),
+  dash: "1,2,".parse_csv(header = "a,b,c", null_value = "-")
+}

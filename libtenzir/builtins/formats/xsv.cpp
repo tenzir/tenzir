@@ -699,8 +699,11 @@ auto parse_line(std::string_view line, std::vector<std::string>& fields,
                 diagnostic_handler& dh) -> void {
   auto field_idx = size_t{0};
   auto field_text = std::string_view{};
+  auto trailing_empty_field = false;
   for (field_idx = 0; true; ++field_idx) {
-    if (line.empty()) {
+    const auto has_value = not line.empty() or trailing_empty_field;
+    trailing_empty_field = false;
+    if (not has_value) {
       if (field_idx < original_field_count) {
         if (not args.auto_fill) {
           diagnostic::warning("{} parser found too few values in a line",
@@ -748,6 +751,7 @@ auto parse_line(std::string_view line, std::vector<std::string>& fields,
     auto field = builder.unflattened_field(fields[field_idx]);
     if (auto split = quoting.split_at_unquoted(line, args.field_separator)) {
       std::tie(field_text, line) = *split;
+      trailing_empty_field = line.empty();
     } else {
       field_text = line;
       line = std::string_view{};
