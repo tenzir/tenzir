@@ -9,4 +9,4 @@ from {
   class_uid: 1001,
   activity_name: 123,  // Should be string, but provided int
 }
-ocsf::derive
+ocsf_derive

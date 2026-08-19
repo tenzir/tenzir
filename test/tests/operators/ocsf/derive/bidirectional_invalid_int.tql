@@ -10,4 +10,4 @@ from {
   activity_id: 999,  // Invalid enum value
   activity_name: "Create",  // Valid string value
 }
-ocsf::derive
+ocsf_derive

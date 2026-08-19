@@ -1,1 +1,1 @@
-package::remove "test2"
+package_remove "test2"

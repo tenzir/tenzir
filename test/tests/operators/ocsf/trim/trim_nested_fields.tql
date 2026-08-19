@@ -19,4 +19,4 @@ from {
     direction: "outbound",
   },
 }
-ocsf::trim
+ocsf_trim

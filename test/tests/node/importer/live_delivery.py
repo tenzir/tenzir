@@ -108,7 +108,7 @@ try:
     )
     activity = start_pipeline(
         node.env,
-        "pipeline::activity range=10s, interval=10s\nunroll pipelines\nwrite_ndjson\n",
+        "pipeline_activity range=10s, interval=10s\nunroll pipelines\nwrite_ndjson\n",
     )
     processes.extend([live, activity])
     ready = read_line(live, 5)

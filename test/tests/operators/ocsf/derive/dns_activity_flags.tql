@@ -1,4 +1,4 @@
-// Test ocsf::derive with dns_activity containing DNS answer flags.
+// Test ocsf_derive with dns_activity containing DNS answer flags.
 // This verifies reverse derivation from list<string> to list<int> enum fields.
 
 from {
@@ -15,4 +15,4 @@ from {
     },
   ],
 }
-ocsf::derive
+ocsf_derive

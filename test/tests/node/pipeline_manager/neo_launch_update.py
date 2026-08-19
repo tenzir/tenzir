@@ -435,7 +435,7 @@ def _check_every_stop_terminates_serve(base_url: str) -> None:
                 "definition": (
                     "//neo\n"
                     "every 500ms {\n"
-                    "  pipeline::list\n"
+                    "  pipeline_list\n"
                     "  where not hidden\n"
                     "  sort id\n"
                     "  summarize pipelines = this.collect()\n"

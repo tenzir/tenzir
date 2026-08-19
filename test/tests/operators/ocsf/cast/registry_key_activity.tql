@@ -5,4 +5,4 @@ from {
   },
   class_uid: 201001,
 }
-ocsf::cast null_fill=true
+ocsf_cast null_fill=true

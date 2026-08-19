@@ -10,7 +10,7 @@
 warning: found invalid value for `activity_id`
   --> tests/operators/ocsf/derive/unknown_values.tql:11:1
    |
-11 | ocsf::derive
-   | ~~~~~~~~~~~~
+11 | ocsf_derive
+   | ~~~~~~~~~~~
    |
    = note: got 999

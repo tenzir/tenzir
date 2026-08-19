@@ -305,7 +305,7 @@ private:
 class plugin final : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
-    return "ai::prompt";
+    return "ai_prompt";
   }
 
   auto describe() const -> Description override {

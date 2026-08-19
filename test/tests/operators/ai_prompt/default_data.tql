@@ -4,7 +4,7 @@ timeout: 60
 ---
 
 from {id: 1, message: "hello"}
-ai::prompt model="fixture-model", endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT")
+ai_prompt model="fixture-model", endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT")
 select id,
        text=ai.prompt.text,
        model=ai.prompt.model,

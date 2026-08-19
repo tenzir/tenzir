@@ -1,4 +1,4 @@
-"""OpenAI Responses API fixture for ai::prompt integration tests."""
+"""OpenAI Responses API fixture for ai_prompt integration tests."""
 
 from __future__ import annotations
 

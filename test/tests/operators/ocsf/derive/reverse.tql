@@ -8,4 +8,4 @@ from {
   class_uid: 1001,
   activity_name: "Read",  // Should derive activity_id = 2
 }
-ocsf::derive
+ocsf_derive

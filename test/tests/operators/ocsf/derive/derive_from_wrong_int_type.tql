@@ -9,4 +9,4 @@ from {
   class_uid: 1001,
   activity_id: 1.5,  // Float instead of int64
 }
-ocsf::derive
+ocsf_derive

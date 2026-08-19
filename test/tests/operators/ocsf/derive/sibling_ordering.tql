@@ -7,4 +7,4 @@ from {
   class_uid: 1001,
   activity_name: "Create",
 }
-| ocsf::derive
+| ocsf_derive

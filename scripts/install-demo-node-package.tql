@@ -1,2 +1,2 @@
 // tql2
-package::add "demo-node"
+package_add "demo-node"

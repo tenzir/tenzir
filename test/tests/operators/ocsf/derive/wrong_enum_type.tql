@@ -10,4 +10,4 @@ from {
   activity_id: "not_an_int",  // Should be int64, but provided string
   activity_name: "Create",
 }
-ocsf::derive
+ocsf_derive

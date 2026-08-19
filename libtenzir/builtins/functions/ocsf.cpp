@@ -127,15 +127,15 @@ using id_to_name_plugin = generic_mapping_plugin<int64_t, std::string_view>;
 } // namespace tenzir::plugins::ocsf
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::name_to_id_plugin{
-  "ocsf::category_uid", "string", tenzir::ocsf_category_uid,
+  "ocsf_category_uid", "string", tenzir::ocsf_category_uid,
   "OCSF category name"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::id_to_name_plugin{
-  "ocsf::category_name", "int", tenzir::ocsf_category_name, "OCSF category ID"})
+  "ocsf_category_name", "int", tenzir::ocsf_category_name, "OCSF category ID"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::name_to_id_plugin{
-  "ocsf::class_uid", "string", tenzir::ocsf_class_uid, "OCSF class name"})
+  "ocsf_class_uid", "string", tenzir::ocsf_class_uid, "OCSF class name"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::id_to_name_plugin{
-  "ocsf::class_name", "int", tenzir::ocsf_class_name, "OCSF class ID"})
+  "ocsf_class_name", "int", tenzir::ocsf_class_name, "OCSF class ID"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::name_to_id_plugin{
-  "ocsf::type_uid", "string", tenzir::ocsf_type_uid, "OCSF type name"})
+  "ocsf_type_uid", "string", tenzir::ocsf_type_uid, "OCSF type name"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::id_to_name_plugin{
-  "ocsf::type_name", "int", tenzir::ocsf_type_name, "OCSF type ID"})
+  "ocsf_type_name", "int", tenzir::ocsf_type_name, "OCSF type ID"})

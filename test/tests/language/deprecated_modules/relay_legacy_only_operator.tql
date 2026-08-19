@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+// `ocsf::apply` exists only under its module-qualified name. The relay keeps
+// resolving it with a deprecation warning, and without pointing at a flat name
+// that does not exist. Compiling it fails because the operator has no IR
+// implementation, like every other legacy-only operator.
+from {class_uid: 1001, metadata: {version: "1.5.0"}}
+ocsf::apply

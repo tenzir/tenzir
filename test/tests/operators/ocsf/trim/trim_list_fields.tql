@@ -27,4 +27,4 @@ from {
     },
   ],
 }
-ocsf::trim
+ocsf_trim

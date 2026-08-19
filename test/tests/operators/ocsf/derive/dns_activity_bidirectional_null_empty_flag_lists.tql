@@ -1,4 +1,4 @@
-// Test ocsf::derive with null-vs-empty DNS answer flag_ids/flags lists.
+// Test ocsf_derive with null-vs-empty DNS answer flag_ids/flags lists.
 // This verifies that bidirectional list derivation stays column-wise and treats
 // different outer list validity as an inconsistent layout.
 
@@ -29,4 +29,4 @@ from {
     },
   ],
 }
-ocsf::derive
+ocsf_derive

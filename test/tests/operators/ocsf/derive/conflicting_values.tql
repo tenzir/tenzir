@@ -10,4 +10,4 @@ from {
   activity_id: 1,  // Should be "Create"
   activity_name: "Delete",  // Conflicts with activity_id=1, should be activity_id=4
 }
-ocsf::derive
+ocsf_derive

@@ -212,7 +212,7 @@ private:
       auto attributes = collect(ty.attributes());
       if (ty.attribute("must_be_record")
           and not input.type.kind().is_any<null_type, record_type>()
-          // Strings are also allowed so that `ocsf::apply` is idempotent.
+          // Strings are also allowed so that `ocsf_apply` is idempotent.
           and (preserve_variants_ or not input.type.kind().is<string_type>())) {
         diagnostic::warning("expected type `record` for `{}`, but got `{}`",
                             path, input.type.kind())
@@ -1187,7 +1187,7 @@ private:
           }
           return None{};
         }();
-        // Emit in alphabetical order to match ocsf::cast schema ordering.
+        // Emit in alphabetical order to match ocsf_cast schema ordering.
         if (int_name < string_name) {
           // Emit enum first, then sibling.
           fields.emplace_back(int_name,
@@ -1230,7 +1230,7 @@ private:
           }
           return field.data;
         }();
-        // Emit in alphabetical order to match ocsf::cast schema ordering.
+        // Emit in alphabetical order to match ocsf_cast schema ordering.
         if (int_name < string_name) {
           // Emit enum first, then sibling.
           if (enum_value) {
@@ -1828,6 +1828,10 @@ public:
 class cast_plugin final : public virtual operator_plugin2<cast_operator>,
                           public virtual OperatorPlugin {
 public:
+  auto operator_name() const -> std::string override {
+    return "ocsf_cast";
+  }
+
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto encode_variants = false;
@@ -1856,6 +1860,10 @@ public:
 class trim_plugin final : public virtual operator_plugin2<trim_operator>,
                           public virtual OperatorPlugin {
 public:
+  auto operator_name() const -> std::string override {
+    return "ocsf_trim";
+  }
+
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     // TODO: Consider using a more intelligent default that is not simply
@@ -1884,6 +1892,10 @@ public:
 class derive_plugin final : public virtual operator_plugin2<derive_operator>,
                             public virtual OperatorPlugin {
 public:
+  auto operator_name() const -> std::string override {
+    return "ocsf_derive";
+  }
+
   auto make(operator_factory_invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     argument_parser2::operator_(name()).parse(inv, ctx).ignore();

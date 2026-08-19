@@ -1,0 +1,12 @@
+{
+  class_name: "File System Activity",
+}
+warning: `ocsf::derive` is deprecated
+ --> tests/language/deprecated_modules/relay_operator.tql:5:1
+  |
+5 | ocsf::derive
+  | ~~~~~~~~~~~~
+  |
+  = note: modules are reserved for packages
+  = hint: use `ocsf_derive` instead
+  = docs: https://tenzir.com/docs/reference/operators

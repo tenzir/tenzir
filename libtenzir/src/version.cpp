@@ -70,9 +70,13 @@ auto tenzir_features(const record& cfg) -> std::vector<std::string> {
   auto result = std::vector<std::string>{
     // The node supports passing the `--limit` flag to the TQL1 `chart` operator
     "chart_limit",
-    // The node supports modules in TQL2. Alongside this a few operators were
-    // renamed, e.g., `package_add` was renamed to `package::add`.
+    // The node supports modules in TQL2. Modules are reserved for packages;
+    // all builtin entities use flat names.
     "modules",
+    // Modules are exclusive to packages: builtin entities that used to live in
+    // a module now use flat names, e.g., `context::enrich` became
+    // `context_enrich`. The old spellings still work, but are deprecated.
+    "flat_builtin_names",
     // The node supports the TQL2 `from` and `to` operators.
     "tql2_from",
     // Schema definitions use the new format that represents Tenzir's type

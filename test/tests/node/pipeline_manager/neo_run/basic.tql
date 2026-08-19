@@ -1,4 +1,4 @@
-pipeline::run {
+pipeline_run {
   from {msg: "pipeline-run-imported"}
   @name = "pipeline-run"
   import

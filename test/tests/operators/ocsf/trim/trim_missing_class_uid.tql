@@ -7,4 +7,4 @@ from {
   time: 1640995200000000,
   type_uid: 400101,
 }
-ocsf::trim
+ocsf_trim

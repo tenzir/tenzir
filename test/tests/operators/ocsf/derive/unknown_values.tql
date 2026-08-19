@@ -8,4 +8,4 @@ from {
   class_uid: 1001,
   activity_id: 999,  // Unknown enum value - should generate warning
 }
-ocsf::derive
+ocsf_derive

@@ -107,28 +107,58 @@ namespace {
 auto global_registry_ref() -> std::shared_ptr<const registry>& {
   static auto* reg = std::invoke([&] -> std::shared_ptr<const registry>* {
     auto init = std::make_shared<registry>();
+    // Modules are exclusive to packages. Native entities must use flat names,
+    // so we reject module-qualified ones instead of creating builtin modules
+    // that would shadow package modules.
+    const auto flat = [](std::string name) -> Option<std::string> {
+      if (name.starts_with("tql2.")) {
+        name.erase(0, 5);
+      }
+      if (name.contains("::")) {
+        return None{};
+      }
+      return name;
+    };
+    // Factory plugins may still carry a scoped name. Such an operator must not
+    // create a builtin module, but it must keep working under its old spelling,
+    // so we park it in the deprecated package under its flattened name. Only
+    // the deprecation relay in `resolve.cpp` looks there, and only if no module
+    // of that name resolved before.
     for (const auto* op : plugins::get<operator_factory_plugin>()) {
       auto name = op->name();
-      if (name.starts_with("tql2.")) {
-        name.erase(0, 5);
+      auto pkg = entity_pkg_std;
+      if (auto stripped = flat(name)) {
+        name = std::move(*stripped);
+      } else {
+        for (auto pos = name.find("::"); pos != std::string::npos;
+             pos = name.find("::")) {
+          name.replace(pos, 2, "_");
+        }
+        pkg = entity_pkg_deprecated;
       }
-      init->add(std::string{entity_pkg_std}, name,
-                native_operator{nullptr, op});
+      init->add(std::string{pkg}, name, native_operator{nullptr, op});
     }
+    const auto report_scoped = [](std::string_view name) {
+      TENZIR_ERROR("ignoring native entity `{}`: modules are reserved for "
+                   "packages; use a flat name instead",
+                   name);
+    };
     for (const auto* op : plugins::get<operator_compiler_plugin>()) {
-      auto name = op->operator_name();
-      if (name.starts_with("tql2.")) {
-        name.erase(0, 5);
+      auto name = flat(op->operator_name());
+      if (not name) {
+        report_scoped(op->operator_name());
+        continue;
       }
-      init->add(std::string{entity_pkg_std}, name,
+      init->add(std::string{entity_pkg_std}, *name,
                 native_operator{op, nullptr});
     }
     for (const auto* fn : plugins::get<function_plugin>()) {
-      auto name = fn->function_name();
-      if (name.starts_with("tql2.")) {
-        name.erase(0, 5);
+      auto name = flat(fn->function_name());
+      if (not name) {
+        report_scoped(fn->function_name());
+        continue;
       }
-      init->add(std::string{entity_pkg_std}, name, std::ref(*fn));
+      init->add(std::string{entity_pkg_std}, *name, std::ref(*fn));
     }
     // Leak this on purpose to prevent static destruction order fiasco.
     return new std::shared_ptr<const registry>{std::move(init)}; // NOLINT
@@ -252,7 +282,11 @@ auto registry::module_names() const -> std::vector<std::string> {
 
 auto registry::entity_names(entity_ns ns) const -> std::vector<std::string> {
   auto result = std::vector<std::string>{};
-  for (const auto& [_, mod] : roots_) {
+  for (const auto& [pkg, mod] : roots_) {
+    // Deprecated spellings are not part of the surface we advertise.
+    if (pkg == entity_pkg_deprecated) {
+      continue;
+    }
     gather_names(mod, ns, "", result);
   }
   std::ranges::sort(result);

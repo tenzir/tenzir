@@ -9,4 +9,4 @@ from {
   },
   class_uid: 1001,
 }
-ocsf::trim
+ocsf_trim

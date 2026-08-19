@@ -306,6 +306,11 @@ class ContextFactoryPluginCrtp : public virtual context_factory_plugin<Name>,
                                  public virtual OperatorPlugin {
 public:
   using CreateOperator = ContextCreateOperatorCrtp<Name, Concrete>;
+
+  auto operator_name() const -> std::string override {
+    return fmt::format("context_create_{}",
+                       detail::replace_all(Name, "-", "_"));
+  }
 };
 
 template <detail::string_literal Name, class Concrete>

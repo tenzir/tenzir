@@ -23,6 +23,6 @@
 warning: found inconsistent list layout between `answers[].flag_ids` and `answers[].flags`
   --> tests/operators/ocsf/derive/dns_activity_mismatched_flag_lists.tql:19:1
    |
-19 | ocsf::derive
-   | ~~~~~~~~~~~~
+19 | ocsf_derive
+   | ~~~~~~~~~~~
    |

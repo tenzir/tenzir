@@ -34,6 +34,6 @@
 warning: found inconsistent list layout between `answers[].flag_ids` and `answers[].flags`
   --> tests/operators/ocsf/derive/dns_activity_bidirectional_null_empty_flag_lists.tql:32:1
    |
-32 | ocsf::derive
-   | ~~~~~~~~~~~~
+32 | ocsf_derive
+   | ~~~~~~~~~~~
    |

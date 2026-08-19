@@ -10,4 +10,4 @@ from {
   activity_id: 99,          // Other -> look at activity_name for source value
   activity_name: "CustomOp", // Free-form source value, not a known enum caption
 }
-ocsf::derive
+ocsf_derive

@@ -1,4 +1,4 @@
-// Test ocsf::derive with DNS answer flag_ids after a class/version split.
+// Test ocsf_derive with DNS answer flag_ids after a class/version split.
 // This verifies list enum derivation for sliced Arrow list arrays.
 
 from {
@@ -22,4 +22,4 @@ from {
     },
   ],
 }
-ocsf::derive
+ocsf_derive

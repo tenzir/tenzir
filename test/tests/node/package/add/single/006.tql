@@ -1,4 +1,4 @@
-package::list
+package_list
 summarize num_packages=count()
 to_stdout {
   write_tql

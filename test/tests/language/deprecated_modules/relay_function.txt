@@ -1,0 +1,12 @@
+{
+  x: 1001,
+}
+warning: `ocsf::class_uid` is deprecated
+ --> tests/language/deprecated_modules/relay_function.tql:3:10
+  |
+3 | from {x: ocsf::class_uid("File System Activity")}
+  |          ~~~~~~~~~~~~~~~
+  |
+  = note: modules are reserved for packages
+  = hint: use `ocsf_class_uid` instead
+  = docs: https://tenzir.com/docs/reference/functions

@@ -1,4 +1,4 @@
-// Test ocsf::derive with dns_activity containing multiple dns_answer.flag_ids
+// Test ocsf_derive with dns_activity containing multiple dns_answer.flag_ids
 // This test verifies that the derive operator can handle multiple flag_ids in dns_answer within dns_activity
 
 from {
@@ -20,4 +20,4 @@ from {
     },
   ],
 }
-ocsf::derive
+ocsf_derive

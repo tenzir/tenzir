@@ -4,7 +4,7 @@ timeout: 60
 ---
 
 from {message: "hello"}
-ai::prompt model="fixture-model",
+ai_prompt model="fixture-model",
            endpoint=env("OPENAI_RESPONSES_FIXTURE_ENDPOINT"),
            data=message
 select text=ai.prompt.text

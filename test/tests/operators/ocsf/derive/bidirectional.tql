@@ -9,4 +9,4 @@ from {
   activity_id: 3,
   activity_name: "Update",  // Should be consistent with activity_id = 3
 }
-ocsf::derive
+ocsf_derive

@@ -1,0 +1,6 @@
+// Modules are reserved for packages. The old module-qualified spelling of a
+// builtin operator still resolves to its flat name, with a deprecation
+// warning.
+from {class_uid: 1001, metadata: {version: "1.5.0"}}
+ocsf::derive
+select class_name

@@ -10,7 +10,7 @@
 warning: found invalid value for `activity_name`
   --> tests/operators/ocsf/derive/bidirectional_invalid_string.tql:13:1
    |
-13 | ocsf::derive
-   | ~~~~~~~~~~~~
+13 | ocsf_derive
+   | ~~~~~~~~~~~
    |
    = note: got "InvalidAction"

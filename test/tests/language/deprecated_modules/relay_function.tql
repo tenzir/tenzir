@@ -1,0 +1,3 @@
+// The old module-qualified spelling of a builtin function still resolves to
+// its flat name, with a deprecation warning.
+from {x: ocsf::class_uid("File System Activity")}

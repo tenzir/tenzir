@@ -1,4 +1,4 @@
-pipeline::list
+pipeline_list
 summarize num_pipelines=count()
 to_stdout {
   write_tql

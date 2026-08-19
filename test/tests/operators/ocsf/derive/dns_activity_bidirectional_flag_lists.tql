@@ -1,4 +1,4 @@
-// Test ocsf::derive with DNS answer flag_ids and flags present.
+// Test ocsf_derive with DNS answer flag_ids and flags present.
 // This verifies element-wise derivation of null list elements in both directions.
 
 from {
@@ -16,4 +16,4 @@ from {
     },
   ],
 }
-ocsf::derive
+ocsf_derive

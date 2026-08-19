@@ -1,4 +1,4 @@
-// Test ocsf::derive with a null outer DNS answer flag_ids list.
+// Test ocsf_derive with a null outer DNS answer flag_ids list.
 // This verifies that deriving list enum siblings preserves null list slots.
 
 from {
@@ -20,4 +20,4 @@ from {
     },
   ],
 }
-ocsf::derive
+ocsf_derive

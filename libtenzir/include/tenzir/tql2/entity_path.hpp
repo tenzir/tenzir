@@ -23,6 +23,14 @@ using entity_pkg = std::string;
 inline constexpr std::string_view entity_pkg_std = "std";
 inline constexpr std::string_view entity_pkg_cfg = "cfg";
 
+/// Holds builtin entities that only exist under a formerly module-qualified
+/// name, keyed by their flattened name. Regular resolution never consults this
+/// package: only the deprecation relay does, and only after everything else,
+/// including packages, failed to resolve the module.
+///
+/// TODO: Remove this together with the compatibility shim in `resolve.cpp`.
+inline constexpr std::string_view entity_pkg_deprecated = "deprecated";
+
 /// Models the available entity namespaces.
 ///
 /// `let` holds constant values exported by packages (package `let` bindings),

@@ -312,7 +312,7 @@ def _sink(
 def _seed_pipeline(input_path: Path, namespace: str, tags: dict[str, str]) -> str:
     prefix = [
         f"from_file {_quoted(str(input_path))} {{ read_ndjson }}",
-        "ocsf::cast encode_variants=true",
+        "ocsf_cast encode_variants=true",
         "batch 65536",
     ]
     workload = tags.get("workload")
@@ -433,7 +433,7 @@ def _prepare_input_pipeline(
 ) -> str:
     pipeline = [
         f"from_file {_quoted(str(seed_path))} {{ read_ndjson }}",
-        "ocsf::cast encode_variants=true",
+        "ocsf_cast encode_variants=true",
     ]
     if tags.get("workload") == "homogeneous":
         pipeline.append(f"where class_uid == {int(tags['class_uid'])}")

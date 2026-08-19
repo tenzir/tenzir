@@ -1,0 +1,3 @@
+{
+  winner: "package",
+}

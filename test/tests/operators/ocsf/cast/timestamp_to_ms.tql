@@ -7,4 +7,4 @@ from {},
      {metadata: {profiles: ["host", "datetime"]}, actor: {session: {created_time: $epoch, created_time_dt: $epoch, invalid: $epoch}}}
 class_uid = 1001
 metadata.version = "1.6.0"
-ocsf::cast timestamp_to_ms=true
+ocsf_cast timestamp_to_ms=true

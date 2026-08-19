@@ -20,9 +20,9 @@ actor.user = {
 }
 drop src.user.domain, src.user.name, src.user.identifier
 category_name = "System Activity"
-category_uid = ocsf::category_uid(category_name)
+category_uid = ocsf_category_uid(category_name)
 class_name = "Process Activity"
-class_uid = ocsf::class_uid(class_name)
+class_uid = ocsf_class_uid(class_name)
 device = {
   hostname: src.computer_name,
   os: {

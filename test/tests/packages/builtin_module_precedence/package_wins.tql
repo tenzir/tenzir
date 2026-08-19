@@ -1,0 +1,3 @@
+// A package entity takes precedence over the compatibility relay for a
+// formerly module-qualified builtin.
+ocsf::derive

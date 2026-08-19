@@ -1,0 +1,8 @@
+error: module `ocsf` not found
+ --> tests/language/deprecated_modules/error_unknown_entity.tql:7:1
+  |
+7 | ocsf::nope
+  | ^^^^
+  |
+  = note: no modules found
+  = docs: https://tenzir.com/docs/reference/operators

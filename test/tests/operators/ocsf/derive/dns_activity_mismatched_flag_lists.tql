@@ -1,4 +1,4 @@
-// Test ocsf::derive with DNS answer flag_ids and flags of different lengths.
+// Test ocsf_derive with DNS answer flag_ids and flags of different lengths.
 // This verifies that mismatched enum/sibling list pairs are diagnosed and left unchanged.
 
 from {
@@ -16,4 +16,4 @@ from {
     },
   ],
 }
-ocsf::derive
+ocsf_derive

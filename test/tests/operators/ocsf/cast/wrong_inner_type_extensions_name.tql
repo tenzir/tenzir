@@ -6,4 +6,4 @@ from {
   class_uid: 1007,
   process: {},
 }
-ocsf::cast null_fill=true
+ocsf_cast null_fill=true

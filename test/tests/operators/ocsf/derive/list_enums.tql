@@ -18,4 +18,4 @@ from {
     },
   ],
 }
-ocsf::derive
+ocsf_derive

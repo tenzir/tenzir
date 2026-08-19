@@ -1,0 +1,16 @@
+warning: `ocsf::apply` is deprecated
+  --> tests/language/deprecated_modules/relay_legacy_only_operator.tql:10:1
+   |
+10 | ocsf::apply
+   | ~~~~~~~~~~~
+   |
+   = note: modules are reserved for packages
+   = docs: https://tenzir.com/docs/reference/operators
+
+error: This operator is not available in Tenzir Node v6
+  --> tests/language/deprecated_modules/relay_legacy_only_operator.tql:10:1
+   |
+10 | ocsf::apply
+   | ^^^^^^^^^^^
+   |
+   = hint: see https://tenzir.com/docs/guides/tenzir-v6-migration

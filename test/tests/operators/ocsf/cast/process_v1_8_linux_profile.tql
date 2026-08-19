@@ -9,4 +9,4 @@ from {
   class_uid: 1007,
   process: { auid: 0, egid: 1, euid: 2 }
 }
-ocsf::cast null_fill=true
+ocsf_cast null_fill=true

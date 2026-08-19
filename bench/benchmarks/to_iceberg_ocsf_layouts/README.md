@@ -21,7 +21,7 @@ and can fire long-running writer timers.
 
 ## Workloads
 
-The fixture normalizes the seed corpus with sparse `ocsf::cast` semantics and
+The fixture normalizes the seed corpus with sparse `ocsf_cast` semantics and
 caches typed BITZ batches before timing begins. The timed pipelines memory-map
 the cache, repeat complete batches, and append them. This preserves schema
 boundaries while removing NDJSON parsing, OCSF casting, and synthetic-field

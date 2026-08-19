@@ -1,8 +1,8 @@
 error: unknown key `schedule` in pipeline definition
  --> tests/node/package/validation/unknown-pipeline-key.tql:6:1
   |
-6 | package::add
-  | ^^^^^^^^^^^^
+6 | package_add
+  | ^^^^^^^^^^^
   |
   = note: invalid package definition
   = hint: use the top-level `metadata` key for package data

@@ -5,6 +5,6 @@
 warning: AI request failed: HTTP request returned status 500: {"error":"fixture failure"}
  --> tests/operators/ai_prompt/warning_null.tql:7:1
   |
-7 | ai::prompt model="fixture-model",
-  | ~~~~~~~~~~
+7 | ai_prompt model="fixture-model",
+  | ~~~~~~~~~
   |

@@ -19,12 +19,35 @@
 #include <tsl/robin_map.h>
 
 #include <algorithm>
+#include <array>
 #include <ranges>
 #include <unordered_set>
 
 namespace tenzir {
 
 namespace {
+
+/// Modules that used to hold builtin entities. Modules are now reserved for
+/// packages, and the entities that lived in these modules were renamed from
+/// `mod::name` to `mod_name`. We keep the old spellings working with a
+/// deprecation warning that relays to the new name.
+///
+/// TODO: Remove this compatibility shim with the next major release.
+constexpr auto deprecated_builtin_modules = std::array<std::string_view, 5>{
+  "ai", "context", "ocsf", "package", "pipeline"};
+
+/// The flat name that replaced a formerly module-qualified builtin entity.
+auto flatten_deprecated_path(const std::vector<ast::identifier>& path)
+  -> Option<std::string> {
+  if (path.size() != 2) {
+    return None{};
+  }
+  if (std::ranges::find(deprecated_builtin_modules, path[0].name)
+      == deprecated_builtin_modules.end()) {
+    return None{};
+  }
+  return fmt::format("{}_{}", path[0].name, path[1].name);
+}
 
 class entity_resolver : public ast::visitor<entity_resolver> {
 public:
@@ -133,6 +156,42 @@ public:
         target_ns == entity_ns::op ? "operators" : "functions");
       std::move(builder).emit(diag_);
     };
+    // Relay a formerly module-qualified builtin entity to its flat name, with a
+    // deprecation warning. Package entities take precedence, so this runs only
+    // after regular resolution failed.
+    const auto relay_deprecated = [&]() -> bool {
+      auto flat = flatten_deprecated_path(x.path);
+      if (not flat) {
+        return false;
+      }
+      for (auto pkg : {std::string{entity_pkg_cfg}, std::string{entity_pkg_std},
+                       std::string{entity_pkg_deprecated}}) {
+        auto path = entity_path{pkg, {*flat}, target_ns};
+        if (not is<entity_ref>(reg_.try_get(path))) {
+          continue;
+        }
+        auto old = fmt::format(
+          "{}", fmt::join(std::views::transform(x.path, &ast::identifier::name),
+                          "::"));
+        auto loc = x.get_location();
+        auto builder = diagnostic::warning("`{}` is deprecated", old)
+                         .primary(loc)
+                         .note("modules are reserved for packages");
+        // Entities in the deprecated package exist only under their old
+        // spelling, so there is no flat name to point at.
+        if (pkg != entity_pkg_deprecated) {
+          builder = std::move(builder).hint("use `{}` instead", *flat);
+        }
+        std::move(builder)
+          .docs("https://tenzir.com/docs/reference/{}",
+                target_ns == entity_ns::op ? "operators" : "functions")
+          .emit(diag_);
+        x.path = {ast::identifier{*flat, loc}};
+        x.ref = std::move(path);
+        return true;
+      }
+      return false;
+    };
     // Because there currently is no way to bring additional entities into the
     // scope, we can directly dispatch to the registry.
     auto pkg = std::invoke([&]() -> Option<entity_pkg> {
@@ -148,6 +207,9 @@ public:
       return None{};
     });
     if (not pkg) {
+      if (relay_deprecated()) {
+        return;
+      }
       report_not_found(x.path, 0, first_ns);
       return;
     }
@@ -161,6 +223,9 @@ public:
     auto result = reg_.try_get(path);
     auto err = try_as<registry::error>(result);
     if (err) {
+      if (relay_deprecated()) {
+        return;
+      }
       TENZIR_ASSERT(err->segment < x.path.size());
       auto is_last = err->segment == path.segments().size() - 1;
       auto error_ns = is_last ? target_ns : entity_ns::mod;

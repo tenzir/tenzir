@@ -166,5 +166,5 @@ if aws.has("firewall_rule_action") {
 
 this = {...ocsf, unmapped: aws}
 @name = "ocsf.dns_activity"
-ocsf::derive
+ocsf_derive
 discard

@@ -14,6 +14,6 @@ from {
     ]
   }
 }
-ocsf::cast null_fill=true
+ocsf_cast null_fill=true
 // TODO: Re-enable once `assert` is ported to the new executor.
 // assert analytic.related_analytics[0].name == "Related Analytic 1"

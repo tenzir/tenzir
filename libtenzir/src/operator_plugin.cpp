@@ -782,12 +782,9 @@ auto OperatorPlugin::describe_shared() const
       desc->name.erase(0, tql2_prefix.size());
     }
     if (desc->docs.empty()) {
-      auto docs_path = desc->name;
-      for (auto pos = docs_path.find("::"); pos != std::string::npos;
-           pos = docs_path.find("::")) {
-        docs_path.replace(pos, 2, "/");
-      }
-      desc->docs = "https://tenzir.com/docs/reference/operators/" + docs_path;
+      // Names are flat because modules are reserved for packages, so the name
+      // is also the documentation slug.
+      desc->docs = "https://tenzir.com/docs/reference/operators/" + desc->name;
     }
     cached_desc_ = std::move(desc);
   });

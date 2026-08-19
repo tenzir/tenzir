@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// A module-qualified name without a flat counterpart remains an error.
+from {x: 1}
+ocsf::nope

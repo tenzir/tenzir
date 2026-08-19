@@ -1,4 +1,4 @@
-pipeline::detach id="detach-1" {
+pipeline_detach id="detach-1" {
   every 1s {
     from {pipe: "detach-1"}
   }
@@ -6,7 +6,7 @@ pipeline::detach id="detach-1" {
   publish "pipeline-manager-neo-detach"
 }
 
-pipeline::detach id="detach-2" {
+pipeline_detach id="detach-2" {
   every 1s {
     from {pipe: "detach-2"}
   }

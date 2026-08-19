@@ -99,7 +99,7 @@
 warning: dropping field which does not exist in schema
   --> tests/operators/ocsf/cast/related_analytics_nested.tql:24:1
    |
-24 | ocsf::cast null_fill=true
-   | ~~~~~~~~~~
+24 | ocsf_cast null_fill=true
+   | ~~~~~~~~~
    |
    = note: found `analytic.related_analytics[].related_analytics`
