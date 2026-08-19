@@ -2189,9 +2189,14 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
       // This new code path will eventually supersede the current one.
       auto flag = cfg.parallelism ? Option<std::string_view>{*cfg.parallelism}
                                   : Option<std::string_view>{};
-      auto parallelism = ir::parallelism::resolve(source->text, flag);
+      auto configured = caf::get_or(content(sys.config()),
+                                    ir::parallelism::config_key, std::string{});
+      auto config = configured.empty() ? Option<std::string_view>{}
+                                       : Option<std::string_view>{configured};
+      auto parallelism = ir::parallelism::resolve(source->text, flag, config);
       if (not parallelism) {
-        diagnostic::error("invalid parallelism value")
+        diagnostic::error("invalid parallelism value in {}",
+                          ir::parallelism::describe(parallelism.error()))
           .hint("expected `disabled`, `max`, or a positive integer, "
                 "optionally followed by `,limit_partitions=<n>` and/or "
                 "`,fused=<all|parallel|none>`")

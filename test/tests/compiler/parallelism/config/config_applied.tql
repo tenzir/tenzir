@@ -1,0 +1,4 @@
+// The `tenzir.parallelism` option in `tenzir.yaml` sets the degree for every
+// pipeline that does not request one itself.
+from {x: 1}, {x: 2}
+where x > 0

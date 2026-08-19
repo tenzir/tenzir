@@ -85,8 +85,12 @@ auto ir::PlanBuilder::derive_kind(const PlannedOperator& up,
   // Every remaining channel between multi-instance operators is one of many:
   // exchanges open up to `n * m` channels, and unfused lane-to-lane wiring
   // still opens one per lane. Give them a small budget each so that their
-  // number does not balloon the pipeline's memory usage.
-  if (type.is<table_slice>() and (up_degree > 1 or down_degree > 1)) {
+  // number does not balloon the pipeline's memory usage. Disabled fusing is
+  // exempt: it asks for plain buffered channels throughout, and pipelines that
+  // request no parallelism at all use it, so the budget would only cost them
+  // throughput without bounding anything.
+  if (type.is<table_slice>() and par_.fused != parallelism::Fusing::none
+      and (up_degree > 1 or down_degree > 1)) {
     return ChannelKind::tiny;
   }
   return ChannelKind::regular;
@@ -547,9 +551,7 @@ auto parse_fusing(std::string_view value) -> Option<ir::parallelism::Fusing> {
 /// comma-separated `<key>=<value>` options.
 auto parse_parallelism(std::string_view value) -> Option<ir::Parallelism> {
   if (detail::trim(value) == "disabled") {
-    return ir::Parallelism{.degree = 1,
-                           .limit_partitions = 1,
-                           .fused = ir::parallelism::Fusing::none};
+    return ir::parallelism::disabled;
   }
   auto parts = detail::split(value, ",");
   TENZIR_ASSERT(not parts.empty());
@@ -557,7 +559,10 @@ auto parse_parallelism(std::string_view value) -> Option<ir::Parallelism> {
   if (not degree) {
     return None{};
   }
-  auto result = ir::Parallelism{.degree = *degree};
+  auto result = ir::Parallelism{.degree = *degree,
+                                .limit_partitions
+                                = ir::parallelism::default_limit_partitions,
+                                .fused = ir::parallelism::Fusing::parallel};
   auto seen_limit_partitions = false;
   auto seen_fusing = false;
   for (auto option : std::span{parts}.subspan(1)) {
@@ -654,23 +659,47 @@ auto skip_source_preamble(std::string_view source) -> std::string_view {
 
 } // namespace
 
+auto ir::parallelism::describe(Origin origin) -> std::string_view {
+  switch (origin) {
+    case Origin::directive:
+      return "`// parallelism:` directive";
+    case Origin::flag:
+      return "`--parallelism` option";
+    case Origin::config:
+      return "`tenzir.parallelism` configuration option";
+  }
+  TENZIR_UNREACHABLE();
+}
+
 auto ir::parallelism::resolve(std::string_view source,
-                              Option<std::string_view> flag)
-  -> Option<Parallelism> {
-  // A directive in the source's leading comment lines wins over the flag.
+                              Option<std::string_view> flag,
+                              Option<std::string_view> config)
+  -> std::expected<Parallelism, Origin> {
+  auto parse = [](std::string_view value,
+                  Origin origin) -> std::expected<Parallelism, Origin> {
+    if (auto result = parse_parallelism(value)) {
+      return *result;
+    }
+    return std::unexpected{origin};
+  };
+  // A directive in the source's leading comment lines wins over the flag,
+  // which in turn wins over the configuration.
   for (auto raw_line : detail::split(skip_source_preamble(source), "\n")) {
     auto line = detail::trim(raw_line);
     if (auto directive = match_parallelism_directive(line)) {
-      return parse_parallelism(*directive);
+      return parse(*directive, Origin::directive);
     }
     if (not line.empty() and not line.starts_with("//")) {
       break;
     }
   }
   if (flag) {
-    return parse_parallelism(*flag);
+    return parse(*flag, Origin::flag);
   }
-  return Parallelism{};
+  if (config) {
+    return parse(*config, Origin::config);
+  }
+  return disabled;
 }
 
 } // namespace tenzir

@@ -7,23 +7,29 @@ from tenzir_test.runners._utils import get_run_module
 
 
 class PlanRunner(TqlRunner):
-    """Render the IR plan at a fixed degree of parallelism.
+    """Render the IR plan, optionally at a fixed degree of parallelism.
 
     The parallelism is fixed (rather than `max`) so that the `(x<n>)`
-    annotations in the snapshots are deterministic across machines.
+    annotations in the snapshots are deterministic across machines. When it is
+    `None`, no `--parallelism` option is passed at all, so that the plan
+    reflects the `// parallelism:` directive or the `tenzir.parallelism`
+    configuration option.
     """
 
-    def __init__(self, *, name: str = "plan", parallelism: str) -> None:
+    def __init__(self, *, name: str = "plan", parallelism: str | None) -> None:
         super().__init__(name=name)
         self._parallelism = parallelism
 
     def run(self, test: Path, update: bool, coverage: bool = False) -> bool | str:
         run_mod = get_run_module()
+        args = ("--dump-ir-plan",)
+        if self._parallelism is not None:
+            args += ("--parallelism", self._parallelism)
         return bool(
             run_mod.run_simple_test(
                 test,
                 update=update,
-                args=("--dump-ir-plan", "--parallelism", self._parallelism),
+                args=args,
                 output_ext=self.output_ext,
                 coverage=coverage,
             )
@@ -33,6 +39,11 @@ class PlanRunner(TqlRunner):
 @startup()
 def _register_dump_plan_parallel() -> PlanRunner:
     return PlanRunner(name="dump-plan-parallel", parallelism="6")
+
+
+@startup()
+def _register_dump_plan() -> PlanRunner:
+    return PlanRunner(name="dump-plan", parallelism=None)
 
 
 __all__ = ["PlanRunner"]

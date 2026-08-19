@@ -1,0 +1,10 @@
+---
+fixtures:
+- node
+---
+
+// A node-wide `tenzir.parallelism` must not change what a pipeline computes,
+// only how many instances its operators run at.
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}
+where x > 1
+summarize total=sum(x), n=count()

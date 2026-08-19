@@ -1,0 +1,4 @@
+// parallelism: disabled
+// A directive can also opt a single pipeline out of the configured degree.
+from {x: 1}, {x: 2}
+where x > 0

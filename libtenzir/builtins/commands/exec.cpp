@@ -212,7 +212,9 @@ public:
                           "operator parallelism: disabled (default), max, "
                           "or a positive integer, optionally followed "
                           "by `,limit_partitions=<n>`"
-                          "and/or `,fused=<all|parallel|none>`"));
+                          "and/or `,fused=<all|parallel|none>`; overrides "
+                          "`tenzir.parallelism`, and is itself overridden by "
+                          "a `// parallelism:` directive in the pipeline"));
     auto factory = command::factory{
       {"exec",
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {

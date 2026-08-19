@@ -1,0 +1,4 @@
+tenzir:
+  # Pipelines that run in this node inherit this degree of parallelism unless
+  # they carry a `// parallelism:` directive themselves.
+  parallelism: 2

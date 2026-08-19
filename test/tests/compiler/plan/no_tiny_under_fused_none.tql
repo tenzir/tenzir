@@ -1,0 +1,9 @@
+// parallelism: 6,fused=none
+// Disabling fusing asks for plain buffered channels throughout, so no channel
+// is tiny (`╎`) here, not even the matched lane-to-lane ones between the two
+// `where` operators. Their number still scales with the degree, so this trades
+// memory for throughput; it also keeps the pipelines that request no
+// parallelism at all, which plan as `disabled`, off the small budget.
+from {x: 1}
+where x > 0
+where x < 3

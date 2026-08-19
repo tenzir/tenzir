@@ -17,6 +17,7 @@
 #include "tenzir/tql2/ast.hpp"
 
 #include <concepts>
+#include <expected>
 #include <limits>
 #include <string_view>
 #include <type_traits>
@@ -289,30 +290,56 @@ inline constexpr auto default_limit_partitions = uint16_t{4};
 /// How the planner parallelizes a pipeline.
 struct Parallelism {
   /// The degree of parallelism for parallelizable operators.
-  size_t degree = 1;
+  size_t degree;
 
   /// The upper bound on the degree of keyed operators, i.e., operators whose
   /// input must be hash-partitioned by `partition_keys`.
-  uint16_t limit_partitions = parallelism::default_limit_partitions;
+  uint16_t limit_partitions;
 
   /// Controls whether operator-to-operator event channels are fused.
-  parallelism::Fusing fused = parallelism::Fusing::parallel;
+  parallelism::Fusing fused;
 };
 
 namespace parallelism {
 
-/// Resolve the effective parallelism from a pipeline's source text and an
-/// optional CLI flag value. A `// parallelism: <value>` directive in the
-/// leading comment lines of `source` takes precedence over `flag`; if neither
-/// is present, the result is `Disabled`.
+/// The parallelism that applies when nothing requests parallel execution: a
+/// single lane, a single partition, and no channel fusing.
+inline constexpr auto disabled = Parallelism{
+  .degree = 1,
+  .limit_partitions = 1,
+  .fused = Fusing::none,
+};
+
+/// The configuration key that sets the node-wide parallelism.
+inline constexpr auto config_key = std::string_view{"tenzir.parallelism"};
+
+/// Where an effective parallelism value came from.
+enum class Origin {
+  /// A `// parallelism: <value>` directive in the pipeline source.
+  directive,
+  /// The `--parallelism` command-line flag.
+  flag,
+  /// The `tenzir.parallelism` configuration option.
+  config,
+};
+
+/// A human-readable description of `origin`, for use in diagnostics.
+auto describe(Origin origin) -> std::string_view;
+
+/// Resolve the effective parallelism from a pipeline's source text, an
+/// optional CLI flag value, and an optional configuration value. A
+/// `// parallelism: <value>` directive in the leading comment lines of
+/// `source` takes precedence over `flag`, which takes precedence over
+/// `config`; if none is present, the result is `disabled`.
 ///
 /// A value is a degree, optionally followed by comma-separated options:
 /// `<degree>[,limit_partitions=<n>][,fused=<all|parallel|none>]`. The
 /// degree is `disabled`, `max`, or a positive integer. Whitespace around
 /// separators is ignored.
-/// Returns `None{}` if a present value fails to parse.
-auto resolve(std::string_view source, Option<std::string_view> flag)
-  -> Option<Parallelism>;
+/// Returns the origin of the offending value if it fails to parse.
+auto resolve(std::string_view source, Option<std::string_view> flag,
+             Option<std::string_view> config)
+  -> std::expected<Parallelism, Origin>;
 
 } // namespace parallelism
 
@@ -447,7 +474,8 @@ auto optimize(pipeline pipe, OptimizeCtx octx = {}) -> pipeline;
 /// partition keys. The operators are not spawned yet; spawning is deferred to
 /// the executor.
 auto make_plan(pipeline pipe, element_type_tag input, base_ctx ctx,
-               Parallelism parallelism = {}) -> failure_or<Plan>;
+               Parallelism parallelism = parallelism::disabled)
+  -> failure_or<Plan>;
 
 /// Incrementally builds a `Plan` while lowering a pipeline. Operators receive
 /// a reference to it from `Operator::plan` and use it to append nodes and wire
@@ -522,7 +550,8 @@ private:
 
   /// How a channel between two adjacent planned operators should be realized,
   /// honoring the configured parallelism strategy. The decision only depends on
-  /// the nominal degrees of the two operators, not on the configured degree.
+  /// the nominal degrees of the two operators and the fusing strategy, not on
+  /// the configured degree.
   auto derive_kind(const PlannedOperator& up, const PlannedOperator& down,
                    element_type_tag type) const -> ChannelKind;
 

@@ -1,0 +1,4 @@
+// parallelism: 3
+// A directive in the pipeline wins over `tenzir.parallelism`.
+from {x: 1}, {x: 2}
+where x > 0
