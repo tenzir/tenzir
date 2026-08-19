@@ -3,8 +3,6 @@ title: Flat names for builtin operators and functions
 type: change
 authors:
   - mavam
-prs:
-  - 166
 created: 2026-08-18T14:55:38.60116Z
 ---
 

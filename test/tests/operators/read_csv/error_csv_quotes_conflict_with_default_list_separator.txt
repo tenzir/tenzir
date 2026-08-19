@@ -1,0 +1,6 @@
+error: quote character `;` conflicts with `list_separator=";"`
+ --> tests/operators/read_csv/error_csv_quotes_conflict_with_default_list_separator.tql:6:19
+  |
+6 |   read_csv quotes=";"
+  |                   ^^^
+  |
