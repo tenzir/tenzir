@@ -10,6 +10,7 @@
 
 #include <tenzir/chunk.hpp>
 #include <tenzir/defaults.hpp>
+#include <tenzir/detail/enum.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/read_detection.hpp>
@@ -18,6 +19,85 @@
 namespace tenzir::plugins::parquet {
 
 namespace {
+
+TENZIR_ENUM(decimal_format, string, float_);
+
+auto format_decimal_type(std::shared_ptr<arrow::DataType> type,
+                         decimal_format format)
+  -> std::shared_ptr<arrow::DataType> {
+  switch (type->id()) {
+    case arrow::Type::DECIMAL128:
+      return format == decimal_format::string ? arrow::utf8()
+                                              : arrow::float64();
+    case arrow::Type::STRUCT: {
+      auto fields = type->fields();
+      auto changed = false;
+      for (auto& field : fields) {
+        auto field_type = format_decimal_type(field->type(), format);
+        changed |= field_type != field->type();
+        field = field->WithType(std::move(field_type));
+      }
+      return changed ? arrow::struct_(std::move(fields)) : std::move(type);
+    }
+    case arrow::Type::LIST: {
+      auto list_type = std::static_pointer_cast<arrow::ListType>(type);
+      auto value_type = format_decimal_type(list_type->value_type(), format);
+      if (value_type == list_type->value_type()) {
+        return type;
+      }
+      return arrow::list(
+        list_type->value_field()->WithType(std::move(value_type)));
+    }
+    case arrow::Type::MAP: {
+      if (format == decimal_format::float_) {
+        return type;
+      }
+      auto map_type = std::static_pointer_cast<arrow::MapType>(type);
+      auto key_type = format_decimal_type(map_type->key_type(), format);
+      auto item_type = format_decimal_type(map_type->item_type(), format);
+      if (key_type == map_type->key_type()
+          and item_type == map_type->item_type()) {
+        return type;
+      }
+      return std::make_shared<arrow::MapType>(
+        map_type->key_field()->WithType(std::move(key_type)),
+        map_type->item_field()->WithType(std::move(item_type)),
+        map_type->keys_sorted());
+    }
+    default:
+      return type;
+  }
+}
+
+auto format_decimal_arrays(std::shared_ptr<arrow::RecordBatch> batch,
+                           decimal_format format)
+  -> arrow::Result<std::shared_ptr<arrow::RecordBatch>> {
+  auto arrays = arrow::ArrayVector{};
+  auto fields = arrow::FieldVector{};
+  auto changed = false;
+  arrays.reserve(batch->num_columns());
+  fields.reserve(batch->num_columns());
+  for (auto index = 0; index < batch->num_columns(); ++index) {
+    auto array = batch->column(index);
+    auto target_type = format_decimal_type(array->type(), format);
+    if (target_type != array->type()) {
+      ARROW_ASSIGN_OR_RAISE(
+        auto result, arrow::compute::Cast(array, std::move(target_type)));
+      array = result.make_array();
+      changed = true;
+    }
+    arrays.push_back(array);
+    fields.push_back(batch->schema()->field(index)->WithType(array->type()));
+  }
+  if (not changed) {
+    return batch;
+  }
+  auto schema = std::make_shared<arrow::Schema>(std::move(fields),
+                                                batch->schema()->endianness(),
+                                                batch->schema()->metadata());
+  return arrow::RecordBatch::Make(std::move(schema), batch->num_rows(),
+                                  std::move(arrays));
+}
 
 auto inject_tenzir_metadata(std::shared_ptr<arrow::RecordBatch> batch)
   -> std::shared_ptr<arrow::RecordBatch> {
@@ -60,12 +140,17 @@ auto inject_tenzir_metadata(std::shared_ptr<arrow::RecordBatch> batch)
     arrow::key_value_metadata(std::move(keys), std::move(values)));
 }
 
-struct ReadParquetArgs {};
+struct ReadParquetArgs {
+  Option<located<std::string>> decimal_format;
+};
 
 class ReadParquet final : public Operator<chunk_ptr, table_slice> {
 public:
-  explicit ReadParquet(ReadParquetArgs args) {
-    TENZIR_UNUSED(args);
+  explicit ReadParquet(ReadParquetArgs args)
+    : decimal_format_{args.decimal_format ? from_string<decimal_format>(
+                                              args.decimal_format->inner)
+                                              .value_or(decimal_format::string)
+                                          : decimal_format::string} {
   }
 
   auto process(chunk_ptr input, Push<table_slice>&, OpCtx&)
@@ -127,6 +212,15 @@ public:
         co_return FinalizeBehavior::done;
       }
       auto batch = maybe_batch.MoveValueUnsafe();
+      auto formatted_batch
+        = format_decimal_arrays(std::move(batch), decimal_format_);
+      if (not formatted_batch.ok()) {
+        diagnostic::error("failed to format parquet decimals")
+          .note("{}", formatted_batch.status().ToStringWithoutContextLines())
+          .emit(ctx);
+        co_return FinalizeBehavior::done;
+      }
+      batch = std::move(formatted_batch).MoveValueUnsafe();
       /// We need to perform some cleanup, in case the parquet files were not
       /// written by us. Specifically we need to ensure that the slice has a
       /// name and that only metadata that are tenzir attributes exist.
@@ -151,6 +245,7 @@ public:
   }
 
 private:
+  decimal_format decimal_format_ = decimal_format::string;
   std::vector<chunk_ptr> chunks_;
 };
 
@@ -162,6 +257,18 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ReadParquetArgs, ReadParquet>{};
+    auto decimal_format_arg
+      = d.named("decimal_format", &ReadParquetArgs::decimal_format);
+    d.validate([decimal_format_arg](DescribeCtx& ctx) -> Empty {
+      if (auto value = ctx.get(decimal_format_arg);
+          value and not from_string<decimal_format>(value->inner)) {
+        diagnostic::error("unsupported decimal format `{}`", value->inner)
+          .primary(value->source)
+          .note("supported decimal formats are `string` and `float`")
+          .emit(ctx);
+      }
+      return {};
+    });
     return d.without_optimize();
   }
 
