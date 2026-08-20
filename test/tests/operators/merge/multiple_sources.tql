@@ -1,0 +1,8 @@
+// Every source in a plan receives the pipeline input's signals. As soon as
+// there is more than one source, they receive them through a broadcast node
+// that fans out to one port per source. Every one of those ports must carry a
+// channel: a port without one leaves the executor with a lane-less output port.
+from {x: 1}
+merge { from {x: 2} }
+merge { from {x: 3} }
+sort x

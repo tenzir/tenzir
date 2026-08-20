@@ -1,0 +1,6 @@
+{
+  filename: "single/data.json",
+}
+{
+  injected: true,
+}

@@ -1,0 +1,3 @@
+// A pipeline without operators still needs a plan that has an input and an
+// output, so the boundary is routed through a single pass node. Compare
+// `language/empty_pipeline`, which checks that executing it succeeds.

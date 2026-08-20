@@ -76,7 +76,6 @@ constexpr auto extract_root_path(glob const& glob_, std::string const& expanded)
 } // namespace
 
 auto FromArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
-  co_await OperatorBase::start(ctx);
   auto resolved = co_await resolve_url(ctx);
   if (not resolved) {
     co_return;

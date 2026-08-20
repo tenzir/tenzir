@@ -1637,7 +1637,6 @@ public:
   auto operator=(const ServeImpl&) -> ServeImpl& = delete;
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    co_await OperatorBase::start(ctx);
     bytes_counter_
       = ctx.make_counter(MetricsLabel{"operator", "serve"},
                          MetricsDirection::write, MetricsVisibility::internal_,

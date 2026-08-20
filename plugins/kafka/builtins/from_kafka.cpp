@@ -485,7 +485,6 @@ public:
   auto operator=(FromKafka const&) -> FromKafka& = delete;
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    co_await OperatorBase::start(ctx);
     if (done_) {
       co_return;
     }
