@@ -297,6 +297,10 @@ FROM tenzir-untested AS tenzir-integration
 COPY --chown=tenzir:tenzir libtenzir/aux/opentelemetry-proto/ \
     ./libtenzir/aux/opentelemetry-proto/
 COPY --chown=tenzir:tenzir test/ ./test
+# Pin tenzir-test to the version used by the nix checks (see
+# nix/test-dependencies.nix). `uv tool run` otherwise resolves the latest PyPI
+# release, whose different stdout/stderr handling reorders diagnostics relative
+# to the reference outputs.
 RUN XDG_CACHE_HOME=/tmp XDG_DATA_HOME=/tmp \
     TENZIR_BINARY="$PREFIX/bin/tenzir" \
     TENZIR_NODE_BINARY="$PREFIX/bin/tenzir-node" \
@@ -307,7 +311,7 @@ RUN XDG_CACHE_HOME=/tmp XDG_DATA_HOME=/tmp \
     --with googleapis-common-protos \
     --with protobuf \
     --with trustme \
-    tenzir-test \
+    tenzir-test==1.10.3 \
     --root test \
     -j $(nproc) && \
     echo "success" > /tmp/tenzir-integration-result
