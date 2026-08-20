@@ -29,8 +29,10 @@
 #include <folly/Demangle.h>
 #include <folly/OperationCancelled.h>
 #include <folly/coro/BoundedQueue.h>
+#include <folly/coro/CurrentExecutor.h>
 
 #include <algorithm>
+#include <chrono>
 #include <limits>
 #include <mutex>
 
@@ -1274,6 +1276,13 @@ private:
   }
 
   auto main_loop() -> Task<void> {
+    // Cooperative preemption for saturated operators.
+    // If input stays ready, one continuation can monopolize a pool thread,
+    // delay cancellation, and hide CPU from per-task profiling.
+    // The budget tracks continuous execution and forces a reschedule every
+    // quantum; a single `process()` call still cannot be preempted.
+    constexpr auto preemption_quantum = std::chrono::milliseconds{100};
+    auto quantum_start = std::chrono::steady_clock::now();
     while (true) {
       co_await folly::coro::co_safe_point;
       ticks_ += 1;
@@ -1294,6 +1303,7 @@ private:
           }
           break;
       }
+      auto before_next = std::chrono::steady_clock::now();
       auto message = co_await driver_.next([&](Event const& event) {
         return match(
           event,
@@ -1313,9 +1323,23 @@ private:
       if (not message) {
         break;
       }
+      // If `driver_.next()` blocked, the previous continuation already ended.
+      // Reset the budget so idle time is not charged to the resumed work.
+      // A synchronous `next()` leaves the budget running.
+      if (auto after_next = std::chrono::steady_clock::now();
+          after_next - before_next >= preemption_quantum) {
+        quantum_start = after_next;
+      }
       co_await co_match(std::move(*message), [&](auto message) {
         return process(std::move(message));
       });
+      // End a long-running continuation and start a fresh one on the same
+      // operator executor once it consumed a full quantum.
+      auto now = std::chrono::steady_clock::now();
+      if (now - quantum_start >= preemption_quantum) {
+        co_await folly::coro::co_reschedule_on_current_executor;
+        quantum_start = std::chrono::steady_clock::now();
+      }
     }
   }
 
