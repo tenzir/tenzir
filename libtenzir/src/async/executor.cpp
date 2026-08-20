@@ -1276,11 +1276,13 @@ private:
   }
 
   auto main_loop() -> Task<void> {
-    // Cooperative preemption for saturated operators.
-    // If input stays ready, one continuation can monopolize a pool thread,
-    // delay cancellation, and hide CPU from per-task profiling.
-    // The budget tracks continuous execution and forces a reschedule every
-    // quantum; a single `process()` call still cannot be preempted.
+    // Cooperative preemption for saturated operators. If input stays ready,
+    // one continuation can monopolize a pool thread, delay cancellation, and
+    // hide CPU from per-task profiling. Forcing a reschedule once a
+    // continuation has run for a quantum bounds all three. This is a
+    // best-effort bound: it preempts the saturated case exactly, but a
+    // non-saturated operator may incur at most one spurious reschedule per
+    // quantum (negligible, and free while it is blocked).
     constexpr auto preemption_quantum = std::chrono::milliseconds{100};
     auto quantum_start = std::chrono::steady_clock::now();
     while (true) {
@@ -1323,9 +1325,9 @@ private:
       if (not message) {
         break;
       }
-      // If `driver_.next()` blocked, the previous continuation already ended.
-      // Reset the budget so idle time is not charged to the resumed work.
-      // A synchronous `next()` leaves the budget running.
+      // A blocking `next()` already ended the continuation; reset the budget so
+      // idle time is not charged to the resumed work. A synchronous `next()`
+      // leaves it running.
       if (auto after_next = std::chrono::steady_clock::now();
           after_next - before_next >= preemption_quantum) {
         quantum_start = after_next;
@@ -1333,8 +1335,7 @@ private:
       co_await co_match(std::move(*message), [&](auto message) {
         return process(std::move(message));
       });
-      // End a long-running continuation and start a fresh one on the same
-      // operator executor once it consumed a full quantum.
+      // Yield once a continuation has run for a full quantum.
       auto now = std::chrono::steady_clock::now();
       if (now - quantum_start >= preemption_quantum) {
         co_await folly::coro::co_reschedule_on_current_executor;
