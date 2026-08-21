@@ -129,6 +129,19 @@ public:
     return **this == other;
   }
 
+  /// Hands the shared ownership to an API that speaks `std::shared_ptr`.
+  ///
+  /// The counterpart of `from_non_null`, and the way out for a library that
+  /// takes a `shared_ptr` and keeps it — proxygen's HTTP handlers, for one.
+  /// Consuming, because the point is to give the ownership away rather than to
+  /// widen it: an `Arc` left behind would be a second owner whose `const` no
+  /// longer means anything, since whoever received the `shared_ptr` can mutate
+  /// through it.
+  auto into_shared() && -> std::shared_ptr<T> {
+    TENZIR_ASSERT(ptr_);
+    return std::move(ptr_);
+  }
+
   /// Returns the number of `Arc` instances sharing ownership.
   auto strong_count() const -> size_t {
     return static_cast<size_t>(ptr_.use_count());
