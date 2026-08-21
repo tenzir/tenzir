@@ -273,15 +273,34 @@ void hash_append(HashAlgorithm& h,
   hash_append(h, m.size());
 }
 
+// -- unordered containers ----------------------------------------------------
+
+/// Mixes the elements of an unordered container, whatever order it holds them
+/// in.
+///
+/// Appending them one by one would make the digest depend on iteration order,
+/// which for an unordered container is unspecified: two containers that compare
+/// equal can iterate differently, and would then hash differently — breaking
+/// the one thing a hash has to promise. So each element is digested on its own
+/// and the digests are added, because addition does not care about order.
+template <class HashAlgorithm, class Container>
+void hash_append_unordered(HashAlgorithm& h, const Container& xs) noexcept {
+  auto combined = size_t{0};
+  for (const auto& x : xs) {
+    auto element = HashAlgorithm{};
+    hash_append(element, x);
+    combined += static_cast<size_t>(std::move(element).finish());
+  }
+  hash_append(h, combined);
+  hash_append(h, xs.size());
+}
+
 // -- unordered_set -----------------------------------------------------------
 
 template <class HashAlgorithm, class Key, class Hash, class Eq, class Alloc>
 void hash_append(HashAlgorithm& h,
                  const std::unordered_set<Key, Hash, Eq, Alloc>& s) noexcept {
-  for (const auto& x : s) {
-    hash_append(h, x);
-  }
-  hash_append(h, s.size());
+  hash_append_unordered(h, s);
 }
 
 // -- unordered_map -----------------------------------------------------------
@@ -290,10 +309,7 @@ template <class HashAlgorithm, class K, class T, class Hash, class Eq,
           class Alloc>
 void hash_append(HashAlgorithm& h,
                  const std::unordered_map<K, T, Hash, Eq, Alloc>& m) noexcept {
-  for (const auto& x : m) {
-    hash_append(h, x);
-  }
-  hash_append(h, m.size());
+  hash_append_unordered(h, m);
 }
 
 // -- tuple -------------------------------------------------------------------
