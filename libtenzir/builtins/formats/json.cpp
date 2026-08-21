@@ -1991,8 +1991,8 @@ public:
     d.optimization_order(&ReadJsonArgs::order);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       msb(ctx);
-      if (ctx.get(jobs)) {
-        diagnostic::error("`_jobs` is not supported for `read_gelf` in neo")
+      if (auto j = ctx.get(jobs); j and *j == 0) {
+        diagnostic::error("`_jobs` must be greater than zero")
           .primary(ctx.get_location(jobs).value_or(location::unknown))
           .emit(ctx);
       }
