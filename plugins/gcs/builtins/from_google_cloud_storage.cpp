@@ -245,6 +245,11 @@ public:
       = Describer<FromGoogleCloudStorageArgs, FromGoogleCloudStorageOperator>{};
     d.named("anonymous", &FromGoogleCloudStorageArgs::anonymous);
     FromArrowFsArgs::describe_to(d);
+    // Instances split the discovered files among themselves by path. We cannot
+    // restrict this to globbing URLs because `url` is a secret that is only
+    // resolved at runtime; instances that end up without files simply finish
+    // immediately.
+    d.parallelizable();
     return d.without_optimize();
   }
 };

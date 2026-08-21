@@ -1,0 +1,21 @@
+{
+  filename: "lifecycle/remove-target.json",
+}
+{
+  filename: "lifecycle/rename-target.json",
+}
+{
+  filename: "multi/data-001.json",
+}
+{
+  filename: "multi/data-002.json",
+}
+{
+  filename: "nested/subdir-a/data.json",
+}
+{
+  filename: "nested/subdir-b/data.json",
+}
+{
+  filename: "single/data.json",
+}

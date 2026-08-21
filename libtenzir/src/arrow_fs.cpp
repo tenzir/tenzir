@@ -13,7 +13,6 @@
 #include "tenzir/chunk.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/fs_url_template.hpp"
@@ -75,7 +74,8 @@ constexpr auto extract_root_path(glob const& glob_, std::string const& expanded)
 
 } // namespace
 
-auto FromArrowFsOperator::start(OpCtx& ctx) -> Task<void> {
+auto FromArrowFsOperator::start(JobId job, OpCtx& ctx) -> Task<void> {
+  job_ = job;
   auto resolved = co_await resolve_url(ctx);
   if (not resolved) {
     co_return;
@@ -116,6 +116,9 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
     msg,
     [this, &ctx](ScanComplete& scan) -> Task<void> {
       for (auto& file : scan.files) {
+        if (not owns(file.path())) {
+          continue;
+        }
         auto inserted = current_.emplace(file).second;
         if (not inserted or previous_.contains(file)) {
           continue;
@@ -131,19 +134,16 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
       // `remove` are used with `watch`.
       std::swap(previous_, current_);
       current_.clear();
-      while (not pending_.empty()) {
-        if (auto slot = find_free_slot()) {
-          start_job_in_slot(*slot, ctx);
-        } else {
-          break;
-        }
+      if (not processing_) {
+        start_next_job(ctx);
       }
       co_return;
     },
     [this, &ctx](FileOpen& open) -> Task<void> {
-      auto slot = find_slot_by_job(open.job_id);
-      TENZIR_ASSERT(slot);
-      auto& file_state = *processing_[*slot];
+      if (not is_current_file(open.file_id)) {
+        co_return;
+      }
+      auto& file_state = *processing_;
       if (not open.istream.ok()) {
         diagnostic::error("failed to open `{}`", file_state.path)
           .primary(base_args_.url)
@@ -153,8 +153,7 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
                                  : std::move(x);
           })
           .emit(ctx);
-        processing_[*slot].reset();
-        start_job_in_slot(*slot, ctx);
+        skip_job(ctx);
         co_return;
       }
       file_state.istream = open.istream.MoveValueUnsafe();
@@ -165,21 +164,20 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
         {"mtime", file_state.mtime},
       };
       pipe.bind(base_args_.file_info, f_info);
-      if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(open.job_id,
+      if (not co_await ctx.plan_and_spawn_sub<chunk_ptr>(open.file_id,
                                                          std::move(pipe))) {
-        processing_[*slot].reset();
-        start_job_in_slot(*slot, ctx);
+        skip_job(ctx);
         co_return;
       }
       // Queue the first read.
       enqueue_task(ctx,
-                   [job_id = open.job_id,
+                   [file_id = open.file_id,
                     istream = file_state.istream] -> Task<AwaitResult> {
                      auto read = co_await spawn_blocking([=] {
                        return istream->Read(read_size);
                      });
                      co_return ReadProgress{
-                       job_id,
+                       file_id,
                        std::move(read),
                      };
                    });
@@ -187,14 +185,15 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
     [this, &ctx](ReadProgress& read) -> Task<void> {
       // The subpipeline can be torn down while a read is in-flight.
       // If it no longer exists, this read is stale.
-      auto sub = ctx.get_sub(read.job_id);
+      auto sub = ctx.get_sub(read.file_id);
       if (not sub) {
         co_return;
       }
       auto& pipe = as<SubHandle<chunk_ptr>>(*sub);
-      auto slot = find_slot_by_job(read.job_id);
-      TENZIR_ASSERT(slot);
-      auto& file_state = *processing_[*slot];
+      if (not is_current_file(read.file_id)) {
+        co_return;
+      }
+      auto& file_state = *processing_;
       if (not read.result.ok()) {
         diagnostic::error("failed to read from `{}`", file_state.path)
           .primary(base_args_.url)
@@ -225,23 +224,24 @@ auto FromArrowFsOperator::process_task(Any result, Push<table_slice>&,
         co_return;
       }
       enqueue_task(ctx,
-                   [job_id = read.job_id,
+                   [file_id = read.file_id,
                     istream = file_state.istream] -> Task<AwaitResult> {
                      auto read = co_await spawn_blocking([=] {
                        return istream->Read(read_size);
                      });
                      co_return ReadProgress{
-                       job_id,
+                       file_id,
                        std::move(read),
                      };
                    });
     },
     [this, &ctx](SubFinished& sub) -> Task<void> {
-      auto slot = find_slot_by_job(sub.job_id);
-      TENZIR_ASSERT(slot);
-      auto path = std::move(processing_[*slot]->path);
-      processing_[*slot].reset();
-      start_job_in_slot(*slot, ctx);
+      if (not is_current_file(sub.file_id)) {
+        co_return;
+      }
+      auto path = std::move(processing_->path);
+      processing_.reset();
+      start_next_job(ctx);
       if (ctx.checkpoint_settings()) {
         cleanup_pending_.push_back(std::move(path));
       } else {
@@ -281,10 +281,8 @@ auto FromArrowFsOperator::state() -> OperatorState {
   if (not pending_.empty()) {
     return OperatorState::normal;
   }
-  for (auto& slot : processing_) {
-    if (slot) {
-      return OperatorState::normal;
-    }
+  if (processing_) {
+    return OperatorState::normal;
   }
   return OperatorState::done;
 }
@@ -293,7 +291,7 @@ auto FromArrowFsOperator::snapshot(Serde& serde) -> void {
   serde("scan_complete_", scan_complete_);
   serde("pending_", pending_);
   serde("processing_", processing_);
-  serde("next_job_id_", next_job_id_);
+  serde("next_file_id_", next_file_id_);
   serde("cleanup_pending_", cleanup_pending_);
   serde("previous_", previous_);
 }
@@ -357,76 +355,77 @@ auto FromArrowFsOperator::post_commit(OpCtx& ctx) -> Task<void> {
   co_await cleanup_files(ctx.dh());
 }
 
-auto FromArrowFsOperator::restore(OpCtx& ctx) -> Task<void> {
-  // TODO: Parallelize this.
-  for (const auto& [index, slot] : detail::enumerate(processing_)) {
-    if (not slot) {
-      continue;
-    }
-    auto& state = *slot;
-    // The path can be empty if the file was put to be cleaned-up but the slot
-    // was not reset.
-    if (state.path.empty()) {
-      slot.reset();
-      continue;
-    }
-    // Verify file exists and mtime matches.
-    auto info_future = fs_->GetFileInfoAsync({state.path});
-    auto info_result = co_await arrow_future_to_task(std::move(info_future));
-    if (not info_result.ok()) {
-      slot.reset();
-      continue;
-    }
-    auto info = info_result.MoveValueUnsafe();
-    if (info.empty() or not info[0].IsFile()) {
-      slot.reset();
-      continue;
-    }
-    auto& file_info = info[0];
-    auto file_mtime = to_option_time(file_info.mtime());
-    if (file_mtime != state.mtime) {
-      diagnostic::warning("file `{}` was modified since last checkpoint",
-                          state.path)
-        .primary(base_args_.url)
-        .emit(ctx);
-      if (state.offset < file_info.size()) {
-        // Assume the file was appended to.
-        state.mtime = file_mtime;
-      } else {
-        if (base_args_.watch) {
-          pending_.push_back(TrackedFile{
-            .path = state.path,
-            .mtime = file_mtime,
-            .istream = nullptr,
-          });
-        }
-        slot.reset();
-        continue;
-      }
-    }
-    // Reopen file.
-    auto open_future = fs_->OpenInputStreamAsync(state.path);
-    auto open_result = co_await arrow_future_to_task(std::move(open_future));
-    if (not open_result.ok()) {
-      diagnostic::warning("failed to open stream for `{}`: {}", state.path,
-                          open_result.status().ToStringWithoutContextLines())
-        .primary(base_args_.url)
-        .emit(ctx);
-      slot.reset();
-      continue;
-    }
-    state.istream = open_result.MoveValueUnsafe();
-    // PERF: Downloads skipped bytes.
-    if (auto advance = state.istream->Advance(state.offset); not advance.ok()) {
-      diagnostic::warning("failed to advance restored stream for `{}`: {}",
-                          state.path, advance.ToStringWithoutContextLines())
-        .primary(base_args_.url)
-        .emit(ctx);
-      slot.reset();
-      continue;
-    }
-    previous_.emplace(file_info);
+auto FromArrowFsOperator::restore_processing(OpCtx& ctx) -> Task<void> {
+  if (not processing_) {
+    co_return;
   }
+  auto& state = *processing_;
+  // The path can be empty if the file was put to be cleaned-up but the state
+  // was not reset.
+  if (state.path.empty()) {
+    processing_.reset();
+    co_return;
+  }
+  // Verify file exists and mtime matches.
+  auto info_future = fs_->GetFileInfoAsync({state.path});
+  auto info_result = co_await arrow_future_to_task(std::move(info_future));
+  if (not info_result.ok()) {
+    processing_.reset();
+    co_return;
+  }
+  auto info = info_result.MoveValueUnsafe();
+  if (info.empty() or not info[0].IsFile()) {
+    processing_.reset();
+    co_return;
+  }
+  auto& file_info = info[0];
+  auto file_mtime = to_option_time(file_info.mtime());
+  if (file_mtime != state.mtime) {
+    diagnostic::warning("file `{}` was modified since last checkpoint",
+                        state.path)
+      .primary(base_args_.url)
+      .emit(ctx);
+    if (state.offset < file_info.size()) {
+      // Assume the file was appended to.
+      state.mtime = file_mtime;
+    } else {
+      if (base_args_.watch) {
+        pending_.push_back(TrackedFile{
+          .path = state.path,
+          .mtime = file_mtime,
+          .istream = nullptr,
+        });
+      }
+      processing_.reset();
+      co_return;
+    }
+  }
+  // Reopen file.
+  auto open_future = fs_->OpenInputStreamAsync(state.path);
+  auto open_result = co_await arrow_future_to_task(std::move(open_future));
+  if (not open_result.ok()) {
+    diagnostic::warning("failed to open stream for `{}`: {}", state.path,
+                        open_result.status().ToStringWithoutContextLines())
+      .primary(base_args_.url)
+      .emit(ctx);
+    processing_.reset();
+    co_return;
+  }
+  state.istream = open_result.MoveValueUnsafe();
+  // PERF: Downloads skipped bytes.
+  if (auto advance = state.istream->Advance(state.offset); not advance.ok()) {
+    diagnostic::warning("failed to advance restored stream for `{}`: {}",
+                        state.path, advance.ToStringWithoutContextLines())
+      .primary(base_args_.url)
+      .emit(ctx);
+    processing_.reset();
+    co_return;
+  }
+  previous_.emplace(file_info);
+}
+
+auto FromArrowFsOperator::restore(OpCtx& ctx) -> Task<void> {
+  co_await restore_processing(ctx);
   // Restore pending files
   auto restored = std::deque<TrackedFile>{};
   for (auto& file : pending_) {
@@ -453,26 +452,32 @@ auto FromArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
       auto root_result
         = co_await arrow_future_to_task(fs_->GetFileInfoAsync({root_path_}));
       if (not root_result.ok()) {
-        diagnostic::error("failed to scan `{}`", root_path_)
-          .primary(base_args_.url)
-          .note(root_result.status().ToStringWithoutContextLines())
-          .emit(dh);
+        if (is_scan_reporter()) {
+          diagnostic::error("failed to scan `{}`", root_path_)
+            .primary(base_args_.url)
+            .note(root_result.status().ToStringWithoutContextLines())
+            .emit(dh);
+        }
       } else {
         TENZIR_ASSERT(root_result->size() == 1);
         auto root_info = std::move((*root_result)[0]);
         switch (root_info.type()) {
           case arrow::fs::FileType::NotFound:
             if (not base_args_.watch) {
-              diagnostic::error("`{}` does not exist", root_path_)
-                .primary(base_args_.url)
-                .emit(dh);
+              if (is_scan_reporter()) {
+                diagnostic::error("`{}` does not exist", root_path_)
+                  .primary(base_args_.url)
+                  .emit(dh);
+              }
               co_return;
             }
             break;
           case arrow::fs::FileType::Unknown:
-            diagnostic::error("`{}` is unknown", root_path_)
-              .primary(base_args_.url)
-              .emit(dh);
+            if (is_scan_reporter()) {
+              diagnostic::error("`{}` is unknown", root_path_)
+                .primary(base_args_.url)
+                .emit(dh);
+            }
             co_return;
           case arrow::fs::FileType::File:
             if (matches(root_info.path(), glob_)) {
@@ -480,9 +485,11 @@ auto FromArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
               break;
             }
             if (not base_args_.watch) {
-              diagnostic::error("`{}` is a file, not a directory", root_path_)
-                .primary(base_args_.url)
-                .emit(dh);
+              if (is_scan_reporter()) {
+                diagnostic::error("`{}` is a file, not a directory", root_path_)
+                  .primary(base_args_.url)
+                  .emit(dh);
+              }
               co_return;
             }
             break;
@@ -494,10 +501,12 @@ auto FromArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
             while (true) {
               auto batch = co_await arrow_future_to_task(gen());
               if (not batch.ok()) {
-                diagnostic::error("failed to scan `{}`", root_path_)
-                  .primary(base_args_.url)
-                  .note(batch.status().ToStringWithoutContextLines())
-                  .emit(dh);
+                if (is_scan_reporter()) {
+                  diagnostic::error("failed to scan `{}`", root_path_)
+                    .primary(base_args_.url)
+                    .note(batch.status().ToStringWithoutContextLines())
+                    .emit(dh);
+                }
                 co_return;
               }
               if (batch->empty()) {
@@ -513,7 +522,7 @@ auto FromArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
                 // that some object stores create. Real directories on local
                 // filesystems are not markers and must not be deleted.
                 if (base_args_.remove and file.IsDirectory()
-                    and fs_->type_name() != "local") {
+                    and fs_->type_name() != "local" and is_scan_reporter()) {
                   co_await remove_file(file.path() + '/', dh);
                 }
               }
@@ -551,39 +560,38 @@ auto FromArrowFsOperator::spawn_scan_task(OpCtx& ctx) -> void {
   });
 }
 
-auto FromArrowFsOperator::start_job_in_slot(size_t slot, OpCtx& ctx) -> void {
+auto FromArrowFsOperator::owns(std::string_view path) const -> bool {
+  return job_.owns(path);
+}
+
+auto FromArrowFsOperator::is_scan_reporter() const -> bool {
+  return job_.index == 0;
+}
+
+auto FromArrowFsOperator::start_next_job(OpCtx& ctx) -> void {
+  TENZIR_ASSERT(not processing_);
   if (pending_.empty()) {
     return;
   }
-  processing_[slot] = std::move(pending_.front());
-  processing_[slot]->job_id = ++next_job_id_;
+  processing_ = std::move(pending_.front());
+  processing_->file_id = ++next_file_id_;
   pending_.pop_front();
   enqueue_task(ctx,
-               [this, job_id = processing_[slot]->job_id,
-                path = processing_[slot]->path] mutable -> Task<AwaitResult> {
+               [this, file_id = processing_->file_id,
+                path = processing_->path] mutable -> Task<AwaitResult> {
                  auto result = co_await arrow_future_to_task(
                    fs_->OpenInputStreamAsync(path));
-                 co_return FileOpen{job_id, std::move(result)};
+                 co_return FileOpen{file_id, std::move(result)};
                });
 }
 
-auto FromArrowFsOperator::find_free_slot() const -> Option<size_t> {
-  for (auto i = size_t{0}; i < max_jobs; ++i) {
-    if (not processing_[i]) {
-      return i;
-    }
-  }
-  return None{};
+auto FromArrowFsOperator::skip_job(OpCtx& ctx) -> void {
+  processing_.reset();
+  start_next_job(ctx);
 }
 
-auto FromArrowFsOperator::find_slot_by_job(uint64_t job_id) const
-  -> Option<size_t> {
-  for (auto i = size_t{0}; i < max_jobs; ++i) {
-    if (processing_[i] and processing_[i]->job_id == job_id) {
-      return i;
-    }
-  }
-  return None{};
+auto FromArrowFsOperator::is_current_file(uint64_t file_id) const -> bool {
+  return processing_ and processing_->file_id == file_id;
 }
 
 auto FromArrowFsOperator::is_globbing() const -> bool {

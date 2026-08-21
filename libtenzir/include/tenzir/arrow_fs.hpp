@@ -33,7 +33,6 @@
 #include <folly/coro/UnboundedQueue.h>
 #include <folly/futures/Future.h>
 
-#include <array>
 #include <deque>
 #include <unordered_map>
 #include <unordered_set>
@@ -132,14 +131,14 @@ struct TrackedFile {
   std::string path;
   Option<time> mtime;
   int64_t offset = 0;
-  uint64_t job_id = 0;
+  uint64_t file_id = 0;
   std::shared_ptr<arrow::io::InputStream> istream;
 
   friend auto inspect(auto& f, TrackedFile& x) -> bool {
     return f.object(x).fields(f.field("path", x.path),
                               f.field("offset", x.offset),
                               f.field("mtime", x.mtime),
-                              f.field("job_id", x.job_id));
+                              f.field("file_id", x.file_id));
   }
 };
 
@@ -148,21 +147,21 @@ struct ScanComplete {
   std::vector<arrow::fs::FileInfo> files;
 };
 
-/// Result of opening a file for reading in a processing slot.
+/// Result of opening a file for reading.
 struct FileOpen {
-  uint64_t job_id;
+  uint64_t file_id;
   arrow::Result<std::shared_ptr<arrow::io::InputStream>> istream;
 };
 
 /// Result of reading a chunk from an active file.
 struct ReadProgress {
-  uint64_t job_id;
+  uint64_t file_id;
   arrow::Result<std::shared_ptr<arrow::Buffer>> result;
 };
 
-/// Signals that a subpipeline has finished and its slot can be freed.
+/// Signals that a subpipeline has finished.
 struct SubFinished {
-  uint64_t job_id;
+  uint64_t file_id;
 };
 
 using AwaitResult = variant<ScanComplete, FileOpen, ReadProgress, SubFinished>;
@@ -228,16 +227,24 @@ struct MakeFilesystemResult {
 /// The base class handles:
 ///   - File discovery (with glob matching)
 ///   - Watch mode (periodic re-scanning)
-///   - Job queue management (concurrent file processing)
+///   - Job queue management (one file at a time)
 ///   - Subpipeline spawning per file
 ///   - File cleanup (remove/rename after processing)
+///
+/// Parallelism:
+///   Every instance scans the whole directory, but only claims the files that
+///   hash to its own `JobId`. Ownership depends on the path alone, so
+///   it is stable across rescans in watch mode and across restarts, and every
+///   file is read, removed, and renamed by exactly one instance. An instance
+///   processes its files one after another, so the number of files read at the
+///   same time is the degree of parallelism.
 class FromArrowFsOperator : public Operator<void, table_slice> {
 public:
   explicit FromArrowFsOperator(FromArrowFsArgs args)
     : base_args_{std::move(args)} {
   }
 
-  auto start(OpCtx& ctx) -> Task<void> final;
+  auto start(JobId job, OpCtx& ctx) -> Task<void> final;
   auto await_task(diagnostic_handler& dh) const -> Task<Any> final;
   auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> final;
@@ -273,18 +280,32 @@ protected:
   }
 
 private:
-  static constexpr size_t max_jobs = 10;
   static constexpr size_t read_size = 10uz * 1024 * 1024;
 
   auto cleanup_file(std::string path, diagnostic_handler& dh) const
     -> Task<void>;
   auto cleanup_files(diagnostic_handler& dh) -> Task<void>;
   auto restore(OpCtx& ctx) -> Task<void>;
+  auto restore_processing(OpCtx& ctx) -> Task<void>;
   auto spawn_scan_task(OpCtx& ctx) -> void;
   auto is_globbing() const -> bool;
-  auto find_free_slot() const -> Option<size_t>;
-  auto find_slot_by_job(uint64_t job_id) const -> Option<size_t>;
-  auto start_job_in_slot(size_t slot, OpCtx& ctx) -> void;
+  /// Whether this instance is responsible for `path`.
+  auto owns(std::string_view path) const -> bool;
+
+  /// Whether this instance reports scan-level problems and cleans up directory
+  /// markers. All instances scan the same directory, so exactly one of them
+  /// must speak up to avoid emitting every scan diagnostic `degree` times.
+  auto is_scan_reporter() const -> bool;
+
+  /// Whether `file_id` identifies the file currently being processed. Results
+  /// of an abandoned file can still arrive after the next one started.
+  auto is_current_file(uint64_t file_id) const -> bool;
+
+  /// Start processing the next pending file, if any.
+  auto start_next_job(OpCtx& ctx) -> void;
+
+  /// Abandon the file currently being processed and take the next one.
+  auto skip_job(OpCtx& ctx) -> void;
 
   template <class F>
     requires std::is_invocable_r_v<Task<AwaitResult>, F>
@@ -299,16 +320,20 @@ private:
   glob glob_;
   std::string root_path_;
 
+  /// Identifies this instance among the parallel instances of this operator.
+  JobId job_;
+
   bool scan_complete_ = false;
   SeenFileSet previous_;
   SeenFileSet current_;
   std::deque<TrackedFile> pending_;
-  std::array<Option<TrackedFile>, max_jobs> processing_{};
-  uint64_t next_job_id_ = 0;
+  Option<TrackedFile> processing_;
+  uint64_t next_file_id_ = 0;
   std::vector<std::string> cleanup_pending_;
   mutable Box<BoundedQueue<AwaitResult>> results_{
     std::in_place,
-    max_jobs + 1,
+    // One each for the scan task and the file being processed.
+    2,
   };
   MetricsCounter bytes_read_counter_;
   MetricsCounter events_read_counter_;

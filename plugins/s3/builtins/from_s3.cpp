@@ -445,6 +445,11 @@ class from_s3 final : public operator_plugin2<from_s3_operator>,
         std::ignore = aws_iam_options::from_record(*iam, ctx);
       }
     });
+    // Instances split the discovered files among themselves by path. We cannot
+    // restrict this to globbing URLs because `url` is a secret that is only
+    // resolved at runtime; instances that end up without files simply finish
+    // immediately.
+    d.parallelizable();
     return d.without_optimize();
   }
 };

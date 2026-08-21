@@ -106,6 +106,11 @@ public:
     auto d = Describer<FromFileArgs, FromFileOperator>{};
     FromArrowFsArgs::describe_to(d);
     d.named("mmap", &FromFileArgs::mmap);
+    // Instances split the discovered files among themselves by path. We cannot
+    // restrict this to globbing URLs because `url` is a secret that is only
+    // resolved at runtime; instances that end up without files simply finish
+    // immediately.
+    d.parallelizable();
     return d.without_optimize();
   }
 };

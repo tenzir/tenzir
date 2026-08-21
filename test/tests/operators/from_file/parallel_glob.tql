@@ -1,0 +1,7 @@
+// parallelism: 4
+// Every instance scans the whole tree but only claims the files that hash to
+// it, so each file is read exactly once no matter the degree of parallelism.
+from_file env("FILE_ROOT") + "/**/*.json" {
+  read_json
+}
+sort filename
