@@ -1,0 +1,24 @@
+{
+  x: 12.3,
+  record: {
+    amount: 1.25,
+  },
+  xs: [
+    1.1,
+    null,
+  ],
+}
+{
+  x: null,
+  record: null,
+  xs: null,
+}
+{
+  x: -4.5,
+  record: {
+    amount: null,
+  },
+  xs: [
+    -2.5,
+  ],
+}
