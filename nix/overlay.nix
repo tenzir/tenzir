@@ -98,6 +98,25 @@ in
   musl = callFunction ./overrides/musl.nix { inherit (prevPkgs) musl; };
   mvfst = callFunction ./overrides/mvfst.nix { inherit (prevPkgs) mvfst; };
   ngtcp2 = callFunction ./overrides/ngtcp2.nix { inherit (prevPkgs) ngtcp2; };
+  # `deployment/` exports over OTLP/HTTP, and upstream builds those exporters
+  # only when asked. What enabling them adds is protobuf, which is already here
+  # for grpc and google-cloud-cpp — the same one from the same nixpkgs, so there
+  # is no second copy to fight over protobuf's descriptor registry.
+  opentelemetry-cpp =
+    (prevPkgs.opentelemetry-cpp.override { enableHttp = true; }).overrideAttrs
+      (baseAttrs: {
+        # These tests are only built when the exporters are, so upstream never
+        # runs them and its patch for network-hungry tests does not cover them.
+        # This one asks for port 4318 by name while ctest runs the suite in
+        # parallel and another exporter test already holds it, so it fails on
+        # the port rather than on anything it set out to check.
+        checkPhase = ''
+          runHook preCheck
+          ctest --output-on-failure --exclude-regex \
+            'OtlpHttpExporterRetryIntegrationTests'
+          runHook postCheck
+        '';
+      });
   protobufc = callFunction ./overrides/protobufc.nix { inherit (prevPkgs) protobufc; };
   rabbitmq-c = callFunction ./overrides/rabbitmq-c.nix { inherit (prevPkgs) rabbitmq-c; };
   restinio = callFunction ./overrides/restinio.nix { inherit (prevPkgs) restinio; };

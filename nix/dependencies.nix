@@ -108,10 +108,9 @@ in
     # tenzir/aws_credentials.hpp includes <aws/...>, and TenzirConfig.cmake
     # requires the SDK for that reason.
     aws-sdk-cpp-tenzir
-    # For `deployment/`, which the engine adds as a subdirectory. Only the API
-    # and SDK are used: its OTLP exporters are absent from this build
-    # (`WITH_OTLP_HTTP=OFF`), and `deployment/src/telemetry.cpp` writes OTLP
-    # itself rather than turning them on and pulling in protobuf and libcurl.
+    # For `deployment/`, which the engine adds as a subdirectory. Its OTLP
+    # exporters are what `deployment/src/telemetry.cpp` exports through, and
+    # `overlay.nix` is where the build that has them is asked for.
     opentelemetry-cpp
     boost
     caf
