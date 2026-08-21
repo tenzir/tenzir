@@ -1,0 +1,5 @@
+from_file f"{env("TENZIR_TEST_ROOT")}/tests/operators/read_gelf/basic.stdin" {
+  unordered {
+    read_gelf _jobs=2
+  }
+}
