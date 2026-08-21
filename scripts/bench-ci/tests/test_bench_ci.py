@@ -622,7 +622,7 @@ def test_list_workflow_runs_spans_renamed_workflow_files(
         queried.append(workflow)
         # GitHub keys runs by workflow file path, so a baseline at a commit
         # built before the rename is only reachable under the old name.
-        if workflow == "engine.yaml":
+        if workflow != "engine.yaml":
             raise common_module.GhCommandError(
                 1, ["gh", *args], stderr="could not find any workflows named"
             )
@@ -634,7 +634,7 @@ def test_list_workflow_runs_spans_renamed_workflow_files(
         "tenzir/mono", filters=["--commit", "old"], limit=5
     )
 
-    assert queried == ["engine.yaml", "tenzir.yaml"]
+    assert queried == ["engine-nightly.yaml", "engine.yaml", "tenzir.yaml"]
     assert [run["databaseId"] for run in runs] == [7]
 
 
