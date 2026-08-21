@@ -1,12 +1,12 @@
 // parallelism: 6
-// Timer emission stays single-instance so all groups share the processing-time
-// frontier anchored by the first input event.
+// Timer emission parallelizes, and each instance anchors its interval at the
+// first event it receives. Group `b` starts 900ms in, so its own 500ms interval
+// spans [900ms, 1400ms) and covers both of its events. A single instance would
+// anchor every group at 0ms instead and split `b` at the 1000ms boundary.
 from {ts: 0ms.from_epoch(), g: "a", x: 1},
-     {ts: 90ms.from_epoch(), g: "a", x: 2},
-     {ts: 360ms.from_epoch(), g: "b", x: 3},
-     {ts: 500ms.from_epoch(), g: "b", x: 5},
-     {ts: 650ms.from_epoch(), g: "b", x: 7},
-     {ts: 750ms.from_epoch(), g: "a", x: 4}
+     {ts: 100ms.from_epoch(), g: "a", x: 2},
+     {ts: 900ms.from_epoch(), g: "b", x: 3},
+     {ts: 1200ms.from_epoch(), g: "b", x: 5}
 delay ts
-summarize total=sum(x), g, options={emit: 300ms, mode: "reset"}
+summarize total=sum(x), g, options={emit: 500ms, mode: "reset"}
 sort g, total

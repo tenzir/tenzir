@@ -1,7 +1,10 @@
 // parallelism: 6
-// Event output uses one operator instance to retain input order.
+// Event output parallelizes: hash partitioning keeps every group's rows and
+// its final state on the same instance. The gather after a replicated
+// operator reorders, so sort to make the output deterministic.
 from {seq: 1, g: "a", x: 1},
      {seq: 2, g: "b", x: 2},
      {seq: 3, g: "a", x: 3},
      {seq: 4, g: "b", x: 4}
 summarize g, total=sum(x), options={output: "events"}
+sort seq

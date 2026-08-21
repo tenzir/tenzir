@@ -1,0 +1,4 @@
+// Event output does not force a single instance: hash partitioning keeps every
+// group's rows and its final state on the same instance.
+from {x: 1, y: 2}, {x: 1, y: 3}
+summarize x, total=sum(y), options={output: "events"}

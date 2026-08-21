@@ -1360,15 +1360,18 @@ public:
   auto parallelizable() const -> bool override {
     // Without group-by keys, there is a single global aggregation state that
     // all rows must reach. Replicating the operator would yield one partial
-    // result per instance. Timer emission also requires one instance because
-    // replicas arm independent processing-time frontiers when they receive
-    // their first rows. Counted event emission requires one instance to keep
-    // a pipeline-wide event count. Event output also uses one instance to
-    // preserve input order. Other final and per-event emission can use hash
-    // partitioning because it routes each group to exactly one instance.
-    return not config_.groups.empty() and config_.output != Output::events
-           and config_.emission != Emission::timer
-           and (config_.emission != Emission::event or config_.emit_every == 1);
+    // result per instance.
+    if (config_.groups.empty()) {
+      return false;
+    }
+    // Counted event emission requires one instance to keep a pipeline-wide
+    // event count.
+    if (config_.emission == Emission::event and config_.emit_every != 1) {
+      return false;
+    }
+    // Other final and per-event emission can use hash partitioning because it
+    // routes each group to exactly one instance.
+    return true;
   }
 
   auto partition_keys() const -> std::vector<ast::expression> override {
