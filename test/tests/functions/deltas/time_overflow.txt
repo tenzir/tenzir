@@ -1,11 +1,11 @@
-{
-  xs: [
-    null,
-  ],
-}
 warning: time subtraction overflow
  --> tests/functions/deltas/time_overflow.tql:5:6
   |
 5 | xs = xs.deltas()
   |      ~~
   |
+{
+  xs: [
+    null,
+  ],
+}

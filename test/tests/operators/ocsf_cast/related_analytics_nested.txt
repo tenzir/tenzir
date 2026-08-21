@@ -1,3 +1,10 @@
+warning: dropping field which does not exist in schema
+  --> tests/operators/ocsf_cast/related_analytics_nested.tql:24:1
+   |
+24 | ocsf_cast null_fill=true
+   | ~~~~~~~~~
+   |
+   = note: found `analytic.related_analytics[].related_analytics`
 {
   activity_id: null,
   activity_name: null,
@@ -96,10 +103,3 @@
   unmapped: null,
   vulnerabilities: null,
 }
-warning: dropping field which does not exist in schema
-  --> tests/operators/ocsf_cast/related_analytics_nested.tql:24:1
-   |
-24 | ocsf_cast null_fill=true
-   | ~~~~~~~~~
-   |
-   = note: found `analytic.related_analytics[].related_analytics`

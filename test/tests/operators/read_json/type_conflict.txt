@@ -1,3 +1,5 @@
+warning: json parser: type mismatch between list elements
+  = note: field `y`
 {
   y: [
     "1",
@@ -6,5 +8,3 @@
     "{\"z\": []}",
   ],
 }
-warning: json parser: type mismatch between list elements
-  = note: field `y`

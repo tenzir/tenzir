@@ -32,6 +32,11 @@ rec {
   integration-container =
     ps: with ps; [
       pymysql
+      # PyIceberg's package tests expect older PyArrow string types, but its
+      # runtime is compatible with the pinned PyArrow used by these tests.
+      (pyiceberg.overridePythonAttrs (_: {
+        doCheck = false;
+      }))
     ];
 
   dev = combine [

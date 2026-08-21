@@ -125,7 +125,7 @@ def _wait_for_rabbitmq(management_url: str, timeout: float) -> None:
     logger.info("RabbitMQ is ready")
 
 
-@fixture(options=AmqpOptions)
+@fixture(options=AmqpOptions, tags=("container",))
 def amqp() -> Iterator[dict[str, str]]:
     """Start RabbitMQ and yield environment variables for broker access."""
     opts = current_options("amqp")

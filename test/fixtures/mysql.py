@@ -399,7 +399,7 @@ def _run_live_signed_insert_loop(
             break
 
 
-@fixture(options=MysqlOptions)
+@fixture(options=MysqlOptions, tags=("container",))
 def mysql() -> Iterator[dict[str, str]]:
     """Start MySQL and yield environment variables for database access."""
     opts = current_options("mysql")

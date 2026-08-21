@@ -1,3 +1,18 @@
+warning: list index out of bounds
+ --> tests/language/expr/list_indexing.tql:6:7
+  |
+6 | c = a[2]
+  |       ~ is out of bounds
+  |
+  = hint: use `[…]?` to suppress this warning
+
+warning: list index out of bounds
+ --> tests/language/expr/list_indexing.tql:8:7
+  |
+8 | e = a[-3]
+  |       ~~ is out of bounds
+  |
+  = hint: use `[…]?` to suppress this warning
 {
   a: [
     1,
@@ -19,18 +34,3 @@
   d: 5,
   e: null,
 }
-warning: list index out of bounds
- --> tests/language/expr/list_indexing.tql:6:7
-  |
-6 | c = a[2]
-  |       ~ is out of bounds
-  |
-  = hint: use `[…]?` to suppress this warning
-
-warning: list index out of bounds
- --> tests/language/expr/list_indexing.tql:8:7
-  |
-8 | e = a[-3]
-  |       ~~ is out of bounds
-  |
-  = hint: use `[…]?` to suppress this warning

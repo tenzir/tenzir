@@ -311,7 +311,7 @@ RUN XDG_CACHE_HOME=/tmp XDG_DATA_HOME=/tmp \
     --with googleapis-common-protos \
     --with protobuf \
     --with trustme \
-    tenzir-test==1.10.3 \
+    tenzir-test==2.0.2 \
     --root test \
     -j $(nproc) && \
     echo "success" > /tmp/tenzir-integration-result

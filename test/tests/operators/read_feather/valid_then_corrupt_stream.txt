@@ -1,9 +1,3 @@
-{
-  a: 1,
-}
-{
-  a: 2,
-}
 warning: truncated Feather input
  --> tests/operators/read_feather/valid_then_corrupt_stream.tql:5:3
   |
@@ -11,3 +5,9 @@ warning: truncated Feather input
   |   ~~~~~~~~~~~~
   |
   = note: discarded 16 trailing bytes
+{
+  a: 1,
+}
+{
+  a: 2,
+}

@@ -1,3 +1,9 @@
+warning: rejected incomplete gzip request
+  --> tests/operators/accept_otlp/gzip.tql:21:13
+   |
+21 | accept_otlp env("HTTP_REQUEST_ENDPOINT"), max_message_size=1024
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
 {
   resource: {
     attributes: [],
@@ -37,9 +43,3 @@
   span_id: null,
   event_name: null,
 }
-warning: rejected incomplete gzip request
-  --> tests/operators/accept_otlp/gzip.tql:21:13
-   |
-21 | accept_otlp env("HTTP_REQUEST_ENDPOINT"), max_message_size=1024
-   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-   |

@@ -312,7 +312,12 @@ def _assert_hlc_records(path: Path, assertions: CloudWatchHlcAssertions) -> None
         )
 
 
-@fixture(name="cloudwatch", log_teardown=True, assertions=CloudWatchAssertions)
+@fixture(
+    name="cloudwatch",
+    log_teardown=True,
+    assertions=CloudWatchAssertions,
+    tags=("container",),
+)
 def run() -> FixtureHandle:
     runtime = detect_runtime()
     if runtime is None:

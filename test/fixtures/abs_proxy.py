@@ -278,7 +278,7 @@ def _make_handle(
     )
 
 
-@fixture(name="abs_slow_proxy")
+@fixture(name="abs_slow_proxy", tags=("container",))
 def abs_slow_proxy() -> FixtureHandle:
     """Azurite behind a slow forwarding proxy to widen close-race windows."""
     runtime = detect_runtime()

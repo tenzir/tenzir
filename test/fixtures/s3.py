@@ -48,7 +48,7 @@ from ._utils import find_free_port
 logger = logging.getLogger(__name__)
 
 # LocalStack configuration
-LOCALSTACK_IMAGE = "docker.io/localstack/localstack"
+LOCALSTACK_IMAGE = "docker.io/localstack/localstack:4.4"
 ACCESS_KEY = "test"
 SECRET_KEY = "test"
 STARTUP_TIMEOUT = 60  # seconds
@@ -215,7 +215,7 @@ def _file_exists(container: ManagedContainer, key: str) -> bool:
     return result.returncode == 0
 
 
-@fixture(assertions=CloudStorageAssertions)
+@fixture(assertions=CloudStorageAssertions, tags=("container",))
 def s3() -> FixtureHandle:
     """Start LocalStack and return fixture handle with assertions."""
     runtime = detect_runtime()

@@ -1,3 +1,10 @@
+warning: YARA-X match evidence is incomplete
+ --> tests/operators/yara/max-matches.tql:2:3
+  |
+2 |   yara rules=r#"
+  |   ~~~~
+  |
+  = note: YARA-X match evidence is truncated for rule 'many' and pattern '$a' because more than `max_matches_per_pattern=2` matches were found
 {
   class_uid: 2004,
   category_uid: 2,
@@ -74,10 +81,3 @@
     },
   ],
 }
-warning: YARA-X match evidence is incomplete
- --> tests/operators/yara/max-matches.tql:2:3
-  |
-2 |   yara rules=r#"
-  |   ~~~~
-  |
-  = note: YARA-X match evidence is truncated for rule 'many' and pattern '$a' because more than `max_matches_per_pattern=2` matches were found

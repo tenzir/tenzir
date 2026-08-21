@@ -1,0 +1,7 @@
+suite: to-sentinelone-data-lake
+requires:
+  operators:
+    - tql2.to_sentinelone_data_lake
+skip:
+  on: capability-unavailable
+  reason: requires the to_sentinelone_data_lake plugin

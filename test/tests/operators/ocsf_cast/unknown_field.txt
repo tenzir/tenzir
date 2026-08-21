@@ -1,3 +1,10 @@
+warning: dropping field which does not exist in schema
+ --> tests/operators/ocsf_cast/unknown_field.tql:2:1
+  |
+2 | ocsf_cast null_fill=true
+  | ~~~~~~~~~
+  |
+  = note: found `foo`
 {
   activity_id: null,
   activity_name: null,
@@ -60,10 +67,3 @@
   unmapped: null,
   url: null,
 }
-warning: dropping field which does not exist in schema
- --> tests/operators/ocsf_cast/unknown_field.tql:2:1
-  |
-2 | ocsf_cast null_fill=true
-  | ~~~~~~~~~
-  |
-  = note: found `foo`

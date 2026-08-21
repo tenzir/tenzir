@@ -23,14 +23,13 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <fmt/format.h>
-#include <folly/coro/BlockingWait.h>
+#include <folly/CancellationToken.h>
 
 #include <chrono>
 #include <cstdint>
 #include <limits>
 #include <memory>
 #include <string>
-#include <thread>
 #include <utility>
 #include <variant>
 
@@ -42,7 +41,6 @@ namespace {
 
 constexpr auto message_queue_capacity = uint32_t{16};
 constexpr auto receive_timeout = 100ms;
-constexpr auto message_queue_retry_delay = 1ms;
 
 auto render_caf_error(const caf::error& err) -> std::string {
   return fmt::to_string(err);
@@ -144,7 +142,6 @@ public:
       co_return;
     }
     runtime_ = runtime;
-    read_loop_finished_ = false;
     ctx.spawn_task(read_loop(runtime, std::move(sender)));
   }
 
@@ -161,7 +158,7 @@ public:
       co_return;
     }
     if (message->is_none()) {
-      read_loop_finished_ = true;
+      // The read loop terminated and dropped its sender.
       co_return;
     }
     co_await co_match(
@@ -254,44 +251,32 @@ private:
   }
 
   auto is_done() const -> bool {
-    return stop_requested_ and active_parsers_ == 0 and read_loop_finished_;
+    return stop_requested_;
   }
 
   static auto read_loop(std::shared_ptr<Runtime> runtime, MessageSender sender)
     -> Task<void> {
-    auto enqueue = [runtime = std::weak_ptr{runtime}](
-                     MessageSender& sender, SourceMessage message) -> void {
-      auto current = runtime.lock();
-      TENZIR_ASSERT(current);
-      while (true) {
-        auto result = sender.try_send(std::move(message));
-        if (result.is_ok()) {
-          return;
-        }
-        message = std::move(result).unwrap_err();
-        if (current->stop_requested.load(std::memory_order_acquire)) {
-          return;
-        }
-        std::this_thread::sleep_for(message_queue_retry_delay);
+    // Each receive must be an individual `spawn_blocking` call with a bounded
+    // timeout: a downstream-initiated shutdown (e.g., `head`) only cancels the
+    // operator scope without calling `stop()`, so the loop has to observe
+    // cancellation between polls to terminate.
+    auto token = co_await folly::coro::co_current_cancellation_token;
+    while (not token.isCancellationRequested()
+           and not runtime->stop_requested.load(std::memory_order_acquire)) {
+      auto message = co_await spawn_blocking([&runtime] {
+        return runtime->socket.receive(receive_timeout);
+      });
+      if (message) {
+        co_await sender.send(SourceMessage{std::move(*message)});
+        continue;
       }
-    };
-    co_await spawn_blocking([runtime = std::move(runtime),
-                             sender = std::move(sender),
-                             enqueue = std::move(enqueue)]() mutable {
-      while (not runtime->stop_requested.load(std::memory_order_acquire)) {
-        auto message = runtime->socket.receive(receive_timeout);
-        if (message) {
-          enqueue(sender, SourceMessage{std::move(*message)});
-          continue;
-        }
-        if (message == ec::timeout) {
-          continue;
-        }
-        enqueue(sender, SourceMessage{ReceiveError{render_socket_error(
-                          runtime->socket, message.error())}});
-        break;
+      if (message == ec::timeout) {
+        continue;
       }
-    });
+      co_await sender.send(SourceMessage{
+        ReceiveError{render_socket_error(runtime->socket, message.error())}});
+      break;
+    }
   }
 
   SourceArgs args_;
@@ -300,7 +285,6 @@ private:
   std::shared_ptr<Runtime> runtime_;
   std::shared_ptr<MessageReceiver> message_receiver_;
   bool stop_requested_ = false;
-  bool read_loop_finished_ = true;
   size_t active_parsers_ = 0;
   uint64_t next_sub_id_ = 0;
   MetricsCounter bytes_read_counter_;

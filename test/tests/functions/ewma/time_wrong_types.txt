@@ -1,11 +1,3 @@
-{
-  kind: "non-list",
-  result: null,
-}
-{
-  kind: "wrong elements",
-  result: null,
-}
 warning: expected `times` to be a list of times, but got `int64`
  --> tests/functions/ewma/time_wrong_types.tql:3:50
   |
@@ -19,3 +11,11 @@ warning: expected `times` to be a list of times, but got a list of `int64`
 3 | select kind, result = xs.ewma(halflife=1d, times=times)
   |                                                  ~~~~~
   |
+{
+  kind: "non-list",
+  result: null,
+}
+{
+  kind: "wrong elements",
+  result: null,
+}

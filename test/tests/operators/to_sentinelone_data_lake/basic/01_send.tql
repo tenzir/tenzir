@@ -1,3 +1,23 @@
+---
+assertions:
+  fixtures:
+    sentinelone:
+      expected_add_events:
+        - events:
+            - attrs:
+                message: hello
+            - attrs:
+                message: ocsf
+                metadata:
+                  version: 1.6.0
+                severity_id: 5
+                time: "1970-01-01T00:00:01Z"
+              sev: 5
+              ts: "1000000000"
+          sessionInfo:
+            serverHost: test-node
+---
+
 from {message: "hello"},
      {metadata:{version: "1.6.0"}, time: 1s.from_epoch(), severity_id: 5, message: "ocsf"}
 to_sentinelone_data_lake env("S1_FIXTURE_URL"), token=env("S1_FIXTURE_TOKEN"),

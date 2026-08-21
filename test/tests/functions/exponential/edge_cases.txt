@@ -1,3 +1,16 @@
+warning: negative exponent in integer `pow`
+ --> tests/functions/exponential/edge_cases.tql:8:37
+  |
+8 |   negative_integer_exponent: pow(2, -1),
+  |                                     ~~
+  |
+
+warning: integer overflow in `pow`
+ --> tests/functions/exponential/edge_cases.tql:9:34
+  |
+9 |   integer_power_overflow: pow(2, 63),
+  |                                  ~~
+  |
 {
   negative_logarithm: null,
   zero_logarithm: null,
@@ -12,16 +25,3 @@
   null_logarithm: null,
   null_power: null,
 }
-warning: negative exponent in integer `pow`
- --> tests/functions/exponential/edge_cases.tql:8:37
-  |
-8 |   negative_integer_exponent: pow(2, -1),
-  |                                     ~~
-  |
-
-warning: integer overflow in `pow`
- --> tests/functions/exponential/edge_cases.tql:9:34
-  |
-9 |   integer_power_overflow: pow(2, 63),
-  |                                  ~~
-  |

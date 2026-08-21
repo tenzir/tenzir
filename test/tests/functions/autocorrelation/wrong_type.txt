@@ -1,9 +1,9 @@
-{
-  ys: null,
-}
 warning: expected list of `int`, `uint`, `double`, or `duration`
  --> tests/functions/autocorrelation/wrong_type.tql:2:13
   |
 2 | select ys = xs.autocorrelation()
   |             ~~
   |
+{
+  ys: null,
+}

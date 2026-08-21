@@ -1,8 +1,3 @@
----
-fixtures: [sentinelone]
-timeout: 60
----
-
 // Column names containing dots are split by unflattened_field() into nested
 // records: "src.ip" becomes {src: {ip: ...}}, "src.port" → {src: {port: ...}},
 // and so on. The result schema merges shared prefixes into one nested record.

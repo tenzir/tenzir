@@ -1,3 +1,16 @@
+warning: ignoring extensions for events where `metadata.extensions` is not a list of records
+ --> tests/operators/ocsf_cast/wrong_inner_type_extensions.tql:9:1
+  |
+9 | ocsf_cast null_fill=true
+  | ~~~~~~~~~
+  |
+
+warning: expected type `record` for `metadata.extensions[]`, but got `int64`
+ --> tests/operators/ocsf_cast/wrong_inner_type_extensions.tql:9:1
+  |
+9 | ocsf_cast null_fill=true
+  | ~~~~~~~~~
+  |
 {
   activity_id: null,
   activity_name: null,
@@ -85,16 +98,3 @@
   type_uid: null,
   unmapped: null,
 }
-warning: ignoring extensions for events where `metadata.extensions` is not a list of records
- --> tests/operators/ocsf_cast/wrong_inner_type_extensions.tql:9:1
-  |
-9 | ocsf_cast null_fill=true
-  | ~~~~~~~~~
-  |
-
-warning: expected type `record` for `metadata.extensions[]`, but got `int64`
- --> tests/operators/ocsf_cast/wrong_inner_type_extensions.tql:9:1
-  |
-9 | ocsf_cast null_fill=true
-  | ~~~~~~~~~
-  |

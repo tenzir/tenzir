@@ -169,7 +169,7 @@ def _seed_stream(
         )
 
 
-@fixture(options=NatsOptions)
+@fixture(options=NatsOptions, tags=("container",))
 def nats() -> Iterator[dict[str, str]]:
     """Start NATS with JetStream and yield environment variables."""
     opts = current_options("nats")

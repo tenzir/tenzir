@@ -16,6 +16,7 @@
 #include <tenzir/ref.hpp>
 
 #include <fmt/format.h>
+#include <folly/coro/Coroutine.h>
 #include <folly/coro/Sleep.h>
 #include <folly/io/async/AsyncSocketException.h>
 #include <proxygen/lib/http/HTTPMessage.h>
@@ -97,16 +98,28 @@ auto retry_request(HttpPoolConfig const& config, F&& f)
       // got response
       proxygen::coro::HTTPClient::Response resp
         = std::move(attempt_res).unwrap();
-      auto const status = resp.headers->getStatusCode();
-      if (attempt >= config.max_retry_count
-          or not http::is_retryable_http_status(status)) {
-        // not retryable
-        co_return http::to_http_response(resp);
+      if (not resp.headers) {
+        // Proxygen can complete a request without a final response when the
+        // stream is torn down mid-flight, e.g. by cancellation during
+        // shutdown. Propagate cancellation; otherwise treat the missing
+        // response like a connection error.
+        co_await folly::coro::co_safe_point;
+        if (attempt >= config.max_retry_count) {
+          co_return Err{std::string{"request completed without a response"}};
+        }
+        retry_reason = "connection error";
+      } else {
+        auto const status = resp.headers->getStatusCode();
+        if (attempt >= config.max_retry_count
+            or not http::is_retryable_http_status(status)) {
+          // not retryable
+          co_return http::to_http_response(resp);
+        }
+        // retryable HTTP status
+        retry_reason = fmt::format("HTTP error {}", status);
+        retry_after = http::parse_retry_after(
+          resp.headers->getHeaders().getSingleOrEmpty("Retry-After"));
       }
-      // retryable HTTP status
-      retry_reason = fmt::format("HTTP error {}", status);
-      retry_after = http::parse_retry_after(
-        resp.headers->getHeaders().getSingleOrEmpty("Retry-After"));
     } else {
       // transport error
       auto attempt_err = attempt_res.unwrap_err();
@@ -640,6 +653,12 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
         auto resp = proxygen::coro::HTTPClient::Response{};
         co_await proxy_request.send(
           source, proxygen::coro::HTTPClient::makeDefaultReader(resp), timeout);
+        if (not resp.headers) {
+          // See `retry_request` for when a request completes without a
+          // final response.
+          co_await folly::coro::co_safe_point;
+          throw std::runtime_error{"request completed without a response"};
+        }
         co_return http::to_http_response(resp);
       }());
       if (result.is_err()) {

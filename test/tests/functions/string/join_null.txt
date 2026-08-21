@@ -1,8 +1,3 @@
-{
-  with_nulls: null,
-  all_nulls: null,
-  null_input: null,
-}
 warning: found `null` in list passed to `join`
  --> tests/functions/string/join_null.tql:4:15
   |
@@ -18,3 +13,8 @@ warning: found `null` in list passed to `join`
   |              ~~~~~~~~~~~~~~~~~~
   |
   = hint: consider using `.where(x => x != null)` before
+{
+  with_nulls: null,
+  all_nulls: null,
+  null_input: null,
+}

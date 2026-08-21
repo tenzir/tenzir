@@ -363,7 +363,7 @@ INSERT INTO {LIVE_STREAM_TABLE} (payload) VALUES ('{LIVE_STREAM_TOKEN}');
             break
 
 
-@fixture(options=MicrosoftSqlOptions)
+@fixture(options=MicrosoftSqlOptions, tags=("container",))
 def microsoft_sql() -> Iterator[dict[str, str]]:
     """Start Microsoft SQL Server and yield database connection variables."""
     opts = current_options("microsoft_sql")

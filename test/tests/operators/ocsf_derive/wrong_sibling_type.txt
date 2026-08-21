@@ -1,3 +1,9 @@
+warning: expected field `activity_name` to be `string`, but got `int64`
+  --> tests/operators/ocsf_derive/wrong_sibling_type.tql:12:1
+   |
+12 | ocsf_derive
+   | ~~~~~~~~~~~
+   |
 {
   metadata: {
     version: "1.5.0",
@@ -7,9 +13,3 @@
   activity_id: null,
   activity_name: 123,
 }
-warning: expected field `activity_name` to be `string`, but got `int64`
-  --> tests/operators/ocsf_derive/wrong_sibling_type.tql:12:1
-   |
-12 | ocsf_derive
-   | ~~~~~~~~~~~
-   |

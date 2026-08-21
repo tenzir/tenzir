@@ -1,3 +1,10 @@
+warning: Splunk search returned WARN: Some search peers did not return results.
+  --> tests/operators/from_splunk/warning_message.tql:11:10
+   |
+11 |   search="search index=main",
+   |          ~~~~~~~~~~~~~~~~~~~
+   |
+   = note: search: search index=main
 {
   _time: 2026-07-14T14:54:45Z,
   _raw: "raw-one",
@@ -16,10 +23,3 @@
   custom: "two",
   number: 43,
 }
-warning: Splunk search returned WARN: Some search peers did not return results.
-  --> tests/operators/from_splunk/warning_message.tql:11:10
-   |
-11 |   search="search index=main",
-   |          ~~~~~~~~~~~~~~~~~~~
-   |
-   = note: search: search index=main

@@ -25,9 +25,7 @@ CREATE TABLE fc_special_types (
   tm Time,
   tm64 Time64(3),
   tm_nullable Nullable(Time),
-  tm64_nullable Nullable(Time64(3)),
-  tm_lc LowCardinality(Time),
-  tm64_lc LowCardinality(Time64(3))
+  tm64_nullable Nullable(Time64(3))
 ) ENGINE = MergeTree ORDER BY id;
 INSERT INTO fc_special_types VALUES
 (
@@ -41,9 +39,7 @@ INSERT INTO fc_special_types VALUES
   '00:00:42',
   '00:00:01.234',
   '00:00:07',
-  '00:00:00.456',
-  '00:00:03',
-  '00:00:00.789'
+  '00:00:00.456'
 ),
 (
   2,
@@ -56,9 +52,7 @@ INSERT INTO fc_special_types VALUES
   '00:00:05',
   '00:00:00.005',
   NULL,
-  NULL,
-  '00:00:04',
-  '00:00:00.006'
+  NULL
 );
 """
     subprocess.run(

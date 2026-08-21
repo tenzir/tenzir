@@ -1,7 +1,3 @@
-{
-  wrong_coordinate: null,
-  wrong_spheroid: null,
-}
 warning: `geo_distance` expected `lon1` to be `number`, but got `string`
  --> tests/functions/geo_distance/wrong_types.tql:2:34
   |
@@ -15,3 +11,7 @@ warning: `geo_distance` expected `spheroid` to be `bool`, but got `string`
 3 |   wrong_spheroid: geo_distance(13.405, 52.52, 0, 0, spheroid="yes"),
   |                                                              ~~~~~
   |
+{
+  wrong_coordinate: null,
+  wrong_spheroid: null,
+}

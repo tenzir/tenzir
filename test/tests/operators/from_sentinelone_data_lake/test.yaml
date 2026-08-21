@@ -1,4 +1,12 @@
+suite: from-sentinelone-data-lake
+fixtures:
+  - sentinelone
+timeout: 60
+requires:
+  operators:
+    - tql2.from_sentinelone_data_lake
 skip:
   on:
     - fixture-unavailable
     - capability-unavailable
+  reason: requires the from_sentinelone_data_lake plugin

@@ -1,15 +1,3 @@
-{
-  kind: "mismatched lengths",
-  result: null,
-}
-{
-  kind: "null timestamp",
-  result: null,
-}
-{
-  kind: "descending timestamps",
-  result: null,
-}
 warning: expected `times` to match the length of `xs`
   --> tests/functions/ewma/time_validation.tql:14:50
    |
@@ -23,3 +11,15 @@ warning: expected `times` to be non-decreasing without nulls
 14 | select kind, result = xs.ewma(halflife=1d, times=times)
    |                                                  ~~~~~
    |
+{
+  kind: "mismatched lengths",
+  result: null,
+}
+{
+  kind: "null timestamp",
+  result: null,
+}
+{
+  kind: "descending timestamps",
+  result: null,
+}

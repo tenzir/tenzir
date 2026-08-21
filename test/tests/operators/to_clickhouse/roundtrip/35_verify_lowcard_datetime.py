@@ -33,6 +33,7 @@ def main() -> None:
     assert total == 3, f"expected 3, got {total}"
     # The column types are unchanged by the append.
     schema = ch_query("DESCRIBE test_lc_dt SETTINGS describe_compact_output=1")
+    schema = schema.replace("\\'", "'")
     assert "LowCardinality(String)" in schema, schema
     assert "DateTime64(3, 'UTC')" in schema, schema
     rows = ch_query(

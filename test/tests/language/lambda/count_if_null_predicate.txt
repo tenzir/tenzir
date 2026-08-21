@@ -1,3 +1,9 @@
+warning: expected `bool`, got `int64`
+ --> tests/language/lambda/count_if_null_predicate.tql:4:23
+  |
+4 | invalid = xs.count_if(x => 1)
+  |                       ~~~~~~
+  |
 {
   xs: [
     1,
@@ -8,9 +14,3 @@
   nullable: 0,
   invalid: 0,
 }
-warning: expected `bool`, got `int64`
- --> tests/language/lambda/count_if_null_predicate.tql:4:23
-  |
-4 | invalid = xs.count_if(x => 1)
-  |                       ~~~~~~
-  |

@@ -1,3 +1,11 @@
+warning: field `g` not found
+ --> tests/operators/summarize/partition-null-keys.tql:4:11
+  |
+4 | summarize g, all=collect(x), total=sum(x)
+  |           ~
+  |
+  = hint: did you mean `x`?
+  = hint: append `?` to suppress this warning
 {
   g: null,
   all: [
@@ -16,11 +24,3 @@
   ],
   total: 5,
 }
-warning: field `g` not found
- --> tests/operators/summarize/partition-null-keys.tql:4:11
-  |
-4 | summarize g, all=collect(x), total=sum(x)
-  |           ~
-  |
-  = hint: did you mean `x`?
-  = hint: append `?` to suppress this warning

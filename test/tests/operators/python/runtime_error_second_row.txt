@@ -1,6 +1,3 @@
-{
-  x: 1,
-}
 error: Traceback (most recent call last):
   File "<inline>", line 1, in <module>
     if self.x == 2: raise RuntimeError('boom on second row')
@@ -11,3 +8,6 @@ on input event: {'x': 2}
 6 | python "if self.x == 2: raise RuntimeError('boom on second row')"
   | ^^^^^^
   |
+{
+  x: 1,
+}

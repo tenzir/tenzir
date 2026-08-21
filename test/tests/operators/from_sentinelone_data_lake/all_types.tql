@@ -1,8 +1,3 @@
----
-fixtures: [sentinelone]
-timeout: 60
----
-
 // Exercises every branch of parse(): null, bool, int64 (negative), uint64
 // (> INT64_MAX so simdjson classifies it as uint64_t), double, and string.
 // The "timestamp" column is handled by the dedicated nanosecond→time path.

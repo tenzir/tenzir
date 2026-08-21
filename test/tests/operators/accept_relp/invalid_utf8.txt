@@ -1,6 +1,3 @@
-{
-  data: "after invalid UTF-8",
-}
 warning: dropped RELP syslog payload with invalid UTF-8
   --> tests/operators/accept_relp/invalid_utf8.tql:14:13
    |
@@ -8,3 +5,6 @@ warning: dropped RELP syslog payload with invalid UTF-8
    |             ~~~~~~~~~~~~~~~~~~~~
    |
    = note: peer: 127.0.0.1
+{
+  data: "after invalid UTF-8",
+}

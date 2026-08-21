@@ -1,9 +1,3 @@
-{
-  data: "authenticated",
-  relp: {
-    transaction_id: 2,
-  },
-}
 warning: TLS handshake failed
   --> tests/operators/accept_relp/tls/reject_missing_client_certificate.tql:24:13
    |
@@ -13,3 +7,9 @@ warning: TLS handshake failed
    = note: peer IP: 127.0.0.1
    = note: reason: AsyncSocketException: error:0A0000C7:SSL routines::peer did not return a certificate, type = SSL error
    = hint: verify TLS settings and certificates on both sides
+{
+  data: "authenticated",
+  relp: {
+    transaction_id: 2,
+  },
+}

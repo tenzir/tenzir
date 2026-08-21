@@ -1,3 +1,5 @@
+warning: ndjson parser: input type does not match given schema
+  = note: input is `int64`, but the schema expects `time`
 {
   timestamp: null,
   flow_id: null,
@@ -21,5 +23,3 @@
   traffic: null,
   community_id: null,
 }
-warning: ndjson parser: input type does not match given schema
-  = note: input is `int64`, but the schema expects `time`

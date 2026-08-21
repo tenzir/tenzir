@@ -22,13 +22,14 @@ def main() -> None:
     print(widened[0]["id"], widened[0]["kind"], widened[0]["payload_a"])
     null_b = sum(1 for row in rows if row["payload_b"] is None)
     print(f"rows with null payload_b: {null_b}")
-    files = {}
+    # Report only which column sets coexist: the number of files per set
+    # depends on rotation timing and is not deterministic.
+    files = set()
     for task in table.scan().plan_files():
         path = urllib.parse.urlparse(task.file.file_path).path
-        columns = frozenset(pq.read_schema(path).names)
-        files[columns] = files.get(columns, 0) + 1
-    for columns, count in sorted(files.items(), key=lambda item: sorted(item[0])):
-        print(f"{count} file(s) with columns: {sorted(columns)}")
+        files.add(frozenset(pq.read_schema(path).names))
+    for columns in sorted(files, key=sorted):
+        print(f"files with columns: {sorted(columns)}")
 
 
 if __name__ == "__main__":

@@ -142,7 +142,7 @@ def _start_proxy(config: _ProxyConfig) -> tuple[_ProxyServer, threading.Thread, 
     return server, thread, port
 
 
-@fixture(name="s3_fail_complete")
+@fixture(name="s3_fail_complete", tags=("container",))
 def s3_fail_complete() -> FixtureHandle:
     """LocalStack behind a proxy that fails CompleteMultipartUpload."""
     runtime = detect_runtime()

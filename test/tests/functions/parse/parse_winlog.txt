@@ -1,3 +1,16 @@
+warning: failed to parse XML: line 1:15: no element found
+   --> tests/functions/parse/parse_winlog.tql:102:8
+    |
+102 | this = x.parse_winlog()
+    |        ~~~~~~~~~~~~~~~~
+    |
+
+warning: assignment to `this` requires `record`, but got `null`
+   --> tests/functions/parse/parse_winlog.tql:102:1
+    |
+102 | this = x.parse_winlog()
+    | ~~~~
+    |
 {
   System: {
     Provider: {
@@ -105,16 +118,3 @@
   },
 }
 {}
-warning: failed to parse XML: line 1:15: no element found
-   --> tests/functions/parse/parse_winlog.tql:102:8
-    |
-102 | this = x.parse_winlog()
-    |        ~~~~~~~~~~~~~~~~
-    |
-
-warning: assignment to `this` requires `record`, but got `null`
-   --> tests/functions/parse/parse_winlog.tql:102:1
-    |
-102 | this = x.parse_winlog()
-    | ~~~~
-    |

@@ -1,3 +1,20 @@
+warning: duplicate OTLP attribute key `event.name`; overwriting "first" with "second"
+  --> tests/operators/accept_otlp/record_attributes.tql:20:13
+   |
+20 | accept_otlp env("HTTP_REQUEST_ENDPOINT"), schema="record"
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+   = note: discarded value: "first"
+   = note: new value: "second"
+
+warning: duplicate OTLP attribute key `event.name`; overwriting "second" with "third"
+  --> tests/operators/accept_otlp/record_attributes.tql:20:13
+   |
+20 | accept_otlp env("HTTP_REQUEST_ENDPOINT"), schema="record"
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+   = note: discarded value: "second"
+   = note: new value: "third"
 {
   resource: {
     attributes: {},
@@ -83,20 +100,3 @@
   span_id: null,
   event_name: null,
 }
-warning: duplicate OTLP attribute key `event.name`; overwriting "first" with "second"
-  --> tests/operators/accept_otlp/record_attributes.tql:20:13
-   |
-20 | accept_otlp env("HTTP_REQUEST_ENDPOINT"), schema="record"
-   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-   |
-   = note: discarded value: "first"
-   = note: new value: "second"
-
-warning: duplicate OTLP attribute key `event.name`; overwriting "second" with "third"
-  --> tests/operators/accept_otlp/record_attributes.tql:20:13
-   |
-20 | accept_otlp env("HTTP_REQUEST_ENDPOINT"), schema="record"
-   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-   |
-   = note: discarded value: "second"
-   = note: new value: "third"

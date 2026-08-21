@@ -1,3 +1,10 @@
+warning: dropping field which does not exist in schema
+  --> tests/operators/ocsf_cast/timestamp_to_ms.tql:10:1
+   |
+10 | ocsf_cast timestamp_to_ms=true
+   | ~~~~~~~~~
+   |
+   = note: found `invalid`
 {
   class_uid: 1001,
   metadata: {
@@ -40,10 +47,3 @@
     version: "1.6.0",
   },
 }
-warning: dropping field which does not exist in schema
-  --> tests/operators/ocsf_cast/timestamp_to_ms.tql:10:1
-   |
-10 | ocsf_cast timestamp_to_ms=true
-   | ~~~~~~~~~
-   |
-   = note: found `invalid`

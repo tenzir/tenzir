@@ -1,3 +1,9 @@
+warning: expected type `string` for `activity_name`, but got `int64`
+ --> tests/operators/ocsf_cast/type_mismatch.tql:2:1
+  |
+2 | ocsf_cast null_fill=true
+  | ~~~~~~~~~
+  |
 {
   activity_id: null,
   activity_name: null,
@@ -60,9 +66,3 @@
   unmapped: null,
   url: null,
 }
-warning: expected type `string` for `activity_name`, but got `int64`
- --> tests/operators/ocsf_cast/type_mismatch.tql:2:1
-  |
-2 | ocsf_cast null_fill=true
-  | ~~~~~~~~~
-  |

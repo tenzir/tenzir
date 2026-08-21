@@ -1,13 +1,3 @@
-{
-  x: "é",
-  y: "👩‍👩‍👦‍👦",
-  xa: null,
-  xb: 2,
-  xc: 1,
-  ya: null,
-  yb: 25,
-  yc: 7,
-}
 warning: expected `list`, got `string`
  --> tests/functions/string/lengths.tql:6:6
   |
@@ -23,3 +13,13 @@ warning: expected `list`, got `string`
   |      ~
   |
   = hint: use `.length_bytes()` or `.length_chars()` instead
+{
+  x: "é",
+  y: "👩‍👩‍👦‍👦",
+  xa: null,
+  xb: 2,
+  xc: 1,
+  ya: null,
+  yb: 25,
+  yc: 7,
+}

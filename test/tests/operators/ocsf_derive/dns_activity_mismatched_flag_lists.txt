@@ -1,3 +1,9 @@
+warning: found inconsistent list layout between `answers[].flag_ids` and `answers[].flags`
+  --> tests/operators/ocsf_derive/dns_activity_mismatched_flag_lists.tql:19:1
+   |
+19 | ocsf_derive
+   | ~~~~~~~~~~~
+   |
 {
   metadata: {
     version: "1.5.0",
@@ -20,9 +26,3 @@
     },
   ],
 }
-warning: found inconsistent list layout between `answers[].flag_ids` and `answers[].flags`
-  --> tests/operators/ocsf_derive/dns_activity_mismatched_flag_lists.tql:19:1
-   |
-19 | ocsf_derive
-   | ~~~~~~~~~~~
-   |

@@ -15,14 +15,14 @@
 rec {
   tenzir-test = python3Packages.buildPythonPackage (finalAttrs: {
     pname = "tenzir-test";
-    version = "1.10.3";
+    version = "2.0.2";
     pyproject = true;
 
     src = fetchFromGitHub {
       owner = "tenzir";
       repo = "test";
       tag = "v${finalAttrs.version}";
-      hash = "sha256-qk1Cjo6r7XZYNz2f8FSCucOK0Rbje3xj63kMZs+3LF0=";
+      hash = "sha256-3vwc99fU75++xkJZ9ZxVv4Slpw88Bd3IKtwCIuzvUr8=";
     };
 
     build-system = with python3Packages; [ hatchling ];
@@ -51,6 +51,7 @@ rec {
       in
       ''
         wrapProgram $out/bin/tenzir-test \
+          --set TENZIR_TEST_DISABLE_INLINE_DEPENDENCY_INSTALL 1 \
           --prefix PYTHONPATH : "$out/${python3Packages.python.sitePackages}:${python3Packages.makePythonPath subprocessDeps}"
       '';
   });

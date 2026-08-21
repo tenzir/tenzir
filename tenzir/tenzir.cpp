@@ -329,10 +329,11 @@ auto main(int argc, char** argv) -> int try {
       auto name_tokens = tokenize_permissive(name);
       if (name_tokens.size() != 1
           or name_tokens.front().kind != token_kind::identifier) {
-        TENZIR_ERROR("invalid operator name `{}` in `tenzir.operators` (must "
-                     "be a single identifier, matching "
-                     "[A-Za-z_][A-Za-z0-9_]* and not a reserved keyword)",
-                     name);
+        diagnostic::error("invalid operator name `{}` in `tenzir.operators`",
+                          name)
+          .note("must be a single identifier, matching "
+                "[A-Za-z_][A-Za-z0-9_]* and not a reserved keyword")
+          .emit(*dh);
         return EXIT_FAILURE;
       }
       auto* definition = try_as<std::string>(&value);

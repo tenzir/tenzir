@@ -1,3 +1,10 @@
+warning: lambda must evaluate to compatible types within the same list
+  --> tests/functions/list_map/resolve_largest.tql:15:18
+   |
+15 | l = l.map(str => str.parse_json())
+   |                  ~~~~~~~~~~~~~~~~ `list`, `record` are incompatible
+   |
+   = note: all entries that are not compatible with `record` will be `null`
 {
   l: [
     {
@@ -32,10 +39,3 @@
     },
   ],
 }
-warning: lambda must evaluate to compatible types within the same list
-  --> tests/functions/list_map/resolve_largest.tql:15:18
-   |
-15 | l = l.map(str => str.parse_json())
-   |                  ~~~~~~~~~~~~~~~~ `list`, `record` are incompatible
-   |
-   = note: all entries that are not compatible with `record` will be `null`

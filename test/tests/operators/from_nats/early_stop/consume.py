@@ -9,7 +9,7 @@ import subprocess
 
 
 def _resolve_tenzir_binary() -> str:
-    binary = shutil.which("tenzir")
+    binary = os.environ.get("TENZIR_BINARY") or shutil.which("tenzir")
     if binary:
         return binary
     raise RuntimeError("tenzir executable not found")

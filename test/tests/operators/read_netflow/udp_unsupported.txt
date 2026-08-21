@@ -1,7 +1,3 @@
-{
-  version: 5,
-  exporter_ip: 127.0.0.1,
-}
 warning: unsupported NetFlow message version
   --> tests/operators/read_netflow/udp_unsupported.tql:15:1
    |
@@ -10,3 +6,7 @@ warning: unsupported NetFlow message version
    |
    = note: peer: 127.0.0.1:45556
    = note: unsupported NetFlow version 6
+{
+  version: 5,
+  exporter_ip: 127.0.0.1,
+}

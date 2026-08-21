@@ -1,3 +1,11 @@
+warning: field `y` not found
+ --> tests/operators/chart/fill.tql:2:23
+  |
+2 | chart_area x=x, y=sum(y), resolution=2s, x_min=0s, x_max=15s, fill=0s
+  |                       ~
+  |
+  = hint: did you mean `x`?
+  = hint: append `?` to suppress this warning
 {
   x: 0ns,
   y: 0ns,
@@ -34,11 +42,3 @@
   x: 16s,
   y: 0ns,
 }
-warning: field `y` not found
- --> tests/operators/chart/fill.tql:2:23
-  |
-2 | chart_area x=x, y=sum(y), resolution=2s, x_min=0s, x_max=15s, fill=0s
-  |                       ~
-  |
-  = hint: did you mean `x`?
-  = hint: append `?` to suppress this warning

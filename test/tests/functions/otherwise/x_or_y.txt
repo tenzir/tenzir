@@ -1,3 +1,20 @@
+warning: field `x` not found
+  --> tests/functions/otherwise/x_or_y.tql:19:5
+   |
+19 | z = x.otherwise(y)
+   |     ~
+   |
+   = hint: did you mean `z`?
+   = hint: append `?` to suppress this warning
+
+warning: field `y` not found
+  --> tests/functions/otherwise/x_or_y.tql:19:17
+   |
+19 | z = x.otherwise(y)
+   |                 ~
+   |
+   = hint: did you mean `z`?
+   = hint: append `?` to suppress this warning
 {
   x: 1,
   y: -1,
@@ -25,20 +42,3 @@
   y: -6,
   z: -6,
 }
-warning: field `x` not found
-  --> tests/functions/otherwise/x_or_y.tql:19:5
-   |
-19 | z = x.otherwise(y)
-   |     ~
-   |
-   = hint: did you mean `z`?
-   = hint: append `?` to suppress this warning
-
-warning: field `y` not found
-  --> tests/functions/otherwise/x_or_y.tql:19:17
-   |
-19 | z = x.otherwise(y)
-   |                 ~
-   |
-   = hint: did you mean `z`?
-   = hint: append `?` to suppress this warning

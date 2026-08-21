@@ -487,7 +487,7 @@ def _create_test_resources(endpoint: str, region: str) -> dict[str, str]:
     }
 
 
-@fixture(name="localstack", log_teardown=True)
+@fixture(name="localstack", log_teardown=True, tags=("container",))
 def run() -> Iterator[dict[str, str]]:
     """Start LocalStack and yield environment variables for AWS access."""
     runtime = _find_container_runtime()

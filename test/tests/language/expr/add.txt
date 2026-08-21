@@ -1,22 +1,3 @@
-{
-  x0: 3,
-  x1: 3,
-  x2: 3,
-  x3: 3,
-  x4: null,
-  x5: 18446744073709551615,
-  x6: null,
-  x7: 3.0,
-  x8: 3.0,
-  x9: 3.0,
-  x10: "ab",
-  x11: null,
-  x12: null,
-  x13: null,
-  x14: null,
-  x15: null,
-  x16: null,
-}
 warning: integer overflow
  --> tests/language/expr/add.tql:6:6
   |
@@ -45,3 +26,22 @@ warning: integer overflow
 15 | x12 = int("-9223372036854775808") + -1
    |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    |
+{
+  x0: 3,
+  x1: 3,
+  x2: 3,
+  x3: 3,
+  x4: null,
+  x5: 18446744073709551615,
+  x6: null,
+  x7: 3.0,
+  x8: 3.0,
+  x9: 3.0,
+  x10: "ab",
+  x11: null,
+  x12: null,
+  x13: null,
+  x14: null,
+  x15: null,
+  x16: null,
+}

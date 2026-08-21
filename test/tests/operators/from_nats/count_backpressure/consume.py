@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -11,7 +12,7 @@ EXPECTED_COUNT = 50
 
 
 def _resolve_tenzir_binary() -> str:
-    binary = shutil.which("tenzir")
+    binary = os.environ.get("TENZIR_BINARY") or shutil.which("tenzir")
     if binary:
         return binary
     raise RuntimeError("tenzir executable not found")

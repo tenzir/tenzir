@@ -1,3 +1,9 @@
+warning: dropping `end_time_dt` because profile `datetime` is not enabled
+ --> tests/operators/ocsf_cast/unspecified_profile_field.tql:2:1
+  |
+2 | ocsf_cast null_fill=true
+  | ~~~~~~~~~
+  |
 {
   activity_id: null,
   activity_name: null,
@@ -60,9 +66,3 @@
   unmapped: null,
   url: null,
 }
-warning: dropping `end_time_dt` because profile `datetime` is not enabled
- --> tests/operators/ocsf_cast/unspecified_profile_field.tql:2:1
-  |
-2 | ocsf_cast null_fill=true
-  | ~~~~~~~~~
-  |

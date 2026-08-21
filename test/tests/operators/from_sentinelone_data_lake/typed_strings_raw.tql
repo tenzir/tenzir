@@ -1,8 +1,3 @@
----
-fixtures: [sentinelone]
-timeout: 60
----
-
 // Same server response as typed_strings.tql, but raw=true disables the
 // non_number_parser so every string value stays as a plain string regardless
 // of whether it looks like an IP address or subnet.

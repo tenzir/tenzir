@@ -122,7 +122,7 @@ def _wait_for_prometheus(base_url: str, timeout: float) -> None:
     logger.info("Prometheus is ready")
 
 
-@fixture(options=PrometheusOptions)
+@fixture(options=PrometheusOptions, tags=("container",))
 def prometheus() -> Iterator[dict[str, str]]:
     """Start Prometheus and yield environment variables for access."""
     opts = current_options("prometheus")

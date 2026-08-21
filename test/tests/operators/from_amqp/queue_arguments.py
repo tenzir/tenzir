@@ -157,19 +157,29 @@ select line = string(message)
                     f"expected {key}={value!r}, got {actual!r}; "
                     f"all arguments: {arguments!r}"
                 )
-        publish = _request_json(
-            opener,
-            "POST",
-            _exchange_publish_path(exchange),
-            {
-                "properties": {},
-                "routing_key": queue,
-                "payload": payload,
-                "payload_encoding": "string",
-            },
-        )
-        if not publish.get("routed"):
-            raise RuntimeError(f"message was not routed to queue {queue}: {publish!r}")
+        # The queue exists before its binding to the exchange does, so an
+        # unrouted publish just means the binding is not ready yet. Unrouted
+        # messages are dropped, so retrying cannot deliver duplicates.
+        deadline = time.monotonic() + 10
+        while True:
+            publish = _request_json(
+                opener,
+                "POST",
+                _exchange_publish_path(exchange),
+                {
+                    "properties": {},
+                    "routing_key": queue,
+                    "payload": payload,
+                    "payload_encoding": "string",
+                },
+            )
+            if publish.get("routed"):
+                break
+            if time.monotonic() >= deadline:
+                raise RuntimeError(
+                    f"message was not routed to queue {queue}: {publish!r}"
+                )
+            time.sleep(0.1)
         stdout, stderr = proc.communicate(timeout=20)
         if proc.returncode != 0:
             raise RuntimeError(

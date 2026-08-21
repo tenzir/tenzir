@@ -1,3 +1,9 @@
+warning: `window` dropped 1 late event(s) that arrived after their window had closed
+ --> tests/operators/window/error_trailing_tolerance.tql:8:35
+  |
+8 | window size=2s, trailing=true, on=ts, tolerance=1s {
+  |                                   ~~
+  |
 {
   n: 1,
   total: 1,
@@ -18,9 +24,3 @@
   total: 9,
   trigger: 4,
 }
-warning: `window` dropped 1 late event(s) that arrived after their window had closed
- --> tests/operators/window/error_trailing_tolerance.tql:8:35
-  |
-8 | window size=2s, trailing=true, on=ts, tolerance=1s {
-  |                                   ~~
-  |

@@ -61,8 +61,15 @@ def _start_catalog(
         f"CATALOG_WAREHOUSE=file://{warehouse_dir}",
         "-v",
         f"{warehouse_dir}:{warehouse_dir}",
-        ICEBERG_REST_IMAGE,
     ]
+    # Both the catalog and Tenzir write to the warehouse. Rootless Podman maps
+    # container root to the invoking host user; Docker maps the host user
+    # directly.
+    if runtime.binary == "podman" and os.geteuid() != 0:
+        run_args.extend(["--user", "0"])
+    else:
+        run_args.extend(["--user", f"{os.getuid()}:{os.getgid()}"])
+    run_args.append(ICEBERG_REST_IMAGE)
     logger.info("Starting Iceberg REST catalog container with %s", runtime.binary)
     container = start_detached(runtime, run_args)
     logger.info(
@@ -116,7 +123,7 @@ def _wait_for_catalog(container: ManagedContainer, port: int, timeout: float) ->
     logger.info("Iceberg REST catalog is ready")
 
 
-@fixture()
+@fixture(tags=("container",))
 def iceberg_rest() -> Iterator[dict[str, str]]:
     """Start an Iceberg REST catalog and yield environment variables."""
     runtime = detect_runtime()

@@ -1,9 +1,9 @@
-{
-  mad_value: null,
-}
 warning: got incompatible types `number` and `duration`
  --> tests/functions/aggregation/mad/mixed_types_warning.tql:3:25
   |
 3 | summarize mad_value=mad(x)
   |                         ~
   |
+{
+  mad_value: null,
+}

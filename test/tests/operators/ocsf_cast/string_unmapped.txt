@@ -1,3 +1,9 @@
+warning: expected type `record` for `unmapped`, but got `string`
+ --> tests/operators/ocsf_cast/string_unmapped.tql:2:1
+  |
+2 | ocsf_cast null_fill=true
+  | ~~~~~~~~~
+  |
 {
   activity_id: null,
   activity_name: null,
@@ -60,9 +66,3 @@
   unmapped: null,
   url: null,
 }
-warning: expected type `record` for `unmapped`, but got `string`
- --> tests/operators/ocsf_cast/string_unmapped.tql:2:1
-  |
-2 | ocsf_cast null_fill=true
-  | ~~~~~~~~~
-  |

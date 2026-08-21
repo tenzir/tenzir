@@ -1,9 +1,3 @@
-{
-  id: "unrelated",
-}
-{
-  id: "same-id-name",
-}
 warning: sigma operator ignores rule 'tests/operators/sigma/inputs/duplicate-identity.yaml#0'
  --> tests/operators/sigma/duplicate-identity.tql:6:12
   |
@@ -19,3 +13,9 @@ warning: sigma operator ignores rule 'tests/operators/sigma/inputs/duplicate-ide
   |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   |
   = note: duplicate rule identity `22222222-2222-2222-2222-222222222222`
+{
+  id: "unrelated",
+}
+{
+  id: "same-id-name",
+}

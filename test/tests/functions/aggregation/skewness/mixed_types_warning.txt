@@ -1,9 +1,9 @@
-{
-  skew: null,
-}
 warning: got incompatible types `number` and `duration`
  --> tests/functions/aggregation/skewness/mixed_types_warning.tql:3:25
   |
 3 | summarize skew=skewness(x)
   |                         ~
   |
+{
+  skew: null,
+}

@@ -9,7 +9,9 @@
 #include "tenzir/detail/weak_run_delayed.hpp"
 
 #include <tenzir/async.hpp>
+#include <tenzir/async/channel.hpp>
 #include <tenzir/async/metrics.hpp>
+#include <tenzir/async/result.hpp>
 #include <tenzir/async/task.hpp>
 #include <tenzir/checked_math.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -22,6 +24,7 @@
 #include <tenzir/view.hpp>
 
 #include <arrow/type.h>
+#include <folly/CancellationToken.h>
 
 #include <chrono>
 
@@ -237,6 +240,11 @@ struct ThrottleArgs {
 class Throttle final : public Operator<table_slice, table_slice> {
 public:
   explicit Throttle(ThrottleArgs args) : args_{std::move(args)} {
+    auto [sender, receiver] = channel<std::chrono::steady_clock::time_point>(1);
+    timer_sender_ = std::move(sender);
+    timer_receiver_
+      = std::make_shared<Receiver<std::chrono::steady_clock::time_point>>(
+        std::move(receiver));
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
@@ -255,6 +263,63 @@ public:
 
   auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
+    // While input is stashed in `pending_`, `state()` reports blocked, so the
+    // executor defers further input until the pacing timer released it.
+    TENZIR_ASSERT(not pending_);
+    co_await emit(std::move(input), push, ctx);
+  }
+
+  // Pacing runs through `await_task()` instead of sleeping in `process()`:
+  // the executor's main loop awaits `process()` inline, so a sleep there
+  // blocks control messages and a graceful stop could not interrupt the wait.
+  auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
+    TENZIR_UNUSED(dh);
+    auto deadline = co_await timer_receiver_->recv();
+    if (deadline.is_none()) {
+      co_return TimerFired{};
+    }
+    // Sleep until the window rolls over, but let `stop()` interrupt the wait
+    // so that stashed input drains promptly during graceful shutdown.
+    auto token = folly::cancellation_token_merge(
+      co_await folly::coro::co_current_cancellation_token,
+      stop_cancel_.getToken());
+    auto result = co_await async_result(
+      folly::coro::co_withCancellation(token, sleep_until(*deadline)));
+    TENZIR_UNUSED(result);
+    co_return TimerFired{};
+  }
+
+  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    if (not result.try_as<TimerFired>() or not pending_) {
+      co_return;
+    }
+    auto input = std::move(*pending_);
+    pending_ = None{};
+    start_ = std::chrono::steady_clock::now();
+    total_ = 0;
+    co_await emit(std::move(input), push, ctx);
+  }
+
+  auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    // Stop pacing so that stashed input drains promptly. Keeping the rate
+    // limit during shutdown would hold the pipeline open until the grace
+    // period force-cancels it, losing the stashed events entirely.
+    stopping_ = true;
+    stop_cancel_.requestCancellation();
+    co_return;
+  }
+
+  auto state() -> OperatorState override {
+    return pending_ ? OperatorState::blocked : OperatorState::normal;
+  }
+
+private:
+  struct TimerFired {};
+
+  auto emit(table_slice input, Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> {
     auto now = std::chrono::steady_clock::now();
     if (args_.drop and last_emit_
         and now - *last_emit_ >= std::chrono::seconds{1}) {
@@ -271,6 +336,10 @@ public:
       start_ = now;
       total_ = 0;
     }
+    if (stopping_ and not args_.drop) {
+      co_await push(std::move(input));
+      co_return;
+    }
     // Preemptive check: the previous slice already exhausted the window budget.
     if (total_ >= args_.rate.inner) {
       if (args_.drop) {
@@ -280,9 +349,8 @@ public:
           .emit(ctx.dh());
         co_return;
       }
-      co_await sleep_until(*start_ + args_.window.inner);
-      start_ = std::chrono::steady_clock::now();
-      total_ = 0;
+      stash(std::move(input));
+      co_return;
     }
     if (args_.drop) {
       // Find the first cutoff, if any, and drop everything after it.
@@ -302,22 +370,31 @@ public:
       }
       co_return;
     }
-    // Wait path: push events up to each cutoff, then sleep until the window
-    // rolls over.
+    // Wait path: push events up to the first cutoff and stash the remainder
+    // until the window rolls over.
     auto begin = size_t{0};
     for (auto cutoff : find_cutoffs(input, ctx.dh())) {
       co_await push(subslice(input, begin, cutoff));
       begin = cutoff;
-      co_await sleep_until(*start_ + args_.window.inner);
-      start_ = std::chrono::steady_clock::now();
-      // `total_` was reset to 0 by `find_cutoffs` on yield.
+      // `find_cutoffs` reset `total_` on yield, but the budget of the current
+      // window is spent either way.
+      total_ = args_.rate.inner;
+      if (begin != input.rows()) {
+        stash(subslice(input, begin, input.rows()));
+      }
+      co_return;
     }
     if (begin != input.rows()) {
       co_await push(subslice(input, begin, input.rows()));
     }
   }
 
-private:
+  auto stash(table_slice remainder) -> void {
+    TENZIR_ASSERT(start_);
+    pending_ = std::move(remainder);
+    auto sent = timer_sender_->try_send(*start_ + args_.window.inner);
+    TENZIR_ASSERT(sent.is_ok());
+  }
   auto find_cutoffs(const table_slice& slice, diagnostic_handler& dh)
     -> generator<size_t> {
     const auto weights = eval(args_.weight, slice, dh);
@@ -381,7 +458,12 @@ private:
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
-    TENZIR_UNUSED(push, ctx);
+    TENZIR_UNUSED(ctx);
+    if (pending_) {
+      auto input = std::move(*pending_);
+      pending_ = None{};
+      co_await push(std::move(input));
+    }
     if (args_.drop and dropped_events_ > 0) {
       throttle_metrics_.emit({{"dropped_events", int64_t(dropped_events_)}});
     }
@@ -394,6 +476,15 @@ private:
   metric_handler throttle_metrics_ = {};
   uint64_t dropped_events_ = 0;
   Option<std::chrono::steady_clock::time_point> last_emit_ = None{};
+  bool stopping_ = false;
+  /// Input that exhausted the current window budget, released by the timer.
+  Option<table_slice> pending_ = None{};
+  /// Wakes the pacing timer in `await_task()`.
+  Option<Sender<std::chrono::steady_clock::time_point>> timer_sender_ = None{};
+  std::shared_ptr<Receiver<std::chrono::steady_clock::time_point>>
+    timer_receiver_;
+  /// Interrupts an in-flight pacing sleep on `stop()`.
+  folly::CancellationSource stop_cancel_;
 };
 
 class plugin final : public virtual operator_plugin2<throttle_operator>,

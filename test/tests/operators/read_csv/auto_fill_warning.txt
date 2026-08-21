@@ -1,3 +1,12 @@
+warning: csv parser: csv parser found too few values in a line
+ --> tests/operators/read_csv/auto_fill_warning.tql:2:5
+  |
+2 |     read_csv
+  |     ~~~~~~~~
+  |
+  = note: line 3
+  = note: line 3 has 2 values, but should have 4 values
+  = hint: use `auto_fill=true` to silently fill missing values with `null`
 {
   a: 1,
   b: 2,
@@ -16,12 +25,3 @@
   c: null,
   d: null,
 }
-warning: csv parser: csv parser found too few values in a line
- --> tests/operators/read_csv/auto_fill_warning.tql:2:5
-  |
-2 |     read_csv
-  |     ~~~~~~~~
-  |
-  = note: line 3
-  = note: line 3 has 2 values, but should have 4 values
-  = hint: use `auto_fill=true` to silently fill missing values with `null`

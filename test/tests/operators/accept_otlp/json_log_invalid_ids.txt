@@ -1,3 +1,16 @@
+warning: rejected invalid OTLP request: invalid `traceId`: ID contains an odd number of hexadecimal digits
+  --> tests/operators/accept_otlp/json_log_invalid_ids.tql:42:13
+   |
+42 | accept_otlp env("HTTP_REQUEST_ENDPOINT")
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+
+warning: rejected invalid OTLP request: failed to decode OTLP/JSON
+  --> tests/operators/accept_otlp/json_log_invalid_ids.tql:42:13
+   |
+42 | accept_otlp env("HTTP_REQUEST_ENDPOINT")
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
 {
   body: "odd trace ID",
   trace_id: null,
@@ -18,16 +31,3 @@
   trace_id: "00112233445566778899aabbccddeeff",
   span_id: null,
 }
-warning: rejected invalid OTLP request: invalid `traceId`: ID contains an odd number of hexadecimal digits
-  --> tests/operators/accept_otlp/json_log_invalid_ids.tql:42:13
-   |
-42 | accept_otlp env("HTTP_REQUEST_ENDPOINT")
-   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-   |
-
-warning: rejected invalid OTLP request: failed to decode OTLP/JSON
-  --> tests/operators/accept_otlp/json_log_invalid_ids.tql:42:13
-   |
-42 | accept_otlp env("HTTP_REQUEST_ENDPOINT")
-   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-   |

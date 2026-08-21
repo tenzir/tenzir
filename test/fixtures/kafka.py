@@ -556,7 +556,7 @@ def _stop_helper(process: subprocess.Popen[str], log_path: Path) -> None:
         )
 
 
-@fixture(options=KafkaOptions)
+@fixture(options=KafkaOptions, tags=("container",))
 def kafka() -> Iterator[dict[str, str]]:
     """Start Kafka and yield environment variables for broker access."""
     opts = current_options("kafka")

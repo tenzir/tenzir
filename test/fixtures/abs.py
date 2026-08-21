@@ -297,7 +297,7 @@ def _blob_exists(port: int, key: str) -> bool:
     raise RuntimeError(f"unexpected status {status} checking blob {key}")
 
 
-@fixture(assertions=CloudStorageAssertions)
+@fixture(assertions=CloudStorageAssertions, tags=("container",))
 def abs() -> FixtureHandle:
     """Start Azurite and return fixture handle with assertions."""
     runtime = detect_runtime()

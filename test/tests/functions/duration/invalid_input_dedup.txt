@@ -1,12 +1,3 @@
-{
-  x: null,
-}
-{
-  x: null,
-}
-{
-  x: null,
-}
 warning: failed to parse string
  --> tests/functions/duration/invalid_input_dedup.tql:8:5
   |
@@ -14,3 +5,12 @@ warning: failed to parse string
   |     ~
   |
   = note: tried to convert: not a duration
+{
+  x: null,
+}
+{
+  x: null,
+}
+{
+  x: null,
+}

@@ -1,3 +1,10 @@
+warning: list contains null values
+ --> tests/functions/autocorrelation/edge_inputs.tql:2:13
+  |
+2 | select ys = xs.autocorrelation()
+  |             ~~
+  |
+  = note: autocorrelation requires a gap-free series
 {
   ys: null,
 }
@@ -7,10 +14,3 @@
 {
   ys: null,
 }
-warning: list contains null values
- --> tests/functions/autocorrelation/edge_inputs.tql:2:13
-  |
-2 | select ys = xs.autocorrelation()
-  |             ~~
-  |
-  = note: autocorrelation requires a gap-free series

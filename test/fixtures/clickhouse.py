@@ -32,7 +32,7 @@ from ._utils import find_free_port
 
 logger = logging.getLogger(__name__)
 
-CLICKHOUSE_IMAGE = "docker.io/clickhouse/clickhouse-server:latest"
+CLICKHOUSE_IMAGE = "docker.io/clickhouse/clickhouse-server:26.7.1.1315"
 CLICKHOUSE_PASSWORD = "tenzir"
 STARTUP_TIMEOUT = 60
 HEALTH_CHECK_INTERVAL = 2
@@ -110,7 +110,7 @@ def _wait_for_clickhouse(container: ManagedContainer, timeout: float) -> None:
     logger.info("ClickHouse is ready")
 
 
-@fixture()
+@fixture(tags=("container",))
 def clickhouse() -> Iterator[dict[str, str]]:
     """Start ClickHouse and yield environment variables for access."""
     runtime = detect_runtime()

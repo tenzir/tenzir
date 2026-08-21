@@ -1,3 +1,5 @@
+warning: zeek_json parser: event did not contain selector field
+  = note: selector field `_path` was not found
 {
   ts: 1056991898.930123,
   uid: "CbJK6937lHta5dSDjf",
@@ -22,5 +24,3 @@
   resp_pkts: 5,
   resp_ip_bytes: 476,
 }
-warning: zeek_json parser: event did not contain selector field
-  = note: selector field `_path` was not found

@@ -166,7 +166,7 @@ def _gcs_file_exists(port: int, key: str) -> bool:
         raise
 
 
-@fixture(assertions=CloudStorageAssertions)
+@fixture(assertions=CloudStorageAssertions, tags=("container",))
 def gcs() -> FixtureHandle:
     """Start fake-gcs-server and return fixture handle with assertions."""
     runtime = detect_runtime()

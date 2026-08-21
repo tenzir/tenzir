@@ -13,9 +13,9 @@ import threading
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Iterator
+from typing import Any
 
-from tenzir_test import fixture
+from tenzir_test import FixtureHandle, fixture
 from tenzir_test.fixtures import FixtureUnavailable, current_options
 
 from ._utils import generate_self_signed_cert
@@ -27,6 +27,11 @@ _EXPECTED_TOKEN = "test-token-s1-12345"
 @dataclass(frozen=True)
 class SentinelOneOptions:
     tls: bool = False
+
+
+@dataclass(frozen=True)
+class SentinelOneAssertions:
+    expected_add_events: list[dict[str, object]] | None = None
 
 
 # Predefined columnar responses keyed by the `query` field in the POST body.
@@ -263,8 +268,12 @@ def _make_handler(capture_path: str) -> type[BaseHTTPRequestHandler]:
     return SentinelOneHandler
 
 
-@fixture(name="sentinelone", options=SentinelOneOptions)
-def sentinelone() -> Iterator[dict[str, str]]:
+@fixture(
+    name="sentinelone",
+    options=SentinelOneOptions,
+    assertions=SentinelOneAssertions,
+)
+def sentinelone() -> FixtureHandle:
     """Start a mock SentinelOne Data Lake API server on a random port.
 
     Exports:
@@ -303,18 +312,55 @@ def sentinelone() -> Iterator[dict[str, str]]:
     scheme = "https" if opts.tls else "http"
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    try:
-        env = {
-            "S1_FIXTURE_URL": f"{scheme}://{_HOST}:{port}",
-            "S1_FIXTURE_TOKEN": _EXPECTED_TOKEN,
-            "S1_FIXTURE_CAPTURE_FILE": capture_path,
-        }
-        env.update(tls_env)
-        yield env
-    finally:
+    env = {
+        "S1_FIXTURE_URL": f"{scheme}://{_HOST}:{port}",
+        "S1_FIXTURE_TOKEN": _EXPECTED_TOKEN,
+        "S1_FIXTURE_CAPTURE_FILE": capture_path,
+    }
+    env.update(tls_env)
+
+    def _assert_test(
+        *, assertions: SentinelOneAssertions | dict[str, Any], **_: object
+    ) -> None:
+        if isinstance(assertions, dict):
+            assertions = SentinelOneAssertions(**assertions)
+        if assertions.expected_add_events is None:
+            return
+        captured = [
+            json.loads(line)
+            for line in Path(capture_path).read_text().splitlines()
+            if line
+        ]
+        normalized = []
+        for payload in captured:
+            if not isinstance(payload, dict):
+                raise AssertionError(
+                    f"expected a SentinelOne addEvents object, got {payload!r}"
+                )
+            session = payload.get("session")
+            if not isinstance(session, str) or not session:
+                raise AssertionError(
+                    f"expected a non-empty SentinelOne session, got {session!r}"
+                )
+            normalized.append(
+                {key: value for key, value in payload.items() if key != "session"}
+            )
+        if normalized != assertions.expected_add_events:
+            raise AssertionError(
+                "expected SentinelOne addEvents payloads "
+                f"{assertions.expected_add_events!r}, got {normalized!r}"
+            )
+
+    def _teardown() -> None:
         server.shutdown()
         thread.join(timeout=2)
         if os.path.exists(capture_path):
             os.remove(capture_path)
         if temp_dir is not None:
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+    return FixtureHandle(
+        env=env,
+        teardown=_teardown,
+        hooks={"assert_test": _assert_test},
+    )

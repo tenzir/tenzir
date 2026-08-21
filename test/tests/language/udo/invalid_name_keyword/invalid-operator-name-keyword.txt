@@ -1,0 +1,2 @@
+[1m[31merror[39m: invalid operator name `let` in `tenzir.operators`[0m
+  [1m[34m=[39m note:[0m must be a single identifier, matching [A-Za-z_][A-Za-z0-9_]* and not a reserved keyword

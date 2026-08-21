@@ -1,9 +1,3 @@
-{
-  request: {
-    Host: "upper",
-    host: "lower",
-  },
-}
 warning: skipped record with conflicting field names
  --> tests/functions/record/map_keys_collision.tql:7:35
   |
@@ -11,3 +5,9 @@ warning: skipped record with conflicting field names
   |                                   ~~~~~~~~~~~~~~
   |
   = note: conflicting fields: `Host`, `host`
+{
+  request: {
+    Host: "upper",
+    host: "lower",
+  },
+}

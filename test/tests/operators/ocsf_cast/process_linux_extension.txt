@@ -1,3 +1,9 @@
+warning: dropping `process.egid` because profile `linux/linux_users` is not enabled
+ --> tests/operators/ocsf_cast/process_linux_extension.tql:9:1
+  |
+9 | ocsf_cast null_fill=true
+  | ~~~~~~~~~
+  |
 {
   activity_id: null,
   activity_name: null,
@@ -89,9 +95,3 @@
   type_uid: null,
   unmapped: null,
 }
-warning: dropping `process.egid` because profile `linux/linux_users` is not enabled
- --> tests/operators/ocsf_cast/process_linux_extension.tql:9:1
-  |
-9 | ocsf_cast null_fill=true
-  | ~~~~~~~~~
-  |

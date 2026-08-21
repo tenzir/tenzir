@@ -1,3 +1,10 @@
+warning: field `x` not found
+ --> tests/functions/otherwise/mixed_gap.tql:3:5
+  |
+3 | z = x.otherwise(-1)
+  |     ~
+  |
+  = hint: append `?` to suppress this warning
 {
   x: 1,
   z: 1,
@@ -9,10 +16,3 @@
   x: 2,
   z: 2,
 }
-warning: field `x` not found
- --> tests/functions/otherwise/mixed_gap.tql:3:5
-  |
-3 | z = x.otherwise(-1)
-  |     ~
-  |
-  = hint: append `?` to suppress this warning

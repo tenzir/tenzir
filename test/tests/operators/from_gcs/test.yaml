@@ -2,7 +2,7 @@ suite: from-gcs
 fixtures: [gcs]
 requires:
   operators:
-    - from_gcs
+    - tql2.from_google_cloud_storage
 assertions:
   fixtures:
     gcs:

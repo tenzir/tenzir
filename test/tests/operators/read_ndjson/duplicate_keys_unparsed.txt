@@ -1,3 +1,5 @@
+warning: ndjson parser: type mismatch between list elements
+  = note: field `x`
 {
   x: [
     "0",
@@ -6,5 +8,3 @@
     "3",
   ],
 }
-warning: ndjson parser: type mismatch between list elements
-  = note: field `x`

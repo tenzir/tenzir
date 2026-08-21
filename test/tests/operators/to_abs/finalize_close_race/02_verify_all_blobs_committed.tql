@@ -3,6 +3,9 @@ from_azure_blob_storage "abfs://" + env("ABS_ACCOUNT_NAME") + "@" + env("ABS_END
   read_ndjson
   blob_path = $file
 }
+// `partition_by` moves the partition fields into the hive-style blob path, so
+// recover `pk` from there instead of the event data.
+pk = int(blob_path.path.split("pk=")[1].split("_part_")[0])
 summarize committed_blobs=count_distinct(blob_path), partitions=distinct(pk)
 partitions = partitions.length()
 select committed_blobs, all_partitions_present=(partitions == 256)

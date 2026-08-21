@@ -1,9 +1,9 @@
-{
-  beat: null,
-}
 warning: expected list of `time`
  --> tests/functions/dominant_period/wrong_type.tql:2:15
   |
 2 | select beat = times.dominant_period(resolution=5s)
   |               ~~~~~
   |
+{
+  beat: null,
+}

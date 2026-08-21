@@ -1,3 +1,9 @@
+warning: expected field `activity_id` to be `int`, but got `double`
+  --> tests/operators/ocsf_derive/derive_from_wrong_int_type.tql:12:1
+   |
+12 | ocsf_derive
+   | ~~~~~~~~~~~
+   |
 {
   metadata: {
     version: "1.5.0",
@@ -7,9 +13,3 @@
   activity_id: 1.5,
   activity_name: null,
 }
-warning: expected field `activity_id` to be `int`, but got `double`
-  --> tests/operators/ocsf_derive/derive_from_wrong_int_type.tql:12:1
-   |
-12 | ocsf_derive
-   | ~~~~~~~~~~~
-   |

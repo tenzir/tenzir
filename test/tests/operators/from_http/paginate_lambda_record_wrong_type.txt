@@ -1,3 +1,10 @@
+warning: `paginate` request field `url` must be `string`
+ --> tests/operators/from_http/paginate_lambda_record_wrong_type.tql:6:13
+  |
+6 |   paginate=(x => x.next),
+  |             ~~~~~~~~~~~
+  |
+  = note: stopping pagination
 {
   page: 1,
   method: "GET",
@@ -13,10 +20,3 @@
     url: 42,
   },
 }
-warning: `paginate` request field `url` must be `string`
- --> tests/operators/from_http/paginate_lambda_record_wrong_type.tql:6:13
-  |
-6 |   paginate=(x => x.next),
-  |             ~~~~~~~~~~~
-  |
-  = note: stopping pagination

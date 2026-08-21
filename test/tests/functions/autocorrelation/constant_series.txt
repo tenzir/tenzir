@@ -1,9 +1,9 @@
-{
-  ys: null,
-}
 warning: autocorrelation is undefined for constant or single-element lists
  --> tests/functions/autocorrelation/constant_series.tql:2:13
   |
 2 | select ys = xs.autocorrelation()
   |             ~~
   |
+{
+  ys: null,
+}

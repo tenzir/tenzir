@@ -52,6 +52,7 @@ from tenzir_test.fixtures.container_runtime import (
     ManagedContainer,
     RuntimeSpec,
     detect_runtime,
+    run_command,
     start_detached,
     wait_until_ready,
 )
@@ -131,8 +132,10 @@ def _start_splunk(
     defaults_path: Path,
 ) -> ManagedContainer:
     container_name = f"tenzir-test-splunk-{uuid.uuid4().hex[:8]}"
+    # No `--rm`: when Splunk dies during startup (e.g. the OOM killer), the
+    # exit state and logs must survive for diagnostics. `_stop_splunk` removes
+    # the container explicitly.
     run_args = [
-        "--rm",
         "--name",
         container_name,
         "--platform",
@@ -170,10 +173,42 @@ def _stop_splunk(container: ManagedContainer) -> None:
             container.container_id[:12],
             (result.stderr or result.stdout or "").strip() or "no output",
         )
+    result = run_command([container.runtime.binary, "rm", "-f", container.container_id])
+    if result.returncode != 0:
+        logger.warning(
+            "Failed to remove Splunk container %s: %s",
+            container.container_id[:12],
+            (result.stderr or result.stdout or "").strip() or "no output",
+        )
 
 
-def _wait_for_splunk(web_port: int, hec_port: int, mgmt_port: int) -> None:
+def _report_container_death(container: ManagedContainer) -> str:
+    state = "container state unavailable"
+    try:
+        info = container.inspect_json()
+        s = info.get("State", {})
+        state = (
+            f"exit code {s.get('ExitCode')}, oom-killed: {s.get('OOMKilled')}, "
+            f"error: {s.get('Error') or 'none'}"
+        )
+    except Exception as exc:  # noqa: BLE001 - best-effort diagnostics
+        state = f"inspect failed: {exc}"
+    result = run_command(
+        [container.runtime.binary, "logs", "--tail", "25", container.container_id]
+    )
+    logs = f"{result.stdout}{result.stderr}".strip()
+    message = f"Splunk container died during startup ({state})"
+    if logs:
+        message = f"{message}; last log lines:\n{logs}"
+    return message
+
+
+def _wait_for_splunk(
+    container: ManagedContainer, web_port: int, hec_port: int, mgmt_port: int
+) -> None:
     def _probe() -> tuple[bool, dict[str, str]]:
+        if not container.is_running():
+            raise RuntimeError(_report_container_death(container))
         management_url = (
             f"https://127.0.0.1:{mgmt_port}/services/server/info?output_mode=json"
         )
@@ -396,10 +431,13 @@ def _verify_search(
         time.sleep(ASSERTION_INTERVAL)
 
 
-@fixture(options=SplunkOptions, assertions=SplunkAssertions)
+@fixture(options=SplunkOptions, assertions=SplunkAssertions, tags=("container",))
 def splunk() -> FixtureHandle:
     opts = current_options("splunk")
-    runtime = detect_runtime()
+    # Prefer Docker: the Splunk image provisions itself with Ansible via
+    # sudo, which fails under rootless Podman with "PAM account management
+    # error" and kills the container during startup.
+    runtime = detect_runtime(order=("docker", "podman"))
     if runtime is None:
         raise FixtureUnavailable(
             "container runtime (docker/podman) required but not found"
@@ -433,7 +471,7 @@ def splunk() -> FixtureHandle:
             mgmt_port=mgmt_port,
             defaults_path=defaults_path,
         )
-        _wait_for_splunk(web_port, hec_port, mgmt_port)
+        _wait_for_splunk(container, web_port, hec_port, mgmt_port)
         _verify_v2_export(mgmt_port)
         if opts.seed_auth_events:
             _seed_auth_events(hec_port)

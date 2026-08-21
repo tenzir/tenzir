@@ -1,7 +1,3 @@
-{
-  wrong_subject: null,
-  wrong_count: null,
-}
 warning: `repeat` expected `string`, but got `int64`
  --> tests/functions/string/repeat_bad_type.tql:2:18
   |
@@ -15,3 +11,7 @@ warning: `repeat` expected `int`, but got `string`
 3 |   wrong_count: "x".repeat("3"),
   |                           ~~~
   |
+{
+  wrong_subject: null,
+  wrong_count: null,
+}

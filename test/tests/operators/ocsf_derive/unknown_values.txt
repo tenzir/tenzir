@@ -1,3 +1,10 @@
+warning: found invalid value for `activity_id`
+  --> tests/operators/ocsf_derive/unknown_values.tql:11:1
+   |
+11 | ocsf_derive
+   | ~~~~~~~~~~~
+   |
+   = note: got 999
 {
   metadata: {
     version: "1.5.0",
@@ -7,10 +14,3 @@
   activity_id: 999,
   activity_name: null,
 }
-warning: found invalid value for `activity_id`
-  --> tests/operators/ocsf_derive/unknown_values.tql:11:1
-   |
-11 | ocsf_derive
-   | ~~~~~~~~~~~
-   |
-   = note: got 999

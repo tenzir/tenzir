@@ -1,3 +1,9 @@
+warning: `year` expected `time`, but got `int64`
+ --> tests/functions/time/time_constructor.tql:9:16
+  |
+9 | invalid_year = x.year()
+  |                ~
+  |
 {
   n: 2024-09-24T20:20:26.168426Z,
   x: 1,
@@ -6,9 +12,3 @@
   d: 24,
   invalid_year: null,
 }
-warning: `year` expected `time`, but got `int64`
- --> tests/functions/time/time_constructor.tql:9:16
-  |
-9 | invalid_year = x.year()
-  |                ~
-  |

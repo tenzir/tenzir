@@ -1,6 +1,3 @@
-{
-  x: 1001,
-}
 warning: `ocsf::class_uid` is deprecated
  --> tests/language/deprecated_modules/relay_function.tql:3:10
   |
@@ -10,3 +7,6 @@ warning: `ocsf::class_uid` is deprecated
   = note: modules are reserved for packages
   = hint: use `ocsf_class_uid` instead
   = docs: https://tenzir.com/docs/reference/functions
+{
+  x: 1001,
+}

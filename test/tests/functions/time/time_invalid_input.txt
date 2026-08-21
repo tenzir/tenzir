@@ -1,6 +1,3 @@
-{
-  x: null,
-}
 warning: `time` failed to parse string
  --> tests/functions/time/time_invalid_input.tql:4:5
   |
@@ -8,3 +5,6 @@ warning: `time` failed to parse string
   |     ~
   |
   = note: tried to convert: definitely not a time
+{
+  x: null,
+}

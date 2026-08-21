@@ -1,3 +1,25 @@
+warning: type clash in list, using `null` instead
+  --> tests/language/expr/list_construction.tql:14:13
+   |
+14 |   x12: [{}, []],
+   |             ~~
+   |
+   = note: expected `record` but got `list`
+
+warning: type clash in list, using `null` instead
+  --> tests/language/expr/list_construction.tql:15:14
+   |
+15 |   x13: [123, "abc"],
+   |              ~~~~~
+   |
+   = note: expected `int64` but got `string`
+
+warning: type clash in list, using `null` instead
+  --> tests/language/expr/list_construction.tql:16:21
+   |
+16 |   x14: [[{x: 123}], [{x: "abc"}]],
+   |                     ~~~~~~~~~~~~
+   |
 {
   x0: [],
   x1: [
@@ -88,25 +110,3 @@
     null,
   ],
 }
-warning: type clash in list, using `null` instead
-  --> tests/language/expr/list_construction.tql:14:13
-   |
-14 |   x12: [{}, []],
-   |             ~~
-   |
-   = note: expected `record` but got `list`
-
-warning: type clash in list, using `null` instead
-  --> tests/language/expr/list_construction.tql:15:14
-   |
-15 |   x13: [123, "abc"],
-   |              ~~~~~
-   |
-   = note: expected `int64` but got `string`
-
-warning: type clash in list, using `null` instead
-  --> tests/language/expr/list_construction.tql:16:21
-   |
-16 |   x14: [[{x: 123}], [{x: "abc"}]],
-   |                     ~~~~~~~~~~~~
-   |

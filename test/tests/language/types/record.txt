@@ -1,61 +1,3 @@
-{
-  xs: {
-    foo: 1,
-  },
-  index_first: 1,
-  get_first: 1,
-  get_first_fallback: 1,
-  index_null: null,
-  get_null: null,
-  get_null_fallback: -1,
-  index_str: 1,
-  get_str: 1,
-  get_str_fallback: 1,
-  get_field: 1,
-  get_field_lenient: 1,
-}
-{
-  xs: {},
-  index_first: null,
-  get_first: null,
-  get_first_fallback: -1,
-  index_null: null,
-  get_null: null,
-  get_null_fallback: -1,
-  index_str: null,
-  get_str: null,
-  get_str_fallback: -1,
-  get_field: null,
-  get_field_lenient: null,
-}
-{
-  xs: null,
-  index_first: null,
-  get_first: null,
-  get_first_fallback: -1,
-  index_null: null,
-  get_null: null,
-  get_null_fallback: -1,
-  index_str: null,
-  get_str: null,
-  get_str_fallback: -1,
-  get_field: null,
-  get_field_lenient: null,
-}
-{
-  xs: "foo",
-  index_first: null,
-  get_first: null,
-  get_first_fallback: -1,
-  index_null: null,
-  get_null: null,
-  get_null_fallback: -1,
-  index_str: null,
-  get_str: null,
-  get_str_fallback: -1,
-  get_field: null,
-  get_field_lenient: null,
-}
 warning: leading `.?` is deprecated; use a trailing `?` instead
   --> tests/language/types/record.tql:19:25
    |
@@ -259,3 +201,61 @@ warning: cannot access field of non-record type
    |                       -- type `string`
    |
    = note: field name is `foo`
+{
+  xs: {
+    foo: 1,
+  },
+  index_first: 1,
+  get_first: 1,
+  get_first_fallback: 1,
+  index_null: null,
+  get_null: null,
+  get_null_fallback: -1,
+  index_str: 1,
+  get_str: 1,
+  get_str_fallback: 1,
+  get_field: 1,
+  get_field_lenient: 1,
+}
+{
+  xs: {},
+  index_first: null,
+  get_first: null,
+  get_first_fallback: -1,
+  index_null: null,
+  get_null: null,
+  get_null_fallback: -1,
+  index_str: null,
+  get_str: null,
+  get_str_fallback: -1,
+  get_field: null,
+  get_field_lenient: null,
+}
+{
+  xs: null,
+  index_first: null,
+  get_first: null,
+  get_first_fallback: -1,
+  index_null: null,
+  get_null: null,
+  get_null_fallback: -1,
+  index_str: null,
+  get_str: null,
+  get_str_fallback: -1,
+  get_field: null,
+  get_field_lenient: null,
+}
+{
+  xs: "foo",
+  index_first: null,
+  get_first: null,
+  get_first_fallback: -1,
+  index_null: null,
+  get_null: null,
+  get_null_fallback: -1,
+  index_str: null,
+  get_str: null,
+  get_str_fallback: -1,
+  get_field: null,
+  get_field_lenient: null,
+}

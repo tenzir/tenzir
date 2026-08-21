@@ -1,11 +1,3 @@
-{
-  g: "a",
-  total: 4,
-}
-{
-  g: null,
-  total: 11,
-}
 warning: field `g` not found
  --> tests/operators/summarize/parallel/null_keys.tql:7:11
   |
@@ -14,3 +6,11 @@ warning: field `g` not found
   |
   = hint: did you mean `x`?
   = hint: append `?` to suppress this warning
+{
+  g: "a",
+  total: 4,
+}
+{
+  g: null,
+  total: 11,
+}

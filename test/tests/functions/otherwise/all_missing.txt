@@ -1,12 +1,3 @@
-{
-  z: -1,
-}
-{
-  z: -1,
-}
-{
-  z: -1,
-}
 warning: field `x` not found
  --> tests/functions/otherwise/all_missing.tql:3:5
   |
@@ -14,3 +5,12 @@ warning: field `x` not found
   |     ~
   |
   = hint: append `?` to suppress this warning
+{
+  z: -1,
+}
+{
+  z: -1,
+}
+{
+  z: -1,
+}

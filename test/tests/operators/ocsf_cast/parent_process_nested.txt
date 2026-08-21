@@ -1,3 +1,10 @@
+warning: dropping field which does not exist in schema
+  --> tests/operators/ocsf_cast/parent_process_nested.tql:18:1
+   |
+18 | ocsf_cast null_fill=true
+   | ~~~~~~~~~
+   |
+   = note: found `process.parent_process.parent_process`
 {
   activity_id: null,
   activity_name: null,
@@ -105,10 +112,3 @@
   type_uid: null,
   unmapped: null,
 }
-warning: dropping field which does not exist in schema
-  --> tests/operators/ocsf_cast/parent_process_nested.tql:18:1
-   |
-18 | ocsf_cast null_fill=true
-   | ~~~~~~~~~
-   |
-   = note: found `process.parent_process.parent_process`

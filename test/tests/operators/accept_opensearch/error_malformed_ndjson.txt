@@ -1,6 +1,3 @@
-{
-  value: 1,
-}
 warning: accept_opensearch parser: line did not contain a single valid JSON object
   = note: line 2
   = note: skipped invalid JSON
@@ -8,3 +5,6 @@ warning: accept_opensearch parser: line did not contain a single valid JSON obje
           {"value":42?
           ^
   = note: total buffer size: 12
+{
+  value: 1,
+}

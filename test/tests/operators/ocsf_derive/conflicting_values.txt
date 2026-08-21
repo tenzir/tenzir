@@ -1,3 +1,10 @@
+warning: found inconsistency between `activity_id` and `activity_name`
+  --> tests/operators/ocsf_derive/conflicting_values.tql:13:1
+   |
+13 | ocsf_derive
+   | ~~~~~~~~~~~
+   |
+   = note: got 1 ("Create") and "Delete" (4)
 {
   metadata: {
     version: "1.5.0",
@@ -7,10 +14,3 @@
   activity_id: 1,
   activity_name: "Delete",
 }
-warning: found inconsistency between `activity_id` and `activity_name`
-  --> tests/operators/ocsf_derive/conflicting_values.tql:13:1
-   |
-13 | ocsf_derive
-   | ~~~~~~~~~~~
-   |
-   = note: got 1 ("Create") and "Delete" (4)

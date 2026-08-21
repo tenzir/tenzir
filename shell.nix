@@ -150,6 +150,7 @@ pkgs.mkShell (
     env.CCACHE_NAMESPACE = "tenzir";
     env.CCACHE_COMPRESS = "true";
     env.CCACHE_SLOPPINESS = "pch_defines,time_macros,include_file_mtime,include_file_ctime,random_seed";
+    env.TENZIR_TEST_DISABLE_INLINE_DEPENDENCY_INSTALL = 1;
 
     shellHook = ''
       ccache_s3_dir="/tmp/tenzir-ccache"

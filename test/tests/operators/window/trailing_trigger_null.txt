@@ -1,3 +1,9 @@
+warning: `window` did not fire for 1 event(s) where `trigger` did not evaluate to `bool`
+ --> tests/operators/window/trailing_trigger_null.tql:6:39
+  |
+6 | window size=2, trailing=true, trigger=fire {
+  |                                       ~~~~
+  |
 {
   x: 1,
   fire: true,
@@ -8,9 +14,3 @@
   fire: true,
   total: 5,
 }
-warning: `window` did not fire for 1 event(s) where `trigger` did not evaluate to `bool`
- --> tests/operators/window/trailing_trigger_null.tql:6:39
-  |
-6 | window size=2, trailing=true, trigger=fire {
-  |                                       ~~~~
-  |

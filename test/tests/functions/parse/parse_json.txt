@@ -1,3 +1,15 @@
+warning: failed to parse a boolean value in the JSON document
+  = note: context:
+          failure
+          ^
+  = note: total buffer size: 7
+
+warning: could not parse json
+ --> tests/functions/parse/parse_json.tql:6:10
+  |
+6 | output = input.parse_json()
+  |          ~~~~~~~~~~~~~~~~~~
+  |
 {
   input: "1",
   output: 1,
@@ -24,15 +36,3 @@
   input: "failure",
   output: null,
 }
-warning: failed to parse a boolean value in the JSON document
-  = note: context:
-          failure
-          ^
-  = note: total buffer size: 7
-
-warning: could not parse json
- --> tests/functions/parse/parse_json.tql:6:10
-  |
-6 | output = input.parse_json()
-  |          ~~~~~~~~~~~~~~~~~~
-  |

@@ -1,6 +1,3 @@
-{
-  id: "unfiltered",
-}
 warning: sigma operator cannot apply filter 'tests/operators/sigma/inputs/filter-unknown-ref.yaml#1'
  --> tests/operators/sigma/filter-unknown-ref.tql:3:12
   |
@@ -9,3 +6,6 @@ warning: sigma operator cannot apply filter 'tests/operators/sigma/inputs/filter
   |
   = note: reference `99999999-9999-9999-9999-999999999999`: no rule with this id or name
   = note: affected rules run unfiltered, which may increase matches
+{
+  id: "unfiltered",
+}

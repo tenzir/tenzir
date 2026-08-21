@@ -1,3 +1,9 @@
+warning: `remote` has no effect in the new executor
+ --> tests/node/scheduler/every_remote_outer.tql:1:1
+  |
+1 | remote {
+  | ~~~~~~
+  |
 {
   index: 0,
 }
@@ -28,9 +34,3 @@
 {
   index: 9,
 }
-warning: `remote` has no effect in the new executor
- --> tests/node/scheduler/every_remote_outer.tql:1:1
-  |
-1 | remote {
-  | ~~~~~~
-  |

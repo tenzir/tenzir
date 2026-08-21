@@ -1,12 +1,3 @@
-{
-  x: 9.38d,
-}
-{
-  x: null,
-}
-{
-  x: null,
-}
 warning: `duration` expected `string`, but got `int64`
  --> tests/functions/duration/parse.tql:9:5
   |
@@ -21,3 +12,12 @@ warning: failed to parse string
   |     ~
   |
   = note: tried to convert:
+{
+  x: 9.38d,
+}
+{
+  x: null,
+}
+{
+  x: null,
+}

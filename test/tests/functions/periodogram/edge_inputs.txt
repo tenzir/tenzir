@@ -1,15 +1,3 @@
-{
-  ys: null,
-}
-{
-  ys: [],
-}
-{
-  ys: [],
-}
-{
-  ys: null,
-}
 warning: list contains null values
  --> tests/functions/periodogram/edge_inputs.tql:2:13
   |
@@ -17,3 +5,15 @@ warning: list contains null values
   |             ~~
   |
   = note: periodogram requires a gap-free series
+{
+  ys: null,
+}
+{
+  ys: [],
+}
+{
+  ys: [],
+}
+{
+  ys: null,
+}

@@ -1,3 +1,9 @@
+warning: dropping `process.egid` because extension `linux` is not enabled
+ --> tests/operators/ocsf_cast/process_linux_profile.tql:9:1
+  |
+9 | ocsf_cast null_fill=true
+  | ~~~~~~~~~
+  |
 {
   activity_id: null,
   activity_name: null,
@@ -86,9 +92,3 @@
   type_uid: null,
   unmapped: null,
 }
-warning: dropping `process.egid` because extension `linux` is not enabled
- --> tests/operators/ocsf_cast/process_linux_profile.tql:9:1
-  |
-9 | ocsf_cast null_fill=true
-  | ~~~~~~~~~
-  |

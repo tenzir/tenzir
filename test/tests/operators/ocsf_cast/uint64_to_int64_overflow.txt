@@ -1,3 +1,10 @@
+warning: integer in `severity_id` exceeds maximum
+ --> tests/operators/ocsf_cast/uint64_to_int64_overflow.tql:2:1
+  |
+2 | ocsf_cast null_fill=true
+  | ~~~~~~~~~
+  |
+  = note: found 18446744073709551615
 {
   activity_id: null,
   activity_name: null,
@@ -60,10 +67,3 @@
   unmapped: null,
   url: null,
 }
-warning: integer in `severity_id` exceeds maximum
- --> tests/operators/ocsf_cast/uint64_to_int64_overflow.tql:2:1
-  |
-2 | ocsf_cast null_fill=true
-  | ~~~~~~~~~
-  |
-  = note: found 18446744073709551615

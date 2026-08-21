@@ -1,6 +1,3 @@
-{
-  d: 3,
-}
 warning: field `a` may only be dropped once
  --> tests/operators/drop/duplicate.tql:8:6
   |
@@ -10,3 +7,6 @@ warning: field `a` may only be dropped once
 8 | drop a, a
   |         ~
   |
+{
+  d: 3,
+}

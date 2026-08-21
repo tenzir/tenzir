@@ -154,11 +154,7 @@ auto strip_prefix(chunk_ptr message, std::string_view prefix)
       ec::invalid_argument,
       fmt::format("message does not start with prefix `{}`", prefix));
   }
-  auto offset = prefix.size();
-  return chunk::make(message->data() + offset, message->size() - offset,
-                     [message = std::move(message)]() noexcept {
-                       static_cast<void>(message);
-                     });
+  return message->slice(prefix.size());
 }
 
 auto prepend_prefix(chunk_ptr payload, std::string_view prefix)

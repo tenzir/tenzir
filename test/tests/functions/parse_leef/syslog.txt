@@ -1,3 +1,17 @@
+warning: field `content` not found
+ --> tests/functions/parse_leef/syslog.tql:4:11
+  |
+4 | content = content.parse_leef()
+  |           ~~~~~~~
+  |
+  = hint: append `?` to suppress this warning
+
+warning: `parse_leef` expected `string`, got `null`
+ --> tests/functions/parse_leef/syslog.tql:4:11
+  |
+4 | content = content.parse_leef()
+  |           ~~~~~~~~~~~~~~~~~~~~
+  |
 {
   facility: 0,
   severity: 4,
@@ -24,17 +38,3 @@
   message: "LEEF:2.0|Zscaler|NSS|3.6|ALLOW|cat=firewall\\tusrName=jane.doe\\tsrc=203.0.113.10\\tdst=198.51.100.20",
   content: null,
 }
-warning: field `content` not found
- --> tests/functions/parse_leef/syslog.tql:4:11
-  |
-4 | content = content.parse_leef()
-  |           ~~~~~~~
-  |
-  = hint: append `?` to suppress this warning
-
-warning: `parse_leef` expected `string`, got `null`
- --> tests/functions/parse_leef/syslog.tql:4:11
-  |
-4 | content = content.parse_leef()
-  |           ~~~~~~~~~~~~~~~~~~~~
-  |

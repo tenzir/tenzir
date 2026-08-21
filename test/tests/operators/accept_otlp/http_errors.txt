@@ -1,3 +1,9 @@
+warning: rejected invalid OTLP request: failed to decode OTLP/JSON
+  --> tests/operators/accept_otlp/http_errors.tql:38:13
+   |
+38 | accept_otlp env("HTTP_REQUEST_ENDPOINT"), signals=["logs"], max_message_size=85
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
 {
   resource: {
     attributes: [],
@@ -37,9 +43,3 @@
   span_id: null,
   event_name: null,
 }
-warning: rejected invalid OTLP request: failed to decode OTLP/JSON
-  --> tests/operators/accept_otlp/http_errors.tql:38:13
-   |
-38 | accept_otlp env("HTTP_REQUEST_ENDPOINT"), signals=["logs"], max_message_size=85
-   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-   |

@@ -1,3 +1,44 @@
+warning: rejected invalid OTLP request: aggregation temporality must be `delta` or `cumulative`
+  --> tests/operators/accept_otlp/json_metrics.tql:64:13
+   |
+64 | accept_otlp env("HTTP_REQUEST_ENDPOINT")
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+
+warning: rejected invalid OTLP request: aggregate sum must be zero when count is zero
+  --> tests/operators/accept_otlp/json_metrics.tql:64:13
+   |
+64 | accept_otlp env("HTTP_REQUEST_ENDPOINT")
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+
+warning: rejected invalid OTLP request: exponential histogram zero threshold must be non-negative
+  --> tests/operators/accept_otlp/json_metrics.tql:64:13
+   |
+64 | accept_otlp env("HTTP_REQUEST_ENDPOINT")
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+
+warning: rejected invalid OTLP request: histogram bounds must be strictly increasing
+  --> tests/operators/accept_otlp/json_metrics.tql:64:13
+   |
+64 | accept_otlp env("HTTP_REQUEST_ENDPOINT")
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+
+warning: rejected invalid OTLP request: summary quantiles must be unique, sorted, and between 0 and 1
+  --> tests/operators/accept_otlp/json_metrics.tql:64:13
+   |
+64 | accept_otlp env("HTTP_REQUEST_ENDPOINT")
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+
+warning: rejected invalid OTLP request: summary quantile values must be non-negative
+  --> tests/operators/accept_otlp/json_metrics.tql:64:13
+   |
+64 | accept_otlp env("HTTP_REQUEST_ENDPOINT")
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
 {
   resource: {
     attributes: [],
@@ -207,44 +248,3 @@
   ],
   flags: 0,
 }
-warning: rejected invalid OTLP request: aggregation temporality must be `delta` or `cumulative`
-  --> tests/operators/accept_otlp/json_metrics.tql:64:13
-   |
-64 | accept_otlp env("HTTP_REQUEST_ENDPOINT")
-   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-   |
-
-warning: rejected invalid OTLP request: aggregate sum must be zero when count is zero
-  --> tests/operators/accept_otlp/json_metrics.tql:64:13
-   |
-64 | accept_otlp env("HTTP_REQUEST_ENDPOINT")
-   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-   |
-
-warning: rejected invalid OTLP request: exponential histogram zero threshold must be non-negative
-  --> tests/operators/accept_otlp/json_metrics.tql:64:13
-   |
-64 | accept_otlp env("HTTP_REQUEST_ENDPOINT")
-   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-   |
-
-warning: rejected invalid OTLP request: histogram bounds must be strictly increasing
-  --> tests/operators/accept_otlp/json_metrics.tql:64:13
-   |
-64 | accept_otlp env("HTTP_REQUEST_ENDPOINT")
-   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-   |
-
-warning: rejected invalid OTLP request: summary quantiles must be unique, sorted, and between 0 and 1
-  --> tests/operators/accept_otlp/json_metrics.tql:64:13
-   |
-64 | accept_otlp env("HTTP_REQUEST_ENDPOINT")
-   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-   |
-
-warning: rejected invalid OTLP request: summary quantile values must be non-negative
-  --> tests/operators/accept_otlp/json_metrics.tql:64:13
-   |
-64 | accept_otlp env("HTTP_REQUEST_ENDPOINT")
-   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-   |
