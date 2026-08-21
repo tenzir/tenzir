@@ -1,0 +1,9 @@
+error: duplicate `_fuse` argument
+ --> tests/operators/parallel/duplicate_fuse.tql:6:22
+  |
+6 | parallel _fuse=true, _fuse=false { pass }
+  |                      ^^^^^^^^^^^
+  ⋮
+6 | parallel _fuse=true, _fuse=false { pass }
+  |          ---------- previously provided here
+  |

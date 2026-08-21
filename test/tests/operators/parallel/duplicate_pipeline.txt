@@ -1,0 +1,9 @@
+error: duplicate `pipeline` argument
+ --> tests/operators/parallel/duplicate_pipeline.tql:6:20
+  |
+6 | parallel { pass }, { pass }
+  |                    ^^^^^^^^
+  ⋮
+6 | parallel { pass }, { pass }
+  |          -------- previously provided here
+  |

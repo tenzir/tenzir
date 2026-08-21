@@ -1,0 +1,7 @@
+// `route_by` is accepted for backward compatibility, but has no effect:
+// partitioning is now derived from the operators inside the subpipeline.
+from {x: 1}, {x: 2}
+parallel 2, route_by=x {
+  y = x
+}
+sort x

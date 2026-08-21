@@ -1,4 +1,4 @@
-error: subpipeline must not produce bytes
+error: `parallel` subpipeline must not produce bytes
  --> tests/operators/parallel/error_bytes_output.tql:6:10
   |
 6 | parallel { write_json }

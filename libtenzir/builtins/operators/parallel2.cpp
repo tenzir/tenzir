@@ -6,12 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/async.hpp"
-#include "tenzir/async/routing.hpp"
-#include "tenzir/operator_plugin.hpp"
+#include "tenzir/compile_ctx.hpp"
+#include "tenzir/detail/scope_guard.hpp"
+#include "tenzir/ir.hpp"
+#include "tenzir/panic.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
-#include "tenzir/table_slice.hpp"
+#include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/plugin.hpp"
 
 #include <thread>
 
@@ -19,294 +22,252 @@ namespace tenzir::plugins::parallel2 {
 
 namespace {
 
+/// The degree used when `jobs` is omitted. We use the number of hardware
+/// threads, falling back to a fixed value when the implementation cannot
+/// determine the available concurrency.
+constexpr auto fallback_jobs = uint64_t{8};
+
+auto default_jobs() -> uint64_t {
+  const auto concurrency = std::thread::hardware_concurrency();
+  return concurrency > 0 ? uint64_t{concurrency} : fallback_jobs;
+}
+
 struct ParallelArgs {
-  Option<located<uint64_t>> jobs;
-  Option<ast::expression> route_by;
-  bool fuse = true;
+  location keyword;
+  Option<located<uint64_t>> jobs; ///< None → `default_jobs`
+  bool fuse = true; ///< true → Fusing::parallel, false → Fusing::none
   located<ir::pipeline> pipe;
+
+  friend auto inspect(auto& f, ParallelArgs& x) -> bool {
+    return f.object(x).fields(f.field("keyword", x.keyword),
+                              f.field("jobs", x.jobs), f.field("fuse", x.fuse),
+                              f.field("pipe", x.pipe));
+  }
 };
 
-/// Shared implementation for both transform and sink variants.
-class ParallelImpl {
+class ParallelIr final : public ir::Operator {
 public:
-  explicit ParallelImpl(ParallelArgs args)
-    : jobs_{args.jobs
-              ? args.jobs->inner
-              : std::max(uint64_t{1}, static_cast<uint64_t>(
-                                        std::thread::hardware_concurrency()))},
-      route_by_{std::move(args.route_by)},
-      fuse_{args.fuse},
-      pipe_{std::move(args.pipe.inner)} {
+  ParallelIr() = default;
+
+  explicit ParallelIr(ParallelArgs args) : args_{std::move(args)} {
   }
 
-  auto start(OpCtx& ctx) -> Task<void> {
-    rows_assigned_.resize(jobs_, 0);
-    for (auto i = uint64_t{0}; i < jobs_; ++i) {
-      auto copy = pipe_;
-      if (not co_await ctx.plan_and_spawn_sub<table_slice>(
-            data{int64_t(i)}, std::move(copy), DiagnosticBehavior::Unchanged,
-            fuse_)) {
-        co_return;
-      }
+  auto name() const -> std::string override {
+    return "parallel_ir";
+  }
+
+  auto copy() const -> Box<ir::Operator> override {
+    return ParallelIr{args_};
+  }
+
+  auto move() && -> Box<ir::Operator> override {
+    return ParallelIr{std::move(args_)};
+  }
+
+  auto jobs() const& -> uint64_t {
+    return args_.jobs ? args_.jobs->inner : default_jobs();
+  }
+
+  auto infer_type(element_type_tag input, diagnostic_handler& dh) const
+    -> failure_or<element_type_tag> override {
+    if (input.is<chunk_ptr>()) {
+      diagnostic::error("`parallel` does not accept bytes as input")
+        .primary(args_.keyword)
+        .emit(dh);
+      return failure::promise();
     }
-  }
-
-  auto process(table_slice input, OpCtx& ctx) -> Task<void> {
-    if (route_by_) {
-      co_await process_hash(std::move(input), ctx);
-    } else {
-      co_await process_round_robin(std::move(input), ctx);
+    TRY(auto output, args_.pipe.inner.infer_type(input, dh));
+    if (output.is<chunk_ptr>()) {
+      diagnostic::error("`parallel` subpipeline must not produce bytes")
+        .primary(args_.pipe.source)
+        .emit(dh);
+      return failure::promise();
     }
+    return output;
   }
 
-  auto snapshot(Serde& serde) {
-    serde("rows_assigned", rows_assigned_);
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
+    return args_.pipe.inner.substitute(ctx, instantiate);
   }
 
-  auto finalize(OpCtx& ctx) const -> Task<void> {
-    for (auto i = uint64_t{0}; i < jobs_; ++i) {
-      auto sub = ctx.get_sub(int64_t(i));
-      if (sub) {
-        auto& pipe = as<SubHandle<table_slice>>(*sub);
-        co_await pipe.close();
-      }
+  auto optimize(ir::optimize_filter filter, event_order order,
+                const ir::OptimizeCtx&) && -> ir::optimize_result override {
+    // Determine whether operators inside this parallel block may reorder.
+    auto degree = jobs();
+    auto sub_octx = ir::OptimizeCtx{
+      .can_any_op_reorder = degree > 1,
+    };
+    // Apply downstream filter and order into the subpipeline (from_downstream).
+    auto sub
+      = std::move(args_.pipe.inner).optimize(std::move(filter), order, sub_octx);
+    // Reinsert residual filters at the front of the subpipeline so they don't
+    // escape past `parallel` (invariant_order: no filter propagation upstream).
+    args_.pipe.inner = std::move(sub.replacement);
+    args_.pipe.inner.prepend(std::move(sub.filter));
+    // Return this operator as the replacement; don't propagate filter upstream.
+    auto replacement = std::vector<Box<ir::Operator>>{};
+    replacement.push_back(std::move(*this).move());
+    return {
+      .filter = {},
+      .order = sub.order,
+      .replacement = ir::pipeline{{}, std::move(replacement)},
+    };
+  }
+
+  auto spawn(element_type_tag) const -> AnyOperator override {
+    panic("parallel must be lowered into the plan before spawning");
+  }
+
+  auto plan(ir::PlanBuilder& builder, ir::PlanPorts input,
+            diagnostic_handler& dh) && -> failure_or<ir::PlanPorts> override {
+    auto degree = jobs();
+    if (degree > 1) {
+      // The subpipeline's head may run at a degree greater than one, which the
+      // external input cannot feed directly.
+      input = builder.scatter_external_input(std::move(input));
     }
+    auto fuse = args_.fuse ? ir::parallelism::Fusing::parallel
+                           : ir::parallelism::Fusing::none;
+    auto scope = ir::Parallelism{
+      .degree = degree,
+      .limit_partitions = builder.par().limit_partitions,
+      .fused = fuse,
+    };
+    builder.push_par_scope(scope);
+    auto guard = detail::scope_guard([&]() noexcept {
+      builder.pop_par_scope();
+    });
+    return builder.lower_pipeline(std::move(args_.pipe.inner), std::move(input),
+                                  dh);
+  }
+
+  auto main_location() const -> location override {
+    return args_.keyword;
+  }
+
+  friend auto inspect(auto& f, ParallelIr& x) -> bool {
+    return f.apply(x.args_);
   }
 
 private:
-  auto process_hash(table_slice input, OpCtx& ctx) -> Task<void> {
-    auto values = eval(*route_by_, input, ctx.dh());
-    // Hash-partition the rows and push at most one slice per bucket.
-    for (auto& [bucket, part] : routing::hash_partition(input, values, jobs_)) {
-      auto sub = ctx.get_sub(int64_t(bucket));
-      TENZIR_ASSERT(sub);
-      auto& pipe = as<SubHandle<table_slice>>(*sub);
-      std::ignore = co_await pipe.push(std::move(part));
-    }
-  }
-
-  auto process_round_robin(table_slice input, OpCtx& ctx) -> Task<void> {
-    auto total_rows = static_cast<uint64_t>(input.rows());
-    auto assignments = routing::distribute_adaptive(total_rows, rows_assigned_);
-    auto offset = size_t{0};
-    for (auto [worker, count] : assignments) {
-      auto slice = subslice(input, offset, offset + count);
-      offset += count;
-      auto sub = ctx.get_sub(int64_t(worker));
-      TENZIR_ASSERT(sub);
-      auto& pipe = as<SubHandle<table_slice>>(*sub);
-      std::ignore = co_await pipe.push(std::move(slice));
-    }
-  }
-
-  uint64_t jobs_;
-  Option<ast::expression> route_by_;
-  bool fuse_;
-  ir::pipeline pipe_;
-  std::vector<uint64_t> rows_assigned_;
+  ParallelArgs args_;
 };
 
-/// Shared implementation for void-input variants (source operators).
-class ParallelSourceImpl {
-public:
-  explicit ParallelSourceImpl(ParallelArgs args)
-    : jobs_{args.jobs
-              ? args.jobs->inner
-              : std::max(uint64_t{1}, static_cast<uint64_t>(
-                                        std::thread::hardware_concurrency()))},
-      fuse_{args.fuse},
-      pipe_{std::move(args.pipe.inner)} {
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> {
-    for (auto i = uint64_t{0}; i < jobs_; ++i) {
-      auto copy = pipe_;
-      if (not co_await ctx.plan_and_spawn_sub<void>(
-            data{int64_t(i)}, std::move(copy), DiagnosticBehavior::Unchanged,
-            fuse_)) {
-        co_return;
-      }
-    }
-  }
-
-private:
-  uint64_t jobs_;
-  bool fuse_;
-  ir::pipeline pipe_;
-};
-
-/// Parallel operator that transforms events (subpipeline outputs events).
-class ParallelTransform final : public Operator<table_slice, table_slice> {
-public:
-  explicit ParallelTransform(ParallelArgs args) : impl_{std::move(args)} {
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> override {
-    return impl_.start(ctx);
-  }
-
-  auto snapshot(Serde& serde) -> void override {
-    impl_.snapshot(serde);
-  }
-
-  auto process(table_slice input, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    TENZIR_UNUSED(push);
-    return impl_.process(std::move(input), ctx);
-  }
-
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
-    -> Task<FinalizeBehavior> override {
-    TENZIR_UNUSED(push);
-    co_await impl_.finalize(ctx);
-    co_return FinalizeBehavior::done;
-  }
-
-private:
-  ParallelImpl impl_;
-};
-
-/// Parallel operator that sinks events (subpipeline outputs void).
-class ParallelSink final : public Operator<table_slice, void> {
-public:
-  explicit ParallelSink(ParallelArgs args) : impl_{std::move(args)} {
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> override {
-    return impl_.start(ctx);
-  }
-
-  auto snapshot(Serde& serde) -> void override {
-    impl_.snapshot(serde);
-  }
-
-  auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
-    return impl_.process(std::move(input), ctx);
-  }
-
-  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    co_await impl_.finalize(ctx);
-    co_return FinalizeBehavior::done;
-  }
-
-private:
-  ParallelImpl impl_;
-};
-
-/// Parallel source operator (subpipeline outputs events).
-class ParallelSource final : public Operator<void, table_slice> {
-public:
-  explicit ParallelSource(ParallelArgs args) : impl_{std::move(args)} {
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> override {
-    return impl_.start(ctx);
-  }
-
-  auto state() -> OperatorState override {
-    return OperatorState::done;
-  }
-
-  auto finalize(Push<table_slice>& push, OpCtx& ctx)
-    -> Task<FinalizeBehavior> override {
-    TENZIR_UNUSED(push, ctx);
-    co_return FinalizeBehavior::done;
-  }
-
-private:
-  ParallelSourceImpl impl_;
-};
-
-/// Parallel source operator (subpipeline outputs void).
-class ParallelVoid final : public Operator<void, void> {
-public:
-  explicit ParallelVoid(ParallelArgs args) : impl_{std::move(args)} {
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> override {
-    return impl_.start(ctx);
-  }
-
-  auto state() -> OperatorState override {
-    return OperatorState::done;
-  }
-
-  auto finalize(OpCtx& ctx) -> Task<FinalizeBehavior> override {
-    TENZIR_UNUSED(ctx);
-    co_return FinalizeBehavior::done;
-  }
-
-private:
-  ParallelSourceImpl impl_;
-};
-
-class plugin final : public OperatorPlugin {
+class plugin final : public virtual operator_compiler_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.parallel";
   }
 
-  auto describe() const -> Description override {
-    auto d = Describer<ParallelArgs>{};
-    auto jobs = d.positional("jobs", &ParallelArgs::jobs);
-    auto route_by = d.named("route_by", &ParallelArgs::route_by, "any");
-    d.named_optional("_fuse", &ParallelArgs::fuse);
-    auto pipe = d.pipeline(&ParallelArgs::pipe, SubOptimize::from_downstream);
-    d.validate([jobs](DescribeCtx& ctx) -> Empty {
-      if (auto j = ctx.get(jobs); j and j->inner == 0) {
-        diagnostic::error("`jobs` must not be zero").primary(*j).emit(ctx);
-      }
-      return {};
-    });
-    d.spawner([pipe, route_by]<class Input>(DescribeCtx& ctx)
-                -> failure_or<Option<SpawnWith<ParallelArgs, Input>>> {
-      TRY(auto pipe, ctx.get(pipe));
-      TRY(auto output, pipe.inner.infer_type(tag_v<Input>, ctx));
-      if constexpr (std::same_as<Input, table_slice>) {
-        if (output == tag_v<table_slice>) {
-          return [](ParallelArgs args) {
-            return ParallelTransform{std::move(args)};
-          };
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<ir::CompileResult> override {
+    auto args = ParallelArgs{};
+    args.keyword = inv.op.get_location();
+
+    auto* pipe_expr = static_cast<ast::pipeline_expr*>(nullptr);
+    auto pipe_location = Option<location>{};
+    auto fuse_location = Option<location>{};
+    auto route_by_location = Option<location>{};
+    auto duplicate
+      = [&](std::string_view what, location previous, location current) {
+          diagnostic::error("duplicate `{}` argument", what)
+            .primary(current)
+            .secondary(previous, "previously provided here")
+            .emit(ctx);
+        };
+    for (auto& arg : inv.args) {
+      if (auto* p = try_as<ast::pipeline_expr>(arg)) {
+        if (pipe_location) {
+          duplicate("pipeline", *pipe_location, arg.get_location());
+          return failure::promise();
         }
-        if (output == tag_v<void>) {
-          return [](ParallelArgs args) {
-            return ParallelSink{std::move(args)};
-          };
+        pipe_location = arg.get_location();
+        pipe_expr = p;
+      } else if (auto* assign = try_as<ast::assignment>(arg)) {
+        // named argument
+        auto* name = try_as<ast::root_field>(*assign->left.kind);
+        if (not name) {
+          diagnostic::error("unexpected argument").primary(arg).emit(ctx);
+          return failure::promise();
         }
-      } else if constexpr (std::same_as<Input, void>) {
-        if (auto route = ctx.get_location(route_by)) {
-          diagnostic::error("`route_by` cannot be used when `parallel` is "
-                            "used as a source")
-            .primary(*route)
+        if (name->id.name == "_fuse") {
+          if (fuse_location) {
+            duplicate("_fuse", *fuse_location, arg.get_location());
+            return failure::promise();
+          }
+          fuse_location = arg.get_location();
+          TRY(auto val, const_eval(assign->right, ctx));
+          auto* b = try_as<bool>(val.inner);
+          if (not b) {
+            diagnostic::error("`_fuse` must be a boolean")
+              .primary(assign->right)
+              .emit(ctx);
+            return failure::promise();
+          }
+          args.fuse = *b;
+        } else if (name->id.name == "route_by") {
+          if (route_by_location) {
+            duplicate("route_by", *route_by_location, arg.get_location());
+            return failure::promise();
+          }
+          route_by_location = arg.get_location();
+          // Accepted so that existing pipelines keep compiling. `parallel` no
+          // longer routes events itself; operators that need their input
+          // partitioned, such as `summarize` and `deduplicate`, declare their
+          // own keys and receive a matching exchange.
+          diagnostic::warning("`route_by` is no longer needed")
+            .primary(arg)
+            .note("events are now routed to the correct operator instance "
+                  "automatically")
+            .emit(ctx);
+        } else {
+          diagnostic::error("unknown argument `{}`", name->id.name)
+            .primary(arg)
             .emit(ctx);
           return failure::promise();
         }
-        if (output == tag_v<table_slice>) {
-          return [](ParallelArgs args) {
-            return ParallelSource{std::move(args)};
-          };
-        }
-        if (output == tag_v<void>) {
-          return [](ParallelArgs args) {
-            return ParallelVoid{std::move(args)};
-          };
-        }
       } else {
-        return {};
+        // positional argument: jobs
+        if (args.jobs) {
+          duplicate("jobs", args.jobs->source, arg.get_location());
+          return failure::promise();
+        }
+        TRY(auto val, const_eval(arg, ctx));
+        auto* i = try_as<int64_t>(val.inner);
+        if (not i) {
+          diagnostic::error("`jobs` must be an integer").primary(arg).emit(ctx);
+          return failure::promise();
+        }
+        if (*i <= 0) {
+          diagnostic::error("`jobs` must be greater than zero")
+            .primary(arg)
+            .emit(ctx);
+          return failure::promise();
+        }
+        args.jobs
+          = located<uint64_t>{static_cast<uint64_t>(*i), arg.get_location()};
       }
-      diagnostic::error("subpipeline must not produce bytes")
-        .primary(pipe.source)
+    }
+
+    if (not pipe_expr) {
+      diagnostic::error("`parallel` requires a pipeline argument `{{ … }}`")
+        .primary(args.keyword)
         .emit(ctx);
       return failure::promise();
-    });
-    // We use `invariant_order()` so that residual filters do not escape, but
-    // are reinserted at the front of the subpipeline instead.
-    return d.invariant_order();
+    }
+
+    args.pipe.source = pipe_expr->get_location();
+    TRY(args.pipe.inner, std::move(pipe_expr->inner).compile(ctx));
+    return ParallelIr{std::move(args)};
   }
 };
+
+using parallel_ir_plugin = inspection_plugin<ir::Operator, ParallelIr>;
 
 } // namespace
 
 } // namespace tenzir::plugins::parallel2
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::parallel2::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::parallel2::parallel_ir_plugin)

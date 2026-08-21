@@ -1,0 +1,11 @@
+// `parallel` at the head of a subpipeline runs its inner operators at a degree
+// greater than one, but the plan's external input is a single handle that can
+// only feed one instance. The planner inserts an identity node to own the
+// scatter.
+from {x: 1, cat: "a", y: 9}, {x: 2, cat: "b", y: 9}, {x: 3, cat: "a", y: 9}
+group cat {
+  parallel 4 {
+    drop y
+  }
+}
+sort x

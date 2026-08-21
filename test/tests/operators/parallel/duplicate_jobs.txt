@@ -1,0 +1,9 @@
+error: duplicate `jobs` argument
+ --> tests/operators/parallel/duplicate_jobs.tql:6:13
+  |
+6 | parallel 2, 3 { pass }
+  |             ^
+  ⋮
+6 | parallel 2, 3 { pass }
+  |          - previously provided here
+  |

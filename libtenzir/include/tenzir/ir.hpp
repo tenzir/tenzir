@@ -37,12 +37,17 @@ namespace ir {
 /// one already filtered an event out.
 using optimize_filter = std::vector<ast::expression>;
 
-/// Pipeline-wide state threaded through the optimize pass.
+/// State threaded through the optimize pass.
 struct OptimizeCtx {
-  /// Whether any operator in the pipeline may reorder events. True when global
-  /// parallelism runs operators at a degree greater than one, in which case
-  /// downstream cannot rely on event order and operators may take faster
-  /// unordered code paths.
+  /// Whether an operator being optimized may reorder events, in which case its
+  /// consumer cannot rely on event order and operators may take faster
+  /// unordered code paths. True when parallelism runs operators at a degree
+  /// greater than one.
+  ///
+  /// This is not pipeline-wide. The parallelism the pipeline is planned with
+  /// sets it for all operators, but `parallel` overrides it for its own
+  /// subpipeline, since it raises the degree of just the operators it
+  /// contains.
   bool can_any_op_reorder = false;
 };
 
@@ -306,7 +311,7 @@ namespace parallelism {
 /// single lane, a single partition, and no channel fusing.
 inline constexpr auto disabled = Parallelism{
   .degree = 1,
-  .limit_partitions = 1,
+  .limit_partitions = 4,
   .fused = Fusing::none,
 };
 
