@@ -12,6 +12,8 @@ Receive OpenTelemetry logs, metrics, and traces directly with the new `accept_ot
 accept_otlp "0.0.0.0:4318", transport="http"
 ```
 
+To receive the same signals over OTLP/gRPC, select the gRPC transport:
+
 ```tql
 accept_otlp "0.0.0.0:4317", transport="grpc"
 ```
