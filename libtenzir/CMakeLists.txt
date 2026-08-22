@@ -712,10 +712,31 @@ if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
             "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/fizz/fizz/generated")
 endif ()
 # proxygen_utils_trace references symbols from proxygen_utils_trace_event_types
-# without declaring the dependency. Link it explicitly so static links see the
-# archive regardless of whether proxygen comes from bundled or system packages.
-target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_target}
-                                        proxygen_utils_trace_event_types)
+# without declaring the dependency. Naming that archive on a consumer's own link
+# line does not fix it: the linker scans archives once, in order, and reaches
+# the one that defines the symbols before the one that references them, so it
+# extracts nothing and the reference stays undefined. Declare the missing edge
+# on the target instead, which is what lets CMake order the two correctly for
+# every consumer. The bundled build has un-namespaced targets, an installed
+# proxygen the namespaced ones.
+if (TARGET proxygen::proxygen_utils_trace)
+  set(_tenzir_proxygen_trace_target proxygen::proxygen_utils_trace)
+  set(_tenzir_proxygen_trace_types_target
+      proxygen::proxygen_utils_trace_event_types)
+elseif (TARGET proxygen_utils_trace)
+  set(_tenzir_proxygen_trace_target proxygen_utils_trace)
+  set(_tenzir_proxygen_trace_types_target proxygen_utils_trace_event_types)
+else ()
+  message(FATAL_ERROR "No supported proxygen trace target found")
+endif ()
+if (NOT TARGET ${_tenzir_proxygen_trace_types_target})
+  message(FATAL_ERROR "No supported proxygen trace event types target found")
+endif ()
+set_property(
+  TARGET ${_tenzir_proxygen_trace_target}
+  APPEND
+  PROPERTY INTERFACE_LINK_LIBRARIES ${_tenzir_proxygen_trace_types_target})
+target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_target})
 if (_tenzir_proxygen_server_target)
   target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_server_target})
 endif ()
