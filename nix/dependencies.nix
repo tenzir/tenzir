@@ -80,7 +80,6 @@ in
   propagatedNativeBuildInputs = [ pkg-config ];
 
   buildInputs = [
-    aws-sdk-cpp-tenzir
     azure-sdk-for-cpp.storage-blobs
     clickhouse-cpp
     fluent-bit
@@ -105,6 +104,9 @@ in
 
   propagatedBuildInputs = [
     arrow-cpp
+    # tenzir/aws_credentials.hpp includes <aws/...>, and TenzirConfig.cmake
+    # requires the SDK for that reason.
+    aws-sdk-cpp-tenzir
     boost
     caf
     # TenzirConfig.cmake requires it, so anything that builds against an

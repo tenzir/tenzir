@@ -131,13 +131,17 @@ if (ARROW_S3)
     AWSSDK
     COMPONENTS s3 sts identity-management
     REQUIRED CONFIG)
-  if (NOT BUILD_SHARED_LIBS)
-    string(
-      APPEND
-      TENZIR_FIND_DEPENDENCY_LIST
-      "\nfind_package(AWSSDK COMPONENTS s3 sts identity-management REQUIRED CONFIG)"
-    )
-  endif ()
+  # Unconditionally, not just for a static build: tenzir/aws_credentials.hpp is
+  # a public header that includes <aws/core/auth/AWSCredentialsProvider.h>, and
+  # AWSSDK_LINK_LIBRARIES holds target names rather than paths. Without this,
+  # consumers of a shared build get neither the include directories they need to
+  # compile nor targets those names resolve to, and see a missing aws/ header or
+  # a bare `-laws-cpp-sdk-s3` instead.
+  string(
+    APPEND
+    TENZIR_FIND_DEPENDENCY_LIST
+    "\nfind_package(AWSSDK COMPONENTS s3 sts identity-management REQUIRED CONFIG)"
+  )
   dependency_summary("AWS SDK S3" ${AWSSDK_CORE_HEADER_FILE} "Dependencies")
 endif ()
 
@@ -613,6 +617,9 @@ target_link_libraries(libtenzir PUBLIC ${ARROW_LIBRARY}
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
 # Link against AWS SDK (for direct S3 deletion without Arrow directory markers).
+# Public because tenzir/aws_credentials.hpp exposes the SDK's types, so a
+# consumer compiles against its headers; the find_package call above is what
+# makes these names resolve on their end.
 if (ARROW_S3)
   target_link_libraries(libtenzir PUBLIC ${AWSSDK_LINK_LIBRARIES})
 endif ()
