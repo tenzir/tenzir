@@ -15,14 +15,14 @@ from common import TARGET_METADATA_ARTIFACTS, GhCommandError, gh_api, gh_json
 
 HEX_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$", re.IGNORECASE)
 
-# GitHub keys a workflow by its file path, so renaming the file starts a fresh
-# run history: every run created before the rename stays attached to the old
-# path and is invisible to `gh run list --workflow engine.yaml`. Baselines are
-# resolved at arbitrary past commits, so keep querying the historical name too.
-# Newest name first, which also keeps ordering right for the latest-run lookup:
-# the rename is a point in time, so every engine.yaml run postdates every
-# tenzir.yaml one. Drop the old entry once no baseline reaches back that far.
-WORKFLOW_FILES = ("engine.yaml", "tenzir.yaml")
+# GitHub keys workflow runs by file path. Keep the renamed workflows so release
+# baselines predating the split remain discoverable through the legacy fallback.
+WORKFLOW_FILES = (
+    "engine-pr.yaml",
+    "engine-nightly.yaml",
+    "engine.yaml",
+    "tenzir.yaml",
+)
 
 RUN_FIELDS = "databaseId,status,conclusion,headSha,url,displayTitle,event"
 
@@ -30,7 +30,7 @@ RUN_FIELDS = "databaseId,status,conclusion,headSha,url,displayTitle,event"
 def list_workflow_runs(
     repo: str, *, filters: list[str], limit: int
 ) -> list[dict[str, Any]]:
-    """List runs across the current and historical workflow file names."""
+    """List runs for current and historical Engine workflows."""
     collected: list[dict[str, Any]] = []
     for workflow in WORKFLOW_FILES:
         try:
@@ -42,6 +42,7 @@ def list_workflow_runs(
                     repo,
                     "--workflow",
                     workflow,
+                    "--all",
                     *filters,
                     "--json",
                     RUN_FIELDS,

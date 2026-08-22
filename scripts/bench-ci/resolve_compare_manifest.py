@@ -29,6 +29,10 @@ def storage_prefix(
     return f"{stem}refs/tags/{ref_value}/{target}"
 
 
+def release_manifest_uri(bucket: str, prefix: str, version: str, target: str) -> str:
+    return f"{storage_prefix(bucket, prefix, 'tag', version, target)}/manifest.json"
+
+
 def fetch_metadata(
     repo: str,
     ref: str,
@@ -53,6 +57,49 @@ def fetch_metadata(
         if allow_missing:
             return {"available": False, "reason": str(exc)}
         raise
+
+
+def fetch_release_metadata(
+    repo: str,
+    bucket: str,
+    prefix: str,
+    version: str,
+    target: str,
+    destination: Path,
+) -> dict[str, Any]:
+    """Fetch a versioned release manifest, falling back to its workflow run."""
+    metadata_path = destination / "manifest.json"
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        subprocess.run(
+            [
+                "aws",
+                "s3",
+                "cp",
+                release_manifest_uri(bucket, prefix, version, target),
+                str(metadata_path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError:
+        for event in ("workflow_dispatch", "release"):
+            metadata = fetch_metadata(
+                repo,
+                version,
+                target,
+                destination,
+                event=event,
+                allow_missing=True,
+            )
+            if metadata.get("available", True):
+                return metadata
+        return metadata
+    metadata = load_json(metadata_path)
+    if metadata.get("version") != version or metadata.get("target") != target:
+        raise RuntimeError(f"invalid release baseline manifest for {target}@{version}")
+    return {"available": True, "metadata_path": str(metadata_path)}
 
 
 def _safe_label(label: str) -> str:
@@ -122,7 +169,7 @@ def prepare_storage_backed_build(
     metadata_path: Path,
     label: str,
     *,
-    run_id: int,
+    run_id: int | None,
     storage: str,
     run_temp: Path,
     role: str,
@@ -133,12 +180,15 @@ def prepare_storage_backed_build(
 ) -> Path:
     payload = load_json(metadata_path)
     payload["label"] = label
-    payload["run_id"] = run_id
+    if run_id is not None:
+        payload["run_id"] = run_id
     payload["storage_prefix"] = storage
     payload["role"] = role
     payload["target"] = target
     payload["ref"] = ref
     payload["implicit"] = implicit
+    if role == "release" and target == "static":
+        payload["release_version"] = ref
     if request_index is not None:
         payload["request_index"] = request_index
     resolved = run_temp / f"{_safe_label(label)}.json"
@@ -189,7 +239,7 @@ def resolve_compare_manifest(
             merge_base,
             target,
             destination=run_temp / f"merge-base-main-{target}",
-            event="push",
+            event="schedule",
             allow_missing=True,
         )
         main_ref = merge_base
@@ -202,7 +252,7 @@ def resolve_compare_manifest(
                 "main",
                 target,
                 output_dir=run_temp / f"main-{target}",
-                event="push",
+                event="schedule",
             )
             main_ref = str(main["resolved_sha"])
         main_path = prepare_storage_backed_build(
@@ -219,19 +269,21 @@ def resolve_compare_manifest(
         build_specs.append(str(main_path))
 
         if isinstance(stable_tag, str) and stable_tag:
-            release = fetch_metadata(
+            release = fetch_release_metadata(
                 repo,
+                bucket,
+                prefix,
                 stable_tag,
                 target,
                 run_temp / f"stable-{target}",
-                event="release",
-                allow_missing=True,
             )
             if release.get("available", True):
                 release_path = prepare_storage_backed_build(
                     Path(release["metadata_path"]),
                     f"latest stable {target}",
-                    run_id=int(release["run_id"]),
+                    run_id=release.get("run_id")
+                    if isinstance(release.get("run_id"), int)
+                    else None,
                     storage=storage_prefix(bucket, prefix, "tag", stable_tag, target),
                     run_temp=run_temp,
                     role="release",
@@ -248,15 +300,24 @@ def resolve_compare_manifest(
     for request_index, selector in enumerate(request["refs"]):
         target = selector["target"]
         ref = selector["ref"]
-        event = infer_event_for_ref(repo, ref)
-        extra = fetch_metadata(
-            repo,
-            ref,
-            target,
-            run_temp / f"extra-{target}-{ref}",
-            event=event,
-            allow_missing=event == "release",
-        )
+        event = "schedule" if ref == "main" else infer_event_for_ref(repo, ref)
+        if event == "release":
+            extra = fetch_release_metadata(
+                repo,
+                bucket,
+                prefix,
+                ref,
+                target,
+                run_temp / f"extra-{target}-{ref}",
+            )
+        else:
+            extra = fetch_metadata(
+                repo,
+                ref,
+                target,
+                run_temp / f"extra-{target}-{ref}",
+                event=event,
+            )
         if not extra.get("available", True):
             print(f"Skipping {target}@{ref}: {extra['reason']}")
             continue
@@ -264,7 +325,9 @@ def resolve_compare_manifest(
             extra_path = prepare_storage_backed_build(
                 Path(extra["metadata_path"]),
                 f"{target}@{ref}",
-                run_id=int(extra["run_id"]),
+                run_id=extra.get("run_id")
+                if isinstance(extra.get("run_id"), int)
+                else None,
                 storage=storage_prefix(
                     bucket, prefix, "main", str(extra["resolved_sha"]), target
                 ),
@@ -279,7 +342,9 @@ def resolve_compare_manifest(
             extra_path = prepare_storage_backed_build(
                 Path(extra["metadata_path"]),
                 f"{target}@{ref}",
-                run_id=int(extra["run_id"]),
+                run_id=extra.get("run_id")
+                if isinstance(extra.get("run_id"), int)
+                else None,
                 storage=storage_prefix(bucket, prefix, "tag", ref, target),
                 run_temp=run_temp,
                 role="release",

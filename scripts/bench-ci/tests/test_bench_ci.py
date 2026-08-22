@@ -28,6 +28,7 @@ import run_benchmarks as run_benchmarks_module
 from run_benchmarks import (
     download_reference_reports,
     filter_missing_reports,
+    load_build_spec,
     normalize_reports,
     publish_reports,
 )
@@ -60,6 +61,13 @@ def test_parse_command_uses_defaults_and_target_specific_refs() -> None:
         {"target": "docker", "ref": "main"},
         {"target": "static", "ref": "abc1234"},
     ]
+
+
+def test_load_build_spec_allows_missing_version(tmp_path: Path) -> None:
+    path = tmp_path / "build.json"
+    path.write_text('{"kind": "static", "target": "static"}', encoding="utf-8")
+
+    assert load_build_spec(path).version is None
 
 
 def test_parse_command_accepts_multiline_arguments() -> None:
@@ -162,6 +170,75 @@ def test_storage_prefix_uses_semantic_ref_layout() -> None:
     assert storage_prefix("tenzir-bench-data", "", "tag", "v5.30.0", "static") == (
         "s3://tenzir-bench-data/refs/tags/v5.30.0/static"
     )
+
+
+def test_release_metadata_prefers_the_versioned_s3_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fake_run(args: list[str], **_kwargs: object) -> None:
+        assert args[:-1] == [
+            "aws",
+            "s3",
+            "cp",
+            "s3://tenzir-bench-data/runs/refs/tags/v5.30.0/docker/manifest.json",
+        ]
+        Path(args[-1]).write_text(
+            '{"image":"ghcr.io/tenzir/tenzir:v5.30.0","kind":"docker","target":"docker","version":"v5.30.0"}',
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(resolve_compare_manifest_module.subprocess, "run", fake_run)
+    metadata = resolve_compare_manifest_module.fetch_release_metadata(
+        "tenzir/tenzir",
+        "tenzir-bench-data",
+        "runs",
+        "v5.30.0",
+        "docker",
+        tmp_path,
+    )
+
+    assert metadata["available"] is True
+    payload = json.loads(Path(str(metadata["metadata_path"])).read_text())
+    assert payload["image"] == "ghcr.io/tenzir/tenzir:v5.30.0"
+
+
+def test_release_metadata_falls_back_to_the_legacy_workflow_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        resolve_compare_manifest_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            subprocess.CalledProcessError(1, ["aws"])
+        ),
+    )
+    events: list[str] = []
+    monkeypatch.setattr(
+        resolve_compare_manifest_module,
+        "fetch_metadata",
+        lambda repo, ref, target, destination, **kwargs: (
+            events.append(str(kwargs["event"]))
+            or {
+                "available": True,
+                "metadata_path": str(destination / "legacy.json"),
+                "run_id": 42,
+            }
+        ),
+    )
+
+    metadata = resolve_compare_manifest_module.fetch_release_metadata(
+        "tenzir/tenzir",
+        "tenzir-bench-data",
+        "runs",
+        "v5.30.0",
+        "docker",
+        tmp_path,
+    )
+
+    assert metadata["run_id"] == 42
+    assert events == ["workflow_dispatch"]
 
 
 def test_update_pr_comment_paginates_before_posting(
@@ -281,6 +358,20 @@ def test_resolve_compare_manifest_moves_target_logic_out_of_workflow(
     )
     monkeypatch.setattr(
         resolve_compare_manifest_module,
+        "fetch_release_metadata",
+        lambda repo, bucket, prefix, version, target, destination: (
+            {"available": False, "reason": "missing release baseline"}
+            if version == "v5.29.0"
+            else {
+                "available": True,
+                "metadata_path": str(
+                    write_metadata(f"{target}-{version}", target=target)
+                ),
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        resolve_compare_manifest_module,
         "materialize_build",
         fake_materialize_build,
     )
@@ -302,6 +393,7 @@ def test_resolve_compare_manifest_moves_target_logic_out_of_workflow(
             "targets": ["docker"],
             "refs": [
                 {"target": "docker", "ref": "v5.29.0"},
+                {"target": "docker", "ref": "v5.30.0"},
                 {"target": "docker", "ref": "feature-x"},
             ],
         },
@@ -313,7 +405,7 @@ def test_resolve_compare_manifest_moves_target_logic_out_of_workflow(
     )
 
     assert manifest["benchmarks"] == ["from_kafka_route53"]
-    assert len(manifest["builds"]) == 4
+    assert len(manifest["builds"]) == 5
     build_payloads = [
         json.loads(Path(path).read_text(encoding="utf-8"))
         for path in manifest["builds"]
@@ -323,6 +415,7 @@ def test_resolve_compare_manifest_moves_target_logic_out_of_workflow(
         "candidate docker",
         "main docker",
         "latest stable docker",
+        "docker@v5.30.0",
         "docker@feature-x",
     ]
     assert build_payloads[0]["role"] == "candidate"
@@ -342,9 +435,12 @@ def test_resolve_compare_manifest_moves_target_logic_out_of_workflow(
     )
     assert build_payloads[2]["role"] == "release"
     assert build_payloads[2]["implicit"] is True
-    assert build_payloads[3]["role"] == "extra"
+    assert build_payloads[3]["role"] == "release"
     assert build_payloads[3]["implicit"] is False
     assert build_payloads[3]["request_index"] == 1
+    assert build_payloads[4]["role"] == "extra"
+    assert build_payloads[4]["implicit"] is False
+    assert build_payloads[4]["request_index"] == 2
 
 
 def test_resolve_compare_manifest_falls_back_when_merge_base_metadata_is_unavailable(
@@ -604,7 +700,7 @@ def test_find_latest_run_with_artifact_uses_recent_successful_run(
     run = find_build_run_module.find_latest_run_with_artifact(
         "tenzir/tenzir",
         branch="main",
-        event="push",
+        event="schedule",
         artifact_name="benchmark-target-docker-amd64",
     )
 
@@ -612,7 +708,7 @@ def test_find_latest_run_with_artifact_uses_recent_successful_run(
     assert run["headSha"] == "wanted"
 
 
-def test_list_workflow_runs_spans_renamed_workflow_files(
+def test_list_workflow_runs_includes_current_and_historical_workflows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     queried: list[str] = []
@@ -620,13 +716,9 @@ def test_list_workflow_runs_spans_renamed_workflow_files(
     def fake_gh_json(args: list[str]) -> object:
         workflow = args[args.index("--workflow") + 1]
         queried.append(workflow)
-        # GitHub keys runs by workflow file path, so a baseline at a commit
-        # built before the rename is only reachable under the old name.
-        if workflow == "engine.yaml":
-            raise common_module.GhCommandError(
-                1, ["gh", *args], stderr="could not find any workflows named"
-            )
-        return [{"databaseId": 7, "headSha": "old", "event": "push"}]
+        run_id = len(queried)
+        assert "--all" in args
+        return [{"databaseId": run_id, "headSha": "old", "event": "pull_request"}]
 
     monkeypatch.setattr(find_build_run_module, "gh_json", fake_gh_json)
 
@@ -634,8 +726,33 @@ def test_list_workflow_runs_spans_renamed_workflow_files(
         "tenzir/mono", filters=["--commit", "old"], limit=5
     )
 
-    assert queried == ["engine.yaml", "tenzir.yaml"]
-    assert [run["databaseId"] for run in runs] == [7]
+    assert queried == [
+        "engine-pr.yaml",
+        "engine-nightly.yaml",
+        "engine.yaml",
+        "tenzir.yaml",
+    ]
+    assert [run["databaseId"] for run in runs] == [1, 2, 3, 4]
+
+
+def test_find_run_selects_the_pr_workflow_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        find_build_run_module, "resolve_commit_sha", lambda repo, ref: "head"
+    )
+    monkeypatch.setattr(
+        find_build_run_module,
+        "list_workflow_runs",
+        lambda repo, *, filters, limit: [
+            {"databaseId": 1, "headSha": "head", "event": "schedule"},
+            {"databaseId": 2, "headSha": "head", "event": "pull_request"},
+        ],
+    )
+
+    run = find_build_run_module.find_run("tenzir/mono", "head", event="pull_request")
+
+    assert run["databaseId"] == 2
 
 
 def test_normalize_reports_uses_benchmark_and_implementation_ids() -> None:
@@ -794,10 +911,9 @@ def test_cmd_compare_materializes_static_only_when_reference_backfill_is_needed(
                 "kind": "static",
                 "storage_prefix": "s3://tenzir-bench-data/runs/refs/main/abc123/static",
                 "version": "5.30.0",
-                "run_id": 11,
-                "artifact_name": "tenzir-static-x86_64-linux",
-                "role": "main",
-                "ref": "abc123",
+                "release_version": "v5.30.0",
+                "role": "release",
+                "ref": "v5.30.0",
                 "implicit": True,
             }
         ),
