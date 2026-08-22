@@ -1,0 +1,9 @@
+created: 2026-08-22
+title: Parallel pipelines across the node
+intro: >-
+  Tenzir now scales pipeline execution across the node, including file ingestion and
+  periodic aggregation. This release also adds native OpenTelemetry ingestion and
+  improves reliability and format handling.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.12.0
