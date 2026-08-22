@@ -28,6 +28,7 @@ import run_benchmarks as run_benchmarks_module
 from run_benchmarks import (
     download_reference_reports,
     filter_missing_reports,
+    load_build_spec,
     normalize_reports,
     publish_reports,
 )
@@ -60,6 +61,13 @@ def test_parse_command_uses_defaults_and_target_specific_refs() -> None:
         {"target": "docker", "ref": "main"},
         {"target": "static", "ref": "abc1234"},
     ]
+
+
+def test_load_build_spec_allows_missing_version(tmp_path: Path) -> None:
+    path = tmp_path / "build.json"
+    path.write_text('{"kind": "static", "target": "static"}', encoding="utf-8")
+
+    assert load_build_spec(path).version is None
 
 
 def test_parse_command_accepts_multiline_arguments() -> None:
