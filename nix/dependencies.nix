@@ -82,7 +82,6 @@ in
   buildInputs = [
     aws-sdk-cpp-tenzir
     azure-sdk-for-cpp.storage-blobs
-    libbacktrace
     clickhouse-cpp
     fluent-bit
     iceberg-cpp
@@ -108,6 +107,10 @@ in
     arrow-cpp
     boost
     caf
+    # TenzirConfig.cmake requires it, so anything that builds against an
+    # installed Tenzir - the plugins of a dynamic build above all - needs to see
+    # it. A plain build input is not enough for that.
+    libbacktrace
     curl
     flatbuffers
     folly
