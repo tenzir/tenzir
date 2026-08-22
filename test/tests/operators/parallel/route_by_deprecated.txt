@@ -1,3 +1,10 @@
+warning: `route_by` is no longer needed
+ --> tests/operators/parallel/route_by_deprecated.tql:4:13
+  |
+4 | parallel 2, route_by=x {
+  |             ~~~~~~~~~~
+  |
+  = note: events are now routed to the correct operator instance automatically
 {
   x: 1,
   y: 1,
@@ -6,10 +13,3 @@
   x: 2,
   y: 2,
 }
-warning: `route_by` is no longer needed
- --> tests/operators/parallel/route_by_deprecated.tql:4:13
-  |
-4 | parallel 2, route_by=x {
-  |             ~~~~~~~~~~
-  |
-  = note: events are now routed to the correct operator instance automatically
