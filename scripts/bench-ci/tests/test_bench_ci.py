@@ -612,7 +612,7 @@ def test_find_latest_run_with_artifact_uses_recent_successful_run(
     assert run["headSha"] == "wanted"
 
 
-def test_list_workflow_runs_spans_renamed_workflow_files(
+def test_list_workflow_runs_uses_nightly_workflow(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     queried: list[str] = []
@@ -620,9 +620,7 @@ def test_list_workflow_runs_spans_renamed_workflow_files(
     def fake_gh_json(args: list[str]) -> object:
         workflow = args[args.index("--workflow") + 1]
         queried.append(workflow)
-        # GitHub keys runs by workflow file path, so a baseline at a commit
-        # built before the rename is only reachable under the old name.
-        if workflow != "engine.yaml":
+        if workflow != "engine-nightly.yaml":
             raise common_module.GhCommandError(
                 1, ["gh", *args], stderr="could not find any workflows named"
             )
@@ -634,7 +632,7 @@ def test_list_workflow_runs_spans_renamed_workflow_files(
         "tenzir/mono", filters=["--commit", "old"], limit=5
     )
 
-    assert queried == ["engine-nightly.yaml", "engine.yaml", "tenzir.yaml"]
+    assert queried == ["engine-nightly.yaml"]
     assert [run["databaseId"] for run in runs] == [7]
 
 
