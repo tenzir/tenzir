@@ -45,6 +45,7 @@ class BuildSpec:
     version: str | None = None
     run_id: int | None = None
     artifact_name: str | None = None
+    release_version: str | None = None
     role: str | None = None
     ref: str | None = None
     implicit: bool = False
@@ -66,6 +67,7 @@ def load_build_spec(path: Path) -> BuildSpec:
     version = payload.get("version")
     run_id = payload.get("run_id")
     artifact_name = payload.get("artifact_name")
+    release_version = payload.get("release_version")
     role = payload.get("role")
     ref = payload.get("ref")
     implicit = payload.get("implicit", False)
@@ -82,6 +84,8 @@ def load_build_spec(path: Path) -> BuildSpec:
         raise RuntimeError(f"{path}: run_id must be an integer")
     if artifact_name is not None and not isinstance(artifact_name, str):
         raise RuntimeError(f"{path}: artifact_name must be a string")
+    if release_version is not None and not isinstance(release_version, str):
+        raise RuntimeError(f"{path}: release_version must be a string")
     if role is not None and not isinstance(role, str):
         raise RuntimeError(f"{path}: role must be a string")
     if ref is not None and not isinstance(ref, str):
@@ -100,6 +104,7 @@ def load_build_spec(path: Path) -> BuildSpec:
         version=version,
         run_id=run_id,
         artifact_name=artifact_name,
+        release_version=release_version,
         role=role,
         ref=ref,
         implicit=implicit,
@@ -208,17 +213,20 @@ def _to_compare_build(
 
 
 def _materialize_static_artifact(paths: BenchPaths, build: BuildSpec) -> Path:
-    if build.run_id is None or not build.artifact_name:
+    if build.release_version is not None:
+        source = f"release-{build.release_version}"
+    elif build.run_id is not None and build.artifact_name:
+        source = str(build.run_id)
+    else:
         raise RuntimeError(
-            f"{build.label}: static build is missing both a binary path and artifact download metadata",
+            f"{build.label}: static build is missing a binary path or download metadata",
         )
-    repo = os.getenv("GITHUB_REPOSITORY", "tenzir/tenzir")
     safe_label = re.sub(r"[^A-Za-z0-9._-]", "-", build.label)
     artifact_root = (
         paths.results_state_dir
         / "benchmark-ci"
         / "_artifacts"
-        / f"{safe_label}-{build.run_id}"
+        / f"{safe_label}-{source}"
     )
     binary = next(iter(sorted(artifact_root.rglob("bin/tenzir"))), None)
     if binary is not None:
@@ -226,27 +234,37 @@ def _materialize_static_artifact(paths: BenchPaths, build: BuildSpec) -> Path:
     download_dir = artifact_root / "download"
     if not download_dir.exists():
         download_dir.mkdir(parents=True, exist_ok=True)
-        subprocess.run(
-            [
+        if build.release_version is not None:
+            command = [
+                "gh",
+                "release",
+                "download",
+                build.release_version,
+                "--repo",
+                "tenzir/tenzir",
+                "--pattern",
+                "tenzir-*-x86_64-linux-static.tar.gz",
+                "--dir",
+                str(download_dir),
+            ]
+        else:
+            command = [
                 "gh",
                 "run",
                 "download",
                 str(build.run_id),
                 "--repo",
-                repo,
+                os.getenv("GITHUB_REPOSITORY", "tenzir/tenzir"),
                 "--name",
-                build.artifact_name,
+                str(build.artifact_name),
                 "--dir",
                 str(download_dir),
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+            ]
+        subprocess.run(command, check=True, capture_output=True, text=True)
     tarballs = sorted(download_dir.rglob("*.tar.gz"))
     if not tarballs:
         raise RuntimeError(
-            f"{build.label}: no tarball found in downloaded artifact {build.artifact_name}"
+            f"{build.label}: no tarball found in downloaded static build"
         )
     extracted_dir = artifact_root / "extract"
     if not extracted_dir.exists():
@@ -403,8 +421,10 @@ def cmd_compare(args: argparse.Namespace) -> int:
             build.kind == "static"
             and build.storage_prefix is not None
             and build.path is None
-            and build.run_id is not None
-            and build.artifact_name is not None
+            and (
+                build.release_version is not None
+                or (build.run_id is not None and build.artifact_name is not None)
+            )
         ):
             preflight_build = _to_compare_build(paths, build, materialize_static=False)
             expected = expected_report_identities(
