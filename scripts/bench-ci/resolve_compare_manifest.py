@@ -300,7 +300,7 @@ def resolve_compare_manifest(
     for request_index, selector in enumerate(request["refs"]):
         target = selector["target"]
         ref = selector["ref"]
-        event = infer_event_for_ref(repo, ref)
+        event = "schedule" if ref == "main" else infer_event_for_ref(repo, ref)
         if event == "release":
             extra = fetch_release_metadata(
                 repo,
