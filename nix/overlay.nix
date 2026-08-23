@@ -28,6 +28,18 @@ let
     });
   };
 
+  # Dynaconf vendors all of its runtime dependencies; the ansible-core
+  # dependency in the nixpkgs packaging is a mistake - nothing in dynaconf
+  # imports ansible, it only appears in test fixtures and in a compatibility
+  # test for the downstream pulp_ansible package. Left in place, it drags the
+  # full Ansible distribution (~800MB) into every image that ships the Python
+  # runtime environment.
+  dynaconfOverlay = python-finalPkgs: python-prevPkgs: {
+    dynaconf = python-prevPkgs.dynaconf.overridePythonAttrs (_: {
+      dependencies = [ ];
+    });
+  };
+
 in
 {
   curl = prevPkgs.curl.override (
@@ -55,7 +67,10 @@ in
   uv-bin = prevPkgs.callPackage ./uv-binary { };
   empty-libgcc_eh = prevPkgs.callPackage ./empty-libgcc_eh { };
 
-  pythonPackagesExtensions = prevPkgs.pythonPackagesExtensions ++ [ pytestOverlay ];
+  pythonPackagesExtensions = prevPkgs.pythonPackagesExtensions ++ [
+    pytestOverlay
+    dynaconfOverlay
+  ];
 
   # Customized from upstream nixpkgs.
   apache-orc = callFunction ./overrides/apache-orc.nix { inherit (prevPkgs) apache-orc; };
