@@ -131,13 +131,17 @@ if (ARROW_S3)
     AWSSDK
     COMPONENTS s3 sts identity-management
     REQUIRED CONFIG)
-  if (NOT BUILD_SHARED_LIBS)
-    string(
-      APPEND
-      TENZIR_FIND_DEPENDENCY_LIST
-      "\nfind_package(AWSSDK COMPONENTS s3 sts identity-management REQUIRED CONFIG)"
-    )
-  endif ()
+  # Unconditionally, not just for a static build: tenzir/aws_credentials.hpp is
+  # a public header that includes <aws/core/auth/AWSCredentialsProvider.h>, and
+  # AWSSDK_LINK_LIBRARIES holds target names rather than paths. Without this,
+  # consumers of a shared build get neither the include directories they need to
+  # compile nor targets those names resolve to, and see a missing aws/ header or
+  # a bare `-laws-cpp-sdk-s3` instead.
+  string(
+    APPEND
+    TENZIR_FIND_DEPENDENCY_LIST
+    "\nfind_package(AWSSDK COMPONENTS s3 sts identity-management REQUIRED CONFIG)"
+  )
   dependency_summary("AWS SDK S3" ${AWSSDK_CORE_HEADER_FILE} "Dependencies")
 endif ()
 
@@ -613,6 +617,9 @@ target_link_libraries(libtenzir PUBLIC ${ARROW_LIBRARY}
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
 # Link against AWS SDK (for direct S3 deletion without Arrow directory markers).
+# Public because tenzir/aws_credentials.hpp exposes the SDK's types, so a
+# consumer compiles against its headers; the find_package call above is what
+# makes these names resolve on their end.
 if (ARROW_S3)
   target_link_libraries(libtenzir PUBLIC ${AWSSDK_LINK_LIBRARIES})
 endif ()
@@ -712,10 +719,31 @@ if (TENZIR_ENABLE_BUNDLED_FACEBOOK_LIBS)
             "${CMAKE_CURRENT_BINARY_DIR}/aux/facebook/fizz/fizz/generated")
 endif ()
 # proxygen_utils_trace references symbols from proxygen_utils_trace_event_types
-# without declaring the dependency. Link it explicitly so static links see the
-# archive regardless of whether proxygen comes from bundled or system packages.
-target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_target}
-                                        proxygen_utils_trace_event_types)
+# without declaring the dependency. Naming that archive on a consumer's own link
+# line does not fix it: the linker scans archives once, in order, and reaches
+# the one that defines the symbols before the one that references them, so it
+# extracts nothing and the reference stays undefined. Declare the missing edge
+# on the target instead, which is what lets CMake order the two correctly for
+# every consumer. The bundled build has un-namespaced targets, an installed
+# proxygen the namespaced ones.
+if (TARGET proxygen::proxygen_utils_trace)
+  set(_tenzir_proxygen_trace_target proxygen::proxygen_utils_trace)
+  set(_tenzir_proxygen_trace_types_target
+      proxygen::proxygen_utils_trace_event_types)
+elseif (TARGET proxygen_utils_trace)
+  set(_tenzir_proxygen_trace_target proxygen_utils_trace)
+  set(_tenzir_proxygen_trace_types_target proxygen_utils_trace_event_types)
+else ()
+  message(FATAL_ERROR "No supported proxygen trace target found")
+endif ()
+if (NOT TARGET ${_tenzir_proxygen_trace_types_target})
+  message(FATAL_ERROR "No supported proxygen trace event types target found")
+endif ()
+set_property(
+  TARGET ${_tenzir_proxygen_trace_target}
+  APPEND
+  PROPERTY INTERFACE_LINK_LIBRARIES ${_tenzir_proxygen_trace_types_target})
+target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_target})
 if (_tenzir_proxygen_server_target)
   target_link_libraries(libtenzir PRIVATE ${_tenzir_proxygen_server_target})
 endif ()

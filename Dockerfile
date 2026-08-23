@@ -1,3 +1,9 @@
+# A local, non-Nix development and test environment. CI neither builds nor
+# publishes this file any more: the `tenzir/tenzir`, `tenzir/tenzir-node` and
+# `tenzir/tenzir-demo` images all come from the Nix attribute `tenzir`, via
+# `engine/nix/tenzir/image.nix`. Change that file when you change what the
+# published images contain.
+
 FROM public.ecr.aws/docker/library/debian:trixie-slim AS runtime-base
 
 FROM gcc:15-trixie AS build-base

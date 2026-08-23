@@ -80,9 +80,7 @@ in
   propagatedNativeBuildInputs = [ pkg-config ];
 
   buildInputs = [
-    aws-sdk-cpp-tenzir
     azure-sdk-for-cpp.storage-blobs
-    libbacktrace
     clickhouse-cpp
     fluent-bit
     iceberg-cpp
@@ -106,8 +104,15 @@ in
 
   propagatedBuildInputs = [
     arrow-cpp
+    # tenzir/aws_credentials.hpp includes <aws/...>, and TenzirConfig.cmake
+    # requires the SDK for that reason.
+    aws-sdk-cpp-tenzir
     boost
     caf
+    # TenzirConfig.cmake requires it, so anything that builds against an
+    # installed Tenzir - the plugins of a dynamic build above all - needs to see
+    # it. A plain build input is not enough for that.
+    libbacktrace
     curl
     flatbuffers
     folly

@@ -4,18 +4,21 @@
   fetchFromGitHub,
   google-cloud-cpp,
 }:
-(
-  if stdenv.hostPlatform.isStatic then
-    google-cloud-cpp.override {
-      apis = [
-        "oauth2"
-        "pubsub"
-        "storage"
-      ];
-    }
-  else
-    google-cloud-cpp
-).overrideAttrs
+# The four APIs the plugins look for, and no more: `storage` for gcs and
+# iceberg, `pubsub` for google-cloud-pubsub, `logging` for
+# to_google_cloud_logging, and `oauth2` for to_google_secops. A plugin whose API
+# is missing disables itself with nothing but a CMake warning, so the list has
+# to be complete on every platform - the nixpkgs default carries no `oauth2`,
+# and the static list used to carry no `logging`. It matches
+# GOOGLE_CLOUD_CPP_ENABLE in scripts/debian/build-google-cloud-cpp-package.sh.
+(google-cloud-cpp.override {
+  apis = [
+    "logging"
+    "oauth2"
+    "pubsub"
+    "storage"
+  ];
+}).overrideAttrs
   (orig: {
     version = "2.46.0";
 
