@@ -56,6 +56,17 @@ def _extract_tarball(tarball: Path) -> None:
         # the binaries to fit - and an unstripped node gives every
         # pip-installed deployment usable backtraces.
         _ = shutil.copytree(extracted_root, PACKAGE_ROOT / "bundled")
+        # The tarball bundles the python operator's dependencies as wheels so
+        # that offline setups work, but the binary ones are ~74 MB that would
+        # push this wheel against the 200 MB cap. A pip-installed tenzir runs
+        # on an online machine by definition, and the operator resolves
+        # matching binaries from PyPI when the bundle only carries the
+        # portable wheels and the interpreter version marker.
+        wheel_dir = PACKAGE_ROOT / "bundled" / "share" / "tenzir" / "python"
+        if wheel_dir.is_dir():
+            for wheel in wheel_dir.glob("*.whl"):
+                if not wheel.name.endswith("-none-any.whl"):
+                    wheel.unlink()
 
 
 def _run_nix() -> list[Path]:

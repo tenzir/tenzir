@@ -58,17 +58,11 @@ let
 
       tenzirPluginNames = import ./plugins/names.nix;
 
-      pythonDeps = import ../python-dependencies.nix;
+      # The bare interpreter suffices: the `python` operator installs its
+      # dependencies from the bundled wheels, which carry the full transitive
+      # set, so nothing needs a site-packages environment at runtime.
       py3 =
-        let
-          p = if stdenv.buildPlatform.canExecute stdenv.hostPlatform then pkgsBuildBuild.python3 else python3;
-        in
-        p.withPackages (
-          pythonDeps.combine [
-            pythonDeps.build
-            pythonDeps.runtime
-          ]
-        );
+        if stdenv.buildPlatform.canExecute stdenv.hostPlatform then pkgsBuildBuild.python3 else python3;
 
       allPluginSrcs = lib.genAttrs tenzirPluginNames (name: "${tenzir-plugins-source}/${name}");
 
@@ -174,7 +168,7 @@ let
             ZSTD_ROOT = lib.getDev zstd;
             LZ4_ROOT = lz4;
             #NIX_LDFLAGS = lib.optionalString (stdenv.cc.isClang && isStatic) "-L${empty-libgcc_eh}/lib";
-            UV_PYTHON = "${lib.getBin py3.python}/bin/python3";
+            UV_PYTHON = "${lib.getBin py3}/bin/python3";
             NIX_LDFLAGS = lib.optionalString (
               stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isStatic
             ) "-L${lib.getDev iconv}/lib -liconv";
@@ -302,16 +296,19 @@ let
 
           dontStrip = true;
 
-          postInstall = ''
+          # The static build needs no wrapper: it bundles uv, and a PATH entry
+          # for the interpreter would point at a store path that does not exist
+          # on the machines the static artifacts are unpacked on, while costing
+          # every static closure the whole interpreter stack. The images set
+          # UV_PYTHON themselves.
+          postInstall = lib.optionalString (!isStatic) ''
             wrapProgram $out/bin/tenzir \
               --prefix PATH : ${
-                lib.makeBinPath (
-                  [ py3.python ]
-                  # The static binary bundles uv.
-                  ++ lib.optionals (!isStatic) [ uv ]
-                )
-              } \
-              --suffix PYTHONPATH : ${py3}/${py3.sitePackages}
+                lib.makeBinPath [
+                  py3
+                  uv
+                ]
+              }
           '';
 
           passthru = {
