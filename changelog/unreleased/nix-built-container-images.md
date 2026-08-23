@@ -3,7 +3,6 @@ title: Nix-built container images
 type: change
 authors:
   - tobim
-  - claude
 created: 2026-08-22T00:00:00.000000Z
 ---
 
@@ -25,6 +24,15 @@ The `-slim` images gain that runtime contract in return: they no longer run as
 `root`, they ship pre-created state directories, `/tmp` is writable, and HTTPS
 works - their trust store was installed under a name the HTTP client does not
 look for, so every TLS connection failed to load its CA paths.
+
+The `tenzir/tenzir-demo` image works again. It now ships the demo package and
+two pre-configured pipelines that import the Zeek and Suricata demo feeds when
+the node starts. Previously the image tried to install a package that no longer
+exists in the library, so a demo node came up without data.
+
+All images are roughly 700 MB smaller. Their bundled Python runtime environment
+no longer contains an unused Ansible installation that a packaging mistake had
+pulled in.
 
 The `tenzir/tenzir-deps` image is no longer published. It only ever carried the
 Debian build dependencies, which the Nix build does not use.

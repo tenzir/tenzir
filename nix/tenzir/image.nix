@@ -1,6 +1,7 @@
 nix2container:
 {
   lib,
+  fetchFromGitHub,
   runCommand,
   bashInteractive,
   cacert,
@@ -140,14 +141,46 @@ let
         done
       '';
 
+  # The demo package comes from the public library, pinned to a revision so that
+  # an image build is reproducible and needs no network of its own.
+  demoLibrary = fetchFromGitHub {
+    owner = "tenzir";
+    repo = "library";
+    rev = "abafa526ca20db080b2a6953b1c75f430a1ab513";
+    hash = "sha256-kKTLpfrJdHoMpB0xOpxCM+sKgrSBhRfA0Xkn/DJwv0M=";
+  };
+
+  # Shipped in the configuration directory's package store, which the node reads
+  # at startup. That loads the package, its operators included, without a
+  # post-start command and without reaching out to the network when the
+  # container comes up. Since the package's sources are standalone operators,
+  # the configured pipelines are what actually feeds the node: they import the
+  # demo data, restarting on failure since the feed downloads from the network.
   demoPackage =
     runCommand "tenzir-demo-package"
       {
         preferLocalBuild = true;
       }
       ''
-        install -Dm444 ${../../scripts/install-demo-node-package.tql} \
-          $out/etc/tenzir/install-demo-node-package.tql
+        mkdir -p $out${prefix}/etc/tenzir/packages
+        cp -r --no-preserve=mode,ownership ${demoLibrary}/demo \
+          $out${prefix}/etc/tenzir/packages/demo
+        cat > $out${prefix}/etc/tenzir/tenzir.yaml <<EOF
+        tenzir:
+          pipelines:
+            demo-zeek:
+              name: Zeek Demo Data
+              definition: |
+                demo::zeek
+                import
+              restart-on-error: true
+            demo-suricata:
+              name: Suricata Demo Data
+              definition: |
+                demo::suricata
+                import
+              restart-on-error: true
+        EOF
       '';
 
   extraTools = [
@@ -240,9 +273,6 @@ in
     name = "tenzir/tenzir-demo";
     entrypoint = [ "tenzir-node" ];
     extraLayers = [ { copyToRoot = demoPackage; } ];
-    extraEnv = [
-      "TENZIR_DEMAND__MAX_BATCHES=3"
-      "TENZIR_START__COMMANDS=exec --file /etc/tenzir/install-demo-node-package.tql"
-    ];
+    extraEnv = [ "TENZIR_DEMAND__MAX_BATCHES=3" ];
   };
 }
