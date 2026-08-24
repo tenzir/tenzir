@@ -1083,15 +1083,16 @@ add_subdirectory(libtenzir)
 add_subdirectory(libtenzir_test)
 add_subdirectory(tenzir)
 
-# The deployment is an in-tree consumer, like the plugins above it. It has to
-# be: `tenzir/async/*.hpp` is folly-typed, and folly reaches consumers through
-# `$<BUILD_LOCAL_INTERFACE:>`, which is stripped from `install(EXPORT)` while
-# the Facebook libs stay bundled. Guarded so an engine-only checkout still
-# configures, and `deployment/CMakeLists.txt` still finds an installed Tenzir
-# when it is built on its own.
-option(TENZIR_ENABLE_DEPLOYMENT "Build the sibling deployment project" ON)
-if (TENZIR_ENABLE_DEPLOYMENT
-    AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../deployment/CMakeLists.txt")
+# A sibling project, built in tree like the plugins above it. Its presence is
+# the switch; the option is for when it is there but in the way.
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../deployment/CMakeLists.txt")
+  set(TENZIR_DEPLOYMENT_DEFAULT ON)
+else ()
+  set(TENZIR_DEPLOYMENT_DEFAULT OFF)
+endif ()
+option(TENZIR_ENABLE_DEPLOYMENT "Build the sibling deployment project"
+       ${TENZIR_DEPLOYMENT_DEFAULT})
+if (TENZIR_ENABLE_DEPLOYMENT)
   add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../deployment" deployment)
 endif ()
 
