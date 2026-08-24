@@ -56,6 +56,9 @@ class MutexGuard;
 template <class T>
 class Mutex {
 public:
+  /// Value-initializes the inner value.
+  Mutex() = default;
+
   explicit Mutex(T x) : value_{std::move(x)} {
   }
 
@@ -71,7 +74,7 @@ private:
   friend class MutexGuard<T>;
 
   RawMutex mutex_;
-  T value_;
+  T value_{};
 };
 
 template <class T>
