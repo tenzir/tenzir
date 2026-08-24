@@ -90,7 +90,8 @@ struct ReadCB : folly::AsyncReader::ReadCallback {
   }
 };
 
-auto read_stdin(Arc<ChunkQueue> queue, diagnostic_handler& dh) -> Task<void> {
+auto read_stdin(Arc<ChunkQueue> queue, diagnostic_handler& dh,
+                folly::EventBase* evb) -> Task<void> {
   const auto fail = [&](auto&& emit) -> Task<void> {
     emit();
     co_await queue->enqueue(chunk_ptr{});
@@ -119,7 +120,6 @@ auto read_stdin(Arc<ChunkQueue> queue, diagnostic_handler& dh) -> Task<void> {
   auto guard = folly::makeGuard([orig_flags] {
     ::fcntl(STDIN_FILENO, F_SETFL, orig_flags);
   });
-  auto* evb = folly::getGlobalIOExecutor()->getEventBase();
   auto reader = folly::AsyncPipeReader::newReader(
     evb, folly::NetworkSocket::fromFd(STDIN_FILENO));
   // Prevent AsyncPipeReader cleanup from closing the process-global stdin.
@@ -181,8 +181,11 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "load_stdin"},
                          MetricsDirection::read, MetricsVisibility::external_,
                          MetricsUnit::bytes);
+    auto executor = ctx.io_executor();
+    // The callback and its queue are confined to this event-base thread.
+    auto* evb = executor->getEventBase();
     ctx.spawn_task(folly::coro::co_withExecutor(
-      ctx.io_executor(), read_stdin(chunk_queue_, ctx.dh())));
+      evb, read_stdin(chunk_queue_, ctx.dh(), evb)));
     co_return;
   }
 
@@ -238,8 +241,11 @@ public:
       done_ = true;
       co_return;
     }
+    auto executor = ctx.io_executor();
+    // The callback and its queue are confined to this event-base thread.
+    auto* evb = executor->getEventBase();
     ctx.spawn_task(folly::coro::co_withExecutor(
-      ctx.io_executor(), read_stdin(chunk_queue_, ctx.dh())));
+      evb, read_stdin(chunk_queue_, ctx.dh(), evb)));
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
