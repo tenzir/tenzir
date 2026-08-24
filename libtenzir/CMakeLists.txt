@@ -726,13 +726,13 @@ endif ()
 # on the target instead, which is what lets CMake order the two correctly for
 # every consumer. The bundled build has un-namespaced targets, an installed
 # proxygen the namespaced ones.
-if (TARGET proxygen::proxygen_utils_trace)
+if (TARGET proxygen_utils_trace)
+  set(_tenzir_proxygen_trace_target proxygen_utils_trace)
+  set(_tenzir_proxygen_trace_types_target proxygen_utils_trace_event_types)
+elseif (TARGET proxygen::proxygen_utils_trace)
   set(_tenzir_proxygen_trace_target proxygen::proxygen_utils_trace)
   set(_tenzir_proxygen_trace_types_target
       proxygen::proxygen_utils_trace_event_types)
-elseif (TARGET proxygen_utils_trace)
-  set(_tenzir_proxygen_trace_target proxygen_utils_trace)
-  set(_tenzir_proxygen_trace_types_target proxygen_utils_trace_event_types)
 else ()
   message(FATAL_ERROR "No supported proxygen trace target found")
 endif ()
