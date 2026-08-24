@@ -48,6 +48,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iterator>
 #include <string_view>
 #include <system_error>
@@ -205,6 +206,67 @@ auto process_path_env() -> std::vector<bp::filesystem::path> {
     path.remove_prefix(separator + 1);
   }
   return result;
+}
+
+/// Returns the interpreter version the bundled wheels were built for, read
+/// from the marker the package ships next to them. The bundled dependency
+/// wheels are binary builds for exactly one interpreter version, so a venv
+/// they are installed into must match it.
+auto bundled_python_version(const std::filesystem::path& python_dir)
+  -> Option<std::string> {
+  auto file = std::ifstream{python_dir / ".python-version"};
+  auto version = std::string{};
+  if (not file or not std::getline(file, version)) {
+    return None{};
+  }
+  boost::algorithm::trim(version);
+  if (version.empty()) {
+    return None{};
+  }
+  return version;
+}
+
+/// Returns the major.minor version of the interpreter at `python`.
+auto interpreter_version(const std::filesystem::path& python,
+                         bp::environment& env) -> Option<std::string> {
+  auto out = bp::ipstream{};
+  auto invocation = std::vector<std::string>{
+    python.string(),
+    "-c",
+    "import sys; print('{}.{}'.format(*sys.version_info[:2]))",
+  };
+  if (bp::system(invocation, env, bp::std_out > out,
+                 detail::preserved_fds{{STDOUT_FILENO}},
+                 bp::detail::limit_handles_{})
+      != 0) {
+    return None{};
+  }
+  auto version = std::string{};
+  if (not std::getline(out, version)) {
+    return None{};
+  }
+  boost::algorithm::trim(version);
+  if (version.empty()) {
+    return None{};
+  }
+  return version;
+}
+
+/// Drops the wheels a venv running `actual` cannot install because they were
+/// built for exactly the interpreter version `required`. The portable wheels
+/// stay; uv resolves matching binary builds from PyPI in their stead.
+auto drop_incompatible_wheels(std::vector<std::string>& bundled_wheels,
+                              const Option<std::string>& required,
+                              const Option<std::string>& actual) -> void {
+  if (not required or not actual or *required == *actual) {
+    return;
+  }
+  TENZIR_VERBOSE("dropping bundled binary wheels: they require Python {} but "
+                 "the venv runs {}",
+                 *required, *actual);
+  std::erase_if(bundled_wheels, [](const std::string& wheel) {
+    return not wheel.ends_with("-none-any.whl");
+  });
 }
 
 using code_or_path_t = located<std::variant<std::filesystem::path, secret>>;
@@ -374,20 +436,60 @@ auto prepare_runtime(const config& config, std::string_view requirements,
     "venv",
     runtime.venv->string(),
   };
-  TENZIR_VERBOSE("creating a python venv with: '{}'",
-                 fmt::join(venv_invocation, "' '"));
-  auto venv_err = bp::ipstream{};
-  if (bp::system(venv_invocation, runtime.env, bp::std_err > venv_err,
-                 detail::preserved_fds{{STDERR_FILENO}},
-                 bp::detail::limit_handles_{})
-      != 0) {
-    diagnostic::error("{}", drain_pipe(venv_err))
+  // Pin the venv to the interpreter version the bundled wheels require. An
+  // explicitly configured interpreter wins: the container images point
+  // UV_PYTHON at their bundled interpreter, which uv must keep using so that
+  // venv creation works without network access.
+  const auto required_version = bundled_wheels.empty()
+                                  ? Option<std::string>{}
+                                  : bundled_python_version(python_dir);
+  auto pinned = false;
+  if (required_version and not detail::getenv("UV_PYTHON")) {
+    venv_invocation.push_back("--python");
+    venv_invocation.push_back(*required_version);
+    pinned = true;
+  }
+  auto create_venv
+    = [&](const std::vector<std::string>& invocation) -> Option<std::string> {
+    TENZIR_VERBOSE("creating a python venv with: '{}'",
+                   fmt::join(invocation, "' '"));
+    auto venv_err = bp::ipstream{};
+    if (bp::system(invocation, runtime.env, bp::std_err > venv_err,
+                   detail::preserved_fds{{STDERR_FILENO}},
+                   bp::detail::limit_handles_{})
+        != 0) {
+      return drain_pipe(venv_err);
+    }
+    return None{};
+  };
+  auto venv_error = create_venv(venv_invocation);
+  if (venv_error and pinned) {
+    // The pinned interpreter is unavailable: none is installed and uv could
+    // not download one. Fall back to whatever interpreter uv finds; the
+    // version check below swaps the binary wheels for PyPI resolution.
+    diagnostic::warning("failed to provision Python {} for the bundled "
+                        "wheels; falling back to the default interpreter and "
+                        "resolving dependencies from PyPI",
+                        *required_version)
+      .primary(operator_location)
+      .note("{}", *venv_error)
+      .emit(dh);
+    venv_invocation.resize(venv_invocation.size() - 2);
+    venv_invocation.push_back("--clear");
+    venv_error = create_venv(venv_invocation);
+  }
+  if (venv_error) {
+    diagnostic::error("{}", *venv_error)
       .primary(operator_location)
       .note("failed to create virtualenv")
       .emit(dh);
     return failure::promise();
   }
   const auto venv_python = *runtime.venv / "bin" / "python3";
+  // An explicit UV_PYTHON override or the fallback interpreter may not match
+  // the version the bundled binary wheels were built for.
+  drop_incompatible_wheels(bundled_wheels, required_version,
+                           interpreter_version(venv_python, runtime.env));
   runtime.uv_python = venv_python.string();
   runtime.env["UV_PYTHON"] = *runtime.uv_python;
   auto run_install
@@ -547,7 +649,6 @@ public:
       // Setup python prerequisites.
       bp::pipe std_out;
       bp::pipe std_in;
-      bp::ipstream std_err;
       auto process_path = process_path_env();
       auto python_executable = bp::search_path("python3", process_path);
       auto env = bp::environment{boost::this_process::environment()};
@@ -610,22 +711,64 @@ public:
           "venv",
           maybe_venv->string(),
         };
-        TENZIR_VERBOSE("creating a python venv with: '{}'",
-                       fmt::join(venv_invocation, "' '"));
-        if (bp::system(venv_invocation, env, bp::std_err > std_err,
-                       detail::preserved_fds{{STDERR_FILENO}},
-                       bp::detail::limit_handles_{})
-            != 0) {
-          auto venv_error = drain_pipe(std_err);
-          // We need to delete the potentially broken venv here to make sure
+        // Pin the venv to the interpreter version the bundled wheels require.
+        // An explicitly configured interpreter wins: the container images
+        // point UV_PYTHON at their bundled interpreter, which uv must keep
+        // using so that venv creation works without network access.
+        const auto required_version = bundled_wheels.empty()
+                                        ? Option<std::string>{}
+                                        : bundled_python_version(python_dir);
+        auto pinned = false;
+        if (required_version and not detail::getenv("UV_PYTHON")) {
+          venv_invocation.push_back("--python");
+          venv_invocation.push_back(*required_version);
+          pinned = true;
+        }
+        auto create_venv =
+          [&](
+            const std::vector<std::string>& invocation) -> Option<std::string> {
+          TENZIR_VERBOSE("creating a python venv with: '{}'",
+                         fmt::join(invocation, "' '"));
+          auto venv_err = bp::ipstream{};
+          if (bp::system(invocation, env, bp::std_err > venv_err,
+                         detail::preserved_fds{{STDERR_FILENO}},
+                         bp::detail::limit_handles_{})
+              != 0) {
+            return drain_pipe(venv_err);
+          }
+          return None{};
+        };
+        auto venv_error = create_venv(venv_invocation);
+        if (venv_error and pinned) {
+          // The pinned interpreter is unavailable: none is installed and uv
+          // could not download one. Fall back to whatever interpreter uv
+          // finds; the version check below swaps the binary wheels for PyPI
+          // resolution.
+          diagnostic::warning("failed to provision Python {} for the bundled "
+                              "wheels; falling back to the default "
+                              "interpreter and resolving dependencies from "
+                              "PyPI",
+                              *required_version)
+            .note("{}", *venv_error)
+            .emit(ctrl.diagnostics());
+          venv_invocation.resize(venv_invocation.size() - 2);
+          venv_invocation.push_back("--clear");
+          venv_error = create_venv(venv_invocation);
+        }
+        if (venv_error) {
+          // The venv_cleanup guard deletes the potentially broken venv so
           // that it doesn't stick around to break later runs of the python
           // operator.
-          diagnostic::error("{}", venv_error)
+          diagnostic::error("{}", *venv_error)
             .note("failed to create virtualenv")
             .throw_();
         }
         const auto venv_python
           = std::filesystem::path{*maybe_venv} / "bin" / "python3";
+        // An explicit UV_PYTHON override or the fallback interpreter may not
+        // match the version the bundled binary wheels were built for.
+        drop_incompatible_wheels(bundled_wheels, required_version,
+                                 interpreter_version(venv_python, env));
         env["UV_PYTHON"] = venv_python.string();
         auto run_install = [&](auto args, std::string_view error_note) {
           using std::begin;

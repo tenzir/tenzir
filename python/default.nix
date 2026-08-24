@@ -36,10 +36,31 @@ let
     ]
   );
 
-  dependencyPackages = map addDistOutput [
-    pythonSet.tenzir-common
-    pythonSet.tenzir-operator
-  ];
+  # The `python` operator installs the bundled wheels into a fresh venv with
+  # `uv pip install`. Anything the bundle does not contain uv resolves against
+  # PyPI, so basic operator usage only works offline when the bundle carries
+  # the full transitive dependency set. Walk the lock file to enumerate it.
+  uvLock = fromTOML (builtins.readFile ./uv.lock);
+  lockPackages = builtins.listToAttrs (
+    map (p: {
+      inherit (p) name;
+      value = p;
+    }) uvLock.package
+  );
+  dependencyClosure =
+    let
+      step =
+        seen: name:
+        if seen ? ${name} then
+          seen
+        else
+          builtins.foldl' step (seen // { ${name} = true; }) (
+            map (d: d.name) (lockPackages.${name}.dependencies or [ ])
+          );
+    in
+    builtins.attrNames (step { } "tenzir-operator");
+
+  dependencyPackages = map (name: addDistOutput pythonSet.${name}) dependencyClosure;
 in
 {
   tenzir-wheels = callPackage (
@@ -47,6 +68,10 @@ in
     runCommand "tenzir-wheels" { } ''
       set -eu
       mkdir -p $out
+      # The dependency wheels are binary builds for exactly this interpreter
+      # version. The `python` operator reads the marker to pin its venvs to a
+      # matching interpreter on systems that do not ship one.
+      echo "${python3.pythonVersion}" > $out/.python-version
       copy_wheels() {
         local src="$1"
         if [ -d "$src" ]; then

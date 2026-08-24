@@ -48,7 +48,7 @@ stdenvNoCC.mkDerivation {
       export XDG_DATA_HOME=$PWD/data
       export XDG_STATE_HOME=$PWD/state
       export TMPDIR=$PWD/tmp
-      reqs=(--no-deps ${tenzirPythonPkgs.tenzir-wheels}/*.whl)
+      reqs=(${tenzirPythonPkgs.tenzir-wheels}/*.whl)
       export TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS="''${reqs[*]}"
       # Remove tests that want networking
       rm -rf test/tests/operators/sockets

@@ -7,6 +7,9 @@ nix2container:
   cacert,
   coreutils,
   libcap,
+  python3,
+  stdenv,
+  zlib,
   isStatic,
 }:
 { pkg, plugins }:
@@ -222,7 +225,16 @@ let
         Env = [
           (
             let
-              path = lib.makeBinPath (extraTools ++ [ pkg ]);
+              # The interpreter is on PATH because the `python` operator
+              # requires one there before it consults uv; the static package,
+              # unlike the wrapped dynamic one, brings none of its own.
+              path = lib.makeBinPath (
+                extraTools
+                ++ [
+                  pkg
+                  python3
+                ]
+              );
             in
             "PATH=${path}"
           )
@@ -242,6 +254,20 @@ let
           # the configuration directory is one a user can write to. See
           # `prefixTree` above.
           "TENZIR_RUNTIME_PREFIX=${prefix}"
+          # The `python` operator creates its venv with uv, which finds no
+          # interpreter on the image's PATH and would download one from the
+          # network. Point it at the bundled interpreter, which matches the
+          # bundled dependency wheels, so venv creation works offline.
+          "UV_PYTHON=${lib.getExe python3}"
+          # The dependency wheels the operator installs are manylinux builds
+          # that expect the dynamic loader to provide libstdc++ and zlib.
+          # Nothing in a Nix-built image registers them with the loader, so
+          # name them explicitly. This also serves wheels that uv downloads
+          # from PyPI for a pipeline's `requirements`; wheels needing more of
+          # the manylinux whitelist (X11, GL, glib) remain out of scope. The
+          # image's own binaries resolve the same store paths through their
+          # RUNPATHs, making this a no-op for them.
+          "LD_LIBRARY_PATH=${lib.getLib stdenv.cc.cc}/lib:${lib.getLib zlib}/lib"
         ]
         ++ extraEnv;
         Entrypoint = entrypoint;
