@@ -1,0 +1,1 @@
+ok: delivered prefixed JSON after subscriber registration
