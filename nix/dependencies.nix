@@ -22,7 +22,6 @@
   protobuf,
   google-cloud-cpp-tenzir,
   nlohmann_json,
-  opentelemetry-cpp,
   crc32c,
   grpc,
   icu,
@@ -108,10 +107,6 @@ in
     # tenzir/aws_credentials.hpp includes <aws/...>, and TenzirConfig.cmake
     # requires the SDK for that reason.
     aws-sdk-cpp-tenzir
-    # For `deployment/`, which the engine adds as a subdirectory. Its OTLP
-    # exporters are what `deployment/src/telemetry.cpp` exports through, and
-    # `overlay.nix` is where the build that has them is asked for.
-    opentelemetry-cpp
     boost
     caf
     # TenzirConfig.cmake requires it, so anything that builds against an

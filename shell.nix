@@ -30,11 +30,8 @@ let
       pkgs.openssl
       pkgs.arrow-adbc-go
       pkgs.libsodium
-      # `deployment/test` is the only thing that wants it, and only in a
-      # developer build: the packaged one configures with
-      # `TENZIR_ENABLE_UNIT_TESTS=OFF`, so this belongs to the shell rather than
-      # to `dependencies.nix`.
       pkgs.catch2_3
+      pkgs.opentelemetry-cpp
     ]
   );
 
