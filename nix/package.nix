@@ -124,9 +124,18 @@ rec {
           # git repository, so its source includes the whole repository and the
           # path stays inside it. Only the names in ./tenzir/plugins/names.nix
           # are pulled from here as proprietary plugins.
-          tenzir-plugins-source = builtins.path {
-            path = ./../plugins;
-            name = "tenzir-plugins-source";
+          #
+          # A fileset only selects files, so the hash of this source cannot
+          # depend on empty directories. The submodule gitlinks under
+          # plugins/*/aux surface as empty directories in some fetch modes
+          # (plain path fetches of jj workspaces, rev-pinned git+file fetches)
+          # and are omitted entirely in others (CI's shallow checkout, worktree
+          # fetches of a colocated checkout); with `builtins.path` that
+          # difference changed the plugin derivations and broke binary cache
+          # hits for local builds.
+          tenzir-plugins-source = lib.fileset.toSource {
+            root = ./../plugins;
+            fileset = ./../plugins;
           };
           pkg = tenzir-de.override {
             inherit tenzir-plugins-source;
