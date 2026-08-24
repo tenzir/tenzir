@@ -3,8 +3,6 @@ title: Lag operator
 type: feature
 authors:
   - mavam
-prs:
-  - 194
 created: 2026-08-24T08:48:14.302022Z
 ---
 
