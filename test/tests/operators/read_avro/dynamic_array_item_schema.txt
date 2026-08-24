@@ -1,0 +1,7 @@
+error: unsupported Avro schema
+ --> tests/operators/read_avro/dynamic_array_item_schema.tql:7:18
+  |
+7 | read_avro schema=r#"{"type":"array","items":{"type":"map","values":"long"}}"#
+  |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: Avro array item types must have a fixed Tenzir type

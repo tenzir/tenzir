@@ -1,0 +1,18 @@
+warning: `parse_avro` expected `blob` or `string`, got `int64`
+ --> tests/functions/parse_avro/input_type_stability.tql:4:10
+  |
+4 | parsed = input.parse_avro(schema=r#"{"type":"fixed","name":"byte","size":1}"#)
+  |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+{
+  nullable: null,
+  parsed: b"a",
+  kind: "blob",
+  nullable_kind: "string",
+}
+{
+  nullable: "a",
+  parsed: null,
+  kind: "blob",
+  nullable_kind: "string",
+}

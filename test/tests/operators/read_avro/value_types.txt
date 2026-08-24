@@ -1,0 +1,12 @@
+{
+  integer: -1,
+  single: 1.5,
+  double: -2.25,
+  bytes: "00FF",
+  fixed: "ABCD",
+  enumeration: "b",
+  nothing: null,
+  nested: {
+    flag: true,
+  },
+}

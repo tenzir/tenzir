@@ -1,0 +1,7 @@
+error: failed to read Avro input
+ --> tests/operators/read_avro/truncated_first_raw.tql:7:1
+  |
+7 | read_avro schema=r#""string""#
+  | ^^^^^^^^^
+  |
+  = note: truncated Avro input

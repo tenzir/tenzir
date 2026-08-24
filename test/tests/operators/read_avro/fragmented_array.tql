@@ -1,0 +1,14 @@
+// Split the first count varint and its items into one-byte chunks, then scan
+// another 50,000 blocks without rescanning the retained prefix.
+from {data: "00".decode_hex()}
+repeat 50067
+enumerate i
+data = (
+  "80" if i == 0 else
+  "01" if i == 1 else
+  "00" if i <= 65 or i == 50066 else
+  "0200"
+).decode_hex()
+write_chunks
+read_avro schema=r#"{"type":"array","items":"long"}"#
+value = value.length()

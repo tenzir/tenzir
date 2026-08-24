@@ -1,0 +1,7 @@
+error: failed to read Avro input
+ --> tests/operators/read_avro/oversized_decoded_array.tql:7:1
+  |
+7 | read_avro schema=r#"{"type": "array", "items": "null"}"#
+  | ^^^^^^^^^
+  |
+  = note: decoded Avro datum exceeds 16 MiB

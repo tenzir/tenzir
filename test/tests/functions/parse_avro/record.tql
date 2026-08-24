@@ -1,0 +1,13 @@
+from {raw: "02066162630000"}, {raw: "040678797a00020261"}
+parsed = raw.decode_hex().parse_avro(schema=r#"{
+  "type": "record",
+  "name": "event",
+  "fields": [
+    {"name": "number", "type": "int"},
+    {"name": "text", "type": "string"},
+    {"name": "metadata", "type": ["null", {"type": "map", "values": "long"}]},
+    {"name": "maybe", "type": ["null", "string"]}
+  ]
+}"#)
+maybe_kind = type_of(parsed.maybe).kind
+drop raw

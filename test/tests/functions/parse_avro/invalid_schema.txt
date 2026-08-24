@@ -1,0 +1,7 @@
+error: invalid Avro schema
+ --> tests/functions/parse_avro/invalid_schema.tql:5:45
+  |
+5 | parsed = raw.decode_hex().parse_avro(schema="{")
+  |                                             ^^^
+  |
+  = note: EOF reached

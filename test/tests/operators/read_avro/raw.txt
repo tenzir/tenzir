@@ -1,0 +1,27 @@
+{
+  id: 42,
+  name: "alice",
+  active: true,
+  tags: [
+    "x",
+    "yz",
+  ],
+  meta: {
+    a: 7,
+  },
+  choice: "ok",
+  optional_meta: null,
+  choice_kind: "string",
+}
+{
+  id: 43,
+  name: "bob",
+  active: false,
+  tags: [],
+  meta: {
+    b: 8,
+  },
+  choice: null,
+  optional_meta: null,
+  choice_kind: "string",
+}

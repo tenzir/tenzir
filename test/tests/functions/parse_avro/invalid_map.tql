@@ -1,0 +1,22 @@
+let $oversized_schema = "{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"r\",\"fields\":[{\"name\":\"" + "x".repeat(32768) + "\",\"type\":\"null\"}]}}"
+from {
+  duplicate_raw: "0402610002610200",
+  invalid_key_raw: "0202ff0000",
+  invalid_value_raw: "0402610278026202ff00",
+  invalid_boolean_raw: "02",
+  invalid_int_overflow_raw: "8080808010",
+  invalid_int_underflow_raw: "8180808010",
+  overdeclared_block_raw: "01040000",
+  oversized_record_array_raw: "b00900",
+}
+duplicate = duplicate_raw.decode_hex().parse_avro(schema=r#"{"type":"map","values":"long"}"#)
+invalid_key = invalid_key_raw.decode_hex().parse_avro(schema=r#"{"type":"map","values":"long"}"#)
+invalid_value = invalid_value_raw.decode_hex().parse_avro(schema=r#"{"type":"map","values":"string"}"#)
+invalid_boolean = invalid_boolean_raw.decode_hex().parse_avro(schema=r#""boolean""#)
+invalid_int_overflow = invalid_int_overflow_raw.decode_hex().parse_avro(schema=r#""int""#)
+invalid_int_underflow = invalid_int_underflow_raw.decode_hex().parse_avro(schema=r#""int""#)
+overdeclared_block = overdeclared_block_raw.decode_hex().parse_avro(schema=r#"{"type":"array","items":"long"}"#)
+oversized_record_array = oversized_record_array_raw.decode_hex().parse_avro(
+  schema=$oversized_schema
+)
+drop duplicate_raw, invalid_key_raw, invalid_value_raw, invalid_boolean_raw, invalid_int_overflow_raw, invalid_int_underflow_raw, overdeclared_block_raw, oversized_record_array_raw

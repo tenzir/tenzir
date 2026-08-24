@@ -1,0 +1,5 @@
+from {data: "00".repeat(2049).decode_hex()}
+write_chunks
+read_avro schema=r#""long""#
+measure
+drop timestamp, schema_id, schema
