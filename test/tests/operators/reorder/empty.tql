@@ -1,0 +1,3 @@
+from {ts: 0s.from_epoch()}
+where false
+reorder on=ts, tolerance=1s

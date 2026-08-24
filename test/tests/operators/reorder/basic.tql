@@ -1,0 +1,8 @@
+// Bounded disorder is repaired incrementally. Events exactly at the watermark
+// are ready, and equal timestamps retain the order observed by `reorder`.
+from {seq: 0, ts: 0s.from_epoch()},
+     {seq: 2, ts: 2s.from_epoch()},
+     {seq: 1, ts: 1s.from_epoch()},
+     {seq: 3, ts: 2s.from_epoch()}
+batch
+reorder on=ts, tolerance=1s

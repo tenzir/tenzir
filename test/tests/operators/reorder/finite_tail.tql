@@ -1,0 +1,5 @@
+// The watermark never reaches either event. Finite end-of-input flushes the
+// remaining tail in event-time order.
+from {seq: 2, ts: 2s.from_epoch()},
+     {seq: 1, ts: 1s.from_epoch()}
+reorder on=ts, tolerance=1h

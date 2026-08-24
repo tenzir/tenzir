@@ -10,6 +10,7 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/async/task.hpp>
+#include <tenzir/detail/event_time_reorder_buffer.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/saturating_arithmetic.hpp>
 #include <tenzir/ir.hpp>
@@ -181,7 +182,9 @@ struct TimeWindowAssignment {
 class WindowBase {
 public:
   explicit WindowBase(WindowArgs args)
-    : args_{std::move(args)}, config_{resolve_config(args_)} {
+    : args_{std::move(args)},
+      config_{resolve_config(args_)},
+      trailing_reorder_{args_.tolerance} {
   }
 
 protected:
@@ -312,7 +315,7 @@ protected:
     open_count_ = std::move(rebuilt_count);
     serde("trailing_rows", trailing_rows_);
     serde("trailing_times", trailing_times_);
-    serde("trailing_reorder", trailing_reorder_);
+    trailing_reorder_.snapshot(serde);
     serde("trailing_time_origin", trailing_time_origin_);
     serde("trailing_count_since_fire", trailing_count_since_fire_);
     serde("trailing_sequence", trailing_sequence_);
@@ -427,24 +430,23 @@ private:
           continue;
         }
         event_time = *timestamp;
-        auto reorder_cutoff
-          = current_time_
-              ? Option{detail::saturating_sub(*current_time_, args_.tolerance)}
-              : None{};
-        if (reorder_cutoff and event_time < *reorder_cutoff) {
+        auto watermark = trailing_reorder_.watermark();
+        if ((watermark and event_time < *watermark)
+            or trailing_reorder_.is_late(event_time)) {
           late_events += 1;
           continue;
         }
-        current_time_
-          = current_time_ ? std::max(*current_time_, event_time) : event_time;
         auto trigger_matches
           = evaluate_trigger(triggers, row, invalid_triggers);
-        trailing_reorder_.emplace(
+        auto result = trailing_reorder_.insert(
           event_time,
           TrailingReorderEntry{subslice(input, row, row + 1), trigger_matches});
+        TENZIR_ASSERT(result
+                      == detail::EventTimeReorderBuffer<
+                        TrailingReorderEntry>::InsertResult::accepted);
+        current_time_ = trailing_reorder_.largest_observed_time();
         warn_about_trailing_cost(ctx);
-        auto cutoff = detail::saturating_sub(*current_time_, args_.tolerance);
-        co_await drain_trailing_reorder_buffer(cutoff, ctx);
+        co_await drain_trailing_reorder_buffer(false, ctx);
         continue;
       }
       if (current_time_ and event_time < *current_time_) {
@@ -466,16 +468,12 @@ private:
     warn_about_late_events(late_events, ctx);
   }
 
-  auto drain_trailing_reorder_buffer(Option<time> cutoff, OpCtx& ctx)
-    -> Task<void> {
-    while (not trailing_reorder_.empty()
-           and (not cutoff or trailing_reorder_.begin()->first <= *cutoff)) {
-      auto entry = trailing_reorder_.extract(trailing_reorder_.begin());
-      auto event_time = entry.key();
-      auto row = std::move(entry.mapped().row);
-      auto trigger_matches = entry.mapped().trigger_matches;
-      co_await process_trailing_time_row(std::move(row), event_time,
-                                         trigger_matches, ctx);
+  auto drain_trailing_reorder_buffer(bool final, OpCtx& ctx) -> Task<void> {
+    auto ready = final ? trailing_reorder_.flush() : trailing_reorder_.drain();
+    for (auto& event : ready) {
+      co_await process_trailing_time_row(std::move(event.payload.row),
+                                         event.timestamp,
+                                         event.payload.trigger_matches, ctx);
     }
   }
 
@@ -681,7 +679,7 @@ protected:
   auto finalize_impl(OpCtx& ctx) -> Task<FinalizeBehavior> {
     if (config_.shape == WindowShape::trailing
         and config_.clock == WindowClock::event_time) {
-      co_await drain_trailing_reorder_buffer(None{}, ctx);
+      co_await drain_trailing_reorder_buffer(true, ctx);
     }
     co_return FinalizeBehavior::done;
   }
@@ -991,8 +989,7 @@ private:
   uint64_t sequence_offset_ = 0;
   std::deque<table_slice> trailing_rows_;
   std::deque<time> trailing_times_;
-  /// A multimap preserves arrival order among equal timestamps.
-  std::multimap<time, TrailingReorderEntry> trailing_reorder_;
+  detail::EventTimeReorderBuffer<TrailingReorderEntry> trailing_reorder_;
   Option<time> trailing_time_origin_;
   uint64_t trailing_count_since_fire_ = 0;
   uint64_t trailing_sequence_ = 0;

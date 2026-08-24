@@ -1,0 +1,10 @@
+// Global ordering composes with `group` to provide an independent watermark
+// and ordered tail for each key.
+from {key: "a", seq: 2, ts: 2s.from_epoch()},
+     {key: "b", seq: 4, ts: 4s.from_epoch()},
+     {key: "a", seq: 1, ts: 1s.from_epoch()},
+     {key: "b", seq: 3, ts: 3s.from_epoch()}
+group key {
+  reorder on=ts, tolerance=10s
+}
+sort key, seq

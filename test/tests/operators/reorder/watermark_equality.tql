@@ -1,0 +1,10 @@
+---
+timeout: 10
+---
+
+// A timestamp at the watermark is emitted while the source remains live.
+every 1h {
+  from {ts: 1s.from_epoch()}
+}
+reorder on=ts, tolerance=0s
+head 1

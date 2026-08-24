@@ -1,0 +1,6 @@
+warning: `reorder` dropped 2 event(s) where `on` did not evaluate to a timestamp
+ --> tests/operators/reorder/invalid_aggregate.tql:4:12
+  |
+4 | reorder on=ts, tolerance=0s
+  |            ~~
+  |

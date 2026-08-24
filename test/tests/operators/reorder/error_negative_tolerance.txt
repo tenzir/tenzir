@@ -1,0 +1,6 @@
+error: `tolerance` must not be negative
+ --> tests/operators/reorder/error_negative_tolerance.tql:6:26
+  |
+6 | reorder on=ts, tolerance=-1s
+  |                          ^^^
+  |

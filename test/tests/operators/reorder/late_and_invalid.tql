@@ -1,0 +1,8 @@
+// Invalid event times and regressions behind emitted output are dropped. The
+// final equal timestamp is not late because the boundary is strict.
+from {seq: 2, ts: 2s.from_epoch()},
+     {seq: 1, ts: 1s.from_epoch()},
+     {seq: 3, ts: null},
+     {seq: 4, ts: "not a timestamp"},
+     {seq: 5, ts: 2s.from_epoch()}
+reorder on=ts, tolerance=0s

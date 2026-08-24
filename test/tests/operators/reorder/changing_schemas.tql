@@ -1,0 +1,6 @@
+// Complete heterogeneous events survive sorting, and adjacent output rows are
+// never concatenated across incompatible schemas.
+from {kind: "a", ts: 2s.from_epoch(), x: 1},
+     {kind: "b", ts: 1s.from_epoch(), y: "two"},
+     {kind: "a", ts: 3s.from_epoch(), x: 3}
+reorder on=ts, tolerance=10s

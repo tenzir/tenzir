@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {ts: 0s.from_epoch()}
+reorder on=ts, tolerance=-1s

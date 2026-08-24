@@ -1,0 +1,4 @@
+from {seq: 0, ts: 0s.from_epoch()},
+     {seq: 1, ts: 1s.from_epoch()},
+     {seq: 2, ts: 2s.from_epoch()}
+reorder on=ts, tolerance=0s

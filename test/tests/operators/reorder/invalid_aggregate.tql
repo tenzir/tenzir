@@ -1,0 +1,4 @@
+// Invalid event times are aggregated once for the incoming slice.
+from {ts: [null, "not a timestamp"]}
+unroll ts
+reorder on=ts, tolerance=0s

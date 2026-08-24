@@ -1,0 +1,22 @@
+warning: `reorder` dropped 1 late event(s)
+ --> tests/operators/reorder/late_and_invalid.tql:8:12
+  |
+8 | reorder on=ts, tolerance=0s
+  |            ~~
+  |
+  = note: a late event's timestamp precedes an event that was already emitted
+
+warning: `reorder` dropped 1 event(s) where `on` did not evaluate to a timestamp
+ --> tests/operators/reorder/late_and_invalid.tql:8:12
+  |
+8 | reorder on=ts, tolerance=0s
+  |            ~~
+  |
+{
+  seq: 2,
+  ts: 1970-01-01T00:00:02Z,
+}
+{
+  seq: 5,
+  ts: 1970-01-01T00:00:02Z,
+}
