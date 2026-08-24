@@ -104,15 +104,24 @@ in
   # protobuf in that shell's closure, the same one grpc and google-cloud-cpp
   # already bring, from the same nixpkgs. One copy, nothing to fight over
   # protobuf's descriptor registry with.
-  opentelemetry-cpp = (prevPkgs.opentelemetry-cpp.override { enableHttp = true; }).overrideAttrs (_: {
-    # Fails on binding port 4318, which a parallel test already holds.
-    checkPhase = ''
-      runHook preCheck
-      ctest --output-on-failure --exclude-regex \
-        'OtlpHttpExporterRetryIntegrationTests'
-      runHook postCheck
-    '';
-  });
+  # `cxxStandard` also sets `WITH_STL`, which is what makes the API speak
+  # `std::shared_ptr` and `std::string_view` instead of its own ABI-stable
+  # stand-ins. Those exist so a separately compiled instrumentation library can
+  # cross a stdlib boundary, which nothing here does.
+  opentelemetry-cpp =
+    (prevPkgs.opentelemetry-cpp.override {
+      enableHttp = true;
+      cxxStandard = "23";
+    }).overrideAttrs
+      (_: {
+        # Fails on binding port 4318, which a parallel test already holds.
+        checkPhase = ''
+          runHook preCheck
+          ctest --output-on-failure --exclude-regex \
+            'OtlpHttpExporterRetryIntegrationTests'
+          runHook postCheck
+        '';
+      });
   protobufc = callFunction ./overrides/protobufc.nix { inherit (prevPkgs) protobufc; };
   rabbitmq-c = callFunction ./overrides/rabbitmq-c.nix { inherit (prevPkgs) rabbitmq-c; };
   restinio = callFunction ./overrides/restinio.nix { inherit (prevPkgs) restinio; };
