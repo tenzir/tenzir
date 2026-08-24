@@ -1,0 +1,3 @@
+from {value: 1}
+where false
+lag value=value, into=previous

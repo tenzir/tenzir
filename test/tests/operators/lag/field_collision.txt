@@ -1,0 +1,14 @@
+{
+  key: "a",
+  value: 1,
+  nested: {
+    previous: null,
+  },
+}
+{
+  key: "a",
+  value: 2,
+  nested: {
+    previous: 1,
+  },
+}

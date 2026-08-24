@@ -1,0 +1,21 @@
+{
+  kind: "first",
+  value: 1,
+  previous: null,
+}
+{
+  kind: "second",
+  value: "two",
+  previous: {
+    kind: "first",
+    value: 1,
+  },
+}
+{
+  kind: "third",
+  extra: true,
+  previous: {
+    kind: "second",
+    value: "two",
+  },
+}

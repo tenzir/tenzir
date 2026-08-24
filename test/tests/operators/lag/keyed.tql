@@ -1,0 +1,11 @@
+from {user: "alice", value: 1},
+     {user: "bob", value: 2},
+     {user: "alice", value: 3},
+     {user: null, value: 4},
+     {user: "alice", value: 5},
+     {user: null, value: 6},
+     {user: "bob", value: 7}
+group user {
+  lag value=value, offset=2, into=previous
+}
+sort user, value

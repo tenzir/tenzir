@@ -1,0 +1,12 @@
+{
+  value: 1,
+  previous: null,
+}
+{
+  value: null,
+  previous: 1,
+}
+{
+  value: 3,
+  previous: null,
+}

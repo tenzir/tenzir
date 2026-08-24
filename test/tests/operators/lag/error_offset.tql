@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {value: 1}
+lag value=value, offset=0, into=previous

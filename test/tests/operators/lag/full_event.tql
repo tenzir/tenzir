@@ -1,0 +1,4 @@
+from {kind: "first", value: 1},
+     {kind: "second", value: "two"},
+     {kind: "third", extra: true}
+lag into=previous

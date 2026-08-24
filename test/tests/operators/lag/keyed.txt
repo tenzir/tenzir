@@ -1,0 +1,35 @@
+{
+  user: "alice",
+  value: 1,
+  previous: null,
+}
+{
+  user: "alice",
+  value: 3,
+  previous: null,
+}
+{
+  user: "alice",
+  value: 5,
+  previous: 1,
+}
+{
+  user: "bob",
+  value: 2,
+  previous: null,
+}
+{
+  user: "bob",
+  value: 7,
+  previous: null,
+}
+{
+  user: null,
+  value: 4,
+  previous: null,
+}
+{
+  user: null,
+  value: 6,
+  previous: null,
+}

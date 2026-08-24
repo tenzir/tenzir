@@ -1,0 +1,4 @@
+from {value: 1},
+     {value: null},
+     {value: 3}
+lag value=value, into=previous

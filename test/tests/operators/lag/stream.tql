@@ -1,0 +1,6 @@
+from {value: 1},
+     {value: 2},
+     {value: 3},
+     {value: 4}
+lag value=value, offset=2, into=previous
+previous_type = type_of(previous).kind

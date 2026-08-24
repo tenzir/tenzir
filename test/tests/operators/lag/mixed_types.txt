@@ -1,0 +1,36 @@
+{
+  i: 0,
+  use_number: true,
+  previous: null,
+  previous_type: "int64",
+}
+{
+  i: 1,
+  use_number: false,
+  previous: null,
+  previous_type: "string",
+}
+{
+  i: 2,
+  use_number: true,
+  previous: null,
+  previous_type: "int64",
+}
+{
+  i: 3,
+  use_number: false,
+  previous: null,
+  previous_type: "string",
+}
+{
+  i: 4,
+  use_number: true,
+  previous: 0,
+  previous_type: "int64",
+}
+{
+  i: 5,
+  use_number: false,
+  previous: "1",
+  previous_type: "string",
+}

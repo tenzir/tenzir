@@ -1,0 +1,9 @@
+from {i: 0, use_number: true},
+     {i: 1, use_number: false},
+     {i: 2, use_number: true},
+     {i: 3, use_number: false},
+     {i: 4, use_number: true},
+     {i: 5, use_number: false}
+batch 2
+lag value=(i if use_number else string(i)), offset=4, into=previous
+previous_type = type_of(previous).kind

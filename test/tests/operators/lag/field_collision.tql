@@ -1,0 +1,3 @@
+from {key: "a", value: 1, nested: {previous: "old"}},
+     {key: "a", value: 2, nested: {previous: "old"}}
+lag value=value, into=nested.previous

@@ -1,0 +1,24 @@
+{
+  time: 2025-01-01T10:00:00Z,
+  user: "alice",
+  value: 1,
+  previous: null,
+}
+{
+  time: 2025-01-01T10:01:00Z,
+  user: "alice",
+  value: 2,
+  previous: 1,
+}
+{
+  time: 2025-01-01T10:00:30Z,
+  user: "bob",
+  value: 10,
+  previous: null,
+}
+{
+  time: 2025-01-01T10:02:00Z,
+  user: "bob",
+  value: 20,
+  previous: 10,
+}

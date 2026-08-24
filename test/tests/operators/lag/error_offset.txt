@@ -1,0 +1,6 @@
+error: `offset` must be greater than zero
+ --> tests/operators/lag/error_offset.tql:6:25
+  |
+6 | lag value=value, offset=0, into=previous
+  |                         ^
+  |
