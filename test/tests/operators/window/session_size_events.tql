@@ -1,0 +1,10 @@
+// The event that reaches an integer size belongs to the closing session. The
+// next event starts a new session even though it remains within the gap.
+from {ts: 0min.from_epoch()},
+     {ts: 1min.from_epoch()},
+     {ts: 2min.from_epoch()}
+window gap=5min, size=2, on=ts {
+  summarize n=count()
+  start = $window.start.since_epoch()
+}
+sort start

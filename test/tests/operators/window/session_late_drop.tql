@@ -1,0 +1,10 @@
+// The event at 4s arrives behind the finalized watermark after the 20s event
+// closes the first session, so the operator drops it.
+from {ts: 0s.from_epoch()},
+     {ts: 20s.from_epoch()},
+     {ts: 4s.from_epoch()}
+window gap=5s, on=ts, tolerance=5s {
+  summarize n=count()
+  start = $window.start.since_epoch()
+}
+sort start

@@ -1,0 +1,12 @@
+// Rows that arrive in one batch belong to the session that was open at
+// admission. A subpipeline that completes mid-batch, like `head`, consumes the
+// remaining batched rows of its session instead of re-opening a session for
+// them.
+from {ts: 0s.from_epoch()},
+     {ts: 1s.from_epoch()},
+     {ts: 2s.from_epoch()},
+     {ts: 3s.from_epoch()}
+window gap=10s, size=3, on=ts {
+  head 2
+  summarize n=count()
+}

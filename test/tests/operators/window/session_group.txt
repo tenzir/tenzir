@@ -1,0 +1,15 @@
+{
+  n: 3,
+  k: "a",
+  start: 0ns,
+}
+{
+  n: 1,
+  k: "b",
+  start: 1min,
+}
+{
+  n: 1,
+  k: "b",
+  start: 10min,
+}

@@ -1,0 +1,6 @@
+error: `size` must be positive
+ --> tests/operators/window/error_session_negative_size.tql:6:21
+  |
+6 | window gap=5s, size=-1 {
+  |                     ^^
+  |

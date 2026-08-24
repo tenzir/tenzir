@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {}
+window gap=5s, trailing=true {
+  pass
+}

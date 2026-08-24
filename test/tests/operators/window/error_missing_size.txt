@@ -1,8 +1,7 @@
-error: required argument `size` was not provided
+error: `window` requires either `size` or `gap`
  --> tests/operators/window/error_missing_size.tql:6:1
   |
 6 | window on=ts {
   | ^^^^^^
   |
-  = usage: window size=duration|uint, [every=duration|uint, trailing=bool, on=time, trigger=bool, tolerance=duration, idle_timeout=duration]
-  = docs: https://tenzir.com/docs/reference/operators/window
+  = hint: use `size=<duration|int>` for fixed windows or `gap=<duration>` for session windows

@@ -1,0 +1,6 @@
+error: `gap` must be a positive duration
+ --> tests/operators/window/error_zero_gap.tql:6:12
+  |
+6 | window gap=0s {
+  |            ^^
+  |

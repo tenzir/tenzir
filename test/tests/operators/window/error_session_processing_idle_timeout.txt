@@ -1,0 +1,6 @@
+error: `idle_timeout` requires a fixed or session window with `on`
+ --> tests/operators/window/error_session_processing_idle_timeout.tql:6:29
+  |
+6 | window gap=5s, idle_timeout=1s {
+  |                             ^^
+  |

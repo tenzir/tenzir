@@ -1,0 +1,12 @@
+// A session remains open while consecutive event-time gaps do not exceed the
+// configured gap. Its total duration is not bounded by the gap.
+from {ts: 0min.from_epoch(), x: 1},
+     {ts: 4min.from_epoch(), x: 2},
+     {ts: 8min.from_epoch(), x: 3},
+     {ts: 15min.from_epoch(), x: 4},
+     {ts: 20min.from_epoch(), x: 5}
+window gap=5min, on=ts {
+  summarize n=count(), options={output: "events"}
+  start = $window.start.since_epoch()
+}
+sort start, ts

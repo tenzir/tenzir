@@ -1,0 +1,6 @@
+// An integer size splits a processing-time session even when all events arrive
+// within its inactivity gap.
+from {x: 1}, {x: 2}, {x: 3}, {x: 4}, {x: 5}
+window gap=1h, size=2 {
+  summarize n=count()
+}

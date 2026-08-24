@@ -1,0 +1,9 @@
+warning: `window` dropped 1 event(s) where `on` did not evaluate to a timestamp
+ --> tests/operators/window/session_invalid_on.tql:5:19
+  |
+5 | window gap=5s, on=ts {
+  |                   ~~
+  |
+{
+  n: 2,
+}

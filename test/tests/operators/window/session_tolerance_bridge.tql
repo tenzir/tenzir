@@ -1,0 +1,11 @@
+// The event at 6s arrives after the event at 12s and bridges the provisional
+// session. Equality with the gap remains in the same session.
+from {ts: 0s.from_epoch()},
+     {ts: 12s.from_epoch()},
+     {ts: 6s.from_epoch()},
+     {ts: 30s.from_epoch()}
+window gap=6s, on=ts, tolerance=6s {
+  summarize n=count()
+  start = $window.start.since_epoch()
+}
+sort start

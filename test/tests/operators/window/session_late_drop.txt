@@ -1,0 +1,14 @@
+warning: `window` dropped 1 late event(s) that arrived after their window had closed
+ --> tests/operators/window/session_late_drop.tql:6:19
+  |
+6 | window gap=5s, on=ts, tolerance=5s {
+  |                   ~~
+  |
+{
+  n: 1,
+  start: 0ns,
+}
+{
+  n: 1,
+  start: 20s,
+}

@@ -1,0 +1,13 @@
+---
+timeout: 10
+retry: 2
+---
+
+// A duration size closes a busy processing-time session on the wall clock
+// before its inactivity gap expires.
+from {x: 1}, {x: 2}, {x: 3}
+batch
+throttle rate=1, window=200ms
+window gap=1s, size=300ms {
+  summarize n=count()
+}

@@ -1,0 +1,9 @@
+error: `trailing` is not valid for session windows
+ --> tests/operators/window/error_session_trailing.tql:6:25
+  |
+6 | window gap=5s, trailing=true {
+  |                         ^^^^
+  ⋮
+6 | window gap=5s, trailing=true {
+  |            --
+  |

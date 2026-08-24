@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {}
+window gap=5s, size=-1 {
+  pass
+}

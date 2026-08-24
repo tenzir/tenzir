@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {ts: 0s.from_epoch()}
+window gap=5s, size=5s, every=1s, trailing=true, on=ts, trigger=true {
+  pass
+}

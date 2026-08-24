@@ -1,0 +1,6 @@
+error: `size` must be a duration or an integer
+ --> tests/operators/window/error_session_invalid_size.tql:6:21
+  |
+6 | window gap=5s, size="events" {
+  |                     ^^^^^^^^
+  |

@@ -1,0 +1,19 @@
+---
+timeout: 10
+retry: 2
+---
+
+// A subpipeline that completes before the next flush rejects the pushed row.
+// The rejected row starts a fresh session that must survive the original
+// session's count cap instead of closing at size one.
+every 100ms {
+  from {}
+}
+head 4
+enumerate i
+set ts = (i * 1s).from_epoch()
+drop i
+window gap=10s, size=3, on=ts {
+  head 2
+  summarize n=count()
+}

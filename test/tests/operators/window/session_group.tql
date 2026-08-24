@@ -1,0 +1,14 @@
+// An outer group gives every key an independent session window.
+from {k: "a", ts: 0min.from_epoch()},
+     {k: "b", ts: 1min.from_epoch()},
+     {k: "a", ts: 4min.from_epoch()},
+     {k: "b", ts: 10min.from_epoch()},
+     {k: "a", ts: 8min.from_epoch()}
+group k {
+  window gap=5min, on=ts {
+    summarize n=count()
+    k = $group
+    start = $window.start.since_epoch()
+  }
+}
+sort k, start

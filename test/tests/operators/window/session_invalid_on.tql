@@ -1,0 +1,7 @@
+from {ts: 0s.from_epoch()},
+     {ts: null},
+     {ts: "invalid"},
+     {ts: 1s.from_epoch()}
+window gap=5s, on=ts {
+  summarize n=count()
+}

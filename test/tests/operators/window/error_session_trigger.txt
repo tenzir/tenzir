@@ -1,0 +1,9 @@
+error: `trigger` is not valid for session windows
+ --> tests/operators/window/error_session_trigger.tql:6:24
+  |
+6 | window gap=5s, trigger=true {
+  |                        ^^^^
+  ⋮
+6 | window gap=5s, trigger=true {
+  |            --
+  |

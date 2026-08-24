@@ -1,0 +1,9 @@
+error: `every` is not valid for session windows
+ --> tests/operators/window/error_session_every.tql:6:22
+  |
+6 | window gap=5s, every=1s {
+  |                      ^^
+  ⋮
+6 | window gap=5s, every=1s {
+  |            --
+  |

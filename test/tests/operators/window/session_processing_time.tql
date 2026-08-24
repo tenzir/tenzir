@@ -1,0 +1,13 @@
+---
+timeout: 10
+retry: 2
+---
+
+// Processing-time sessions close on their wall-clock gap even when no later
+// event arrives to advance the pipeline.
+from {x: 1}, {x: 2}
+batch
+throttle rate=1, window=1s
+window gap=100ms {
+  summarize n=count()
+}

@@ -1,0 +1,5 @@
+from {ts: 0s.from_epoch()},
+     {ts: 1s.from_epoch()}
+window gap=5s, on=ts {
+  head 0
+}

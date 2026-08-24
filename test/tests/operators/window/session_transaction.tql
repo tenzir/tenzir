@@ -1,0 +1,18 @@
+// Model `transaction dest maxpause=5m | where eventcount >= 5` with an outer
+// group and one session window per destination.
+from {dest: "a", ts: 0min.from_epoch()},
+     {dest: "b", ts: 1min.from_epoch()},
+     {dest: "a", ts: 4min.from_epoch()},
+     {dest: "b", ts: 5min.from_epoch()},
+     {dest: "a", ts: 8min.from_epoch()},
+     {dest: "b", ts: 9min.from_epoch()},
+     {dest: "a", ts: 12min.from_epoch()},
+     {dest: "b", ts: 13min.from_epoch()},
+     {dest: "a", ts: 16min.from_epoch()}
+group dest {
+  window gap=5min, on=ts {
+    summarize eventcount=count()
+    where eventcount >= 5
+    dest = $group
+  }
+}

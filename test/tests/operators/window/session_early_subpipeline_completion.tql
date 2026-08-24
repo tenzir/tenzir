@@ -1,0 +1,16 @@
+---
+timeout: 10
+retry: 2
+---
+
+// A session recovers when its subpipeline terminates before the inactivity
+// boundary instead of silently dropping later events.
+every 100ms {
+  from {}
+}
+head 3
+enumerate x
+set ts = (x * 1s).from_epoch()
+window gap=1h, on=ts {
+  head 1
+}

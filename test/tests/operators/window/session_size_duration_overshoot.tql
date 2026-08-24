@@ -1,0 +1,11 @@
+// An event beyond a duration size starts a new session even when it remains
+// within the inactivity gap. Only an event exactly at the boundary joins and
+// closes the current session.
+from {ts: 0min.from_epoch()},
+     {ts: 30min.from_epoch()},
+     {ts: 31min.from_epoch()}
+window gap=1h, size=5min, on=ts {
+  summarize n=count()
+  start = $window.start.since_epoch()
+}
+sort start

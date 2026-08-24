@@ -35,6 +35,7 @@
 #include <mutex>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace tenzir::plugins::window {
@@ -53,6 +54,7 @@ enum class WindowShape {
   tumbling,
   hopping,
   trailing,
+  session,
 };
 
 enum class WindowClock {
@@ -63,12 +65,14 @@ enum class WindowClock {
 
 struct WindowArgs {
   located<data> size;
+  Option<located<duration>> gap;
   Option<located<data>> every;
   bool trailing = false;
   Option<ast::expression> on;
   Option<ast::expression> trigger;
   duration tolerance = {};
   Option<duration> idle_timeout;
+  location operator_location = location::unknown;
   located<ir::pipeline> pipe;
   let_id let;
 };
@@ -81,6 +85,28 @@ struct WindowConfig {
   duration time_stride = {};
   uint64_t count_size = 0;
   uint64_t count_stride = 0;
+  Option<duration> session_max_duration;
+  Option<uint64_t> session_max_events;
+};
+
+/// Rows admitted to the open session under one event time, awaiting their
+/// batched push into the session's subpipeline.
+struct PendingSessionRows {
+  time event_time;
+  table_slice rows;
+};
+
+struct SessionWindowState {
+  time start;
+  time end;
+  uint64_t events = 0;
+  uint64_t sequence = 0;
+
+  friend auto inspect(auto& f, SessionWindowState& x) -> bool {
+    return f.object(x).fields(f.field("start", x.start), f.field("end", x.end),
+                              f.field("events", x.events),
+                              f.field("sequence", x.sequence));
+  }
 };
 
 /// Integer division rounding towards negative infinity (unlike C++ `/`, which
@@ -110,6 +136,20 @@ auto as_count(located<data> const& value) -> Option<uint64_t> {
 
 auto resolve_config(WindowArgs const& args) -> WindowConfig {
   auto result = WindowConfig{};
+  if (args.gap) {
+    result.basis = WindowBasis::time;
+    result.shape = WindowShape::session;
+    result.clock
+      = args.on ? WindowClock::event_time : WindowClock::processing_time;
+    result.time_size = args.gap->inner;
+    result.time_stride = args.gap->inner;
+    if (auto max_duration = try_as<duration>(&args.size.inner)) {
+      result.session_max_duration = *max_duration;
+    } else if (auto max_events = as_count(args.size)) {
+      result.session_max_events = *max_events;
+    }
+    return result;
+  }
   auto time_size = try_as<duration>(&args.size.inner);
   auto count_size = as_count(args.size);
   TENZIR_ASSERT(time_size or count_size);
@@ -192,6 +232,10 @@ protected:
     return config_.shape == WindowShape::trailing;
   }
 
+  auto is_session() const -> bool {
+    return config_.shape == WindowShape::session;
+  }
+
   auto trailing_sequence() const -> uint64_t {
     return trailing_sequence_;
   }
@@ -212,6 +256,19 @@ protected:
         deadline = co_await frontier->dequeue();
       }
     });
+    if (is_session()) {
+      if (config_.clock == WindowClock::event_time) {
+        if (session_ or not session_reorder_.empty()) {
+          last_session_activity_ = steady_clock::now();
+        }
+      } else {
+        co_await close_passed_processing_time_session(ctx, wall_now());
+      }
+      if (has_timed_state()) {
+        arm_timer();
+      }
+      co_return;
+    }
     if (config_.clock == WindowClock::event_time) {
       auto now = steady_clock::now();
       for (auto& [start, state] : open_time_) {
@@ -235,6 +292,10 @@ protected:
   }
 
   auto process_impl(table_slice input, OpCtx& ctx) -> Task<void> {
+    if (config_.shape == WindowShape::session) {
+      co_await process_session(std::move(input), ctx);
+      co_return;
+    }
     if (config_.shape == WindowShape::trailing) {
       if (config_.basis == WindowBasis::time) {
         co_await process_trailing_time(std::move(input), ctx);
@@ -256,6 +317,21 @@ protected:
 
   auto process_task_impl(Any result, OpCtx& ctx) -> Task<void> {
     std::ignore = result.as<TimerTick>();
+    if (is_session()) {
+      if (config_.clock == WindowClock::processing_time) {
+        co_await close_passed_processing_time_session(ctx, wall_now());
+      } else if (last_session_activity_
+                 and *last_session_activity_ + *args_.idle_timeout
+                       <= steady_clock::now()) {
+        co_await flush_session(ctx);
+      }
+      if (has_timed_state()) {
+        arm_timer();
+      } else {
+        timer_idle_ = true;
+      }
+      co_return;
+    }
     if (config_.clock == WindowClock::processing_time) {
       auto now = std::max(wall_now(), current_time_.unwrap_or(time::min()));
       current_time_ = now;
@@ -321,6 +397,19 @@ protected:
     serde("trailing_sequence", trailing_sequence_);
     serde("warned_trailing_cost", warned_trailing_cost_);
     serde("warned_trailing_children", warned_trailing_children_);
+    serde("session", session_);
+    serde("session_reorder", session_reorder_);
+    serde("session_last_emitted", session_last_emitted_);
+    serde("session_sequence", session_sequence_);
+    serde("warned_session_reorder_cost", warned_session_reorder_cost_);
+    if (serde.is_loading()) {
+      // `prepare_snapshot_impl` closes sessions before saving. Older snapshots
+      // may still contain an open session whose subpipeline cannot be restored.
+      session_ = None{};
+      if (not session_reorder_.empty()) {
+        last_session_activity_ = steady_clock::now();
+      }
+    }
   }
 
 private:
@@ -328,8 +417,358 @@ private:
     if (config_.shape == WindowShape::trailing) {
       return false;
     }
+    if (config_.shape == WindowShape::session) {
+      return config_.clock == WindowClock::processing_time
+             or args_.idle_timeout.has_value();
+    }
     return config_.clock == WindowClock::processing_time
            or (config_.clock == WindowClock::event_time and args_.idle_timeout);
+  }
+
+  auto has_timed_state() const -> bool {
+    if (is_session()) {
+      return session_.has_value() or not session_reorder_.empty();
+    }
+    return not open_time_.empty();
+  }
+
+  auto process_session(table_slice input, OpCtx& ctx) -> Task<void> {
+    if (config_.clock == WindowClock::processing_time) {
+      auto arrival = std::max(wall_now(), current_time_.unwrap_or(time::min()));
+      current_time_ = arrival;
+      // Admission applies the inclusive boundary rules itself: an event exactly
+      // at `end + gap` or `start + max_duration` joins the session. The `>=`
+      // deadline check in `close_passed_processing_time_session` is only
+      // correct for timer expiry, so it must not run before admission.
+      co_await admit_session_rows(std::move(input), arrival, ctx);
+      co_await flush_session_pending(ctx);
+      if (timer_idle_ and has_timed_state()) {
+        arm_timer();
+      }
+      co_return;
+    }
+    TENZIR_ASSERT(args_.on);
+    auto timestamps = eval(*args_.on, input, ctx);
+    auto invalid_events = int64_t{0};
+    auto late_events = int64_t{0};
+    auto row_count = detail::narrow<int64_t>(input.rows());
+    for (auto row = int64_t{0}; row < row_count; ++row) {
+      auto value = materialize(timestamps.view3_at(row));
+      auto timestamp = try_as<time>(&value);
+      if (not timestamp) {
+        invalid_events += 1;
+        continue;
+      }
+      auto watermark
+        = current_time_
+            ? Option{detail::saturating_sub(*current_time_, args_.tolerance)}
+            : None{};
+      if ((watermark and *timestamp < *watermark)
+          or (session_last_emitted_ and *timestamp < *session_last_emitted_)) {
+        late_events += 1;
+        continue;
+      }
+      current_time_
+        = current_time_ ? std::max(*current_time_, *timestamp) : *timestamp;
+      session_reorder_.emplace(*timestamp, subslice(input, row, row + 1));
+      last_session_activity_ = steady_clock::now();
+      warn_about_session_cost(ctx);
+      auto cutoff = detail::saturating_sub(*current_time_, args_.tolerance);
+      co_await drain_session_reorder_buffer(cutoff, ctx);
+      co_await close_passed_event_time_session(ctx, cutoff);
+    }
+    if (invalid_events > 0) {
+      diagnostic::warning("`window` dropped {} event(s) where `on` did not "
+                          "evaluate to a timestamp",
+                          invalid_events)
+        .primary(*args_.on)
+        .emit(ctx);
+    }
+    co_await flush_session_pending(ctx);
+    warn_about_late_events(late_events, ctx);
+    if (args_.idle_timeout and timer_idle_ and has_timed_state()) {
+      arm_timer();
+    }
+  }
+
+  auto drain_session_reorder_buffer(Option<time> cutoff, OpCtx& ctx)
+    -> Task<void> {
+    while (not session_reorder_.empty()
+           and (not cutoff or session_reorder_.begin()->first <= *cutoff)) {
+      auto entry = session_reorder_.extract(session_reorder_.begin());
+      session_last_emitted_ = entry.key();
+      co_await admit_session_rows(std::move(entry.mapped()), entry.key(), ctx);
+    }
+  }
+
+  /// Admits rows that all carry `event_time` into the session, splitting at
+  /// the gap and the optional caps. Rows accumulate in `session_pending_` and
+  /// reach the subpipeline in batches via `flush_session_pending`.
+  auto admit_session_rows(table_slice rows, time event_time, OpCtx& ctx)
+    -> Task<void> {
+    auto offset = int64_t{0};
+    auto remaining = detail::narrow<int64_t>(rows.rows());
+    while (remaining > 0) {
+      if (session_
+          and (event_time
+                 > detail::saturating_add(session_->end, config_.time_size)
+               or (config_.session_max_duration
+                   and event_time > detail::saturating_add(
+                         session_->start, *config_.session_max_duration)))) {
+        co_await close_session(ctx);
+      }
+      if (not session_) {
+        if (not co_await spawn_session(event_time, ctx)) {
+          // Drop this row, but keep trying for the remaining rows.
+          offset += 1;
+          remaining -= 1;
+          continue;
+        }
+      }
+      auto take = remaining;
+      if (config_.session_max_events) {
+        auto capacity = detail::saturating_sub(*config_.session_max_events,
+                                               session_->events);
+        TENZIR_ASSERT(capacity > 0);
+        if (capacity < detail::narrow<uint64_t>(take)) {
+          take = detail::narrow<int64_t>(capacity);
+        }
+      }
+      // An event exactly at the duration boundary joins and closes the
+      // session, so it must not share a chunk with later rows.
+      if (config_.session_max_duration
+          and event_time >= detail::saturating_add(
+                session_->start, *config_.session_max_duration)) {
+        take = int64_t{1};
+      }
+      session_pending_.push_back(
+        {event_time, subslice(rows, offset, offset + take)});
+      session_->end = event_time;
+      session_->events = detail::saturating_add(session_->events,
+                                                detail::narrow<uint64_t>(take));
+      offset += take;
+      remaining -= take;
+      auto reached_max_events
+        = config_.session_max_events
+          and session_->events >= *config_.session_max_events;
+      auto reached_max_duration
+        = config_.session_max_duration
+          and event_time >= detail::saturating_add(
+                session_->start, *config_.session_max_duration);
+      if (reached_max_events or reached_max_duration) {
+        co_await close_session(ctx);
+      }
+    }
+  }
+
+  /// Spawns a fresh session subpipeline whose window starts at `event_time`.
+  auto spawn_session(time event_time, OpCtx& ctx) -> Task<bool> {
+    TENZIR_ASSERT(not session_);
+    auto sequence = session_sequence_++;
+    auto window = record{};
+    window.emplace("start", data{event_time});
+    auto copy = args_.pipe.inner;
+    copy.bind(args_.let, ast::constant::kind{std::move(window)});
+    auto sub = co_await ctx.plan_and_spawn_sub<table_slice>(data{sequence},
+                                                            std::move(copy));
+    if (not sub) {
+      co_return false;
+    }
+    session_ = SessionWindowState{event_time, event_time, 0, sequence};
+    co_return true;
+  }
+
+  /// Pushes buffered rows into the session's subpipeline, batching contiguous
+  /// runs that share a schema into one push each.
+  auto flush_session_pending(OpCtx& ctx) -> Task<void> {
+    if (session_pending_.empty()) {
+      co_return;
+    }
+    auto pending = std::exchange(session_pending_, {});
+    TENZIR_ASSERT(session_);
+    auto sequence = session_->sequence;
+    auto sub = ctx.get_sub(make_view(data{sequence}));
+    // Entries the subpipeline did not accept before completing, with their
+    // admitted event times.
+    auto rejected = std::vector<PendingSessionRows>{};
+    if (sub) {
+      auto it = pending.begin();
+      while (it != pending.end()) {
+        auto run_end = std::ranges::find_if(
+          it + 1, pending.end(), [&](PendingSessionRows const& x) {
+            return x.rows.schema() != it->rows.schema();
+          });
+        auto run_rows = int64_t{0};
+        auto slices = std::vector<table_slice>{};
+        slices.reserve(run_end - it);
+        for (auto entry = it; entry != run_end; ++entry) {
+          run_rows += detail::narrow<int64_t>(entry->rows.rows());
+          slices.push_back(entry->rows);
+        }
+        auto batch = slices.size() == 1 ? std::move(slices.front())
+                                        : concatenate(std::move(slices));
+        auto result
+          = co_await as<SubHandle<table_slice>>(*sub).push(std::move(batch));
+        if (result.is_err()) {
+          // The subpipeline rejects an unaccepted suffix of the batch. Map it
+          // back onto the pending entries to recover per-row event times.
+          auto unaccepted
+            = detail::narrow<int64_t>(std::move(result).unwrap_err().rows());
+          auto accepted = run_rows - unaccepted;
+          auto offset = int64_t{0};
+          for (auto entry = it; entry != run_end; ++entry) {
+            auto entry_rows = detail::narrow<int64_t>(entry->rows.rows());
+            if (offset + entry_rows > accepted) {
+              auto begin = std::max(accepted - offset, int64_t{0});
+              rejected.push_back(
+                {entry->event_time, subslice(entry->rows, begin, entry_rows)});
+            }
+            offset += entry_rows;
+          }
+          std::move(run_end, pending.end(), std::back_inserter(rejected));
+          break;
+        }
+        it = run_end;
+      }
+    } else {
+      rejected = std::move(pending);
+    }
+    if (rejected.empty()) {
+      co_return;
+    }
+    // The subpipeline completed before the session boundary. Retry the rows
+    // it did not accept in fresh sessions instead of silently dropping them,
+    // replaying the event times recorded at admission.
+    if (session_ and session_->sequence == sequence) {
+      session_ = None{};
+    }
+    for (auto& entry : rejected) {
+      auto row_count = detail::narrow<int64_t>(entry.rows.rows());
+      for (auto row = int64_t{0}; row < row_count; ++row) {
+        co_await process_session_row(subslice(entry.rows, row, row + 1),
+                                     entry.event_time, ctx);
+      }
+    }
+  }
+
+  /// Pushes a single row directly into the session's subpipeline. Only the
+  /// retry path uses this; regular admission batches rows through
+  /// `admit_session_rows` and `flush_session_pending`.
+  auto process_session_row(table_slice row, time event_time, OpCtx& ctx)
+    -> Task<void> {
+    if (session_
+        and event_time
+              > detail::saturating_add(session_->end, config_.time_size)) {
+      co_await close_session(ctx);
+    }
+    if (session_ and config_.session_max_duration
+        and event_time > detail::saturating_add(
+              session_->start, *config_.session_max_duration)) {
+      co_await close_session(ctx);
+    }
+    auto spawned_for_row = false;
+    if (not session_) {
+      if (not co_await spawn_session(event_time, ctx)) {
+        co_return;
+      }
+      spawned_for_row = true;
+    }
+    auto sub = ctx.get_sub(make_view(data{session_->sequence}));
+    if (not sub) {
+      // A freshly spawned subpipeline is always present.
+      TENZIR_ASSERT(not spawned_for_row);
+      // The subpipeline may terminate before the session boundary. Start a
+      // fresh session for this row instead of silently dropping it.
+      session_ = None{};
+      co_await process_session_row(std::move(row), event_time, ctx);
+      co_return;
+    }
+    TENZIR_ASSERT(session_);
+    session_->end = event_time;
+    session_->events = detail::saturating_add(session_->events, uint64_t{1});
+    auto sequence = session_->sequence;
+    auto result
+      = co_await as<SubHandle<table_slice>>(*sub).push(std::move(row));
+    if (result.is_err()) {
+      auto rejected = std::move(result).unwrap_err();
+      if (session_ and session_->sequence == sequence) {
+        session_ = None{};
+      }
+      // A newly spawned child that rejects its first row cannot make progress.
+      if (not spawned_for_row) {
+        co_await process_session_row(std::move(rejected), event_time, ctx);
+      }
+      co_return;
+    }
+    auto reached_max_events
+      = config_.session_max_events and session_
+        and session_->sequence == sequence
+        and session_->events >= *config_.session_max_events;
+    auto reached_max_duration
+      = config_.session_max_duration and session_
+        and session_->sequence == sequence
+        and event_time >= detail::saturating_add(session_->start,
+                                                 *config_.session_max_duration);
+    if (reached_max_events or reached_max_duration) {
+      co_await close_session(ctx);
+    }
+  }
+
+  auto close_passed_event_time_session(OpCtx& ctx, time watermark)
+    -> Task<void> {
+    if (session_
+        and watermark
+              > detail::saturating_add(session_->end, config_.time_size)) {
+      co_await close_session(ctx);
+    }
+  }
+
+  auto close_passed_processing_time_session(OpCtx& ctx, time now)
+    -> Task<void> {
+    if (not session_) {
+      co_return;
+    }
+    auto deadline = detail::saturating_add(session_->end, config_.time_size);
+    if (config_.session_max_duration) {
+      deadline
+        = std::min(deadline, detail::saturating_add(
+                               session_->start, *config_.session_max_duration));
+    }
+    if (now >= deadline) {
+      co_await close_session(ctx);
+    }
+  }
+
+  auto close_session(OpCtx& ctx) -> Task<void> {
+    if (not session_) {
+      co_return;
+    }
+    auto sequence = session_->sequence;
+    co_await flush_session_pending(ctx);
+    // Flushing may have replaced the session while retrying rows that a
+    // completed subpipeline rejected. The replacement has a fresh start and
+    // event count, so the original session's boundary must not close it.
+    if (not session_ or session_->sequence != sequence) {
+      co_return;
+    }
+    session_ = None{};
+    if (auto sub = ctx.get_sub(make_view(data{sequence}))) {
+      co_await as<SubHandle<table_slice>>(*sub).close();
+    }
+  }
+
+  auto warn_about_session_cost(OpCtx& ctx) -> void {
+    static constexpr auto warning_threshold = size_t{100'000};
+    auto retained = session_reorder_.size();
+    if (warned_session_reorder_cost_ or retained < warning_threshold) {
+      return;
+    }
+    diagnostic::warning("`window` retained {} events for session reordering",
+                        retained)
+      .primary(args_.operator_location)
+      .note("reduce `tolerance` to bound the reorder buffer more tightly")
+      .emit(ctx);
+    warned_session_reorder_cost_ = true;
   }
 
   auto process_fixed_event_time(table_slice input, OpCtx& ctx) -> Task<void> {
@@ -676,10 +1115,22 @@ private:
   }
 
 protected:
+  auto prepare_snapshot_impl(OpCtx& ctx) -> Task<void> {
+    if (is_session()) {
+      // Dynamically spawned subpipelines cannot be recreated from a checkpoint.
+      // Close the session before serialization so its admitted rows are emitted
+      // instead of being lost on restore.
+      co_await flush_session(ctx);
+    }
+  }
+
   auto finalize_impl(OpCtx& ctx) -> Task<FinalizeBehavior> {
     if (config_.shape == WindowShape::trailing
         and config_.clock == WindowClock::event_time) {
       co_await drain_trailing_reorder_buffer(true, ctx);
+    }
+    if (config_.shape == WindowShape::session) {
+      co_await flush_session(ctx);
     }
     co_return FinalizeBehavior::done;
   }
@@ -694,6 +1145,15 @@ protected:
   }
 
 private:
+  auto flush_session(OpCtx& ctx) -> Task<void> {
+    co_await drain_session_reorder_buffer(None{}, ctx);
+    // Closing may leave a replacement session behind when a completed
+    // subpipeline rejected rows, so close until nothing remains open.
+    while (session_) {
+      co_await close_session(ctx);
+    }
+  }
+
   /// Assigns each row of `ts` to the fixed event-time windows that contain it.
   /// The clock advances per event in stream order, independent of slice
   /// boundaries.
@@ -957,9 +1417,29 @@ private:
   }
 
   auto arm_timer() -> void {
-    TENZIR_ASSERT(not open_time_.empty());
+    TENZIR_ASSERT(has_timed_state());
     auto earliest = steady_clock::time_point::max();
-    if (config_.clock == WindowClock::processing_time) {
+    if (is_session()) {
+      if (config_.clock == WindowClock::processing_time) {
+        TENZIR_ASSERT(session_);
+        auto deadline
+          = detail::saturating_add(session_->end, config_.time_size);
+        if (config_.session_max_duration) {
+          deadline = std::min(
+            deadline, detail::saturating_add(session_->start,
+                                             *config_.session_max_duration));
+        }
+        auto delay = detail::saturating_sub(deadline.time_since_epoch(),
+                                            wall_now().time_since_epoch());
+        earliest = detail::saturating_add(steady_clock::now(),
+                                          std::max(delay, duration::zero()));
+      } else {
+        TENZIR_ASSERT(args_.idle_timeout);
+        TENZIR_ASSERT(last_session_activity_);
+        earliest = detail::saturating_add(*last_session_activity_,
+                                          *args_.idle_timeout);
+      }
+    } else if (config_.clock == WindowClock::processing_time) {
       auto delay = detail::saturating_sub(
         open_time_.begin()->second.end.time_since_epoch(),
         wall_now().time_since_epoch());
@@ -996,6 +1476,16 @@ private:
   uint64_t trailing_in_flight_ = 0;
   bool warned_trailing_cost_ = false;
   bool warned_trailing_children_ = false;
+  Option<SessionWindowState> session_;
+  /// Rows admitted to the open session but not yet pushed to its
+  /// subpipeline. Always empty between calls into the operator.
+  std::vector<PendingSessionRows> session_pending_;
+  /// A multimap preserves arrival order among equal timestamps.
+  std::multimap<time, table_slice> session_reorder_;
+  Option<time> session_last_emitted_;
+  Option<steady_clock::time_point> last_session_activity_;
+  uint64_t session_sequence_ = 0;
+  bool warned_session_reorder_cost_ = false;
   bool timer_idle_ = true;
   Arc<FrontierQueue> frontier_queue_{std::in_place};
   mutable Arc<TickQueue> tick_queue_{std::in_place, 1};
@@ -1045,6 +1535,12 @@ public:
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push);
     return finalize_impl(ctx);
+  }
+
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push);
+    return prepare_snapshot_impl(ctx);
   }
 
   auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
@@ -1141,6 +1637,10 @@ public:
     return finalize_impl(ctx);
   }
 
+  auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {
+    return prepare_snapshot_impl(ctx);
+  }
+
   auto finish_sub(SubKeyView key, OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(key, ctx);
     if (is_trailing()) {
@@ -1162,46 +1662,66 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<WindowArgs>{};
-    auto size = d.named("size", &WindowArgs::size, "duration|uint");
-    auto every = d.named("every", &WindowArgs::every, "duration|uint");
+    auto size = d.named_optional("size", &WindowArgs::size, "duration|int");
+    auto gap = d.named("gap", &WindowArgs::gap, "duration");
+    auto every = d.named("every", &WindowArgs::every, "duration|int");
     auto trailing = d.named("trailing", &WindowArgs::trailing);
     auto on = d.named("on", &WindowArgs::on, "time");
     auto trigger = d.named("trigger", &WindowArgs::trigger, "bool");
     auto tolerance
       = d.named_optional("tolerance", &WindowArgs::tolerance, "duration");
     auto idle = d.named("idle_timeout", &WindowArgs::idle_timeout, "duration");
+    d.operator_location(&WindowArgs::operator_location);
     auto pipe = d.pipeline(&WindowArgs::pipe, SubOptimize::from_downstream,
                            {{"window", &WindowArgs::let}});
-    d.validate([size, every, trailing, on, trigger, tolerance,
+    d.validate([size, gap, every, trailing, on, trigger, tolerance,
                 idle](DescribeCtx& ctx) -> Empty {
       auto raw_size = ctx.get(size);
-      if (not raw_size) {
-        return {};
-      }
-      auto time_size = try_as<duration>(&raw_size->inner);
-      auto count_size = as_count(*raw_size);
-      auto signed_size = try_as<int64_t>(&raw_size->inner);
-      if (signed_size and *signed_size < 0) {
-        diagnostic::error("`size` must be positive")
-          .primary(raw_size->source)
+      auto raw_gap = ctx.get(gap);
+      if (not raw_size and not raw_gap) {
+        diagnostic::error("`window` requires either `size` or `gap`")
+          .primary(ctx.operator_location())
+          .hint("use `size=<duration|int>` for fixed windows or "
+                "`gap=<duration>` for session windows")
           .emit(ctx);
         return {};
       }
-      if (not time_size and not count_size) {
-        diagnostic::error("`size` must be a duration or an unsigned integer")
-          .primary(raw_size->source)
-          .emit(ctx);
-        return {};
+      auto time_size = raw_size ? try_as<duration>(&raw_size->inner) : nullptr;
+      auto count_size = raw_size ? as_count(*raw_size) : None{};
+      if (raw_size) {
+        auto signed_size = try_as<int64_t>(&raw_size->inner);
+        if (signed_size and *signed_size < 0) {
+          diagnostic::error("`size` must be positive")
+            .primary(raw_size->source)
+            .emit(ctx);
+          return {};
+        }
+        if (not time_size and not count_size) {
+          diagnostic::error("`size` must be a duration or an integer")
+            .primary(raw_size->source)
+            .emit(ctx);
+          return {};
+        }
+        if ((time_size and *time_size <= duration::zero())
+            or (count_size and *count_size == 0)) {
+          diagnostic::error("`size` must be positive")
+            .primary(raw_size->source)
+            .emit(ctx);
+        }
       }
-      if ((time_size and *time_size <= duration::zero())
-          or (count_size and *count_size == 0)) {
-        diagnostic::error("`size` must be positive")
-          .primary(raw_size->source)
+      if (raw_gap and raw_gap->inner <= duration::zero()) {
+        diagnostic::error("`gap` must be a positive duration")
+          .primary(raw_gap->source)
           .emit(ctx);
       }
       auto raw_every = ctx.get(every);
       auto is_trailing = ctx.get(trailing).value_or(false);
-      if (raw_every) {
+      if (raw_gap and raw_every) {
+        diagnostic::error("`every` is not valid for session windows")
+          .primary(raw_every->source)
+          .secondary(raw_gap->source)
+          .emit(ctx);
+      } else if (raw_every) {
         auto every_time = try_as<duration>(&raw_every->inner);
         auto every_count = as_count(*raw_every);
         auto signed_every = try_as<int64_t>(&raw_every->inner);
@@ -1210,7 +1730,7 @@ public:
             .primary(raw_every->source)
             .emit(ctx);
         } else if (not every_time and not every_count) {
-          diagnostic::error("`every` must be a duration or an unsigned integer")
+          diagnostic::error("`every` must be a duration or an integer")
             .primary(raw_every->source)
             .emit(ctx);
         } else if ((time_size and not every_time)
@@ -1233,25 +1753,40 @@ public:
             .emit(ctx);
         }
       }
-      auto on_value = ctx.get(on);
-      if (ctx.get(trigger) and not is_trailing) {
+      if (raw_gap and is_trailing) {
+        diagnostic::error("`trailing` is not valid for session windows")
+          .primary(ctx.get_location(trailing).value())
+          .secondary(raw_gap->source)
+          .emit(ctx);
+      }
+      auto trigger_value = ctx.get(trigger);
+      if (trigger_value and raw_gap) {
+        diagnostic::error("`trigger` is not valid for session windows")
+          .primary(ctx.get_location(trigger).value())
+          .secondary(raw_gap->source)
+          .emit(ctx);
+      } else if (trigger_value and not is_trailing) {
         diagnostic::error("`trigger` is only valid for trailing windows")
           .primary(ctx.get_location(trigger).value())
           .hint("set `trailing=true` to run a trailing window")
           .emit(ctx);
       }
+      auto on_value = ctx.get(on);
       auto tolerance_value = ctx.get(tolerance);
       auto idle_value = ctx.get(idle);
-      if (count_size and on_value) {
+      if (count_size and on_value and not raw_gap) {
         diagnostic::error("`on` is only valid for duration windows")
           .primary(ctx.get_location(on).value())
           .secondary(raw_size->source)
           .emit(ctx);
       }
-      auto fixed_event_time = time_size and not is_trailing and on_value;
-      auto trailing_event_time = time_size and is_trailing and on_value;
-      if (tolerance_value and not fixed_event_time
-          and not trailing_event_time) {
+      auto fixed_event_time = raw_size and not raw_gap and time_size
+                              and not is_trailing and on_value;
+      auto trailing_event_time
+        = raw_size and not raw_gap and time_size and is_trailing and on_value;
+      auto session_event_time = raw_gap and on_value;
+      if (tolerance_value and not fixed_event_time and not trailing_event_time
+          and not session_event_time) {
         diagnostic::error("`tolerance` requires a duration window with `on`")
           .primary(ctx.get_location(tolerance).value())
           .emit(ctx);
@@ -1260,9 +1795,9 @@ public:
           .primary(ctx.get_location(tolerance).value())
           .emit(ctx);
       }
-      if (idle_value and not fixed_event_time) {
+      if (idle_value and not fixed_event_time and not session_event_time) {
         diagnostic::error(
-          "`idle_timeout` is only valid for fixed event-time windows")
+          "`idle_timeout` requires a fixed or session window with `on`")
           .primary(ctx.get_location(idle).value())
           .emit(ctx);
       } else if (idle_value and *idle_value <= duration::zero()) {

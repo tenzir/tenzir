@@ -1,0 +1,17 @@
+---
+timeout: 30
+retry: 2
+---
+
+// The wall-clock idle timeout force-closes an event-time session when its local
+// watermark does not advance.
+every 1s {
+  from {}
+}
+head 2
+enumerate i
+set ts = (i * 1s).from_epoch()
+// The tolerance keeps each event buffered until the idle timer flushes it.
+window gap=10s, on=ts, tolerance=5s, idle_timeout=10ms {
+  summarize n=count()
+}
