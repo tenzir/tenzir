@@ -163,8 +163,9 @@ using rebuilder_actor = typed_actor_fwd<
   auto(atom::start, start_options)->caf::result<void>,
   // Stop a rebuild.
   auto(atom::stop, stop_options)->caf::result<void>,
-  // INTERNAL: Continue working on the currently in-progress rebuild.
-  auto(atom::internal, atom::rebuild)->caf::result<void>,
+  // INTERNAL: Continue working on the in-progress rebuild run with the given
+  // id.
+  auto(atom::internal, atom::rebuild, uint64_t)->caf::result<void>,
   // INTERNAL: Continue working on the currently in-progress rebuild.
   auto(atom::internal, atom::schedule)->caf::result<void>>
   // Conform to the protocol of the STATUS CLIENT actor.
@@ -475,7 +476,9 @@ struct rebuilder_state {
               "threads",
               *self, run->statistics.num_total, run->options.parallel);
           }
-          self->mail(atom::internal_v, atom::rebuild_v)
+          self
+            ->mail(atom::internal_v, atom::rebuild_v,
+                   static_cast<uint64_t>(this_run))
             .fan_out_request(std::vector<rebuilder_actor>(run->options.parallel,
                                                           self),
                              caf::infinite, caf::policy::select_all_tag)
@@ -543,8 +546,17 @@ struct rebuilder_state {
     return run->stop_requests.emplace_back(std::move(rp));
   }
 
-  /// Make progress on the ongoing rebuild.
-  auto rebuild() -> caf::result<void> {
+  /// Make progress on the rebuild run identified by `rebuild_run`.
+  auto rebuild(uint64_t rebuild_run) -> caf::result<void> {
+    if (not run or static_cast<uint64_t>(run->id) != rebuild_run) {
+      // A worker delegates a fresh rebuild message to self after every batch,
+      // but a failing sibling worker ends the run early: the select-all
+      // fan-out in `start` reports the first error immediately and `finish`
+      // resets `run`. A delegated message that arrives after that has no work
+      // left to pick up — and if a new run started in the meantime, it has
+      // its own workers, so a stale message must not join it either.
+      return {};
+    }
     if (run->remaining_partitions.empty()) {
       return {}; // We're done!
     }
@@ -613,7 +625,7 @@ struct rebuilder_state {
       run->statistics.num_rebuilding -= 1;
       run->statistics.num_total -= 1;
       // Pick up new work until we run out of remainig partitions.
-      return self->mail(atom::internal_v, atom::rebuild_v)
+      return self->mail(atom::internal_v, atom::rebuild_v, rebuild_run)
         .delegate(static_cast<rebuilder_actor>(self));
     }
     TENZIR_VERBOSE(
@@ -670,7 +682,7 @@ struct rebuilder_state {
             run->statistics.num_rebuilding -= num_partitions;
             // Pick up new work until we run out of remaining partitions.
             rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
-                        atom::rebuild_v);
+                        atom::rebuild_v, static_cast<uint64_t>(this_run));
             return;
           }
           auto unconsumed_partitions = selected_partitions;
@@ -721,7 +733,7 @@ struct rebuilder_state {
           run->statistics.num_rebuilding -= num_partitions;
           // Pick up new work until we run out of remainig partitions.
           rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
-                      atom::rebuild_v);
+                      atom::rebuild_v, static_cast<uint64_t>(this_run));
         },
         [this, retry_partitions = std::move(retry_partitions), num_partitions,
          this_run, rp](caf::error& error) mutable {
@@ -785,7 +797,7 @@ struct rebuilder_state {
                                              retry_partitions.end());
             run->statistics.num_total -= 1;
             rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
-                        atom::rebuild_v);
+                        atom::rebuild_v, static_cast<uint64_t>(this_run));
             return;
           }
           TENZIR_WARN("{} failed to rebuild partitions: {}", *self, error);
@@ -903,8 +915,8 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
     [self](atom::stop, const stop_options& options) {
       return self->state().stop(options);
     },
-    [self](atom::internal, atom::rebuild) {
-      return self->state().rebuild();
+    [self](atom::internal, atom::rebuild, uint64_t rebuild_run) {
+      return self->state().rebuild(rebuild_run);
     },
     [self](atom::internal, atom::schedule) {
       return self->state().schedule();
