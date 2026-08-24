@@ -130,6 +130,11 @@ auto retry_request(HttpPoolConfig const& config, F&& f)
       attempt_err.with_exception([&](proxygen::coro::HTTPError const& err) {
         is_retryable = http::is_retryable_http_error(err.code);
       });
+      attempt_err.with_exception(
+        [&](proxygen::coro::HTTPCoroSessionPool::Exception const& err) {
+          using Type = proxygen::coro::HTTPCoroSessionPool::Exception::Type;
+          is_retryable = err.type == Type::Timeout;
+        });
       if (not is_retryable or attempt >= config.max_retry_count) {
         // will not retry, return error
         co_return Err{std::move(attempt_err).what().toStdString()};
@@ -571,6 +576,11 @@ auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
           attempt_err.with_exception([&](proxygen::coro::HTTPError const& err) {
             is_retryable = http::is_retryable_http_error(err.code);
           });
+          attempt_err.with_exception(
+            [&](proxygen::coro::HTTPCoroSessionPool::Exception const& err) {
+              using Type = proxygen::coro::HTTPCoroSessionPool::Exception::Type;
+              is_retryable = err.type == Type::Timeout;
+            });
           if (body_started or not is_retryable
               or attempt >= impl->config.max_retry_count) {
             co_return Err{std::move(attempt_err).what().toStdString()};
