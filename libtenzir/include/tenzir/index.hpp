@@ -17,6 +17,7 @@
 #include "tenzir/detail/stable_set.hpp"
 #include "tenzir/fbs/index.hpp"
 #include "tenzir/importer.hpp"
+#include "tenzir/partition_paths.hpp"
 #include "tenzir/partition_transformer.hpp"
 #include "tenzir/plugin_fwd.hpp"
 #include "tenzir/query_context.hpp"
@@ -34,9 +35,6 @@
 #include <vector>
 
 namespace tenzir {
-
-// 7 Returns the store path for a given partition id.
-std::filesystem::path store_path_for_partition(const uuid& id);
 
 /// The transformer replaces the old partition with the new one or keeps it
 /// depending on the value of keep_original_partition.
@@ -153,45 +151,7 @@ struct index_state {
 
   // -- persistence ------------------------------------------------------------
 
-  [[nodiscard]] std::filesystem::path
-  index_filename(const std::filesystem::path& basename = {}) const;
-
-  /// The path to a partition transform finalize marker.
-  [[nodiscard]] std::filesystem::path marker_path(const uuid& id) const;
-
-  /// Maps partitions to their expected location on the file system.
-  [[nodiscard]] std::filesystem::path partition_path(const uuid& id) const;
-
-  /// The directory that contains passive partition stores.
-  [[nodiscard]] std::filesystem::path archive_dir() const;
-
-  /// Returns a format string that can be formatted with a partition id to get
-  /// the input location of that partition for the partition transformer.
-  [[nodiscard]] std::string partition_path_template() const;
-
-  /// The path to which a partition transformer should write a partition with
-  /// the UUID `id`.
-  [[nodiscard]] std::filesystem::path
-  transformer_partition_path(const uuid& id) const;
-
-  /// Returns a format string that can be formatted with a partition id to
-  /// get the output location of that partition for the partition transformer.
-  [[nodiscard]] std::string transformer_partition_path_template() const;
-
-  /// Maps partition synopses to their expected location on the file system.
-  [[nodiscard]] std::filesystem::path
-  partition_synopsis_path(const uuid& id) const;
-
-  /// The path to which a partition transformer should write a synopsis
-  /// for a partition with the UUID `id`.
-  [[nodiscard]] std::filesystem::path
-  transformer_partition_synopsis_path(const uuid& id) const;
-
-  /// Returns a format string that can be formatted with a partition id to
-  /// get the output location of the that partition synopsis for the
-  /// partition transformer.
-  [[nodiscard]] std::string
-  transformer_partition_synopsis_path_template() const;
+  [[nodiscard]] std::filesystem::path index_filename() const;
 
   caf::error load_from_disk();
 
@@ -322,14 +282,8 @@ struct index_state {
   /// The CATALOG actor.
   catalog_actor catalog = {};
 
-  /// The directory for persistent state.
-  std::filesystem::path dir = {};
-
-  /// The directory for partition synopses.
-  std::filesystem::path synopsisdir = {};
-
-  /// The directory for in-progress partition transforms.
-  std::filesystem::path markersdir = {};
+  /// The on-disk locations of the partition files.
+  partition_paths paths = {};
 
   /// List of actors that wait for the next flush event.
   std::vector<flush_listener_actor> flush_listeners = {};

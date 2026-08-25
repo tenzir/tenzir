@@ -231,20 +231,6 @@ void PartitionTransformProgress::report_next_phase_transition_from(
   }
 }
 
-Option<std::filesystem::path>
-store_path_for_partition(const std::filesystem::path& base_path,
-                         const uuid& id) {
-  std::error_code err{};
-  for (const char* ext : {"store", "feather", "parquet"}) {
-    auto store_filename = fmt::format("{}.{}", id, ext);
-    auto candidate = base_path / "archive" / store_filename;
-    if (std::filesystem::exists(candidate, err)) {
-      return candidate;
-    }
-  }
-  return None{};
-}
-
 caf::error
 extract_partition_synopsis(const std::filesystem::path& partition_path,
                            const std::filesystem::path& partition_synopsis_path,
@@ -386,7 +372,7 @@ partition_actor partition_factory::operator()(const uuid& id) const {
                 "to load it regardless",
                 *state_.self, id);
   }
-  const auto path = state_.partition_path(id);
+  const auto path = state_.paths.partition(id);
   TENZIR_TRACE("{} loads partition {} for path {}", *state_.self, id, path);
   materializations_++;
   return state_.self->spawn(passive_partition, id, filesystem_, path,
@@ -405,55 +391,15 @@ index_state::index_state(index_actor::pointer self)
 
 // -- persistence --------------------------------------------------------------
 
-std::filesystem::path
-index_state::index_filename(const std::filesystem::path& basename) const {
-  return basename / dir / "index.bin";
-}
-
-std::filesystem::path index_state::marker_path(const uuid& id) const {
-  return markersdir / fmt::format("{:l}.marker", id);
-}
-
-std::filesystem::path index_state::partition_path(const uuid& id) const {
-  return dir / fmt::format("{:l}", id);
-}
-
-std::filesystem::path index_state::archive_dir() const {
-  return dir / ".." / "archive";
-}
-
-std::string index_state::partition_path_template() const {
-  return (dir / "{:l}").string();
-}
-
-std::filesystem::path
-index_state::transformer_partition_path(const uuid& id) const {
-  return markersdir / fmt::format("{:l}", id);
-}
-
-std::string index_state::transformer_partition_path_template() const {
-  return (markersdir / "{:l}").string();
-}
-
-std::filesystem::path
-index_state::partition_synopsis_path(const uuid& id) const {
-  return synopsisdir / fmt::format("{:l}.mdx", id);
-}
-
-std::filesystem::path
-index_state::transformer_partition_synopsis_path(const uuid& id) const {
-  return markersdir / fmt::format("{:l}.mdx", id);
-}
-
-std::string index_state::transformer_partition_synopsis_path_template() const {
-  return (dir / "markers" / "{:l}.mdx").string();
+std::filesystem::path index_state::index_filename() const {
+  return paths.index_dir / "index.bin";
 }
 
 caf::error index_state::load_from_disk() {
   // We dont use the filesystem actor here because this function is only
   // called once during startup, when no other actors exist yet.
   std::error_code err{};
-  auto const file_exists = std::filesystem::exists(dir, err);
+  auto const file_exists = std::filesystem::exists(paths.index_dir, err);
   if (not file_exists) {
     TENZIR_VERBOSE("{} found no prior state, starting with a clean slate",
                    *self);
@@ -467,16 +413,17 @@ caf::error index_state::load_from_disk() {
     return caf::none;
   }
   // Start by finishing up any in-progress transforms.
-  if (std::filesystem::is_directory(markersdir, err)) {
+  if (std::filesystem::is_directory(paths.markers_dir, err)) {
     auto error = [&]() -> caf::error {
       auto transforms_dir_iter
-        = std::filesystem::directory_iterator(markersdir, err);
+        = std::filesystem::directory_iterator(paths.markers_dir, err);
       if (err) {
         return caf::make_error(ec::filesystem_error,
                                fmt::format("{} failed to list directory "
                                            "contents "
                                            "of {}: {}",
-                                           *self, dir, err.message()));
+                                           *self, paths.index_dir,
+                                           err.message()));
       }
       auto kept_markers = false;
       for (auto const& entry : transforms_dir_iter) {
@@ -540,11 +487,11 @@ caf::error index_state::load_from_disk() {
             }
           }
           const auto staged_partition = std::filesystem::path{fmt::format(
-            TENZIR_FMT_RUNTIME(transformer_partition_path_template()), uuid)};
+            TENZIR_FMT_RUNTIME(paths.transformer_partition_template()), uuid)};
           auto partition_ec = std::error_code{};
           const auto have_partition
             = std::filesystem::exists(staged_partition, partition_ec)
-              or std::filesystem::exists(partition_path(uuid), partition_ec);
+              or std::filesystem::exists(paths.partition(uuid), partition_ec);
           if (not have_store or not have_partition) {
             outputs_usable = false;
           }
@@ -575,13 +522,13 @@ caf::error index_state::load_from_disk() {
           for (auto const* id : *transform_v0->output_partitions()) {
             const auto uuid = tenzir::uuid::from_flatbuffer(*id);
             const auto staged_partition = std::filesystem::path{fmt::format(
-              TENZIR_FMT_RUNTIME(transformer_partition_path_template()), uuid)};
-            restage(partition_path(uuid), staged_partition);
+              TENZIR_FMT_RUNTIME(paths.transformer_partition_template()), uuid)};
+            restage(paths.partition(uuid), staged_partition);
             const auto staged_synopsis = std::filesystem::path{
               fmt::format(TENZIR_FMT_RUNTIME(
-                            transformer_partition_synopsis_path_template()),
+                            paths.transformer_synopsis_template()),
                           uuid)};
-            restage(partition_synopsis_path(uuid), staged_synopsis);
+            restage(paths.synopsis(uuid), staged_synopsis);
           }
         };
         if (not outputs_usable) {
@@ -612,15 +559,15 @@ caf::error index_state::load_from_disk() {
         for (auto const* id : *transform_v0->output_partitions()) {
           const auto uuid = tenzir::uuid::from_flatbuffer(*id);
           const auto staged_partition = std::filesystem::path{fmt::format(
-            TENZIR_FMT_RUNTIME(transformer_partition_path_template()), uuid)};
-          if (not install(staged_partition, partition_path(uuid))) {
+            TENZIR_FMT_RUNTIME(paths.transformer_partition_template()), uuid)};
+          if (not install(staged_partition, paths.partition(uuid))) {
             install_ok = false;
             break;
           }
           const auto staged_synopsis = std::filesystem::path{fmt::format(
-            TENZIR_FMT_RUNTIME(transformer_partition_synopsis_path_template()),
+            TENZIR_FMT_RUNTIME(paths.transformer_synopsis_template()),
             uuid)};
-          if (not install(staged_synopsis, partition_synopsis_path(uuid))) {
+          if (not install(staged_synopsis, paths.synopsis(uuid))) {
             TENZIR_DEBUG("{} regenerates the missing synopsis of transformed "
                          "partition {} later",
                          *self, uuid);
@@ -636,7 +583,7 @@ caf::error index_state::load_from_disk() {
         }
         for (auto const* id : *transform_v0->input_partitions()) {
           auto uuid = tenzir::uuid::from_flatbuffer(*id);
-          auto path = partition_path(uuid);
+          auto path = paths.partition(uuid);
           if (std::filesystem::exists(path, err)) {
             // TODO: In combination with inhomogeneous partitions, this may
             // result in incorrect index statistics. This depends on whether the
@@ -666,7 +613,7 @@ caf::error index_state::load_from_disk() {
       // partition itself, there does not currently seem to be a bulletproof
       // way of handling this.
       if (not kept_markers) {
-        std::filesystem::remove_all(markersdir);
+        std::filesystem::remove_all(paths.markers_dir);
       }
       return caf::none;
     }();
@@ -674,12 +621,12 @@ caf::error index_state::load_from_disk() {
       TENZIR_WARN("{} failed to finish leftover transforms: {}", *self, error);
     }
   }
-  auto dir_iter = std::filesystem::directory_iterator(dir, err);
+  auto dir_iter = std::filesystem::directory_iterator(paths.index_dir, err);
   if (err) {
     return caf::make_error(ec::filesystem_error,
                            fmt::format("failed to list directory contents of "
                                        "{}: {}",
-                                       dir, err.message()));
+                                       paths.index_dir, err.message()));
   }
   auto partition_ids = std::vector<uuid>{};
   auto oversized_partition_ids = std::vector<uuid>{};
@@ -705,7 +652,7 @@ caf::error index_state::load_from_disk() {
       if (not size_err and file_size >= FLATBUFFERS_MAX_BUFFER_SIZE
           and test_file_identifier(entry, fbs::PartitionIdentifier())) {
         auto store_path
-          = dir / ".." / "archive" / fmt::format("{:u}.store", partition_uuid);
+          = paths.archive_dir / fmt::format("{:u}.store", partition_uuid);
         if (std::filesystem::exists(store_path, err)) {
           oversized_partition_ids.push_back(partition_uuid);
         } else {
@@ -732,7 +679,8 @@ caf::error index_state::load_from_disk() {
   // be there in the first place.
   TENZIR_DEBUG("{} deletes {} orphaned mdx files", *self, orphans.size());
   for (auto& orphan : orphans) {
-    std::filesystem::remove(dir / fmt::format("{}.mdx", orphan), err);
+    std::filesystem::remove(paths.index_dir / fmt::format("{}.mdx", orphan),
+                            err);
   }
   // We build an in-memory representation of the archive folder for quicker
   // lookup when we add file paths and sizes to the in-memory synopsis. Sizes
@@ -743,7 +691,7 @@ caf::error index_state::load_from_disk() {
   };
   const auto store_map = [&] {
     auto result = std::map<uuid, store_info>{};
-    auto store_path = dir / ".." / "archive";
+    auto store_path = paths.archive_dir;
     if (not std::filesystem::is_directory(store_path, err)) {
       return result;
     }
@@ -776,16 +724,16 @@ caf::error index_state::load_from_disk() {
     }
     return p.lexically_normal();
   };
-  const auto index_dir = resolve_dir(dir);
-  const auto synopsis_dir = resolve_dir(synopsisdir);
-  const auto archive_dir = resolve_dir(dir / ".." / "archive");
+  const auto index_dir = resolve_dir(paths.index_dir);
+  const auto synopsis_dir = resolve_dir(paths.synopsis_dir);
+  const auto archive_dir = resolve_dir(paths.archive_dir);
   const auto lazy_sketches = synopsis_opts.lazy_sketches;
   const auto skip_verification = synopsis_opts.skip_synopsis_verification;
-  // `synopsis_files` was scanned from `dir`, but synopses live under
-  // `synopsisdir`. These are the same in the default configuration; when they
+  // `synopsis_files` was scanned from the index directory, but synopses live
+  // under the synopsis directory. These are the same by default; when they
   // differ we must check the actual synopsis path instead of the scan result,
   // otherwise we would regenerate every synopsis on each startup.
-  const auto synopsis_in_index_dir = synopsisdir == dir;
+  const auto synopsis_in_index_dir = paths.synopsis_dir == paths.index_dir;
   // Loads a single partition synopsis from disk. This is invoked concurrently
   // from multiple worker threads below, so it must not touch shared mutable
   // state: it only reads data prepared above (all immutable during the load)
@@ -794,8 +742,8 @@ caf::error index_state::load_from_disk() {
   // workers have finished.
   auto load_one =
     [&](const uuid& partition_uuid) -> caf::expected<partition_synopsis_pair> {
-    auto part_path = partition_path(partition_uuid);
-    auto synopsis_path = partition_synopsis_path(partition_uuid);
+    auto part_path = paths.partition(partition_uuid);
+    auto synopsis_path = paths.synopsis(partition_uuid);
     // Generate the external partition synopsis file if it doesn't exist. In the
     // common case the synopsis lives in the scanned index directory, so we can
     // use the scan result and avoid a stat; otherwise we check the actual path.
@@ -1176,8 +1124,8 @@ void index_state::decommission_active_partition(
                           });
   active_partitions.erase(active_partition);
   // Persist active partition asynchronously.
-  const auto part_path = partition_path(id);
-  const auto synopsis_path = partition_synopsis_path(id);
+  const auto part_path = paths.partition(id);
+  const auto synopsis_path = paths.synopsis(id);
   TENZIR_TRACE("{} persists active partition {} to {}", *self, schema,
                part_path);
   self->mail(atom::persist_v, part_path, synopsis_path)
@@ -1626,9 +1574,12 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state().catalog = std::move(catalog);
   self->state().taxonomies = std::make_shared<tenzir::taxonomies>();
   self->state().taxonomies->concepts = modules::concepts();
-  self->state().dir = dir;
-  self->state().synopsisdir = catalog_dir;
-  self->state().markersdir = dir / "markers";
+  self->state().paths = {
+    .index_dir = dir,
+    .synopsis_dir = catalog_dir,
+    .markers_dir = dir / "markers",
+    .archive_dir = dir / ".." / "archive",
+  };
   self->state().partition_capacity = partition_capacity;
   self->state().max_buffered_events = max_buffered_events;
   self->state().active_partition_timeout = active_partition_timeout;
@@ -1773,18 +1724,11 @@ index(index_actor::stateful_pointer<index_state> self,
       finish();
       return rp;
     },
-    [self](atom::resolve,
-           tenzir::expression& expr) -> caf::result<catalog_lookup_result> {
-      auto query_context = query_context::make_extract("index", self, expr);
-      query_context.id = tenzir::uuid::random();
-      return self->mail(atom::candidates_v, std::move(query_context))
-        .delegate(self->state().catalog);
-    },
     [self](atom::erase, uuid partition_id) -> caf::result<atom::done> {
       TENZIR_VERBOSE("{} erases partition {}", *self, partition_id);
       auto rp = self->make_response_promise<atom::done>();
-      auto path = self->state().partition_path(partition_id);
-      auto synopsis_path = self->state().partition_synopsis_path(partition_id);
+      auto path = self->state().paths.partition(partition_id);
+      auto synopsis_path = self->state().paths.synopsis(partition_id);
       if (not self->state().persisted_partitions.contains(partition_id)) {
         std::error_code err{};
         const auto file_exists = std::filesystem::exists(path, err);
@@ -1842,8 +1786,7 @@ index(index_actor::stateful_pointer<index_state> self,
                                 *self, partition_id, path, err);
                   });
             };
-            auto store_path = store_path_for_partition(self->state().dir / "..",
-                                                       partition_id);
+            auto store_path = self->state().paths.find_store(partition_id);
             if (store_path) {
               erase_dense_index_file();
               rp.delegate(self->state().filesystem, atom::erase_v, *store_path);
@@ -2030,12 +1973,12 @@ index(index_actor::stateful_pointer<index_state> self,
       }
       auto store_id = std::string{self->state().store_actor_plugin->name()};
       auto input_partition_path_template
-        = self->state().partition_path_template();
-      auto archive_dir = self->state().archive_dir();
+        = self->state().paths.partition_template();
+      auto archive_dir = self->state().paths.archive_dir;
       auto partition_path_template
-        = self->state().transformer_partition_path_template();
+        = self->state().paths.transformer_partition_template();
       auto partition_synopsis_path_template
-        = self->state().transformer_partition_synopsis_path_template();
+        = self->state().paths.transformer_synopsis_template();
       auto transformation_id = uuid::random();
       if (not progress) {
         progress = std::make_shared<PartitionTransformProgress>();
@@ -2074,7 +2017,7 @@ index(index_actor::stateful_pointer<index_state> self,
         std::move(partition_transformer_addr),
         std::move(partition_completion_disposable));
       TENZIR_ASSERT(inserted);
-      auto marker_path = self->state().marker_path(uuid::random());
+      auto marker_path = self->state().paths.marker(uuid::random());
       auto rp = self->make_response_promise<partition_apply_result>();
       auto deliver =
         [self, rp, corrected_partitions, marker_path, transformation_id,
@@ -2147,8 +2090,7 @@ index(index_actor::stateful_pointer<index_state> self,
             for (auto& aps : apsv) {
               if (aps.synopsis) {
                 aps.synopsis.unshared().sketches_file.url = fmt::format(
-                  "file://{}",
-                  self->state().partition_synopsis_path(aps.uuid).string());
+                  "file://{}", self->state().paths.synopsis(aps.uuid).string());
               }
             }
             std::vector<uuid> new_partition_ids;
@@ -2185,13 +2127,12 @@ index(index_actor::stateful_pointer<index_state> self,
                     std::pair<std::filesystem::path, std::filesystem::path>>{};
                   for (auto const& aps : apsv) {
                     auto old_path
-                      = self->state().transformer_partition_path(aps.uuid);
+                      = self->state().paths.transformer_partition(aps.uuid);
                     auto old_synopsis_path
-                      = self->state().transformer_partition_synopsis_path(
-                        aps.uuid);
-                    auto new_path = self->state().partition_path(aps.uuid);
+                      = self->state().paths.transformer_synopsis(aps.uuid);
+                    auto new_path = self->state().paths.partition(aps.uuid);
                     auto new_synopsis_path
-                      = self->state().partition_synopsis_path(aps.uuid);
+                      = self->state().paths.synopsis(aps.uuid);
                     renames.emplace_back(std::move(old_path),
                                          std::move(new_path));
                     renames.emplace_back(std::move(old_synopsis_path),

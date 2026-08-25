@@ -12,6 +12,7 @@
 #include <tenzir/export_bridge.hpp>
 #include <tenzir/expression.hpp>
 #include <tenzir/modules.hpp>
+#include <tenzir/partition_paths.hpp>
 #include <tenzir/partition_synopsis.hpp>
 #include <tenzir/passive_partition.hpp>
 #include <tenzir/query_context.hpp>
@@ -122,7 +123,7 @@ struct bridge_state {
     // if they quit, but not their actual error message.
     const auto partition
       = self->spawn(passive_partition, info.uuid, filesystem,
-                    std::filesystem::path{fmt::format("index/{:l}", info.uuid)},
+                    partition_paths::relative().partition(info.uuid),
                     mode.high_priority ? caf::message_priority::high
                                        : caf::message_priority::normal);
     self->mail(atom::query_v, std::move(ctx))
