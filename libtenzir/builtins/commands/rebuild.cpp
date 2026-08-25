@@ -22,7 +22,6 @@
 #include <tenzir/detail/saturating_arithmetic.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/fwd.hpp>
-#include <tenzir/index.hpp>
 #include <tenzir/node.hpp>
 #include <tenzir/partition_synopsis.hpp>
 #include <tenzir/partition_transformer.hpp>
@@ -298,7 +297,6 @@ struct rebuilder_state {
   /// Actor handles required for the rebuilder.
   rebuilder_actor::pointer self = {};
   catalog_actor catalog = {};
-  index_actor index = {};
   importer_actor importer = {};
 
   /// Emits a `tenzir.metrics.rebuild_quarantine` event; unset if no importer
@@ -1005,17 +1003,14 @@ struct rebuilder_state {
       return self->mail(atom::internal_v, atom::rebuild_v, rebuild_run)
         .delegate(static_cast<rebuilder_actor>(self));
     }
-    auto transform_progress = std::make_shared<PartitionTransformProgress>();
-    const auto batch_id
-      = started_batch(schema, current_run_partitions, transform_progress);
-    TENZIR_DEBUG("{} selected {} partition(s) for rebuild of schema {} with {} "
-                 "estimated decoded bytes (budget: {}, available: {} from {})",
-                 *self, current_run_partitions.size(), schema,
-                 format_bytes(current_run_bytes),
-                 format_bytes(current_run_budget.bytes),
-                 format_bytes(current_run_budget.available.bytes),
-                 current_run_budget.available.source);
-    // Ask the index to rebuild the partitions we selected.
+    TENZIR_VERBOSE(
+      "{} selected {} partition(s) for rebuild of schema {} with {} "
+      "estimated decoded bytes (budget: {}, available: {} from {})",
+      *self, current_run_partitions.size(), schema,
+      format_bytes(current_run_bytes), format_bytes(current_run_budget.bytes),
+      format_bytes(current_run_budget.available.bytes),
+      current_run_budget.available.source);
+    // Ask the catalog to rebuild the partitions we selected.
     auto rp = self->make_response_promise<void>();
     auto dh = null_diagnostic_handler{};
     auto provider = session_provider::make(dh);
@@ -1046,11 +1041,8 @@ struct rebuilder_state {
     self
       ->mail(atom::apply_v, std::move(*rebatch),
              std::move(current_run_partitions), keep_original_partition::no,
-             std::string{"rebuild"}, minimum_partition_reduction,
-             minimum_reduction_ratio, std::move(required_partitions),
-             current_run_budget.bytes, desired_batch_size,
-             std::move(transform_progress))
-      .request(index, caf::infinite)
+             std::string{"rebuild"})
+      .request(catalog, caf::infinite)
       .then(
         [this, rp, selected_partitions = std::move(selected_partitions),
          num_partitions, batch_id, this_run,
@@ -1240,13 +1232,11 @@ struct rebuilder_state {
 /// Defines the behavior of the REBUILDER actor.
 /// @param self A pointer to this actor.
 /// @param catalog A handle to the CATALOG actor.
-/// @param index A handle to the INDEX actor.
 rebuilder_actor::behavior_type
 rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
-          catalog_actor catalog, index_actor index) {
+          catalog_actor catalog) {
   self->state().self = self;
   self->state().catalog = std::move(catalog);
-  self->state().index = std::move(index);
   self->state().max_partition_size
     = caf::get_or(content(self->system().config()), "tenzir.max-partition-size",
                   defaults::max_partition_size);
@@ -1618,9 +1608,8 @@ public:
 
   auto make_component(node_actor::stateful_pointer<node_state> node) const
     -> component_plugin_actor override {
-    auto [catalog, index]
-      = node->state().registry.find<catalog_actor, index_actor>();
-    return node->spawn(rebuilder, std::move(catalog), std::move(index));
+    auto [catalog] = node->state().registry.find<catalog_actor>();
+    return node->spawn(rebuilder, std::move(catalog));
   }
 };
 

@@ -156,6 +156,27 @@ auto spawn_filesystem(node_actor::stateful_pointer<node_state> self)
   return filesystem;
 }
 
+/// Reads the `tenzir.index` section into an `index_config`.
+auto parse_index_config(const caf::settings& settings) -> index_config {
+  const auto* index_settings = get_if(&settings, "tenzir.index");
+  auto result = index_config{};
+  if (not index_settings) {
+    return result;
+  }
+  const auto index_settings_data = to<data>(*index_settings);
+  if (not index_settings_data) {
+    diagnostic::error(index_settings_data.error())
+      .note("failed to convert `tenzir.index` configuration")
+      .throw_();
+  }
+  if (auto err = convert(*index_settings_data, result); err.valid()) {
+    diagnostic::error(err)
+      .note("failed to parse `tenzir.index` configuration")
+      .throw_();
+  }
+  return result;
+}
+
 auto spawn_catalog(node_actor::stateful_pointer<node_state> self,
                    const filesystem_actor& filesystem,
                    const caf::settings& settings) -> catalog_actor {
@@ -165,8 +186,10 @@ auto spawn_catalog(node_actor::stateful_pointer<node_state> self,
     = get_or(settings, "tenzir.index.lazy-sketches", false);
   auto catalog = self->spawn<caf::detached>(
     tenzir::catalog, filesystem,
-    partition_paths::from_database_dir(self->state().dir), sketch_cache_bytes,
-    lazy_sketches);
+    partition_paths::from_database_dir(self->state().dir),
+    std::string{defaults::store_backend}, parse_index_config(settings),
+    get_or(settings, "tenzir.max-partition-size", defaults::max_partition_size),
+    sketch_cache_bytes, lazy_sketches);
   TENZIR_ASSERT(catalog);
   if (auto err = register_component(self, caf::actor_cast<caf::actor>(catalog),
                                     "catalog");
@@ -181,21 +204,6 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
                  const filesystem_actor& filesystem,
                  const catalog_actor& catalog) -> index_actor {
   auto index = [&] {
-    const auto* index_settings = get_if(&settings, "tenzir.index");
-    auto index_config = tenzir::index_config{};
-    if (index_settings) {
-      const auto index_settings_data = to<data>(*index_settings);
-      if (not index_settings_data) {
-        diagnostic::error(index_settings_data.error())
-          .note("failed to convert `tenzir.index` configuration")
-          .throw_();
-      }
-      if (auto err = convert(*index_settings_data, index_config); err.valid()) {
-        diagnostic::error(err)
-          .note("failed to parse `tenzir.index` configuration")
-          .throw_();
-      }
-    }
     return self->spawn<caf::detached>(
       tenzir::index, filesystem, catalog, self->state().dir / "index",
       std::string{defaults::store_backend},
@@ -209,7 +217,7 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
       get_or(settings, "tenzir.active-partition-timeout",
              defaults::active_partition_timeout),
       defaults::max_in_mem_partitions, defaults::num_query_supervisors,
-      self->state().dir / "index", std::move(index_config));
+      self->state().dir / "index", parse_index_config(settings));
   }();
   TENZIR_ASSERT(index);
   if (auto err

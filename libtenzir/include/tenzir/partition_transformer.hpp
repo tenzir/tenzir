@@ -106,9 +106,6 @@ struct partition_transformer_state {
       self,
     stream_data&&, path_data&&) const;
 
-  /// Actor handle of the catalog.
-  catalog_actor catalog = {};
-
   /// Actor handle of the filesystem actor.
   filesystem_actor fs = {};
 
@@ -194,6 +191,12 @@ struct partition_transformer_state {
   /// variables need to be stored in the meantime.
   std::variant<std::monostate, stream_data, path_data> persist;
 
+  /// The store each output partition was persisted to. The transformer only
+  /// learns these once its store builders report back, which is after the
+  /// output synopses have been packed, so they are stamped onto the synopses
+  /// handed back to the catalog rather than into the `.mdx` files.
+  std::unordered_map<uuid, resource> store_resources = {};
+
   /// Number of stores launched and finished.
   size_t stores_launched = 0ull;
   size_t stores_finished = 0ull;
@@ -226,7 +229,7 @@ auto store_error_partition(const caf::error& err) -> Option<uuid>;
 auto partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>,
   std::string store_id, const index_config& synopsis_opts,
-  const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
+  const caf::settings& index_opts, filesystem_actor fs,
   std::vector<partition_info> input_partitions, ast::pipeline transform,
   std::string input_partition_path_template, std::filesystem::path archive_dir,
   std::string partition_path_template, std::string synopsis_path_template,

@@ -14,7 +14,6 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/catalog.hpp"
 #include "tenzir/detail/lru_cache.hpp"
-#include "tenzir/detail/stable_set.hpp"
 #include "tenzir/fbs/index.hpp"
 #include "tenzir/importer.hpp"
 #include "tenzir/partition_paths.hpp"
@@ -35,30 +34,6 @@
 #include <vector>
 
 namespace tenzir {
-
-/// The transformer replaces the old partition with the new one or keeps it
-/// depending on the value of keep_original_partition.
-enum class keep_original_partition : bool {
-  yes = true,
-  no = false,
-};
-
-template <class Inspector>
-auto inspect(Inspector& f, keep_original_partition& x) {
-  return detail::inspect_enum(f, x);
-}
-
-// New partition creation listeners will be sent the initial state of the
-// whole database if they set this to 'yes'.
-enum class send_initial_dbstate : bool {
-  yes = true,
-  no = false,
-};
-
-template <class Inspector>
-auto inspect(Inspector& f, send_initial_dbstate& x) {
-  return detail::inspect_enum(f, x);
-}
 
 /// Extract a partition synopsis from the partition at `partition_path`
 /// and write it to `partition_synopsis_path`.
@@ -195,10 +170,6 @@ struct index_state {
 
   void drain_retired_partitions(caf::error reason);
 
-  /// Adds a new partition creation listener.
-  void
-  add_partition_creation_listener(partition_creation_listener_actor listener);
-
   // -- query handling ---------------------------------------------------------
 
   /// Schedules partitions for lookups. Returns the number of newly scheduled
@@ -288,10 +259,6 @@ struct index_state {
   /// List of actors that wait for the next flush event.
   std::vector<flush_listener_actor> flush_listeners = {};
 
-  /// List of actors that want to be notified about new partitions.
-  std::vector<partition_creation_listener_actor> partition_creation_listeners
-    = {};
-
   bool shutting_down = false;
 
   /// Whether a `flush_to_disk` request arrived that has not been written yet.
@@ -303,20 +270,6 @@ struct index_state {
 
   /// Plugin responsible for spawning new partition-local stores.
   const tenzir::store_actor_plugin* store_actor_plugin = {};
-
-  /// The partitions currently being transformed.
-  detail::stable_set<uuid> partitions_in_transformation = {};
-
-  /// The collection of currently active transformers. These need to be
-  /// explicitly shut down if the index actor exists.
-  /// The `disposable` refers to the monitor that would otherwise automatically
-  /// remove the actor from the list if it finished on its own. It must be
-  /// disposed of before shutdown.
-  std::unordered_map<caf::actor_addr, caf::disposable> active_transformers;
-
-  /// Progress for the complete transformation transaction, including the
-  /// filesystem and catalog work performed after the transformer exits.
-  std::unordered_map<uuid, ActivePartitionTransform> active_transformations;
 
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem = {};

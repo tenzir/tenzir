@@ -217,7 +217,6 @@ void pack_and_fulfill(
 void quit_or_stall(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>,
   partition_transformer_state::stores_are_finished&&);
-
 void quit_or_stall(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
@@ -229,8 +228,7 @@ void quit_or_stall(
   } else {
     TENZIR_ASSERT(std::holds_alternative<stores_are_finished>(shutdown_state),
                   "unexpected variant content");
-    result.promise.deliver(std::move(result.result));
-    self->quit();
+    deliver_result(self, std::move(result));
   }
 }
 
@@ -313,8 +311,7 @@ void quit_or_stall(
   } else {
     auto* finished = std::get_if<transformer_is_finished>(&shutdown_state);
     TENZIR_ASSERT(finished != nullptr, "unexpected variant content");
-    finished->promise.deliver(std::move(finished->result));
-    self->quit();
+    deliver_result(self, std::move(*finished));
   }
 }
 
@@ -820,7 +817,7 @@ auto partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
   std::string store_id, const index_config& synopsis_opts,
-  const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
+  const caf::settings& index_opts, filesystem_actor fs,
   std::vector<partition_info> input_partitions, ast::pipeline transform,
   std::string input_partition_path_template, std::filesystem::path archive_dir,
   std::string partition_path_template, std::string synopsis_path_template,
@@ -842,7 +839,6 @@ auto partition_transformer(
     = caf::get_or(index_opts, "cardinality", defaults::max_partition_size);
   self->state().index_opts = index_opts;
   self->state().fs = std::move(fs);
-  self->state().catalog = std::move(catalog);
   self->state().input_partitions = std::move(input_partitions);
   self->state().transform = std::move(transform);
   self->state().store_id = std::move(store_id);

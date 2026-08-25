@@ -42,7 +42,6 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/partition_synopsis.hpp"
-#include "tenzir/partition_transformer.hpp"
 #include "tenzir/passive_partition.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/plugin/store.hpp"
@@ -118,37 +117,6 @@
 //                                                      atom::done            |
 //   <------------------------------------------------------------------------/
 //
-//
-// # Partition Transforms
-//
-//
-//
-//   atom::apply, transform              spawn()
-// ---------------------------> index  -----------> partition_transformer
-//                                                                    |
-//                                                                    \--------------> write index/markers/188427dd-1577-4b2a-b99c-09e91d1c167f
-//                                                                    \--------------> write index/markers/188427dd-1577-4b2a-b99c-09e91d1c167f.mdx
-//                                                                    |
-//                                                                  [...] (2 files per output partition)
-//                                      vector<partition_synopsis>    |
-//                             index  <-------------------------------/
-//                            |     | -----|
-//                                         | write index/markers/{transform_id}.marker
-//                                         | (contains list of input and output partitions)
-//                            |     | <----/
-//                            |     | ~~~~~|
-//                                         | atom::rename (move output partitions from index/markers/ to index/ )
-//                                         | update index statistics
-//                                         | atom::erase (for every input partition)
-//   atom::done               |     |<~~~~~/
-// <--------------------------|     |
-//                                  |------|
-//                                         |
-//                                         | erase index/markers/{transform_id}.marker
-//                                    <----/
-//
-// On index startup in `index::load_from_disk()` we first go through the `index/markers/` directory
-// and finish up the work recorded in any existing marker files.
 //
 // # Erase
 //
@@ -324,33 +292,6 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
   auto index = index_builder.Finish();
   fbs::FinishIndexBuffer(builder, index);
   return index;
-}
-
-tenzir::chunk_ptr create_marker(const std::vector<tenzir::uuid>& in,
-                                const std::vector<tenzir::uuid>& out,
-                                keep_original_partition keep) {
-  flatbuffers::FlatBufferBuilder builder;
-  auto in_offsets
-    = flatbuffers::Offset<flatbuffers::Vector<const fbs::UUID*>>{};
-  if (keep == keep_original_partition::no) {
-    in_offsets = builder.CreateVectorOfStructs<fbs::UUID>(
-      in.size(), [&in](size_t i, fbs::UUID* vec) {
-        ::memcpy(vec->mutable_data()->Data(), in[i].begin(),
-                 tenzir::uuid::num_bytes);
-      });
-  }
-  auto out_offsets = builder.CreateVectorOfStructs<fbs::UUID>(
-    out.size(), [&out](size_t i, fbs::UUID* vec) {
-      ::memcpy(vec->mutable_data()->Data(), out[i].begin(),
-               tenzir::uuid::num_bytes);
-    });
-  auto v0_offset = tenzir::fbs::partition_transform::Createv0(
-    builder, in_offsets, out_offsets);
-  auto transform_offset = tenzir::fbs::CreatePartitionTransform(
-    builder, tenzir::fbs::partition_transform::PartitionTransform::v0,
-    v0_offset.Union());
-  fbs::FinishPartitionTransformBuffer(builder, transform_offset);
-  return tenzir::chunk::make(builder.Release());
 }
 
 // -- partition_factory --------------------------------------------------------
@@ -1146,10 +1087,6 @@ void index_state::decommission_active_partition(
             [=, this](atom::ok) {
               TENZIR_TRACE("{} inserted partition {} {} to the catalog", *self,
                            schema, id);
-              for (auto& listener : partition_creation_listeners) {
-                self->mail(atom::update_v, partition_synopsis_pair{id, ps})
-                  .send(listener);
-              }
               persisted_partitions.emplace(id);
               retire_partition(id, caf::exit_reason::normal);
               if (completion) {
@@ -1273,11 +1210,6 @@ void index_state::drain_retired_partitions(caf::error reason) {
     }
     partition.exit_sent = true;
   }
-}
-
-void index_state::add_partition_creation_listener(
-  partition_creation_listener_actor listener) {
-  partition_creation_listeners.push_back(listener);
 }
 
 // -- query handling ---------------------------------------------------------
@@ -1446,8 +1378,6 @@ std::size_t index_state::memusage() const {
            * sizeof(decltype(persisted_partitions)::value_type);
   usage += pending_queries.memusage();
   usage += calculate_usage(flush_listeners);
-  usage += calculate_usage(partition_creation_listeners);
-  usage += calculate_usage(partitions_in_transformation);
   return usage;
 }
 
@@ -1618,30 +1548,6 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](table_slice& slice) {
       self->state().handle_slice(std::move(slice));
     },
-    [self](atom::subscribe, atom::create,
-           const partition_creation_listener_actor& listener,
-           send_initial_dbstate should_send) {
-      TENZIR_DEBUG("{} adds partition creation listener", *self);
-      self->state().add_partition_creation_listener(listener);
-      if (should_send == send_initial_dbstate::no) {
-        return;
-      }
-      // When we get here, the initial bulk upgrade and any table slices
-      // finished since then have already been sent to the catalog, and
-      // since CAF guarantees message order within the same inbound queue
-      // they will all be part of the response vector.
-      self->mail(atom::get_v)
-        .urgent()
-        .request(self->state().catalog, caf::infinite)
-        .then(
-          [=](std::vector<partition_synopsis_pair>& v) {
-            self->mail(atom::update_v, std::move(v)).send(listener);
-          },
-          [](const caf::error& e) {
-            TENZIR_WARN(
-              "index failed to get list of partitions from catalog: {}", e);
-          });
-    },
     [self](atom::get, bool internal) -> caf::result<std::vector<table_slice>> {
       auto rp = self->make_response_promise<std::vector<table_slice>>();
       auto result = std::make_shared<std::vector<table_slice>>();
@@ -1724,352 +1630,6 @@ index(index_actor::stateful_pointer<index_state> self,
       finish();
       return rp;
     },
-    [self](atom::apply, ast::pipeline pipe,
-           std::vector<partition_info> selected_partitions,
-           keep_original_partition keep, std::string origin,
-           uint64_t minimum_partition_reduction, double minimum_reduction_ratio,
-           std::vector<uuid> required_input_partitions,
-           uint64_t input_byte_budget, uint64_t rebuild_batch_size,
-           std::shared_ptr<PartitionTransformProgress> progress)
-      -> caf::result<partition_apply_result> {
-      if (selected_partitions.empty()) {
-        return caf::make_error(ec::invalid_argument, "no partitions given");
-      }
-      TENZIR_DEBUG("{} applies a pipeline to partitions {}", *self,
-                   selected_partitions);
-      TENZIR_ASSERT(self->state().store_actor_plugin);
-      auto input_partitions = std::vector<partition_info>{};
-      input_partitions.reserve(selected_partitions.size());
-      std::erase_if(selected_partitions, [&](const auto& entry) {
-        if (self->state().persisted_partitions.contains(entry.uuid)) {
-          return false;
-        }
-        TENZIR_WARN("{} skips unknown partition {} for pipeline {:?}", *self,
-                    entry.uuid, pipe);
-        return true;
-      });
-      auto corrected_partitions = catalog_lookup_result{};
-      for (const auto& partition : selected_partitions) {
-        if (self->state()
-              .partitions_in_transformation.insert(partition.uuid)
-              .second) {
-          corrected_partitions.candidate_infos[partition.schema]
-            .partition_infos.emplace_back(partition);
-          input_partitions.emplace_back(partition);
-        } else {
-          // Getting overlapping partitions triggers a warning. We ignore the
-          // partition unless that would put the transformation below its
-          // reduction constraints, in which case we skip the whole request
-          // below.
-          // TODO: Implement some synchronization mechanism for partition
-          // erasure so rebuild, compaction, and aging can properly
-          // synchronize.
-          TENZIR_WARN("{} refuses to apply transformation '{:?}' to partition "
-                      "{} because it is currently being transformed",
-                      *self, pipe, partition.uuid);
-        }
-      }
-      if (corrected_partitions.empty()) {
-        return partition_apply_result{};
-      }
-      const auto input_events
-        = std::transform_reduce(input_partitions.begin(),
-                                input_partitions.end(), size_t{}, std::plus<>{},
-                                [](const partition_info& partition) {
-                                  return partition.events;
-                                });
-      const auto estimated_output_partitions
-        = input_events / self->state().partition_capacity
-          + static_cast<size_t>(input_events % self->state().partition_capacity
-                                != 0);
-      const auto has_required_input
-        = std::ranges::any_of(input_partitions, [&](const auto& partition) {
-            return std::ranges::contains(required_input_partitions,
-                                         partition.uuid);
-          });
-      if (not has_required_input
-          and not satisfies_partition_reduction(
-            input_partitions.size(), estimated_output_partitions,
-            minimum_partition_reduction, minimum_reduction_ratio)) {
-        for (const auto& partition : input_partitions) {
-          const auto erased
-            = self->state().partitions_in_transformation.erase(partition.uuid);
-          TENZIR_ASSERT(erased == 1);
-        }
-        TENZIR_DEBUG(
-          "{} skips transformation because only {} of {} selected partitions "
-          "are available; the transformation must eliminate at least {} "
-          "partitions and {:.0f}% of its inputs",
-          *self, input_partitions.size(), selected_partitions.size(),
-          minimum_partition_reduction, minimum_reduction_ratio * 100);
-        return partition_apply_result{
-          .input_partitions = {},
-          .output_partitions = {},
-          .input_complete = false,
-          .skipped = true,
-        };
-      }
-      auto store_id = std::string{self->state().store_actor_plugin->name()};
-      auto input_partition_path_template
-        = self->state().paths.partition_template();
-      auto archive_dir = self->state().paths.archive_dir;
-      auto partition_path_template
-        = self->state().paths.transformer_partition_template();
-      auto partition_synopsis_path_template
-        = self->state().paths.transformer_synopsis_template();
-      auto transformation_id = uuid::random();
-      if (not progress) {
-        progress = std::make_shared<PartitionTransformProgress>();
-      }
-      progress->id = fmt::to_string(transformation_id);
-      auto status_result = self->state().active_transformations.try_emplace(
-        transformation_id, ActivePartitionTransform{
-                             .progress = progress,
-                             .input_partitions = input_partitions,
-                             .origin = origin,
-                           });
-      TENZIR_ASSERT(status_result.second);
-      /// Yummy. Partitioned Foam. :)
-      partition_transformer_actor partition_transfomer = self->spawn(
-        partition_transformer, store_id, self->state().synopsis_opts,
-        self->state().index_opts, self->state().catalog,
-        self->state().filesystem, std::move(input_partitions), pipe,
-        std::move(input_partition_path_template), std::move(archive_dir),
-        std::move(partition_path_template),
-        std::move(partition_synopsis_path_template), std::move(origin),
-        minimum_partition_reduction, minimum_reduction_ratio,
-        std::move(required_input_partitions), input_byte_budget,
-        detail::narrow_cast<size_t>(rebuild_batch_size), progress);
-      /// Monitor the actor to remove it from the collection of active
-      /// transformers.
-      auto partition_transformer_addr = partition_transfomer->address();
-      auto partition_completion_disposable = self->monitor(
-        partition_transfomer,
-        [self, partition_transformer_addr](const caf::error&) {
-          const auto it = self->state().active_transformers.find(
-            partition_transformer_addr);
-          TENZIR_ASSERT(it != self->state().active_transformers.end());
-          self->state().active_transformers.erase(it);
-        });
-      const auto [_, inserted] = self->state().active_transformers.try_emplace(
-        std::move(partition_transformer_addr),
-        std::move(partition_completion_disposable));
-      TENZIR_ASSERT(inserted);
-      auto marker_path = self->state().paths.marker(uuid::random());
-      auto rp = self->make_response_promise<partition_apply_result>();
-      auto deliver =
-        [self, rp, corrected_partitions, marker_path, transformation_id,
-         progress](caf::expected<partition_apply_result>&& result) mutable {
-          progress->set_phase(PartitionTransformPhase::done);
-          self->state().active_transformations.erase(transformation_id);
-          // Erase errors don't matter too much here, leftover in-progress
-          // transforms will be cleaned up on next startup.
-          self->mail(atom::erase_v, marker_path)
-            .request(self->state().filesystem, caf::infinite)
-            .then(
-              [](atom::done) { /* nop */
-                               ;
-              },
-              [self, marker_path](const caf::error& e) {
-                TENZIR_DEBUG("{} failed to erase in-progress marker at {}: "
-                             "{}",
-                             *self, marker_path, e);
-              });
-          for (const auto& [_, candidate_info] :
-               corrected_partitions.candidate_infos) {
-            for (const auto& partition : candidate_info.partition_infos) {
-              self->state().partitions_in_transformation.erase(partition.uuid);
-            }
-          }
-          if (result) {
-            rp.deliver(std::move(*result));
-          } else {
-            rp.deliver(std::move(result.error()));
-          }
-          // We clear the in-memory partitions here because they are only used
-          // by the partition transformer which will take quite some time to
-          // start again.
-          self->state().inmem_partitions.clear();
-        };
-      // TODO: Implement some kind of monadic composition instead of these
-      // nested requests.
-      // TODO: With CAF 0.19 it will no longer be needed to keep
-      // partition_transformer alive in the lambda as the promise kept in the
-      // state will keep the actor alive
-      self->mail(atom::persist_v)
-        .request(partition_transfomer, caf::infinite)
-        .then(
-          [self, deliver, corrected_partitions, keep, marker_path, rp,
-           partition_transfomer,
-           progress](partition_transformer_result& transform_result) mutable {
-            if (transform_result.skipped) {
-              TENZIR_DEBUG("{} skips committing transformer output because "
-                           "the consumed inputs did not meet its constraints",
-                           *self);
-              deliver(partition_apply_result{
-                .input_partitions = {},
-                .output_partitions = {},
-                .input_complete = false,
-                .skipped = true,
-              });
-              return;
-            }
-            std::vector<uuid> old_partition_ids;
-            old_partition_ids.reserve(transform_result.input_partitions.size());
-            for (const auto& partition : transform_result.input_partitions) {
-              old_partition_ids.emplace_back(partition.uuid);
-            }
-            auto apsv = std::move(transform_result.output_partitions);
-            // Point each output synopsis at its final `.mdx` path (the marker
-            // is renamed there before the merge below). With lazy sketches the
-            // catalog drops the Bloom filters on merge and reloads them on
-            // demand from this path, so it must be set or pruning would be
-            // lost for transformed/rebuilt partitions until the next restart.
-            for (auto& aps : apsv) {
-              if (aps.synopsis) {
-                aps.synopsis.unshared().sketches_file.url = fmt::format(
-                  "file://{}", self->state().paths.synopsis(aps.uuid).string());
-              }
-            }
-            std::vector<uuid> new_partition_ids;
-            new_partition_ids.reserve(apsv.size());
-            for (auto const& [uuid, _] : apsv) {
-              new_partition_ids.push_back(uuid);
-            }
-            auto result = std::vector<partition_info>{};
-            for (auto const& aps : apsv) {
-              // If synopsis was null (ie. all events were deleted),
-              // the partition transformer should not have included
-              // it in the result.
-              TENZIR_ASSERT(aps.synopsis);
-              auto info = partition_info{
-                aps.uuid,
-                *aps.synopsis,
-              };
-              result.emplace_back(std::move(info));
-            }
-            auto transformed_input_partitions
-              = std::move(transform_result.input_partitions);
-            auto input_complete = transform_result.input_complete;
-            // Record in-progress marker.
-            auto marker_chunk
-              = create_marker(old_partition_ids, new_partition_ids, keep);
-            progress->set_phase(PartitionTransformPhase::writing_marker);
-            self->mail(atom::write_v, marker_path, marker_chunk)
-              .request(self->state().filesystem, caf::infinite)
-              .then(
-                [=, apsv = std::move(apsv)](atom::ok) mutable {
-                  // Move the written partitions from the `markers/`
-                  // directory into the regular index directory.
-                  auto renames = std::vector<
-                    std::pair<std::filesystem::path, std::filesystem::path>>{};
-                  for (auto const& aps : apsv) {
-                    auto old_path
-                      = self->state().paths.transformer_partition(aps.uuid);
-                    auto old_synopsis_path
-                      = self->state().paths.transformer_synopsis(aps.uuid);
-                    auto new_path = self->state().paths.partition(aps.uuid);
-                    auto new_synopsis_path
-                      = self->state().paths.synopsis(aps.uuid);
-                    renames.emplace_back(std::move(old_path),
-                                         std::move(new_path));
-                    renames.emplace_back(std::move(old_synopsis_path),
-                                         std::move(new_synopsis_path));
-                  }
-                  progress->set_phase(
-                    PartitionTransformPhase::moving_partition_files);
-                  self->mail(atom::move_v, std::move(renames))
-                    .request(self->state().filesystem, caf::infinite)
-                    .then(
-                      // Delete input partitions if necessary.
-                      [=, apsv = std::move(apsv)](atom::done) mutable {
-                        progress->set_phase(
-                          PartitionTransformPhase::updating_catalog);
-                        if (keep == keep_original_partition::yes) {
-                          if (not apsv.empty()) {
-                            self->mail(atom::merge_v, apsv)
-                              .urgent()
-                              .request(self->state().catalog, caf::infinite)
-                              .then(
-                                [self, deliver, transformed_input_partitions,
-                                 result, input_complete,
-                                 apsv](atom::ok) mutable {
-                                  // Update index statistics and list of
-                                  // persisted partitions.
-                                  for (auto const& aps : apsv) {
-                                    self->state().persisted_partitions.emplace(
-                                      aps.uuid);
-                                  }
-                                  self->state().flush_to_disk();
-                                  deliver(partition_apply_result{
-                                    .input_partitions
-                                    = std::move(transformed_input_partitions),
-                                    .output_partitions = std::move(result),
-                                    .input_complete = input_complete,
-                                  });
-                                },
-                                [deliver](caf::error& e) mutable {
-                                  deliver(std::move(e));
-                                });
-                          } else {
-                            deliver(partition_apply_result{
-                              .input_partitions
-                              = std::move(transformed_input_partitions),
-                              .output_partitions = std::move(result),
-                              .input_complete = input_complete,
-                            });
-                          }
-                        } else { // keep == keep_original_partition::no
-                          self->mail(atom::replace_v, old_partition_ids, apsv)
-                            .urgent()
-                            .request(self->state().catalog, caf::infinite)
-                            .then(
-                              [self, deliver, old_partition_ids,
-                               transformed_input_partitions, result, apsv,
-                               input_complete, progress](atom::ok) mutable {
-                                for (auto const& aps : apsv) {
-                                  self->state().persisted_partitions.emplace(
-                                    aps.uuid);
-                                }
-                                self->state().flush_to_disk();
-                                progress->set_phase(PartitionTransformPhase::
-                                                      erasing_input_partitions);
-                                self->mail(atom::erase_v, old_partition_ids)
-                                  .request(self->state().catalog, caf::infinite)
-                                  .then(
-                                    [=](atom::done) mutable {
-                                      deliver(partition_apply_result{
-                                        .input_partitions = std::move(
-                                          transformed_input_partitions),
-                                        .output_partitions = std::move(result),
-                                        .input_complete = input_complete,
-                                      });
-                                    },
-                                    [=](const caf::error& e) mutable {
-                                      deliver(e);
-                                    });
-                              },
-                              [deliver](const caf::error& e) mutable {
-                                deliver(e);
-                              });
-                        }
-                      },
-                      [deliver, self, rp](caf::error& e) mutable {
-                        TENZIR_WARN("{} failed to finalize partition "
-                                    "transformer output: {}",
-                                    *self, e);
-                        deliver(std::move(e));
-                      });
-                },
-                [deliver](const caf::error& e) mutable {
-                  deliver(e);
-                });
-          },
-          [deliver](const caf::error& e) mutable {
-            deliver(e);
-          });
-      return rp;
-    },
     [self](atom::flush) -> caf::result<void> {
       TENZIR_DEBUG("{} got a flush request from {}", *self,
                    self->current_sender());
@@ -2087,13 +1647,7 @@ index(index_actor::stateful_pointer<index_state> self,
                      msg.source, msg.reason);
       auto perform_shutdown = [self](auto reason) {
         self->state().drain_retired_partitions(reason);
-        auto dependents = std::vector<caf::actor>{};
-        dependents.reserve(self->state().active_transformers.size());
-        for (auto& [act, disp] : self->state().active_transformers) {
-          disp.dispose();
-          dependents.push_back(caf::actor_cast<caf::actor>(act));
-        }
-        shutdown<policy::parallel>(self, std::move(dependents), reason);
+        shutdown<policy::parallel>(self, std::vector<caf::actor>{}, reason);
       };
       self->state().shutting_down = true;
       self->mail(atom::flush_v)

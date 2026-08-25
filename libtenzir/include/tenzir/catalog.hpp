@@ -12,12 +12,16 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/detail/flat_map.hpp"
+#include "tenzir/detail/inspection_common.hpp"
 #include "tenzir/detail/request_cache.hpp"
+#include "tenzir/detail/stable_set.hpp"
 #include "tenzir/expression.hpp"
+#include "tenzir/index_config.hpp"
 #include "tenzir/instrumentation.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/partition_paths.hpp"
 #include "tenzir/partition_synopsis.hpp"
+#include "tenzir/plugin_fwd.hpp"
 #include "tenzir/taxonomies.hpp"
 #include "tenzir/uuid.hpp"
 
@@ -31,6 +35,30 @@
 #include <vector>
 
 namespace tenzir {
+
+/// The transformer replaces the old partition with the new one or keeps it
+/// depending on the value of keep_original_partition.
+enum class keep_original_partition : bool {
+  yes = true,
+  no = false,
+};
+
+template <class Inspector>
+auto inspect(Inspector& f, keep_original_partition& x) {
+  return detail::inspect_enum(f, x);
+}
+
+// New partition creation listeners will be sent the initial state of the
+// whole database if they set this to 'yes'.
+enum class send_initial_dbstate : bool {
+  yes = true,
+  no = false,
+};
+
+template <class Inspector>
+auto inspect(Inspector& f, send_initial_dbstate& x) {
+  return detail::inspect_enum(f, x);
+}
 
 /// The result of a catalog query.
 struct catalog_lookup_result {
@@ -132,6 +160,18 @@ public:
   /// Erase this partition from the catalog.
   void erase(const uuid& partition);
 
+  /// Applies a pipeline to a set of partitions, writing the results into new
+  /// partitions. With `keep == keep_original_partition::no` the inputs are
+  /// replaced by the outputs and erased from disk once the outputs are safely
+  /// in place.
+  auto apply(ast::pipeline pipe, std::vector<partition_info> selected,
+             keep_original_partition keep, std::string origin)
+    -> caf::result<partition_apply_result>;
+
+  /// Adds a new partition creation listener.
+  void
+  add_partition_creation_listener(partition_creation_listener_actor listener);
+
   /// Erases this partition from the catalog and deletes its on-disk files.
   /// The store is located by probing the archive for the known extensions; if
   /// that fails, the partition itself is loaded so its store header can name
@@ -196,6 +236,28 @@ public:
   /// The on-disk locations of the partition files.
   partition_paths paths = {};
 
+  /// Plugin responsible for spawning stores for transform outputs.
+  const tenzir::store_actor_plugin* store_actor_plugin = {};
+
+  /// Config options to be used for new synopses.
+  index_config synopsis_opts = {};
+
+  /// Config options for value indices.
+  caf::settings index_opts = {};
+
+  /// The partitions currently being transformed.
+  detail::stable_set<uuid> partitions_in_transformation = {};
+
+  /// The collection of currently active transformers. These need to be
+  /// explicitly shut down when the catalog exits. The `disposable` refers to
+  /// the monitor that would otherwise automatically remove the actor from the
+  /// list if it finished on its own. It must be disposed of before shutdown.
+  std::unordered_map<caf::actor_addr, caf::disposable> active_transformers = {};
+
+  /// List of actors that want to be notified about new partitions.
+  std::vector<partition_creation_listener_actor> partition_creation_listeners
+    = {};
+
   /// For each type, maps a partition ID to the synopses for that partition.
   // We mainly iterate over the whole map and return a sorted set, for which
   // the `flat_map` proves to be much faster than `std::{unordered_,}set`.
@@ -225,6 +287,10 @@ public:
 /// @param self The actor handle.
 /// @param filesystem Used to move/erase on-disk partition files.
 /// @param paths The on-disk locations of the partition files.
+/// @param store_backend The store backend to use for transform outputs.
+/// @param synopsis_opts The false-positive rates for the types and fields of
+/// newly created synopses.
+/// @param partition_capacity The maximum number of events per partition.
 /// @param sketch_cache_bytes Memory budget for on-demand loading of deferred
 /// Bloom-filter sketches; zero disables on-demand loading.
 /// @param lazy_sketches Whether Bloom-filter sketches are deferred; when set,
@@ -232,7 +298,8 @@ public:
 /// memory bounded during ongoing ingest.
 auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
              filesystem_actor filesystem, partition_paths paths,
-             size_t sketch_cache_bytes = 0, bool lazy_sketches = false)
-  -> catalog_actor::behavior_type;
+             std::string store_backend, index_config synopsis_opts,
+             size_t partition_capacity, size_t sketch_cache_bytes = 0,
+             bool lazy_sketches = false) -> catalog_actor::behavior_type;
 
 } // namespace tenzir

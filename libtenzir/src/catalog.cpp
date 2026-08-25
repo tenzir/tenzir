@@ -32,8 +32,11 @@
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/passive_partition.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/plugin/register.hpp"
+#include "tenzir/plugin/store.hpp"
 #include "tenzir/query_context.hpp"
 #include "tenzir/series_builder.hpp"
+#include "tenzir/shutdown.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/synopsis.hpp"
 #include "tenzir/taxonomies.hpp"
@@ -1276,14 +1279,29 @@ auto catalog_state::memusage() const -> size_t {
 
 auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
              filesystem_actor filesystem, partition_paths paths,
-             size_t sketch_cache_bytes, bool lazy_sketches)
-  -> catalog_actor::behavior_type {
+             std::string store_backend, index_config synopsis_opts,
+             size_t partition_capacity, size_t sketch_cache_bytes,
+             bool lazy_sketches) -> catalog_actor::behavior_type {
   if (self->getf(caf::local_actor::is_detached_flag)) {
     caf::detail::set_thread_name("tnz.catalog");
   }
   self->state().self = self;
   self->state().filesystem = std::move(filesystem);
   self->state().paths = std::move(paths);
+  self->state().synopsis_opts = std::move(synopsis_opts);
+  // For historic reasons, the `tenzir.max-partition-size` is stored as the
+  // `cardinality` in the value index options.
+  self->state().index_opts["cardinality"] = partition_capacity;
+  self->state().store_actor_plugin
+    = plugins::find<store_actor_plugin>(store_backend);
+  if (not self->state().store_actor_plugin) {
+    auto error = caf::make_error(ec::invalid_configuration,
+                                 fmt::format("could not find store plugin '{}'",
+                                             store_backend));
+    TENZIR_ERROR("{}", render(error));
+    self->quit(error);
+    return catalog_actor::behavior_type::make_empty_behavior();
+  }
   self->state().taxonomies.concepts = modules::concepts();
   self->state().lazy_sketches = lazy_sketches;
   // Initialize the sketch cache before the request cache below, so that any
@@ -1301,7 +1319,44 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
         return self->state().cache->stash(self, atom::merge_v,
                                           std::move(partitions));
       }
-      return self->state().merge(std::move(partitions));
+      // Only the index sends this message, once per persisted ingest
+      // partition. Transform outputs are merged inside the apply handler
+      // instead, which is what keeps the partition creation listeners tied to
+      // ingest.
+      auto notification = self->state().partition_creation_listeners.empty()
+                            ? std::vector<partition_synopsis_pair>{}
+                            : partitions;
+      auto result = self->state().merge(std::move(partitions));
+      for (const auto& listener : self->state().partition_creation_listeners) {
+        self->mail(atom::update_v, notification).send(listener);
+      }
+      return result;
+    },
+    [self](atom::apply, ast::pipeline& pipe,
+           std::vector<partition_info>& selected, keep_original_partition keep,
+           std::string& origin) -> caf::result<partition_apply_result> {
+      if (self->state().cache) {
+        return self->state().cache->stash(self, atom::apply_v, std::move(pipe),
+                                          std::move(selected), keep,
+                                          std::move(origin));
+      }
+      return self->state().apply(std::move(pipe), std::move(selected), keep,
+                                 std::move(origin));
+    },
+    [self](atom::subscribe, atom::create,
+           const partition_creation_listener_actor& listener,
+           send_initial_dbstate should_send) -> caf::result<void> {
+      if (self->state().cache) {
+        return self->state().cache->stash(
+          self, atom::subscribe_v, atom::create_v, listener, should_send);
+      }
+      TENZIR_DEBUG("{} adds partition creation listener", *self);
+      self->state().add_partition_creation_listener(listener);
+      if (should_send == send_initial_dbstate::yes) {
+        self->mail(atom::update_v, collect_synopses(self->state()))
+          .send(listener);
+      }
+      return {};
     },
     [self](atom::get) -> caf::result<std::vector<partition_synopsis_pair>> {
       // if (self->state().mail_cache) {
@@ -1427,6 +1482,17 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
     },
     [](atom::status, status_verbosity, duration) {
       return record{};
+    },
+    [self](const caf::exit_msg& msg) {
+      TENZIR_VERBOSE("{} received EXIT from {} with reason: {}", *self,
+                     msg.source, msg.reason);
+      auto dependents = std::vector<caf::actor>{};
+      dependents.reserve(self->state().active_transformers.size());
+      for (auto& [addr, disposable] : self->state().active_transformers) {
+        disposable.dispose();
+        dependents.push_back(caf::actor_cast<caf::actor>(addr));
+      }
+      shutdown<policy::parallel>(self, std::move(dependents), msg.reason);
     },
   };
 }

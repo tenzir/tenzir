@@ -176,6 +176,18 @@ using catalog_actor = typed_actor_fwd<
   // Atomatically replace a set of partititon synopses with another.
   auto(atom::replace, std::vector<uuid>, std::vector<partition_synopsis_pair>)
     ->caf::result<atom::ok>,
+  // Applies the given pipeline (TQL2 AST) to the given partitions.
+  // When keep_original_partition is yes: merges the transformed partitions
+  // with the original ones and returns the new partition infos. When
+  // keep_original_partition is no: replaces the inputs with the outputs and
+  // erases the inputs from disk.
+  auto(atom::apply, ast::pipeline, std::vector<tenzir::partition_info>,
+       keep_original_partition, std::string)
+    ->caf::result<partition_apply_result>,
+  // Subscribes a PARTITION CREATION LISTENER to the CATALOG.
+  auto(atom::subscribe, atom::create, partition_creation_listener_actor,
+       send_initial_dbstate)
+    ->caf::result<void>,
   // Return the candidate partitions per type for a query.
   auto(atom::candidates, tenzir::query_context)
     ->caf::result<catalog_lookup_result>,
@@ -208,24 +220,6 @@ using index_actor = typed_actor_fwd<
   auto(atom::done, uuid)->caf::result<void>,
   // Stores a table slice.
   auto(table_slice)->caf::result<void>,
-  // Subscribes a PARTITION CREATION LISTENER to the INDEX.
-  auto(atom::subscribe, atom::create, partition_creation_listener_actor,
-       send_initial_dbstate)
-    ->caf::result<void>,
-  // Applies the given pipeline (TQL2 AST) to the partition.
-  // When keep_original_partition is yes: merges the transformed partitions
-  // with the original ones and returns the new partition infos. When
-  // keep_original_partition is no: does an in-place pipeline keeping the old
-  // ids, and makes new partitions preserving them. Three trailing arguments
-  // constrain the accepted inputs by absolute reduction, relative reduction,
-  // and inputs that independently require transformation. The byte-budget
-  // argument uses zero to request automatic estimation. A non-zero rebuild
-  // batch size enables the streaming fast path. The final argument optionally
-  // shares progress with the caller.
-  auto(atom::apply, ast::pipeline, std::vector<tenzir::partition_info>,
-       keep_original_partition, std::string, uint64_t, double, std::vector<uuid>,
-       uint64_t, uint64_t, std::shared_ptr<PartitionTransformProgress>)
-    ->caf::result<partition_apply_result>,
   // Decomissions all active partitions, effectively flushing them to disk.
   auto(atom::flush)->caf::result<void>,
   // Returns all events from active and unpersisted partitions.
