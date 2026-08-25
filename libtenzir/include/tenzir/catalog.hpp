@@ -13,7 +13,6 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/detail/flat_map.hpp"
 #include "tenzir/detail/inspection_common.hpp"
-#include "tenzir/detail/request_cache.hpp"
 #include "tenzir/detail/stable_set.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/index_config.hpp"
@@ -149,9 +148,19 @@ public:
 
   constexpr static auto name = "catalog";
 
+  /// Rebuilds the catalog from the database directory. Runs synchronously
+  /// during startup, before the catalog installs its behavior, so requests
+  /// that arrive in the meantime simply wait in the mailbox.
+  auto load_from_disk() -> caf::error;
+
+  /// Finishes up transforms that were interrupted by the last shutdown:
+  /// erases the inputs of a committed transform and moves its outputs into
+  /// place. Part of `load_from_disk`.
+  void replay_markers();
+
   /// Creates the catalog from a set of partition synopses.
   auto initialize(std::vector<partition_synopsis_pair> partitions)
-    -> caf::result<atom::ok>;
+    -> caf::error;
 
   /// Add a new partition synopsis.
   auto merge(std::vector<partition_synopsis_pair> partitions)
@@ -275,8 +284,6 @@ public:
   /// dropped so that ongoing ingest does not accumulate them in resident
   /// memory; they are loaded on demand from disk instead.
   bool lazy_sketches = false;
-
-  Option<detail::request_cache> cache;
 
   tenzir::taxonomies taxonomies = {};
 };

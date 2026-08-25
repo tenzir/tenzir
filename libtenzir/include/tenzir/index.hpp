@@ -14,7 +14,6 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/catalog.hpp"
 #include "tenzir/detail/lru_cache.hpp"
-#include "tenzir/fbs/index.hpp"
 #include "tenzir/importer.hpp"
 #include "tenzir/partition_paths.hpp"
 #include "tenzir/partition_transformer.hpp"
@@ -34,28 +33,6 @@
 #include <vector>
 
 namespace tenzir {
-
-/// Extract a partition synopsis from the partition at `partition_path`
-/// and write it to `partition_synopsis_path`.
-//  TODO: Move into separate header.
-caf::error
-extract_partition_synopsis(const std::filesystem::path& partition_path,
-                           const std::filesystem::path& partition_synopsis_path,
-                           bool verify = false);
-
-/// Creates a partition transform marker that records the inputs and outputs
-/// of an in-progress partition transformation, so that an interrupted
-/// transformation can be finished on the next startup.
-tenzir::chunk_ptr
-create_marker(const std::vector<uuid>& in, const std::vector<uuid>& out,
-              keep_original_partition keep);
-
-/// Flatbuffer integration. Note that this is only one-way, restoring
-/// the index state needs additional runtime information.
-// TODO: Pull out the persisted part of the state into a separate struct
-// that can be packed and unpacked.
-caf::expected<flatbuffers::Offset<fbs::Index>>
-pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 
 /// The state of the active partition.
 struct active_partition_info {
@@ -123,20 +100,6 @@ struct index_state {
   // -- constructor ------------------------------------------------------------
 
   explicit index_state(index_actor::pointer self);
-
-  // -- persistence ------------------------------------------------------------
-
-  [[nodiscard]] std::filesystem::path index_filename() const;
-
-  caf::error load_from_disk();
-
-  /// Requests that the index state be persisted. Writes are coalesced: the
-  /// first request arms a timer and later ones only set a flag, so a burst of
-  /// partition flushes results in a single write.
-  void flush_to_disk();
-
-  /// Writes the index state out immediately, bypassing the coalescing timer.
-  void flush_to_disk_now();
 
   // -- inbound path -----------------------------------------------------------
 
@@ -212,9 +175,6 @@ struct index_state {
   /// Uses the `partition_factory` to load new partitions as needed, and evicts
   /// old entries when the size exceeds `max_inmem_partitions`.
   detail::lru_cache<uuid, partition_actor, partition_factory> inmem_partitions;
-
-  /// The set of partitions that exist on disk.
-  std::unordered_set<uuid> persisted_partitions = {};
 
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity = {};
