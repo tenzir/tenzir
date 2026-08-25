@@ -57,8 +57,6 @@
 
 namespace tenzir {
 
-namespace {
-
 auto create_marker(const std::vector<uuid>& in, const std::vector<uuid>& out,
                    keep_original_partition keep) -> chunk_ptr {
   auto builder = flatbuffers::FlatBufferBuilder{};
@@ -82,8 +80,6 @@ auto create_marker(const std::vector<uuid>& in, const std::vector<uuid>& out,
   fbs::FinishPartitionTransformBuffer(builder, transform_offset);
   return chunk::make(builder.Release());
 }
-
-} // namespace
 
 void catalog_state::add_partition_creation_listener(
   partition_creation_listener_actor listener) {
@@ -112,7 +108,7 @@ auto catalog_state::apply(ast::pipeline pipe,
   });
   auto corrected_partitions = catalog_lookup_result{};
   for (const auto& partition : selected) {
-    if (partitions_in_transformation.insert(partition.uuid).second) {
+    if (in_transformation.insert(partition.uuid).second) {
       corrected_partitions.candidate_infos[partition.schema]
         .partition_infos.emplace_back(partition);
       input_partitions.emplace_back(partition);
@@ -120,8 +116,6 @@ auto catalog_state::apply(ast::pipeline pipe,
       // Getting overlapping partitions triggers a warning, and we silently
       // ignore the partition at the cost of the transformation being less
       // efficient.
-      // TODO: Implement some synchronization mechanism for partition erasure
-      // so rebuild, compaction, and aging can properly synchronize.
       TENZIR_WARN("{} refuses to apply transformation '{:?}' to partition {} "
                   "because it is currently being transformed",
                   *self, pipe, partition.uuid);
@@ -154,19 +148,12 @@ auto catalog_state::apply(ast::pipeline pipe,
   auto rp = self->make_response_promise<partition_apply_result>();
   auto deliver = [this, rp, corrected_partitions, marker_path](
                    caf::expected<partition_apply_result>&& result) mutable {
-    // Erase errors don't matter too much here, leftover in-progress transforms
-    // will be cleaned up on next startup.
-    self->mail(atom::erase_v, marker_path)
-      .request(filesystem, caf::infinite)
-      .then([](atom::done) { /* nop */ },
-            [this, marker_path](const caf::error& e) {
-              TENZIR_DEBUG("{} failed to erase in-progress marker at {}: {}",
-                           *self, marker_path, e);
-            });
+    // The marker stays if a deferred erasure still needs it as a tombstone.
+    erase_marker_if_unreferenced(marker_path);
     for (const auto& [_, candidate_info] :
          corrected_partitions.candidate_infos) {
       for (const auto& partition : candidate_info.partition_infos) {
-        partitions_in_transformation.erase(partition.uuid);
+        in_transformation.erase(partition.uuid);
       }
     }
     if (result) {
@@ -251,15 +238,31 @@ auto catalog_state::apply(ast::pipeline pipe,
                       });
                       return;
                     }
+                    auto erased = std::vector<partition_synopsis_pair>{};
+                    erased.reserve(old_partition_ids.size());
                     for (const auto& id : old_partition_ids) {
+                      erased.emplace_back(id, find_synopsis(id));
                       erase(id);
                     }
                     std::ignore = merge(std::move(apsv));
-                    self->mail(atom::erase_v, old_partition_ids)
-                      .request(caf::actor_cast<catalog_actor>(self),
-                               caf::infinite)
+                    // Both continuations below need `erased`, so it is
+                    // copied into each rather than moved into one.
+                    // Rewrite the marker to tombstone form. The outputs are in
+                    // place, so a replay must not try to move them again; the
+                    // inputs are gone from the catalog but their files may
+                    // outlive this transform if a retriever still holds them,
+                    // and only the tombstone keeps a crash in between from
+                    // resurrecting them.
+                    self
+                      ->mail(atom::write_v, marker_path,
+                             create_marker(old_partition_ids, {},
+                                           keep_original_partition::no))
+                      .request(filesystem, caf::infinite)
                       .then(
-                        [=](atom::done) mutable {
+                        [=, this](atom::ok) mutable {
+                          for (auto& [id, synopsis] : erased) {
+                            retire_erased(id, std::move(synopsis), marker_path);
+                          }
                           deliver(partition_apply_result{
                             .input_partitions
                             = std::move(transformed_input_partitions),
@@ -267,8 +270,20 @@ auto catalog_state::apply(ast::pipeline pipe,
                             .input_complete = input_complete,
                           });
                         },
-                        [=](const caf::error& e) mutable {
-                          deliver(e);
+                        [=, this](caf::error& e) mutable {
+                          // The inputs already left the catalog and their
+                          // replacements are in, so their files have to go
+                          // regardless. Without a tombstone a crash before the
+                          // deletion can resurrect an input that a retriever
+                          // still pins, but leaving its files behind forever
+                          // is the worse of the two.
+                          TENZIR_WARN("{} failed to record the erasure of the "
+                                      "transformed partitions at {}: {}",
+                                      *self, marker_path, e);
+                          for (auto& [id, synopsis] : erased) {
+                            retire_erased(id, std::move(synopsis), {});
+                          }
+                          deliver(std::move(e));
                         });
                   },
                   [deliver, this](caf::error& e) mutable {

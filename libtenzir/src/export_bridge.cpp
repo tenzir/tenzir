@@ -49,6 +49,14 @@ struct bridge_state {
 
   filesystem_actor filesystem = {};
 
+  /// The catalog lease covering the retro candidate set. The catalog keeps a
+  /// candidate's files around until we release it, so that a rebuild or a
+  /// compaction cannot pull a partition out from under us mid-export. We
+  /// release each partition as we finish reading it: holding the whole set
+  /// until the export ends would keep erased partitions on disk for its entire
+  /// duration, and a live export never ends on its own at all.
+  uuid lease = {};
+
   struct metric {
     size_t emitted = {};
     size_t queued = {};
@@ -85,6 +93,29 @@ struct bridge_state {
            and queued_partitions.empty() and not unpersisted_events;
   }
 
+  /// Hands one partition back to the catalog, now that we are done with it.
+  auto release_candidate(const uuid& partition) -> void {
+    if (lease == uuid{}) {
+      return;
+    }
+    const auto catalog
+      = self->system().registry().get<catalog_actor>("tenzir.catalog");
+    TENZIR_ASSERT(catalog);
+    self->mail(atom::release_v, lease, std::vector{partition}).send(catalog);
+  }
+
+  /// Hands back whatever is left once every candidate has been read.
+  auto release_candidates() -> void {
+    if (lease == uuid{} or not queued_partitions.empty()
+        or inflight_partitions != 0 or not checked_candidates) {
+      return;
+    }
+    const auto catalog
+      = self->system().registry().get<catalog_actor>("tenzir.catalog");
+    TENZIR_ASSERT(catalog);
+    self->mail(atom::release_v, std::exchange(lease, {})).send(catalog);
+  }
+
   auto try_pop_partition() -> void {
     const auto size_threshold = defaults::max_partition_size * mode.parallel;
     if (num_queued_total >= size_threshold) {
@@ -105,6 +136,7 @@ struct bridge_state {
       if (open_partitions > 0) {
         --open_partitions;
       }
+      release_candidates();
       if (buffer_rp.pending() and is_done()) {
         buffer_rp.deliver(table_slice{});
       }
@@ -114,8 +146,10 @@ struct bridge_state {
     auto [info, ctx] = std::move(queued_partitions.front());
     queued_partitions.pop();
     ++inflight_partitions;
-    auto next = [this] {
+    auto next = [this, id = info.uuid] {
       --inflight_partitions;
+      release_candidate(id);
+      release_candidates();
       try_pop_partition();
     };
     // TODO: We may want to monitor the spawned partitions to be able to return
@@ -304,6 +338,7 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
     auto query_context
       = tenzir::query_context::make_extract("export", self, self->state().expr);
     query_context.id = uuid::random();
+    self->state().lease = query_context.id;
     TENZIR_DEBUG("export operator starts catalog lookup with id {} and "
                  "expression {}",
                  query_context.id, self->state().expr);
@@ -342,6 +377,7 @@ auto make_bridge(export_bridge_actor::stateful_pointer<bridge_state> self,
         }
       }
       self->state().unpersisted_events.reset();
+      self->state().release_candidates();
       // In case we get zero partitions back from the catalog we need to
       // already signal that we're done here.
       if (self->state().buffer_rp.pending() and self->state().is_done()) {

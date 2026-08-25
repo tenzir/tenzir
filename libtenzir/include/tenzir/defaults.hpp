@@ -223,6 +223,13 @@ inline constexpr size_t max_partition_size = 4'194'304; // 4 Mi
 inline constexpr caf::timespan active_partition_timeout
   = std::chrono::seconds{30};
 
+/// How long an erased partition may stay on disk because a retriever still
+/// holds it. Sized for a healthy but slow export rather than for wedge
+/// detection: an export throttled by its sink legitimately holds unopened
+/// candidates for its whole runtime.
+inline constexpr caf::timespan deferred_erase_timeout
+  = std::chrono::minutes{30};
+
 /// Timeout after which a new automatic rebuild is triggered.
 inline constexpr caf::timespan rebuild_interval = std::chrono::minutes{30};
 

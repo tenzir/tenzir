@@ -1,0 +1,310 @@
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
+//
+// SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
+#include "tenzir/catalog.hpp"
+#include "tenzir/expression.hpp"
+#include "tenzir/index_config.hpp"
+#include "tenzir/partition_paths.hpp"
+#include "tenzir/partition_synopsis.hpp"
+#include "tenzir/posix_filesystem.hpp"
+#include "tenzir/qualified_record_field.hpp"
+#include "tenzir/query_context.hpp"
+#include "tenzir/synopsis_factory.hpp"
+#include "tenzir/test/test.hpp"
+#include "tenzir/uuid.hpp"
+
+#include <caf/actor_system.hpp>
+#include <caf/actor_system_config.hpp>
+#include <caf/make_copy_on_write.hpp>
+#include <caf/scoped_actor.hpp>
+
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <thread>
+
+using namespace tenzir;
+using namespace std::chrono_literals;
+
+namespace {
+
+constexpr auto timeout = std::chrono::seconds{10};
+
+/// A catalog actor over a scratch database directory, plus the helpers to put
+/// partitions into it and to check what is left on disk.
+struct fixture {
+  /// How long an erased-but-pinned partition may linger. Zero never forces.
+  explicit fixture(duration deferred_erase_timeout = duration::zero())
+    : deferred_erase_timeout{deferred_erase_timeout} {
+    factory<synopsis>::initialize();
+    std::filesystem::create_directories(paths.index_dir);
+    std::filesystem::create_directories(paths.archive_dir);
+    fs = sys.spawn(posix_filesystem, dbdir);
+    catalog = sys.spawn(tenzir::catalog, fs, paths, std::string{"feather"},
+                        index_config{}, /*partition_capacity=*/size_t{1024},
+                        deferred_erase_timeout,
+                        /*sketch_cache_bytes=*/size_t{0},
+                        /*lazy_sketches=*/false);
+  }
+
+  duration deferred_erase_timeout = {};
+  caf::actor_system_config config = {};
+  caf::actor_system sys{config};
+  std::filesystem::path dbdir
+    = std::filesystem::temp_directory_path()
+      / fmt::format("tnz-catalog-leases-{}", uuid::random());
+  partition_paths paths = partition_paths::from_database_dir(dbdir);
+  filesystem_actor fs = {};
+  catalog_actor catalog = {};
+  type schema = type{"test", record_type{{"msg", string_type{}}}};
+
+  ~fixture() {
+    caf::anon_send_exit(catalog, caf::exit_reason::user_shutdown);
+    caf::anon_send_exit(fs, caf::exit_reason::user_shutdown);
+    auto ec = std::error_code{};
+    std::filesystem::remove_all(dbdir, ec);
+  }
+
+  fixture(const fixture&) = delete;
+  fixture(fixture&&) = delete;
+  auto operator=(const fixture&) -> fixture& = delete;
+  auto operator=(fixture&&) -> fixture& = delete;
+
+  /// Writes the three files of a partition and merges its synopsis into the
+  /// catalog. The contents do not matter: erasure only ever deletes the paths
+  /// the synopsis names.
+  auto add_partition() -> uuid {
+    auto id = uuid::random();
+    for (const auto& path : files_of(id)) {
+      auto out = std::ofstream{path};
+      out << fmt::format("partition {}", id);
+    }
+    auto synopsis = caf::make_copy_on_write<partition_synopsis>();
+    synopsis.unshared().schema = schema;
+    synopsis.unshared().events = 1;
+    // The catalog answers `#schema`-based predicates — which is what a
+    // trivially true expression boils down to — by walking the field
+    // synopses, so a partition without any is invisible to every lookup.
+    synopsis.unshared().field_synopses_[qualified_record_field{
+      "test", "msg", type{string_type{}}}]
+      = nullptr;
+    synopsis.unshared().min_import_time = time::min();
+    synopsis.unshared().max_import_time = time::min();
+    synopsis.unshared().indexes_file = {
+      .url = fmt::format("file://{}", paths.partition(id).string()), .size = 0};
+    synopsis.unshared().sketches_file = {
+      .url = fmt::format("file://{}", paths.synopsis(id).string()), .size = 0};
+    synopsis.unshared().store_file
+      = {.url = fmt::format("file://{}", store_of(id).string()), .size = 0};
+    auto self = caf::scoped_actor{sys};
+    auto merged = false;
+    self
+      ->mail(atom::merge_v,
+             std::vector<partition_synopsis_pair>{{id, std::move(synopsis)}})
+      .request(catalog, timeout)
+      .receive(
+        [&](atom::ok) {
+          merged = true;
+        },
+        [](const caf::error& err) {
+          FAIL("failed to merge partition: {}", err);
+        });
+    REQUIRE(merged);
+    return id;
+  }
+
+  auto store_of(const uuid& id) const -> std::filesystem::path {
+    return paths.archive_dir / fmt::format("{:l}.feather", id);
+  }
+
+  auto files_of(const uuid& id) const -> std::vector<std::filesystem::path> {
+    return {paths.partition(id), paths.synopsis(id), store_of(id)};
+  }
+
+  auto files_exist(const uuid& id) const -> bool {
+    return std::ranges::any_of(files_of(id), [](const auto& path) {
+      auto ec = std::error_code{};
+      return std::filesystem::exists(path, ec);
+    });
+  }
+
+  /// Waits for the files of a partition to disappear. Deletion runs through
+  /// the filesystem actor, so it always trails the request that triggered it.
+  auto await_deletion(const uuid& id) const -> bool {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+      if (not files_exist(id)) {
+        return true;
+      }
+      std::this_thread::sleep_for(10ms);
+    }
+    return false;
+  }
+
+  /// Asks for candidates, pinning the result under `query`.
+  auto candidates(caf::scoped_actor& self, const uuid& query)
+    -> catalog_lookup_result {
+    auto context = query_context::make_extract("test", self, expression{});
+    context.id = query;
+    auto result = catalog_lookup_result{};
+    self->mail(atom::candidates_v, std::move(context))
+      .request(catalog, timeout)
+      .receive(
+        [&](catalog_lookup_result& candidates) {
+          result = std::move(candidates);
+        },
+        [](const caf::error& err) {
+          FAIL("candidate lookup failed: {}", err);
+        });
+    return result;
+  }
+
+  /// Releases one partition from a candidate set.
+  void release(caf::scoped_actor& self, const uuid& query, const uuid& id) {
+    auto released = false;
+    self->mail(atom::release_v, query, std::vector{id})
+      .request(catalog, timeout)
+      .receive(
+        [&] {
+          released = true;
+        },
+        [](const caf::error& err) {
+          FAIL("release failed: {}", err);
+        });
+    REQUIRE(released);
+  }
+
+  void release(caf::scoped_actor& self, const uuid& query) {
+    auto released = false;
+    self->mail(atom::release_v, query)
+      .request(catalog, timeout)
+      .receive(
+        [&] {
+          released = true;
+        },
+        [](const caf::error& err) {
+          FAIL("release failed: {}", err);
+        });
+    REQUIRE(released);
+  }
+
+  /// Erases a partition, returning the error if the catalog refused.
+  auto erase(caf::scoped_actor& self, const uuid& id) -> caf::error {
+    auto result = caf::error{};
+    self->mail(atom::erase_v, id)
+      .request(catalog, timeout)
+      .receive(
+        [](atom::done) {
+          // nop
+        },
+        [&](caf::error& err) {
+          result = std::move(err);
+        });
+    return result;
+  }
+
+  /// Collects the ids in a candidate set.
+  static auto ids_of(const catalog_lookup_result& candidates)
+    -> std::vector<uuid> {
+    auto result = std::vector<uuid>{};
+    for (const auto& [type, info] : candidates.candidate_infos) {
+      for (const auto& partition : info.partition_infos) {
+        result.push_back(partition.uuid);
+      }
+    }
+    std::ranges::sort(result);
+    return result;
+  }
+};
+
+} // namespace
+
+TEST("a pinned partition keeps its files until the pin is released") {
+  auto f = fixture{};
+  const auto id = f.add_partition();
+  auto reader = caf::scoped_actor{f.sys};
+  const auto query = uuid::random();
+  CHECK_EQUAL(fixture::ids_of(f.candidates(reader, query)), std::vector{id});
+  // The erase succeeds, but the reader still holds the partition, so its files
+  // must survive.
+  auto eraser = caf::scoped_actor{f.sys};
+  CHECK_EQUAL(f.erase(eraser, id), caf::error{});
+  CHECK(f.files_exist(id));
+  // It is gone from the catalog right away, though.
+  CHECK(fixture::ids_of(f.candidates(eraser, uuid::random())).empty());
+  f.release(reader, query);
+  CHECK(f.await_deletion(id));
+}
+
+TEST("a pinned partition is deleted when its reader goes down") {
+  auto f = fixture{};
+  const auto id = f.add_partition();
+  {
+    auto reader = caf::scoped_actor{f.sys};
+    CHECK_EQUAL(fixture::ids_of(f.candidates(reader, uuid::random())),
+                std::vector{id});
+    auto eraser = caf::scoped_actor{f.sys};
+    CHECK_EQUAL(f.erase(eraser, id), caf::error{});
+    CHECK(f.files_exist(id));
+  }
+  // The reader is gone without ever releasing its candidate set; the catalog
+  // notices and cleans up.
+  CHECK(f.await_deletion(id));
+}
+
+TEST("releasing one partition leaves the rest of the set pinned") {
+  auto f = fixture{};
+  const auto first = f.add_partition();
+  const auto second = f.add_partition();
+  auto reader = caf::scoped_actor{f.sys};
+  const auto query = uuid::random();
+  CHECK_EQUAL(f.candidates(reader, query).size(), 2u);
+  auto eraser = caf::scoped_actor{f.sys};
+  CHECK_EQUAL(f.erase(eraser, first), caf::error{});
+  CHECK_EQUAL(f.erase(eraser, second), caf::error{});
+  CHECK(f.files_exist(first));
+  CHECK(f.files_exist(second));
+  // A reader releases each partition as it finishes with it, so the pin covers
+  // one partition read rather than the whole export.
+  f.release(reader, query, first);
+  CHECK(f.await_deletion(first));
+  CHECK(f.files_exist(second));
+  f.release(reader, query, second);
+  CHECK(f.await_deletion(second));
+}
+
+TEST("a deferred erase past its deadline deletes despite a live pin") {
+  auto f = fixture{std::chrono::milliseconds{200}};
+  const auto id = f.add_partition();
+  auto reader = caf::scoped_actor{f.sys};
+  const auto query = uuid::random();
+  CHECK_EQUAL(fixture::ids_of(f.candidates(reader, query)), std::vector{id});
+  auto eraser = caf::scoped_actor{f.sys};
+  CHECK_EQUAL(f.erase(eraser, id), caf::error{});
+  // The reader never releases. Without the deadline its files would stay on
+  // disk forever and the disk budget could never be met.
+  CHECK(f.await_deletion(id));
+  // The pin it still holds must not double-dispose when it finally goes.
+  f.release(reader, query);
+  CHECK(not f.files_exist(id));
+}
+
+TEST("a zero timeout never forces a deferred erase") {
+  auto f = fixture{};
+  const auto id = f.add_partition();
+  auto reader = caf::scoped_actor{f.sys};
+  const auto query = uuid::random();
+  CHECK_EQUAL(fixture::ids_of(f.candidates(reader, query)), std::vector{id});
+  auto eraser = caf::scoped_actor{f.sys};
+  CHECK_EQUAL(f.erase(eraser, id), caf::error{});
+  // Nothing forces the deletion, so the files outlive any deadline.
+  std::this_thread::sleep_for(300ms);
+  CHECK(f.files_exist(id));
+  f.release(reader, query);
+  CHECK(f.await_deletion(id));
+}

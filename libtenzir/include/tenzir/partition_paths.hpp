@@ -10,7 +10,6 @@
 
 #include "tenzir/fwd.hpp"
 
-#include "tenzir/option.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <fmt/format.h>
@@ -99,20 +98,6 @@ struct partition_paths {
 
   auto transformer_synopsis_template() const -> std::string {
     return (markers_dir / "{:l}.mdx").string();
-  }
-
-  /// Probes the archive for the store file of the given partition. The
-  /// extension depends on the store backend that wrote it, and older databases
-  /// may mix backends, so we cannot derive the name without looking.
-  auto find_store(const uuid& id) const -> Option<std::filesystem::path> {
-    auto err = std::error_code{};
-    for (const auto* ext : {"store", "feather", "parquet"}) {
-      auto candidate = archive_dir / fmt::format("{}.{}", id, ext);
-      if (std::filesystem::exists(candidate, err)) {
-        return candidate;
-      }
-    }
-    return None{};
   }
 };
 

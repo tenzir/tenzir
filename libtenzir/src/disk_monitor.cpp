@@ -270,6 +270,16 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
               continuation();
             },
             [=, id = partition.id](caf::error& e) {
+              if (e == ec::busy) {
+                // The catalog refuses to erase a partition that is currently
+                // being transformed. That is a transient condition, so we
+                // leave it alone and pick it up again on the next scan
+                // instead of blacklisting it for the lifetime of the node.
+                TENZIR_VERBOSE("{} skips partition {} because it is busy",
+                               *self, id);
+                continuation();
+                return;
+              }
               TENZIR_WARN("{} failed to erase partition {} within {}: {}",
                           *self, id, erase_timeout, e);
               self->state().blacklist.insert(

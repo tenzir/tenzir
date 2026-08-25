@@ -186,9 +186,20 @@ using catalog_actor = typed_actor_fwd<
   auto(atom::subscribe, atom::create, partition_creation_listener_actor,
        send_initial_dbstate)
     ->caf::result<void>,
-  // Return the candidate partitions per type for a query.
+  // Return the candidate partitions per type for a query. Every returned
+  // partition is pinned under `query_context::id` until the requester releases
+  // the result or goes down: its files stay on disk even if it is replaced or
+  // erased in the meantime, so a reader that already got the candidate set can
+  // still open it.
   auto(atom::candidates, tenzir::query_context)
     ->caf::result<catalog_lookup_result>,
+  // Release part of a candidate set: the given partitions lose their pin.
+  // Readers release each partition as they finish with it, so a pin covers one
+  // partition read rather than a whole export.
+  auto(atom::release, uuid, std::vector<uuid>)->caf::result<void>,
+  // Release a whole candidate set. Implied by the requester's termination, so
+  // this is only needed by components that outlive their queries.
+  auto(atom::release, uuid)->caf::result<void>,
   // Retrieves information about a partition with a given UUID.
   auto(atom::get, uuid)->caf::result<partition_info>>
   // Conform to the procotol of the STATUS CLIENT actor.

@@ -721,9 +721,13 @@ struct rebuilder_state {
     if (run->options.detached) {
       rp.deliver();
     }
+    // No query id, so the catalog creates no lease. The rebuilder is not a
+    // reader: it hands the partitions to a transformer, which mmaps them
+    // itself, and `atom::apply` re-validates them against live state. Pinning
+    // its whole candidate set would keep every partition it erases on disk for
+    // the length of the run. Moot once the catalog drives rebuild itself.
     auto query_context
       = query_context::make_extract("rebuild", self, run->options.expression);
-    query_context.id = uuid::random();
     // On a database with many partitions this lookup can take a while, and
     // until it returns the run reports all-zero statistics. Announce it so
     // that window is recognizable as candidate selection rather than a stall.

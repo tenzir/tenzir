@@ -141,6 +141,44 @@ private:
   std::unordered_map<uuid, entry> entries_ = {};
 };
 
+/// One outstanding candidate set, keyed by `query_context::id`.
+///
+/// The lease pins its partitions: their files stay on disk until the lease
+/// goes away, even if the partition is replaced or erased in the meantime, so
+/// a reader that already received the candidate set can still open it.
+struct partition_lease {
+  caf::actor_addr owner = {};
+  std::vector<uuid> partitions = {};
+};
+
+/// A partition that left the catalog while a retriever still held a pin on it.
+/// Its files stay on disk until the last pin goes away; the tombstone marker
+/// makes sure that a crash in between does not resurrect it, because a
+/// partition file without a synopsis has its synopsis regenerated at startup.
+struct deferred_erase {
+  /// Carries the resource paths of the partition's files.
+  partition_synopsis_ptr synopsis = {};
+
+  /// The tombstone marker recording that this partition is to be erased.
+  std::filesystem::path marker = {};
+
+  /// Set if the partition is being quarantined rather than erased; holds the
+  /// rendered error that triggered the quarantine.
+  Option<std::string> quarantine_error = None{};
+
+  /// When the files go regardless of remaining pins. A retriever that wedges
+  /// would otherwise keep an erased partition on disk forever and the disk
+  /// budget could never be met. Unset when forcing is disabled.
+  Option<time> deadline = None{};
+};
+
+/// Builds a partition transform marker. `in` names the transform's inputs and
+/// `out` its outputs. With `keep == yes` the inputs are omitted: they survive
+/// the transform, so a replay must not erase them. A marker with inputs but no
+/// outputs is a tombstone: replaying it erases the inputs and nothing else.
+auto create_marker(const std::vector<uuid>& in, const std::vector<uuid>& out,
+                   keep_original_partition keep) -> chunk_ptr;
+
 /// The state of the CATALOG actor.
 struct catalog_state {
 public:
@@ -166,8 +204,54 @@ public:
   auto merge(std::vector<partition_synopsis_pair> partitions)
     -> caf::result<atom::ok>;
 
-  /// Erase this partition from the catalog.
+  /// Erase this partition from the catalog. Leaves the on-disk files alone.
   void erase(const uuid& partition);
+
+  /// Records an outstanding candidate set and starts monitoring its owner, so
+  /// that the lease is released even if the owner never gets around to it.
+  void add_lease(const uuid& query, const caf::strong_actor_ptr& owner,
+                 std::vector<uuid> partitions);
+
+  /// Drops part of a lease. Readers release each partition as they finish with
+  /// it, so a pin covers one partition read rather than a whole export.
+  void release_lease(const uuid& query, const std::vector<uuid>& partitions);
+
+  /// Drops a whole lease.
+  void release_lease(const uuid& query);
+
+  /// Drops every lease held by the given owner.
+  void release_leases_of(const caf::actor_addr& owner);
+
+  /// Decrements the pin count of a partition and, if that was the last pin on
+  /// a partition that already left the catalog, deletes its files.
+  void unpin(const uuid& partition);
+
+  /// Removes the partition from the catalog and disposes of its files, either
+  /// right away or, if a retriever still holds a pin, once the last pin goes
+  /// away. Writes a tombstone marker in the latter case.
+  auto retire(const uuid& partition, Option<std::string> quarantine_error)
+    -> caf::result<atom::done>;
+
+  /// Disposes of a partition that already left the catalog, deferring the
+  /// deletion while it is pinned. `marker` names the tombstone that already
+  /// records the erasure.
+  void retire_erased(const uuid& partition, partition_synopsis_ptr synopsis,
+                     std::filesystem::path marker);
+
+  /// Deletes (or, when quarantining, moves aside) the files of a partition
+  /// that has left the catalog and is no longer pinned. Reports through `rp`
+  /// if one is given.
+  void dispose_of(const uuid& partition, deferred_erase entry,
+                  Option<caf::typed_response_promise<atom::done>> rp);
+
+  /// Erases a tombstone marker once no deferred erasure needs it any more.
+  void erase_marker_if_unreferenced(const std::filesystem::path& marker);
+
+  /// Deletes deferred partitions whose deadline has passed, pins and all.
+  void sweep_deferred();
+
+  /// The point at which a deferral parked now would be forced, if at all.
+  auto deferred_erase_deadline() const -> Option<time>;
 
   /// Applies a pipeline to a set of partitions, writing the results into new
   /// partitions. With `keep == keep_original_partition::no` the inputs are
@@ -184,8 +268,12 @@ public:
   /// Erases this partition from the catalog and deletes its on-disk files.
   /// The store is located by probing the archive for the known extensions; if
   /// that fails, the partition itself is loaded so its store header can name
-  /// the file.
+  /// the file. Refused while the partition is an input to a running transform.
   auto erase_from_disk(const uuid& partition) -> caf::result<atom::done>;
+
+  /// Returns the resident synopsis of a partition, or nullptr if the catalog
+  /// does not know it.
+  auto find_synopsis(const uuid& partition) const -> partition_synopsis_ptr;
 
   /// Quarantines this partition: moves its store file aside into a
   /// "quarantined" directory, deletes its other on-disk files, and erases it
@@ -254,8 +342,28 @@ public:
   /// Config options for value indices.
   caf::settings index_opts = {};
 
-  /// The partitions currently being transformed.
-  detail::stable_set<uuid> partitions_in_transformation = {};
+  /// The partitions that are inputs to a running transform. They must not be
+  /// erased underneath it: the transform would write its outputs anyway and
+  /// the erased data would come back.
+  detail::stable_set<uuid> in_transformation = {};
+
+  /// The outstanding candidate sets, keyed by `query_context::id`.
+  std::unordered_map<uuid, partition_lease> leases = {};
+
+  /// The owners of the outstanding candidate sets, with the number of leases
+  /// each holds and the monitor that reports their termination.
+  std::unordered_map<caf::actor_addr, std::pair<size_t, caf::disposable>>
+    consumers = {};
+
+  /// How many leases reference each partition.
+  std::unordered_map<uuid, size_t> pin_counts = {};
+
+  /// Partitions that left the catalog while still pinned.
+  std::unordered_map<uuid, deferred_erase> deferred = {};
+
+  /// How long an erased partition may linger because a reader still pins it.
+  /// Zero disables forcing.
+  duration deferred_erase_timeout = {};
 
   /// The collection of currently active transformers. These need to be
   /// explicitly shut down when the catalog exits. The `disposable` refers to
@@ -294,6 +402,8 @@ public:
 /// @param self The actor handle.
 /// @param filesystem Used to move/erase on-disk partition files.
 /// @param paths The on-disk locations of the partition files.
+/// @param deferred_erase_timeout How long an erased partition may linger
+/// because a retriever still pins it; zero never forces the deletion.
 /// @param store_backend The store backend to use for transform outputs.
 /// @param synopsis_opts The false-positive rates for the types and fields of
 /// newly created synopses.
@@ -306,7 +416,8 @@ public:
 auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
              filesystem_actor filesystem, partition_paths paths,
              std::string store_backend, index_config synopsis_opts,
-             size_t partition_capacity, size_t sketch_cache_bytes = 0,
-             bool lazy_sketches = false) -> catalog_actor::behavior_type;
+             size_t partition_capacity, duration deferred_erase_timeout,
+             size_t sketch_cache_bytes = 0, bool lazy_sketches = false)
+  -> catalog_actor::behavior_type;
 
 } // namespace tenzir

@@ -189,6 +189,8 @@ auto spawn_catalog(node_actor::stateful_pointer<node_state> self,
     partition_paths::from_database_dir(self->state().dir),
     std::string{defaults::store_backend}, parse_index_config(settings),
     get_or(settings, "tenzir.max-partition-size", defaults::max_partition_size),
+    get_or(settings, "tenzir.deferred-erase-timeout",
+           defaults::deferred_erase_timeout),
     sketch_cache_bytes, lazy_sketches);
   TENZIR_ASSERT(catalog);
   if (auto err = register_component(self, caf::actor_cast<caf::actor>(catalog),

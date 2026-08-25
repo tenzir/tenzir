@@ -84,6 +84,19 @@ auto contains_metadata(const expression& expr) -> bool {
     });
 }
 
+/// Collects the ids of every partition in a candidate set.
+auto partition_ids(const catalog_lookup_result& candidates)
+  -> std::vector<uuid> {
+  auto result = std::vector<uuid>{};
+  result.reserve(candidates.size());
+  for (const auto& [schema, info] : candidates.candidate_infos) {
+    for (const auto& partition : info.partition_infos) {
+      result.push_back(partition.uuid);
+    }
+  }
+  return result;
+}
+
 auto collect_synopses(const catalog_state& state)
   -> std::vector<partition_synopsis_pair> {
   auto result = std::vector<partition_synopsis_pair>{};
@@ -508,120 +521,153 @@ void catalog_state::erase(const uuid& partition) {
   }
 }
 
-auto catalog_state::erase_from_disk(const uuid& partition)
-  -> caf::result<atom::done> {
-  TENZIR_VERBOSE("{} erases partition {}", *self, partition);
-  const auto path = paths.partition(partition);
-  const auto synopsis_path = paths.synopsis(partition);
-  const auto known = std::ranges::any_of(synopses_per_type, [&](const auto& x) {
-    return x.second.contains(partition);
-  });
-  if (not known) {
-    // The disk monitor selects partitions by scanning the index directory, so
-    // it can name a partition that never made it into the catalog. Deleting it
-    // is still the right thing to do, but a partition that is neither known
-    // nor on disk is a caller error.
-    auto err = std::error_code{};
-    if (not std::filesystem::exists(path, err)) {
-      return caf::make_error(ec::logic_error,
-                             fmt::format("unknown partition for path {}: {}",
-                                         path, err.message()));
+auto catalog_state::find_synopsis(const uuid& partition) const
+  -> partition_synopsis_ptr {
+  for (const auto& [schema, entries] : synopses_per_type) {
+    if (const auto it = entries.find(partition); it != entries.end()) {
+      return it->second;
     }
   }
-  erase(partition);
-  auto rp = self->make_response_promise<atom::done>();
-  // Remove the synopsis file. We can already safely do so because the
-  // partition has left the catalog.
-  self->mail(atom::erase_v, synopsis_path)
-    .urgent()
-    .request(filesystem, caf::infinite)
-    .then(
-      [self = self, partition](atom::done) {
-        TENZIR_TRACE("{} erased partition synopsis {} from filesystem", *self,
-                     partition);
-      },
-      [self = self, partition, synopsis_path](const caf::error& err) {
-        TENZIR_WARN("{} failed to erase partition synopsis {} at {}: {}", *self,
-                    partition, synopsis_path, err);
-      });
-  auto erase_dense_index_file
-    = [self = self, filesystem = filesystem, partition, path] {
-        self->mail(atom::erase_v, path)
-          .urgent()
-          .request(filesystem, caf::infinite)
-          .then(
-            [self, partition](atom::done) {
-              TENZIR_TRACE("{} erased partition {} from filesystem", *self,
-                           partition);
-            },
-            [self, partition, path](const caf::error& err) {
-              TENZIR_WARN("{} failed to erase partition {} at {}: {}", *self,
-                          partition, path, err);
-            });
-      };
-  if (auto store_path = paths.find_store(partition)) {
-    erase_dense_index_file();
-    rp.delegate(filesystem, atom::erase_v, *store_path);
-    return rp;
+  return {};
+}
+
+void catalog_state::add_lease(const uuid& query,
+                              const caf::strong_actor_ptr& owner,
+                              std::vector<uuid> partitions) {
+  // A query without an id cannot be released by its owner, and an anonymous
+  // sender cannot be monitored; either way we would hold the lease forever.
+  if (partitions.empty() or query == uuid{} or not owner) {
+    return;
   }
-  // Fallback path: in case the store file is not found at the expected path we
-  // need to load the partition and retrieve the correct path from the store
-  // header.
-  TENZIR_DEBUG("{} did not find a store for partition {}, inspecting the store "
-               "header",
+  const auto owner_addr = owner->address();
+  for (const auto& partition : partitions) {
+    ++pin_counts[partition];
+  }
+  // A second lookup under the same query id supersedes the first one; that
+  // should not happen, but leaking the old lease would pin its partitions
+  // forever.
+  release_lease(query);
+  leases.emplace(query, partition_lease{
+                          .owner = owner_addr,
+                          .partitions = std::move(partitions),
+                        });
+  auto [consumer, inserted] = consumers.try_emplace(owner_addr);
+  if (inserted) {
+    consumer->second.second
+      = self->monitor(caf::actor_cast<caf::actor>(owner),
+                      [this, owner_addr](const caf::error&) {
+                        release_leases_of(owner_addr);
+                      });
+  }
+  ++consumer->second.first;
+}
+
+void catalog_state::release_lease(const uuid& query,
+                                  const std::vector<uuid>& partitions) {
+  const auto it = leases.find(query);
+  if (it == leases.end()) {
+    return;
+  }
+  for (const auto& partition : partitions) {
+    // A partition this lease does not hold is not an error: a reader that
+    // retries a query may release the same one twice.
+    if (std::erase(it->second.partitions, partition) == 0) {
+      continue;
+    }
+    unpin(partition);
+  }
+  if (it->second.partitions.empty()) {
+    release_lease(query);
+  }
+}
+
+void catalog_state::release_lease(const uuid& query) {
+  const auto it = leases.find(query);
+  if (it == leases.end()) {
+    return;
+  }
+  const auto lease = std::move(it->second);
+  leases.erase(it);
+  for (const auto& partition : lease.partitions) {
+    unpin(partition);
+  }
+  const auto consumer = consumers.find(lease.owner);
+  if (consumer == consumers.end()) {
+    return;
+  }
+  if (--consumer->second.first == 0) {
+    consumer->second.second.dispose();
+    consumers.erase(consumer);
+  }
+}
+
+void catalog_state::release_leases_of(const caf::actor_addr& owner) {
+  auto queries = std::vector<uuid>{};
+  for (const auto& [query, lease] : leases) {
+    if (lease.owner == owner) {
+      queries.push_back(query);
+    }
+  }
+  for (const auto& query : queries) {
+    release_lease(query);
+  }
+}
+
+auto catalog_state::deferred_erase_deadline() const -> Option<time> {
+  if (deferred_erase_timeout == duration::zero()) {
+    return None{};
+  }
+  return time::clock::now() + deferred_erase_timeout;
+}
+
+void catalog_state::sweep_deferred() {
+  const auto now = time::clock::now();
+  auto expired = std::vector<uuid>{};
+  for (const auto& [partition, erasure] : deferred) {
+    if (erasure.deadline and *erasure.deadline <= now) {
+      expired.push_back(partition);
+    }
+  }
+  for (const auto& partition : expired) {
+    const auto entry = deferred.find(partition);
+    auto erasure = std::move(entry->second);
+    deferred.erase(entry);
+    // The holder keeps its pin; it simply finds the files gone. That is the
+    // trade the timeout makes, and it is loud on purpose.
+    TENZIR_WARN("{} deletes partition {} after waiting {} for {} retriever(s) "
+                "to release it; a reader that has not opened it yet will read "
+                "short",
+                *self, partition, data{deferred_erase_timeout},
+                pin_counts[partition]);
+    dispose_of(partition, std::move(erasure), None{});
+  }
+}
+
+void catalog_state::unpin(const uuid& partition) {
+  const auto it = pin_counts.find(partition);
+  TENZIR_ASSERT(it != pin_counts.end());
+  TENZIR_ASSERT(it->second > 0);
+  if (--it->second > 0) {
+    return;
+  }
+  pin_counts.erase(it);
+  const auto entry = deferred.find(partition);
+  if (entry == deferred.end()) {
+    return;
+  }
+  auto erasure = std::move(entry->second);
+  deferred.erase(entry);
+  TENZIR_DEBUG("{} disposes of partition {} after the last pin went away",
                *self, partition);
-  self->mail(atom::mmap_v, path)
-    .urgent()
-    .request(filesystem, caf::infinite)
-    .then(
-      [this, partition, path, rp,
-       erase_dense_index_file](const chunk_ptr& chunk) mutable {
-        TENZIR_DEBUG("{} mmapped partition {} to extract store path for "
-                     "erasure",
-                     *self, partition);
-        if (not chunk or chunk->size() < FLATBUFFERS_MIN_BUFFER_SIZE) {
-          erase_dense_index_file();
-          rp.deliver(caf::make_error(
-            ec::filesystem_error,
-            fmt::format("failed to load the state for partition {}", path)));
-          return;
-        }
-        if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE
-            and flatbuffers::BufferHasIdentifier(chunk->data(),
-                                                 fbs::PartitionIdentifier())) {
-          TENZIR_WARN("failed to load partition for deletion at {} because its "
-                      "size of {} exceeds the maximum allowed size of {}. The "
-                      "index statistics will be incorrect until the database "
-                      "has been rebuilt and restarted",
-                      path, chunk->size(), FLATBUFFERS_MAX_BUFFER_SIZE);
-          erase_dense_index_file();
-          rp.deliver(caf::make_error(ec::filesystem_error,
-                                     "aborting erasure due to encountering a "
-                                     "legacy oversized partition"));
-          return;
-        }
-        // The passive partition erases both its store and its own file, so we
-        // must not race it with `erase_dense_index_file`.
-        auto actor = self->spawn(passive_partition, partition, filesystem, path,
-                                 caf::message_priority::normal);
-        rp.delegate(actor, atom::erase_v);
-      },
-      [this, partition, rp, erase_dense_index_file](caf::error& err) mutable {
-        TENZIR_WARN("{} failed to load partition {} for erase fallback path: "
-                    "{}",
-                    *self, partition, err);
-        erase_dense_index_file();
-        rp.deliver(std::move(err));
-      });
-  return rp;
+  dispose_of(partition, std::move(erasure), None{});
 }
 
 namespace {
 
 /// Recovers the filesystem path from a `resource`'s `url`, which is always
 /// written as a literal `file://` prefix followed by the canonical path (see
-/// e.g. `index_state`'s population of `partition_synopsis::store_file`),
-/// never a percent-encoded or otherwise escaped URI.
+/// e.g. the catalog's population of `partition_synopsis::store_file`), never a
+/// percent-encoded or otherwise escaped URI.
 auto path_from_file_url(const resource& res) -> std::filesystem::path {
   constexpr auto prefix = std::string_view{"file://"};
   if (res.url.starts_with(prefix)) {
@@ -632,84 +678,264 @@ auto path_from_file_url(const resource& res) -> std::filesystem::path {
 
 } // namespace
 
-auto catalog_state::erase_and_extract(const uuid& partition, std::string error)
+void catalog_state::erase_marker_if_unreferenced(
+  const std::filesystem::path& marker) {
+  if (marker.empty()) {
+    return;
+  }
+  const auto referenced = std::ranges::any_of(deferred, [&](const auto& entry) {
+    return entry.second.marker == marker;
+  });
+  if (referenced) {
+    return;
+  }
+  // Erase errors don't matter too much here: a leftover marker is replayed at
+  // the next startup, which erases partitions that are already gone.
+  self->mail(atom::erase_v, marker)
+    .request(filesystem, caf::infinite)
+    .then([](atom::done) { /* nop */ },
+          [self = self, marker](const caf::error& err) {
+            TENZIR_DEBUG("{} failed to erase marker at {}: {}", *self, marker,
+                         err);
+          });
+}
+
+void catalog_state::retire_erased(const uuid& partition,
+                                  partition_synopsis_ptr synopsis,
+                                  std::filesystem::path marker) {
+  auto erasure = deferred_erase{
+    .synopsis = std::move(synopsis),
+    .marker = std::move(marker),
+    .quarantine_error = None{},
+    .deadline = deferred_erase_deadline(),
+  };
+  if (pin_counts.contains(partition)) {
+    TENZIR_DEBUG("{} defers the deletion of partition {} because a retriever "
+                 "still holds it",
+                 *self, partition);
+    deferred.emplace(partition, std::move(erasure));
+    return;
+  }
+  dispose_of(partition, std::move(erasure), None{});
+}
+
+auto catalog_state::retire(const uuid& partition,
+                           Option<std::string> quarantine_error)
   -> caf::result<atom::done> {
-  const partition_synopsis* synopsis = nullptr;
-  for (const auto& [type, entries] : synopses_per_type) {
-    if (auto it = entries.find(partition); it != entries.end()) {
-      synopsis = it->second.get();
-      break;
-    }
-  }
-  if (not synopsis) {
-    erase(partition);
-    return atom::done_v;
-  }
-  const auto partition_path = path_from_file_url(synopsis->indexes_file);
-  const auto synopsis_path = path_from_file_url(synopsis->sketches_file);
-  const auto store_path = path_from_file_url(synopsis->store_file);
-  TENZIR_WARN("{} quarantines partition {} after an error: {}", *self,
-              partition, error);
-  // A partition whose synopsis failed to serialize can end up with an empty
-  // `resource::url` for one of these three fields (see e.g.
-  // `active_partition.cpp`'s handling of a failed external `.mdx` write).
-  // `path_from_file_url` would then return an empty path, which the
-  // filesystem actor resolves as its own root directory, turning an
-  // `atom::erase`/`atom::move` meant for one file into one that touches the
-  // whole database directory. Skip any request whose path is empty instead.
-  if (not partition_path.empty()) {
-    self->mail(atom::erase_v, partition_path)
-      .request(filesystem, caf::infinite)
-      .then([](atom::done) { /* nop */ },
-            [self = self, partition, partition_path](const caf::error& err) {
-              TENZIR_WARN("{} failed to erase quarantined partition {} at "
-                          "{}: {}",
-                          *self, partition, partition_path, err);
-            });
-  }
-  if (not synopsis_path.empty()) {
-    self->mail(atom::erase_v, synopsis_path)
-      .request(filesystem, caf::infinite)
-      .then([](atom::done) { /* nop */ },
-            [self = self, partition, synopsis_path](const caf::error& err) {
-              TENZIR_WARN("{} failed to erase quarantined partition synopsis "
-                          "{} at {}: {}",
-                          *self, partition, synopsis_path, err);
-            });
-  }
-  auto rp = self->make_response_promise<atom::done>();
-  if (store_path.empty()) {
-    TENZIR_WARN("{} cannot quarantine store for partition {}: no store path "
-                "on record",
-                *self, partition);
-    erase(partition);
-    rp.deliver(atom::done_v);
+  auto erasure = deferred_erase{
+    .synopsis = find_synopsis(partition),
+    .marker = {},
+    .quarantine_error = std::move(quarantine_error),
+    .deadline = deferred_erase_deadline(),
+  };
+  erase(partition);
+  if (not pin_counts.contains(partition)) {
+    auto rp = self->make_response_promise<atom::done>();
+    dispose_of(partition, std::move(erasure), rp);
     return rp;
   }
-  auto quarantined_path
-    = store_path.parent_path() / "quarantined" / store_path.filename();
-  std::error_code err;
-  std::filesystem::create_directories(quarantined_path.parent_path(), err);
-  if (err) {
-    return caf::make_error(
-      ec::filesystem_error,
-      fmt::format("failed to create quarantine directory {}: {}",
-                  quarantined_path.parent_path(), err.message()));
-  }
-  self->mail(atom::move_v, store_path, quarantined_path)
+  // A retriever still holds the partition, so its files have to stay. Record a
+  // tombstone first: a partition file without a synopsis has its synopsis
+  // regenerated at the next startup, so without one the partition would come
+  // back from the dead if we crashed before the deletion.
+  TENZIR_DEBUG("{} defers the deletion of partition {} because a retriever "
+               "still holds it",
+               *self, partition);
+  erasure.marker = paths.marker(uuid::random());
+  auto rp = self->make_response_promise<atom::done>();
+  self
+    ->mail(atom::write_v, erasure.marker,
+           create_marker({partition}, {}, keep_original_partition::no))
     .request(filesystem, caf::infinite)
     .then(
-      [this, partition, rp](atom::done) mutable {
-        erase(partition);
+      [this, partition, erasure, rp](atom::ok) mutable {
+        // The pins were checked before the write. A release processed while it
+        // was in flight would have found nothing parked yet and done nothing,
+        // so parking now would leave the files waiting for a trigger that has
+        // already come and gone.
+        if (not pin_counts.contains(partition)) {
+          dispose_of(partition, std::move(erasure), rp);
+          return;
+        }
+        deferred.emplace(partition, std::move(erasure));
         rp.deliver(atom::done_v);
       },
-      [this, partition, rp](caf::error& err) mutable {
-        TENZIR_WARN("{} failed to quarantine store for partition {}: {}", *self,
-                    partition, err);
-        erase(partition);
+      [rp](caf::error& err) mutable {
         rp.deliver(std::move(err));
       });
   return rp;
+}
+
+void catalog_state::dispose_of(
+  const uuid& partition, deferred_erase entry,
+  Option<caf::typed_response_promise<atom::done>> rp) {
+  auto finish = [rp](caf::expected<atom::done> result) mutable {
+    if (not rp) {
+      return;
+    }
+    if (result) {
+      rp->deliver(*result);
+    } else {
+      rp->deliver(std::move(result.error()));
+    }
+  };
+  // A partition whose synopsis failed to serialize can end up with an empty
+  // `resource::url` (see e.g. `active_partition.cpp`'s handling of a failed
+  // external `.mdx` write). `path_from_file_url` would then return an empty
+  // path, which the filesystem actor resolves as its own root directory,
+  // turning an erase or move meant for one file into one that touches the
+  // whole database directory. Fall back to the canonical layout instead.
+  const auto resolve
+    = [&](const resource& res,
+          const std::filesystem::path& fallback) -> std::filesystem::path {
+    if (not entry.synopsis) {
+      return fallback;
+    }
+    auto result = path_from_file_url(res);
+    return result.empty() ? fallback : result;
+  };
+  const auto partition_path
+    = resolve(entry.synopsis ? entry.synopsis->indexes_file : resource{},
+              paths.partition(partition));
+  const auto synopsis_path
+    = resolve(entry.synopsis ? entry.synopsis->sketches_file : resource{},
+              paths.synopsis(partition));
+  auto erase_file = [this, partition](const std::filesystem::path& path,
+                                      std::string_view what) {
+    self->mail(atom::erase_v, path)
+      .urgent()
+      .request(filesystem, caf::infinite)
+      .then(
+        [self = self, partition, what](atom::done) {
+          TENZIR_TRACE("{} erased {} of partition {} from filesystem", *self,
+                       what, partition);
+        },
+        [self = self, partition, path, what](const caf::error& err) {
+          TENZIR_WARN("{} failed to erase {} of partition {} at {}: {}", *self,
+                      what, partition, path, err);
+        });
+  };
+  erase_file(synopsis_path, "synopsis");
+  if (entry.quarantine_error) {
+    TENZIR_WARN("{} quarantines partition {} after an error: {}", *self,
+                partition, *entry.quarantine_error);
+    erase_file(partition_path, "dense indexes");
+    const auto store_path
+      = entry.synopsis ? path_from_file_url(entry.synopsis->store_file)
+                       : std::filesystem::path{};
+    if (store_path.empty()) {
+      TENZIR_WARN("{} cannot quarantine store for partition {}: no store path "
+                  "on record",
+                  *self, partition);
+      erase_marker_if_unreferenced(entry.marker);
+      finish(atom::done_v);
+      return;
+    }
+    const auto quarantined_path
+      = store_path.parent_path() / "quarantined" / store_path.filename();
+    auto err = std::error_code{};
+    std::filesystem::create_directories(quarantined_path.parent_path(), err);
+    if (err) {
+      erase_marker_if_unreferenced(entry.marker);
+      finish(caf::make_error(
+        ec::filesystem_error,
+        fmt::format("failed to create quarantine directory {}: {}",
+                    quarantined_path.parent_path(), err.message())));
+      return;
+    }
+    self->mail(atom::move_v, store_path, quarantined_path)
+      .request(filesystem, caf::infinite)
+      .then(
+        [this, marker = entry.marker, finish](atom::done) mutable {
+          erase_marker_if_unreferenced(marker);
+          finish(atom::done_v);
+        },
+        [this, partition, marker = entry.marker,
+         finish](caf::error& err) mutable {
+          TENZIR_WARN("{} failed to quarantine store for partition {}: {}",
+                      *self, partition, err);
+          erase_marker_if_unreferenced(marker);
+          finish(std::move(err));
+        });
+    return;
+  }
+  // The synopsis is the only source for the store's path. Every partition the
+  // catalog holds carries one -- the startup scan fills it in or discards the
+  // partition, a persist that cannot report its store never completes, and a
+  // transform sets it on every output -- so there is nothing to fall back to
+  // and nothing that would need probing the archive to find.
+  const auto store_path
+    = entry.synopsis ? path_from_file_url(entry.synopsis->store_file)
+                     : std::filesystem::path{};
+  if (not store_path.empty()) {
+    erase_file(partition_path, "dense indexes");
+    self->mail(atom::erase_v, store_path)
+      .urgent()
+      .request(filesystem, caf::infinite)
+      .then(
+        [this, marker = entry.marker, finish](atom::done) mutable {
+          erase_marker_if_unreferenced(marker);
+          finish(atom::done_v);
+        },
+        [this, marker = entry.marker, finish](caf::error& err) mutable {
+          erase_marker_if_unreferenced(marker);
+          finish(std::move(err));
+        });
+    return;
+  }
+  // No store path on record. That should not happen for a partition the
+  // catalog held, so say so rather than pass an empty path to the
+  // filesystem actor, which resolves it as its own root and would take the
+  // whole database directory with it.
+  TENZIR_WARN("{} cannot erase the store of partition {}: no store path on "
+              "record",
+              *self, partition);
+  erase_file(partition_path, "dense indexes");
+  erase_marker_if_unreferenced(entry.marker);
+  finish(atom::done_v);
+}
+
+auto catalog_state::erase_from_disk(const uuid& partition)
+  -> caf::result<atom::done> {
+  TENZIR_VERBOSE("{} erases partition {}", *self, partition);
+  const auto known = find_synopsis(partition) != nullptr;
+  if (not known) {
+    // The disk monitor selects partitions by scanning the index directory, so
+    // it can name a partition that never made it into the catalog. Deleting it
+    // is still the right thing to do, but a partition that is neither known
+    // nor on disk is a caller error.
+    auto err = std::error_code{};
+    const auto path = paths.partition(partition);
+    if (not std::filesystem::exists(path, err)) {
+      return caf::make_error(ec::logic_error,
+                             fmt::format("unknown partition for path {}: {}",
+                                         path, err.message()));
+    }
+  } else if (in_transformation.contains(partition)) {
+    // Erasing a partition out from under a transform would let its data
+    // resurrect through the transform's output. The disk monitor retries on
+    // its next scan.
+    return caf::make_error(ec::busy,
+                           fmt::format("refusing to erase partition {} while "
+                                       "it is being transformed",
+                                       partition));
+  }
+  return retire(partition, None{});
+}
+
+auto catalog_state::erase_and_extract(const uuid& partition, std::string error)
+  -> caf::result<atom::done> {
+  if (not find_synopsis(partition)) {
+    erase(partition);
+    return atom::done_v;
+  }
+  if (in_transformation.contains(partition)) {
+    return caf::make_error(ec::busy,
+                           fmt::format("refusing to quarantine partition {} "
+                                       "while it is being transformed",
+                                       partition));
+  }
+  return retire(partition, std::move(error));
 }
 
 auto catalog_state::finalize_lookup(catalog_lookup_result&& candidates,
@@ -1277,8 +1503,9 @@ auto catalog_state::memusage() const -> size_t {
 auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
              filesystem_actor filesystem, partition_paths paths,
              std::string store_backend, index_config synopsis_opts,
-             size_t partition_capacity, size_t sketch_cache_bytes,
-             bool lazy_sketches) -> catalog_actor::behavior_type {
+             size_t partition_capacity, duration deferred_erase_timeout,
+             size_t sketch_cache_bytes, bool lazy_sketches)
+  -> catalog_actor::behavior_type {
   if (self->getf(caf::local_actor::is_detached_flag)) {
     caf::detail::set_thread_name("tnz.catalog");
   }
@@ -1289,6 +1516,7 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
   // For historic reasons, the `tenzir.max-partition-size` is stored as the
   // `cardinality` in the value index options.
   self->state().index_opts["cardinality"] = partition_capacity;
+  self->state().deferred_erase_timeout = deferred_erase_timeout;
   self->state().store_actor_plugin
     = plugins::find<store_actor_plugin>(store_backend);
   if (not self->state().store_actor_plugin) {
@@ -1315,6 +1543,14 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
   }
   TENZIR_VERBOSE("{} finished initializing and is ready to accept queries",
                  *self);
+  // A retriever that never releases would otherwise keep an erased partition
+  // on disk forever. Sweeping at a fraction of the timeout bounds how long
+  // past its deadline a partition can linger.
+  if (deferred_erase_timeout > duration::zero()) {
+    detail::weak_run_delayed_loop(self, deferred_erase_timeout / 4, [self] {
+      self->state().sweep_deferred();
+    });
+  }
   return {
     [self](atom::merge, std::vector<partition_synopsis_pair>& partitions)
       -> caf::result<atom::ok> {
@@ -1431,7 +1667,22 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
     },
     [self](atom::candidates, tenzir::query_context query_context)
       -> caf::result<catalog_lookup_result> {
-      return self->state().lookup(std::move(query_context.expr));
+      auto owner = self->current_sender();
+      auto result = self->state().lookup(std::move(query_context.expr));
+      if (not result) {
+        return std::move(result.error());
+      }
+      self->state().add_lease(query_context.id, owner, partition_ids(*result));
+      return std::move(*result);
+    },
+    [self](atom::release, uuid query) -> caf::result<void> {
+      self->state().release_lease(query);
+      return {};
+    },
+    [self](atom::release, uuid query,
+           const std::vector<uuid>& partitions) -> caf::result<void> {
+      self->state().release_lease(query, partitions);
+      return {};
     },
     [self](atom::get, uuid uuid) -> caf::result<partition_info> {
       for (const auto& [type, synopses] : self->state().synopses_per_type) {
