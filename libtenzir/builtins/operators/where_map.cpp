@@ -23,7 +23,6 @@
 #include <tenzir/expression.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/modules.hpp>
-#include <tenzir/null_bitmap.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
@@ -338,9 +337,17 @@ auto make_where_function(function_invocation inv, session ctx)
             const auto lists = check(field.as<list_type>());
             const auto list_values
               = series{lists.type.value_type(), lists.array->values()};
-            auto ids = null_bitmap{};
+            // We deliberately use a `std::vector<bool>` instead of a
+            // `null_bitmap` here: the latter only offers linear-time random
+            // access, which would make the element selection below quadratic
+            // in the number of list elements per batch.
+            auto ids = std::vector<bool>{};
             auto all_true = true;
             auto all_false = true;
+            const auto offset_begin = lists.array->value_offset(0);
+            const auto offset_end
+              = lists.array->value_offset(lists.array->length());
+            ids.reserve(offset_end - offset_begin);
             // TODO: Technically, this call to `evaluate` can cause warnings, as
             // lists may contain bogus values in the value array where the list
             // itself is `null`. This is very unlikely to happen in practice,
@@ -354,22 +361,22 @@ auto make_where_function(function_invocation inv, session ctx)
                   const auto pred = check(result.as<bool_type>());
                   if (pred.array->true_count() == pred.length()) {
                     all_false = false;
-                    ids.append_bits(true, pred.length());
+                    ids.insert(ids.end(), pred.length(), true);
                     return;
                   }
                   all_true = false;
                   if (pred.array->true_count() == 0) {
-                    ids.append_bits(false, pred.length());
+                    ids.insert(ids.end(), pred.length(), false);
                     return;
                   }
                   all_false = false;
                   for (const auto& elem : *pred.array) {
-                    ids.append_bit(elem.value_or(false));
+                    ids.push_back(elem.value_or(false));
                   }
                 },
                 [&](const null_type&) {
                   all_true = false;
-                  ids.append_bits(false, result.length());
+                  ids.insert(ids.end(), result.length(), false);
                 },
                 [&](const auto&) {
                   diagnostic::warning("expected `bool`, got `{}`",
@@ -377,12 +384,9 @@ auto make_where_function(function_invocation inv, session ctx)
                     .primary(args.lambda.body)
                     .emit(ctx);
                   all_true = false;
-                  ids.append_bits(false, result.length());
+                  ids.insert(ids.end(), result.length(), false);
                 });
             }
-            const auto offset_begin = lists.array->value_offset(0);
-            const auto offset_end
-              = lists.array->value_offset(lists.array->length());
             TENZIR_ASSERT_EQ(offset_end - offset_begin,
                              detail::narrow<int64_t>(ids.size()));
             if (all_true) {

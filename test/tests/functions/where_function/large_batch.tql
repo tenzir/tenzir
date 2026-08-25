@@ -1,0 +1,13 @@
+// Regression: `where()` used to select the surviving list elements through a
+// bitmap with linear-time random access, which made the function quadratic in
+// the number of list elements per batch. A single large batch took seconds;
+// with the fix it is linear. This test locks in the result and would become
+// noticeably slow again if the quadratic behavior returned.
+let $blocks = [
+  10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 127.0.0.0/8,
+]
+from {src: 10.1.2.3}
+repeat 65536
+batch 65536
+matches = $blocks.where(s => src in s)
+summarize rows=count(), distinct_matches=distinct(matches)
