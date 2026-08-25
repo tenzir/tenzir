@@ -160,6 +160,10 @@ public:
       IfOp{args_.condition}.with_name("if")};
   }
 
+  auto parallelizable() const -> bool override {
+    return true;
+  }
+
   auto plan(ir::PlanBuilder& builder, ir::PlanPorts input,
             diagnostic_handler& dh) && -> failure_or<ir::PlanPorts> override {
     // `if` is a two-output operator: it evaluates the condition per row and

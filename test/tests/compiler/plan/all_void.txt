@@ -1,7 +1,9 @@
 ● {input}
 │
 ● version
+╎
+● discard(x6)
 │
-● discard
+● pass
 │
 ● {output}

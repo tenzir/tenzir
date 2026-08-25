@@ -1,11 +1,11 @@
 ● {input}
 │
 ● version
-│
-● If
-├─┐
-● │ discard
-│ │
+╎
+● If(x6)
+╟╌┐
+● ╎ discard(x6)
+│ ╎
 │ ● to_stdout
 ├─┘
 ● pass

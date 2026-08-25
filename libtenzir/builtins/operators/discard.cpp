@@ -115,6 +115,7 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<DiscardArgs, Discard<chunk_ptr>, Discard<table_slice>>{};
+    d.parallelizable();
     return d.unordered();
   }
 };

@@ -1,12 +1,12 @@
 ● {input}
 │
 ● version
-│
-● If
-├─┐
-● │ head
-│ │
-│ ● tail
+╎
+● If(x6)
+╟╌┐
+● ╎ where(x6)
+╎ ╎
+╎ ● tail
 ├─┘
 ● to_stdout
 │

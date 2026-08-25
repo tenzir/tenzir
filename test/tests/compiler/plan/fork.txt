@@ -3,10 +3,10 @@
 ● version
 │
 ● fork
-├─┐
-● │ to_stdout
-│ │
-│ ● discard
+├╌┐
+● ╎ to_stdout
+│ ╎
+│ ● discard(x6)
 ├─┘
 ● pass
 │

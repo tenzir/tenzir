@@ -508,6 +508,10 @@ public:
       MatchOp{args_}.with_name("match")};
   }
 
+  auto parallelizable() const -> bool override {
+    return true;
+  }
+
   auto plan(ir::PlanBuilder& builder, ir::PlanPorts input,
             diagnostic_handler& dh) && -> failure_or<ir::PlanPorts> override {
     // `match` is an N-output operator with one output port per arm. It

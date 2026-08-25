@@ -1,11 +1,11 @@
 ● {input}
 │
 ● version
-│
-● If
-├─┐
-● │ head
-├─┘
+╎
+● If(x6)
+├╌┐
+● ╎ head
+├╌┘
 ● to_stdout
 │
 ● {output}
