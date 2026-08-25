@@ -13,13 +13,11 @@
 #include "tenzir/active_partition.hpp"
 #include "tenzir/actors.hpp"
 #include "tenzir/catalog.hpp"
-#include "tenzir/detail/lru_cache.hpp"
 #include "tenzir/importer.hpp"
 #include "tenzir/partition_paths.hpp"
 #include "tenzir/partition_transformer.hpp"
 #include "tenzir/plugin_fwd.hpp"
 #include "tenzir/query_context.hpp"
-#include "tenzir/query_queue.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/actor.hpp>
@@ -52,47 +50,6 @@ struct active_partition_info {
       .fields(f.field("actor", x.actor), f.field("events", x.events),
               f.field("id", x.id));
   }
-};
-
-struct ActivePartitionTransform {
-  std::shared_ptr<PartitionTransformProgress> progress = {};
-  std::vector<partition_info> input_partitions = {};
-  std::string origin = {};
-  time started_at = time::clock::now();
-};
-
-/// Loads partitions from disk by UUID.
-class partition_factory {
-public:
-  explicit partition_factory(index_state& state);
-
-  filesystem_actor& filesystem(); // getter/setter
-
-  partition_actor operator()(const uuid& id) const;
-
-  [[nodiscard]] size_t materializations() const;
-
-private:
-  filesystem_actor filesystem_;
-  const index_state& state_;
-
-  /// A counter for the amount passive partitions were loaded from disk.
-  mutable size_t materializations_ = 0;
-};
-
-/// Event counters for metrics.
-struct index_counters {
-  /// Stores how many passive partitions were loaded from disk until the last
-  /// time the delta was written to the metrics. This variable stores the
-  /// absolute number since the index was started and is only used to calulate
-  /// the delta for the next round.
-  size_t previous_materializations = 0;
-
-  /// How many queries were sent to partitions.
-  size_t partition_lookups = 0;
-
-  /// How many partitions were scheduled for queries.
-  size_t partition_scheduled = 0;
 };
 
 /// The state of the index actor.
@@ -133,12 +90,6 @@ struct index_state {
 
   void drain_retired_partitions(caf::error reason);
 
-  // -- query handling ---------------------------------------------------------
-
-  /// Schedules partitions for lookups. Returns the number of newly scheduled
-  /// partitions.
-  [[nodiscard]] auto schedule_lookups() -> size_t;
-
   // -- introspection ----------------------------------------------------------
 
   size_t memusage() const;
@@ -171,11 +122,6 @@ struct index_state {
 
   std::unordered_map<uuid, unpersisted_partition_info> unpersisted = {};
 
-  /// The set of passive (read-only) partitions currently loaded into memory.
-  /// Uses the `partition_factory` to load new partitions as needed, and evicts
-  /// old entries when the size exceeds `max_inmem_partitions`.
-  detail::lru_cache<uuid, partition_actor, partition_factory> inmem_partitions;
-
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity = {};
 
@@ -188,36 +134,11 @@ struct index_state {
   /// Timeout after which an active partition is forcibly flushed.
   duration active_partition_timeout = {};
 
-  /// The maximum size of the partition LRU cache (or the maximum number of
-  /// read-only partition loaded to memory).
-  size_t max_inmem_partitions = {};
-
-  /// The queue of in-flight queries.
-  query_queue pending_queries = {};
-
-  /// The maximum number of partitions to serve queries at the same time.
-  size_t max_concurrent_partition_lookups = 0;
-
-  /// A counter to track the number of partitions that are currently serving
-  /// lookups.
-  size_t running_partition_lookups = 0;
-
-  /// A counter generate incemental ids for active lookups.
-  size_t active_lookup_counter = 0;
-
-  /// Stores information about currently running partition lookups.
-  std::vector<std::tuple<size_t, std::chrono::system_clock::time_point,
-                         query_queue::entry>>
-    active_lookups;
-
   /// The CATALOG actor.
   catalog_actor catalog = {};
 
   /// The on-disk locations of the partition files.
   partition_paths paths = {};
-
-  /// List of actors that wait for the next flush event.
-  std::vector<flush_listener_actor> flush_listeners = {};
 
   bool shutting_down = false;
 
@@ -255,10 +176,6 @@ struct index_state {
 /// @param partition_capacity The maximum number of events per partition.
 /// @param active_partition_timeout Timeout after which an active partition is
 /// forcibly flushed.
-/// @param max_inmem_partitions The maximum number of passive partitions loaded
-/// into memory.
-/// @param max_concurrent_partition_lookups The maximum amount of concurrent
-/// lookups.
 /// @param catalog_dir The directory used by the catalog.
 /// @param index_config The meta-index configuration of the false-positives
 /// rates for the types and fields.
@@ -269,8 +186,7 @@ index(index_actor::stateful_pointer<index_state> self,
       filesystem_actor filesystem, catalog_actor catalog,
       const std::filesystem::path& dir, std::string store_backend,
       size_t max_buffered_events, size_t partition_capacity,
-      duration active_partition_timeout, size_t max_inmem_partitions,
-      size_t max_concurrent_partition_lookups,
+      duration active_partition_timeout,
       const std::filesystem::path& catalog_dir, index_config index_config);
 
 } // namespace tenzir

@@ -42,7 +42,6 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/partition_synopsis.hpp"
-#include "tenzir/passive_partition.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/plugin/store.hpp"
 #include "tenzir/shutdown.hpp"
@@ -87,37 +86,6 @@
 //                                                                      ------------------------> indexer
 //                                                                                ...
 //
-// # Lookup
-//
-// At the same time, the index is also involved in the lookup path, where it
-// receives an expression and loads the partitions that might contain relevant
-// results into memory.
-//
-//    expression                                lookup()
-//   ------------>  index                  --------------------> catalog
-//                                                                 |
-//     query_id,                                                   |
-//     scheduled,                                                  |
-//     remaining                            [uuid, query_context]  |
-//   <-----------  (creates query state)  <------------------------/
-//                            |
-//                            |  query_id, n_taste
-//                            |
-//    query_id, n             v                   expression, client
-//   ------------> (spawn n partitions) --------------------------------> partition
-//                                                                            |
-//                                                      ids                   |
-//   <------------------------------------------------------------------------/
-//                                                      ids                   |
-//   <------------------------------------------------------------------------/
-//                                                                            |
-//
-//                                                                          [...]
-//
-//                                                      atom::done            |
-//   <------------------------------------------------------------------------/
-//
-//
 // # Erase
 //
 // We currently have two distinct erasure code paths: One externally driven by
@@ -128,32 +96,9 @@
 
 namespace tenzir {
 
-// -- partition_factory --------------------------------------------------------
-
-partition_factory::partition_factory(index_state& state) : state_{state} {
-  // nop
-}
-
-filesystem_actor& partition_factory::filesystem() {
-  return filesystem_;
-}
-
-partition_actor partition_factory::operator()(const uuid& id) const {
-  const auto path = state_.paths.partition(id);
-  TENZIR_TRACE("{} loads partition {} for path {}", *state_.self, id, path);
-  materializations_++;
-  return state_.self->spawn(passive_partition, id, filesystem_, path,
-                            caf::message_priority::normal);
-}
-
-size_t partition_factory::materializations() const {
-  return materializations_;
-}
-
 // -- index_state --------------------------------------------------------------
 
-index_state::index_state(index_actor::pointer self)
-  : self{self}, inmem_partitions{0, partition_factory{*this}} {
+index_state::index_state(index_actor::pointer self) : self{self} {
 }
 
 // -- inbound path -----------------------------------------------------------
@@ -431,160 +376,9 @@ void index_state::drain_retired_partitions(caf::error reason) {
   }
 }
 
-// -- query handling ---------------------------------------------------------
-
-auto index_state::schedule_lookups() -> size_t {
-  if (not pending_queries.has_work()) {
-    return 0u;
-  }
-  const size_t previous_partition_lookups = running_partition_lookups;
-  while (running_partition_lookups < max_concurrent_partition_lookups) {
-    // 1. Get the partition with the highest accumulated priority.
-    auto next = pending_queries.next();
-    if (not next) {
-      TENZIR_TRACE("{} did not find a partition to query", *self);
-      break;
-    }
-    auto immediate_completion = [&](const query_queue::entry& x) {
-      for (auto qid : x.queries) {
-        if (auto client = pending_queries.handle_completion(qid)) {
-          TENZIR_TRACE("{} completes query {} immediately", *self, qid);
-          self->mail(atom::done_v).send(*client);
-        }
-      }
-    };
-    if (next->erased) {
-      TENZIR_VERBOSE("{} skips erased partition {}", *self, next->partition);
-      immediate_completion(*next);
-      continue;
-    }
-    if (next->queries.empty()) {
-      TENZIR_VERBOSE("{} skips partition {} because it has no scheduled "
-                     "queries",
-                     *self, next->partition);
-      continue;
-    }
-    TENZIR_TRACE("{} schedules partition {} for {}", *self, next->partition,
-                 next->queries);
-    // 2. Acquire the actor for the selected partition, potentially materializing
-    //    it from its persisted state.
-    auto acquire = [&](const uuid& partition_id) -> partition_actor {
-      // We need to first check whether the ID is the active partition or one
-      // of our unpersisted ones. Only then can we dispatch to our LRU cache.
-      partition_actor part;
-      tenzir::type partition_type{};
-      for (const auto& [type, active_partition] : active_partitions) {
-        if (active_partition.actor != nullptr
-            and active_partition.id == partition_id) {
-          part = active_partition.actor;
-          break;
-        }
-      }
-      if (not part) {
-        if (auto it = unpersisted.find(partition_id); it != unpersisted.end()) {
-          part = it->second.actor;
-        } else {
-          part = inmem_partitions.get_or_load(partition_id);
-        }
-      }
-      if (not part) {
-        TENZIR_WARN("{} failed to load partition {} that was part of a query",
-                    *self, partition_id);
-      }
-      return part;
-    };
-    auto partition_actor = acquire(next->partition);
-    if (not partition_actor) {
-      // We need to mark failed partitions as completed to avoid clients going
-      // out of sync.
-      immediate_completion(*next);
-      continue;
-    }
-    // 3. request all relevant queries in a loop
-    auto ts = std::chrono::system_clock::now();
-    auto active_lookup_id = active_lookup_counter++;
-    active_lookups.emplace_back(active_lookup_id, ts, *next);
-    auto active_lookup = active_lookups.end() - 1;
-    for (auto qid : next->queries) {
-      auto it = pending_queries.queries().find(qid);
-      if (it == pending_queries.queries().end()) {
-        TENZIR_WARN("{} tried to access non-existent query {}", *self, qid);
-        auto& qs = std::get<2>(*active_lookup).queries;
-        qs.erase(std::remove(qs.begin(), qs.end(), qid), qs.end());
-        if (qs.empty()) {
-          --running_partition_lookups;
-          active_lookups.erase(active_lookup);
-        }
-        continue;
-      }
-      auto handle_completion = [active_lookup_id, qid, this] {
-        if (auto client = pending_queries.handle_completion(qid)) {
-          self->mail(atom::done_v).send(*client);
-        }
-        // 4. recursively call schedule_lookups in the done handler. ...or
-        //    when all done? (5)
-        // 5. decrement running_partition_lookups when all queries that
-        //    were started are done. Keep track in the closure.
-        auto active_lookup = std::find_if(
-          active_lookups.begin(), active_lookups.end(), [&](const auto& entry) {
-            return std::get<0>(entry) == active_lookup_id;
-          });
-        TENZIR_ASSERT(active_lookup != active_lookups.end());
-        auto& qs = std::get<2>(*active_lookup).queries;
-        qs.erase(std::remove(qs.begin(), qs.end(), qid), qs.end());
-        if (qs.empty()) {
-          --running_partition_lookups;
-          active_lookups.erase(active_lookup);
-          const auto num_scheduled = schedule_lookups();
-          TENZIR_TRACE("{} scheduled {} partitions after completion of a "
-                       "previously scheduled lookup",
-                       *self, num_scheduled);
-        }
-      };
-      const auto& context_it
-        = it->second.query_contexts_per_type.find(next->schema);
-      if (context_it == it->second.query_contexts_per_type.end()) {
-        TENZIR_WARN("{} failed to evaluate query {} for partition {}: query "
-                    "context for schema is already unvailable",
-                    *self, qid, next->partition);
-        inmem_partitions.drop(next->partition);
-        handle_completion();
-        continue;
-      }
-      self->mail(atom::query_v, context_it->second)
-        .request(partition_actor, defaults::scheduler_timeout)
-        .then(
-          [this, handle_completion, qid, pid = next->partition](uint64_t n) {
-            TENZIR_TRACE("{} received {} results for query {} from partition "
-                         "{}",
-                         *self, n, qid, pid);
-            handle_completion();
-          },
-          [this, handle_completion, qid,
-           pid = next->partition](const caf::error& err) {
-            TENZIR_WARN("{} failed to evaluate query {} for partition {}: {}",
-                        *self, qid, pid, err);
-            // We don't know if this was a transient error or if the
-            // partition/store is corrupted. However, the partition actor has
-            // possibly already exited so at least we have to clear it from
-            // the cache so that subsequent queries get a chance to respawn it
-            // cleanly instead of trying to talk to the dead.
-            inmem_partitions.drop(pid);
-            handle_completion();
-          });
-    }
-    running_partition_lookups++;
-  }
-  TENZIR_ASSERT(running_partition_lookups >= previous_partition_lookups);
-  return running_partition_lookups - previous_partition_lookups;
-}
-
 // -- introspection ----------------------------------------------------------
 
 std::size_t index_state::memusage() const {
-  auto calculate_usage = []<class T>(const T& collection) -> std::size_t {
-    return collection.size() * sizeof(typename T::value_type);
-  };
   auto usage = std::size_t{sizeof(*this)};
   for (const auto& [type, partition_info] : active_partitions) {
     usage += as_bytes(type).size() + sizeof(partition_info);
@@ -592,8 +386,6 @@ std::size_t index_state::memusage() const {
   for (const auto& [id, partition] : unpersisted) {
     usage += sizeof(id) + as_bytes(partition.schema).size() + sizeof(partition);
   }
-  usage += pending_queries.memusage();
-  usage += calculate_usage(flush_listeners);
   return usage;
 }
 
@@ -662,22 +454,19 @@ index(index_actor::stateful_pointer<index_state> self,
       filesystem_actor filesystem, catalog_actor catalog,
       const std::filesystem::path& dir, std::string store_backend,
       size_t max_buffered_events, size_t partition_capacity,
-      duration active_partition_timeout, size_t max_inmem_partitions,
-      size_t max_concurrent_partition_lookups,
+      duration active_partition_timeout,
       const std::filesystem::path& catalog_dir, index_config index_config) {
-  TENZIR_TRACE("index {} {} {} {} {} {} {} {} {}", TENZIR_ARG(self->id()),
+  TENZIR_TRACE("index {} {} {} {} {} {}", TENZIR_ARG(self->id()),
                TENZIR_ARG(filesystem), TENZIR_ARG(dir),
                TENZIR_ARG(partition_capacity),
-               TENZIR_ARG(active_partition_timeout),
-               TENZIR_ARG(max_inmem_partitions),
-               TENZIR_ARG(max_concurrent_partition_lookups),
-               TENZIR_ARG(catalog_dir), TENZIR_ARG(index_config));
+               TENZIR_ARG(active_partition_timeout), TENZIR_ARG(catalog_dir),
+               TENZIR_ARG(index_config));
   if (self->getf(caf::scheduled_actor::is_detached_flag)) {
     caf::detail::set_thread_name("tnz.index");
   }
-  TENZIR_VERBOSE("{} initializes index in {} with a maximum partition "
-                 "size of {} events and {} resident partitions",
-                 *self, dir, partition_capacity, max_inmem_partitions);
+  TENZIR_VERBOSE("{} initializes index in {} with a maximum partition size of "
+                 "{} events",
+                 *self, dir, partition_capacity);
   self->state().index_opts["cardinality"] = partition_capacity;
   // The transformer needs both of these to size its share of the memory
   // budget. Passing them through `index_opts` keeps its spawn signature
@@ -703,8 +492,6 @@ index(index_actor::stateful_pointer<index_state> self,
   }
   // Set members.
   self->state().self = self;
-  self->state().max_concurrent_partition_lookups
-    = max_concurrent_partition_lookups;
   self->state().store_actor_plugin
     = plugins::find<store_actor_plugin>(store_backend);
   if (not self->state().store_actor_plugin) {
@@ -729,9 +516,6 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state().partition_capacity = partition_capacity;
   self->state().max_buffered_events = max_buffered_events;
   self->state().active_partition_timeout = active_partition_timeout;
-  self->state().inmem_partitions.factory().filesystem()
-    = self->state().filesystem;
-  self->state().inmem_partitions.resize(max_inmem_partitions);
   detail::weak_run_delayed_loop(
     self, defaults::metrics_interval,
     [self, actor_metrics_builder
@@ -751,9 +535,6 @@ index(index_actor::stateful_pointer<index_state> self,
         .send(importer);
     });
   return {
-    [self](atom::done, uuid partition_id) {
-      TENZIR_TRACE("{} queried partition {} successfully", *self, partition_id);
-    },
     [self](table_slice& slice) {
       self->state().handle_slice(std::move(slice));
     },

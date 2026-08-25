@@ -241,14 +241,10 @@ inline constexpr caf::timespan index_flush_interval = std::chrono::seconds{10};
 
 /// Maximum number of in-memory INDEX partitions.
 inline constexpr size_t max_in_mem_partitions = 1;
-
 /// Memory budget for the catalog's on-demand cache of deferred Bloom-filter
 /// sketches (see `tenzir.index.lazy-sketches`). Loaded sketches are evicted
 /// least-recently-used once the total exceeds this many bytes.
 inline constexpr size_t sketch_cache_bytes = 1'073'741'824; // 1 Gi
-
-/// Maximum number of concurrent INDEX queries.
-inline constexpr size_t num_query_supervisors = 10;
 
 /// The store backend to use.
 inline constexpr const char* store_backend = "feather";

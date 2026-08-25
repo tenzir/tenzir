@@ -223,10 +223,11 @@ struct importer_actor_traits {
 };
 using importer_actor = caf::typed_actor<importer_actor_traits>;
 
-/// The INDEX actor interface.
+/// The INDEX actor interface. The index owns the ingest path: it routes
+/// incoming events into active partitions and hands them to the catalog once
+/// they are persisted. Everything about partitions that are already on disk —
+/// lookups, transforms, erasure — belongs to the CATALOG.
 using index_actor = typed_actor_fwd<
-  // Triggered when the INDEX finished querying a PARTITION.
-  auto(atom::done, uuid)->caf::result<void>,
   // Stores a table slice.
   auto(table_slice)->caf::result<void>,
   // Decomissions all active partitions, effectively flushing them to disk.
