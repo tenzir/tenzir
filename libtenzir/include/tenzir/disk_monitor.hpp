@@ -66,7 +66,7 @@ struct disk_monitor_state {
   size_t pending_partitions = 0;
 
   /// Node handle of the INDEX.
-  index_actor index;
+  catalog_actor catalog;
 
   /// List of known-bad partitions
   detail::flat_set<blacklist_entry> blacklist;
@@ -83,10 +83,10 @@ struct disk_monitor_state {
 /// @param low_water Erase until this limit is no longer exceeded.
 /// @param scan_interval The timespan between scans.
 /// @param db_dir The path to the database directory.
-/// @param index The actor handle of the INDEX.
+/// @param catalog The actor handle of the CATALOG.
 disk_monitor_actor::behavior_type
 disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
              const disk_monitor_config& config,
-             const std::filesystem::path& db_dir, index_actor index);
+             const std::filesystem::path& db_dir, catalog_actor catalog);
 
 } // namespace tenzir

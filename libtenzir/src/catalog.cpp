@@ -12,6 +12,7 @@
 #include "tenzir/chunk.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/defaults.hpp"
+#include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/detail/set_operations.hpp"
 #include "tenzir/detail/tracepoint.hpp"
@@ -20,6 +21,7 @@
 #include "tenzir/duration_synopsis.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/expression.hpp"
+#include "tenzir/fbs/partition.hpp"
 #include "tenzir/flatbuffer.hpp"
 #include "tenzir/instrumentation.hpp"
 #include "tenzir/int64_synopsis.hpp"
@@ -28,6 +30,7 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/partition_synopsis.hpp"
+#include "tenzir/passive_partition.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/query_context.hpp"
 #include "tenzir/series_builder.hpp"
@@ -503,6 +506,114 @@ void catalog_state::erase(const uuid& partition) {
       return;
     }
   }
+}
+
+auto catalog_state::erase_from_disk(const uuid& partition)
+  -> caf::result<atom::done> {
+  TENZIR_VERBOSE("{} erases partition {}", *self, partition);
+  const auto path = paths.partition(partition);
+  const auto synopsis_path = paths.synopsis(partition);
+  const auto known = std::ranges::any_of(synopses_per_type, [&](const auto& x) {
+    return x.second.contains(partition);
+  });
+  if (not known) {
+    // The disk monitor selects partitions by scanning the index directory, so
+    // it can name a partition that never made it into the catalog. Deleting it
+    // is still the right thing to do, but a partition that is neither known
+    // nor on disk is a caller error.
+    auto err = std::error_code{};
+    if (not std::filesystem::exists(path, err)) {
+      return caf::make_error(ec::logic_error,
+                             fmt::format("unknown partition for path {}: {}",
+                                         path, err.message()));
+    }
+  }
+  erase(partition);
+  auto rp = self->make_response_promise<atom::done>();
+  // Remove the synopsis file. We can already safely do so because the
+  // partition has left the catalog.
+  self->mail(atom::erase_v, synopsis_path)
+    .urgent()
+    .request(filesystem, caf::infinite)
+    .then(
+      [self = self, partition](atom::done) {
+        TENZIR_TRACE("{} erased partition synopsis {} from filesystem", *self,
+                     partition);
+      },
+      [self = self, partition, synopsis_path](const caf::error& err) {
+        TENZIR_WARN("{} failed to erase partition synopsis {} at {}: {}", *self,
+                    partition, synopsis_path, err);
+      });
+  auto erase_dense_index_file
+    = [self = self, filesystem = filesystem, partition, path] {
+        self->mail(atom::erase_v, path)
+          .urgent()
+          .request(filesystem, caf::infinite)
+          .then(
+            [self, partition](atom::done) {
+              TENZIR_TRACE("{} erased partition {} from filesystem", *self,
+                           partition);
+            },
+            [self, partition, path](const caf::error& err) {
+              TENZIR_WARN("{} failed to erase partition {} at {}: {}", *self,
+                          partition, path, err);
+            });
+      };
+  if (auto store_path = paths.find_store(partition)) {
+    erase_dense_index_file();
+    rp.delegate(filesystem, atom::erase_v, *store_path);
+    return rp;
+  }
+  // Fallback path: in case the store file is not found at the expected path we
+  // need to load the partition and retrieve the correct path from the store
+  // header.
+  TENZIR_DEBUG("{} did not find a store for partition {}, inspecting the store "
+               "header",
+               *self, partition);
+  self->mail(atom::mmap_v, path)
+    .urgent()
+    .request(filesystem, caf::infinite)
+    .then(
+      [this, partition, path, rp,
+       erase_dense_index_file](const chunk_ptr& chunk) mutable {
+        TENZIR_DEBUG("{} mmapped partition {} to extract store path for "
+                     "erasure",
+                     *self, partition);
+        if (not chunk or chunk->size() < FLATBUFFERS_MIN_BUFFER_SIZE) {
+          erase_dense_index_file();
+          rp.deliver(caf::make_error(
+            ec::filesystem_error,
+            fmt::format("failed to load the state for partition {}", path)));
+          return;
+        }
+        if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE
+            and flatbuffers::BufferHasIdentifier(chunk->data(),
+                                                 fbs::PartitionIdentifier())) {
+          TENZIR_WARN("failed to load partition for deletion at {} because its "
+                      "size of {} exceeds the maximum allowed size of {}. The "
+                      "index statistics will be incorrect until the database "
+                      "has been rebuilt and restarted",
+                      path, chunk->size(), FLATBUFFERS_MAX_BUFFER_SIZE);
+          erase_dense_index_file();
+          rp.deliver(caf::make_error(ec::filesystem_error,
+                                     "aborting erasure due to encountering a "
+                                     "legacy oversized partition"));
+          return;
+        }
+        // The passive partition erases both its store and its own file, so we
+        // must not race it with `erase_dense_index_file`.
+        auto actor = self->spawn(passive_partition, partition, filesystem, path,
+                                 caf::message_priority::normal);
+        rp.delegate(actor, atom::erase_v);
+      },
+      [this, partition, rp, erase_dense_index_file](caf::error& err) mutable {
+        TENZIR_WARN("{} failed to load partition {} for erase fallback path: "
+                    "{}",
+                    *self, partition, err);
+        erase_dense_index_file();
+        rp.deliver(std::move(err));
+      });
+  return rp;
 }
 
 namespace {
@@ -1164,13 +1275,15 @@ auto catalog_state::memusage() const -> size_t {
 }
 
 auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
-             filesystem_actor filesystem, size_t sketch_cache_bytes,
-             bool lazy_sketches) -> catalog_actor::behavior_type {
+             filesystem_actor filesystem, partition_paths paths,
+             size_t sketch_cache_bytes, bool lazy_sketches)
+  -> catalog_actor::behavior_type {
   if (self->getf(caf::local_actor::is_detached_flag)) {
     caf::detail::set_thread_name("tnz.catalog");
   }
   self->state().self = self;
   self->state().filesystem = std::move(filesystem);
+  self->state().paths = std::move(paths);
   self->state().taxonomies.concepts = modules::concepts();
   self->state().lazy_sketches = lazy_sketches;
   // Initialize the sketch cache before the request cache below, so that any
@@ -1235,12 +1348,41 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
       }
       return build_catalog_slices(*parsed, *synopses);
     },
-    [self](atom::erase, uuid partition) -> caf::result<atom::ok> {
+    [self](atom::erase, uuid partition) -> caf::result<atom::done> {
       if (self->state().cache) {
         return self->state().cache->stash(self, atom::erase_v, partition);
       }
-      self->state().erase(partition);
-      return atom::ok_v;
+      return self->state().erase_from_disk(partition);
+    },
+    [self](atom::erase,
+           const std::vector<uuid>& partitions) -> caf::result<atom::done> {
+      if (self->state().cache) {
+        return self->state().cache->stash(self, atom::erase_v, partitions);
+      }
+      if (partitions.empty()) {
+        return atom::done_v;
+      }
+      auto rp = self->make_response_promise<atom::done>();
+      auto counter = detail::make_fanout_counter(
+        partitions.size(),
+        [rp]() mutable {
+          rp.deliver(atom::done_v);
+        },
+        [rp](caf::error&& err) mutable {
+          rp.deliver(std::move(err));
+        });
+      for (const auto& partition : partitions) {
+        self->mail(atom::erase_v, partition)
+          .request(static_cast<catalog_actor>(self), caf::infinite)
+          .then(
+            [counter](atom::done) {
+              counter->receive_success();
+            },
+            [counter](caf::error& err) {
+              counter->receive_error(std::move(err));
+            });
+      }
+      return rp;
     },
     [self](atom::erase, atom::extract, uuid partition,
            std::string& error) -> caf::result<atom::done> {

@@ -163,8 +163,10 @@ auto spawn_catalog(node_actor::stateful_pointer<node_state> self,
     settings, "tenzir.index.sketch-cache-bytes", defaults::sketch_cache_bytes);
   const auto lazy_sketches
     = get_or(settings, "tenzir.index.lazy-sketches", false);
-  auto catalog = self->spawn<caf::detached>(tenzir::catalog, filesystem,
-                                            sketch_cache_bytes, lazy_sketches);
+  auto catalog = self->spawn<caf::detached>(
+    tenzir::catalog, filesystem,
+    partition_paths::from_database_dir(self->state().dir), sketch_cache_bytes,
+    lazy_sketches);
   TENZIR_ASSERT(catalog);
   if (auto err = register_component(self, caf::actor_cast<caf::actor>(catalog),
                                     "catalog");
@@ -231,8 +233,8 @@ auto spawn_importer(node_actor::stateful_pointer<node_state> self,
 }
 
 auto spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
-                        const caf::settings& settings, const index_actor& index)
-  -> disk_monitor_actor {
+                        const caf::settings& settings,
+                        const catalog_actor& catalog) -> disk_monitor_actor {
   auto disk_monitor = [&] {
     const auto* command = caf::get_if<std::string>(
       &settings, "tenzir.start.disk-budget-check-binary");
@@ -283,7 +285,7 @@ auto spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
     }
     const auto db_dir_abs = std::filesystem::absolute(self->state().dir);
     return self->spawn(tenzir::disk_monitor, disk_monitor_config, db_dir_abs,
-                       index);
+                       catalog);
   }();
   if (disk_monitor) {
     if (auto err = register_component(
@@ -303,7 +305,7 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
   const auto index = spawn_index(self, settings, filesystem, catalog);
   [[maybe_unused]] const auto importer = spawn_importer(self, index);
   [[maybe_unused]] const auto disk_monitor
-    = spawn_disk_monitor(self, settings, index);
+    = spawn_disk_monitor(self, settings, catalog);
   // 1. Collect all component_plugins into a name -> plugin* map:
   using component_plugin_map
     = std::unordered_map<std::string, const component_plugin*>;

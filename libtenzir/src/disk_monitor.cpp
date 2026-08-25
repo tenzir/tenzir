@@ -121,7 +121,7 @@ bool disk_monitor_state::purging() const {
 disk_monitor_actor::behavior_type
 disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
              const disk_monitor_config& config,
-             const std::filesystem::path& db_dir, index_actor index) {
+             const std::filesystem::path& db_dir, catalog_actor catalog) {
   TENZIR_TRACE("disk_monitor {} {} {} {}", TENZIR_ARG(self->id()),
                TENZIR_ARG(config.high_water_mark),
                TENZIR_ARG(config.low_water_mark), TENZIR_ARG(db_dir));
@@ -132,7 +132,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
   }
   self->state().config = config;
   self->state().state_directory = db_dir;
-  self->state().index = std::move(index);
+  self->state().catalog = std::move(catalog);
   self->mail(atom::ping_v).send(self);
   return {
     [self](atom::ping) {
@@ -250,8 +250,8 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
             TENZIR_WARN("{} failed to calculate size of {}: {}", *self,
                         self->state().state_directory, size.error());
           } else {
-            TENZIR_VERBOSE("{} erased ids from index; leftover size is {}",
-                           *self, *size);
+            TENZIR_VERBOSE("{} erased partitions; leftover size is {}", *self,
+                           *size);
             if (*size > self->state().config.low_water_mark) {
               // Repeat until we're below the low water mark
               self->mail(atom::erase_v).send(self);
@@ -261,10 +261,10 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       };
       for (size_t i = 0; i < idx; ++i) {
         auto& partition = partitions.at(i);
-        TENZIR_VERBOSE("{} erases partition {} from index", *self,
+        TENZIR_VERBOSE("{} erases partition {} from the catalog", *self,
                        partition.id);
         self->mail(atom::erase_v, partition.id)
-          .request(self->state().index, erase_timeout)
+          .request(self->state().catalog, erase_timeout)
           .then(
             [=](atom::done) {
               continuation();

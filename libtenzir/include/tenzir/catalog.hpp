@@ -16,6 +16,7 @@
 #include "tenzir/expression.hpp"
 #include "tenzir/instrumentation.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/partition_paths.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/taxonomies.hpp"
 #include "tenzir/uuid.hpp"
@@ -131,6 +132,12 @@ public:
   /// Erase this partition from the catalog.
   void erase(const uuid& partition);
 
+  /// Erases this partition from the catalog and deletes its on-disk files.
+  /// The store is located by probing the archive for the known extensions; if
+  /// that fails, the partition itself is loaded so its store header can name
+  /// the file.
+  auto erase_from_disk(const uuid& partition) -> caf::result<atom::done>;
+
   /// Quarantines this partition: moves its store file aside into a
   /// "quarantined" directory, deletes its other on-disk files, and erases it
   /// from the catalog.
@@ -183,8 +190,11 @@ public:
   /// A pointer to the parent actor.
   catalog_actor::pointer self = {};
 
-  /// Used to move/erase on-disk partition files during quarantine.
+  /// Used to move/erase on-disk partition files.
   filesystem_actor filesystem = {};
+
+  /// The on-disk locations of the partition files.
+  partition_paths paths = {};
 
   /// For each type, maps a partition ID to the synopses for that partition.
   // We mainly iterate over the whole map and return a sorted set, for which
@@ -213,14 +223,16 @@ public:
 /// represents a list of candidate partition IDs that may contain the desired
 /// data. The CATALOG may return false positives but never false negatives.
 /// @param self The actor handle.
-/// @param filesystem Used to move/erase on-disk partition files during
+/// @param filesystem Used to move/erase on-disk partition files.
+/// @param paths The on-disk locations of the partition files.
 /// @param sketch_cache_bytes Memory budget for on-demand loading of deferred
 /// Bloom-filter sketches; zero disables on-demand loading.
 /// @param lazy_sketches Whether Bloom-filter sketches are deferred; when set,
 /// merged synopses also have their Bloom filters dropped to keep resident
 /// memory bounded during ongoing ingest.
 auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
-             filesystem_actor filesystem, size_t sketch_cache_bytes = 0,
-             bool lazy_sketches = false) -> catalog_actor::behavior_type;
+             filesystem_actor filesystem, partition_paths paths,
+             size_t sketch_cache_bytes = 0, bool lazy_sketches = false)
+  -> catalog_actor::behavior_type;
 
 } // namespace tenzir

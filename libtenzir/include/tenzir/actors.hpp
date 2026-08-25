@@ -163,8 +163,11 @@ using catalog_actor = typed_actor_fwd<
   auto(atom::get, expression)->caf::result<std::vector<partition_synopsis_pair>>,
   auto(atom::get, std::string)->caf::result<std::vector<table_slice>>,
   auto(atom::get, std::string, expression)->caf::result<std::vector<table_slice>>,
-  // Erase a single partition synopsis.
-  auto(atom::erase, uuid)->caf::result<atom::ok>,
+  // Erase a single partition: remove it from the catalog and delete its
+  // on-disk files (synopsis, dense indexes, and store).
+  auto(atom::erase, uuid)->caf::result<atom::done>,
+  // Erase a set of partitions.
+  auto(atom::erase, std::vector<uuid>)->caf::result<atom::done>,
   // Quarantine a single partition: move its store file aside into a
   // "quarantined" directory (for postmortem inspection), delete its other
   // on-disk files, and erase it from the catalog, all as one operation. The
@@ -209,10 +212,6 @@ using index_actor = typed_actor_fwd<
   auto(atom::subscribe, atom::create, partition_creation_listener_actor,
        send_initial_dbstate)
     ->caf::result<void>,
-  // Erases the given partition from the INDEX.
-  auto(atom::erase, uuid)->caf::result<atom::done>,
-  // Erases the given set of partitions from the INDEX.
-  auto(atom::erase, std::vector<uuid>)->caf::result<atom::done>,
   // Applies the given pipeline (TQL2 AST) to the partition.
   // When keep_original_partition is yes: merges the transformed partitions
   // with the original ones and returns the new partition infos. When
