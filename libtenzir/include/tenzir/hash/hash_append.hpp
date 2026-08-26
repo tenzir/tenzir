@@ -285,8 +285,19 @@ void hash_append(HashAlgorithm& h,
 /// and the digests are added, because addition does not care about order —
 /// word by word rather than through `size_t`, because a digest is not always
 /// a number: xxh3's 128-bit result is a struct, and wider ones are arrays.
+///
+/// This is a fair hash, not an adversary-proof one: word-wise sums can be
+/// steered (Wagner's k-sum), and the per-element states are default-built, so
+/// a keyed algorithm would have no key here. Both draw the same line, which
+/// the assertion spells out: a digest that must resist an adversary needs its
+/// elements in a canonical order instead, and nothing needs that yet.
 template <class HashAlgorithm, class Container>
 void hash_append_unordered(HashAlgorithm& h, const Container& xs) noexcept {
+  static_assert(std::is_default_constructible_v<HashAlgorithm>,
+                "digesting an unordered container sums one digest per element, "
+                "which needs a fresh state each and would not carry a keyed or "
+                "cryptographic algorithm's guarantees anyway; hash a canonical "
+                "order of the elements instead");
   using result_type = std::remove_cvref_t<typename HashAlgorithm::result_type>;
   static_assert(std::is_trivially_copyable_v<result_type>);
   constexpr auto words
