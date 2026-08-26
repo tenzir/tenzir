@@ -1,6 +1,6 @@
 {
-  slices: 2,
+  slices: 9,
   min_rows: 1,
-  max_rows: 65536,
+  max_rows: 8192,
   total_rows: 65537,
 }

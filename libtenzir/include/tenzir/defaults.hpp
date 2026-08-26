@@ -29,7 +29,7 @@ inline constexpr size_t max_recursion = 100;
 namespace import {
 
 /// Maximum size for sources that generate table slices.
-inline constexpr uint64_t table_slice_size = 65'536; // 64 Ki
+inline constexpr uint64_t table_slice_size = 8192; // 8 Ki
 
 /// Maximum number of results.
 inline constexpr size_t max_events = 0;

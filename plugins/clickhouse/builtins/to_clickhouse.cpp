@@ -16,6 +16,7 @@
 #include "tenzir/async/task.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/concept/printable/tenzir/json2.hpp"
+#include "tenzir/defaults.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/operator_plugin.hpp"
@@ -226,7 +227,7 @@ struct ToClickhouseArgs {
   // Internal per-schema batching: rows accumulate per schema and are only sent
   // once one of these thresholds is hit. This coalesces the tiny per-schema
   // slices that heterogeneous input (e.g. OCSF) produces into larger inserts.
-  uint64_t max_batch_rows = 65536;
+  uint64_t max_batch_rows = defaults::import::table_slice_size;
   duration batch_timeout = std::chrono::seconds{1};
   // A single field or list of fields to create as `JSON` columns. Unset when
   // `kind` is null.
