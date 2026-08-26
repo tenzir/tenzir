@@ -1,0 +1,19 @@
+---
+fixtures:
+  - http_request:
+      requests:
+        - path: /services/collector/event
+          body: '{"event":{"message":"one"},"time":"1777019400.125","host":"vpn-01","fields":{"environment":"prod"}}{"event":"two","queue":"typing","receiver":"client-provided"}'
+          headers:
+            Authorization: Splunk test-token
+            X-Splunk-Request-Channel: 00872DC6-AC83-4EDE-8AFE-8413C3825C4C
+          expected_status: 200
+          expected_body: '{"text":"Success","code":0}'
+          stop_on_connection_drop: true
+timeout: 10
+---
+
+accept_splunk env("HTTP_REQUEST_ENDPOINT"),
+  hec_token=secret("test-token", _literal=true)
+head 2
+this = {schema: @name, data: this}

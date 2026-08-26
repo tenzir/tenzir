@@ -1,0 +1,24 @@
+---
+fixtures:
+  - http_request:
+      requests:
+        - path: /services/collector/event
+          body: '{"event":"this payload is larger than thirty-two bytes"}'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 413
+          expected_body: '{"text":"Data payload too large","code":6}'
+        - path: /services/collector/event
+          body: '{"event":"ok"}'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 200
+          expected_body: '{"text":"Success","code":0}'
+          stop_on_connection_drop: true
+timeout: 10
+---
+
+accept_splunk env("HTTP_REQUEST_ENDPOINT"),
+  hec_token=secret("test-token", _literal=true),
+  max_request_size=32
+head 1

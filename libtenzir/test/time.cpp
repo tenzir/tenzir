@@ -225,6 +225,10 @@ TEST("unix epoch time parser") {
   CHECK(ts.time_since_epoch() == 1444040673s);
   CHECK(parsers::time("@1398933902.686337", ts));
   CHECK(ts.time_since_epoch() == double_seconds{1398933902.686337});
+  CHECK(parsers::unix_ts("1777019400.125", ts));
+  CHECK(ts.time_since_epoch() == 1777019400s + 125ms);
+  CHECK(not parsers::unix_ts("9223372036.9", ts));
+  CHECK(not parsers::unix_ts("-9223372036.9", ts));
 }
 
 TEST("now time parser") {

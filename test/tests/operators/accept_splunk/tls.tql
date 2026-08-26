@@ -1,0 +1,24 @@
+---
+fixtures:
+  - http_request:
+      generate_tls_cert: true
+      path: /services/collector/event
+      body: '{"event":"tls"}'
+      headers:
+        Authorization: Splunk test-token
+      tls: true
+      expected_status: 200
+      expected_body: '{"text":"Success","code":0}'
+      stop_on_connection_drop: true
+timeout: 10
+---
+
+let $tls = {
+  certfile: env("HTTP_REQUEST_TLS_CERTFILE"),
+  cacert: env("HTTP_REQUEST_TLS_CAFILE"),
+}
+
+accept_splunk "https://" + env("HTTP_REQUEST_ENDPOINT"),
+  hec_token=secret("test-token", _literal=true),
+  tls=$tls
+head 1

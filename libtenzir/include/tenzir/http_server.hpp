@@ -13,11 +13,14 @@
 // headers everywhere. Only include this from operators that actually run an
 // HTTP server (accept_http, accept_opensearch) and from http_server.cpp.
 
+#include "tenzir/async/task.hpp"
+#include "tenzir/box.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/result.hpp"
 #include "tenzir/tls_options.hpp"
 
+#include <folly/Function.h>
 #include <proxygen/lib/http/coro/HTTPSourceHolder.h>
 #include <proxygen/lib/http/coro/server/HTTPServer.h>
 #include <wangle/ssl/SSLContextConfig.h>
@@ -63,10 +66,30 @@ auto parse_endpoint(std::string_view endpoint, location loc,
   -> Option<server_endpoint>;
 
 auto is_tls_enabled(Option<located<data>> const& tls,
-                    const caf::actor_system_config& cfg) -> bool;
+                    caf::actor_system_config const& cfg) -> bool;
+
+/// Builds the common Proxygen server configuration, including endpoint and
+/// TLS validation.
+auto make_config(std::string_view endpoint, location endpoint_location,
+                 Option<located<data>> const& tls,
+                 caf::actor_system_config const& cfg, diagnostic_handler& dh,
+                 std::string_view argument_name = "endpoint")
+  -> failure_or<proxygen::coro::HTTPServer::Config>;
 
 auto make_response(uint16_t status, const std::string& content_type,
                    std::string body) -> proxygen::coro::HTTPSourceHolder;
+
+/// Invokes a callback once an HTTP response is delivered or canceled.
+auto track_response_delivery(proxygen::coro::HTTPSourceHolder response,
+                             folly::Function<void()> callback)
+  -> proxygen::coro::HTTPSourceHolder;
+
+/// Invokes one callback when the response reaches the kernel write and another
+/// once delivery completes or is canceled.
+auto track_response_delivery(proxygen::coro::HTTPSourceHolder response,
+                             folly::Function<void()> kernel_write_callback,
+                             folly::Function<void()> delivery_callback)
+  -> proxygen::coro::HTTPSourceHolder;
 
 /// RAII wrapper around `proxygen::coro::HTTPServer` that runs the server on a
 /// dedicated IO thread and tears it down on destruction. Unlike upstream's
@@ -98,6 +121,32 @@ private:
 
   proxygen::coro::HTTPServer server_;
   std::thread thread_;
+};
+
+/// Non-blocking owner for a running HTTP server.
+///
+/// Destruction force-stops the server and moves its joining destructor to a
+/// detached thread.
+class Server {
+public:
+  static auto start(proxygen::coro::HTTPServer::Config config,
+                    std::shared_ptr<proxygen::coro::HTTPHandler> handler)
+    -> Task<Result<Box<Server>, std::string>>;
+
+  explicit Server(std::unique_ptr<ScopedServer> server) noexcept;
+  ~Server();
+
+  Server(Server const&) = delete;
+  Server(Server&&) = delete;
+  auto operator=(Server const&) -> Server& = delete;
+  auto operator=(Server&&) -> Server& = delete;
+
+  auto drain() -> void;
+  auto finish() -> void;
+  auto force_stop() -> void;
+
+private:
+  Option<Box<ScopedServer>> server_;
 };
 
 } // namespace tenzir::http_server

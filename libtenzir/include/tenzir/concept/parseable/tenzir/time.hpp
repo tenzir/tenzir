@@ -272,11 +272,32 @@ namespace parsers {
 
 auto const ymdhms = ymdhms_parser{};
 
-/// Parses a fractional seconds-timestamp as UNIX epoch.
-auto const unix_ts = parsers::real->*[](double d) {
-  using std::chrono::duration_cast;
-  return time{duration_cast<tenzir::duration>(double_seconds{d})};
+} // namespace parsers
+
+struct unix_ts_parser : parser_base<unix_ts_parser> {
+  using attribute = time;
+
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+    auto seconds = double{};
+    if (not parsers::real(f, l, seconds)) {
+      return false;
+    }
+    auto parsed = from_unix_timestamp(seconds);
+    if (not parsed) {
+      return false;
+    }
+    if constexpr (not std::is_same_v<Attribute, unused_type>) {
+      x = *parsed;
+    }
+    return true;
+  }
 };
+
+namespace parsers {
+
+/// Parses a fractional-seconds timestamp as a UNIX epoch.
+auto const unix_ts = unix_ts_parser{};
 
 } // namespace parsers
 

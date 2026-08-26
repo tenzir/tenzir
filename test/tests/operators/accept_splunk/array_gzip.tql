@@ -1,0 +1,17 @@
+---
+fixtures:
+  - http_request:
+      path: /services/collector/event/1.0
+      body_base64: H4sIAAAAAAAC/4uuVkotS80rUbKqVspNLS5OTE9VslJKr8osUKrVUUrLTM1JKQbJpeaVAcULivJTlGprYwEXXUnYNgAAAA==
+      headers:
+        Authorization: Splunk test-token
+        Content-Encoding: GZip
+      expected_status: 200
+      expected_body: '{"text":"Success","code":0}'
+      stop_on_connection_drop: true
+timeout: 10
+---
+
+accept_splunk env("HTTP_REQUEST_ENDPOINT"),
+  hec_token=secret("test-token", _literal=true)
+head 1

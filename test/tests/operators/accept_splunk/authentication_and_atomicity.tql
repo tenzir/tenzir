@@ -1,0 +1,33 @@
+---
+fixtures:
+  - http_request:
+      requests:
+        - path: /services/collector/event
+          body: '{"event":"unauthenticated"}'
+          expected_status: 401
+          expected_body: '{"text":"Token is required","code":2}'
+        - path: /services/collector/event
+          body: '{"event":"bad token"}'
+          headers:
+            Authorization: Splunk wrong-token
+          expected_status: 403
+          expected_body: '{"text":"Invalid token","code":4}'
+        - path: /services/collector/event
+          body: '{"event":"must not escape"}{"host":"missing event"}'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 400
+          expected_body: '{"text":"Event field is required","code":12}'
+        - path: /services/collector/event
+          body: '{"event":"accepted"}'
+          headers:
+            Authorization: splunk test-token
+          expected_status: 200
+          expected_body: '{"text":"Success","code":0}'
+          stop_on_connection_drop: true
+timeout: 10
+---
+
+accept_splunk env("HTTP_REQUEST_ENDPOINT"),
+  hec_token=secret("test-token", _literal=true)
+head 1

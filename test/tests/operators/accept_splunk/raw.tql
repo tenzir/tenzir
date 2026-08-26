@@ -1,0 +1,16 @@
+---
+fixtures:
+  - http_request:
+      path: /services/collector/raw/1.0?channel=00872DC6-AC83-4EDE-8AFE-8413C3825C4C&host=vpn-01&source=secure.log&sourcetype=linux_secure&index=main&time=1777019400.25
+      body: "first line\nsecond line\n"
+      headers:
+        Authorization: Splunk test-token
+      expected_status: 200
+      expected_body: '{"text":"Success","code":0}'
+      stop_on_connection_drop: true
+timeout: 10
+---
+
+accept_splunk env("HTTP_REQUEST_ENDPOINT"),
+  hec_token=secret("test-token", _literal=true)
+head 1

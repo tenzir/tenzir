@@ -1,0 +1,11 @@
+{
+  event: {
+    message: "gzip",
+  },
+  fields: {
+    env: "prod",
+  },
+  receiver: {
+    peer_ip: 127.0.0.1,
+  },
+}

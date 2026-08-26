@@ -1,0 +1,6 @@
+error: `https://` endpoint requires `tls=true`
+ --> tests/operators/accept_splunk/error_https_requires_tls.tql:5:15
+  |
+5 | accept_splunk "https://127.0.0.1:8088",
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^
+  |

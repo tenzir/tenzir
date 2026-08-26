@@ -8,7 +8,6 @@
 
 #include "http.hpp"
 
-#include "tenzir/async/blocking_executor.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/diagnostics.hpp"
@@ -17,10 +16,8 @@
 
 #include <folly/io/IOBuf.h>
 #include <proxygen/lib/http/HTTPMessage.h>
-#include <proxygen/lib/http/coro/HTTPByteEvents.h>
 #include <proxygen/lib/http/coro/HTTPCoroSession.h>
 #include <proxygen/lib/http/coro/HTTPFixedSource.h>
-#include <proxygen/lib/http/coro/HTTPSourceFilter.h>
 #include <proxygen/lib/http/coro/HTTPSourceReader.h>
 #include <proxygen/lib/http/coro/server/HTTPServer.h>
 
@@ -117,161 +114,6 @@ auto parse_request_headers(proxygen::HTTPMessage const& request,
     });
   return std::pair{std::move(metadata), content_encoding == "gzip"};
 }
-
-class ResponseCompletion final : public proxygen::coro::HTTPByteEventCallback {
-public:
-  ResponseCompletion(Arc<MessageQueue> queue,
-                     Arc<Semaphore> active_requests_limit,
-                     SemaphorePermit permit)
-    : queue_{std::move(queue)},
-      active_requests_limit_{std::move(active_requests_limit)},
-      permit_{std::move(permit)} {
-  }
-
-  auto onByteEvent(proxygen::coro::HTTPByteEvent event) -> void override {
-    switch (event.type) {
-      case proxygen::coro::HTTPByteEvent::Type::KERNEL_WRITE:
-        kernel_write_finished_ = true;
-        release_admission();
-        if (ack_finished_) {
-          finish();
-        }
-        break;
-      case proxygen::coro::HTTPByteEvent::Type::CUMULATIVE_ACK:
-        release_admission();
-        finish();
-        break;
-      case proxygen::coro::HTTPByteEvent::Type::TRANSPORT_WRITE:
-      case proxygen::coro::HTTPByteEvent::Type::NIC_TX:
-        break;
-    }
-  }
-
-  auto onByteEventCanceled(proxygen::coro::HTTPByteEvent event,
-                           proxygen::coro::HTTPError) -> void override {
-    switch (event.type) {
-      case proxygen::coro::HTTPByteEvent::Type::KERNEL_WRITE:
-        release_admission();
-        finish();
-        break;
-      case proxygen::coro::HTTPByteEvent::Type::CUMULATIVE_ACK:
-        ack_finished_ = true;
-        if (kernel_write_finished_) {
-          finish();
-        }
-        break;
-      case proxygen::coro::HTTPByteEvent::Type::TRANSPORT_WRITE:
-      case proxygen::coro::HTTPByteEvent::Type::NIC_TX:
-        break;
-    }
-  }
-
-  auto finish() -> void {
-    if (finished_) {
-      return;
-    }
-    finished_ = true;
-    release_admission();
-    queue_->force_enqueue(HttpResponseDelivered{});
-    if (numWeakRefCountedPtrs() == 0) {
-      delete this;
-    }
-  }
-
-private:
-  auto release_admission() -> void {
-    permit_.release();
-  }
-
-  auto onWeakRefCountedPtrDestroy() -> void override {
-    if (finished_ and numWeakRefCountedPtrs() == 0) {
-      delete this;
-    }
-  }
-
-  Arc<MessageQueue> queue_;
-  // The permit refers to this semaphore, so keep it alive until completion.
-  Arc<Semaphore> active_requests_limit_;
-  SemaphorePermit permit_;
-  bool kernel_write_finished_ = false;
-  bool ack_finished_ = false;
-  bool finished_ = false;
-};
-
-class DeliveryTrackingSource final : public proxygen::coro::HTTPSourceFilter {
-public:
-  DeliveryTrackingSource(proxygen::coro::HTTPSourceHolder source,
-                         Arc<MessageQueue> queue,
-                         Arc<Semaphore> active_requests_limit,
-                         SemaphorePermit permit)
-    : HTTPSourceFilter{source.release()},
-      completion_{new ResponseCompletion{std::move(queue),
-                                         std::move(active_requests_limit),
-                                         std::move(permit)}} {
-    setHeapAllocated();
-  }
-
-  ~DeliveryTrackingSource() override {
-    finish_without_delivery_event();
-  }
-
-  auto readHeaderEvent()
-    -> folly::coro::Task<proxygen::coro::HTTPHeaderEvent> override {
-    auto event = co_await folly::coro::co_awaitTry(readHeaderEventImpl());
-    auto guard = folly::makeGuard(lifetime(event));
-    if (event.hasException()) {
-      finish_without_delivery_event();
-      co_yield folly::coro::co_error(proxygen::coro::getHTTPError(event));
-    }
-    if (event->eom) {
-      track_delivery(event->byteEventRegistrations);
-    }
-    co_return std::move(*event);
-  }
-
-  auto readBodyEvent(uint32_t max)
-    -> folly::coro::Task<proxygen::coro::HTTPBodyEvent> override {
-    auto event = co_await folly::coro::co_awaitTry(readBodyEventImpl(max));
-    auto guard = folly::makeGuard(lifetime(event));
-    if (event.hasException()) {
-      finish_without_delivery_event();
-      co_yield folly::coro::co_error(proxygen::coro::getHTTPError(event));
-    }
-    if (event->eom) {
-      track_delivery(event->byteEventRegistrations);
-    }
-    co_return std::move(*event);
-  }
-
-  auto stopReading(folly::Optional<const proxygen::coro::HTTPErrorCode> error
-                   = folly::none) noexcept -> void override {
-    finish_without_delivery_event();
-    HTTPSourceFilter::stopReading(error);
-  }
-
-private:
-  auto track_delivery(
-    std::vector<proxygen::coro::HTTPByteEventRegistration>& registrations)
-    -> void {
-    TENZIR_ASSERT(completion_);
-    auto registration = proxygen::coro::HTTPByteEventRegistration{};
-    registration.events
-      = static_cast<uint8_t>(proxygen::coro::HTTPByteEvent::Type::KERNEL_WRITE)
-        | static_cast<uint8_t>(
-          proxygen::coro::HTTPByteEvent::Type::CUMULATIVE_ACK);
-    registration.callback = completion_->getWeakRefCountedPtr();
-    registrations.emplace_back(std::move(registration));
-    completion_ = nullptr;
-  }
-
-  auto finish_without_delivery_event() noexcept -> void {
-    if (auto* completion = std::exchange(completion_, nullptr)) {
-      completion->finish();
-    }
-  }
-
-  ResponseCompletion* completion_;
-};
 
 class RequestHandler final : public proxygen::coro::HTTPHandler {
 public:
@@ -370,9 +212,16 @@ public:
           : http_server::make_response(response.status, response.content_type,
                                        std::move(response.body));
     co_await queue_->enqueue(HttpResponsePending{});
-    co_return new DeliveryTrackingSource{std::move(response_source), queue_,
-                                         active_requests_limit_,
-                                         std::move(*permit)};
+    co_return http_server::track_response_delivery(
+      std::move(response_source),
+      [active_requests_limit = active_requests_limit_,
+       permit = std::move(*permit)]() mutable {
+        TENZIR_UNUSED(active_requests_limit);
+        permit.release();
+      },
+      [queue = queue_]() mutable {
+        queue->force_enqueue(HttpResponseDelivered{});
+      });
   }
 
 private:
@@ -384,38 +233,9 @@ private:
 
 } // namespace
 
-OtlpHttpServer::OtlpHttpServer(
-  std::unique_ptr<http_server::ScopedServer> server) noexcept
-  : server_{std::in_place,
-            Box<http_server::ScopedServer>::from_non_null(std::move(server))} {
-}
-
-OtlpHttpServer::~OtlpHttpServer() {
-  force_stop();
-}
-
-auto OtlpHttpServer::drain() -> void {
-  (*server_)->server().drain();
-}
-
-auto OtlpHttpServer::finish() -> void {
-  if (not server_) {
-    return;
-  }
-  std::thread{[server = std::exchange(server_, None{})] {}}.detach();
-}
-
-auto OtlpHttpServer::force_stop() -> void {
-  if (not server_) {
-    return;
-  }
-  (*server_)->server().forceStop();
-  finish();
-}
-
 auto start_http_server(AcceptOtlpArgs const& args, Arc<MessageQueue> queue,
                        Arc<Semaphore> active_requests_limit, OpCtx& ctx)
-  -> Task<Option<Box<OtlpHttpServer>>> {
+  -> Task<Option<Box<http_server::Server>>> {
   auto const& cfg = ctx.actor_system().config();
   auto endpoint = std::string{};
   auto requests = std::vector<secret_request>{
@@ -423,61 +243,18 @@ auto start_http_server(AcceptOtlpArgs const& args, Arc<MessageQueue> queue,
   if ((co_await ctx.resolve_secrets(std::move(requests))).is_error()) {
     co_return None{};
   }
-  auto parsed
-    = http_server::parse_endpoint(endpoint, args.endpoint.source, ctx.dh());
-  if (not parsed) {
+  auto config = http_server::make_config(endpoint, args.endpoint.source,
+                                         args.tls, cfg, ctx.dh());
+  if (not config) {
     co_return None{};
   }
-  auto const tls_enabled = http_server::is_tls_enabled(args.tls, cfg);
-  if (parsed->scheme_tls) {
-    if (*parsed->scheme_tls and not tls_enabled) {
-      diagnostic::error("`https://` endpoint requires `tls=true`")
-        .primary(args.endpoint)
-        .emit(ctx);
-      co_return None{};
-    }
-    if (not *parsed->scheme_tls and tls_enabled) {
-      diagnostic::error("`http://` endpoint requires `tls=false`")
-        .primary(args.endpoint)
-        .emit(ctx);
-      co_return None{};
-    }
-  }
-  auto config = proxygen::coro::HTTPServer::Config{};
-  try {
-    config.socketConfig.bindAddress.setFromHostPort(parsed->host, parsed->port);
-  } catch (std::exception const& ex) {
-    diagnostic::error("failed to configure OTLP endpoint: {}", ex.what())
-      .primary(args.endpoint)
-      .emit(ctx);
-    co_return None{};
-  }
-  config.numIOThreads = 1;
-  if (tls_enabled) {
-    auto options = tls_options::from_optional(args.tls, {.tls_default = false,
-                                                         .is_server = true});
-    auto tls = options.resolve(cfg, ctx);
-    if (not tls) {
-      co_return None{};
-    }
-    auto tls_config
-      = http_server::make_ssl_context_config(*tls, args.endpoint.source, ctx);
-    if (not tls_config) {
-      co_return None{};
-    }
-    config.socketConfig.sslContextConfigs.emplace_back(std::move(*tls_config));
-  }
-  config.shutdownOnSignals = {};
   auto request_id_gen = Arc<Atomic<uint64_t>>{std::in_place, uint64_t{0}};
   auto handler
     = std::make_shared<RequestHandler>(args, std::move(queue),
                                        std::move(request_id_gen),
                                        std::move(active_requests_limit));
-  auto server = co_await spawn_blocking(
-    [config = std::move(config), handler = std::move(handler)]() mutable {
-      return http_server::ScopedServer::start(std::move(config),
-                                              std::move(handler));
-    });
+  auto server = co_await http_server::Server::start(std::move(*config),
+                                                    std::move(handler));
   if (server.is_err()) {
     diagnostic::error("failed to start OTLP/HTTP server: {}",
                       std::move(server).unwrap_err())
@@ -485,7 +262,7 @@ auto start_http_server(AcceptOtlpArgs const& args, Arc<MessageQueue> queue,
       .emit(ctx);
     co_return None{};
   }
-  co_return Box<OtlpHttpServer>{std::in_place, std::move(server).unwrap()};
+  co_return std::move(server).unwrap();
 }
 
 } // namespace tenzir::plugins::accept_otlp::detail

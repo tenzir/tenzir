@@ -1,0 +1,6 @@
+{
+  event: "ok",
+  receiver: {
+    peer_ip: 127.0.0.1,
+  },
+}

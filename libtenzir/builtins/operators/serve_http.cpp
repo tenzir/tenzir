@@ -337,8 +337,8 @@ public:
     }
     auto request_handler
       = std::make_shared<RequestHandler>(message_queue_, active_connections_);
-    auto server = http_server::ScopedServer::start(std::move(config.unwrap()),
-                                                   std::move(request_handler));
+    auto server = co_await http_server::Server::start(
+      std::move(config.unwrap()), std::move(request_handler));
     if (server.is_err()) {
       diagnostic::error("failed to start HTTP server: {}",
                         std::move(server).unwrap_err())
@@ -347,8 +347,7 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    server_ = Arc<http_server::ScopedServer>::from_non_null(
-      std::move(server).unwrap());
+    server_ = std::move(server).unwrap();
     bytes_counter_
       = ctx.make_counter(MetricsLabel{"operator", "serve_http"},
                          MetricsDirection::write, MetricsVisibility::external_,
@@ -501,7 +500,7 @@ private:
     }
     lifecycle_ = Lifecycle::draining;
     if (server_) {
-      (*server_)->server().drain();
+      (*server_)->drain();
     }
   }
 
@@ -541,9 +540,8 @@ private:
     }
     if (clients_.empty() and message_queue_->empty()) {
       if (server_) {
-        (*server_)->server().forceStop();
-        // move server to a new thread, where it can call thread join
-        std::thread([srv = std::exchange(server_, None{})] {}).detach();
+        (*server_)->force_stop();
+        server_ = None{};
       }
       lifecycle_ = Lifecycle::done;
     }
@@ -583,55 +581,14 @@ private:
 
   auto make_config(OpCtx& ctx) const
     -> Task<Option<proxygen::coro::HTTPServer::Config>> {
-    auto parsed = http_server::parse_endpoint(args_.endpoint.inner,
-                                              args_.endpoint.source, ctx.dh());
-    if (not parsed) {
+    auto config
+      = http_server::make_config(args_.endpoint.inner, args_.endpoint.source,
+                                 args_.tls, ctx.actor_system().config(),
+                                 ctx.dh());
+    if (not config) {
       co_return None{};
     }
-    auto const& cfg = ctx.actor_system().config();
-    auto tls_enabled = http_server::is_tls_enabled(args_.tls, cfg);
-    if (parsed->scheme_tls) {
-      if (*parsed->scheme_tls and not tls_enabled) {
-        diagnostic::error("`https://` endpoint requires `tls=true`")
-          .primary(args_.endpoint)
-          .emit(ctx);
-        co_return None{};
-      }
-      if (not *parsed->scheme_tls and tls_enabled) {
-        diagnostic::error("`http://` endpoint requires `tls=false`")
-          .primary(args_.endpoint)
-          .emit(ctx);
-        co_return None{};
-      }
-    }
-    auto config = proxygen::coro::HTTPServer::Config{};
-    try {
-      config.socketConfig.bindAddress.setFromHostPort(parsed->host,
-                                                      parsed->port);
-    } catch (std::exception const& ex) {
-      diagnostic::error("failed to configure HTTP endpoint: {}", ex.what())
-        .primary(args_.endpoint)
-        .emit(ctx);
-      co_return None{};
-    }
-    config.numIOThreads = 1;
-    if (tls_enabled) {
-      auto tls_opts = tls_options::from_optional(
-        args_.tls, {.tls_default = false, .is_server = true});
-      auto tls = tls_opts.resolve(cfg, ctx.dh());
-      if (not tls) {
-        co_return None{};
-      }
-      auto tls_config = http_server::make_ssl_context_config(
-        *tls, args_.endpoint.source, ctx.dh());
-      if (not tls_config) {
-        co_return None{};
-      }
-      config.socketConfig.sslContextConfigs.emplace_back(
-        std::move(*tls_config));
-    }
-    config.shutdownOnSignals = {};
-    co_return config;
+    co_return std::move(*config);
   }
 
   // --- args ---
@@ -639,7 +596,7 @@ private:
   // --- transient ---
   data sub_key_ = data{int64_t{0}};
   mutable Arc<MessageQueue> message_queue_{std::in_place, 64};
-  Option<Arc<http_server::ScopedServer>> server_;
+  Option<Box<http_server::Server>> server_;
   Arc<Semaphore> active_connections_;
   std::vector<Arc<Client>> clients_;
   MetricsCounter bytes_counter_;

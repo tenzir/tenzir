@@ -8,10 +8,14 @@
 
 #include "tenzir/http_server.hpp"
 
+#include "tenzir/async/blocking_executor.hpp"
 #include "tenzir/concept/parseable/tenzir/endpoint.hpp"
 
+#include <folly/ScopeGuard.h>
 #include <folly/synchronization/Baton.h>
+#include <proxygen/lib/http/coro/HTTPByteEvents.h>
 #include <proxygen/lib/http/coro/HTTPFixedSource.h>
+#include <proxygen/lib/http/coro/HTTPSourceFilter.h>
 #include <proxygen/lib/http/coro/server/HTTPServer.h>
 #include <proxygen/lib/utils/URL.h>
 
@@ -35,6 +39,157 @@ auto parse_server_folly_tls_version(std::string_view input)
   }
   return None{};
 }
+
+class ResponseCompletion final : public proxygen::coro::HTTPByteEventCallback {
+public:
+  ResponseCompletion(folly::Function<void()> kernel_write_callback,
+                     folly::Function<void()> delivery_callback)
+    : kernel_write_callback_{std::move(kernel_write_callback)},
+      delivery_callback_{std::move(delivery_callback)} {
+  }
+
+  auto onByteEvent(proxygen::coro::HTTPByteEvent event) -> void override {
+    switch (event.type) {
+      case proxygen::coro::HTTPByteEvent::Type::KERNEL_WRITE:
+        finish_kernel_write();
+        if (ack_finished_) {
+          finish();
+        }
+        break;
+      case proxygen::coro::HTTPByteEvent::Type::CUMULATIVE_ACK:
+        finish();
+        break;
+      case proxygen::coro::HTTPByteEvent::Type::TRANSPORT_WRITE:
+      case proxygen::coro::HTTPByteEvent::Type::NIC_TX:
+        break;
+    }
+  }
+
+  auto onByteEventCanceled(proxygen::coro::HTTPByteEvent event,
+                           proxygen::coro::HTTPError) -> void override {
+    switch (event.type) {
+      case proxygen::coro::HTTPByteEvent::Type::KERNEL_WRITE:
+        finish_kernel_write();
+        finish();
+        break;
+      case proxygen::coro::HTTPByteEvent::Type::CUMULATIVE_ACK:
+        ack_finished_ = true;
+        if (kernel_write_finished_) {
+          finish();
+        }
+        break;
+      case proxygen::coro::HTTPByteEvent::Type::TRANSPORT_WRITE:
+      case proxygen::coro::HTTPByteEvent::Type::NIC_TX:
+        break;
+    }
+  }
+
+  auto finish() -> void {
+    if (finished_) {
+      return;
+    }
+    finish_kernel_write();
+    finished_ = true;
+    delivery_callback_();
+    if (numWeakRefCountedPtrs() == 0) {
+      delete this;
+    }
+  }
+
+private:
+  auto onWeakRefCountedPtrDestroy() -> void override {
+    if (finished_ and numWeakRefCountedPtrs() == 0) {
+      delete this;
+    }
+  }
+
+  auto finish_kernel_write() -> void {
+    if (kernel_write_finished_) {
+      return;
+    }
+    kernel_write_finished_ = true;
+    kernel_write_callback_();
+  }
+
+  folly::Function<void()> kernel_write_callback_;
+  folly::Function<void()> delivery_callback_;
+  bool kernel_write_finished_ = false;
+  bool ack_finished_ = false;
+  bool finished_ = false;
+};
+
+class DeliveryTrackingSource final : public proxygen::coro::HTTPSourceFilter {
+public:
+  DeliveryTrackingSource(proxygen::coro::HTTPSourceHolder source,
+                         folly::Function<void()> kernel_write_callback,
+                         folly::Function<void()> delivery_callback)
+    : HTTPSourceFilter{source.release()},
+      completion_{new ResponseCompletion{std::move(kernel_write_callback),
+                                         std::move(delivery_callback)}} {
+    setHeapAllocated();
+  }
+
+  ~DeliveryTrackingSource() override {
+    finish_without_delivery_event();
+  }
+
+  auto readHeaderEvent()
+    -> folly::coro::Task<proxygen::coro::HTTPHeaderEvent> override {
+    auto event = co_await folly::coro::co_awaitTry(readHeaderEventImpl());
+    auto guard = folly::makeGuard(lifetime(event));
+    if (event.hasException()) {
+      finish_without_delivery_event();
+      co_yield folly::coro::co_error(proxygen::coro::getHTTPError(event));
+    }
+    if (event->eom) {
+      track_delivery(event->byteEventRegistrations);
+    }
+    co_return std::move(*event);
+  }
+
+  auto readBodyEvent(uint32_t max)
+    -> folly::coro::Task<proxygen::coro::HTTPBodyEvent> override {
+    auto event = co_await folly::coro::co_awaitTry(readBodyEventImpl(max));
+    auto guard = folly::makeGuard(lifetime(event));
+    if (event.hasException()) {
+      finish_without_delivery_event();
+      co_yield folly::coro::co_error(proxygen::coro::getHTTPError(event));
+    }
+    if (event->eom) {
+      track_delivery(event->byteEventRegistrations);
+    }
+    co_return std::move(*event);
+  }
+
+  auto stopReading(folly::Optional<const proxygen::coro::HTTPErrorCode> error
+                   = folly::none) noexcept -> void override {
+    finish_without_delivery_event();
+    HTTPSourceFilter::stopReading(error);
+  }
+
+private:
+  auto track_delivery(
+    std::vector<proxygen::coro::HTTPByteEventRegistration>& registrations)
+    -> void {
+    TENZIR_ASSERT(completion_);
+    auto registration = proxygen::coro::HTTPByteEventRegistration{};
+    registration.events
+      = static_cast<uint8_t>(proxygen::coro::HTTPByteEvent::Type::KERNEL_WRITE)
+        | static_cast<uint8_t>(
+          proxygen::coro::HTTPByteEvent::Type::CUMULATIVE_ACK);
+    registration.callback = completion_->getWeakRefCountedPtr();
+    registrations.emplace_back(std::move(registration));
+    completion_ = nullptr;
+  }
+
+  auto finish_without_delivery_event() noexcept -> void {
+    if (auto* completion = std::exchange(completion_, nullptr)) {
+      completion->finish();
+    }
+  }
+
+  ResponseCompletion* completion_;
+};
 
 } // namespace
 
@@ -153,7 +308,7 @@ auto parse_endpoint(std::string_view endpoint, location loc,
 }
 
 auto is_tls_enabled(Option<located<data>> const& tls,
-                    const caf::actor_system_config& /*cfg*/) -> bool {
+                    caf::actor_system_config const& /*cfg*/) -> bool {
   if (not tls) {
     return false;
   }
@@ -162,6 +317,57 @@ auto is_tls_enabled(Option<located<data>> const& tls,
   auto tls_opts = tls_options::from_optional(tls, {.tls_default = false,
                                                    .is_server = true});
   return tls_opts.get_tls().inner;
+}
+
+auto make_config(std::string_view endpoint, location endpoint_location,
+                 Option<located<data>> const& tls,
+                 caf::actor_system_config const& cfg, diagnostic_handler& dh,
+                 std::string_view argument_name)
+  -> failure_or<proxygen::coro::HTTPServer::Config> {
+  auto parsed = parse_endpoint(endpoint, endpoint_location, dh, argument_name);
+  if (not parsed) {
+    return failure::promise();
+  }
+  auto tls_enabled = is_tls_enabled(tls, cfg);
+  if (parsed->scheme_tls) {
+    if (*parsed->scheme_tls and not tls_enabled) {
+      diagnostic::error("`https://` endpoint requires `tls=true`")
+        .primary(endpoint_location)
+        .emit(dh);
+      return failure::promise();
+    }
+    if (not *parsed->scheme_tls and tls_enabled) {
+      diagnostic::error("`http://` endpoint requires `tls=false`")
+        .primary(endpoint_location)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
+  auto config = proxygen::coro::HTTPServer::Config{};
+  try {
+    config.socketConfig.bindAddress.setFromHostPort(parsed->host, parsed->port);
+  } catch (std::exception const& ex) {
+    diagnostic::error("failed to configure HTTP endpoint: {}", ex.what())
+      .primary(endpoint_location)
+      .emit(dh);
+    return failure::promise();
+  }
+  config.numIOThreads = 1;
+  if (tls_enabled) {
+    auto options = tls_options::from_optional(tls, {.tls_default = false,
+                                                    .is_server = true});
+    auto resolved = options.resolve(cfg, dh);
+    if (not resolved) {
+      return failure::promise();
+    }
+    auto tls_config = make_ssl_context_config(*resolved, endpoint_location, dh);
+    if (not tls_config) {
+      return failure::promise();
+    }
+    config.socketConfig.sslContextConfigs.emplace_back(std::move(*tls_config));
+  }
+  config.shutdownOnSignals = {};
+  return config;
 }
 
 auto make_response(uint16_t status, const std::string& content_type,
@@ -173,6 +379,22 @@ auto make_response(uint16_t status, const std::string& content_type,
                                    content_type);
   }
   return proxygen::coro::HTTPSourceHolder{source};
+}
+
+auto track_response_delivery(proxygen::coro::HTTPSourceHolder response,
+                             folly::Function<void()> callback)
+  -> proxygen::coro::HTTPSourceHolder {
+  return track_response_delivery(
+    std::move(response), [] {}, std::move(callback));
+}
+
+auto track_response_delivery(proxygen::coro::HTTPSourceHolder response,
+                             folly::Function<void()> kernel_write_callback,
+                             folly::Function<void()> delivery_callback)
+  -> proxygen::coro::HTTPSourceHolder {
+  return proxygen::coro::HTTPSourceHolder{new DeliveryTrackingSource{
+    std::move(response), std::move(kernel_write_callback),
+    std::move(delivery_callback)}};
 }
 
 ScopedServer::ScopedServer(proxygen::coro::HTTPServer::Config config,
@@ -226,6 +448,47 @@ ScopedServer::~ScopedServer() {
   server_.drain();
   server_.forceStop();
   thread_.join();
+}
+
+Server::Server(std::unique_ptr<ScopedServer> server) noexcept
+  : server_{std::in_place,
+            Box<ScopedServer>::from_non_null(std::move(server))} {
+}
+
+Server::~Server() {
+  force_stop();
+}
+
+auto Server::start(proxygen::coro::HTTPServer::Config config,
+                   std::shared_ptr<proxygen::coro::HTTPHandler> handler)
+  -> Task<Result<Box<Server>, std::string>> {
+  auto result = co_await spawn_blocking(
+    [config = std::move(config), handler = std::move(handler)]() mutable {
+      return ScopedServer::start(std::move(config), std::move(handler));
+    });
+  if (result.is_err()) {
+    co_return Err{std::move(result).unwrap_err()};
+  }
+  co_return Box<Server>{std::in_place, std::move(result).unwrap()};
+}
+
+auto Server::drain() -> void {
+  if (server_) {
+    (*server_)->server().drain();
+  }
+}
+
+auto Server::finish() -> void {
+  if (server_) {
+    std::thread{[server = std::exchange(server_, None{})] {}}.detach();
+  }
+}
+
+auto Server::force_stop() -> void {
+  if (server_) {
+    (*server_)->server().forceStop();
+    finish();
+  }
 }
 
 } // namespace tenzir::http_server

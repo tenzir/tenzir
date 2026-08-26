@@ -1,0 +1,15 @@
+warning: failed to decompress: IOError: zlib inflate failed: incorrect header check
+  = note: rejecting compressed body
+
+warning: rejected incomplete gzip request
+  --> tests/operators/accept_splunk/corrupt_gzip.tql:29:15
+   |
+29 | accept_splunk env("HTTP_REQUEST_ENDPOINT"),
+   |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+{
+  event: "accepted",
+  receiver: {
+    peer_ip: 127.0.0.1,
+  },
+}

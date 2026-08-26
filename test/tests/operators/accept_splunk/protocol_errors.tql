@@ -1,0 +1,76 @@
+---
+fixtures:
+  - http_request:
+      requests:
+        - method: GET
+          path: /services/collector/health/1.0
+          body: ''
+          expected_status: 200
+          expected_body: '{"text":"HEC is healthy","code":17}'
+        - path: /services/collector/ack
+          body: '{}'
+          expected_status: 400
+          expected_body: '{"text":"ACK is disabled","code":14}'
+        - path: /services/collector/raw
+          body: 'raw data'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 400
+          expected_body: '{"text":"Data channel is missing","code":10}'
+        - path: /services/collector/event
+          body: '{"event":"invalid channel"}'
+          headers:
+            Authorization: Splunk test-token
+            X-Splunk-Request-Channel: not-a-uuid
+          expected_status: 400
+          expected_body: '{"text":"Invalid data channel","code":11}'
+        - path: /services/collector/event
+          body: '{"event":"bad fields","fields":{"answer":42}}'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 400
+          expected_body: '{"text":"Error in handling indexed fields","code":15}'
+        - path: /services/collector/event
+          body: '{"event":"unsupported encoding"}'
+          headers:
+            Authorization: Splunk test-token
+            Content-Encoding: br
+          expected_status: 415
+          expected_body: '{"text":"Invalid data format","code":6}'
+        - path: /services/collector/event
+          body: '{"event":"invalid time","time":"tomorrow"}'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 400
+          expected_body: '{"text":"Invalid data format","code":6}'
+        - path: /services/collector/event
+          body: '{"event":"out-of-range time","time":1e20}'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 400
+          expected_body: '{"text":"Invalid data format","code":6}'
+        - path: /services/collector/event
+          body: '{"event":"fraction beyond time range","time":9223372036.9}'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 400
+          expected_body: '{"text":"Invalid data format","code":6}'
+        - path: /services/collector/event
+          body: '{"event":42}'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 400
+          expected_body: '{"text":"Invalid data format","code":6}'
+        - path: /services/collector/event
+          body: '{"event":"accepted"}'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 200
+          expected_body: '{"text":"Success","code":0}'
+          stop_on_connection_drop: true
+timeout: 10
+---
+
+accept_splunk env("HTTP_REQUEST_ENDPOINT"),
+  hec_token=secret("test-token", _literal=true)
+head 1

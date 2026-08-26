@@ -1,0 +1,12 @@
+{
+  raw: b"first line\nsecond line\n",
+  host: "vpn-01",
+  source: "secure.log",
+  sourcetype: "linux_secure",
+  index: "main",
+  time: 2026-04-24T08:30:00.250Z,
+  receiver: {
+    peer_ip: 127.0.0.1,
+    channel: "00872DC6-AC83-4EDE-8AFE-8413C3825C4C",
+  },
+}

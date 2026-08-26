@@ -1,0 +1,25 @@
+{
+  schema: "splunk.hec.event",
+  data: {
+    event: {
+      message: "one",
+    },
+    time: 2026-04-24T08:30:00.125Z,
+    host: "vpn-01",
+    fields: {
+      environment: "prod",
+    },
+    receiver: {
+      peer_ip: 127.0.0.1,
+      channel: "00872DC6-AC83-4EDE-8AFE-8413C3825C4C",
+    },
+  },
+}
+{
+  schema: "splunk.hec.event",
+  data: {
+    event: "two",
+    receiver: "client-provided",
+    queue: "typing",
+  },
+}

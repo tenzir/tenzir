@@ -675,7 +675,7 @@ auto decompress_chunk_impl(arrow::util::Decompressor& decompressor,
     if (not result.ok()) {
       diagnostic::warning("failed to decompress: {}",
                           result.status().ToString())
-        .note("emitting compressed body")
+        .note("rejecting compressed body")
         .emit(dh);
       return Err{(uint16_t)400}; // bad request
     }
@@ -701,7 +701,7 @@ auto decompress_chunk_impl(arrow::util::Decompressor& decompressor,
       if (auto reset = decompressor.Reset(); not reset.ok()) {
         diagnostic::warning("failed to reset decompressor: {}",
                             reset.ToString())
-          .note("emitting compressed body")
+          .note("rejecting compressed body")
           .emit(dh);
         return Err{(uint16_t)400}; // bad request
       }

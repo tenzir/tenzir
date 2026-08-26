@@ -10,6 +10,8 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/option.hpp"
+
 #include <caf/timespan.hpp>
 #include <caf/timestamp.hpp>
 
@@ -36,6 +38,12 @@ using sys_seconds = sys_time<std::chrono::seconds>;
 
 /// A helper type to represent fractional time stamps in type `double`.
 using double_seconds = std::chrono::duration<double, std::ratio<1>>;
+
+/// Converts fractional seconds since the UNIX epoch to a timestamp.
+///
+/// Returns `None` when the value is not finite or outside the representable
+/// timestamp range.
+auto from_unix_timestamp(double seconds) -> Option<time>;
 
 bool convert(duration dur, double& d);
 bool convert(duration dur, data& d);

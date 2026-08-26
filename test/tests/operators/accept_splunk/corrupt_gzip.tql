@@ -1,0 +1,31 @@
+---
+fixtures:
+  - http_request:
+      requests:
+        - path: /services/collector/event
+          body_base64: bm90LWd6aXA=
+          headers:
+            Authorization: Splunk test-token
+            Content-Encoding: gzip
+          expected_status: 400
+          expected_body: '{"text":"Invalid data format","code":6}'
+        - path: /services/collector/event
+          body_base64: H4sIAAAAAAAC/6tWSi1LzStRslIqKSrNS04sSU1RqgUA
+          headers:
+            Authorization: Splunk test-token
+            Content-Encoding: gzip
+          expected_status: 400
+          expected_body: '{"text":"Invalid data format","code":6}'
+        - path: /services/collector/event
+          body: '{"event":"accepted"}'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 200
+          expected_body: '{"text":"Success","code":0}'
+          stop_on_connection_drop: true
+timeout: 10
+---
+
+accept_splunk env("HTTP_REQUEST_ENDPOINT"),
+  hec_token=secret("test-token", _literal=true)
+head 1

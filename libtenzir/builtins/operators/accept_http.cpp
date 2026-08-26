@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/arc.hpp"
+#include "tenzir/async/bounded_queue.hpp"
 #include "tenzir/async/mutex.hpp"
 #include "tenzir/async/oneshot.hpp"
 #include "tenzir/async/semaphore.hpp"
@@ -27,7 +28,6 @@
 #include "tenzir/tls_options.hpp"
 #include "tenzir/variant.hpp"
 
-#include <folly/coro/BoundedQueue.h>
 #include <folly/io/IOBuf.h>
 #include <folly/io/async/SSLContext.h>
 #include <proxygen/lib/http/HTTPMessage.h>
@@ -106,7 +106,7 @@ struct RequestFinished {
 struct Noop {};
 
 using Message = variant<Noop, RequestStarted, RequestBody, RequestFinished>;
-using MessageQueue = folly::coro::BoundedQueue<Message>;
+using MessageQueue = BoundedQueue<Message>;
 
 auto make_request_metadata(proxygen::HTTPMessage const& request)
   -> RequestMetadata {
@@ -200,7 +200,10 @@ public:
   auto handleRequest(folly::EventBase*, proxygen::coro::HTTPSessionContextPtr,
                      proxygen::coro::HTTPSourceHolder request_source)
     -> folly::coro::Task<proxygen::coro::HTTPSourceHolder> override {
-    auto permit = co_await active_connections_->acquire();
+    auto permit = active_connections_->try_acquire();
+    if (not permit) {
+      co_return proxygen::coro::HTTPFixedSource::makeFixedResponse(503);
+    }
     auto request_id = request_id_gen_->fetch_add(1, std::memory_order_relaxed);
     std::string path;
     auto bytes_received = size_t{};
@@ -274,13 +277,22 @@ public:
     // queue or returning the response, because proxygen writes the
     // response on this coroutine's executor.
     co_await folly::coro::co_reschedule_on_current_executor;
-    co_await queue_->enqueue(Noop{});
+    auto response = proxygen::coro::HTTPSourceHolder{};
     if (res_status != 200) {
-      co_return proxygen::coro::HTTPFixedSource::makeFixedResponse(res_status);
+      response = proxygen::coro::HTTPFixedSource::makeFixedResponse(res_status);
+    } else {
+      auto configured = get_response_for_path(args_, path);
+      response = http_server::make_response(
+        configured.status, configured.content_type, configured.body);
     }
-    auto response = get_response_for_path(args_, path);
-    co_return http_server::make_response(response.status, response.content_type,
-                                         response.body);
+    co_return http_server::track_response_delivery(
+      std::move(response),
+      [queue = queue_, active_connections = active_connections_,
+       permit = std::move(*permit)]() mutable {
+        TENZIR_UNUSED(active_connections);
+        permit.release();
+        queue->force_enqueue(Noop{});
+      });
   }
 
 private:
@@ -297,6 +309,14 @@ public:
       active_connections_{std::in_place, args_.get_max_connections()} {
   }
 
+  ~AcceptHttp() noexcept override {
+    force_stop();
+  }
+  AcceptHttp(AcceptHttp const&) = delete;
+  AcceptHttp(AcceptHttp&&) noexcept = default;
+  auto operator=(AcceptHttp const&) -> AcceptHttp& = delete;
+  auto operator=(AcceptHttp&&) -> AcceptHttp& = delete;
+
   auto start(OpCtx& ctx) -> Task<void> override {
     auto config = co_await make_config(ctx);
     if (not config) {
@@ -306,8 +326,8 @@ public:
     auto request_id_gen = Arc<Atomic<uint64_t>>{std::in_place, uint64_t{0}};
     auto request_handler = std::make_shared<RequestHandler>(
       args_, message_queue_, request_id_gen, active_connections_);
-    auto server = http_server::ScopedServer::start(std::move(config.unwrap()),
-                                                   std::move(request_handler));
+    auto server = co_await http_server::Server::start(
+      std::move(config.unwrap()), std::move(request_handler));
     if (server.is_err()) {
       diagnostic::error("failed to start HTTP server: {}",
                         std::move(server).unwrap_err())
@@ -316,8 +336,7 @@ public:
       lifecycle_ = Lifecycle::done;
       co_return;
     }
-    server_ = Arc<http_server::ScopedServer>::from_non_null(
-      std::move(server).unwrap());
+    server_ = std::move(server).unwrap();
     // Forceful cancellation still bypasses the graceful drain path.
     ctx.spawn_task([this]() -> Task<void> {
       co_await catch_cancellation(wait_forever());
@@ -473,19 +492,18 @@ public:
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
-    TENZIR_UNUSED(push, ctx);
+    TENZIR_UNUSED(push);
     if (lifecycle_ == Lifecycle::done) {
       co_return FinalizeBehavior::done;
     }
-    begin_draining();
+    begin_draining(ctx);
     maybe_finish_draining();
     co_return lifecycle_ == Lifecycle::done ? FinalizeBehavior::done
                                             : FinalizeBehavior::continue_;
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(ctx);
-    begin_draining();
+    begin_draining(ctx);
     maybe_finish_draining();
     co_return;
   }
@@ -527,20 +545,24 @@ private:
     lifecycle_ = Lifecycle::done;
     drain_deadline_ = None{};
     if (server_) {
-      (*server_)->server().forceStop();
-      // move server to a new thread, where it can call thread join
-      std::thread([srv = std::exchange(server_, None{})] {}).detach();
+      (*server_)->force_stop();
+      server_ = None{};
     }
   }
 
-  auto begin_draining() -> void {
+  auto begin_draining(OpCtx& ctx) -> void {
     if (lifecycle_ != Lifecycle::running) {
       return;
     }
     lifecycle_ = Lifecycle::draining;
     drain_deadline_ = std::chrono::steady_clock::now() + drain_timeout;
+    ctx.spawn_task([queue = message_queue_,
+                    deadline = *drain_deadline_]() mutable -> Task<void> {
+      co_await sleep_until(deadline);
+      queue->force_enqueue(Noop{});
+    });
     if (server_) {
-      (*server_)->server().drain();
+      (*server_)->drain();
     }
   }
 
@@ -559,82 +581,41 @@ private:
     // request in flight, so a full set of available permits is a sufficient
     // signal that all accepted work has drained.
     if (active_connections_->available_permits()
-        != detail::narrow<size_t>(args_.get_max_connections())) {
+          != detail::narrow<size_t>(args_.get_max_connections())
+        or not message_queue_->empty()) {
       return;
     }
     drain_deadline_ = None{};
     if (server_) {
-      std::thread([srv = std::exchange(server_, None{})] {}).detach();
+      (*server_)->finish();
+      server_ = None{};
     }
     lifecycle_ = Lifecycle::done;
   }
 
   auto make_config(OpCtx& ctx) const
     -> Task<Option<proxygen::coro::HTTPServer::Config>> {
-    auto const& cfg = ctx.actor_system().config();
     auto resolved_endpoint = std::string{};
-    auto requests = std::vector<secret_request>{};
-    requests.emplace_back(make_secret_request("endpoint", args_.endpoint,
-                                              resolved_endpoint, ctx.dh()));
-    if (auto result = co_await ctx.resolve_secrets(std::move(requests));
-        result.is_error()) {
+    auto requests = std::vector<secret_request>{make_secret_request(
+      "endpoint", args_.endpoint, resolved_endpoint, ctx.dh())};
+    if ((co_await ctx.resolve_secrets(std::move(requests))).is_error()) {
       co_return None{};
     }
-    auto parsed = http_server::parse_endpoint(resolved_endpoint,
-                                              args_.endpoint.source, ctx.dh());
-    if (not parsed) {
+    auto config
+      = http_server::make_config(resolved_endpoint, args_.endpoint.source,
+                                 args_.tls, ctx.actor_system().config(),
+                                 ctx.dh());
+    if (not config) {
       co_return None{};
     }
-    auto tls_enabled = http_server::is_tls_enabled(args_.tls, cfg);
-    if (parsed->scheme_tls) {
-      if (*parsed->scheme_tls and not tls_enabled) {
-        diagnostic::error("`https://` endpoint requires `tls=true`")
-          .primary(args_.endpoint)
-          .emit(ctx);
-        co_return None{};
-      }
-      if (not *parsed->scheme_tls and tls_enabled) {
-        diagnostic::error("`http://` endpoint requires `tls=false`")
-          .primary(args_.endpoint)
-          .emit(ctx);
-        co_return None{};
-      }
-    }
-    auto config = proxygen::coro::HTTPServer::Config{};
-    try {
-      config.socketConfig.bindAddress.setFromHostPort(parsed->host,
-                                                      parsed->port);
-    } catch (std::exception const& ex) {
-      diagnostic::error("failed to configure HTTP endpoint: {}", ex.what())
-        .primary(args_.endpoint)
-        .emit(ctx);
-      co_return None{};
-    }
-    config.numIOThreads = 1;
-    if (tls_enabled) {
-      auto tls_opts = tls_options::from_optional(
-        args_.tls, {.tls_default = false, .is_server = true});
-      auto tls = tls_opts.resolve(cfg, ctx);
-      if (not tls) {
-        co_return None{};
-      }
-      auto tls_config = http_server::make_ssl_context_config(
-        *tls, args_.endpoint.source, ctx);
-      if (not tls_config) {
-        co_return None{};
-      }
-      config.socketConfig.sslContextConfigs.emplace_back(
-        std::move(*tls_config));
-    }
-    config.shutdownOnSignals = {};
-    co_return config;
+    co_return std::move(*config);
   }
 
   // --- config ---
   AcceptHttpArgs args_;
   // --- transient ---
   mutable Arc<MessageQueue> message_queue_{std::in_place, uint32_t{64}};
-  Option<Arc<http_server::ScopedServer>> server_;
+  Option<Box<http_server::Server>> server_;
   Mutex<std::unordered_map<uint64_t, ActiveRequest>> active_requests_{{}};
   Arc<Semaphore> active_connections_;
 };

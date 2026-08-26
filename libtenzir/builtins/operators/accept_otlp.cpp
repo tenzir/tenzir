@@ -442,7 +442,7 @@ private:
 
   AcceptOtlpArgs args_;
   mutable Arc<MessageQueue> message_queue_;
-  Option<Box<OtlpHttpServer>> http_server_;
+  Option<Box<http_server::Server>> http_server_;
   Option<Box<OtlpGrpcServer>> grpc_server_;
   std::unordered_map<uint64_t, ActiveRequest> active_requests_;
   Arc<Semaphore> active_requests_limit_;
