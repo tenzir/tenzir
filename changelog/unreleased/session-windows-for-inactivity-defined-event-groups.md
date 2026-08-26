@@ -31,8 +31,10 @@ window gap=5min, size=1000, on=time { … }
 
 A session accepts one of these caps at a time.
 
-The operator delivers a session's events to its subpipeline in batches. A
-subpipeline that stops early, such as one starting with `head`, consumes the
-remaining events of its session; a later event within the gap then opens a new
-session. Checkpointing closes the open session, so a pipeline restored from a
-checkpoint starts sessions fresh.
+The operator delivers a session's events to its subpipeline in batches and
+emits subpipeline output in session order. A later session cannot overtake an
+earlier one when their subpipelines finish concurrently. A subpipeline that
+stops early, such as one starting with `head`, consumes the remaining events of
+its session; a later event within the gap then opens a new session. Checkpointing
+closes the open session, so a pipeline restored from a checkpoint starts
+sessions fresh.

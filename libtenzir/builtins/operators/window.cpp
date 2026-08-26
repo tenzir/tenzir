@@ -236,8 +236,9 @@ protected:
     return config_.shape == WindowShape::session;
   }
 
-  auto trailing_sequence() const -> uint64_t {
-    return trailing_sequence_;
+  auto next_ordered_sequence() const -> uint64_t {
+    TENZIR_ASSERT(is_trailing() or is_session());
+    return is_trailing() ? trailing_sequence_ : session_sequence_;
   }
 
   auto start_impl(OpCtx& ctx) -> Task<void> {
@@ -564,7 +565,7 @@ private:
   /// Spawns a fresh session subpipeline whose window starts at `event_time`.
   auto spawn_session(time event_time, OpCtx& ctx) -> Task<bool> {
     TENZIR_ASSERT(not session_);
-    auto sequence = session_sequence_++;
+    auto sequence = session_sequence_;
     auto window = record{};
     window.emplace("start", data{event_time});
     auto copy = args_.pipe.inner;
@@ -574,6 +575,7 @@ private:
     if (not sub) {
       co_return false;
     }
+    session_sequence_ += 1;
     session_ = SessionWindowState{event_time, event_time, 0, sequence};
     co_return true;
   }
@@ -1491,7 +1493,7 @@ private:
   mutable Arc<TickQueue> tick_queue_{std::in_place, 1};
 };
 
-struct TrailingOutputState {
+struct OrderedOutputState {
   // `process_sub` may run concurrently. Keep the critical section limited to
   // moving Arrow-backed slices into the per-window output buffer.
   std::mutex mutex;
@@ -1546,46 +1548,48 @@ public:
   auto process_sub(SubKeyView key, table_slice slice, Push<table_slice>& push,
                    OpCtx& ctx) -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (not is_trailing()) {
+    if (not is_trailing() and not is_session()) {
       co_await push(std::move(slice));
       co_return;
     }
     auto key_data = materialize(key);
     auto sequence = try_as<uint64_t>(&key_data);
     TENZIR_ASSERT(sequence);
-    auto guard = std::lock_guard{trailing_output_->mutex};
-    if (*sequence < trailing_output_->next) {
+    auto guard = std::lock_guard{ordered_output_->mutex};
+    if (*sequence < ordered_output_->next) {
       co_return;
     }
-    trailing_output_->pending[*sequence].push_back(std::move(slice));
+    ordered_output_->pending[*sequence].push_back(std::move(slice));
   }
 
   auto finish_sub(SubKeyView key, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
-    if (not is_trailing()) {
+    if (not is_trailing() and not is_session()) {
       co_return;
     }
-    on_trailing_child_finished();
+    if (is_trailing()) {
+      on_trailing_child_finished();
+    }
     auto key_data = materialize(key);
     auto sequence = try_as<uint64_t>(&key_data);
     TENZIR_ASSERT(sequence);
     auto ready = std::vector<table_slice>{};
     {
-      auto guard = std::lock_guard{trailing_output_->mutex};
-      if (*sequence < trailing_output_->next) {
+      auto guard = std::lock_guard{ordered_output_->mutex};
+      if (*sequence < ordered_output_->next) {
         co_return;
       }
-      trailing_output_->finished.insert(*sequence);
-      while (trailing_output_->finished.contains(trailing_output_->next)) {
-        auto it = trailing_output_->pending.find(trailing_output_->next);
-        if (it != trailing_output_->pending.end()) {
+      ordered_output_->finished.insert(*sequence);
+      while (ordered_output_->finished.contains(ordered_output_->next)) {
+        auto it = ordered_output_->pending.find(ordered_output_->next);
+        if (it != ordered_output_->pending.end()) {
           ready.insert(ready.end(), std::make_move_iterator(it->second.begin()),
                        std::make_move_iterator(it->second.end()));
-          trailing_output_->pending.erase(it);
+          ordered_output_->pending.erase(it);
         }
-        trailing_output_->finished.erase(trailing_output_->next);
-        trailing_output_->next += 1;
+        ordered_output_->finished.erase(ordered_output_->next);
+        ordered_output_->next += 1;
       }
     }
     for (auto& slice : ready) {
@@ -1598,15 +1602,17 @@ public:
     if (serde.is_loading()) {
       // Subpipelines do not survive a restore. Drop their partial output and
       // resume ordered release at the first sequence that has not been spawned.
-      auto guard = std::lock_guard{trailing_output_->mutex};
-      trailing_output_->pending.clear();
-      trailing_output_->finished.clear();
-      trailing_output_->next = trailing_sequence();
+      auto guard = std::lock_guard{ordered_output_->mutex};
+      ordered_output_->pending.clear();
+      ordered_output_->finished.clear();
+      if (is_trailing() or is_session()) {
+        ordered_output_->next = next_ordered_sequence();
+      }
     }
   }
 
 private:
-  Arc<TrailingOutputState> trailing_output_{std::in_place};
+  Arc<OrderedOutputState> ordered_output_{std::in_place};
 };
 
 template <>
