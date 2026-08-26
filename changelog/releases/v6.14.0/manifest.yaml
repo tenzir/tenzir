@@ -1,0 +1,10 @@
+created: 2026-08-26
+title: Statistical models for distribution drift
+intro: >-
+  Tenzir now lets you build, store, merge, and compare statistical models in TQL to
+  detect distribution drift across pipelines and time windows. The release also adds
+  session windows, bounded event-time reordering, preceding-event access, native Splunk
+  HEC ingestion, and more self-contained container and Python deployments.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.13.0
