@@ -282,14 +282,25 @@ void hash_append(HashAlgorithm& h,
 /// which for an unordered container is unspecified: two containers that compare
 /// equal can iterate differently, and would then hash differently — breaking
 /// the one thing a hash has to promise. So each element is digested on its own
-/// and the digests are added, because addition does not care about order.
+/// and the digests are added, because addition does not care about order —
+/// word by word rather than through `size_t`, because a digest is not always
+/// a number: xxh3's 128-bit result is a struct, and wider ones are arrays.
 template <class HashAlgorithm, class Container>
 void hash_append_unordered(HashAlgorithm& h, const Container& xs) noexcept {
-  auto combined = size_t{0};
+  using result_type = std::remove_cvref_t<typename HashAlgorithm::result_type>;
+  static_assert(std::is_trivially_copyable_v<result_type>);
+  constexpr auto words
+    = (sizeof(result_type) + sizeof(std::uint64_t) - 1) / sizeof(std::uint64_t);
+  auto combined = std::array<std::uint64_t, words>{};
   for (const auto& x : xs) {
     auto element = HashAlgorithm{};
     hash_append(element, x);
-    combined += static_cast<size_t>(std::move(element).finish());
+    auto result = std::move(element).finish();
+    auto digest = std::array<std::uint64_t, words>{};
+    std::memcpy(digest.data(), &result, sizeof(result));
+    for (auto i = size_t{0}; i < words; ++i) {
+      combined[i] += digest[i];
+    }
   }
   hash_append(h, combined);
   hash_append(h, xs.size());
