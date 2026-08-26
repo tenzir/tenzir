@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// Invalid configuration produces errors before processing input.
+from {}
+model = histogram([1], bins=0, width=1.0)

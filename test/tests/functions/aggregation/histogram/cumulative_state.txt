@@ -1,0 +1,36 @@
+{
+  direct_count: 2,
+  direct_bins: [
+    2,
+    0,
+  ],
+  merged_count: 2,
+  merged_bins: [
+    2,
+    0,
+  ],
+}
+{
+  direct_count: 4,
+  direct_bins: [
+    2,
+    2,
+  ],
+  merged_count: 4,
+  merged_bins: [
+    2,
+    2,
+  ],
+}
+{
+  direct_count: 5,
+  direct_bins: [
+    2,
+    3,
+  ],
+  merged_count: 5,
+  merged_bins: [
+    2,
+    3,
+  ],
+}

@@ -1,0 +1,14 @@
+from {
+  unequal_weights: jensen_shannon([1, 2], [1]),
+  negative_weight: jensen_shannon([1, -1], [1, 1]),
+  zero_weight: jensen_shannon([0, 0], [1, 1]),
+  null_weight: jensen_shannon([1, null], [1, 1]),
+  empty_ecdf: ecdf([], 1),
+  non_finite_ecdf: ecdf([1.0, "nan".float()], 1.0),
+  inexact_ecdf: ecdf([9007199254740993], 9007199254740993),
+  empty_ks: kolmogorov_smirnov([], [1]),
+  inexact_ks: kolmogorov_smirnov([9007199254740992], [9007199254740993]),
+  null_wasserstein: wasserstein([1, null], [1, 2]),
+  inexact_wasserstein: wasserstein([9007199254740992], [9007199254740993]),
+  out_of_range_duration: wasserstein([0ns], [9223372036854775807ns])
+}

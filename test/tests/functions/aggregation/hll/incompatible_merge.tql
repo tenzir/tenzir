@@ -1,0 +1,11 @@
+// Invalid versions and incompatible precisions invalidate only their
+// model_merge list row; a following compatible row still succeeds.
+from {}
+a = hll([1, 2], precision=4)
+b = hll([2, 3], precision=5)
+max_count = {...a, input_count: uint("18446744073709551615"),
+  count: uint("18446744073709551615")}
+select precision=hll_cardinality(model_merge([a, b])),
+  version=hll_cardinality(model_merge([a, {...a, version: uint(2)}])),
+  overflow=hll_cardinality(model_merge([max_count, a])),
+  compatible=hll_cardinality(model_merge([a, a]))

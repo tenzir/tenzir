@@ -1,0 +1,9 @@
+warning: `model_merge` failed: cannot merge `tdigest` models: incompatible compression: expected 20, got 30
+ --> tests/functions/aggregation/tdigest/merge_incompatible.tql:5:27
+  |
+5 | select merged=model_merge([a, b])
+  |                           ~
+  |
+{
+  merged: null,
+}

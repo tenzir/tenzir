@@ -1,0 +1,5 @@
+// Merge compatibility follows the actual key types, so a frequency table
+// refuses to absorb keys of a different type.
+from {m: frequency_table(["a"])},
+  {m: frequency_table([int(1)])}
+summarize merged = model_merge(m)

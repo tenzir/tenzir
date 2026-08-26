@@ -1,0 +1,6 @@
+error: `precision` must be in [4, 18]
+ --> tests/functions/aggregation/hll/invalid_precision_upper.tql:6:28
+  |
+6 | model = hll([1], precision=19)
+  |                            ^^
+  |

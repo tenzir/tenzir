@@ -1,0 +1,21 @@
+warning: histogram query value must be finite
+ --> tests/functions/aggregation/histogram/query_non_finite.tql:4:37
+  |
+4 | select bucket = histogram_bucket(m, x),
+  |                                     ~
+  |
+
+warning: histogram query value must be finite
+ --> tests/functions/aggregation/histogram/query_non_finite.tql:5:38
+  |
+5 |   bucket_count = histogram_bucket(m, x).count?
+  |                                      ~
+  |
+{
+  bucket: null,
+  bucket_count: null,
+}
+{
+  bucket: null,
+  bucket_count: null,
+}

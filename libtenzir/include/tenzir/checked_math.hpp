@@ -13,6 +13,7 @@
 #include <concepts>
 #include <cstdint>
 #include <limits>
+#include <ranges>
 #include <type_traits>
 
 namespace tenzir {
@@ -64,6 +65,22 @@ constexpr auto checked_add(X x, Y y) -> Option<std::common_type_t<X, Y>> {
     }
     return x + R(y);
   }
+}
+
+template <std::ranges::input_range Range>
+  requires std::integral<std::ranges::range_value_t<Range>>
+constexpr auto checked_sum(Range&& values)
+  -> Option<std::ranges::range_value_t<Range>> {
+  using value_type = std::ranges::range_value_t<Range>;
+  auto result = value_type{0};
+  for (auto value : values) {
+    auto next = checked_add(result, value);
+    if (not next) {
+      return None{};
+    }
+    result = *next;
+  }
+  return result;
 }
 
 template <std::integral X, std::integral Y>

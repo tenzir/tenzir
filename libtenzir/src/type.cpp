@@ -1584,7 +1584,7 @@ bool type_check(const type& x, const data& y) noexcept {
       for (size_t i = 0; i < u.size(); ++i) {
         const auto field = t.field(i);
         const auto& [k, v] = as_vector(u)[i];
-        if (field.name != k or type_check(field.type, v)) {
+        if (field.name != k or not type_check(field.type, v)) {
           return false;
         }
       }

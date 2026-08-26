@@ -1,0 +1,10 @@
+{
+  label: 1,
+  merged_label: "string",
+  values: [
+    {
+      value: "a",
+      count: 1,
+    },
+  ],
+}

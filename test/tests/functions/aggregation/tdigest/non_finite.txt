@@ -1,0 +1,8 @@
+{
+  count: 1,
+  null_count: 1,
+  non_finite_count: 3,
+  min: 1.0,
+  max: 1.0,
+  median: 1.0,
+}

@@ -1,0 +1,7 @@
+// Exact categorical counts use deterministic descending-count order.
+from {x: "b"}, {x: "a"}, {x: "b"}, {x: "c"}, {x: "a"}, {x: "b"}
+summarize model = frequency_table(x)
+select model,
+  b_count = frequency_table_count(model, "b"),
+  missing_count = frequency_table_count(model, "missing"),
+  cardinality = model.values.length()

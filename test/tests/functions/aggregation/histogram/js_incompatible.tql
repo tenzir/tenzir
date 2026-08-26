@@ -1,0 +1,8 @@
+// Incompatible boundaries and empty models return null; only the former
+// warns.
+from {}
+p = histogram([1.0], bins=2, width=1.0)
+q = histogram([1.0], bins=2, width=2.0)
+empty = histogram([], bins=2, width=1.0)
+select incompatible = model_divergence(p, q, method="jensen_shannon"),
+  empty = model_divergence(p, empty, method="jensen_shannon")

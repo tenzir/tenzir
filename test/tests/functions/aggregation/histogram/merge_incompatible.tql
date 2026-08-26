@@ -1,0 +1,6 @@
+// Generic model merging rejects different fixed-width geometry rather than
+// returning a partial result.
+from {}
+p = histogram([1.0], bins=2, width=1.0)
+q = histogram([1.0], bins=2, width=2.0)
+select merged = model_merge([p, q])

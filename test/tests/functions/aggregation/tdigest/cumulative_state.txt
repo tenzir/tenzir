@@ -1,0 +1,18 @@
+{
+  digest_count: 2,
+  digest_min: 0.0,
+  digest_max: 10.0,
+  merged_count: 2,
+}
+{
+  digest_count: 4,
+  digest_min: 0.0,
+  digest_max: 30.0,
+  merged_count: 4,
+}
+{
+  digest_count: 5,
+  digest_min: 0.0,
+  digest_max: 40.0,
+  merged_count: 5,
+}

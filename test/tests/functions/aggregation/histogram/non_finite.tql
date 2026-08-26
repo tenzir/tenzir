@@ -1,0 +1,5 @@
+// NaN and infinities count as non-finite and stay out of count, extrema, and
+// buckets.
+from {x: 1.0}, {x: "nan".float()}, {x: "inf".float()}, {x: "-inf".float()}
+summarize model=histogram(x, bins=2, width=1.0)
+select count=model.count, non_finite=model.non_finite_count, min=model.min, max=model.max

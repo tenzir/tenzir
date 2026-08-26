@@ -1,0 +1,11 @@
+warning: expected `int`, `uint`, or `float`, got `string`; skipping these values
+ --> tests/functions/aggregation/histogram/bad_type_warning.tql:3:27
+  |
+3 | summarize model=histogram(x, bins=2, width=1.0)
+  |                           ~
+  |
+{
+  input_count: 3,
+  count: 1,
+  null_count: 1,
+}

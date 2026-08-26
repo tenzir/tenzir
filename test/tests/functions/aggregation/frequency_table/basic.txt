@@ -1,0 +1,27 @@
+{
+  model: {
+    model: "frequency_table",
+    version: 1,
+    input_count: 6,
+    count: 6,
+    null_count: 0,
+    value_type: "string",
+    values: [
+      {
+        value: "b",
+        count: 3,
+      },
+      {
+        value: "a",
+        count: 2,
+      },
+      {
+        value: "c",
+        count: 1,
+      },
+    ],
+  },
+  b_count: 3,
+  missing_count: 0,
+  cardinality: 3,
+}

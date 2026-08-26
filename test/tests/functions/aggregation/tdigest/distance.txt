@@ -1,0 +1,12 @@
+{
+  ks_zero: 0.0,
+  ks: 1.0,
+  ks_symmetric: true,
+  wasserstein_zero: 0.0,
+  wasserstein: 10.0,
+  wasserstein_symmetric: true,
+  extreme_wasserstein_zero: 0.0,
+  adjacent_ks: 1.0,
+  adjacent_wasserstein: 2.220446049250313e-16,
+  empty: null,
+}

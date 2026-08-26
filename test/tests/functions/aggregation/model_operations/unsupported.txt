@@ -1,0 +1,9 @@
+warning: cannot compare `histogram` version 1 with `tdigest` version 1
+ --> tests/functions/aggregation/model_operations/unsupported.tql:5:31
+  |
+5 | select mixed = model_distance(hist, digest, method="wasserstein")
+  |                               ~
+  |
+{
+  mixed: null,
+}

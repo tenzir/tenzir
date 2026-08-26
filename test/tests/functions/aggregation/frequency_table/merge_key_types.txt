@@ -1,0 +1,9 @@
+warning: `model_merge` failed: cannot merge `frequency_table` models: cannot merge frequency tables with value types `string` and `int64`
+ --> tests/functions/aggregation/frequency_table/merge_key_types.tql:5:32
+  |
+5 | summarize merged = model_merge(m)
+  |                                ~
+  |
+{
+  merged: null,
+}

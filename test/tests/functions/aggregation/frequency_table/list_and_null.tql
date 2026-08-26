@@ -1,0 +1,7 @@
+// List calls reset state between rows and null values only affect null_count.
+from {xs: ["b", "a", "b"]}, {xs: [null, "c"]}, {xs: []}
+model = frequency_table(xs)
+select input_count = model.input_count,
+  count = model.count,
+  null_count = model.null_count,
+  values = model.values

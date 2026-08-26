@@ -1,0 +1,10 @@
+warning: histogram models have different represented edges
+ --> tests/functions/aggregation/histogram/js_incompatible.tql:7:40
+  |
+7 | select incompatible = model_divergence(p, q, method="jensen_shannon"),
+  |                                        ~
+  |
+{
+  incompatible: null,
+  empty: null,
+}

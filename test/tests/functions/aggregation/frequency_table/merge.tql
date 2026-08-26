@@ -1,0 +1,18 @@
+// Frequency tables retain exact scalar and nested keys when merged.
+from {}
+a = frequency_table(["a", "b", "a"])
+b = frequency_table(["b", "c"])
+merged = model_merge([a, b])
+nested = frequency_table([[], [1]])
+nested_merged = model_merge([nested])
+blobs = frequency_table([b"foo", b"bar", b"foo"])
+blobs_merged = model_merge([blobs])
+select model = merged.model,
+  a_count = frequency_table_count(merged, "a"),
+  b_count = frequency_table_count(merged, "b"),
+  c_count = frequency_table_count(merged, "c"),
+  input_count = merged.input_count,
+  count = merged.count,
+  values = merged.values,
+  empty_list_count = frequency_table_count(nested_merged, []),
+  blob_count = frequency_table_count(blobs_merged, b"foo")

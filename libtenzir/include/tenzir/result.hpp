@@ -12,6 +12,8 @@
 #include "tenzir/unit.hpp"
 #include "tenzir/variant.hpp"
 
+#include <string>
+
 namespace tenzir {
 
 template <class T>
@@ -35,6 +37,8 @@ public:
 private:
   T value_;
 };
+
+Err(char const*) -> Err<std::string>;
 
 template <class Value, class Error>
 class [[nodiscard]] Result {

@@ -1,0 +1,5 @@
+// Underflow and overflow are forwarded as outcomes alongside regular bins.
+from {}
+p = histogram([-10.0], bins=2, width=1.0)
+q = histogram([10.0], bins=2, width=1.0)
+select matches_bucket_counts = model_divergence(p, q, method="jensen_shannon") == jensen_shannon([1, 0, 0, 0], [0, 0, 0, 1])

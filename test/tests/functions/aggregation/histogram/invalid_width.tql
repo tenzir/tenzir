@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// Nonpositive width is rejected.
+from {}
+model = histogram([1], bins=2, width=-1.0)

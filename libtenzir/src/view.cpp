@@ -266,7 +266,7 @@ bool type_check(const type& x, const data_view& y) {
       }
       for (size_t i = 0; const auto& [k, v] : u) {
         const auto field = t.field(i++);
-        if (field.name != k or type_check(field.type, v)) {
+        if (field.name != k or not type_check(field.type, v)) {
           return false;
         }
       }

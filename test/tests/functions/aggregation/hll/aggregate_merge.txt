@@ -1,0 +1,5 @@
+{
+  count: 6,
+  null_count: 2,
+  cardinality: 5,
+}

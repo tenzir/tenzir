@@ -1,0 +1,3 @@
+// Frequency tables reject schema evolution that would coerce exact keys.
+from {x: 42}, {x: "42"}
+summarize model=frequency_table(x)

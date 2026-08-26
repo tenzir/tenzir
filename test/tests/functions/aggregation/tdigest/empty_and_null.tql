@@ -1,0 +1,9 @@
+// Empty and all-null lists produce valid empty models with null extrema.
+from {}
+empty = tdigest([], compression=20)
+all_null = tdigest([null.float(), null.float()], compression=20)
+select empty_count=empty.count, empty_null_count=empty.null_count,
+  empty_min=empty.min, empty_max=empty.max,
+  empty_centroids=empty.centroids.length(),
+  all_null_count=all_null.count, all_null_null_count=all_null.null_count,
+  all_null_min=all_null.min, all_null_max=all_null.max

@@ -1,0 +1,6 @@
+{
+  count: 10,
+  null_count: 1,
+  cardinality: 10,
+  all_distinct: true,
+}

@@ -1,0 +1,4 @@
+// Generic merge ignores null model values, and empty/all-null list calls have
+// no selected model and therefore return null.
+from {models: null}, {models: []}, {models: [null, null]}
+select merged = model_merge(models)

@@ -1,0 +1,12 @@
+{
+  model: "tdigest",
+  version: 1,
+  compression: 20,
+  input_count: 5,
+  count: 4,
+  null_count: 1,
+  non_finite_count: 0,
+  min: 0.0,
+  max: 30.0,
+  centroids: 4,
+}

@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// Public compression limits bound model and merge costs.
+from {}
+m = tdigest([1.0], compression=9)

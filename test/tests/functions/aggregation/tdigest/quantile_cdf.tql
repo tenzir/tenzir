@@ -1,0 +1,13 @@
+// Quantile and CDF cover tails, exact centroid boundaries, interpolation,
+// null queries, and an empty distribution.
+from {}
+m = tdigest([0.0, 10.0, 20.0, 30.0], compression=20)
+extreme = tdigest([-1e308, -1e308, 1e308, 1e308], compression=10)
+empty = tdigest([], compression=20)
+select q0=tdigest_quantile(m, 0.0), q50=tdigest_quantile(m, 0.5),
+  q100=tdigest_quantile(m, 1.0),
+  below=tdigest_cdf(m, -1.0), at_min=tdigest_cdf(m, 0.0),
+  middle=tdigest_cdf(m, 15.0), at_max=tdigest_cdf(m, 30.0),
+  above=tdigest_cdf(m, 31.0), null_query=tdigest_cdf(m, null),
+  extreme_median=tdigest_quantile(extreme, 0.5),
+  empty_quantile=tdigest_quantile(empty, 0.5), empty_cdf=tdigest_cdf(empty, 0.0)

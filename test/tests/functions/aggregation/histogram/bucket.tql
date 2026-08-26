@@ -1,0 +1,8 @@
+// Bucket lookup for underflow, regular, overflow, and exact edges.
+from {}
+m = histogram([1.0, 3.0, 4.0, 12.0], bins=4, width=2.5)
+select underflow = histogram_bucket(m, -1),
+  regular = histogram_bucket(m, 3),
+  last_edge = histogram_bucket(m, 10.0),
+  overflow = histogram_bucket(m, 10.5),
+  null_query = histogram_bucket(m, null)

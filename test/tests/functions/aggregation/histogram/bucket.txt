@@ -1,0 +1,31 @@
+{
+  underflow: {
+    kind: "underflow",
+    index: -1,
+    lower: null,
+    upper: 0.0,
+    count: 0,
+  },
+  regular: {
+    kind: "regular",
+    index: 1,
+    lower: 2.5,
+    upper: 5.0,
+    count: 2,
+  },
+  last_edge: {
+    kind: "regular",
+    index: 3,
+    lower: 7.5,
+    upper: 10.0,
+    count: 0,
+  },
+  overflow: {
+    kind: "overflow",
+    index: 4,
+    lower: 10.0,
+    upper: null,
+    count: 1,
+  },
+  null_query: null,
+}

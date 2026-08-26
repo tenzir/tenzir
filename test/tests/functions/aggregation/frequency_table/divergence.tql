@@ -1,0 +1,7 @@
+// Model divergence aligns categorical counts by value before forwarding them
+// to the shared Jensen-Shannon implementation.
+from {}
+p = frequency_table(["a", "a", "b"])
+q = frequency_table(["b", "c", "c"])
+select matches_aligned_counts = model_divergence(p, q, method="jensen_shannon") == jensen_shannon([2, 1, 0], [0, 1, 2]),
+  empty = model_divergence(p, frequency_table([]), method="jensen_shannon")

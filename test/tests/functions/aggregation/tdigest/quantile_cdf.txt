@@ -1,0 +1,14 @@
+{
+  q0: 0.0,
+  q50: 15.0,
+  q100: 30.0,
+  below: 0.0,
+  at_min: 0.125,
+  middle: 0.5,
+  at_max: 0.875,
+  above: 1.0,
+  null_query: null,
+  extreme_median: 0.0,
+  empty_quantile: null,
+  empty_cdf: null,
+}

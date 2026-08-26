@@ -1,0 +1,5 @@
+// Unsupported values are skipped, while typed nulls still contribute to null_count.
+from {x: 1s}, {x: duration(null)}, {x: 1.0}
+summarize m=tdigest(x)
+select input_count=m.input_count, count=m.count,
+  null_count=m.null_count

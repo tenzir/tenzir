@@ -1,0 +1,4 @@
+// Negative start with negative values.
+from {x: -5.0}, {x: -2.5}, {x: 0.0}
+summarize model=histogram(x, bins=2, width=2.5, start=-5.0)
+select counts=model.bins.map(b => b.count), overflow=model.overflow

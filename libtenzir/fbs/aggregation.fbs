@@ -107,6 +107,73 @@ enum QuantileState : short {
   Numeric,
 }
 
+table Histogram {
+  /// Per-bin counters for the configured regular bins.
+  counts: [ulong] (required);
+  /// Lower edge of the first regular bin.
+  start: double;
+  /// Width of every regular bin.
+  width: double;
+  underflow: ulong;
+  overflow: ulong;
+  null_count: ulong;
+  non_finite_count: ulong;
+  /// Number of accepted finite values, including underflow and overflow.
+  count: ulong;
+  /// Whether min and max carry values (count > 0).
+  has_extrema: bool;
+  min: double;
+  max: double;
+  input_count: ulong;
+}
+
+/// Persisted aggregation state for the first-class t-digest model.
+table TDigest {
+  means: [double] (required);
+  weights: [double] (required);
+  compression: uint;
+  count: ulong;
+  null_count: ulong;
+  non_finite_count: ulong;
+  has_extrema: bool;
+  min: double;
+  max: double;
+  input_count: ulong;
+}
+
+/// Persisted aggregation state for the first-class HyperLogLog model.
+table Hll {
+  registers: [ubyte] (required);
+  precision: ubyte;
+  hash: string (required);
+  count: ulong;
+  null_count: ulong;
+  input_count: ulong;
+}
+
+/// One exact categorical value count in a frequency-table model.
+table FrequencyTableEntry {
+  value: Data (required);
+  count: ulong;
+}
+
+/// Persisted aggregation state for an exact frequency-table model.
+table FrequencyTable {
+  values: [FrequencyTableEntry] (required);
+  input_count: ulong;
+  count: ulong;
+  null_count: ulong;
+  failed: bool;
+  key_type: [ubyte] (required, nested_flatbuffer: "tenzir.fbs.Type");
+}
+
+/// Persisted state for the generic model merge aggregation. The result is
+/// absent before the first non-null model record.
+table ModelMerge {
+  failed: bool;
+  result: Data;
+}
+
 table Quantile {
   state: QuantileState;
   means: [double] (required);

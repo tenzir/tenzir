@@ -1,0 +1,5 @@
+// Non-finite query values return null and warn only once per function batch.
+from {x: "nan".float()}, {x: "inf".float()}
+m = histogram([1.0], bins=2, width=1.0)
+select bucket = histogram_bucket(m, x),
+  bucket_count = histogram_bucket(m, x).count?

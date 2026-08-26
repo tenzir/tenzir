@@ -1,0 +1,6 @@
+// Non-finite numbers are counted separately and excluded from the digest.
+from {}
+m = tdigest([1.0, "nan".float(), "inf".float(), "-inf".float(), null.float()])
+select count=m.count, null_count=m.null_count,
+  non_finite_count=m.non_finite_count, min=m.min, max=m.max,
+  median=tdigest_quantile(m, 0.5)

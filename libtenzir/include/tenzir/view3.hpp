@@ -130,6 +130,8 @@ public:
     return iterator{&array_, index_, array_.num_fields()};
   }
 
+  auto field_type(std::string_view name) const -> Option<type>;
+
   template <typename Ordering>
   friend auto order_impl(record_view3 l, record_view3 r) -> Ordering;
 

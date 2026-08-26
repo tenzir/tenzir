@@ -10,6 +10,8 @@
 
 #include "tenzir/test/test.hpp"
 
+#include <array>
+
 namespace tenzir {
 
 namespace {
@@ -46,6 +48,12 @@ TEST("checked_add") {
   GOOD(checked_add(U(max<S>) + 1, min<S>), U(0));
   BAD(checked_add(max<U> - U(max<S>) + U(1), max<S>));
   GOOD(checked_add(max<U> - U(max<S>), max<S>), max<U>);
+}
+
+TEST("checked_sum") {
+  GOOD(checked_sum(std::array{U(1), U(2), U(3)}), U(6));
+  GOOD(checked_sum(std::array<U, 0>{}), U(0));
+  BAD(checked_sum(std::array{max<U>, U(1)}));
 }
 
 TEST("checked_sub") {

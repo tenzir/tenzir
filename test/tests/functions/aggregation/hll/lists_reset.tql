@@ -1,0 +1,6 @@
+// Regular list calls reset all dynamic state between rows while retaining the
+// requested precision. An all-null list produces a valid empty model.
+from {xs: [1, 2, 2]}, {xs: [8, 9, 9]}, {xs: [int(null), int(null)]}
+model = hll(xs, precision=10)
+select count=model.count, null_count=model.null_count,
+  cardinality=hll_cardinality(model), precision=model.precision

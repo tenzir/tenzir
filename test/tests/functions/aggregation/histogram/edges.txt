@@ -1,0 +1,10 @@
+{
+  counts: [
+    1,
+    1,
+    0,
+    1,
+  ],
+  underflow: 0,
+  overflow: 1,
+}

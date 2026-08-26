@@ -1,0 +1,6 @@
+error: `bins` must be in [1, 16384]
+ --> tests/functions/aggregation/histogram/invalid_config.tql:7:29
+  |
+7 | model = histogram([1], bins=0, width=1.0)
+  |                             ^
+  |

@@ -1,0 +1,37 @@
+warning: incompatible frequency-table key types `int64` and `string`
+ --> tests/functions/aggregation/frequency_table/divergence_incompatible.tql:5:27
+  |
+5 | result = model_divergence(ints, strings, method="jensen_shannon")
+  |                           ~
+  |
+{
+  ints: {
+    model: "frequency_table",
+    version: 1,
+    input_count: 1,
+    count: 1,
+    null_count: 0,
+    value_type: "int64",
+    values: [
+      {
+        value: 1,
+        count: 1,
+      },
+    ],
+  },
+  strings: {
+    model: "frequency_table",
+    version: 1,
+    input_count: 1,
+    count: 1,
+    null_count: 0,
+    value_type: "string",
+    values: [
+      {
+        value: "1",
+        count: 1,
+      },
+    ],
+  },
+  result: null,
+}

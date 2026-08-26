@@ -1,0 +1,6 @@
+{
+  count: 1,
+  non_finite: 3,
+  min: 1.0,
+  max: 1.0,
+}

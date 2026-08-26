@@ -1,0 +1,22 @@
+warning: record does not have this field
+ --> tests/functions/aggregation/histogram/large_edges.tql:4:22
+  |
+4 | select edges = model.edges, counts = model.counts
+  |                      ~~~~~
+  |
+  = note: field name is `edges`
+  = hint: append `?` to suppress this warning
+
+warning: record does not have this field
+ --> tests/functions/aggregation/histogram/large_edges.tql:4:44
+  |
+4 | select edges = model.edges, counts = model.counts
+  |                                            ~~~~~~
+  |
+  = note: field name is `counts`
+  = hint: did you mean `count`?
+  = hint: append `?` to suppress this warning
+{
+  edges: null,
+  counts: null,
+}

@@ -1,0 +1,23 @@
+// Counter overflow invalidates a generic merge instead of wrapping or exposing
+// the model merged up to the failing field.
+from {}
+p = {
+  model: "histogram", version: uint(1),
+  input_count: uint("18446744073709551615"),
+  count: uint("18446744073709551615"), null_count: uint(0),
+  kind: "fixed_width", non_finite_count: uint(0),
+  min: 0.5, max: 0.5, start: 0.0, width: 1.0,
+  underflow: uint(0), overflow: uint(0),
+  bins: [{
+    lower: 0.0, upper: 1.0, count: uint("18446744073709551615"),
+  }],
+}
+q = {
+  model: "histogram", version: uint(1), input_count: uint(1),
+  count: uint(1), null_count: uint(0),
+  kind: "fixed_width", non_finite_count: uint(0),
+  min: 0.5, max: 0.5, start: 0.0, width: 1.0,
+  underflow: uint(0), overflow: uint(0),
+  bins: [{lower: 0.0, upper: 1.0, count: uint(1)}],
+}
+select merged = model_merge([p, q])

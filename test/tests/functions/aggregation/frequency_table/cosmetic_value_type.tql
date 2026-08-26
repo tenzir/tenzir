@@ -1,0 +1,8 @@
+// The `value_type` field is a human-readable label, not a contract. Parsing
+// ignores it, and re-emitting the model derives it from the stored keys.
+from {}
+good = frequency_table(["a"])
+merged = model_merge([{...good, value_type: "banana"}])
+select label = frequency_table_count({...good, value_type: "int64"}, "a"),
+  merged_label = merged.value_type,
+  values = merged.values

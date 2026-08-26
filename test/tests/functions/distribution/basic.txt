@@ -1,0 +1,13 @@
+{
+  jensen_shannon: 0.6931471805599453,
+  jensen_shannon_large: 0.0,
+  ecdf: 0.75,
+  ecdf_duration: 0.75,
+  ecdf_time: 0.5,
+  kolmogorov_smirnov: 0.33333333333333337,
+  kolmogorov_smirnov_duration: 0.33333333333333337,
+  wasserstein: 0.3333333333333333,
+  wasserstein_large: 1e+308,
+  wasserstein_duration: 1s,
+  wasserstein_time: 1d,
+}

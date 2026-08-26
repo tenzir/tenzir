@@ -1,0 +1,12 @@
+{
+  compression: 20,
+  count: 2,
+  min: 1.0,
+  max: 2.0,
+}
+{
+  compression: 20,
+  count: 3,
+  min: 8.0,
+  max: 10.0,
+}

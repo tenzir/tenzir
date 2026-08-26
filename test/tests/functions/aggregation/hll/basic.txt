@@ -1,0 +1,18 @@
+{
+  model: "hll",
+  version: 1,
+  input_count: 6,
+  count: 5,
+  null_count: 1,
+  precision: 10,
+  hash: "tenzir.data.xxh3_64.v1",
+  register_count: 1024,
+  one_cardinality: 1,
+  duplicate_cardinality: 2,
+  all_null_cardinality: 0,
+  empty_count: 0,
+  empty_null_count: 0,
+  empty_cardinality: 0,
+  null_list: null,
+  saturated_cardinality: 16,
+}
