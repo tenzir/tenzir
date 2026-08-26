@@ -1,4 +1,6 @@
 // parallelism: disabled
 // A directive can also opt a single pipeline out of the configured degree.
+// `disabled` only drops the degree back to one; channels keep the default
+// `fused=parallel` strategy, so the plan matches `// parallelism: 1`.
 from {x: 1}, {x: 2}
 where x > 0

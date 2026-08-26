@@ -75,9 +75,8 @@ auto ir::PlanBuilder::derive_kind(const PlannedOperator& up,
   // exchanges open up to `n * m` channels, and unfused lane-to-lane wiring
   // still opens one per lane. Give them a small budget each so that their
   // number does not balloon the pipeline's memory usage. Disabled fusing is
-  // exempt: it asks for plain buffered channels throughout, and pipelines that
-  // request no parallelism at all use it, so the budget would only cost them
-  // throughput without bounding anything.
+  // exempt: it asks for plain buffered channels throughout, so the budget
+  // would only cost throughput without bounding anything.
   if (type.is<table_slice>()
       and par_scopes_.back().fused != parallelism::Fusing::none
       and (up_degree > 1 or down_degree > 1)) {

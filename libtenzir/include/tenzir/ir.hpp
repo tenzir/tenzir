@@ -307,12 +307,15 @@ struct Parallelism {
 
 namespace parallelism {
 
-/// The parallelism that applies when nothing requests parallel execution: a
-/// single lane, a single partition, and no channel fusing.
+/// The parallelism that applies when nothing requests parallel execution, and
+/// that `// parallelism: disabled` selects: a single lane and a single
+/// partition, but with the same channel fusing that parallel pipelines use, so
+/// that a chain of parallelizable operators runs run-to-completion instead of
+/// hopping between actors.
 inline constexpr auto disabled = Parallelism{
   .degree = 1,
-  .limit_partitions = 4,
-  .fused = Fusing::none,
+  .limit_partitions = default_limit_partitions,
+  .fused = Fusing::parallel,
 };
 
 /// The configuration key that sets the node-wide parallelism.
