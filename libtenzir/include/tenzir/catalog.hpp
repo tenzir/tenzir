@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/actors.hpp"
+#include "tenzir/dbdir_size.hpp"
 #include "tenzir/detail/flat_map.hpp"
 #include "tenzir/detail/inspection_common.hpp"
 #include "tenzir/detail/stable_set.hpp"
@@ -129,6 +130,11 @@ struct maintenance_options {
 
   /// How often the automatic source re-selects, first pass at half interval.
   duration rebuild_interval = {};
+
+  /// The disk budget loop: water marks, step size, scan interval, and the
+  /// optional external size command. A zero high water mark disables it, which
+  /// is what an unconfigured budget looks like.
+  disk_monitor_config space = {};
 };
 
 /// The threshold at which a partition counts as undersized, relative to the
@@ -397,6 +403,24 @@ public:
   /// Continues the run after a batch landed, or ends it if it was winding down.
   void schedule_rebuild_or_finish();
 
+  /// Measures the database directory off this thread, continuing in
+  /// `on_space_measured`.
+  void measure_space();
+
+  /// Acts on a completed measurement, evicting while over budget.
+  void on_space_measured(uint64_t size);
+
+  /// The bytes held by partitions that are erased but still pinned. They are
+  /// already spoken for and will come back without erasing anything further,
+  /// so the budget loop must not count them against the water marks.
+  auto parked_bytes() const -> uint64_t;
+
+  /// The next partitions to evict, oldest ingest first, at most `limit`.
+  auto select_eviction_batch(size_t limit) const -> std::vector<uuid>;
+
+  /// Reports the disk budget loop's state.
+  auto space_status() const -> record;
+
   /// Describes one run's statistics and options, shared between the live
   /// `current-run` and the historical `last-run` status entries.
   static auto describe_rebuild_run(const rebuild_run& run) -> record;
@@ -564,6 +588,25 @@ public:
 
   /// The rebuild run in progress, if any.
   Option<rebuild_run> rebuild = None{};
+
+  /// How the catalog runs storage maintenance.
+  maintenance_options maintenance = {};
+
+  /// Set while a database size measurement is in flight. The measurement runs
+  /// off this thread, so a scan slower than the interval must not queue more
+  /// of itself up behind it.
+  bool measuring_space = false;
+
+  /// Set while an eviction pass is deleting. The pass runs until the database
+  /// is back under the low water mark, so the periodic check must not start a
+  /// second one on top of it.
+  bool evicting = false;
+
+  /// The most recently measured size of the database directory.
+  Option<uint64_t> dbdir_size = None{};
+
+  /// How many partitions the budget loop has evicted.
+  size_t evicted = 0;
 
   /// The most recently finished run, so that `rebuild show` still describes
   /// it once the run itself is gone.

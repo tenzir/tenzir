@@ -25,6 +25,7 @@
 #include "tenzir/version.hpp"
 
 #include <caf/actor_registry.hpp>
+#include <caf/event_based_actor.hpp>
 
 #include <algorithm>
 #include <numeric>
@@ -506,6 +507,156 @@ auto catalog_state::rebuild_status() const -> record {
     });
   }
   result["quarantined"] = std::move(quarantined);
+  return result;
+}
+
+// -- the disk budget loop -----------------------------------------------------
+
+auto catalog_state::parked_bytes() const -> uint64_t {
+  auto result = uint64_t{0};
+  for (const auto& [partition, entry] : deferred) {
+    if (not entry.synopsis) {
+      continue;
+    }
+    // The files, not `approx_bytes`: that is a decoded-size estimate the
+    // rebuild batcher weighs against available memory, and it runs several
+    // times the compressed on-disk footprint. Subtracting it from a
+    // `compute_dbdir_size` measurement would make the loop stop evicting while
+    // still over budget.
+    result += entry.synopsis->store_file.size
+              + entry.synopsis->indexes_file.size
+              + entry.synopsis->sketches_file.size;
+  }
+  return result;
+}
+
+auto catalog_state::select_eviction_batch(size_t limit) const
+  -> std::vector<uuid> {
+  if (limit == 0) {
+    return {};
+  }
+  // Oldest data goes first. The disk monitor ordered by the partition file's
+  // mtime, which a rebuild resets: rewriting an old partition made it look
+  // young and moved it to the back of the queue. `max_import_time` is a
+  // property of the events, so it survives a rewrite.
+  auto candidates = std::vector<std::pair<time, uuid>>{};
+  for (const auto& [schema, partitions] : synopses_per_type) {
+    for (const auto& [partition, synopsis] : partitions) {
+      if (in_transformation.contains(partition)) {
+        // Erasing an input would let its data resurrect through the
+        // transform's output. The next pass picks it up once it is free.
+        continue;
+      }
+      candidates.emplace_back(synopsis->max_import_time, partition);
+    }
+  }
+  const auto count = std::min(limit, candidates.size());
+  std::partial_sort(candidates.begin(),
+                    candidates.begin() + static_cast<ptrdiff_t>(count),
+                    candidates.end());
+  auto result = std::vector<uuid>{};
+  result.reserve(count);
+  for (auto i = size_t{0}; i < count; ++i) {
+    result.push_back(candidates[i].second);
+  }
+  return result;
+}
+
+void catalog_state::measure_space() {
+  TENZIR_ASSERT(not measuring_space);
+  measuring_space = true;
+  // `compute_dbdir_size` walks the whole database, or shells out to an
+  // external binary. The disk monitor could block on that because nothing
+  // else went through it; the catalog answers candidate lookups, so the scan
+  // runs on a throwaway detached actor rather than on this thread.
+  auto worker = self->spawn<caf::detached>(
+    [dir = paths.database_dir,
+     config = maintenance.space](caf::event_based_actor*) -> caf::behavior {
+      return {
+        [dir, config](atom::get) -> caf::result<uint64_t> {
+          auto size = compute_dbdir_size(dir, config);
+          if (not size) {
+            return std::move(size.error());
+          }
+          return static_cast<uint64_t>(*size);
+        },
+      };
+    });
+  self->mail(atom::get_v)
+    .request(worker, caf::infinite)
+    .then(
+      [this, worker](uint64_t size) {
+        self->send_exit(worker, caf::exit_reason::user_shutdown);
+        measuring_space = false;
+        on_space_measured(size);
+      },
+      [this, worker](caf::error& error) {
+        self->send_exit(worker, caf::exit_reason::user_shutdown);
+        measuring_space = false;
+        // Abandon the pass rather than keep deleting blind: without a
+        // measurement there is no way to tell when to stop.
+        evicting = false;
+        TENZIR_WARN("{} failed to measure the size of {}: {}", *self,
+                    paths.database_dir, error);
+      });
+}
+
+void catalog_state::on_space_measured(uint64_t size) {
+  dbdir_size = size;
+  // Partitions that are erased but still pinned keep their files until the
+  // last reader drops. They are already on their way out, so counting them
+  // against the budget would make one pressure episode erase far more than it
+  // needs to while freeing nothing until the pins clear.
+  const auto parked = parked_bytes();
+  const auto effective = size - std::min(size, parked);
+  // A pass that has started runs down to the low water mark; otherwise the
+  // node would sit just under the high mark and re-trigger constantly.
+  const auto threshold = evicting ? maintenance.space.low_water_mark
+                                  : maintenance.space.high_water_mark;
+  if (effective <= threshold) {
+    if (evicting) {
+      TENZIR_VERBOSE("{} is back under its disk budget at {} bytes", *self,
+                     effective);
+      evicting = false;
+    }
+    return;
+  }
+  const auto batch = select_eviction_batch(maintenance.space.step_size);
+  if (batch.empty()) {
+    TENZIR_WARN("{} is over its disk budget at {} bytes but has no partition "
+                "it may evict",
+                *self, effective);
+    evicting = false;
+    return;
+  }
+  evicting = true;
+  TENZIR_VERBOSE("{} evicts {} partition(s) to get from {} bytes under {}",
+                 *self, batch.size(), effective, threshold);
+  for (const auto& partition : batch) {
+    // The selection already skipped everything `retire` would refuse, and the
+    // budget loop has nobody to report an error to; a failure is logged there.
+    std::ignore = retire(partition, None{});
+    ++evicted;
+  }
+  // Re-measure rather than subtract an estimate: the erasures may be deferred
+  // behind pins, in which case nothing was actually freed yet.
+  measure_space();
+}
+
+auto catalog_state::space_status() const -> record {
+  if (maintenance.space.high_water_mark == 0) {
+    return {};
+  }
+  auto result = record{
+    {"evicting", evicting},
+    {"evicted", evicted},
+    {"parked-bytes", parked_bytes()},
+    {"high-water-mark", uint64_t{maintenance.space.high_water_mark}},
+    {"low-water-mark", uint64_t{maintenance.space.low_water_mark}},
+  };
+  if (dbdir_size) {
+    result["dbdir-size"] = *dbdir_size;
+  }
   return result;
 }
 

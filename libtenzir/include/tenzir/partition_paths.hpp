@@ -46,6 +46,10 @@ struct partition_paths {
   /// The directory holding partition stores.
   std::filesystem::path archive_dir;
 
+  /// The database directory the layout was derived from. Empty for the
+  /// relative layout, which names no directory to begin with.
+  std::filesystem::path database_dir;
+
   /// Derives the layout from a database directory. Passing an empty path
   /// yields the layout relative to the database directory, which is what the
   /// filesystem actor resolves its requests against.
@@ -56,6 +60,7 @@ struct partition_paths {
       .synopsis_dir = dbdir / "index",
       .markers_dir = dbdir / "index" / "markers",
       .archive_dir = dbdir / "archive",
+      .database_dir = dbdir,
     };
   }
 

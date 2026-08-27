@@ -179,6 +179,98 @@ auto parse_index_config(const caf::settings& settings) -> index_config {
 
 /// Reads the settings that decide whether the catalog runs storage
 /// maintenance itself, and how hard.
+/// Reads the disk budget from the canonical `tenzir.start.disk-budget-*`
+/// settings, then lets the compaction plugin's `plugins.compaction.space.*`
+/// keys override them. The plugin wins so that a deployment already carrying
+/// those keys keeps the budget it has been running with; an OSS node that
+/// never sets them is unaffected either way.
+auto parse_space_options(const caf::settings& settings) -> disk_monitor_config {
+  auto result = disk_monitor_config{};
+  auto bytesize = [&](std::string_view key) -> Option<size_t> {
+    if (not caf::get_if(&settings, key)) {
+      return None{};
+    }
+    auto parsed = detail::get_bytesize(settings, key, 0);
+    if (not parsed) {
+      diagnostic::error(parsed.error())
+        .note("failed to parse `{}`", key)
+        .throw_();
+    }
+    return *parsed;
+  };
+  auto overridden = std::vector<std::string_view>{};
+  auto take = [&](auto& target, std::string_view canonical,
+                  std::string_view plugin, auto read) {
+    if (auto value = read(canonical)) {
+      target = *value;
+    }
+    if (auto value = read(plugin)) {
+      target = *value;
+      overridden.push_back(plugin);
+    }
+  };
+  take(result.high_water_mark, "tenzir.start.disk-budget-high",
+       "plugins.compaction.space.disk-budget-high", bytesize);
+  take(result.low_water_mark, "tenzir.start.disk-budget-low",
+       "plugins.compaction.space.disk-budget-low", bytesize);
+  take(result.step_size, "tenzir.start.disk-budget-step-size",
+       "plugins.compaction.space.step-size",
+       [&](std::string_view key) -> Option<size_t> {
+         if (const auto* value = caf::get_if<caf::config_value::integer>(
+               &settings, std::string{key})) {
+           return static_cast<size_t>(*value);
+         }
+         return None{};
+       });
+  take(result.scan_binary, "tenzir.start.disk-budget-check-binary",
+       "plugins.compaction.space.scan-binary",
+       [&](std::string_view key) -> Option<Option<std::string>> {
+         if (const auto* value
+             = caf::get_if<std::string>(&settings, std::string{key})) {
+           return Option<std::string>{*value};
+         }
+         return None{};
+       });
+  take(result.scan_interval, "tenzir.start.disk-budget-check-interval",
+       "plugins.compaction.space.interval",
+       [&](std::string_view key) -> Option<std::chrono::seconds> {
+         if (const auto* value = caf::get_if<caf::config_value::integer>(
+               &settings, std::string{key})) {
+           return std::chrono::seconds{*value};
+         }
+         if (const auto* value
+             = caf::get_if<caf::timespan>(&settings, std::string{key})) {
+           return std::chrono::duration_cast<std::chrono::seconds>(*value);
+         }
+         return None{};
+       });
+  if (result.step_size == 0) {
+    result.step_size = defaults::disk_monitor_step_size;
+  }
+  if (result.scan_interval == std::chrono::seconds::zero()) {
+    result.scan_interval = std::chrono::seconds{defaults::disk_scan_interval};
+  }
+  // Matching the disk monitor: an unset low-water mark means "erase down to
+  // the high-water mark", not "erase everything".
+  if (result.low_water_mark == 0) {
+    result.low_water_mark = result.high_water_mark;
+  }
+  if (not overridden.empty()) {
+    TENZIR_INFO("catalog takes its disk budget from {}",
+                fmt::join(overridden, ", "));
+  }
+  if (auto err = validate(result); err.valid()) {
+    diagnostic::error(err).note("failed to validate the disk budget").throw_();
+  }
+  if (result.high_water_mark == 0 and result.scan_binary) {
+    diagnostic::error("invalid configuration")
+      .note("a disk budget check binary is configured but the high-water mark "
+            "is unset")
+      .throw_();
+  }
+  return result;
+}
+
 auto parse_maintenance_options(const caf::settings& settings)
   -> maintenance_options {
   return {
@@ -187,6 +279,7 @@ auto parse_maintenance_options(const caf::settings& settings)
     = get_or(settings, "tenzir.automatic-rebuild", size_t{1}),
     .rebuild_interval
     = get_or(settings, "tenzir.rebuild-interval", defaults::rebuild_interval),
+    .space = parse_space_options(settings),
   };
 }
 
@@ -194,7 +287,13 @@ auto parse_maintenance_options(const caf::settings& settings)
 /// `tenzir.catalog-maintenance` is set the node does not spawn them, so the
 /// two mechanisms never both drive work.
 auto is_replaced_by_catalog_maintenance(std::string_view component) -> bool {
-  return component == "rebuilder";
+  // The compaction component is here for its space-based sweep, which enforces
+  // a disk budget of its own against the same water marks the catalog's budget
+  // loop uses. Two loops both erasing to satisfy one budget would delete about
+  // twice what it asks for. Its temporal compaction has no catalog equivalent
+  // yet and is therefore unavailable while the flag is on, which is the
+  // narrower cost of the two.
+  return component == "rebuilder" or component == "compaction";
 }
 
 auto spawn_catalog(node_actor::stateful_pointer<node_state> self,
@@ -336,8 +435,12 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
   const auto catalog = spawn_catalog(self, filesystem, settings);
   const auto index = spawn_index(self, settings, filesystem, catalog);
   [[maybe_unused]] const auto importer = spawn_importer(self, index);
+  // The catalog enforces the disk budget itself when it runs maintenance, and
+  // the two must never both evict.
   [[maybe_unused]] const auto disk_monitor
-    = spawn_disk_monitor(self, settings, catalog);
+    = get_or(settings, "tenzir.catalog-maintenance", false)
+        ? disk_monitor_actor{}
+        : spawn_disk_monitor(self, settings, catalog);
   // 1. Collect all component_plugins into a name -> plugin* map:
   using component_plugin_map
     = std::unordered_map<std::string, const component_plugin*>;

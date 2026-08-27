@@ -1585,6 +1585,7 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
         self->mail(builder.finish_assert_one_slice()).send(importer);
       });
   }
+  self->state().maintenance = maintenance;
   // The periodic rebuild source. Off unless the catalog runs maintenance --
   // otherwise the standalone rebuilder is doing this, and the two must never
   // both drive work.
@@ -1610,6 +1611,23 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
             }
           },
           true);
+      });
+  }
+  // The disk budget loop. Off unless the catalog runs maintenance -- otherwise
+  // the standalone disk monitor is enforcing the budget, and the two must
+  // never both evict.
+  if (maintenance.enabled and maintenance.space.high_water_mark > 0) {
+    TENZIR_INFO("{} evicts partitions every {} to stay under {} bytes", *self,
+                data{maintenance.space.scan_interval},
+                maintenance.space.high_water_mark);
+    detail::weak_run_delayed_loop(
+      self, maintenance.space.scan_interval, [self] {
+        // A pass already under way re-measures on its own; starting a second
+        // one would evict against a size that the first has already acted on.
+        if (self->state().measuring_space or self->state().evicting) {
+          return;
+        }
+        self->state().measure_space();
       });
   }
   // A retriever that never releases would otherwise keep an erased partition
@@ -1775,6 +1793,9 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
       auto result = record{};
       if (auto rebuild = self->state().rebuild_status(); not rebuild.empty()) {
         result["rebuild"] = std::move(rebuild);
+      }
+      if (auto space = self->state().space_status(); not space.empty()) {
+        result["space"] = std::move(space);
       }
       return result;
     },
