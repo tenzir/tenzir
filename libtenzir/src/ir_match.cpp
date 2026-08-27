@@ -119,17 +119,9 @@ auto make_boolean_array(std::vector<bool> const& mask)
 /// matches and whose guard passes (one output port per arm); the mandatory
 /// wildcard arm catches any remaining rows. Mirrors `match`'s first-match
 /// semantics, evaluating the scrutinee and guards once per slice.
-class MatchOp final : public Operator<table_slice, table_slice> {
+class MatchOp final : public Operator<table_slice, table_slice, true> {
 public:
   explicit MatchOp(MatchArgs args) : args_{std::move(args)} {
-  }
-
-  auto needs_output_ports() const -> bool override {
-    return true;
-  }
-
-  auto process(table_slice, Push<table_slice>&, OpCtx&) -> Task<void> override {
-    TENZIR_UNREACHABLE();
   }
 
   auto process(table_slice input, PushPorts<table_slice>& push, OpCtx& ctx)
@@ -504,7 +496,7 @@ public:
   }
 
   auto spawn(element_type_tag) const -> AnyOperator override {
-    return Box<tenzir::Operator<table_slice, table_slice>>{
+    return Box<tenzir::Operator<table_slice, table_slice, true>>{
       MatchOp{args_}.with_name("match")};
   }
 

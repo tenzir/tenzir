@@ -47,6 +47,7 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/any.hpp"
+#include "tenzir/async/fwd.hpp"
 #include "tenzir/async/push_pull.hpp"
 #include "tenzir/async/scope.hpp"
 #include "tenzir/element_type.hpp"
@@ -260,15 +261,20 @@ public:
     -> Task<void>
     = 0;
 
-  /// Process a single input item into multiple output ports (opt-in).
-  virtual auto process(Input input, PushPorts<Output>& push, OpCtx& ctx)
-    -> Task<void> {
-    TENZIR_UNUSED(input, push, ctx);
-    panic("operator did not implement multi-output process");
-  }
-
 protected:
   ~OperatorInputOutputBase() = default;
+};
+
+template <class Input, class Output>
+class OperatorInputMultiOutputBase {
+public:
+  /// Process a single input item into multiple logical output ports.
+  virtual auto process(Input input, PushPorts<Output>& push, OpCtx& ctx)
+    -> Task<void>
+    = 0;
+
+protected:
+  ~OperatorInputMultiOutputBase() = default;
 };
 
 template <class Input>
@@ -501,14 +507,6 @@ public:
     return OperatorState::normal;
   }
 
-  /// Whether this operator wants to push to output ports other than 0.
-  ///
-  /// If multiple ports are not needed, this should return false,
-  /// for performance reasons.
-  virtual auto needs_output_ports() const -> bool {
-    return false;
-  }
-
   /// Called to request a graceful shutdown.
   ///
   /// `stop()` means "stop producing new work, but finish draining work that is
@@ -544,10 +542,13 @@ private:
 };
 
 template <class Input, class Output>
-class Operator : public OperatorBase,
-                 public OperatorOutputBase<Output>,
-                 public OperatorInputOutputBase<Input, Output> {
+class Operator<Input, Output, false>
+  : public OperatorBase,
+    public OperatorOutputBase<Output>,
+    public OperatorInputOutputBase<Input, Output> {
 public:
+  static constexpr auto multiple_output_ports = false;
+
   Operator() = default;
   Operator(Operator const&) = delete;
   auto operator=(Operator const&) -> Operator& = delete;
@@ -556,11 +557,26 @@ public:
   virtual ~Operator() = default;
 };
 
-using AnyOperator = variant<
-  Box<Operator<void, void>>, Box<Operator<void, chunk_ptr>>,
-  Box<Operator<void, table_slice>>, Box<Operator<chunk_ptr, chunk_ptr>>,
-  Box<Operator<chunk_ptr, table_slice>>, Box<Operator<table_slice, chunk_ptr>>,
-  Box<Operator<table_slice, table_slice>>, Box<Operator<table_slice, void>>,
-  Box<Operator<chunk_ptr, void>>>;
+template <class Input, class Output>
+class Operator<Input, Output, true>
+  : public OperatorBase,
+    public OperatorOutputBase<Output>,
+    public OperatorInputMultiOutputBase<Input, Output> {
+public:
+  // Sinks have no output to route, and sources never get a `process` call, so
+  // neither can meaningfully opt into multiple output ports.
+  static_assert(not std::same_as<Input, void>);
+  static_assert(not std::same_as<Output, void>);
+  static constexpr auto multiple_output_ports = true;
+
+  Operator() = default;
+  Operator(Operator const&) = delete;
+  auto operator=(Operator const&) -> Operator& = delete;
+  Operator(Operator&&) noexcept = default;
+  auto operator=(Operator&&) noexcept -> Operator& = default;
+  virtual ~Operator() = default;
+};
+
+// `AnyOperator` is declared in `tenzir/async/fwd.hpp`.
 
 } // namespace tenzir

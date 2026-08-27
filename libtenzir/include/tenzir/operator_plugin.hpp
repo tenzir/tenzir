@@ -124,18 +124,21 @@ struct Pipeline {
   SubOptimize sub_optimize = SubOptimize::off;
 };
 
-template <class Args, class Input, class Output>
-using SpawnFn = std::function<auto(Args)->Box<Operator<Input, Output>>>;
+template <class Args, class Input, class Output,
+          bool MultipleOutputPorts = false>
+using SpawnFn
+  = std::function<auto(Args)->Box<Operator<Input, Output, MultipleOutputPorts>>>;
 
-template <class Input, class Output>
-using Spawn = SpawnFn<Any, Input, Output>;
+template <class Input, class Output, bool MultipleOutputPorts = false>
+using Spawn = SpawnFn<Any, Input, Output, MultipleOutputPorts>;
 
 // Variant for different operator spawn functions (matches AnyOperator).
 using AnySpawn
   = variant<Spawn<void, void>, Spawn<void, chunk_ptr>, Spawn<void, table_slice>,
             Spawn<chunk_ptr, chunk_ptr>, Spawn<chunk_ptr, table_slice>,
             Spawn<table_slice, chunk_ptr>, Spawn<table_slice, table_slice>,
-            Spawn<table_slice, void>, Spawn<chunk_ptr, void>>;
+            Spawn<table_slice, table_slice, true>, Spawn<table_slice, void>,
+            Spawn<chunk_ptr, void>>;
 
 template <class Args, class Input>
 using SpawnWith
@@ -610,9 +613,10 @@ public:
   template <class Impl>
   auto impl() -> void {
     std::invoke(
-      [&]<class Input, class Output>(Operator<Input, Output>*) {
-        desc_.spawns.push_back(
-          Spawn<Input, Output>{[](Any args) -> Box<Operator<Input, Output>> {
+      [&]<class Input, class Output, bool MultipleOutputPorts>(
+        Operator<Input, Output, MultipleOutputPorts>*) {
+        desc_.spawns.push_back(Spawn<Input, Output, MultipleOutputPorts>{
+          [](Any args) -> Box<Operator<Input, Output, MultipleOutputPorts>> {
             return Impl{std::move(args).as<Args>()};
           }});
       },
@@ -1000,9 +1004,11 @@ public:
           TRY(auto spawn, std::move(option));
           return match(
             spawn,
-            [&]<class Output>(SpawnFn<Args, Input, Output>& spawn) -> AnySpawn {
-              return [spawn = std::move(spawn)](
-                       Any args) -> Box<Operator<Input, Output>> {
+            [&]<class Output, bool MultipleOutputPorts>(
+              SpawnFn<Args, Input, Output, MultipleOutputPorts>& spawn)
+              -> AnySpawn {
+              return [spawn = std::move(spawn)](Any args)
+                       -> Box<Operator<Input, Output, MultipleOutputPorts>> {
                 return spawn(args.as<Args>());
               };
             });

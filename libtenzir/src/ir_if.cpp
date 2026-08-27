@@ -42,17 +42,9 @@ struct IfArgs {
 /// `true` rows to port 0 (consequence) and `false`/`null` rows to port 1
 /// (alternative). A non-boolean condition routes the whole subslice to the
 /// alternative and emits a diagnostic.
-class IfOp final : public Operator<table_slice, table_slice> {
+class IfOp final : public Operator<table_slice, table_slice, true> {
 public:
   explicit IfOp(ast::expression condition) : condition_{std::move(condition)} {
-  }
-
-  auto needs_output_ports() const -> bool override {
-    return true;
-  }
-
-  auto process(table_slice, Push<table_slice>&, OpCtx&) -> Task<void> override {
-    TENZIR_UNREACHABLE();
   }
 
   auto process(table_slice input, PushPorts<table_slice>& push, OpCtx& ctx)
@@ -156,7 +148,7 @@ public:
   }
 
   auto spawn(element_type_tag) const -> AnyOperator override {
-    return Box<tenzir::Operator<table_slice, table_slice>>{
+    return Box<tenzir::Operator<table_slice, table_slice, true>>{
       IfOp{args_.condition}.with_name("if")};
   }
 
