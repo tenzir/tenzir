@@ -182,6 +182,11 @@ using catalog_actor = typed_actor_fwd<
   auto(atom::apply, ast::pipeline, std::vector<tenzir::partition_info>,
        keep_original_partition, std::string)
     ->caf::result<partition_apply_result>,
+  // Starts a rebuild run, or joins the one already in progress. The catalog
+  // selects the partitions itself, against live state, one batch at a time.
+  auto(atom::start, atom::rebuild, rebuild_options)->caf::result<void>,
+  // Stops the rebuild run in progress, if any.
+  auto(atom::stop, atom::rebuild, rebuild_stop_options)->caf::result<void>,
   // Subscribes a PARTITION CREATION LISTENER to the CATALOG.
   auto(atom::subscribe, atom::create, partition_creation_listener_actor,
        send_initial_dbstate)
@@ -451,6 +456,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::node_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_creation_listener_actor))
+  TENZIR_ADD_TYPE_ID((tenzir::rebuild_options))
+  TENZIR_ADD_TYPE_ID((tenzir::rebuild_stop_options))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::atom::done>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::diagnostic>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::table_slice>))

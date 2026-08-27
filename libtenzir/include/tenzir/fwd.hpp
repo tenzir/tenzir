@@ -252,6 +252,8 @@ struct package;
 struct package_pipelines_map;
 struct package_contexts_map;
 struct partition_apply_result;
+struct rebuild_options;
+struct rebuild_stop_options;
 struct partition_info;
 struct PartitionTransformProgress;
 struct partition_synopsis_pair;

@@ -47,7 +47,8 @@ struct fixture {
     fs = sys.spawn(posix_filesystem, dbdir);
     catalog = sys.spawn(tenzir::catalog, fs, paths, std::string{"feather"},
                         index_config{}, /*partition_capacity=*/size_t{1024},
-                        deferred_erase_timeout,
+                        /*desired_batch_size=*/size_t{1024},
+                        maintenance_options{}, deferred_erase_timeout,
                         /*sketch_cache_bytes=*/size_t{0},
                         /*lazy_sketches=*/false);
   }

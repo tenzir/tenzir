@@ -177,6 +177,26 @@ auto parse_index_config(const caf::settings& settings) -> index_config {
   return result;
 }
 
+/// Reads the settings that decide whether the catalog runs storage
+/// maintenance itself, and how hard.
+auto parse_maintenance_options(const caf::settings& settings)
+  -> maintenance_options {
+  return {
+    .enabled = get_or(settings, "tenzir.catalog-maintenance", false),
+    .automatic_rebuild
+    = get_or(settings, "tenzir.automatic-rebuild", size_t{1}),
+    .rebuild_interval
+    = get_or(settings, "tenzir.rebuild-interval", defaults::rebuild_interval),
+  };
+}
+
+/// The components the catalog replaces once it runs maintenance itself. While
+/// `tenzir.catalog-maintenance` is set the node does not spawn them, so the
+/// two mechanisms never both drive work.
+auto is_replaced_by_catalog_maintenance(std::string_view component) -> bool {
+  return component == "rebuilder";
+}
+
 auto spawn_catalog(node_actor::stateful_pointer<node_state> self,
                    const filesystem_actor& filesystem,
                    const caf::settings& settings) -> catalog_actor {
@@ -189,6 +209,9 @@ auto spawn_catalog(node_actor::stateful_pointer<node_state> self,
     partition_paths::from_database_dir(self->state().dir),
     std::string{defaults::store_backend}, parse_index_config(settings),
     get_or(settings, "tenzir.max-partition-size", defaults::max_partition_size),
+    get_or(settings, "tenzir.import.batch-size",
+           defaults::import::table_slice_size),
+    parse_maintenance_options(settings),
     get_or(settings, "tenzir.deferred-erase-timeout",
            defaults::deferred_erase_timeout),
     sketch_cache_bytes, lazy_sketches);
@@ -346,8 +369,16 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
     derive_sequence(derive_sequence, todo.begin()->second->component_name());
   }
   // 3. Load all components in order.
+  const auto catalog_maintenance
+    = get_or(settings, "tenzir.catalog-maintenance", false);
   for (const auto* plugin : sequenced_components) {
     auto name = plugin->component_name();
+    if (catalog_maintenance and is_replaced_by_catalog_maintenance(name)) {
+      TENZIR_VERBOSE("{} does not spawn the {} component because the catalog "
+                     "runs that work itself",
+                     *self, name);
+      continue;
+    }
     auto handle = plugin->make_component(self);
     if (not handle) {
       diagnostic::error("{} failed to create the {} component", *self, name)

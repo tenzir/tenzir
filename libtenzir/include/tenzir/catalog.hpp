@@ -21,6 +21,7 @@
 #include "tenzir/partition_paths.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/plugin_fwd.hpp"
+#include "tenzir/series_builder.hpp"
 #include "tenzir/taxonomies.hpp"
 #include "tenzir/uuid.hpp"
 
@@ -29,6 +30,7 @@
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <limits>
 #include <list>
 #include <unordered_set>
 #include <vector>
@@ -58,6 +60,80 @@ template <class Inspector>
 auto inspect(Inspector& f, send_initial_dbstate& x) {
   return detail::inspect_enum(f, x);
 }
+
+/// What a rebuild run should select and how hard it should work at it.
+struct rebuild_options {
+  /// Rebuild every candidate, not just the outdated and undersized ones.
+  bool all = false;
+
+  /// Also rebuild partitions that are current but smaller than
+  /// `undersized_threshold` of the maximum partition size.
+  bool undersized = false;
+
+  /// How many batches the run transforms at once, and the divisor of its
+  /// per-batch memory budget.
+  size_t parallel = 1;
+
+  /// Stop after selecting this many partitions.
+  size_t max_partitions = std::numeric_limits<size_t>::max();
+
+  /// Restricts the run to the partitions matching this expression.
+  expression expression = {};
+
+  /// Return as soon as the run has started rather than when it finishes.
+  bool detached = false;
+
+  /// Whether this is the periodic source rather than a user-issued run. The
+  /// automatic source keeps picking up newly ingested partitions; a manual run
+  /// bounds itself to the partitions that existed when it started, so it
+  /// terminates under ongoing ingest.
+  bool automatic = false;
+
+  friend auto inspect(auto& f, rebuild_options& x) {
+    return f.object(x)
+      .pretty_name("tenzir.rebuild_options")
+      .fields(f.field("all", x.all), f.field("undersized", x.undersized),
+              f.field("parallel", x.parallel),
+              f.field("max-partitions", x.max_partitions),
+              f.field("expression", x.expression),
+              f.field("detached", x.detached),
+              f.field("automatic", x.automatic));
+  }
+};
+
+/// How a rebuild run should be stopped.
+struct rebuild_stop_options {
+  /// Return immediately instead of waiting for the run to wind down.
+  bool detached = false;
+
+  friend auto inspect(auto& f, rebuild_stop_options& x) {
+    return f.object(x)
+      .pretty_name("tenzir.rebuild_stop_options")
+      .fields(f.field("detached", x.detached));
+  }
+};
+
+/// How the catalog runs storage maintenance itself.
+///
+/// Until the cutover this selects between two mechanisms and never enables
+/// both: with `enabled` the node runs no standalone rebuilder, compactor, or
+/// disk monitor and the catalog drives that work; without it the catalog's
+/// sources stay stopped and the standalone actors behave exactly as they do
+/// today.
+struct maintenance_options {
+  bool enabled = false;
+
+  /// The automatic rebuild source's parallelism. Zero disables that source
+  /// alone; everything else keeps running.
+  size_t automatic_rebuild = 1;
+
+  /// How often the automatic source re-selects, first pass at half interval.
+  duration rebuild_interval = {};
+};
+
+/// The threshold at which a partition counts as undersized, relative to the
+/// configured `tenzir.max-partition-size`.
+inline constexpr auto undersized_threshold = 0.8;
 
 /// The result of a catalog query.
 struct catalog_lookup_result {
@@ -179,6 +255,52 @@ struct deferred_erase {
 auto create_marker(const std::vector<uuid>& in, const std::vector<uuid>& out,
                    keep_original_partition keep) -> chunk_ptr;
 
+/// A rebuild run in progress inside the catalog.
+struct rebuild_run {
+  rebuild_options options = {};
+
+  /// Distinguishes this run from the one it superseded. A manual run can
+  /// displace an automatic one whose batches are still in flight; their
+  /// continuations then find a run engaged and would otherwise settle their
+  /// accounts against it.
+  uint64_t generation = 0;
+
+  /// A manual run only considers partitions that already existed when it
+  /// started, so it terminates under ongoing ingest. Unset for the automatic
+  /// source, whose whole point is to keep picking up new partitions.
+  Option<time> horizon = None{};
+
+  /// Runtime byte estimates per schema, for legacy partitions that carry no
+  /// `approx_bytes`. The catalog sees every transform result, so it learns
+  /// these as it goes.
+  std::unordered_map<type, uint64_t> approx_bytes_per_event = {};
+
+  /// Every partition this run has already selected, plus every partition it
+  /// produced. Rebuilding a partition yields a fresh id, so without this a
+  /// run would keep finding its own output eligible and never terminate --
+  /// `--all` most obviously, since its output matches the same filter.
+  std::unordered_set<uuid> visited = {};
+
+  /// How many partitions the run has handed to a transform, against
+  /// `options.max_partitions`.
+  size_t selected = 0;
+
+  /// How many batches are in flight, against `options.parallel`.
+  size_t running = 0;
+
+  /// Statistics, as `rebuild show` reports them.
+  size_t transformed = 0;
+  size_t results = 0;
+  size_t quarantined = 0;
+
+  /// Set once a stop was requested; the run winds down instead of selecting
+  /// more work.
+  bool stopping = false;
+
+  /// Answered when the run finishes.
+  std::vector<caf::typed_response_promise<void>> stop_requests = {};
+};
+
 /// The state of the CATALOG actor.
 struct catalog_state {
 public:
@@ -249,6 +371,75 @@ public:
 
   /// Deletes deferred partitions whose deadline has passed, pins and all.
   void sweep_deferred();
+
+  // -- rebuild ----------------------------------------------------------------
+
+  /// Selects the next batch of rebuild work, empty when no schema has enough
+  /// eligible partitions left. Evaluated against live state on every call, so
+  /// a run picks up partitions ingested after it started and skips ones erased
+  /// or claimed by another transform underneath it.
+  auto select_rebuild_batch(rebuild_run& run) -> std::vector<partition_info>;
+
+  /// Starts a rebuild run, or joins the one already in progress.
+  auto start_rebuild(rebuild_options options) -> caf::result<void>;
+
+  /// Winds the current run down: it selects no further work and finishes once
+  /// its in-flight batches land.
+  auto stop_rebuild(const rebuild_stop_options& options) -> caf::result<void>;
+
+  /// Fills the run's free batch slots with freshly selected work. Called when
+  /// a run starts and whenever a batch lands.
+  void schedule_rebuild();
+
+  /// Ends the run and answers everyone waiting on it.
+  void finish_rebuild();
+
+  /// Continues the run after a batch landed, or ends it if it was winding down.
+  void schedule_rebuild_or_finish();
+
+  /// Describes one run's statistics and options, shared between the live
+  /// `current-run` and the historical `last-run` status entries.
+  static auto describe_rebuild_run(const rebuild_run& run) -> record;
+
+  /// Reports the current and last run, plus every partition quarantined so
+  /// far. The quarantine set outlives the run that found it.
+  auto rebuild_status() const -> record;
+
+  /// Emits a `tenzir.metrics.rebuild_quarantine` event. Only on demand, when a
+  /// partition is actually quarantined, so unlike the periodic rebuild metric
+  /// it does not sit on a timer.
+  void report_quarantine(const uuid& partition, const caf::error& error);
+
+  /// Whether a partition is worth handing to a rebuild at all.
+  auto is_rebuild_candidate(const uuid& partition,
+                            const partition_synopsis& synopsis,
+                            const rebuild_run& run) const -> bool;
+
+  /// Sets up a rebuild run and starts its first batches. Fails if a run is
+  /// already going that this one must not displace.
+  auto begin_rebuild(rebuild_options options) -> caf::error;
+
+  /// Folds a partition'"'"'s size into the per-schema byte-per-event estimate
+  /// that covers legacy partitions without `approx_bytes`.
+  static void
+  learn_size_estimate(rebuild_run& run, const partition_info& partition);
+
+  /// The estimated decoded size of a partition, falling back to the learned
+  /// per-schema estimate and then to `unknown`.
+  static auto
+  estimate_approx_bytes(const rebuild_run& run, const partition_info& partition,
+                        uint64_t unknown) -> uint64_t;
+
+  /// Whether we can say how large a partition decodes to. Partitions written
+  /// before `approx_bytes` existed cannot be measured until one of their
+  /// schema has been rebuilt once.
+  static auto has_size_estimate(const rebuild_run& run,
+                                const partition_info& partition) -> bool;
+
+  /// Whether a batch that holds a single partition is worth running.
+  static auto is_worth_rebuilding_alone(const rebuild_run& run,
+                                        const partition_info& partition)
+    -> bool;
 
   /// The point at which a deferral parked now would be forced, if at all.
   auto deferred_erase_deadline() const -> Option<time>;
@@ -365,6 +556,31 @@ public:
   /// Zero disables forcing.
   duration deferred_erase_timeout = {};
 
+  /// The maximum number of events in a partition.
+  size_t partition_capacity = {};
+
+  /// The batch size a rebuild rebatches its output to.
+  size_t desired_batch_size = {};
+
+  /// The rebuild run in progress, if any.
+  Option<rebuild_run> rebuild = None{};
+
+  /// The most recently finished run, so that `rebuild show` still describes
+  /// it once the run itself is gone.
+  Option<rebuild_run> last_rebuild = None{};
+
+  /// Partitions quarantined for an unrecoverable format error, and the
+  /// rendered error that caused it. Kept outside `rebuild` so that
+  /// `rebuild show` keeps reporting every quarantined partition after the
+  /// run that found it has finished. In-memory only: a quarantined partition
+  /// is erased from disk, so it can never be reselected after a restart
+  /// either way.
+  std::unordered_map<uuid, std::string> quarantined_partitions = {};
+
+  /// Builders for the rebuild metrics, unset while no importer is registered.
+  Option<series_builder> rebuild_metric = None{};
+  Option<series_builder> quarantine_metric = None{};
+
   /// The collection of currently active transformers. These need to be
   /// explicitly shut down when the catalog exits. The `disposable` refers to
   /// the monitor that would otherwise automatically remove the actor from the
@@ -408,6 +624,8 @@ public:
 /// @param synopsis_opts The false-positive rates for the types and fields of
 /// newly created synopses.
 /// @param partition_capacity The maximum number of events per partition.
+/// @param desired_batch_size The batch size a rebuild rebatches its output to.
+/// @param maintenance Whether and how the catalog runs storage maintenance.
 /// @param sketch_cache_bytes Memory budget for on-demand loading of deferred
 /// Bloom-filter sketches; zero disables on-demand loading.
 /// @param lazy_sketches Whether Bloom-filter sketches are deferred; when set,
@@ -416,7 +634,8 @@ public:
 auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
              filesystem_actor filesystem, partition_paths paths,
              std::string store_backend, index_config synopsis_opts,
-             size_t partition_capacity, duration deferred_erase_timeout,
+             size_t partition_capacity, size_t desired_batch_size,
+             maintenance_options maintenance, duration deferred_erase_timeout,
              size_t sketch_cache_bytes = 0, bool lazy_sketches = false)
   -> catalog_actor::behavior_type;
 

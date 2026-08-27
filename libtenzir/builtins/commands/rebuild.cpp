@@ -1409,6 +1409,62 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
 
 /// A helper function to get a handle to the REBUILDER actor from a client
 /// process.
+/// The component that drives rebuilds. A node with
+/// `tenzir.catalog-maintenance` set does not run a rebuilder at all, because
+/// the catalog does that work itself, so we fall back to it. The fallback goes
+/// away with the rebuilder in the cutover, when the catalog becomes the only
+/// answer.
+struct rebuild_driver {
+  rebuilder_actor rebuilder = {};
+  catalog_actor catalog = {};
+};
+
+auto get_component(caf::scoped_actor& self, const node_actor& node,
+                   std::string label) -> caf::expected<caf::actor> {
+  auto result = caf::expected<caf::actor>{caf::error{}};
+  self->mail(atom::get_v, atom::label_v, std::vector<std::string>{label})
+    .request(node, caf::infinite)
+    .receive(
+      [&](std::vector<caf::actor>& actors) {
+        if (actors.empty()) {
+          result = caf::make_error(
+            ec::logic_error,
+            fmt::format("{} is not in the component registry", label));
+        } else {
+          TENZIR_ASSERT(actors.size() == 1);
+          result = std::move(actors[0]);
+        }
+      },
+      [&](caf::error& err) {
+        result = std::move(err);
+      });
+  return result;
+}
+
+auto get_rebuild_driver(caf::actor_system& sys)
+  -> caf::expected<rebuild_driver> {
+  auto self = caf::scoped_actor{sys};
+  auto node_opt = connect_to_node(self);
+  if (not node_opt) {
+    return std::move(node_opt.error());
+  }
+  const auto node = std::move(*node_opt);
+  if (auto rebuilder = get_component(self, node, "rebuilder")) {
+    return rebuild_driver{
+      .rebuilder = caf::actor_cast<rebuilder_actor>(std::move(*rebuilder)),
+    };
+  }
+  auto catalog = get_component(self, node, "catalog");
+  if (not catalog) {
+    return caf::make_error(ec::logic_error,
+                           "neither a rebuilder nor a catalog is in the "
+                           "component registry");
+  }
+  return rebuild_driver{
+    .catalog = caf::actor_cast<catalog_actor>(std::move(*catalog)),
+  };
+}
+
 caf::expected<rebuilder_actor> get_rebuilder(caf::actor_system& sys) {
   auto self = caf::scoped_actor{sys};
   auto node_opt = connect_to_node(self);
@@ -1450,9 +1506,9 @@ rebuild_start_command(const invocation& inv, caf::actor_system& sys) {
   // Create a scoped actor for interaction with the actor system and connect to
   // the node.
   auto self = caf::scoped_actor{sys};
-  auto rebuilder = get_rebuilder(sys);
-  if (not rebuilder) {
-    return caf::make_message(std::move(rebuilder.error()));
+  auto driver = get_rebuild_driver(sys);
+  if (not driver) {
+    return caf::make_message(std::move(driver.error()));
   }
   // Parse the query expression, iff it exists.
   auto query = read_query(inv, "tenzir.rebuild.read", must_provide_query::no);
@@ -1480,15 +1536,28 @@ rebuild_start_command(const invocation& inv, caf::actor_system& sys) {
     .automatic = false,
   };
   auto result = caf::message{};
-  self->mail(atom::start_v, std::move(options))
-    .request(*rebuilder, caf::infinite)
-    .receive(
-      [] {
-        // nop
-      },
-      [&](caf::error& err) {
-        result = caf::make_message(std::move(err));
-      });
+  auto on_error = [&](caf::error& err) {
+    result = caf::make_message(std::move(err));
+  };
+  if (driver->rebuilder) {
+    self->mail(atom::start_v, std::move(options))
+      .request(driver->rebuilder, caf::infinite)
+      .receive([] { /* nop */ }, on_error);
+  } else {
+    self
+      ->mail(atom::start_v, atom::rebuild_v,
+             rebuild_options{
+               .all = options.all,
+               .undersized = options.undersized,
+               .parallel = options.parallel,
+               .max_partitions = options.max_partitions,
+               .expression = std::move(options.expression),
+               .detached = options.detached,
+               .automatic = false,
+             })
+      .request(driver->catalog, caf::infinite)
+      .receive([] { /* nop */ }, on_error);
+  }
   return result;
 }
 
@@ -1497,23 +1566,27 @@ rebuild_stop_command(const invocation& inv, caf::actor_system& sys) {
   // Create a scoped actor for interaction with the actor system and connect to
   // the node.
   auto self = caf::scoped_actor{sys};
-  auto rebuilder = get_rebuilder(sys);
-  if (not rebuilder) {
-    return caf::make_message(std::move(rebuilder.error()));
+  auto driver = get_rebuild_driver(sys);
+  if (not driver) {
+    return caf::make_message(std::move(driver.error()));
   }
   auto result = caf::message{};
-  auto options = stop_options{
-    .detached = caf::get_or(inv.options, "tenzir.rebuild.detached", false),
+  auto on_error = [&](caf::error& err) {
+    result = caf::make_message(std::move(err));
   };
-  self->mail(atom::stop_v, std::move(options))
-    .request(*rebuilder, caf::infinite)
-    .receive(
-      [] {
-        // nop
-      },
-      [&](caf::error& err) {
-        result = caf::make_message(std::move(err));
-      });
+  const auto detached
+    = caf::get_or(inv.options, "tenzir.rebuild.detached", false);
+  if (driver->rebuilder) {
+    self->mail(atom::stop_v, stop_options{.detached = detached})
+      .request(driver->rebuilder, caf::infinite)
+      .receive([] { /* nop */ }, on_error);
+  } else {
+    self
+      ->mail(atom::stop_v, atom::rebuild_v,
+             rebuild_stop_options{.detached = detached})
+      .request(driver->catalog, caf::infinite)
+      .receive([] { /* nop */ }, on_error);
+  }
   return result;
 }
 
@@ -1521,13 +1594,16 @@ caf::message rebuild_show_command(const invocation&, caf::actor_system& sys) {
   // Create a scoped actor for interaction with the actor system and connect to
   // the node.
   auto self = caf::scoped_actor{sys};
-  auto rebuilder = get_rebuilder(sys);
-  if (not rebuilder) {
-    return caf::make_message(std::move(rebuilder.error()));
+  auto driver = get_rebuild_driver(sys);
+  if (not driver) {
+    return caf::make_message(std::move(driver.error()));
   }
   auto err = caf::error{};
+  auto status = driver->rebuilder
+                  ? caf::actor_cast<caf::actor>(driver->rebuilder)
+                  : caf::actor_cast<caf::actor>(driver->catalog);
   self->mail(atom::status_v, status_verbosity::debug, duration::max())
-    .request(*rebuilder, caf::infinite)
+    .request(caf::actor_cast<status_client_actor>(status), caf::infinite)
     .receive(
       [&](const record& status) {
         auto yaml = to_yaml(status);

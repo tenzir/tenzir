@@ -43,6 +43,7 @@
 #include "tenzir/time_synopsis.hpp"
 #include "tenzir/uint64_synopsis.hpp"
 
+#include <caf/actor_registry.hpp>
 #include <caf/binary_serializer.hpp>
 #include <caf/detail/set_thread_name.hpp>
 #include <caf/expected.hpp>
@@ -1503,7 +1504,8 @@ auto catalog_state::memusage() const -> size_t {
 auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
              filesystem_actor filesystem, partition_paths paths,
              std::string store_backend, index_config synopsis_opts,
-             size_t partition_capacity, duration deferred_erase_timeout,
+             size_t partition_capacity, size_t desired_batch_size,
+             maintenance_options maintenance, duration deferred_erase_timeout,
              size_t sketch_cache_bytes, bool lazy_sketches)
   -> catalog_actor::behavior_type {
   if (self->getf(caf::local_actor::is_detached_flag)) {
@@ -1516,6 +1518,8 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
   // For historic reasons, the `tenzir.max-partition-size` is stored as the
   // `cardinality` in the value index options.
   self->state().index_opts["cardinality"] = partition_capacity;
+  self->state().partition_capacity = partition_capacity;
+  self->state().desired_batch_size = desired_batch_size;
   self->state().deferred_erase_timeout = deferred_erase_timeout;
   self->state().store_actor_plugin
     = plugins::find<store_actor_plugin>(store_backend);
@@ -1543,6 +1547,71 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
   }
   TENZIR_VERBOSE("{} finished initializing and is ready to accept queries",
                  *self);
+  // The rebuild metrics. The importer is not up yet when the catalog starts,
+  // so the periodic emitter below looks it up each time, the way the index
+  // does for its own actor metrics.
+  if (maintenance.enabled) {
+    self->state().quarantine_metric = series_builder{type{
+      "tenzir.metrics.rebuild_quarantine",
+      record_type{
+        {"timestamp", time_type{}},
+        {"partition", string_type{}},
+        {"error", string_type{}},
+      },
+      {{"internal"}},
+    }};
+    auto builder = series_builder{type{
+      "tenzir.metrics.rebuild",
+      record_type{
+        {"timestamp", time_type{}},
+        {"partitions", uint64_type{}},
+        {"queued_partitions", uint64_type{}},
+      },
+      {{"internal"}},
+    }};
+    detail::weak_run_delayed_loop(
+      self, defaults::metrics_interval,
+      [self, builder = std::move(builder)]() mutable {
+        const auto importer
+          = self->system().registry().get<importer_actor>("tenzir.importer");
+        if (not importer) {
+          return;
+        }
+        const auto& rebuild = self->state().rebuild;
+        auto metric = builder.record();
+        metric.field("timestamp", time::clock::now());
+        metric.field("partitions", rebuild ? rebuild->running : 0);
+        metric.field("queued_partitions", uint64_t{0});
+        self->mail(builder.finish_assert_one_slice()).send(importer);
+      });
+  }
+  // The periodic rebuild source. Off unless the catalog runs maintenance --
+  // otherwise the standalone rebuilder is doing this, and the two must never
+  // both drive work.
+  if (maintenance.enabled and maintenance.automatic_rebuild > 0) {
+    TENZIR_INFO("{} rebuilds undersized partitions every {} with {} thread(s)",
+                *self, data{maintenance.rebuild_interval},
+                maintenance.automatic_rebuild);
+    // Delay the first pass so that it does not land in the middle of startup.
+    detail::weak_run_delayed(
+      self, maintenance.rebuild_interval / 2, [self, maintenance] {
+        detail::weak_run_delayed_loop(
+          self, maintenance.rebuild_interval,
+          [self, maintenance] {
+            auto error = self->state().begin_rebuild(rebuild_options{
+              .undersized = true,
+              .parallel = maintenance.automatic_rebuild,
+              .expression = trivially_true_expression(),
+              .automatic = true,
+            });
+            if (error.valid()) {
+              TENZIR_WARN("{} failed to start an automatic rebuild: {}", *self,
+                          error);
+            }
+          },
+          true);
+      });
+  }
   // A retriever that never releases would otherwise keep an erased partition
   // on disk forever. Sweeping at a fraction of the timeout bounds how long
   // past its deadline a partition can linger.
@@ -1675,6 +1744,14 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
       self->state().add_lease(query_context.id, owner, partition_ids(*result));
       return std::move(*result);
     },
+    [self](atom::start, atom::rebuild,
+           rebuild_options& options) -> caf::result<void> {
+      return self->state().start_rebuild(std::move(options));
+    },
+    [self](atom::stop, atom::rebuild,
+           const rebuild_stop_options& options) -> caf::result<void> {
+      return self->state().stop_rebuild(options);
+    },
     [self](atom::release, uuid query) -> caf::result<void> {
       self->state().release_lease(query);
       return {};
@@ -1694,8 +1771,12 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
         tenzir::ec::lookup_error,
         fmt::format("unable to find partition with uuid: {}", uuid));
     },
-    [](atom::status, status_verbosity, duration) {
-      return record{};
+    [self](atom::status, status_verbosity, duration) {
+      auto result = record{};
+      if (auto rebuild = self->state().rebuild_status(); not rebuild.empty()) {
+        result["rebuild"] = std::move(rebuild);
+      }
+      return result;
     },
     [self](const caf::exit_msg& msg) {
       TENZIR_VERBOSE("{} received EXIT from {} with reason: {}", *self,
