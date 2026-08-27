@@ -411,9 +411,9 @@ filter(const table_slice& slice, const expression& expr);
 [[nodiscard]] Option<table_slice>
 filter(const table_slice& slice, const ids& hints);
 
-/// Filters a table slice by a boolean mask, keeping only rows where the mask
-/// value bit is true. The null bitmap of the mask is ignored. Returns an empty
-/// table slice if no rows are kept.
+/// Filters a table slice by a boolean mask, keeping only rows where the mask is
+/// true. A null counts as false and is dropped. Returns an empty table slice if
+/// no rows are kept.
 /// @pre `slice.rows() == mask.length()`
 [[nodiscard]] auto filter(const table_slice& slice,
                           const arrow::BooleanArray& mask) -> table_slice;
@@ -425,12 +425,30 @@ filter(const table_slice& slice, const ids& hints);
                              std::span<const int64_t> rows) -> table_slice;
 
 /// Partitions a table slice into two based on a boolean mask. Rows where the
-/// mask value bit is true go to the first result, others to the second.
-/// The null bitmap of the mask is ignored.
+/// mask is true go to the first result, others to the second. A null counts as
+/// false and thus goes to the second result.
 /// @pre `slice.rows() == mask.length()`
 [[nodiscard]] auto
 partition(const table_slice& slice, const arrow::BooleanArray& mask)
   -> std::pair<table_slice, table_slice>;
+
+/// A contiguous run of rows that all fall on the same side of a mask.
+struct PartitionRun {
+  /// Whether the mask selected these rows.
+  bool selected;
+  table_slice slice;
+};
+
+/// Splits a table slice into contiguous runs of rows that share the same mask
+/// value, as zero-copy sub-slices. A null counts as not selected.
+///
+/// Returns `None` when the mask is too interleaved to be covered by `max_runs`
+/// runs. Callers should then fall back to `partition`, which always yields
+/// exactly two slices but has to copy every row to do so.
+/// @pre `slice.rows() == mask.length()`
+[[nodiscard]] auto
+partition_runs(const table_slice& slice, const arrow::BooleanArray& mask,
+               size_t max_runs) -> Option<std::vector<PartitionRun>>;
 
 /// Resolves all enumeration columns in a table slice to string columns. Note
 /// that this does not go into records inside lists or maps.

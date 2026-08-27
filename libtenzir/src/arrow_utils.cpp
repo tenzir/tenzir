@@ -13,6 +13,8 @@
 #include "tenzir/try.hpp"
 
 #include <arrow/api.h>
+#include <arrow/util/bit_run_reader.h>
+#include <arrow/util/bitmap_ops.h>
 
 namespace tenzir {
 
@@ -330,47 +332,83 @@ template struct instantiate_append_array_slice<std::monostate{}>;
 
 namespace {
 
-template <typename F>
-void for_each_true_run(const arrow::BooleanArray& mask, F&& fn) {
-  auto i = int64_t{0};
-  auto len = mask.length();
-  while (i < len) {
-    while (i < len and not(mask.IsValid(i) and mask.Value(i))) {
-      ++i;
-    }
-    if (i >= len) {
-      break;
-    }
-    auto begin = i;
-    while (i < len and mask.IsValid(i) and mask.Value(i)) {
-      ++i;
-    }
-    fn(begin, i);
+/// A bitmap in which a null of the source mask reads as `false`, so that run
+/// detection needs to look at a single bitmap only.
+struct EffectiveBitmap {
+  const uint8_t* data = nullptr;
+  int64_t offset = 0;
+  /// Keeps `data` alive when the validity had to be folded in.
+  std::shared_ptr<arrow::Buffer> owned = nullptr;
+};
+
+/// Folds the validity of `mask` into its values.
+///
+/// Without nulls this borrows the value bitmap. With nulls it materializes the
+/// conjunction once, which costs one bitmap allocation but keeps the scan
+/// below word-wise instead of falling back to bit-by-bit.
+auto to_effective_bitmap(const arrow::BooleanArray& mask) -> EffectiveBitmap {
+  const auto& data = *mask.data();
+  // Bitmaps carry their offset in bits, so the pointers must stay unadjusted.
+  const auto* values = data.GetValues<uint8_t>(1, 0);
+  if (mask.null_count() == 0) {
+    return {values, data.offset, nullptr};
   }
+  const auto* validity = data.GetValues<uint8_t>(0, 0);
+  auto buffer = check(arrow::internal::BitmapAnd(arrow_memory_pool(), validity,
+                                                 data.offset, values,
+                                                 data.offset, data.length, 0));
+  return {buffer->data(), 0, std::move(buffer)};
 }
 
 /// Iterates contiguous runs in a boolean mask, calling fn(begin, end, value)
-/// for each run.
+/// for each run. A null counts as `false`.
+///
+/// Arrow's `BitRunReader` scans a machine word at a time instead of polling
+/// every single bit, which matters because callers use the runs to replace
+/// per-row appends with bulk slice appends.
 template <typename F>
 void for_each_run(const arrow::BooleanArray& mask, F&& fn) {
   auto len = mask.length();
   if (len == 0) {
     return;
   }
-  auto run_begin = int64_t{0};
-  auto run_value = mask.IsValid(0) and mask.Value(0);
-  for (auto i = int64_t{1}; i < len; ++i) {
-    auto value = mask.IsValid(i) and mask.Value(i);
-    if (value != run_value) {
-      fn(run_begin, i, run_value);
-      run_begin = i;
-      run_value = value;
-    }
+  auto bitmap = to_effective_bitmap(mask);
+  auto reader = arrow::internal::BitRunReader{bitmap.data, bitmap.offset, len};
+  auto begin = int64_t{0};
+  while (begin < len) {
+    auto run = reader.NextRun();
+    TENZIR_ASSERT(run.length > 0);
+    auto end = begin + run.length;
+    fn(begin, end, run.set);
+    begin = end;
   }
-  fn(run_begin, len, run_value);
 }
 
 } // namespace
+
+auto mask_runs(const arrow::BooleanArray& mask, size_t limit)
+  -> Option<std::vector<MaskRun>> {
+  auto len = mask.length();
+  auto result = std::vector<MaskRun>{};
+  if (len == 0) {
+    return result;
+  }
+  result.reserve(std::min(limit, static_cast<size_t>(len)));
+  auto bitmap = to_effective_bitmap(mask);
+  auto reader = arrow::internal::BitRunReader{bitmap.data, bitmap.offset, len};
+  auto begin = int64_t{0};
+  while (begin < len) {
+    if (result.size() == limit) {
+      return None{};
+    }
+    auto run = reader.NextRun();
+    TENZIR_ASSERT(run.length > 0);
+    auto end = begin + run.length;
+    result.push_back({begin, end, run.set});
+    begin = end;
+  }
+  return result;
+}
 
 auto partition_array(arrow::ArrayBuilder& true_builder,
                      arrow::ArrayBuilder& false_builder, const type& ty,

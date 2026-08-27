@@ -38,6 +38,13 @@ struct IfArgs {
   }
 };
 
+/// The maximum number of contiguous runs for which `IfOp` keeps the zero-copy
+/// sub-slice path instead of materializing one slice per branch. Conditions
+/// that correlate with the input order, such as a predicate on a sorted or
+/// per-schema field, stay well below this; interleaved ones exceed it after a
+/// short prefix and fall back to copying.
+constexpr auto max_partition_runs = size_t{4};
+
 /// Runtime operator for `if`: evaluates the condition per slice and routes
 /// `true` rows to port 0 (consequence) and `false`/`null` rows to port 1
 /// (alternative). A non-boolean condition routes the whole subslice to the
@@ -65,6 +72,16 @@ public:
             .emit(dh);
         }
         co_await push(1, sliced);
+        continue;
+      }
+      // A condition that is clustered rather than interleaved lets both
+      // branches be served by zero-copy sub-slices, at the price of a few more
+      // messages than the two that `partition` produces.
+      if (auto runs
+          = partition_runs(sliced, *typed->array, max_partition_runs)) {
+        for (auto& [selected, part] : *runs) {
+          co_await push(selected ? 0 : 1, std::move(part));
+        }
         continue;
       }
       // `partition` sends `true` rows to the first slice and `false`/`null`

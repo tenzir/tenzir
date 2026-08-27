@@ -1327,6 +1327,22 @@ auto partition(const table_slice& slice, const arrow::BooleanArray& mask)
   };
 }
 
+auto partition_runs(const table_slice& slice, const arrow::BooleanArray& mask,
+                    size_t max_runs) -> Option<std::vector<PartitionRun>> {
+  TENZIR_ASSERT(detail::narrow_cast<int64_t>(slice.rows()) == mask.length());
+  auto runs = mask_runs(mask, max_runs);
+  if (not runs) {
+    return None{};
+  }
+  auto result = std::vector<PartitionRun>{};
+  result.reserve(runs->size());
+  for (auto [begin, end, value] : *runs) {
+    result.push_back({value, subslice(slice, detail::narrow<size_t>(begin),
+                                      detail::narrow<size_t>(end))});
+  }
+  return result;
+}
+
 uint64_t count_matching(const table_slice& slice, const expression& expr,
                         const ids& hints) {
   if (slice.rows() == 0) {
