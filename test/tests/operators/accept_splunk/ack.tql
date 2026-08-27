@@ -1,0 +1,57 @@
+---
+fixtures:
+  - http_request:
+      requests:
+        - path: /services/collector/event
+          json_body:
+            event: one
+          headers:
+            Authorization: Splunk test-token
+            X-Splunk-Request-Channel: 00872DC6-AC83-4EDE-8AFE-8413C3825C4C
+          capture_json:
+            ack_id: ackId
+        - path: /services/collector/ack
+          json_body:
+            acks:
+              - from_capture: ack_id
+              - from_capture: ack_id
+          headers:
+            Authorization: Splunk test-token
+            X-Splunk-Request-Channel: 00872dc6-ac83-4ede-8afe-8413c3825c4c
+        - path: /services/collector/event
+          json_body:
+            event: two
+          delay_before: 0.2
+          headers:
+            Authorization: Splunk test-token
+            X-Splunk-Request-Channel: 00872DC6-AC83-4EDE-8AFE-8413C3825C4C
+          stop_on_connection_drop: true
+assertions:
+  fixtures:
+    http_request:
+      responses:
+        - request: 0
+          status: 200
+          json:
+            - path: code
+              equals: 0
+            - path: ackId
+              type: integer
+              min: 1
+              max: 9007199254740991
+        - request: 1
+          status: 200
+          json:
+            - path: acks
+              key_from_capture: ack_id
+              equals: false
+
+timeout: 10
+---
+
+accept_splunk env("HTTP_REQUEST_ENDPOINT"),
+  hec_token=secret("test-token", _literal=true),
+  ack=true,
+  max_pending_acks=1,
+  ack_timeout=100ms
+head 2
