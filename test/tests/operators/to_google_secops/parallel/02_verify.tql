@@ -1,0 +1,7 @@
+// Verify that the parallel instances together sent every event exactly once.
+// The grouping into requests is nondeterministic, so only the log texts are
+// compared.
+from_file env("GOOGLE_SECOPS_CAPTURE_FILE") { read_json }
+unroll payload.inlineSource.logs
+select path, text = payload.inlineSource.logs.data.decode_base64().string()
+sort text
