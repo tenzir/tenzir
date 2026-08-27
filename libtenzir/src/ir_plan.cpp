@@ -55,7 +55,7 @@ auto derive_parallelism(const ir::Operator& op,
 auto ir::PlanBuilder::derive_kind(const PlannedOperator& up,
                                   const PlannedOperator& down,
                                   element_type_tag type) const -> ChannelKind {
-  if (par_scopes_.back().fused == parallelism::Fusing::all) {
+  if (par_scopes_.back().fuse == parallelism::Fusing::all) {
     return ChannelKind::fused;
   }
   const auto up_degree = up.nominal_parallelism;
@@ -68,7 +68,7 @@ auto ir::PlanBuilder::derive_kind(const PlannedOperator& up,
   const auto matched = up_degree == down_degree and not down_keyed
                        and up.op->parallelizable()
                        and down.op->parallelizable();
-  if (matched and par_scopes_.back().fused == parallelism::Fusing::parallel) {
+  if (matched and par_scopes_.back().fuse == parallelism::Fusing::parallel) {
     return ChannelKind::fused;
   }
   // Every remaining channel between multi-instance operators is one of many:
@@ -78,7 +78,7 @@ auto ir::PlanBuilder::derive_kind(const PlannedOperator& up,
   // exempt: it asks for plain buffered channels throughout, so the budget
   // would only cost throughput without bounding anything.
   if (type.is<table_slice>()
-      and par_scopes_.back().fused != parallelism::Fusing::none
+      and par_scopes_.back().fuse != parallelism::Fusing::none
       and (up_degree > 1 or down_degree > 1)) {
     return ChannelKind::tiny;
   }
@@ -571,20 +571,6 @@ auto parse_degree(std::string_view value) -> Option<size_t> {
   return None{};
 }
 
-/// Parse a `fusing` option value: `all`, `parallel`, or `never`.
-auto parse_fusing(std::string_view value) -> Option<ir::parallelism::Fusing> {
-  if (value == "all") {
-    return ir::parallelism::Fusing::all;
-  }
-  if (value == "parallel") {
-    return ir::parallelism::Fusing::parallel;
-  }
-  if (value == "none") {
-    return ir::parallelism::Fusing::none;
-  }
-  return None{};
-}
-
 /// Parse a parallelism value: a degree, optionally followed by
 /// comma-separated `<key>=<value>` options.
 auto parse_parallelism(std::string_view value) -> Option<ir::Parallelism> {
@@ -600,9 +586,9 @@ auto parse_parallelism(std::string_view value) -> Option<ir::Parallelism> {
   auto result = ir::Parallelism{.degree = *degree,
                                 .limit_partitions
                                 = ir::parallelism::default_limit_partitions,
-                                .fused = ir::parallelism::Fusing::parallel};
+                                .fuse = ir::parallelism::Fusing::parallel};
   auto seen_limit_partitions = false;
-  auto seen_fusing = false;
+  auto seen_fuse = false;
   for (auto option : std::span{parts}.subspan(1)) {
     auto separator = option.find('=');
     if (separator == std::string_view::npos) {
@@ -620,16 +606,17 @@ auto parse_parallelism(std::string_view value) -> Option<ir::Parallelism> {
       }
       result.limit_partitions = *limit;
       seen_limit_partitions = true;
-    } else if (key == "fused") {
-      if (seen_fusing) {
+    } else if (key == "fuse" or key == "fused") {
+      // `fused` is the deprecated spelling of `fuse`.
+      if (seen_fuse) {
         return None{};
       }
-      auto fused = parse_fusing(argument);
-      if (not fused) {
+      auto fuse = ir::parallelism::parse_fusing(argument);
+      if (not fuse) {
         return None{};
       }
-      result.fused = *fused;
-      seen_fusing = true;
+      result.fuse = *fuse;
+      seen_fuse = true;
     } else {
       return None{};
     }
@@ -696,6 +683,19 @@ auto skip_source_preamble(std::string_view source) -> std::string_view {
 }
 
 } // namespace
+
+auto ir::parallelism::parse_fusing(std::string_view value) -> Option<Fusing> {
+  if (value == "all") {
+    return Fusing::all;
+  }
+  if (value == "parallel") {
+    return Fusing::parallel;
+  }
+  if (value == "none") {
+    return Fusing::none;
+  }
+  return None{};
+}
 
 auto ir::parallelism::describe(Origin origin) -> std::string_view {
   switch (origin) {

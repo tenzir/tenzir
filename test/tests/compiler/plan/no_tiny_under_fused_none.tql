@@ -1,4 +1,4 @@
-// parallelism: 6,fused=none
+// parallelism: 6,fuse=none
 // Disabling fusing asks for plain buffered channels throughout, so no channel
 // is tiny (`╎`) here, not even the matched lane-to-lane ones between the two
 // `where` operators. Their number still scales with the degree, so this trades

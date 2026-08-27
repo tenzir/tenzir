@@ -3,4 +3,4 @@ error: true
 ---
 
 from {x: 1}
-parallel _fuse=true, _fuse=false { pass }
+parallel fuse="all", fuse="none" { pass }

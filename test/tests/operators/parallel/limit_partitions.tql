@@ -1,0 +1,6 @@
+// `limit_partitions` caps the degree of keyed operators inside the block.
+from {x: 1, g: "a"}, {x: 2, g: "b"}, {x: 3, g: "a"}, {x: 4, g: "c"}
+parallel 4, limit_partitions=2 {
+  summarize g, total=sum(x), n=count()
+}
+sort g

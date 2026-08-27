@@ -1,5 +1,5 @@
-// parallelism: 1, fused=all
-// The `fused=all` option fuses all operator-to-operator channels,
+// parallelism: 1, fuse=all
+// The `fuse=all` option fuses all operator-to-operator channels,
 // regardless of parallelism matching. The external `{input}` and `{output}`
 // edges are never fused.
 from {x: 1}

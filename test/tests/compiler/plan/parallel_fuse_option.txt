@@ -1,0 +1,11 @@
+● {input}
+│
+● from
+│
+● where(x2)
+│
+● where(x2)
+╎
+● to_stdout
+│
+● {output}

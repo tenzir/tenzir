@@ -2199,7 +2199,7 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
                           ir::parallelism::describe(parallelism.error()))
           .hint("expected `disabled`, `max`, or a positive integer, "
                 "optionally followed by `,limit_partitions=<n>` and/or "
-                "`,fused=<all|parallel|none>`")
+                "`,fuse=<all|parallel|none>`")
           .emit(ctx);
         return failure::promise();
       }

@@ -262,7 +262,7 @@ tenzir:
 
   # The degree of parallelism that pipelines run at by default. The value is
   # `disabled`, `max`, or a positive integer, optionally followed by
-  # `,limit_partitions=<n>` and/or `,fused=<all|parallel|none>`. A
+  # `,limit_partitions=<n>` and/or `,fuse=<all|parallel|none>`. A
   # `// parallelism: <value>` directive in a pipeline's leading comments
   # overrides this, as does the `--parallelism` option of `tenzir exec`.
   parallelism: disabled
