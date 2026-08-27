@@ -3,11 +3,10 @@
 
 """Verify that a node over its disk budget evicts partitions.
 
-Runs against whichever implementation is enforcing the budget: the standalone
-disk monitor by default, and the catalog's own budget loop when
-`tenzir.catalog-maintenance` is set. Both read the same
-`tenzir.start.disk-budget-*` settings, so the test does not care which one is
-live -- which is the point, since the catalog loop replaces the disk monitor.
+The catalog's budget loop enforces this, reading the same
+`tenzir.start.disk-budget-*` settings the disk monitor used to. The test was
+written against the disk monitor and passes unchanged against its replacement,
+which is what it is for.
 
 Phase 1: seed several partitions with no budget configured, and measure them.
 Phase 2: restart under a budget below that size; the node evicts down to it.
@@ -28,7 +27,10 @@ BATCHES = 6
 EVENTS_PER_BATCH = 200
 
 
-def _terminate(proc: subprocess.Popen[str], timeout: int = 20) -> None:
+def _terminate(proc: subprocess.Popen[str], timeout: int = 60) -> None:
+    # Generous on purpose: a node killed before it finishes shutting down loses
+    # whatever it had not persisted, and these tests count events across a
+    # restart. Twenty seconds is not always enough when the suite runs wide.
     if proc.poll() is not None:
         return
     proc.terminate()

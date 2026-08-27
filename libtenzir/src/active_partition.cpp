@@ -284,7 +284,7 @@ active_partition_actor::behavior_type active_partition(
   TENZIR_TRACE("{} spawned new active store at {}", *self, builder);
   return {
     [self](atom::erase) -> caf::result<atom::done> {
-      // Erase is sent by the disk monitor to erase this partition
+      // Erase is sent by the catalog to erase this partition
       // from disk, but an active partition does not have any files
       // on disk, so it should never get selected for deletion.
       TENZIR_WARN("{} got erase atom as an active partition", *self);

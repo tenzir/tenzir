@@ -217,7 +217,7 @@ struct partition_transformer_state {
 /// if the error carries one. Errors from decoding a partition's store (e.g.
 /// a corrupt/truncated backing file) are tagged with the offending
 /// partition's uuid so that callers processing a batch of partitions (e.g.
-/// the rebuilder) can identify exactly which partition failed instead of
+/// the catalog) can identify exactly which partition failed instead of
 /// having to treat the whole batch as suspect.
 auto store_error_partition(const caf::error& err) -> Option<uuid>;
 

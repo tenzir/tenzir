@@ -36,8 +36,7 @@ struct disk_monitor_config {
   std::chrono::seconds scan_interval = std::chrono::seconds{60};
 };
 
-/// Tests if the passed config options represent a valid disk monitor
-/// configuration.
+/// Tests if the passed config options represent a valid disk budget.
 caf::error validate(const disk_monitor_config&);
 
 /// Computes the size of the database directory.

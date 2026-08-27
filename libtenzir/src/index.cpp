@@ -89,7 +89,7 @@
 // # Erase
 //
 // We currently have two distinct erasure code paths: One externally driven by
-// the disk monitor, who looks at the file system and identifies those partitions
+// the catalog, which looks at the file system and identifies those partitions
 // that shall be removed. This is done by the `atom::erase` handler.
 //
 // clang-format on

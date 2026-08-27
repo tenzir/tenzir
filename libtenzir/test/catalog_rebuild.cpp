@@ -56,7 +56,10 @@ struct fixture {
     clock += std::chrono::seconds{1};
     synopsis.unshared().min_import_time = clock;
     synopsis.unshared().max_import_time = clock;
-    state.synopses_per_type[schema][id] = std::move(synopsis);
+    state.update_synopses([&](tenzir::catalog_state::synopsis_map& map) {
+      tenzir::catalog_state::mutable_schema(map, schema)[id]
+        = std::move(synopsis);
+    });
     return id;
   }
 

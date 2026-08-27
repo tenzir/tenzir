@@ -44,7 +44,10 @@ struct fixture {
     clock += std::chrono::seconds{1};
     synopsis.unshared().min_import_time = clock;
     synopsis.unshared().max_import_time = clock;
-    state.synopses_per_type[schema][id] = std::move(synopsis);
+    state.update_synopses([&](tenzir::catalog_state::synopsis_map& map) {
+      tenzir::catalog_state::mutable_schema(map, schema)[id]
+        = std::move(synopsis);
+    });
     return id;
   }
 
@@ -115,8 +118,8 @@ struct weighted_policy final : tenzir::storage_policy {
     if (synopsis.schema.name() != heavy) {
       return None{};
     }
-    // Weighted age, the way the compaction policy expresses it: a weight is a
-    // multiplier on the age, not a value on a scale of its own.
+    // Scaled age, the way the compaction policy expresses it: a weighted
+    // answer stays comparable with the plain age of unweighted partitions.
     const auto age = std::chrono::duration<double>{tenzir::time::clock::now()
                                                    - synopsis.max_import_time}
                        .count();
@@ -159,4 +162,56 @@ TEST("parked bytes count the partitions waiting on their pins") {
   // the budget loop must not erase more data on their account. The count is
   // the on-disk footprint, not the decoded-size estimate.
   CHECK_EQUAL(f.state.parked_bytes(), 1000u);
+}
+
+TEST("excluded victims do not shadow the candidates behind them") {
+  auto f = fixture{};
+  const auto oldest = f.add();
+  const auto next = f.add();
+  CHECK_EQUAL(f.state.select_eviction_batch(1), std::vector{oldest});
+  // A victim the pass could not act on -- full pool, broken pipeline -- must
+  // not be re-selected forever while actionable partitions wait behind it.
+  CHECK_EQUAL(f.state.select_eviction_batch(1, {oldest}), std::vector{next});
+}
+
+TEST("bytes of in-flight deletions count as already reclaimed") {
+  auto f = fixture{};
+  CHECK_EQUAL(f.state.deleting_bytes(), 0u);
+  // Deletion is asynchronous: a database scan can complete before the
+  // filesystem actor got to the files. Until it does, the victims' bytes are
+  // spoken for, and the budget loop must not select further partitions to
+  // cover them.
+  f.state.deleting[uuid::random()] = 600;
+  f.state.deleting[uuid::random()] = 400;
+  CHECK_EQUAL(f.state.deleting_bytes(), 1000u);
+  // The inputs of a running eviction transform are likewise spoken for: the
+  // rewrite is already reclaiming their bytes.
+  CHECK_EQUAL(f.state.evicting_bytes(), 0u);
+  f.state.evicting_inputs[uuid::random()] = 250;
+  CHECK_EQUAL(f.state.evicting_bytes(), 250u);
+}
+
+TEST("a slot freed by other policy work lets a queued named run proceed") {
+  auto f = fixture{};
+  f.state.maintenance.compaction_slots = 1;
+  // A periodic maintenance or eviction action holds the only slot.
+  f.state.compacting = 1;
+  auto run = named_rule_run{};
+  run.rule = "r";
+  run.pending = {uuid::random()};
+  // A batch of the run itself is in flight too, so the run is not finished
+  // and must not be answered here.
+  run.running = 1;
+  f.state.named_run.emplace(std::move(run));
+  // Nothing moves while the pool is full.
+  f.state.drain_named_rule();
+  REQUIRE(f.state.named_run);
+  CHECK_EQUAL(f.state.named_run->pending.size(), 1u);
+  // The slot comes back from that other work, not from this run. If only the
+  // run's own completions drained the queue, it would wait here forever and
+  // its caller would block on a promise that never lands.
+  f.state.release_compaction_slot();
+  CHECK_EQUAL(f.state.compacting, 0u);
+  REQUIRE(f.state.named_run);
+  CHECK(f.state.named_run->pending.empty());
 }

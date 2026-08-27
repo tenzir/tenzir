@@ -9,6 +9,25 @@ table v0 {
 
 	/// List of output partitions.
 	output_partitions: [UUID] (required);
+
+	/// Whether the inputs are quarantined rather than erased: a replay moves
+	/// each input's store aside for inspection instead of deleting it.
+	quarantine: bool = false;
+
+	/// Opaque policy token of the maintenance action this transform ran, as
+	/// serialized by the storage policy. A startup replay hands it back to
+	/// the policy's on_committed, so a commit a crash cut off still lands.
+	policy_token: string;
+
+	/// The partition the policy acted on. Recorded separately because a
+	/// preserve-input transform has an empty input list.
+	token_input: UUID;
+
+	/// Whether the outputs are already merged into the catalog. A replay then
+	/// skips confirming their placement -- outputs that later vanished did so
+	/// legitimately -- and only erases the inputs and hands the policy
+	/// payload back.
+	finalized: bool = false;
 }
 
 union PartitionTransform {

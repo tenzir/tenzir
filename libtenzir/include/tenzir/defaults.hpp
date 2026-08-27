@@ -233,14 +233,9 @@ inline constexpr caf::timespan deferred_erase_timeout
 /// Timeout after which a new automatic rebuild is triggered.
 inline constexpr caf::timespan rebuild_interval = std::chrono::minutes{30};
 
-/// Interval over which index state writes are coalesced. The on-disk index
-/// lists every persisted partition, so writing it per partition flush costs
-/// more the more partitions exist; batching bounds that to one write per
-/// interval.
-inline constexpr caf::timespan index_flush_interval = std::chrono::seconds{10};
-
-/// Maximum number of in-memory INDEX partitions.
-inline constexpr size_t max_in_mem_partitions = 1;
+/// How long the catalog waits before retrying a partition disposal whose file
+/// operations failed.
+inline constexpr caf::timespan disposal_retry_delay = std::chrono::minutes{1};
 /// Memory budget for the catalog's on-demand cache of deferred Bloom-filter
 /// sketches (see `tenzir.index.lazy-sketches`). Loaded sketches are evicted
 /// least-recently-used once the total exceeds this many bytes.

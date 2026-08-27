@@ -120,15 +120,17 @@ TEST("catalog loads deferred bloom filters on demand to prune") {
   // The resident synopsis has a deferred (null) Bloom-filter sketch.
   REQUIRE_EQUAL(f.resident->field_synopses_.at(f.msg), nullptr);
   auto state = catalog_state{};
-  state.sketches = sketch_cache{size_t{1} << 20};
-  state.synopses_per_type[f.schema][f.id] = f.resident;
+  state.lookup_engine.sketches = sketch_cache{size_t{1} << 20};
+  state.update_synopses([&](tenzir::catalog_state::synopsis_map& map) {
+    tenzir::catalog_state::mutable_schema(map, f.schema)[f.id] = f.resident;
+  });
   // A non-matching equality predicate prunes the partition only if the Bloom
   // filter is loaded on demand.
   auto absent = state.lookup(unbox(to<expression>("msg == \"absent\"")));
   REQUIRE(absent);
   CHECK_EQUAL(absent->size(), 0u);
   // The sketch was loaded into the cache as a side effect.
-  CHECK_NOT_EQUAL(state.sketches.peek(f.id), nullptr);
+  CHECK_NOT_EQUAL(state.lookup_engine.sketches.peek(f.id), nullptr);
   // A matching predicate keeps the partition (Bloom filters never yield false
   // negatives).
   auto present = state.lookup(unbox(to<expression>("msg == \"hello\"")));
@@ -140,8 +142,10 @@ TEST("catalog evaluates metadata before deferred bloom filters in "
      "disjunctions") {
   auto f = fixture{};
   auto state = catalog_state{};
-  state.sketches = sketch_cache{size_t{1} << 20};
-  state.synopses_per_type[f.schema][f.id] = f.resident;
+  state.lookup_engine.sketches = sketch_cache{size_t{1} << 20};
+  state.update_synopses([&](tenzir::catalog_state::synopsis_map& map) {
+    tenzir::catalog_state::mutable_schema(map, f.schema)[f.id] = f.resident;
+  });
   // `@name == "test"` is represented as a schema meta extractor in the
   // catalog expression. It makes the disjunction true without a Bloom lookup.
   auto expression = disjunction{
@@ -153,15 +157,17 @@ TEST("catalog evaluates metadata before deferred bloom filters in "
   auto result = state.lookup(std::move(expression));
   REQUIRE(result);
   CHECK_EQUAL(result->size(), 1u);
-  CHECK_EQUAL(state.sketches.peek(f.id), nullptr);
+  CHECK_EQUAL(state.lookup_engine.sketches.peek(f.id), nullptr);
 }
 
 TEST("catalog evaluates metadata before deferred bloom filters in "
      "conjunctions") {
   auto f = fixture{};
   auto state = catalog_state{};
-  state.sketches = sketch_cache{size_t{1} << 20};
-  state.synopses_per_type[f.schema][f.id] = f.resident;
+  state.lookup_engine.sketches = sketch_cache{size_t{1} << 20};
+  state.update_synopses([&](tenzir::catalog_state::synopsis_map& map) {
+    tenzir::catalog_state::mutable_schema(map, f.schema)[f.id] = f.resident;
+  });
   // `@name == "other"` rules out the partition without a Bloom lookup.
   auto expression = conjunction{
     predicate{field_extractor{"msg"}, relational_operator::equal,
@@ -172,7 +178,7 @@ TEST("catalog evaluates metadata before deferred bloom filters in "
   auto result = state.lookup(std::move(expression));
   REQUIRE(result);
   CHECK_EQUAL(result->size(), 0u);
-  CHECK_EQUAL(state.sketches.peek(f.id), nullptr);
+  CHECK_EQUAL(state.lookup_engine.sketches.peek(f.id), nullptr);
 }
 
 TEST("catalog prunes more partitions than fit in the sketch cache budget") {
@@ -181,14 +187,17 @@ TEST("catalog prunes more partitions than fit in the sketch cache budget") {
   const auto one = read_mdx(f.mdx, /*lazy=*/false)->memusage();
   REQUIRE_GREATER(one, 0u);
   auto state = catalog_state{};
-  state.sketches = sketch_cache{one + one / 2};
+  state.lookup_engine.sketches = sketch_cache{one + one / 2};
   // Three partitions of the same schema, all with deferred sketches on disk.
   for (auto i = 0; i < 3; ++i) {
     const auto id = uuid::random();
     auto resident = read_mdx(f.mdx, /*lazy=*/true);
     resident.unshared().sketches_file
       = {.url = fmt::format("file://{}", f.mdx.string()), .size = 0};
-    state.synopses_per_type[f.schema][id] = std::move(resident);
+    state.update_synopses([&](tenzir::catalog_state::synopsis_map& map) {
+      tenzir::catalog_state::mutable_schema(map, f.schema)[id]
+        = std::move(resident);
+    });
   }
   // Even though the cache can hold only one sketch at a time, all three are
   // pruned because phase 2 loads, checks, and evicts incrementally -- pruning
@@ -210,7 +219,7 @@ TEST("catalog defers bloom filters of merged partitions when lazy") {
   static_cast<void>(state.merge({{f.id, full}}));
   // The resident synopsis must not retain the Bloom filter, otherwise ongoing
   // ingest would grow resident memory unbounded.
-  const auto& stored = state.synopses_per_type.at(f.schema).at(f.id);
+  const auto& stored = state.synopses_per_type->at(f.schema)->at(f.id);
   CHECK_EQUAL(stored->field_synopses_.at(f.msg), nullptr);
   // Deferring here COW-copies the synopsis (the test still holds a reference),
   // so the copy must preserve the sketch URL -- otherwise the deferred sketch
@@ -224,7 +233,7 @@ TEST("catalog keeps bloom filters of merged partitions when not lazy") {
   full.unshared().sketches_file.url = fmt::format("file://{}", f.mdx.string());
   auto state = catalog_state{}; // lazy_sketches defaults to false
   static_cast<void>(state.merge({{f.id, full}}));
-  const auto& stored = state.synopses_per_type.at(f.schema).at(f.id);
+  const auto& stored = state.synopses_per_type->at(f.schema)->at(f.id);
   CHECK_NOT_EQUAL(stored->field_synopses_.at(f.msg), nullptr);
 }
 
@@ -237,33 +246,37 @@ TEST("catalog keeps merged bloom filters without a loadable sketch path") {
   auto state = catalog_state{};
   state.lazy_sketches = true;
   static_cast<void>(state.merge({{f.id, full}}));
-  const auto& stored = state.synopses_per_type.at(f.schema).at(f.id);
+  const auto& stored = state.synopses_per_type->at(f.schema)->at(f.id);
   CHECK_NOT_EQUAL(stored->field_synopses_.at(f.msg), nullptr);
 }
 
 TEST("catalog does not load sketches for non-bloom-answerable predicates") {
   auto f = fixture{};
   auto state = catalog_state{};
-  state.sketches = sketch_cache{size_t{1} << 20};
-  state.synopses_per_type[f.schema][f.id] = f.resident;
+  state.lookup_engine.sketches = sketch_cache{size_t{1} << 20};
+  state.update_synopses([&](tenzir::catalog_state::synopsis_map& map) {
+    tenzir::catalog_state::mutable_schema(map, f.schema)[f.id] = f.resident;
+  });
   // A Bloom filter cannot answer `!=`, so loading its sketch could not prune
   // the query; the partition stays a candidate and nothing is loaded.
   auto result = state.lookup(unbox(to<expression>("msg != \"hello\"")));
   REQUIRE(result);
   CHECK_EQUAL(result->size(), 1u);
-  CHECK_EQUAL(state.sketches.peek(f.id), nullptr);
+  CHECK_EQUAL(state.lookup_engine.sketches.peek(f.id), nullptr);
 }
 
 TEST("catalog without a sketch budget keeps deferred partitions as "
      "candidates") {
   auto f = fixture{};
   auto state = catalog_state{};
-  state.sketches = sketch_cache{0}; // on-demand loading disabled
-  state.synopses_per_type[f.schema][f.id] = f.resident;
+  state.lookup_engine.sketches = sketch_cache{0}; // on-demand loading disabled
+  state.update_synopses([&](tenzir::catalog_state::synopsis_map& map) {
+    tenzir::catalog_state::mutable_schema(map, f.schema)[f.id] = f.resident;
+  });
   // Without loading, the catalog cannot rule the partition out and must keep
   // it as a conservative candidate (correct, just coarser).
   auto absent = state.lookup(unbox(to<expression>("msg == \"absent\"")));
   REQUIRE(absent);
   CHECK_EQUAL(absent->size(), 1u);
-  CHECK_EQUAL(state.sketches.peek(f.id), nullptr);
+  CHECK_EQUAL(state.lookup_engine.sketches.peek(f.id), nullptr);
 }

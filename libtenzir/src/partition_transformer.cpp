@@ -373,7 +373,7 @@ struct partition_source_state {
 /// `diagnostic::error(err).note(...).to_error()`, but preserves `err`'s
 /// original `tenzir::ec` code when it is `ec::format_error` instead of
 /// collapsing it to `ec::diagnostic`, and attaches `partition` as a second,
-/// typed context element. Callers such as the rebuilder need to identify
+/// typed context element. The catalog needs to identify
 /// exactly which partition in a batch a decode failure came from, which is
 /// only possible if that information survives the wrapping instead of being
 /// left to string-parsing after the fact (see `store_error_partition`).
@@ -782,7 +782,12 @@ void partition_transformer_state::fulfill(
         self->quit();
       });
   progress->partition_files_total.store(stream_data.partition_chunks->size(),
-                                        std::memory_order_relaxed);
+                                        std::memory_order_relaxed);  auto synopsis_sizes = std::unordered_map<uuid, uint64_t>{};
+  for (const auto& [id, synopsis_chunk] : *stream_data.synopsis_chunks) {
+    if (synopsis_chunk) {
+      synopsis_sizes[id] = synopsis_chunk->size();
+    }
+  }
   for (auto& [id, schema, partition_chunk] : *stream_data.partition_chunks) {
     auto rng = self->state().data.equal_range(schema);
     auto it = std::find_if(rng.first, rng.second, [id = id](auto const& kv) {
@@ -794,6 +799,20 @@ void partition_transformer_state::fulfill(
       .uuid = id,
       .synopsis = std::move(synopsis),
     };
+    // Record the on-disk footprint of the files this loop writes. The catalog
+    // credits these sizes when it parks, deletes, or rewrites the partition,
+    // and without them a freshly transformed partition would count as nothing
+    // but its store. The URLs arrive separately -- the sketches path from the
+    // apply handler, the partition path from the next startup scan -- but the
+    // sizes are only known here, while the chunks are in hand.
+    if (aps.synopsis) {
+      auto& mutable_synopsis = aps.synopsis.unshared();
+      mutable_synopsis.indexes_file.size = partition_chunk->size();
+      if (const auto size = synopsis_sizes.find(id);
+          size != synopsis_sizes.end()) {
+        mutable_synopsis.sketches_file.size = size->second;
+      }
+    }
     auto filename = fmt::format(
       TENZIR_FMT_RUNTIME(self->state().partition_path_template), id);
     auto partition_path = std::filesystem::path{filename};

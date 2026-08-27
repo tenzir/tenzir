@@ -23,7 +23,6 @@
 #include "tenzir/detail/process.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
-#include "tenzir/disk_monitor.hpp"
 #include "tenzir/ecc.hpp"
 #include "tenzir/export_bridge.hpp"
 #include "tenzir/importer.hpp"
@@ -218,6 +217,13 @@ auto parse_space_options(const caf::settings& settings) -> disk_monitor_config {
        [&](std::string_view key) -> Option<size_t> {
          if (const auto* value = caf::get_if<caf::config_value::integer>(
                &settings, std::string{key})) {
+           // Casting first would turn a negative value into a huge step size,
+           // and one eviction pass would then retire every partition in the
+           // catalog before its first remeasurement.
+           if (*value < 1) {
+             diagnostic::error("`{}` must be at least 1, got {}", key, *value)
+               .throw_();
+           }
            return static_cast<size_t>(*value);
          }
          return None{};
@@ -227,19 +233,28 @@ auto parse_space_options(const caf::settings& settings) -> disk_monitor_config {
        [&](std::string_view key) -> Option<Option<std::string>> {
          if (const auto* value
              = caf::get_if<std::string>(&settings, std::string{key})) {
+           // An empty string means "no scan binary", the way the compactor
+           // read it -- configurations that spell the option out with an empty
+           // value must keep working.
+           if (value->empty()) {
+             return Option<std::string>{None{}};
+           }
            return Option<std::string>{*value};
          }
          return None{};
        });
+  auto interval_configured = false;
   take(result.scan_interval, "tenzir.start.disk-budget-check-interval",
        "plugins.compaction.space.interval",
        [&](std::string_view key) -> Option<std::chrono::seconds> {
          if (const auto* value = caf::get_if<caf::config_value::integer>(
                &settings, std::string{key})) {
+           interval_configured = true;
            return std::chrono::seconds{*value};
          }
          if (const auto* value
              = caf::get_if<caf::timespan>(&settings, std::string{key})) {
+           interval_configured = true;
            return std::chrono::duration_cast<std::chrono::seconds>(*value);
          }
          return None{};
@@ -247,11 +262,16 @@ auto parse_space_options(const caf::settings& settings) -> disk_monitor_config {
   if (result.step_size == 0) {
     result.step_size = defaults::disk_monitor_step_size;
   }
-  if (result.scan_interval == std::chrono::seconds::zero()) {
+  // A zero interval that nobody wrote means "use the default". An *explicit*
+  // zero pauses the budget loop -- the documented meaning of
+  // `plugins.compaction.space.interval: 0s` -- and must not silently turn
+  // into deleting data once a minute.
+  if (result.scan_interval == std::chrono::seconds::zero()
+      and not interval_configured) {
     result.scan_interval = std::chrono::seconds{defaults::disk_scan_interval};
   }
-  // Matching the disk monitor: an unset low-water mark means "erase down to
-  // the high-water mark", not "erase everything".
+  // An unset low-water mark means "erase down to the high-water mark", not
+  // "erase everything".
   if (result.low_water_mark == 0) {
     result.low_water_mark = result.high_water_mark;
   }
@@ -273,8 +293,7 @@ auto parse_space_options(const caf::settings& settings) -> disk_monitor_config {
 
 auto parse_maintenance_options(const caf::settings& settings)
   -> maintenance_options {
-  return {
-    .enabled = get_or(settings, "tenzir.catalog-maintenance", false),
+  auto result = maintenance_options{
     .automatic_rebuild
     = get_or(settings, "tenzir.automatic-rebuild", size_t{1}),
     .rebuild_interval
@@ -282,27 +301,32 @@ auto parse_maintenance_options(const caf::settings& settings)
     .space = parse_space_options(settings),
     // The compaction pool is bounded separately from rebuild parallelism, so
     // that a slow user-authored pipeline cannot stall a rebuild. One slot by
-    // default: the domains are independent, so worst-case memory is their sum.
-    .compaction_slots = get_or(settings, "tenzir.compaction-slots", size_t{1}),
+    // default -- the domains are independent, so worst-case memory is their
+    // sum -- but a deployment that sized the old compactor's concurrency via
+    // `plugins.compaction.time.step-size` keeps that concurrency: the legacy
+    // setting seeds the default, and the new setting wins when both are set.
+    .compaction_slots
+    = get_or(settings, "tenzir.compaction-slots",
+             get_or(settings, "plugins.compaction.time.step-size", size_t{1})),
   };
-}
-
-/// The components the catalog replaces once it runs maintenance itself. While
-/// `tenzir.catalog-maintenance` is set the node does not spawn them, so the
-/// two mechanisms never both drive work.
-auto is_replaced_by_catalog_maintenance(std::string_view component) -> bool {
-  // The compaction component is here for its space-based sweep, which enforces
-  // a disk budget of its own against the same water marks the catalog's budget
-  // loop uses. Two loops both erasing to satisfy one budget would delete about
-  // twice what it asks for. Its temporal compaction has no catalog equivalent
-  // yet and is therefore unavailable while the flag is on, which is the
-  // narrower cost of the two.
-  return component == "rebuilder" or component == "compaction";
+  if (result.compaction_slots == 0) {
+    // With zero slots a named compaction run could never start its work and
+    // would hang its caller forever; the policy pass has its own off switch
+    // (the interval), so zero slots expresses nothing that setting does not.
+    diagnostic::error("`tenzir.compaction-slots` must be at least 1").throw_();
+  }
+  return result;
 }
 
 auto spawn_catalog(node_actor::stateful_pointer<node_state> self,
                    const filesystem_actor& filesystem,
                    const caf::settings& settings) -> catalog_actor {
+  const auto lookup_parallelism
+    = get_or(settings, "tenzir.catalog-lookup-parallelism", size_t{2});
+  if (lookup_parallelism == 0) {
+    diagnostic::error("`tenzir.catalog-lookup-parallelism` must be at least 1")
+      .throw_();
+  }
   const auto sketch_cache_bytes = get_or(
     settings, "tenzir.index.sketch-cache-bytes", defaults::sketch_cache_bytes);
   const auto lazy_sketches
@@ -317,7 +341,7 @@ auto spawn_catalog(node_actor::stateful_pointer<node_state> self,
     parse_maintenance_options(settings),
     get_or(settings, "tenzir.deferred-erase-timeout",
            defaults::deferred_erase_timeout),
-    sketch_cache_bytes, lazy_sketches);
+    sketch_cache_bytes, lazy_sketches, lookup_parallelism);
   TENZIR_ASSERT(catalog);
   if (auto err = register_component(self, caf::actor_cast<caf::actor>(catalog),
                                     "catalog");
@@ -367,71 +391,6 @@ auto spawn_importer(node_actor::stateful_pointer<node_state> self,
   return importer;
 }
 
-auto spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
-                        const caf::settings& settings,
-                        const catalog_actor& catalog) -> disk_monitor_actor {
-  auto disk_monitor = [&] {
-    const auto* command = caf::get_if<std::string>(
-      &settings, "tenzir.start.disk-budget-check-binary");
-    const auto hiwater
-      = detail::get_bytesize(settings, "tenzir.start.disk-budget-high", 0);
-    if (not hiwater) {
-      diagnostic::error(hiwater.error())
-        .note("failed to parse `tenzir.start.disk-budget-high`")
-        .throw_();
-    }
-    auto lowater
-      = detail::get_bytesize(settings, "tenzir.start.disk-budget-low", 0);
-    if (not lowater) {
-      diagnostic::error(lowater.error())
-        .note("failed to parse `tenzir.start.disk-budget-low`")
-        .throw_();
-    }
-    // Set low == high as the default value.
-    if (not *lowater) {
-      *lowater = *hiwater;
-    }
-    const auto step_size
-      = caf::get_or(settings, "tenzir.start.disk-budget-step-size",
-                    defaults::disk_monitor_step_size);
-    const auto interval
-      = caf::get_or(settings, "tenzir.start.disk-budget-check-interval",
-                    std::chrono::seconds{defaults::disk_scan_interval}.count());
-    auto disk_monitor_config = tenzir::disk_monitor_config{
-      *hiwater,
-      *lowater,
-      step_size,
-      command ? *command : Option<std::string>{},
-      std::chrono::seconds{interval},
-    };
-    if (auto err = validate(disk_monitor_config); err.valid()) {
-      diagnostic::error(err)
-        .note("failed to validate disk monitor config")
-        .throw_();
-    }
-    if (*hiwater == 0) {
-      if (command) {
-        diagnostic::error("invalid configuration")
-          .note("'tenzir.start.disk-budget-check-binary' is configured but "
-                "'tenzir.start.disk-budget-high' is unset")
-          .throw_();
-      }
-      return disk_monitor_actor{};
-    }
-    const auto db_dir_abs = std::filesystem::absolute(self->state().dir);
-    return self->spawn(tenzir::disk_monitor, disk_monitor_config, db_dir_abs,
-                       catalog);
-  }();
-  if (disk_monitor) {
-    if (auto err = register_component(
-          self, caf::actor_cast<caf::actor>(disk_monitor), "disk-monitor");
-        err.valid()) {
-      diagnostic::error(err).note("failed to register disk-monitor").throw_();
-    }
-  }
-  return disk_monitor;
-}
-
 auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
   // Before we laod any component plugins, we first load all the core components.
   const auto& settings = content(self->system().config());
@@ -439,12 +398,6 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
   const auto catalog = spawn_catalog(self, filesystem, settings);
   const auto index = spawn_index(self, settings, filesystem, catalog);
   [[maybe_unused]] const auto importer = spawn_importer(self, index);
-  // The catalog enforces the disk budget itself when it runs maintenance, and
-  // the two must never both evict.
-  [[maybe_unused]] const auto disk_monitor
-    = get_or(settings, "tenzir.catalog-maintenance", false)
-        ? disk_monitor_actor{}
-        : spawn_disk_monitor(self, settings, catalog);
   // 1. Collect all component_plugins into a name -> plugin* map:
   using component_plugin_map
     = std::unordered_map<std::string, const component_plugin*>;
@@ -476,16 +429,8 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
     derive_sequence(derive_sequence, todo.begin()->second->component_name());
   }
   // 3. Load all components in order.
-  const auto catalog_maintenance
-    = get_or(settings, "tenzir.catalog-maintenance", false);
   for (const auto* plugin : sequenced_components) {
     auto name = plugin->component_name();
-    if (catalog_maintenance and is_replaced_by_catalog_maintenance(name)) {
-      TENZIR_VERBOSE("{} does not spawn the {} component because the catalog "
-                     "runs that work itself",
-                     *self, name);
-      continue;
-    }
     auto handle = plugin->make_component(self);
     if (not handle) {
       diagnostic::error("{} failed to create the {} component", *self, name)

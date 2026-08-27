@@ -33,6 +33,7 @@
 
 #include <limits>
 #include <list>
+#include <map>
 #include <unordered_set>
 #include <vector>
 
@@ -114,16 +115,12 @@ struct rebuild_stop_options {
   }
 };
 
-/// How the catalog runs storage maintenance itself.
+/// How the catalog runs storage maintenance.
 ///
-/// Until the cutover this selects between two mechanisms and never enables
-/// both: with `enabled` the node runs no standalone rebuilder, compactor, or
-/// disk monitor and the catalog drives that work; without it the catalog's
-/// sources stay stopped and the standalone actors behave exactly as they do
-/// today.
+/// Each source is disabled by its own setting rather than collectively: a zero
+/// rebuild parallelism, a zero high water mark, or a zero compaction interval
+/// stops that one and leaves the rest running.
 struct maintenance_options {
-  bool enabled = false;
-
   /// The automatic rebuild source's parallelism. Zero disables that source
   /// alone; everything else keeps running.
   size_t automatic_rebuild = 1;
@@ -140,7 +137,6 @@ struct maintenance_options {
   /// parallelism, so that a slow user-authored pipeline cannot stall a
   /// rebuild, nor a large rebuild batch delay a retention rule.
   size_t compaction_slots = 1;
-
 };
 
 /// The threshold at which a partition counts as undersized, relative to the
@@ -229,6 +225,66 @@ private:
   std::unordered_map<uuid, entry> entries_ = {};
 };
 
+/// The pure candidate-evaluation machinery, separated from the catalog's
+/// mutable bookkeeping so that lookup workers can run it against a snapshot
+/// of the partition synopses. Evaluation has no cross-partition state and no
+/// reference back to the catalog; each worker owns one engine, and the
+/// catalog keeps one of its own -- without a sketch budget -- for internal,
+/// non-query lookups such as rebuild filters.
+struct catalog_lookup_engine {
+  using universe = catalog_snapshot::map_type;
+
+  /// Evaluates an expression against the given synopses. Two phases: prune
+  /// with the resident synopses, then load deferred Bloom-filter sketches on
+  /// demand for exactly the candidates such a sketch could still prune.
+  auto lookup(expression expr, const universe& synopses_per_type)
+    -> caf::expected<catalog_lookup_result>;
+
+  /// Evaluates one schema's synopses. The collection is a parameter (rather
+  /// than always a full per-schema map) so the same logic can evaluate a
+  /// single partition during on-demand sketch pruning. This is only sound
+  /// because the evaluation has no cross-partition state: evaluating a set
+  /// equals the union of evaluating each partition alone. Keep it that way.
+  /// @param deferred_sketch_partitions Receives the ids of partitions kept
+  /// only because a Bloom-filter sketch was deferred and could prune them if
+  /// loaded. `lookup` uses this to restrict on-demand loading to exactly
+  /// those candidates instead of every surviving candidate in every schema.
+  auto lookup_impl(
+    const expression& expr, const type& schema,
+    const detail::flat_map<uuid, partition_synopsis_ptr>& partition_synopses,
+    std::unordered_set<uuid>& deferred_sketch_partitions) const
+    -> catalog_lookup_result::candidate_info;
+
+  /// Loads the deferred Bloom-filter sketches of the given partition into the
+  /// sketch cache, if possible. Returns the number of bytes loaded, or 0 if
+  /// the partition was already cached, has no loadable sketches, or could not
+  /// be loaded (in which case the partition stays a conservative candidate).
+  auto ensure_sketches_loaded(const uuid& id,
+                              const partition_synopsis_ptr& resident) -> size_t;
+
+  /// Taxonomy definitions for concept resolution, snapshotted at spawn.
+  tenzir::taxonomies taxonomies = {};
+
+  /// On-demand cache of partitions whose deferred Bloom-filter sketches have
+  /// been loaded for pruning. Bounded by a share of
+  /// `tenzir.index.sketch-cache-bytes`.
+  sketch_cache sketches = {};
+};
+
+/// A lookup worker: one engine, driven by delegated candidate requests.
+struct catalog_lookup_worker_state {
+  static inline constexpr auto name = "catalog-lookup-worker";
+
+  catalog_lookup_engine engine = {};
+};
+
+/// Spawns a catalog lookup worker.
+auto catalog_lookup_worker(
+  catalog_lookup_worker_actor::stateful_pointer<catalog_lookup_worker_state>
+    self,
+  tenzir::taxonomies taxonomies, size_t sketch_cache_bytes)
+  -> catalog_lookup_worker_actor::behavior_type;
+
 /// One outstanding candidate set, keyed by `query_context::id`.
 ///
 /// The lease pins its partitions: their files stay on disk until the lease
@@ -237,6 +293,11 @@ private:
 struct partition_lease {
   caf::actor_addr owner = {};
   std::vector<uuid> partitions = {};
+
+  /// Distinguishes this lease from a superseded one under the same query id,
+  /// so that the asynchronous narrowing after a delegated lookup never
+  /// releases pins belonging to a newer lease.
+  uint64_t generation = 0;
 };
 
 /// A partition that left the catalog while a retriever still held a pin on it.
@@ -258,6 +319,12 @@ struct deferred_erase {
   /// would otherwise keep an erased partition on disk forever and the disk
   /// budget could never be met. Unset when forcing is disabled.
   Option<time> deadline = None{};
+
+  /// When a *failed* disposal is retried. Set on re-parking after a deletion
+  /// or quarantine move failed; independent of `deadline`, because retrying
+  /// broken filesystem operations has nothing to do with forcing pinned
+  /// erasures, and must work even when forcing is disabled.
+  Option<time> retry_at = None{};
 };
 
 /// Builds a partition transform marker. `in` names the transform's inputs and
@@ -265,7 +332,10 @@ struct deferred_erase {
 /// the transform, so a replay must not erase them. A marker with inputs but no
 /// outputs is a tombstone: replaying it erases the inputs and nothing else.
 auto create_marker(const std::vector<uuid>& in, const std::vector<uuid>& out,
-                   keep_original_partition keep) -> chunk_ptr;
+                   keep_original_partition keep, bool quarantine = false,
+                   std::string_view policy_token = {},
+                   Option<uuid> token_input = None{}, bool finalized = false)
+  -> chunk_ptr;
 
 /// A rebuild run in progress inside the catalog.
 struct rebuild_run {
@@ -300,6 +370,10 @@ struct rebuild_run {
   /// How many batches are in flight, against `options.parallel`.
   size_t running = 0;
 
+  /// How many partitions those batches hold, which is what the rebuild metric
+  /// reports.
+  size_t running_partitions = 0;
+
   /// Statistics, as `rebuild show` reports them.
   size_t transformed = 0;
   size_t results = 0;
@@ -309,8 +383,48 @@ struct rebuild_run {
   /// more work.
   bool stopping = false;
 
+  /// The first unrecoverable batch failure. It aborts the run, and everyone
+  /// waiting on the run receives it instead of a silent success that skipped
+  /// partitions. Corrupt stores do not count: quarantining one is progress.
+  Option<caf::error> failure = None{};
+
   /// Answered when the run finishes.
   std::vector<caf::typed_response_promise<void>> stop_requests = {};
+};
+
+/// A `compaction run` in progress. The work is queued rather than fired at
+/// once: a rule can match every partition in the database, and one transformer
+/// per partition would each claim a quarter of available memory.
+///
+/// Only the partition ids are held. The action is asked for again when the
+/// partition's turn comes, so a rule that stopped applying while the run was
+/// queued is not carried out against a stale decision.
+struct named_rule_run {
+  std::string rule = {};
+  Option<duration> older_than = None{};
+  Option<duration> newer_than = None{};
+  std::vector<uuid> pending = {};
+  size_t running = 0;
+
+  /// Partitions the run could not process because another transform held
+  /// them. Their replacements carry new ids the run never saw, so reporting
+  /// plain success would overstate what the rule covered; the run answers
+  /// with a retry hint instead.
+  size_t skipped = 0;
+
+  caf::error failure = {};
+  caf::typed_response_promise<atom::done> promise = {};
+};
+
+/// What came of asking the policy to evict a partition.
+enum class eviction_outcome {
+  /// The policy had no action, so the partition is erased instead.
+  none,
+  /// An action was started and holds a compaction slot.
+  started,
+  /// The policy has an action but the pool is full. The partition is left
+  /// alone: erasing it would throw away the rewrite the policy asked for.
+  deferred,
 };
 
 /// The state of the CATALOG actor.
@@ -326,9 +440,12 @@ public:
   auto load_from_disk() -> caf::error;
 
   /// Finishes up transforms that were interrupted by the last shutdown:
-  /// erases the inputs of a committed transform and moves its outputs into
-  /// place. Part of `load_from_disk`.
-  void replay_markers();
+  /// moves the outputs of a committed transform into place and erases its
+  /// inputs. Part of `load_from_disk`. Returns every input uuid the markers
+  /// name, so the startup scan skips them: their erasure runs asynchronously,
+  /// and scanning them back in would resurrect them in memory while their
+  /// files disappear underneath.
+  auto replay_markers() -> std::unordered_set<uuid>;
 
   /// Creates the catalog from a set of partition synopses.
   auto initialize(std::vector<partition_synopsis_pair> partitions)
@@ -338,13 +455,28 @@ public:
   auto merge(std::vector<partition_synopsis_pair> partitions)
     -> caf::result<atom::ok>;
 
+  /// Whether the policy hears about an erasure. The apply handler passes `no`
+  /// for the inputs of a replacement, which it reports through `on_replaced`
+  /// instead -- an `on_erased` there would make the policy drop state that the
+  /// outputs are supposed to inherit.
+  enum class notify_policy : bool { no, yes };
+
   /// Erase this partition from the catalog. Leaves the on-disk files alone.
-  void erase(const uuid& partition);
+  void erase(const uuid& partition, notify_policy notify = notify_policy::yes);
 
   /// Records an outstanding candidate set and starts monitoring its owner, so
   /// that the lease is released even if the owner never gets around to it.
-  void add_lease(const uuid& query, const caf::strong_actor_ptr& owner,
-                 std::vector<uuid> partitions);
+  /// Returns the lease's generation, or zero when no lease was recorded.
+  auto add_lease(const uuid& query, const caf::strong_actor_ptr& owner,
+                 std::vector<uuid> partitions) -> uint64_t;
+
+  /// Narrows a lease to the given partitions, releasing the pins of
+  /// everything else it held; an empty set releases the lease. No-op unless
+  /// the lease still has the given generation: candidates requests take a
+  /// provisional lease on the whole snapshot they delegate, and the narrowing
+  /// arrives asynchronously with the worker's result.
+  void narrow_lease(const uuid& query, uint64_t generation,
+                    const std::vector<uuid>& keep);
 
   /// Drops part of a lease. Readers release each partition as they finish with
   /// it, so a pin covers one partition read rather than a whole export.
@@ -380,6 +512,29 @@ public:
 
   /// Erases a tombstone marker once no deferred erasure needs it any more.
   void erase_marker_if_unreferenced(const std::filesystem::path& marker);
+
+  /// Whether anything still depends on the marker: a disposal or flush hold,
+  /// or a deferred erasure that names it as its tombstone.
+  [[nodiscard]] auto
+  marker_referenced(const std::filesystem::path& marker) const -> bool;
+
+  /// Drops one `markers_in_disposal` reference and erases the marker if it
+  /// was the last. Counterpart of the hold a policy-driven transform takes
+  /// until its commit is flushed.
+  void release_marker_hold(const std::filesystem::path& marker);
+
+  /// Retries writing a finalized marker as long as a hold still references
+  /// it. A marker stuck in non-finalized form gates its replay on output
+  /// confirmation, and an output that is legitimately erased in the meantime
+  /// would strand the payload; once the hold is released the commit is
+  /// durable and the content no longer matters.
+  void retry_finalize_marker(std::filesystem::path marker, chunk_ptr content);
+
+  /// Flushes the policy and releases the marker hold once the flush
+  /// *succeeds*. A failed flush keeps the marker -- it is the commit's only
+  /// durable record until the history write lands -- and checks back after
+  /// the policy's background retry has had its chance.
+  void release_marker_after_flush(std::filesystem::path marker);
 
   /// Deletes deferred partitions whose deadline has passed, pins and all.
   void sweep_deferred();
@@ -428,13 +583,31 @@ public:
   /// so the budget loop must not count them against the water marks.
   auto parked_bytes() const -> uint64_t;
 
+  /// The bytes held by partitions whose file deletions are in flight. Same
+  /// reasoning as `parked_bytes`: a measurement that races the filesystem
+  /// actor still sees them, and counting them would make the loop evict more
+  /// than the budget asks for.
+  auto deleting_bytes() const -> uint64_t;
+
+  /// The bytes held by partitions an eviction transform is rewriting. The
+  /// rewrite typically shrinks or removes them, so a measurement taken while
+  /// it runs overstates what eviction still has to reclaim; crediting the full
+  /// footprint errs toward evicting less, and the scan after the commit sees
+  /// the truth.
+  auto evicting_bytes() const -> uint64_t;
+
   /// How urgently a partition should be evicted; higher goes sooner. Falls
   /// back to its age, which is the scale a policy weight is expressed in.
   auto eviction_weight_of(const uuid& partition,
                           const partition_synopsis& synopsis) const -> double;
 
-  /// The next partitions to evict, heaviest first, at most `limit`.
-  auto select_eviction_batch(size_t limit) const -> std::vector<uuid>;
+  /// The next partitions to evict, heaviest first, at most `limit`. Skips
+  /// `excluded`, which the eviction pass fills with victims it could not act
+  /// on, so that one deferred heavyweight does not shadow every actionable
+  /// partition behind it.
+  auto
+  select_eviction_batch(size_t limit, const std::unordered_set<uuid>& excluded
+                                      = {}) const -> std::vector<uuid>;
 
   /// Gives a compaction slot back and lets anything queued take it. Every
   /// release goes through here so that no path can free a slot without
@@ -448,9 +621,24 @@ public:
   /// Runs one policy action, holding a slot until it lands.
   void run_maintenance_action(const uuid& partition, storage_action action);
 
+  /// Runs a named policy rule over every partition it applies to, answering
+  /// once the run finishes.
+  auto run_named_rule(std::string rule, Option<duration> older_than,
+                      Option<duration> newer_than) -> caf::result<atom::done>;
+
+  /// Starts as much of the queued named run as the compaction pool allows.
+  void drain_named_rule();
+
+  /// Ends the named run and answers its caller: the recorded failure if one
+  /// occurred, a retry hint when partitions were skipped over concurrent
+  /// transforms, and plain success otherwise.
+  void finish_named_run();
+
+  /// Settles one finished batch of a named run and continues or answers.
+  void finish_named_rule_batch(caf::error error);
+
   /// Runs the policy's eviction action for a partition, if it has one.
-  /// @returns Whether an action was started; `false` means erase it instead.
-  auto run_eviction_action(const uuid& partition) -> bool;
+  auto run_eviction_action(const uuid& partition) -> eviction_outcome;
 
   /// Reports the disk budget loop's state.
   auto space_status() const -> record;
@@ -507,8 +695,8 @@ public:
   /// replaced by the outputs and erased from disk once the outputs are safely
   /// in place.
   auto apply(ast::pipeline pipe, std::vector<partition_info> selected,
-             keep_original_partition keep, std::string origin)
-    -> caf::result<partition_apply_result>;
+             keep_original_partition keep, std::string origin,
+             std::string policy_token) -> caf::result<partition_apply_result>;
 
   /// Adds a new partition creation listener.
   void
@@ -537,35 +725,6 @@ public:
   /// @param expr The expression to lookup.
   /// @returns A lookup result of candidate partitions categorized by type.
   auto lookup(expression expr) -> caf::expected<catalog_lookup_result>;
-
-  /// Applies the finishing touches shared by every `lookup` path: sorts each
-  /// schema's candidates by recency and reports the timing. `start` is when
-  /// the enclosing lookup began.
-  auto finalize_lookup(catalog_lookup_result&& candidates,
-                       stopwatch::time_point start) const
-    -> catalog_lookup_result;
-
-  /// Evaluates `expr` against the given partition collection of `schema`.
-  /// The collection is a parameter (rather than always the full per-schema map)
-  /// so the same logic can evaluate a single partition during on-demand sketch
-  /// pruning. This is only sound because the evaluation has no cross-partition
-  /// state: evaluating a set equals the union of evaluating each partition
-  /// alone. Keep it that way.
-  /// @param deferred_sketch_partitions Receives the ids of partitions kept only
-  /// because a Bloom-filter sketch was deferred and could prune them if loaded.
-  /// `lookup` uses this to restrict on-demand loading to exactly those
-  /// candidates instead of every surviving candidate in every schema.
-  auto lookup_impl(
-    const expression& expr, const type& schema,
-    const detail::flat_map<uuid, partition_synopsis_ptr>& partition_synopses,
-    std::unordered_set<uuid>& deferred_sketch_partitions) const
-    -> catalog_lookup_result::candidate_info;
-
-  /// Loads the deferred Bloom-filter sketches of the given partition into the
-  /// sketch cache, if possible. Returns the number of bytes loaded, or 0 if
-  /// the partition was already cached, has no loadable sketches, or could not
-  /// be loaded (in which case the partition stays a conservative candidate).
-  auto ensure_sketches_loaded(const uuid& id, const type& schema) -> size_t;
 
   /// @returns A best-effort estimate of the amount of memory used for this
   /// catalog (in bytes).
@@ -610,6 +769,21 @@ public:
   /// Partitions that left the catalog while still pinned.
   std::unordered_map<uuid, deferred_erase> deferred = {};
 
+  /// Partitions whose file deletions have been handed to the filesystem actor
+  /// but have not completed, and their on-disk footprint. An entry leaves when
+  /// its store deletion lands, freed or failed either way.
+  std::unordered_map<uuid, uint64_t> deleting = {};
+
+  /// Inputs of in-flight eviction transforms, and their on-disk footprint. An
+  /// entry leaves when the transform lands, committed or failed either way.
+  std::unordered_map<uuid, uint64_t> evicting_inputs = {};
+
+  /// How many in-flight disposals still need each tombstone. `deferred`
+  /// references a marker while an erasure waits on pins; this covers the
+  /// window while its files are actually being deleted, so that nothing
+  /// erases the marker before the disk is clean.
+  std::map<std::filesystem::path, size_t> markers_in_disposal = {};
+
   /// How long an erased partition may linger because a reader still pins it.
   /// Zero disables forcing.
   duration deferred_erase_timeout = {};
@@ -622,6 +796,15 @@ public:
 
   /// The rebuild run in progress, if any.
   Option<rebuild_run> rebuild = None{};
+
+  /// A manual run waiting for the automatic run's in-flight batches to land.
+  /// Discarding those batches would leave their inputs claimed by transforms
+  /// the manual run cannot select, so it starts once they settle.
+  Option<rebuild_options> pending_rebuild = None{};
+
+  /// Whoever asked for the queued run; adopted as its stop requests when it
+  /// starts.
+  std::vector<caf::typed_response_promise<void>> pending_rebuild_waiters = {};
 
   /// The storage policy, or null when no plugin contributes one. The catalog
   /// keeps its built-in behavior in that case.
@@ -648,6 +831,37 @@ public:
 
   /// Policy pipelines in flight, against `maintenance.compaction_slots`.
   size_t compacting = 0;
+
+  /// Set when the periodic pass ran out of slots mid-walk, so that a freed
+  /// slot resumes it. Anything else waits for its interval.
+  bool maintenance_pending = false;
+
+  /// Victims whose retirement is in flight: the tombstone write and the file
+  /// deletions have not settled. Excluded from eviction selection, so a
+  /// measurement racing the retirement cannot select them twice.
+  /// A transform finalized by startup marker replay, for the policy to hear
+  /// about once it exists. A crash between the durable marker and the
+  /// policy's callbacks would otherwise leave the persisted history naming
+  /// the erased inputs and missing the completed rule's watermark;
+  /// `make_policy()` feeds these to the fresh policy, whose construction has
+  /// already settled its state with blocking reads. Replaying state the
+  /// history already saw is a no-op.
+  struct replayed_transform {
+    std::vector<uuid> inputs = {};
+    std::vector<partition_info> outputs = {};
+    std::string policy_token = {};
+    Option<uuid> token_input = None{};
+
+    /// The marker file, kept by the replay for a token-carrying transform so
+    /// the commit stays replayable until the policy has persisted it.
+    std::filesystem::path marker = {};
+  };
+  std::vector<replayed_transform> replayed_transforms = {};
+
+  std::unordered_set<uuid> retiring = {};
+
+  /// The `compaction run` in progress, if any.
+  Option<named_rule_run> named_run = None{};
 
   /// How many policy actions have landed.
   size_t compacted = 0;
@@ -681,22 +895,54 @@ public:
   /// For each type, maps a partition ID to the synopses for that partition.
   // We mainly iterate over the whole map and return a sorted set, for which
   // the `flat_map` proves to be much faster than `std::{unordered_,}set`.
-  // See also ae9dbed.
-  std::unordered_map<tenzir::type,
-                     detail::flat_map<uuid, partition_synopsis_ptr>>
-    synopses_per_type;
+  // See also ae9dbed. Both levels are immutable behind shared_ptr: a lookup
+  // snapshot is one pointer copy, and each in-flight lookup keeps exactly its
+  // generation alive. Mutate only through `update_synopses`.
+  using synopsis_map = catalog_snapshot::map_type;
+  std::shared_ptr<const synopsis_map> synopses_per_type
+    = std::make_shared<synopsis_map>();
 
-  /// On-demand cache of partitions whose deferred Bloom-filter sketches have
-  /// been loaded for pruning. Bounded by `tenzir.index.sketch-cache-bytes`.
-  sketch_cache sketches;
+  /// Publishes a new generation of the synopsis set: `mutate` receives a
+  /// private copy of the outer map, and any per-schema map it wants to change
+  /// must be cloned too (see `mutable_schema`), because readers -- the lookup
+  /// workers -- share the current ones.
+  void update_synopses(auto&& mutate) {
+    auto next = std::make_shared<synopsis_map>(*synopses_per_type);
+    mutate(*next);
+    synopses_per_type = std::move(next);
+  }
+
+  /// Installs a mutable clone of one schema's synopses into an
+  /// under-construction generation, creating the schema if needed, and
+  /// returns a reference to it. Clone at most once per schema per generation.
+  static auto mutable_schema(synopsis_map& map, const type& schema)
+    -> schema_synopsis_map&;
+
+  /// The catalog's own evaluation engine, for internal lookups. It carries
+  /// no sketch budget; the configured budget belongs to the workers.
+  catalog_lookup_engine lookup_engine = {};
+
+  /// The workers that evaluate candidate requests off this actor's thread,
+  /// and the round-robin cursor over them.
+  std::vector<catalog_lookup_worker_actor> lookup_pool = {};
+  size_t next_lookup_worker_index = 0;
+
+  /// Returns the next worker, round-robin.
+  auto next_lookup_worker() -> const catalog_lookup_worker_actor&;
+
+  /// Drops a partition's cached sketches in every worker. Sends are ordered
+  /// per worker, so a lookup delegated after this call cannot see the stale
+  /// entry.
+  void invalidate_sketches(const uuid& partition);
+
+  /// The source of `partition_lease::generation` values.
+  uint64_t lease_generation = 0;
 
   /// Whether Bloom-filter sketches are deferred (see `tenzir.index.lazy-
   /// sketches`). When set, newly merged synopses also have their Bloom filters
   /// dropped so that ongoing ingest does not accumulate them in resident
   /// memory; they are loaded on demand from disk instead.
   bool lazy_sketches = false;
-
-  tenzir::taxonomies taxonomies = {};
 };
 
 /// The CATALOG is the first index actor that queries hit. The result
@@ -718,12 +964,14 @@ public:
 /// @param lazy_sketches Whether Bloom-filter sketches are deferred; when set,
 /// merged synopses also have their Bloom filters dropped to keep resident
 /// memory bounded during ongoing ingest.
+/// @param lookup_parallelism How many lookup workers evaluate candidate
+/// requests concurrently; the sketch-cache budget is split among them.
 auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
              filesystem_actor filesystem, partition_paths paths,
              std::string store_backend, index_config synopsis_opts,
              size_t partition_capacity, size_t desired_batch_size,
              maintenance_options maintenance, duration deferred_erase_timeout,
-             size_t sketch_cache_bytes = 0, bool lazy_sketches = false)
-  -> catalog_actor::behavior_type;
+             size_t sketch_cache_bytes = 0, bool lazy_sketches = false,
+             size_t lookup_parallelism = 1) -> catalog_actor::behavior_type;
 
 } // namespace tenzir

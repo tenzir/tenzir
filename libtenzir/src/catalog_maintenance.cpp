@@ -13,6 +13,7 @@
 
 #include "tenzir/catalog.hpp"
 #include "tenzir/detail/available_memory.hpp"
+#include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/detail/saturating_arithmetic.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/importer.hpp"
@@ -182,8 +183,14 @@ auto catalog_state::select_rebuild_batch(rebuild_run& run)
   if (run.options.expression != trivially_true_expression()) {
     auto candidates = lookup(run.options.expression);
     if (not candidates) {
+      // An invalid filter must fail the run, not masquerade as "matched
+      // nothing": the caller typed it and can fix it.
       TENZIR_WARN("{} failed to resolve the rebuild expression {}: {}", name,
                   run.options.expression, candidates.error());
+      run.stopping = true;
+      if (not run.failure) {
+        run.failure = candidates.error();
+      }
       return {};
     }
     matching.emplace();
@@ -193,20 +200,23 @@ auto catalog_state::select_rebuild_batch(rebuild_run& run)
       }
     }
   }
-  // Group the eligible partitions by schema. Schemas are tried in name order
-  // and partitions within one oldest first, so that selection is deterministic
-  // and a batch merges data that arrived close together.
-  auto eligible = std::map<std::string, std::vector<partition_info>>{};
-  for (const auto& [schema, partitions] : synopses_per_type) {
-    for (const auto& [id, synopsis] : partitions) {
+  // Group the eligible partitions by their complete schema type, not its
+  // name: schema evolution leaves distinct layouts sharing one name, and the
+  // transformer splits its outputs by type anyway -- a name-keyed batch of two
+  // such layouts would emit two still-undersized outputs and rewrite them
+  // again on every pass, forever. Groups are tried in name order (fingerprint
+  // breaking ties) and partitions within one oldest first, so that selection
+  // is deterministic and a batch merges data that arrived close together.
+  auto eligible = std::unordered_map<type, std::vector<partition_info>>{};
+  for (const auto& [schema, partitions] : *synopses_per_type) {
+    for (const auto& [id, synopsis] : *partitions) {
       if (matching and not matching->contains(id)) {
         continue;
       }
       if (not is_rebuild_candidate(id, *synopsis, run)) {
         continue;
       }
-      auto& partition
-        = eligible[std::string{schema.name()}].emplace_back(id, *synopsis);
+      auto& partition = eligible[schema].emplace_back(id, *synopsis);
       // Seed the per-schema estimate from every candidate, not just the ones
       // that end up in this batch: one measurable partition is what lets its
       // unmeasurable siblings be sized, and without that they are each assumed
@@ -214,38 +224,62 @@ auto catalog_state::select_rebuild_batch(rebuild_run& run)
       learn_size_estimate(run, partition);
     }
   }
+  auto groups = std::vector<type>{};
+  groups.reserve(eligible.size());
+  for (const auto& [schema, partitions] : eligible) {
+    groups.push_back(schema);
+  }
+  std::ranges::sort(groups, [](const type& lhs, const type& rhs) {
+    if (const auto order = lhs.name() <=> rhs.name(); order != 0) {
+      return order < 0;
+    }
+    return lhs.make_fingerprint() < rhs.make_fingerprint();
+  });
   const auto remaining = run.options.max_partitions - run.selected;
-  for (auto& [schema_name, partitions] : eligible) {
+  for (const auto& group : groups) {
+    auto& partitions = eligible[group];
+    const auto schema_name = group.name();
     std::ranges::sort(partitions, {}, &partition_info::max_import_time);
-    auto batch = std::vector<partition_info>{};
-    auto events = size_t{0};
-    auto bytes = uint64_t{0};
-    for (const auto& partition : partitions) {
-      if (events >= partition_capacity or batch.size() >= remaining) {
+    // A partition that fills the budget by itself but is not worth a lone
+    // rewrite must not block its schema: skipping past it lets the smaller
+    // siblings behind it form a batch, instead of every pass hitting the
+    // same blocker forever.
+    for (auto first = partitions.begin(); first != partitions.end(); ++first) {
+      auto batch = std::vector<partition_info>{};
+      auto events = size_t{0};
+      auto bytes = uint64_t{0};
+      for (auto it = first; it != partitions.end(); ++it) {
+        const auto& partition = *it;
+        if (events >= partition_capacity or batch.size() >= remaining) {
+          break;
+        }
+        const auto partition_bytes
+          = estimate_approx_bytes(run, partition, budget);
+        if (not batch.empty()
+            and detail::saturating_add(bytes, partition_bytes) > budget) {
+          // Skip the candidate that does not fit rather than ending the
+          // batch: an oversized partition in the middle of the age order
+          // must not hide the smaller siblings behind it, which may well
+          // complete this batch.
+          continue;
+        }
+        bytes = detail::saturating_add(bytes, partition_bytes);
+        events += partition.events;
+        batch.push_back(partition);
+      }
+      if (batch.empty()) {
         break;
       }
-      const auto partition_bytes
-        = estimate_approx_bytes(run, partition, budget);
-      if (not batch.empty()
-          and detail::saturating_add(bytes, partition_bytes) > budget) {
-        break;
+      if (batch.size() == 1
+          and not is_worth_rebuilding_alone(run, batch.front())) {
+        continue;
       }
-      bytes = detail::saturating_add(bytes, partition_bytes);
-      events += partition.events;
-      batch.push_back(partition);
+      TENZIR_VERBOSE("{} selected {} partition(s) of schema {} for rebuild "
+                     "with {} events and {} estimated bytes (budget: {})",
+                     catalog_state::name, batch.size(), schema_name, events,
+                     bytes, budget);
+      return batch;
     }
-    if (batch.empty()) {
-      continue;
-    }
-    if (batch.size() == 1
-        and not is_worth_rebuilding_alone(run, batch.front())) {
-      continue;
-    }
-    TENZIR_VERBOSE("{} selected {} partition(s) of schema {} for rebuild with "
-                   "{} events and {} estimated bytes (budget: {})",
-                   catalog_state::name, batch.size(), schema_name, events,
-                   bytes, budget);
-    return batch;
   }
   return {};
 }
@@ -255,21 +289,33 @@ auto catalog_state::begin_rebuild(rebuild_options options) -> caf::error {
     return caf::make_error(ec::invalid_configuration,
                            "rebuild requires a non-zero parallel level");
   }
-  // The automatic source never displaces a run that is already going; it just
-  // tries again on its next pass.
-  if (options.automatic and rebuild) {
+  // The automatic source never displaces a run that is already going or
+  // queued; it just tries again on its next pass.
+  if (options.automatic and (rebuild or pending_rebuild)) {
     return {};
   }
-  if (rebuild and not rebuild->options.automatic) {
+  if ((rebuild and not rebuild->options.automatic) or pending_rebuild) {
     return caf::make_error(
       ec::invalid_argument,
       fmt::format("{} refuses to start a rebuild while one is still ongoing "
                   "({} partitions transformed); consider 'tenzir-ctl rebuild "
                   "stop'",
-                  *self, rebuild->transformed));
+                  *self, rebuild ? rebuild->transformed : 0));
   }
-  // A manual run supersedes the automatic one.
+  // A manual run supersedes the automatic one -- but only once its in-flight
+  // batches land. Discarding them would leave their inputs claimed by
+  // transforms this run cannot select, so a `--all` could report success
+  // without having covered them; and their landing must settle the automatic
+  // run's accounting, not this one's.
   if (rebuild) {
+    if (rebuild->running > 0) {
+      TENZIR_VERBOSE("{} queues a manual rebuild behind the automatic run's "
+                     "{} in-flight batch(es)",
+                     *self, rebuild->running);
+      rebuild->stopping = true;
+      pending_rebuild.emplace(std::move(options));
+      return {};
+    }
     TENZIR_VERBOSE("{} stops the automatic rebuild for a manual one", *self);
     finish_rebuild();
   }
@@ -299,9 +345,20 @@ auto catalog_state::start_rebuild(rebuild_options options)
   if (auto error = begin_rebuild(std::move(options)); error.valid()) {
     return error;
   }
-  // `schedule_rebuild` may have finished the run already, and a detached
-  // caller does not want to wait for one that has not.
-  if (detached or not rebuild) {
+  if (detached) {
+    return {};
+  }
+  // The run may be queued behind the automatic run's in-flight batches; the
+  // caller then waits for the queued run, which adopts these promises when it
+  // starts.
+  if (pending_rebuild) {
+    auto rp = self->make_response_promise<void>();
+    pending_rebuild_waiters.push_back(rp);
+    return rp;
+  }
+  // `schedule_rebuild` may have finished the run already, and a caller does
+  // not want to wait for one that has not.
+  if (not rebuild) {
     return {};
   }
   auto rp = self->make_response_promise<void>();
@@ -311,6 +368,14 @@ auto catalog_state::start_rebuild(rebuild_options options)
 
 auto catalog_state::stop_rebuild(const rebuild_stop_options& options)
   -> caf::result<void> {
+  // A queued manual run is stopped before it starts; its waiters get the same
+  // plain completion a stopped running rebuild's waiters get.
+  if (pending_rebuild) {
+    pending_rebuild = None{};
+    for (auto& rp : std::exchange(pending_rebuild_waiters, {})) {
+      rp.deliver();
+    }
+  }
   if (not rebuild) {
     return {};
   }
@@ -339,6 +404,7 @@ void catalog_state::finish_rebuild() {
                 run.results);
   }
   auto stop_requests = std::exchange(run.stop_requests, {});
+  const auto failure = run.failure;
   // Only the statistics and options are ever read back; the run's bookkeeping
   // grows with the number of partitions it touched, so it does not stay
   // resident for the lifetime of the node.
@@ -346,7 +412,36 @@ void catalog_state::finish_rebuild() {
   run.approx_bytes_per_event = {};
   last_rebuild = std::move(run);
   for (auto& rp : stop_requests) {
-    rp.deliver();
+    // A run that aborted reports why, so that `tenzir-ctl rebuild` and
+    // anything scripted on top of it can tell a skipped rebuild from a done
+    // one.
+    if (failure) {
+      rp.deliver(*failure);
+    } else {
+      rp.deliver();
+    }
+  }
+  // A manual run queued behind this one starts now, and its waiters become
+  // its stop requests.
+  if (pending_rebuild) {
+    auto options = *std::exchange(pending_rebuild, None{});
+    auto waiters = std::exchange(pending_rebuild_waiters, {});
+    if (auto error = begin_rebuild(std::move(options)); error.valid()) {
+      for (auto& rp : waiters) {
+        rp.deliver(error);
+      }
+      return;
+    }
+    // The queued run may have found nothing to do and finished on the spot.
+    if (not rebuild) {
+      for (auto& rp : waiters) {
+        rp.deliver();
+      }
+      return;
+    }
+    for (auto& rp : waiters) {
+      rebuild->stop_requests.push_back(std::move(rp));
+    }
   }
 }
 
@@ -358,28 +453,50 @@ void catalog_state::schedule_rebuild() {
     if (batch.empty()) {
       break;
     }
+    auto batch_ids = std::vector<uuid>{};
+    batch_ids.reserve(batch.size());
     for (const auto& partition : batch) {
       rebuild->visited.insert(partition.uuid);
+      batch_ids.push_back(partition.uuid);
     }
     const auto size = batch.size();
     rebuild->selected += size;
     ++rebuild->running;
+    rebuild->running_partitions += size;
     auto pipeline = rebuild_pipeline(batch.front().schema, desired_batch_size);
     // Go through the handler rather than calling `apply` directly: it returns
     // a promise, and this is the one place that needs a continuation on it.
     self
       ->mail(atom::apply_v, std::move(pipeline), std::move(batch),
-             keep_original_partition::no, std::string{"rebuild"})
+             keep_original_partition::no, std::string{"rebuild"}, std::string{})
       .request(caf::actor_cast<catalog_actor>(self), caf::infinite)
       .then(
-        [this, generation = rebuild->generation](
-          partition_apply_result& result) {
+        [this, size, batch_ids,
+         generation = rebuild->generation](partition_apply_result& result) {
           if (not rebuild or rebuild->generation != generation) {
             // A later run replaced ours. Its accounting is not ours to settle:
             // decrementing its `running` would wrap the counter and wedge it.
             return;
           }
           --rebuild->running;
+          rebuild->running_partitions -= size;
+          // The transformer stops consuming when its memory budget fills, and
+          // `apply` refuses partitions another transform claimed in the
+          // meantime. Either way the leftovers are untouched, so hand them
+          // back to selection -- allowance included -- instead of counting
+          // them as done.
+          if (result.input_partitions.size() < batch_ids.size()) {
+            auto consumed = std::unordered_set<uuid>{};
+            for (const auto& partition : result.input_partitions) {
+              consumed.insert(partition.uuid);
+            }
+            for (const auto& id : batch_ids) {
+              if (not consumed.contains(id)) {
+                rebuild->visited.erase(id);
+                --rebuild->selected;
+              }
+            }
+          }
           for (const auto& partition : result.output_partitions) {
             learn_size_estimate(*rebuild, partition);
             // The output is a fresh partition that may well match the run's
@@ -409,11 +526,13 @@ void catalog_state::schedule_rebuild() {
           }
           schedule_rebuild_or_finish();
         },
-        [this, size, generation = rebuild->generation](caf::error& error) {
+        [this, size, batch_ids,
+         generation = rebuild->generation](caf::error& error) {
           if (not rebuild or rebuild->generation != generation) {
             return;
           }
           --rebuild->running;
+          rebuild->running_partitions -= size;
           // The transformer blames a store decode failure on the partition it
           // came from, so we can quarantine exactly the culprit instead of
           // treating the whole batch as suspect. Without the quarantine the
@@ -425,10 +544,71 @@ void catalog_state::schedule_rebuild() {
             ++rebuild->quarantined;
             quarantined_partitions[*corrupt] = fmt::to_string(error);
             report_quarantine(*corrupt, error);
-            std::ignore = erase_and_extract(*corrupt, fmt::to_string(error));
+            // The quarantine itself can fail -- a refused retirement, a
+            // failed marker write. The partition then stays active and a
+            // later selection may hit it again, which retries the quarantine;
+            // what must not happen is counting it as handled in silence. The
+            // request counts as running work: finishing the run before the
+            // marker is durable could hand the caller a success whose
+            // quarantined tally the still-pending operation later disproves.
+            ++rebuild->running;
+            self
+              ->mail(atom::erase_v, atom::extract_v, *corrupt,
+                     fmt::to_string(error))
+              .request(caf::actor_cast<catalog_actor>(self), caf::infinite)
+              .then(
+                [this, generation](atom::done) {
+                  // The marker is durable and the file operations are on
+                  // their way; nothing further to track here.
+                  if (rebuild and rebuild->generation == generation) {
+                    --rebuild->running;
+                    schedule_rebuild_or_finish();
+                  }
+                },
+                [this, corrupt = *corrupt,
+                 generation](caf::error& quarantine_error) {
+                  TENZIR_WARN("{} failed to quarantine partition {}: {}", *self,
+                              corrupt, quarantine_error);
+                  quarantined_partitions.erase(corrupt);
+                  if (rebuild and rebuild->generation == generation) {
+                    --rebuild->quarantined;
+                    --rebuild->running;
+                    // Retrying would loop: selection would pick the corrupt
+                    // partition again, fail the same way, and land back
+                    // here. Wind the run down and report why -- the
+                    // partition stays active and the next run retries the
+                    // quarantine.
+                    rebuild->stopping = true;
+                    if (not rebuild->failure) {
+                      rebuild->failure = quarantine_error;
+                    }
+                    schedule_rebuild_or_finish();
+                  }
+                });
+            // The rest of the batch is unchanged in the catalog and only
+            // failed by association. Un-visiting it -- allowance included, or
+            // a batch that exhausted `max_partitions` could never retry --
+            // hands it back to selection, so one corrupt store does not
+            // exempt its batch mates from the run.
+            for (const auto& id : batch_ids) {
+              if (id != *corrupt) {
+                rebuild->visited.erase(id);
+                --rebuild->selected;
+              }
+            }
           } else {
-            TENZIR_WARN("{} failed to rebuild {} partitions: {}", *self, size,
-                        error);
+            // Anything else -- a failed write, a failed rename -- is not
+            // progress, and retrying it blind would likely fail the same way.
+            // Wind the run down and report the failure to whoever waits on
+            // it, rather than delivering a success that silently skipped
+            // these partitions.
+            TENZIR_WARN("{} stops the rebuild after failing to rebuild {} "
+                        "partitions: {}",
+                        *self, size, error);
+            rebuild->stopping = true;
+            if (not rebuild->failure) {
+              rebuild->failure = error;
+            }
           }
           schedule_rebuild_or_finish();
         });
@@ -531,6 +711,22 @@ auto catalog_state::parked_bytes() const -> uint64_t {
   return result;
 }
 
+auto catalog_state::deleting_bytes() const -> uint64_t {
+  auto result = uint64_t{0};
+  for (const auto& [partition, footprint] : deleting) {
+    result += footprint;
+  }
+  return result;
+}
+
+auto catalog_state::evicting_bytes() const -> uint64_t {
+  auto result = uint64_t{0};
+  for (const auto& [partition, footprint] : evicting_inputs) {
+    result += footprint;
+  }
+  return result;
+}
+
 auto catalog_state::eviction_weight_of(const uuid& partition,
                                        const partition_synopsis& synopsis) const
   -> double {
@@ -542,15 +738,16 @@ auto catalog_state::eviction_weight_of(const uuid& partition,
       return *weighted;
     }
   }
-  // No policy, or none for this partition: age alone. A weight is a multiplier
-  // on age rather than a scale of its own, so this mixes with weighted answers
-  // -- and it is the same as an unweighted schema gets from compaction, whose
-  // default weight is 1. Ordering descending is oldest-first, the built-in
-  // behavior.
+  // No policy, or none for this partition: age alone. A policy expresses its
+  // weights as scaled age rather than on a scale of its own, so this mixes
+  // with weighted answers -- and it is what an unweighted schema gets from
+  // compaction, whose default weight of 1 leaves the age untouched. Ordering
+  // descending is oldest-first, the built-in behavior.
   return age;
 }
 
-auto catalog_state::select_eviction_batch(size_t limit) const
+auto catalog_state::select_eviction_batch(
+  size_t limit, const std::unordered_set<uuid>& excluded) const
   -> std::vector<uuid> {
   if (limit == 0) {
     return {};
@@ -561,11 +758,18 @@ auto catalog_state::select_eviction_batch(size_t limit) const
   // moved it to the back of the queue. `max_import_time` is a property of the
   // events, so it survives a rewrite.
   auto candidates = std::vector<std::pair<double, uuid>>{};
-  for (const auto& [schema, partitions] : synopses_per_type) {
-    for (const auto& [partition, synopsis] : partitions) {
+  for (const auto& [schema, partitions] : *synopses_per_type) {
+    for (const auto& [partition, synopsis] : *partitions) {
       if (in_transformation.contains(partition)) {
         // Erasing an input would let its data resurrect through the
         // transform's output. The next pass picks it up once it is free.
+        continue;
+      }
+      if (retiring.contains(partition)) {
+        // Already on its way out; its retirement has not settled yet.
+        continue;
+      }
+      if (excluded.contains(partition)) {
         continue;
       }
       candidates.emplace_back(eviction_weight_of(partition, *synopsis),
@@ -628,11 +832,12 @@ void catalog_state::measure_space() {
 void catalog_state::on_space_measured(uint64_t size) {
   dbdir_size = size;
   // Partitions that are erased but still pinned keep their files until the
-  // last reader drops. They are already on their way out, so counting them
-  // against the budget would make one pressure episode erase far more than it
-  // needs to while freeing nothing until the pins clear.
-  const auto parked = parked_bytes();
-  const auto effective = size - std::min(size, parked);
+  // last reader drops, and partitions whose deletion is in flight keep theirs
+  // until the filesystem actor gets to them. Both are already on their way
+  // out, so counting them against the budget would make one pressure episode
+  // erase far more than it needs to while freeing nothing yet.
+  const auto pending = parked_bytes() + deleting_bytes() + evicting_bytes();
+  const auto effective = size - std::min(size, pending);
   // A pass that has started runs down to the low water mark; otherwise the
   // node would sit just under the high mark and re-trigger constantly.
   const auto threshold = evicting ? maintenance.space.low_water_mark
@@ -645,51 +850,138 @@ void catalog_state::on_space_measured(uint64_t size) {
     }
     return;
   }
-  const auto batch = select_eviction_batch(maintenance.space.step_size);
-  if (batch.empty()) {
-    TENZIR_WARN("{} is over its disk budget at {} bytes but has no partition "
-                "it may evict",
-                *self, effective);
+  // Deferred victims -- a full pool, a broken or previously failed pipeline --
+  // must not shadow the actionable partitions ranked behind them, or a single
+  // stuck heavyweight would starve the budget forever. Excluding them and
+  // selecting again walks down the ranking until something can act or the
+  // candidates run out.
+  auto deferred_victims = std::unordered_set<uuid>{};
+  auto started_transform = false;
+  auto selected_any = false;
+  auto to_retire = std::vector<uuid>{};
+  while (not started_transform and to_retire.empty()) {
+    const auto batch
+      = select_eviction_batch(maintenance.space.step_size, deferred_victims);
+    if (batch.empty()) {
+      break;
+    }
+    selected_any = true;
+    evicting = true;
+    TENZIR_VERBOSE("{} evicts {} partition(s) to get from {} bytes under {}",
+                   *self, batch.size(), effective, threshold);
+    for (const auto& partition : batch) {
+      switch (run_eviction_action(partition)) {
+        case eviction_outcome::started:
+          started_transform = true;
+          continue;
+        case eviction_outcome::deferred:
+          deferred_victims.insert(partition);
+          continue;
+        case eviction_outcome::none:
+          break;
+      }
+      to_retire.push_back(partition);
+    }
+  }
+  if (not started_transform and to_retire.empty()) {
+    if (not selected_any) {
+      TENZIR_WARN("{} is over its disk budget at {} bytes but has no partition "
+                  "it may evict",
+                  *self, effective);
+    } else {
+      // Every candidate is waiting on the compaction pool or on its own
+      // pipeline. Measuring again now would walk the whole database only to
+      // reach the same conclusion, over and over until a slot frees. The scan
+      // interval brings us back.
+      TENZIR_VERBOSE("{} found no eviction it can start yet; waiting for the "
+                     "next scan",
+                     *self);
+    }
     evicting = false;
     return;
   }
-  evicting = true;
-  TENZIR_VERBOSE("{} evicts {} partition(s) to get from {} bytes under {}",
-                 *self, batch.size(), effective, threshold);
-  for (const auto& partition : batch) {
-    if (run_eviction_action(partition)) {
-      continue;
-    }
-    // The selection already skipped everything `retire` would refuse, and the
-    // budget loop has nobody to report an error to; a failure is logged there.
-    std::ignore = retire(partition, None{});
-    ++evicted;
+  if (to_retire.empty()) {
+    // Only rewrites started. Their inputs are credited, so measuring now is
+    // sound, and their completion triggers another measurement anyway.
+    measure_space();
+    return;
   }
-  // Re-measure rather than subtract an estimate: the erasures may be deferred
-  // behind pins, in which case nothing was actually freed yet.
-  measure_space();
+  // Retirements run asynchronously -- a tombstone write, then the file
+  // deletions -- and until each one's continuation runs, its partition is
+  // still in the catalog. Measuring immediately would re-select the very same
+  // victims (or, with a persistently failing marker write, spin full database
+  // scans against the same failure without ever waiting for the scan
+  // interval). So the victims are excluded from selection while they retire,
+  // and the next measurement starts when the batch has settled.
+  auto counter = detail::make_fanout_counter(
+    to_retire.size(),
+    [this] {
+      if (not measuring_space) {
+        measure_space();
+      }
+    },
+    [this](caf::error&&) {
+      // At least one retirement failed; its victim is selectable again. Let
+      // the scan interval bring us back rather than retrying in a tight loop
+      // against the same broken filesystem.
+      TENZIR_VERBOSE("{} pauses eviction until the next scan after a failed "
+                     "retirement",
+                     *self);
+      evicting = false;
+    });
+  for (const auto& partition : to_retire) {
+    retiring.insert(partition);
+    self->mail(atom::erase_v, partition)
+      .request(caf::actor_cast<catalog_actor>(self), caf::infinite)
+      .then(
+        [this, partition, counter](atom::done) {
+          retiring.erase(partition);
+          ++evicted;
+          counter->receive_success();
+        },
+        [this, partition, counter](caf::error& error) {
+          retiring.erase(partition);
+          TENZIR_WARN("{} failed to evict partition {}: {}", *self, partition,
+                      error);
+          counter->receive_error(std::move(error));
+        });
+  }
 }
 
 void catalog_state::release_compaction_slot() {
   TENZIR_ASSERT(compacting > 0);
-  // The single place a slot is given back. Anything that waits on a free slot
-  // hooks in here, so that no release path can be added later that forgets to
-  // wake it.
+  // The single place a slot is given back, and therefore the single place
+  // that hands it to whoever waits. Order is priority: a named run first --
+  // its caller blocks on a promise -- then the periodic pass, which would
+  // otherwise process at most `compaction-slots` partitions per interval and
+  // fall permanently behind whenever more eligible partitions arrive per
+  // interval than that.
   --compacting;
+  drain_named_rule();
+  // Only a pass that ran out of slots resumes here. Resuming unconditionally
+  // would let any released slot -- a named run's batch, an eviction rewrite --
+  // start temporal rules off-schedule and bypass the deliberate delay of the
+  // first pass after startup.
+  if (maintenance_pending) {
+    maintenance_pass();
+  }
 }
 
 void catalog_state::maintenance_pass() {
   if (not policy) {
     return;
   }
+  maintenance_pending = false;
   // Walk the partitions and ask about each one. Selection is per partition and
   // against live state, so a partition that becomes ineligible between two
   // passes is simply not asked about again.
-  for (const auto& [schema, partitions] : synopses_per_type) {
-    for (const auto& [partition, synopsis] : partitions) {
+  for (const auto& [schema, partitions] : *synopses_per_type) {
+    for (const auto& [partition, synopsis] : *partitions) {
       if (compacting >= maintenance.compaction_slots) {
-        // The pool is full. What is left waits for the next pass rather than
-        // queueing, so that the work is re-decided against fresh state.
+        // The pool is full. What is left is not queued: the pass resumes with
+        // a fresh walk when a slot frees, so the work is re-decided against
+        // live state rather than replayed from a stale list.
+        maintenance_pending = true;
         return;
       }
       if (in_transformation.contains(partition)) {
@@ -715,15 +1007,35 @@ void catalog_state::run_maintenance_action(const uuid& partition,
   ++compacting;
   self
     ->mail(atom::apply_v, std::move(action.pipeline), std::move(batch),
-           action.keep, action.origin)
+           action.keep, action.origin,
+           policy ? policy->serialize_token(action.token) : std::string{})
     .request(caf::actor_cast<catalog_actor>(self), caf::infinite)
     .then(
       [this, partition,
        recorded = action.token](partition_apply_result& result) {
+        if (result.input_partitions.empty()) {
+          // Another transform claimed the partition first; nothing ran, so
+          // there is nothing to commit. Whatever replaces it gets its own
+          // look on the next pass.
+          release_compaction_slot();
+          return;
+        }
         ++compacted;
         if (policy) {
           policy->on_committed(recorded, partition, result.output_partitions);
         }
+        if (policy and not result.marker.empty()) {
+          // The commit above lives only in policy memory plus this marker;
+          // the marker may go only once the flush *succeeds*. Per-commit
+          // flushes coalesce -- a flush during an in-flight write joins it.
+          release_marker_after_flush(std::filesystem::path{result.marker});
+        }
+        // A committed action can expose follow-up work on the same data: the
+        // replacement may be eligible for the next rule in line, and waiting
+        // for the next interval would delay every subsequent rule by a full
+        // period. Have the released slot walk again; a walk that starts
+        // nothing ends the cycle.
+        maintenance_pending = true;
         release_compaction_slot();
       },
       [this, partition, recorded = action.token](caf::error& error) {
@@ -737,20 +1049,238 @@ void catalog_state::run_maintenance_action(const uuid& partition,
       });
 }
 
-auto catalog_state::run_eviction_action(const uuid& partition) -> bool {
+auto catalog_state::run_named_rule(std::string rule,
+                                   Option<duration> older_than,
+                                   Option<duration> newer_than)
+  -> caf::result<atom::done> {
   if (not policy) {
-    return false;
+    return caf::make_error(ec::invalid_configuration,
+                           "no storage policy is configured");
+  }
+  if (named_run) {
+    return caf::make_error(ec::busy, "a compaction rule is already running");
+  }
+  // A rule with nothing to do and a misspelled rule both find no work, so ask
+  // the policy which of the two this is rather than reporting success for a
+  // typo. A policy that does not name its rules gets the benefit of the doubt.
+  if (const auto known = policy->rule_names(); not known.empty()) {
+    if (std::ranges::find(known, rule) == known.end()) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("no storage policy rule named '{}'; "
+                                         "known rules: {}",
+                                         rule, fmt::join(known, ", ")));
+    }
+  }
+  // Only the policy can validate the effective window: the overrides merge
+  // with the rule's configured bounds, which the catalog never sees. An
+  // impossible window would otherwise rewrite matching partitions through an
+  // always-false predicate, advance their watermarks, and report success.
+  if (auto error = policy->check_named_run(rule, older_than, newer_than);
+      error.valid()) {
+    return error;
+  }
+  // Collect the partitions first: starting transforms while walking would
+  // mutate the very maps the walk is iterating.
+  auto pending = std::vector<uuid>{};
+  auto skipped = size_t{0};
+  for (const auto& [schema, partitions] : *synopses_per_type) {
+    for (const auto& [partition, synopsis] : *partitions) {
+      if (not policy->named_action(rule, older_than, newer_than, partition,
+                                   *synopsis)) {
+        continue;
+      }
+      if (in_transformation.contains(partition)) {
+        // Another transform holds this partition, and its replacement gets an
+        // id this run will never see. Count it so the run can say that it did
+        // not cover everything, instead of a `done` that quietly excludes it.
+        ++skipped;
+        continue;
+      }
+      pending.push_back(partition);
+    }
+  }
+  if (pending.empty() and skipped == 0) {
+    // Nothing matched, which is a legitimate outcome rather than an error: the
+    // rule may simply have nothing left to do.
+    TENZIR_VERBOSE("{} found no partition for compaction rule {}", *self, rule);
+    return atom::done_v;
+  }
+  TENZIR_INFO("{} runs compaction rule {} over {} partition(s)", *self, rule,
+              pending.size());
+  auto rp = self->make_response_promise<atom::done>();
+  named_run.emplace(named_rule_run{
+    .rule = std::move(rule),
+    .older_than = older_than,
+    .newer_than = newer_than,
+    .pending = std::move(pending),
+    .skipped = skipped,
+    .promise = rp,
+  });
+  drain_named_rule();
+  return rp;
+}
+
+void catalog_state::drain_named_rule() {
+  if (not named_run) {
+    return;
+  }
+  // One partition per free slot. A rule can match every partition in the
+  // database, and firing them all at once would put a transformer on each --
+  // every one of them budgeting a quarter of available memory for itself.
+  while (not named_run->pending.empty()
+         and compacting < maintenance.compaction_slots) {
+    const auto partition = named_run->pending.back();
+    named_run->pending.pop_back();
+    auto synopsis = find_synopsis(partition);
+    if (not synopsis) {
+      // Erased while the run was queued; the data is gone either way.
+      continue;
+    }
+    if (in_transformation.contains(partition)) {
+      // Claimed while the run was queued; its replacement carries an id this
+      // run never saw, so it counts as not covered.
+      ++named_run->skipped;
+      continue;
+    }
+    // Ask again rather than replaying a decision made when the run started:
+    // the history may have moved on in the meantime.
+    auto action
+      = policy->named_action(named_run->rule, named_run->older_than,
+                             named_run->newer_than, partition, *synopsis);
+    if (not action) {
+      continue;
+    }
+    auto batch = std::vector<partition_info>{};
+    batch.emplace_back(partition, *synopsis);
+    ++compacting;
+    ++named_run->running;
+    self
+      ->mail(atom::apply_v, std::move(action->pipeline), std::move(batch),
+             action->keep, action->origin,
+             policy ? policy->serialize_token(action->token) : std::string{})
+      .request(caf::actor_cast<catalog_actor>(self), caf::infinite)
+      .then(
+        [this, partition,
+         recorded = action->token](partition_apply_result& result) {
+          if (result.input_partitions.empty()) {
+            // Another transform claimed the partition between the
+            // `in_transformation` check and this request: apply() refused it
+            // and ran nothing. Committing the token would record untouched
+            // data as processed, and the run would overstate its coverage.
+            ++named_run->skipped;
+            finish_named_rule_batch({});
+            return;
+          }
+          if (policy) {
+            policy->on_committed(recorded, partition, result.output_partitions);
+            if (not result.marker.empty()) {
+              release_marker_after_flush(std::filesystem::path{result.marker});
+            }
+          }
+          finish_named_rule_batch({});
+        },
+        [this, partition, recorded = action->token](caf::error& error) {
+          TENZIR_WARN("{} failed to run a compaction rule on partition {}: {}",
+                      *self, partition, error);
+          if (policy) {
+            policy->on_failed(recorded, partition, error);
+          }
+          finish_named_rule_batch(std::move(error));
+        });
+  }
+  if (named_run->running == 0 and named_run->pending.empty()) {
+    // Every candidate went away before its turn came.
+    finish_named_run();
+  }
+}
+
+void catalog_state::finish_named_run() {
+  auto run = *std::exchange(named_run, None{});
+  auto deliver = [](named_rule_run run, caf::error flush_error) {
+    if (run.failure) {
+      run.promise.deliver(std::move(run.failure));
+      return;
+    }
+    if (flush_error) {
+      // The transforms landed, but the record of them did not: answering
+      // `done` would promise durability the disk refused. The write is
+      // retried in the background, so a re-run after recovery is safe.
+      run.promise.deliver(caf::make_error(
+        ec::filesystem_error,
+        fmt::format("compaction rule {} ran, but persisting its history "
+                    "failed and is being retried: {}",
+                    run.rule, flush_error)));
+      return;
+    }
+    if (run.skipped > 0) {
+      // Partitions the run could not reach were replaced under new ids, so a
+      // plain `done` would overstate what the rule covered. Saying so makes
+      // the command retryable: the next run sees the replacements.
+      run.promise.deliver(caf::make_error(
+        ec::busy, fmt::format("compaction rule {} skipped {} partition(s) "
+                              "that another transform held; run it again to "
+                              "cover their replacements",
+                              run.rule, run.skipped)));
+      return;
+    }
+    run.promise.deliver(atom::done_v);
+  };
+  if (not policy) {
+    deliver(std::move(run), {});
+    return;
+  }
+  // The caller is about to hear that the run happened; the state backing that
+  // answer -- the watermarks its transforms recorded -- must be durable
+  // first, not sitting in a debounce window that a shutdown would discard.
+  deliver(std::move(run), policy->flush());
+}
+
+void catalog_state::finish_named_rule_batch(caf::error error) {
+  if (not named_run) {
+    release_compaction_slot();
+    return;
+  }
+  --named_run->running;
+  // Report the first failure, but let the rest of the run finish rather than
+  // abandoning partitions the operator asked to process.
+  if (error and not named_run->failure) {
+    named_run->failure = std::move(error);
+  }
+  if (named_run->pending.empty() and named_run->running == 0) {
+    finish_named_run();
+  }
+  // Last, so that the run's own accounting is settled before the freed slot
+  // is offered to whatever is queued.
+  release_compaction_slot();
+}
+
+auto catalog_state::run_eviction_action(const uuid& partition)
+  -> eviction_outcome {
+  if (not policy) {
+    return eviction_outcome::none;
   }
   auto synopsis = find_synopsis(partition);
   if (not synopsis) {
-    return false;
+    return eviction_outcome::none;
   }
-  auto action = policy->eviction_action(partition, *synopsis);
-  if (not action) {
-    // No action means erase outright, which is what an unconfigured eviction
-    // has always done.
-    return false;
+  auto answer = policy->eviction_action(partition, *synopsis);
+  if (const auto* fallback
+      = std::get_if<storage_policy::eviction_fallback>(&answer)) {
+    switch (*fallback) {
+      case storage_policy::eviction_fallback::erase:
+        // Erase outright, which is what an unconfigured eviction has always
+        // done.
+        return eviction_outcome::none;
+      case storage_policy::eviction_fallback::keep:
+        // The policy owns this partition but cannot act on it right now, for
+        // example because its configured pipeline does not build. Erasing in
+        // its stead would delete data the operator asked to transform; the
+        // next measurement round asks again.
+        return eviction_outcome::deferred;
+    }
+    TENZIR_UNREACHABLE();
   }
+  auto& action = std::get<storage_action>(answer);
   // The policy owns this partition either way: erasing it because the pool is
   // busy would throw away the rewrite it asked for. Leaving it for the next
   // measurement round is the only correct answer.
@@ -758,33 +1288,75 @@ auto catalog_state::run_eviction_action(const uuid& partition) -> bool {
     TENZIR_DEBUG("{} defers the eviction action for partition {} because the "
                  "compaction pool is full",
                  *self, partition);
-    return true;
+    return eviction_outcome::deferred;
   }
   auto batch = std::vector<partition_info>{};
   batch.emplace_back(partition, *synopsis);
   ++compacting;
+  // Credit the input's footprint for as long as the transform runs: a
+  // measurement taken in the meantime still sees its files, and without the
+  // credit the pass would start further evictions to reclaim bytes this
+  // rewrite is already reclaiming.
+  evicting_inputs[partition] = synopsis->store_file.size
+                               + synopsis->indexes_file.size
+                               + synopsis->sketches_file.size;
   self
-    ->mail(atom::apply_v, std::move(action->pipeline), std::move(batch),
-           action->keep, action->origin)
+    ->mail(atom::apply_v, std::move(action.pipeline), std::move(batch),
+           action.keep, action.origin,
+           policy ? policy->serialize_token(action.token) : std::string{})
     .request(caf::actor_cast<catalog_actor>(self), caf::infinite)
     .then(
       [this, partition,
-       recorded = action->token](partition_apply_result& result) {
+       recorded = action.token](partition_apply_result& result) {
+        evicting_inputs.erase(partition);
+        if (result.input_partitions.empty()) {
+          // Another transform claimed the partition first; no bytes moved on
+          // this partition's account. Fall through to the re-measure below:
+          // the budget question is still open either way.
+          release_compaction_slot();
+          if (maintenance.space.high_water_mark > 0 and not measuring_space
+              and not evicting) {
+            measure_space();
+          }
+          return;
+        }
         ++evicted;
         if (policy) {
           policy->on_committed(recorded, partition, result.output_partitions);
+          if (not result.marker.empty()) {
+            release_marker_after_flush(std::filesystem::path{result.marker});
+          }
         }
         release_compaction_slot();
+        // The pass may have ended while this transform ran: with the input's
+        // full footprint credited, the measurement can dip under the water
+        // mark even though the rewrite keeps most of those bytes. Measuring
+        // now that the truth is on disk lets the pass resume if the budget is
+        // in fact still exceeded, rather than waiting out the scan interval.
+        if (maintenance.space.high_water_mark > 0 and not measuring_space
+            and not evicting) {
+          measure_space();
+        }
       },
-      [this, partition, recorded = action->token](caf::error& error) {
+      [this, partition, recorded = action.token](caf::error& error) {
+        evicting_inputs.erase(partition);
         TENZIR_WARN("{} failed to run the eviction action on partition {}: {}",
                     *self, partition, error);
         if (policy) {
           policy->on_failed(recorded, partition, error);
         }
         release_compaction_slot();
+        // Same as the success path: a pass may have ended on this input's
+        // credited footprint, and the failure returns those bytes to the
+        // budget. Measuring now lets the pass resume -- and consider the
+        // victims ranked behind this one -- instead of waiting out the scan
+        // interval.
+        if (maintenance.space.high_water_mark > 0 and not measuring_space
+            and not evicting) {
+          measure_space();
+        }
       });
-  return true;
+  return eviction_outcome::started;
 }
 
 auto catalog_state::space_status() const -> record {
@@ -797,6 +1369,8 @@ auto catalog_state::space_status() const -> record {
     {"evicting", evicting},
     {"evicted", evicted},
     {"parked-bytes", parked_bytes()},
+    {"deleting-bytes", deleting_bytes()},
+    {"evicting-bytes", evicting_bytes()},
     {"high-water-mark", uint64_t{maintenance.space.high_water_mark}},
     {"low-water-mark", uint64_t{maintenance.space.low_water_mark}},
   };

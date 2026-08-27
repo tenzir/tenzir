@@ -50,7 +50,8 @@ struct fixture {
                         /*desired_batch_size=*/size_t{1024},
                         maintenance_options{}, deferred_erase_timeout,
                         /*sketch_cache_bytes=*/size_t{0},
-                        /*lazy_sketches=*/false);
+                        /*lazy_sketches=*/false,
+                        /*lookup_parallelism=*/size_t{1});
   }
 
   duration deferred_erase_timeout = {};

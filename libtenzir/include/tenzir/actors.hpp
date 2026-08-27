@@ -147,6 +147,17 @@ using partition_creation_listener_actor = typed_actor_fwd<
   auto(atom::update, std::vector<partition_synopsis_pair>)
     ->caf::result<void>>::unwrap;
 
+/// The interface of a catalog lookup worker, which evaluates candidate
+/// lookups against a snapshot of the partition synopses so the catalog's own
+/// thread stays free for its bookkeeping -- including the storage policy's
+/// blocking state writes.
+using catalog_lookup_worker_actor = typed_actor_fwd<
+  // Evaluate an expression against a snapshot of the partition synopses.
+  auto(atom::candidates, expression, catalog_snapshot)
+    ->caf::result<catalog_lookup_result>,
+  // Drop cached sketches of a partition that left the catalog.
+  auto(atom::erase, uuid)->caf::result<void>>::unwrap;
+
 /// The CATALOG actor interface.
 using catalog_actor = typed_actor_fwd<
   // Merge a set of partition synopses.
@@ -179,14 +190,26 @@ using catalog_actor = typed_actor_fwd<
   // with the original ones and returns the new partition infos. When
   // keep_original_partition is no: replaces the inputs with the outputs and
   // erases the inputs from disk.
+  // The trailing string is the policy token of the maintenance action this
+  // transform runs, serialized by the storage policy; empty when the
+  // transform is not policy-driven. It rides in the transform marker so a
+  // commit a crash cut off can be replayed at the next startup.
   auto(atom::apply, ast::pipeline, std::vector<tenzir::partition_info>,
-       keep_original_partition, std::string)
+       keep_original_partition, std::string, std::string)
     ->caf::result<partition_apply_result>,
   // Starts a rebuild run, or joins the one already in progress. The catalog
   // selects the partitions itself, against live state, one batch at a time.
   auto(atom::start, atom::rebuild, rebuild_options)->caf::result<void>,
   // Stops the rebuild run in progress, if any.
   auto(atom::stop, atom::rebuild, rebuild_stop_options)->caf::result<void>,
+  // Runs a named policy rule now, outside the periodic schedule. The durations
+  // override the rule's configured window when given.
+  auto(atom::run, atom::compaction, std::string, Option<duration>,
+       Option<duration>)
+    ->caf::result<atom::done>,
+  // Reports the storage policy's effective configuration, so that a client
+  // shows what the running node enforces rather than its own configuration.
+  auto(atom::list, atom::compaction)->caf::result<record>,
   // Subscribes a PARTITION CREATION LISTENER to the CATALOG.
   auto(atom::subscribe, atom::create, partition_creation_listener_actor,
        send_initial_dbstate)
@@ -239,15 +262,6 @@ using index_actor = typed_actor_fwd<
   auto(atom::flush)->caf::result<void>,
   // Returns all events from active and unpersisted partitions.
   auto(atom::get, bool internal)->caf::result<std::vector<table_slice>>>
-  // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
-
-/// The DISK MONITOR actor interface.
-using disk_monitor_actor = typed_actor_fwd<
-  // Checks the monitoring requirements.
-  auto(atom::ping)->caf::result<void>,
-  // Purge events as required for the monitoring requirements.
-  auto(atom::erase)->caf::result<void>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -443,9 +457,9 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
     (std::vector<std::pair<std::filesystem::path, std::filesystem::path>>))
   TENZIR_ADD_TYPE_ID((tenzir::active_partition_actor))
   TENZIR_ADD_TYPE_ID((tenzir::catalog_actor))
+  TENZIR_ADD_TYPE_ID((tenzir::catalog_lookup_worker_actor))
   TENZIR_ADD_TYPE_ID((tenzir::default_active_store_actor))
   TENZIR_ADD_TYPE_ID((tenzir::default_passive_store_actor))
-  TENZIR_ADD_TYPE_ID((tenzir::disk_monitor_actor))
   TENZIR_ADD_TYPE_ID((tenzir::export_bridge_actor))
   TENZIR_ADD_TYPE_ID((tenzir::export_mode))
   TENZIR_ADD_TYPE_ID((tenzir::filesystem_actor))
@@ -463,7 +477,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID((tenzir::rest_handler_actor))
   TENZIR_ADD_TYPE_ID((tenzir::status_client_actor))
-  TENZIR_ADD_TYPE_ID((std::shared_ptr<tenzir::PartitionTransformProgress>))
+  TENZIR_ADD_TYPE_ID((std::shared_ptr<tenzir::PartitionTransformProgress>))  TENZIR_ADD_TYPE_ID((tenzir::Option<tenzir::duration>))
 
 CAF_END_TYPE_ID_BLOCK(tenzir_actors)
 

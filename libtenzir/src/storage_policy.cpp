@@ -23,6 +23,26 @@ auto storage_policy::maintenance_action(const uuid&,
   return None{};
 }
 
+auto storage_policy::describe() const -> record {
+  return {};
+}
+
+auto storage_policy::rule_names() const -> std::vector<std::string> {
+  return {};
+}
+
+auto storage_policy::check_named_run(std::string_view, Option<duration>,
+                                     Option<duration>) const -> caf::error {
+  return {};
+}
+
+auto storage_policy::named_action(std::string_view, Option<duration>,
+                                  Option<duration>, const uuid&,
+                                  const partition_synopsis&) const
+  -> Option<storage_action> {
+  return None{};
+}
+
 auto storage_policy::eviction_weight(const uuid&,
                                      const partition_synopsis&) const
   -> Option<double> {
@@ -31,14 +51,14 @@ auto storage_policy::eviction_weight(const uuid&,
 
 auto storage_policy::eviction_action(const uuid&,
                                      const partition_synopsis&) const
-  -> Option<storage_action> {
-  return None{};
+  -> eviction_action_result {
+  return eviction_fallback::erase;
 }
 
 void storage_policy::on_merged(const partition_synopsis_pair&) {
 }
 
-void storage_policy::on_replaced(const uuid&,
+void storage_policy::on_replaced(const std::vector<uuid>&,
                                  const std::vector<partition_info>&) {
 }
 
@@ -51,6 +71,18 @@ void storage_policy::on_erased(const uuid&) {
 
 void storage_policy::on_failed(const std::any&, const uuid&,
                                const caf::error&) {
+}
+
+auto storage_policy::flush() -> caf::error {
+  return {};
+}
+
+auto storage_policy::serialize_token(const std::any&) const -> std::string {
+  return {};
+}
+
+auto storage_policy::deserialize_token(std::string_view) const -> std::any {
+  return {};
 }
 
 } // namespace tenzir

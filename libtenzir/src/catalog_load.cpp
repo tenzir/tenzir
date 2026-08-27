@@ -16,6 +16,7 @@
 #include "tenzir/concept/parseable/tenzir/uuid.hpp"
 #include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/fbs/partition.hpp"
@@ -41,6 +42,7 @@
 #include <map>
 #include <span>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 namespace tenzir {
@@ -133,18 +135,22 @@ auto extract_partition_synopsis(
                   std::span{chunk_out->data(), chunk_out->size()});
 }
 
-void catalog_state::replay_markers() {
+auto catalog_state::replay_markers() -> std::unordered_set<uuid> {
+  auto replayed_inputs = std::unordered_set<uuid>{};
   auto err = std::error_code{};
   if (not std::filesystem::is_directory(paths.markers_dir, err)) {
-    return;
+    return replayed_inputs;
   }
   auto marker_iter
     = std::filesystem::directory_iterator(paths.markers_dir, err);
   if (err) {
     TENZIR_WARN("{} failed to list directory contents of {}: {}", *self,
                 paths.markers_dir, err.message());
-    return;
+    return replayed_inputs;
   }
+  // Files in the marker directory that an unfinished replay still needs; the
+  // stray sweep at the end must not remove them.
+  auto protected_files = std::unordered_set<std::string>{};
   for (const auto& entry : marker_iter) {
     if (entry.path().extension() != ".marker") {
       continue;
@@ -170,50 +176,298 @@ void catalog_state::replay_markers() {
       continue;
     }
     const auto* transform_v0 = transform_flatbuffer->transform_as_v0();
-    for (const auto* id : *transform_v0->input_partitions()) {
-      const auto input = uuid::from_flatbuffer(*id);
-      const auto path = paths.partition(input);
-      if (not std::filesystem::exists(path, err)) {
-        continue;
+    const auto quarantine = transform_v0->quarantine();
+    const auto finalized = transform_v0->finalized();
+    // A preserve-input marker omits the input vector entirely -- the schema
+    // allows it, and create_marker writes it only for replacements -- so the
+    // accessor can be null.
+    auto marker_input_ids = std::vector<uuid>{};
+    if (const auto* marker_inputs = transform_v0->input_partitions()) {
+      marker_input_ids.reserve(marker_inputs->size());
+      for (const auto* id : *marker_inputs) {
+        marker_input_ids.push_back(uuid::from_flatbuffer(*id));
       }
-      // TODO: In combination with inhomogeneous partitions, this may result in
-      // incorrect index statistics. This depends on whether the statistics
-      // where already updated on-disk before Tenzir crashed or not, which is
-      // hard to figure out here.
-      auto partition = self->spawn(passive_partition, input, filesystem, path,
-                                   caf::message_priority::normal);
-      self->mail(atom::erase_v)
-        .request(partition, caf::infinite)
-        .then(
-          [this, input](atom::done) {
-            TENZIR_DEBUG("{} erased partition {} during startup", *self, input);
-          },
-          [this, input](const caf::error& e) {
-            TENZIR_WARN("{} failed to erase partition {} during startup: {}",
-                        *self, input, e);
-          });
     }
-    for (const auto* id : *transform_v0->output_partitions()) {
-      const auto output = uuid::from_flatbuffer(*id);
-      const auto renames = std::array{
-        std::pair{paths.transformer_partition(output), paths.partition(output)},
-        std::pair{paths.transformer_synopsis(output), paths.synopsis(output)},
-      };
-      for (const auto& [from, to] : renames) {
-        auto ec = std::error_code{};
-        std::filesystem::rename(from, to, ec);
-        if (ec) {
-          TENZIR_WARN("failed to rename '{}' to '{}': {}", from, to,
-                      ec.message());
+    // A quarantined partition is sentenced no matter how far the file
+    // operations got: its store is corrupt, and scanning it back in would
+    // only resurrect the failing reads the quarantine exists to end. A
+    // *transform's* inputs join the exclusion set further down, only once
+    // every output is confirmed -- see there.
+    if (quarantine) {
+      for (const auto& input : marker_input_ids) {
+        replayed_inputs.insert(input);
+      }
+    }
+    // Outputs first, and confirmed: the inputs may only die once every
+    // output *partition* is verifiably at its destination -- a successful
+    // rename, or a destination that is already there from a previous replay
+    // or the transform itself. Anything less, including a source and
+    // destination that are both invisible or an `exists` that itself fails,
+    // keeps the marker and the inputs: erasing them on an unconfirmed output
+    // would destroy the only copy. Synopses are the exception -- the
+    // transformer skips writing null ones, and the scan regenerates a missing
+    // one from its partition file -- so their placement never blocks.
+    auto outputs_in_place = true;
+    // A finalized marker's outputs are already merged catalog state;
+    // an output that has since vanished did so legitimately (erased or
+    // re-transformed), so their placement is not confirmed -- only the
+    // input erasures and the policy payload remain to replay.
+    if (not finalized) {
+      for (const auto* id : *transform_v0->output_partitions()) {
+        const auto output = uuid::from_flatbuffer(*id);
+        {
+          auto ec = std::error_code{};
+          std::filesystem::rename(paths.transformer_partition(output),
+                                  paths.partition(output), ec);
+          if (ec) {
+            ec.clear();
+            const auto in_place
+              = std::filesystem::exists(paths.partition(output), ec);
+            if (ec or not in_place) {
+              TENZIR_WARN("{} keeps the marker at {} because output partition "
+                          "{} is not confirmed at {}",
+                          *self, entry.path(), output, paths.partition(output));
+              outputs_in_place = false;
+            }
+          }
+        }
+        {
+          auto ec = std::error_code{};
+          std::filesystem::rename(paths.transformer_synopsis(output),
+                                  paths.synopsis(output), ec);
+          // Tolerated in every failure mode; see above.
         }
       }
     }
+    if (not outputs_in_place) {
+      // Try again at the next startup. Until then the *inputs* stay
+      // queryable -- their files are intact and no erasure runs while the
+      // outputs are unconfirmed -- and the outputs stay invisible: excluding
+      // any that already moved keeps the scan from loading them next to the
+      // inputs whose events they duplicate, and the protected transformer
+      // files keep the rest replayable.
+      for (const auto* id : *transform_v0->output_partitions()) {
+        const auto output = uuid::from_flatbuffer(*id);
+        replayed_inputs.insert(output);
+        protected_files.insert(
+          paths.transformer_partition(output).filename().string());
+        protected_files.insert(
+          paths.transformer_synopsis(output).filename().string());
+      }
+      continue;
+    }
+    // Every output is confirmed, so the erasures below run now -- or, if one
+    // fails, at the next startup. Only from this point on must the scan skip
+    // the inputs: loading them while their files disappear would leave
+    // phantoms in memory next to their finalized replacements.
+    if (not quarantine) {
+      auto replayed = replayed_transform{};
+      for (const auto& input : marker_input_ids) {
+        replayed_inputs.insert(input);
+        replayed.inputs.push_back(input);
+      }
+      if (const auto* token = transform_v0->policy_token()) {
+        replayed.policy_token = token->str();
+      }
+      if (const auto* token_input = transform_v0->token_input()) {
+        replayed.token_input = uuid::from_flatbuffer(*token_input);
+      }
+      // This replay may be finishing a transform whose policy callbacks the
+      // crash cut off. Hand the replacement -- and the interrupted commit,
+      // when the marker carries a token -- to the policy once it exists, so
+      // its history follows the data to the current ids. A preserve-input
+      // transform has no inputs to replace but still commits.
+      if (not replayed.inputs.empty() or not replayed.policy_token.empty()) {
+        // The marker is the interrupted replacement's -- and, with a token,
+        // the interrupted commit's -- only durable record. It may go only
+        // after the policy has that state on disk *and* every recorded input
+        // erasure completed, so it takes one disposal reference per
+        // obligation and disappears when the last one releases.
+        replayed.marker = entry.path();
+        ++markers_in_disposal[entry.path()];
+        protected_files.insert(entry.path().filename().string());
+        for (const auto* id : *transform_v0->output_partitions()) {
+          auto info = partition_info{};
+          info.uuid = uuid::from_flatbuffer(*id);
+          replayed.outputs.push_back(std::move(info));
+        }
+        replayed_transforms.push_back(std::move(replayed));
+      }
+    }
+    // Erase the inputs' files directly, and delete the marker only once every
+    // one of them is gone. Deleting the marker up front would lose the durable
+    // record while the erasures are outstanding -- a crash or a failed
+    // deletion would then resurrect the inputs at the next startup. Going
+    // through a passive partition instead would not do: its erase handler
+    // acknowledges after the store deletion alone and only fire-and-forgets
+    // the partition file, exactly the file whose survival resurrects the
+    // data. A marker that stays behind replays harmlessly: erasing files that
+    // are already gone succeeds, so retries converge.
+    if (quarantine) {
+      // A quarantine preserves the store for inspection: move it aside before
+      // any erasure, exactly like the runtime path. A destination that is
+      // already there is a finished move from a previous replay, and the
+      // leftover source -- if any -- is a duplicate whose removal converges.
+      auto move_failed = false;
+      for (const auto& input : marker_input_ids) {
+        for (const auto* extension : {"store", "feather", "parquet"}) {
+          const auto source
+            = paths.archive_dir / fmt::format("{}.{}", input, extension);
+          auto ec = std::error_code{};
+          const auto present = std::filesystem::exists(source, ec);
+          if (ec) {
+            move_failed = true;
+            continue;
+          }
+          if (not present) {
+            continue;
+          }
+          const auto destination
+            = paths.archive_dir / "quarantined" / source.filename();
+          std::filesystem::create_directories(destination.parent_path(), ec);
+          if (ec) {
+            move_failed = true;
+            continue;
+          }
+          const auto moved = std::filesystem::exists(destination, ec);
+          if (ec) {
+            move_failed = true;
+            continue;
+          }
+          if (moved) {
+            std::filesystem::remove(source, ec);
+            if (ec) {
+              move_failed = true;
+            }
+            continue;
+          }
+          std::filesystem::rename(source, destination, ec);
+          if (ec) {
+            move_failed = true;
+          }
+        }
+      }
+      if (move_failed) {
+        TENZIR_WARN("{} keeps the marker at {} because a quarantine move it "
+                    "records did not complete",
+                    *self, entry.path());
+        continue;
+      }
+    }
+    auto pending_files = std::vector<std::filesystem::path>{};
+    auto probe_failed = false;
+    for (const auto& input : marker_input_ids) {
+      auto probe = [&](const std::filesystem::path& path) {
+        auto ec = std::error_code{};
+        const auto present = std::filesystem::exists(path, ec);
+        if (ec) {
+          // Absence must be *confirmed*: mistaking a transient I/O failure
+          // for a missing file could erase the marker while the unprobed
+          // input survives, and the next startup would resurrect it.
+          probe_failed = true;
+          return;
+        }
+        if (present) {
+          pending_files.push_back(path);
+        }
+      };
+      probe(paths.partition(input));
+      probe(paths.synopsis(input));
+      // A quarantined store was moved aside above; only an erasure deletes
+      // it. No known store implementation deviates from the default path
+      // scheme; the startup scan and disposal rely on the same assumption.
+      if (not quarantine) {
+        for (const auto* extension : {"store", "feather", "parquet"}) {
+          probe(paths.archive_dir / fmt::format("{}.{}", input, extension));
+        }
+      }
+    }
+    const auto marker_path = entry.path();
+    const auto marker_retained
+      = not replayed_transforms.empty()
+        and replayed_transforms.back().marker == marker_path;
+    if (probe_failed) {
+      TENZIR_WARN("{} keeps the marker at {} because it could not confirm "
+                  "which input files remain",
+                  *self, marker_path);
+      if (marker_retained) {
+        // An unconfirmed input is an erasure obligation like a failed
+        // deletion: without this reference, the policy flush would release
+        // the marker's only hold and delete it, and the next restart would
+        // load the surviving input next to its finalized outputs. The
+        // reference is deliberately never released this lifetime; the next
+        // startup's replay probes again.
+        ++markers_in_disposal[marker_path];
+      }
+      continue;
+    }
+    if (pending_files.empty()) {
+      if (not marker_retained) {
+        std::filesystem::remove(marker_path, err);
+      }
+      continue;
+    }
+    if (marker_retained) {
+      // The erasures below are an obligation of their own: releasing the
+      // marker on the policy flush alone could delete it while a failed
+      // input deletion still needs the replay, and the next startup would
+      // scan the surviving input back in next to its replacement.
+      ++markers_in_disposal[marker_path];
+    }
+    auto counter = detail::make_fanout_counter(
+      pending_files.size(),
+      [this, marker_path, marker_retained]() {
+        if (marker_retained) {
+          // Every recorded file is gone; drop the erasure reference. The
+          // flush reference keeps the marker alive as long as the policy
+          // still needs it.
+          release_marker_hold(marker_path);
+          return;
+        }
+        self->mail(atom::erase_v, marker_path)
+          .request(filesystem, caf::infinite)
+          .then([](atom::done) { /* nop */ },
+                [self = self, marker_path](const caf::error& e) {
+                  // Replayed again at the next startup; harmless.
+                  TENZIR_DEBUG("{} failed to erase marker at {}: {}", *self,
+                               marker_path, e);
+                });
+      },
+      [this, marker_path](caf::error&& e) {
+        TENZIR_WARN("{} keeps the marker at {} because an erasure it records "
+                    "did not complete: {}",
+                    *self, marker_path, e);
+      });
+    for (const auto& file : pending_files) {
+      self->mail(atom::erase_v, file)
+        .request(filesystem, caf::infinite)
+        .then(
+          [counter](atom::done) {
+            counter->receive_success();
+          },
+          [this, file, counter](caf::error& e) {
+            TENZIR_WARN("{} failed to erase {} during startup: {}", *self, file,
+                        e);
+            counter->receive_error(std::move(e));
+          });
+    }
   }
+  // Everything else in the marker directory is an orphan: outputs of a
+  // transform that died before writing its marker, which nothing references.
+  // The markers themselves stay until their replay completes above, and the
+  // outputs of a replay that could not finish stay with them.
   // TODO: This does not handle store files, which may already have been
   // written. Since a store file may also be written before the partition
   // itself, there does not currently seem to be a bulletproof way of handling
   // this.
-  std::filesystem::remove_all(paths.markers_dir, err);
+  for (const auto& stray :
+       std::filesystem::directory_iterator(paths.markers_dir, err)) {
+    if (stray.path().extension() != ".marker"
+        and not protected_files.contains(stray.path().filename().string())) {
+      std::filesystem::remove_all(stray.path(), err);
+    }
+  }
+  return replayed_inputs;
 }
 
 auto catalog_state::load_from_disk() -> caf::error {
@@ -226,7 +480,7 @@ auto catalog_state::load_from_disk() -> caf::error {
     return caf::none;
   }
   // Start by finishing up any in-progress transforms.
-  replay_markers();
+  const auto replayed_inputs = replay_markers();
   auto dir_iter = std::filesystem::directory_iterator(paths.index_dir, err);
   if (err) {
     return caf::make_error(ec::filesystem_error,
@@ -268,6 +522,13 @@ auto catalog_state::load_from_disk() -> caf::error {
                     "{} and won't attempt to recover the data",
                     *self, partition_uuid);
       }
+      continue;
+    }
+    if (replayed_inputs.contains(partition_uuid)) {
+      // A marker sentences this partition to erasure; the deletion runs
+      // asynchronously (or, after a failure, at the next startup). Loading it
+      // now would resurrect it in memory next to its finalized replacements
+      // while its files disappear underneath.
       continue;
     }
     partition_ids.push_back(partition_uuid);
@@ -346,23 +607,47 @@ auto catalog_state::load_from_disk() -> caf::error {
         return error;
       }
     }
-    TRY(auto chunk, chunk::mmap(synopsis_path));
-    // Skipping verification avoids faulting in the entire buffer (including
-    // sketch payloads that are never decoded); it is only safe because such
-    // synopses are verified when written.
-    auto maybe_flatbuffer
-      = skip_verification
-          ? flatbuffer<fbs::PartitionSynopsis>::make_unsafe(std::move(chunk))
-          : flatbuffer<fbs::PartitionSynopsis>::make(std::move(chunk));
-    if (not maybe_flatbuffer) {
-      return std::move(maybe_flatbuffer.error());
+    auto read_synopsis
+      = [&]() -> caf::expected<flatbuffer<fbs::PartitionSynopsis>> {
+      TRY(auto chunk, chunk::mmap(synopsis_path));
+      // Skipping verification avoids faulting in the entire buffer (including
+      // sketch payloads that are never decoded); it is only safe because such
+      // synopses are verified when written.
+      auto maybe_flatbuffer
+        = skip_verification
+            ? flatbuffer<fbs::PartitionSynopsis>::make_unsafe(std::move(chunk))
+            : flatbuffer<fbs::PartitionSynopsis>::make(std::move(chunk));
+      if (not maybe_flatbuffer) {
+        return std::move(maybe_flatbuffer.error());
+      }
+      if ((*maybe_flatbuffer)->partition_synopsis_type()
+          != fbs::partition_synopsis::PartitionSynopsis::legacy) {
+        return caf::make_error(ec::format_error, "invalid partition synopsis "
+                                                 "version");
+      }
+      return std::move(*maybe_flatbuffer);
+    };
+    auto maybe_synopsis = read_synopsis();
+    if (not maybe_synopsis) {
+      // A corrupt synopsis is recoverable as long as the partition file is
+      // intact: regenerate it the way a missing one is regenerated. Without
+      // the retry the partition would silently drop out of the catalog while
+      // its files stay on disk -- invisible to queries and, worse, to the
+      // disk-budget eviction, which can only reclaim what the catalog knows.
+      TENZIR_VERBOSE("{} regenerates the synopsis of partition {} because it "
+                     "does not load: {}",
+                     *self, partition_uuid, maybe_synopsis.error());
+      if (auto error = extract_partition_synopsis(part_path, synopsis_path,
+                                                  skip_verification);
+          error.valid()) {
+        return error;
+      }
+      maybe_synopsis = read_synopsis();
+      if (not maybe_synopsis) {
+        return std::move(maybe_synopsis.error());
+      }
     }
-    const auto ps_flatbuffer = std::move(*maybe_flatbuffer);
-    if (ps_flatbuffer->partition_synopsis_type()
-        != fbs::partition_synopsis::PartitionSynopsis::legacy) {
-      return caf::make_error(ec::format_error, "invalid partition synopsis "
-                                               "version");
-    }
+    const auto ps_flatbuffer = std::move(*maybe_synopsis);
     TENZIR_ASSERT(ps_flatbuffer->partition_synopsis_as_legacy());
     auto ps
       = partition_synopsis_ptr{caf::make_copy_on_write<partition_synopsis>()};
@@ -448,14 +733,21 @@ auto catalog_state::load_from_disk() -> caf::error {
       try {
         auto result = load_one(partition_uuid);
         if (not result) {
-          TENZIR_VERBOSE("{} failed to load partition {}: {}", *self,
-                         partition_uuid, result.error());
+          // Loud on purpose: the partition drops out of the catalog, but its
+          // files stay on disk, where they count against the disk budget
+          // without being evictable. They are deliberately not deleted -- a
+          // transient I/O failure during startup must not destroy data -- so
+          // the operator has to decide.
+          TENZIR_WARN("{} skips partition {}, whose files remain on disk "
+                      "until removed manually: {}",
+                      *self, partition_uuid, result.error());
           continue;
         }
         worker_synopses[worker].push_back(std::move(*result));
       } catch (const std::exception& ex) {
-        TENZIR_VERBOSE("{} failed to load partition {}: {}", *self,
-                       partition_uuid, ex.what());
+        TENZIR_WARN("{} skips partition {}, whose files remain on disk until "
+                    "removed manually: {}",
+                    *self, partition_uuid, ex.what());
         continue;
       }
       if (const auto n = loaded.fetch_add(1, std::memory_order_relaxed) + 1;
