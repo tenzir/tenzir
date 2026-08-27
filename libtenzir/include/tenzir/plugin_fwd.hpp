@@ -37,6 +37,7 @@ class rest_endpoint_plugin;
 
 // -- store (plugin/store.hpp) -------------------------------------------------
 
+class storage_policy_plugin;
 class store_actor_plugin;
 class store_plugin;
 
