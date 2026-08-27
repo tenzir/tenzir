@@ -135,6 +135,12 @@ struct maintenance_options {
   /// optional external size command. A zero high water mark disables it, which
   /// is what an unconfigured budget looks like.
   disk_monitor_config space = {};
+
+  /// How many policy pipelines may run at once. Separate from rebuild
+  /// parallelism, so that a slow user-authored pipeline cannot stall a
+  /// rebuild, nor a large rebuild batch delay a retention rule.
+  size_t compaction_slots = 1;
+
 };
 
 /// The threshold at which a partition counts as undersized, relative to the
@@ -310,7 +316,7 @@ struct rebuild_run {
 /// The state of the CATALOG actor.
 struct catalog_state {
 public:
-  catalog_state() = default;
+  catalog_state();
 
   constexpr static auto name = "catalog";
 
@@ -403,6 +409,13 @@ public:
   /// Continues the run after a batch landed, or ends it if it was winding down.
   void schedule_rebuild_or_finish();
 
+  /// Defined out of line, like the constructor above: `policy` is incomplete
+  /// in this header, so the deleter it needs cannot be generated here.
+  ~catalog_state();
+
+  /// Builds the storage policy from whichever plugin contributes one.
+  void make_policy();
+
   /// Measures the database directory off this thread, continuing in
   /// `on_space_measured`.
   void measure_space();
@@ -415,8 +428,29 @@ public:
   /// so the budget loop must not count them against the water marks.
   auto parked_bytes() const -> uint64_t;
 
-  /// The next partitions to evict, oldest ingest first, at most `limit`.
+  /// How urgently a partition should be evicted; higher goes sooner. Falls
+  /// back to its age, which is the scale a policy weight is expressed in.
+  auto eviction_weight_of(const uuid& partition,
+                          const partition_synopsis& synopsis) const -> double;
+
+  /// The next partitions to evict, heaviest first, at most `limit`.
   auto select_eviction_batch(size_t limit) const -> std::vector<uuid>;
+
+  /// Gives a compaction slot back and lets anything queued take it. Every
+  /// release goes through here so that no path can free a slot without
+  /// waking a run that is waiting for one.
+  void release_compaction_slot();
+
+  /// Asks the policy about each partition in turn and starts what it asks
+  /// for, up to the free slots in the compaction pool.
+  void maintenance_pass();
+
+  /// Runs one policy action, holding a slot until it lands.
+  void run_maintenance_action(const uuid& partition, storage_action action);
+
+  /// Runs the policy's eviction action for a partition, if it has one.
+  /// @returns Whether an action was started; `false` means erase it instead.
+  auto run_eviction_action(const uuid& partition) -> bool;
 
   /// Reports the disk budget loop's state.
   auto space_status() const -> record;
@@ -589,6 +623,10 @@ public:
   /// The rebuild run in progress, if any.
   Option<rebuild_run> rebuild = None{};
 
+  /// The storage policy, or null when no plugin contributes one. The catalog
+  /// keeps its built-in behavior in that case.
+  std::unique_ptr<storage_policy> policy = {};
+
   /// How the catalog runs storage maintenance.
   maintenance_options maintenance = {};
 
@@ -607,6 +645,12 @@ public:
 
   /// How many partitions the budget loop has evicted.
   size_t evicted = 0;
+
+  /// Policy pipelines in flight, against `maintenance.compaction_slots`.
+  size_t compacting = 0;
+
+  /// How many policy actions have landed.
+  size_t compacted = 0;
 
   /// The most recently finished run, so that `rebuild show` still describes
   /// it once the run itself is gone.

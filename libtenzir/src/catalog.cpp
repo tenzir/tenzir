@@ -33,6 +33,7 @@
 #include "tenzir/passive_partition.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/plugin/storage_policy.hpp"
 #include "tenzir/plugin/store.hpp"
 #include "tenzir/query_context.hpp"
 #include "tenzir/series_builder.hpp"
@@ -509,6 +510,9 @@ auto catalog_state::merge(std::vector<partition_synopsis_pair> partitions)
 }
 
 void catalog_state::erase(const uuid& partition) {
+  if (policy) {
+    policy->on_erased(partition);
+  }
   sketches.erase(partition);
   for (auto it = synopses_per_type.begin(); it != synopses_per_type.end();
        ++it) {
@@ -718,6 +722,65 @@ void catalog_state::retire_erased(const uuid& partition,
     return;
   }
   dispose_of(partition, std::move(erasure), None{});
+}
+
+catalog_state::catalog_state() = default;
+
+catalog_state::~catalog_state() = default;
+
+void catalog_state::make_policy() {
+  for (const auto* plugin : plugins::get<storage_policy_plugin>()) {
+    auto candidate = plugin->make_storage_policy(storage_policy_context{
+      // The policy has no actor context of its own, so it borrows the
+      // catalog's. Both callbacks answer on the catalog's thread, and the
+      // filesystem actor resolves the paths against the database directory.
+      .read =
+        [self = this->self, fs = filesystem](std::filesystem::path path,
+                                             std::function<void(chunk_ptr)>
+                                               then) {
+          self->mail(atom::read_v, std::move(path))
+            .request(fs, caf::infinite)
+            .then(
+              [then](chunk_ptr& chunk) {
+                then(std::move(chunk));
+              },
+              [then](const caf::error&) {
+                // A missing file is the ordinary first-start case, and an
+                // unreadable one is reported by the policy itself.
+                then(chunk_ptr{});
+              });
+        },
+      .write =
+        [self = this->self, fs = filesystem](std::filesystem::path path,
+                                             chunk_ptr chunk,
+                                             std::function<void(caf::error)>
+                                               then) {
+          self->mail(atom::write_v, std::move(path), std::move(chunk))
+            .request(fs, caf::infinite)
+            .then(
+              [then](atom::ok) {
+                then({});
+              },
+              [then](caf::error& error) {
+                then(std::move(error));
+              });
+        },
+      .run_delayed =
+        [self = this->self](duration delay, std::function<void()> what) {
+          detail::weak_run_delayed(self, delay, std::move(what));
+        },
+    });
+    if (not candidate) {
+      // An unconfigured implementation declines, which is not an error.
+      continue;
+    }
+    TENZIR_INFO("{} takes its storage policy from the {} plugin", *self,
+                plugin->name());
+    policy = std::move(candidate);
+    // One policy: a second would have to be reconciled with the first on every
+    // question, and there is no sensible way to do that.
+    break;
+  }
 }
 
 auto catalog_state::retire(const uuid& partition,
@@ -1586,6 +1649,12 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
       });
   }
   self->state().maintenance = maintenance;
+  // Only when the catalog runs maintenance: while the flag is off the
+  // compaction component is still doing this work, and asking a policy that
+  // nothing acts on would be misleading in the log.
+  if (maintenance.enabled) {
+    self->state().make_policy();
+  }
   // The periodic rebuild source. Off unless the catalog runs maintenance --
   // otherwise the standalone rebuilder is doing this, and the two must never
   // both drive work.
@@ -1630,6 +1699,19 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
         self->state().measure_space();
       });
   }
+  // The policy's maintenance pass. The policy names its own interval, because
+  // only it knows whether its configuration implies periodic work; zero means
+  // it has none.
+  if (maintenance.enabled and self->state().policy) {
+    const auto interval = self->state().policy->maintenance_interval();
+    if (interval > duration::zero()) {
+      TENZIR_INFO("{} runs storage policy maintenance every {}", *self,
+                  data{interval});
+      detail::weak_run_delayed_loop(self, interval, [self] {
+        self->state().maintenance_pass();
+      });
+    }
+  }
   // A retriever that never releases would otherwise keep an erased partition
   // on disk forever. Sweeping at a fraction of the timeout bounds how long
   // past its deadline a partition can linger.
@@ -1648,6 +1730,14 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
       auto notification = self->state().partition_creation_listeners.empty()
                             ? std::vector<partition_synopsis_pair>{}
                             : partitions;
+      if (const auto& policy = self->state().policy) {
+        // Ingest only. A transform's outputs reach the policy through
+        // `on_committed`, so that a policy keeping per-partition state is not
+        // fed the same partition twice.
+        for (const auto& partition : partitions) {
+          policy->on_merged(partition);
+        }
+      }
       auto result = self->state().merge(std::move(partitions));
       for (const auto& listener : self->state().partition_creation_listeners) {
         self->mail(atom::update_v, notification).send(listener);

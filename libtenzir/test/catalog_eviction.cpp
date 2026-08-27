@@ -8,6 +8,7 @@
 
 #include "tenzir/catalog.hpp"
 #include "tenzir/partition_synopsis.hpp"
+#include "tenzir/plugin/storage_policy.hpp"
 #include "tenzir/synopsis_factory.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/uuid.hpp"
@@ -100,6 +101,53 @@ TEST("eviction stops at the step size") {
   CHECK_EQUAL(f.state.select_eviction_batch(0).size(), 0u);
   // Asking for more than there is yields what there is.
   CHECK_EQUAL(f.state.select_eviction_batch(10).size(), 3u);
+}
+
+namespace {
+
+/// A policy that weights one schema above everything else, to show that the
+/// catalog orders by what the policy says rather than by age.
+struct weighted_policy final : tenzir::storage_policy {
+  std::string heavy = {};
+
+  auto eviction_weight(const uuid&, const partition_synopsis& synopsis) const
+    -> Option<double> override {
+    if (synopsis.schema.name() != heavy) {
+      return None{};
+    }
+    // Weighted age, the way the compaction policy expresses it: a weight is a
+    // multiplier on the age, not a value on a scale of its own.
+    const auto age = std::chrono::duration<double>{tenzir::time::clock::now()
+                                                   - synopsis.max_import_time}
+                       .count();
+    return 1000.0 * age;
+  }
+};
+
+} // namespace
+
+TEST("a policy weight decides the eviction order") {
+  auto f = fixture{};
+  // Oldest first, so without a policy this one would go first.
+  const auto oldest = f.add("light");
+  const auto newest = f.add("heavy");
+  CHECK_EQUAL(f.state.select_eviction_batch(1), std::vector{oldest});
+  auto policy = std::make_unique<weighted_policy>();
+  policy->heavy = "heavy";
+  f.state.policy = std::move(policy);
+  // The policy outweighs the age difference, so the younger one goes first.
+  CHECK_EQUAL(f.state.select_eviction_batch(1), std::vector{newest});
+}
+
+TEST("a partition the policy has no weight for keeps its age") {
+  auto f = fixture{};
+  const auto oldest = f.add("light");
+  f.add("light");
+  auto policy = std::make_unique<weighted_policy>();
+  policy->heavy = "absent";
+  f.state.policy = std::move(policy);
+  // `none` from the policy falls back to age, which is oldest-first.
+  CHECK_EQUAL(f.state.select_eviction_batch(1), std::vector{oldest});
 }
 
 TEST("parked bytes count the partitions waiting on their pins") {

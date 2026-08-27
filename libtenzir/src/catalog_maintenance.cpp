@@ -20,6 +20,7 @@
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/partition_transformer.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/plugin/storage_policy.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/version.hpp"
@@ -530,16 +531,36 @@ auto catalog_state::parked_bytes() const -> uint64_t {
   return result;
 }
 
+auto catalog_state::eviction_weight_of(const uuid& partition,
+                                       const partition_synopsis& synopsis) const
+  -> double {
+  const auto age = std::chrono::duration<double>{time::clock::now()
+                                                 - synopsis.max_import_time}
+                     .count();
+  if (policy) {
+    if (const auto weighted = policy->eviction_weight(partition, synopsis)) {
+      return *weighted;
+    }
+  }
+  // No policy, or none for this partition: age alone. A weight is a multiplier
+  // on age rather than a scale of its own, so this mixes with weighted answers
+  // -- and it is the same as an unweighted schema gets from compaction, whose
+  // default weight is 1. Ordering descending is oldest-first, the built-in
+  // behavior.
+  return age;
+}
+
 auto catalog_state::select_eviction_batch(size_t limit) const
   -> std::vector<uuid> {
   if (limit == 0) {
     return {};
   }
-  // Oldest data goes first. The disk monitor ordered by the partition file's
-  // mtime, which a rebuild resets: rewriting an old partition made it look
-  // young and moved it to the back of the queue. `max_import_time` is a
-  // property of the events, so it survives a rewrite.
-  auto candidates = std::vector<std::pair<time, uuid>>{};
+  // Heaviest goes first. Without a policy the weight is the age, so this is
+  // oldest-first. The disk monitor ordered by the partition file's mtime,
+  // which a rebuild resets: rewriting an old partition made it look young and
+  // moved it to the back of the queue. `max_import_time` is a property of the
+  // events, so it survives a rewrite.
+  auto candidates = std::vector<std::pair<double, uuid>>{};
   for (const auto& [schema, partitions] : synopses_per_type) {
     for (const auto& [partition, synopsis] : partitions) {
       if (in_transformation.contains(partition)) {
@@ -547,13 +568,16 @@ auto catalog_state::select_eviction_batch(size_t limit) const
         // transform's output. The next pass picks it up once it is free.
         continue;
       }
-      candidates.emplace_back(synopsis->max_import_time, partition);
+      candidates.emplace_back(eviction_weight_of(partition, *synopsis),
+                              partition);
     }
   }
   const auto count = std::min(limit, candidates.size());
   std::partial_sort(candidates.begin(),
                     candidates.begin() + static_cast<ptrdiff_t>(count),
-                    candidates.end());
+                    candidates.end(), [](const auto& lhs, const auto& rhs) {
+                      return lhs.first > rhs.first;
+                    });
   auto result = std::vector<uuid>{};
   result.reserve(count);
   for (auto i = size_t{0}; i < count; ++i) {
@@ -633,6 +657,9 @@ void catalog_state::on_space_measured(uint64_t size) {
   TENZIR_VERBOSE("{} evicts {} partition(s) to get from {} bytes under {}",
                  *self, batch.size(), effective, threshold);
   for (const auto& partition : batch) {
+    if (run_eviction_action(partition)) {
+      continue;
+    }
     // The selection already skipped everything `retire` would refuse, and the
     // budget loop has nobody to report an error to; a failure is logged there.
     std::ignore = retire(partition, None{});
@@ -643,11 +670,130 @@ void catalog_state::on_space_measured(uint64_t size) {
   measure_space();
 }
 
+void catalog_state::release_compaction_slot() {
+  TENZIR_ASSERT(compacting > 0);
+  // The single place a slot is given back. Anything that waits on a free slot
+  // hooks in here, so that no release path can be added later that forgets to
+  // wake it.
+  --compacting;
+}
+
+void catalog_state::maintenance_pass() {
+  if (not policy) {
+    return;
+  }
+  // Walk the partitions and ask about each one. Selection is per partition and
+  // against live state, so a partition that becomes ineligible between two
+  // passes is simply not asked about again.
+  for (const auto& [schema, partitions] : synopses_per_type) {
+    for (const auto& [partition, synopsis] : partitions) {
+      if (compacting >= maintenance.compaction_slots) {
+        // The pool is full. What is left waits for the next pass rather than
+        // queueing, so that the work is re-decided against fresh state.
+        return;
+      }
+      if (in_transformation.contains(partition)) {
+        continue;
+      }
+      auto action = policy->maintenance_action(partition, *synopsis);
+      if (not action) {
+        continue;
+      }
+      run_maintenance_action(partition, std::move(*action));
+    }
+  }
+}
+
+void catalog_state::run_maintenance_action(const uuid& partition,
+                                           storage_action action) {
+  auto synopsis = find_synopsis(partition);
+  if (not synopsis) {
+    return;
+  }
+  auto batch = std::vector<partition_info>{};
+  batch.emplace_back(partition, *synopsis);
+  ++compacting;
+  self
+    ->mail(atom::apply_v, std::move(action.pipeline), std::move(batch),
+           action.keep, action.origin)
+    .request(caf::actor_cast<catalog_actor>(self), caf::infinite)
+    .then(
+      [this, partition,
+       recorded = action.token](partition_apply_result& result) {
+        ++compacted;
+        if (policy) {
+          policy->on_committed(recorded, partition, result.output_partitions);
+        }
+        release_compaction_slot();
+      },
+      [this, partition, recorded = action.token](caf::error& error) {
+        TENZIR_WARN("{} failed to run a maintenance action on partition {}: "
+                    "{}",
+                    *self, partition, error);
+        if (policy) {
+          policy->on_failed(recorded, partition, error);
+        }
+        release_compaction_slot();
+      });
+}
+
+auto catalog_state::run_eviction_action(const uuid& partition) -> bool {
+  if (not policy) {
+    return false;
+  }
+  auto synopsis = find_synopsis(partition);
+  if (not synopsis) {
+    return false;
+  }
+  auto action = policy->eviction_action(partition, *synopsis);
+  if (not action) {
+    // No action means erase outright, which is what an unconfigured eviction
+    // has always done.
+    return false;
+  }
+  // The policy owns this partition either way: erasing it because the pool is
+  // busy would throw away the rewrite it asked for. Leaving it for the next
+  // measurement round is the only correct answer.
+  if (compacting >= maintenance.compaction_slots) {
+    TENZIR_DEBUG("{} defers the eviction action for partition {} because the "
+                 "compaction pool is full",
+                 *self, partition);
+    return true;
+  }
+  auto batch = std::vector<partition_info>{};
+  batch.emplace_back(partition, *synopsis);
+  ++compacting;
+  self
+    ->mail(atom::apply_v, std::move(action->pipeline), std::move(batch),
+           action->keep, action->origin)
+    .request(caf::actor_cast<catalog_actor>(self), caf::infinite)
+    .then(
+      [this, partition,
+       recorded = action->token](partition_apply_result& result) {
+        ++evicted;
+        if (policy) {
+          policy->on_committed(recorded, partition, result.output_partitions);
+        }
+        release_compaction_slot();
+      },
+      [this, partition, recorded = action->token](caf::error& error) {
+        TENZIR_WARN("{} failed to run the eviction action on partition {}: {}",
+                    *self, partition, error);
+        if (policy) {
+          policy->on_failed(recorded, partition, error);
+        }
+        release_compaction_slot();
+      });
+  return true;
+}
+
 auto catalog_state::space_status() const -> record {
   if (maintenance.space.high_water_mark == 0) {
     return {};
   }
   auto result = record{
+    {"compacting", compacting},
+    {"compacted", compacted},
     {"evicting", evicting},
     {"evicted", evicted},
     {"parked-bytes", parked_bytes()},

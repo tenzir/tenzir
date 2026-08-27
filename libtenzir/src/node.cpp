@@ -280,6 +280,10 @@ auto parse_maintenance_options(const caf::settings& settings)
     .rebuild_interval
     = get_or(settings, "tenzir.rebuild-interval", defaults::rebuild_interval),
     .space = parse_space_options(settings),
+    // The compaction pool is bounded separately from rebuild parallelism, so
+    // that a slow user-authored pipeline cannot stall a rebuild. One slot by
+    // default: the domains are independent, so worst-case memory is their sum.
+    .compaction_slots = get_or(settings, "tenzir.compaction-slots", size_t{1}),
   };
 }
 
