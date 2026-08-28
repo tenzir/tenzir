@@ -197,6 +197,7 @@ let
     runtime
     { copyToRoot = cacert; }
     { deps = extraTools; }
+    { deps = [ python3 ]; }
     { deps = [ pkg ]; }
   ]
   ++ map (pluginLayer: { deps = pluginLayer; }) plugins
