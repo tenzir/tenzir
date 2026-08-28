@@ -1,0 +1,7 @@
+// Centroid merging remains finite when the input spans opposite large values.
+from {}
+repeat 100
+enumerate i
+x = -1e308 if i == 0 else 1e308
+summarize d = tdigest(x, compression=10)
+select median = tdigest_quantile(d, 0.5)

@@ -131,6 +131,14 @@ auto order_impl(const data_view3 l, const data_view3 r) -> Ordering {
   return match(std::tie(l, r), f);
 }
 
+auto record_view3::field_type(std::string_view name) const -> Option<type> {
+  auto field = array_.struct_type()->GetFieldByName(std::string{name});
+  if (not field) {
+    return None{};
+  }
+  return type::from_arrow(*field);
+}
+
 auto partial_order(const data_view3 l, const data_view3 r)
   -> std::partial_ordering {
   return order_impl<std::partial_ordering>(l, r);

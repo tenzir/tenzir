@@ -6,41 +6,53 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/argument_parser2.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/panic.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
+#include "tenzir/session.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
+#include <algorithm>
+#include <limits>
 #include <thread>
 
 namespace tenzir::plugins::parallel2 {
 
 namespace {
 
-/// The degree used when `jobs` is omitted. We use the number of hardware
-/// threads, falling back to a fixed value when the implementation cannot
-/// determine the available concurrency.
-constexpr auto fallback_jobs = uint64_t{8};
+/// The upper bound on the degree used when `jobs` is omitted. Spawning one
+/// instance per hardware thread rarely pays off for the section of a pipeline
+/// that `parallel` wraps, so we cap the implicit degree here.
+constexpr auto max_default_jobs = uint64_t{8};
 
+/// The degree used when `jobs` is omitted: `max_default_jobs`, limited to the
+/// number of hardware threads when the implementation can determine it.
 auto default_jobs() -> uint64_t {
   const auto concurrency = std::thread::hardware_concurrency();
-  return concurrency > 0 ? uint64_t{concurrency} : fallback_jobs;
+  if (concurrency == 0) {
+    return max_default_jobs;
+  }
+  return std::min(max_default_jobs, uint64_t{concurrency});
 }
 
 struct ParallelArgs {
   location keyword;
   Option<located<uint64_t>> jobs; ///< None → `default_jobs`
-  bool fuse = true; ///< true → Fusing::parallel, false → Fusing::none
+  /// None → inherit from the enclosing parallelism scope.
+  Option<located<ir::parallelism::Fusing>> fuse;
+  Option<located<uint16_t>> limit_partitions; ///< None → inherit
   located<ir::pipeline> pipe;
 
   friend auto inspect(auto& f, ParallelArgs& x) -> bool {
     return f.object(x).fields(f.field("keyword", x.keyword),
                               f.field("jobs", x.jobs), f.field("fuse", x.fuse),
+                              f.field("limit_partitions", x.limit_partitions),
                               f.field("pipe", x.pipe));
   }
 };
@@ -127,12 +139,12 @@ public:
       // external input cannot feed directly.
       input = builder.scatter_external_input(std::move(input));
     }
-    auto fuse = args_.fuse ? ir::parallelism::Fusing::parallel
-                           : ir::parallelism::Fusing::none;
     auto scope = ir::Parallelism{
       .degree = degree,
-      .limit_partitions = builder.par().limit_partitions,
-      .fused = fuse,
+      .limit_partitions = args_.limit_partitions
+                            ? args_.limit_partitions->inner
+                            : builder.par().limit_partitions,
+      .fuse = args_.fuse ? args_.fuse->inner : builder.par().fuse,
     };
     builder.push_par_scope(scope);
     auto guard = detail::scope_guard([&]() noexcept {
@@ -164,99 +176,110 @@ public:
     -> failure_or<ir::CompileResult> override {
     auto args = ParallelArgs{};
     args.keyword = inv.op.get_location();
-
+    // `argument_parser2` compiles subpipelines into runtime pipelines, but we
+    // need the IR. Take the pipeline argument out of the invocation and let the
+    // parser handle everything else.
     auto* pipe_expr = static_cast<ast::pipeline_expr*>(nullptr);
-    auto pipe_location = Option<location>{};
-    auto fuse_location = Option<location>{};
-    auto route_by_location = Option<location>{};
-    auto duplicate
-      = [&](std::string_view what, location previous, location current) {
-          diagnostic::error("duplicate `{}` argument", what)
-            .primary(current)
-            .secondary(previous, "previously provided here")
-            .emit(ctx);
-        };
+    auto rest = std::vector<ast::expression>{};
     for (auto& arg : inv.args) {
-      if (auto* p = try_as<ast::pipeline_expr>(arg)) {
-        if (pipe_location) {
-          duplicate("pipeline", *pipe_location, arg.get_location());
-          return failure::promise();
-        }
-        pipe_location = arg.get_location();
-        pipe_expr = p;
-      } else if (auto* assign = try_as<ast::assignment>(arg)) {
-        // named argument
-        auto* name = try_as<ast::root_field>(*assign->left.kind);
-        if (not name) {
-          diagnostic::error("unexpected argument").primary(arg).emit(ctx);
-          return failure::promise();
-        }
-        if (name->id.name == "_fuse") {
-          if (fuse_location) {
-            duplicate("_fuse", *fuse_location, arg.get_location());
-            return failure::promise();
-          }
-          fuse_location = arg.get_location();
-          TRY(auto val, const_eval(assign->right, ctx));
-          auto* b = try_as<bool>(val.inner);
-          if (not b) {
-            diagnostic::error("`_fuse` must be a boolean")
-              .primary(assign->right)
-              .emit(ctx);
-            return failure::promise();
-          }
-          args.fuse = *b;
-        } else if (name->id.name == "route_by") {
-          if (route_by_location) {
-            duplicate("route_by", *route_by_location, arg.get_location());
-            return failure::promise();
-          }
-          route_by_location = arg.get_location();
-          // Accepted so that existing pipelines keep compiling. `parallel` no
-          // longer routes events itself; operators that need their input
-          // partitioned, such as `summarize` and `deduplicate`, declare their
-          // own keys and receive a matching exchange.
-          diagnostic::warning("`route_by` is no longer needed")
-            .primary(arg)
-            .note("events are now routed to the correct operator instance "
-                  "automatically")
-            .emit(ctx);
-        } else {
-          diagnostic::error("unknown argument `{}`", name->id.name)
-            .primary(arg)
-            .emit(ctx);
-          return failure::promise();
-        }
-      } else {
-        // positional argument: jobs
-        if (args.jobs) {
-          duplicate("jobs", args.jobs->source, arg.get_location());
-          return failure::promise();
-        }
-        TRY(auto val, const_eval(arg, ctx));
-        auto* i = try_as<int64_t>(val.inner);
-        if (not i) {
-          diagnostic::error("`jobs` must be an integer").primary(arg).emit(ctx);
-          return failure::promise();
-        }
-        if (*i <= 0) {
-          diagnostic::error("`jobs` must be greater than zero")
-            .primary(arg)
-            .emit(ctx);
-          return failure::promise();
-        }
-        args.jobs
-          = located<uint64_t>{static_cast<uint64_t>(*i), arg.get_location()};
+      auto* p = try_as<ast::pipeline_expr>(arg);
+      if (not p) {
+        rest.push_back(std::move(arg));
+        continue;
       }
+      if (pipe_expr) {
+        diagnostic::error("duplicate `pipeline` argument")
+          .primary(arg)
+          .secondary(pipe_expr->get_location(), "previously provided here")
+          .emit(ctx);
+        return failure::promise();
+      }
+      pipe_expr = p;
     }
-
     if (not pipe_expr) {
       diagnostic::error("`parallel` requires a pipeline argument `{{ … }}`")
         .primary(args.keyword)
         .emit(ctx);
       return failure::promise();
     }
-
+    auto jobs = Option<located<uint64_t>>{};
+    auto fuse = Option<located<std::string>>{};
+    auto limit_partitions = Option<located<uint64_t>>{};
+    auto legacy_fuse = Option<located<bool>>{};
+    auto route_by = Option<ast::expression>{};
+    // TODO: `Describer` is the intended argument machinery, but it is only
+    // reachable through `OperatorPlugin`/`GenericIr`, which cannot plan a
+    // parallelism scope. Until it grows a planning hook, use the legacy parser
+    // with a session shim, as `where` and `top_rare` do.
+    auto provider = session_provider::make(ctx);
+    TRY(argument_parser2::operator_("parallel")
+          .positional("jobs", jobs, "int")
+          .named("fuse", fuse, "string")
+          .named("limit_partitions", limit_partitions, "int")
+          .named("_fuse", legacy_fuse, "bool")
+          .named("route_by", route_by, "field")
+          .parse(operator_factory_invocation{inv.op, rest},
+                 provider.as_session()));
+    if (jobs) {
+      if (jobs->inner == 0) {
+        diagnostic::error("`jobs` must be greater than zero")
+          .primary(*jobs)
+          .emit(ctx);
+        return failure::promise();
+      }
+      args.jobs = *jobs;
+    }
+    if (limit_partitions) {
+      constexpr auto max = std::numeric_limits<uint16_t>::max();
+      if (limit_partitions->inner == 0 or limit_partitions->inner > max) {
+        diagnostic::error("`limit_partitions` must be between 1 and {}", max)
+          .primary(*limit_partitions)
+          .emit(ctx);
+        return failure::promise();
+      }
+      args.limit_partitions = located{
+        static_cast<uint16_t>(limit_partitions->inner),
+        limit_partitions->source,
+      };
+    }
+    if (fuse) {
+      auto parsed = ir::parallelism::parse_fusing(fuse->inner);
+      if (not parsed) {
+        diagnostic::error("`fuse` must be one of `none`, `parallel`, or `all`")
+          .primary(*fuse)
+          .emit(ctx);
+        return failure::promise();
+      }
+      args.fuse = located{*parsed, fuse->source};
+    }
+    if (legacy_fuse) {
+      diagnostic::warning("`_fuse` is deprecated")
+        .primary(*legacy_fuse)
+        .note("use `fuse=\"{}\"` instead",
+              legacy_fuse->inner ? "parallel" : "none")
+        .emit(ctx);
+      if (fuse) {
+        diagnostic::error("cannot combine `_fuse` and `fuse`")
+          .primary(*legacy_fuse)
+          .secondary(*fuse, "`fuse` provided here")
+          .emit(ctx);
+        return failure::promise();
+      }
+      args.fuse = located{legacy_fuse->inner ? ir::parallelism::Fusing::parallel
+                                             : ir::parallelism::Fusing::none,
+                          legacy_fuse->source};
+    }
+    if (route_by) {
+      // Accepted so that existing pipelines keep compiling. `parallel` no
+      // longer routes events itself; operators that need their input
+      // partitioned, such as `summarize` and `deduplicate`, declare their own
+      // keys and receive a matching exchange.
+      diagnostic::warning("`route_by` is no longer needed")
+        .primary(*route_by)
+        .note("events are now routed to the correct operator instance "
+              "automatically")
+        .emit(ctx);
+    }
     args.pipe.source = pipe_expr->get_location();
     TRY(args.pipe.inner, std::move(pipe_expr->inner).compile(ctx));
     return ParallelIr{std::move(args)};

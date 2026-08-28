@@ -1,0 +1,18 @@
+// Native digest comparisons are symmetric, accept different compression,
+// yield zero for identity, and preserve input units for Wasserstein distance.
+from {}
+p = tdigest([0.0], compression=20)
+q = tdigest([10.0], compression=30)
+extreme = tdigest([-1e308, 1e308])
+adjacent = tdigest([1.0000000000000002])
+one = tdigest([1.0])
+select ks_zero=model_distance(p, p, method="kolmogorov_smirnov"),
+  ks=model_distance(p, q, method="kolmogorov_smirnov"),
+  ks_symmetric=model_distance(p, q, method="kolmogorov_smirnov") == model_distance(q, p, method="kolmogorov_smirnov"),
+  wasserstein_zero=model_distance(p, p, method="wasserstein"),
+  wasserstein=model_distance(p, q, method="wasserstein"),
+  wasserstein_symmetric=model_distance(p, q, method="wasserstein") == model_distance(q, p, method="wasserstein"),
+  extreme_wasserstein_zero=model_distance(extreme, extreme, method="wasserstein"),
+  adjacent_ks=model_distance(one, adjacent, method="kolmogorov_smirnov"),
+  adjacent_wasserstein=model_distance(one, adjacent, method="wasserstein"),
+  empty=model_distance(p, tdigest([], compression=20), method="kolmogorov_smirnov")

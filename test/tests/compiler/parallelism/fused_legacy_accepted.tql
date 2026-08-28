@@ -1,0 +1,6 @@
+// parallelism: 1, fused=all
+// `fused` is the deprecated spelling of `fuse` and remains accepted so that
+// existing pipelines keep working.
+from {x: 1, g: "a"}, {x: 2, g: "b"}
+summarize g, total=sum(x)
+sort g

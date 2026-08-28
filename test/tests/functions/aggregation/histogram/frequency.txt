@@ -1,0 +1,6 @@
+{
+  f_regular: 0.4,
+  f_underflow: 0.2,
+  f_overflow: 0.2,
+  f_empty_bin: 0.0,
+}

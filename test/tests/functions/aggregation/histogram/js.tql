@@ -1,0 +1,6 @@
+// Model divergence forwards compatible histogram bucket counts to the shared
+// Jensen-Shannon implementation.
+from {}
+p = histogram([1.0, 2.0, 1.0, 2.0], bins=2, width=5.0)
+q = histogram([6.0, 7.0], bins=2, width=5.0)
+select matches_bucket_counts = model_divergence(p, q, method="jensen_shannon") == jensen_shannon([0, 4, 0, 0], [0, 0, 2, 0])

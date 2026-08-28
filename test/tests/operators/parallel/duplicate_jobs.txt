@@ -1,9 +1,8 @@
-error: duplicate `jobs` argument
+error: unexpected argument
  --> tests/operators/parallel/duplicate_jobs.tql:6:13
   |
 6 | parallel 2, 3 { pass }
   |             ^
-  ⋮
-6 | parallel 2, 3 { pass }
-  |          - previously provided here
   |
+  = usage: parallel [jobs:int, fuse=string, limit_partitions=int, route_by=field]
+  = docs: https://tenzir.com/docs/reference/operators/parallel

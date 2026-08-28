@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import shutil
 import ssl
 import tempfile
@@ -30,6 +31,7 @@ class HttpRequestOptions:
     path: str = "/"
     body: str = '{"value":1}\n'
     body_base64: str | None = None
+    json_body: Any | None = None
     headers: dict[str, str] = field(
         default_factory=lambda: {"Content-Type": "application/json"}
     )
@@ -45,6 +47,11 @@ class HttpRequestOptions:
     request_timeout: float = 0.2
     max_attempts_per_request: int = 15
     inter_request_delay: float = 0.0
+    delay_before: float = 0.0
+
+    # Capture values from a JSON response for `from_capture` references in
+    # later structured JSON request bodies.
+    capture_json: dict[str, str] = field(default_factory=dict)
 
     # Multi-request mode.
     # Each entry can override request-level fields.
@@ -52,15 +59,23 @@ class HttpRequestOptions:
 
 
 @dataclass(frozen=True)
+class HttpRequestAssertions:
+    responses: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class _RequestSpec:
     method: str
     path: str
     body: bytes
+    json_body: Any | None
     headers: dict[str, str]
     tls: bool
     expected_status: int | None
     expected_body: str | None
     stop_on_connection_drop: bool
+    delay_before: float
+    capture_json: dict[str, str]
 
 
 def _to_request_specs(opts: HttpRequestOptions) -> list[_RequestSpec]:
@@ -78,24 +93,63 @@ def _to_request_specs(opts: HttpRequestOptions) -> list[_RequestSpec]:
                 if opts.body_base64 is not None
                 else opts.body.encode("utf-8")
             ),
+            json_body=opts.json_body,
             headers=dict(opts.headers),
             tls=opts.tls,
             expected_status=opts.expected_status,
             expected_body=opts.expected_body,
             stop_on_connection_drop=opts.stop_on_connection_drop,
+            delay_before=opts.delay_before,
+            capture_json=dict(opts.capture_json),
         )
         for _ in range(opts.repeat)
     ]
 
 
-@fixture(name="http_request", options=HttpRequestOptions)
+def _resolve_captures(value: Any, captures: dict[str, Any]) -> Any:
+    if isinstance(value, dict):
+        if set(value) == {"from_capture"}:
+            name = value["from_capture"]
+            if not isinstance(name, str):
+                raise TypeError("`from_capture` must name a captured value")
+            if name not in captures:
+                raise ValueError(f"unknown captured value: {name!r}")
+            return captures[name]
+        return {key: _resolve_captures(item, captures) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_resolve_captures(item, captures) for item in value]
+    return value
+
+
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON object key: {key!r}")
+        result[key] = value
+    return result
+
+
+def _json_path(value: Any, path: str) -> Any:
+    current = value
+    for segment in path.split("."):
+        if not isinstance(current, dict) or segment not in current:
+            raise ValueError(f"JSON response has no value at {path!r}")
+        current = current[segment]
+    return current
+
+
+@fixture(
+    name="http_request", options=HttpRequestOptions, assertions=HttpRequestAssertions
+)
 def http_request() -> FixtureHandle:
     opts = current_options("http_request")
     if not isinstance(opts, HttpRequestOptions):
-        raise RuntimeError("http_request fixture options failed to parse")
+        raise TypeError("http_request fixture options failed to parse")
     port = find_free_port()
     endpoint = f"{_HOST}:{port}"
     errors: list[str] = []
+    responses: dict[int, tuple[int, str]] = {}
     sent_count = [0]
     stopped_early = [False]
     stop_event = threading.Event()
@@ -109,12 +163,22 @@ def http_request() -> FixtureHandle:
         )
     request_specs = _to_request_specs(opts)
     first_request_at = time.monotonic() + opts.initial_delay
+    variables: dict[str, Any] = {}
+
+    def _capture_response(spec: _RequestSpec, body: str) -> None:
+        if not spec.capture_json:
+            return
+        parsed = json.loads(body, object_pairs_hook=_unique_json_object)
+        for name, path in spec.capture_json.items():
+            variables[name] = _json_path(parsed, path)
 
     def _worker() -> None:
         remaining_initial_delay = first_request_at - time.monotonic()
         if remaining_initial_delay > 0:
             stop_event.wait(remaining_initial_delay)
         for req_idx, spec in enumerate(request_specs):
+            if spec.delay_before > 0:
+                stop_event.wait(spec.delay_before)
             if stop_event.is_set():
                 stopped_early[0] = True
                 return
@@ -122,6 +186,14 @@ def http_request() -> FixtureHandle:
             target_url = urljoin(f"{proto}://{endpoint}/", spec.path.lstrip("/"))
             payload = spec.body
             headers = dict(spec.headers)
+            if spec.json_body is not None:
+                try:
+                    resolved = _resolve_captures(spec.json_body, variables)
+                except (TypeError, ValueError) as exc:
+                    errors.append(f"request {req_idx}: {exc}")
+                    return
+                payload = json.dumps(resolved, separators=(",", ":")).encode()
+                headers.setdefault("Content-Type", "application/json")
             sent = False
             ssl_context: ssl.SSLContext | None = None
             if spec.tls and tls_dir and tls_ca is not None:
@@ -155,6 +227,11 @@ def http_request() -> FixtureHandle:
                                 f"request {req_idx}: expected HTTP body "
                                 f"{spec.expected_body!r}, got {body!r}"
                             )
+                        responses[req_idx] = (response.status, body)
+                        try:
+                            _capture_response(spec, body)
+                        except (json.JSONDecodeError, ValueError) as exc:
+                            errors.append(f"request {req_idx}: {exc}")
                         sent_count[0] += 1
                         sent = True
                         break
@@ -173,6 +250,11 @@ def http_request() -> FixtureHandle:
                             f"request {req_idx}: expected HTTP body "
                             f"{spec.expected_body!r}, got {body!r}"
                         )
+                    responses[req_idx] = (exc.code, body)
+                    try:
+                        _capture_response(spec, body)
+                    except (json.JSONDecodeError, ValueError) as capture_error:
+                        errors.append(f"request {req_idx}: {capture_error}")
                     sent_count[0] += 1
                     sent = True
                     break
@@ -200,9 +282,84 @@ def http_request() -> FixtureHandle:
     worker.start()
 
     def _assert_test(
-        *, test: Path, assertions: dict[str, Any] | None = None, **_: Any
+        *,
+        test: Path,
+        assertions: HttpRequestAssertions | dict[str, Any],
+        **_: Any,
     ) -> None:
-        _ = (test, assertions)
+        config = (
+            assertions
+            if isinstance(assertions, HttpRequestAssertions)
+            else HttpRequestAssertions(**assertions)
+        )
+        worker.join(timeout=2)
+        if worker.is_alive():
+            raise AssertionError(f"{test.name}: HTTP requests did not finish")
+        for response_assertion in config.responses:
+            request_index = response_assertion.get("request")
+            if not isinstance(request_index, int):
+                raise TypeError("response assertion requires an integer `request`")
+            if request_index not in responses:
+                raise AssertionError(
+                    f"{test.name}: request {request_index} has no response"
+                )
+            status, body = responses[request_index]
+            expected_status = response_assertion.get("status")
+            if expected_status is not None and status != expected_status:
+                raise AssertionError(
+                    f"{test.name}: request {request_index} expected HTTP status "
+                    f"{expected_status}, got {status}"
+                )
+            expected_body = response_assertion.get("body")
+            if expected_body is not None and body != expected_body:
+                raise AssertionError(
+                    f"{test.name}: request {request_index} expected HTTP body "
+                    f"{expected_body!r}, got {body!r}"
+                )
+            json_assertions = response_assertion.get("json", [])
+            if not json_assertions:
+                continue
+            parsed = json.loads(body, object_pairs_hook=_unique_json_object)
+            for json_assertion in json_assertions:
+                path = json_assertion.get("path", "")
+                actual = _json_path(parsed, path) if path else parsed
+                capture_name = json_assertion.get("key_from_capture")
+                if capture_name is not None:
+                    if capture_name not in variables:
+                        raise ValueError(f"unknown captured value: {capture_name!r}")
+                    key = str(variables[capture_name])
+                    if not isinstance(actual, dict) or key not in actual:
+                        raise AssertionError(
+                            f"{test.name}: request {request_index} JSON value "
+                            f"at {path!r} has no key {key!r}"
+                        )
+                    actual = actual[key]
+                if "equals" in json_assertion and actual != json_assertion["equals"]:
+                    raise AssertionError(
+                        f"{test.name}: request {request_index} JSON value at "
+                        f"{path!r} expected {json_assertion['equals']!r}, "
+                        f"got {actual!r}"
+                    )
+                expected_type = json_assertion.get("type")
+                if expected_type == "integer" and (
+                    not isinstance(actual, int) or isinstance(actual, bool)
+                ):
+                    raise AssertionError(
+                        f"{test.name}: request {request_index} JSON value at "
+                        f"{path!r} expected an integer, got {actual!r}"
+                    )
+                minimum = json_assertion.get("min")
+                if minimum is not None and actual < minimum:
+                    raise AssertionError(
+                        f"{test.name}: request {request_index} JSON value at "
+                        f"{path!r} expected at least {minimum!r}, got {actual!r}"
+                    )
+                maximum = json_assertion.get("max")
+                if maximum is not None and actual > maximum:
+                    raise AssertionError(
+                        f"{test.name}: request {request_index} JSON value at "
+                        f"{path!r} expected at most {maximum!r}, got {actual!r}"
+                    )
 
     def _teardown() -> None:
         stop_event.set()

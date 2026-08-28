@@ -1,0 +1,76 @@
+warning: Jensen-Shannon weight lists must have equal lengths
+ --> tests/functions/distribution/invalid.tql:2:35
+  |
+2 |   unequal_weights: jensen_shannon([1, 2], [1]),
+  |                                   ~~~~~~
+  |
+
+warning: Jensen-Shannon weights must be non-negative
+ --> tests/functions/distribution/invalid.tql:3:35
+  |
+3 |   negative_weight: jensen_shannon([1, -1], [1, 1]),
+  |                                   ~~~~~~~
+  |
+
+warning: distribution samples must not contain nulls
+ --> tests/functions/distribution/invalid.tql:5:31
+  |
+5 |   null_weight: jensen_shannon([1, null], [1, 1]),
+  |                               ~~~~~~~~~
+  |
+
+warning: distribution samples must be finite
+ --> tests/functions/distribution/invalid.tql:7:25
+  |
+7 |   non_finite_ecdf: ecdf([1.0, "nan".float()], 1.0),
+  |                         ~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: ECDF query integers must be between -2^53 and 2^53
+ --> tests/functions/distribution/invalid.tql:8:42
+  |
+8 |   inexact_ecdf: ecdf([9007199254740993], 9007199254740993),
+  |                                          ~~~~~~~~~~~~~~~~
+  |
+
+warning: distribution integers must be between -2^53 and 2^53
+  --> tests/functions/distribution/invalid.tql:10:54
+   |
+10 |   inexact_ks: kolmogorov_smirnov([9007199254740992], [9007199254740993]),
+   |                                                      ~~~~~~~~~~~~~~~~~~
+   |
+
+warning: distribution samples must not contain nulls
+  --> tests/functions/distribution/invalid.tql:11:33
+   |
+11 |   null_wasserstein: wasserstein([1, null], [1, 2]),
+   |                                 ~~~~~~~~~
+   |
+
+warning: distribution integers must be between -2^53 and 2^53
+  --> tests/functions/distribution/invalid.tql:12:56
+   |
+12 |   inexact_wasserstein: wasserstein([9007199254740992], [9007199254740993]),
+   |                                                        ~~~~~~~~~~~~~~~~~~
+   |
+
+warning: Wasserstein distance exceeds duration range
+  --> tests/functions/distribution/invalid.tql:13:38
+   |
+13 |   out_of_range_duration: wasserstein([0ns], [9223372036854775807ns])
+   |                                      ~~~~~
+   |
+{
+  unequal_weights: null,
+  negative_weight: null,
+  zero_weight: null,
+  null_weight: null,
+  empty_ecdf: null,
+  non_finite_ecdf: null,
+  inexact_ecdf: null,
+  empty_ks: null,
+  inexact_ks: null,
+  null_wasserstein: null,
+  inexact_wasserstein: null,
+  out_of_range_duration: null,
+}

@@ -1,0 +1,45 @@
+---
+fixtures:
+  - http_request:
+      requests:
+        - path: /services/collector/event
+          body: '{"event":"missing channel"}'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 400
+          expected_body: '{"text":"Data channel is missing","code":10}'
+        - path: /services/collector/ack
+          body: '{"acks":[42]}'
+          headers:
+            Authorization: Splunk test-token
+          expected_status: 400
+          expected_body: '{"text":"Data channel is missing","code":10}'
+        - path: /services/collector/ack
+          body: '{"acks":[-1]}'
+          headers:
+            Authorization: Splunk test-token
+            X-Splunk-Request-Channel: 00872DC6-AC83-4EDE-8AFE-8413C3825C4C
+          expected_status: 400
+          expected_body: '{"text":"Invalid data format","code":6}'
+        - path: /services/collector/ack
+          body: '{"acks":[42]}'
+          headers:
+            Authorization: Splunk test-token
+            X-Splunk-Request-Channel: 00872DC6-AC83-4EDE-8AFE-8413C3825C4C
+          expected_status: 200
+          expected_body: '{"acks":{"42":false}}'
+        - path: /services/collector/event
+          body: '{"event":"accepted"}'
+          headers:
+            Authorization: Splunk test-token
+            X-Splunk-Request-Channel: 00872DC6-AC83-4EDE-8AFE-8413C3825C4C
+          expected_status: 200
+          stop_on_connection_drop: true
+
+timeout: 10
+---
+
+accept_splunk env("HTTP_REQUEST_ENDPOINT"),
+  hec_token=secret("test-token", _literal=true),
+  ack=true
+head 1

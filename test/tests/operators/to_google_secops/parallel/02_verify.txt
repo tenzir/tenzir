@@ -1,0 +1,32 @@
+{
+  path: "/v1/projects/test-project/locations/us/instances/test-instance/logTypes/WINEVTLOG/logs:import",
+  text: "event-1",
+}
+{
+  path: "/v1/projects/test-project/locations/us/instances/test-instance/logTypes/WINEVTLOG/logs:import",
+  text: "event-2",
+}
+{
+  path: "/v1/projects/test-project/locations/us/instances/test-instance/logTypes/WINEVTLOG/logs:import",
+  text: "event-3",
+}
+{
+  path: "/v1/projects/test-project/locations/us/instances/test-instance/logTypes/WINEVTLOG/logs:import",
+  text: "event-4",
+}
+{
+  path: "/v1/projects/test-project/locations/us/instances/test-instance/logTypes/WINEVTLOG/logs:import",
+  text: "event-5",
+}
+{
+  path: "/v1/projects/test-project/locations/us/instances/test-instance/logTypes/WINEVTLOG/logs:import",
+  text: "event-6",
+}
+{
+  path: "/v1/projects/test-project/locations/us/instances/test-instance/logTypes/WINEVTLOG/logs:import",
+  text: "event-7",
+}
+{
+  path: "/v1/projects/test-project/locations/us/instances/test-instance/logTypes/WINEVTLOG/logs:import",
+  text: "event-8",
+}

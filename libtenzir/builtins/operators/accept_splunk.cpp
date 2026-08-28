@@ -19,8 +19,10 @@
 #include "tenzir/concept/parseable/tenzir/uuid.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/detail/saturating_arithmetic.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/hash/hash.hpp"
 #include "tenzir/http.hpp"
 #include "tenzir/http_server.hpp"
 #include "tenzir/json_parser.hpp"
@@ -43,6 +45,8 @@
 #include <chrono>
 #include <cstddef>
 #include <limits>
+#include <map>
+#include <set>
 #include <string_view>
 #include <thread>
 #include <unordered_map>
@@ -59,6 +63,8 @@ constexpr auto json_content_type = std::string_view{"application/json"};
 constexpr auto json_whitespace = std::string_view{" \t\r\n"};
 constexpr auto default_max_request_size = size_t{10_Mi};
 constexpr auto compressed_size_allowance = size_t{64_Ki};
+constexpr auto default_max_pending_acks = uint64_t{1_M};
+constexpr auto default_ack_timeout = std::chrono::minutes{10};
 constexpr auto success_body
   = std::string_view{R"({"text":"Success","code":0})"};
 constexpr auto health_body
@@ -69,6 +75,9 @@ struct AcceptSplunkArgs {
   located<secret> hec_token;
   Option<located<uint64_t>> max_request_size;
   Option<located<uint64_t>> max_connections;
+  bool ack = false;
+  Option<located<uint64_t>> max_pending_acks;
+  Option<located<duration>> ack_timeout;
   Option<located<data>> tls;
 
   auto get_max_request_size() const -> size_t {
@@ -78,6 +87,15 @@ struct AcceptSplunkArgs {
 
   auto get_max_concurrent_requests() const -> uint64_t {
     return max_connections ? max_connections->inner : uint64_t{10};
+  }
+
+  auto get_max_pending_acks() const -> uint64_t {
+    return max_pending_acks ? max_pending_acks->inner
+                            : default_max_pending_acks;
+  }
+
+  auto get_ack_timeout() const -> duration {
+    return ack_timeout ? ack_timeout->inner : default_ack_timeout;
   }
 };
 
@@ -91,6 +109,7 @@ using ResponseSignal = Oneshot<Response>;
 enum class EndpointKind {
   event,
   raw,
+  ack,
 };
 
 struct RequestMetadata {
@@ -129,8 +148,8 @@ auto hec_response(uint16_t status, int code, std::string_view text)
   };
 }
 
-auto classify_path(proxygen::HTTPMessage const& msg, std::string peer_ip)
-  -> variant<Response, RequestMetadata> {
+auto classify_path(proxygen::HTTPMessage const& msg, std::string peer_ip,
+                   bool ack_enabled) -> variant<Response, RequestMetadata> {
   auto const method = msg.getMethod();
   auto const path = std::string_view{msg.getPathAsStringPiece()};
   if (method == proxygen::HTTPMethod::GET
@@ -138,8 +157,8 @@ auto classify_path(proxygen::HTTPMessage const& msg, std::string peer_ip)
            or path == "/services/collector/health/1.0")) {
     return Response{.status = 200, .body = std::string{health_body}};
   }
-  if (method == proxygen::HTTPMethod::POST
-      and path == "/services/collector/ack") {
+  if (method == proxygen::HTTPMethod::POST and path == "/services/collector/ack"
+      and not ack_enabled) {
     return hec_response(400, 14, "ACK is disabled");
   }
   auto kind = Option<EndpointKind>{None{}};
@@ -151,6 +170,9 @@ auto classify_path(proxygen::HTTPMessage const& msg, std::string peer_ip)
              and (path == "/services/collector/raw"
                   or path == "/services/collector/raw/1.0")) {
     kind = EndpointKind::raw;
+  } else if (method == proxygen::HTTPMethod::POST
+             and path == "/services/collector/ack") {
+    kind = EndpointKind::ack;
   }
   if (not kind) {
     return hec_response(404, 6, "Invalid data format");
@@ -180,12 +202,13 @@ auto classify_path(proxygen::HTTPMessage const& msg, std::string peer_ip)
 
 class RequestHandler final : public proxygen::coro::HTTPHandler {
 public:
-  RequestHandler(size_t max_request_size, std::string token,
+  RequestHandler(size_t max_request_size, std::string token, bool ack_enabled,
                  Arc<MessageQueue> queue,
                  Arc<Atomic<uint64_t>> request_id_generator,
                  Arc<Semaphore> request_slots)
     : max_request_size_{max_request_size},
       token_{std::move(token)},
+      ack_enabled_{ack_enabled},
       queue_{std::move(queue)},
       request_id_generator_{std::move(request_id_generator)},
       request_slots_{std::move(request_slots)} {
@@ -218,8 +241,8 @@ public:
         if (not is_final) {
           co_return proxygen::coro::HTTPSourceReader::Continue;
         }
-        auto classified
-          = classify_path(*msg, session->getPeerAddress().getAddressStr());
+        auto classified = classify_path(
+          *msg, session->getPeerAddress().getAddressStr(), ack_enabled_);
         if (auto response = try_as<Response>(&classified)) {
           response_signal->send(std::move(*response));
           co_return proxygen::coro::HTTPSourceReader::Cancel;
@@ -243,7 +266,8 @@ public:
           co_return proxygen::coro::HTTPSourceReader::Cancel;
         }
         auto metadata = std::move(as<RequestMetadata>(classified));
-        if (metadata.kind == EndpointKind::raw and not metadata.channel) {
+        if ((ack_enabled_ or metadata.kind == EndpointKind::raw)
+            and not metadata.channel) {
           response_signal->send(
             hec_response(400, 10, "Data channel is missing"));
           co_return proxygen::coro::HTTPSourceReader::Cancel;
@@ -254,6 +278,9 @@ public:
             response_signal->send(
               hec_response(400, 11, "Invalid data channel"));
             co_return proxygen::coro::HTTPSourceReader::Cancel;
+          }
+          if (ack_enabled_) {
+            metadata.channel = fmt::to_string(channel);
           }
         }
         auto content_encoding
@@ -337,9 +364,23 @@ public:
 private:
   size_t max_request_size_;
   std::string token_;
+  bool ack_enabled_;
   Arc<MessageQueue> queue_;
   Arc<Atomic<uint64_t>> request_id_generator_;
   Arc<Semaphore> request_slots_;
+};
+
+using AckMap = std::map<std::string, std::map<uint64_t, time>>;
+
+struct AckState {
+  /// Accepted requests not covered by a checkpoint yet.
+  AckMap pending;
+  /// Requests frozen into the checkpoint that is currently committing.
+  AckMap committing;
+  /// Requests covered by a committed checkpoint and ready to acknowledge.
+  AckMap ready;
+  /// Total entries across all three maps, used to bound snapshot state.
+  uint64_t count = 0;
 };
 
 struct InFlightRequest {
@@ -513,6 +554,43 @@ auto parse_event_body(SimdjsonPaddedBuffer const& body,
   return events;
 }
 
+auto parse_ack_ids(SimdjsonPaddedBuffer const& body)
+  -> Result<std::vector<uint64_t>, Response> {
+  auto text
+    = std::string_view{reinterpret_cast<char const*>(body.data()), body.size()};
+  text = detail::trim(text, json_whitespace);
+  auto parsed = from_json(text);
+  if (not parsed) {
+    return Err{hec_response(400, 6, "Invalid data format")};
+  }
+  auto* envelope = try_as<record>(&*parsed);
+  if (not envelope or envelope->size() != 1) {
+    return Err{hec_response(400, 6, "Invalid data format")};
+  }
+  auto it = envelope->find("acks");
+  if (it == envelope->end()) {
+    return Err{hec_response(400, 6, "Invalid data format")};
+  }
+  auto* values = try_as<list>(&it->second);
+  if (not values) {
+    return Err{hec_response(400, 6, "Invalid data format")};
+  }
+  auto result = std::vector<uint64_t>{};
+  result.reserve(values->size());
+  for (auto const& value : *values) {
+    if (auto id = try_as<uint64_t>(&value)) {
+      result.push_back(*id);
+      continue;
+    }
+    if (auto id = try_as<int64_t>(&value); id and *id >= 0) {
+      result.push_back(detail::narrow<uint64_t>(*id));
+      continue;
+    }
+    return Err{hec_response(400, 6, "Invalid data format")};
+  }
+  return result;
+}
+
 auto make_raw_event(std::span<std::byte const> body,
                     RequestMetadata const& metadata)
   -> Result<record, Response> {
@@ -580,10 +658,9 @@ public:
     }
     auto request_id_generator
       = Arc<Atomic<uint64_t>>{std::in_place, uint64_t{0}};
-    auto handler
-      = std::make_shared<RequestHandler>(args_.get_max_request_size(),
-                                         std::move(token), message_queue_,
-                                         request_id_generator, request_slots_);
+    auto handler = std::make_shared<RequestHandler>(
+      args_.get_max_request_size(), std::move(token), args_.ack, message_queue_,
+      request_id_generator, request_slots_);
     auto server = co_await http_server::Server::start(std::move(*config),
                                                       std::move(handler));
     if (server.is_err()) {
@@ -694,6 +771,24 @@ public:
             hec_response(400, 6, "Invalid data format"));
           co_return;
         }
+        if (args_.ack) {
+          expire_acks();
+        }
+        if (request.metadata.kind == EndpointKind::ack) {
+          TENZIR_ASSERT(request.metadata.channel);
+          auto parsed = parse_ack_ids(request.body);
+          if (parsed.is_err()) {
+            request.response_signal->send(std::move(parsed).unwrap_err());
+            co_return;
+          }
+          request.response_signal->send(ack_response(
+            *request.metadata.channel, std::move(parsed).unwrap()));
+          co_return;
+        }
+        if (args_.ack and acks_.count >= args_.get_max_pending_acks()) {
+          request.response_signal->send(hec_response(503, 9, "Server is busy"));
+          co_return;
+        }
         auto events = std::vector<record>{};
         auto schema_name = std::string_view{};
         if (request.metadata.kind == EndpointKind::event) {
@@ -727,6 +822,20 @@ public:
           co_await push(std::move(slice));
         }
         events_read_counter_.add(rows);
+        if (args_.ack) {
+          TENZIR_ASSERT(request.metadata.channel);
+          auto ack_id = make_ack_id(*request.metadata.channel);
+          acks_.pending[*request.metadata.channel].emplace(
+            ack_id, detail::saturating_add(time::clock::now(),
+                                           args_.get_ack_timeout()));
+          acks_.count += 1;
+          request.response_signal->send(Response{
+            .status = 200,
+            .body = fmt::format(R"({{"text":"Success","code":0,"ackId":{}}})",
+                                ack_id),
+          });
+          co_return;
+        }
         request.response_signal->send(
           Response{.status = 200, .body = std::string{success_body}});
       },
@@ -734,6 +843,32 @@ public:
         maybe_finish_draining();
         co_return;
       });
+  }
+
+  auto prepare_snapshot(Push<table_slice>& push, OpCtx& ctx)
+    -> Task<void> override {
+    TENZIR_UNUSED(push, ctx);
+    TENZIR_ASSERT(acks_.committing.empty());
+    acks_.committing = std::move(acks_.pending);
+    acks_.pending.clear();
+    co_return;
+  }
+
+  auto snapshot(Serde& serde) -> void override {
+    serde("ready_acks", acks_.ready);
+    serde("checkpoint_acks", acks_.committing);
+    if (serde.is_loading()) {
+      merge_acks(acks_.ready, acks_.committing);
+      acks_.committing.clear();
+      acks_.count = count_acks(acks_.ready);
+    }
+  }
+
+  auto post_commit(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
+    merge_acks(acks_.ready, acks_.committing);
+    acks_.committing.clear();
+    co_return;
   }
 
   auto finalize(Push<table_slice>& push, OpCtx& ctx)
@@ -761,6 +896,85 @@ public:
   }
 
 private:
+  static auto merge_acks(AckMap& destination, AckMap& source) -> void {
+    for (auto& [channel, ids] : source) {
+      destination[channel].merge(ids);
+    }
+  }
+
+  static auto count_acks(AckMap const& acks) -> uint64_t {
+    auto result = uint64_t{0};
+    for (auto const& entry : acks) {
+      result += entry.second.size();
+    }
+    return result;
+  }
+
+  auto expire_acks() -> void {
+    auto const now = time::clock::now();
+    auto expired = uint64_t{0};
+    auto expire = [&](AckMap& acks) {
+      for (auto channel = acks.begin(); channel != acks.end();) {
+        expired += std::erase_if(channel->second, [&](auto const& entry) {
+          return entry.second <= now;
+        });
+        if (channel->second.empty()) {
+          channel = acks.erase(channel);
+        } else {
+          ++channel;
+        }
+      }
+    };
+    expire(acks_.pending);
+    expire(acks_.committing);
+    expire(acks_.ready);
+    TENZIR_ASSERT(expired <= acks_.count);
+    acks_.count -= expired;
+  }
+
+  auto contains_ack(std::string const& channel, uint64_t id) const -> bool {
+    auto contains = [&](AckMap const& acks) {
+      auto it = acks.find(channel);
+      return it != acks.end() and it->second.contains(id);
+    };
+    return contains(acks_.pending) or contains(acks_.committing)
+           or contains(acks_.ready);
+  }
+
+  auto make_ack_id(std::string const& channel) const -> uint64_t {
+    // Random IDs prevent a restored checkpoint from reusing IDs that the
+    // previous process returned for post-checkpoint requests.
+    // JSON clients commonly parse numbers as IEEE-754 doubles, which represent
+    // integers exactly only up to 2^53 - 1.
+    constexpr auto mask = (uint64_t{1} << 53) - 1;
+    for (;;) {
+      auto id = hash(uuid::random()) & mask;
+      if (id > 0 and not contains_ack(channel, id)) {
+        return id;
+      }
+    }
+  }
+
+  auto ack_response(std::string const& channel, std::vector<uint64_t> ids)
+    -> Response {
+    auto body = std::string{R"({"acks":{)"};
+    auto separator = std::string_view{};
+    auto channel_it = acks_.ready.find(channel);
+    auto requested = std::set<uint64_t>{};
+    for (auto id : ids) {
+      if (not requested.insert(id).second) {
+        continue;
+      }
+      auto ready
+        = channel_it != acks_.ready.end() and channel_it->second.contains(id);
+      fmt::format_to(std::back_inserter(body), R"({}"{}":{})", separator, id,
+                     ready);
+      separator = ",";
+    }
+    body += "}}";
+    return Response{.status = 200, .body = std::move(body)};
+  }
+
   enum class Lifecycle {
     starting,
     running,
@@ -837,6 +1051,7 @@ private:
   Arc<Semaphore> request_slots_;
   Option<Box<http_server::Server>> server_;
   std::unordered_map<uint64_t, InFlightRequest> active_requests_;
+  AckState acks_;
   MetricsCounter bytes_read_counter_;
   MetricsCounter events_read_counter_;
   mutable Arc<MessageQueue> message_queue_{std::in_place, uint32_t{64}};
@@ -859,6 +1074,11 @@ public:
       "max_request_size", &AcceptSplunkArgs::max_request_size);
     auto max_connections
       = describer.named("max_connections", &AcceptSplunkArgs::max_connections);
+    describer.named("ack", &AcceptSplunkArgs::ack);
+    auto max_pending_acks = describer.named(
+      "max_pending_acks", &AcceptSplunkArgs::max_pending_acks);
+    auto ack_timeout
+      = describer.named("ack_timeout", &AcceptSplunkArgs::ack_timeout);
     auto tls_validator
       = tls_options{{.tls_default = false, .is_server = true}}.add_to_describer(
         describer, &AcceptSplunkArgs::tls);
@@ -889,6 +1109,17 @@ public:
             .primary(value->source)
             .emit(ctx);
         }
+      }
+      if (auto value = ctx.get(max_pending_acks); value and value->inner == 0) {
+        diagnostic::error("`max_pending_acks` must be greater than 0")
+          .primary(value->source)
+          .emit(ctx);
+      }
+      if (auto value = ctx.get(ack_timeout);
+          value and value->inner <= duration::zero()) {
+        diagnostic::error("`ack_timeout` must be greater than 0s")
+          .primary(value->source)
+          .emit(ctx);
       }
       return {};
     });

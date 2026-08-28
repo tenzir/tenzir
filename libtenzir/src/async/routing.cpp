@@ -106,15 +106,67 @@ struct HashRun {
 /// the zero-copy sub-slice path instead of materializing one slice per bucket.
 constexpr auto max_runs_per_bucket = size_t{2};
 
+/// The bucket of every row, plus the number of distinct buckets they cover.
+struct RowBuckets {
+  std::vector<uint64_t> buckets;
+  size_t used;
+};
+
 /// Hashes every row exactly once, yielding its bucket.
-auto row_buckets(const multi_series& values, uint64_t jobs)
-  -> std::vector<uint64_t> {
+///
+/// Counting the used buckets here is free: it rides along on the pass that
+/// already touches every row, and needs only a `jobs`-sized bitmap instead of
+/// the per-bucket row vectors that the caller may never build.
+auto row_buckets(const multi_series& values, uint64_t jobs) -> RowBuckets {
   TENZIR_ASSERT(jobs > 0);
   auto num_rows = values.length();
-  auto result = std::vector<uint64_t>{};
-  result.reserve(static_cast<size_t>(num_rows));
+  auto result = RowBuckets{};
+  result.buckets.reserve(static_cast<size_t>(num_rows));
+  auto seen = std::vector<bool>(jobs, false);
   for (auto row = int64_t{0}; row < num_rows; ++row) {
-    result.push_back(std::hash<data_view3>{}(values.view3_at(row)) % jobs);
+    auto bucket = std::hash<data_view3>{}(values.view3_at(row)) % jobs;
+    result.buckets.push_back(bucket);
+    if (not seen[bucket]) {
+      seen[bucket] = true;
+      ++result.used;
+    }
+  }
+  return result;
+}
+
+/// Groups row indices by bucket, ascending within each bucket.
+///
+/// This is a counting sort into one flat buffer rather than one vector per
+/// bucket: a single allocation instead of `jobs` allocations with geometric
+/// regrowth, which is what dominates once `jobs` gets large.
+struct BucketedRows {
+  /// Row indices, grouped by bucket.
+  std::vector<int64_t> rows;
+  /// Bucket `b` owns `rows[offsets[b] .. offsets[b + 1])`.
+  std::vector<size_t> offsets;
+
+  auto operator[](uint64_t bucket) const -> std::span<const int64_t> {
+    return std::span{rows}.subspan(offsets[bucket],
+                                   offsets[bucket + 1] - offsets[bucket]);
+  }
+};
+
+auto bucket_rows(std::span<const uint64_t> buckets, uint64_t jobs)
+  -> BucketedRows {
+  auto result = BucketedRows{};
+  result.offsets.assign(jobs + 1, 0);
+  // Count into the slot after the bucket's own, so that the prefix sum below
+  // turns the counts into start offsets in place.
+  for (auto bucket : buckets) {
+    ++result.offsets[bucket + 1];
+  }
+  for (auto bucket = uint64_t{0}; bucket < jobs; ++bucket) {
+    result.offsets[bucket + 1] += result.offsets[bucket];
+  }
+  result.rows.resize(buckets.size());
+  auto cursors = result.offsets;
+  for (auto row = size_t{0}; row < buckets.size(); ++row) {
+    result.rows[cursors[buckets[row]]++] = detail::narrow<int64_t>(row);
   }
   return result;
 }
@@ -160,25 +212,16 @@ auto hash_partition(const table_slice& slice, const multi_series& keys,
   if (jobs == 1) {
     return {RoutedSlice{0, slice}};
   }
-  auto buckets = row_buckets(keys, jobs);
-  // One pass collects the row indices per bucket, so the total work is O(rows)
-  // rather than the O(rows * jobs) of building one boolean mask per bucket.
-  auto indices = std::vector<std::vector<int64_t>>(jobs);
-  for (auto row = int64_t{0}; row < num_rows; ++row) {
-    indices[buckets[row]].push_back(row);
-  }
-  auto used = std::ranges::count_if(indices, [](const auto& rows) {
-    return not rows.empty();
-  });
+  auto [buckets, used] = row_buckets(keys, jobs);
   // Everything lands in one bucket: forward the input untouched.
   if (used == 1) {
     return {RoutedSlice{buckets[0], slice}};
   }
   // The input is already clustered by bucket: sub-slices are cheaper than a
   // copy, and the number of parts stays bounded. Unclustered input bails out of
-  // the run detection after a short prefix.
-  if (auto runs = runs_from_buckets(buckets, max_runs_per_bucket
-                                               * static_cast<size_t>(used))) {
+  // the run detection after a short prefix. This runs before the row indices
+  // are grouped, so the clustered path never pays for that grouping.
+  if (auto runs = runs_from_buckets(buckets, max_runs_per_bucket * used)) {
     auto result = std::vector<RoutedSlice>{};
     result.reserve(runs->size());
     for (auto [bucket, begin, end] : *runs) {
@@ -186,13 +229,17 @@ auto hash_partition(const table_slice& slice, const multi_series& keys,
     }
     return result;
   }
+  // Grouping the row indices in one pass keeps the total work at O(rows),
+  // rather than the O(rows * jobs) of building one boolean mask per bucket.
+  auto grouped = bucket_rows(buckets, jobs);
   auto result = std::vector<RoutedSlice>{};
-  result.reserve(static_cast<size_t>(used));
+  result.reserve(used);
   for (auto bucket = uint64_t{0}; bucket < jobs; ++bucket) {
-    if (indices[bucket].empty()) {
+    auto rows = grouped[bucket];
+    if (rows.empty()) {
       continue;
     }
-    result.push_back({bucket, take_rows(slice, indices[bucket])});
+    result.push_back({bucket, take_rows(slice, rows)});
   }
   return result;
 }

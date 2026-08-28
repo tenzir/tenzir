@@ -1,0 +1,17 @@
+warning: `_fuse` is deprecated
+ --> tests/operators/parallel/legacy_fuse_and_fuse.tql:6:16
+  |
+6 | parallel _fuse=true, fuse="none" { pass }
+  |                ~~~~
+  |
+  = note: use `fuse="parallel"` instead
+
+error: cannot combine `_fuse` and `fuse`
+ --> tests/operators/parallel/legacy_fuse_and_fuse.tql:6:16
+  |
+6 | parallel _fuse=true, fuse="none" { pass }
+  |                ^^^^
+  ⋮
+6 | parallel _fuse=true, fuse="none" { pass }
+  |                           ------ `fuse` provided here
+  |

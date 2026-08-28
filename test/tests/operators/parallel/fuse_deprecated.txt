@@ -1,0 +1,11 @@
+warning: `_fuse` is deprecated
+ --> tests/operators/parallel/fuse_deprecated.tql:3:16
+  |
+3 | parallel _fuse=false { y = x }
+  |                ~~~~~
+  |
+  = note: use `fuse="none"` instead
+{
+  x: 1,
+  y: 1,
+}

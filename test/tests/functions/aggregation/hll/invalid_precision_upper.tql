@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {}
+model = hll([1], precision=19)

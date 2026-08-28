@@ -1,0 +1,63 @@
+warning: histogram models have different represented edges
+ --> tests/functions/aggregation/histogram/js_empty_incompatible.tql:5:27
+  |
+5 | result = model_divergence(p, q, method="jensen_shannon")
+  |                           ~
+  |
+{
+  p: {
+    model: "histogram",
+    version: 1,
+    input_count: 0,
+    count: 0,
+    null_count: 0,
+    kind: "fixed_width",
+    non_finite_count: 0,
+    min: null,
+    max: null,
+    start: 0.0,
+    width: 1.0,
+    underflow: 0,
+    overflow: 0,
+    bins: [
+      {
+        lower: 0.0,
+        upper: 1.0,
+        count: 0,
+      },
+      {
+        lower: 1.0,
+        upper: 2.0,
+        count: 0,
+      },
+    ],
+  },
+  q: {
+    model: "histogram",
+    version: 1,
+    input_count: 0,
+    count: 0,
+    null_count: 0,
+    kind: "fixed_width",
+    non_finite_count: 0,
+    min: null,
+    max: null,
+    start: 0.0,
+    width: 2.0,
+    underflow: 0,
+    overflow: 0,
+    bins: [
+      {
+        lower: 0.0,
+        upper: 2.0,
+        count: 0,
+      },
+      {
+        lower: 2.0,
+        upper: 4.0,
+        count: 0,
+      },
+    ],
+  },
+  result: null,
+}

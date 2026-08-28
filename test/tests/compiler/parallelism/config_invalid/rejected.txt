@@ -1,2 +1,2 @@
 error: invalid parallelism value in `tenzir.parallelism` configuration option
-  = hint: expected `disabled`, `max`, or a positive integer, optionally followed by `,limit_partitions=<n>` and/or `,fused=<all|parallel|none>`
+  = hint: expected `disabled`, `max`, or a positive integer, optionally followed by `,limit_partitions=<n>` and/or `,fuse=<all|parallel|none>`

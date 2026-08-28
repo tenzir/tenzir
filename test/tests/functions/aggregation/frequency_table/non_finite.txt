@@ -1,0 +1,25 @@
+warning: `frequency_table` failed: values must not contain NaN or infinity
+ --> tests/functions/aggregation/frequency_table/non_finite.tql:3:30
+  |
+3 | select nan = frequency_table(["nan".float()]),
+  |                              ~~~~~~~~~~~~~~~
+  |
+
+warning: `frequency_table` failed: values must not contain NaN or infinity
+ --> tests/functions/aggregation/frequency_table/non_finite.tql:4:32
+  |
+4 |   nested_nan = frequency_table([["nan".float()]]),
+  |                                ~~~~~~~~~~~~~~~~~
+  |
+
+warning: `frequency_table` failed: values must not contain NaN or infinity
+ --> tests/functions/aggregation/frequency_table/non_finite.tql:5:30
+  |
+5 |   infinity = frequency_table(["inf".float()])
+  |                              ~~~~~~~~~~~~~~~
+  |
+{
+  nan: null,
+  nested_nan: null,
+  infinity: null,
+}

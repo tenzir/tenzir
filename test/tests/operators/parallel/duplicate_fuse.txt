@@ -1,9 +1,11 @@
-error: duplicate `_fuse` argument
- --> tests/operators/parallel/duplicate_fuse.tql:6:22
+error: duplicate named argument `fuse`
+ --> tests/operators/parallel/duplicate_fuse.tql:6:10
   |
-6 | parallel _fuse=true, _fuse=false { pass }
-  |                      ^^^^^^^^^^^
+6 | parallel fuse="all", fuse="none" { pass }
+  |          ^^^^^^^^^^
   ⋮
-6 | parallel _fuse=true, _fuse=false { pass }
-  |          ---------- previously provided here
+6 | parallel fuse="all", fuse="none" { pass }
+  |                      ^^^^^^^^^^^
   |
+  = usage: parallel [jobs:int, fuse=string, limit_partitions=int, route_by=field]
+  = docs: https://tenzir.com/docs/reference/operators/parallel

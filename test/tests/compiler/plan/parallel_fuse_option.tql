@@ -1,0 +1,8 @@
+// `parallel` accepts the same `fused` values as the `// parallelism` directive.
+// With `fuse="none"`, the channels inside the block are never fused, even
+// between matched parallel operators.
+from {x: 1}, {x: 2}, {x: 3}
+parallel 2, fuse="none" {
+  where x > 0
+  where x < 3
+}

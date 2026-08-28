@@ -33,12 +33,12 @@
 
 #pragma once
 
+#include "tenzir/box.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/result.hpp"
 
 #include <cmath>
 #include <cstdint>
-#include <expected>
-#include <memory>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -57,6 +57,8 @@ class tdigest {
 public:
   explicit tdigest(uint32_t delta = 100, uint32_t buffer_size = 500);
   ~tdigest();
+  tdigest(const tdigest&);
+  tdigest& operator=(const tdigest&);
   tdigest(tdigest&&);
   tdigest& operator=(tdigest&&);
 
@@ -64,7 +66,7 @@ public:
   auto reset() -> void;
 
   // validate data integrity
-  auto validate() const -> std::expected<void, std::string>;
+  auto validate() const -> Result<void, std::string>;
 
   // dump internal data, only for debug
   auto dump() const -> void;
@@ -100,6 +102,13 @@ public:
   // calculate quantile
   auto quantile(double q) const -> double;
 
+  // estimate the cumulative probability at a finite value
+  auto cdf(double x) const -> double;
+
+  // compare two non-empty digests as approximate distributions
+  auto ks_distance(const tdigest& other) const -> double;
+  auto wasserstein_distance(const tdigest& other) const -> double;
+
   auto min() const -> double {
     return quantile(0);
   }
@@ -128,7 +137,7 @@ private:
 
   // hide other members with pimpl
   class tdigest_impl;
-  std::unique_ptr<tdigest_impl> impl_;
+  mutable Box<tdigest_impl> impl_;
 };
 
 } // namespace tenzir::detail

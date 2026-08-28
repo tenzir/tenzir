@@ -1,0 +1,9 @@
+warning: `model_merge` failed: cannot merge `histogram` models: histogram kind, start, width, bin count, and represented edges must match exactly
+ --> tests/functions/aggregation/histogram/merge_incompatible.tql:6:29
+  |
+6 | select merged = model_merge([p, q])
+  |                             ~
+  |
+{
+  merged: null,
+}

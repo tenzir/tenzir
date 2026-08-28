@@ -1,0 +1,8 @@
+// Empty and all-null inputs produce an empty model with null extrema, and
+// point lookups on it return a zero count.
+from {xs: [], ys: [null, null]}
+model = histogram(xs, bins=2, width=1.0)
+select model,
+  ys_count = histogram(ys, bins=2, width=1.0).null_count,
+  bucket = histogram_bucket(model, 0.5),
+  bucket_count = histogram_bucket(model, 0.5).count?

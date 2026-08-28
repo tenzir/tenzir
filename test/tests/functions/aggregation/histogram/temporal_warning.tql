@@ -1,0 +1,4 @@
+// Durations and timestamps are not supported yet and warn once.
+from {x: 1s}, {x: duration(null)}
+summarize model=histogram(x, bins=2, width=1.0)
+select count=model.count, null_count=model.null_count

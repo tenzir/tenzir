@@ -1,0 +1,11 @@
+{
+  empty_count: 0,
+  empty_null_count: 0,
+  empty_min: null,
+  empty_max: null,
+  empty_centroids: 0,
+  all_null_count: 0,
+  all_null_null_count: 2,
+  all_null_min: null,
+  all_null_max: null,
+}

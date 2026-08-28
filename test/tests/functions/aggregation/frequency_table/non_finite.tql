@@ -1,0 +1,5 @@
+// Non-finite keys cannot provide exact, persistent equality semantics.
+from {}
+select nan = frequency_table(["nan".float()]),
+  nested_nan = frequency_table([["nan".float()]]),
+  infinity = frequency_table(["inf".float()])

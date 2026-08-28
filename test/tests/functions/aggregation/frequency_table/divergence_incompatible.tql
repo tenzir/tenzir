@@ -1,0 +1,5 @@
+// Divergence requires both tables to describe the same categorical type.
+from {}
+ints = frequency_table([1])
+strings = frequency_table(["1"])
+result = model_divergence(ints, strings, method="jensen_shannon")

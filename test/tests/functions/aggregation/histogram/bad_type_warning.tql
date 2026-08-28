@@ -1,0 +1,5 @@
+// Non-numeric values warn and count typed nulls.
+from {x: "foo"}, {x: null.string()}, {x: 1.0}
+summarize model=histogram(x, bins=2, width=1.0)
+select input_count=model.input_count, count=model.count,
+  null_count=model.null_count

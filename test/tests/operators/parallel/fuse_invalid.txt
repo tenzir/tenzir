@@ -1,0 +1,6 @@
+error: `fuse` must be one of `none`, `parallel`, or `all`
+ --> tests/operators/parallel/fuse_invalid.tql:6:15
+  |
+6 | parallel fuse="sometimes" { pass }
+  |               ^^^^^^^^^^^
+  |

@@ -35,16 +35,8 @@ struct ForkMergeArgs {
 
 /// Runtime operator for `fork_merge`: copies every input slice to each of its
 /// N output ports (one per branch).
-class ForkMergeOp final : public Operator<table_slice, table_slice> {
+class ForkMergeOp final : public Operator<table_slice, table_slice, true> {
 public:
-  auto needs_output_ports() const -> bool override {
-    return true;
-  }
-
-  auto process(table_slice, Push<table_slice>&, OpCtx&) -> Task<void> override {
-    TENZIR_UNREACHABLE();
-  }
-
   auto process(table_slice input, PushPorts<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
@@ -136,7 +128,7 @@ public:
   }
 
   auto spawn(element_type_tag) const -> AnyOperator override {
-    return Box<tenzir::Operator<table_slice, table_slice>>{
+    return Box<tenzir::Operator<table_slice, table_slice, true>>{
       ForkMergeOp{}.with_name("fork_merge")};
   }
 

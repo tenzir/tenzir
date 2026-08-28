@@ -1,0 +1,4 @@
+// Edge computation avoids overflowing an intermediate product.
+from {}
+model = histogram([-1e308, 0.0, 1e308], bins=2, start=-1e308, width=1e308)
+select edges = model.edges, counts = model.counts

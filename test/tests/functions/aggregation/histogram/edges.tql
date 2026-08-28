@@ -1,0 +1,5 @@
+// Exact bin edges: half-open bins, the final upper edge belongs to the final
+// regular bin, and only values greater than it overflow.
+from {x: 0.0}, {x: 2.5}, {x: 10.0}, {x: 10.000001}
+summarize model=histogram(x, bins=4, width=2.5)
+select counts=model.bins.map(b => b.count), underflow=model.underflow, overflow=model.overflow

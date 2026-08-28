@@ -10,6 +10,7 @@
 
 #include "tenzir/async/fetch_node.hpp"
 #include "tenzir/async/mail.hpp"
+#include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/operator_plugin.hpp"
@@ -81,7 +82,8 @@ struct context_save_result {
 
 class context {
 public:
-  static constexpr auto dump_batch_size_limit = 65536;
+  static constexpr auto dump_batch_size_limit
+    = int64_t{defaults::import::table_slice_size};
 
   virtual ~context() noexcept = default;
 

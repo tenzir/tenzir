@@ -1,0 +1,24 @@
+// Duplicates affect count but not cardinality; typed nulls are counted.
+from {}
+one = hll([1], precision=10)
+duplicates = hll([1, 1, 1, 2, 2, int(null)], precision=10)
+all_null = hll([int(null)], precision=10)
+empty = hll([1].where(x => false), precision=10)
+null_list = hll(null, precision=10)
+// An estimate cannot exceed the exact number of accepted observations.
+base = hll([], precision=4)
+saturated = {...base, input_count: uint(16), count: uint(16),
+  registers: [uint(1), uint(1), uint(1), uint(1), uint(1), uint(1), uint(1),
+    uint(1), uint(1), uint(1), uint(1), uint(1), uint(1), uint(1), uint(1),
+    uint(1)]}
+select model=duplicates.model, version=duplicates.version,
+  input_count=duplicates.input_count, count=duplicates.count,
+  null_count=duplicates.null_count,
+  precision=duplicates.precision, hash=duplicates.hash,
+  register_count=duplicates.registers.length(),
+  one_cardinality=hll_cardinality(one),
+  duplicate_cardinality=hll_cardinality(duplicates),
+  all_null_cardinality=hll_cardinality(all_null),
+  empty_count=empty.count, empty_null_count=empty.null_count,
+  empty_cardinality=hll_cardinality(empty), null_list=null_list,
+  saturated_cardinality=hll_cardinality(saturated)

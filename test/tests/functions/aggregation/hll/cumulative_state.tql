@@ -1,0 +1,11 @@
+// Cumulative emissions retain persisted constructor and model_merge aggregation
+// state across one-event input batches.
+from {x: 0}, {x: 1}, {x: 2}, {x: 3}, {x: 4}
+batch 1
+single = hll([x], precision=10)
+summarize direct = hll(x, precision=10), merged = model_merge(single),
+  options={emit: 2, mode: "cumulative"}
+select direct_count = direct.count,
+  direct_cardinality = hll_cardinality(direct),
+  merged_count = merged.count,
+  merged_cardinality = hll_cardinality(merged)

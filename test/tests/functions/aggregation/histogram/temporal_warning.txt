@@ -1,0 +1,11 @@
+warning: `histogram` does not support `duration` values yet; skipping them
+ --> tests/functions/aggregation/histogram/temporal_warning.tql:3:27
+  |
+3 | summarize model=histogram(x, bins=2, width=1.0)
+  |                           ~
+  |
+  = hint: convert to a number first, e.g., `x / 1s` for durations or `x.since_epoch() / 1s` for timestamps
+{
+  count: 0,
+  null_count: 1,
+}

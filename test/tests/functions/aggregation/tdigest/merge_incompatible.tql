@@ -1,0 +1,5 @@
+// T-digest model merges require identical compression.
+from {}
+a = tdigest([0.0], compression=20)
+b = tdigest([1.0], compression=30)
+select merged=model_merge([a, b])

@@ -1,0 +1,4 @@
+// Large integers convert to float; conversion is inexact above 2^53.
+from {x: 9007199254740993}
+summarize model=histogram(x, bins=2, width=9007199254740994.0)
+select count=model.count, min=model.min, first_bin=model.bins[0].count

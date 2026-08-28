@@ -1,0 +1,17 @@
+// Generic aggregation and list-call merging sum all counters, preserve exact
+// geometry, combine extrema, and reset list-call state after aggregation.
+from {xs: [null, "nan".float(), -1.0, 1.0, 5.0]},
+  {xs: ["inf".float(), 2.0, 10.0, 11.0]}
+m = histogram(xs, bins=2, width=5.0)
+summarize aggregation = model_merge(m), models = collect(m)
+list_call = model_merge(models)
+select aggregation_count = aggregation.count,
+  aggregation_null_count = aggregation.null_count,
+  aggregation_non_finite_count = aggregation.non_finite_count,
+  aggregation_min = aggregation.min,
+  aggregation_max = aggregation.max,
+  aggregation_underflow = aggregation.underflow,
+  aggregation_overflow = aggregation.overflow,
+  aggregation_bins = aggregation.bins.map(b => b.count),
+  list_count = list_call.count,
+  list_bins = list_call.bins.map(b => b.count)

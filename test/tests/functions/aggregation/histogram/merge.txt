@@ -1,0 +1,18 @@
+{
+  aggregation_count: 6,
+  aggregation_null_count: 1,
+  aggregation_non_finite_count: 2,
+  aggregation_min: -1.0,
+  aggregation_max: 11.0,
+  aggregation_underflow: 1,
+  aggregation_overflow: 1,
+  aggregation_bins: [
+    2,
+    2,
+  ],
+  list_count: 6,
+  list_bins: [
+    2,
+    2,
+  ],
+}

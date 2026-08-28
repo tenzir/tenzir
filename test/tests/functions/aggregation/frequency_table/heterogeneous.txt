@@ -1,0 +1,9 @@
+warning: `frequency_table` failed: cannot combine values of types `int64` and `string`
+ --> tests/functions/aggregation/frequency_table/heterogeneous.tql:3:33
+  |
+3 | summarize model=frequency_table(x)
+  |                                 ~
+  |
+{
+  model: null,
+}

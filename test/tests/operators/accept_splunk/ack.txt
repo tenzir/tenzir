@@ -1,0 +1,14 @@
+{
+  event: "one",
+  receiver: {
+    peer_ip: 127.0.0.1,
+    channel: "00872dc6-ac83-4ede-8afe-8413c3825c4c",
+  },
+}
+{
+  event: "two",
+  receiver: {
+    peer_ip: 127.0.0.1,
+    channel: "00872dc6-ac83-4ede-8afe-8413c3825c4c",
+  },
+}

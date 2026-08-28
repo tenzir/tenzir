@@ -1,9 +1,9 @@
 ● {input}
 │
 ● from
-│
+╎
 ● where
-│
+╎
 ● to_stdout
 │
 ● {output}

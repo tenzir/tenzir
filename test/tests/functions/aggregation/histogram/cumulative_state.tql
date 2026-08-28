@@ -1,0 +1,11 @@
+// Cumulative emissions retain persisted constructor and model_merge aggregation
+// state across one-event input batches.
+from {x: 0.0}, {x: 1.0}, {x: 2.0}, {x: 3.0}, {x: 4.0}
+batch 1
+single = histogram([x], bins=2, width=2.0)
+summarize direct = histogram(x, bins=2, width=2.0),
+  merged = model_merge(single), options={emit: 2, mode: "cumulative"}
+select direct_count = direct.count,
+  direct_bins = direct.bins.map(b => b.count),
+  merged_count = merged.count,
+  merged_bins = merged.bins.map(b => b.count)

@@ -1,0 +1,3 @@
+// `_fuse` is deprecated in favor of `fused`.
+from {x: 1}
+parallel _fuse=false { y = x }

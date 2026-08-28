@@ -1,0 +1,4 @@
+// Regular list calls reset all dynamic state while retaining compression.
+from {xs: [1.0, 2.0]}, {xs: [8.0, 9.0, 10.0]}
+select m=tdigest(xs, compression=20)
+select compression=m.compression, count=m.count, min=m.min, max=m.max

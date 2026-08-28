@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// Public precision bounds cap model size and estimator behavior.
+from {}
+model = hll([1], precision=3)

@@ -6,6 +6,7 @@ from {ts: 0s.from_epoch()},
      {ts: 1s.from_epoch()},
      {ts: 2s.from_epoch()},
      {ts: 3s.from_epoch()}
+batch 4
 window gap=10s, size=3, on=ts {
   head 2
   summarize n=count()

@@ -44,10 +44,42 @@ namespace tenzir::detail {
 
 namespace {
 
-// a numerically stable lerp is unbelievably complex
-// but we are *approximating* the quantile, so let's keep it simple
-auto lerp(double a, double b, double t) -> double {
-  return a + t * (b - a);
+/// Returns the relative position of `value` in [`left`, `right`] without
+/// overflowing the interval width.
+auto relative_position(double left, double right, double value) -> double {
+  const auto width = right - left;
+  if (std::isfinite(width)) {
+    return (value - left) / width;
+  }
+  return (value / 2.0 - left / 2.0) / (right / 2.0 - left / 2.0);
+}
+
+/// Multiplies an interval width by a non-negative scale without overflowing
+/// the width before applying the scale.
+auto scale_interval(double left, double right, double scale) -> double {
+  if (scale == 0.0) {
+    return 0.0;
+  }
+  const auto width = right - left;
+  if (std::isfinite(width)) {
+    return width * scale;
+  }
+  return right * scale - left * scale;
+}
+
+/// Integrates the absolute value of the line from `y0` to `y1` over an
+/// interval from `left` to `right`.
+auto integrate_abs_line(double y0, double y1, double left, double right)
+  -> double {
+  if (std::signbit(y0) == std::signbit(y1) or y0 == 0.0 or y1 == 0.0) {
+    return scale_interval(left, right, (std::abs(y0) + std::abs(y1)) / 2.0);
+  }
+  const auto a = std::abs(y0);
+  const auto b = std::abs(y1);
+  const auto high = std::max(a, b);
+  const auto ratio = std::min(a, b) / high;
+  const auto scale = high * (1.0 + ratio * ratio) / (2.0 * (1.0 + ratio));
+  return scale_interval(left, right, scale);
 }
 
 // histogram bin
@@ -58,7 +90,7 @@ struct centroid {
   // merge with another centroid
   void merge(const centroid& other) {
     weight += other.weight;
-    mean += (other.mean - mean) * other.weight / weight;
+    mean = std::lerp(mean, other.mean, other.weight / weight);
   }
 };
 
@@ -133,15 +165,14 @@ public:
 
   // validate k-size of a tdigest
   auto validate(const std::vector<centroid>& tdigest, double total_weight) const
-    -> std::expected<void, std::string> {
+    -> Result<void, std::string> {
     auto q_prev = 0.0;
     auto k_prev = this->k(0);
     for (size_t i = 0; i < tdigest.size(); ++i) {
       auto q = q_prev + tdigest[i].weight / total_weight;
       auto k_val = this->k(q);
       if (tdigest[i].weight != 1 and (k_val - k_prev) > 1.001) {
-        return std::unexpected(
-          fmt::format("oversized centroid: {}", k_val - k_prev));
+        return Err{fmt::format("oversized centroid: {}", k_val - k_prev)};
       }
       k_prev = k_val;
       q_prev = q;
@@ -177,29 +208,29 @@ public:
     merger_.reset(0, nullptr);
   }
 
-  auto validate() const -> std::expected<void, std::string> {
+  auto validate() const -> Result<void, std::string> {
     // check weight, centroid order
     auto total_weight = 0.0;
     auto prev_mean = std::numeric_limits<double>::lowest();
     for (const auto& c : tdigests_[current_]) {
       if (not std::isfinite(c.mean) or not std::isfinite(c.weight)) {
-        return std::unexpected("non-finite value found in tdigest");
+        return Err{"non-finite value found in tdigest"};
       }
       if (c.mean < prev_mean) {
-        return std::unexpected("centroid mean decreases");
+        return Err{"centroid mean decreases"};
       }
       if (c.weight < 1) {
-        return std::unexpected("invalid centroid weight");
+        return Err{"invalid centroid weight"};
       }
       prev_mean = c.mean;
       total_weight += c.weight;
     }
     if (total_weight != total_weight_) {
-      return std::unexpected("tdigest total weight mismatch");
+      return Err{"tdigest total weight mismatch"};
     }
     // check if buffer expanded
     if (tdigests_[0].capacity() > delta_ or tdigests_[1].capacity() > delta_) {
-      return std::unexpected("oversized tdigest buffer");
+      return Err{"oversized tdigest buffer"};
     }
     // check k-size
     return merger_.validate(tdigests_[current_], total_weight_);
@@ -334,7 +365,7 @@ public:
         TENZIR_ASSERT(weight_sum == total_weight_);
         auto c = &td[ci_right];
         TENZIR_ASSERT(c->weight >= 2);
-        return lerp(c->mean, max_, diff / (c->weight / 2));
+        return std::lerp(c->mean, max_, diff / (c->weight / 2));
       }
       ++ci_right;
     } else {
@@ -342,14 +373,178 @@ public:
         // index smaller than center of first bin
         auto c = &td[0];
         TENZIR_ASSERT(c->weight >= 2);
-        return lerp(min_, c->mean, index / (c->weight / 2));
+        return std::lerp(min_, c->mean, index / (c->weight / 2));
       }
       --ci_left;
       diff += td[ci_left].weight / 2 + td[ci_right].weight / 2;
     }
     // interpolate from adjacent centroids
     diff /= (td[ci_left].weight / 2 + td[ci_right].weight / 2);
-    return lerp(td[ci_left].mean, td[ci_right].mean, diff);
+    return std::lerp(td[ci_left].mean, td[ci_right].mean, diff);
+  }
+
+  auto cdf(double x) const -> double {
+    const auto& td = tdigests_[current_];
+    if (not std::isfinite(x) or td.empty()) {
+      return NAN;
+    }
+    if (x < min_) {
+      return 0.0;
+    }
+    if (x > max_) {
+      return 1.0;
+    }
+    if (td.size() == 1) {
+      const auto mean = td.front().mean;
+      if (min_ == max_) {
+        return 0.5;
+      }
+      if (x < mean) {
+        return mean == min_ ? 0.0 : 0.5 * relative_position(min_, mean, x);
+      }
+      if (x > mean) {
+        return mean == max_ ? 1.0
+                            : 0.5 + 0.5 * relative_position(mean, max_, x);
+      }
+      return 0.5;
+    }
+    const auto& first = td.front();
+    if (x < first.mean) {
+      if (first.mean == min_) {
+        return 0.0;
+      }
+      if (x == min_) {
+        return 0.5 / total_weight_;
+      }
+      return (1.0
+              + relative_position(min_, first.mean, x)
+                  * (first.weight / 2.0 - 1.0))
+             / total_weight_;
+    }
+    const auto& last = td.back();
+    if (x > last.mean) {
+      if (last.mean == max_) {
+        return 1.0;
+      }
+      if (x == max_) {
+        return 1.0 - 0.5 / total_weight_;
+      }
+      const auto remaining = (1.0
+                              + (1.0 - relative_position(last.mean, max_, x))
+                                  * (last.weight / 2.0 - 1.0))
+                             / total_weight_;
+      return 1.0 - remaining;
+    }
+    auto weight_so_far = 0.0;
+    for (auto i = size_t{0}; i + 1 < td.size(); ++i) {
+      if (td[i].mean == x) {
+        auto equal_weight = 0.0;
+        while (i < td.size() and td[i].mean == x) {
+          equal_weight += td[i].weight;
+          ++i;
+        }
+        return (weight_so_far + equal_weight / 2.0) / total_weight_;
+      }
+      if (td[i].mean < x and x < td[i + 1].mean) {
+        if (td[i].weight == 1.0 and td[i + 1].weight == 1.0) {
+          return (weight_so_far + 1.0) / total_weight_;
+        }
+        auto left_excluded = 0.0;
+        auto right_excluded = 0.0;
+        if (td[i].weight == 1.0) {
+          left_excluded = 0.5;
+        } else if (td[i + 1].weight == 1.0) {
+          right_excluded = 0.5;
+        }
+        const auto span_weight = (td[i].weight + td[i + 1].weight) / 2.0;
+        const auto interpolated_weight
+          = span_weight - left_excluded - right_excluded;
+        const auto base = weight_so_far + td[i].weight / 2.0 + left_excluded;
+        return (base
+                + interpolated_weight
+                    * relative_position(td[i].mean, td[i + 1].mean, x))
+               / total_weight_;
+      }
+      weight_so_far += td[i].weight;
+    }
+    TENZIR_ASSERT(x == td.back().mean);
+    return 1.0 - td.back().weight / 2.0 / total_weight_;
+  }
+
+  /// Returns the CDF limits immediately before and after `x`.
+  auto cdf_limits(double x) const -> std::pair<double, double> {
+    const auto& td = tdigests_[current_];
+    if (not std::isfinite(x) or td.empty()) {
+      return {NAN, NAN};
+    }
+    if (x < min_) {
+      return {0.0, 0.0};
+    }
+    if (x > max_) {
+      return {1.0, 1.0};
+    }
+    if (td.size() == 1) {
+      const auto mean = td.front().mean;
+      if (min_ == max_) {
+        return {0.0, 1.0};
+      }
+      if (x == mean) {
+        return {mean == min_ ? 0.0 : 0.5, mean == max_ ? 1.0 : 0.5};
+      }
+      const auto value = cdf(x);
+      return {value, value};
+    }
+    auto weight_before = 0.0;
+    auto first_equal = size_t{0};
+    while (first_equal < td.size() and td[first_equal].mean < x) {
+      weight_before += td[first_equal].weight;
+      ++first_equal;
+    }
+    if (first_equal == td.size() or td[first_equal].mean != x) {
+      if (x == min_) {
+        return {0.0, 1.0 / total_weight_};
+      }
+      if (x == max_) {
+        return {1.0 - 1.0 / total_weight_, 1.0};
+      }
+      const auto value = cdf(x);
+      return {value, value};
+    }
+    auto last_equal = first_equal;
+    auto weight_before_last = weight_before;
+    while (last_equal + 1 < td.size() and td[last_equal + 1].mean == x) {
+      weight_before_last += td[last_equal].weight;
+      ++last_equal;
+    }
+    const auto left
+      = x == min_
+          ? 0.0
+          : (weight_before
+             + (td[first_equal].weight == 1.0 ? 0.0
+                                              : td[first_equal].weight / 2.0))
+              / total_weight_;
+    const auto right
+      = x == max_
+          ? 1.0
+          : (weight_before_last
+             + (td[last_equal].weight == 1.0 ? 1.0
+                                             : td[last_equal].weight / 2.0))
+              / total_weight_;
+    return {left, right};
+  }
+
+  auto breakpoints() const -> std::vector<double> {
+    auto result = std::vector<double>{};
+    result.reserve(tdigests_[current_].size() + 2);
+    result.push_back(min_);
+    for (const auto& c : tdigests_[current_]) {
+      result.push_back(c.mean);
+    }
+    result.push_back(max_);
+    std::ranges::sort(result);
+    const auto [first, last] = std::ranges::unique(result);
+    result.erase(first, last);
+    return result;
   }
 
   auto mean() const -> double {
@@ -386,7 +581,9 @@ public:
     }
     if (centroids.size() > delta_ or not std::isfinite(min)
         or not std::isfinite(max) or min > centroids.front().mean
-        or centroids.back().mean > max) {
+        or centroids.back().mean > max
+        or (centroids.front().weight == 1 and min != centroids.front().mean)
+        or (centroids.back().weight == 1 and max != centroids.back().mean)) {
       return false;
     }
     auto total_weight = 0.0;
@@ -423,12 +620,14 @@ private:
 };
 
 tdigest::tdigest(uint32_t delta, uint32_t buffer_size)
-  : impl_(new tdigest_impl(delta)) {
+  : impl_{std::in_place, delta} {
   input_.reserve(buffer_size);
   reset();
 }
 
 tdigest::~tdigest() = default;
+tdigest::tdigest(const tdigest&) = default;
+tdigest& tdigest::operator=(const tdigest&) = default;
 tdigest::tdigest(tdigest&&) = default;
 tdigest& tdigest::operator=(tdigest&&) = default;
 
@@ -437,7 +636,7 @@ auto tdigest::reset() -> void {
   impl_->reset();
 }
 
-auto tdigest::validate() const -> std::expected<void, std::string> {
+auto tdigest::validate() const -> Result<void, std::string> {
   merge_input();
   return impl_->validate();
 }
@@ -453,7 +652,7 @@ auto tdigest::merge(const std::vector<tdigest>& others) -> void {
   other_impls.reserve(others.size());
   for (auto& other : others) {
     other.merge_input();
-    other_impls.push_back(other.impl_.get());
+    other_impls.push_back(&*other.impl_);
   }
   impl_->merge(other_impls);
 }
@@ -461,12 +660,73 @@ auto tdigest::merge(const std::vector<tdigest>& others) -> void {
 auto tdigest::merge(const tdigest& other) -> void {
   merge_input();
   other.merge_input();
-  impl_->merge({other.impl_.get()});
+  impl_->merge({&*other.impl_});
 }
 
 auto tdigest::quantile(double q) const -> double {
   merge_input();
   return impl_->quantile(q);
+}
+
+auto tdigest::cdf(double x) const -> double {
+  merge_input();
+  return impl_->cdf(x);
+}
+
+auto tdigest::ks_distance(const tdigest& other) const -> double {
+  merge_input();
+  other.merge_input();
+  if (impl_->total_weight() == 0 or other.impl_->total_weight() == 0) {
+    return NAN;
+  }
+  auto points = impl_->breakpoints();
+  auto other_points = other.impl_->breakpoints();
+  points.insert(points.end(), other_points.begin(), other_points.end());
+  std::ranges::sort(points);
+  const auto [first, last] = std::ranges::unique(points);
+  points.erase(first, last);
+  auto result = 0.0;
+  const auto check_at = [&](double x) {
+    result = std::max(result, std::abs(impl_->cdf(x) - other.impl_->cdf(x)));
+    const auto limits = impl_->cdf_limits(x);
+    const auto other_limits = other.impl_->cdf_limits(x);
+    result = std::max(result, std::abs(limits.first - other_limits.first));
+    result = std::max(result, std::abs(limits.second - other_limits.second));
+  };
+  for (const auto x : points) {
+    check_at(x);
+  }
+  return std::min(result, 1.0);
+}
+
+auto tdigest::wasserstein_distance(const tdigest& other) const -> double {
+  merge_input();
+  other.merge_input();
+  if (impl_->total_weight() == 0 or other.impl_->total_weight() == 0) {
+    return NAN;
+  }
+  auto points = impl_->breakpoints();
+  auto other_points = other.impl_->breakpoints();
+  points.insert(points.end(), other_points.begin(), other_points.end());
+  std::ranges::sort(points);
+  const auto [first, last] = std::ranges::unique(points);
+  points.erase(first, last);
+  auto result = 0.0;
+  for (auto i = size_t{0}; i + 1 < points.size(); ++i) {
+    const auto a = points[i];
+    const auto b = points[i + 1];
+    if (a == b) {
+      continue;
+    }
+    const auto limits_at_a = impl_->cdf_limits(a);
+    const auto other_limits_at_a = other.impl_->cdf_limits(a);
+    const auto limits_at_b = impl_->cdf_limits(b);
+    const auto other_limits_at_b = other.impl_->cdf_limits(b);
+    const auto d0 = limits_at_a.second - other_limits_at_a.second;
+    const auto d1 = limits_at_b.first - other_limits_at_b.first;
+    result += integrate_abs_line(d0, d1, a, b);
+  }
+  return result;
 }
 
 auto tdigest::mean() const -> double {

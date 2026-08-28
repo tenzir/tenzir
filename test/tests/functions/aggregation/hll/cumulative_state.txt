@@ -1,0 +1,18 @@
+{
+  direct_count: 2,
+  direct_cardinality: 2,
+  merged_count: 2,
+  merged_cardinality: 2,
+}
+{
+  direct_count: 4,
+  direct_cardinality: 4,
+  merged_count: 4,
+  merged_cardinality: 4,
+}
+{
+  direct_count: 5,
+  direct_cardinality: 5,
+  merged_count: 5,
+  merged_cardinality: 5,
+}

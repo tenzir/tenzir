@@ -8,11 +8,14 @@
 
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/arrow_utils.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/test/test.hpp"
 
 #include <arrow/api.h>
+
+#include <algorithm>
 
 namespace tenzir {
 
@@ -22,6 +25,19 @@ auto make_mask(std::vector<bool> bits) -> std::shared_ptr<arrow::BooleanArray> {
   auto builder = arrow::BooleanBuilder{};
   for (auto bit : bits) {
     check(builder.Append(bit));
+  }
+  return finish(builder);
+}
+
+auto make_nullable_mask(std::vector<Option<bool>> bits)
+  -> std::shared_ptr<arrow::BooleanArray> {
+  auto builder = arrow::BooleanBuilder{};
+  for (auto bit : bits) {
+    if (bit.is_none()) {
+      check(builder.AppendNull());
+    } else {
+      check(builder.Append(*bit));
+    }
   }
   return finish(builder);
 }
@@ -83,6 +99,21 @@ TEST("filter table slice - keep middle") {
   CHECK_EQUAL(materialize(result.at(0, 0)), int64_t{20});
   CHECK_EQUAL(materialize(result.at(1, 0)), int64_t{30});
   CHECK_EQUAL(materialize(result.at(2, 0)), int64_t{40});
+}
+
+TEST("filter table slice - nulls count as false") {
+  auto slice = make_test_slice();
+  auto mask = make_nullable_mask({true, None{}, true, None{}, false});
+  auto result = filter(slice, *mask);
+  REQUIRE_EQUAL(result.rows(), uint64_t{2});
+  CHECK_EQUAL(materialize(result.at(0, 0)), int64_t{10});
+  CHECK_EQUAL(materialize(result.at(1, 0)), int64_t{30});
+}
+
+TEST("filter table slice - an all-null mask keeps nothing") {
+  auto slice = make_test_slice();
+  auto mask = make_nullable_mask({None{}, None{}, None{}, None{}, None{}});
+  CHECK_EQUAL(filter(slice, *mask).rows(), uint64_t{0});
 }
 
 TEST("filter table slice - nested record") {
@@ -341,11 +372,149 @@ TEST("partition table slice - multiple fields with lists") {
   CHECK_EQUAL(materialize(rhs.at(1, 1)), (list{}));
 }
 
+TEST("partition table slice - nulls count as false") {
+  auto slice = make_test_slice();
+  auto mask = make_nullable_mask({true, None{}, true, None{}, false});
+  auto [lhs, rhs] = partition(slice, *mask);
+  REQUIRE_EQUAL(lhs.rows(), uint64_t{2});
+  CHECK_EQUAL(materialize(lhs.at(0, 0)), int64_t{10});
+  CHECK_EQUAL(materialize(lhs.at(1, 0)), int64_t{30});
+  REQUIRE_EQUAL(rhs.rows(), uint64_t{3});
+  CHECK_EQUAL(materialize(rhs.at(0, 0)), int64_t{20});
+  CHECK_EQUAL(materialize(rhs.at(1, 0)), int64_t{40});
+  CHECK_EQUAL(materialize(rhs.at(2, 0)), int64_t{50});
+}
+
+TEST("partition table slice - offset mask") {
+  // A sliced mask starts at a non-zero bit offset, which run detection must
+  // honor instead of reading from the start of the bitmap.
+  auto slice = subslice(make_test_slice(), 1, 4);
+  auto mask = make_mask({false, true, false, true, false})->Slice(1, 3);
+  auto [lhs, rhs] = partition(slice, as<arrow::BooleanArray>(*mask));
+  REQUIRE_EQUAL(lhs.rows(), uint64_t{2});
+  CHECK_EQUAL(materialize(lhs.at(0, 0)), int64_t{20});
+  CHECK_EQUAL(materialize(lhs.at(1, 0)), int64_t{40});
+  REQUIRE_EQUAL(rhs.rows(), uint64_t{1});
+  CHECK_EQUAL(materialize(rhs.at(0, 0)), int64_t{30});
+}
+
+TEST("partition table slice - offset mask with nulls") {
+  auto slice = subslice(make_test_slice(), 1, 4);
+  auto mask
+    = make_nullable_mask({false, true, None{}, true, false})->Slice(1, 3);
+  auto [lhs, rhs] = partition(slice, as<arrow::BooleanArray>(*mask));
+  REQUIRE_EQUAL(lhs.rows(), uint64_t{2});
+  CHECK_EQUAL(materialize(lhs.at(0, 0)), int64_t{20});
+  CHECK_EQUAL(materialize(lhs.at(1, 0)), int64_t{40});
+  REQUIRE_EQUAL(rhs.rows(), uint64_t{1});
+  CHECK_EQUAL(materialize(rhs.at(0, 0)), int64_t{30});
+}
+
+TEST("partition table slice - long runs") {
+  // Runs longer than a machine word exercise the word-wise scan.
+  auto b = series_builder{};
+  constexpr auto rows = int64_t{200};
+  for (auto row = int64_t{0}; row < rows; ++row) {
+    b.record().field("x").data(row);
+  }
+  auto slices = b.finish_as_table_slice("runs");
+  REQUIRE_EQUAL(slices.size(), size_t{1});
+  auto bits = std::vector<bool>(rows, false);
+  std::fill(bits.begin() + 70, bits.begin() + 150, true);
+  auto [lhs, rhs] = partition(slices[0], *make_mask(bits));
+  REQUIRE_EQUAL(lhs.rows(), uint64_t{80});
+  CHECK_EQUAL(materialize(lhs.at(0, 0)), int64_t{70});
+  CHECK_EQUAL(materialize(lhs.at(79, 0)), int64_t{149});
+  REQUIRE_EQUAL(rhs.rows(), uint64_t{120});
+  CHECK_EQUAL(materialize(rhs.at(0, 0)), int64_t{0});
+  CHECK_EQUAL(materialize(rhs.at(69, 0)), int64_t{69});
+  CHECK_EQUAL(materialize(rhs.at(70, 0)), int64_t{150});
+  CHECK_EQUAL(materialize(rhs.at(119, 0)), int64_t{199});
+}
+
 TEST("partition table slice - row count invariant") {
   auto slice = make_test_slice();
   auto mask = make_mask({true, false, true, true, false});
   auto [lhs, rhs] = partition(slice, *mask);
   CHECK_EQUAL(lhs.rows() + rhs.rows(), slice.rows());
+}
+
+TEST("partition_runs splits a clustered mask without copying") {
+  auto slice = make_test_slice();
+  auto runs
+    = partition_runs(slice, *make_mask({true, true, false, false, false}), 4);
+  REQUIRE(runs);
+  REQUIRE_EQUAL(runs->size(), size_t{2});
+  CHECK_EQUAL((*runs)[0].selected, true);
+  REQUIRE_EQUAL((*runs)[0].slice.rows(), uint64_t{2});
+  CHECK_EQUAL(materialize((*runs)[0].slice.at(0, 0)), int64_t{10});
+  CHECK_EQUAL((*runs)[1].selected, false);
+  REQUIRE_EQUAL((*runs)[1].slice.rows(), uint64_t{3});
+  CHECK_EQUAL(materialize((*runs)[1].slice.at(0, 0)), int64_t{30});
+}
+
+TEST("partition_runs covers every row exactly once") {
+  auto slice = make_test_slice();
+  auto runs
+    = partition_runs(slice, *make_mask({false, true, true, false, false}), 4);
+  REQUIRE(runs);
+  auto rows = uint64_t{0};
+  auto selected = uint64_t{0};
+  for (const auto& run : *runs) {
+    rows += run.slice.rows();
+    selected += run.selected ? run.slice.rows() : 0;
+  }
+  CHECK_EQUAL(rows, slice.rows());
+  CHECK_EQUAL(selected, uint64_t{2});
+}
+
+TEST("partition_runs gives up on an interleaved mask") {
+  auto slice = make_test_slice();
+  auto mask = make_mask({true, false, true, false, true});
+  CHECK(not partition_runs(slice, *mask, 4));
+  // With enough room for every run, the same mask still splits.
+  auto runs = partition_runs(slice, *mask, 5);
+  REQUIRE(runs);
+  CHECK_EQUAL(runs->size(), size_t{5});
+}
+
+TEST("partition_runs treats nulls as not selected") {
+  auto slice = make_test_slice();
+  auto runs = partition_runs(
+    slice, *make_nullable_mask({true, true, None{}, None{}, false}), 4);
+  REQUIRE(runs);
+  REQUIRE_EQUAL(runs->size(), size_t{2});
+  CHECK_EQUAL((*runs)[0].selected, true);
+  CHECK_EQUAL((*runs)[0].slice.rows(), uint64_t{2});
+  CHECK_EQUAL((*runs)[1].selected, false);
+  CHECK_EQUAL((*runs)[1].slice.rows(), uint64_t{3});
+}
+
+TEST("partition_runs on a uniform mask yields a single run") {
+  auto slice = make_test_slice();
+  auto all_true
+    = partition_runs(slice, *make_mask({true, true, true, true, true}), 4);
+  REQUIRE(all_true);
+  REQUIRE_EQUAL(all_true->size(), size_t{1});
+  CHECK_EQUAL((*all_true)[0].selected, true);
+  CHECK_EQUAL((*all_true)[0].slice.rows(), slice.rows());
+  auto all_false
+    = partition_runs(slice, *make_mask({false, false, false, false, false}), 4);
+  REQUIRE(all_false);
+  REQUIRE_EQUAL(all_false->size(), size_t{1});
+  CHECK_EQUAL((*all_false)[0].selected, false);
+  CHECK_EQUAL((*all_false)[0].slice.rows(), slice.rows());
+}
+
+TEST("partition_runs preserves offsets") {
+  auto slice = make_test_slice();
+  slice.offset(100);
+  auto runs
+    = partition_runs(slice, *make_mask({true, true, false, false, false}), 4);
+  REQUIRE(runs);
+  REQUIRE_EQUAL(runs->size(), size_t{2});
+  CHECK_EQUAL((*runs)[0].slice.offset(), id{100});
+  CHECK_EQUAL((*runs)[1].slice.offset(), id{102});
 }
 
 TEST("take_rows selects rows in the given order") {

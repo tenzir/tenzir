@@ -1,0 +1,8 @@
+// Relative frequency uses the total accepted count as denominator, including
+// underflow and overflow.
+from {}
+m = histogram([-1.0, 1.0, 1.5, 3.0, 99.0], bins=4, width=2.5)
+select f_regular = float(histogram_bucket(m, 2.0).count) / m.count,
+  f_underflow = float(histogram_bucket(m, -5.0).count) / m.count,
+  f_overflow = float(histogram_bucket(m, 50.0).count) / m.count,
+  f_empty_bin = float(histogram_bucket(m, 8.0).count) / m.count

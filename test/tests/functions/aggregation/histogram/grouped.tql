@@ -1,0 +1,5 @@
+// Grouped aggregation keeps independent state per group.
+from {g: "a", x: 1.0}, {g: "b", x: 6.0}, {g: "a", x: 2.0}
+summarize g, model=histogram(x, bins=2, width=5.0)
+sort g
+select g, counts=model.bins.map(b => b.count)

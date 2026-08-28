@@ -1,0 +1,88 @@
+{
+  direct_input_count: 2,
+  direct_values: [
+    {
+      value: "a",
+      count: 1,
+    },
+    {
+      value: "b",
+      count: 1,
+    },
+  ],
+  merged_input_count: 2,
+  merged_values: [
+    {
+      value: "a",
+      count: 1,
+    },
+    {
+      value: "b",
+      count: 1,
+    },
+  ],
+}
+{
+  direct_input_count: 4,
+  direct_values: [
+    {
+      value: "a",
+      count: 2,
+    },
+    {
+      value: "b",
+      count: 1,
+    },
+    {
+      value: "c",
+      count: 1,
+    },
+  ],
+  merged_input_count: 4,
+  merged_values: [
+    {
+      value: "a",
+      count: 2,
+    },
+    {
+      value: "b",
+      count: 1,
+    },
+    {
+      value: "c",
+      count: 1,
+    },
+  ],
+}
+{
+  direct_input_count: 5,
+  direct_values: [
+    {
+      value: "a",
+      count: 3,
+    },
+    {
+      value: "b",
+      count: 1,
+    },
+    {
+      value: "c",
+      count: 1,
+    },
+  ],
+  merged_input_count: 5,
+  merged_values: [
+    {
+      value: "a",
+      count: 3,
+    },
+    {
+      value: "b",
+      count: 1,
+    },
+    {
+      value: "c",
+      count: 1,
+    },
+  ],
+}

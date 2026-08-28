@@ -284,16 +284,8 @@ private:
 
 /// Runtime operator for `fork`: forwards every slice unchanged to the main
 /// output (port 0) and a copy to the side-effect subpipeline (port 1).
-class ForkOp final : public Operator<table_slice, table_slice> {
+class ForkOp final : public Operator<table_slice, table_slice, true> {
 public:
-  auto needs_output_ports() const -> bool override {
-    return true;
-  }
-
-  auto process(table_slice, Push<table_slice>&, OpCtx&) -> Task<void> override {
-    TENZIR_UNREACHABLE();
-  }
-
   auto process(table_slice input, PushPorts<table_slice>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
@@ -386,7 +378,7 @@ public:
   }
 
   auto spawn(element_type_tag) const -> AnyOperator override {
-    return Box<tenzir::Operator<table_slice, table_slice>>{
+    return Box<tenzir::Operator<table_slice, table_slice, true>>{
       ForkOp{}.with_name("fork")};
   }
 

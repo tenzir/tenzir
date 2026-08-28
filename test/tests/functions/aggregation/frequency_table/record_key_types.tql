@@ -1,0 +1,4 @@
+// Record field names are part of an exact key type.
+from {m: frequency_table([{a: 1}])},
+  {m: frequency_table([{b: 1}])}
+summarize merged = model_merge(m)

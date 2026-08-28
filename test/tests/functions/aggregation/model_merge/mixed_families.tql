@@ -1,0 +1,5 @@
+// Aggregation dispatch rejects a family change after the first model instead of
+// returning a partial merge.
+from {m: histogram([1.0], bins=2, width=1.0)},
+  {m: tdigest([1.0], compression=20)}
+summarize merged = model_merge(m)

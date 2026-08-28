@@ -1,0 +1,6 @@
+// Model operations return null when the record shape does not match.
+from {}
+select histogram = histogram_bucket({foo: 1}, 1.0),
+  frequency_table = frequency_table_count({foo: 1}, "x"),
+  hll = hll_cardinality({foo: 1}),
+  tdigest = tdigest_quantile({foo: 1}, 0.5)

@@ -1,0 +1,24 @@
+{
+  model: {
+    model: "frequency_table",
+    version: 1,
+    input_count: 3,
+    count: 3,
+    null_count: 0,
+    value_type: "double",
+    values: [
+      {
+        value: 1.0,
+        count: 1,
+      },
+      {
+        value: 2.0,
+        count: 1,
+      },
+      {
+        value: 3.0,
+        count: 1,
+      },
+    ],
+  },
+}

@@ -1,0 +1,5 @@
+{
+  ten_ok: true,
+  hundred_ok: true,
+  low_precision_is_finite: true,
+}

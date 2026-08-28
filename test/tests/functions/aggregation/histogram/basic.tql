@@ -1,0 +1,4 @@
+// Fixed-width histogram over mixed int/uint/float input with underflow,
+// overflow, nulls, and an empty bin.
+from {x: -2}, {x: 1}, {x: uint(3)}, {x: 7.0}, {x: 100}, {x: null}
+summarize model=histogram(x, bins=4, width=2.5)

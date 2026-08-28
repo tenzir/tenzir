@@ -1,0 +1,26 @@
+warning: `model_merge` failed: cannot merge `hll` models: incompatible precision: expected 4, got 5
+ --> tests/functions/aggregation/hll/incompatible_merge.tql:8:46
+  |
+8 | select precision=hll_cardinality(model_merge([a, b])),
+  |                                              ~
+  |
+
+warning: `model_merge` failed: incompatible models: expected `hll` version 1, got `hll` version 2
+ --> tests/functions/aggregation/hll/incompatible_merge.tql:9:39
+  |
+9 |   version=hll_cardinality(model_merge([a, {...a, version: uint(2)}])),
+  |                                       ~
+  |
+
+warning: `model_merge` failed: cannot merge `hll` models: `input_count` overflows when merged
+  --> tests/functions/aggregation/hll/incompatible_merge.tql:10:40
+   |
+10 |   overflow=hll_cardinality(model_merge([max_count, a])),
+   |                                        ~
+   |
+{
+  precision: null,
+  version: null,
+  overflow: null,
+  compatible: 2,
+}

@@ -1,0 +1,8 @@
+// Numeric construction records the shared envelope, configuration, extrema,
+// and one unit-weight centroid per value for this small input.
+from {x: 0.0}, {x: 10}, {x: uint(20)}, {x: 30.0}, {x: null.float()}
+summarize m=tdigest(x, compression=20)
+select model=m.model, version=m.version, compression=m.compression,
+  input_count=m.input_count, count=m.count, null_count=m.null_count,
+  non_finite_count=m.non_finite_count, min=m.min, max=m.max,
+  centroids=m.centroids.length()

@@ -1,0 +1,8 @@
+// Cumulative emissions retain constructor and model_merge aggregation state.
+from {x: 0.0}, {x: 10.0}, {x: 20.0}, {x: 30.0}, {x: 40.0}
+batch 1
+single = tdigest([x], compression=20)
+summarize digest=tdigest(x, compression=20), merged=model_merge(single),
+  options={emit: 2, mode: "cumulative"}
+select digest_count=digest.count, digest_min=digest.min, digest_max=digest.max,
+  merged_count=merged.count

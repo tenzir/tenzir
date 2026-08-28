@@ -1,0 +1,6 @@
+error: `limit_partitions` must be between 1 and 65535
+ --> tests/operators/parallel/limit_partitions_zero.tql:6:27
+  |
+6 | parallel limit_partitions=0 { pass }
+  |                           ^
+  |

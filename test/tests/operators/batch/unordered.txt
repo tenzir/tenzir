@@ -1,5 +1,5 @@
 {
-  events: 11620,
+  events: 8192,
   schema_id: "4f4891a68719de72",
   schema: "suricata.alert",
 }
@@ -7,4 +7,9 @@
   events: 210,
   schema_id: "56dc33037148c381",
   schema: "suricata.flow",
+}
+{
+  events: 3428,
+  schema_id: "4f4891a68719de72",
+  schema: "suricata.alert",
 }

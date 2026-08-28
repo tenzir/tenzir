@@ -1,0 +1,8 @@
+// The first non-null model selects a registered family provider. Unknown model
+// identities warn and invalidate the list row.
+from {}
+future = {
+  model: "future", version: uint(1), input_count: uint(0),
+  count: uint(0), null_count: uint(0),
+}
+select merged = model_merge([future])

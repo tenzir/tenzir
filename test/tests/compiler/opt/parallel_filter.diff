@@ -25,7 +25,6 @@
      },
      parallel_ir {
        keyword: [1]:82..90 from 0,
-       fuse: true,
        pipe: {
          lets: [
            

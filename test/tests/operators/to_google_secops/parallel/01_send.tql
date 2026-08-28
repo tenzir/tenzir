@@ -1,0 +1,14 @@
+// parallelism: 4
+// Every instance batches, authenticates, and sends on its own, so the events
+// are spread over the instances and arrive in an arbitrary number of requests.
+from {n: 1}, {n: 2}, {n: 3}, {n: 4}, {n: 5}, {n: 6}, {n: 7}, {n: 8}
+to_google_secops project="test-project",
+                 region="us",
+                 instance="test-instance",
+                 log_text=f"event-{n}",
+                 log_type="WINEVTLOG",
+                 log_entry_time=2026-01-01T00:00:00,
+                 collection_time=2026-01-01T00:00:01,
+                 service_credentials=env("GOOGLE_SECOPS_SERVICE_CREDENTIALS"),
+                 _ingestion_url=env("GOOGLE_SECOPS_INGESTION_URL"),
+                 batch_timeout=100ms

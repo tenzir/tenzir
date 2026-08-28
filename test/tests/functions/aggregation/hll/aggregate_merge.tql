@@ -1,0 +1,7 @@
+// Constructor list calls produce partial models that model_merge can combine
+// through its aggregation path.
+from {xs: [1, 2, 3, int(null)]}, {xs: [3, 4, 5, int(null)]}
+partial = hll(xs, precision=10)
+summarize merged=model_merge(partial)
+select count=merged.count, null_count=merged.null_count,
+  cardinality=hll_cardinality(merged)

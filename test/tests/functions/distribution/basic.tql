@@ -1,0 +1,22 @@
+from {
+  jensen_shannon: jensen_shannon([1, 0], [0, 1]),
+  jensen_shannon_large: jensen_shannon([1e308, 1e308], [1e308, 1e308]),
+  ecdf: ecdf([1, 2, 2, 4], 2),
+  ecdf_duration: ecdf([1s, 2s, 2s, 4s], 2s),
+  ecdf_time: ecdf([
+    "2026-01-01T00:00:00Z".time(),
+    "2026-01-03T00:00:00Z".time(),
+  ], "2026-01-02T00:00:00Z".time()),
+  kolmogorov_smirnov: kolmogorov_smirnov([0, 1, 2], [1, 2, 3]),
+  kolmogorov_smirnov_duration: kolmogorov_smirnov([0s, 1s, 2s], [1s, 2s, 3s]),
+  wasserstein: wasserstein([0, 2], [0, 1, 2]),
+  wasserstein_large: wasserstein([-1e308, 1e308], [1e308, 1e308]),
+  wasserstein_duration: wasserstein([0s, 1s, 2s], [1s, 2s, 3s]),
+  wasserstein_time: wasserstein([
+    "2026-01-01T00:00:00Z".time(),
+    "2026-01-02T00:00:00Z".time(),
+  ], [
+    "2026-01-02T00:00:00Z".time(),
+    "2026-01-03T00:00:00Z".time(),
+  ])
+}

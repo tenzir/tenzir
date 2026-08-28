@@ -1,0 +1,5 @@
+// Generic model comparisons reject mixed model families.
+from {}
+hist = histogram([1.0], bins=2, width=1.0)
+digest = tdigest([1.0])
+select mixed = model_distance(hist, digest, method="wasserstein")

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
 
@@ -17,6 +18,7 @@
 #include <arrow/type_traits.h>
 
 #include <source_location>
+#include <vector>
 
 namespace tenzir {
 
@@ -167,12 +169,30 @@ auto append_array(type_to_arrow_builder_t<Ty>& builder, const Ty& ty,
 }
 
 /// Partitions an array into two builders based on a boolean mask. Rows where
-/// the mask value bit is true go to `true_builder`, others to `false_builder`.
-/// The null bitmap of the mask is ignored. Walks the type tree column-by-column
-/// for cache efficiency.
+/// the mask is true go to `true_builder`, others to `false_builder`. A null
+/// counts as false and thus goes to `false_builder`. Walks the type tree
+/// column-by-column for cache efficiency.
 auto partition_array(arrow::ArrayBuilder& true_builder,
                      arrow::ArrayBuilder& false_builder, const type& ty,
                      const arrow::Array& array, const arrow::BooleanArray& mask)
   -> void;
+
+/// A contiguous run of rows `[begin, end)` in a boolean mask that all share the
+/// same value, where a null counts as `false`.
+struct MaskRun {
+  int64_t begin;
+  int64_t end;
+  bool value;
+};
+
+/// Derives the maximal contiguous same-value runs of `mask`, giving up once
+/// their number exceeds `limit`.
+///
+/// An interleaved mask yields one run per row, so a caller that only wants to
+/// know whether the mask is clustered must not pay for materializing them: the
+/// limit makes this bail out after a short prefix instead of scanning and
+/// allocating over every row.
+[[nodiscard]] auto mask_runs(const arrow::BooleanArray& mask, size_t limit)
+  -> Option<std::vector<MaskRun>>;
 
 } // namespace tenzir

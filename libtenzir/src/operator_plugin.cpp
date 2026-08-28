@@ -388,18 +388,20 @@ public:
                              *desc_, main_location(), dh};
       TRY(auto spawn, (*desc_->spawner)(input, ctx));
       if (spawn) {
-        return match(*spawn,
-                     []<class Input, class Output>(
-                       Spawn<Input, Output>&) -> element_type_tag {
-                       return tag_v<Output>;
-                     });
+        return match(
+          *spawn,
+          []<class Input, class Output, bool MultipleOutputPorts>(
+            Spawn<Input, Output, MultipleOutputPorts>&) -> element_type_tag {
+            return tag_v<Output>;
+          });
       }
     }
     for (auto& spawn : desc_->spawns) {
       auto output
         = match(spawn,
-                [&]<class Input, class Output>(
-                  const Spawn<Input, Output>&) -> Option<element_type_tag> {
+                [&]<class Input, class Output, bool MultipleOutputPorts>(
+                  const Spawn<Input, Output, MultipleOutputPorts>&)
+                  -> Option<element_type_tag> {
                   if (input.is<Input>()) {
                     return tag_v<Output>;
                   }
@@ -500,8 +502,9 @@ public:
     for (auto& spawn : desc_->spawns) {
       auto result
         = match(spawn,
-                [&]<class Input, class Output>(
-                  const Spawn<Input, Output>& spawn) -> Option<AnyOperator> {
+                [&]<class Input, class Output, bool MultipleOutputPorts>(
+                  const Spawn<Input, Output, MultipleOutputPorts>& spawn)
+                  -> Option<AnyOperator> {
                   if (input.is<Input>()) {
                     return spawn(std::move(args));
                   }

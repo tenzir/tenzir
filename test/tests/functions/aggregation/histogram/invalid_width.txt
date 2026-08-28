@@ -1,0 +1,6 @@
+error: `width` must be a finite number greater than zero
+ --> tests/functions/aggregation/histogram/invalid_width.tql:7:38
+  |
+7 | model = histogram([1], bins=2, width=-1.0)
+  |                                      ^^^^
+  |

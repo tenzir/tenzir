@@ -1,0 +1,10 @@
+// `fuse` mirrors the `// parallelism: …,fuse=…` option and must not change
+// results, only how operator-to-operator channels are wired.
+from {x: 1}, {x: 2}
+parallel 2, fuse="all" {
+  y = x
+}
+parallel 1, fuse="none" {
+  z = x
+}
+sort x

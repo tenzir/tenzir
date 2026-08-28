@@ -560,18 +560,16 @@ public:
       sys_{sys},
       input_is_void_{
         match(op_,
-              []<class In, class Out>(const Box<Operator<In, Out>>&) {
+              []<class In, class Out, bool MultipleOutputPorts>(
+                const Box<Operator<In, Out, MultipleOutputPorts>>&) {
                 return std::same_as<In, void>;
               })},
       output_is_void_{
         match(op_,
-              []<class In, class Out>(const Box<Operator<In, Out>>&) {
+              []<class In, class Out, bool MultipleOutputPorts>(
+                const Box<Operator<In, Out, MultipleOutputPorts>>&) {
                 return std::same_as<Out, void>;
               })},
-      needs_output_ports_{match(op_,
-                                [](const auto& op) {
-                                  return op->needs_output_ports();
-                                })},
       open_pulls_{count_data_pulls(pull_upstream_)} {
   }
 
@@ -1115,7 +1113,9 @@ private:
   auto call_process_task(Any result) -> Task<void> {
     auto& ctx_ref = static_cast<OpCtx&>(*this);
     co_await co_match(
-      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+      op_,
+      [&]<class In, class Out, bool MultipleOutputPorts>(
+        Box<Operator<In, Out, MultipleOutputPorts>>& op) -> Task<void> {
         if constexpr (std::same_as<Out, void>) {
           co_await op->process_task(std::move(result), ctx_ref);
         } else {
@@ -1129,8 +1129,9 @@ private:
     auto& ctx_ref = static_cast<OpCtx&>(*this);
     co_return co_await co_match(
       op_,
-      [&]<class In, class Out>(
-        Box<Operator<In, Out>>& op) -> Task<FinalizeBehavior> {
+      [&]<class In, class Out, bool MultipleOutputPorts>(
+        Box<Operator<In, Out, MultipleOutputPorts>>& op)
+        -> Task<FinalizeBehavior> {
         if constexpr (std::same_as<Out, void>) {
           co_return co_await op->finalize(ctx_ref);
         } else {
@@ -1143,7 +1144,9 @@ private:
   auto call_prepare_snapshot() -> Task<void> {
     auto& ctx_ref = static_cast<OpCtx&>(*this);
     co_await co_match(
-      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+      op_,
+      [&]<class In, class Out, bool MultipleOutputPorts>(
+        Box<Operator<In, Out, MultipleOutputPorts>>& op) -> Task<void> {
         if constexpr (std::same_as<Out, void>) {
           co_await op->prepare_snapshot(ctx_ref);
         } else {
@@ -1156,7 +1159,9 @@ private:
   auto call_process_sub(SubKeyView key, table_slice slice) -> Task<void> {
     auto& ctx_ref = static_cast<OpCtx&>(*this);
     co_await co_match(
-      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+      op_,
+      [&]<class In, class Out, bool MultipleOutputPorts>(
+        Box<Operator<In, Out, MultipleOutputPorts>>& op) -> Task<void> {
         if constexpr (std::same_as<Out, void>) {
           co_await op->process_sub(key, std::move(slice), ctx_ref);
         } else {
@@ -1169,7 +1174,9 @@ private:
   auto call_process_sub(SubKeyView key, chunk_ptr chunk) -> Task<void> {
     auto& ctx_ref = static_cast<OpCtx&>(*this);
     co_await co_match(
-      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+      op_,
+      [&]<class In, class Out, bool MultipleOutputPorts>(
+        Box<Operator<In, Out, MultipleOutputPorts>>& op) -> Task<void> {
         if constexpr (std::same_as<Out, void>) {
           co_await op->process_sub(key, std::move(chunk), ctx_ref);
         } else {
@@ -1182,7 +1189,9 @@ private:
   auto call_finish_sub(SubKeyView key) -> Task<void> {
     auto& ctx_ref = static_cast<OpCtx&>(*this);
     co_await co_match(
-      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+      op_,
+      [&]<class In, class Out, bool MultipleOutputPorts>(
+        Box<Operator<In, Out, MultipleOutputPorts>>& op) -> Task<void> {
         if constexpr (std::same_as<Out, void>) {
           co_await op->finish_sub(key, ctx_ref);
         } else {
@@ -1195,7 +1204,9 @@ private:
   auto call_finish_sub(SubKeyView key, failure error) -> Task<void> {
     auto& ctx_ref = static_cast<OpCtx&>(*this);
     co_await co_match(
-      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+      op_,
+      [&]<class In, class Out, bool MultipleOutputPorts>(
+        Box<Operator<In, Out, MultipleOutputPorts>>& op) -> Task<void> {
         if constexpr (std::same_as<Out, void>) {
           co_await op->finish_sub(key, error, ctx_ref);
         } else {
@@ -1209,11 +1220,13 @@ private:
   auto call_process(DataInput input) -> Task<void> {
     auto& ctx_ref = static_cast<OpCtx&>(*this);
     co_await co_match(
-      op_, [&]<class In, class Out>(Box<Operator<In, Out>>& op) -> Task<void> {
+      op_,
+      [&]<class In, class Out, bool MultipleOutputPorts>(
+        Box<Operator<In, Out, MultipleOutputPorts>>& op) -> Task<void> {
         if constexpr (std::same_as<In, DataInput>) {
           if constexpr (std::same_as<Out, void>) {
             co_await op->process(input, ctx_ref);
-          } else if (needs_output_ports_) {
+          } else if constexpr (MultipleOutputPorts) {
             auto pushes = std::vector<OpPushWrapper<Out>>{};
             auto refs = std::vector<Push<Out>*>{};
             pushes.reserve(push_downstream_.size());
@@ -1676,7 +1689,6 @@ private:
   caf::actor_system& sys_;
   bool input_is_void_;
   bool output_is_void_;
-  bool needs_output_ports_;
   std::shared_ptr<const registry> reg_ = global_registry();
   folly::Executor::KeepAlive<folly::IOExecutor> io_executor_;
 

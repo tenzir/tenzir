@@ -1,0 +1,39 @@
+{
+  model: {
+    model: "histogram",
+    version: 1,
+    input_count: 6,
+    count: 5,
+    null_count: 1,
+    kind: "fixed_width",
+    non_finite_count: 0,
+    min: -2.0,
+    max: 100.0,
+    start: 0.0,
+    width: 2.5,
+    underflow: 1,
+    overflow: 1,
+    bins: [
+      {
+        lower: 0.0,
+        upper: 2.5,
+        count: 1,
+      },
+      {
+        lower: 2.5,
+        upper: 5.0,
+        count: 1,
+      },
+      {
+        lower: 5.0,
+        upper: 7.5,
+        count: 1,
+      },
+      {
+        lower: 7.5,
+        upper: 10.0,
+        count: 0,
+      },
+    ],
+  },
+}

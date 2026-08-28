@@ -1,0 +1,8 @@
+// Every non-null Tenzir value is supported. Type tags make equal-looking
+// numeric values distinct, and nested list/record structure participates.
+from {x: 42}, {x: uint(42)}, {x: 42.0}, {x: "42"}, {x: true},
+  {x: 192.0.2.1}, {x: 192.0.2.0/24}, {x: 1s},
+  {x: [1, 2, 3]}, {x: {a: 1, b: [true, false]}}, {x: null}
+summarize model=hll(x, precision=12)
+select count=model.count, null_count=model.null_count,
+  cardinality=hll_cardinality(model), all_distinct=hll_cardinality(model) == 10

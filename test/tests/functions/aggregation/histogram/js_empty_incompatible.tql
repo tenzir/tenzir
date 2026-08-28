@@ -1,0 +1,5 @@
+// Empty histograms still validate represented-edge compatibility.
+from {}
+p = histogram([], bins=2, width=1.0)
+q = histogram([], bins=2, width=2.0)
+result = model_divergence(p, q, method="jensen_shannon")

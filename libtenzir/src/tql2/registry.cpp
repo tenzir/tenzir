@@ -93,7 +93,8 @@ auto operator_def::make(operator_factory_invocation inv, session ctx) const
     },
     [&](const native_operator& op) -> failure_or<operator_ptr> {
       if (not op.factory_plugin) {
-        diagnostic::error("this operator can only be used with the new IR")
+        diagnostic::error("operator `{}` can only be used with the new IR",
+                          make_operator_name(inv.self))
           .primary(inv.self)
           .emit(ctx);
         return failure::promise();

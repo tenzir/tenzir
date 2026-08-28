@@ -10,6 +10,7 @@
 
 #include "tenzir/async/fwd.hpp"
 #include "tenzir/base_ctx.hpp"
+#include "tenzir/detail/inspection_common.hpp"
 #include "tenzir/element_type.hpp"
 #include "tenzir/operator_id.hpp"
 #include "tenzir/option.hpp"
@@ -273,7 +274,7 @@ namespace parallelism {
 
 /// Controls whether operator-to-operator event channels are fused
 /// (run-to-completion per item).
-enum class Fusing {
+enum class Fusing : uint8_t {
   /// Fuse every operator-to-operator channel. Every operator fully processes
   /// an item before the upstream produces the next one.
   all,
@@ -286,6 +287,13 @@ enum class Fusing {
   /// Never fuse any channel.
   none,
 };
+
+auto inspect(auto& f, Fusing& x) -> bool {
+  return detail::inspect_enum(f, x);
+}
+
+/// Parse a fusing value: `all`, `parallel`, or `none`.
+auto parse_fusing(std::string_view value) -> Option<Fusing>;
 
 /// The default value of `Parallelism::limit_partitions`.
 inline constexpr auto default_limit_partitions = uint16_t{4};
@@ -302,17 +310,20 @@ struct Parallelism {
   uint16_t limit_partitions;
 
   /// Controls whether operator-to-operator event channels are fused.
-  parallelism::Fusing fused;
+  parallelism::Fusing fuse;
 };
 
 namespace parallelism {
 
-/// The parallelism that applies when nothing requests parallel execution: a
-/// single lane, a single partition, and no channel fusing.
+/// The parallelism that applies when nothing requests parallel execution, and
+/// that `// parallelism: disabled` selects: a single lane and a single
+/// partition, but with the same channel fusing that parallel pipelines use, so
+/// that a chain of parallelizable operators runs run-to-completion instead of
+/// hopping between actors.
 inline constexpr auto disabled = Parallelism{
   .degree = 1,
-  .limit_partitions = 4,
-  .fused = Fusing::none,
+  .limit_partitions = default_limit_partitions,
+  .fuse = Fusing::parallel,
 };
 
 /// The configuration key that sets the node-wide parallelism.
@@ -338,7 +349,7 @@ auto describe(Origin origin) -> std::string_view;
 /// `config`; if none is present, the result is `disabled`.
 ///
 /// A value is a degree, optionally followed by comma-separated options:
-/// `<degree>[,limit_partitions=<n>][,fused=<all|parallel|none>]`. The
+/// `<degree>[,limit_partitions=<n>][,fuse=<all|parallel|none>]`. The
 /// degree is `disabled`, `max`, or a positive integer. Whitespace around
 /// separators is ignored.
 /// Returns the origin of the offending value if it fails to parse.

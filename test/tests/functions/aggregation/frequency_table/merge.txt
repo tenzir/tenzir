@@ -1,0 +1,24 @@
+{
+  model: "frequency_table",
+  a_count: 2,
+  b_count: 2,
+  c_count: 1,
+  input_count: 5,
+  count: 5,
+  values: [
+    {
+      value: "a",
+      count: 2,
+    },
+    {
+      value: "b",
+      count: 2,
+    },
+    {
+      value: "c",
+      count: 1,
+    },
+  ],
+  empty_list_count: 1,
+  blob_count: 2,
+}

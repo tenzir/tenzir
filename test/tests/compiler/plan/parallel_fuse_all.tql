@@ -1,0 +1,6 @@
+// With `fuse="all"`, every channel inside the block is fused.
+from {x: 1}, {x: 2}, {x: 3}
+parallel 1, fuse="all" {
+  where x > 0
+  head 2
+}

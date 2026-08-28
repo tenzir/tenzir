@@ -130,6 +130,21 @@ TEST("comparison with data") {
   CHECK(is_equal(x, y));
 }
 
+TEST("type checking records") {
+  const auto schema = type{record_type{{{"a", int64_type{}}}}};
+  const auto check = [&](const data& value, bool expected) {
+    CHECK_EQUAL(type_check(schema, value), expected);
+    CHECK_EQUAL(type_check(schema, make_view(value)), expected);
+  };
+  check(data{record{{"a", int64_t{1}}}}, true);
+  check(data{record{{"b", int64_t{1}}}}, false);
+  check(data{record{{"a", "wrong type"}}}, false);
+  const auto records_schema = type{list_type{schema}};
+  const auto records = data{list{record{{"a", int64_t{1}}}}};
+  CHECK(type_check(records_schema, records));
+  CHECK(type_check(records_schema, make_view(records)));
+}
+
 TEST("increment decrement container_view_iterator") {
   auto xs = list{int64_t{42}, true, "foo", 4.2};
   auto v = make_view(xs);
