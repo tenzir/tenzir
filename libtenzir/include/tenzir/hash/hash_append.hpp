@@ -273,15 +273,56 @@ void hash_append(HashAlgorithm& h,
   hash_append(h, m.size());
 }
 
+// -- unordered containers ----------------------------------------------------
+
+/// Mixes the elements of an unordered container, whatever order it holds them
+/// in.
+///
+/// Appending them one by one would make the digest depend on iteration order,
+/// which for an unordered container is unspecified: two containers that compare
+/// equal can iterate differently, and would then hash differently — breaking
+/// the one thing a hash has to promise. So each element is digested on its own
+/// and the digests are added, because addition does not care about order —
+/// word by word rather than through `size_t`, because a digest is not always
+/// a number: xxh3's 128-bit result is a struct, and wider ones are arrays.
+///
+/// This is a fair hash, not an adversary-proof one: word-wise sums can be
+/// steered (Wagner's k-sum), and the per-element states are default-built, so
+/// a keyed algorithm would have no key here. Both draw the same line, which
+/// the assertion spells out: a digest that must resist an adversary needs its
+/// elements in a canonical order instead, and nothing needs that yet.
+template <class HashAlgorithm, class Container>
+void hash_append_unordered(HashAlgorithm& h, Container const& xs) noexcept {
+  static_assert(std::is_default_constructible_v<HashAlgorithm>,
+                "digesting an unordered container sums one digest per element, "
+                "which needs a fresh state each and would not carry a keyed or "
+                "cryptographic algorithm's guarantees anyway; hash a canonical "
+                "order of the elements instead");
+  using result_type = std::remove_cvref_t<typename HashAlgorithm::result_type>;
+  static_assert(std::is_trivially_copyable_v<result_type>);
+  constexpr auto words
+    = (sizeof(result_type) + sizeof(std::uint64_t) - 1) / sizeof(std::uint64_t);
+  auto combined = std::array<std::uint64_t, words>{};
+  for (auto const& x : xs) {
+    auto element = HashAlgorithm{};
+    hash_append(element, x);
+    auto result = std::move(element).finish();
+    auto digest = std::array<std::uint64_t, words>{};
+    std::memcpy(digest.data(), &result, sizeof(result));
+    for (auto i = size_t{0}; i < words; ++i) {
+      combined[i] += digest[i];
+    }
+  }
+  hash_append(h, combined);
+  hash_append(h, xs.size());
+}
+
 // -- unordered_set -----------------------------------------------------------
 
 template <class HashAlgorithm, class Key, class Hash, class Eq, class Alloc>
 void hash_append(HashAlgorithm& h,
                  const std::unordered_set<Key, Hash, Eq, Alloc>& s) noexcept {
-  for (const auto& x : s) {
-    hash_append(h, x);
-  }
-  hash_append(h, s.size());
+  hash_append_unordered(h, s);
 }
 
 // -- unordered_map -----------------------------------------------------------
@@ -290,10 +331,7 @@ template <class HashAlgorithm, class K, class T, class Hash, class Eq,
           class Alloc>
 void hash_append(HashAlgorithm& h,
                  const std::unordered_map<K, T, Hash, Eq, Alloc>& m) noexcept {
-  for (const auto& x : m) {
-    hash_append(h, x);
-  }
-  hash_append(h, m.size());
+  hash_append_unordered(h, m);
 }
 
 // -- tuple -------------------------------------------------------------------

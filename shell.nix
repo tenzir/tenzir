@@ -30,6 +30,8 @@ let
       pkgs.openssl
       pkgs.arrow-adbc-go
       pkgs.libsodium
+      pkgs.catch2_3
+      pkgs.opentelemetry-cpp
     ]
   );
 

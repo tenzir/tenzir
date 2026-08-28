@@ -611,6 +611,33 @@ template <class T>
 template <class T>
 Option(T) -> Option<T>;
 
+// -- hashing ------------------------------------------------------------------
+
+/// Feeds an option to a hash algorithm.
+///
+/// Emptiness is hashed rather than skipped. Otherwise a struct with two
+/// optional fields would hash the same however one value was distributed
+/// between them, and an empty option would be indistinguishable from a field
+/// that is not there at all.
+///
+/// Deliberately without an include of the hashing headers, and so without the
+/// `using ::tenzir::hash_append;` that would need one: the calls below are
+/// dependent, and the algorithm's own namespace brings the other overloads
+/// along at instantiation.
+template <class HashAlgorithm, class T>
+auto hash_append(HashAlgorithm& h, Option<T> const& x) -> void {
+  hash_append(h, x.is_some());
+  if (x.is_some()) {
+    hash_append(h, *x);
+  }
+}
+
+/// Feeds the empty option, so `None` hashes like an empty `Option`.
+template <class HashAlgorithm>
+auto hash_append(HashAlgorithm& h, None) -> void {
+  hash_append(h, false);
+}
+
 // -- variant_traits -----------------------------------------------------------
 
 template <class T>

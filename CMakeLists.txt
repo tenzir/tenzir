@@ -1083,6 +1083,19 @@ add_subdirectory(libtenzir)
 add_subdirectory(libtenzir_test)
 add_subdirectory(tenzir)
 
+# A sibling project, built in tree like the plugins above it. Its presence is
+# the switch; the option is for when it is there but in the way.
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../deployment/CMakeLists.txt")
+  set(TENZIR_DEPLOYMENT_DEFAULT ON)
+else ()
+  set(TENZIR_DEPLOYMENT_DEFAULT OFF)
+endif ()
+option(TENZIR_ENABLE_DEPLOYMENT "Build the sibling deployment project"
+       ${TENZIR_DEPLOYMENT_DEFAULT})
+if (TENZIR_ENABLE_DEPLOYMENT)
+  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../deployment" deployment)
+endif ()
+
 if (BUILD_TESTING)
   add_custom_target(
     unit-tests
