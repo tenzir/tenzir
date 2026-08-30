@@ -248,6 +248,7 @@
         "CURL_INCLUDE_DIR": "/opt/homebrew/opt/curl/include",
         "CURL_LIBRARY": "/opt/homebrew/opt/curl/lib/libcurl.dylib",
         "TENZIR_ENABLE_BUNDLED_SIMDJSON": "ON",
+        "TENZIR_ENABLE_DEPLOYMENT": "OFF",
         "TENZIR_PLUGINS_BLACKLIST": "from_velociraptor"
       },
       "environment": {
@@ -279,6 +280,7 @@
       "cacheVariables": {
         "CMAKE_OSX_DEPLOYMENT_TARGET": "26.0",
         "CMAKE_PREFIX_PATH": "/opt/homebrew/opt/curl;/opt/homebrew/opt/google-cloud-cpp",
+        "TENZIR_ENABLE_DEPLOYMENT": "OFF",
         "CURL_ROOT": "/opt/homebrew/opt/curl"
       },
       "environment": {
