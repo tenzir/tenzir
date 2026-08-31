@@ -27,6 +27,7 @@
 #include <ranges>
 #include <shared_mutex>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -121,10 +122,20 @@ auto global_registry_ref() -> std::shared_ptr<const registry>& {
       return name;
     };
     // Factory plugins may still carry a scoped name. Such an operator must not
-    // create a builtin module, but it must keep working under its old spelling,
-    // so we park it in the deprecated package under its flattened name. Only
-    // the deprecation relay in `resolve.cpp` looks there, and only if no module
-    // of that name resolved before.
+    // create a builtin module, but it must keep working under its old spelling.
+    // If a compiler plugin registers the flattened name, the two halves belong
+    // to the same renamed operator, so the factory joins it in the standard
+    // package; both spellings then work on both execution paths. Otherwise the
+    // operator exists only under its old spelling, and we park it in the
+    // deprecated package under its flattened name. Only the deprecation relay
+    // in `resolve.cpp` looks there, and only if no module of that name resolved
+    // before.
+    auto flat_ir_names = std::unordered_set<std::string>{};
+    for (const auto* op : plugins::get<operator_compiler_plugin>()) {
+      if (auto name = flat(op->operator_name())) {
+        flat_ir_names.insert(std::move(*name));
+      }
+    }
     for (const auto* op : plugins::get<operator_factory_plugin>()) {
       auto name = op->name();
       auto pkg = entity_pkg_std;
@@ -135,7 +146,9 @@ auto global_registry_ref() -> std::shared_ptr<const registry>& {
              pos = name.find("::")) {
           name.replace(pos, 2, "_");
         }
-        pkg = entity_pkg_deprecated;
+        if (not flat_ir_names.contains(name)) {
+          pkg = entity_pkg_deprecated;
+        }
       }
       init->add(std::string{pkg}, name, native_operator{nullptr, op});
     }
