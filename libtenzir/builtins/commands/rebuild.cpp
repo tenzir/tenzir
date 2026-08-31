@@ -47,6 +47,16 @@
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
 
+#if defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 17000
+#  include <chrono>
+namespace date = std::chrono;
+#else
+#  include <arrow/vendored/datetime.h>
+namespace date = arrow_vendored::date;
+#endif
+
+#include <cmath>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -100,6 +110,17 @@ namespace {
 /// configured 'tenzir.max-partition-size'.
 inline constexpr auto undersized_threshold = 0.8;
 
+/// The minimum number of partitions an open four-hour bucket must eliminate.
+inline constexpr auto minimum_open_bucket_reduction = size_t{5};
+
+/// The default fraction of input partitions a closed bucket must eliminate.
+inline constexpr auto default_merge_margin = 0.6;
+
+/// Recent partitions remain in fixed four-hour buckets before being promoted
+/// to whole local-day buckets.
+inline constexpr auto recent_bucket_span = std::chrono::hours{24};
+inline constexpr auto recent_bucket_width = std::chrono::hours{4};
+
 /// How long a batch may be in flight without any partition completing before
 /// we report it. Generous, because a large merge legitimately takes minutes.
 inline constexpr auto stall_threshold = std::chrono::minutes{1};
@@ -109,21 +130,81 @@ struct memory_budget {
   detail::available_memory_info available = {};
 };
 
+struct partition_bucket {
+  int64_t local_start_seconds = {};
+  bool daily = false;
+  bool open = false;
+
+  friend auto operator==(partition_bucket const&, partition_bucket const&)
+    -> bool
+    = default;
+};
+
+auto bucket_for(time timestamp, time now, date::time_zone const* timezone)
+  -> partition_bucket {
+  TENZIR_ASSERT(timezone);
+  const auto local_timestamp = timezone->to_local(
+    std::chrono::time_point_cast<std::chrono::seconds>(timestamp));
+  const auto local_now = timezone->to_local(
+    std::chrono::time_point_cast<std::chrono::seconds>(now));
+  const auto day_start = date::floor<date::days>(local_timestamp);
+  const auto day_end = day_start + date::days{1};
+  // Keep a day split into four-hour buckets until the whole local day has
+  // aged out. Promoting pieces of a day one at a time would make the daily
+  // bucket grow across successive runs and recreate the churn this policy
+  // avoids.
+  if (timezone->to_sys(day_end, date::choose::latest)
+      <= now - recent_bucket_span) {
+    return {
+      .local_start_seconds = std::chrono::duration_cast<std::chrono::seconds>(
+                               day_start.time_since_epoch())
+                               .count(),
+      .daily = true,
+    };
+  }
+  const auto hours_since_midnight
+    = date::floor<std::chrono::hours>(local_timestamp - day_start);
+  const auto bucket_start
+    = day_start
+      + recent_bucket_width
+          * (hours_since_midnight.count() / recent_bucket_width.count());
+  const auto current_day_start = date::floor<date::days>(local_now);
+  const auto current_hours_since_midnight
+    = date::floor<std::chrono::hours>(local_now - current_day_start);
+  const auto current_bucket_start = current_day_start
+                                    + recent_bucket_width
+                                        * (current_hours_since_midnight.count()
+                                           / recent_bucket_width.count());
+  return {
+    .local_start_seconds = std::chrono::duration_cast<std::chrono::seconds>(
+                             bucket_start.time_since_epoch())
+                             .count(),
+    .open = bucket_start == current_bucket_start,
+  };
+}
+
 /// Determines how many estimated decoded bytes one batch may select.
 ///
 /// Must agree with the budget the transformer enforces while loading (see
 /// `make_memory_budget` in partition_transformer.cpp). Selecting more than the
 /// transformer will load requeues the remainder and rewrites the same data
 /// repeatedly; selecting less merges fewer partitions than we safely could.
-auto rebuild_byte_budget(uint64_t configured, size_t parallelism)
+auto rebuild_byte_budget(Option<uint64_t> configured, size_t parallelism)
   -> memory_budget {
   const auto divisor
     = std::max<uint64_t>(detail::narrow_cast<uint64_t>(parallelism), 1);
-  if (configured > 0) {
+  if (configured) {
+    if (*configured == 0) {
+      return {
+        .bytes = std::numeric_limits<uint64_t>::max(),
+        .available = {.bytes = std::numeric_limits<uint64_t>::max(),
+                      .source = "tenzir.rebuild-memory-budget"},
+      };
+    }
     return {
-      .bytes = configured / divisor,
+      .bytes = *configured / divisor,
       .available
-      = {.bytes = configured, .source = "tenzir.rebuild-memory-budget"},
+      = {.bytes = *configured, .source = "tenzir.rebuild-memory-budget"},
     };
   }
   auto available
@@ -246,9 +327,13 @@ struct rebuilder_state {
   size_t desired_batch_size = 0u;
   size_t automatic_rebuild = 0u;
   duration rebuild_interval = {};
-  /// An absolute cap on the decoded bytes one batch may select, or zero to
-  /// derive it from the memory available at the time of selection.
-  uint64_t rebuild_memory_budget = 0u;
+  /// An explicitly configured total decoded-byte budget. Zero disables the
+  /// budget; absence derives it from the memory available during selection.
+  Option<uint64_t> rebuild_memory_budget = None{};
+  /// Minimum partition-count reduction for closed time buckets.
+  double rebuild_merge_margin = default_merge_margin;
+  /// Time zone used to align four-hour and daily bucket boundaries.
+  date::time_zone const* rebuild_timezone = nullptr;
 
   void started_batch(const type& schema, size_t partitions) {
     TENZIR_ASSERT(run);
@@ -304,6 +389,12 @@ struct rebuilder_state {
     if (not run) {
       return;
     }
+    struct stall_snapshot {
+      duration stalled_for = {};
+      size_t num_rebuilding = {};
+      size_t num_completed = {};
+      size_t num_total = {};
+    };
     const auto now = time::clock::now();
     for (auto& [schema, progress] : run->progress_by_schema) {
       const auto stalled_for = now - progress.last_progress_at;
@@ -311,12 +402,59 @@ struct rebuilder_state {
         continue;
       }
       progress.stall_reported = true;
-      TENZIR_WARN("{} rebuild of schema {} appears stuck: {} partition(s) "
-                  "in flight with no completed batch for {}; the transform "
-                  "may be waiting on the index, a store write, or the "
-                  "filesystem ({}/{} partitions done overall)",
-                  *self, schema, progress.num_rebuilding, data{stalled_for},
-                  run->statistics.num_completed, run->statistics.num_total);
+      const auto this_run = run->id;
+      const auto last_progress_at = progress.last_progress_at;
+      auto current_stall = [this, schema, this_run,
+                            last_progress_at]() -> Option<stall_snapshot> {
+        if (not run or run->id != this_run) {
+          return None{};
+        }
+        const auto it = run->progress_by_schema.find(schema);
+        if (it == run->progress_by_schema.end()
+            or it->second.last_progress_at != last_progress_at
+            or not it->second.stall_reported) {
+          return None{};
+        }
+        const auto stalled_for = time::clock::now() - last_progress_at;
+        if (stalled_for < stall_threshold) {
+          return None{};
+        }
+        return stall_snapshot{
+          .stalled_for = stalled_for,
+          .num_rebuilding = it->second.num_rebuilding,
+          .num_completed = run->statistics.num_completed,
+          .num_total = run->statistics.num_total,
+        };
+      };
+      self->mail(atom::status_v, status_verbosity::debug, duration::max())
+        .request(index, std::chrono::seconds{5})
+        .then(
+          [this, schema, current_stall](record& index_status) {
+            const auto current = current_stall();
+            if (not current) {
+              return;
+            }
+            TENZIR_WARN("{} rebuild of schema {} appears stuck: {} "
+                        "partition(s) in flight with no completed batch for "
+                        "{} ({}/{} partitions done overall); index status: "
+                        "{}",
+                        *self, schema, current->num_rebuilding,
+                        data{current->stalled_for}, current->num_completed,
+                        current->num_total, data{std::move(index_status)});
+          },
+          [this, schema, current_stall](const caf::error& error) {
+            const auto current = current_stall();
+            if (not current) {
+              return;
+            }
+            TENZIR_WARN("{} rebuild of schema {} appears stuck: {} "
+                        "partition(s) in flight with no completed batch for "
+                        "{} ({}/{} partitions done overall); failed to get "
+                        "index status: {}",
+                        *self, schema, current->num_rebuilding,
+                        data{current->stalled_for}, current->num_completed,
+                        current->num_total, error);
+          });
     }
   }
 
@@ -347,7 +485,7 @@ struct rebuilder_state {
 
   /// Describes a single run's statistics and options, shared between the
   /// live `current-run` and the historical `last-run` status entries.
-  static auto describe_run(const struct run& run) -> record {
+  auto describe_run(const struct run& run) const -> record {
     return record{
       {"phase", run.selecting ? "selecting candidates" : "rebuilding"},
       {"partitions",
@@ -371,6 +509,8 @@ struct rebuilder_state {
          {"expression", fmt::to_string(run.options.expression)},
          {"detached", run.options.detached},
          {"automatic", run.options.automatic},
+         {"merge-margin", rebuild_merge_margin},
+         {"timezone", std::string{rebuild_timezone->name()}},
        }},
     };
   }
@@ -706,19 +846,27 @@ struct rebuilder_state {
                              format_bytes(current_run_budget.available.bytes),
                              current_run_budget.available.source);
     }
-    // Take the first partition and collect as many of the same
-    // type as possible to create new paritions. The approach used may
-    // collects too many partitions if there is no exact match, but that is
-    // usually better than conservatively undersizing the number of
-    // partitions for the current run. For oversized runs we move the last
-    // transformed partition back to the list of remaining partitions if it
-    // is less than some percentage of the desired size.
+    // Take the first partition and collect partitions of the same schema and
+    // import-time bucket. Closed buckets may produce multiple outputs because
+    // no new imports will continuously feed their remainder. The open bucket
+    // remains capped at one output so repeated automatic runs converge.
     const auto schema = run->remaining_partitions[0].schema;
+    const auto selected_bucket
+      = bucket_for(run->remaining_partitions[0].max_import_time,
+                   run->started_at, rebuild_timezone);
+    const auto allow_multiple_outputs
+      = run->options.undersized and not selected_bucket.open;
     const auto first_removed = std::remove_if(
       run->remaining_partitions.begin(), run->remaining_partitions.end(),
       [&](const partition_info& partition) {
-        if (schema == partition.schema
-            and current_run_events < max_partition_size
+        const auto same_bucket
+          = not run->options.undersized
+            or bucket_for(partition.max_import_time, run->started_at,
+                          rebuild_timezone)
+                 == selected_bucket;
+        if (schema == partition.schema and same_bucket
+            and (allow_multiple_outputs
+                 or current_run_events < max_partition_size)
             and not current_run_is_full) {
           const auto partition_bytes
             = estimate_approx_bytes(partition, current_run_budget.bytes);
@@ -728,12 +876,7 @@ struct rebuilder_state {
             current_run_is_full = true;
             return false;
           }
-          // Never overshoot the capacity of a single output partition. The
-          // transformer splits its output at `max_partition_size`, so a larger
-          // batch yields one full partition plus a remainder, and that
-          // remainder is usually undersized again. With new partitions
-          // continuously arriving to merge with it, that never converges.
-          if (not current_run_partitions.empty()
+          if (not allow_multiple_outputs and not current_run_partitions.empty()
               and current_run_events + partition.events > max_partition_size) {
             current_run_is_full = true;
             return false;
@@ -756,27 +899,37 @@ struct rebuilder_state {
     run->remaining_partitions.erase(first_removed,
                                     run->remaining_partitions.end());
     run->statistics.num_rebuilding += current_run_partitions.size();
-    // When merging undersized partitions, skip a batch that consists of a
-    // single partition in good shape: it has nothing to merge with, so
-    // rewriting it pays a full decode and re-encode without consolidating
-    // anything. Multi-partition batches always rebuild, even when the merged
-    // result stays below the undersized threshold: collapsing them still
-    // reduces the partition count, and a batch that the memory budget or the
-    // event cap cut short has more partitions of the same schema waiting, so
-    // its merge is incremental progress rather than futile work. Skipping
-    // such batches instead halted consolidation entirely on nodes whose
-    // budget keeps batches below the threshold, while every skipped
-    // partition came back as a candidate in the next run.
-    //
-    // Oversized or outdated partitions, and those we cannot size, always
-    // rebuild.
-    const auto skip_rebuild
-      = run->options.undersized and current_run_partitions.size() == 1
-        and current_run_partitions[0].version
-              == version::current_partition_version
-        and current_run_partitions[0].events <= max_partition_size
-        and has_size_estimate(current_run_partitions[0]);
-    if (skip_rebuild) {
+    // Current data must eliminate a fixed number of partitions before it is
+    // rewritten. Closed buckets instead use the configured proportional
+    // reduction. Oversized or outdated partitions, and those we cannot size,
+    // always rebuild.
+    auto merged_events = size_t{0};
+    auto required_partitions = std::vector<uuid>{};
+    if (run->options.undersized) {
+      for (const auto& partition : current_run_partitions) {
+        if (partition.version != version::current_partition_version
+            or partition.events > max_partition_size
+            or not has_size_estimate(partition)) {
+          required_partitions.push_back(partition.uuid);
+        }
+        merged_events += partition.events;
+      }
+    }
+    const auto minimum_partition_reduction
+      = run->options.undersized and selected_bucket.open
+          ? minimum_open_bucket_reduction
+          : size_t{0};
+    const auto minimum_reduction_ratio
+      = run->options.undersized and not selected_bucket.open
+          ? rebuild_merge_margin
+          : double{0};
+    const auto estimated_output_partitions
+      = merged_events / max_partition_size
+        + static_cast<size_t>(merged_events % max_partition_size != 0);
+    if (required_partitions.empty() and run->options.undersized
+        and not satisfies_partition_reduction(
+          current_run_partitions.size(), estimated_output_partitions,
+          minimum_partition_reduction, minimum_reduction_ratio)) {
       const auto skipped = current_run_partitions.size();
       run->statistics.num_rebuilding -= skipped;
       run->statistics.num_total -= skipped;
@@ -803,14 +956,19 @@ struct rebuilder_state {
     auto rebatch = parse_pipeline_with_location_override(
       pipeline, location::unknown, provider.as_session());
     TENZIR_ASSERT(rebatch);
-    // We sort the selected partitions from old to new so the rebuild transform
-    // sees the batches (and events) in the order they arrived. This prevents
-    // the rebatching from shuffling events, and rebatching of already correctly
-    // sized batches just for the right alignment.
+    // Sort the selected partitions from old to new so the rebuild transform
+    // sees the batches (and events) in the order they arrived. Put required
+    // inputs first without changing their relative order so a memory-limited
+    // prefix cannot skip them in favor of optional undersized partitions.
     std::sort(current_run_partitions.begin(), current_run_partitions.end(),
               [](const partition_info& lhs, const partition_info& rhs) {
                 return lhs.max_import_time < rhs.max_import_time;
               });
+    std::stable_partition(
+      current_run_partitions.begin(), current_run_partitions.end(),
+      [&](const partition_info& partition) {
+        return std::ranges::contains(required_partitions, partition.uuid);
+      });
     auto selected_partitions = current_run_partitions;
     auto retry_partitions = current_run_partitions;
     const auto num_partitions = current_run_partitions.size();
@@ -818,7 +976,9 @@ struct rebuilder_state {
     self
       ->mail(atom::apply_v, std::move(*rebatch),
              std::move(current_run_partitions), keep_original_partition::no,
-             std::string{"rebuild"})
+             std::string{"rebuild"}, minimum_partition_reduction,
+             minimum_reduction_ratio, std::move(required_partitions),
+             current_run_budget.bytes)
       .request(index, caf::infinite)
       .then(
         [this, rp, selected_partitions = std::move(selected_partitions),
@@ -833,9 +993,15 @@ struct rebuilder_state {
           }
           if (result.input_partitions.empty()
               and result.output_partitions.empty()) {
-            TENZIR_DEBUG("{} skipped {} partitions as they are already being "
-                         "transformed by another actor",
-                         *self, num_partitions);
+            if (result.skipped) {
+              TENZIR_DEBUG("{} skipped {} partitions because the inputs loaded "
+                           "at runtime did not meet the merge threshold",
+                           *self, num_partitions);
+            } else {
+              TENZIR_DEBUG("{} skipped {} partitions as they are already being "
+                           "transformed by another actor",
+                           *self, num_partitions);
+            }
             run->statistics.num_total -= num_partitions;
             run->statistics.num_rebuilding -= num_partitions;
             finished_batch(schema, num_partitions, false);
@@ -1017,20 +1183,73 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
                   defaults::import::table_slice_size);
   self->state().automatic_rebuild = caf::get_or(
     content(self->system().config()), "tenzir.automatic-rebuild", size_t{1});
-  self->state().rebuild_memory_budget
+  self->state().rebuild_merge_margin
     = caf::get_or(content(self->system().config()),
-                  "tenzir.rebuild-memory-budget", uint64_t{0});
+                  "tenzir.rebuild-merge-margin", default_merge_margin);
+  if (not std::isfinite(self->state().rebuild_merge_margin)
+      or self->state().rebuild_merge_margin < 0
+      or self->state().rebuild_merge_margin > 1) {
+    auto error
+      = caf::make_error(ec::invalid_configuration,
+                        "tenzir.rebuild-merge-margin must be between 0 and 1");
+    TENZIR_ERROR("{}", render(error));
+    self->quit(error);
+    return rebuilder_actor::behavior_type::make_empty_behavior();
+  }
+  const auto* configured_timezone = caf::get_if<std::string>(
+    &content(self->system().config()), "tenzir.rebuild-timezone");
+  try {
+    if (configured_timezone) {
+      self->state().rebuild_timezone = date::locate_zone(*configured_timezone);
+    } else {
+      try {
+        self->state().rebuild_timezone = date::current_zone();
+      } catch (std::runtime_error const&) {
+        // Minimal containers and Nix build sandboxes may not provide
+        // /etc/localtime. UTC is the conventional system default in that case.
+        self->state().rebuild_timezone = date::locate_zone("UTC");
+      }
+    }
+  } catch (std::runtime_error const& ex) {
+    auto error = caf::make_error(
+      ec::invalid_configuration, "failed to resolve {} time zone: {}",
+      configured_timezone
+        ? fmt::format("tenzir.rebuild-timezone '{}'", *configured_timezone)
+        : std::string{"system"},
+      ex.what());
+    TENZIR_ERROR("{}", render(error));
+    self->quit(error);
+    return rebuilder_actor::behavior_type::make_empty_behavior();
+  }
+  if (const auto* configured = caf::get_if<caf::config_value::integer>(
+        &content(self->system().config()), "tenzir.rebuild-memory-budget")) {
+    if (*configured < 0) {
+      auto error
+        = caf::make_error(ec::invalid_configuration,
+                          "tenzir.rebuild-memory-budget must not be negative");
+      TENZIR_ERROR("{}", render(error));
+      self->quit(error);
+      return rebuilder_actor::behavior_type::make_empty_behavior();
+    }
+    self->state().rebuild_memory_budget
+      = detail::narrow_cast<uint64_t>(*configured);
+  }
   if (self->state().automatic_rebuild > 0) {
     self->state().rebuild_interval
       = caf::get_or(content(self->system().config()), "tenzir.rebuild-interval",
                     defaults::rebuild_interval);
-    TENZIR_INFO("{} runs automatic rebuilds every {} with {} thread(s) and a "
-                "memory budget of {}",
+    TENZIR_INFO("{} runs automatic rebuilds every {} with {} thread(s), a "
+                "memory budget of {}, a merge margin of {:.0f}%, and {} time "
+                "zone buckets",
                 *self, data{self->state().rebuild_interval},
                 self->state().automatic_rebuild,
-                format_bytes(self->state().rebuild_memory_budget > 0
-                               ? self->state().rebuild_memory_budget
-                               : std::numeric_limits<uint64_t>::max()));
+                self->state().rebuild_memory_budget
+                  ? format_bytes(*self->state().rebuild_memory_budget == 0
+                                   ? std::numeric_limits<uint64_t>::max()
+                                   : *self->state().rebuild_memory_budget)
+                  : "automatic",
+                self->state().rebuild_merge_margin * 100,
+                self->state().rebuild_timezone->name());
     // We delay the first run such that we do not do it during initialization
     // where there are many other things going on. For long-running processes,
     // we on average already waited for half the duration before.

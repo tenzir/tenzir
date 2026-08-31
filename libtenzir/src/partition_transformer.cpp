@@ -43,9 +43,13 @@
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/futures/Future.h>
 
+#include <algorithm>
 #include <atomic>
 #include <filesystem>
+#include <limits>
 #include <memory>
+#include <numeric>
+#include <ranges>
 #include <string>
 
 namespace tenzir {
@@ -74,11 +78,16 @@ auto make_memory_budget(const caf::settings& index_opts, size_t parallelism)
   auto configured
     = caf::get_if<caf::config_value::integer>(&index_opts, "rebuild-memory-"
                                                            "budget");
-  if (configured and *configured > 0) {
-    return memory_budget{
-      .bytes = detail::narrow_cast<uint64_t>(*configured) / divisor,
-      .source = "tenzir.rebuild-memory-budget",
-    };
+  if (configured) {
+    if (*configured == 0) {
+      return None{};
+    }
+    if (*configured > 0) {
+      return memory_budget{
+        .bytes = detail::narrow_cast<uint64_t>(*configured) / divisor,
+        .source = "tenzir.rebuild-memory-budget",
+      };
+    }
   }
   // Without an explicit budget, admit a fraction of what is available now.
   auto available = detail::available_memory();
@@ -139,6 +148,9 @@ void store_or_fulfill(
 void pack_and_fulfill(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self) {
+  self->state().progress->phase.store(
+    PartitionTransformPhase::packing_partition_metadata,
+    std::memory_order_relaxed);
   auto stream_data = partition_transformer_state::stream_data{
     .partition_chunks
     = std::vector<std::tuple<tenzir::uuid, tenzir::type, chunk_ptr>>{},
@@ -318,14 +330,17 @@ public:
                    std::string partition_path_template,
                    std::filesystem::path archive_dir,
                    filesystem_actor filesystem, Option<memory_budget> budget,
-                   std::shared_ptr<partition_source_state> state)
+                   std::shared_ptr<partition_source_state> state,
+                   std::shared_ptr<PartitionTransformProgress> progress)
     : partitions_{std::move(partitions)},
       partition_path_template_{std::move(partition_path_template)},
       archive_dir_{std::move(archive_dir)},
       filesystem_{std::move(filesystem)},
       memory_budget_{std::move(budget)},
-      state_{std::move(state)} {
+      state_{std::move(state)},
+      progress_{std::move(progress)} {
     TENZIR_ASSERT(state_);
+    TENZIR_ASSERT(progress_);
     state_->selected_partitions = partitions_;
   }
 
@@ -333,7 +348,8 @@ public:
     // The transform holds every slice until it persists, so this is what the
     // budget bounds.
     auto buffered_bytes = uint64_t{0};
-    for (const auto& partition : partitions_) {
+    for (auto index = size_t{0}; index < partitions_.size(); ++index) {
+      const auto& partition = partitions_[index];
       // Always admit one partition, even if it exceeds the budget by itself:
       // stopping with nothing loaded would make the rebuild requeue the batch
       // and select it again, forever.
@@ -348,6 +364,7 @@ public:
         state_->input_complete = false;
         break;
       }
+      progress_->current_input.store(index, std::memory_order_relaxed);
       auto maybe_slices = co_await load_partition(partition);
       if (not maybe_slices) {
         fail(std::move(maybe_slices.error()));
@@ -368,6 +385,8 @@ public:
         co_return;
       }
       state_->loaded_partitions.push_back(partition);
+      progress_->loaded_inputs.store(state_->loaded_partitions.size(),
+                                     std::memory_order_relaxed);
     }
     co_await push_input(OperatorMsg<table_slice>{Signal{EndOfData{}}});
   }
@@ -500,6 +519,7 @@ private:
   filesystem_actor filesystem_;
   Option<memory_budget> memory_budget_;
   std::shared_ptr<partition_source_state> state_;
+  std::shared_ptr<PartitionTransformProgress> progress_;
 };
 
 /// Compile an AST `table_slice -> table_slice` pipeline to an executable plan.
@@ -582,6 +602,8 @@ void partition_transformer_state::fulfill(
     self,
   stream_data&& stream_data, path_data&& path_data) const {
   TENZIR_DEBUG("{} fulfills promise", *self);
+  progress->phase.store(PartitionTransformPhase::writing_partition_files,
+                        std::memory_order_relaxed);
   auto promise = path_data.promise;
   if (self->state().stream_error.valid()) {
     promise.deliver(self->state().stream_error);
@@ -590,6 +612,16 @@ void partition_transformer_state::fulfill(
   }
   if (self->state().transform_error.valid()) {
     promise.deliver(self->state().transform_error);
+    self->quit();
+    return;
+  }
+  if (not self->state().input_constraints_satisfied) {
+    promise.deliver(partition_transformer_result{
+      .input_partitions = self->state().transformed_input_partitions,
+      .output_partitions = {},
+      .input_complete = false,
+      .skipped = true,
+    });
     self->quit();
     return;
   }
@@ -640,6 +672,11 @@ void partition_transformer_state::fulfill(
       stream_data.partition_chunks->size(),
       [self, promise](std::vector<partition_synopsis_pair>&& result) mutable {
         // We're done now, but we may still need to wait for the stores.
+        if (self->state().stores_finished < self->state().stores_launched) {
+          self->state().progress->phase.store(
+            PartitionTransformPhase::persisting_stores,
+            std::memory_order_relaxed);
+        }
         quit_or_stall(self,
                       partition_transformer_state::transformer_is_finished{
                         .promise = std::move(promise),
@@ -656,6 +693,8 @@ void partition_transformer_state::fulfill(
         promise.deliver(std::move(e));
         self->quit();
       });
+  progress->partition_files_total.store(stream_data.partition_chunks->size(),
+                                        std::memory_order_relaxed);
   for (auto& [id, schema, partition_chunk] : *stream_data.partition_chunks) {
     auto rng = self->state().data.equal_range(schema);
     auto it = std::find_if(rng.first, rng.second, [id = id](auto const& kv) {
@@ -673,7 +712,10 @@ void partition_transformer_state::fulfill(
     self->mail(atom::write_v, partition_path, partition_chunk)
       .request(fs, caf::infinite)
       .then(
-        [fanout_counter, aps = std::move(aps)](atom::ok) mutable {
+        [fanout_counter, progress = progress,
+         aps = std::move(aps)](atom::ok) mutable {
+          progress->partition_files_written.fetch_add(
+            1, std::memory_order_relaxed);
           fanout_counter->state().emplace_back(std::move(aps));
           fanout_counter->receive_success();
         },
@@ -691,7 +733,12 @@ auto partition_transformer(
   std::vector<partition_info> input_partitions, ast::pipeline transform,
   std::string input_partition_path_template, std::filesystem::path archive_dir,
   std::string partition_path_template, std::string synopsis_path_template,
-  std::string origin) -> partition_transformer_actor::behavior_type {
+  std::string origin, size_t minimum_partition_reduction,
+  double minimum_reduction_ratio, std::vector<uuid> required_input_partitions,
+  uint64_t input_byte_budget,
+  std::shared_ptr<PartitionTransformProgress> progress)
+  -> partition_transformer_actor::behavior_type {
+  TENZIR_ASSERT(progress);
   self->state().synopsis_opts = synopsis_opts;
   self->state().input_partition_path_template
     = std::move(input_partition_path_template);
@@ -709,6 +756,12 @@ auto partition_transformer(
   self->state().transform = std::move(transform);
   self->state().store_id = std::move(store_id);
   self->state().origin = std::move(origin);
+  self->state().minimum_partition_reduction = minimum_partition_reduction;
+  self->state().minimum_reduction_ratio = minimum_reduction_ratio;
+  self->state().required_input_partitions
+    = std::move(required_input_partitions);
+  self->state().input_byte_budget = input_byte_budget;
+  self->state().progress = std::move(progress);
   self->mail(atom::done_v).send(static_cast<partition_transformer_actor>(self));
   return {
     [](tenzir::table_slice&) -> caf::result<void> {
@@ -744,6 +797,8 @@ auto partition_transformer(
           std::move(slice));
       };
       auto finish_transform = [self]() {
+        self->state().progress->phase.store(
+          PartitionTransformPhase::creating_output, std::memory_order_relaxed);
         auto stream_data = partition_transformer_state::stream_data{
           .partition_chunks
           = std::vector<std::tuple<tenzir::uuid, tenzir::type, chunk_ptr>>{},
@@ -788,6 +843,8 @@ auto partition_transformer(
             // that changes we need to take a bit more care here to avoid
             // a race.
             ++self->state().stores_finished;
+            self->state().progress->stores_finished.store(
+              self->state().stores_finished, std::memory_order_relaxed);
             TENZIR_DEBUG("{} sees builder finished for a total of {}/{} "
                          "stores: {}",
                          *self, self->state().stores_finished,
@@ -799,6 +856,8 @@ auto partition_transformer(
             }
           });
           ++self->state().stores_launched;
+          self->state().progress->stores_launched.store(
+            self->state().stores_launched, std::memory_order_relaxed);
           partition_data.store_header = builder_and_header->header;
         }
         TENZIR_DEBUG("{} received all table slices", *self);
@@ -813,17 +872,30 @@ auto partition_transformer(
       auto archive_dir = std::move(self->state().archive_dir);
       auto fs = self->state().fs;
       auto ast = std::move(self->state().transform);
-      auto budget
-        = make_memory_budget(self->state().index_opts,
-                             detail::narrow_cast<size_t>(caf::get_or(
-                               self->state().index_opts, "rebuild-parallelism",
-                               caf::config_value::integer{1})));
+      auto budget = [&]() -> Option<memory_budget> {
+        if (self->state().input_byte_budget == 0) {
+          return make_memory_budget(
+            self->state().index_opts,
+            detail::narrow_cast<size_t>(
+              caf::get_or(self->state().index_opts, "rebuild-parallelism",
+                          caf::config_value::integer{1})));
+        }
+        if (self->state().input_byte_budget
+            == std::numeric_limits<uint64_t>::max()) {
+          return None{};
+        }
+        return memory_budget{
+          .bytes = self->state().input_byte_budget,
+          .source = "rebuilder batch selection",
+        };
+      }();
       // We deliver `rp` immediately and signal real completion later via the
       // store-builder monitors set up in `finish_transform`.
       auto rp = self->make_response_promise<void>();
       auto weak = caf::weak_actor_ptr{self->ctrl(), caf::add_ref};
       auto& sys = self->system();
       auto source_state = std::make_shared<partition_source_state>();
+      auto progress = self->state().progress;
       folly::coro::co_withExecutor(
         folly::getGlobalCPUExecutor(),
         folly::coro::co_invoke(
@@ -831,8 +903,8 @@ auto partition_transformer(
            input_partition_path_template
            = std::move(input_partition_path_template),
            archive_dir = std::move(archive_dir), fs = std::move(fs), &sys, weak,
-           self, process_slice, budget = std::move(budget),
-           source_state]() mutable -> folly::coro::Task<failure_or<void>> {
+           self, process_slice, budget = std::move(budget), source_state,
+           progress]() mutable -> folly::coro::Task<failure_or<void>> {
             // Compaction and rebuild have no user-facing diagnostic sink, so
             // we log to the server log. The handler is owned by this
             // coroutine frame so its address is stable across awaits and it
@@ -848,12 +920,15 @@ auto partition_transformer(
               std::move(fs),
               std::move(budget),
               source_state,
+              progress,
             };
             auto feed_input
-              = [loader = std::move(loader)](
-                  Push<OperatorMsg<table_slice>>& push_input) mutable
+              = [loader = std::move(loader),
+                 progress](Push<OperatorMsg<table_slice>>& push_input) mutable
               -> Task<void> {
               co_await loader.feed(push_input);
+              progress->phase.store(PartitionTransformPhase::finishing_pipeline,
+                                    std::memory_order_relaxed);
             };
             auto drain_output
               = [self, weak, process_slice, source_state](
@@ -949,6 +1024,32 @@ auto partition_transformer(
                   ? std::move(source_state->selected_partitions)
                   : std::move(source_state->loaded_partitions);
             self->state().input_complete = source_state->input_complete;
+            const auto has_required_input = std::ranges::any_of(
+              self->state().transformed_input_partitions,
+              [&](const auto& partition) {
+                return std::ranges::contains(
+                  self->state().required_input_partitions, partition.uuid);
+              });
+            if (not has_required_input
+                and not satisfies_partition_reduction(
+                  self->state().transformed_input_partitions.size(),
+                  self->state().data.size(),
+                  self->state().minimum_partition_reduction,
+                  self->state().minimum_reduction_ratio)) {
+              TENZIR_INFO(
+                "{} skips transformation because the runtime loader consumed "
+                "only {} partitions and produced {} output partitions; the "
+                "transformation must eliminate at least {} partitions and "
+                "{:.0f}% of its inputs",
+                *self, self->state().transformed_input_partitions.size(),
+                self->state().data.size(),
+                self->state().minimum_partition_reduction,
+                self->state().minimum_reduction_ratio * 100);
+              self->state().input_constraints_satisfied = false;
+              store_or_fulfill(self,
+                               partition_transformer_state::stream_data{});
+              return;
+            }
             finish_transform();
           });
         });
@@ -957,6 +1058,10 @@ auto partition_transformer(
     },
     [self](atom::internal, atom::resume, atom::done) {
       TENZIR_DEBUG("{} got resume", *self);
+      self->state().progress->phase.store(
+        PartitionTransformPhase::creating_output, std::memory_order_relaxed);
+      self->state().progress->output_partitions.store(
+        self->state().data.size(), std::memory_order_relaxed);
       for (auto& [schema, data] : self->state().data) {
         auto& mutable_synopsis = data.synopsis.unshared();
         // Push the slices to the store.
@@ -1007,6 +1112,8 @@ auto partition_transformer(
                      self->state().persist);
           self->quit(annotated_error);
         });
+      self->state().progress->phase.store(
+        PartitionTransformPhase::persisting_stores, std::memory_order_relaxed);
       for (auto& [_, partition_data] : self->state().data) {
         self->mail(atom::persist_v)
           .request(partition_data.builder, caf::infinite)

@@ -220,6 +220,7 @@ struct partition_transformer_result {
   std::vector<partition_info> input_partitions;
   std::vector<partition_synopsis_pair> output_partitions;
   bool input_complete = true;
+  bool skipped = false;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, partition_transformer_result& x) {
@@ -227,7 +228,8 @@ struct partition_transformer_result {
       .pretty_name("tenzir.partition-transformer-result")
       .fields(f.field("input-partitions", x.input_partitions),
               f.field("output-partitions", x.output_partitions),
-              f.field("input-complete", x.input_complete));
+              f.field("input-complete", x.input_complete),
+              f.field("skipped", x.skipped));
   }
 };
 
@@ -235,6 +237,7 @@ struct partition_apply_result {
   std::vector<partition_info> input_partitions;
   std::vector<partition_info> output_partitions;
   bool input_complete = true;
+  bool skipped = false;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, partition_apply_result& x) {
@@ -242,7 +245,8 @@ struct partition_apply_result {
       .pretty_name("tenzir.partition-apply-result")
       .fields(f.field("input-partitions", x.input_partitions),
               f.field("output-partitions", x.output_partitions),
-              f.field("input-complete", x.input_complete));
+              f.field("input-complete", x.input_complete),
+              f.field("skipped", x.skipped));
   }
 };
 

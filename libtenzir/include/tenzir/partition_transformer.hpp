@@ -12,17 +12,48 @@
 
 #include "tenzir/active_partition.hpp"
 #include "tenzir/actors.hpp"
+#include "tenzir/atomic.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/tql2/ast.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
 #include <filesystem>
+#include <memory>
 #include <unordered_map>
 #include <variant>
 #include <vector>
 
 namespace tenzir {
+
+enum class PartitionTransformPhase : uint8_t {
+  loading_input,
+  finishing_pipeline,
+  creating_output,
+  persisting_stores,
+  packing_partition_metadata,
+  writing_partition_files,
+  writing_marker,
+  moving_partition_files,
+  updating_catalog,
+  erasing_input_partitions,
+  done,
+};
+
+/// A read-only progress snapshot shared with the index actor. The transformer
+/// runs its pipeline on Folly's CPU executor, so atomics keep this diagnostic
+/// observer from adding messages to the transform's data path.
+struct PartitionTransformProgress {
+  Atomic<PartitionTransformPhase> phase
+    = PartitionTransformPhase::loading_input;
+  Atomic<size_t> current_input = 0;
+  Atomic<size_t> loaded_inputs = 0;
+  Atomic<size_t> output_partitions = 0;
+  Atomic<size_t> stores_launched = 0;
+  Atomic<size_t> stores_finished = 0;
+  Atomic<size_t> partition_files_written = 0;
+  Atomic<size_t> partition_files_total = 0;
+};
 
 /// Similar to the active partition, but all contents come in a single
 /// stream, a transform is applied and no queries need to be answered
@@ -118,6 +149,17 @@ struct partition_transformer_state {
   /// Origin tag for the store metadata ("rebuild", "compaction", etc.).
   std::string origin = "rebuild";
 
+  /// Constraints on the partition-count reduction achieved by the inputs that
+  /// the runtime loader actually consumes.
+  size_t minimum_partition_reduction = 0;
+  double minimum_reduction_ratio = 0;
+  std::vector<uuid> required_input_partitions = {};
+  uint64_t input_byte_budget = 0;
+  bool input_constraints_satisfied = true;
+
+  /// Progress observed by the index while this transform is active.
+  std::shared_ptr<PartitionTransformProgress> progress = {};
+
   /// Options for creating new synopses.
   index_config synopsis_opts = {};
 
@@ -173,6 +215,28 @@ auto partition_transformer(
   std::vector<partition_info> input_partitions, ast::pipeline transform,
   std::string input_partition_path_template, std::filesystem::path archive_dir,
   std::string partition_path_template, std::string synopsis_path_template,
-  std::string origin = "rebuild") -> partition_transformer_actor::behavior_type;
+  std::string origin, size_t minimum_partition_reduction,
+  double minimum_reduction_ratio, std::vector<uuid> required_input_partitions,
+  uint64_t input_byte_budget,
+  std::shared_ptr<PartitionTransformProgress> progress)
+  -> partition_transformer_actor::behavior_type;
+
+/// Returns whether rewriting the inputs reduces the partition count
+/// sufficiently.
+inline auto
+satisfies_partition_reduction(size_t input_partitions, size_t output_partitions,
+                              size_t minimum_partition_reduction,
+                              double minimum_reduction_ratio) -> bool {
+  if (input_partitions == 0) {
+    return false;
+  }
+  const auto reduction = input_partitions > output_partitions
+                           ? input_partitions - output_partitions
+                           : size_t{0};
+  return reduction >= minimum_partition_reduction
+         and static_cast<double>(reduction)
+                 / static_cast<double>(input_partitions)
+               >= minimum_reduction_ratio;
+}
 
 } // namespace tenzir

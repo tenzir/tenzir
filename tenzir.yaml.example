@@ -292,6 +292,20 @@ tenzir:
   # Timeout after which an automatic rebuild is triggered.
   rebuild-interval: 30min
 
+  # Total decoded-memory budget shared by concurrent rebuilds. By default, the
+  # node estimates the budget from available memory. The value is in bytes; set
+  # it to 0 to disable the memory limit.
+  #rebuild-memory-budget: 1073741824
+
+  # Minimum fraction of input partitions that a closed rebuild time bucket
+  # must eliminate. The current four-hour bucket instead needs to eliminate at
+  # least five partitions.
+  rebuild-merge-margin: 0.6
+
+  # IANA time zone used to align four-hour and daily rebuild buckets. Defaults
+  # to the system time zone.
+  #rebuild-timezone: Europe/Berlin
+
   # Zstd compression level applied to the Feather store backend.
   # zstd-compression-level: <default>
 

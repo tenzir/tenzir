@@ -220,9 +220,14 @@ using index_actor = typed_actor_fwd<
   // When keep_original_partition is yes: merges the transformed partitions
   // with the original ones and returns the new partition infos. When
   // keep_original_partition is no: does an in-place pipeline keeping the old
-  // ids, and makes new partitions preserving them.
+  // ids, and makes new partitions preserving them. Three trailing arguments
+  // constrain the accepted inputs by absolute reduction, relative reduction,
+  // and inputs that independently require transformation. The last argument
+  // is a caller-computed byte budget, where zero requests automatic
+  // estimation.
   auto(atom::apply, ast::pipeline, std::vector<tenzir::partition_info>,
-       keep_original_partition, std::string)
+       keep_original_partition, std::string, size_t, double, std::vector<uuid>,
+       uint64_t)
     ->caf::result<partition_apply_result>,
   // Decomissions all active partitions, effectively flushing them to disk.
   auto(atom::flush)->caf::result<void>,
