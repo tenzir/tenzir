@@ -121,6 +121,76 @@ void store_or_fulfill(
   }
 }
 
+/// Packs the transformed partitions and their synopses and hands the result to
+/// the rendezvous with `atom::persist`. Must not run before every store builder
+/// has reported its `resource`: the synopses handed to the catalog carry the
+/// store's location and size, and this consumes them.
+void pack_and_fulfill(
+  partition_transformer_actor::stateful_pointer<partition_transformer_state>
+    self) {
+  auto stream_data = partition_transformer_state::stream_data{
+    .partition_chunks
+    = std::vector<std::tuple<tenzir::uuid, tenzir::type, chunk_ptr>>{},
+    .synopsis_chunks
+    = std::vector<std::tuple<tenzir::uuid, tenzir::chunk_ptr>>{},
+  };
+  // This is an inline lambda so we can use `return` after errors
+  // instead of `goto`.
+  [&] {
+    for (auto& [schema, partition_data] :
+         self->state().data) { // Pack partitions
+      auto indexers_it
+        = self->state().partition_buildup.find(partition_data.id);
+      if (indexers_it == self->state().partition_buildup.end()) {
+        stream_data.partition_chunks
+          = caf::make_error(ec::logic_error, "missing data for partition");
+        return;
+      }
+      auto partition = pack_full(partition_data, record_type{});
+      if (not partition) {
+        stream_data.partition_chunks = partition.error();
+        return;
+      }
+      stream_data.partition_chunks->emplace_back(
+        std::make_tuple(partition_data.id, schema, *partition));
+    }
+    for (auto& [schema, partition_data] :
+         self->state().data) { // Pack partition synopsis
+      flatbuffers::FlatBufferBuilder builder;
+      auto synopsis = pack(builder, *partition_data.synopsis);
+      if (not synopsis) {
+        stream_data.synopsis_chunks = synopsis.error();
+        return;
+      }
+      fbs::PartitionSynopsisBuilder ps_builder(builder);
+      ps_builder.add_partition_synopsis_type(
+        fbs::partition_synopsis::PartitionSynopsis::legacy);
+      ps_builder.add_partition_synopsis(synopsis->Union());
+      auto ps_offset = ps_builder.Finish();
+      fbs::FinishPartitionSynopsisBuffer(builder, ps_offset);
+      auto ps_chunk = fbs::release(builder);
+      // When the index reads synopses without verification, transformed
+      // synopses must be verified here so the write-once guarantee also
+      // holds for partitions produced by rebuilds and transforms.
+      if (self->state().synopsis_opts.skip_synopsis_verification) {
+        if (auto checked
+            = flatbuffer<fbs::PartitionSynopsis>::make(chunk_ptr{ps_chunk});
+            not checked) {
+          stream_data.synopsis_chunks = caf::make_error(
+            ec::format_error,
+            fmt::format("failed to verify transformed partition "
+                        "synopsis: {}",
+                        checked.error()));
+          return;
+        }
+      }
+      stream_data.synopsis_chunks->emplace_back(
+        std::make_tuple(partition_data.id, std::move(ps_chunk)));
+    }
+  }();
+  store_or_fulfill(self, std::move(stream_data));
+}
+
 void quit_or_stall(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
@@ -900,93 +970,56 @@ auto partition_transformer(
         mutable_synopsis.shrink();
         mutable_synopsis.events = data.events;
       }
+      // Each store builder reports where its store file landed and how large it
+      // is. The partition synopsis is the only place that information reaches
+      // the catalog, and `pack_and_fulfill` below consumes the synopses, so we
+      // must not pack until every `persist` has come back.
+      if (self->state().data.empty()) {
+        pack_and_fulfill(self);
+        return;
+      }
+      auto persist_counter = detail::make_fanout_counter(
+        self->state().data.size(),
+        [self] {
+          pack_and_fulfill(self);
+        },
+        [self](caf::error err) {
+          auto annotated_error = diagnostic::error(err).note("").to_error();
+          std::visit(detail::overload{
+                       [&](partition_transformer_state::path_data& pd) {
+                         pd.promise.deliver(annotated_error);
+                       },
+                       [&](auto&) {
+                         // We should not get here, but let's not abort the
+                         // process if we do.
+                         TENZIR_ERROR("{}", annotated_error);
+                       },
+                     },
+                     self->state().persist);
+          self->quit(annotated_error);
+        });
       for (auto& [_, partition_data] : self->state().data) {
         self->mail(atom::persist_v)
           .request(partition_data.builder, caf::infinite)
           .then(
-            [self, builder = partition_data.builder](resource&) {
+            [self, persist_counter, builder = partition_data.builder,
+             synopsis = &partition_data.synopsis](resource& store_file) {
+              // Without this the store's path and size never reach the
+              // catalog, and the index recovers them only by stat'ing the
+              // archive on the next startup. Until then `partitions` reports
+              // a store size of zero for every partition that a rebuild or a
+              // compaction produced.
+              synopsis->unshared().store_file = std::move(store_file);
               // Unlike active partitions, the transformer no longer needs the
               // store builder after `persist` succeeds, so we explicitly shut
               // it down to preserve the existing completion signal.
               self->send_exit(builder, caf::exit_reason::normal);
+              persist_counter->receive_success();
             },
-            [self](caf::error& err) {
-              auto annotated_error = diagnostic::error(err).note("").to_error();
-              std::visit(detail::overload{
-                           [&](partition_transformer_state::path_data& pd) {
-                             pd.promise.deliver(annotated_error);
-                           },
-                           [&](auto&) {
-                             // We should not get here, but let's not abort the
-                             // process if we do.
-                             TENZIR_ERROR("{}", annotated_error);
-                           },
-                         },
-                         self->state().persist);
-              self->quit(annotated_error);
+            [persist_counter](caf::error& err) {
+              persist_counter->receive_error(std::move(err));
             });
       }
-      auto stream_data = partition_transformer_state::stream_data{
-        .partition_chunks
-        = std::vector<std::tuple<tenzir::uuid, tenzir::type, chunk_ptr>>{},
-        .synopsis_chunks
-        = std::vector<std::tuple<tenzir::uuid, tenzir::chunk_ptr>>{},
-      };
-      // This is an inline lambda so we can use `return` after errors
-      // instead of `goto`.
-      [&] {
-        for (auto& [schema, partition_data] :
-             self->state().data) { // Pack partitions
-          auto indexers_it
-            = self->state().partition_buildup.find(partition_data.id);
-          if (indexers_it == self->state().partition_buildup.end()) {
-            stream_data.partition_chunks
-              = caf::make_error(ec::logic_error, "missing data for partition");
-            return;
-          }
-          auto partition = pack_full(partition_data, record_type{});
-          if (not partition) {
-            stream_data.partition_chunks = partition.error();
-            return;
-          }
-          stream_data.partition_chunks->emplace_back(
-            std::make_tuple(partition_data.id, schema, *partition));
-        }
-        for (auto& [schema, partition_data] :
-             self->state().data) { // Pack partition synopsis
-          flatbuffers::FlatBufferBuilder builder;
-          auto synopsis = pack(builder, *partition_data.synopsis);
-          if (not synopsis) {
-            stream_data.synopsis_chunks = synopsis.error();
-            return;
-          }
-          fbs::PartitionSynopsisBuilder ps_builder(builder);
-          ps_builder.add_partition_synopsis_type(
-            fbs::partition_synopsis::PartitionSynopsis::legacy);
-          ps_builder.add_partition_synopsis(synopsis->Union());
-          auto ps_offset = ps_builder.Finish();
-          fbs::FinishPartitionSynopsisBuffer(builder, ps_offset);
-          auto ps_chunk = fbs::release(builder);
-          // When the index reads synopses without verification, transformed
-          // synopses must be verified here so the write-once guarantee also
-          // holds for partitions produced by rebuilds and transforms.
-          if (self->state().synopsis_opts.skip_synopsis_verification) {
-            if (auto checked
-                = flatbuffer<fbs::PartitionSynopsis>::make(chunk_ptr{ps_chunk});
-                not checked) {
-              stream_data.synopsis_chunks = caf::make_error(
-                ec::format_error,
-                fmt::format("failed to verify transformed partition "
-                            "synopsis: {}",
-                            checked.error()));
-              return;
-            }
-          }
-          stream_data.synopsis_chunks->emplace_back(
-            std::make_tuple(partition_data.id, std::move(ps_chunk)));
-        }
-      }();
-      store_or_fulfill(self, std::move(stream_data));
     },
     [self](atom::persist) -> caf::result<partition_transformer_result> {
       TENZIR_DEBUG("{} received request to persist", *self);

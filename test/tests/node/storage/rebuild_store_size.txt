@@ -1,0 +1,2 @@
+phase1-baseline-store-recorded: ok
+phase2-rebuilt-store-recorded: ok
