@@ -87,6 +87,7 @@ endmacro ()
 
 create_tenzir_symlink(tenzir-node)
 create_tenzir_symlink(tenzir-ctl)
+create_tenzir_symlink(tenzir-rebuild)
 
 # -- example configuration file -----------------------------------------------
 
