@@ -251,7 +251,7 @@ try:
 
     # --- Phase 4: consolidate ----------------------------------------------
 
-    r = run_rebuild(node)
+    r = run_rebuild(node, "--parallel=3")
     assert r.returncode == 0, f"offline rebuild failed: {r.stderr}"
     assert "done: merged" in r.stderr, f"missing summary output:\n{r.stderr}"
     print("phase4-consolidate: ok")

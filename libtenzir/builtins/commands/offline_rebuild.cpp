@@ -61,15 +61,18 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cctype>
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <mutex>
 #include <numeric>
 #include <system_error>
 #include <termios.h>
+#include <thread>
 #include <unistd.h>
 #include <unordered_map>
 #include <unordered_set>
@@ -727,21 +730,56 @@ auto scan_partitions(const std::filesystem::path& state_dir,
                                        "{}: {}",
                                        index_dir, err.message()));
   }
-  auto records = std::vector<partition_record>{};
-  records.reserve(candidates.size());
+  // Split the candidates into interleaved subsets and scan them in parallel;
+  // reading partition metadata is independent per file.
+  const auto num_threads = std::min({
+    static_cast<size_t>(std::max(std::thread::hardware_concurrency(), 1u)),
+    size_t{16},
+    std::max(candidates.size(), size_t{1}),
+  });
+  auto results = std::vector<std::vector<partition_record>>(num_threads);
+  auto failures = std::vector<std::vector<std::string>>(num_threads);
+  auto scanned = std::atomic<size_t>{0};
+  auto threads = std::vector<std::thread>{};
+  threads.reserve(num_threads);
+  for (size_t t = 0; t < num_threads; ++t) {
+    threads.emplace_back([&, t] {
+      for (size_t i = t; i < candidates.size(); i += num_threads) {
+        auto rec
+          = load_record(state_dir, index_dir, candidates[i], cut_by_field);
+        if (not rec) {
+          failures[t].push_back(
+            fmt::format("{}: {}", candidates[i], render(rec.error(), false)));
+        } else {
+          results[t].push_back(std::move(*rec));
+        }
+        scanned.fetch_add(1, std::memory_order_relaxed);
+      }
+    });
+  }
+  // Report progress from this thread while the scanners are busy.
   auto last_report = std::chrono::steady_clock::now();
-  for (const auto& id : candidates) {
-    auto rec = load_record(state_dir, index_dir, id, cut_by_field);
-    if (not rec) {
-      report("skipping unreadable partition {}: {}", id,
-             render(rec.error(), false));
-      continue;
-    }
-    records.push_back(std::move(*rec));
+  while (scanned.load(std::memory_order_relaxed) < candidates.size()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds{50});
     if (const auto now = std::chrono::steady_clock::now();
         now - last_report >= report_interval) {
       last_report = now;
-      report("scanned {}/{} partitions", records.size(), candidates.size());
+      report("scanned {}/{} partitions",
+             scanned.load(std::memory_order_relaxed), candidates.size());
+    }
+  }
+  for (auto& thread : threads) {
+    thread.join();
+  }
+  auto records = std::vector<partition_record>{};
+  records.reserve(candidates.size());
+  for (auto& result : results) {
+    records.insert(records.end(), std::make_move_iterator(result.begin()),
+                   std::make_move_iterator(result.end()));
+  }
+  for (const auto& per_thread : failures) {
+    for (const auto& failure : per_thread) {
+      report("skipping unreadable partition {}", failure);
     }
   }
   return records;
@@ -1319,6 +1357,13 @@ auto offline_rebuild_command(const invocation& inv, caf::actor_system&)
   const auto start_time = std::chrono::steady_clock::now();
   const auto dry_run
     = caf::get_or(inv.options, "tenzir.offline-rebuild.dry-run", false);
+  const auto parallel_option
+    = caf::get_or(inv.options, "tenzir.offline-rebuild.parallel", int64_t{1});
+  if (parallel_option < 1 or parallel_option > 64) {
+    return caf::make_message(caf::make_error(
+      ec::invalid_argument, "--parallel must be between 1 and 64"));
+  }
+  const auto parallel = static_cast<size_t>(parallel_option);
   const auto max_events = caf::get_or(inv.options, "tenzir.max-partition-size",
                                       defaults::max_partition_size);
   const auto max_span = caf::get_or(
@@ -1435,8 +1480,24 @@ auto offline_rebuild_command(const invocation& inv, caf::actor_system&)
         backend_plugin->make_store_writer([](const chunk_ptr&) {
           return caf::error{};
         }));
-  auto groups = plan_consolidation(std::move(*records), max_events, byte_budget,
+  // The memory budget is shared across the merges that actually run
+  // concurrently. Plan with the requested parallelism first; when that yields
+  // fewer groups than workers, replan with the effective worker count so that
+  // a lone merge is not restricted to a fraction of the budget. The larger
+  // per-merge budget of the replan can unlock additional groups, so the
+  // number of launched workers stays capped at the divisor that the final
+  // plan was budgeted for.
+  auto planned_workers = parallel;
+  auto per_merge_budget = std::max(byte_budget / planned_workers, uint64_t{1});
+  auto groups = plan_consolidation(*records, max_events, per_merge_budget,
                                    max_span, streaming_stores);
+  if (const auto effective = std::clamp(groups.size(), size_t{1}, parallel);
+      effective < planned_workers) {
+    planned_workers = effective;
+    per_merge_budget = std::max(byte_budget / planned_workers, uint64_t{1});
+    groups = plan_consolidation(std::move(*records), max_events,
+                                per_merge_budget, max_span, streaming_stores);
+  }
   if (groups.empty()) {
     report("all partitions are already consolidated; nothing to do");
     return {};
@@ -1446,9 +1507,14 @@ auto offline_rebuild_command(const invocation& inv, caf::actor_system&)
                       [](size_t acc, const merge_group& group) {
                         return acc + group.parts.size();
                       });
-  report("planned {} merges covering {} partitions (memory budget: {}{})",
-         groups.size(), planned_inputs, human_bytes(byte_budget),
-         streaming_stores ? " per input, streaming" : "");
+  report("planned {} merges covering {} partitions (memory budget: {} per "
+         "merge{}{})",
+         groups.size(), planned_inputs, human_bytes(per_merge_budget),
+         streaming_stores ? ", streaming" : "",
+         planned_workers > 1
+           ? fmt::format(", {} in parallel",
+                         std::min(planned_workers, groups.size()))
+           : std::string{});
   auto plans = make_schema_plans(groups);
   if (dry_run) {
     report_plan(plans, "would merge");
@@ -1479,36 +1545,63 @@ auto offline_rebuild_command(const invocation& inv, caf::actor_system&)
   } else {
     report_plan(plans, "will merge");
   }
-  // Phase 3: consolidate.
-  auto merged_partitions = size_t{0};
-  auto merged_events = uint64_t{0};
-  auto bytes_before = uint64_t{0};
-  auto bytes_after = uint64_t{0};
-  auto failures = size_t{0};
+  // Phase 3: consolidate. Groups are disjoint—distinct inputs, fresh output
+  // ids, and randomly named markers—so they can merge in parallel.
+  auto merged_partitions = std::atomic<size_t>{0};
+  auto merged_events = std::atomic<uint64_t>{0};
+  auto bytes_before = std::atomic<uint64_t>{0};
+  auto bytes_after = std::atomic<uint64_t>{0};
+  auto failures = std::atomic<size_t>{0};
+  auto completed = std::atomic<size_t>{0};
+  auto next_group = std::atomic<size_t>{0};
+  auto report_mutex = std::mutex{};
   auto last_report = std::chrono::steady_clock::now();
-  for (size_t i = 0; i < groups.size(); ++i) {
-    const auto& group = groups[i];
-    auto result = execute_merge(group, state_dir, index_dir, synopsis_opts,
-                                max_events, store_backend, byte_budget,
-                                fmt::format("[{}/{}]", i + 1, groups.size()));
-    if (not result) {
-      ++failures;
-      report("failed to merge {} partitions of schema `{}`: {}",
-             group.parts.size(), group.parts.front().schema.name(),
-             render(result.error(), false));
-      continue;
+  const auto merge_worker = [&] {
+    for (;;) {
+      const auto i = next_group.fetch_add(1, std::memory_order_relaxed);
+      if (i >= groups.size()) {
+        return;
+      }
+      const auto& group = groups[i];
+      auto result = execute_merge(group, state_dir, index_dir, synopsis_opts,
+                                  max_events, store_backend, byte_budget,
+                                  fmt::format("[{}/{}]", i + 1, groups.size()));
+      const auto done = completed.fetch_add(1, std::memory_order_relaxed) + 1;
+      if (not result) {
+        failures.fetch_add(1, std::memory_order_relaxed);
+        report("failed to merge {} partitions of schema `{}`: {}",
+               group.parts.size(), group.parts.front().schema.name(),
+               render(result.error(), false));
+        continue;
+      }
+      merged_partitions.fetch_add(group.parts.size(),
+                                  std::memory_order_relaxed);
+      merged_events.fetch_add(result->events, std::memory_order_relaxed);
+      bytes_after.fetch_add(result->bytes_written, std::memory_order_relaxed);
+      for (const auto& rec : group.parts) {
+        bytes_before.fetch_add(rec.disk_bytes, std::memory_order_relaxed);
+      }
+      const auto lock = std::lock_guard{report_mutex};
+      if (const auto now = std::chrono::steady_clock::now();
+          now - last_report >= report_interval or done == groups.size()) {
+        last_report = now;
+        report("merged {}/{} groups: {} partitions ({} events) so far", done,
+               groups.size(), merged_partitions.load(std::memory_order_relaxed),
+               merged_events.load(std::memory_order_relaxed));
+      }
     }
-    merged_partitions += group.parts.size();
-    merged_events += result->events;
-    bytes_after += result->bytes_written;
-    for (const auto& rec : group.parts) {
-      bytes_before += rec.disk_bytes;
+  };
+  if (const auto workers = std::min(planned_workers, groups.size());
+      workers <= 1) {
+    merge_worker();
+  } else {
+    auto threads = std::vector<std::thread>{};
+    threads.reserve(workers);
+    for (size_t t = 0; t < workers; ++t) {
+      threads.emplace_back(merge_worker);
     }
-    if (const auto now = std::chrono::steady_clock::now();
-        now - last_report >= report_interval or i + 1 == groups.size()) {
-      last_report = now;
-      report("merged {}/{} groups: {} partitions ({} events) so far", i + 1,
-             groups.size(), merged_partitions, merged_events);
+    for (auto& thread : threads) {
+      thread.join();
     }
   }
   if (std::filesystem::is_empty(index_dir / "markers", err)) {
@@ -1518,12 +1611,13 @@ auto offline_rebuild_command(const invocation& inv, caf::actor_system&)
     std::chrono::steady_clock::now() - start_time);
   report("done: merged {} partitions into {} ({} events) in {}; {} -> {} on "
          "disk",
-         merged_partitions, groups.size() - failures, merged_events, elapsed,
-         human_bytes(bytes_before), human_bytes(bytes_after));
-  if (failures > 0) {
-    return caf::make_message(
-      caf::make_error(ec::unspecified, fmt::format("{} of {} merges failed",
-                                                   failures, groups.size())));
+         merged_partitions.load(), groups.size() - failures.load(),
+         merged_events.load(), elapsed, human_bytes(bytes_before.load()),
+         human_bytes(bytes_after.load()));
+  if (failures.load() > 0) {
+    return caf::make_message(caf::make_error(
+      ec::unspecified,
+      fmt::format("{} of {} merges failed", failures.load(), groups.size())));
   }
   return {};
 }
@@ -1552,8 +1646,11 @@ public:
                        "named like 'timestamp', 'time', or 'ts'; import time "
                        "when the schema has none)")
         .add<std::string>("max-merge-memory",
-                          "memory budget for a single merge, e.g. 8GiB "
-                          "(default: a quarter of the available memory)"));
+                          "memory budget for merging, shared across parallel "
+                          "merges, e.g. 8GiB (default: a quarter of the "
+                          "available memory)")
+        .add<int64_t>("parallel,j", "number of merges to run in parallel "
+                                    "(default: 1)"));
     auto factory = command::factory{
       {"offline-rebuild", offline_rebuild_command},
     };
