@@ -147,6 +147,20 @@ auto file_size_or_zero(const std::filesystem::path& path) -> uint64_t {
   return err ? 0 : size;
 }
 
+/// The live memory held by a partition synopsis's sketches, computed directly
+/// because `partition_synopsis::memusage()` caches its result until the next
+/// shrink.
+auto synopsis_memusage(const partition_synopsis& synopsis) -> uint64_t {
+  auto result = uint64_t{0};
+  for (const auto& [field, sketch] : synopsis.field_synopses_) {
+    result += sketch ? sketch->memusage() : 0;
+  }
+  for (const auto& [type, sketch] : synopsis.type_synopses_) {
+    result += sketch ? sketch->memusage() : 0;
+  }
+  return result;
+}
+
 /// The per-schema aggregation of the consolidation plan.
 struct schema_plan {
   std::string name = {};
@@ -956,7 +970,8 @@ auto execute_merge(const merge_group& group,
                    const index_config& synopsis_opts,
                    uint64_t partition_capacity,
                    const std::string& store_backend, uint64_t byte_budget,
-                   std::string_view progress) -> caf::expected<merge_result> {
+                   uint64_t synopsis_budget, std::string_view progress)
+  -> caf::expected<merge_result> {
   const auto* out_plugin = plugins::find<store_plugin>(store_backend);
   if (not out_plugin) {
     return caf::make_error(ec::invalid_configuration,
@@ -1032,6 +1047,8 @@ auto execute_merge(const merge_group& group,
            std::chrono::duration_cast<std::chrono::seconds>(now - merge_start));
   };
   const auto memory_before = detail::available_memory();
+  auto sketch_usage = uint64_t{0};
+  auto bytes_since_sketch_check = uint64_t{0};
   for (size_t input = 0; input < group.parts.size(); ++input) {
     const auto& rec = group.parts[input];
     // Guard against blowing far past the memory budget when the size
@@ -1044,11 +1061,15 @@ auto execute_merge(const merge_group& group,
                             ? memory_before->bytes - current->bytes
                             : uint64_t{0};
         if (used > byte_budget + byte_budget / 2) {
+          // The measurement covers the whole process, so with parallel merges
+          // this group is not necessarily the main consumer—it is merely the
+          // one that noticed. It stays unmerged and a later run retries it.
           return caf::make_error(
             ec::out_of_memory,
-            fmt::format("merge of {} partitions of schema `{}` exceeded the "
-                        "memory budget ({} used, {} budget); use "
-                        "--max-merge-memory to adjust the budget",
+            fmt::format("merge of {} partitions of schema `{}` aborted: {} "
+                        "used across all in-flight merges, {} shared budget; "
+                        "the inputs stay in place and the next run retries "
+                        "them; use --max-merge-memory to adjust the budget",
                         group.parts.size(), schema.name(), human_bytes(used),
                         human_bytes(byte_budget)));
         }
@@ -1158,6 +1179,24 @@ auto execute_merge(const merge_group& group,
       ids.append_bits(true, last - first);
       data.events += slice.rows();
       synopsis.add(slice, partition_capacity, synopsis_opts);
+      // String and IP sketches buffer their input columns until they shrink
+      // into Bloom filters, which pins decoded input data for the whole
+      // merge—and a single high-cardinality input can exceed the allowance on
+      // its own. Shrink mid-merge when the buffers grow too large; a sketch
+      // shrunk early keeps accepting additions at a slightly higher
+      // false-positive rate. Summing the sketches' exact memory usage
+      // traverses all buffered columns, so gate it on the last measured usage
+      // plus a cheap running overestimate of what arrived since, keeping the
+      // overshoot bounded by one slice.
+      bytes_since_sketch_check += slice.approx_bytes();
+      if (sketch_usage + bytes_since_sketch_check > synopsis_budget) {
+        bytes_since_sketch_check = 0;
+        sketch_usage = synopsis_memusage(synopsis);
+        if (sketch_usage > synopsis_budget) {
+          synopsis.shrink();
+          sketch_usage = synopsis_memusage(synopsis);
+        }
+      }
       if (auto error = writer ? (*writer)->add({std::move(slice)})
                               : buffered_store->add({std::move(slice)});
           error.valid()) {
@@ -1480,6 +1519,13 @@ auto offline_rebuild_command(const invocation& inv, caf::actor_system&)
         backend_plugin->make_store_writer([](const chunk_ptr&) {
           return caf::error{};
         }));
+  const auto max_sketch_memory = detail::get_bytesize(
+    inv.options, "tenzir.offline-rebuild.max-sketch-memory", 0);
+  if (not max_sketch_memory) {
+    return caf::make_message(diagnostic::error(max_sketch_memory.error())
+                               .note("failed to parse `--max-sketch-memory`")
+                               .to_error());
+  }
   // The memory budget is shared across the merges that actually run
   // concurrently. Plan with the requested parallelism first; when that yields
   // fewer groups than workers, replan with the effective worker count so that
@@ -1498,6 +1544,13 @@ auto offline_rebuild_command(const invocation& inv, caf::actor_system&)
     groups = plan_consolidation(std::move(*records), max_events,
                                 per_merge_budget, max_span, streaming_stores);
   }
+  // Sketches shrunk early accept further additions with only a slightly worse
+  // sizing, so cap the buffering allowance at a fixed amount even when the
+  // memory budget is huge.
+  const auto synopsis_budget
+    = *max_sketch_memory > 0
+        ? *max_sketch_memory
+        : std::min(per_merge_budget / 4, uint64_t{2} << 30);
   if (groups.empty()) {
     report("all partitions are already consolidated; nothing to do");
     return {};
@@ -1563,9 +1616,10 @@ auto offline_rebuild_command(const invocation& inv, caf::actor_system&)
         return;
       }
       const auto& group = groups[i];
-      auto result = execute_merge(group, state_dir, index_dir, synopsis_opts,
-                                  max_events, store_backend, byte_budget,
-                                  fmt::format("[{}/{}]", i + 1, groups.size()));
+      auto result
+        = execute_merge(group, state_dir, index_dir, synopsis_opts, max_events,
+                        store_backend, byte_budget, synopsis_budget,
+                        fmt::format("[{}/{}]", i + 1, groups.size()));
       const auto done = completed.fetch_add(1, std::memory_order_relaxed) + 1;
       if (not result) {
         failures.fetch_add(1, std::memory_order_relaxed);
@@ -1649,6 +1703,10 @@ public:
                           "memory budget for merging, shared across parallel "
                           "merges, e.g. 8GiB (default: a quarter of the "
                           "available memory)")
+        .add<std::string>("max-sketch-memory",
+                          "buffering allowance for the sketches of a single "
+                          "merge, e.g. 2GiB (default: a quarter of the "
+                          "per-merge budget, at most 2GiB)")
         .add<int64_t>("parallel,j", "number of merges to run in parallel "
                                     "(default: 1)"));
     auto factory = command::factory{
