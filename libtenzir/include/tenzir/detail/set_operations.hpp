@@ -23,20 +23,19 @@ T intersect(const T& xs, const T& ys) {
 
 template <class T>
 void inplace_intersect(T& result, const T& xs) {
-  // Adapted from https://stackoverflow.com/a/1773620/1170277.
-  auto i = result.begin();
   auto j = xs.begin();
-  while (i != result.end() and j != xs.end()) {
-    if (*i < *j) {
-      i = result.erase(i);
-    } else if (*i > *j) {
-      ++j;
-    } else {
-      ++i;
-      ++j;
-    }
-  }
-  result.erase(i, result.end());
+  result.erase(std::remove_if(result.begin(), result.end(),
+                              [&](const auto& x) {
+                                while (j != xs.end() and *j < x) {
+                                  ++j;
+                                }
+                                if (j == xs.end() or x < *j) {
+                                  return true;
+                                }
+                                ++j;
+                                return false;
+                              }),
+               result.end());
 }
 
 template <class T>
