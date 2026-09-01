@@ -458,6 +458,7 @@ caf::error index_state::load_from_disk() {
     TENZIR_VERBOSE("{} found no prior state, starting with a clean slate",
                    *self);
     self->mail(atom::start_v, std::vector<partition_synopsis_pair>{})
+      .urgent()
       .request(catalog, caf::infinite)
       .then([](atom::ok) {},
             [this](caf::error err) {
@@ -978,6 +979,7 @@ caf::error index_state::load_from_disk() {
   TENZIR_DEBUG("{} requesting bulk merge of {} partitions", *self,
                synopses.size());
   self->mail(atom::start_v, std::move(synopses))
+    .urgent()
     .request(catalog, caf::infinite)
     .then(
       [this](atom::ok) {
@@ -1190,6 +1192,7 @@ void index_state::decommission_active_partition(
         // down.
         auto apsv = std::vector<partition_synopsis_pair>{{id, ps}};
         self->mail(atom::merge_v, std::move(apsv))
+          .urgent()
           .request(catalog, caf::infinite)
           .then(
             [=, this](atom::ok) {
@@ -1677,6 +1680,7 @@ index(index_actor::stateful_pointer<index_state> self,
       // since CAF guarantees message order within the same inbound queue
       // they will all be part of the response vector.
       self->mail(atom::get_v)
+        .urgent()
         .request(self->state().catalog, caf::infinite)
         .then(
           [=](std::vector<partition_synopsis_pair>& v) {
@@ -2205,6 +2209,7 @@ index(index_actor::stateful_pointer<index_state> self,
                         if (keep == keep_original_partition::yes) {
                           if (not apsv.empty()) {
                             self->mail(atom::merge_v, apsv)
+                              .urgent()
                               .request(self->state().catalog, caf::infinite)
                               .then(
                                 [self, deliver, transformed_input_partitions,
@@ -2237,6 +2242,7 @@ index(index_actor::stateful_pointer<index_state> self,
                           }
                         } else { // keep == keep_original_partition::no
                           self->mail(atom::replace_v, old_partition_ids, apsv)
+                            .urgent()
                             .request(self->state().catalog, caf::infinite)
                             .then(
                               [self, deliver, old_partition_ids,

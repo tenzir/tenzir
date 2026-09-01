@@ -732,6 +732,7 @@ struct rebuilder_state {
     TENZIR_INFO("{} selects rebuild candidates matching {}", *self,
                 run->options.expression);
     self->mail(atom::candidates_v, std::move(query_context))
+      .urgent()
       .request(catalog, caf::infinite)
       .then(
         [this, finish, this_run](catalog_lookup_result& lookup_result) mutable {
@@ -1170,6 +1171,7 @@ struct rebuilder_state {
             self
               ->mail(atom::erase_v, atom::extract_v, *corrupt,
                      fmt::to_string(error))
+              .urgent()
               .request(catalog, caf::infinite)
               .then(
                 [this, corrupt = *corrupt](atom::done) {
