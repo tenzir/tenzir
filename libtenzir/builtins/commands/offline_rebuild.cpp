@@ -25,6 +25,7 @@
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/available_memory.hpp"
 #include "tenzir/detail/load_contents.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/pid_file.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/settings.hpp"
@@ -64,6 +65,7 @@
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <numeric>
 #include <system_error>
@@ -394,7 +396,23 @@ auto replay_markers(const std::filesystem::path& state_dir,
                     const std::filesystem::path& index_dir) -> caf::error {
   const auto markers_dir = index_dir / "markers";
   auto err = std::error_code{};
+  // Remove stray temporary stores from merges that died before their marker
+  // became durable. Only safe when no marker references a temporary file.
+  const auto sweep_stray_stores = [&] {
+    auto ec = std::error_code{};
+    for (const auto& archive_entry : std::filesystem::directory_iterator(
+           state_dir / "archive",
+           std::filesystem::directory_options::skip_permission_denied, ec)) {
+      if (archive_entry.path().extension() == ".tmp") {
+        auto remove_ec = std::error_code{};
+        std::filesystem::remove(archive_entry.path(), remove_ec);
+      }
+    }
+  };
   if (not std::filesystem::is_directory(markers_dir, err)) {
+    // A streaming merge writes its temporary store before it creates the
+    // markers directory, so stray temporaries can exist without any marker.
+    sweep_stray_stores();
     return caf::none;
   }
   // Move a file into place, treating an already-moved source as success.
@@ -448,7 +466,10 @@ auto replay_markers(const std::filesystem::path& state_dir,
         const auto output_id = uuid::from_flatbuffer(*id);
         const auto name = fmt::format("{:l}", output_id);
         // A store written by a streaming merge stays at its temporary path
-        // until the marker is durable; promote it on replay.
+        // until the marker is durable; promote it on replay. An output
+        // without any store would lose data once the inputs are erased, so
+        // require one to exist, and treat filesystem errors as failures.
+        auto have_store = false;
         for (const auto* ext : {"store", "feather", "parquet"}) {
           const auto final_path
             = state_dir / "archive" / fmt::format("{}.{}", output_id, ext);
@@ -457,8 +478,17 @@ auto replay_markers(const std::filesystem::path& state_dir,
           auto ec = std::error_code{};
           if (std::filesystem::exists(tmp_path, ec)) {
             restored = restore(tmp_path, final_path) and restored;
+          } else if (ec) {
+            restored = false;
+          }
+          ec.clear();
+          if (std::filesystem::exists(final_path, ec)) {
+            have_store = true;
+          } else if (ec) {
+            restored = false;
           }
         }
+        restored = have_store and restored;
         restored = restore(markers_dir / name, index_dir / name) and restored;
         restored
           = restore(markers_dir / (name + ".mdx"), index_dir / (name + ".mdx"))
@@ -543,17 +573,13 @@ auto replay_markers(const std::filesystem::path& state_dir,
                   "filesystem problem and run again",
                   kept, markers_dir));
   }
-  // Remove stray temporary stores from merges that died before their marker
-  // became durable. Safe now that no marker references a temporary file.
-  for (const auto& archive_entry : std::filesystem::directory_iterator(
-         state_dir / "archive",
-         std::filesystem::directory_options::skip_permission_denied, err)) {
-    if (archive_entry.path().extension() == ".tmp") {
-      auto ec = std::error_code{};
-      std::filesystem::remove(archive_entry.path(), ec);
-    }
-  }
-  std::filesystem::remove(markers_dir, err);
+  sweep_stray_stores();
+  // Every marker replayed successfully, so any remaining file in the markers
+  // directory is a staged output whose merge died before its marker became
+  // durable; nothing references those, so remove them along with the
+  // directory. Leaving them behind would make the directory non-empty
+  // forever and block future dry runs.
+  std::filesystem::remove_all(markers_dir, err);
   if (replayed > 0) {
     report("finished {} interrupted partition transform(s) left over from an "
            "unclean shutdown",
@@ -743,9 +769,15 @@ constexpr auto undersized_threshold = 0.8;
 /// partitions cover no more than that much time. A partition whose own range
 /// already exceeds the span cannot be shrunk without reading its events and
 /// stays in place like a full partition.
+///
+/// With a streaming store writer, merging holds at most one input partition
+/// decoded in memory, so the byte budget only bounds the size of a single
+/// input; without one, the output store buffers the whole group until it is
+/// serialized, so the budget bounds the group total.
 auto plan_consolidation(std::vector<partition_record> records,
                         uint64_t max_events, uint64_t byte_budget,
-                        duration max_span) -> std::vector<merge_group> {
+                        duration max_span, bool streaming_stores)
+  -> std::vector<merge_group> {
   const auto target_events = static_cast<uint64_t>(
     undersized_threshold * static_cast<double>(max_events));
   auto by_schema = std::unordered_map<type, std::vector<partition_record>>{};
@@ -755,6 +787,10 @@ auto plan_consolidation(std::vector<partition_record> records,
       // synopsis; they cannot be consolidated by this tool.
       report("skipping partition {} with unsupported version {}", rec.id,
              rec.version);
+      continue;
+    }
+    if (rec.events == 0) {
+      // Nothing to merge, and an empty store cannot be written.
       continue;
     }
     by_schema[rec.schema].push_back(std::move(rec));
@@ -800,22 +836,24 @@ auto plan_consolidation(std::vector<partition_record> records,
       current = merge_group{};
     };
     for (auto& rec : parts) {
+      const auto bytes = estimated_bytes(rec);
       if (rec.events >= target_events
           or (max_span > duration::zero()
-              and rec.cut_max - rec.cut_min > max_span)) {
-        // The partition is not undersized, or it alone already covers more
-        // time than the allowed span; leave it in place. It closes the
-        // current group so that no merged partition spans its range.
+              and rec.cut_max - rec.cut_min > max_span)
+          or (streaming_stores and bytes > byte_budget)) {
+        // The partition is not undersized, it alone already covers more time
+        // than the allowed span, or it alone does not fit into the memory
+        // budget; leave it in place. It closes the current group so that no
+        // merged partition spans its range.
         flush();
         continue;
       }
-      const auto bytes = estimated_bytes(rec);
       // Stop growing a group only after its total crossed the target, like
       // the online rebuilder; the memory budget and the time span remain hard
       // limits that are checked before adding.
       if (not current.parts.empty()
           and (current.events >= target_events
-               or current.bytes + bytes > byte_budget
+               or (not streaming_stores and current.bytes + bytes > byte_budget)
                or (max_span > duration::zero()
                    and std::max(current.cut_max, rec.cut_max)
                            - std::min(current.cut_min, rec.cut_min)
@@ -887,13 +925,6 @@ auto execute_merge(const merge_group& group,
                            fmt::format("unknown store backend `{}`",
                                        store_backend));
   }
-  auto out_store = out_plugin->make_active_store();
-  if (not out_store) {
-    return diagnostic::error(out_store.error())
-      .note("failed to create `{}` store", store_backend)
-      .to_error();
-  }
-  (*out_store)->set_origin("rebuild");
   const auto schema = group.parts.front().schema;
   auto data = active_partition_state::serialization_data{};
   data.id = uuid::random();
@@ -902,6 +933,50 @@ auto execute_merge(const merge_group& group,
   data.synopsis = caf::make_copy_on_write<partition_synopsis>();
   auto& synopsis = data.synopsis.unshared();
   synopsis.schema = schema;
+  const auto store_out_path
+    = state_dir / "archive" / fmt::format("{}.{}", data.id, store_backend);
+  const auto store_tmp_path
+    = std::filesystem::path{store_out_path.string() + ".tmp"};
+  // Prefer the streaming store writer, which keeps at most one input
+  // partition in memory and flushes serialized data to a temporary file as it
+  // goes; fall back to the buffered active store for backends without
+  // streaming support.
+  auto store_file = std::ofstream{};
+  auto writer = out_plugin->make_store_writer([&](const chunk_ptr& chunk) {
+    store_file.write(reinterpret_cast<const char*>(chunk->data()),
+                     detail::narrow_cast<std::streamsize>(chunk->size()));
+    if (not store_file) {
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to write to `{}`",
+                                         store_tmp_path));
+    }
+    return caf::error{};
+  });
+  auto buffered_store = std::unique_ptr<active_store>{};
+  if (writer) {
+    (*writer)->set_origin("rebuild");
+    store_file.open(store_tmp_path, std::ios::binary | std::ios::trunc);
+    if (not store_file) {
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to open `{}` for writing",
+                                         store_tmp_path));
+    }
+  } else {
+    auto buffered = out_plugin->make_active_store();
+    if (not buffered) {
+      return diagnostic::error(buffered.error())
+        .note("failed to create `{}` store", store_backend)
+        .to_error();
+    }
+    buffered_store = std::move(*buffered);
+    buffered_store->set_origin("rebuild");
+  }
+  // The temporary file only becomes the store through the rename below;
+  // remove it on every other path. Removing it after the rename is a no-op.
+  auto cleanup_tmp = detail::scope_guard{[&]() noexcept {
+    auto ec = std::error_code{};
+    std::filesystem::remove(store_tmp_path, ec);
+  }};
   auto input_store_paths = std::vector<std::filesystem::path>{};
   input_store_paths.reserve(group.parts.size());
   const auto merge_start = std::chrono::steady_clock::now();
@@ -1045,7 +1120,9 @@ auto execute_merge(const merge_group& group,
       ids.append_bits(true, last - first);
       data.events += slice.rows();
       synopsis.add(slice, partition_capacity, synopsis_opts);
-      if (auto error = (*out_store)->add({std::move(slice)}); error.valid()) {
+      if (auto error = writer ? (*writer)->add({std::move(slice)})
+                              : buffered_store->add({std::move(slice)});
+          error.valid()) {
         return diagnostic::error(error)
           .note("failed to append events of partition {}", rec.id)
           .to_error();
@@ -1091,11 +1168,30 @@ auto execute_merge(const merge_group& group,
       .note("failed to serialize merged partition synopsis")
       .to_error();
   }
-  auto store_chunk_out = (*out_store)->finish();
-  if (not store_chunk_out) {
-    return diagnostic::error(store_chunk_out.error())
-      .note("failed to serialize merged store")
-      .to_error();
+  // Finalize the output store: a streaming writer flushes its remaining data
+  // to the temporary file, a buffered store serializes into memory.
+  auto store_chunk_out = chunk_ptr{};
+  if (writer) {
+    auto bytes = (*writer)->finish();
+    if (not bytes) {
+      return diagnostic::error(bytes.error())
+        .note("failed to serialize merged store")
+        .to_error();
+    }
+    store_file.close();
+    if (not store_file) {
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to write to `{}`",
+                                         store_tmp_path));
+    }
+  } else {
+    auto chunk = buffered_store->finish();
+    if (not chunk) {
+      return diagnostic::error(chunk.error())
+        .note("failed to serialize merged store")
+        .to_error();
+    }
+    store_chunk_out = std::move(*chunk);
   }
   // Persist the outputs: first the store, then partition and synopsis staged
   // in the markers directory, then the marker that records the swap. Once the
@@ -1110,8 +1206,6 @@ auto execute_merge(const merge_group& group,
                                        err.message()));
   }
   const auto output_name = fmt::format("{:l}", data.id);
-  const auto store_out_path
-    = state_dir / "archive" / fmt::format("{}.{}", data.id, store_backend);
   const auto staged_partition = markers_dir / output_name;
   const auto staged_synopsis = markers_dir / (output_name + ".mdx");
   const auto marker_path
@@ -1131,8 +1225,15 @@ auto execute_merge(const merge_group& group,
     }
     return caf::none;
   };
-  if (auto error = save(store_out_path, *store_chunk_out); error.valid()) {
-    return error;
+  // A buffered store still needs to be written to disk; a streaming store is
+  // already durable at its temporary path. Both are only renamed to the final
+  // name after the marker below, so that an interrupted merge leaves nothing
+  // under a final name that recovery does not know about, and stray temporary
+  // stores are swept on the next run.
+  if (store_chunk_out) {
+    if (auto error = save(store_tmp_path, store_chunk_out); error.valid()) {
+      return error;
+    }
   }
   if (auto error = save(staged_partition, *partition_chunk_out);
       error.valid()) {
@@ -1327,8 +1428,15 @@ auto offline_rebuild_command(const invocation& inv, caf::actor_system&)
                                    })
                                    .bytes
                                  / 4;
+  const auto* backend_plugin = plugins::find<store_plugin>(store_backend);
+  const auto streaming_stores
+    = backend_plugin
+      and static_cast<bool>(
+        backend_plugin->make_store_writer([](const chunk_ptr&) {
+          return caf::error{};
+        }));
   auto groups = plan_consolidation(std::move(*records), max_events, byte_budget,
-                                   max_span);
+                                   max_span, streaming_stores);
   if (groups.empty()) {
     report("all partitions are already consolidated; nothing to do");
     return {};
@@ -1338,8 +1446,9 @@ auto offline_rebuild_command(const invocation& inv, caf::actor_system&)
                       [](size_t acc, const merge_group& group) {
                         return acc + group.parts.size();
                       });
-  report("planned {} merges covering {} partitions (memory budget: {})",
-         groups.size(), planned_inputs, human_bytes(byte_budget));
+  report("planned {} merges covering {} partitions (memory budget: {}{})",
+         groups.size(), planned_inputs, human_bytes(byte_budget),
+         streaming_stores ? " per input, streaming" : "");
   auto plans = make_schema_plans(groups);
   if (dry_run) {
     report_plan(plans, "would merge");
