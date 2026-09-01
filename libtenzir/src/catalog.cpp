@@ -760,8 +760,8 @@ auto catalog_state::lookup_impl(
   -> catalog_lookup_result::candidate_info {
   TENZIR_ASSERT(not is<caf::none_t>(expr));
   // The partition UUIDs must be sorted, otherwise the invariants of the
-  // inplace union and intersection algorithms are violated, leading to
-  // wrong results. So all places where we return an assembled set must
+  // inplace set algorithms are violated, leading to wrong results. So all
+  // places where we return an assembled set must
   // ensure the post-condition of returning a sorted list. We currently
   // rely on `flat_map` already traversing them in the correct order, so
   // no separate sorting step is required.
@@ -776,6 +776,36 @@ auto catalog_state::lookup_impl(
     }
     return memoized_partitions;
   };
+  using synopsis_map = detail::flat_map<uuid, partition_synopsis_ptr>;
+  using candidate_info = catalog_lookup_result::candidate_info;
+  auto narrow_to = [&](const candidate_info& candidates) {
+    auto entries = typename synopsis_map::vector_type{};
+    entries.reserve(candidates.partition_infos.size());
+    for (const auto& candidate : candidates.partition_infos) {
+      const auto it = partition_synopses.find(candidate.uuid);
+      TENZIR_ASSERT(it != partition_synopses.end());
+      entries.push_back(*it);
+    }
+    return synopsis_map::make_unsafe(std::move(entries));
+  };
+  auto exclude = [&](const candidate_info& candidates) {
+    TENZIR_ASSERT(candidates.partition_infos.size()
+                  <= partition_synopses.size());
+    auto entries = typename synopsis_map::vector_type{};
+    entries.reserve(partition_synopses.size()
+                    - candidates.partition_infos.size());
+    auto candidate = candidates.partition_infos.begin();
+    for (const auto& entry : partition_synopses) {
+      if (candidate != candidates.partition_infos.end()
+          and candidate->uuid == entry.first) {
+        ++candidate;
+        continue;
+      }
+      entries.push_back(entry);
+    }
+    TENZIR_ASSERT(candidate == candidates.partition_infos.end());
+    return synopsis_map::make_unsafe(std::move(entries));
+  };
   auto f = detail::overload{
     [&](const conjunction& x) -> catalog_lookup_result::candidate_info {
       TENZIR_ASSERT(not x.empty());
@@ -786,19 +816,14 @@ auto catalog_state::lookup_impl(
           if (contains_metadata(op) != metadata) {
             continue;
           }
-          // TODO: A conjunction means that we can restrict the lookup to the
-          // remaining candidates. This could be achived by passing the `result`
-          // set to `lookup` along with the child expression.
-          auto xs = lookup_impl(op, schema, partition_synopses,
-                                deferred_sketch_partitions);
           if (not initialized) {
-            result = std::move(xs);
+            result = lookup_impl(op, schema, partition_synopses,
+                                 deferred_sketch_partitions);
             initialized = true;
           } else {
-            detail::inplace_intersect(result.partition_infos,
-                                      xs.partition_infos);
-            TENZIR_ASSERT_EXPENSIVE(std::is_sorted(
-              result.partition_infos.begin(), result.partition_infos.end()));
+            auto remaining = narrow_to(result);
+            result
+              = lookup_impl(op, schema, remaining, deferred_sketch_partitions);
           }
           if (result.partition_infos.empty()) {
             return result; // short-circuit
@@ -814,18 +839,25 @@ auto catalog_state::lookup_impl(
           if (contains_metadata(op) != metadata) {
             continue;
           }
-          // TODO: A disjunction means that we can restrict the lookup to the
-          // set of partitions that are outside of the current result set.
-          auto xs = lookup_impl(op, schema, partition_synopses,
-                                deferred_sketch_partitions);
-          if (xs.partition_infos.size() == partition_synopses.size()) {
-            return xs; // short-circuit
+          auto xs = catalog_lookup_result::candidate_info{};
+          if (result.partition_infos.empty()) {
+            xs = lookup_impl(op, schema, partition_synopses,
+                             deferred_sketch_partitions);
+          } else {
+            auto remaining = exclude(result);
+            if (remaining.empty()) {
+              return result;
+            }
+            xs = lookup_impl(op, schema, remaining, deferred_sketch_partitions);
           }
           TENZIR_ASSERT_EXPENSIVE(std::is_sorted(xs.partition_infos.begin(),
                                                  xs.partition_infos.end()));
           detail::inplace_unify(result.partition_infos, xs.partition_infos);
           TENZIR_ASSERT_EXPENSIVE(std::is_sorted(result.partition_infos.begin(),
                                                  result.partition_infos.end()));
+          if (result.partition_infos.size() == partition_synopses.size()) {
+            return result; // short-circuit
+          }
         }
       }
       return result;
