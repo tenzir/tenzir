@@ -1,0 +1,20 @@
+warning: truncated Avro input
+ --> tests/functions/parse_avro/errors.tql:2:10
+  |
+2 | parsed = raw.decode_hex().parse_avro(schema=r#""string""#)
+  |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+
+warning: trailing Avro data
+ --> tests/functions/parse_avro/errors.tql:2:10
+  |
+2 | parsed = raw.decode_hex().parse_avro(schema=r#""string""#)
+  |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: discarded 1 trailing bytes
+{
+  parsed: null,
+}
+{
+  parsed: "a",
+}

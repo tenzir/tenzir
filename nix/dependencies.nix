@@ -11,6 +11,7 @@
   libpcap,
   arrow-cpp,
   arrow-adbc-cpp,
+  avro-cpp,
   aws-sdk-cpp-tenzir,
   azure-sdk-for-cpp,
   libbacktrace,
@@ -80,6 +81,7 @@ in
   propagatedNativeBuildInputs = [ pkg-config ];
 
   buildInputs = [
+    avro-cpp
     azure-sdk-for-cpp.storage-blobs
     clickhouse-cpp
     fluent-bit

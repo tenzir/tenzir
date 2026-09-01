@@ -1,0 +1,7 @@
+error: unsupported Avro schema
+ --> tests/functions/parse_avro/recursive_schema.tql:8:32
+  |
+8 | value = data.parse_avro(schema=r#"{
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: recursive Avro schemas are not supported

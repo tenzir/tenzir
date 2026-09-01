@@ -1,0 +1,4 @@
+from {data: "00020002010C0A68656C6C6F00".decode_hex()}
+write_chunks
+read_avro schema=r#"["null",{"type":"array","items":"string"}]"#
+item_type = type_of(value).state.type.kind

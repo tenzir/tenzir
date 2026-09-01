@@ -1,0 +1,18 @@
+{
+  parsed: {
+    number: 1,
+    text: "abc",
+    metadata: null,
+    maybe: null,
+  },
+  maybe_kind: "string",
+}
+{
+  parsed: {
+    number: 2,
+    text: "xyz",
+    metadata: null,
+    maybe: "a",
+  },
+  maybe_kind: "string",
+}

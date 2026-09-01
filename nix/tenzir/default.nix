@@ -36,6 +36,7 @@ let
       bundledPlugins = [
         "plugins/amqp"
         "plugins/amazon-kinesis"
+        "plugins/avro"
         "plugins/azure-blob-storage"
         "plugins/clickhouse"
         "plugins/amazon-cloudwatch"

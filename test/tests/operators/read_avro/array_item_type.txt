@@ -1,0 +1,14 @@
+{
+  value: null,
+  item_type: "string",
+}
+{
+  value: [],
+  item_type: "string",
+}
+{
+  value: [
+    "hello",
+  ],
+  item_type: "string",
+}

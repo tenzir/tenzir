@@ -1,0 +1,7 @@
+error: failed to read Avro input
+ --> tests/operators/read_avro/invalid_array_block_size.tql:7:1
+  |
+7 | read_avro schema=r#"{"type":"array","items":"string"}"#
+  | ^^^^^^^^^
+  |
+  = note: invalid Avro block size

@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from {data: "00".decode_hex()}
+write_chunks
+read_avro schema=r#"{"type":"array","items":{"type":"map","values":"long"}}"#

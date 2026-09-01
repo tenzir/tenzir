@@ -1,0 +1,5 @@
+---
+error: true
+---
+from {raw: "00"}
+parsed = raw.decode_hex().parse_avro(schema="{")

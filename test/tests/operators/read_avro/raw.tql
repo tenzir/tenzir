@@ -1,0 +1,18 @@
+from {
+  data: "540A616C6963650104027804797A000202610E0002046F6B005606626F62000002026210000000".decode_hex(),
+}
+write_chunks
+read_avro schema=r#"{
+  "type": "record",
+  "name": "event",
+  "fields": [
+    {"name": "id", "type": "long"},
+    {"name": "name", "type": "string"},
+    {"name": "active", "type": "boolean"},
+    {"name": "tags", "type": {"type": "array", "items": "string"}},
+    {"name": "meta", "type": {"type": "map", "values": "long"}},
+    {"name": "choice", "type": ["null", "string"]},
+    {"name": "optional_meta", "type": ["null", {"type": "map", "values": "long"}]}
+  ]
+}"#
+choice_kind = type_of(choice).kind

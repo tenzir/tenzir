@@ -1,0 +1,4 @@
+from {raw: "00"}
+parsed = raw.decode_hex().parse_avro(schema=r#""bytes""#)
+parsed = parsed.encode_hex()
+drop raw
