@@ -879,89 +879,108 @@ auto catalog_state::lookup_impl(
         TENZIR_ASSERT(is<data>(x.rhs));
         const auto& rhs = as<data>(x.rhs);
         catalog_lookup_result::candidate_info result;
-        // dont iterate through all synopses, rewrite lookup_impl to use a
-        // singular type all synopses loops -> relevant anymore? Use type as
-        // synopses key
+        auto matching_fields = std::vector<qualified_record_field>{};
+        const auto* schema_fields = try_as<record_type>(&schema);
+        const auto fields_resolved
+          = schema_fields != nullptr and not schema.name().empty();
+        if (fields_resolved) {
+          for (const auto& leaf : schema_fields->leaves()) {
+            auto field = qualified_record_field{schema, leaf.index};
+            if (match(field)) {
+              matching_fields.push_back(std::move(field));
+            }
+          }
+        }
         for (const auto& [part_id, part_syn] : partition_synopses) {
           // Prefer an on-demand-loaded synopsis (with Bloom-filter sketches)
           // when one is cached; otherwise use the resident synopsis, whose
           // deferred sketches are null.
           const auto loaded = sketches.peek(part_id);
           const auto& effective = loaded ? loaded : part_syn;
-          for (const auto& [field, syn] : effective->field_synopses_) {
-            if (match(field)) {
-              // We need to prune the type's metadata here by converting it to
-              // a concrete type and back, because the type synopses are
-              // looked up independent from names and attributes.
-              auto prune = [&]<concrete_type T>(const T& x) {
-                return type{x};
-              };
-              auto cleaned_type = tenzir::match(field.type(), prune);
-              // We rely on having a field -> nullptr mapping here for the
-              // fields that don't have their own synopsis.
-              if (syn) {
-                auto opt = syn->lookup(x.op, make_view(rhs));
-                if (not opt or *opt) {
-                  TENZIR_TRACE("{} selects {} at predicate {}",
-                               detail::pretty_type_name(this), part_id, x);
-                  result.partition_infos.emplace_back(part_id, *effective);
-                  break;
-                }
-                // The field has no dedicated synopsis. Check if there is one
-                // for the type in general.
-              } else if (auto it = effective->type_synopses_.find(cleaned_type);
-                         it != effective->type_synopses_.end() and it->second) {
-                auto opt = it->second->lookup(x.op, make_view(rhs));
-                if (not opt or *opt) {
-                  TENZIR_TRACE("{} selects {} at predicate {}",
-                               detail::pretty_type_name(this), part_id, x);
-                  result.partition_infos.emplace_back(part_id, *effective);
-                  break;
-                }
-              } else {
-                // The catalog couldn't rule out this partition, so we have
-                // to include it in the result set. If the missing synopsis is
-                // a deferred Bloom filter, record that loading it could prune
-                // further -- but only if the Bloom filter could actually answer
-                // this predicate. `bloom_filter_synopsis::lookup` only hashes
-                // literal values of the field type: it prunes `equal` against a
-                // literal and `in` against a list of literals. For anything
-                // else (`!=`, ranges, patterns, subnets/patterns inside an `in`
-                // list, type mismatches) it returns nullopt or silently skips
-                // the element, so loading the sketch could not prune -- or
-                // worse, could prune a partition exact evaluation would keep.
-                if (not loaded) {
-                  // True iff `value` is a literal a Bloom filter on this field
-                  // type can hash (string -> string, IP -> ip).
-                  const auto is_bloom_literal = [&](const data& value) {
-                    return tenzir::match(
-                      field.type(), [&]<concrete_type T>(const T&) {
-                        if constexpr (std::is_same_v<T, string_type>) {
-                          return is<std::string>(value);
-                        } else if constexpr (std::is_same_v<T, ip_type>) {
-                          return is<ip>(value);
-                        } else {
-                          return false;
-                        }
-                      });
-                  };
-                  auto bloom_prunable = false;
-                  if (x.op == relational_operator::equal) {
-                    bloom_prunable = is_bloom_literal(rhs);
-                  } else if (x.op == relational_operator::in) {
-                    if (const auto* xs = try_as<list>(&rhs)) {
-                      bloom_prunable
-                        = std::ranges::all_of(*xs, is_bloom_literal);
+          auto may_contain = [&](const qualified_record_field& field,
+                                 const synopsis_ptr& syn) {
+            // We need to prune the type's metadata here by converting it to a
+            // concrete type and back, because the type synopses are looked up
+            // independent from names and attributes.
+            auto prune = [&]<concrete_type T>(const T& x) {
+              return type{x};
+            };
+            auto cleaned_type = tenzir::match(field.type(), prune);
+            if (syn) {
+              auto opt = syn->lookup(x.op, make_view(rhs));
+              return not opt or *opt;
+            }
+            // The field has no dedicated synopsis. Check if there is one for
+            // the type in general.
+            if (auto it = effective->type_synopses_.find(cleaned_type);
+                it != effective->type_synopses_.end() and it->second) {
+              auto opt = it->second->lookup(x.op, make_view(rhs));
+              return not opt or *opt;
+            }
+            // The catalog couldn't rule out this partition, so we have to
+            // include it in the result set. If the missing synopsis is a
+            // deferred Bloom filter, record that loading it could prune
+            // further -- but only if the Bloom filter could actually answer
+            // this predicate. `bloom_filter_synopsis::lookup` only hashes
+            // literal values of the field type: it prunes `equal` against a
+            // literal and `in` against a list of literals. For anything else
+            // (`!=`, ranges, patterns, subnets/patterns inside an `in` list,
+            // type mismatches) it returns nullopt or silently skips the
+            // element, so loading the sketch could not prune -- or worse,
+            // could prune a partition exact evaluation would keep.
+            if (not loaded) {
+              // True iff `value` is a literal a Bloom filter on this field type
+              // can hash (string -> string, IP -> ip).
+              const auto is_bloom_literal = [&](const data& value) {
+                return tenzir::match(
+                  field.type(), [&]<concrete_type T>(const T&) {
+                    if constexpr (std::is_same_v<T, string_type>) {
+                      return is<std::string>(value);
+                    } else if constexpr (std::is_same_v<T, ip_type>) {
+                      return is<ip>(value);
+                    } else {
+                      return false;
                     }
-                  }
-                  if (bloom_prunable) {
-                    deferred_sketch_partitions.insert(part_id);
-                  }
+                  });
+              };
+              auto bloom_prunable = false;
+              if (x.op == relational_operator::equal) {
+                bloom_prunable = is_bloom_literal(rhs);
+              } else if (x.op == relational_operator::in) {
+                if (const auto* xs = try_as<list>(&rhs)) {
+                  bloom_prunable = std::ranges::all_of(*xs, is_bloom_literal);
                 }
-                result.partition_infos.emplace_back(part_id, *effective);
+              }
+              if (bloom_prunable) {
+                deferred_sketch_partitions.insert(part_id);
+              }
+            }
+            return true;
+          };
+          auto selected = false;
+          if (fields_resolved) {
+            for (const auto& field : matching_fields) {
+              const auto syn = effective->field_synopses_.find(field);
+              if (syn != effective->field_synopses_.end()
+                  and may_contain(field, syn->second)) {
+                selected = true;
                 break;
               }
             }
+          } else {
+            // Partition v0 synopses have no schema and may be heterogeneous,
+            // so resolve their matching fields separately.
+            for (const auto& [field, syn] : effective->field_synopses_) {
+              if (match(field) and may_contain(field, syn)) {
+                selected = true;
+                break;
+              }
+            }
+          }
+          if (selected) {
+            TENZIR_TRACE("{} selects {} at predicate {}",
+                         detail::pretty_type_name(this), part_id, x);
+            result.partition_infos.emplace_back(part_id, *effective);
           }
         }
         TENZIR_DEBUG("{} checked {} partitions for predicate {} and got {} "
@@ -981,6 +1000,14 @@ auto catalog_state::lookup_impl(
               // We don't have to look into the synopses for type queries, just
               // at the schema names.
               catalog_lookup_result::candidate_info result;
+              if (schema and not schema.name().empty()) {
+                if (evaluate(std::string{schema.name()}, x.op, d)) {
+                  result = all_partitions();
+                }
+                return result;
+              }
+              // Partition v0 synopses have no schema, so recover their names
+              // from their qualified fields instead.
               for (const auto& [part_id, part_syn] : partition_synopses) {
                 for (const auto& [fqf, _] : part_syn->field_synopses_) {
                   // TODO: provide an overload for view of evaluate() so that
