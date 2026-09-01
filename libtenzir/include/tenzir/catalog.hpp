@@ -14,6 +14,7 @@
 #include "tenzir/detail/flat_map.hpp"
 #include "tenzir/detail/request_cache.hpp"
 #include "tenzir/expression.hpp"
+#include "tenzir/instrumentation.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/taxonomies.hpp"
@@ -143,6 +144,13 @@ public:
   /// @param expr The expression to lookup.
   /// @returns A lookup result of candidate partitions categorized by type.
   auto lookup(expression expr) -> caf::expected<catalog_lookup_result>;
+
+  /// Applies the finishing touches shared by every `lookup` path: sorts each
+  /// schema's candidates by recency and reports the timing. `start` is when
+  /// the enclosing lookup began.
+  auto finalize_lookup(catalog_lookup_result&& candidates,
+                       stopwatch::time_point start) const
+    -> catalog_lookup_result;
 
   /// Evaluates `expr` against the given partition collection of `schema`.
   /// The collection is a parameter (rather than always the full per-schema map)

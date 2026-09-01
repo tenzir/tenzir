@@ -17,6 +17,8 @@
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/available_memory.hpp"
 #include "tenzir/detail/fanout_counter.hpp"
+#include "tenzir/detail/narrow.hpp"
+#include "tenzir/detail/saturating_arithmetic.hpp"
 #include "tenzir/fbs/utils.hpp"
 #include "tenzir/flatbuffer.hpp"
 #include "tenzir/ir.hpp"
@@ -51,33 +53,42 @@ namespace tenzir {
 namespace {
 
 struct memory_budget {
-  uint64_t initial_available = 0;
+  /// The maximum number of decoded bytes this transform may buffer.
   uint64_t bytes = 0;
+  /// Where `bytes` came from, for diagnostics.
   std::string source = {};
 };
 
-auto make_memory_budget() -> Option<memory_budget> {
+/// Determines how many decoded bytes a single partition transform may buffer.
+///
+/// The budget is compared against the bytes we actually buffered, not against a
+/// system-wide `MemAvailable` delta: unrelated activity moves that number in
+/// both directions, and the page cache backing our `mmap`ed input counts as
+/// available, so it barely registers what we hold.
+///
+/// Concurrent transforms share one machine, so each gets `1/parallelism` of the
+/// budget.
+auto make_memory_budget(const caf::settings& index_opts, size_t parallelism)
+  -> Option<memory_budget> {
+  const auto divisor = std::max<uint64_t>(parallelism, 1);
+  auto configured
+    = caf::get_if<caf::config_value::integer>(&index_opts, "rebuild-memory-"
+                                                           "budget");
+  if (configured and *configured > 0) {
+    return memory_budget{
+      .bytes = detail::narrow_cast<uint64_t>(*configured) / divisor,
+      .source = "tenzir.rebuild-memory-budget",
+    };
+  }
+  // Without an explicit budget, admit a fraction of what is available now.
   auto available = detail::available_memory();
   if (not available) {
     return None{};
   }
   return memory_budget{
-    .initial_available = available->bytes,
-    .bytes = available->bytes / 4,
+    .bytes = available->bytes / 4 / divisor,
     .source = std::move(available->source),
   };
-}
-
-auto live_budget_used(const memory_budget& budget)
-  -> Option<std::pair<uint64_t, uint64_t>> {
-  auto current = detail::available_memory();
-  if (not current) {
-    return None{};
-  }
-  const auto used = budget.initial_available > current->bytes
-                      ? budget.initial_available - current->bytes
-                      : uint64_t{0};
-  return std::pair{used, current->bytes};
 }
 
 auto collect_table_slices(caf::event_based_actor*,
@@ -306,46 +317,36 @@ public:
   partition_loader(std::vector<partition_info> partitions,
                    std::string partition_path_template,
                    std::filesystem::path archive_dir,
-                   filesystem_actor filesystem,
+                   filesystem_actor filesystem, Option<memory_budget> budget,
                    std::shared_ptr<partition_source_state> state)
     : partitions_{std::move(partitions)},
       partition_path_template_{std::move(partition_path_template)},
       archive_dir_{std::move(archive_dir)},
       filesystem_{std::move(filesystem)},
-      memory_budget_{make_memory_budget()},
+      memory_budget_{std::move(budget)},
       state_{std::move(state)} {
     TENZIR_ASSERT(state_);
     state_->selected_partitions = partitions_;
   }
 
   auto feed(Push<OperatorMsg<table_slice>>& push_input) const -> Task<void> {
+    // The transform holds every slice until it persists, so this is what the
+    // budget bounds.
+    auto buffered_bytes = uint64_t{0};
     for (const auto& partition : partitions_) {
-      if (memory_budget_) {
-        if (auto used = live_budget_used(*memory_budget_);
-            used and used->first >= memory_budget_->bytes) {
-          if (state_->loaded_partitions.empty()) {
-            fail(caf::make_error(
-              ec::out_of_memory,
-              fmt::format("partition transform memory budget is "
-                          "exhausted before loading partition {} "
-                          "({} bytes used, {} bytes budget, {} bytes "
-                          "available, source: {})",
-                          partition.uuid, used->first, memory_budget_->bytes,
-                          used->second, memory_budget_->source)));
-            co_await push_input(OperatorMsg<table_slice>{Signal{EndOfData{}}});
-            co_return;
-          }
-          TENZIR_VERBOSE("{} stops loading transform input before partition {} "
-                         "after {} partition(s); live memory budget is full "
-                         "({} bytes used, {} bytes budget, {} bytes available, "
-                         "source: {})",
-                         "partition-transformer", partition.uuid,
-                         state_->loaded_partitions.size(), used->first,
-                         memory_budget_->bytes, used->second,
-                         memory_budget_->source);
-          state_->input_complete = false;
-          break;
-        }
+      // Always admit one partition, even if it exceeds the budget by itself:
+      // stopping with nothing loaded would make the rebuild requeue the batch
+      // and select it again, forever.
+      if (memory_budget_ and not state_->loaded_partitions.empty()
+          and buffered_bytes >= memory_budget_->bytes) {
+        TENZIR_INFO("{} stops loading transform input before partition {} "
+                    "after {} partition(s); memory budget is full ({} bytes "
+                    "buffered, {} bytes budget, source: {})",
+                    "partition-transformer", partition.uuid,
+                    state_->loaded_partitions.size(), buffered_bytes,
+                    memory_budget_->bytes, memory_budget_->source);
+        state_->input_complete = false;
+        break;
       }
       auto maybe_slices = co_await load_partition(partition);
       if (not maybe_slices) {
@@ -358,6 +359,8 @@ public:
         if (slice.rows() == 0) {
           continue;
         }
+        buffered_bytes
+          = detail::saturating_add(buffered_bytes, slice.approx_bytes());
         co_await push_input(OperatorMsg<table_slice>{std::move(slice)});
       }
       if (state_->error.valid()) {
@@ -810,6 +813,11 @@ auto partition_transformer(
       auto archive_dir = std::move(self->state().archive_dir);
       auto fs = self->state().fs;
       auto ast = std::move(self->state().transform);
+      auto budget
+        = make_memory_budget(self->state().index_opts,
+                             detail::narrow_cast<size_t>(caf::get_or(
+                               self->state().index_opts, "rebuild-parallelism",
+                               caf::config_value::integer{1})));
       // We deliver `rp` immediately and signal real completion later via the
       // store-builder monitors set up in `finish_transform`.
       auto rp = self->make_response_promise<void>();
@@ -823,7 +831,7 @@ auto partition_transformer(
            input_partition_path_template
            = std::move(input_partition_path_template),
            archive_dir = std::move(archive_dir), fs = std::move(fs), &sys, weak,
-           self, process_slice,
+           self, process_slice, budget = std::move(budget),
            source_state]() mutable -> folly::coro::Task<failure_or<void>> {
             // Compaction and rebuild have no user-facing diagnostic sink, so
             // we log to the server log. The handler is owned by this
@@ -838,6 +846,7 @@ auto partition_transformer(
               std::move(input_partition_path_template),
               std::move(archive_dir),
               std::move(fs),
+              std::move(budget),
               source_state,
             };
             auto feed_input

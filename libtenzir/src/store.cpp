@@ -292,10 +292,11 @@ default_active_store_actor::behavior_type default_active_store(
       }
       auto chunk = self->state().store->finish();
       if (not chunk) {
-        self->quit(diagnostic::error(std::move(chunk.error()))
-                     .note("while persisting store to disk")
-                     .to_error());
-        return {};
+        auto error = diagnostic::error(std::move(chunk.error()))
+                       .note("while persisting store to disk")
+                       .to_error();
+        self->quit(error);
+        return error;
       }
       auto rp = self->make_response_promise<resource>();
       auto res = resource{

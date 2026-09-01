@@ -100,19 +100,37 @@ namespace {
 /// configured 'tenzir.max-partition-size'.
 inline constexpr auto undersized_threshold = 0.8;
 
+/// How long a batch may be in flight without any partition completing before
+/// we report it. Generous, because a large merge legitimately takes minutes.
+inline constexpr auto stall_threshold = std::chrono::minutes{1};
+
 struct memory_budget {
   uint64_t bytes = 0;
   detail::available_memory_info available = {};
 };
 
-auto rebuild_byte_budget(size_t parallelism) -> memory_budget {
+/// Determines how many estimated decoded bytes one batch may select.
+///
+/// Must agree with the budget the transformer enforces while loading (see
+/// `make_memory_budget` in partition_transformer.cpp). Selecting more than the
+/// transformer will load requeues the remainder and rewrites the same data
+/// repeatedly; selecting less merges fewer partitions than we safely could.
+auto rebuild_byte_budget(uint64_t configured, size_t parallelism)
+  -> memory_budget {
+  const auto divisor
+    = std::max<uint64_t>(detail::narrow_cast<uint64_t>(parallelism), 1);
+  if (configured > 0) {
+    return {
+      .bytes = configured / divisor,
+      .available
+      = {.bytes = configured, .source = "tenzir.rebuild-memory-budget"},
+    };
+  }
   auto available
     = detail::available_memory().value_or(detail::available_memory_info{
       .bytes = uint64_t{512} * 1024 * 1024,
       .source = "fallback",
     });
-  const auto divisor
-    = std::max<uint64_t>(detail::narrow_cast<uint64_t>(parallelism), 1);
   return {
     // The transformer currently holds decoded output slices before persisting
     // the new Feather store, and the store writer builds additional Arrow
@@ -145,13 +163,31 @@ enum class run_id : uint64_t {};
 
 /// The state of an in-progress rebuild.
 struct run {
+  struct schema_progress {
+    size_t num_rebuilding = {};
+    time last_progress_at = time::clock::now();
+    bool stall_reported = false;
+  };
+
   /// Distinguishes this run from any run that starts after it. Continuations
   /// launched for this run must check their captured id against
   /// `rebuilder_state::run->id` before touching `run->` state, since `run`
   /// may have been reset and re-emplaced for a new run by the time they fire.
   run_id id = {};
+  /// When this run started, for reporting how long it has been going.
+  time started_at = time::clock::now();
+  /// Whether the run is still waiting for the catalog to return candidates.
+  /// Until that completes every statistic below is legitimately zero, which
+  /// is otherwise indistinguishable from a run that is stuck.
+  bool selecting = true;
   std::vector<partition_info> remaining_partitions = {};
   struct statistics statistics = {};
+  /// In-flight work tracked per schema so progress elsewhere does not hide a
+  /// transform that has stopped responding.
+  std::unordered_map<type, schema_progress> progress_by_schema = {};
+  /// Next percentage milestone emitted for an automatic rebuild. Ten-percent
+  /// steps bound progress logging independently of the partition count.
+  size_t next_progress_percent = 10;
   start_options options = {};
   std::vector<caf::typed_response_promise<void>> stop_requests = {};
   std::vector<caf::typed_response_promise<void>> delayed_rebuilds = {};
@@ -210,6 +246,79 @@ struct rebuilder_state {
   size_t desired_batch_size = 0u;
   size_t automatic_rebuild = 0u;
   duration rebuild_interval = {};
+  /// An absolute cap on the decoded bytes one batch may select, or zero to
+  /// derive it from the memory available at the time of selection.
+  uint64_t rebuild_memory_budget = 0u;
+
+  void started_batch(const type& schema, size_t partitions) {
+    TENZIR_ASSERT(run);
+    auto& progress = run->progress_by_schema[schema];
+    progress.num_rebuilding += partitions;
+  }
+
+  void
+  finished_batch(const type& schema, size_t partitions, bool made_progress) {
+    TENZIR_ASSERT(run);
+    const auto it = run->progress_by_schema.find(schema);
+    TENZIR_ASSERT(it != run->progress_by_schema.end());
+    TENZIR_ASSERT(it->second.num_rebuilding >= partitions);
+    it->second.num_rebuilding -= partitions;
+    if (made_progress) {
+      it->second.last_progress_at = time::clock::now();
+      it->second.stall_reported = false;
+    }
+    if (it->second.num_rebuilding == 0) {
+      run->progress_by_schema.erase(it);
+    }
+  }
+
+  /// Emits at most one message per ten-percent milestone. A large batch may
+  /// cross multiple milestones, but still produces just one message.
+  void report_progress(const type& schema) {
+    TENZIR_ASSERT(run);
+    if (not run->options.automatic or run->statistics.num_total == 0
+        or run->statistics.num_completed >= run->statistics.num_total) {
+      return;
+    }
+    const auto percent
+      = run->statistics.num_completed * 100 / run->statistics.num_total;
+    if (percent < run->next_progress_percent) {
+      return;
+    }
+    const auto remaining = run->statistics.num_total
+                           - run->statistics.num_completed
+                           - run->statistics.num_rebuilding;
+    TENZIR_VERBOSE("{} automatic rebuild progress: {}/{} partitions rebuilt "
+                   "({}%, {} in flight, {} queued) after {}; latest schema {}",
+                   *self, run->statistics.num_completed,
+                   run->statistics.num_total, percent,
+                   run->statistics.num_rebuilding, remaining,
+                   data{time::clock::now() - run->started_at}, schema);
+    run->next_progress_percent = std::min<size_t>(100, percent / 10 * 10 + 10);
+  }
+
+  /// Warns for each schema that has partitions in flight but has not completed
+  /// a batch for a while. Every hop of the transform chain waits without a
+  /// timeout, so a wedged batch is otherwise completely silent.
+  void check_for_stall() {
+    if (not run) {
+      return;
+    }
+    const auto now = time::clock::now();
+    for (auto& [schema, progress] : run->progress_by_schema) {
+      const auto stalled_for = now - progress.last_progress_at;
+      if (stalled_for < stall_threshold or progress.stall_reported) {
+        continue;
+      }
+      progress.stall_reported = true;
+      TENZIR_WARN("{} rebuild of schema {} appears stuck: {} partition(s) "
+                  "in flight with no completed batch for {}; the transform "
+                  "may be waiting on the index, a store write, or the "
+                  "filesystem ({}/{} partitions done overall)",
+                  *self, schema, progress.num_rebuilding, data{stalled_for},
+                  run->statistics.num_completed, run->statistics.num_total);
+    }
+  }
 
   /// The state of the ongoing rebuild.
   Option<struct run> run = None{};
@@ -240,12 +349,16 @@ struct rebuilder_state {
   /// live `current-run` and the historical `last-run` status entries.
   static auto describe_run(const struct run& run) -> record {
     return record{
+      {"phase", run.selecting ? "selecting candidates" : "rebuilding"},
       {"partitions",
        record{
          {"total", run.statistics.num_total},
          {"transforming", run.statistics.num_rebuilding},
          {"transformed", run.statistics.num_completed},
-         {"remaining", run.statistics.num_total - run.statistics.num_completed},
+         // Partitions currently being transformed are neither done nor still
+         // waiting, so they must not be counted as remaining.
+         {"remaining", run.statistics.num_total - run.statistics.num_completed
+                         - run.statistics.num_rebuilding},
          {"results", run.statistics.num_results},
          {"quarantined", run.statistics.num_quarantined},
        }},
@@ -306,6 +419,14 @@ struct rebuilder_state {
            or approx_bytes_per_event.contains(partition.schema);
   }
 
+  /// The event count at or above which a partition counts as adequately sized.
+  /// Partitions below this are candidates for an undersized merge, so a merge
+  /// that cannot reach it does not accomplish anything.
+  auto undersized_events() const -> size_t {
+    return detail::narrow_cast<size_t>(
+      detail::narrow_cast<double>(max_partition_size) * undersized_threshold);
+  }
+
   auto estimate_approx_bytes(const partition_info& partition,
                              uint64_t unknown_partition_bytes) const
     -> uint64_t {
@@ -327,6 +448,15 @@ struct rebuilder_state {
                              "rebuild requires a non-zero parallel level");
     }
     if (options.automatic and run) {
+      // The scheduler re-arms unconditionally, so a run that never finishes
+      // suppresses every later automatic rebuild for the lifetime of the
+      // process. Returning silently would make that indistinguishable from
+      // automatic rebuild being switched off.
+      TENZIR_INFO("{} skips automatic rebuild: a run is still ongoing after "
+                  "{} ({}/{} partitions done, {} in flight)",
+                  *self, data{time::clock::now() - run->started_at},
+                  run->statistics.num_completed, run->statistics.num_total,
+                  run->statistics.num_rebuilding);
       return {};
     }
     if (run and not run->options.automatic) {
@@ -404,6 +534,11 @@ struct rebuilder_state {
     auto query_context
       = query_context::make_extract("rebuild", self, run->options.expression);
     query_context.id = uuid::random();
+    // On a database with many partitions this lookup can take a while, and
+    // until it returns the run reports all-zero statistics. Announce it so
+    // that window is recognizable as candidate selection rather than a stall.
+    TENZIR_INFO("{} selects rebuild candidates matching {}", *self,
+                run->options.expression);
     self->mail(atom::candidates_v, std::move(query_context))
       .request(catalog, caf::infinite)
       .then(
@@ -414,6 +549,7 @@ struct rebuilder_state {
                          *self);
             return;
           }
+          run->selecting = false;
           TENZIR_ASSERT(run->statistics.num_total == 0);
           for (auto& [type, result] : lookup_result.candidate_infos) {
             std::erase_if(result.partition_infos,
@@ -427,9 +563,7 @@ struct rebuilder_state {
                     return false;
                   }
                   if (run->options.undersized
-                      and partition.events < detail::narrow_cast<size_t>(
-                            detail::narrow_cast<double>(max_partition_size)
-                            * undersized_threshold)) {
+                      and partition.events < undersized_events()) {
                     return false;
                   }
                   return true;
@@ -438,38 +572,36 @@ struct rebuilder_state {
             for (const auto& partition : result.partition_infos) {
               learn_size_estimate(partition);
             }
-            if (run->options.max_partitions < result.partition_infos.size()) {
-              std::stable_sort(result.partition_infos.begin(),
-                               result.partition_infos.end(),
-                               [](const auto& lhs, const auto& rhs) {
-                                 return lhs.schema < rhs.schema;
-                               });
-              result.partition_infos.erase(
-                result.partition_infos.begin()
-                  + detail::narrow<ptrdiff_t>(run->options.max_partitions),
-                result.partition_infos.end());
-              if (result.partition_infos.size() == 1
-                  and result.partition_infos.front().version
-                        < version::current_partition_version) {
-                // Edge case: we can't do anything if we have a single
-                // undersized partition for a given schema.
-                result.partition_infos.clear();
-              }
-            }
-            run->statistics.num_total += result.partition_infos.size();
             run->remaining_partitions.insert(run->remaining_partitions.end(),
                                              result.partition_infos.begin(),
                                              result.partition_infos.end());
           }
+          // Apply the cap across all schemas rather than to each one in turn.
+          // Applying it per schema made `-n` bound the work by
+          // `max_partitions * schemas`, which on a database with dozens of
+          // schemas is not a bound the caller would recognize.
+          //
+          // Truncating the concatenated list keeps the leading schemas whole
+          // instead of taking a slice out of every schema. That suits the
+          // batching below, which can only merge partitions that share a
+          // schema: a thin slice of many schemas would yield batches too small
+          // to be worth rewriting.
+          if (run->options.max_partitions < run->remaining_partitions.size()) {
+            run->remaining_partitions.erase(
+              run->remaining_partitions.begin()
+                + detail::narrow<ptrdiff_t>(run->options.max_partitions),
+              run->remaining_partitions.end());
+          }
+          run->statistics.num_total = run->remaining_partitions.size();
           if (run->statistics.num_total == 0) {
             TENZIR_DEBUG("{} ignores rebuild request for 0 partitions", *self);
             return finish({}, true);
           }
           if (run->options.automatic) {
-            TENZIR_VERBOSE("{} triggered an automatic run for {} candidate "
-                           "partitions with {} threads",
-                           *self, run->statistics.num_total,
-                           run->options.parallel);
+            TENZIR_INFO("{} triggered an automatic run for {} candidate "
+                        "partitions with {} threads",
+                        *self, run->statistics.num_total,
+                        run->options.parallel);
           } else {
             TENZIR_INFO(
               "{} triggered a run for {} candidate partitions with {} "
@@ -509,6 +641,7 @@ struct rebuilder_state {
                          *self);
             return;
           }
+          run->selecting = false;
           finish(std::move(error));
         });
     return rp;
@@ -564,7 +697,8 @@ struct rebuilder_state {
     auto current_run_events = size_t{0};
     auto current_run_bytes = uint64_t{0};
     auto current_run_is_full = false;
-    auto current_run_budget = rebuild_byte_budget(run->options.parallel);
+    auto current_run_budget
+      = rebuild_byte_budget(rebuild_memory_budget, run->options.parallel);
     if (current_run_budget.bytes == 0) {
       return caf::make_error(ec::out_of_memory,
                              "rebuild has no memory budget available "
@@ -594,6 +728,16 @@ struct rebuilder_state {
             current_run_is_full = true;
             return false;
           }
+          // Never overshoot the capacity of a single output partition. The
+          // transformer splits its output at `max_partition_size`, so a larger
+          // batch yields one full partition plus a remainder, and that
+          // remainder is usually undersized again. With new partitions
+          // continuously arriving to merge with it, that never converges.
+          if (not current_run_partitions.empty()
+              and current_run_events + partition.events > max_partition_size) {
+            current_run_is_full = true;
+            return false;
+          }
           current_run_bytes
             = detail::saturating_add(current_run_bytes, partition_bytes);
           current_run_events += partition.events;
@@ -612,29 +756,49 @@ struct rebuilder_state {
     run->remaining_partitions.erase(first_removed,
                                     run->remaining_partitions.end());
     run->statistics.num_rebuilding += current_run_partitions.size();
-    // If we have just a single partition then we shouldn't rebuild if our
-    // intent was to merge undersized partitions, unless the partition is
-    // oversized or not of the latest partition version.
-    const auto skip_rebuild
-      = run->options.undersized and current_run_partitions.size() == 1
-        and current_run_partitions[0].version
-              == version::current_partition_version
-        and current_run_partitions[0].events <= max_partition_size
-        and has_size_estimate(current_run_partitions[0]);
+    // When merging undersized partitions, skip the batch if the merged result
+    // would still be undersized: that pays a full decode and re-encode only to
+    // produce another merge candidate. Testing the merged size rather than the
+    // input count also covers batches of several tiny partitions that together
+    // still fall short.
+    //
+    // Oversized or outdated partitions, and those we cannot size, always
+    // rebuild.
+    const auto skip_rebuild = [&] {
+      if (not run->options.undersized) {
+        return false;
+      }
+      auto merged_events = size_t{0};
+      for (const auto& partition : current_run_partitions) {
+        if (partition.version != version::current_partition_version) {
+          return false;
+        }
+        if (partition.events > max_partition_size) {
+          return false;
+        }
+        if (not has_size_estimate(partition)) {
+          return false;
+        }
+        merged_events += partition.events;
+      }
+      return merged_events < undersized_events();
+    }();
     if (skip_rebuild) {
-      run->statistics.num_rebuilding -= 1;
-      run->statistics.num_total -= 1;
+      const auto skipped = current_run_partitions.size();
+      run->statistics.num_rebuilding -= skipped;
+      run->statistics.num_total -= skipped;
       // Pick up new work until we run out of remainig partitions.
       return self->mail(atom::internal_v, atom::rebuild_v, rebuild_run)
         .delegate(static_cast<rebuilder_actor>(self));
     }
-    TENZIR_VERBOSE(
-      "{} selected {} partition(s) for rebuild of schema {} with {} "
-      "estimated decoded bytes (budget: {}, available: {} from {})",
-      *self, current_run_partitions.size(), schema,
-      format_bytes(current_run_bytes), format_bytes(current_run_budget.bytes),
-      format_bytes(current_run_budget.available.bytes),
-      current_run_budget.available.source);
+    started_batch(schema, current_run_partitions.size());
+    TENZIR_DEBUG("{} selected {} partition(s) for rebuild of schema {} with {} "
+                 "estimated decoded bytes (budget: {}, available: {} from {})",
+                 *self, current_run_partitions.size(), schema,
+                 format_bytes(current_run_bytes),
+                 format_bytes(current_run_budget.bytes),
+                 format_bytes(current_run_budget.available.bytes),
+                 current_run_budget.available.source);
     // Ask the index to rebuild the partitions we selected.
     auto rp = self->make_response_promise<void>();
     auto dh = null_diagnostic_handler{};
@@ -665,7 +829,8 @@ struct rebuilder_state {
       .request(index, caf::infinite)
       .then(
         [this, rp, selected_partitions = std::move(selected_partitions),
-         num_partitions, this_run](partition_apply_result& result) mutable {
+         num_partitions, this_run,
+         schema](partition_apply_result& result) mutable {
           if (not run or run->id != this_run) {
             TENZIR_DEBUG("{} abandons rebuild continuation for a superseded "
                          "run",
@@ -680,6 +845,7 @@ struct rebuilder_state {
                          *self, num_partitions);
             run->statistics.num_total -= num_partitions;
             run->statistics.num_rebuilding -= num_partitions;
+            finished_batch(schema, num_partitions, false);
             // Pick up new work until we run out of remaining partitions.
             rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
                         atom::rebuild_v, static_cast<uint64_t>(this_run));
@@ -731,12 +897,14 @@ struct rebuilder_state {
           run->statistics.num_completed += result.input_partitions.size();
           run->statistics.num_results += result.output_partitions.size();
           run->statistics.num_rebuilding -= num_partitions;
+          finished_batch(schema, num_partitions, true);
+          report_progress(schema);
           // Pick up new work until we run out of remainig partitions.
           rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
                       atom::rebuild_v, static_cast<uint64_t>(this_run));
         },
         [this, retry_partitions = std::move(retry_partitions), num_partitions,
-         this_run, rp](caf::error& error) mutable {
+         this_run, rp, schema](caf::error& error) mutable {
           if (not run or run->id != this_run) {
             TENZIR_DEBUG("{} abandons rebuild continuation for a superseded "
                          "run",
@@ -765,6 +933,7 @@ struct rebuilder_state {
             quarantined_partitions[*corrupt] = fmt::to_string(error);
             retry_partitions.erase(it);
             run->statistics.num_rebuilding -= num_partitions;
+            finished_batch(schema, num_partitions, true);
             // Fire the quarantine mail and only log its outcome here: the
             // catalog's mailbox already orders this erase before any future
             // candidate query, so the run can continue immediately below
@@ -805,6 +974,7 @@ struct rebuilder_state {
                                            retry_partitions.begin(),
                                            retry_partitions.end());
           run->statistics.num_rebuilding -= num_partitions;
+          finished_batch(schema, num_partitions, false);
           rp.deliver(std::move(error));
         });
     return rp;
@@ -854,17 +1024,37 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
                   defaults::import::table_slice_size);
   self->state().automatic_rebuild = caf::get_or(
     content(self->system().config()), "tenzir.automatic-rebuild", size_t{1});
+  self->state().rebuild_memory_budget
+    = caf::get_or(content(self->system().config()),
+                  "tenzir.rebuild-memory-budget", uint64_t{0});
   if (self->state().automatic_rebuild > 0) {
     self->state().rebuild_interval
       = caf::get_or(content(self->system().config()), "tenzir.rebuild-interval",
                     defaults::rebuild_interval);
+    TENZIR_INFO("{} runs automatic rebuilds every {} with {} thread(s) and a "
+                "memory budget of {}",
+                *self, data{self->state().rebuild_interval},
+                self->state().automatic_rebuild,
+                format_bytes(self->state().rebuild_memory_budget > 0
+                               ? self->state().rebuild_memory_budget
+                               : std::numeric_limits<uint64_t>::max()));
     // We delay the first run such that we do not do it during initialization
     // where there are many other things going on. For long-running processes,
     // we on average already waited for half the duration before.
     detail::weak_run_delayed(self, self->state().rebuild_interval / 2, [self] {
       self->state().schedule();
     });
+  } else {
+    TENZIR_INFO("{} has automatic rebuilds disabled via "
+                "'tenzir.automatic-rebuild'; partitions are only merged by an "
+                "explicit 'rebuild start'",
+                *self);
   }
+  // Runs regardless of whether metrics are wired up, since this is the only
+  // signal that a wedged batch produces.
+  detail::weak_run_delayed_loop(self, defaults::metrics_interval, [self] {
+    self->state().check_for_stall();
+  });
   if (auto importer
       = self->system().registry().get<importer_actor>("tenzir.importer")) {
     self->state().importer = importer;

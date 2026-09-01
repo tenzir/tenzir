@@ -601,6 +601,35 @@ auto catalog_state::erase_and_extract(const uuid& partition, std::string error)
   return rp;
 }
 
+auto catalog_state::finalize_lookup(catalog_lookup_result&& candidates,
+                                    stopwatch::time_point start) const
+  -> catalog_lookup_result {
+  // Sort each schema's partitions by recency and gather statistics.
+  auto num_candidate_partitions = size_t{0};
+  auto num_candidate_events = size_t{0};
+  for (auto& [type, per_schema] : candidates.candidate_infos) {
+    std::sort(per_schema.partition_infos.begin(),
+              per_schema.partition_infos.end(),
+              [](const partition_info& lhs, const partition_info& rhs) {
+                return lhs.max_import_time > rhs.max_import_time;
+              });
+    num_candidate_partitions += per_schema.partition_infos.size();
+    num_candidate_events
+      += std::transform_reduce(per_schema.partition_infos.begin(),
+                               per_schema.partition_infos.end(), size_t{0},
+                               std::plus<>{}, [](const auto& partition) {
+                                 return partition.events;
+                               });
+  }
+  auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
+    stopwatch::now() - start);
+  TENZIR_INFO("catalog found {} candidate partitions ({} events) in "
+              "{} microseconds",
+              num_candidate_partitions, num_candidate_events, delta.count());
+  TENZIR_TRACEPOINT(catalog_lookup, delta.count(), num_candidate_partitions);
+  return std::move(candidates);
+}
+
 auto catalog_state::lookup(expression expr)
   -> caf::expected<catalog_lookup_result> {
   auto start = stopwatch::now();
@@ -613,6 +642,28 @@ auto catalog_state::lookup(expression expr)
                            fmt::format("{} failed to normalize and validate "
                                        "epxression {}: {}",
                                        *self, expr, normalized.error()));
+  }
+  // Short-circuit a match-everything lookup. The answer is every partition, so
+  // there is nothing to prune and no reason to pay for the machinery that
+  // would arrive at that conclusion: no taxonomy resolution per schema, no
+  // per-partition predicate evaluation, and none of the string construction
+  // the `meta_extractor::schema` branch does for each one. Rebuild and
+  // compaction issue exactly this expression on every run, over every
+  // partition in the database.
+  if (*normalized == trivially_true_expression()) {
+    auto total_candidates = catalog_lookup_result{};
+    for (const auto& [type, partition_synopses] : synopses_per_type) {
+      if (partition_synopses.empty()) {
+        continue;
+      }
+      auto& candidates = total_candidates.candidate_infos[type];
+      candidates.exp = trivially_true_expression();
+      candidates.partition_infos.reserve(partition_synopses.size());
+      for (const auto& [part_id, part_syn] : partition_synopses) {
+        candidates.partition_infos.emplace_back(part_id, *part_syn);
+      }
+    }
+    return finalize_lookup(std::move(total_candidates), start);
   }
   // Resolve the expression once per schema; reused across both phases below.
   auto resolved_per_type = std::vector<std::pair<type, expression>>{};
@@ -699,30 +750,7 @@ auto catalog_state::lookup(expression expr)
       return entry.second.partition_infos.empty();
     });
   }
-  // Sort each schema's partitions by recency and gather statistics.
-  auto num_candidate_partitions = size_t{0};
-  auto num_candidate_events = size_t{0};
-  for (auto& [type, candidates] : total_candidates.candidate_infos) {
-    std::sort(candidates.partition_infos.begin(),
-              candidates.partition_infos.end(),
-              [](const partition_info& lhs, const partition_info& rhs) {
-                return lhs.max_import_time > rhs.max_import_time;
-              });
-    num_candidate_partitions += candidates.partition_infos.size();
-    num_candidate_events
-      += std::transform_reduce(candidates.partition_infos.begin(),
-                               candidates.partition_infos.end(), size_t{0},
-                               std::plus<>{}, [](const auto& partition) {
-                                 return partition.events;
-                               });
-  }
-  auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
-    stopwatch::now() - start);
-  TENZIR_VERBOSE("catalog found {} candidate partitions ({} events) in "
-                 "{} microseconds",
-                 num_candidate_partitions, num_candidate_events, delta.count());
-  TENZIR_TRACEPOINT(catalog_lookup, delta.count(), num_candidate_partitions);
-  return total_candidates;
+  return finalize_lookup(std::move(total_candidates), start);
 }
 
 auto catalog_state::lookup_impl(

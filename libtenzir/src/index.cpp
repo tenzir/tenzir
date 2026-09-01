@@ -826,8 +826,9 @@ caf::error index_state::load_from_disk() {
   return caf::none;
 }
 
-/// Persists the state to disk.
-void index_state::flush_to_disk() {
+/// Persists the state to disk immediately.
+void index_state::flush_to_disk_now() {
+  flush_pending = false;
   auto builder = flatbuffers::FlatBufferBuilder{};
   auto index = pack(builder, *this);
   if (not index) {
@@ -844,6 +845,34 @@ void index_state::flush_to_disk() {
       [this](const caf::error& err) {
         TENZIR_WARN("{} failed to persist index state: {}", *self, render(err));
       });
+}
+
+/// Requests that the state be persisted, coalescing bursts into one write.
+///
+/// The index flatbuffer names every persisted partition, so its size grows
+/// with the partition count while the flush rate stays constant -- writing it
+/// per flush therefore gets quadratically more expensive as a database grows,
+/// on the one filesystem actor the whole node shares. Batching bounds that to
+/// one write per `index_flush_interval`. Losing the last few seconds of it on
+/// a crash is harmless: `load_from_disk` discovers partitions by scanning the
+/// index directory, not by reading this file.
+void index_state::flush_to_disk() {
+  flush_pending = true;
+  if (shutting_down) {
+    // Nothing will run the timer anymore, so write it out while we still can.
+    flush_to_disk_now();
+    return;
+  }
+  if (flush_scheduled) {
+    return;
+  }
+  flush_scheduled = true;
+  detail::weak_run_delayed(self, defaults::index_flush_interval, [this] {
+    flush_scheduled = false;
+    if (flush_pending) {
+      flush_to_disk_now();
+    }
+  });
 }
 
 // -- inbound path -----------------------------------------------------------
@@ -1327,6 +1356,16 @@ index(index_actor::stateful_pointer<index_state> self,
                  "size of {} events and {} resident partitions",
                  *self, dir, partition_capacity, max_inmem_partitions);
   self->state().index_opts["cardinality"] = partition_capacity;
+  // The transformer needs both of these to size its share of the memory
+  // budget. Passing them through `index_opts` keeps its spawn signature
+  // unchanged.
+  if (auto budget = caf::get_if<caf::config_value::integer>(
+        &content(self->system().config()), "tenzir.rebuild-memory-budget")) {
+    self->state().index_opts["rebuild-memory-budget"] = *budget;
+  }
+  self->state().index_opts["rebuild-parallelism"]
+    = caf::get_or(content(self->system().config()), "tenzir.automatic-rebuild",
+                  caf::config_value::integer{1});
   self->state().synopsis_opts = std::move(index_config);
   if (dir != catalog_dir) {
     TENZIR_VERBOSE("{} uses {} for catalog data", *self, catalog_dir);

@@ -179,7 +179,13 @@ struct index_state {
 
   caf::error load_from_disk();
 
+  /// Requests that the index state be persisted. Writes are coalesced: the
+  /// first request arms a timer and later ones only set a flag, so a burst of
+  /// partition flushes results in a single write.
   void flush_to_disk();
+
+  /// Writes the index state out immediately, bypassing the coalescing timer.
+  void flush_to_disk_now();
 
   // -- inbound path -----------------------------------------------------------
 
@@ -317,6 +323,13 @@ struct index_state {
     = {};
 
   bool shutting_down = false;
+
+  /// Whether a `flush_to_disk` request arrived that has not been written yet.
+  bool flush_pending = false;
+
+  /// Whether the coalescing timer is armed. While it is, `flush_to_disk` only
+  /// sets `flush_pending` instead of issuing another write.
+  bool flush_scheduled = false;
 
   /// Plugin responsible for spawning new partition-local stores.
   const tenzir::store_actor_plugin* store_actor_plugin = {};

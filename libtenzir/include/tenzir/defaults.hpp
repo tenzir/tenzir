@@ -226,6 +226,12 @@ inline constexpr caf::timespan active_partition_timeout
 /// Timeout after which a new automatic rebuild is triggered.
 inline constexpr caf::timespan rebuild_interval = std::chrono::minutes{30};
 
+/// Interval over which index state writes are coalesced. The on-disk index
+/// lists every persisted partition, so writing it per partition flush costs
+/// more the more partitions exist; batching bounds that to one write per
+/// interval.
+inline constexpr caf::timespan index_flush_interval = std::chrono::seconds{10};
+
 /// Maximum number of in-memory INDEX partitions.
 inline constexpr size_t max_in_mem_partitions = 1;
 
