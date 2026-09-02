@@ -1,0 +1,11 @@
+created: 2026-09-02
+title: Splunk HEC Acknowledgements
+intro: >-
+  Tenzir now supports the Splunk HEC acknowledgement protocol, preserving delivery
+  guarantees across node restarts, and decodes raw Avro data with the new read_avro
+  operator and parse_avro function. This release also branches events up to 9x faster
+  and extends parallel execution with full parallelism options and independent Google
+  SecOps output instances.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.14.0
