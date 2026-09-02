@@ -1,4 +1,4 @@
 from {raw: "02ff"}
-string = raw.decode_hex().parse_avro(schema=r#""string""#)
-bytes = raw.decode_hex().parse_avro(schema=r#""bytes""#).encode_hex()
+string = raw.decode_hex().parse_avro(schema={type: "string"})
+bytes = raw.decode_hex().parse_avro(schema={type: "bytes"}).encode_hex()
 drop raw

@@ -1,7 +1,7 @@
 from {input: "a", nullable: "00"},
   {input: 42, nullable: "020261"}
 batch 1
-parsed = input.parse_avro(schema=r#"{"type":"fixed","name":"byte","size":1}"#)
+parsed = input.parse_avro(schema={type: "fixed", name: "byte", size: 1})
 kind = type_of(parsed).kind
 nullable = nullable.decode_hex().parse_avro(schema=r#"["null","string"]"#)
 nullable_kind = type_of(nullable).kind

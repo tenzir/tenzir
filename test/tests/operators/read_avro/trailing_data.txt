@@ -1,7 +1,7 @@
 warning: truncated Avro input
  --> tests/operators/read_avro/trailing_data.tql:3:1
   |
-3 | read_avro schema=r#""string""#
+3 | read_avro schema={type: "string"}
   | ~~~~~~~~~
   |
   = note: discarded 2 trailing bytes

@@ -1,0 +1,6 @@
+from {
+  data: "4f626a01".decode_hex(),
+}
+write_chunks
+read_avro schema={type: "fixed", name: "magic", size: 4}, raw=true
+value = value.encode_hex()

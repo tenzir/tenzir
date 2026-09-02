@@ -2,21 +2,29 @@ from {
   data: "010000C03F00000000000002C00400FFABCD0201".decode_hex(),
 }
 write_chunks
-read_avro schema=r#"{
-  "type": "record",
-  "name": "values",
-  "fields": [
-    {"name": "integer", "type": "int"},
-    {"name": "single", "type": "float"},
-    {"name": "double", "type": "double"},
-    {"name": "bytes", "type": "bytes"},
-    {"name": "fixed", "type": {"type": "fixed", "name": "pair", "size": 2}},
-    {"name": "enumeration", "type": {"type": "enum", "name": "choice", "symbols": ["a", "b"]}},
-    {"name": "nothing", "type": "null"},
-    {"name": "nested", "type": {"type": "record", "name": "inner", "fields": [
-      {"name": "flag", "type": "boolean"}
-    ]}}
-  ]
-}"#
+read_avro schema={
+  type: "record",
+  name: "values",
+  fields: [
+    {name: "integer", type: "int"},
+    {name: "single", type: "float"},
+    {name: "double", type: "double"},
+    {name: "bytes", type: "bytes"},
+    {name: "fixed", type: {type: "fixed", name: "pair", size: 2}},
+    {
+      name: "enumeration",
+      type: {type: "enum", name: "choice", symbols: ["a", "b"]},
+    },
+    {name: "nothing", type: "null"},
+    {
+      name: "nested",
+      type: {
+        type: "record",
+        name: "inner",
+        fields: [{name: "flag", type: "boolean"}],
+      },
+    },
+  ],
+}
 bytes = bytes.encode_hex()
 fixed = fixed.encode_hex()

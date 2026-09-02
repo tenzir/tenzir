@@ -1,15 +1,15 @@
 warning: truncated Avro input
  --> tests/functions/parse_avro/errors.tql:2:10
   |
-2 | parsed = raw.decode_hex().parse_avro(schema=r#""string""#)
-  |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2 | parsed = raw.decode_hex().parse_avro(schema={type: "string"})
+  |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   |
 
 warning: trailing Avro data
  --> tests/functions/parse_avro/errors.tql:2:10
   |
-2 | parsed = raw.decode_hex().parse_avro(schema=r#""string""#)
-  |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2 | parsed = raw.decode_hex().parse_avro(schema={type: "string"})
+  |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   |
   = note: discarded 1 trailing bytes
 {

@@ -1,8 +1,8 @@
 warning: failed to parse Avro input
  --> tests/functions/parse_avro/invalid_utf8.tql:2:10
   |
-2 | string = raw.decode_hex().parse_avro(schema=r#""string""#)
-  |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2 | string = raw.decode_hex().parse_avro(schema={type: "string"})
+  |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   |
   = note: invalid UTF-8 in Avro string
 {

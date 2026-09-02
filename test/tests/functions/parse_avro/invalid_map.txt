@@ -1,63 +1,63 @@
 warning: failed to parse Avro input
-  --> tests/functions/parse_avro/invalid_map.tql:12:13
+  --> tests/functions/parse_avro/invalid_map.tql:19:13
    |
-12 | duplicate = duplicate_raw.decode_hex().parse_avro(schema=r#"{"type":"map","values":"long"}"#)
-   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+19 | duplicate = duplicate_raw.decode_hex().parse_avro(schema={type: "map", values: "long"})
+   |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    |
    = note: duplicate Avro map key
 
 warning: failed to parse Avro input
-  --> tests/functions/parse_avro/invalid_map.tql:13:15
+  --> tests/functions/parse_avro/invalid_map.tql:20:15
    |
-13 | invalid_key = invalid_key_raw.decode_hex().parse_avro(schema=r#"{"type":"map","values":"long"}"#)
-   |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+20 | invalid_key = invalid_key_raw.decode_hex().parse_avro(schema={type: "map", values: "long"})
+   |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    |
    = note: invalid UTF-8 in Avro map key
 
 warning: failed to parse Avro input
-  --> tests/functions/parse_avro/invalid_map.tql:14:17
+  --> tests/functions/parse_avro/invalid_map.tql:21:17
    |
-14 | invalid_value = invalid_value_raw.decode_hex().parse_avro(schema=r#"{"type":"map","values":"string"}"#)
-   |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+21 | invalid_value = invalid_value_raw.decode_hex().parse_avro(schema={type: "map", values: "string"})
+   |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    |
    = note: invalid UTF-8 in Avro string
 
 warning: failed to parse Avro input
-  --> tests/functions/parse_avro/invalid_map.tql:15:19
+  --> tests/functions/parse_avro/invalid_map.tql:22:19
    |
-15 | invalid_boolean = invalid_boolean_raw.decode_hex().parse_avro(schema=r#""boolean""#)
-   |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+22 | invalid_boolean = invalid_boolean_raw.decode_hex().parse_avro(schema={type: "boolean"})
+   |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    |
    = note: invalid Avro boolean
 
 warning: failed to parse Avro input
-  --> tests/functions/parse_avro/invalid_map.tql:16:24
+  --> tests/functions/parse_avro/invalid_map.tql:23:24
    |
-16 | invalid_int_overflow = invalid_int_overflow_raw.decode_hex().parse_avro(schema=r#""int""#)
-   |                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-   |
-   = note: Avro int out of range
-
-warning: failed to parse Avro input
-  --> tests/functions/parse_avro/invalid_map.tql:17:25
-   |
-17 | invalid_int_underflow = invalid_int_underflow_raw.decode_hex().parse_avro(schema=r#""int""#)
-   |                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+23 | invalid_int_overflow = invalid_int_overflow_raw.decode_hex().parse_avro(schema={type: "int"})
+   |                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    |
    = note: Avro int out of range
 
 warning: failed to parse Avro input
-  --> tests/functions/parse_avro/invalid_map.tql:18:22
+  --> tests/functions/parse_avro/invalid_map.tql:24:25
    |
-18 | overdeclared_block = overdeclared_block_raw.decode_hex().parse_avro(schema=r#"{"type":"array","items":"long"}"#)
-   |                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+24 | invalid_int_underflow = invalid_int_underflow_raw.decode_hex().parse_avro(schema={type: "int"})
+   |                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+   = note: Avro int out of range
+
+warning: failed to parse Avro input
+  --> tests/functions/parse_avro/invalid_map.tql:25:22
+   |
+25 | overdeclared_block = overdeclared_block_raw.decode_hex().parse_avro(schema={type: "array", items: "long"})
+   |                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    |
    = note: invalid Avro block size
 
 warning: failed to parse Avro input
-  --> tests/functions/parse_avro/invalid_map.tql:19:26
+  --> tests/functions/parse_avro/invalid_map.tql:26:26
    |
-19 | oversized_record_array = oversized_record_array_raw.decode_hex().parse_avro(
+26 | oversized_record_array = oversized_record_array_raw.decode_hex().parse_avro(
    |                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    |
    = note: decoded Avro datum exceeds 16 MiB

@@ -1,7 +1,7 @@
 error: unsupported Avro schema
  --> tests/functions/parse_avro/dynamic_array_item_schema.tql:6:45
   |
-6 | parsed = raw.decode_hex().parse_avro(schema=r#"{"type":"array","items":{"type":"map","values":"long"}}"#)
+6 | parsed = raw.decode_hex().parse_avro(schema={
   |                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
   = note: Avro array item types must have a fixed Tenzir type

@@ -3,4 +3,7 @@ error: true
 ---
 
 from {raw: "00"}
-parsed = raw.decode_hex().parse_avro(schema=r#"{"type":"array","items":{"type":"map","values":"long"}}"#)
+parsed = raw.decode_hex().parse_avro(schema={
+  type: "array",
+  items: {type: "map", values: "long"},
+})
