@@ -125,6 +125,7 @@ in
   protobufc = callFunction ./overrides/protobufc.nix { inherit (prevPkgs) protobufc; };
   rabbitmq-c = callFunction ./overrides/rabbitmq-c.nix { inherit (prevPkgs) rabbitmq-c; };
   restinio = callFunction ./overrides/restinio.nix { inherit (prevPkgs) restinio; };
+  snappy = callFunction ./overrides/snappy.nix { inherit (prevPkgs) snappy; };
   thrift = callFunction ./overrides/thrift.nix { inherit (prevPkgs) thrift; };
   wangle = callFunction ./overrides/wangle.nix { inherit (prevPkgs) wangle; };
   yara-x = callFunction ./overrides/yara-x.nix { };
