@@ -20,6 +20,8 @@
 
 #include <filesystem>
 #include <memory>
+#include <string>
+#include <string_view>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -40,12 +42,20 @@ enum class PartitionTransformPhase : uint8_t {
   done,
 };
 
+auto partition_transform_phase_name(PartitionTransformPhase phase)
+  -> std::string_view;
+
 /// A read-only progress snapshot shared with the index actor. The transformer
 /// runs its pipeline on Folly's CPU executor, so atomics keep this diagnostic
 /// observer from adding messages to the transform's data path.
 struct PartitionTransformProgress {
+  void set_phase(PartitionTransformPhase next);
+  void report_next_phase_transition_from(PartitionTransformPhase previous);
+
   Atomic<PartitionTransformPhase> phase
     = PartitionTransformPhase::loading_input;
+  Atomic<bool> report_next_phase_transition = false;
+  std::string id = {};
   Atomic<size_t> current_input = 0;
   Atomic<size_t> loaded_inputs = 0;
   Atomic<size_t> output_partitions = 0;

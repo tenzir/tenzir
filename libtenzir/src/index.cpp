@@ -175,9 +175,8 @@ bool test_file_identifier(std::filesystem::path file, const char* identifier) {
 
 namespace tenzir {
 
-namespace {
-
-auto phase_name(PartitionTransformPhase phase) -> std::string_view {
+auto partition_transform_phase_name(PartitionTransformPhase phase)
+  -> std::string_view {
   switch (phase) {
     case PartitionTransformPhase::loading_input:
       return "loading and transforming input";
@@ -205,7 +204,32 @@ auto phase_name(PartitionTransformPhase phase) -> std::string_view {
   TENZIR_UNREACHABLE();
 }
 
-} // namespace
+void PartitionTransformProgress::set_phase(PartitionTransformPhase next) {
+  const auto previous = phase.exchange(next, std::memory_order_relaxed);
+  if (previous == next) {
+    return;
+  }
+  if (report_next_phase_transition.exchange(false, std::memory_order_relaxed)) {
+    TENZIR_WARN("partition transform {} transitioned from '{}' to '{}' after "
+                "being reported stalled",
+                id, partition_transform_phase_name(previous),
+                partition_transform_phase_name(next));
+  }
+}
+
+void PartitionTransformProgress::report_next_phase_transition_from(
+  PartitionTransformPhase previous) {
+  report_next_phase_transition.store(true, std::memory_order_relaxed);
+  const auto current = phase.load(std::memory_order_relaxed);
+  if (current != previous
+      and report_next_phase_transition.exchange(false,
+                                                std::memory_order_relaxed)) {
+    TENZIR_WARN("partition transform {} transitioned from '{}' to '{}' after "
+                "being reported stalled",
+                id, partition_transform_phase_name(previous),
+                partition_transform_phase_name(current));
+  }
+}
 
 Option<std::filesystem::path>
 store_path_for_partition(const std::filesystem::path& base_path,
@@ -1366,6 +1390,66 @@ std::size_t index_state::memusage() const {
   return usage;
 }
 
+auto active_transformations_status(
+  index_actor::stateful_pointer<index_state> self) -> record {
+  auto transformations = list{};
+  transformations.reserve(self->state().active_transformations.size());
+  for (const auto& [id, status] : self->state().active_transformations) {
+    auto schemas = list{};
+    auto schema_names = std::vector<std::string>{};
+    for (const auto& partition : status.input_partitions) {
+      auto schema = std::string{partition.schema.name()};
+      if (std::ranges::find(schema_names, schema) == schema_names.end()) {
+        schema_names.push_back(schema);
+        schemas.emplace_back(std::move(schema));
+      }
+    }
+    const auto phase = status.progress->phase.load(std::memory_order_relaxed);
+    auto input = record{
+      {"selected", status.input_partitions.size()},
+      {"loaded",
+       status.progress->loaded_inputs.load(std::memory_order_relaxed)},
+    };
+    auto partitions = list{};
+    partitions.reserve(status.input_partitions.size());
+    for (const auto& partition : status.input_partitions) {
+      partitions.emplace_back(fmt::to_string(partition.uuid));
+    }
+    input["partitions"] = std::move(partitions);
+    const auto current
+      = status.progress->current_input.load(std::memory_order_relaxed);
+    if (phase == PartitionTransformPhase::loading_input
+        and current < status.input_partitions.size()) {
+      input["current"] = fmt::to_string(status.input_partitions[current].uuid);
+    }
+    transformations.emplace_back(record{
+      {"id", fmt::to_string(id)},
+      {"origin", status.origin},
+      {"schemas", std::move(schemas)},
+      {"phase", std::string{partition_transform_phase_name(phase)}},
+      {"duration", time::clock::now() - status.started_at},
+      {"input", std::move(input)},
+      {"output-partitions",
+       status.progress->output_partitions.load(std::memory_order_relaxed)},
+      {"stores",
+       record{
+         {"launched",
+          status.progress->stores_launched.load(std::memory_order_relaxed)},
+         {"finished",
+          status.progress->stores_finished.load(std::memory_order_relaxed)},
+       }},
+      {"partition-files",
+       record{
+         {"total", status.progress->partition_files_total.load(
+                     std::memory_order_relaxed)},
+         {"written", status.progress->partition_files_written.load(
+                       std::memory_order_relaxed)},
+       }},
+    });
+  }
+  return record{{"active-transforms", std::move(transformations)}};
+}
+
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       filesystem_actor filesystem, catalog_actor catalog,
@@ -1748,9 +1832,11 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](atom::apply, ast::pipeline pipe,
            std::vector<partition_info> selected_partitions,
            keep_original_partition keep, std::string origin,
-           size_t minimum_partition_reduction, double minimum_reduction_ratio,
+           uint64_t minimum_partition_reduction, double minimum_reduction_ratio,
            std::vector<uuid> required_input_partitions,
-           uint64_t input_byte_budget) -> caf::result<partition_apply_result> {
+           uint64_t input_byte_budget,
+           std::shared_ptr<PartitionTransformProgress> progress)
+      -> caf::result<partition_apply_result> {
       if (selected_partitions.empty()) {
         return caf::make_error(ec::invalid_argument, "no partitions given");
       }
@@ -1836,8 +1922,11 @@ index(index_actor::stateful_pointer<index_state> self,
         = self->state().transformer_partition_path_template();
       auto partition_synopsis_path_template
         = self->state().transformer_partition_synopsis_path_template();
-      auto progress = std::make_shared<PartitionTransformProgress>();
       auto transformation_id = uuid::random();
+      if (not progress) {
+        progress = std::make_shared<PartitionTransformProgress>();
+      }
+      progress->id = fmt::to_string(transformation_id);
       auto status_result = self->state().active_transformations.try_emplace(
         transformation_id, ActivePartitionTransform{
                              .progress = progress,
@@ -1875,8 +1964,7 @@ index(index_actor::stateful_pointer<index_state> self,
       auto deliver =
         [self, rp, corrected_partitions, marker_path, transformation_id,
          progress](caf::expected<partition_apply_result>&& result) mutable {
-          progress->phase.store(PartitionTransformPhase::done,
-                                std::memory_order_relaxed);
+          progress->set_phase(PartitionTransformPhase::done);
           self->state().active_transformations.erase(transformation_id);
           // Erase errors don't matter too much here, leftover in-progress
           // transforms will be cleaned up on next startup.
@@ -1971,8 +2059,7 @@ index(index_actor::stateful_pointer<index_state> self,
             // Record in-progress marker.
             auto marker_chunk
               = create_marker(old_partition_ids, new_partition_ids, keep);
-            progress->phase.store(PartitionTransformPhase::writing_marker,
-                                  std::memory_order_relaxed);
+            progress->set_phase(PartitionTransformPhase::writing_marker);
             self->mail(atom::write_v, marker_path, marker_chunk)
               .request(self->state().filesystem, caf::infinite)
               .then(
@@ -1995,17 +2082,15 @@ index(index_actor::stateful_pointer<index_state> self,
                     renames.emplace_back(std::move(old_synopsis_path),
                                          std::move(new_synopsis_path));
                   }
-                  progress->phase.store(
-                    PartitionTransformPhase::moving_partition_files,
-                    std::memory_order_relaxed);
+                  progress->set_phase(
+                    PartitionTransformPhase::moving_partition_files);
                   self->mail(atom::move_v, std::move(renames))
                     .request(self->state().filesystem, caf::infinite)
                     .then(
                       // Delete input partitions if necessary.
                       [=, apsv = std::move(apsv)](atom::done) mutable {
-                        progress->phase.store(
-                          PartitionTransformPhase::updating_catalog,
-                          std::memory_order_relaxed);
+                        progress->set_phase(
+                          PartitionTransformPhase::updating_catalog);
                         if (keep == keep_original_partition::yes) {
                           if (not apsv.empty()) {
                             self->mail(atom::merge_v, apsv)
@@ -2051,10 +2136,8 @@ index(index_actor::stateful_pointer<index_state> self,
                                     aps.uuid);
                                 }
                                 self->state().flush_to_disk();
-                                progress->phase.store(
-                                  PartitionTransformPhase::
-                                    erasing_input_partitions,
-                                  std::memory_order_relaxed);
+                                progress->set_phase(PartitionTransformPhase::
+                                                      erasing_input_partitions);
                                 self->mail(atom::erase_v, old_partition_ids)
                                   .request(static_cast<index_actor>(self),
                                            caf::infinite)
@@ -2102,64 +2185,7 @@ index(index_actor::stateful_pointer<index_state> self,
     },
     // -- status_client_actor --------------------------------------------------
     [self](atom::status, status_verbosity, duration) -> record {
-      auto transformations = list{};
-      transformations.reserve(self->state().active_transformations.size());
-      for (const auto& [id, status] : self->state().active_transformations) {
-        auto schemas = list{};
-        auto schema_names = std::vector<std::string>{};
-        for (const auto& partition : status.input_partitions) {
-          auto schema = std::string{partition.schema.name()};
-          if (std::ranges::find(schema_names, schema) == schema_names.end()) {
-            schema_names.push_back(schema);
-            schemas.emplace_back(std::move(schema));
-          }
-        }
-        const auto phase
-          = status.progress->phase.load(std::memory_order_relaxed);
-        auto input = record{
-          {"selected", status.input_partitions.size()},
-          {"loaded",
-           status.progress->loaded_inputs.load(std::memory_order_relaxed)},
-        };
-        auto partitions = list{};
-        partitions.reserve(status.input_partitions.size());
-        for (const auto& partition : status.input_partitions) {
-          partitions.emplace_back(fmt::to_string(partition.uuid));
-        }
-        input["partitions"] = std::move(partitions);
-        const auto current
-          = status.progress->current_input.load(std::memory_order_relaxed);
-        if (phase == PartitionTransformPhase::loading_input
-            and current < status.input_partitions.size()) {
-          input["current"]
-            = fmt::to_string(status.input_partitions[current].uuid);
-        }
-        transformations.emplace_back(record{
-          {"id", fmt::to_string(id)},
-          {"origin", status.origin},
-          {"schemas", std::move(schemas)},
-          {"phase", std::string{phase_name(phase)}},
-          {"duration", time::clock::now() - status.started_at},
-          {"input", std::move(input)},
-          {"output-partitions",
-           status.progress->output_partitions.load(std::memory_order_relaxed)},
-          {"stores",
-           record{
-             {"launched",
-              status.progress->stores_launched.load(std::memory_order_relaxed)},
-             {"finished",
-              status.progress->stores_finished.load(std::memory_order_relaxed)},
-           }},
-          {"partition-files",
-           record{
-             {"total", status.progress->partition_files_total.load(
-                         std::memory_order_relaxed)},
-             {"written", status.progress->partition_files_written.load(
-                           std::memory_order_relaxed)},
-           }},
-        });
-      }
-      return record{{"active-transforms", std::move(transformations)}};
+      return active_transformations_status(self);
     },
     [self](const caf::exit_msg& msg) {
       TENZIR_VERBOSE("{} received EXIT from {} with reason: {}", *self,

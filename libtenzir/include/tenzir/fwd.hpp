@@ -257,6 +257,7 @@ struct package_pipelines_map;
 struct package_contexts_map;
 struct partition_apply_result;
 struct partition_info;
+struct PartitionTransformProgress;
 struct partition_synopsis_pair;
 struct partition_synopsis;
 struct partition_transformer_result;

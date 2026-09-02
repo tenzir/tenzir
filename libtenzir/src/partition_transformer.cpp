@@ -148,9 +148,8 @@ void store_or_fulfill(
 void pack_and_fulfill(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self) {
-  self->state().progress->phase.store(
-    PartitionTransformPhase::packing_partition_metadata,
-    std::memory_order_relaxed);
+  self->state().progress->set_phase(
+    PartitionTransformPhase::packing_partition_metadata);
   auto stream_data = partition_transformer_state::stream_data{
     .partition_chunks
     = std::vector<std::tuple<tenzir::uuid, tenzir::type, chunk_ptr>>{},
@@ -602,8 +601,6 @@ void partition_transformer_state::fulfill(
     self,
   stream_data&& stream_data, path_data&& path_data) const {
   TENZIR_DEBUG("{} fulfills promise", *self);
-  progress->phase.store(PartitionTransformPhase::writing_partition_files,
-                        std::memory_order_relaxed);
   auto promise = path_data.promise;
   if (self->state().stream_error.valid()) {
     promise.deliver(self->state().stream_error);
@@ -646,6 +643,7 @@ void partition_transformer_state::fulfill(
     self->quit();
     return;
   }
+  progress->set_phase(PartitionTransformPhase::writing_partition_files);
   // When we get here we know that there was at least one event and
   // no error during packing, so at least one of these chunks must be
   // nonnull.
@@ -673,9 +671,8 @@ void partition_transformer_state::fulfill(
       [self, promise](std::vector<partition_synopsis_pair>&& result) mutable {
         // We're done now, but we may still need to wait for the stores.
         if (self->state().stores_finished < self->state().stores_launched) {
-          self->state().progress->phase.store(
-            PartitionTransformPhase::persisting_stores,
-            std::memory_order_relaxed);
+          self->state().progress->set_phase(
+            PartitionTransformPhase::persisting_stores);
         }
         quit_or_stall(self,
                       partition_transformer_state::transformer_is_finished{
@@ -797,8 +794,8 @@ auto partition_transformer(
           std::move(slice));
       };
       auto finish_transform = [self]() {
-        self->state().progress->phase.store(
-          PartitionTransformPhase::creating_output, std::memory_order_relaxed);
+        self->state().progress->set_phase(
+          PartitionTransformPhase::creating_output);
         auto stream_data = partition_transformer_state::stream_data{
           .partition_chunks
           = std::vector<std::tuple<tenzir::uuid, tenzir::type, chunk_ptr>>{},
@@ -927,8 +924,7 @@ auto partition_transformer(
                  progress](Push<OperatorMsg<table_slice>>& push_input) mutable
               -> Task<void> {
               co_await loader.feed(push_input);
-              progress->phase.store(PartitionTransformPhase::finishing_pipeline,
-                                    std::memory_order_relaxed);
+              progress->set_phase(PartitionTransformPhase::finishing_pipeline);
             };
             auto drain_output
               = [self, weak, process_slice, source_state](
@@ -1058,8 +1054,8 @@ auto partition_transformer(
     },
     [self](atom::internal, atom::resume, atom::done) {
       TENZIR_DEBUG("{} got resume", *self);
-      self->state().progress->phase.store(
-        PartitionTransformPhase::creating_output, std::memory_order_relaxed);
+      self->state().progress->set_phase(
+        PartitionTransformPhase::creating_output);
       self->state().progress->output_partitions.store(
         self->state().data.size(), std::memory_order_relaxed);
       for (auto& [schema, data] : self->state().data) {
@@ -1112,8 +1108,8 @@ auto partition_transformer(
                      self->state().persist);
           self->quit(annotated_error);
         });
-      self->state().progress->phase.store(
-        PartitionTransformPhase::persisting_stores, std::memory_order_relaxed);
+      self->state().progress->set_phase(
+        PartitionTransformPhase::persisting_stores);
       for (auto& [_, partition_data] : self->state().data) {
         self->mail(atom::persist_v)
           .request(partition_data.builder, caf::infinite)

@@ -222,12 +222,12 @@ using index_actor = typed_actor_fwd<
   // keep_original_partition is no: does an in-place pipeline keeping the old
   // ids, and makes new partitions preserving them. Three trailing arguments
   // constrain the accepted inputs by absolute reduction, relative reduction,
-  // and inputs that independently require transformation. The last argument
-  // is a caller-computed byte budget, where zero requests automatic
-  // estimation.
+  // and inputs that independently require transformation. The penultimate
+  // argument is a caller-computed byte budget, where zero requests automatic
+  // estimation. The final argument optionally shares progress with the caller.
   auto(atom::apply, ast::pipeline, std::vector<tenzir::partition_info>,
-       keep_original_partition, std::string, size_t, double, std::vector<uuid>,
-       uint64_t)
+       keep_original_partition, std::string, uint64_t, double,
+       std::vector<uuid>, uint64_t, std::shared_ptr<PartitionTransformProgress>)
     ->caf::result<partition_apply_result>,
   // Decomissions all active partitions, effectively flushing them to disk.
   auto(atom::flush)->caf::result<void>,
@@ -515,6 +515,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID((tenzir::rest_handler_actor))
   TENZIR_ADD_TYPE_ID((tenzir::status_client_actor))
+  TENZIR_ADD_TYPE_ID((std::shared_ptr<tenzir::PartitionTransformProgress>))
 
 CAF_END_TYPE_ID_BLOCK(tenzir_actors)
 
@@ -525,6 +526,8 @@ CAF_END_TYPE_ID_BLOCK(tenzir_actors)
 #define tenzir_uuid_synopsis_map                                               \
   std::unordered_map<tenzir::uuid, tenzir::partition_synopsis_ptr>
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<tenzir_uuid_synopsis_map>)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(
+  std::shared_ptr<tenzir::PartitionTransformProgress>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::partition_synopsis_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::partition_synopsis_pair)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(tenzir::partition_transformer_result)
