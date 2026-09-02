@@ -4,6 +4,7 @@ fixtures:
       method: GET
       body: ""
       initial_delay: 1.0
+      max_attempts_per_request: 60
       request_timeout: 5.0
       expected_status: 200
       expected_body: |
