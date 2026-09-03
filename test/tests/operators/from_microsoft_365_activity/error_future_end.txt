@@ -1,0 +1,6 @@
+error: `end_time` must not be in the future
+  --> tests/operators/from_microsoft_365_activity/error_future_end.tql:17:12
+   |
+17 |   end_time=now() + 1h
+   |            ^^^^^^^^^^
+   |

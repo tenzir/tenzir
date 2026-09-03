@@ -10,6 +10,8 @@
 
 #include "tenzir/panic.hpp"
 
+#include <iterator>
+
 namespace tenzir::detail {
 
 template <bool include_cond = false, typename... Ts>

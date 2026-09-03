@@ -1,0 +1,7 @@
+error: Microsoft 365 activity subscription `Audit.Exchange` is missing or disabled
+ --> tests/operators/from_microsoft_365_activity/error_missing_subscription.tql:9:1
+  |
+9 | from_microsoft_365_activity auth={
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: set `start_missing_subscriptions=true` to start it

@@ -1,0 +1,7 @@
+error: Microsoft 365 activity pagination URL points to an untrusted origin
+ --> tests/operators/from_microsoft_365_activity/error_untrusted_next_page.tql:9:1
+  |
+9 | from_microsoft_365_activity auth={
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: origin: https://example.invalid

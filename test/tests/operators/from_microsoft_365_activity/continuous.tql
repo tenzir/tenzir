@@ -1,0 +1,20 @@
+---
+fixtures: [microsoft_365_activity]
+timeout: 60
+skip:
+  on: fixture-unavailable
+---
+
+from_microsoft_365_activity auth={
+    tenant_id: env("MS_ACTIVITY_FIXTURE_TENANT_ID"),
+    client_id: env("MS_ACTIVITY_FIXTURE_CLIENT_ID"),
+    client_secret: env("MS_ACTIVITY_FIXTURE_CLIENT_SECRET"),
+    authority: env("MS_ACTIVITY_FIXTURE_AUTHORITY"),
+  },
+  content_types=["Audit.General"],
+  start_time=now() - 2h,
+  poll_interval=1ms,
+  publisher_identifier="continuous",
+  _base_url=env("MS_ACTIVITY_FIXTURE_BASE_URL"),
+  tls=false
+head 2

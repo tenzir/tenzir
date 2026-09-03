@@ -1,0 +1,16 @@
+---
+error: true
+fixtures: [microsoft_365_activity]
+skip:
+  on: fixture-unavailable
+---
+
+from_microsoft_365_activity auth={
+    tenant_id: "tenant",
+    client_id: "client",
+    client_secret: "secret",
+  },
+  content_types=["Audit.General"],
+  start_time=now() - 2h,
+  end_time=now() - 1h,
+  poll_interval=15min

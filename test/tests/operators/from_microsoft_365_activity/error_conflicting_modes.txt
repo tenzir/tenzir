@@ -1,0 +1,6 @@
+error: `poll_interval` cannot be combined with a bounded time range
+  --> tests/operators/from_microsoft_365_activity/error_conflicting_modes.tql:16:17
+   |
+16 |   poll_interval=15min
+   |                 ^^^^^
+   |

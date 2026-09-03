@@ -1,0 +1,28 @@
+warning: HTTP error 429, attempt 1/6, retrying after 0s
+ --> tests/operators/from_microsoft_365_activity/retry_after.tql:8:1
+  |
+8 | from_microsoft_365_activity auth={
+  | ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+{
+  Id: "event-1",
+  CreationTime: 2026-09-02T09:55:00Z,
+  microsoft_365_activity: {
+    tenant_id: "11111111-2222-3333-4444-555555555555",
+    content_type: "Audit.General",
+    content_id: "blob-1",
+    content_created: 2026-09-02T10:00:00Z,
+    content_expiration: 2099-09-09T10:10:00Z,
+  },
+}
+{
+  Id: "event-2",
+  Operation: "UserLoggedIn",
+  microsoft_365_activity: {
+    tenant_id: "11111111-2222-3333-4444-555555555555",
+    content_type: "Audit.General",
+    content_id: "blob-2",
+    content_created: 2026-09-02T10:05:00Z,
+    content_expiration: 2099-09-09T10:05:00Z,
+  },
+}

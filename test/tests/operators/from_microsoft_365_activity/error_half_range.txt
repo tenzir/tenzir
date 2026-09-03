@@ -1,0 +1,6 @@
+error: `end_time` requires `start_time`
+  --> tests/operators/from_microsoft_365_activity/error_half_range.tql:14:12
+   |
+14 |   end_time=now() - 1h
+   |            ^^^^^^^^^^
+   |

@@ -1,0 +1,18 @@
+---
+error: true
+fixtures: [microsoft_365_activity]
+skip:
+  on: fixture-unavailable
+---
+
+from_microsoft_365_activity auth={
+    tenant_id: "contoso.onmicrosoft.com",
+    client_id: "client",
+    client_secret: "secret",
+    authority: env("MS_ACTIVITY_FIXTURE_AUTHORITY"),
+  },
+  content_types=["Audit.General"],
+  start_time=now() - 2h,
+  end_time=now() - 1h,
+  _base_url=env("MS_ACTIVITY_FIXTURE_BASE_URL"),
+  tls=false

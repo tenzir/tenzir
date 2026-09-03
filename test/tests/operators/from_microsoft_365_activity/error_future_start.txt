@@ -1,0 +1,6 @@
+error: `start_time` must be in the past
+  --> tests/operators/from_microsoft_365_activity/error_future_start.tql:15:14
+   |
+15 |   start_time=now() + 1h
+   |              ^^^^^^^^^^
+   |

@@ -1,0 +1,6 @@
+error: `auth.tenant_id` must be a GUID for the Microsoft 365 Activity API
+ --> tests/operators/from_microsoft_365_activity/error_invalid_tenant.tql:8:34
+  |
+8 | from_microsoft_365_activity auth={
+  |                                  ^
+  |

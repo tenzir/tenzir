@@ -1,0 +1,6 @@
+error: unsupported Microsoft 365 activity content type `Audit.Unknown`
+  --> tests/operators/from_microsoft_365_activity/error_content_type.tql:13:17
+   |
+13 |   content_types=["Audit.Unknown"],
+   |                 ^^^^^^^^^^^^^^^^^
+   |
