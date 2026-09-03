@@ -1,0 +1,26 @@
+name: partition_ingest_rebuild
+description: >-
+  Measure importing one million representative Graylog events and rebuilding
+  the same events from 1000-event Feather partitions toward a 100000-event
+  target size.
+tags:
+  benchmark: node
+  area: partitions
+  dataset: graylog-sample-1m
+inputs:
+  main:
+    path: graylog_sample_2026_06_18_1M.ndjson.zst
+    source:
+      num_events: 1000000
+env:
+  TENZIR_CONSOLE_FORMAT: none
+fixtures:
+  - node_partition:
+      inputs: [main]
+      max_partition_size: 100000
+      seed_partition_size: 1000
+      read_pipeline: decompress_zstd | read_ndjson
+runtime:
+  warmup_runs: 1
+  measurement_runs: 3
+  timeout_seconds: 1800

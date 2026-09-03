@@ -1,0 +1,12 @@
+---
+bench:
+  id: ingest
+  description: Import one million Graylog events into a clean node.
+  tags:
+    operation: ingest
+---
+from_file env("BENCHMARK_INPUT_PATH") {
+  decompress_zstd
+  read_ndjson
+}
+import
