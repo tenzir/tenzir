@@ -149,12 +149,16 @@ endif ()
 
 if (ARROW_AZURE)
   find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
+  find_package(azure-identity-cpp CONFIG REQUIRED)
   if (NOT BUILD_SHARED_LIBS)
     string(APPEND TENZIR_FIND_DEPENDENCY_LIST
            "\nfind_package(azure-storage-blobs-cpp CONFIG REQUIRED)")
+    string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+           "\nfind_package(azure-identity-cpp CONFIG REQUIRED)")
   endif ()
   dependency_summary("Azure Storage Blobs" Azure::azure-storage-blobs
                      "Dependencies")
+  dependency_summary("Azure Identity" Azure::azure-identity "Dependencies")
 endif ()
 
 # -- boost ---------------------------------------------------------------------
@@ -626,7 +630,8 @@ endif ()
 
 # Link against Azure SDK (for direct Azure blob deletion without directory markers).
 if (ARROW_AZURE)
-  target_link_libraries(libtenzir PRIVATE Azure::azure-storage-blobs)
+  target_link_libraries(libtenzir PRIVATE Azure::azure-storage-blobs
+                                          Azure::azure-identity)
 endif ()
 
 # Link against Boost.

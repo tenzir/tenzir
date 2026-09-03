@@ -83,6 +83,7 @@ in
   buildInputs = [
     avro-cpp
     azure-sdk-for-cpp.storage-blobs
+    azure-sdk-for-cpp.identity
     clickhouse-cpp
     fluent-bit
     iceberg-cpp

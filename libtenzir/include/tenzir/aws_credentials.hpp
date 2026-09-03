@@ -29,19 +29,6 @@ auto make_default_aws_credentials_provider_chain()
   -> std::shared_ptr<Aws::Auth::AWSCredentialsProvider>;
 
 // TODO: Move to the shared Amazon module as `tenzir::amazon`.
-/// Fetches a web identity token from the configured source.
-///
-/// Supports three token sources:
-/// - HTTP endpoint: Fetches token via HTTP GET, optionally parsing JSON
-/// - File: Reads token from a file path
-/// - Direct: Returns the token value directly
-///
-/// @param web_identity The resolved web identity configuration
-/// @return The token string or an error
-auto fetch_web_identity_token(const resolved_web_identity& web_identity)
-  -> caf::expected<std::string>;
-
-// TODO: Move to the shared Amazon module as `tenzir::amazon`.
 /// Creates an AWS credentials provider based on the resolved credentials.
 ///
 /// This function implements the common credential resolution logic:

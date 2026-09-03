@@ -44,6 +44,7 @@ curl -L "https://github.com/apache/arrow/archive/refs/tags/${ARROW_TAG}.tar.gz" 
 cd cpp
 
 patch -p1 </patches/arrow-cpp-eager-struct-fields.patch
+patch -p1 </patches/arrow-cpp-azure-token-credential.patch
 
 # Ship shared libraries only: everything in the image links Arrow
 # dynamically, and exporting Parquet::parquet_static tricks the bundled

@@ -21,6 +21,8 @@ arrow-cpp.overrideAttrs (orig: {
   patches = [
     ./arrow-cpp-nixos-zoneinfo.patch
     ./arrow-cpp-eager-struct-fields.patch
+    # Allows injecting an arbitrary Azure token credential; see TNZ-987.
+    ./arrow-cpp-azure-token-credential.patch
   ];
 
   nativeBuildInputs =

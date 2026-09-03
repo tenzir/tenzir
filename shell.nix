@@ -127,7 +127,8 @@ pkgs.mkShell (
       "${deps-prefix}"
       + ":${deps-prefix}/share/azure-core-cpp"
       + ":${deps-prefix}/share/azure-storage-common-cpp"
-      + ":${deps-prefix}/share/azure-storage-blobs-cpp";
+      + ":${deps-prefix}/share/azure-storage-blobs-cpp"
+      + ":${deps-prefix}/share/azure-identity-cpp";
     # Feed pkg-config and the compiler/linker one deduplicated include/lib
     # location. This keeps the Nix wrappers fast while preserving normal
     # dependency discovery for configure checks and real builds.

@@ -15,11 +15,14 @@
 #include <arrow/filesystem/azurefs.h>
 #include <arrow/util/uri.h>
 
+#include "auth.hpp"
+
 namespace tenzir::plugins::abs {
 namespace {
 
 struct ToAzureBlobStorageArgs : ToArrowFsArgs {
   Option<located<secret>> account_key;
+  Option<located<record>> azure_auth;
 };
 
 class ToAzureBlobStorageOperator final : public ToArrowFsOperator {
@@ -40,6 +43,15 @@ protected:
                                              resolved_account_key_, ctx.dh()));
     }
     CO_TRY(co_await ctx.resolve_secrets(std::move(requests)));
+    if (args_.azure_auth) {
+      CO_TRY(auto options, AzureAuthOptions::from_record(
+                             *args_.azure_auth, ctx.dh(), azure_auth_support));
+      resolved_auth_
+        = co_await resolve_azure_auth(std::move(options), storage_scope, ctx);
+      if (not resolved_auth_) {
+        co_return failure::promise();
+      }
+    }
     co_return std::move(resolved);
   }
 
@@ -75,6 +87,23 @@ protected:
         co_return failure::promise();
       }
     }
+    if (resolved_auth_) {
+      auto credential = make_azure_token_credential(*resolved_auth_);
+      if (not credential) {
+        diagnostic::error(credential.error())
+          .primary(*args_.azure_auth)
+          .emit(dh);
+        co_return failure::promise();
+      }
+      auto credential_status = opts.ConfigureCredential(std::move(*credential));
+      if (not credential_status.ok()) {
+        diagnostic::error("failed to set Azure credential")
+          .primary(*args_.azure_auth)
+          .note(credential_status.ToStringWithoutContextLines())
+          .emit(dh);
+        co_return failure::promise();
+      }
+    }
     auto fs_result = arrow::fs::AzureFileSystem::Make(opts);
     if (not fs_result.ok()) {
       diagnostic::error("failed to create Azure Blob Storage filesystem")
@@ -90,6 +119,7 @@ protected:
 private:
   ToAzureBlobStorageArgs args_;
   std::string resolved_account_key_;
+  Option<ResolvedAzureAuth> resolved_auth_;
 };
 
 class ToAzureBlobStoragePlugin final : public OperatorPlugin {
@@ -100,8 +130,13 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<ToAzureBlobStorageArgs, ToAzureBlobStorageOperator>{};
-    d.named("account_key", &ToAzureBlobStorageArgs::account_key);
-    ToArrowFsArgs::describe_to(d);
+    auto account_key_arg
+      = d.named("account_key", &ToAzureBlobStorageArgs::account_key);
+    auto azure_auth_arg
+      = d.named("azure_auth", &ToAzureBlobStorageArgs::azure_auth);
+    ToArrowFsArgs::describe_to(d, [=](DescribeCtx& ctx) {
+      check_azure_auth_args(ctx, account_key_arg, azure_auth_arg);
+    });
     return d.without_optimize();
   }
 };

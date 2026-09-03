@@ -10,17 +10,27 @@
 
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/curl.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/http_pool.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/try.hpp"
 #include "tenzir/type.hpp"
 
+#include <arrow/util/config.h>
 #include <boost/url/parse.hpp>
 #include <folly/io/async/EventBase.h>
 
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <iterator>
+
+#ifdef ARROW_AZURE
+#  include <azure/core/context.hpp>
+#  include <azure/core/credentials/credentials.hpp>
+#  include <azure/identity/client_assertion_credential.hpp>
+#  include <azure/identity/client_secret_credential.hpp>
+#endif
 
 namespace tenzir {
 
@@ -33,31 +43,6 @@ constexpr auto default_authority = "https://login.microsoftonline.com";
 /// Fallback token lifetime for Azure token responses without a usable
 /// `expires_in` field.
 constexpr auto default_token_lifetime = 50min;
-
-/// Helper to assign a secret from a record field.
-auto assign_secret(located<record> const& config, std::string_view key,
-                   Option<secret>& x, diagnostic_handler& dh)
-  -> failure_or<void> {
-  if (auto it = config.inner.find(key); it != config.inner.end()) {
-    if (auto* s = try_as<secret>(it->second.get_data())) {
-      x = std::move(*s);
-    } else if (auto* str = try_as<std::string>(it->second.get_data())) {
-      if (str->empty()) {
-        diagnostic::error("'{}' must not be empty", key)
-          .primary(config)
-          .emit(dh);
-        return failure::promise();
-      }
-      x = secret::make_literal(std::move(*str));
-    } else {
-      diagnostic::error("'{}' must be a `string` or `secret`", key)
-        .primary(config)
-        .emit(dh);
-      return failure::promise();
-    }
-  }
-  return {};
-}
 
 auto check_resolved(std::string_view name, std::string const& value,
                     location loc, diagnostic_handler& dh) -> failure_or<void> {
@@ -133,13 +118,24 @@ auto refresh_time(std::chrono::steady_clock::time_point now,
   return now + expires_in - safety_margin;
 }
 
+/// The SDK expects a trailing slash on the authority host, but
+/// `resolve_azure_auth` strips it, so this helper adds it back.
+template <class Options>
+auto credential_options(ResolvedAzureAuth const& auth) -> Options {
+  auto options = Options{};
+  options.AuthorityHost = auth.authority + "/";
+  return options;
+}
+
 } // namespace
 
 auto AzureAuthOptions::from_record(located<record> config,
-                                   diagnostic_handler& dh)
+                                   diagnostic_handler& dh,
+                                   AzureAuthSupport support)
   -> failure_or<AzureAuthOptions> {
   constexpr auto known = std::array{
-    "tenant_id", "client_id", "client_secret", "scope", "authority",
+    "tenant_id", "client_id", "client_secret",
+    "scope",     "authority", "web_identity",
   };
   auto const unknown = std::ranges::find_if(config.inner, [&](auto&& x) {
     return std::ranges::find(known, x.first) == std::ranges::end(known);
@@ -157,6 +153,17 @@ auto AzureAuthOptions::from_record(located<record> config,
   TRY(assign_secret(config, "client_secret", opts.client_secret, dh));
   TRY(assign_secret(config, "scope", opts.scope, dh));
   TRY(assign_secret(config, "authority", opts.authority, dh));
+  if (auto it = config.inner.find("web_identity"); it != config.inner.end()) {
+    if (auto* r = try_as<record>(it->second.get_data())) {
+      TRY(opts.web_identity, web_identity_options::from_record(
+                               located{std::move(*r), config.source}, dh));
+    } else {
+      diagnostic::error("`web_identity` must be a record")
+        .primary(config)
+        .emit(dh);
+      return failure::promise();
+    }
+  }
   if (not opts.tenant_id) {
     diagnostic::error("`auth` requires `tenant_id`").primary(config).emit(dh);
     return failure::promise();
@@ -165,9 +172,31 @@ auto AzureAuthOptions::from_record(located<record> config,
     diagnostic::error("`auth` requires `client_id`").primary(config).emit(dh);
     return failure::promise();
   }
-  if (not opts.client_secret) {
-    diagnostic::error("`auth` requires `client_secret`")
+  if (opts.client_secret and opts.web_identity) {
+    diagnostic::error("`client_secret` and `web_identity` are mutually "
+                      "exclusive")
       .primary(config)
+      .emit(dh);
+    return failure::promise();
+  }
+  if (not opts.client_secret and not opts.web_identity) {
+    diagnostic::error("`auth` requires one of: `client_secret`, "
+                      "`web_identity`")
+      .primary(config)
+      .emit(dh);
+    return failure::promise();
+  }
+  if (opts.web_identity and not support.web_identity) {
+    diagnostic::error("`web_identity` is not supported by this operator")
+      .primary(config)
+      .hint("use `client_secret` instead")
+      .emit(dh);
+    return failure::promise();
+  }
+  if (opts.scope and not support.scope) {
+    diagnostic::error("`scope` is not supported by this operator")
+      .primary(config)
+      .note("the Azure SDK requests the scope itself")
       .emit(dh);
     return failure::promise();
   }
@@ -183,8 +212,18 @@ auto AzureAuthOptions::make_secret_requests(ResolvedAzureAuth& resolved,
                                             resolved.tenant_id, dh));
   requests.emplace_back(make_secret_request("auth.client_id", *client_id, loc,
                                             resolved.client_id, dh));
-  requests.emplace_back(make_secret_request(
-    "auth.client_secret", *client_secret, loc, resolved.client_secret, dh));
+  if (client_secret) {
+    requests.emplace_back(make_secret_request(
+      "auth.client_secret", *client_secret, loc, resolved.client_secret, dh));
+  }
+  if (web_identity) {
+    resolved.web_identity = resolved_web_identity{};
+    auto web_identity_requests
+      = web_identity->make_secret_requests(*resolved.web_identity, dh);
+    requests.insert(requests.end(),
+                    std::make_move_iterator(web_identity_requests.begin()),
+                    std::make_move_iterator(web_identity_requests.end()));
+  }
   if (scope) {
     requests.emplace_back(
       make_secret_request("auth.scope", *scope, loc, resolved.scope, dh));
@@ -212,10 +251,13 @@ auto resolve_azure_auth(AzureAuthOptions options, std::string default_scope,
   auto& dh = ctx.dh();
   if (not check_resolved("tenant_id", resolved.tenant_id, options.loc, dh)
       or not check_resolved("client_id", resolved.client_id, options.loc, dh)
-      or not check_resolved("client_secret", resolved.client_secret,
-                            options.loc, dh)
       or not check_resolved("scope", resolved.scope, options.loc, dh)
       or not check_resolved("authority", resolved.authority, options.loc, dh)) {
+    co_return None{};
+  }
+  if (options.client_secret
+      and not check_resolved("client_secret", resolved.client_secret,
+                             options.loc, dh)) {
     co_return None{};
   }
   resolved.authority = normalize_authority(std::move(resolved.authority));
@@ -225,8 +267,43 @@ auto resolve_azure_auth(AzureAuthOptions options, std::string default_scope,
   co_return resolved;
 }
 
+auto make_azure_token_credential(ResolvedAzureAuth const& auth)
+  -> caf::expected<std::shared_ptr<Azure::Core::Credentials::TokenCredential>> {
+#ifdef ARROW_AZURE
+  using credential_ptr
+    = std::shared_ptr<Azure::Core::Credentials::TokenCredential>;
+  if (not auth.web_identity) {
+    return credential_ptr{
+      std::make_shared<Azure::Identity::ClientSecretCredential>(
+        auth.tenant_id, auth.client_id, auth.client_secret,
+        credential_options<Azure::Identity::ClientSecretCredentialOptions>(
+          auth))};
+  }
+  auto options
+    = credential_options<Azure::Identity::ClientAssertionCredentialOptions>(
+      auth);
+  auto callback
+    = [web_identity = *auth.web_identity](Azure::Core::Context const&) {
+        auto token = fetch_web_identity_token(web_identity);
+        if (not token) {
+          throw Azure::Core::Credentials::AuthenticationException{
+            fmt::format("failed to fetch client assertion: {}", token.error())};
+        }
+        return std::move(*token);
+      };
+  return credential_ptr{
+    std::make_shared<Azure::Identity::ClientAssertionCredential>(
+      auth.tenant_id, auth.client_id, std::move(callback), options)};
+#else
+  (void)auth;
+  return diagnostic::error("Azure support is not available in this build")
+    .to_error();
+#endif
+}
+
 AzureTokenProvider::AzureTokenProvider(ResolvedAzureAuth auth, location loc)
   : auth_{std::move(auth)}, loc_{loc} {
+  TENZIR_ASSERT(not auth_.web_identity);
 }
 
 auto AzureTokenProvider::authorize(std::vector<http::Header>& headers,
