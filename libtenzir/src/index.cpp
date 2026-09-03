@@ -1834,7 +1834,7 @@ index(index_actor::stateful_pointer<index_state> self,
            keep_original_partition keep, std::string origin,
            uint64_t minimum_partition_reduction, double minimum_reduction_ratio,
            std::vector<uuid> required_input_partitions,
-           uint64_t input_byte_budget,
+           uint64_t input_byte_budget, uint64_t rebuild_batch_size,
            std::shared_ptr<PartitionTransformProgress> progress)
       -> caf::result<partition_apply_result> {
       if (selected_partitions.empty()) {
@@ -1943,7 +1943,8 @@ index(index_actor::stateful_pointer<index_state> self,
         std::move(partition_path_template),
         std::move(partition_synopsis_path_template), std::move(origin),
         minimum_partition_reduction, minimum_reduction_ratio,
-        std::move(required_input_partitions), input_byte_budget, progress);
+        std::move(required_input_partitions), input_byte_budget,
+        detail::narrow_cast<size_t>(rebuild_batch_size), progress);
       /// Monitor the actor to remove it from the collection of active
       /// transformers.
       auto partition_transformer_addr = partition_transfomer->address();

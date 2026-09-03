@@ -1047,7 +1047,8 @@ struct rebuilder_state {
              std::move(current_run_partitions), keep_original_partition::no,
              std::string{"rebuild"}, minimum_partition_reduction,
              minimum_reduction_ratio, std::move(required_partitions),
-             current_run_budget.bytes, std::move(transform_progress))
+             current_run_budget.bytes, desired_batch_size,
+             std::move(transform_progress))
       .request(index, caf::infinite)
       .then(
         [this, rp, selected_partitions = std::move(selected_partitions),

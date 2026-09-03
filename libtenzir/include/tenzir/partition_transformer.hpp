@@ -97,6 +97,10 @@ struct partition_transformer_state {
   active_partition_state::serialization_data&
   create_or_get_partition(const table_slice& slice);
 
+  // Returns the current non-full partition for `schema`, or creates one.
+  active_partition_state::serialization_data&
+  create_or_get_streaming_partition(const type& schema);
+
   void fulfill(
     partition_transformer_actor::stateful_pointer<partition_transformer_state>
       self,
@@ -165,6 +169,7 @@ struct partition_transformer_state {
   double minimum_reduction_ratio = 0;
   std::vector<uuid> required_input_partitions = {};
   uint64_t input_byte_budget = 0;
+  size_t rebuild_batch_size = 0;
   bool input_constraints_satisfied = true;
 
   /// Progress observed by the index while this transform is active.
@@ -227,7 +232,7 @@ auto partition_transformer(
   std::string partition_path_template, std::string synopsis_path_template,
   std::string origin, size_t minimum_partition_reduction,
   double minimum_reduction_ratio, std::vector<uuid> required_input_partitions,
-  uint64_t input_byte_budget,
+  uint64_t input_byte_budget, size_t rebuild_batch_size,
   std::shared_ptr<PartitionTransformProgress> progress)
   -> partition_transformer_actor::behavior_type;
 
