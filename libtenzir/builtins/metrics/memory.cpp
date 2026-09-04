@@ -290,26 +290,15 @@ auto parse_proc_kb_value(std::string_view line, std::string_view key)
 auto make_procfs_metrics() -> record {
   auto make_status_record = [] {
     auto status = record{};
-    status.reserve(6);
+    status.reserve(7);
     status.try_emplace("vm_rss_bytes", caf::none);
     status.try_emplace("vm_data_bytes", caf::none);
     status.try_emplace("vm_swap_bytes", caf::none);
     status.try_emplace("rss_anon_bytes", caf::none);
     status.try_emplace("file_rss_bytes", caf::none);
     status.try_emplace("rss_shmem_bytes", caf::none);
+    status.try_emplace("hugetlb_bytes", caf::none);
     return status;
-  };
-  auto make_smaps_record = [] {
-    auto smaps = record{};
-    smaps.reserve(7);
-    smaps.try_emplace("rss_bytes", caf::none);
-    smaps.try_emplace("pss_bytes", caf::none);
-    smaps.try_emplace("private_clean_bytes", caf::none);
-    smaps.try_emplace("private_dirty_bytes", caf::none);
-    smaps.try_emplace("anonymous_rss_bytes", caf::none);
-    smaps.try_emplace("swap_bytes", caf::none);
-    smaps.try_emplace("hugetlb_bytes", caf::none);
-    return smaps;
   };
   auto make_heap_record = [] {
     auto heap = record{};
@@ -318,7 +307,6 @@ auto make_procfs_metrics() -> record {
     return heap;
   };
   auto status = make_status_record();
-  auto smaps = make_smaps_record();
   auto heap = make_heap_record();
 #if TENZIR_LINUX
   auto set_record_field
@@ -329,96 +317,22 @@ auto make_procfs_metrics() -> record {
           rec.emplace(std::string{key}, value);
         }
       };
-  auto add_value = [](Option<uint64_t>& target, uint64_t value) {
-    if (target) {
-      *target += value;
-    } else {
-      target = value;
-    }
-  };
   auto assign_value = [](Option<uint64_t>& target, uint64_t value) {
     target = value;
   };
-  Option<uint64_t> rss;
-  Option<uint64_t> pss;
-  Option<uint64_t> private_clean;
-  Option<uint64_t> private_dirty;
-  Option<uint64_t> anonymous_bytes;
-  Option<uint64_t> swap;
-  Option<uint64_t> shared_hugetlb;
-  Option<uint64_t> private_hugetlb;
-  Option<uint64_t> hugetlb_total;
-  auto parse_smaps_stream = [&](std::istream& stream) {
-    std::string line;
-    while (std::getline(stream, line)) {
-      const auto view = std::string_view{line};
-      if (const auto value = parse_proc_kb_value(view, "Rss")) {
-        add_value(rss, *value);
-      } else if (const auto value = parse_proc_kb_value(view, "Pss")) {
-        add_value(pss, *value);
-      } else if (const auto value
-                 = parse_proc_kb_value(view, "Private_Clean")) {
-        add_value(private_clean, *value);
-      } else if (const auto value
-                 = parse_proc_kb_value(view, "Private_Dirty")) {
-        add_value(private_dirty, *value);
-      } else if (const auto value = parse_proc_kb_value(view, "Anonymous")) {
-        add_value(anonymous_bytes, *value);
-      } else if (const auto value = parse_proc_kb_value(view, "Swap")) {
-        add_value(swap, *value);
-      } else if (const auto value
-                 = parse_proc_kb_value(view, "Shared_Hugetlb")) {
-        add_value(shared_hugetlb, *value);
-      } else if (const auto value
-                 = parse_proc_kb_value(view, "Private_Hugetlb")) {
-        add_value(private_hugetlb, *value);
-      } else if (const auto value = parse_proc_kb_value(view, "Hugetlb")) {
-        add_value(hugetlb_total, *value);
-      }
-    }
-  };
-  if (std::ifstream smaps_rollup{"/proc/self/smaps_rollup"}) {
-    parse_smaps_stream(smaps_rollup);
-  } else if (std::ifstream smaps_file{"/proc/self/smaps"}) {
-    parse_smaps_stream(smaps_file);
-  }
-  if (rss) {
-    set_record_field(smaps, "rss_bytes", *rss);
-  }
-  if (pss) {
-    set_record_field(smaps, "pss_bytes", *pss);
-  }
-  if (private_clean) {
-    set_record_field(smaps, "private_clean_bytes", *private_clean);
-  }
-  if (private_dirty) {
-    set_record_field(smaps, "private_dirty_bytes", *private_dirty);
-  }
-  if (anonymous_bytes) {
-    set_record_field(smaps, "anonymous_rss_bytes", *anonymous_bytes);
-  }
-  if (swap) {
-    set_record_field(smaps, "swap_bytes", *swap);
-  }
-  Option<uint64_t> hugetlb_bytes;
-  if (shared_hugetlb) {
-    add_value(hugetlb_bytes, *shared_hugetlb);
-  }
-  if (private_hugetlb) {
-    add_value(hugetlb_bytes, *private_hugetlb);
-  }
-  if (not hugetlb_bytes and hugetlb_total) {
-    assign_value(hugetlb_bytes, *hugetlb_total);
-  }
-  if (hugetlb_bytes) {
-    set_record_field(smaps, "hugetlb_bytes", *hugetlb_bytes);
-  }
+  // Read only the per-process counters from `/proc/self/status`. Deliberately
+  // avoid `/proc/self/smaps_rollup`: producing it walks every page table entry
+  // of the process while holding the mmap lock, which on large nodes stalls
+  // every concurrent mmap, munmap, page fault, and allocator purge for the
+  // duration of the walk. The status counters are maintained incrementally by
+  // the kernel and cost microseconds to read.
   Option<uint64_t> vm_rss;
   Option<uint64_t> vm_data;
   Option<uint64_t> vm_swap;
   Option<uint64_t> rss_anon;
   Option<uint64_t> rss_file;
   Option<uint64_t> rss_shmem;
+  Option<uint64_t> hugetlb;
   if (std::ifstream status_file{"/proc/self/status"}) {
     std::string line;
     while (std::getline(status_file, line)) {
@@ -435,35 +349,31 @@ auto make_procfs_metrics() -> record {
         assign_value(rss_file, *value);
       } else if (const auto value = parse_proc_kb_value(view, "RssShmem")) {
         assign_value(rss_shmem, *value);
+      } else if (const auto value = parse_proc_kb_value(view, "HugetlbPages")) {
+        assign_value(hugetlb, *value);
       }
     }
   }
   if (vm_rss) {
     set_record_field(status, "vm_rss_bytes", *vm_rss);
-    if (not rss) {
-      set_record_field(smaps, "rss_bytes", *vm_rss);
-    }
   }
   if (vm_data) {
     set_record_field(status, "vm_data_bytes", *vm_data);
   }
   if (vm_swap) {
     set_record_field(status, "vm_swap_bytes", *vm_swap);
-    if (not swap) {
-      set_record_field(smaps, "swap_bytes", *vm_swap);
-    }
   }
   if (rss_anon) {
     set_record_field(status, "rss_anon_bytes", *rss_anon);
-    if (not anonymous_bytes) {
-      set_record_field(smaps, "anonymous_rss_bytes", *rss_anon);
-    }
   }
   if (rss_file) {
     set_record_field(status, "file_rss_bytes", *rss_file);
   }
   if (rss_shmem) {
     set_record_field(status, "rss_shmem_bytes", *rss_shmem);
+  }
+  if (hugetlb) {
+    set_record_field(status, "hugetlb_bytes", *hugetlb);
   }
   if (auto* program_break = ::sbrk(0);
       program_break and program_break != reinterpret_cast<void*>(-1)) {
@@ -476,9 +386,8 @@ auto make_procfs_metrics() -> record {
   }
 #endif
   auto result = record{};
-  result.reserve(3);
+  result.reserve(2);
   result.try_emplace("status", std::move(status));
-  result.try_emplace("smaps", std::move(smaps));
   result.try_emplace("heap", std::move(heap));
   return result;
 }
@@ -661,17 +570,6 @@ public:
       {"rss_anon_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
       {"file_rss_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
       {"rss_shmem_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
-    };
-    auto const procfs_smaps = record_type{
-      {"rss_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
-      {"pss_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
-      {"private_clean_bytes",
-       metrics::prometheus_gauge(uint64_type{}, "bytes")},
-      {"private_dirty_bytes",
-       metrics::prometheus_gauge(uint64_type{}, "bytes")},
-      {"anonymous_rss_bytes",
-       metrics::prometheus_gauge(uint64_type{}, "bytes")},
-      {"swap_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
       {"hugetlb_bytes", metrics::prometheus_gauge(uint64_type{}, "bytes")},
     };
     auto const procfs_heap = record_type{
@@ -679,7 +577,6 @@ public:
     };
     auto const procfs = record_type{
       {"status", procfs_status},
-      {"smaps", procfs_smaps},
       {"heap", procfs_heap},
     };
     auto const malloc_stats = record_type{
