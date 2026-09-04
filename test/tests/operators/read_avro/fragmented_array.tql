@@ -10,5 +10,5 @@ data = (
   "0200"
 ).decode_hex()
 write_chunks
-read_avro schema=r#"{"type":"array","items":"long"}"#
+read_avro schema={type: "array", items: "long"}
 value = value.length()

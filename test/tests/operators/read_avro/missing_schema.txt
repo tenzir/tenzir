@@ -1,8 +1,7 @@
-error: required argument `schema` was not provided
+error: failed to read Avro input
  --> tests/operators/read_avro/missing_schema.tql:7:1
   |
 7 | read_avro
   | ^^^^^^^^^
   |
-  = usage: read_avro schema=string
-  = docs: https://tenzir.com/docs/reference/operators/read_avro
+  = note: the `schema` argument is required for raw Avro input

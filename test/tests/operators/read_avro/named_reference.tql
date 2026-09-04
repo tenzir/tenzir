@@ -1,16 +1,21 @@
 from {data: "00".decode_hex()},
   {data: "020261026200".decode_hex()}
 write_chunks
-read_avro schema=r#"{
-  "type": "array",
-  "items": {
-    "type": "record",
-    "name": "outer",
-    "fields": [
-      {"name": "first", "type": {"type": "record", "name": "inner", "fields": [
-        {"name": "value", "type": "string"}
-      ]}},
-      {"name": "second", "type": "inner"}
-    ]
-  }
-}"#
+read_avro schema={
+  type: "array",
+  items: {
+    type: "record",
+    name: "outer",
+    fields: [
+      {
+        name: "first",
+        type: {
+          type: "record",
+          name: "inner",
+          fields: [{name: "value", type: "string"}],
+        },
+      },
+      {name: "second", type: "inner"},
+    ],
+  },
+}

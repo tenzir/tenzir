@@ -1,6 +1,6 @@
 from {raw: ""}
-parsed = raw.decode_hex().parse_avro(schema=r#"{
-  "type": "record",
-  "name": "empty",
-  "fields": []
-}"#)
+parsed = raw.decode_hex().parse_avro(schema={
+  type: "record",
+  name: "empty",
+  fields: [],
+})

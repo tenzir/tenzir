@@ -5,11 +5,11 @@ error: true
 from {data: "0200".decode_hex()},
   {data: "04020600".decode_hex()}
 batch 1
-value = data.parse_avro(schema=r#"{
-  "type": "record",
-  "name": "Node",
-  "fields": [
-    {"name": "value", "type": "int"},
-    {"name": "next", "type": ["null", "Node"]}
-  ]
-}"#)
+value = data.parse_avro(schema={
+  type: "record",
+  name: "Node",
+  fields: [
+    {name: "value", type: "int"},
+    {name: "next", type: ["null", "Node"]},
+  ],
+})

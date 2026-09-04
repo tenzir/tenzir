@@ -1,0 +1,8 @@
+{
+  id: 42,
+  name: "alice",
+}
+{
+  id: 43,
+  name: "bob",
+}

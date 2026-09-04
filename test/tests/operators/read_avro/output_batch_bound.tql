@@ -1,6 +1,10 @@
 // A compact enum index expands to a large symbol in the output.
 from {data: "00".repeat(1000).decode_hex()}
 write_chunks
-read_avro schema="{\"type\":\"enum\",\"name\":\"e\",\"symbols\":[\"" + "x".repeat(32768) + "\"]}"
+read_avro schema={
+  type: "enum",
+  name: "e",
+  symbols: ["x".repeat(32768)],
+}
 measure
 drop timestamp, schema_id, schema

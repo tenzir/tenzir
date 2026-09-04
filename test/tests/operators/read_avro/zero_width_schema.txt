@@ -1,7 +1,7 @@
 error: invalid Avro schema
  --> tests/operators/read_avro/zero_width_schema.tql:7:18
   |
-7 | read_avro schema=r#""null""#
-  |                  ^^^^^^^^^^^
+7 | read_avro schema={type: "null"}
+  |                  ^^^^^^^^^^^^^^
   |
   = note: raw Avro schemas must consume input

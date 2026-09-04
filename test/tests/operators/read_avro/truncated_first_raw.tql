@@ -4,4 +4,4 @@ error: true
 
 from {data: "0A68".decode_hex()}
 write_chunks
-read_avro schema=r#""string""#
+read_avro schema={type: "string"}
