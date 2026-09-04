@@ -756,33 +756,26 @@ struct rebuilder_state {
     run->remaining_partitions.erase(first_removed,
                                     run->remaining_partitions.end());
     run->statistics.num_rebuilding += current_run_partitions.size();
-    // When merging undersized partitions, skip the batch if the merged result
-    // would still be undersized: that pays a full decode and re-encode only to
-    // produce another merge candidate. Testing the merged size rather than the
-    // input count also covers batches of several tiny partitions that together
-    // still fall short.
+    // When merging undersized partitions, skip a batch that consists of a
+    // single partition in good shape: it has nothing to merge with, so
+    // rewriting it pays a full decode and re-encode without consolidating
+    // anything. Multi-partition batches always rebuild, even when the merged
+    // result stays below the undersized threshold: collapsing them still
+    // reduces the partition count, and a batch that the memory budget or the
+    // event cap cut short has more partitions of the same schema waiting, so
+    // its merge is incremental progress rather than futile work. Skipping
+    // such batches instead halted consolidation entirely on nodes whose
+    // budget keeps batches below the threshold, while every skipped
+    // partition came back as a candidate in the next run.
     //
     // Oversized or outdated partitions, and those we cannot size, always
     // rebuild.
-    const auto skip_rebuild = [&] {
-      if (not run->options.undersized) {
-        return false;
-      }
-      auto merged_events = size_t{0};
-      for (const auto& partition : current_run_partitions) {
-        if (partition.version != version::current_partition_version) {
-          return false;
-        }
-        if (partition.events > max_partition_size) {
-          return false;
-        }
-        if (not has_size_estimate(partition)) {
-          return false;
-        }
-        merged_events += partition.events;
-      }
-      return merged_events < undersized_events();
-    }();
+    const auto skip_rebuild
+      = run->options.undersized and current_run_partitions.size() == 1
+        and current_run_partitions[0].version
+              == version::current_partition_version
+        and current_run_partitions[0].events <= max_partition_size
+        and has_size_estimate(current_run_partitions[0]);
     if (skip_rebuild) {
       const auto skipped = current_run_partitions.size();
       run->statistics.num_rebuilding -= skipped;
