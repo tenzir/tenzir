@@ -46,6 +46,10 @@ public:
     }
   }
 
+  void add(view<T> x) {
+    bloom_filter_.add(x);
+  }
+
   [[nodiscard]] Option<bool>
   lookup(relational_operator op, data_view rhs) const override {
     switch (op) {

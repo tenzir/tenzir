@@ -57,6 +57,8 @@ public:
 /// @relates buffered_synopsis_traits
 template <>
 struct buffered_synopsis_traits<tenzir::ip> {
+  using set_type = tsl::robin_set<tenzir::ip>;
+
   template <typename HashFunction>
   static synopsis_ptr make(tenzir::type type, bloom_filter_parameters p,
                            std::vector<size_t> seeds = {}) {
@@ -64,21 +66,14 @@ struct buffered_synopsis_traits<tenzir::ip> {
                                           std::move(seeds));
   }
 
-  // Estimate the size in bytes for a vector of typed series.
-  template <typename SeriesType>
-  static size_t memusage(const std::vector<SeriesType>& data) {
-    size_t result = sizeof(data);
-    for (const auto& s : data) {
-      result += sizeof(SeriesType);
-      if (s.array) {
-        for (const auto& buffer : s.array->data()->buffers) {
-          if (buffer) {
-            result += buffer->size();
-          }
-        }
-      }
-    }
-    return result;
+  static void insert(set_type& xs, tenzir::ip x) {
+    xs.insert(x);
+  }
+
+  static size_t memusage(const set_type& xs) {
+    return sizeof(xs)
+           + xs.bucket_count()
+               * (sizeof(set_type::value_type) + sizeof(uint64_t));
   }
 };
 
