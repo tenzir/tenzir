@@ -223,14 +223,12 @@ TEST("disk reconciliation separates live files from pending reclamation") {
   f.state.on_space_measured(2500);
   CHECK_EQUAL(f.state.external_bytes, 500u);
   CHECK_EQUAL(f.state.dbdir_size, 2500u);
-  CHECK(f.state.space_reconciled);
 }
 
 TEST("disk pressure keeps its low-water target across decisions") {
   auto f = fixture{};
   auto id = f.add("test", 2000);
   f.state.in_transformation.insert(id);
-  f.state.space_reconciled = true;
   f.state.maintenance.space.high_water_mark = 1500;
   f.state.maintenance.space.low_water_mark = 1000;
   f.state.maintenance.space.scan_interval = std::chrono::seconds{1};
@@ -248,7 +246,6 @@ TEST("retiring and pinned files are credited only once") {
   auto f = fixture{};
   auto id = f.add("test", 1000);
   f.state.retiring.insert(id);
-  f.state.space_reconciled = true;
   f.state.maintenance.space.high_water_mark = 900;
   f.state.maintenance.space.low_water_mark = 500;
   f.state.maintenance.space.scan_interval = std::chrono::seconds{1};
@@ -263,25 +260,27 @@ TEST("retiring and pinned files are credited only once") {
   CHECK_EQUAL(f.state.dbdir_size, 1000u);
 }
 
-TEST("disk eviction waits for startup reconciliation and respects pause") {
+TEST("disk eviction enforces known bytes without a scan and respects pause") {
   auto f = fixture{};
-  f.add("test", 2000);
+  auto id = f.add("test", 2000);
+  // Keep selection pure while verifying that unreconciled pressure is active.
+  f.state.in_transformation.insert(id);
   f.state.maintenance.space.high_water_mark = 1500;
   f.state.maintenance.space.low_water_mark = 1000;
-  f.state.maintenance.space.scan_interval = std::chrono::seconds{1};
-  // Either gate must prevent dispatch even though unclaimed data is over budget.
-  f.state.enforce_disk_budget();
-  CHECK(not f.state.evicting);
-  f.state.space_reconciled = true;
   f.state.maintenance.space.scan_interval = std::chrono::seconds::zero();
   f.state.enforce_disk_budget();
   CHECK(not f.state.evicting);
+  f.state.maintenance.space.scan_interval = std::chrono::seconds{1};
+  // No directory measurement is needed, even if one is currently in flight.
+  f.state.measuring_space = true;
+  f.state.enforce_disk_budget();
+  CHECK(f.state.evicting);
+  CHECK_EQUAL(f.state.dbdir_size, uint64_t{2000});
 }
 
 TEST("eviction rewrites consume the disk step allowance") {
   auto f = fixture{};
   f.add("test", 2000);
-  f.state.space_reconciled = true;
   f.state.maintenance.space.high_water_mark = 1500;
   f.state.maintenance.space.low_water_mark = 1000;
   f.state.maintenance.space.scan_interval = std::chrono::seconds{1};

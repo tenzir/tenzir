@@ -1122,7 +1122,6 @@ void catalog_state::on_space_measured(uint64_t size) {
   auto const known = catalog_bytes + parked_bytes() + deleting_bytes();
   external_bytes = size - std::min(size, known);
   dbdir_size = size;
-  space_reconciled = true;
   advance_maintenance(time::clock::now());
 }
 
@@ -1130,11 +1129,14 @@ void catalog_state::enforce_disk_budget(time now) {
   eviction_pending.clear();
   if (maintenance.space.high_water_mark == 0
       or maintenance.space.scan_interval <= std::chrono::seconds::zero()
-      or not space_reconciled or now < eviction_retry_at) {
+      or now < eviction_retry_at) {
     return;
   }
   // Only live data and non-partition bytes need further reclamation. Parked
   // and deleting files are still physical usage, but already spoken for.
+  // Known partition bytes enforce the budget even before the first successful
+  // scan: continuous catalog churn can invalidate every directory walk. Scans
+  // only refine the non-partition overhead, never gate live-byte enforcement.
   auto const live = detail::saturating_add(catalog_bytes, external_bytes);
   dbdir_size = detail::saturating_add(
     live, detail::saturating_add(parked_bytes(), deleting_bytes()));

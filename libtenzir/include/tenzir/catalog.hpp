@@ -929,7 +929,6 @@ public:
   /// Bytes owned by live catalog partitions; scans reconcile everything else.
   uint64_t catalog_bytes = 0;
   uint64_t external_bytes = 0;
-  bool space_reconciled = false;
   uint64_t storage_generation = 0;
 
   /// A transform finalized by startup marker replay, for the policy to hear
