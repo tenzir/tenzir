@@ -33,7 +33,8 @@ public:
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> multi_series {
         return map_series(eval(expr), [&](series value) -> series {
-          const auto f = detail::overload{
+          return match(
+            *value.array,
             [](const arrow::NullArray& array) -> series {
               return series::null(blob_type{}, array.length());
             },
@@ -53,9 +54,7 @@ public:
                 .primary(expr)
                 .emit(ctx);
               return series::null(blob_type{}, value.length());
-            },
-          };
-          return match(*value.array, f);
+            });
         });
       });
   }
