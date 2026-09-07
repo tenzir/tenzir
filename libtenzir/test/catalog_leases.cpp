@@ -266,6 +266,21 @@ TEST("catalog startup failure stops its lookup workers") {
   CHECK(f.await_shutdown());
 }
 
+TEST("a disk scan exits without its catalog processing the response") {
+  auto f = fixture{};
+  f.sys.spawn(
+    [paths = f.paths](catalog_actor::stateful_pointer<catalog_state> self)
+      -> catalog_actor::behavior_type {
+      self->state().self = self;
+      self->state().paths = paths;
+      self->state().measure_space();
+      // Quit during initialization, before any response continuation can run.
+      self->quit();
+      return catalog_actor::behavior_type::make_empty_behavior();
+    });
+  CHECK(f.await_shutdown());
+}
+
 TEST("a deduplicated candidate keeps only the queued query's pin") {
   auto f = fixture{};
   const auto id = f.add_partition();

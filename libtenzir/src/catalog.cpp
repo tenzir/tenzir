@@ -464,8 +464,10 @@ auto catalog_state::mutable_schema(synopsis_map& map, const type& schema)
 }
 
 void catalog_state::erase(const uuid& partition, notify_policy notify) {
+  // Admissions identify accounted partitions, including while package startup
+  // still holds back maintenance scheduling.
   if (auto synopsis = find_synopsis(partition);
-      synopsis and maintenance_ready) {
+      synopsis and admissions.contains(partition)) {
     catalog_bytes -= synopsis->store_file.size + synopsis->indexes_file.size
                      + synopsis->sketches_file.size;
   }

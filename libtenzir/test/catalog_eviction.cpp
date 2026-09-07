@@ -77,6 +77,22 @@ TEST("eviction takes the oldest partitions first") {
   CHECK_EQUAL(f.state.select_eviction_batch(2), (std::vector{first, second}));
 }
 
+TEST("erasure updates accounting before maintenance scheduling starts") {
+  auto f = fixture{};
+  const auto removed = f.add("test", 1000);
+  f.add("test", 2000);
+  // Directly populated synopses model a just-loaded catalog. Initialization
+  // accounts for them, but package startup has not enabled scheduling yet.
+  f.state.catalog_bytes = 0;
+  REQUIRE(not f.state.initialize_maintenance(f.clock).valid());
+  REQUIRE(not f.state.maintenance_ready);
+  CHECK_EQUAL(f.state.catalog_bytes, uint64_t{3000});
+  f.state.erase(removed);
+  CHECK_EQUAL(f.state.catalog_bytes, uint64_t{2000});
+  f.state.on_space_measured(2000);
+  CHECK_EQUAL(f.state.external_bytes, uint64_t{0});
+}
+
 TEST("eviction crosses schemas") {
   auto f = fixture{};
   const auto oldest = f.add("a");

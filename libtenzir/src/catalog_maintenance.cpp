@@ -1078,11 +1078,14 @@ void catalog_state::measure_space() {
   // else went through it; the catalog answers candidate lookups, so the scan
   // runs on a throwaway detached actor rather than on this thread.
   auto worker = self->spawn<caf::detached>(
-    [dir = paths.database_dir,
-     config = maintenance.space](caf::event_based_actor*) -> caf::behavior {
+    [dir = paths.database_dir, config = maintenance.space](
+      caf::event_based_actor* worker) -> caf::behavior {
       return {
-        [dir, config](atom::get) -> caf::result<uint64_t> {
+        [worker, dir, config](atom::get) -> caf::result<uint64_t> {
           auto size = compute_dbdir_size(dir, config);
+          // This is a one-shot worker. Its lifetime must not depend on the
+          // catalog still being alive to process the response.
+          worker->quit();
           if (not size) {
             return std::move(size.error());
           }
@@ -1093,8 +1096,7 @@ void catalog_state::measure_space() {
   self->mail(atom::get_v)
     .request(worker, caf::infinite)
     .then(
-      [this, worker, generation, stable](uint64_t size) {
-        self->send_exit(worker, caf::exit_reason::user_shutdown);
+      [this, generation, stable](uint64_t size) {
         measuring_space = false;
         if (stable and generation == storage_generation
             and active_transformers.empty() and deleting.empty()
@@ -1106,8 +1108,7 @@ void catalog_state::measure_space() {
           advance_maintenance(time::clock::now());
         }
       },
-      [this, worker](caf::error& error) {
-        self->send_exit(worker, caf::exit_reason::user_shutdown);
+      [this](caf::error& error) {
         measuring_space = false;
         // Keep the last reconciled overhead; live resource accounting still
         // advances independently of this failed directory walk.
