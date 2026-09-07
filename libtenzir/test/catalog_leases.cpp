@@ -51,7 +51,7 @@ struct fixture {
                         maintenance_options{}, deferred_erase_timeout,
                         /*sketch_cache_bytes=*/size_t{0},
                         /*lazy_sketches=*/false,
-                        /*lookup_parallelism=*/size_t{1});
+                        /*lookup_parallelism=*/size_t{1}, node_actor{});
   }
 
   duration deferred_erase_timeout = {};

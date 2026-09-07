@@ -137,8 +137,6 @@ auto catalog_state::initialize_maintenance(time now) -> caf::error {
       policy_dirty.insert(id);
     }
   }
-  maintenance_ready = true;
-  advance_maintenance(now);
   return {};
 }
 

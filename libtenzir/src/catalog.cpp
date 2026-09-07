@@ -32,6 +32,7 @@
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/passive_partition.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/plugin/component.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/plugin/storage_policy.hpp"
 #include "tenzir/plugin/store.hpp"
@@ -1385,7 +1386,8 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
              size_t partition_capacity, size_t desired_batch_size,
              maintenance_options maintenance, duration deferred_erase_timeout,
              size_t sketch_cache_bytes, bool lazy_sketches,
-             size_t lookup_parallelism) -> catalog_actor::behavior_type {
+             size_t lookup_parallelism, node_actor node)
+  -> catalog_actor::behavior_type {
   if (self->getf(caf::local_actor::is_detached_flag)) {
     caf::detail::set_thread_name("tnz.catalog");
   }
@@ -1506,6 +1508,43 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
       error.valid()) {
     self->quit(std::move(error));
     return catalog_actor::behavior_type::make_empty_behavior();
+  }
+  auto start_maintenance = [self] {
+    self->state().maintenance_ready = true;
+    self->state().advance_maintenance(time::clock::now());
+  };
+  if (node and plugins::find<component_plugin>("package-manager")) {
+    // The node answers only after creating its components. A status reply
+    // then establishes that the package manager finished initialization and
+    // published its operators. Keep serving catalog requests while waiting:
+    // component startup itself may need them.
+    auto fail_startup = [self](caf::error const& error) {
+      self->quit(diagnostic::error(error)
+                   .note("waiting for package operators before starting "
+                         "catalog maintenance")
+                   .to_error());
+    };
+    self
+      ->mail(atom::get_v, atom::label_v,
+             std::vector<std::string>{"package-manager"})
+      .request(node, caf::infinite)
+      .then(
+        [self, start_maintenance,
+         fail_startup](std::vector<caf::actor> const& components) {
+          TENZIR_ASSERT(components.size() == 1);
+          auto packages
+            = caf::actor_cast<component_plugin_actor>(components[0]);
+          self->mail(atom::status_v, status_verbosity::info, duration::zero())
+            .request(packages, caf::infinite)
+            .then(
+              [start_maintenance](record const&) {
+                start_maintenance();
+              },
+              fail_startup);
+        },
+        fail_startup);
+  } else {
+    start_maintenance();
   }
   return {
     [self](atom::merge, std::vector<partition_synopsis_pair>& partitions)

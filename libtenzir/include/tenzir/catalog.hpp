@@ -1059,12 +1059,15 @@ public:
 /// memory bounded during ongoing ingest.
 /// @param lookup_parallelism How many lookup workers evaluate candidate
 /// requests concurrently; the sketch-cache budget is split among them.
+/// @param node The node whose package manager must finish initialization
+/// before maintenance can resolve package-defined operators.
 auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
              filesystem_actor filesystem, partition_paths paths,
              std::string store_backend, index_config synopsis_opts,
              size_t partition_capacity, size_t desired_batch_size,
              maintenance_options maintenance, duration deferred_erase_timeout,
              size_t sketch_cache_bytes = 0, bool lazy_sketches = false,
-             size_t lookup_parallelism = 1) -> catalog_actor::behavior_type;
+             size_t lookup_parallelism = 1, node_actor node = {})
+  -> catalog_actor::behavior_type;
 
 } // namespace tenzir

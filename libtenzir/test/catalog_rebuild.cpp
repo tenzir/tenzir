@@ -501,6 +501,9 @@ TEST("rebuild defaults to the system timezone and accepts an explicit "
      "override") {
   auto local = catalog_state{};
   CHECK(not local.initialize_maintenance(tenzir::time{}).valid());
+  // Initialization prepares the clock and admissions, but component startup
+  // must explicitly enable maintenance after publishing package operators.
+  CHECK(not local.maintenance_ready);
   CHECK_EQUAL(local.rebuild_zone->name(),
               arrow_vendored::date::current_zone()->name());
   auto explicit_zone = catalog_state{};

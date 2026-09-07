@@ -364,7 +364,7 @@ auto spawn_catalog(node_actor::stateful_pointer<node_state> self,
     parse_maintenance_options(settings),
     get_or(settings, "tenzir.deferred-erase-timeout",
            defaults::deferred_erase_timeout),
-    sketch_cache_bytes, lazy_sketches, lookup_parallelism);
+    sketch_cache_bytes, lazy_sketches, lookup_parallelism, node_actor{self});
   TENZIR_ASSERT(catalog);
   if (auto err = register_component(self, caf::actor_cast<caf::actor>(catalog),
                                     "catalog");
