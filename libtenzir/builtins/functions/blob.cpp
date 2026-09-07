@@ -35,20 +35,20 @@ public:
         return map_series(eval(expr), [&](series value) -> series {
           return match(
             *value.array,
-            [](const arrow::NullArray& array) -> series {
+            [](arrow::NullArray const& array) -> series {
               return series::null(blob_type{}, array.length());
             },
-            [](const arrow::BinaryArray& array) -> series {
+            [](arrow::BinaryArray const& array) -> series {
               return series{blob_type{},
                             std::make_shared<arrow::BinaryArray>(array.data())};
             },
-            [](const arrow::StringArray& array) -> series {
+            [](arrow::StringArray const& array) -> series {
               // UTF-8 and binary arrays share their offsets and value buffers.
               auto data = array.data()->Copy();
               data->type = blob_type{}.to_arrow_type();
               return series{blob_type{}, arrow::MakeArray(std::move(data))};
             },
-            [&](const auto&) -> series {
+            [&](auto const&) -> series {
               diagnostic::warning("expected `string` or `blob`, got `{}`",
                                   value.type.kind())
                 .primary(expr)
