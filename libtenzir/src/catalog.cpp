@@ -1440,9 +1440,10 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
   const auto workers = std::max<size_t>(1, lookup_parallelism);
   self->state().lookup_pool.reserve(workers);
   for (auto i = size_t{0}; i < workers; ++i) {
-    self->state().lookup_pool.push_back(
-      self->spawn(catalog_lookup_worker, self->state().lookup_engine.taxonomies,
-                  sketch_cache_bytes / workers));
+    // Also stop workers if initialization below exits before a behavior exists.
+    self->state().lookup_pool.push_back(self->spawn<caf::linked>(
+      catalog_lookup_worker, self->state().lookup_engine.taxonomies,
+      sketch_cache_bytes / workers));
   }
   // Load the on-disk state before installing the behavior below. The catalog
   // is detached, so blocking here only delays this actor; everything sent to
@@ -1786,7 +1787,12 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
         }
       }
       auto dependents = std::vector<caf::actor>{};
-      dependents.reserve(self->state().active_transformers.size());
+      dependents.reserve(self->state().active_transformers.size()
+                         + self->state().lookup_pool.size());
+      for (const auto& worker : self->state().lookup_pool) {
+        self->unlink_from(worker);
+        dependents.push_back(caf::actor_cast<caf::actor>(worker));
+      }
       for (auto& [addr, disposable] : self->state().active_transformers) {
         disposable.dispose();
         dependents.push_back(caf::actor_cast<caf::actor>(addr));

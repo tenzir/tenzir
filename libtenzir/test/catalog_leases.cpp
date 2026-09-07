@@ -14,6 +14,7 @@
 #include "tenzir/posix_filesystem.hpp"
 #include "tenzir/qualified_record_field.hpp"
 #include "tenzir/query_context.hpp"
+#include "tenzir/status.hpp"
 #include "tenzir/synopsis_factory.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/uuid.hpp"
@@ -39,7 +40,8 @@ constexpr auto timeout = std::chrono::seconds{10};
 /// partitions into it and to check what is left on disk.
 struct fixture {
   /// How long an erased-but-pinned partition may linger. Zero never forces.
-  explicit fixture(duration deferred_erase_timeout = duration::zero())
+  explicit fixture(duration deferred_erase_timeout = duration::zero(),
+                   maintenance_options maintenance = {})
     : deferred_erase_timeout{deferred_erase_timeout} {
     factory<synopsis>::initialize();
     std::filesystem::create_directories(paths.index_dir);
@@ -48,7 +50,7 @@ struct fixture {
     catalog = sys.spawn(tenzir::catalog, fs, paths, std::string{"feather"},
                         index_config{}, /*partition_capacity=*/size_t{1024},
                         /*desired_batch_size=*/size_t{1024},
-                        maintenance_options{}, deferred_erase_timeout,
+                        std::move(maintenance), deferred_erase_timeout,
                         /*sketch_cache_bytes=*/size_t{0},
                         /*lazy_sketches=*/false,
                         /*lookup_parallelism=*/size_t{1}, node_actor{});
@@ -76,6 +78,19 @@ struct fixture {
   fixture(fixture&&) = delete;
   auto operator=(const fixture&) -> fixture& = delete;
   auto operator=(fixture&&) -> fixture& = delete;
+
+  auto await_shutdown() -> bool {
+    caf::anon_send_exit(catalog, caf::exit_reason::user_shutdown);
+    caf::anon_send_exit(fs, caf::exit_reason::user_shutdown);
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+      if (sys.running_actors_count() == 0) {
+        return true;
+      }
+      std::this_thread::sleep_for(10ms);
+    }
+    return false;
+  }
 
   /// Writes the three files of a partition and merges its synopsis into the
   /// catalog. The contents do not matter: erasure only ever deletes the paths
@@ -225,6 +240,31 @@ struct fixture {
 };
 
 } // namespace
+
+TEST("catalog shutdown stops its lookup workers") {
+  auto f = fixture{};
+  f.add_partition();
+  CHECK(f.await_shutdown());
+}
+
+TEST("catalog startup failure stops its lookup workers") {
+  auto maintenance = maintenance_options{};
+  maintenance.rebuild_timezone = "Not/A-Timezone";
+  auto f = fixture{duration::zero(), std::move(maintenance)};
+  {
+    auto self = caf::scoped_actor{f.sys};
+    self->mail(atom::status_v, status_verbosity::info, duration::zero())
+      .request(f.catalog, timeout)
+      .receive(
+        [](const record&) {
+          FAIL("catalog accepted an invalid timezone");
+        },
+        [](const caf::error& error) {
+          CHECK(error.valid());
+        });
+  }
+  CHECK(f.await_shutdown());
+}
 
 TEST("a deduplicated candidate keeps only the queued query's pin") {
   auto f = fixture{};
