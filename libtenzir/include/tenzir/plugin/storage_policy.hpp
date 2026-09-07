@@ -21,10 +21,17 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
 namespace tenzir {
+
+/// A catalog without a policy writes this before dropping replacement lineage.
+/// Stateful policies must fail closed while this file exists: their history
+/// may refer to inputs whose replacement mapping is no longer available.
+inline constexpr auto invalid_policy_history_path
+  = std::string_view{"policy-history.invalid"};
 
 // -- storage policy ----------------------------------------------------------
 
@@ -237,8 +244,8 @@ public:
 class storage_policy_plugin : public virtual plugin {
 public:
   /// Builds the policy. Called once, when the catalog starts. Returning
-  /// `nullptr` disables this plugin's policy, which is what an unconfigured
-  /// implementation returns.
+  /// `nullptr` disables this plugin's policy. Stateful policies must check
+  /// `invalid_policy_history_path` before trusting persisted history.
   /// @note This runs in the actor context of the CATALOG.
   virtual auto make_storage_policy(storage_policy_context context) const
     -> std::unique_ptr<storage_policy>

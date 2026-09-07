@@ -543,8 +543,12 @@ public:
   /// Flushes the policy and releases the marker hold once the flush
   /// *succeeds*. A failed flush keeps the marker -- it is the commit's only
   /// durable record until the history write lands -- and checks back after
-  /// the policy's background retry has had its chance.
+  /// the policy's background retry has had its chance. Without a policy, a
+  /// durable history invalidation replaces the flush.
   void release_marker_after_flush(std::filesystem::path marker);
+
+  /// Invalidates stale policy history before discarding policy-less lineage.
+  auto invalidate_policy_history() -> caf::error;
 
   /// Deletes deferred partitions whose deadline has passed, pins and all.
   void sweep_deferred();
@@ -593,6 +597,9 @@ public:
 
   /// Builds the storage policy from whichever plugin contributes one.
   void make_policy();
+
+  /// Replays completed transforms in dependency order into the policy.
+  void replay_policy_transforms();
 
   /// Measures the database directory off this thread, continuing in
   /// `on_space_measured`.

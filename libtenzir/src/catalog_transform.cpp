@@ -349,13 +349,9 @@ void catalog_state::transform(
                       ++markers_in_disposal[marker_path];
                       held_marker = marker_path.string();
                     } else if (keep == keep_original_partition::no) {
-                      // Held even when no policy is configured: the lineage
-                      // must survive until a policy exists to fold it, or a
-                      // stale history from an earlier policy-enabled lifetime
-                      // would keep naming the replaced inputs. Without a
-                      // policy the release below keeps the hold for the
-                      // lifetime, and the next startup carries the marker
-                      // forward the same way.
+                      // Without a policy, release requires a durable history
+                      // invalidation instead. A later policy must not trust
+                      // stale history after this lineage has been discarded.
                       ++markers_in_disposal[marker_path];
                       self_release = true;
                     }

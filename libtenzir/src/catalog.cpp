@@ -762,18 +762,33 @@ void catalog_state::release_marker_hold(const std::filesystem::path& marker) {
   erase_marker_if_unreferenced(marker);
 }
 
-void catalog_state::release_marker_after_flush(std::filesystem::path marker) {
-  if (not policy) {
-    // No policy to fold the lineage into. Keeping the hold keeps the marker
-    // for the whole lifetime, and the startup replay hands it to whichever
-    // policy a later configuration provides -- a stale history re-enabled
-    // then still learns where its recorded inputs went.
-    return;
+auto catalog_state::invalidate_policy_history() -> caf::error {
+  auto const path = paths.database_dir / invalid_policy_history_path;
+  auto error = std::error_code{};
+  auto const exists = std::filesystem::exists(path, error);
+  if (error) {
+    return caf::make_error(ec::filesystem_error,
+                           fmt::format("failed to probe {}: {}", path, error));
   }
-  if (policy->flush().valid()) {
-    // The marker is the commit's only durable record until the history write
-    // lands; the policy retries that write on its own schedule, so check
-    // back instead of deleting the record.
+  if (exists) {
+    return {};
+  }
+  return io::save(path, as_bytes(std::string_view{
+                          "Partitions were replaced without a storage policy. "
+                          "Reset the stale policy history before removing this "
+                          "file.\n"}));
+}
+
+void catalog_state::release_marker_after_flush(std::filesystem::path marker) {
+  auto error = policy ? policy->flush() : invalidate_policy_history();
+  if (error.valid()) {
+    if (not policy) {
+      TENZIR_WARN("{} retains replacement lineage because policy history "
+                  "could not be invalidated: {}",
+                  name, error);
+    }
+    // The marker remains the commit's only durable record until either the
+    // history or its invalidation is saved. Retry without releasing the hold.
     detail::weak_run_delayed(self, defaults::disposal_retry_delay,
                              [this, marker = std::move(marker)] {
                                release_marker_after_flush(marker);
@@ -867,6 +882,10 @@ void catalog_state::make_policy() {
     // question, and there is no sensible way to do that.
     break;
   }
+  replay_policy_transforms();
+}
+
+void catalog_state::replay_policy_transforms() {
   auto release_markers
     = [this](const std::vector<std::filesystem::path>& markers) {
         for (const auto& marker : markers) {
@@ -883,10 +902,11 @@ void catalog_state::make_policy() {
     }
   }
   if (not policy) {
-    // No policy to fold the lineage into -- keep the markers held for this
-    // lifetime, so a policy configured on a later restart still learns where
-    // a stale history's recorded inputs went. They fold and clear the first
-    // time a policy is back.
+    // One durable invalidation replaces arbitrarily many lineage markers.
+    // A subsequently enabled policy must not trust history predating it.
+    for (auto const& marker : held_markers) {
+      release_marker_after_flush(marker);
+    }
     replayed_transforms.clear();
     return;
   }
@@ -911,11 +931,13 @@ void catalog_state::make_policy() {
     // A transform writes history onto its outputs -- and, for a
     // preserve-input commit, onto its token_input, the surviving partition a
     // later transform may consume. A candidate is ready when no *other*
-    // pending transform still writes onto any of its inputs; the exclusion
-    // matters because a consuming transform's token_input is its own input.
+    // pending transform still writes onto an input, including token_input.
+    // Only a preserving transform writes back onto its token_input: treating
+    // a consumer as a writer would create a false dependency cycle.
     const auto writes_onto = [](const replayed_transform& transform,
                                 const uuid& id) {
-      if (transform.token_input and *transform.token_input == id) {
+      if (transform.inputs.empty() and transform.token_input
+          and *transform.token_input == id) {
         return true;
       }
       return std::ranges::any_of(transform.outputs, [&](const auto& output) {
@@ -927,9 +949,11 @@ void catalog_state::make_policy() {
         if (&other == &transform) {
           return false;
         }
-        return std::ranges::any_of(transform.inputs, [&](const auto& input) {
-          return writes_onto(other, input);
-        });
+        return (transform.token_input
+                and writes_onto(other, *transform.token_input))
+               or std::ranges::any_of(transform.inputs, [&](const auto& input) {
+                    return writes_onto(other, input);
+                  });
       });
     });
     if (chosen == pending.end()) {
