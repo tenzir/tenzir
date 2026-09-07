@@ -1,0 +1,5 @@
+// The storage limit must not run before this non-legacy filter.
+export parallel=1
+where string(value) == "3"
+select category
+head 1

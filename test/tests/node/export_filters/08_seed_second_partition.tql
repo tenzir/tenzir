@@ -1,0 +1,9 @@
+// A second import creates a second partition for the parallel tests below.
+from {
+  value: 4,
+  category: "d",
+}, {
+  value: 5,
+  category: "e",
+}
+import

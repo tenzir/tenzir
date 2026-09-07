@@ -1,0 +1,7 @@
+// With several partitions in flight, the bridge must still emit exactly the
+// requested number of events and finish once the limit is reached.
+export parallel=2
+where value >= 2
+select category
+head 3
+summarize n=count()

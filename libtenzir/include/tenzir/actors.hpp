@@ -13,6 +13,7 @@
 #include "tenzir/aliases.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/secret_store.hpp"
 
 #include <caf/inspector_access.hpp>
@@ -376,6 +377,8 @@ struct export_mode {
   uint64_t parallel = 3;
   bool high_priority = false;
   bool eager = false;
+  /// Stop after this many events that pass the filter. Pushed down from `head`.
+  Option<uint64_t> limit = None{};
 
   export_mode() = default;
 
@@ -395,7 +398,8 @@ struct export_mode {
     return f.object(x).fields(
       f.field("retro", x.retro), f.field("live", x.live),
       f.field("internal", x.internal), f.field("parallel", x.parallel),
-      f.field("high_priority", x.high_priority), f.field("eager", x.eager));
+      f.field("high_priority", x.high_priority), f.field("eager", x.eager),
+      f.field("limit", x.limit));
   }
 };
 

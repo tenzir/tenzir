@@ -1,0 +1,5 @@
+export parallel=1
+where value >= 2
+select category
+head 2
+sort category

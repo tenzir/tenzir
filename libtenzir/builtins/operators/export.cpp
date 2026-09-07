@@ -69,8 +69,7 @@ struct ExportArgs {
   /// The filter pushed down by `describer.optimize_filter`.
   ir::OptimizeFilter filter;
   /// The limit pushed down by `describer.optimize_limit`, counting events that
-  /// pass `filter`. Recorded for the optimizer output; the runtime does not
-  /// honor it yet (TNZ-1030).
+  /// pass `filter`.
   Option<uint64_t> limit = None{};
   /// The projection pushed down by `describer.optimize_projection`. Recorded
   /// for the optimizer output; the runtime does not honor it yet (TNZ-1030).
@@ -232,6 +231,12 @@ public:
     auto mode
       = export_mode{args_.live ? args_.retro : true, args_.live, args_.internal,
                     args_.parallel, args_.high_priority};
+    // The bridge can only count events that pass the full filter. If part of
+    // it still runs here, or Prometheus shaping changes the events, the limit
+    // must stay local.
+    if (not remainder_ and not uses_prometheus_shape_) {
+      mode.limit = args_.limit;
+    }
     auto result
       = co_await async_mail(atom::spawn_v, std::move(expr), mode).request(*node);
     if (not result) {

@@ -1,0 +1,6 @@
+{
+  category: "b",
+}
+{
+  category: "c",
+}

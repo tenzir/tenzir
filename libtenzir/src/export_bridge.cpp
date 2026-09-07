@@ -76,6 +76,9 @@ struct bridge_state {
   }
 
   auto is_done() const -> bool {
+    if (mode.limit == uint64_t{0}) {
+      return buffer.empty();
+    }
     return not mode.live and buffer.empty() and inflight_partitions == 0
            and open_partitions == 0 and checked_candidates
            and queued_partitions.empty() and not unpersisted_events;
@@ -94,6 +97,9 @@ struct bridge_state {
   }
 
   auto pop_partition() -> void {
+    if (mode.limit == uint64_t{0}) {
+      queued_partitions = {};
+    }
     if (queued_partitions.empty()) {
       if (open_partitions > 0) {
         --open_partitions;
@@ -148,7 +154,7 @@ struct bridge_state {
 
   auto add_events(table_slice slice, event_source source,
                   caf::typed_response_promise<void> rp) -> void {
-    if (slice.rows() == 0) {
+    if (slice.rows() == 0 or mode.limit == uint64_t{0}) {
       if (rp.pending()) {
         rp.deliver();
       }
@@ -195,9 +201,15 @@ struct bridge_state {
         return;
       }
     }
+    if (mode.limit) {
+      slice = head(std::move(slice), *mode.limit);
+      *mode.limit -= slice.rows();
+      if (*mode.limit == 0) {
+        queued_partitions = {};
+      }
+    }
     if (buffer_rp.pending()) {
       TENZIR_ASSERT(buffer.empty());
-      TENZIR_ASSERT(not is_done());
       metrics[slice.schema()].emitted += slice.rows();
       buffer_rp.deliver(std::move(slice));
       if (rp.pending()) {

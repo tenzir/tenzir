@@ -23,6 +23,9 @@ head 10
 the source learns that at most 10 matching events are needed and that only
 `id`, `message`, and `severity` are read. The `head` and `select` operators stay
 in the pipeline, so results are unchanged whether or not a source acts on the
-hints. In this release, `export` records the hints, which you can inspect with
-`tenzir --dump-opt-ir`. Acting on them at the storage layer follows in a later
-release.
+hints. `export` also records the field selection, which you can inspect with
+`tenzir --dump-opt-ir`; acting on it at the storage layer is not planned.
+
+The `export` operator now honors the limit: it stops opening partitions once it
+has enough matching events. Filters that require local evaluation
+conservatively read everything.
