@@ -298,6 +298,8 @@ auto parse_maintenance_options(const caf::settings& settings)
     = get_or(settings, "tenzir.automatic-rebuild", size_t{1}),
     .rebuild_interval
     = get_or(settings, "tenzir.rebuild-interval", defaults::rebuild_interval),
+    .rebuild_timezone
+    = get_or(settings, "tenzir.rebuild-timezone", std::string{}),
     .space = parse_space_options(settings),
     // The compaction pool is bounded separately from rebuild parallelism, so
     // that a slow user-authored pipeline cannot stall a rebuild. One slot by
@@ -309,6 +311,11 @@ auto parse_maintenance_options(const caf::settings& settings)
     = get_or(settings, "tenzir.compaction-slots",
              get_or(settings, "plugins.compaction.time.step-size", size_t{1})),
   };
+  if (caf::get_if<duration>(&settings, "tenzir.rebuild-interval")
+      and result.rebuild_interval > duration::zero()) {
+    TENZIR_WARN("tenzir.rebuild-interval is deprecated: automatic rebuild "
+                "now collects arrivals until the next local hour boundary");
+  }
   if (result.compaction_slots == 0) {
     // With zero slots a named compaction run could never start its work and
     // would hang its caller forever; the policy pass has its own off switch

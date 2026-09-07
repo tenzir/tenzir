@@ -23,14 +23,29 @@ back of the queue. And a partition that is an input to a running transform is
 no longer selected for erasure, instead of being erased and having its data
 reappear through the transform's output.
 
-All existing settings keep working unchanged, including
-`tenzir.start.disk-budget-*`, `tenzir.automatic-rebuild`, and
-`tenzir.rebuild-interval`. The compaction plugin's
+`tenzir.start.disk-budget-*` and `tenzir.automatic-rebuild` keep their
+existing meanings. The compaction plugin's
 `plugins.compaction.space.*` keys now alias the corresponding
 `tenzir.start.disk-budget-*` settings, and take precedence where both are set.
 `tenzir.compaction-slots` is new: it bounds how many compaction pipelines run
-at once, independently of rebuild parallelism, so that a slow pipeline cannot
-stall a rebuild.
+at once, independently of rebuild parallelism. Due compaction takes priority
+over rebuild for the same inputs, even while waiting for a compaction slot;
+unrelated rebuild work can proceed concurrently.
+
+One decision function now selects and claims maintenance work inline after
+catalog changes. Timers wake that function for time-driven eligibility and
+disk-size reconciliation, rather than running independent selectors.
+
+Automatic rebuild collects arrivals until the next local hour boundary.
+Batches combine only inputs with the same complete schema and calendar day
+of `max_import_time`; existing partitions are not split. The node uses its
+system timezone unless you set `tenzir.rebuild-timezone` to an explicit IANA
+timezone such as `Europe/Berlin` or `UTC`. Manual rebuild bypasses the hourly
+wait, but respects day grouping and compaction priority.
+
+`tenzir.rebuild-interval` is deprecated. An explicitly configured positive
+value emits a warning and uses hourly collection; zero still disables
+automatic rebuild.
 
 `tenzir-ctl rebuild {start,stop,show}` and `tenzir-ctl compaction
 {list,apply,run}` are unchanged for callers, except that `compaction run` now

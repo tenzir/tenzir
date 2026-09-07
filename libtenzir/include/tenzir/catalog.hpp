@@ -31,9 +31,11 @@
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <chrono>
 #include <limits>
 #include <list>
 #include <map>
+#include <set>
 #include <unordered_set>
 #include <vector>
 
@@ -85,10 +87,8 @@ struct rebuild_options {
   /// Return as soon as the run has started rather than when it finishes.
   bool detached = false;
 
-  /// Whether this is the periodic source rather than a user-issued run. The
-  /// automatic source keeps picking up newly ingested partitions; a manual run
-  /// bounds itself to the partitions that existed when it started, so it
-  /// terminates under ongoing ingest.
+  /// Automatic runs process closed hourly collections. Manual runs include
+  /// the open hour but still have a fixed catalog-admission horizon.
   bool automatic = false;
 
   friend auto inspect(auto& f, rebuild_options& x) {
@@ -125,8 +125,11 @@ struct maintenance_options {
   /// alone; everything else keeps running.
   size_t automatic_rebuild = 1;
 
-  /// How often the automatic source re-selects, first pass at half interval.
+  /// Legacy off switch. Positive values now use hourly collection.
   duration rebuild_interval = {};
+
+  /// Empty selects the node's system timezone.
+  std::string rebuild_timezone = {};
 
   /// The disk budget loop: water marks, step size, scan interval, and the
   /// optional external size command. A zero high water mark disables it, which
@@ -134,8 +137,7 @@ struct maintenance_options {
   disk_monitor_config space = {};
 
   /// How many policy pipelines may run at once. Separate from rebuild
-  /// parallelism, so that a slow user-authored pipeline cannot stall a
-  /// rebuild, nor a large rebuild batch delay a retention rule.
+  /// parallelism. Policy still wins when both would select the same inputs.
   size_t compaction_slots = 1;
 };
 
@@ -338,6 +340,8 @@ auto create_marker(const std::vector<uuid>& in, const std::vector<uuid>& out,
   -> chunk_ptr;
 
 /// A rebuild run in progress inside the catalog.
+using RebuildGroups = std::set<std::pair<type, int64_t>>;
+
 struct rebuild_run {
   rebuild_options options = {};
 
@@ -347,10 +351,16 @@ struct rebuild_run {
   /// accounts against it.
   uint64_t generation = 0;
 
-  /// A manual run only considers partitions that already existed when it
-  /// started, so it terminates under ongoing ingest. Unset for the automatic
-  /// source, whose whole point is to keep picking up new partitions.
-  Option<time> horizon = None{};
+  /// Latest catalog admission this run may consume: its start for manual
+  /// work, the closed collection boundary for automatic work.
+  uint64_t horizon = std::numeric_limits<uint64_t>::max();
+
+  /// Built once per run; batches still revalidate live claims and policy.
+  Option<std::vector<std::list<partition_info>>> groups = None{};
+  Option<RebuildGroups> collected_groups = None{};
+
+  /// Eligible inputs withheld by higher-priority policy or an existing claim.
+  size_t deferred = 0;
 
   /// Runtime byte estimates per schema, for legacy partitions that carry no
   /// `approx_bytes`. The catalog sees every transform result, so it learns
@@ -542,10 +552,10 @@ public:
   // -- rebuild ----------------------------------------------------------------
 
   /// Selects the next batch of rebuild work, empty when no schema has enough
-  /// eligible partitions left. Evaluated against live state on every call, so
-  /// a run picks up partitions ingested after it started and skips ones erased
-  /// or claimed by another transform underneath it.
-  auto select_rebuild_batch(rebuild_run& run) -> std::vector<partition_info>;
+  /// eligible partitions left. Rechecks live claims within the fixed admission
+  /// horizon; later arrivals belong to a subsequent collection.
+  auto select_rebuild_batch(rebuild_run& run, time now = time::clock::now())
+    -> std::vector<partition_info>;
 
   /// Starts a rebuild run, or joins the one already in progress.
   auto start_rebuild(rebuild_options options) -> caf::result<void>;
@@ -556,13 +566,26 @@ public:
 
   /// Fills the run's free batch slots with freshly selected work. Called when
   /// a run starts and whenever a batch lands.
-  void schedule_rebuild();
+  void schedule_rebuild(time now);
 
   /// Ends the run and answers everyone waiting on it.
   void finish_rebuild();
 
-  /// Continues the run after a batch landed, or ends it if it was winding down.
-  void schedule_rebuild_or_finish();
+  /// The only maintenance selector. Call after publishing a complete transition.
+  void advance_maintenance(time now);
+  void arm_maintenance_wakeup(time now);
+
+  /// Resolves the timezone and initializes deadlines after startup recovery.
+  auto initialize_maintenance(time now) -> caf::error;
+
+  auto rebuild_day(time imported) const -> int64_t;
+  auto next_rebuild_hour(time now) const -> time;
+  void close_rebuild_collection(time now);
+  auto blocks_rebuild(uuid const& id, partition_synopsis const& synopsis,
+                      time now = time::clock::now()) const -> bool;
+
+  /// Reconcile accounting, then let the shared selector enforce the budget.
+  void enforce_disk_budget(time now = time::clock::now());
 
   /// Defined out of line, like the constructor above: `policy` is incomplete
   /// in this header, so the deleter it needs cannot be generated here.
@@ -589,25 +612,20 @@ public:
   /// than the budget asks for.
   auto deleting_bytes() const -> uint64_t;
 
-  /// The bytes held by partitions an eviction transform is rewriting. The
-  /// rewrite typically shrinks or removes them, so a measurement taken while
-  /// it runs overstates what eviction still has to reclaim; crediting the full
-  /// footprint errs toward evicting less, and the scan after the commit sees
-  /// the truth.
-  auto evicting_bytes() const -> uint64_t;
-
   /// How urgently a partition should be evicted; higher goes sooner. Falls
   /// back to its age, which is the scale a policy weight is expressed in.
   auto eviction_weight_of(const uuid& partition,
-                          const partition_synopsis& synopsis) const -> double;
+                          const partition_synopsis& synopsis, time now) const
+    -> double;
 
   /// The next partitions to evict, heaviest first, at most `limit`. Skips
   /// `excluded`, which the eviction pass fills with victims it could not act
   /// on, so that one deferred heavyweight does not shadow every actionable
   /// partition behind it.
-  auto
-  select_eviction_batch(size_t limit, const std::unordered_set<uuid>& excluded
-                                      = {}) const -> std::vector<uuid>;
+  auto select_eviction_batch(size_t limit,
+                             const std::unordered_set<uuid>& excluded = {},
+                             time now = time::clock::now()) const
+    -> std::vector<uuid>;
 
   /// Gives a compaction slot back and lets anything queued take it. Every
   /// release goes through here so that no path can free a slot without
@@ -616,10 +634,16 @@ public:
 
   /// Asks the policy about each partition in turn and starts what it asks
   /// for, up to the free slots in the compaction pool.
-  void maintenance_pass();
+  void schedule_compaction(time now);
 
   /// Runs one policy action, holding a slot until it lands.
-  void run_maintenance_action(const uuid& partition, storage_action action);
+  void run_policy_action(const uuid& partition, storage_action action,
+                         bool eviction = false);
+
+  /// Suppress a rewrite that failed to reclaim bytes, including its new IDs.
+  void record_eviction_result(uuid const& input, uint64_t input_bytes,
+                              keep_original_partition keep,
+                              partition_apply_result const& result);
 
   /// Runs a named policy rule over every partition it applies to, answering
   /// once the run finishes.
@@ -627,7 +651,7 @@ public:
                       Option<duration> newer_than) -> caf::result<atom::done>;
 
   /// Starts as much of the queued named run as the compaction pool allows.
-  void drain_named_rule();
+  void drain_named_rule(time now = time::clock::now());
 
   /// Ends the named run and answers its caller: the recorded failure if one
   /// occurred, a retry hint when partitions were skipped over concurrent
@@ -697,6 +721,13 @@ public:
   auto apply(ast::pipeline pipe, std::vector<partition_info> selected,
              keep_original_partition keep, std::string origin,
              std::string policy_token) -> caf::result<partition_apply_result>;
+
+  /// Selectors call this directly: inputs are claimed before it returns.
+  void transform(ast::pipeline pipe, std::vector<partition_info> selected,
+                 keep_original_partition keep, std::string origin,
+                 std::string policy_token,
+                 std::function<void(partition_apply_result&)> success,
+                 std::function<void(caf::error&)> failure);
 
   /// Adds a new partition creation listener.
   void
@@ -774,9 +805,8 @@ public:
   /// its store deletion lands, freed or failed either way.
   std::unordered_map<uuid, uint64_t> deleting = {};
 
-  /// Inputs of in-flight eviction transforms, and their on-disk footprint. An
-  /// entry leaves when the transform lands, committed or failed either way.
-  std::unordered_map<uuid, uint64_t> evicting_inputs = {};
+  /// No-progress eviction outputs must not spin through fresh UUIDs.
+  std::unordered_set<uuid> eviction_suppressed = {};
 
   /// How many in-flight disposals still need each tombstone. `deferred`
   /// references a marker while an erasure waits on pins; this covers the
@@ -818,27 +848,51 @@ public:
   /// of itself up behind it.
   bool measuring_space = false;
 
-  /// Set while an eviction pass is deleting. The pass runs until the database
-  /// is back under the low water mark, so the periodic check must not start a
-  /// second one on top of it.
+  /// A pressure episode stays active until usage reaches the low water mark.
   bool evicting = false;
 
-  /// The most recently measured size of the database directory.
+  /// Physical usage estimate: live, pending deletion, and reconciled overhead.
   Option<uint64_t> dbdir_size = None{};
 
   /// How many partitions the budget loop has evicted.
   size_t evicted = 0;
 
+  /// Eviction rewrites also consume the disk-budget step allowance.
+  size_t eviction_running = 0;
+
   /// Policy pipelines in flight, against `maintenance.compaction_slots`.
   size_t compacting = 0;
 
-  /// Set when the periodic pass ran out of slots mid-walk, so that a freed
-  /// slot resumes it. Anything else waits for its interval.
-  bool maintenance_pending = false;
+  /// Selection stays disabled until startup state and policy are complete.
+  bool maintenance_ready = false;
+  bool deciding_maintenance = false;
+  caf::disposable maintenance_wakeup = {};
+  Option<time> wakeup_at = None{};
+  time next_collection = {};
+  time next_policy_check = {};
+  time next_space_scan = {};
+  time next_disposal_check = {};
+  time eviction_retry_at = {};
+  std::chrono::time_zone const* rebuild_zone = nullptr;
 
-  /// Victims whose retirement is in flight: the tombstone write and the file
-  /// deletions have not settled. Excluded from eviction selection, so a
-  /// measurement racing the retirement cannot select them twice.
+  /// Monotonic catalog admissions, independent of imported timestamps.
+  uint64_t admission_sequence = 0;
+  std::unordered_map<uuid, uint64_t> admissions = {};
+  uint64_t closed_admission = 0;
+  RebuildGroups open_rebuild_groups = {};
+  RebuildGroups closed_rebuild_groups = {};
+
+  /// Only changed partitions need policy classification between clock checks.
+  std::unordered_set<uuid> policy_dirty = {};
+  std::unordered_set<uuid> policy_pending = {};
+  std::unordered_set<uuid> eviction_pending = {};
+
+  /// Bytes owned by live catalog partitions; scans reconcile everything else.
+  uint64_t catalog_bytes = 0;
+  uint64_t external_bytes = 0;
+  bool space_reconciled = false;
+  uint64_t storage_generation = 0;
+
   /// A transform finalized by startup marker replay, for the policy to hear
   /// about once it exists. A crash between the durable marker and the
   /// policy's callbacks would otherwise leave the persisted history naming

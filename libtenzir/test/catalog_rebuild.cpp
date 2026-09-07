@@ -9,6 +9,7 @@
 #include "tenzir/catalog.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/plugin/storage_policy.hpp"
 #include "tenzir/qualified_record_field.hpp"
 #include "tenzir/synopsis_factory.hpp"
 #include "tenzir/test/test.hpp"
@@ -34,6 +35,7 @@ struct fixture {
     factory<synopsis>::initialize();
     state.partition_capacity = capacity;
     state.desired_batch_size = capacity;
+    state.rebuild_zone = std::chrono::locate_zone("UTC");
   }
 
   /// Adds a partition and returns its id. Each call advances the clock, so
@@ -46,6 +48,7 @@ struct fixture {
            Option<uint64_t> size = None{}) -> uuid {
     const auto approx_bytes = size.value_or(events * 100);
     const auto id = uuid::random();
+    state.admissions[id] = ++state.admission_sequence;
     auto schema
       = type{std::string{schema_name}, record_type{{"msg", string_type{}}}};
     auto synopsis = caf::make_copy_on_write<partition_synopsis>();
@@ -56,6 +59,7 @@ struct fixture {
     clock += std::chrono::seconds{1};
     synopsis.unshared().min_import_time = clock;
     synopsis.unshared().max_import_time = clock;
+    state.open_rebuild_groups.emplace(schema, state.rebuild_day(clock));
     state.update_synopses([&](tenzir::catalog_state::synopsis_map& map) {
       tenzir::catalog_state::mutable_schema(map, schema)[id]
         = std::move(synopsis);
@@ -116,13 +120,12 @@ TEST("a batch never mixes schemas") {
 TEST("a batch stops at the partition capacity") {
   auto f = fixture{};
   const auto first = f.add("test", capacity - 1);
-  const auto second = f.add("test", capacity - 1);
+  f.add("test", capacity - 1);
   f.add("test", capacity - 1);
   auto run = f.make_run(all_options());
-  // The first partition already brings the batch within one event of the
-  // capacity, so the second closes it out and the third stays behind.
+  // No second input fits under the event cap; --all permits a lone rewrite.
   CHECK_EQUAL(fixture::ids_of(f.state.select_rebuild_batch(run)),
-              (std::vector{first, second}));
+              (std::vector{first}));
 }
 
 TEST("selection skips partitions that a transform already holds") {
@@ -138,16 +141,29 @@ TEST("selection skips partitions that a transform already holds") {
               (std::vector{first, third}));
 }
 
-TEST("selection picks up partitions merged after the run started") {
+TEST("new arrivals wait for the next automatic collection") {
   auto f = fixture{};
   const auto first = f.add("test", 10);
   auto run = f.make_run(automatic_options());
   // One partition is not a batch yet.
   CHECK(f.state.select_rebuild_batch(run).empty());
-  // The automatic source re-selects against live state, so a partition that
-  // arrives mid-run joins the next batch. This is not possible with a snapshot
-  // taken once per run.
+  // An open-hour arrival must not repeatedly re-merge this run's tiny output.
   const auto second = f.add("test", 10);
+  CHECK(f.state.select_rebuild_batch(run).empty());
+  run = f.make_run(automatic_options());
+  CHECK_EQUAL(fixture::ids_of(f.state.select_rebuild_batch(run)),
+              (std::vector{first, second}));
+}
+
+TEST("a closed collection does not rebuild untouched schema day groups") {
+  auto f = fixture{};
+  f.add("old", 10);
+  f.add("old", 10);
+  auto first = f.add("new", 10);
+  auto second = f.add("new", 10);
+  auto run = f.make_run(automatic_options());
+  run.collected_groups = RebuildGroups{
+    {f.state.find_synopsis(first)->schema, f.state.rebuild_day(f.clock)}};
   CHECK_EQUAL(fixture::ids_of(f.state.select_rebuild_batch(run)),
               (std::vector{first, second}));
 }
@@ -169,7 +185,7 @@ TEST("a manual run ignores partitions ingested after it started") {
   const auto second = f.add("test", 10);
   auto run = f.make_run(all_options());
   // A manual run bounds itself so that it terminates under ongoing ingest.
-  run.horizon = f.clock + std::chrono::seconds{1};
+  run.horizon = f.state.admission_sequence;
   f.add("test", 10);
   f.add("test", 10);
   CHECK_EQUAL(fixture::ids_of(f.state.select_rebuild_batch(run)),
@@ -295,4 +311,172 @@ TEST("quarantined partitions outlive the run that found them") {
   REQUIRE(entry);
   CHECK_EQUAL(entry->at("uuid"), data{fmt::to_string(id)});
   CHECK_EQUAL(entry->at("error"), data{std::string{"store decode failed"}});
+}
+
+TEST("rebuild never combines different max import days, including --all") {
+  auto f = fixture{};
+  f.clock = tenzir::time{} + std::chrono::hours{23};
+  auto first = f.add("test", 10);
+  f.clock += std::chrono::hours{2};
+  auto second = f.add("test", 10);
+  auto third = f.add("test", 10);
+  auto automatic = f.make_run(automatic_options());
+  CHECK_EQUAL(fixture::ids_of(f.state.select_rebuild_batch(automatic)),
+              (std::vector{second, third}));
+  auto all = f.make_run(all_options());
+  CHECK_EQUAL(fixture::ids_of(f.state.select_rebuild_batch(all)),
+              (std::vector{first}));
+}
+
+TEST("day buckets use max import time, not the input's span") {
+  auto f = fixture{};
+  f.clock = tenzir::time{} + std::chrono::hours{26};
+  auto first = f.add("test", 10);
+  auto second = f.add("test", 10);
+  auto schema = f.state.find_synopsis(first)->schema;
+  f.state.update_synopses([&](catalog_state::synopsis_map& map) {
+    auto& synopsis = catalog_state::mutable_schema(map, schema)[first];
+    synopsis.unshared().min_import_time = tenzir::time{};
+  });
+  auto run = f.make_run(automatic_options());
+  CHECK_EQUAL(fixture::ids_of(f.state.select_rebuild_batch(run)),
+              (std::vector{first, second}));
+}
+
+TEST("a busy compaction pool does not give rebuild its inputs") {
+  auto f = fixture{};
+  auto first = f.add("test", 10);
+  auto held = f.add("test", 10);
+  auto third = f.add("test", 10);
+  f.state.compacting = f.state.maintenance.compaction_slots;
+  f.state.policy_pending.insert(held);
+  auto run = f.make_run(all_options());
+  CHECK_EQUAL(fixture::ids_of(f.state.select_rebuild_batch(run)),
+              (std::vector{first, third}));
+  CHECK_EQUAL(run.deferred, 1u);
+}
+
+TEST("inline decisions classify due policy before checking pool capacity") {
+  struct DuePolicy final : storage_policy {
+    uuid input;
+    auto maintenance_deadline(uuid const&, partition_synopsis const&,
+                              tenzir::time) const -> tenzir::time override {
+      return tenzir::time::max();
+    }
+    auto maintenance_interval() const -> duration override {
+      return std::chrono::hours{1};
+    }
+    auto maintenance_action(uuid const& id, partition_synopsis const&,
+                            tenzir::time) const
+      -> Option<storage_action> override {
+      if (id == input) {
+        return storage_action{};
+      }
+      return None{};
+    }
+  };
+  auto f = fixture{};
+  auto id = f.add("test", 10);
+  auto policy = std::make_unique<DuePolicy>();
+  policy->input = id;
+  f.state.policy = std::move(policy);
+  f.state.compacting = f.state.maintenance.compaction_slots;
+  f.state.maintenance_ready = true;
+  f.state.next_collection = tenzir::time::max();
+  f.state.next_disposal_check = tenzir::time::max();
+  f.state.next_policy_check = tenzir::time::max();
+  f.state.policy_dirty.insert(id);
+  f.state.advance_maintenance(f.clock);
+  CHECK(f.state.policy_dirty.empty());
+  CHECK(f.state.policy_pending.contains(id));
+  auto run = f.make_run(all_options());
+  CHECK(f.state.select_rebuild_batch(run).empty());
+  CHECK_EQUAL(run.deferred, 1u);
+}
+
+TEST("a retiring input cannot be selected while its marker is being written") {
+  auto f = fixture{};
+  auto held = f.add("test", 10);
+  auto free = f.add("test", 10);
+  f.state.retiring.insert(held);
+  auto run = f.make_run(all_options());
+  CHECK_EQUAL(fixture::ids_of(f.state.select_rebuild_batch(run)),
+              (std::vector{free}));
+}
+
+TEST("late arrivals cannot enter a manual run by carrying old timestamps") {
+  auto f = fixture{};
+  auto first = f.add("test", 10);
+  auto run = f.make_run(all_options());
+  run.horizon = f.state.admission_sequence;
+  f.clock -= std::chrono::minutes{30};
+  f.add("test", 10);
+  CHECK_EQUAL(fixture::ids_of(f.state.select_rebuild_batch(run)),
+              (std::vector{first}));
+}
+
+TEST("timezone controls day buckets and preserves both autumn hours") {
+  using namespace std::chrono;
+  auto f = fixture{};
+  f.state.rebuild_zone = locate_zone("Europe/Berlin");
+  auto midnight_utc = tenzir::time{sys_days{2026y / October / 25}};
+  CHECK_EQUAL(f.state.rebuild_day(midnight_utc - hours{1}),
+              floor<days>(midnight_utc.time_since_epoch()).count());
+  auto first_hour = midnight_utc + minutes{30};
+  auto second_hour = midnight_utc + hours{1} + minutes{30};
+  CHECK_EQUAL(f.state.next_rebuild_hour(first_hour), midnight_utc + hours{1});
+  CHECK_EQUAL(f.state.next_rebuild_hour(second_hour), midnight_utc + hours{2});
+}
+
+TEST("hourly collection skips the nonexistent spring hour") {
+  using namespace std::chrono;
+  auto f = fixture{};
+  f.state.rebuild_zone = locate_zone("Europe/Berlin");
+  auto midnight_utc = tenzir::time{sys_days{2026y / March / 29}};
+  CHECK_EQUAL(f.state.next_rebuild_hour(midnight_utc + minutes{30}),
+              midnight_utc + hours{1});
+  CHECK_EQUAL(f.state.next_rebuild_hour(midnight_utc + hours{1} + minutes{30}),
+              midnight_utc + hours{2});
+}
+
+TEST("invalid explicit rebuild timezone fails before scheduling") {
+  auto state = catalog_state{};
+  state.maintenance.rebuild_timezone = "Not/A-Timezone";
+  CHECK(state.initialize_maintenance(tenzir::time{}).valid());
+  CHECK(not state.maintenance_ready);
+}
+
+TEST("rebuild defaults to the system timezone and accepts an explicit "
+     "override") {
+  auto local = catalog_state{};
+  CHECK(not local.initialize_maintenance(tenzir::time{}).valid());
+  CHECK_EQUAL(local.rebuild_zone->name(), std::chrono::current_zone()->name());
+  auto explicit_zone = catalog_state{};
+  explicit_zone.maintenance.rebuild_timezone = "UTC";
+  CHECK(not explicit_zone.initialize_maintenance(tenzir::time{}).valid());
+  CHECK_EQUAL(explicit_zone.rebuild_zone->name(),
+              std::chrono::locate_zone("UTC")->name());
+}
+
+TEST("arrivals cannot postpone or reopen a collection cutoff") {
+  using namespace std::chrono;
+  auto f = fixture{};
+  f.state.maintenance_ready = true;
+  f.state.maintenance.rebuild_interval = hours{1};
+  auto boundary = tenzir::time{} + hours{2};
+  f.state.next_collection = boundary;
+  f.add("test", 10);
+  f.state.close_rebuild_collection(boundary - seconds{1});
+  CHECK_EQUAL(f.state.next_collection, boundary);
+  CHECK(f.state.closed_rebuild_groups.empty());
+  f.state.close_rebuild_collection(boundary);
+  auto closed = f.state.closed_admission;
+  CHECK(not f.state.closed_rebuild_groups.empty());
+  f.add("test", 10);
+  f.state.close_rebuild_collection(boundary);
+  CHECK_EQUAL(f.state.closed_admission, closed);
+  CHECK_EQUAL(f.state.next_collection, boundary + hours{1});
+  f.state.close_rebuild_collection(boundary - hours{1});
+  CHECK_EQUAL(f.state.closed_admission, closed);
+  CHECK_EQUAL(f.state.next_collection, boundary + hours{1});
 }

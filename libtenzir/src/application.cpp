@@ -95,8 +95,8 @@ void add_root_opts(command& cmd) {
                             "timespan after which an active partition is "
                             "forcibly flushed (default: 30s)");
   cmd.options.add<duration>("?tenzir", "rebuild-interval",
-                            "timespan after which an automatic rebuild is "
-                            "triggered (default: 30min)");
+                            "deprecated; automatic rebuild collects hourly "
+                            "(zero still disables automatic rebuild)");
   cmd.options.add<int64_t>(
     "?tenzir", "rebuild-memory-budget",
     "total decoded-byte budget for concurrent rebuilds; set to 0 to disable "
@@ -106,8 +106,9 @@ void add_root_opts(command& cmd) {
                           "rebuilding a closed "
                           "time bucket (default: 0.6)");
   cmd.options.add<std::string>("?tenzir", "rebuild-timezone",
-                               "time zone for rebuild bucket boundaries "
-                               "(default: system time zone)");
+                               "timezone for rebuild days and hourly "
+                               "collection "
+                               "(default: node system timezone)");
   cmd.options.add<bool>("?tenzir", "validate-store-batches",
                         "fully validate persisted batches read by exports and "
                         "rebuilds");

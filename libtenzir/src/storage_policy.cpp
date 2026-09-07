@@ -17,14 +17,27 @@ auto storage_policy::maintenance_interval() const -> duration {
   return duration::zero();
 }
 
-auto storage_policy::maintenance_action(const uuid&,
-                                        const partition_synopsis&) const
-  -> Option<storage_action> {
+auto storage_policy::maintenance_action(const uuid&, const partition_synopsis&,
+                                        time) const -> Option<storage_action> {
   return None{};
 }
 
 auto storage_policy::describe() const -> record {
   return {};
+}
+
+auto storage_policy::blocks_rebuild(uuid const& id,
+                                    partition_synopsis const& synopsis,
+                                    time now) const -> bool {
+  return maintenance_interval() > duration::zero()
+         and maintenance_action(id, synopsis, now).has_value();
+}
+
+auto storage_policy::maintenance_deadline(const uuid&,
+                                          const partition_synopsis&,
+                                          time now) const -> time {
+  auto const interval = maintenance_interval();
+  return interval > duration::zero() ? now + interval : time::max();
 }
 
 auto storage_policy::rule_names() const -> std::vector<std::string> {
@@ -38,14 +51,13 @@ auto storage_policy::check_named_run(std::string_view, Option<duration>,
 
 auto storage_policy::named_action(std::string_view, Option<duration>,
                                   Option<duration>, const uuid&,
-                                  const partition_synopsis&) const
+                                  const partition_synopsis&, time) const
   -> Option<storage_action> {
   return None{};
 }
 
-auto storage_policy::eviction_weight(const uuid&,
-                                     const partition_synopsis&) const
-  -> Option<double> {
+auto storage_policy::eviction_weight(const uuid&, const partition_synopsis&,
+                                     time) const -> Option<double> {
   return None{};
 }
 

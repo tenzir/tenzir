@@ -87,24 +87,32 @@ class storage_policy {
 public:
   virtual ~storage_policy() = default;
 
-  /// How often the catalog should run the maintenance pass for this policy.
-  /// Zero, the default, disables the pass -- a policy that only contributes
-  /// eviction behavior has no periodic work to do.
-  ///
-  /// The policy owns this because it owns what the pass is *for*: the catalog
-  /// cannot know that a rule set implies an hourly sweep.
+  /// The fallback age-eligibility recheck interval. Zero disables automatic
+  /// age-driven actions; eviction and named runs remain independent.
   virtual auto maintenance_interval() const -> duration;
 
-  /// Periodic, age-driven maintenance. Called while the catalog walks its own
+  /// Age-driven maintenance. Called while the catalog walks its own
   /// partitions; `none` means "nothing to do for this partition".
   ///
   /// The argument is the synopsis rather than `partition_info` because a rule
   /// may select on a time field of its own, whose range lives in the
   /// synopsis's field-level time synopses. A policy that checks the range here
   /// keeps the catalog from rewriting partitions that hold no matching events.
-  virtual auto maintenance_action(const uuid& partition,
-                                  const partition_synopsis& synopsis) const
+  virtual auto
+  maintenance_action(const uuid& partition, const partition_synopsis& synopsis,
+                     time now = time::clock::now()) const
     -> Option<storage_action>;
+
+  /// Due or failed user policy wins over rebuild, regardless of free slots.
+  virtual auto
+  blocks_rebuild(const uuid& partition, const partition_synopsis& synopsis,
+                 time now = time::clock::now()) const -> bool;
+
+  /// The next time age alone can change eligibility. The default falls back
+  /// to the configured interval when the policy cannot determine it exactly.
+  virtual auto maintenance_deadline(const uuid& partition,
+                                    const partition_synopsis& synopsis,
+                                    time now) const -> time;
 
   /// The policy's effective configuration, for `compaction list` and its kin.
   /// The node answers this rather than the client rendering its own config: a
@@ -140,14 +148,15 @@ public:
   /// what a rule is.
   virtual auto named_action(std::string_view rule, Option<duration> older_than,
                             Option<duration> newer_than, const uuid& partition,
-                            const partition_synopsis& synopsis) const
+                            const partition_synopsis& synopsis,
+                            time now = time::clock::now()) const
     -> Option<storage_action>;
 
   /// Eviction ordering when over the disk budget. Higher is evicted sooner;
   /// `none` keeps the catalog's default of oldest `max_import_time` first.
-  virtual auto eviction_weight(const uuid& partition,
-                               const partition_synopsis& synopsis) const
-    -> Option<double>;
+  virtual auto
+  eviction_weight(const uuid& partition, const partition_synopsis& synopsis,
+                  time now = time::clock::now()) const -> Option<double>;
 
   /// What happens to a partition the disk-budget loop selected when the
   /// policy contributes no pipeline for it.

@@ -137,8 +137,28 @@ auto catalog_state::apply(ast::pipeline pipe,
                           keep_original_partition keep, std::string origin,
                           std::string policy_token)
   -> caf::result<partition_apply_result> {
+  auto rp = self->make_response_promise<partition_apply_result>();
+  transform(
+    std::move(pipe), std::move(selected), keep, std::move(origin),
+    std::move(policy_token),
+    [rp](partition_apply_result& result) mutable {
+      rp.deliver(std::move(result));
+    },
+    [rp](caf::error& error) mutable {
+      rp.deliver(std::move(error));
+    });
+  return rp;
+}
+
+void catalog_state::transform(
+  ast::pipeline pipe, std::vector<partition_info> selected,
+  keep_original_partition keep, std::string origin, std::string policy_token,
+  std::function<void(partition_apply_result&)> success,
+  std::function<void(caf::error&)> failure) {
   if (selected.empty()) {
-    return caf::make_error(ec::invalid_argument, "no partitions given");
+    auto error = caf::make_error(ec::invalid_argument, "no partitions given");
+    failure(error);
+    return;
   }
   TENZIR_DEBUG("{} applies a pipeline to partitions {}", *self, selected);
   TENZIR_ASSERT(store_actor_plugin);
@@ -156,7 +176,8 @@ auto catalog_state::apply(ast::pipeline pipe,
   });
   auto corrected_partitions = catalog_lookup_result{};
   for (const auto& partition : selected) {
-    if (in_transformation.insert(partition.uuid).second) {
+    if (not retiring.contains(partition.uuid)
+        and in_transformation.insert(partition.uuid).second) {
       corrected_partitions.candidate_infos[partition.schema]
         .partition_infos.emplace_back(partition);
       input_partitions.emplace_back(partition);
@@ -170,7 +191,9 @@ auto catalog_state::apply(ast::pipeline pipe,
     }
   }
   if (corrected_partitions.empty()) {
-    return partition_apply_result{};
+    auto result = partition_apply_result{};
+    success(result);
+    return;
   }
   /// Yummy. Partitioned Foam. :)
   auto transformer
@@ -193,7 +216,6 @@ auto catalog_state::apply(ast::pipeline pipe,
     std::move(transformer_addr), std::move(completion_disposable));
   TENZIR_ASSERT(inserted);
   auto marker_path = paths.marker(uuid::random());
-  auto rp = self->make_response_promise<partition_apply_result>();
   // Engaged when the transform ends in a state only a restart can finish:
   // the marker is durable and some outputs may already sit in the index
   // directory, so the marker must survive to replay, and the inputs *it
@@ -204,9 +226,13 @@ auto catalog_state::apply(ast::pipeline pipe,
   // compaction, and erasure until the restart.
   auto commit_at_restart
     = std::make_shared<Option<std::unordered_set<uuid>>>(None{});
+  // Outputs become visible to readers before the policy commit callback.
+  // Keep them unavailable to maintenance until that callback publishes history.
+  auto output_claims = std::make_shared<std::vector<uuid>>();
   auto deliver
-    = [this, rp, corrected_partitions, marker_path, commit_at_restart](
-        caf::expected<partition_apply_result>&& result) mutable {
+    = [this, success = std::move(success), failure = std::move(failure),
+       corrected_partitions, marker_path, commit_at_restart,
+       output_claims](caf::expected<partition_apply_result>&& result) mutable {
         if (not *commit_at_restart) {
           // The marker stays if a deferred erasure still needs it as a
           // tombstone.
@@ -223,17 +249,22 @@ auto catalog_state::apply(ast::pipeline pipe,
           }
         }
         if (result) {
-          rp.deliver(std::move(*result));
+          success(*result);
         } else {
-          rp.deliver(std::move(result.error()));
+          failure(result.error());
         }
+        for (auto const& id : *output_claims) {
+          in_transformation.erase(id);
+          policy_dirty.insert(id);
+        }
+        advance_maintenance(time::clock::now());
       };
   // TODO: Implement some kind of monadic composition instead of these nested
   // requests.
   self->mail(atom::persist_v)
     .request(transformer, caf::infinite)
     .then(
-      [this, deliver, keep, marker_path, commit_at_restart,
+      [this, deliver, keep, marker_path, commit_at_restart, output_claims,
        policy_token = std::move(policy_token),
        transformer](partition_transformer_result& transform_result) mutable {
         auto old_partition_ids = std::vector<uuid>{};
@@ -242,6 +273,10 @@ auto catalog_state::apply(ast::pipeline pipe,
           old_partition_ids.emplace_back(partition.uuid);
         }
         auto apsv = std::move(transform_result.output_partitions);
+        for (auto const& output : apsv) {
+          in_transformation.insert(output.uuid);
+          output_claims->push_back(output.uuid);
+        }
         // Point each output synopsis at its final `.mdx` path (the marker is
         // renamed there before the merge below). With lazy sketches the
         // catalog drops the Bloom filters on merge and reloads them on demand
@@ -349,7 +384,7 @@ auto catalog_state::apply(ast::pipeline pipe,
                                              policy_token, token_input, true))
                         .request(filesystem, caf::infinite)
                         .then(
-                          [=, this](atom::ok) mutable {
+                          [=](atom::ok) mutable {
                             deliver(partition_apply_result{
                               .input_partitions
                               = std::move(transformed_input_partitions),
@@ -506,7 +541,6 @@ auto catalog_state::apply(ast::pipeline pipe,
       [deliver](const caf::error& e) mutable {
         deliver(e);
       });
-  return rp;
 }
 
 } // namespace tenzir

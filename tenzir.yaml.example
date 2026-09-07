@@ -289,8 +289,13 @@ tenzir:
   # disable.
   automatic-rebuild: 1
 
-  # Timeout after which an automatic rebuild is triggered.
-  rebuild-interval: 30min
+  # Automatic rebuild collects arrivals until the next local hour boundary.
+  # Inputs are grouped by schema and the day of their maximum import time.
+  # Use the node's system timezone unless you set an explicit IANA timezone.
+  # rebuild-timezone: Europe/Berlin
+  #
+  # rebuild-interval is deprecated. Positive values use hourly collection;
+  # zero still disables automatic rebuild.
 
   # Total decoded-memory budget shared by concurrent rebuilds. By default, the
   # node estimates the budget from available memory. The value is in bytes; set

@@ -41,9 +41,11 @@ struct fixture {
     synopsis.unshared().schema = schema;
     synopsis.unshared().events = 100;
     synopsis.unshared().approx_bytes = bytes;
+    synopsis.unshared().store_file.size = bytes;
     clock += std::chrono::seconds{1};
     synopsis.unshared().min_import_time = clock;
     synopsis.unshared().max_import_time = clock;
+    state.catalog_bytes += bytes;
     state.update_synopses([&](tenzir::catalog_state::synopsis_map& map) {
       tenzir::catalog_state::mutable_schema(map, schema)[id]
         = std::move(synopsis);
@@ -113,16 +115,15 @@ namespace {
 struct weighted_policy final : tenzir::storage_policy {
   std::string heavy = {};
 
-  auto eviction_weight(const uuid&, const partition_synopsis& synopsis) const
-    -> Option<double> override {
+  auto eviction_weight(const uuid&, const partition_synopsis& synopsis,
+                       tenzir::time now) const -> Option<double> override {
     if (synopsis.schema.name() != heavy) {
       return None{};
     }
     // Scaled age, the way the compaction policy expresses it: a weighted
     // answer stays comparable with the plain age of unweighted partitions.
-    const auto age = std::chrono::duration<double>{tenzir::time::clock::now()
-                                                   - synopsis.max_import_time}
-                       .count();
+    const auto age
+      = std::chrono::duration<double>{now - synopsis.max_import_time}.count();
     return 1000.0 * age;
   }
 };
@@ -184,18 +185,107 @@ TEST("bytes of in-flight deletions count as already reclaimed") {
   f.state.deleting[uuid::random()] = 600;
   f.state.deleting[uuid::random()] = 400;
   CHECK_EQUAL(f.state.deleting_bytes(), 1000u);
-  // The inputs of a running eviction transform are likewise spoken for: the
-  // rewrite is already reclaiming their bytes.
-  CHECK_EQUAL(f.state.evicting_bytes(), 0u);
-  f.state.evicting_inputs[uuid::random()] = 250;
-  CHECK_EQUAL(f.state.evicting_bytes(), 250u);
 }
 
-TEST("a slot freed by other policy work lets a queued named run proceed") {
+TEST("a no-progress eviction cannot repeat through its fresh output UUID") {
+  auto f = fixture{};
+  auto input = uuid::random();
+  auto output = f.add("test", 1000);
+  auto result = partition_apply_result{};
+  result.output_partitions.emplace_back(output, *f.state.find_synopsis(output));
+  f.state.record_eviction_result(input, 1000, keep_original_partition::no,
+                                 result);
+  CHECK(f.state.eviction_suppressed.contains(output));
+  CHECK_EQUAL(f.state.run_eviction_action(output), eviction_outcome::deferred);
+}
+
+TEST("disk reconciliation separates live files from pending reclamation") {
+  auto f = fixture{};
+  f.add("test", 1000);
+  f.park(uuid::random(), 700);
+  f.state.deleting[uuid::random()] = 300;
+  f.state.on_space_measured(2500);
+  CHECK_EQUAL(f.state.external_bytes, 500u);
+  CHECK_EQUAL(f.state.dbdir_size, 2500u);
+  CHECK(f.state.space_reconciled);
+}
+
+TEST("disk pressure keeps its low-water target across decisions") {
+  auto f = fixture{};
+  auto id = f.add("test", 2000);
+  f.state.in_transformation.insert(id);
+  f.state.space_reconciled = true;
+  f.state.maintenance.space.high_water_mark = 1500;
+  f.state.maintenance.space.low_water_mark = 1000;
+  f.state.maintenance.space.scan_interval = std::chrono::seconds{1};
+  f.state.enforce_disk_budget();
+  CHECK(f.state.evicting);
+  f.state.catalog_bytes = 1200;
+  f.state.enforce_disk_budget();
+  CHECK(f.state.evicting);
+  f.state.catalog_bytes = 1000;
+  f.state.enforce_disk_budget();
+  CHECK(not f.state.evicting);
+}
+
+TEST("retiring and pinned files are credited only once") {
+  auto f = fixture{};
+  auto id = f.add("test", 1000);
+  f.state.retiring.insert(id);
+  f.state.space_reconciled = true;
+  f.state.maintenance.space.high_water_mark = 900;
+  f.state.maintenance.space.low_water_mark = 500;
+  f.state.maintenance.space.scan_interval = std::chrono::seconds{1};
+  f.state.enforce_disk_budget();
+  CHECK(not f.state.evicting);
+  CHECK_EQUAL(f.state.dbdir_size, 1000u);
+  f.state.retiring.clear();
+  f.state.catalog_bytes = 0;
+  f.park(id, 1000);
+  f.state.enforce_disk_budget();
+  CHECK(not f.state.evicting);
+  CHECK_EQUAL(f.state.dbdir_size, 1000u);
+}
+
+TEST("disk eviction waits for startup reconciliation and respects pause") {
+  auto f = fixture{};
+  f.add("test", 2000);
+  f.state.maintenance.space.high_water_mark = 1500;
+  f.state.maintenance.space.low_water_mark = 1000;
+  f.state.maintenance.space.scan_interval = std::chrono::seconds{1};
+  // Either gate must prevent dispatch even though unclaimed data is over budget.
+  f.state.enforce_disk_budget();
+  CHECK(not f.state.evicting);
+  f.state.space_reconciled = true;
+  f.state.maintenance.space.scan_interval = std::chrono::seconds::zero();
+  f.state.enforce_disk_budget();
+  CHECK(not f.state.evicting);
+}
+
+TEST("eviction rewrites consume the disk step allowance") {
+  auto f = fixture{};
+  f.add("test", 2000);
+  f.state.space_reconciled = true;
+  f.state.maintenance.space.high_water_mark = 1500;
+  f.state.maintenance.space.low_water_mark = 1000;
+  f.state.maintenance.space.scan_interval = std::chrono::seconds{1};
+  f.state.maintenance.space.step_size = 1;
+  f.state.eviction_running = 1;
+  // No direct deletion may start while a rewrite holds the sole allowance.
+  f.state.enforce_disk_budget();
+  CHECK(f.state.evicting);
+  CHECK(f.state.retiring.empty());
+}
+
+TEST("a released slot resumes the shared decision function") {
   auto f = fixture{};
   f.state.maintenance.compaction_slots = 1;
   // A periodic maintenance or eviction action holds the only slot.
   f.state.compacting = 1;
+  // Disable real deadlines; this test exercises inline completion only.
+  f.state.maintenance_ready = true;
+  f.state.next_collection = tenzir::time::max();
+  f.state.next_disposal_check = tenzir::time::max();
   auto run = named_rule_run{};
   run.rule = "r";
   run.pending = {uuid::random()};

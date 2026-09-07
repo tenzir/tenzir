@@ -418,6 +418,15 @@ auto catalog_state::merge(std::vector<partition_synopsis_pair> partitions)
     // Clone each touched schema exactly once for the whole batch.
     auto cloned = std::unordered_map<type, schema_synopsis_map*>{};
     for (auto& [id, synopsis] : partitions) {
+      if (auto old = find_synopsis(id)) {
+        catalog_bytes -= old->store_file.size + old->indexes_file.size
+                         + old->sketches_file.size;
+      }
+      catalog_bytes += synopsis->store_file.size + synopsis->indexes_file.size
+                       + synopsis->sketches_file.size;
+      admissions[id] = ++admission_sequence;
+      ++storage_generation;
+      policy_dirty.insert(id);
       // With lazy sketches, drop the Bloom filters of newly flushed or
       // transformed partitions too; otherwise ongoing ingest would accumulate
       // them in resident memory and bypass the bounded sketch cache. They are
@@ -454,6 +463,16 @@ auto catalog_state::mutable_schema(synopsis_map& map, const type& schema)
 }
 
 void catalog_state::erase(const uuid& partition, notify_policy notify) {
+  if (auto synopsis = find_synopsis(partition);
+      synopsis and maintenance_ready) {
+    catalog_bytes -= synopsis->store_file.size + synopsis->indexes_file.size
+                     + synopsis->sketches_file.size;
+  }
+  ++storage_generation;
+  admissions.erase(partition);
+  policy_dirty.erase(partition);
+  policy_pending.erase(partition);
+  eviction_suppressed.erase(partition);
   if (policy and notify == notify_policy::yes) {
     policy->on_erased(partition);
   }
@@ -686,6 +705,7 @@ void catalog_state::unpin(const uuid& partition) {
   TENZIR_DEBUG("{} disposes of partition {} after the last pin went away",
                *self, partition);
   dispose_of(partition, std::move(erasure), None{});
+  advance_maintenance(time::clock::now());
 }
 
 namespace {
@@ -784,7 +804,9 @@ void catalog_state::retire_erased(const uuid& partition,
 
 catalog_state::catalog_state() = default;
 
-catalog_state::~catalog_state() = default;
+catalog_state::~catalog_state() {
+  maintenance_wakeup.dispose();
+}
 
 void catalog_state::make_policy() {
   for (const auto* plugin : plugins::get<storage_policy_plugin>()) {
@@ -942,6 +964,7 @@ void catalog_state::make_policy() {
 auto catalog_state::retire(const uuid& partition,
                            Option<std::string> quarantine_error)
   -> caf::result<atom::done> {
+  retiring.insert(partition);
   auto erasure = deferred_erase{
     .synopsis = find_synopsis(partition),
     .marker = {},
@@ -956,6 +979,7 @@ auto catalog_state::retire(const uuid& partition,
     if (deferred.contains(partition) or deleting.contains(partition)) {
       // A concurrent retirement already parked it or is deleting its files;
       // that retirement covers the erasure, so this one is redundant.
+      retiring.erase(partition);
       erase_marker_if_unreferenced(erasure.marker);
       rp.deliver(atom::done_v);
       return;
@@ -964,6 +988,7 @@ auto catalog_state::retire(const uuid& partition,
       // A transform claimed it in the meantime; erasing its input now would
       // let the data resurrect through the transform's output.
       erase_marker_if_unreferenced(erasure.marker);
+      retiring.erase(partition);
       rp.deliver(
         caf::make_error(ec::busy, fmt::format("refusing to erase partition {} "
                                               "while it is being transformed",
@@ -971,6 +996,7 @@ auto catalog_state::retire(const uuid& partition,
       return;
     }
     erase(partition);
+    retiring.erase(partition);
     // Pins may go away while a tombstone write is in flight; a release then
     // found nothing parked and did nothing, so parking now would wait for a
     // trigger that already came and went.
@@ -980,6 +1006,7 @@ auto catalog_state::retire(const uuid& partition,
     }
     deferred.emplace(partition, std::move(erasure));
     rp.deliver(atom::done_v);
+    advance_maintenance(time::clock::now());
   };
   // Every retirement records its intent first, pinned or not: a crash while
   // the file operations are outstanding -- or an operation that fails --
@@ -1005,10 +1032,13 @@ auto catalog_state::retire(const uuid& partition,
       [proceed, erasure](atom::ok) mutable {
         proceed(std::move(erasure));
       },
-      [rp](caf::error& err) mutable {
+      [this, partition, rp](caf::error& err) mutable {
+        retiring.erase(partition);
+        eviction_retry_at = time::clock::now() + defaults::disposal_retry_delay;
         // The partition never left the catalog: a failed erase is a no-op, not
         // a limbo state.
         rp.deliver(std::move(err));
+        advance_maintenance(time::clock::now());
       });
   return rp;
 }
@@ -1016,6 +1046,7 @@ auto catalog_state::retire(const uuid& partition,
 void catalog_state::dispose_of(
   const uuid& partition, deferred_erase entry,
   Option<caf::typed_response_promise<atom::done>> rp) {
+  ++storage_generation;
   // Count the files against `deleting` until the filesystem actor is done
   // with them: a database scan that races the deletion still sees them, and
   // without the correction the budget loop would select further victims for
@@ -1092,6 +1123,7 @@ void catalog_state::dispose_of(
                                                 "of partition {}",
                                                 partition)));
       }
+      advance_maintenance(time::clock::now());
       return;
     }
   }
@@ -1100,9 +1132,8 @@ void catalog_state::dispose_of(
   // store gone but the dense index left behind, say -- re-parks the partition:
   // the tombstone stays referenced, the deadline sweep retries the deletion
   // (erasing a path that is already gone succeeds, so retries converge), and a
-  // crash in between still replays the erasure from the marker. With forcing
-  // disabled there is no sweep, and the marker completes the cleanup at the
-  // next startup instead.
+  // crash in between still replays the erasure from the marker. Failed file
+  // operations are retried even when forced disposal of pinned data is off.
   //
   // The marker stays referenced for the whole disposal: nothing in `deferred`
   // points at it while the deletions are in flight, and without the reference
@@ -1125,12 +1156,14 @@ void catalog_state::dispose_of(
   auto counter = detail::make_fanout_counter(
     operations,
     [this, partition, entry, rp, release_marker]() mutable {
+      ++storage_generation;
       deleting.erase(partition);
       release_marker(entry.marker);
       erase_marker_if_unreferenced(entry.marker);
       if (rp) {
         rp->deliver(atom::done_v);
       }
+      advance_maintenance(time::clock::now());
     },
     [this, partition, entry, rp, release_marker](caf::error&& err) mutable {
       deleting.erase(partition);
@@ -1143,6 +1176,7 @@ void catalog_state::dispose_of(
       if (rp) {
         rp->deliver(std::move(err));
       }
+      advance_maintenance(time::clock::now());
     });
   auto erase_file
     = [this, partition, counter](const std::filesystem::path& path,
@@ -1433,88 +1467,10 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
   }
   self->state().maintenance = maintenance;
   self->state().make_policy();
-  // The periodic rebuild source. Either `tenzir.automatic-rebuild` or
-  // `tenzir.rebuild-interval` at zero disables it alone; everything else keeps
-  // running. The interval has to be checked too: a zero delay would make the
-  // loop fire continuously rather than not at all.
-  if (maintenance.automatic_rebuild > 0
-      and maintenance.rebuild_interval > duration::zero()) {
-    TENZIR_INFO("{} rebuilds undersized partitions every {} with {} thread(s)",
-                *self, data{maintenance.rebuild_interval},
-                maintenance.automatic_rebuild);
-    // Delay the first pass so that it does not land in the middle of startup.
-    detail::weak_run_delayed(
-      self, maintenance.rebuild_interval / 2, [self, maintenance] {
-        detail::weak_run_delayed_loop(
-          self, maintenance.rebuild_interval,
-          [self, maintenance] {
-            auto error = self->state().begin_rebuild(rebuild_options{
-              .undersized = true,
-              .parallel = maintenance.automatic_rebuild,
-              .expression = trivially_true_expression(),
-              .automatic = true,
-            });
-            if (error.valid()) {
-              TENZIR_WARN("{} failed to start an automatic rebuild: {}", *self,
-                          error);
-            }
-          },
-          true);
-      });
-  }
-  // The disk budget loop. A zero high water mark is what an unconfigured
-  // budget looks like; an explicitly zero scan interval pauses the loop while
-  // keeping the thresholds configured. Either disables it.
-  if (maintenance.space.high_water_mark > 0
-      and maintenance.space.scan_interval > std::chrono::seconds::zero()) {
-    TENZIR_INFO("{} evicts partitions every {} to stay under {} bytes", *self,
-                data{maintenance.space.scan_interval},
-                maintenance.space.high_water_mark);
-    detail::weak_run_delayed_loop(
-      self, maintenance.space.scan_interval, [self] {
-        // A pass already under way re-measures on its own; starting a second
-        // one would evict against a size that the first has already acted on.
-        if (self->state().measuring_space or self->state().evicting) {
-          return;
-        }
-        self->state().measure_space();
-      });
-  }
-  // The policy's maintenance pass. The policy names its own interval, because
-  // only it knows whether its configuration implies periodic work; zero means
-  // it has none.
-  if (self->state().policy) {
-    const auto interval = self->state().policy->maintenance_interval();
-    if (interval > duration::zero()) {
-      TENZIR_INFO("{} runs storage policy maintenance every {}", *self,
-                  data{interval});
-      detail::weak_run_delayed_loop(
-        self, interval,
-        [self] {
-          self->state().maintenance_pass();
-        },
-        // Not immediately: `weak_run_delayed_loop` runs the action at once by
-        // default, which would put a compaction pass in every node startup
-        // rather than on the interval the policy asked for. The compactor
-        // scheduled its first temporal run one interval out, and so do we.
-        false);
-    }
-  }
-  // The sweep serves two masters: it forces pinned erasures past their
-  // deadline (only meaningful when the timeout is enabled), and it retries
-  // failed disposals (always meaningful -- a broken deletion must not depend
-  // on the pin-forcing configuration to ever run again). So it always runs,
-  // at a fraction of the timeout when one is set and at the retry cadence
-  // otherwise.
-  {
-    const auto sweep_interval
-      = deferred_erase_timeout > duration::zero()
-          ? std::min<duration>(deferred_erase_timeout / 4,
-                               defaults::disposal_retry_delay)
-          : duration{defaults::disposal_retry_delay};
-    detail::weak_run_delayed_loop(self, sweep_interval, [self] {
-      self->state().sweep_deferred();
-    });
+  if (auto error = self->state().initialize_maintenance(time::clock::now());
+      error.valid()) {
+    self->quit(std::move(error));
+    return catalog_actor::behavior_type::make_empty_behavior();
   }
   return {
     [self](atom::merge, std::vector<partition_synopsis_pair>& partitions)
@@ -1534,7 +1490,15 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
           policy->on_merged(partition);
         }
       }
+      auto const now = time::clock::now();
+      self->state().close_rebuild_collection(now);
+      for (auto const& [id, synopsis] : partitions) {
+        self->state().open_rebuild_groups.emplace(
+          synopsis->schema,
+          self->state().rebuild_day(synopsis->max_import_time));
+      }
       auto result = self->state().merge(std::move(partitions));
+      self->state().advance_maintenance(now);
       for (const auto& listener : self->state().partition_creation_listeners) {
         self->mail(atom::update_v, notification).send(listener);
       }
@@ -1634,10 +1598,19 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
     [self](atom::replace, const std::vector<uuid>& old_uuids,
            std::vector<partition_synopsis_pair>& new_synopses)
       -> caf::result<atom::ok> {
-      for (auto const& uuid : old_uuids) {
-        self->state().erase(uuid);
+      if (auto const& policy = self->state().policy) {
+        auto outputs = std::vector<partition_info>{};
+        for (auto const& [id, synopsis] : new_synopses) {
+          outputs.emplace_back(id, *synopsis);
+        }
+        policy->on_replaced(old_uuids, outputs);
       }
-      return self->state().merge(std::move(new_synopses));
+      for (auto const& uuid : old_uuids) {
+        self->state().erase(uuid, catalog_state::notify_policy::no);
+      }
+      auto result = self->state().merge(std::move(new_synopses));
+      self->state().advance_maintenance(time::clock::now());
+      return result;
     },
     [self](atom::candidates, tenzir::query_context query_context)
       -> caf::result<catalog_lookup_result> {

@@ -12,9 +12,10 @@
 // `catalog_transform.cpp` for what running the selected work looks like.
 
 #include "tenzir/catalog.hpp"
+#include "tenzir/defaults.hpp"
 #include "tenzir/detail/available_memory.hpp"
-#include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/detail/saturating_arithmetic.hpp"
+#include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/importer.hpp"
 #include "tenzir/logger.hpp"
@@ -69,6 +70,215 @@ auto rebuild_pipeline(const type& schema, size_t desired_batch_size)
 }
 
 } // namespace
+
+auto catalog_state::rebuild_day(time imported) const -> int64_t {
+  auto const seconds = std::chrono::floor<std::chrono::seconds>(imported);
+  auto const local = rebuild_zone
+                       ? rebuild_zone->to_local(seconds).time_since_epoch()
+                       : seconds.time_since_epoch();
+  return std::chrono::floor<std::chrono::days>(local).count();
+}
+
+auto catalog_state::next_rebuild_hour(time now) const -> time {
+  TENZIR_ASSERT(rebuild_zone);
+  auto const info = rebuild_zone->get_info(now);
+  auto const local = rebuild_zone->to_local(now);
+  auto const boundary
+    = std::chrono::floor<std::chrono::hours>(local) + std::chrono::hours{1};
+  auto const candidate = time{boundary.time_since_epoch() - info.offset};
+  // The offset transition itself closes the current window, including a
+  // repeated hour. Never resolve an ambiguous local label back to system time.
+  if (info.end <= std::chrono::floor<std::chrono::seconds>(candidate)) {
+    return time{info.end.time_since_epoch()};
+  }
+  return candidate;
+}
+
+auto catalog_state::initialize_maintenance(time now) -> caf::error {
+  try {
+    rebuild_zone = maintenance.rebuild_timezone.empty()
+                     ? std::chrono::current_zone()
+                     : std::chrono::locate_zone(maintenance.rebuild_timezone);
+  } catch (std::exception const& error) {
+    return caf::make_error(ec::invalid_configuration,
+                           fmt::format("failed to resolve rebuild timezone: {}",
+                                       error.what()));
+  }
+  next_collection = next_rebuild_hour(now);
+  next_policy_check = now;
+  next_space_scan = now;
+  next_disposal_check = now;
+  for (auto const& [schema, partitions] : *synopses_per_type) {
+    for (auto const& [id, synopsis] : *partitions) {
+      admissions[id] = ++admission_sequence;
+      open_rebuild_groups.emplace(schema,
+                                  rebuild_day(synopsis->max_import_time));
+      catalog_bytes += synopsis->store_file.size + synopsis->indexes_file.size
+                       + synopsis->sketches_file.size;
+      policy_dirty.insert(id);
+    }
+  }
+  maintenance_ready = true;
+  advance_maintenance(now);
+  return {};
+}
+
+auto catalog_state::blocks_rebuild(uuid const& id,
+                                   partition_synopsis const& synopsis,
+                                   time now) const -> bool {
+  if (policy_pending.contains(id) or eviction_pending.contains(id)
+      or (policy and policy->blocks_rebuild(id, synopsis, now))) {
+    return true;
+  }
+  if (named_run and policy
+      and policy->named_action(named_run->rule, named_run->older_than,
+                               named_run->newer_than, id, synopsis, now)) {
+    return true;
+  }
+  return false;
+}
+
+void catalog_state::close_rebuild_collection(time now) {
+  if (maintenance.automatic_rebuild == 0
+      or maintenance.rebuild_interval <= duration::zero()) {
+    open_rebuild_groups.clear();
+    closed_rebuild_groups.clear();
+    return;
+  }
+  if (maintenance_ready and now >= next_collection) {
+    closed_admission = admission_sequence;
+    closed_rebuild_groups.merge(open_rebuild_groups);
+    open_rebuild_groups.clear();
+    next_collection = next_rebuild_hour(now);
+  }
+}
+
+void catalog_state::advance_maintenance(time now) {
+  if (not maintenance_ready or deciding_maintenance) {
+    return;
+  }
+  deciding_maintenance = true;
+  close_rebuild_collection(now);
+  auto const policy_interval
+    = policy ? policy->maintenance_interval() : duration::zero();
+  if (policy_interval > duration::zero() and now >= next_policy_check) {
+    for (auto const& [schema, partitions] : *synopses_per_type) {
+      for (auto const& [id, synopsis] : *partitions) {
+        policy_dirty.insert(id);
+      }
+    }
+    next_policy_check = time::max();
+  }
+  auto const space_enabled
+    = maintenance.space.high_water_mark > 0
+      and maintenance.space.scan_interval > std::chrono::seconds::zero();
+  if (space_enabled and now >= next_space_scan) {
+    next_space_scan = now + maintenance.space.scan_interval;
+    if (not measuring_space) {
+      measure_space();
+    }
+  }
+  if (now >= next_disposal_check) {
+    sweep_deferred();
+  }
+  // Selection and claims happen in this order, before asynchronous execution.
+  enforce_disk_budget(now);
+  drain_named_rule(now);
+  schedule_compaction(now);
+  auto const automatic_enabled
+    = maintenance.automatic_rebuild > 0
+      and maintenance.rebuild_interval > duration::zero();
+  if (automatic_enabled and not closed_rebuild_groups.empty() and rebuild
+      and rebuild->options.automatic and rebuild->running == 0) {
+    // A closed hour can extend the pending work without letting an old
+    // policy conflict hold up unrelated groups indefinitely.
+    if (rebuild->groups) {
+      for (auto const& group : *rebuild->groups) {
+        for (auto const& input : group) {
+          auto synopsis = find_synopsis(input.uuid);
+          if (synopsis
+              and is_rebuild_candidate(input.uuid, *synopsis, *rebuild)) {
+            closed_rebuild_groups.emplace(input.schema,
+                                          rebuild_day(input.max_import_time));
+          }
+        }
+      }
+    }
+    finish_rebuild();
+  }
+  if (automatic_enabled and not closed_rebuild_groups.empty() and not rebuild
+      and not pending_rebuild) {
+    auto error = begin_rebuild(rebuild_options{
+      .undersized = true,
+      .parallel = maintenance.automatic_rebuild,
+      .expression = trivially_true_expression(),
+      .automatic = true,
+    });
+    if (error) {
+      TENZIR_WARN("{} failed to start automatic rebuild: {}", *self, error);
+    }
+  }
+  while (rebuild) {
+    auto const generation = rebuild->generation;
+    schedule_rebuild(now);
+    if (not rebuild or rebuild->generation == generation) {
+      break;
+    }
+  }
+  arm_maintenance_wakeup(now);
+  deciding_maintenance = false;
+}
+
+void catalog_state::arm_maintenance_wakeup(time now) {
+  auto const automatic_enabled
+    = maintenance.automatic_rebuild > 0
+      and maintenance.rebuild_interval > duration::zero();
+  auto const policy_interval
+    = policy ? policy->maintenance_interval() : duration::zero();
+  auto const space_enabled
+    = maintenance.space.high_water_mark > 0
+      and maintenance.space.scan_interval > std::chrono::seconds::zero();
+  // One wakeup covers collection, policy eligibility, reconciliation, and
+  // deferred disposal. State transitions otherwise call us inline.
+  next_disposal_check = time::max();
+  for (auto const& [id, entry] : deferred) {
+    if (entry.retry_at) {
+      next_disposal_check = std::min(next_disposal_check, *entry.retry_at);
+    } else if (entry.deadline) {
+      next_disposal_check = std::min(next_disposal_check, *entry.deadline);
+    }
+  }
+  auto deadline = next_disposal_check;
+  if (automatic_enabled) {
+    deadline = std::min(deadline, next_collection);
+  }
+  if (policy_interval > duration::zero()) {
+    deadline = std::min(deadline, next_policy_check);
+  }
+  if (space_enabled) {
+    deadline = std::min(deadline, next_space_scan);
+  }
+  if (space_enabled and eviction_retry_at > now) {
+    deadline = std::min(deadline, eviction_retry_at);
+  }
+  if (deadline == time::max()) {
+    maintenance_wakeup.dispose();
+    wakeup_at = None{};
+    return;
+  }
+  if (not wakeup_at or *wakeup_at != deadline) {
+    maintenance_wakeup.dispose();
+    wakeup_at = deadline;
+    maintenance_wakeup = detail::weak_run_delayed(
+      self, std::max(duration::zero(), deadline - now), [this, deadline] {
+        if (not wakeup_at or *wakeup_at != deadline) {
+          return;
+        }
+        wakeup_at = None{};
+        advance_maintenance(time::clock::now());
+      });
+  }
+}
 
 void catalog_state::learn_size_estimate(rebuild_run& run,
                                         const partition_info& partition) {
@@ -137,11 +347,6 @@ auto catalog_state::is_worth_rebuilding_alone(const rebuild_run& run,
 auto catalog_state::is_rebuild_candidate(const uuid& partition,
                                          const partition_synopsis& synopsis,
                                          const rebuild_run& run) const -> bool {
-  // A partition another transform already holds would be refused by `apply`
-  // anyway, and selecting it would only waste a batch slot.
-  if (in_transformation.contains(partition)) {
-    return false;
-  }
   // Selecting the same partition, or a partition this run produced, is how
   // continuous re-selection fails to terminate.
   if (run.visited.contains(partition)) {
@@ -152,7 +357,8 @@ auto catalog_state::is_rebuild_candidate(const uuid& partition,
   }
   // A manual run ignores everything ingested after it started, which is what
   // lets it terminate while data keeps arriving.
-  if (run.horizon and synopsis.max_import_time >= *run.horizon) {
+  if (auto it = admissions.find(partition);
+      it != admissions.end() and it->second > run.horizon) {
     return false;
   }
   if (run.options.all) {
@@ -166,8 +372,9 @@ auto catalog_state::is_rebuild_candidate(const uuid& partition,
                static_cast<double>(partition_capacity) * undersized_threshold);
 }
 
-auto catalog_state::select_rebuild_batch(rebuild_run& run)
+auto catalog_state::select_rebuild_batch(rebuild_run& run, time now)
   -> std::vector<partition_info> {
+  run.deferred = 0;
   if (run.selected >= run.options.max_partitions) {
     return {};
   }
@@ -180,7 +387,8 @@ auto catalog_state::select_rebuild_batch(rebuild_run& run)
   // what the automatic source uses -- would select everything anyway, so we
   // skip the lookup rather than walking every synopsis for it.
   auto matching = Option<std::unordered_set<uuid>>{None{}};
-  if (run.options.expression != trivially_true_expression()) {
+  if (not run.groups
+      and run.options.expression != trivially_true_expression()) {
     auto candidates = lookup(run.options.expression);
     if (not candidates) {
       // An invalid filter must fail the run, not masquerade as "matched
@@ -200,84 +408,95 @@ auto catalog_state::select_rebuild_batch(rebuild_run& run)
       }
     }
   }
-  // Group the eligible partitions by their complete schema type, not its
-  // name: schema evolution leaves distinct layouts sharing one name, and the
-  // transformer splits its outputs by type anyway -- a name-keyed batch of two
-  // such layouts would emit two still-undersized outputs and rewrite them
-  // again on every pass, forever. Groups are tried in name order (fingerprint
-  // breaking ties) and partitions within one oldest first, so that selection
-  // is deterministic and a batch merges data that arrived close together.
-  auto eligible = std::unordered_map<type, std::vector<partition_info>>{};
-  for (const auto& [schema, partitions] : *synopses_per_type) {
-    for (const auto& [id, synopsis] : *partitions) {
-      if (matching and not matching->contains(id)) {
-        continue;
-      }
-      if (not is_rebuild_candidate(id, *synopsis, run)) {
-        continue;
-      }
-      auto& partition = eligible[schema].emplace_back(id, *synopsis);
-      // Seed the per-schema estimate from every candidate, not just the ones
-      // that end up in this batch: one measurable partition is what lets its
-      // unmeasurable siblings be sized, and without that they are each assumed
-      // to fill the whole budget and never share a batch.
-      learn_size_estimate(run, partition);
-    }
-  }
-  auto groups = std::vector<type>{};
-  groups.reserve(eligible.size());
-  for (const auto& [schema, partitions] : eligible) {
-    groups.push_back(schema);
-  }
-  std::ranges::sort(groups, [](const type& lhs, const type& rhs) {
-    if (const auto order = lhs.name() <=> rhs.name(); order != 0) {
-      return order < 0;
-    }
-    return lhs.make_fingerprint() < rhs.make_fingerprint();
-  });
-  const auto remaining = run.options.max_partitions - run.selected;
-  for (const auto& group : groups) {
-    auto& partitions = eligible[group];
-    const auto schema_name = group.name();
-    std::ranges::sort(partitions, {}, &partition_info::max_import_time);
-    // A partition that fills the budget by itself but is not worth a lone
-    // rewrite must not block its schema: skipping past it lets the smaller
-    // siblings behind it form a batch, instead of every pass hitting the
-    // same blocker forever.
-    for (auto first = partitions.begin(); first != partitions.end(); ++first) {
-      auto batch = std::vector<partition_info>{};
-      auto events = size_t{0};
-      auto bytes = uint64_t{0};
-      for (auto it = first; it != partitions.end(); ++it) {
-        const auto& partition = *it;
-        if (events >= partition_capacity or batch.size() >= remaining) {
-          break;
-        }
-        const auto partition_bytes
-          = estimate_approx_bytes(run, partition, budget);
-        if (not batch.empty()
-            and detail::saturating_add(bytes, partition_bytes) > budget) {
-          // Skip the candidate that does not fit rather than ending the
-          // batch: an oversized partition in the middle of the age order
-          // must not hide the smaller siblings behind it, which may well
-          // complete this batch.
+  if (not run.groups) {
+    auto eligible
+      = std::unordered_map<type,
+                           std::map<int64_t, std::vector<partition_info>>>{};
+    for (auto const& [schema, partitions] : *synopses_per_type) {
+      for (auto const& [id, synopsis] : *partitions) {
+        if (run.collected_groups
+            and not run.collected_groups->contains(
+              {schema, rebuild_day(synopsis->max_import_time)})) {
           continue;
         }
-        bytes = detail::saturating_add(bytes, partition_bytes);
-        events += partition.events;
-        batch.push_back(partition);
+        if ((matching and not matching->contains(id))
+            or not is_rebuild_candidate(id, *synopsis, run)) {
+          continue;
+        }
+        auto& info = eligible[schema][rebuild_day(synopsis->max_import_time)]
+                       .emplace_back(id, *synopsis);
+        learn_size_estimate(run, info);
       }
-      if (batch.empty()) {
-        break;
+    }
+    auto schemas = std::vector<type>{};
+    for (auto const& [schema, days] : eligible) {
+      schemas.push_back(schema);
+    }
+    std::ranges::sort(schemas, [](type const& lhs, type const& rhs) {
+      if (auto order = lhs.name() <=> rhs.name(); order != 0) {
+        return order < 0;
       }
-      if (batch.size() == 1
-          and not is_worth_rebuilding_alone(run, batch.front())) {
+      return lhs.make_fingerprint() < rhs.make_fingerprint();
+    });
+    run.groups.emplace();
+    for (auto const& schema : schemas) {
+      for (auto& [day, partitions] : eligible[schema]) {
+        std::ranges::sort(partitions, {}, &partition_info::max_import_time);
+        run.groups->emplace_back(std::make_move_iterator(partitions.begin()),
+                                 std::make_move_iterator(partitions.end()));
+      }
+    }
+  }
+  auto const remaining = run.options.max_partitions - run.selected;
+  for (auto& group : *run.groups) {
+    auto batch = std::vector<partition_info>{};
+    auto events = size_t{0};
+    auto bytes = uint64_t{0};
+    for (auto it = group.begin(); it != group.end();) {
+      auto current = it++;
+      auto const& partition = *current;
+      auto synopsis = find_synopsis(partition.uuid);
+      if (not synopsis
+          or not is_rebuild_candidate(partition.uuid, *synopsis, run)) {
+        group.erase(current);
         continue;
       }
-      TENZIR_VERBOSE("{} selected {} partition(s) of schema {} for rebuild "
-                     "with {} events and {} estimated bytes (budget: {})",
-                     catalog_state::name, batch.size(), schema_name, events,
-                     bytes, budget);
+      if (in_transformation.contains(partition.uuid)
+          or retiring.contains(partition.uuid)
+          or blocks_rebuild(partition.uuid, *synopsis, now)) {
+        ++run.deferred;
+        continue;
+      }
+      if (quarantined_partitions.contains(partition.uuid)) {
+        group.erase(current);
+        continue;
+      }
+      auto const estimate = estimate_approx_bytes(run, partition, budget);
+      if (not batch.empty()
+          and (detail::saturating_add(bytes, estimate) > budget
+               or detail::saturating_add(events, partition.events)
+                    > partition_capacity)) {
+        // ponytail: Greedy packing can miss fitting pairs. Use a Pareto
+        // frontier only if measured fragmentation warrants the complexity.
+        if (batch.size() == 1
+            and not is_worth_rebuilding_alone(run, batch.front())
+            and estimate <= bytes and partition.events <= events) {
+          batch.front() = partition;
+          bytes = estimate;
+          events = partition.events;
+        }
+        continue;
+      }
+      batch.push_back(partition);
+      bytes = detail::saturating_add(bytes, estimate);
+      events = detail::saturating_add(events, partition.events);
+      if (events >= partition_capacity or batch.size() >= remaining) {
+        break;
+      }
+    }
+    if (batch.size() > 1
+        or (batch.size() == 1
+            and is_worth_rebuilding_alone(run, batch.front()))) {
       return batch;
     }
   }
@@ -321,21 +540,20 @@ auto catalog_state::begin_rebuild(rebuild_options options) -> caf::error {
   }
   // Number every run, so a superseded run's continuations can tell that the
   // accounting they are about to touch is no longer theirs.
-  static auto generation = uint64_t{0};
   rebuild.emplace();
-  rebuild->generation = ++generation;
+  rebuild->generation = last_rebuild ? last_rebuild->generation + 1 : 1;
   rebuild->options = std::move(options);
-  // A manual run only considers what already exists, so that it terminates
-  // while data keeps arriving. The automatic source deliberately does not.
-  if (not rebuild->options.automatic) {
-    rebuild->horizon = time::clock::now();
+  // Automatic runs use the closed hour; manual runs include the open hour.
+  rebuild->horizon
+    = rebuild->options.automatic ? closed_admission : admission_sequence;
+  if (rebuild->options.automatic) {
+    rebuild->collected_groups = std::exchange(closed_rebuild_groups, {});
   }
   TENZIR_DEBUG("{} starts a{} rebuild of {}{} partitions with {} thread(s)",
                *self, rebuild->options.automatic ? "n automatic" : " manual",
                rebuild->options.all ? "all" : "outdated",
                rebuild->options.undersized ? " and undersized" : "",
                rebuild->options.parallel);
-  schedule_rebuild();
   return {};
 }
 
@@ -346,6 +564,7 @@ auto catalog_state::start_rebuild(rebuild_options options)
     return error;
   }
   if (detached) {
+    advance_maintenance(time::clock::now());
     return {};
   }
   // The run may be queued behind the automatic run's in-flight batches; the
@@ -356,13 +575,10 @@ auto catalog_state::start_rebuild(rebuild_options options)
     pending_rebuild_waiters.push_back(rp);
     return rp;
   }
-  // `schedule_rebuild` may have finished the run already, and a caller does
-  // not want to wait for one that has not.
-  if (not rebuild) {
-    return {};
-  }
+  TENZIR_ASSERT(rebuild);
   auto rp = self->make_response_promise<void>();
   rebuild->stop_requests.push_back(rp);
+  advance_maintenance(time::clock::now());
   return rp;
 }
 
@@ -409,6 +625,8 @@ void catalog_state::finish_rebuild() {
   // grows with the number of partitions it touched, so it does not stay
   // resident for the lifetime of the node.
   run.visited = {};
+  run.groups = None{};
+  run.collected_groups = None{};
   run.approx_bytes_per_event = {};
   last_rebuild = std::move(run);
   for (auto& rp : stop_requests) {
@@ -432,24 +650,18 @@ void catalog_state::finish_rebuild() {
       }
       return;
     }
-    // The queued run may have found nothing to do and finished on the spot.
-    if (not rebuild) {
-      for (auto& rp : waiters) {
-        rp.deliver();
-      }
-      return;
-    }
+    TENZIR_ASSERT(rebuild);
     for (auto& rp : waiters) {
       rebuild->stop_requests.push_back(std::move(rp));
     }
   }
 }
 
-void catalog_state::schedule_rebuild() {
+void catalog_state::schedule_rebuild(time now) {
   TENZIR_ASSERT(rebuild);
   while (not rebuild->stopping
          and rebuild->running < rebuild->options.parallel) {
-    auto batch = select_rebuild_batch(*rebuild);
+    auto batch = select_rebuild_batch(*rebuild, now);
     if (batch.empty()) {
       break;
     }
@@ -464,167 +676,163 @@ void catalog_state::schedule_rebuild() {
     ++rebuild->running;
     rebuild->running_partitions += size;
     auto pipeline = rebuild_pipeline(batch.front().schema, desired_batch_size);
-    // Go through the handler rather than calling `apply` directly: it returns
-    // a promise, and this is the one place that needs a continuation on it.
-    self
-      ->mail(atom::apply_v, std::move(pipeline), std::move(batch),
-             keep_original_partition::no, std::string{"rebuild"}, std::string{})
-      .request(caf::actor_cast<catalog_actor>(self), caf::infinite)
-      .then(
-        [this, size, batch_ids,
-         generation = rebuild->generation](partition_apply_result& result) {
-          if (not rebuild or rebuild->generation != generation) {
-            // A later run replaced ours. Its accounting is not ours to settle:
-            // decrementing its `running` would wrap the counter and wedge it.
-            return;
+    // Claim and dispatch in the same actor turn as selection.
+    transform(
+      std::move(pipeline), std::move(batch), keep_original_partition::no,
+      std::string{"rebuild"}, std::string{},
+      [this, size, batch_ids,
+       generation = rebuild->generation](partition_apply_result& result) {
+        if (not rebuild or rebuild->generation != generation) {
+          // A later run replaced ours. Its accounting is not ours to settle:
+          // decrementing its `running` would wrap the counter and wedge it.
+          return;
+        }
+        --rebuild->running;
+        rebuild->running_partitions -= size;
+        // A transformer may stop at its memory budget. Return untouched
+        // inputs and their allowance to this run.
+        if (result.input_partitions.size() < batch_ids.size()) {
+          rebuild->groups = None{};
+          auto consumed = std::unordered_set<uuid>{};
+          for (const auto& partition : result.input_partitions) {
+            consumed.insert(partition.uuid);
           }
-          --rebuild->running;
-          rebuild->running_partitions -= size;
-          // The transformer stops consuming when its memory budget fills, and
-          // `apply` refuses partitions another transform claimed in the
-          // meantime. Either way the leftovers are untouched, so hand them
-          // back to selection -- allowance included -- instead of counting
-          // them as done.
-          if (result.input_partitions.size() < batch_ids.size()) {
-            auto consumed = std::unordered_set<uuid>{};
-            for (const auto& partition : result.input_partitions) {
-              consumed.insert(partition.uuid);
-            }
-            for (const auto& id : batch_ids) {
-              if (not consumed.contains(id)) {
-                rebuild->visited.erase(id);
-                --rebuild->selected;
-              }
+          for (const auto& id : batch_ids) {
+            if (not consumed.contains(id)) {
+              rebuild->visited.erase(id);
+              --rebuild->selected;
             }
           }
-          for (const auto& partition : result.output_partitions) {
-            learn_size_estimate(*rebuild, partition);
-            // The output is a fresh partition that may well match the run's
-            // filter again. Marking it visited is what bounds the run.
-            rebuild->visited.insert(partition.uuid);
-          }
-          rebuild->transformed += result.input_partitions.size();
-          rebuild->results += result.output_partitions.size();
-          // A mismatch means another transform took part of the batch out from
-          // under this one. `apply` refuses overlaps, so the batch is simply
-          // smaller than selected; there is nothing to repair.
-          const auto events = [](const auto& partitions) {
-            return std::transform_reduce(partitions.begin(), partitions.end(),
-                                         size_t{}, std::plus<>{},
-                                         [](const partition_info& partition) {
-                                           return partition.events;
-                                         });
-          };
-          if (events(result.input_partitions)
-              != events(result.output_partitions)) {
-            TENZIR_WARN("{} rebuilt {} events from {} partitions into {} "
-                        "events in {} partitions",
-                        *self, events(result.input_partitions),
-                        result.input_partitions.size(),
-                        events(result.output_partitions),
-                        result.output_partitions.size());
-          }
-          schedule_rebuild_or_finish();
-        },
-        [this, size, batch_ids,
-         generation = rebuild->generation](caf::error& error) {
-          if (not rebuild or rebuild->generation != generation) {
-            return;
-          }
-          --rebuild->running;
-          rebuild->running_partitions -= size;
-          // The transformer blames a store decode failure on the partition it
-          // came from, so we can quarantine exactly the culprit instead of
-          // treating the whole batch as suspect. Without the quarantine the
-          // next pass would select it again and fail the same way forever.
-          if (const auto corrupt = store_error_partition(error)) {
-            TENZIR_WARN("{} quarantines partition {} after a rebuild failure: "
-                        "{}",
-                        *self, *corrupt, error);
-            ++rebuild->quarantined;
-            quarantined_partitions[*corrupt] = fmt::to_string(error);
-            report_quarantine(*corrupt, error);
-            // The quarantine itself can fail -- a refused retirement, a
-            // failed marker write. The partition then stays active and a
-            // later selection may hit it again, which retries the quarantine;
-            // what must not happen is counting it as handled in silence. The
-            // request counts as running work: finishing the run before the
-            // marker is durable could hand the caller a success whose
-            // quarantined tally the still-pending operation later disproves.
-            ++rebuild->running;
-            self
-              ->mail(atom::erase_v, atom::extract_v, *corrupt,
-                     fmt::to_string(error))
-              .request(caf::actor_cast<catalog_actor>(self), caf::infinite)
-              .then(
-                [this, generation](atom::done) {
-                  // The marker is durable and the file operations are on
-                  // their way; nothing further to track here.
-                  if (rebuild and rebuild->generation == generation) {
-                    --rebuild->running;
-                    schedule_rebuild_or_finish();
+        }
+        for (const auto& partition : result.output_partitions) {
+          learn_size_estimate(*rebuild, partition);
+          // The output is a fresh partition that may well match the run's
+          // filter again. Marking it visited is what bounds the run.
+          rebuild->visited.insert(partition.uuid);
+        }
+        rebuild->transformed += result.input_partitions.size();
+        rebuild->results += result.output_partitions.size();
+        const auto events = [](const auto& partitions) {
+          return std::transform_reduce(partitions.begin(), partitions.end(),
+                                       size_t{}, std::plus<>{},
+                                       [](const partition_info& partition) {
+                                         return partition.events;
+                                       });
+        };
+        if (events(result.input_partitions)
+            != events(result.output_partitions)) {
+          TENZIR_WARN("{} rebuilt {} events from {} partitions into {} "
+                      "events in {} partitions",
+                      *self, events(result.input_partitions),
+                      result.input_partitions.size(),
+                      events(result.output_partitions),
+                      result.output_partitions.size());
+        }
+        advance_maintenance(time::clock::now());
+      },
+      [this, size, batch_ids,
+       generation = rebuild->generation](caf::error& error) {
+        if (not rebuild or rebuild->generation != generation) {
+          return;
+        }
+        --rebuild->running;
+        rebuild->running_partitions -= size;
+        // The transformer blames a store decode failure on the partition it
+        // came from, so we can quarantine exactly the culprit instead of
+        // treating the whole batch as suspect. Without the quarantine the
+        // next pass would select it again and fail the same way forever.
+        if (const auto corrupt = store_error_partition(error)) {
+          TENZIR_WARN("{} quarantines partition {} after a rebuild failure: "
+                      "{}",
+                      *self, *corrupt, error);
+          ++rebuild->quarantined;
+          quarantined_partitions[*corrupt] = fmt::to_string(error);
+          report_quarantine(*corrupt, error);
+          // The quarantine itself can fail -- a refused retirement, a
+          // failed marker write. The partition then stays active and a
+          // later selection may hit it again, which retries the quarantine;
+          // what must not happen is counting it as handled in silence. The
+          // request counts as running work: finishing the run before the
+          // marker is durable could hand the caller a success whose
+          // quarantined tally the still-pending operation later disproves.
+          ++rebuild->running;
+          self
+            ->mail(atom::erase_v, atom::extract_v, *corrupt,
+                   fmt::to_string(error))
+            .request(caf::actor_cast<catalog_actor>(self), caf::infinite)
+            .then(
+              [this, generation](atom::done) {
+                // The marker is durable and the file operations are on
+                // their way; nothing further to track here.
+                if (rebuild and rebuild->generation == generation) {
+                  --rebuild->running;
+                  advance_maintenance(time::clock::now());
+                }
+              },
+              [this, corrupt = *corrupt,
+               generation](caf::error& quarantine_error) {
+                TENZIR_WARN("{} failed to quarantine partition {}: {}", *self,
+                            corrupt, quarantine_error);
+                quarantined_partitions.erase(corrupt);
+                if (rebuild and rebuild->generation == generation) {
+                  --rebuild->quarantined;
+                  --rebuild->running;
+                  // Retrying would loop: selection would pick the corrupt
+                  // partition again, fail the same way, and land back
+                  // here. Wind the run down and report why -- the
+                  // partition stays active and the next run retries the
+                  // quarantine.
+                  rebuild->stopping = true;
+                  if (not rebuild->failure) {
+                    rebuild->failure = quarantine_error;
                   }
-                },
-                [this, corrupt = *corrupt,
-                 generation](caf::error& quarantine_error) {
-                  TENZIR_WARN("{} failed to quarantine partition {}: {}", *self,
-                              corrupt, quarantine_error);
-                  quarantined_partitions.erase(corrupt);
-                  if (rebuild and rebuild->generation == generation) {
-                    --rebuild->quarantined;
-                    --rebuild->running;
-                    // Retrying would loop: selection would pick the corrupt
-                    // partition again, fail the same way, and land back
-                    // here. Wind the run down and report why -- the
-                    // partition stays active and the next run retries the
-                    // quarantine.
-                    rebuild->stopping = true;
-                    if (not rebuild->failure) {
-                      rebuild->failure = quarantine_error;
-                    }
-                    schedule_rebuild_or_finish();
-                  }
-                });
-            // The rest of the batch is unchanged in the catalog and only
-            // failed by association. Un-visiting it -- allowance included, or
-            // a batch that exhausted `max_partitions` could never retry --
-            // hands it back to selection, so one corrupt store does not
-            // exempt its batch mates from the run.
-            for (const auto& id : batch_ids) {
-              if (id != *corrupt) {
-                rebuild->visited.erase(id);
-                --rebuild->selected;
-              }
-            }
-          } else {
-            // Anything else -- a failed write, a failed rename -- is not
-            // progress, and retrying it blind would likely fail the same way.
-            // Wind the run down and report the failure to whoever waits on
-            // it, rather than delivering a success that silently skipped
-            // these partitions.
-            TENZIR_WARN("{} stops the rebuild after failing to rebuild {} "
-                        "partitions: {}",
-                        *self, size, error);
-            rebuild->stopping = true;
-            if (not rebuild->failure) {
-              rebuild->failure = error;
+                  advance_maintenance(time::clock::now());
+                }
+              });
+          // The rest of the batch is unchanged in the catalog and only
+          // failed by association. Un-visiting it -- allowance included, or
+          // a batch that exhausted `max_partitions` could never retry --
+          // hands it back to selection, so one corrupt store does not
+          // exempt its batch mates from the run.
+          rebuild->groups = None{};
+          for (const auto& id : batch_ids) {
+            if (id != *corrupt) {
+              rebuild->visited.erase(id);
+              --rebuild->selected;
             }
           }
-          schedule_rebuild_or_finish();
-        });
+        } else {
+          // Anything else -- a failed write, a failed rename -- is not
+          // progress, and retrying it blind would likely fail the same way.
+          // Wind the run down and report the failure to whoever waits on
+          // it, rather than delivering a success that silently skipped
+          // these partitions.
+          TENZIR_WARN("{} stops the rebuild after failing to rebuild {} "
+                      "partitions: {}",
+                      *self, size, error);
+          rebuild->stopping = true;
+          if (not rebuild->failure) {
+            rebuild->failure = error;
+          }
+        }
+        advance_maintenance(time::clock::now());
+      });
   }
   if (rebuild->running == 0) {
+    if (rebuild->options.automatic and rebuild->deferred > 0
+        and not rebuild->stopping) {
+      return;
+    }
+    if (rebuild->deferred > 0 and not rebuild->options.automatic
+        and not rebuild->failure) {
+      rebuild->failure = caf::make_error(
+        ec::busy,
+        fmt::format("rebuild deferred {} partition(s) to storage "
+                    "policy or existing maintenance; retry after it finishes",
+                    rebuild->deferred));
+    }
     finish_rebuild();
   }
-}
-
-void catalog_state::schedule_rebuild_or_finish() {
-  TENZIR_ASSERT(rebuild);
-  if (rebuild->stopping and rebuild->running == 0) {
-    finish_rebuild();
-    return;
-  }
-  schedule_rebuild();
 }
 
 void catalog_state::report_quarantine(const uuid& partition,
@@ -655,6 +863,7 @@ auto catalog_state::describe_rebuild_run(const rebuild_run& run) -> record {
        {"transformed", run.transformed},
        {"results", run.results},
        {"quarantined", run.quarantined},
+       {"deferred", run.deferred},
      }},
     {"options",
      record{
@@ -672,6 +881,12 @@ auto catalog_state::describe_rebuild_run(const rebuild_run& run) -> record {
 
 auto catalog_state::rebuild_status() const -> record {
   auto result = record{};
+  if (rebuild_zone) {
+    result["timezone"] = std::string{rebuild_zone->name()};
+  }
+  if (maintenance_ready) {
+    result["next-collection"] = next_collection;
+  }
   if (rebuild) {
     result["current-run"] = describe_rebuild_run(*rebuild);
   }
@@ -691,7 +906,7 @@ auto catalog_state::rebuild_status() const -> record {
   return result;
 }
 
-// -- the disk budget loop -----------------------------------------------------
+// -- disk budget decisions ----------------------------------------------------
 
 auto catalog_state::parked_bytes() const -> uint64_t {
   auto result = uint64_t{0};
@@ -719,22 +934,14 @@ auto catalog_state::deleting_bytes() const -> uint64_t {
   return result;
 }
 
-auto catalog_state::evicting_bytes() const -> uint64_t {
-  auto result = uint64_t{0};
-  for (const auto& [partition, footprint] : evicting_inputs) {
-    result += footprint;
-  }
-  return result;
-}
-
 auto catalog_state::eviction_weight_of(const uuid& partition,
-                                       const partition_synopsis& synopsis) const
-  -> double {
-  const auto age = std::chrono::duration<double>{time::clock::now()
-                                                 - synopsis.max_import_time}
-                     .count();
+                                       const partition_synopsis& synopsis,
+                                       time now) const -> double {
+  const auto age
+    = std::chrono::duration<double>{now - synopsis.max_import_time}.count();
   if (policy) {
-    if (const auto weighted = policy->eviction_weight(partition, synopsis)) {
+    if (const auto weighted
+        = policy->eviction_weight(partition, synopsis, now)) {
       return *weighted;
     }
   }
@@ -747,7 +954,7 @@ auto catalog_state::eviction_weight_of(const uuid& partition,
 }
 
 auto catalog_state::select_eviction_batch(
-  size_t limit, const std::unordered_set<uuid>& excluded) const
+  size_t limit, const std::unordered_set<uuid>& excluded, time now) const
   -> std::vector<uuid> {
   if (limit == 0) {
     return {};
@@ -772,7 +979,7 @@ auto catalog_state::select_eviction_batch(
       if (excluded.contains(partition)) {
         continue;
       }
-      candidates.emplace_back(eviction_weight_of(partition, *synopsis),
+      candidates.emplace_back(eviction_weight_of(partition, *synopsis, now),
                               partition);
     }
   }
@@ -793,6 +1000,9 @@ auto catalog_state::select_eviction_batch(
 void catalog_state::measure_space() {
   TENZIR_ASSERT(not measuring_space);
   measuring_space = true;
+  auto const generation = storage_generation;
+  auto const stable
+    = active_transformers.empty() and deleting.empty() and retiring.empty();
   // `compute_dbdir_size` walks the whole database, or shells out to an
   // external binary. The disk monitor could block on that because nothing
   // else went through it; the catalog answers candidate lookups, so the scan
@@ -813,240 +1023,225 @@ void catalog_state::measure_space() {
   self->mail(atom::get_v)
     .request(worker, caf::infinite)
     .then(
-      [this, worker](uint64_t size) {
+      [this, worker, generation, stable](uint64_t size) {
         self->send_exit(worker, caf::exit_reason::user_shutdown);
         measuring_space = false;
-        on_space_measured(size);
+        if (stable and generation == storage_generation
+            and active_transformers.empty() and deleting.empty()
+            and retiring.empty()) {
+          on_space_measured(size);
+        } else {
+          // A directory walk is not a snapshot. Retain the last reconciled
+          // overhead instead of interpreting partially moved files as growth.
+          advance_maintenance(time::clock::now());
+        }
       },
       [this, worker](caf::error& error) {
         self->send_exit(worker, caf::exit_reason::user_shutdown);
         measuring_space = false;
-        // Abandon the pass rather than keep deleting blind: without a
-        // measurement there is no way to tell when to stop.
-        evicting = false;
+        // Keep the last reconciled overhead; live resource accounting still
+        // advances independently of this failed directory walk.
         TENZIR_WARN("{} failed to measure the size of {}: {}", *self,
                     paths.database_dir, error);
+        advance_maintenance(time::clock::now());
       });
 }
 
 void catalog_state::on_space_measured(uint64_t size) {
+  auto const known = catalog_bytes + parked_bytes() + deleting_bytes();
+  external_bytes = size - std::min(size, known);
   dbdir_size = size;
-  // Partitions that are erased but still pinned keep their files until the
-  // last reader drops, and partitions whose deletion is in flight keep theirs
-  // until the filesystem actor gets to them. Both are already on their way
-  // out, so counting them against the budget would make one pressure episode
-  // erase far more than it needs to while freeing nothing yet.
-  const auto pending = parked_bytes() + deleting_bytes() + evicting_bytes();
-  const auto effective = size - std::min(size, pending);
-  // A pass that has started runs down to the low water mark; otherwise the
-  // node would sit just under the high mark and re-trigger constantly.
-  const auto threshold = evicting ? maintenance.space.low_water_mark
-                                  : maintenance.space.high_water_mark;
-  if (effective <= threshold) {
-    if (evicting) {
-      TENZIR_VERBOSE("{} is back under its disk budget at {} bytes", *self,
-                     effective);
-      evicting = false;
-    }
+  space_reconciled = true;
+  advance_maintenance(time::clock::now());
+}
+
+void catalog_state::enforce_disk_budget(time now) {
+  eviction_pending.clear();
+  if (maintenance.space.high_water_mark == 0
+      or maintenance.space.scan_interval <= std::chrono::seconds::zero()
+      or not space_reconciled or now < eviction_retry_at) {
     return;
   }
-  // Deferred victims -- a full pool, a broken or previously failed pipeline --
-  // must not shadow the actionable partitions ranked behind them, or a single
-  // stuck heavyweight would starve the budget forever. Excluding them and
-  // selecting again walks down the ranking until something can act or the
-  // candidates run out.
-  auto deferred_victims = std::unordered_set<uuid>{};
-  auto started_transform = false;
-  auto selected_any = false;
-  auto to_retire = std::vector<uuid>{};
-  while (not started_transform and to_retire.empty()) {
-    const auto batch
-      = select_eviction_batch(maintenance.space.step_size, deferred_victims);
-    if (batch.empty()) {
-      break;
-    }
-    selected_any = true;
-    evicting = true;
-    TENZIR_VERBOSE("{} evicts {} partition(s) to get from {} bytes under {}",
-                   *self, batch.size(), effective, threshold);
-    for (const auto& partition : batch) {
-      switch (run_eviction_action(partition)) {
-        case eviction_outcome::started:
-          started_transform = true;
-          continue;
-        case eviction_outcome::deferred:
-          deferred_victims.insert(partition);
-          continue;
-        case eviction_outcome::none:
-          break;
-      }
-      to_retire.push_back(partition);
+  // Only live data and non-partition bytes need further reclamation. Parked
+  // and deleting files are still physical usage, but already spoken for.
+  auto const live = detail::saturating_add(catalog_bytes, external_bytes);
+  dbdir_size = detail::saturating_add(
+    live, detail::saturating_add(parked_bytes(), deleting_bytes()));
+  auto promised = uint64_t{0};
+  for (auto const& id : retiring) {
+    if (auto synopsis = find_synopsis(id)) {
+      promised += synopsis->store_file.size + synopsis->indexes_file.size
+                  + synopsis->sketches_file.size;
     }
   }
-  if (not started_transform and to_retire.empty()) {
-    if (not selected_any) {
-      TENZIR_WARN("{} is over its disk budget at {} bytes but has no partition "
-                  "it may evict",
-                  *self, effective);
-    } else {
-      // Every candidate is waiting on the compaction pool or on its own
-      // pipeline. Measuring again now would walk the whole database only to
-      // reach the same conclusion, over and over until a slot frees. The scan
-      // interval brings us back.
-      TENZIR_VERBOSE("{} found no eviction it can start yet; waiting for the "
-                     "next scan",
-                     *self);
-    }
+  auto const effective = live - std::min(live, promised);
+  auto const threshold = evicting ? maintenance.space.low_water_mark
+                                  : maintenance.space.high_water_mark;
+  if (effective <= threshold) {
     evicting = false;
     return;
   }
-  if (to_retire.empty()) {
-    // Only rewrites started. Their inputs are credited, so measuring now is
-    // sound, and their completion triggers another measurement anyway.
-    measure_space();
+  evicting = true;
+  auto const outstanding = retiring.size() + deleting.size() + eviction_running;
+  if (outstanding >= maintenance.space.step_size) {
     return;
   }
-  // Retirements run asynchronously -- a tombstone write, then the file
-  // deletions -- and until each one's continuation runs, its partition is
-  // still in the catalog. Measuring immediately would re-select the very same
-  // victims (or, with a persistently failing marker write, spin full database
-  // scans against the same failure without ever waiting for the scan
-  // interval). So the victims are excluded from selection while they retire,
-  // and the next measurement starts when the batch has settled.
-  auto counter = detail::make_fanout_counter(
-    to_retire.size(),
-    [this] {
-      if (not measuring_space) {
-        measure_space();
+  auto planned = uint64_t{0};
+  auto slots = maintenance.space.step_size - outstanding;
+  // Order once per decision, including protected victims. Repeated top-k
+  // scans would turn a long protected prefix into quadratic work.
+  for (auto const& id :
+       select_eviction_batch(std::numeric_limits<size_t>::max(), {}, now)) {
+    if (slots == 0
+        or effective - std::min(effective, planned)
+             <= maintenance.space.low_water_mark) {
+      break;
+    }
+    auto const synopsis = find_synopsis(id);
+    if (not synopsis) {
+      continue;
+    }
+    auto const outcome = run_eviction_action(id);
+    if (outcome != eviction_outcome::none) {
+      eviction_pending.insert(id);
+      if (outcome == eviction_outcome::started) {
+        --slots;
       }
-    },
-    [this](caf::error&&) {
-      // At least one retirement failed; its victim is selectable again. Let
-      // the scan interval bring us back rather than retrying in a tight loop
-      // against the same broken filesystem.
-      TENZIR_VERBOSE("{} pauses eviction until the next scan after a failed "
-                     "retirement",
-                     *self);
-      evicting = false;
-    });
-  for (const auto& partition : to_retire) {
-    retiring.insert(partition);
-    self->mail(atom::erase_v, partition)
+      // A rewrite's reclamation is unknown. Do not credit its entire input.
+      continue;
+    }
+    planned += synopsis->store_file.size + synopsis->indexes_file.size
+               + synopsis->sketches_file.size;
+    retiring.insert(id);
+    --slots;
+    self->mail(atom::erase_v, id)
       .request(caf::actor_cast<catalog_actor>(self), caf::infinite)
       .then(
-        [this, partition, counter](atom::done) {
-          retiring.erase(partition);
+        [this, id](atom::done) {
+          retiring.erase(id);
           ++evicted;
-          counter->receive_success();
+          advance_maintenance(time::clock::now());
         },
-        [this, partition, counter](caf::error& error) {
-          retiring.erase(partition);
-          TENZIR_WARN("{} failed to evict partition {}: {}", *self, partition,
-                      error);
-          counter->receive_error(std::move(error));
+        [this, id](caf::error& error) {
+          retiring.erase(id);
+          eviction_retry_at
+            = time::clock::now() + maintenance.space.scan_interval;
+          TENZIR_WARN("{} failed to evict partition {}: {}", *self, id, error);
+          advance_maintenance(time::clock::now());
         });
   }
 }
 
 void catalog_state::release_compaction_slot() {
   TENZIR_ASSERT(compacting > 0);
-  // The single place a slot is given back, and therefore the single place
-  // that hands it to whoever waits. Order is priority: a named run first --
-  // its caller blocks on a promise -- then the periodic pass, which would
-  // otherwise process at most `compaction-slots` partitions per interval and
-  // fall permanently behind whenever more eligible partitions arrive per
-  // interval than that.
+  // The shared selector, not the completing source, assigns the freed slot.
   --compacting;
-  drain_named_rule();
-  // Only a pass that ran out of slots resumes here. Resuming unconditionally
-  // would let any released slot -- a named run's batch, an eviction rewrite --
-  // start temporal rules off-schedule and bypass the deliberate delay of the
-  // first pass after startup.
-  if (maintenance_pending) {
-    maintenance_pass();
-  }
+  advance_maintenance(time::clock::now());
 }
 
-void catalog_state::maintenance_pass() {
-  if (not policy) {
+void catalog_state::schedule_compaction(time now) {
+  if (not policy or policy->maintenance_interval() <= duration::zero()) {
     return;
   }
-  maintenance_pending = false;
-  // Walk the partitions and ask about each one. Selection is per partition and
-  // against live state, so a partition that becomes ineligible between two
-  // passes is simply not asked about again.
-  for (const auto& [schema, partitions] : *synopses_per_type) {
-    for (const auto& [partition, synopsis] : *partitions) {
-      if (compacting >= maintenance.compaction_slots) {
-        // The pool is full. What is left is not queued: the pass resumes with
-        // a fresh walk when a slot frees, so the work is re-decided against
-        // live state rather than replayed from a stale list.
-        maintenance_pending = true;
-        return;
-      }
-      if (in_transformation.contains(partition)) {
-        continue;
-      }
-      auto action = policy->maintenance_action(partition, *synopsis);
-      if (not action) {
-        continue;
-      }
-      run_maintenance_action(partition, std::move(*action));
+  // Classify every changed input before considering rebuild, even with no
+  // compaction capacity. A busy pool never turns a due policy into no policy.
+  for (auto const& id : std::exchange(policy_dirty, {})) {
+    auto synopsis = find_synopsis(id);
+    if (synopsis) {
+      next_policy_check = std::min(
+        next_policy_check, policy->maintenance_deadline(id, *synopsis, now));
     }
+    if (synopsis and policy->blocks_rebuild(id, *synopsis, now)) {
+      policy_pending.insert(id);
+    } else {
+      policy_pending.erase(id);
+    }
+  }
+  if (compacting >= maintenance.compaction_slots) {
+    return;
+  }
+  auto candidates
+    = std::vector<uuid>{policy_pending.begin(), policy_pending.end()};
+  for (auto const& id : candidates) {
+    if (compacting >= maintenance.compaction_slots) {
+      break;
+    }
+    if (in_transformation.contains(id) or retiring.contains(id)) {
+      continue;
+    }
+    auto synopsis = find_synopsis(id);
+    auto action = synopsis ? policy->maintenance_action(id, *synopsis, now)
+                           : Option<storage_action>{None{}};
+    if (not action) {
+      policy_pending.erase(id);
+      continue;
+    }
+    run_policy_action(id, std::move(*action));
   }
 }
 
-void catalog_state::run_maintenance_action(const uuid& partition,
-                                           storage_action action) {
+void catalog_state::run_policy_action(const uuid& partition,
+                                      storage_action action, bool eviction) {
   auto synopsis = find_synopsis(partition);
   if (not synopsis) {
     return;
   }
   auto batch = std::vector<partition_info>{};
   batch.emplace_back(partition, *synopsis);
+  auto const input_bytes = synopsis->store_file.size
+                           + synopsis->indexes_file.size
+                           + synopsis->sketches_file.size;
   ++compacting;
-  self
-    ->mail(atom::apply_v, std::move(action.pipeline), std::move(batch),
-           action.keep, action.origin,
-           policy ? policy->serialize_token(action.token) : std::string{})
-    .request(caf::actor_cast<catalog_actor>(self), caf::infinite)
-    .then(
-      [this, partition,
-       recorded = action.token](partition_apply_result& result) {
-        if (result.input_partitions.empty()) {
-          // Another transform claimed the partition first; nothing ran, so
-          // there is nothing to commit. Whatever replaces it gets its own
-          // look on the next pass.
-          release_compaction_slot();
-          return;
-        }
+  if (eviction) {
+    ++eviction_running;
+  }
+  transform(
+    std::move(action.pipeline), std::move(batch), action.keep, action.origin,
+    policy ? policy->serialize_token(action.token) : std::string{},
+    [this, partition, eviction, input_bytes, keep = action.keep,
+     recorded = action.token](partition_apply_result& result) {
+      if (eviction) {
+        --eviction_running;
+      }
+      if (result.input_partitions.empty()) {
+        // Nothing was consumed, so there is no policy result to commit.
+        release_compaction_slot();
+        return;
+      }
+      if (eviction) {
+        ++evicted;
+        record_eviction_result(partition, input_bytes, keep, result);
+      } else {
         ++compacted;
-        if (policy) {
-          policy->on_committed(recorded, partition, result.output_partitions);
-        }
-        if (policy and not result.marker.empty()) {
-          // The commit above lives only in policy memory plus this marker;
-          // the marker may go only once the flush *succeeds*. Per-commit
-          // flushes coalesce -- a flush during an in-flight write joins it.
-          release_marker_after_flush(std::filesystem::path{result.marker});
-        }
-        // A committed action can expose follow-up work on the same data: the
-        // replacement may be eligible for the next rule in line, and waiting
-        // for the next interval would delay every subsequent rule by a full
-        // period. Have the released slot walk again; a walk that starts
-        // nothing ends the cycle.
-        maintenance_pending = true;
-        release_compaction_slot();
-      },
-      [this, partition, recorded = action.token](caf::error& error) {
-        TENZIR_WARN("{} failed to run a maintenance action on partition {}: "
-                    "{}",
-                    *self, partition, error);
-        if (policy) {
-          policy->on_failed(recorded, partition, error);
-        }
-        release_compaction_slot();
-      });
+      }
+      if (policy) {
+        policy->on_committed(recorded, partition, result.output_partitions);
+      }
+      if (policy and not result.marker.empty()) {
+        // The commit above lives only in policy memory plus this marker;
+        // the marker may go only once the flush *succeeds*. Per-commit
+        // flushes coalesce -- a flush during an in-flight write joins it.
+        release_marker_after_flush(std::filesystem::path{result.marker});
+      }
+      // A committed action can expose follow-up work on the same data: the
+      // replacement may be eligible for the next rule in line, and waiting
+      // for the next interval would delay every subsequent rule by a full
+      // period. Have the released slot walk again; a walk that starts
+      // nothing ends the cycle.
+      release_compaction_slot();
+    },
+    [this, partition, eviction, recorded = action.token](caf::error& error) {
+      if (eviction) {
+        --eviction_running;
+      }
+      TENZIR_WARN("{} failed to run a maintenance action on partition {}: "
+                  "{}",
+                  *self, partition, error);
+      if (policy) {
+        policy->on_failed(recorded, partition, error);
+      }
+      release_compaction_slot();
+    });
 }
 
 auto catalog_state::run_named_rule(std::string rule,
@@ -1083,10 +1278,11 @@ auto catalog_state::run_named_rule(std::string rule,
   // mutate the very maps the walk is iterating.
   auto pending = std::vector<uuid>{};
   auto skipped = size_t{0};
+  auto const now = time::clock::now();
   for (const auto& [schema, partitions] : *synopses_per_type) {
     for (const auto& [partition, synopsis] : *partitions) {
       if (not policy->named_action(rule, older_than, newer_than, partition,
-                                   *synopsis)) {
+                                   *synopsis, now)) {
         continue;
       }
       if (in_transformation.contains(partition)) {
@@ -1116,11 +1312,11 @@ auto catalog_state::run_named_rule(std::string rule,
     .skipped = skipped,
     .promise = rp,
   });
-  drain_named_rule();
+  advance_maintenance(now);
   return rp;
 }
 
-void catalog_state::drain_named_rule() {
+void catalog_state::drain_named_rule(time now) {
   if (not named_run) {
     return;
   }
@@ -1136,7 +1332,7 @@ void catalog_state::drain_named_rule() {
       // Erased while the run was queued; the data is gone either way.
       continue;
     }
-    if (in_transformation.contains(partition)) {
+    if (in_transformation.contains(partition) or retiring.contains(partition)) {
       // Claimed while the run was queued; its replacement carries an id this
       // run never saw, so it counts as not covered.
       ++named_run->skipped;
@@ -1146,7 +1342,7 @@ void catalog_state::drain_named_rule() {
     // the history may have moved on in the meantime.
     auto action
       = policy->named_action(named_run->rule, named_run->older_than,
-                             named_run->newer_than, partition, *synopsis);
+                             named_run->newer_than, partition, *synopsis, now);
     if (not action) {
       continue;
     }
@@ -1154,39 +1350,34 @@ void catalog_state::drain_named_rule() {
     batch.emplace_back(partition, *synopsis);
     ++compacting;
     ++named_run->running;
-    self
-      ->mail(atom::apply_v, std::move(action->pipeline), std::move(batch),
-             action->keep, action->origin,
-             policy ? policy->serialize_token(action->token) : std::string{})
-      .request(caf::actor_cast<catalog_actor>(self), caf::infinite)
-      .then(
-        [this, partition,
-         recorded = action->token](partition_apply_result& result) {
-          if (result.input_partitions.empty()) {
-            // Another transform claimed the partition between the
-            // `in_transformation` check and this request: apply() refused it
-            // and ran nothing. Committing the token would record untouched
-            // data as processed, and the run would overstate its coverage.
-            ++named_run->skipped;
-            finish_named_rule_batch({});
-            return;
-          }
-          if (policy) {
-            policy->on_committed(recorded, partition, result.output_partitions);
-            if (not result.marker.empty()) {
-              release_marker_after_flush(std::filesystem::path{result.marker});
-            }
-          }
+    transform(
+      std::move(action->pipeline), std::move(batch), action->keep,
+      action->origin,
+      policy ? policy->serialize_token(action->token) : std::string{},
+      [this, partition,
+       recorded = action->token](partition_apply_result& result) {
+        if (result.input_partitions.empty()) {
+          // Do not record untouched input as processed.
+          ++named_run->skipped;
           finish_named_rule_batch({});
-        },
-        [this, partition, recorded = action->token](caf::error& error) {
-          TENZIR_WARN("{} failed to run a compaction rule on partition {}: {}",
-                      *self, partition, error);
-          if (policy) {
-            policy->on_failed(recorded, partition, error);
+          return;
+        }
+        if (policy) {
+          policy->on_committed(recorded, partition, result.output_partitions);
+          if (not result.marker.empty()) {
+            release_marker_after_flush(std::filesystem::path{result.marker});
           }
-          finish_named_rule_batch(std::move(error));
-        });
+        }
+        finish_named_rule_batch({});
+      },
+      [this, partition, recorded = action->token](caf::error& error) {
+        TENZIR_WARN("{} failed to run a compaction rule on partition {}: {}",
+                    *self, partition, error);
+        if (policy) {
+          policy->on_failed(recorded, partition, error);
+        }
+        finish_named_rule_batch(std::move(error));
+      });
   }
   if (named_run->running == 0 and named_run->pending.empty()) {
     // Every candidate went away before its turn came.
@@ -1254,8 +1445,32 @@ void catalog_state::finish_named_rule_batch(caf::error error) {
   release_compaction_slot();
 }
 
+void catalog_state::record_eviction_result(
+  uuid const& input, uint64_t input_bytes, keep_original_partition keep,
+  partition_apply_result const& result) {
+  auto output_bytes = uint64_t{0};
+  for (auto const& output : result.output_partitions) {
+    if (auto synopsis = find_synopsis(output.uuid)) {
+      output_bytes += synopsis->store_file.size + synopsis->indexes_file.size
+                      + synopsis->sketches_file.size;
+    }
+  }
+  if (keep == keep_original_partition::no and output_bytes < input_bytes) {
+    return;
+  }
+  if (keep == keep_original_partition::yes) {
+    eviction_suppressed.insert(input);
+  }
+  for (auto const& output : result.output_partitions) {
+    eviction_suppressed.insert(output.uuid);
+  }
+}
+
 auto catalog_state::run_eviction_action(const uuid& partition)
   -> eviction_outcome {
+  if (eviction_suppressed.contains(partition)) {
+    return eviction_outcome::deferred;
+  }
   if (not policy) {
     return eviction_outcome::none;
   }
@@ -1290,72 +1505,7 @@ auto catalog_state::run_eviction_action(const uuid& partition)
                  *self, partition);
     return eviction_outcome::deferred;
   }
-  auto batch = std::vector<partition_info>{};
-  batch.emplace_back(partition, *synopsis);
-  ++compacting;
-  // Credit the input's footprint for as long as the transform runs: a
-  // measurement taken in the meantime still sees its files, and without the
-  // credit the pass would start further evictions to reclaim bytes this
-  // rewrite is already reclaiming.
-  evicting_inputs[partition] = synopsis->store_file.size
-                               + synopsis->indexes_file.size
-                               + synopsis->sketches_file.size;
-  self
-    ->mail(atom::apply_v, std::move(action.pipeline), std::move(batch),
-           action.keep, action.origin,
-           policy ? policy->serialize_token(action.token) : std::string{})
-    .request(caf::actor_cast<catalog_actor>(self), caf::infinite)
-    .then(
-      [this, partition,
-       recorded = action.token](partition_apply_result& result) {
-        evicting_inputs.erase(partition);
-        if (result.input_partitions.empty()) {
-          // Another transform claimed the partition first; no bytes moved on
-          // this partition's account. Fall through to the re-measure below:
-          // the budget question is still open either way.
-          release_compaction_slot();
-          if (maintenance.space.high_water_mark > 0 and not measuring_space
-              and not evicting) {
-            measure_space();
-          }
-          return;
-        }
-        ++evicted;
-        if (policy) {
-          policy->on_committed(recorded, partition, result.output_partitions);
-          if (not result.marker.empty()) {
-            release_marker_after_flush(std::filesystem::path{result.marker});
-          }
-        }
-        release_compaction_slot();
-        // The pass may have ended while this transform ran: with the input's
-        // full footprint credited, the measurement can dip under the water
-        // mark even though the rewrite keeps most of those bytes. Measuring
-        // now that the truth is on disk lets the pass resume if the budget is
-        // in fact still exceeded, rather than waiting out the scan interval.
-        if (maintenance.space.high_water_mark > 0 and not measuring_space
-            and not evicting) {
-          measure_space();
-        }
-      },
-      [this, partition, recorded = action.token](caf::error& error) {
-        evicting_inputs.erase(partition);
-        TENZIR_WARN("{} failed to run the eviction action on partition {}: {}",
-                    *self, partition, error);
-        if (policy) {
-          policy->on_failed(recorded, partition, error);
-        }
-        release_compaction_slot();
-        // Same as the success path: a pass may have ended on this input's
-        // credited footprint, and the failure returns those bytes to the
-        // budget. Measuring now lets the pass resume -- and consider the
-        // victims ranked behind this one -- instead of waiting out the scan
-        // interval.
-        if (maintenance.space.high_water_mark > 0 and not measuring_space
-            and not evicting) {
-          measure_space();
-        }
-      });
+  run_policy_action(partition, std::move(action), true);
   return eviction_outcome::started;
 }
 
@@ -1370,7 +1520,7 @@ auto catalog_state::space_status() const -> record {
     {"evicted", evicted},
     {"parked-bytes", parked_bytes()},
     {"deleting-bytes", deleting_bytes()},
-    {"evicting-bytes", evicting_bytes()},
+    {"no-progress-partitions", eviction_suppressed.size()},
     {"high-water-mark", uint64_t{maintenance.space.high_water_mark}},
     {"low-water-mark", uint64_t{maintenance.space.low_water_mark}},
   };
