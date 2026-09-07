@@ -1,0 +1,12 @@
+{
+  value: "hello",
+  kind: "blob",
+}
+{
+  value: null,
+  kind: "blob",
+}
+{
+  value: "🚀",
+  kind: "blob",
+}

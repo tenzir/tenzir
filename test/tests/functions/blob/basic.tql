@@ -1,0 +1,5 @@
+from {text: "hello"},
+  {text: null.string()},
+  {text: "🚀"}
+data = blob(text)
+select value = data.string(), kind = type_of(data).kind
