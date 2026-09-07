@@ -1,0 +1,37 @@
+// Direct matching on the Azure activity log record and automatic matching on
+// its OCSF API Activity translation must agree. No library normalizer exists
+// yet for Azure activity logs, so this inline translation is the executable
+// definition of the paths the catalog inverts.
+from {
+  id: "direct",
+  operationName: "MICROSOFT.NETWORK/NETWORKSECURITYGROUPS/DELETE",
+  ResourceId: "/subscriptions/s1/resourceGroups/rg1/providers/Microsoft.Network/networkSecurityGroups/prod-nsg",
+  ResourceProviderValue: "MICROSOFT.NETWORK",
+}
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-azure-activity.yaml",
+      mapping="direct", format="plain"
+select id=event.id
+
+merge {
+from {
+  id: "automatic",
+  operationName: "MICROSOFT.NETWORK/NETWORKSECURITYGROUPS/DELETE",
+  ResourceId: "/subscriptions/s1/resourceGroups/rg1/providers/Microsoft.Network/networkSecurityGroups/prod-nsg",
+  ResourceProviderValue: "MICROSOFT.NETWORK",
+}
+class_uid = 6003
+activity_id = 4
+metadata = {
+  version: "1.9.0",
+  product: {name: "Azure Activity Log", vendor_name: "Microsoft"},
+}
+api = {
+  operation: operationName,
+  service: {name: ResourceProviderValue},
+}
+resources = [{uid: ResourceId}]
+drop operationName, ResourceId, ResourceProviderValue
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-azure-activity.yaml", format="plain"
+select id=event.id
+}
+sort id

@@ -1,0 +1,9 @@
+title: BITS Transfer From Direct IP Address
+logsource:
+  product: windows
+  service: bits-client
+detection:
+  selection:
+    EventID: 16403
+    RemoteName|re: '://[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'
+  condition: selection

@@ -1,0 +1,46 @@
+// Direct matching on the CloudTrail record and automatic matching on its OCSF
+// API Activity translation must agree. No library normalizer exists yet for
+// CloudTrail, so this inline translation is the executable definition of the
+// paths the catalog inverts.
+from {
+  id: "direct",
+  eventSource: "cloudtrail.amazonaws.com",
+  eventName: "StopLogging",
+  userAgent: "aws-cli/2.15.0",
+  userIdentity: {type: "IAMUser", arn: "arn:aws:iam::123456789012:user/alice"},
+  sourceIPAddress: 198.51.100.23,
+  awsRegion: "us-east-1",
+}
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-cloudtrail.yaml",
+      mapping="direct", format="plain"
+select id=event.id
+
+merge {
+from {
+  id: "automatic",
+  eventSource: "cloudtrail.amazonaws.com",
+  eventName: "StopLogging",
+  userAgent: "aws-cli/2.15.0",
+  userIdentity: {type: "IAMUser", arn: "arn:aws:iam::123456789012:user/alice"},
+  sourceIPAddress: 198.51.100.23,
+  awsRegion: "us-east-1",
+}
+class_uid = 6003
+activity_id = 4
+metadata = {
+  version: "1.9.0",
+  product: {name: "CloudTrail", vendor_name: "AWS"},
+}
+api = {
+  operation: eventName,
+  service: {name: eventSource},
+}
+http_request = {user_agent: userAgent}
+actor = {user: {type: userIdentity.type, uid: userIdentity.arn}}
+src_endpoint = {ip: sourceIPAddress}
+cloud = {provider: "AWS", region: awsRegion}
+drop eventSource, eventName, userAgent, userIdentity, sourceIPAddress, awsRegion
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-cloudtrail.yaml", format="plain"
+select id=event.id
+}
+sort id

@@ -1,0 +1,9 @@
+title: Beacon DNS A record
+logsource:
+  product: zeek
+  service: dns
+detection:
+  selection:
+    query|startswith: 'beacon.'
+    answers|contains: 'answer.example.test'
+  condition: selection

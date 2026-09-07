@@ -1,0 +1,35 @@
+// OCSF Detection Finding (2004) fixture events for the `sigma/windows/windefend`
+// mapping family. Commented events are near-miss negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 2004,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host", "security_control"], extensions: [{name: "win"}], event_code: "1116", log_name: "Microsoft-Windows-Windows Defender/Operational", product: {name: "Microsoft-Windows-Windows Defender", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  severity_id: 4,
+  disposition_id: 3,
+  finding_info: {title: "Trojan:Win32/Meterpreter.A", uid: "{d3}", types: ["Trojan"]},
+  malware: [{name: "Trojan:Win32/Meterpreter.A"}],
+  actor: {process: {path: "C:\\Windows\\System32\\svchost.exe", file: {path: "C:\\Windows\\System32\\svchost.exe", type_id: 1}}, user: {domain: "CORP", name: "alice"}},
+}
+{
+  id: "tamper",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 2004,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host", "security_control"], extensions: [{name: "win"}], event_code: "5001", log_name: "Microsoft-Windows-Windows Defender/Operational", product: {name: "Microsoft-Windows-Windows Defender", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  severity_id: 4,
+  finding_info: {title: "Windows Defender Real-Time Protection Disabled", uid: "1", types: ["Software: Antivirus"]},
+}
+// Guard must reject: a Sysmon-authored finding is a known other producer.
+{
+  id: "other-producer",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 2004,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "255", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  finding_info: {title: "Trojan:Win32/Meterpreter.A", uid: "{d4}"},
+}

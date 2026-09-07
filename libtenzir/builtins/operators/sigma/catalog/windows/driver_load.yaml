@@ -1,0 +1,49 @@
+id: sigma/windows/driver_load
+title: Windows driver load
+logsource:
+  category: driver_load
+  product: windows
+  service: sysmon
+  optional-service: true
+guard:
+  # Provenance-scoped fields such as EventID use the Sysmon namespace.
+  source: sysmon
+  class-uid: 1002
+  # Load.
+  activities: [1]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  ImageLoaded:
+    primitive: path
+    path: driver.file.path
+    kind: string
+  Hashes:
+    primitive: fingerprints
+    path: driver.file.hashes
+    notes: Never pairs an algorithm with another fingerprint's value.
+  SignatureStatus:
+    primitive: path
+    path: driver.file.signature.state_id
+    kind: integral
+    rule-value:
+      dictionary:
+        name: signature status
+        entries:
+          valid: 1
+          expired: 2
+          revoked: 3
+          untrusted: 6
+    notes: Translates the Sysmon status to the OCSF signature state; a rule with another status is skipped.
+  Signature:
+    primitive: path
+    path: driver.file.signature.certificate.issuer
+    kind: string
+    notes: Uses the signer name the normalizer stored as the certificate issuer.
+unmapped:
+  - field: Signed
+    reason: OCSF encodes signing as the presence of the signature object, not as a flag.

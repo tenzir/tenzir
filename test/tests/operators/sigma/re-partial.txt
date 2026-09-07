@@ -1,0 +1,12 @@
+{
+  rule: "Regex anchors still bind",
+  id: "ip-root",
+}
+{
+  rule: "Regex matches anywhere in the value",
+  id: "ip-root",
+}
+{
+  rule: "Regex matches anywhere in the value",
+  id: "ip-url",
+}

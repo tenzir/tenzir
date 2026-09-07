@@ -1,0 +1,10 @@
+title: Logon Via Seclogo Process
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4624
+    LogonType: 9
+    LogonProcessName: seclogo
+  condition: selection

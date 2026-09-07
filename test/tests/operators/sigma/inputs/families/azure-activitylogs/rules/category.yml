@@ -1,0 +1,9 @@
+title: Administrative Category Write
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  selection:
+    CategoryValue: Administrative
+    operationName|endswith: '/WRITE'
+  condition: selection

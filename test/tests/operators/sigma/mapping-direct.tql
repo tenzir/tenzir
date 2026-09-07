@@ -1,0 +1,23 @@
+from {
+  id: "literal",
+  class_uid: 1007,
+  metadata: {
+    version: "1.9.0",
+  },
+  Image: r"C:\Windows\System32\cmd.exe",
+  process: {
+    path: r"C:\Windows\System32\powershell.exe",
+  },
+}
+sigma rules=r#"
+title: Literal OCSF field
+logsource:
+  category: dns
+  product: linux
+  service: other
+detection:
+  selection:
+    Image|endswith: '\cmd.exe'
+  condition: selection
+"#, mapping="direct", format="plain"
+select id=event.id

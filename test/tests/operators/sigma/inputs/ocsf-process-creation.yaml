@@ -1,0 +1,21 @@
+title: Suspicious Command Shell From Services
+id: 1f2b3c4d-1111-2222-3333-444455556666
+logsource:
+  category: process_creation
+  product: windows
+  service: sysmon
+detection:
+  selection:
+    EventID: 1
+    ParentImage|endswith: '\services.exe'
+    Image|endswith: '\cmd.exe'
+    OriginalFileName: Cmd.Exe
+    CommandLine|contains|all:
+      - /c
+      - whoami
+    IntegrityLevel: High
+    Hashes|contains: SHA256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  filter_system:
+    User: NT AUTHORITY\SYSTEM
+  condition: selection and not filter_system
+level: high

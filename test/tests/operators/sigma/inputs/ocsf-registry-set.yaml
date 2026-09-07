@@ -1,0 +1,13 @@
+title: Suspicious Sysmon registry value
+logsource:
+  category: registry_set
+  product: windows
+  service: sysmon
+detection:
+  selection:
+    EventID: 13
+    TargetObject|endswith: '\Software\Acme\Run\Updater'
+    Details|contains: 'powershell.exe'
+    Image|endswith: '\reg.exe'
+    User: 'CORP\alice'
+  condition: selection

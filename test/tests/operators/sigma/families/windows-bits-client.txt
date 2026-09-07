@@ -1,0 +1,8 @@
+{
+  rule: "BITS Job Via Bitsadmin To Temp",
+  id: "match",
+}
+{
+  rule: "BITS Transfer From Direct IP Address",
+  id: "match",
+}

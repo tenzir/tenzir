@@ -1,0 +1,10 @@
+// The fixture events must be valid OCSF 1.9: a misspelled path would
+// otherwise only make a projection absent and silently skip the rule. The
+// baseline records only the warnings that deliberate near-miss negatives
+// (wrong class, unknown version) provoke.
+from_file f"{env("TENZIR_INPUTS")}/families/windows-bits-client/events.tql" {
+  read_tql
+}
+drop id
+ocsf_cast
+summarize events=count()

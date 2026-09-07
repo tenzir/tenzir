@@ -1,0 +1,87 @@
+id: sigma/windows/create_remote_thread
+title: Windows remote thread creation
+logsource:
+  category: create_remote_thread
+  product: windows
+  service: sysmon
+  optional-service: true
+guard:
+  # Provenance-scoped fields such as EventID use the Sysmon namespace.
+  source: sysmon
+  class-uid: 1007
+  # Inject.
+  activities: [4]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  SourceImage:
+    primitive: fallback
+    primary: actor.process.path
+    fallback: actor.process.file.path
+    kind: string
+    notes: Uses the acting process.
+  TargetImage:
+    primitive: fallback
+    primary: process.path
+    fallback: process.file.path
+    kind: string
+    notes: Uses the affected process.
+  SourceUser:
+    primitive: principal
+    domain: actor.user.domain
+    name: actor.user.name
+    evidence: actor.user
+  TargetUser:
+    primitive: principal
+    domain: process.user.domain
+    name: process.user.name
+    evidence: process.user
+  SourceProcessId:
+    primitive: path
+    path: actor.process.pid
+    kind: source-identifier
+    rule-value: stringify
+  TargetProcessId:
+    primitive: path
+    path: process.pid
+    kind: source-identifier
+    rule-value: stringify
+  SourceProcessGuid:
+    primitive: path
+    path: actor.process.uid
+    kind: string
+  TargetProcessGuid:
+    primitive: path
+    path: process.uid
+    kind: string
+  StartModule:
+    primitive: path
+    path: module.file.name
+    kind: string
+  StartFunction:
+    primitive: path
+    path: module.function_name
+    kind: string
+  StartAddress:
+    primitive: path
+    path: module.base_address
+    kind: string
+  TargetParentProcessId:
+    primitive: path
+    path: process.parent_process.pid
+    kind: source-identifier
+    rule-value: stringify
+  NewThreadId:
+    primitive: path
+    path: process.ptid
+    kind: source-identifier
+    rule-value: stringify
+unmapped:
+  - field: SourceParentImage
+    reason: The Process Activity mapping does not carry the acting process's parent.
+  - field: SourceCommandLine
+    reason: The Process Activity mapping does not carry the acting process command line.

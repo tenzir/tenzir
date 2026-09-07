@@ -1,0 +1,51 @@
+id: sigma/azure/riskdetection
+title: Entra ID Protection risk detections
+logsource:
+  product: azure
+  service: riskdetection
+guard:
+  class-uid: 2004
+  # Create.
+  activities: [1]
+fields:
+  riskEventType:
+    primitive: path
+    path: finding_info.title
+    kind: string
+  riskLevel:
+    primitive: path
+    path: risk_level_id
+    kind: integral
+    rule-value:
+      dictionary:
+        name: risk level
+        entries:
+          none: 0
+          low: 1
+          medium: 2
+          high: 3
+    notes: Translates the Entra risk level to the OCSF risk level; a rule with another level is skipped.
+  riskState:
+    primitive: path
+    path: status_id
+    kind: integral
+    rule-value:
+      dictionary:
+        name: risk state
+        entries:
+          atrisk: 1
+          confirmedcompromised: 1
+          confirmedsafe: 3
+          dismissed: 3
+          none: 4
+          remediated: 4
+    notes: Translates the Entra risk state to the OCSF finding status; a rule with another state is skipped.
+  riskDetail:
+    primitive: path
+    path: finding_info.desc
+    kind: string
+unmapped:
+  - field: userPrincipalName
+    reason: The Detection Finding mapping stores the user under evidences.
+  - field: ipAddress
+    reason: The Detection Finding mapping stores the source address under evidences.

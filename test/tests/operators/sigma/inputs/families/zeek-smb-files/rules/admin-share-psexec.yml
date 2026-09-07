@@ -1,0 +1,9 @@
+title: PsExec Service Binary Over Admin Share
+logsource:
+  product: zeek
+  service: smb_files
+detection:
+  selection:
+    name|endswith: 'ADMIN$'
+    path|endswith: 'PSEXESVC.exe'
+  condition: selection

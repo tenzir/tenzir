@@ -1,0 +1,8 @@
+title: Risky User Principal
+logsource:
+  product: azure
+  service: riskdetection
+detection:
+  selection:
+    userPrincipalName|endswith: '@corp.example'
+  condition: selection

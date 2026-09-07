@@ -101,7 +101,7 @@ TEST("merging") {
 
 TEST("parseable - simple sequential") {
   auto str = "type a = int64 type b = string type c = a"s;
-  module mod;
+  auto mod = module{};
   CHECK(parsers::module(str, mod));
   CHECK(mod.find("a"));
   CHECK(mod.find("b"));
@@ -114,7 +114,7 @@ TEST("parseable - toplevel comments") {
     type foo = int64
     // A comment a the end of the schema.
   )__";
-  module mod;
+  auto mod = module{};
   CHECK(parsers::module(str, mod));
   CHECK(mod.find("foo"));
 }
@@ -127,7 +127,7 @@ TEST("parseable - inline comments") {
     }                   // detail,
     type bar = int64    // jeez!
   )__";
-  module mod;
+  auto mod = module{};
   CHECK(parsers::module(str, mod));
   CHECK(mod.find("foo"));
   CHECK(mod.find("bar"));
@@ -153,7 +153,7 @@ TEST("module : zeek - style") {
       client_issuer_subject: string
     }
   )__";
-  module mod;
+  auto mod = module{};
   CHECK(parsers::module(str, mod));
   auto ssl = mod.find("zeek.ssl");
   REQUIRE(ssl);
@@ -171,7 +171,7 @@ TEST("schema : aliases") {
                type baz = bar
                type x = baz
              )__";
-  module mod;
+  auto mod = module{};
   CHECK(parsers::module(std::string{str}, mod));
   auto foo = mod.find("foo");
   REQUIRE(foo);
@@ -206,7 +206,7 @@ TEST("parseable - basic types global") {
       a10: t10,
     }
   )__";
-  module mod;
+  auto mod = module{};
   CHECK(parsers::module(std::string{str}, mod));
   CHECK(mod.find("t1"));
   CHECK(mod.find("t10"));
@@ -234,7 +234,7 @@ TEST("parseable - basic types local") {
       a10: subnet,
     }
   )__";
-  module mod;
+  auto mod = module{};
   CHECK(parsers::module(std::string{str}, mod));
   auto foo = mod.find("foo");
   REQUIRE(foo);
@@ -254,7 +254,7 @@ TEST("parseable - complex types global") {
       v: list_t,
     }
   )__";
-  module mod;
+  auto mod = module{};
   CHECK(parsers::module(std::string{str}, mod));
   auto enum_t = mod.find("enum_t");
   REQUIRE(enum_t);
@@ -277,7 +277,7 @@ TEST("parseable - out of order definitions") {
     }
     type foo = int64
   )__"sv;
-  module mod;
+  auto mod = module{};
   CHECK(parsers::module(str, mod));
   auto baz = unbox_pointer(mod.find("baz"));
   auto expected = type{

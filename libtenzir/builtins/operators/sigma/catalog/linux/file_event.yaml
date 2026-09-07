@@ -1,0 +1,53 @@
+id: sigma/linux/file_event
+title: Linux file creation
+logsource:
+  category: file_event
+  product: linux
+guard:
+  class-uid: 1001
+  # Create.
+  activities: [1]
+fields:
+  TargetFilename:
+    primitive: path
+    path: file.path
+    kind: string
+  Image:
+    primitive: fallback
+    primary: actor.process.path
+    fallback: actor.process.file.path
+    kind: string
+    notes: Uses the acting process.
+  CommandLine:
+    primitive: path
+    path: actor.process.cmd_line
+    kind: string
+    notes: Uses the acting process command line.
+  ParentImage:
+    primitive: fallback
+    primary: actor.process.parent_process.path
+    fallback: actor.process.parent_process.file.path
+    kind: string
+    notes: Uses the parent of the acting process.
+  ParentCommandLine:
+    primitive: path
+    path: actor.process.parent_process.cmd_line
+    kind: string
+  User:
+    primitive: principal
+    domain: actor.user.domain
+    name: actor.user.name
+    evidence: actor.user
+    notes: Uses the acting user, not the affected user.
+  ProcessId:
+    primitive: path
+    path: actor.process.pid
+    kind: source-identifier
+    rule-value: stringify
+  ProcessGuid:
+    primitive: path
+    path: actor.process.uid
+    kind: string
+unmapped:
+  - field: CreationUtcTime
+    reason: The File System Activity mapping stores the creation time as a timestamp, not as the Sysmon-rendered string.

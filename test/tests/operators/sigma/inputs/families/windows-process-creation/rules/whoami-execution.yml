@@ -1,0 +1,10 @@
+title: Whoami Execution
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: '\cmd.exe'
+    CommandLine|contains: whoami
+  condition: selection
+level: low

@@ -1,0 +1,10 @@
+title: Vulnerable Driver Loaded
+logsource:
+  category: driver_load
+  product: windows
+detection:
+  selection_path:
+    ImageLoaded|endswith: '\gdrv.sys'
+  selection_hash:
+    Hashes|contains: 'SHA256=0101010101010101010101010101010101010101010101010101010101010101'
+  condition: 1 of selection_*

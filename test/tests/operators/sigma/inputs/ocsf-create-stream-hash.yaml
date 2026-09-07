@@ -1,0 +1,9 @@
+title: Zone Identifier Stream On Download
+logsource:
+  category: create_stream_hash
+  product: windows
+detection:
+  selection:
+    TargetFilename|endswith: '.exe:Zone.Identifier'
+    Hash|contains: 'MD5=cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd'
+  condition: selection

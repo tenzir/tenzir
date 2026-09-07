@@ -1,0 +1,9 @@
+title: Member Added To Global Administrators
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    OperationName: 'Add member to group'
+    TargetResources.displayName|contains: 'Administrators'
+  condition: selection

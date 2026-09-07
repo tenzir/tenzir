@@ -1,0 +1,23 @@
+// OCSF File System Activity (1001) fixture events for the `sigma/linux/file_event`
+// mapping family. Commented events are near-miss negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 1001,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], event_code: "11", log_name: "Linux-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon"}},
+  device: {hostname: "srv01", os: {type_id: 200, name: "Linux"}},
+  file: {path: "/etc/cron.d/backdoor", type_id: 1},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "/usr/bin/vim", file: {path: "/usr/bin/vim", type_id: 8}}, user: {domain: "", name: "root"}},
+}
+// Guard must reject: a Windows host contradicts a Linux logsource.
+{
+  id: "windows",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 1001,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], event_code: "11", log_name: "Linux-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon"}},
+  device: {hostname: "ws01", os: {type_id: 100}},
+  file: {path: "/etc/cron.d/backdoor", type_id: 1},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "/usr/bin/vim", file: {path: "/usr/bin/vim", type_id: 8}}, user: {domain: "", name: "root"}},
+}

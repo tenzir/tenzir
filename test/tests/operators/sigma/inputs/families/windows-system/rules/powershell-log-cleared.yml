@@ -1,0 +1,10 @@
+title: PowerShell Event Log Cleared
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    EventID: 104
+    Provider_Name: 'Microsoft-Windows-Eventlog'
+    Channel: 'Microsoft-Windows-PowerShell/Operational'
+  condition: selection

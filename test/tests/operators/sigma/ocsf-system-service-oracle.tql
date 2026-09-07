@@ -1,0 +1,46 @@
+// Direct matching on the System-log-shaped record and automatic matching on
+// its OCSF Windows Service Activity translation must agree. The translation
+// mirrors the Service Control Manager normalizer: the provider becomes the
+// product name, the channel the log name, and ImagePath the service command
+// line.
+from {
+  id: "direct",
+  EventID: 7045,
+  Provider_Name: "Service Control Manager",
+  Channel: "System",
+  ServiceName: "evilsvc",
+  ImagePath: "%COMSPEC% /c powershell -nop -enc AAAA",
+  AccountName: "LocalSystem",
+}
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-system-service.yaml",
+      mapping="direct", format="plain"
+select id=event.id
+
+merge {
+from {
+  id: "automatic",
+  EventID: 7045,
+  Provider_Name: "Service Control Manager",
+  Channel: "System",
+  ServiceName: "evilsvc",
+  ImagePath: "%COMSPEC% /c powershell -nop -enc AAAA",
+  AccountName: "LocalSystem",
+}
+class_uid = 201004
+activity_id = 1
+metadata = {
+  version: "1.9.0",
+  event_code: string(EventID),
+  log_name: Channel,
+  product: {name: Provider_Name, vendor_name: "Microsoft"},
+}
+win_service = {
+  name: ServiceName,
+  cmd_line: ImagePath,
+  service_start_name: AccountName,
+}
+drop EventID, Provider_Name, Channel, ServiceName, ImagePath, AccountName
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-system-service.yaml", format="plain"
+select id=event.id
+}
+sort id

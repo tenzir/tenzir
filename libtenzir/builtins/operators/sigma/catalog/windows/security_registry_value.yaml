@@ -1,0 +1,66 @@
+id: sigma/windows/security_registry_value
+title: Windows Security registry value change
+logsource:
+  product: windows
+  service: security
+guard:
+  # Provenance-scoped fields such as EventID use the Security log namespace;
+  # the System log shares the source kind and is excluded by name.
+  source: windows_security
+  log-name: Security
+  conflicting-log-names: [System]
+  class-uid: 201002
+  # Set, Modify, and Delete.
+  activities: [2, 3, 4]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  SubjectUserName:
+    primitive: path
+    path: actor.user.name
+    kind: string
+  SubjectDomainName:
+    primitive: path
+    path: actor.user.domain
+    kind: string
+  SubjectUserSid:
+    primitive: path
+    path: actor.user.uid
+    kind: string
+  SubjectLogonId:
+    primitive: path
+    path: actor.session.uid_alt
+    kind: string
+  ObjectName:
+    primitive: path
+    path: reg_value.path
+    kind: string
+  ObjectValueName:
+    primitive: path
+    path: reg_value.name
+    kind: string
+  NewValue:
+    primitive: path
+    path: reg_value.data
+    notes: Reads the value data the normalizer stored, whatever its type.
+  OldValue:
+    primitive: path
+    path: prev_reg_value.data
+  NewValueType:
+    primitive: path
+    path: reg_value.type
+    kind: string
+  ProcessName:
+    primitive: fallback
+    primary: actor.process.path
+    fallback: actor.process.file.path
+    kind: string
+unmapped:
+  - field: OperationType
+    reason: The Registry Value Activity mapping folds the operation into the activity.
+  - field: ProcessId
+    reason: The source renders process identifiers in hexadecimal; OCSF stores integers.

@@ -1,0 +1,28 @@
+id: sigma/windows/ps_module
+title: Windows PowerShell module logging
+logsource:
+  category: ps_module
+  product: windows
+  service: powershell
+  optional-service: true
+guard:
+  # Provenance-scoped fields such as EventID use the PowerShell namespace.
+  source: powershell
+  class-uid: 1009
+  # Execute.
+  activities: [1]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  Payload:
+    primitive: path
+    path: script.script_content.value
+    kind: string
+    notes: Reads the pipeline payload as the script content.
+unmapped:
+  - field: ContextInfo
+    reason: The Script Activity mapping does not carry the module logging context.

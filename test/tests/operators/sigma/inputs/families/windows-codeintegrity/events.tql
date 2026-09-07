@@ -1,0 +1,39 @@
+// OCSF Application Lifecycle (6002) fixture events for the
+// `sigma/windows/codeintegrity_operational` mapping family. Commented events are
+// near-miss negatives.
+{
+  id: "blocked",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 6002,
+  activity_id: 3,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "3077", log_name: "Microsoft-Windows-CodeIntegrity/Operational", product: {name: "Microsoft-Windows-CodeIntegrity", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  status_id: 2,
+  status_detail: "Blocked by App Control policy",
+  severity_id: 3,
+  application: {name: "tool.exe", type: "Code Integrity", data: {file_path: "\\Device\\HarddiskVolume3\\Users\\alice\\Downloads\\tool.exe", requested_policy: 8, validated_policy: 1, policy_name: "Corporate WDAC"}},
+  actor: {process: {path: "\\Device\\HarddiskVolume3\\Windows\\explorer.exe", file: {path: "\\Device\\HarddiskVolume3\\Windows\\explorer.exe", type_id: 8}}},
+}
+{
+  id: "signing-level",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 6002,
+  activity_id: 3,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "3033", log_name: "Microsoft-Windows-CodeIntegrity/Operational", product: {name: "Microsoft-Windows-CodeIntegrity", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  status_id: 2,
+  application: {name: "nvspcap64.dll", type: "Code Integrity", data: {file_path: "\\Device\\HarddiskVolume3\\Windows\\System32\\nvspcap64.dll", requested_signing_level: 8, validated_signing_level: 1}},
+  actor: {process: {path: "\\Device\\HarddiskVolume3\\Program Files\\Firefox\\firefox.exe"}},
+}
+// Guard must reject: an AppLocker block is a known other producer for the
+// EventID rule.
+{
+  id: "applocker",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 6002,
+  activity_id: 3,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "8004", log_name: "Microsoft-Windows-AppLocker/EXE and DLL", product: {name: "Microsoft-Windows-AppLocker", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  status_id: 2,
+  application: {name: "tool.exe", data: {file_path: "%OSDRIVE%\\Users\\alice\\Downloads\\tool.exe"}},
+}

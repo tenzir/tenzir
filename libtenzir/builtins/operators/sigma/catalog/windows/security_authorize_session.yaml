@@ -1,0 +1,41 @@
+id: sigma/windows/security_authorize_session
+title: Windows Security special privilege assignment
+logsource:
+  product: windows
+  service: security
+guard:
+  # Provenance-scoped fields such as EventID use the Security log namespace;
+  # the System log shares the source kind and is excluded by name.
+  source: windows_security
+  log-name: Security
+  conflicting-log-names: [System]
+  class-uid: 3003
+  # Assign Privileges.
+  activities: [1]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  SubjectUserName:
+    primitive: path
+    path: user.name
+    kind: string
+  SubjectDomainName:
+    primitive: path
+    path: user.domain
+    kind: string
+  SubjectUserSid:
+    primitive: path
+    path: user.uid
+    kind: string
+  SubjectLogonId:
+    primitive: path
+    path: session.uid_alt
+    kind: string
+  PrivilegeList:
+    primitive: path
+    path: privileges
+    notes: A rule value matches when any assigned privilege matches.

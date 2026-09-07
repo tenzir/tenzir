@@ -1,0 +1,9 @@
+title: Driver Signed By Hardware Vendor
+logsource:
+  category: driver_load
+  product: windows
+detection:
+  selection:
+    Signature|contains: 'Giga-Byte'
+    SignatureStatus: 'Valid'
+  condition: selection

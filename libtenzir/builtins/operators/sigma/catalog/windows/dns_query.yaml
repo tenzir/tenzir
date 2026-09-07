@@ -1,0 +1,61 @@
+id: sigma/windows/dns_query
+title: Windows DNS query
+logsource:
+  category: dns_query
+  product: windows
+  service: sysmon
+  optional-service: true
+guard:
+  # Provenance-scoped fields such as EventID use the Sysmon namespace.
+  source: sysmon
+  class-uid: 4003
+  # Query, Response, and Traffic.
+  activities: [1, 2, 6]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  QueryName:
+    primitive: path
+    path: query.hostname
+    kind: string
+  QueryResults:
+    primitive: list-member
+    path: answers
+    member: rdata
+    rule-value: stringify
+    notes: A rule value matches when any answer matches; the Sysmon type prefixes and IPv4-in-IPv6 rendering are gone.
+  QueryStatus:
+    primitive: path
+    path: status_code
+    kind: source-identifier
+    rule-value: stringify
+  Image:
+    primitive: fallback
+    primary: actor.process.path
+    fallback: actor.process.file.path
+    kind: string
+    notes: Uses the acting process.
+  CommandLine:
+    primitive: path
+    path: actor.process.cmd_line
+    kind: string
+    notes: Uses the acting process command line.
+  User:
+    primitive: principal
+    domain: actor.user.domain
+    name: actor.user.name
+    evidence: actor.user
+    notes: Uses the acting user, not the affected user.
+  ProcessId:
+    primitive: path
+    path: actor.process.pid
+    kind: source-identifier
+    rule-value: stringify
+  ProcessGuid:
+    primitive: path
+    path: actor.process.uid
+    kind: string

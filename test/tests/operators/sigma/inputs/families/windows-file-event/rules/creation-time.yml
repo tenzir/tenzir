@@ -1,0 +1,9 @@
+title: Backdated File Creation
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|endswith: '.hta'
+    CreationUtcTime|startswith: '2010'
+  condition: selection

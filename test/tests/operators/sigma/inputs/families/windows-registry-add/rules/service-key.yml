@@ -1,0 +1,9 @@
+title: New Service Registry Key
+logsource:
+  category: registry_add
+  product: windows
+detection:
+  selection:
+    EventType: 'CreateKey'
+    TargetObject|contains: '\CurrentControlSet\Services\'
+  condition: selection

@@ -1,0 +1,10 @@
+title: Defender Detection Of Meterpreter
+logsource:
+  product: windows
+  service: windefend
+detection:
+  selection:
+    EventID: 1116
+    Threat_Name|contains: 'Meterpreter'
+    ProcessName|endswith: '\svchost.exe'
+  condition: selection

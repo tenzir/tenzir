@@ -1,0 +1,10 @@
+title: User Added To Domain Admins
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4728
+    TargetUserName: 'Domain Admins'
+    MemberName|contains: 'CN=support'
+  condition: selection

@@ -1,0 +1,17 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/windows-windefend/rules/config-change.yml' for OCSF input
+ --> tests/operators/sigma/families/windows-windefend.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/windows-windefend/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `NewValue`
+  = note: field `NewValue` is unmapped: Defender configuration changes carry the new value only in the finding title.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "Defender Detection Of Meterpreter",
+  id: "match",
+}
+{
+  rule: "Defender Real-Time Protection Disabled",
+  id: "tamper",
+}

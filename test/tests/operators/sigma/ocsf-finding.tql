@@ -1,0 +1,11 @@
+from_file f"{env("TENZIR_INPUTS")}/ocsf-process-events.json" {
+  read_json
+}
+where id == "match"
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-process-creation.yaml"
+select input_id=evidences[0].data.id,
+       input_class_uid=evidences[0].data.class_uid,
+       input_process=evidences[0].data.process,
+       observables,
+       trace=evidences[1].sigma.trace,
+       fields=evidences[1].sigma.fields

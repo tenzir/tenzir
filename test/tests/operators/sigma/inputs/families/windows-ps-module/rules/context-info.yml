@@ -1,0 +1,8 @@
+title: Hidden PowerShell Host From Module Logging
+logsource:
+  category: ps_module
+  product: windows
+detection:
+  selection:
+    ContextInfo|contains: ' -w hidden'
+  condition: selection

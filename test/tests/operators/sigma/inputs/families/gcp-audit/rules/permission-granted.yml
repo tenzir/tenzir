@@ -1,0 +1,8 @@
+title: GCP Permission Granted
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    data.protoPayload.authorizationInfo.granted: 'true'
+  condition: selection

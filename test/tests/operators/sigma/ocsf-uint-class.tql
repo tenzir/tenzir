@@ -1,0 +1,24 @@
+from {
+  id: "uint-class",
+  class_uid: uint(1007),
+  activity_id: uint(1),
+  metadata: {
+    version: "1.9.0",
+    event_code: "1",
+  },
+  process: {
+    path: r"C:\Windows\System32\cmd.exe",
+  },
+}
+sigma rules=r#"
+title: Unsigned OCSF identifiers
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    EventID: 1
+    Image|endswith: '\cmd.exe'
+  condition: selection
+"#, format="plain"
+select id=event.id

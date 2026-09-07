@@ -1,0 +1,123 @@
+{
+  input_id: "match",
+  input_class_uid: 1007,
+  input_process: {
+    path: "C:\\Windows\\System32\\cmd.exe",
+    cmd_line: "cmd.exe /c whoami",
+    integrity_id: 4,
+    user: {
+      domain: "CORP",
+      name: "alice",
+    },
+    file: {
+      internal_name: "Cmd.Exe",
+      hashes: [
+        {
+          algorithm_id: 3,
+          value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        },
+      ],
+    },
+    parent_process: {
+      path: "C:\\Windows\\System32\\services.exe",
+    },
+  },
+  observables: [
+    {
+      name: "evidences[0].data.metadata.event_code",
+      type_id: 0,
+      value: "1",
+    },
+    {
+      name: "evidences[0].data.process.parent_process.path",
+      type_id: 0,
+      value: "C:\\Windows\\System32\\services.exe",
+    },
+    {
+      name: "evidences[0].data.process.path",
+      type_id: 0,
+      value: "C:\\Windows\\System32\\cmd.exe",
+    },
+    {
+      name: "evidences[0].data.process.file.internal_name",
+      type_id: 0,
+      value: "Cmd.Exe",
+    },
+    {
+      name: "evidences[0].data.process.cmd_line",
+      type_id: 0,
+      value: "cmd.exe /c whoami",
+    },
+    {
+      name: "evidences[0].data.process.integrity_id",
+      type_id: 0,
+      value: "4",
+    },
+    {
+      name: "evidences[0].data.process.file.hashes",
+      type_id: 0,
+      value: "SHA256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    },
+  ],
+  trace: [
+    {
+      identifier: "selection",
+      matched: true,
+    },
+    {
+      identifier: "filter_system",
+      matched: false,
+    },
+  ],
+  fields: [
+    {
+      field: "EventID",
+      matcher: "equals",
+      case: "insensitive",
+      polarity: "positive",
+      value: "1",
+    },
+    {
+      field: "ParentImage",
+      matcher: "endswith",
+      case: "insensitive",
+      polarity: "positive",
+      value: "C:\\Windows\\System32\\services.exe",
+    },
+    {
+      field: "Image",
+      matcher: "endswith",
+      case: "insensitive",
+      polarity: "positive",
+      value: "C:\\Windows\\System32\\cmd.exe",
+    },
+    {
+      field: "OriginalFileName",
+      matcher: "equals",
+      case: "insensitive",
+      polarity: "positive",
+      value: "Cmd.Exe",
+    },
+    {
+      field: "CommandLine",
+      matcher: "contains",
+      case: "insensitive",
+      polarity: "positive",
+      value: "cmd.exe /c whoami",
+    },
+    {
+      field: "IntegrityLevel",
+      matcher: "equals",
+      case: "insensitive",
+      polarity: "positive",
+      value: "4",
+    },
+    {
+      field: "Hashes",
+      matcher: "contains",
+      case: "insensitive",
+      polarity: "positive",
+      value: "SHA256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    },
+  ],
+}

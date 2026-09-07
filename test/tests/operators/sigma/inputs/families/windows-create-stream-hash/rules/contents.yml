@@ -1,0 +1,8 @@
+title: Zone Identifier From Internet
+logsource:
+  category: create_stream_hash
+  product: windows
+detection:
+  selection:
+    Contents|contains: 'ZoneId=3'
+  condition: selection

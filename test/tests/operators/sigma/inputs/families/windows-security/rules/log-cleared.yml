@@ -1,0 +1,8 @@
+title: Security Log Cleared
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 1102
+  condition: selection

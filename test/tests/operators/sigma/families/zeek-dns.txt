@@ -1,0 +1,33 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/zeek-dns/rules/rejected-flags.yml' for OCSF input
+ --> tests/operators/sigma/families/zeek-dns.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/zeek-dns/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `Z`, `rejected`
+  = note: field `Z` is unmapped: The DNS Activity mapping does not preserve the Zeek authoritative flag.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "Beacon DNS A record",
+  id: "match",
+}
+{
+  rule: "NXDOMAIN answers from an external resolver",
+  id: "match",
+}
+{
+  rule: "Suspicious Zeek DNS answer",
+  id: "conflicting-log",
+}
+{
+  rule: "Suspicious Zeek DNS answer",
+  id: "conflicting-product",
+}
+{
+  rule: "Suspicious Zeek DNS answer",
+  id: "match",
+}
+{
+  rule: "Suspicious Zeek DNS answer",
+  id: "missing-log-name",
+}

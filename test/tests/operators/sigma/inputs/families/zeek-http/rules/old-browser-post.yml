@@ -1,0 +1,11 @@
+title: POST With Legacy Browser Agent
+logsource:
+  product: zeek
+  service: http
+detection:
+  selection:
+    method: POST
+    user_agent|contains: 'MSIE 6.0'
+    uri|endswith: '.php'
+    status_code: 200
+  condition: selection

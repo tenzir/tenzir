@@ -1,0 +1,12 @@
+title: CloudTrail Logging Stopped By IAM User
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: cloudtrail.amazonaws.com
+    eventName: StopLogging
+    userIdentity.type: IAMUser
+    userAgent|startswith: 'aws-cli'
+    errorCode: null
+  condition: selection

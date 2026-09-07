@@ -1,0 +1,40 @@
+// OCSF API Activity (6003) fixture events for the `sigma/aws/cloudtrail` mapping
+// family. Commented events are near-miss negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 6003,
+  activity_id: 4,
+  metadata: {version: "1.9.0", profiles: ["cloud"], log_name: "CloudTrail", product: {name: "CloudTrail", vendor_name: "AWS"}},
+  status_id: 1,
+  api: {operation: "StopLogging", service: {name: "cloudtrail.amazonaws.com"}, response: {}},
+  actor: {user: {type: "IAMUser", uid: "arn:aws:iam::123456789012:user/alice", name: "alice", account: {uid: "123456789012"}}, session: {is_mfa: false, issuer: "Role"}},
+  src_endpoint: {ip: 198.51.100.23},
+  http_request: {user_agent: "aws-cli/2.15.0"},
+  cloud: {provider: "AWS", region: "us-east-1", account: {uid: "123456789012"}},
+}
+{
+  id: "denied",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 6003,
+  activity_id: 2,
+  metadata: {version: "1.9.0", profiles: ["cloud"], log_name: "CloudTrail", product: {name: "CloudTrail", vendor_name: "AWS"}},
+  status_id: 2,
+  api: {operation: "GetSecretValue", service: {name: "secretsmanager.amazonaws.com"}, response: {error: "AccessDenied", error_message: "User is not authorized"}},
+  actor: {user: {type: "AssumedRole", uid: "arn:aws:sts::123456789012:assumed-role/dev/session"}},
+  src_endpoint: {ip: 198.51.100.23},
+  http_request: {user_agent: "Boto3/1.34"},
+  cloud: {provider: "AWS", region: "eu-west-1"},
+}
+// Projection must not match: a service principal performs the call.
+{
+  id: "service-principal",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 6003,
+  activity_id: 4,
+  metadata: {version: "1.9.0", profiles: ["cloud"], log_name: "CloudTrail", product: {name: "CloudTrail", vendor_name: "AWS"}},
+  status_id: 1,
+  api: {operation: "StopLogging", service: {name: "cloudtrail.amazonaws.com"}},
+  actor: {user: {type: "AWSService", name: "config.amazonaws.com"}},
+  cloud: {provider: "AWS"},
+}

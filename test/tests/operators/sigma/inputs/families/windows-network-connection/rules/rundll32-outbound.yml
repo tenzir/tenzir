@@ -1,0 +1,14 @@
+title: Rundll32 Outbound Connection On Unusual Port
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Image|endswith: '\rundll32.exe'
+    Initiated: 'true'
+    DestinationPort: 4444
+  filter_local:
+    DestinationIp|cidr:
+      - '10.0.0.0/8'
+      - '192.168.0.0/16'
+  condition: selection and not filter_local

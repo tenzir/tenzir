@@ -1,0 +1,7 @@
+title: Regex matches anywhere in the value
+logsource:
+  product: test
+detection:
+  selection:
+    RemoteName|re: '://[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'
+  condition: selection

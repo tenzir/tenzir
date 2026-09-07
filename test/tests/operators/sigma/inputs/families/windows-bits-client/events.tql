@@ -1,0 +1,27 @@
+// OCSF HTTP Activity (4002) fixture events for the `sigma/windows/bits_client`
+// mapping family. Commented events are near-miss negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 4002,
+  activity_id: 99,
+  activity_name: "Transfer",
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "16403", log_name: "Microsoft-Windows-Bits-Client/Operational", product: {name: "Microsoft-Windows-Bits-Client", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  http_request: {url: {url_string: "http://198.51.100.7/updates/backdoor.exe", scheme: "http", hostname: "198.51.100.7", path: "/updates/backdoor.exe"}},
+  file: {path: "C:\\Users\\alice\\AppData\\Local\\Temp\\update.exe", name: "update.exe", type_id: 1},
+  actor: {process: {pid: 5124, path: "C:\\Windows\\System32\\bitsadmin.exe", file: {path: "C:\\Windows\\System32\\bitsadmin.exe", type_id: 8}}},
+  connection_info: {direction_id: 2},
+}
+// Projection must not match: a Windows Update download.
+{
+  id: "windows-update",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 4002,
+  activity_id: 99,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "16403", log_name: "Microsoft-Windows-Bits-Client/Operational", product: {name: "Microsoft-Windows-Bits-Client", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  http_request: {url: {url_string: "https://download.windowsupdate.com/c/msdownload/update.cab", hostname: "download.windowsupdate.com"}},
+  file: {path: "C:\\Windows\\SoftwareDistribution\\Download\\update.cab"},
+  actor: {process: {path: "C:\\Windows\\System32\\svchost.exe"}},
+}

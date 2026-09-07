@@ -7,4 +7,5 @@ mixed-source rollback: ok
 retained identity resolution: ok
 external filter refresh on retained target: ok
 broken-filter retention: ok
+OCSF schema plan lifecycle: ok
 failure warning count: 1 per revision

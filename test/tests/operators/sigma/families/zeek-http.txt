@@ -1,0 +1,13 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/zeek-http/rules/mime.yml' for OCSF input
+ --> tests/operators/sigma/families/zeek-http.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/zeek-http/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `resp_mime_types`
+  = note: field `resp_mime_types` is unmapped: The HTTP Activity mapping does not preserve response MIME types.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "POST With Legacy Browser Agent",
+  id: "match",
+}

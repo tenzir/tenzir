@@ -1,0 +1,47 @@
+// OCSF Entity Management (3004) fixture events for the `sigma/windows/firewall_as`
+// mapping family. Commented events are near-miss negatives.
+{
+  id: "rule-added",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 3004,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host", "security_control"], extensions: [{name: "win"}], event_code: "2004", log_name: "Microsoft-Windows-Windows Firewall With Advanced Security/Firewall", product: {name: "Microsoft-Windows-Windows Firewall With Advanced Security", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  entity: {uid: "{8736B31E}", name: "Remote Support", type_id: 99, type: "Firewall Rule", data: {application_path: "C:\\Users\\alice\\AppData\\Local\\Temp\\support.exe", direction: "Inbound", direction_id: 1, action: "Allow", action_id: 3, protocol: "TCP", protocol_num: 6, local_ports: "4444", remote_ports: "*", profiles: "2147483647", active: true, edge_traversal: false}},
+  firewall_rule: {uid: "{8736B31E}", name: "Remote Support", type: "Inbound", condition: "Allow"},
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001"}, process: {path: "C:\\Windows\\System32\\netsh.exe", file: {path: "C:\\Windows\\System32\\netsh.exe", type_id: 8}}},
+}
+// Projection must not match: a block rule added by the Defender service.
+{
+  id: "defender-block",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 3004,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host", "security_control"], extensions: [{name: "win"}], event_code: "2004", log_name: "Microsoft-Windows-Windows Firewall With Advanced Security/Firewall", product: {name: "Microsoft-Windows-Windows Firewall With Advanced Security", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  entity: {uid: "{1}", name: "Block Telnet", type_id: 99, type: "Firewall Rule", data: {application_path: "C:\\Windows\\System32\\telnet.exe", action_id: 2, direction_id: 1, protocol_num: 6}},
+  actor: {process: {path: "C:\\ProgramData\\Microsoft\\Windows Defender\\Platform\\4.18\\MsMpEng.exe"}},
+}
+// Guard must reject: a Security-log firewall change is a known other producer
+// for the EventID rule.
+{
+  id: "security-firewall",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 3004,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4946", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  entity: {uid: "{2}", name: "Remote Support", type_id: 99, type: "Firewall Rule"},
+}
+// Guard must reject: an unrelated Entity Management producer whose free-form
+// `entity.data` payload happens to carry a colliding `action_id`. The raw
+// firewall codes only mean something for the Windows Firewall producer.
+{
+  id: "okta-collision",
+  time: 2024-05-01T12:00:03Z,
+  class_uid: 3004,
+  activity_id: 3,
+  metadata: {version: "1.9.0", product: {name: "Okta System Log", vendor_name: "Okta"}, log_name: "okta"},
+  entity: {uid: "0oa1b2c3", name: "Remote Support", type_id: 99, type: "AppInstance", data: {action_id: 3, direction_id: 1, protocol_num: 6, application_path: "C:\\Users\\alice\\AppData\\Local\\Temp\\support.exe"}},
+  actor: {user: {uid: "00u1", name: "alice"}},
+}

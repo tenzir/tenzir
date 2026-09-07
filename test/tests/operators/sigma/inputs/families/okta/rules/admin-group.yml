@@ -1,0 +1,9 @@
+title: User Added To Okta Administrators
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType: group.user_membership.add
+    displayMessage|contains: 'group'
+  condition: selection

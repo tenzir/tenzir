@@ -1,0 +1,8 @@
+title: Known Tool Deleted Itself
+logsource:
+  category: file_delete
+  product: windows
+detection:
+  selection:
+    Hashes|contains: 'SHA256=abababababababababababababababababababababababababababababababab'
+  condition: selection

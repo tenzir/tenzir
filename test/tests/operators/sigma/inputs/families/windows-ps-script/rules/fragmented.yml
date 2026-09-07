@@ -1,0 +1,8 @@
+title: Fragmented Script Block
+logsource:
+  category: ps_script
+  product: windows
+detection:
+  selection:
+    MessageTotal|gt: 1
+  condition: selection

@@ -1,0 +1,4 @@
+{
+  rule: "AppleScript Execution From Shell",
+  id: "match",
+}

@@ -1,0 +1,13 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/windows-pipe-created/rules/pipe-type.yml' for OCSF input
+ --> tests/operators/sigma/families/windows-pipe-created.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/windows-pipe-created/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `EventType`
+  = note: field `EventType` is unmapped: The Windows Resource Activity mapping does not distinguish pipe creation from connection.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "Cobalt Strike Post Exploitation Pipe",
+  id: "match",
+}

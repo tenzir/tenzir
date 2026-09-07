@@ -1,0 +1,52 @@
+// Direct matching on the Sysmon-shaped record and automatic matching on its
+// OCSF Network Activity translation must agree. The translation mirrors the
+// Sysmon network connection normalizer: the boolean Initiated becomes the
+// connection direction, and the endpoints move into OCSF endpoint objects.
+from {
+  id: "direct",
+  EventID: 3,
+  Image: r"C:\Windows\System32\rundll32.exe",
+  Initiated: true,
+  Protocol: "tcp",
+  DestinationIp: 203.0.113.10,
+  DestinationPort: 4444,
+  DestinationHostname: "c2.example.test",
+}
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-network-connection.yaml",
+      mapping="direct", format="plain"
+select id=event.id
+
+merge {
+from {
+  id: "automatic",
+  EventID: 3,
+  Image: r"C:\Windows\System32\rundll32.exe",
+  Initiated: true,
+  Protocol: "tcp",
+  DestinationIp: 203.0.113.10,
+  DestinationPort: 4444,
+  DestinationHostname: "c2.example.test",
+}
+class_uid = 4001
+activity_id = 1
+metadata = {
+  version: "1.9.0",
+  event_code: string(EventID),
+  log_name: "Microsoft-Windows-Sysmon/Operational",
+  product: {name: "Microsoft-Windows-Sysmon"},
+}
+connection_info = {
+  direction_id: 2 if Initiated else 1,
+  protocol_name: Protocol,
+}
+dst_endpoint = {
+  ip: DestinationIp,
+  port: DestinationPort,
+  hostname: DestinationHostname,
+}
+actor = {process: {path: Image}}
+drop EventID, Image, Initiated, Protocol, DestinationIp, DestinationPort, DestinationHostname
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-network-connection.yaml", format="plain"
+select id=event.id
+}
+sort id

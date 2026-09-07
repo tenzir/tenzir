@@ -1,0 +1,47 @@
+id: sigma/azure/activitylogs
+title: Azure activity log
+logsource:
+  product: azure
+  service: activitylogs
+guard:
+  class-uid: 6003
+  # Create, Read, Update, and Delete.
+  activities: [1, 2, 3, 4]
+fields:
+  operationName:
+    primitive: path
+    path: api.operation
+    kind: string
+  OperationNameValue:
+    primitive: path
+    path: api.operation
+    kind: string
+  ResourceProviderValue:
+    primitive: path
+    path: api.service.name
+    kind: string
+  ResourceId:
+    primitive: list-member
+    path: resources
+    member: uid
+    notes: A rule value matches when any affected resource matches.
+  properties.message:
+    primitive: path
+    path: message
+    kind: string
+  CallerIpAddress:
+    primitive: path
+    path: src_endpoint.ip
+  Caller:
+    primitive: path
+    path: actor.user.email_addr
+    kind: string
+  ActivityStatusValue:
+    primitive: path
+    path: status
+    kind: string
+unmapped:
+  - field: CategoryValue
+    reason: The API Activity mapping does not preserve the activity log category.
+  - field: Category
+    reason: The API Activity mapping does not preserve the activity log category.

@@ -1,0 +1,28 @@
+// OCSF Network Activity (4001) fixture events for the
+// `sigma/linux/network_connection` mapping family. Commented events are
+// near-miss negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 4001,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], event_code: "3", log_name: "Linux-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon"}},
+  device: {hostname: "srv01", os: {type_id: 200, name: "Linux"}},
+  connection_info: {direction_id: 2, protocol_name: "tcp", protocol_num: 6, protocol_ver_id: 4},
+  src_endpoint: {ip: 10.0.0.42, port: 51515, hostname: "ws01.corp.example"},
+  dst_endpoint: {ip: 203.0.113.10, port: 4444, hostname: "c2.example.test"},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "/usr/bin/python3", file: {path: "/usr/bin/python3", type_id: 8}}, user: {domain: "", name: "www-data"}},
+}
+// Projection must not match: inbound.
+{
+  id: "inbound",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 4001,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], event_code: "3", log_name: "Linux-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon"}},
+  device: {hostname: "srv01", os: {type_id: 200, name: "Linux"}},
+  connection_info: {direction_id: 1, protocol_name: "tcp", protocol_num: 6, protocol_ver_id: 4},
+  src_endpoint: {ip: 10.0.0.42, port: 51515, hostname: "ws01.corp.example"},
+  dst_endpoint: {ip: 203.0.113.10, port: 4444, hostname: "c2.example.test"},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "/usr/bin/python3", file: {path: "/usr/bin/python3", type_id: 8}}, user: {domain: "", name: "www-data"}},
+}

@@ -325,6 +325,26 @@ foreach (source IN LISTS libtenzir_builtins_sources)
   endif ()
 endforeach ()
 
+# Embed the declarative Sigma OCSF mapping catalog. Each YAML document under
+# builtins/operators/sigma/catalog/ becomes one embedded string in a
+# generated translation unit that the sigma builtin parses at startup.
+file(GLOB_RECURSE libtenzir_sigma_catalog_documents CONFIGURE_DEPENDS
+     "${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/sigma/catalog/*.yaml")
+list(SORT libtenzir_sigma_catalog_documents)
+set(libtenzir_sigma_catalog_output
+    "${CMAKE_CURRENT_BINARY_DIR}/sigma_catalog_data.cpp")
+add_custom_command(
+  OUTPUT "${libtenzir_sigma_catalog_output}"
+  COMMAND
+    "${CMAKE_COMMAND}"
+    "-DINPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/sigma/catalog"
+    "-DOUTPUT=${libtenzir_sigma_catalog_output}" -P
+    "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/TenzirEmbedSigmaCatalog.cmake"
+  DEPENDS ${libtenzir_sigma_catalog_documents}
+          "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/TenzirEmbedSigmaCatalog.cmake"
+  COMMENT "Embedding the Sigma OCSF mapping catalog")
+list(APPEND libtenzir_builtins_sources "${libtenzir_sigma_catalog_output}")
+
 file(GLOB_RECURSE libtenzir_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/include/tenzir/*.hpp")

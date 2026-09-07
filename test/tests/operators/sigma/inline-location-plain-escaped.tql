@@ -1,0 +1,12 @@
+// A plain string with escapes decodes to fewer characters than it occupies,
+// so offsets into the YAML cannot locate the source. The diagnostic falls
+// back to the complete literal instead of pointing at a shifted line. The
+// seven escapes make the span exceed the content by nine characters, which
+// is exactly what a raw string with three hashes would show: only the
+// literal syntax tells them apart.
+from {
+  class_uid: 1007,
+  metadata: {version: "1.9.0"},
+  process: {path: r"C:\Windows\System32\cmd.exe"},
+}
+sigma rules="title: Escaped plain\nlogsource:\n  category: process_creation\n  product: windows\ndetection:\n  selection:\n    CallTrace|contains: ntdll.dll\n  condition: selection", format="plain"

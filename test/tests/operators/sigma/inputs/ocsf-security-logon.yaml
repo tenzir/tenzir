@@ -1,0 +1,13 @@
+title: RDP Logon From External Address
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4624
+    LogonType: 10
+    TargetUserName: bob
+    AuthenticationPackageName: Negotiate
+  filter_internal:
+    IpAddress|cidr: '10.0.0.0/8'
+  condition: selection and not filter_internal

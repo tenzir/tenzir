@@ -1,0 +1,8 @@
+title: Remote Thread From Office Child
+logsource:
+  category: create_remote_thread
+  product: windows
+detection:
+  selection:
+    SourceParentImage|endswith: '\winword.exe'
+  condition: selection

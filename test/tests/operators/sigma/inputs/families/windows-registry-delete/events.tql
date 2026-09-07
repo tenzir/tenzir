@@ -1,0 +1,34 @@
+// OCSF registry activity fixture events for the
+// `sigma/windows/registry_delete_key` and `sigma/windows/registry_delete_value`
+// mapping alternatives. Commented events are near-miss negatives.
+{
+  id: "key-delete",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 201001,
+  activity_id: 4,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "12", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  reg_key: {path: "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender"},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\reg.exe", file: {path: "C:\\Windows\\System32\\reg.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}
+{
+  id: "value-delete",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 201002,
+  activity_id: 4,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "12", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  reg_value: {path: "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender", name: "DisableAntiSpyware"},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\reg.exe", file: {path: "C:\\Windows\\System32\\reg.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}
+// Guard must reject: a key creation is not a registry_delete.
+{
+  id: "key-create",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 201001,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "12", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  reg_key: {path: "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender"},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\reg.exe", file: {path: "C:\\Windows\\System32\\reg.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}

@@ -1,0 +1,18 @@
+from {
+  id: "native",
+  class_uid: 1007,
+  metadata: {
+    version: "1.9.0",
+  },
+  process: {
+    path: r"C:\Windows\System32\cmd.exe",
+  },
+}
+sigma rules=r#"
+title: OCSF-native rule
+detection:
+  selection:
+    process.path|endswith: '\cmd.exe'
+  condition: selection
+"#, format="plain"
+select id=event.id

@@ -1,0 +1,38 @@
+id: sigma/zeek/smb_files
+title: Zeek SMB files
+logsource:
+  product: zeek
+  service: smb_files
+guard:
+  class-uid: 4006
+  # File Open; the mapping reports other actions as Other.
+  activities: [2]
+fields:
+  id.orig_h:
+    primitive: path
+    path: src_endpoint.ip
+  id.orig_p:
+    primitive: path
+    path: src_endpoint.port
+    kind: integral
+  id.resp_h:
+    primitive: path
+    path: dst_endpoint.ip
+  id.resp_p:
+    primitive: path
+    path: dst_endpoint.port
+    kind: integral
+  name:
+    primitive: path
+    path: share
+    kind: string
+    notes: Zeek names the share in the name field.
+  path:
+    primitive: path
+    path: file.path
+    kind: string
+unmapped:
+  - field: action
+    reason: The SMB Activity mapping folds the action into the activity and share type.
+  - field: size
+    reason: The SMB Activity mapping does not preserve the file size.

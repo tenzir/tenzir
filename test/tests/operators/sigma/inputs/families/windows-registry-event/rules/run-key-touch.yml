@@ -1,0 +1,9 @@
+title: Any Run Key Registry Event
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: '\CurrentVersion\Run'
+    Image|endswith: '\reg.exe'
+  condition: selection

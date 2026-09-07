@@ -1,0 +1,58 @@
+// OCSF Registry Key Activity (201001) and Registry Value Activity (201002)
+// fixture events for the `sigma/windows/registry_event_key` and
+// `sigma/windows/registry_event_value` mapping alternatives. Commented events
+// are near-miss negatives.
+{
+  id: "key-create",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 201001,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "12", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  reg_key: {path: "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run\\Acme"},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\reg.exe", file: {path: "C:\\Windows\\System32\\reg.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}
+{
+  id: "key-rename",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 201001,
+  activity_id: 5,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "14", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  reg_key: {path: "HKLM\\SOFTWARE\\Acme\\Renamed"},
+  prev_reg_key: {path: "HKLM\\SOFTWARE\\Acme\\Original"},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\reg.exe", file: {path: "C:\\Windows\\System32\\reg.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}
+{
+  id: "value-set",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 201002,
+  activity_id: 2,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "13", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  reg_value: {path: "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", name: "Updater", data: "powershell.exe -nop -w hidden"},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\reg.exe", file: {path: "C:\\Windows\\System32\\reg.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}
+{
+  id: "value-delete",
+  time: 2024-05-01T12:00:03Z,
+  class_uid: 201002,
+  activity_id: 4,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "12", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  reg_value: {path: "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", name: "Updater"},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\reg.exe", file: {path: "C:\\Windows\\System32\\reg.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}
+// Plain rules match: a Security-log value modification is a conformant
+// value set. The EventID rule must not: the Security log is a known other
+// producer.
+{
+  id: "security-value",
+  time: 2024-05-01T12:00:04Z,
+  class_uid: 201002,
+  activity_id: 3,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4657", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  reg_value: {path: "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", name: "Updater", data: "powershell.exe -nop -w hidden"},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\reg.exe", file: {path: "C:\\Windows\\System32\\reg.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}

@@ -1,0 +1,31 @@
+// OCSF Authentication (3002) fixture events for the `sigma/azure/signinlogs`
+// mapping family. Commented events are near-miss negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 3002,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["cloud", "security_control"], log_name: "auditLogs/signIns", product: {name: "Microsoft Entra ID", vendor_name: "Microsoft"}},
+  status_id: 2,
+  status_code: "50126",
+  status_detail: "Invalid username or password",
+  severity_id: 2,
+  user: {uid: "u1", name: "alice", domain: "corp.example", email_addr: "alice@corp.example", type_id: 1},
+  service: {uid: "app1", name: "Azure Portal"},
+  dst_endpoint: {uid: "res1", svc_name: "Windows Azure Service Management API"},
+  src_endpoint: {ip: 198.51.100.23, uid: "dev1", os: {name: "Linux"}},
+  is_mfa: false,
+}
+// Projection must not match: a successful sign-in.
+{
+  id: "success",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 3002,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["cloud", "security_control"], log_name: "auditLogs/signIns", product: {name: "Microsoft Entra ID", vendor_name: "Microsoft"}},
+  status_id: 1,
+  status_code: "0",
+  user: {email_addr: "alice@corp.example"},
+  service: {name: "Azure Portal"},
+  src_endpoint: {ip: 10.0.0.42},
+}

@@ -1,0 +1,21 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/azure-auditlogs/rules/category.yml' for OCSF input
+ --> tests/operators/sigma/families/azure-auditlogs.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/azure-auditlogs/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `Category`
+  = note: field `Category` is unmapped: The audit category selects the OCSF class and is not preserved as a field.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "Entra User Created",
+  id: "add-user",
+}
+{
+  rule: "Failed Application Update",
+  id: "update-application",
+}
+{
+  rule: "Member Added To Global Administrators",
+  id: "add-member",
+}

@@ -1,0 +1,10 @@
+title: BITS Job Via Bitsadmin To Temp
+logsource:
+  product: windows
+  service: bits-client
+detection:
+  selection:
+    EventID: 16403
+    processPath|endswith: '\bitsadmin.exe'
+    LocalName|contains: '\Temp\'
+  condition: selection

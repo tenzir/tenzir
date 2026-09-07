@@ -1,0 +1,9 @@
+// Family fixture test for the `sigma/windows/driver_load` mapping. The events file
+// carries TQL-typed OCSF samples including near-miss negatives; the rules
+// directory holds representative stock-shaped Sigma rules.
+from_file f"{env("TENZIR_INPUTS")}/families/windows-driver-load/events.tql" {
+  read_tql
+}
+sigma path=f"{env("TENZIR_INPUTS")}/families/windows-driver-load/rules", format="plain"
+select rule=rule.title, id=event.id
+sort rule, id

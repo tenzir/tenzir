@@ -1,0 +1,65 @@
+id: sigma/windows/registry_event_value
+title: Windows registry value event
+logsource:
+  category: registry_event
+  product: windows
+  service: sysmon
+  optional-service: true
+guard:
+  # Provenance-scoped fields such as EventID use the Sysmon namespace.
+  source: sysmon
+  class-uid: 201002
+  # Set, Modify, and Delete.
+  activities: [2, 3, 4]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  TargetObject:
+    primitive: join
+    left: reg_value.path
+    right: reg_value.name
+    separator: "\\"
+    evidence: reg_value
+  Details:
+    primitive: path
+    path: reg_value.data
+    notes: Reads the value data the normalizer stored, whatever its type.
+  EventType:
+    primitive: path
+    path: activity_id
+    kind: integral
+    rule-value:
+      dictionary:
+        name: registry event type
+        entries:
+          setvalue: 2
+          deletevalue: 4
+    notes: Translates the Sysmon event type to the OCSF activity; a rule with another type is skipped.
+  Image:
+    primitive: fallback
+    primary: actor.process.path
+    fallback: actor.process.file.path
+    kind: string
+    notes: Uses the acting process.
+  User:
+    primitive: principal
+    domain: actor.user.domain
+    name: actor.user.name
+    evidence: actor.user
+    notes: Uses the acting user, not the affected user.
+  ProcessId:
+    primitive: path
+    path: actor.process.pid
+    kind: source-identifier
+    rule-value: stringify
+  ProcessGuid:
+    primitive: path
+    path: actor.process.uid
+    kind: string
+unmapped:
+  - field: NewName
+    reason: Registry values are not renamed as values.

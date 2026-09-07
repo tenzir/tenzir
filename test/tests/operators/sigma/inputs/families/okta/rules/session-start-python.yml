@@ -1,0 +1,10 @@
+title: Okta Session Started From Scripted Client
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType: user.session.start
+    client.userAgent.rawUserAgent|contains: 'python-requests'
+    actor.alternateId|endswith: '@corp.example'
+  condition: selection

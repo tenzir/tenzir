@@ -1,0 +1,10 @@
+title: Group Membership Attribute Modified
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 5136
+    AttributeLDAPDisplayName: member
+    ObjectClass: group
+  condition: selection

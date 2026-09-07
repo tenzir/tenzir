@@ -1,0 +1,17 @@
+// A plain string without escapes contains its content verbatim, so the
+// diagnostic points at the offending rule's title line.
+from {
+  class_uid: 1007,
+  metadata: {version: "1.9.0"},
+  process: {path: r"C:\Windows\System32\cmd.exe"},
+}
+sigma rules="
+title: Verbatim plain
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CallTrace|contains: ntdll.dll
+  condition: selection
+", format="plain"

@@ -1,0 +1,94 @@
+id: sigma/linux/network_connection
+title: Linux network connection
+logsource:
+  category: network_connection
+  product: linux
+guard:
+  class-uid: 4001
+  # Open and Traffic.
+  activities: [1, 6]
+fields:
+  Initiated:
+    primitive: path
+    path: connection_info.direction_id
+    kind: integral
+    rule-value:
+      dictionary:
+        name: connection direction
+        entries:
+          "true": 2
+          "false": 1
+    notes: Outbound connections are initiated; inbound ones are not.
+  Protocol:
+    primitive: path
+    path: connection_info.protocol_name
+    kind: string
+  DestinationIp:
+    primitive: path
+    path: dst_endpoint.ip
+  DestinationPort:
+    primitive: path
+    path: dst_endpoint.port
+    kind: source-identifier
+    rule-value: stringify
+  DestinationHostname:
+    primitive: path
+    path: dst_endpoint.hostname
+    kind: string
+  SourceIp:
+    primitive: path
+    path: src_endpoint.ip
+  SourcePort:
+    primitive: path
+    path: src_endpoint.port
+    kind: source-identifier
+    rule-value: stringify
+  SourceHostname:
+    primitive: path
+    path: src_endpoint.hostname
+    kind: string
+  Image:
+    primitive: fallback
+    primary: actor.process.path
+    fallback: actor.process.file.path
+    kind: string
+    notes: Uses the acting process.
+  CommandLine:
+    primitive: path
+    path: actor.process.cmd_line
+    kind: string
+    notes: Uses the acting process command line.
+  ParentImage:
+    primitive: fallback
+    primary: actor.process.parent_process.path
+    fallback: actor.process.parent_process.file.path
+    kind: string
+    notes: Uses the parent of the acting process.
+  ParentCommandLine:
+    primitive: path
+    path: actor.process.parent_process.cmd_line
+    kind: string
+  User:
+    primitive: principal
+    domain: actor.user.domain
+    name: actor.user.name
+    evidence: actor.user
+    notes: Uses the acting user, not the affected user.
+  ProcessId:
+    primitive: path
+    path: actor.process.pid
+    kind: source-identifier
+    rule-value: stringify
+  ProcessGuid:
+    primitive: path
+    path: actor.process.uid
+    kind: string
+unmapped:
+  - field: SourceIsIpv6
+    reason: OCSF encodes the address family in the address itself.
+  - field: DestinationIsIpv6
+    reason: OCSF encodes the address family in the address itself.
+  - field: SourcePortName
+    reason: The Network Activity mapping resolves the service name from a table, not from the source string.
+  - field: DestinationPortName
+    reason: The Network Activity mapping resolves the service name from a table, not from the source string.

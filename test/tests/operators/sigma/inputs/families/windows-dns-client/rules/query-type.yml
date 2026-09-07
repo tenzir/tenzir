@@ -1,0 +1,9 @@
+title: DNS Client TXT Query
+logsource:
+  product: windows
+  service: dns-client
+detection:
+  selection:
+    EventID: 3008
+    QueryType: 16
+  condition: selection

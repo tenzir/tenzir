@@ -1,0 +1,9 @@
+title: Okta Threat Detected
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType: security.threat.detected
+    outcome.result: SUCCESS
+  condition: selection

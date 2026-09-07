@@ -1,0 +1,62 @@
+// Direct matching on the Sysmon-shaped record and automatic matching on its
+// OCSF Module Activity translation must agree. The translation mirrors the
+// Sysmon image load normalizer: Hashes split into fingerprints, and the
+// signature status becomes the OCSF signature state.
+let $algorithms = {MD5: 1, SHA1: 2, SHA256: 3, SHA512: 4}
+let $states = {Valid: 1, Expired: 2, Revoked: 3, Untrusted: 6}
+from {
+  id: "direct",
+  EventID: 7,
+  Image: r"C:\Windows\Temp\loader.exe",
+  ImageLoaded: r"C:\Windows\System32\vaultcli.dll",
+  OriginalFileName: "vaultcli.dll",
+  Hashes: "MD5=cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd,SHA256=efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef",
+  Signed: "true",
+  Signature: "Microsoft Windows",
+  SignatureStatus: "Valid",
+}
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-image-load.yaml",
+      mapping="direct", format="plain"
+select id=event.id
+
+merge {
+from {
+  id: "automatic",
+  EventID: 7,
+  Image: r"C:\Windows\Temp\loader.exe",
+  ImageLoaded: r"C:\Windows\System32\vaultcli.dll",
+  OriginalFileName: "vaultcli.dll",
+  Hashes: "MD5=cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd,SHA256=efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef",
+  Signed: "true",
+  Signature: "Microsoft Windows",
+  SignatureStatus: "Valid",
+}
+class_uid = 1005
+activity_id = 1
+metadata = {
+  version: "1.9.0",
+  event_code: string(EventID),
+  log_name: "Microsoft-Windows-Sysmon/Operational",
+  product: {name: "Microsoft-Windows-Sysmon"},
+}
+module = {
+  file: {
+    path: ImageLoaded,
+    internal_name: OriginalFileName,
+    hashes: Hashes.split(",").map(h => h.split("=", max=1)).map(kv => {
+      algorithm_id: $algorithms[kv[0]?]? else 99,
+      value: kv[1]?,
+    }),
+    signature: {
+      algorithm_id: 0,
+      state_id: $states[SignatureStatus]?,
+      certificate: {issuer: Signature},
+    },
+  },
+}
+actor = {process: {path: Image}}
+drop EventID, Image, ImageLoaded, OriginalFileName, Hashes, Signed, Signature, SignatureStatus
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-image-load.yaml", format="plain"
+select id=event.id
+}
+sort id

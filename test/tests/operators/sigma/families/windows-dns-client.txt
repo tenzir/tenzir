@@ -1,0 +1,13 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/windows-dns-client/rules/query-type.yml' for OCSF input
+ --> tests/operators/sigma/families/windows-dns-client.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/windows-dns-client/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `QueryType`
+  = note: field `QueryType` is unmapped: The DNS Activity mapping stores the record type by name, not by number.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "DNS Client Query To Paste Site",
+  id: "match",
+}

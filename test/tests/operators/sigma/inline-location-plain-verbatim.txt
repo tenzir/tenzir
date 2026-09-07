@@ -1,0 +1,9 @@
+warning: sigma operator skips rule '<rules[0]>' for OCSF input
+ --> tests/operators/sigma/inline-location-plain-verbatim.tql:9:1
+  |
+9 | title: Verbatim plain
+  | ~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `CallTrace`
+  = note: field `CallTrace` is absent from the OCSF schema
+  = note: use `mapping="direct"` only when the rule fields exist literally

@@ -1,0 +1,9 @@
+title: Network Security Group Deleted
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  selection:
+    operationName: MICROSOFT.NETWORK/NETWORKSECURITYGROUPS/DELETE
+    ResourceId|contains: '/prod-'
+  condition: selection

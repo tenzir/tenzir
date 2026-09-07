@@ -1,0 +1,21 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/windows-dns-query/rules/options.yml' for OCSF input
+ --> tests/operators/sigma/families/windows-dns-query.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/windows-dns-query/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `QueryOptions`
+  = note: field `QueryOptions` is absent from the OCSF schema
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "DNS Query Resolving To Known Bad Address",
+  id: "match",
+}
+{
+  rule: "DNS Query To Paste Site",
+  id: "match",
+}
+{
+  rule: "DNS Query To Paste Site By PowerShell",
+  id: "match",
+}

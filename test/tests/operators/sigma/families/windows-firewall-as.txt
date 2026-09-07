@@ -1,0 +1,21 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/windows-firewall-as/rules/origin.yml' for OCSF input
+ --> tests/operators/sigma/families/windows-firewall-as.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/windows-firewall-as/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `Origin`
+  = note: field `Origin` is unmapped: Stock rules never target the rule origin.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "Firewall Allow Action",
+  id: "rule-added",
+}
+{
+  rule: "Firewall Allow Rule For Temp Application",
+  id: "rule-added",
+}
+{
+  rule: "Firewall Rule Added Via Netsh",
+  id: "rule-added",
+}

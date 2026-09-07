@@ -1,0 +1,24 @@
+// OCSF Kernel Extension Activity (1002) fixture events for the
+// `sigma/windows/driver_load` mapping family. Commented events are near-miss
+// negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 1002,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "6", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  driver: {file: {path: "C:\\Windows\\Temp\\gdrv.sys", type_id: 8, hashes: [{algorithm_id: 3, value: "0101010101010101010101010101010101010101010101010101010101010101"}], signature: {algorithm_id: 0, state_id: 1, certificate: {issuer: "Giga-Byte Technology"}}}},
+  actor: {},
+}
+// Guard must reject: an image load is another class.
+{
+  id: "wrong-class",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 1005,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "7", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  module: {file: {path: "C:\\Windows\\Temp\\gdrv.sys", type_id: 8}, load_type_id: 0},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\svchost.exe", file: {path: "C:\\Windows\\System32\\svchost.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}

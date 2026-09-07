@@ -1,0 +1,13 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/windows-ps-module/rules/context-info.yml' for OCSF input
+ --> tests/operators/sigma/families/windows-ps-module.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/windows-ps-module/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `ContextInfo`
+  = note: field `ContextInfo` is unmapped: The Script Activity mapping does not carry the module logging context.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "PSReadline History Disabled",
+  id: "module-logging",
+}

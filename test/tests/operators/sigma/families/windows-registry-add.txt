@@ -1,0 +1,4 @@
+{
+  rule: "New Service Registry Key",
+  id: "match",
+}

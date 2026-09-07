@@ -1,0 +1,10 @@
+title: Rejected DNS query via Zeek flags
+logsource:
+  product: zeek
+  service: dns
+detection:
+  selection:
+    query|endswith: '.example.test'
+    Z: 0
+    rejected: true
+  condition: selection

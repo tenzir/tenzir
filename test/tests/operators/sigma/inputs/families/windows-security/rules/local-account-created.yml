@@ -1,0 +1,10 @@
+title: Local Account Created
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4720
+    TargetUserName|contains: 'support'
+    SubjectUserName: alice
+  condition: selection

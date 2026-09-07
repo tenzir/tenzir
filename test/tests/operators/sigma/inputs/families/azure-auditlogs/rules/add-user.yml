@@ -1,0 +1,8 @@
+title: Entra User Created
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    properties.message: 'Add user'
+  condition: selection

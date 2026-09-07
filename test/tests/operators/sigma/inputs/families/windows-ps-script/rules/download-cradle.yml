@@ -1,0 +1,10 @@
+title: PowerShell Download Cradle
+logsource:
+  category: ps_script
+  product: windows
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+      - 'New-Object'
+      - 'DownloadString'
+  condition: selection

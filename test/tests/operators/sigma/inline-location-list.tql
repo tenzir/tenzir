@@ -1,0 +1,19 @@
+// A list mixes literal syntaxes per element: the escaped plain string maps
+// to its complete literal, the raw string to its title line, and a value
+// that is not a literal at all to its complete expression.
+let $suffix = "\n  condition: selection\n"
+from {
+  class_uid: 1007,
+  metadata: {version: "1.9.0"},
+  process: {path: r"C:\Windows\System32\cmd.exe"},
+}
+sigma rules=["title: Escaped plain in list\nlogsource:\n  category: process_creation\n  product: windows\ndetection:\n  selection:\n    CallTrace|contains: ntdll.dll\n  condition: selection", r#"
+title: Raw in list
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CallTrace|contains: '\ntdll.dll'
+  condition: selection
+"#, "title: Computed in list\nlogsource:\n  category: process_creation\n  product: windows\ndetection:\n  selection:\n    CallTrace|contains: ntdll.dll" + $suffix], format="plain"

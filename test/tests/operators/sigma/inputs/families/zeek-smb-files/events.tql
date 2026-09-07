@@ -1,0 +1,29 @@
+// OCSF SMB Activity (4006) fixture events for the `sigma/zeek/smb_files` mapping
+// family. Commented events are near-miss negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 4006,
+  activity_id: 2,
+  metadata: {version: "1.9.0", log_name: "smb_files.log", product: {name: "Zeek"}},
+  src_endpoint: {ip: 10.0.0.42, port: 51515},
+  dst_endpoint: {ip: 10.0.0.5, port: 445},
+  share: "\\\\dc01\\ADMIN$",
+  share_type_id: 1,
+  share_type: "File",
+  file: {path: "PSEXESVC.exe"},
+  connection_info: {protocol_name: "tcp", protocol_num: 6},
+}
+// Projection must not match: a user share.
+{
+  id: "user-share",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 4006,
+  activity_id: 2,
+  metadata: {version: "1.9.0", log_name: "smb_files.log", product: {name: "Zeek"}},
+  src_endpoint: {ip: 10.0.0.42, port: 51517},
+  dst_endpoint: {ip: 10.0.0.5, port: 445},
+  share: "\\\\fs01\\home",
+  share_type_id: 1,
+  file: {path: "alice\\report.docx"},
+}

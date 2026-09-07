@@ -1,0 +1,8 @@
+title: Okta Policy Rule Modified
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType|startswith: 'policy.rule.'
+  condition: selection

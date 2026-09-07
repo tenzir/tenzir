@@ -1,0 +1,93 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/windows-security/rules/kerberoast.yml' for OCSF input
+ --> tests/operators/sigma/families/windows-security.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/windows-security/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `TicketEncryptionType`
+  = note: field `TicketEncryptionType` is absent from the OCSF schema
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "Debug Privilege Granted",
+  id: "privileges",
+}
+{
+  rule: "Debug Privilege Granted",
+  id: "special-privileges",
+}
+{
+  rule: "Domain Admins Group Object Modified",
+  id: "directory-change",
+}
+{
+  rule: "Elevated Whoami From Security Log",
+  id: "process-create",
+}
+{
+  rule: "Explicit Credential Logon To Domain Controller",
+  id: "explicit-credentials",
+}
+{
+  rule: "Failed Logon With Bad Password",
+  id: "logon-failed",
+}
+{
+  rule: "Group Membership Attribute Modified",
+  id: "directory-change",
+}
+{
+  rule: "Handle Requested On NTDS Database",
+  id: "handle-request",
+}
+{
+  rule: "LSA Secrets Registry Key Accessed",
+  id: "key-access",
+}
+{
+  rule: "Local Account Created",
+  id: "account-create",
+}
+{
+  rule: "Logon Via Seclogo Process",
+  id: "seclogo-logon",
+}
+{
+  rule: "NTDS Database Accessed",
+  id: "file-access",
+}
+{
+  rule: "PsExec Binary Written To Admin Share",
+  id: "share-access",
+}
+{
+  rule: "PsExec Service Installation",
+  id: "service-install",
+}
+{
+  rule: "RDP Logon From External Address",
+  id: "logon",
+}
+{
+  rule: "Run Key Modified To Encoded PowerShell",
+  id: "registry-value",
+}
+{
+  rule: "SAM User Object Accessed By LSASS",
+  id: "sam-access",
+}
+{
+  rule: "Scheduled Task Created In Maintenance Folder",
+  id: "task-create",
+}
+{
+  rule: "Security Log Cleared",
+  id: "log-clear",
+}
+{
+  rule: "User Added To Domain Admins",
+  id: "group-add",
+}
+{
+  rule: "Whoami Privilege Enumeration",
+  id: "process-create",
+}

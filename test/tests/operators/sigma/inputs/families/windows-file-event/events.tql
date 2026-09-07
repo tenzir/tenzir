@@ -1,0 +1,58 @@
+// OCSF File System Activity (1001) fixture events for the `sigma/windows/file_event`
+// mapping family. Events without a comment are positives; commented events are
+// near-miss negatives that the logsource guard or a projection must reject.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 1001,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "11", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  file: {path: "C:\\Users\\alice\\AppData\\Local\\Temp\\payload.hta", type_id: 1},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\mshta.exe", file: {path: "C:\\Windows\\System32\\mshta.exe", type_id: 8}, cmd_line: "mshta.exe evil.hta", parent_process: {path: "C:\\Windows\\explorer.exe", cmd_line: "explorer.exe"}}, user: {domain: "CORP", name: "alice"}},
+}
+// Null classifiers are not a provenance conflict; `Image` uses the fallback.
+{
+  id: "missing-classifiers",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 1001,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], event_code: "11", log_name: null, product: null},
+  file: {path: "C:\\Users\\alice\\AppData\\Local\\Temp\\payload.hta", type_id: 1},
+  actor: {process: {path: null, file: {path: "C:\\Windows\\System32\\mshta.exe"}}, user: {domain: "CORP", name: "alice"}},
+}
+// Guard must reject: a deletion is not a file_event.
+{
+  id: "wrong-activity",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 1001,
+  activity_id: 4,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "23", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  file: {path: "C:\\Users\\alice\\AppData\\Local\\Temp\\payload.hta", type_id: 1},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\mshta.exe", file: {path: "C:\\Windows\\System32\\mshta.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}
+// Plain rules match: a Security-log file event is conformant File System
+// Activity. The EventID rule must not: it needs the Sysmon producer, and the
+// Security log is a known other producer.
+{
+  id: "security-producer",
+  time: 2024-05-01T12:00:03Z,
+  class_uid: 1001,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4663", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  file: {path: "C:\\Users\\alice\\AppData\\Local\\Temp\\payload.hta", type_id: 1},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\mshta.exe", file: {path: "C:\\Windows\\System32\\mshta.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}
+// Guard must reject: the device OS contradicts a Windows-only logsource.
+{
+  id: "linux",
+  time: 2024-05-01T12:00:04Z,
+  class_uid: 1001,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "11", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {os: {type_id: 200, name: "Linux"}},
+  file: {path: "C:\\Users\\alice\\AppData\\Local\\Temp\\payload.hta", type_id: 1},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\mshta.exe", file: {path: "C:\\Windows\\System32\\mshta.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}

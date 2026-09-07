@@ -1,0 +1,8 @@
+title: Defender Policy Registry Deletion
+logsource:
+  category: registry_delete
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: '\Policies\Microsoft\Windows Defender'
+  condition: selection

@@ -1,0 +1,30 @@
+// Inline rules given as a list keep per-element locations: the skip warning
+// underlines the offending rule's title, and the label carries the element
+// index.
+from {
+  class_uid: 1007,
+  activity_id: 3,
+  metadata: {version: "1.9.0"},
+  actor: {process: {path: r"C:\Users\alice\Desktop\dump.exe"}},
+  process: {path: r"C:\Windows\System32\lsass.exe"},
+}
+sigma rules=[r#"
+title: LSASS Access
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection:
+    TargetImage|endswith: '\lsass.exe'
+  condition: selection
+"#, r#"
+title: Unsafe call trace
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection:
+    CallTrace|contains: 'UNKNOWN'
+  condition: selection
+"#], format="plain"
+select title=rule.title

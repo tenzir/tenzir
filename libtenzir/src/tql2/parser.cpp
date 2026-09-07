@@ -655,7 +655,15 @@ public:
     return expr;
   }
 
-  auto parse_string() -> located<std::string> {
+  /// A decoded string or blob literal together with its syntax, which the
+  /// AST retains because a raw literal's span maps onto its value.
+  template <class T>
+  struct Literal {
+    located<T> value;
+    bool raw = false;
+  };
+
+  auto parse_string() -> Literal<std::string> {
     auto raw = false;
     auto begin = accept(tk::string_begin);
     if (not begin) {
@@ -675,10 +683,10 @@ public:
       }
       return unescape_string(content, location, false);
     });
-    return located{std::move(result), location};
+    return Literal{located{std::move(result), location}, raw};
   }
 
-  auto parse_blob() -> located<blob> {
+  auto parse_blob() -> Literal<blob> {
     auto raw = false;
     auto begin = accept(tk::blob_begin);
     if (not begin) {
@@ -694,7 +702,8 @@ public:
       }
     }
     auto end = expect(tk::closing_quote);
-    return located{std::move(result), begin.location.combine(end)};
+    return Literal{located{std::move(result), begin.location.combine(end)},
+                   raw};
   }
 
   auto parse_format_expr() -> ast::format_expr {
@@ -758,11 +767,17 @@ public:
     }
     if (peek(tk::string_begin) or peek(tk::raw_string_begin)) {
       auto string = parse_string();
-      return ast::constant{std::move(string.inner), string.source};
+      auto result
+        = ast::constant{std::move(string.value.inner), string.value.source};
+      result.raw = string.raw;
+      return result;
     }
     if (peek(tk::blob_begin) or peek(tk::raw_blob_begin)) {
       auto blob = parse_blob();
-      return ast::constant{std::move(blob.inner), blob.source};
+      auto result
+        = ast::constant{std::move(blob.value.inner), blob.value.source};
+      result.raw = blob.raw;
+      return result;
     }
     if (peek(tk::format_string_begin)) {
       return parse_format_expr();
@@ -1114,7 +1129,7 @@ public:
         return result.as_identifier();
       }
       auto string = parse_string();
-      return ast::identifier{string.inner, string.source};
+      return ast::identifier{string.value.inner, string.value.source};
     });
     expect(tk::colon);
     auto expr = parse_expression();

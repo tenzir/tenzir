@@ -1,0 +1,55 @@
+id: sigma/windows/registry_add
+title: Windows registry key creation
+logsource:
+  category: registry_add
+  product: windows
+  service: sysmon
+  optional-service: true
+guard:
+  # Provenance-scoped fields such as EventID use the Sysmon namespace.
+  source: sysmon
+  class-uid: 201001
+  # Create.
+  activities: [1]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  TargetObject:
+    primitive: path
+    path: reg_key.path
+    kind: string
+  EventType:
+    primitive: path
+    path: activity_id
+    kind: integral
+    rule-value:
+      dictionary:
+        name: registry event type
+        entries:
+          createkey: 1
+    notes: Translates the Sysmon event type to the OCSF activity; a rule with another type is skipped.
+  Image:
+    primitive: fallback
+    primary: actor.process.path
+    fallback: actor.process.file.path
+    kind: string
+    notes: Uses the acting process.
+  User:
+    primitive: principal
+    domain: actor.user.domain
+    name: actor.user.name
+    evidence: actor.user
+    notes: Uses the acting user, not the affected user.
+  ProcessId:
+    primitive: path
+    path: actor.process.pid
+    kind: source-identifier
+    rule-value: stringify
+  ProcessGuid:
+    primitive: path
+    path: actor.process.uid
+    kind: string

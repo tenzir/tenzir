@@ -1,0 +1,136 @@
+{
+  rule: "Command Shell With File Metadata Context",
+  id: "command-split",
+}
+{
+  rule: "Command Shell With File Metadata Context",
+  id: "conflicting-service",
+}
+{
+  rule: "Command Shell With File Metadata Context",
+  id: "disk-name-only",
+}
+{
+  rule: "Command Shell With File Metadata Context",
+  id: "hash-cross-object",
+}
+{
+  rule: "Command Shell With File Metadata Context",
+  id: "image-fallback",
+}
+{
+  rule: "Command Shell With File Metadata Context",
+  id: "match",
+}
+{
+  rule: "Command Shell With File Metadata Context",
+  id: "null-classifiers",
+}
+{
+  rule: "Command Shell With File Metadata Context",
+  id: "system-user",
+}
+{
+  rule: "Command Shell With File Metadata Context",
+  id: "unknown-classifiers",
+}
+{
+  rule: "Command Shell With File Metadata Context",
+  id: "unknown-version",
+}
+{
+  rule: "Elevated Command Shell By Integrity SID",
+  id: "command-split",
+}
+{
+  rule: "Elevated Command Shell By Integrity SID",
+  id: "conflicting-service",
+}
+{
+  rule: "Elevated Command Shell By Integrity SID",
+  id: "disk-name-only",
+}
+{
+  rule: "Elevated Command Shell By Integrity SID",
+  id: "hash-cross-object",
+}
+{
+  rule: "Elevated Command Shell By Integrity SID",
+  id: "image-fallback",
+}
+{
+  rule: "Elevated Command Shell By Integrity SID",
+  id: "match",
+}
+{
+  rule: "Elevated Command Shell By Integrity SID",
+  id: "null-classifiers",
+}
+{
+  rule: "Elevated Command Shell By Integrity SID",
+  id: "system-user",
+}
+{
+  rule: "Elevated Command Shell By Integrity SID",
+  id: "unknown-classifiers",
+}
+{
+  rule: "Elevated Command Shell By Integrity SID",
+  id: "unknown-version",
+}
+{
+  rule: "Suspicious Command Shell From Services",
+  id: "image-fallback",
+}
+{
+  rule: "Suspicious Command Shell From Services",
+  id: "match",
+}
+{
+  rule: "Suspicious Command Shell From Services",
+  id: "null-classifiers",
+}
+{
+  rule: "Suspicious Command Shell From Services",
+  id: "unknown-classifiers",
+}
+{
+  rule: "Suspicious Command Shell From Services",
+  id: "unknown-version",
+}
+{
+  rule: "Whoami Execution",
+  id: "conflicting-service",
+}
+{
+  rule: "Whoami Execution",
+  id: "disk-name-only",
+}
+{
+  rule: "Whoami Execution",
+  id: "hash-cross-object",
+}
+{
+  rule: "Whoami Execution",
+  id: "image-fallback",
+}
+{
+  rule: "Whoami Execution",
+  id: "match",
+}
+{
+  rule: "Whoami Execution",
+  id: "null-classifiers",
+}
+{
+  rule: "Whoami Execution",
+  id: "system-user",
+}
+{
+  rule: "Whoami Execution",
+  id: "unknown-classifiers",
+}
+{
+  rule: "Whoami Execution",
+  id: "unknown-version",
+}

@@ -1,0 +1,62 @@
+id: sigma/windows/security_smb
+title: Windows Security network share access
+logsource:
+  product: windows
+  service: security
+guard:
+  # Provenance-scoped fields such as EventID use the Security log namespace;
+  # the System log shares the source kind and is excluded by name.
+  source: windows_security
+  log-name: Security
+  conflicting-log-names: [System]
+  class-uid: 4006
+  # File Open; the mapping reports share access as Other.
+  activities: [2]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  SubjectUserName:
+    primitive: path
+    path: actor.user.name
+    kind: string
+  SubjectDomainName:
+    primitive: path
+    path: actor.user.domain
+    kind: string
+  SubjectUserSid:
+    primitive: path
+    path: actor.user.uid
+    kind: string
+  SubjectLogonId:
+    primitive: path
+    path: actor.session.uid_alt
+    kind: string
+  ShareName:
+    primitive: path
+    path: share
+    kind: string
+  RelativeTargetName:
+    primitive: path
+    path: file.path
+    kind: string
+  IpAddress:
+    primitive: path
+    path: src_endpoint.ip
+  IpPort:
+    primitive: path
+    path: src_endpoint.port
+    kind: source-identifier
+    rule-value: stringify
+unmapped:
+  - field: AccessMask
+    reason: The source renders the access mask in hexadecimal; OCSF stores an integer.
+  - field: AccessList
+    reason: The SMB Activity mapping does not preserve the rendered access list.
+  - field: ShareLocalPath
+    reason: The SMB Activity mapping does not preserve the local share path.
+  - field: ObjectType
+    reason: Share access events always concern files.

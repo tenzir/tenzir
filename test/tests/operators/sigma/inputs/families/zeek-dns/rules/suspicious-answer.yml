@@ -1,0 +1,11 @@
+title: Suspicious Zeek DNS answer
+logsource:
+  product: zeek
+  service: dns
+detection:
+  selection:
+    query|endswith: '.example.test'
+    answers|contains: 'alias.example.test'
+    qtype_name: A
+    id.resp_p: 53
+  condition: selection

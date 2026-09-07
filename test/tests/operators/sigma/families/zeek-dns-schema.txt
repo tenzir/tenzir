@@ -1,0 +1,10 @@
+warning: dropping field which does not exist in schema
+ --> tests/operators/sigma/families/zeek-dns-schema.tql:9:1
+  |
+9 | ocsf_cast
+  | ~~~~~~~~~
+  |
+  = note: found `query`
+{
+  events: 6,
+}

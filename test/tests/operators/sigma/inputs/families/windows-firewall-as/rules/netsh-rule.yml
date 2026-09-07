@@ -1,0 +1,9 @@
+title: Firewall Rule Added Via Netsh
+logsource:
+  product: windows
+  service: firewall-as
+detection:
+  selection:
+    EventID: 2004
+    ModifyingApplication|endswith: '\netsh.exe'
+  condition: selection

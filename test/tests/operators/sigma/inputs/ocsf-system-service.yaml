@@ -1,0 +1,11 @@
+title: Service Installed With PowerShell Command
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name: 'Service Control Manager'
+    EventID: 7045
+    ImagePath|contains: 'powershell'
+    AccountName: LocalSystem
+  condition: selection

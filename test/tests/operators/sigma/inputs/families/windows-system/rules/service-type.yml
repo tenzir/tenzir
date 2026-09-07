@@ -1,0 +1,9 @@
+title: Kernel Driver Service Installed
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    EventID: 7045
+    ServiceType: 'kernel mode driver'
+  condition: selection

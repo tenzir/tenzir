@@ -1,0 +1,12 @@
+title: Vault Client Loaded By Unusual Process
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: '\vaultcli.dll'
+    OriginalFileName: 'vaultcli.dll'
+    Description|contains: 'Vault'
+  filter_system:
+    Image|startswith: 'C:\Windows\System32\'
+  condition: selection and not filter_system

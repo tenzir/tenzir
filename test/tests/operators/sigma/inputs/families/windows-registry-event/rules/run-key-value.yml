@@ -1,0 +1,9 @@
+title: Run Key Value Set To PowerShell
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: '\CurrentVersion\Run\'
+    Details|contains: 'powershell'
+  condition: selection

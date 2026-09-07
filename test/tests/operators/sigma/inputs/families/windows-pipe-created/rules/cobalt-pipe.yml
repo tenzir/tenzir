@@ -1,0 +1,8 @@
+title: Cobalt Strike Post Exploitation Pipe
+logsource:
+  category: pipe_created
+  product: windows
+detection:
+  selection:
+    PipeName|startswith: '\postex_'
+  condition: selection

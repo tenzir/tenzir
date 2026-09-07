@@ -1,0 +1,11 @@
+title: Python Outbound Connection From Web User
+logsource:
+  category: network_connection
+  product: linux
+detection:
+  selection:
+    Image|endswith: '/python3'
+    Initiated: 'true'
+    User: 'www-data'
+    DestinationPort: 4444
+  condition: selection

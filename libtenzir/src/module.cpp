@@ -54,7 +54,7 @@ caf::expected<module> module::merge(const module& s1, const module& s2) {
   return result;
 }
 
-module module::combine(const module& s1, const module& s2) {
+auto module::combine(const module& s1, const module& s2) -> module {
   auto result = s1;
   for (const auto& t : s2) {
     if (auto* x = result.find(t.name())) {

@@ -1,0 +1,5 @@
+from_file f"{env("TENZIR_INPUTS")}/ocsf-process-events.json" {
+  read_json
+}
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-process-creation.yaml", format="plain"
+select id=event.id

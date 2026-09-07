@@ -1,0 +1,125 @@
+id: sigma/windows/security_authentication
+title: Windows Security authentication
+logsource:
+  product: windows
+  service: security
+guard:
+  # Provenance-scoped fields such as EventID use the Security log namespace;
+  # the System log shares the source kind and is excluded by name.
+  source: windows_security
+  log-name: Security
+  conflicting-log-names: [System]
+  class-uid: 3002
+  # Logon, Logoff, Authentication Ticket, Service Ticket Request, Service Ticket Renew, and Preauth.
+  activities: [1, 2, 3, 4, 5, 6]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  SubjectUserName:
+    primitive: path
+    path: actor.user.name
+    kind: string
+  SubjectDomainName:
+    primitive: path
+    path: actor.user.domain
+    kind: string
+  SubjectUserSid:
+    primitive: path
+    path: actor.user.uid
+    kind: string
+  SubjectLogonId:
+    primitive: path
+    path: actor.session.uid_alt
+    kind: string
+  TargetUserName:
+    primitive: path
+    path: user.name
+    kind: string
+  TargetDomainName:
+    primitive: path
+    path: user.domain
+    kind: string
+  TargetSid:
+    primitive: path
+    path: user.uid
+    kind: string
+  TargetUserSid:
+    primitive: path
+    path: user.uid
+    kind: string
+  TargetLogonId:
+    primitive: path
+    path: session.uid_alt
+    kind: string
+  LogonType:
+    primitive: path
+    path: logon_type_id
+    kind: source-identifier
+    rule-value: stringify
+  IpAddress:
+    primitive: path
+    path: src_endpoint.ip
+  IpPort:
+    primitive: path
+    path: src_endpoint.port
+    kind: source-identifier
+    rule-value: stringify
+  WorkstationName:
+    primitive: path
+    path: src_endpoint.hostname
+    kind: string
+  Workstation:
+    primitive: path
+    path: src_endpoint.hostname
+    kind: string
+    notes: NTLM authentication (4776) names the workstation without the Name suffix.
+  AuthenticationPackageName:
+    primitive: path
+    path: auth_protocol
+    kind: string
+  Status:
+    primitive: path
+    path: status_code
+    kind: string
+    notes: Compares the NTSTATUS or Kerberos result code the source rendered.
+  FailureReason:
+    primitive: path
+    path: status_detail
+    kind: string
+  TargetServerName:
+    primitive: path
+    path: dst_endpoint.hostname
+    kind: string
+    notes: Explicit-credential logons (4648) name the target server.
+  ServiceName:
+    primitive: fallback
+    primary: service.name
+    fallback: dst_endpoint.svc_name
+    kind: string
+    notes: Kerberos ticket events name the requested service.
+  ProcessName:
+    primitive: fallback
+    primary: actor.process.path
+    fallback: actor.process.file.path
+    kind: string
+  LogonProcessName:
+    primitive: path
+    path: logon_process.name
+    kind: string
+unmapped:
+  - field: TicketEncryptionType
+    reason: The Authentication mapping does not preserve the Kerberos encryption type.
+  - field: TicketOptions
+    reason: The Authentication mapping stores Kerberos flags in the authentication token, not as the rendered option mask.
+  - field: SubStatus
+    reason: The Authentication mapping keeps only the primary status code.
+  - field: ProcessId
+    reason: The source renders process identifiers in hexadecimal; OCSF stores integers.
+  - field: ElevatedToken
+    reason: The Authentication mapping does not preserve the elevation flag.
+  - field: ImpersonationLevel
+    reason: The Authentication mapping does not preserve the impersonation level.

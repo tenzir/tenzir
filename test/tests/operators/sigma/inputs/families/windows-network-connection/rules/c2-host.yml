@@ -1,0 +1,12 @@
+title: Connection To Known C2 Host
+logsource:
+  category: network_connection
+  product: windows
+  service: sysmon
+detection:
+  selection:
+    EventID: 3
+    Initiated: true
+    DestinationHostname|endswith: '.example.test'
+    Protocol: tcp
+  condition: selection

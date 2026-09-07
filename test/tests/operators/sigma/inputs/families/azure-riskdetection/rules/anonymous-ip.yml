@@ -1,0 +1,10 @@
+title: Sign-In From Anonymous IP Detected
+logsource:
+  product: azure
+  service: riskdetection
+detection:
+  selection:
+    riskEventType: anonymizedIPAddress
+    riskLevel: high
+    riskState: atRisk
+  condition: selection

@@ -1,0 +1,11 @@
+title: Failed Logon With Bad Password
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4625
+    Status: '0xC000006D'
+    LogonType: 3
+    WorkstationName|contains: 'kali'
+  condition: selection

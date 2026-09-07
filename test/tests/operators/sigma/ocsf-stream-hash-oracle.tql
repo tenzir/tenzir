@@ -1,0 +1,46 @@
+// Direct matching on the Sysmon-shaped record and automatic matching on its
+// OCSF File System Activity translation must agree. The translation mirrors
+// the Sysmon stream hash normalizer: the stream name moves out of the file
+// path into the component attribute.
+from {
+  id: "direct",
+  EventID: 15,
+  TargetFilename: r"C:\Users\alice\Downloads\setup.exe:Zone.Identifier",
+  Hash: "MD5=cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+  Image: r"C:\Program Files\Firefox\firefox.exe",
+}
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-create-stream-hash.yaml",
+      mapping="direct", format="plain"
+select id=event.id
+
+merge {
+from {
+  id: "automatic",
+  EventID: 15,
+  TargetFilename: r"C:\Users\alice\Downloads\setup.exe:Zone.Identifier",
+  Hash: "MD5=cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+  Image: r"C:\Program Files\Firefox\firefox.exe",
+}
+parts = TargetFilename.split(":")
+class_uid = 1001
+activity_id = 1
+metadata = {
+  version: "1.9.0",
+  event_code: string(EventID),
+  log_name: "Microsoft-Windows-Sysmon/Operational",
+  product: {name: "Microsoft-Windows-Sysmon"},
+}
+file = {
+  path: parts.slice(end=-1).join(":"),
+  hashes: Hash.split(",").map(h => h.split("=", max=1)).map(kv => {
+    algorithm_id: 1,
+    value: kv[1]?,
+  }),
+}
+component = parts[-1]?
+actor = {process: {path: Image}}
+drop EventID, TargetFilename, Hash, Image, parts
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-create-stream-hash.yaml", format="plain"
+select id=event.id
+}
+sort id

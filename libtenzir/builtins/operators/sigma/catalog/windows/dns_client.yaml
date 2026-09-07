@@ -1,0 +1,38 @@
+id: sigma/windows/dns_client
+title: Windows DNS client queries
+logsource:
+  product: windows
+  service: dns-client
+guard:
+  # Provenance-scoped fields such as EventID use the DNS client namespace.
+  source: windows_dns_client
+  class-uid: 4003
+  # Query, Response, and Traffic.
+  activities: [1, 2, 6]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  QueryName:
+    primitive: path
+    path: query.hostname
+    kind: string
+  QueryResults:
+    primitive: list-member
+    path: answers
+    member: rdata
+    rule-value: stringify
+    notes: A rule value matches when any answer matches.
+  QueryStatus:
+    primitive: path
+    path: status_code
+    kind: source-identifier
+    rule-value: stringify
+unmapped:
+  - field: QueryType
+    reason: The DNS Activity mapping stores the record type by name, not by number.
+  - field: QueryOptions
+    reason: The DNS Activity mapping does not preserve the query option flags.

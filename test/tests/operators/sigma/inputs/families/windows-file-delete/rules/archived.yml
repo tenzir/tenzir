@@ -1,0 +1,9 @@
+title: Deleted Executable Not Archived
+logsource:
+  category: file_delete
+  product: windows
+detection:
+  selection:
+    IsExecutable: 'true'
+    Archived: 'false'
+  condition: selection

@@ -1,0 +1,62 @@
+id: sigma/windows/codeintegrity_operational
+title: Windows App Control blocks and audits
+logsource:
+  product: windows
+  service: codeintegrity-operational
+guard:
+  # Provenance-scoped fields such as EventID and the free-form
+  # `application.data` payload use the CodeIntegrity namespace.
+  source: windows_codeintegrity
+  class-uid: 6002
+  # Start.
+  activities: [3]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  FileNameBuffer:
+    primitive: path
+    path: application.data.file_path
+    kind: string
+    provenance-scoped: true
+    notes: Code Integrity reports the device path of the validated file.
+  ProcessNameBuffer:
+    primitive: fallback
+    primary: actor.process.path
+    fallback: actor.process.file.path
+    kind: string
+    notes: The process that attempted the load.
+  RequestedPolicy:
+    primitive: path
+    path: application.data.requested_policy
+    provenance-scoped: true
+  ValidatedPolicy:
+    primitive: path
+    path: application.data.validated_policy
+    provenance-scoped: true
+  RequestedSigningLevel:
+    primitive: path
+    path: application.data.requested_signing_level
+    provenance-scoped: true
+  ValidatedSigningLevel:
+    primitive: path
+    path: application.data.validated_signing_level
+    provenance-scoped: true
+  PolicyName:
+    primitive: path
+    path: application.data.policy_name
+    kind: string
+    provenance-scoped: true
+  Status:
+    primitive: path
+    path: application.data.status
+    kind: string
+    provenance-scoped: true
+unmapped:
+  - field: FileNameLength
+    reason: Buffer lengths describe the event encoding, not the file.
+  - field: ProcessNameLength
+    reason: Buffer lengths describe the event encoding, not the process.

@@ -1,0 +1,42 @@
+id: sigma/windows/registry_set
+title: Windows registry value set
+logsource:
+  category: registry_set
+  product: windows
+  service: sysmon
+  optional-service: true
+guard:
+  # Provenance-scoped fields such as EventID use the Sysmon namespace.
+  source: sysmon
+  class-uid: 201002
+  # Set and Modify: Sysmon reports both as SetValue.
+  activities: [2, 3]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  TargetObject:
+    primitive: join
+    left: reg_value.path
+    right: reg_value.name
+    separator: "\\"
+    evidence: reg_value
+  Details:
+    primitive: path
+    path: reg_value.data
+    notes: Reads the value data the normalizer stored, whatever its type.
+  Image:
+    primitive: fallback
+    primary: actor.process.path
+    fallback: actor.process.file.path
+    kind: string
+    notes: Uses the acting process.
+  User:
+    primitive: principal
+    domain: actor.user.domain
+    name: actor.user.name
+    evidence: actor.user
+    notes: Uses the acting user, not the affected user.

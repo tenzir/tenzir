@@ -1,0 +1,79 @@
+id: sigma/macos/process_creation
+title: macOS process creation
+logsource:
+  category: process_creation
+  product: macos
+guard:
+  class-uid: 1007
+  activities: [1]
+fields:
+  Image:
+    primitive: fallback
+    primary: process.path
+    fallback: process.file.path
+    kind: string
+  ParentImage:
+    primitive: fallback
+    primary: process.parent_process.path
+    fallback: process.parent_process.file.path
+    kind: string
+    notes: Uses the parent process only.
+  OriginalFileName:
+    primitive: path
+    path: process.file.internal_name
+    kind: string
+    notes: Uses embedded executable identity and never the on-disk file name.
+  CommandLine:
+    primitive: path
+    path: process.cmd_line
+    kind: string
+    notes: Applies every modifier to one projected command line.
+  User:
+    primitive: principal
+    domain: process.user.domain
+    name: process.user.name
+    evidence: process.user
+    notes: Uses the process user, not an arbitrary User object.
+  ParentUser:
+    primitive: principal
+    domain: process.parent_process.user.domain
+    name: process.parent_process.user.name
+    evidence: process.parent_process.user
+    notes: Uses the parent process user only.
+  ParentCommandLine:
+    primitive: path
+    path: process.parent_process.cmd_line
+    kind: string
+  CurrentDirectory:
+    primitive: path
+    path: process.working_directory
+    kind: string
+  Description:
+    primitive: path
+    path: process.file.desc
+    kind: string
+    notes: Uses the embedded file description.
+  Product:
+    primitive: path
+    path: process.file.product.name
+    kind: string
+    notes: Uses the embedded product name.
+  Company:
+    primitive: path
+    path: process.file.company_name
+    kind: string
+  FileVersion:
+    primitive: path
+    path: process.file.version
+    kind: string
+  Hashes:
+    primitive: fingerprints
+    path: process.file.hashes
+    notes: Never pairs an algorithm with another fingerprint's value.
+unmapped:
+  - field: EventID
+    reason: Sysmon for Linux and macOS event IDs are not part of the OCSF process mapping.
+  - field: IntegrityLevel
+    reason: Integrity levels are a Windows concept.
+  - field: LogonId
+    reason: The Process Activity mapping does not preserve the Sysmon logon session identifier.

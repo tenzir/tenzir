@@ -1,0 +1,8 @@
+title: Okta API Token Created
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType: system.api_token.create
+  condition: selection

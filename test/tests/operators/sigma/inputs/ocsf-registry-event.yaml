@@ -1,0 +1,11 @@
+title: Run Key Value Set To PowerShell
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection:
+    EventType: 'SetValue'
+    TargetObject|contains: '\CurrentVersion\Run\'
+    Details|contains: 'powershell'
+    Image|endswith: '\reg.exe'
+  condition: selection

@@ -1,0 +1,9 @@
+title: App Control Blocked Download
+logsource:
+  product: windows
+  service: codeintegrity-operational
+detection:
+  selection:
+    EventID: 3077
+    FileNameBuffer|contains: '\Downloads\'
+  condition: selection

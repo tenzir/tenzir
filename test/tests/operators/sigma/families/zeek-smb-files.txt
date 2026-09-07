@@ -1,0 +1,13 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/zeek-smb-files/rules/action.yml' for OCSF input
+ --> tests/operators/sigma/families/zeek-smb-files.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/zeek-smb-files/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `action`
+  = note: field `action` is unmapped: The SMB Activity mapping folds the action into the activity and share type.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "PsExec Service Binary Over Admin Share",
+  id: "match",
+}

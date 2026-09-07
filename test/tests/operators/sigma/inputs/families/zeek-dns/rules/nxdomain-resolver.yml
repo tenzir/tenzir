@@ -1,0 +1,11 @@
+title: NXDOMAIN answers from an external resolver
+logsource:
+  product: zeek
+  service: dns
+detection:
+  selection:
+    id.resp_h: 192.0.2.53
+    rcode_name: NXDOMAIN
+  filter_internal:
+    id.orig_h|cidr: 10.0.0.0/8
+  condition: selection and filter_internal

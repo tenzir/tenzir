@@ -1,0 +1,46 @@
+// Direct matching on the Security-log-shaped record and automatic matching on
+// its OCSF Authentication translation must agree. The translation mirrors the
+// Windows logon normalizer: LogonType becomes logon_type_id, the target user
+// becomes the user object, and the network fields move into src_endpoint.
+from {
+  id: "direct",
+  EventID: 4624,
+  LogonType: 10,
+  TargetUserName: "bob",
+  TargetDomainName: "CORP",
+  AuthenticationPackageName: "Negotiate",
+  IpAddress: 198.51.100.23,
+  IpPort: 50123,
+}
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-security-logon.yaml",
+      mapping="direct", format="plain"
+select id=event.id
+
+merge {
+from {
+  id: "automatic",
+  EventID: 4624,
+  LogonType: 10,
+  TargetUserName: "bob",
+  TargetDomainName: "CORP",
+  AuthenticationPackageName: "Negotiate",
+  IpAddress: 198.51.100.23,
+  IpPort: 50123,
+}
+class_uid = 3002
+activity_id = 1
+metadata = {
+  version: "1.9.0",
+  event_code: string(EventID),
+  log_name: "Security",
+  product: {name: "Microsoft-Windows-Security-Auditing"},
+}
+logon_type_id = LogonType
+user = {name: TargetUserName, domain: TargetDomainName}
+src_endpoint = {ip: IpAddress, port: IpPort}
+auth_protocol = AuthenticationPackageName
+drop EventID, LogonType, TargetUserName, TargetDomainName, AuthenticationPackageName, IpAddress, IpPort
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-security-logon.yaml", format="plain"
+select id=event.id
+}
+sort id

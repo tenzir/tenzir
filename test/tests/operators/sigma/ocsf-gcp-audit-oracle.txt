@@ -1,0 +1,6 @@
+{
+  id: "automatic",
+}
+{
+  id: "direct",
+}

@@ -1,0 +1,93 @@
+id: sigma/azure/auditlogs_account_change
+title: Entra ID audit user management
+logsource:
+  product: azure
+  service: auditlogs
+guard:
+  class-uid: 3001
+  # Create through Delete.
+  activities: [1, 2, 3, 4, 5, 6]
+fields:
+  properties.message:
+    primitive: path
+    path: message
+    kind: string
+    notes: The activity display name is the OCSF message.
+  ActivityDisplayName:
+    primitive: path
+    path: message
+    kind: string
+  OperationName:
+    primitive: path
+    path: message
+    kind: string
+  operationName:
+    primitive: path
+    path: message
+    kind: string
+  Result:
+    primitive: path
+    path: status_id
+    kind: integral
+    rule-value:
+      dictionary:
+        name: audit result
+        entries:
+          success: 1
+          failure: 2
+    notes: Translates the audit result to the OCSF status; a rule with another value is skipped.
+  ResultReason:
+    primitive: path
+    path: status_detail
+    kind: string
+  InitiatedBy.user.userPrincipalName:
+    primitive: path
+    path: actor.user.email_addr
+    kind: string
+  InitiatedBy.app.displayName:
+    primitive: path
+    path: actor.app_name
+    kind: string
+  TargetResources.displayName:
+    primitive: path
+    path: user.full_name
+    kind: string
+unmapped:
+  - field: Category
+    reason: The audit category selects the OCSF class and is not preserved as a field.
+  - field: category
+    reason: The audit category selects the OCSF class and is not preserved as a field.
+  - field: LoggedByService
+    reason: The Entity Management mapping does not preserve the logging service.
+  - field: Status
+    reason: The audit mapping translates the result into the OCSF status enumeration.
+  - field: ActivityType
+    reason: The audit mapping folds the operation type into the activity.
+  - field: activityType
+    reason: The audit mapping folds the operation type into the activity.
+  - field: Initiatedby
+    reason: The audit mapping splits the initiator into the actor user or application.
+  - field: Target
+    reason: Targets become class-specific user, group, or entity objects.
+  - field: TargetResources
+    reason: Targets become class-specific user, group, or entity objects.
+  - field: properties.targetResources
+    reason: Targets become class-specific user, group, or entity objects.
+  - field: targetResources.type
+    reason: Targets become class-specific user, group, or entity objects.
+  - field: TargetResources.ModifiedProperties.DisplayName
+    reason: Modified properties are not preserved by the audit mapping.
+  - field: TargetResources.ModifiedProperties.NewValue
+    reason: Modified properties are not preserved by the audit mapping.
+  - field: TargetResources.modifiedProperties
+    reason: Modified properties are not preserved by the audit mapping.
+  - field: TargetResources.modifiedProperties.newValue
+    reason: Modified properties are not preserved by the audit mapping.
+  - field: properties.result
+    reason: The audit mapping translates the result into the OCSF status enumeration.
+  - field: failure_status_reason
+    reason: The audit mapping stores the failure reason as status_detail under ResultReason.
+  - field: ConsentContext.IsAdminConsent
+    reason: The audit mapping does not preserve consent context.
+  - field: additionalDetails.additionalInfo
+    reason: The audit mapping does not preserve additional details.

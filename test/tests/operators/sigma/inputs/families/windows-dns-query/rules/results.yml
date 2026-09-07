@@ -1,0 +1,9 @@
+title: DNS Query Resolving To Known Bad Address
+logsource:
+  category: dns_query
+  product: windows
+detection:
+  selection:
+    QueryResults|contains: '198.51.100.7'
+    QueryStatus: 0
+  condition: selection

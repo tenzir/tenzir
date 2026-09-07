@@ -1,0 +1,8 @@
+title: Application Management Category
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    Category: ApplicationManagement
+  condition: selection

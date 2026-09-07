@@ -1,0 +1,9 @@
+title: DNS Query To Paste Site By PowerShell
+logsource:
+  category: dns_query
+  product: windows
+detection:
+  selection:
+    QueryName|contains: 'pastebin'
+    Image|endswith: '\powershell.exe'
+  condition: selection

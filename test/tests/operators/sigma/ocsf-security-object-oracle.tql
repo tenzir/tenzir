@@ -1,0 +1,49 @@
+// Direct matching on the Security-log-shaped record and automatic matching on
+// its OCSF translation must agree. The translation mirrors the Windows object
+// access normalizer: the object type routes the event into File System
+// Activity or Registry Key Activity, so the ObjectType projection compares
+// against the class itself. A key access must not match the file rule.
+from {
+  id: "direct",
+  EventID: 4663,
+  ObjectType: "File",
+  ObjectName: r"C:\Windows\NTDS\ntds.dit",
+  ProcessName: r"C:\Windows\System32\svchost.exe",
+}
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-security-object-access.yaml",
+      mapping="direct", format="plain"
+select id=event.id
+
+merge {
+from {
+  id: "automatic",
+  EventID: 4663,
+  ObjectType: "File",
+  ObjectName: r"C:\Windows\NTDS\ntds.dit",
+  ProcessName: r"C:\Windows\System32\svchost.exe",
+}, {
+  id: "key",
+  EventID: 4663,
+  ObjectType: "Key",
+  ObjectName: r"\REGISTRY\MACHINE\NTDS\ntds.dit",
+  ProcessName: r"C:\Windows\System32\svchost.exe",
+}
+class_uid = 1001 if ObjectType == "File" else 201001
+activity_id = 99
+metadata = {
+  version: "1.9.0",
+  event_code: string(EventID),
+  log_name: "Security",
+  product: {name: "Microsoft-Windows-Security-Auditing"},
+}
+if ObjectType == "File" {
+  file = {path: ObjectName}
+} else {
+  reg_key = {path: ObjectName}
+}
+actor = {process: {path: ProcessName}}
+drop EventID, ObjectType, ObjectName, ProcessName
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-security-object-access.yaml", format="plain"
+select id=event.id
+}
+sort id

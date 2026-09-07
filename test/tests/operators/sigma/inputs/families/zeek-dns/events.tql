@@ -1,0 +1,177 @@
+// OCSF DNS Activity (4003) fixture events for the `sigma/zeek/dns` mapping
+// family. Events without a comment are positives; commented events are
+// near-miss negatives that the logsource guard or the projection must reject.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 4003,
+  activity_id: 6,
+  metadata: {
+    version: "1.9.0",
+    log_name: "dns.log",
+    product: {
+      name: "Zeek",
+    },
+  },
+  src_endpoint: {
+    ip: 10.0.0.42,
+  },
+  query: {
+    hostname: "beacon.example.test",
+    type: "A",
+  },
+  answers: [
+    {
+      type: "CNAME",
+      rdata: "alias.example.test",
+    },
+    {
+      type: "A",
+      rdata: "answer.example.test",
+    },
+  ],
+  rcode: "NXDomain",
+  rcode_id: 3,
+  dst_endpoint: {
+    ip: 192.0.2.53,
+    port: 53,
+  },
+}
+// A missing log name is not a provenance conflict: the guard only rejects
+// known contradictions.
+{
+  id: "missing-log-name",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 4003,
+  activity_id: 6,
+  metadata: {
+    version: "1.9.0",
+    log_name: null,
+    product: {
+      name: "Zeek",
+    },
+  },
+  query: {
+    hostname: "beacon.example.test",
+    type: "A",
+  },
+  answers: [
+    {
+      type: "CNAME",
+      rdata: "alias.example.test",
+    },
+  ],
+  dst_endpoint: {
+    port: 53,
+  },
+}
+// Matches: a Zeek-authored rule is a DNS Activity rule after translation,
+// so producer metadata does not constrain it.
+{
+  id: "conflicting-log",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 4003,
+  activity_id: 6,
+  metadata: {
+    version: "1.9.0",
+    log_name: "http.log",
+    product: {
+      name: "Zeek",
+    },
+  },
+  query: {
+    hostname: "beacon.example.test",
+    type: "A",
+  },
+  answers: [
+    {
+      type: "CNAME",
+      rdata: "alias.example.test",
+    },
+  ],
+  dst_endpoint: {
+    port: 53,
+  },
+}
+// Matches: another producer's conformant DNS Activity satisfies the same
+// translated predicate.
+{
+  id: "conflicting-product",
+  time: 2024-05-01T12:00:03Z,
+  class_uid: 4003,
+  activity_id: 6,
+  metadata: {
+    version: "1.9.0",
+    log_name: "dns.log",
+    product: {
+      name: "Suricata",
+    },
+  },
+  query: {
+    hostname: "beacon.example.test",
+    type: "A",
+  },
+  answers: [
+    {
+      type: "CNAME",
+      rdata: "alias.example.test",
+    },
+  ],
+  dst_endpoint: {
+    port: 53,
+  },
+}
+// Guard must reject: wrong OCSF class.
+{
+  id: "wrong-class",
+  time: 2024-05-01T12:00:04Z,
+  class_uid: 4002,
+  activity_id: 6,
+  metadata: {
+    version: "1.9.0",
+    log_name: "dns.log",
+    product: {
+      name: "Zeek",
+    },
+  },
+  query: {
+    hostname: "beacon.example.test",
+    type: "A",
+  },
+  answers: [
+    {
+      type: "CNAME",
+      rdata: "alias.example.test",
+    },
+  ],
+  dst_endpoint: {
+    port: 53,
+  },
+}
+// Projection must not match: the answers list lacks the rule's value.
+{
+  id: "wrong-answer",
+  time: 2024-05-01T12:00:05Z,
+  class_uid: 4003,
+  activity_id: 6,
+  metadata: {
+    version: "1.9.0",
+    log_name: "dns.log",
+    product: {
+      name: "Zeek",
+    },
+  },
+  query: {
+    hostname: "beacon.example.test",
+    type: "A",
+  },
+  answers: [
+    {
+      type: "CNAME",
+      rdata: "other.example.test",
+    },
+  ],
+  dst_endpoint: {
+    port: 53,
+  },
+}

@@ -1,0 +1,8 @@
+title: Cron File Created
+logsource:
+  category: file_event
+  product: linux
+detection:
+  selection:
+    TargetFilename|startswith: '/etc/cron.d/'
+  condition: selection

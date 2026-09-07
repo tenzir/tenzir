@@ -1,0 +1,37 @@
+id: sigma/windows/bits_client
+title: Windows BITS transfer jobs
+logsource:
+  product: windows
+  service: bits-client
+guard:
+  # Provenance-scoped fields such as EventID use the BITS client namespace.
+  source: windows_bits
+  class-uid: 4002
+  # The job direction is not part of the event; only Other is reported.
+  activities: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  RemoteName:
+    primitive: path
+    path: http_request.url.url_string
+    kind: string
+  LocalName:
+    primitive: path
+    path: file.path
+    kind: string
+  processPath:
+    primitive: fallback
+    primary: actor.process.path
+    fallback: actor.process.file.path
+    kind: string
+    notes: The process that created the job.
+  processId:
+    primitive: path
+    path: actor.process.pid
+    kind: source-identifier
+    rule-value: stringify

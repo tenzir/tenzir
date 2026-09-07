@@ -1,0 +1,9 @@
+title: GCP IAM Policy Changed On Production Project
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    gcp.audit.method_name: SetIamPolicy
+    data.protoPayload.resourceName|contains: 'prod-'
+  condition: selection

@@ -1,0 +1,15 @@
+title: Command Shell With File Metadata Context
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentCommandLine|endswith: '\services.exe'
+    ParentUser: 'NT AUTHORITY\SYSTEM'
+    CurrentDirectory|startswith: 'C:\Users\'
+    Description: 'Windows Command Processor'
+    Product|contains: 'Windows'
+    Company: 'Microsoft Corporation'
+    FileVersion|startswith: '10.0'
+  condition: selection
+level: low

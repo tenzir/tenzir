@@ -1,0 +1,65 @@
+// OCSF Network Activity (4001) fixture events for the
+// `sigma/windows/network_connection` mapping family. Commented events are
+// near-miss negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 4001,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "3", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  connection_info: {direction_id: 2, protocol_name: "tcp", protocol_num: 6, protocol_ver_id: 4},
+  src_endpoint: {ip: 10.0.0.42, port: 51515, hostname: "ws01.corp.example"},
+  dst_endpoint: {ip: 203.0.113.10, port: 4444, hostname: "c2.example.test"},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\rundll32.exe", file: {path: "C:\\Windows\\System32\\rundll32.exe", type_id: 8}, cmd_line: "rundll32.exe payload.dll,Run"}, user: {domain: "CORP", name: "alice"}},
+}
+// Also matches: Traffic is an eligible activity for a connection.
+{
+  id: "traffic",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 4001,
+  activity_id: 6,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "3", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  connection_info: {direction_id: 2, protocol_name: "tcp", protocol_num: 6, protocol_ver_id: 4},
+  src_endpoint: {ip: 10.0.0.42, port: 51515, hostname: "ws01.corp.example"},
+  dst_endpoint: {ip: 203.0.113.10, port: 4444, hostname: "c2.example.test"},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\rundll32.exe", file: {path: "C:\\Windows\\System32\\rundll32.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}
+// Projection must not match: an inbound connection is not initiated.
+{
+  id: "inbound",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 4001,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "3", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  connection_info: {direction_id: 1, protocol_name: "tcp", protocol_num: 6, protocol_ver_id: 4},
+  src_endpoint: {ip: 10.0.0.42, port: 51515, hostname: "ws01.corp.example"},
+  dst_endpoint: {ip: 203.0.113.10, port: 4444, hostname: "c2.example.test"},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\rundll32.exe", file: {path: "C:\\Windows\\System32\\rundll32.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}
+// Projection must not match: a common port and a benign host.
+{
+  id: "benign-port",
+  time: 2024-05-01T12:00:03Z,
+  class_uid: 4001,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "3", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  connection_info: {direction_id: 2, protocol_name: "tcp", protocol_num: 6, protocol_ver_id: 4},
+  src_endpoint: {ip: 10.0.0.42, port: 51515, hostname: "ws01.corp.example"},
+  dst_endpoint: {ip: 198.51.100.5, port: 443, hostname: "update.example.com"},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\rundll32.exe", file: {path: "C:\\Windows\\System32\\rundll32.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}
+// Guard must reject: a DNS query is another class.
+{
+  id: "wrong-class",
+  time: 2024-05-01T12:00:04Z,
+  class_uid: 4003,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "22", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  query: {hostname: "c2.example.test"},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\rundll32.exe", file: {path: "C:\\Windows\\System32\\rundll32.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}

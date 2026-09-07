@@ -1,0 +1,10 @@
+title: Elevated Whoami From Security Log
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4688
+    NewProcessName|endswith: '\whoami.exe'
+    MandatoryLabel: S-1-16-12288
+  condition: selection

@@ -1,0 +1,48 @@
+id: sigma/windows/pipe_created
+title: Windows named pipe creation
+logsource:
+  category: pipe_created
+  product: windows
+  service: sysmon
+  optional-service: true
+guard:
+  # Provenance-scoped fields such as EventID use the Sysmon namespace.
+  source: sysmon
+  class-uid: 201003
+  # Access.
+  activities: [1]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  PipeName:
+    primitive: path
+    path: win_resource.name
+    kind: string
+  Image:
+    primitive: fallback
+    primary: actor.process.path
+    fallback: actor.process.file.path
+    kind: string
+    notes: Uses the acting process.
+  User:
+    primitive: principal
+    domain: actor.user.domain
+    name: actor.user.name
+    evidence: actor.user
+    notes: Uses the acting user, not the affected user.
+  ProcessId:
+    primitive: path
+    path: actor.process.pid
+    kind: source-identifier
+    rule-value: stringify
+  ProcessGuid:
+    primitive: path
+    path: actor.process.uid
+    kind: string
+unmapped:
+  - field: EventType
+    reason: The Windows Resource Activity mapping does not distinguish pipe creation from connection.

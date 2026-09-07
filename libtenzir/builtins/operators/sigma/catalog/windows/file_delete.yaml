@@ -1,0 +1,59 @@
+id: sigma/windows/file_delete
+title: Windows file deletion
+logsource:
+  category: file_delete
+  product: windows
+  service: sysmon
+  optional-service: true
+guard:
+  # Provenance-scoped fields such as EventID use the Sysmon namespace.
+  source: sysmon
+  class-uid: 1001
+  # Delete.
+  activities: [4]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  TargetFilename:
+    primitive: path
+    path: file.path
+    kind: string
+  Hashes:
+    primitive: fingerprints
+    path: file.hashes
+    notes: Never pairs an algorithm with another fingerprint's value.
+  Image:
+    primitive: fallback
+    primary: actor.process.path
+    fallback: actor.process.file.path
+    kind: string
+    notes: Uses the acting process.
+  CommandLine:
+    primitive: path
+    path: actor.process.cmd_line
+    kind: string
+    notes: Uses the acting process command line.
+  User:
+    primitive: principal
+    domain: actor.user.domain
+    name: actor.user.name
+    evidence: actor.user
+    notes: Uses the acting user, not the affected user.
+  ProcessId:
+    primitive: path
+    path: actor.process.pid
+    kind: source-identifier
+    rule-value: stringify
+  ProcessGuid:
+    primitive: path
+    path: actor.process.uid
+    kind: string
+unmapped:
+  - field: IsExecutable
+    reason: The File System Activity mapping folds the flag into the file type.
+  - field: Archived
+    reason: The Sysmon archive flag has no OCSF attribute.

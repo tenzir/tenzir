@@ -1,0 +1,39 @@
+// OCSF Process Activity (1007) fixture events for the
+// `sigma/windows/create_remote_thread` mapping family. Commented events are
+// near-miss negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 1007,
+  activity_id: 4,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "8", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  injection_type_id: 1,
+  actor: {process: {uid: "{A1B2}", pid: 1000, path: "C:\\Users\\alice\\Desktop\\inject.exe", file: {path: "C:\\Users\\alice\\Desktop\\inject.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+  process: {uid: "{C3D4}", pid: 700, path: "C:\\Windows\\explorer.exe", file: {path: "C:\\Windows\\explorer.exe", type_id: 8}, user: {domain: "NT AUTHORITY", name: "SYSTEM"}},
+  module: {base_address: "0x7FFA1234", file: {name: "kernel32.dll"}, function_name: "LoadLibraryW"},
+}
+// Projection must not match: another start function.
+{
+  id: "other-function",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 1007,
+  activity_id: 4,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "8", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  injection_type_id: 1,
+  actor: {process: {uid: "{A1B2}", pid: 1000, path: "C:\\Users\\alice\\Desktop\\inject.exe", file: {path: "C:\\Users\\alice\\Desktop\\inject.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+  process: {uid: "{C3D4}", pid: 700, path: "C:\\Windows\\explorer.exe", file: {path: "C:\\Windows\\explorer.exe", type_id: 8}, user: {domain: "NT AUTHORITY", name: "SYSTEM"}},
+  module: {base_address: "0x7FFA1234", file: {name: "ntdll.dll"}, function_name: "EtwpNotificationThread"},
+}
+// Guard must reject: opening a process is not thread creation.
+{
+  id: "open",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 1007,
+  activity_id: 3,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "10", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  actor: {process: {uid: "{A1B2}", pid: 1000, path: "C:\\Users\\alice\\Desktop\\inject.exe", file: {path: "C:\\Users\\alice\\Desktop\\inject.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+  process: {uid: "{C3D4}", pid: 700, path: "C:\\Windows\\explorer.exe", file: {path: "C:\\Windows\\explorer.exe", type_id: 8}, user: {domain: "NT AUTHORITY", name: "SYSTEM"}},
+}

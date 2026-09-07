@@ -1,0 +1,11 @@
+title: Whoami Privilege Enumeration
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4688
+    NewProcessName|endswith: '\whoami.exe'
+    CommandLine|contains: '/priv'
+    ParentProcessName|endswith: '\cmd.exe'
+  condition: selection

@@ -1,0 +1,10 @@
+title: Handle Requested On NTDS Database
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4656
+    ObjectType: File
+    ObjectName|endswith: '\ntds.dit'
+  condition: selection

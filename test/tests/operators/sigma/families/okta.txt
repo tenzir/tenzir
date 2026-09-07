@@ -1,0 +1,29 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/okta/rules/threat-detected.yml' for OCSF input
+ --> tests/operators/sigma/families/okta.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/okta/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `outcome.result`
+  = note: field `outcome.result` is unmapped: The Okta mapping translates the outcome into the OCSF status enumeration.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "Okta API Token Created",
+  id: "api-token",
+}
+{
+  rule: "Okta MFA Factor Reset",
+  id: "mfa-deactivate",
+}
+{
+  rule: "Okta Policy Rule Modified",
+  id: "policy-update",
+}
+{
+  rule: "Okta Session Started From Scripted Client",
+  id: "session-start",
+}
+{
+  rule: "User Added To Okta Administrators",
+  id: "group-add",
+}

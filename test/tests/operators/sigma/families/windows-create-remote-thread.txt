@@ -1,0 +1,13 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/windows-create-remote-thread/rules/source-parent.yml' for OCSF input
+ --> tests/operators/sigma/families/windows-create-remote-thread.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/windows-create-remote-thread/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `SourceParentImage`
+  = note: field `SourceParentImage` is unmapped: The Process Activity mapping does not carry the acting process's parent.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "Remote Thread Via LoadLibrary",
+  id: "match",
+}

@@ -1,0 +1,32 @@
+{
+  rule: "Any Run Key Registry Event",
+  id: "key-create",
+}
+{
+  rule: "Any Run Key Registry Event",
+  id: "security-value",
+}
+{
+  rule: "Any Run Key Registry Event",
+  id: "value-delete",
+}
+{
+  rule: "Any Run Key Registry Event",
+  id: "value-set",
+}
+{
+  rule: "Registry Key Renamed",
+  id: "key-rename",
+}
+{
+  rule: "Run Key Value Deleted",
+  id: "value-delete",
+}
+{
+  rule: "Run Key Value Set To PowerShell",
+  id: "security-value",
+}
+{
+  rule: "Run Key Value Set To PowerShell",
+  id: "value-set",
+}

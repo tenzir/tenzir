@@ -1,0 +1,10 @@
+title: AppX Package Deployed From Downloads
+logsource:
+  product: windows
+  service: appxdeployment-server
+detection:
+  selection:
+    EventID: 400
+    Path|contains: '\Downloads\'
+    HasFullTrust: 'true'
+  condition: selection

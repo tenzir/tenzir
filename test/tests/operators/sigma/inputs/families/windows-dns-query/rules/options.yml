@@ -1,0 +1,9 @@
+title: DNS Query With Unusual Options
+logsource:
+  category: dns_query
+  product: windows
+detection:
+  selection:
+    QueryName|endswith: '.test'
+    QueryOptions: 140737488355328
+  condition: selection

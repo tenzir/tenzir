@@ -1,0 +1,10 @@
+title: Script Block From Downloads Folder
+logsource:
+  category: ps_script
+  product: windows
+  service: powershell
+detection:
+  selection:
+    EventID: 4104
+    Path|contains: '\Downloads\'
+  condition: selection

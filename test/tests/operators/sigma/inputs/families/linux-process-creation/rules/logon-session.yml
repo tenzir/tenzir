@@ -1,0 +1,8 @@
+title: Process In Root Logon Session
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    LogonId: '0x0'
+  condition: selection

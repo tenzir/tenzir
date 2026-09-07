@@ -1,0 +1,14 @@
+title: Curl Piped To Shell
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: '/curl'
+    CommandLine|contains|all:
+      - 'http'
+      - '| sh'
+    ParentImage|endswith: '/bash'
+    CurrentDirectory: '/tmp'
+    User: 'root'
+  condition: selection

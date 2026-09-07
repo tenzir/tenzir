@@ -1,0 +1,10 @@
+title: PsExec Service Installation
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4697
+    ServiceName: PSEXESVC
+    ServiceFileName|endswith: '\PSEXESVC.exe'
+  condition: selection

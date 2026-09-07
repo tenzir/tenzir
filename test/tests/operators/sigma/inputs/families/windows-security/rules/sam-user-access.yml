@@ -1,0 +1,10 @@
+title: SAM User Object Accessed By LSASS
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4661
+    ObjectType: SAM_USER
+    AccessList|contains: '%%5400'
+  condition: selection

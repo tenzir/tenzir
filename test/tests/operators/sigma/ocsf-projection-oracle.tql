@@ -1,0 +1,62 @@
+from {
+  id: "direct",
+  EventID: 1,
+  ParentImage: r"C:\Windows\System32\services.exe",
+  Image: r"C:\Windows\System32\cmd.exe",
+  OriginalFileName: "Cmd.Exe",
+  CommandLine: "cmd.exe /c whoami",
+  IntegrityLevel: "High",
+  User: r"CORP\alice",
+  Hashes: "SHA256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+}
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-process-creation.yaml",
+      mapping="direct", format="plain"
+select id=event.id
+
+merge {
+from {
+  id: "automatic",
+  EventID: 1,
+  ParentImage: r"C:\Windows\System32\services.exe",
+  Image: r"C:\Windows\System32\cmd.exe",
+  OriginalFileName: "Cmd.Exe",
+  CommandLine: "cmd.exe /c whoami",
+  IntegrityLevel: "High",
+  User: r"CORP\alice",
+  Hashes: "SHA256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+}
+class_uid = 1007
+activity_id = 1
+metadata = {
+  version: "1.9.0",
+  event_code: string(EventID),
+  log_name: "Microsoft-Windows-Sysmon/Operational",
+  product: {
+    name: "Microsoft Sysmon",
+  },
+}
+process = {
+  path: Image,
+  cmd_line: CommandLine,
+  integrity_id: 4,
+  user: {
+    domain: User.split("\\")[0]?,
+    name: User.split("\\")[-1]?,
+  },
+  file: {
+    internal_name: OriginalFileName,
+    hashes: [{
+      algorithm_id: 3,
+      value: Hashes.split("=", max=1)[1]?,
+    }],
+  },
+  parent_process: {
+    path: ParentImage,
+  },
+}
+drop EventID, ParentImage, Image, OriginalFileName, CommandLine, IntegrityLevel, User, Hashes
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-process-creation.yaml",
+      format="plain"
+select id=event.id
+}
+sort id

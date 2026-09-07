@@ -1,0 +1,8 @@
+title: Single-Factor Sign-In
+logsource:
+  product: azure
+  service: signinlogs
+detection:
+  selection:
+    AuthenticationRequirement: singleFactorAuthentication
+  condition: selection

@@ -1,0 +1,26 @@
+// OCSF Detection Finding (2004) fixture events for the `sigma/azure/riskdetection`
+// mapping family. Commented events are near-miss negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 2004,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["cloud", "security_control"], log_name: "identityProtection/riskDetections", product: {name: "Microsoft Entra ID Protection", vendor_name: "Microsoft"}},
+  severity_id: 4,
+  risk_level_id: 3,
+  status_id: 1,
+  is_alert: true,
+  finding_info: {title: "anonymizedIPAddress", uid: "rd1", desc: "Sign-in from an anonymous IP address"},
+}
+// Projection must not match: the risk state is remediated, not at risk.
+{
+  id: "remediated",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 2004,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["cloud", "security_control"], log_name: "identityProtection/riskDetections", product: {name: "Microsoft Entra ID", vendor_name: "Microsoft"}},
+  risk_level_id: 3,
+  status_id: 4,
+  is_alert: true,
+  finding_info: {title: "anonymizedIPAddress", uid: "rd2"},
+}

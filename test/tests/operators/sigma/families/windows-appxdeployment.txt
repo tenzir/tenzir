@@ -1,0 +1,8 @@
+{
+  rule: "AppX Package Deployed By PowerShell",
+  id: "match",
+}
+{
+  rule: "AppX Package Deployed From Downloads",
+  id: "match",
+}

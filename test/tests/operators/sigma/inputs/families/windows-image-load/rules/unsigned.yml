@@ -1,0 +1,8 @@
+title: Unsigned Module Loaded
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    Signed: 'false'
+  condition: selection

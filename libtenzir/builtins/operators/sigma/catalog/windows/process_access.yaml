@@ -1,0 +1,97 @@
+id: sigma/windows/process_access
+title: Windows process access
+logsource:
+  category: process_access
+  product: windows
+  service: sysmon
+  optional-service: true
+guard:
+  # Provenance-scoped fields such as EventID use the Sysmon namespace.
+  source: sysmon
+  class-uid: 1007
+  # Open.
+  activities: [3]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  SourceImage:
+    primitive: fallback
+    primary: actor.process.path
+    fallback: actor.process.file.path
+    kind: string
+    notes: Uses the acting process.
+  TargetImage:
+    primitive: fallback
+    primary: process.path
+    fallback: process.file.path
+    kind: string
+    notes: Uses the affected process.
+  SourceUser:
+    primitive: principal
+    domain: actor.user.domain
+    name: actor.user.name
+    evidence: actor.user
+  TargetUser:
+    primitive: principal
+    domain: process.user.domain
+    name: process.user.name
+    evidence: process.user
+  SourceProcessId:
+    primitive: path
+    path: actor.process.pid
+    kind: source-identifier
+    rule-value: stringify
+  TargetProcessId:
+    primitive: path
+    path: process.pid
+    kind: source-identifier
+    rule-value: stringify
+  SourceProcessGUID:
+    primitive: path
+    path: actor.process.uid
+    kind: string
+  TargetProcessGUID:
+    primitive: path
+    path: process.uid
+    kind: string
+  GrantedAccess:
+    primitive: path
+    path: requested_permissions
+    kind: integral
+    rule-value:
+      dictionary:
+        name: process access mask
+        entries:
+          "0x1000": 4096
+          "0x1010": 4112
+          "0x1400": 5120
+          "0x1410": 5136
+          "0x1418": 5144
+          "0x1438": 5176
+          "0x143a": 5178
+          "0x1f0fff": 2035711
+          "0x1f1fff": 2039807
+          "0x1f2fff": 2043903
+          "0x1f3fff": 2047999
+          "0x1fffff": 2097151
+          "0x40": 64
+          "0x100000": 1048576
+          "0x100040": 1048640
+          "0x1f00": 7936
+          "0x1fff": 8191
+          "0x2000": 8192
+          "0x0800": 2048
+          "0x800": 2048
+          "0x0400": 1024
+          "0x400": 1024
+          "0x0040": 64
+          "0x0010": 16
+          "0x10": 16
+    notes: Translates the exact hexadecimal mask to the OCSF integer; rules that match mask fragments are skipped.
+unmapped:
+  - field: CallTrace
+    reason: The call stack has no OCSF attribute.

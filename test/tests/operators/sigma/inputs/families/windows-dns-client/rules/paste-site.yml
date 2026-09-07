@@ -1,0 +1,9 @@
+title: DNS Client Query To Paste Site
+logsource:
+  product: windows
+  service: dns-client
+detection:
+  selection:
+    EventID: 3008
+    QueryName|contains: 'pastebin'
+  condition: selection

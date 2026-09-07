@@ -1,0 +1,9 @@
+title: IPv6 Outbound Connection
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Initiated: 'true'
+    SourceIsIpv6: 'true'
+  condition: selection

@@ -1,0 +1,15 @@
+title: Windows Defender Service Stopped
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    EventID: 7036
+    Provider_Name: 'Service Control Manager'
+    param1:
+      - 'Windows Defender Antivirus Service'
+      - 'Service antivirus Microsoft Defender'
+    param2:
+      - 'stopped'
+      - 'arrêté'
+  condition: selection

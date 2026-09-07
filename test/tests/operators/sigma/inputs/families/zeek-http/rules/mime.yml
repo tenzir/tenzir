@@ -1,0 +1,8 @@
+title: Executable Download Over HTTP
+logsource:
+  product: zeek
+  service: http
+detection:
+  selection:
+    resp_mime_types|contains: 'application/x-dosexec'
+  condition: selection

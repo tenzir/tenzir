@@ -1,0 +1,10 @@
+title: PsExec Binary Written To Admin Share
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 5145
+    ShareName|contains: 'ADMIN$'
+    RelativeTargetName|endswith: 'PSEXESVC.exe'
+  condition: selection

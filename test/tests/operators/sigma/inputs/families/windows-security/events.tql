@@ -1,0 +1,265 @@
+// OCSF fixture events for the `sigma/windows/security_*` mapping alternatives.
+// One selector spans several classes; each event answers to exactly one
+// alternative. Commented events are near-miss negatives.
+{
+  id: "logon",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 3002,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4624", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  status_id: 1,
+  logon_type_id: 10,
+  logon_type: "Remote Interactive",
+  user: {uid: "S-1-5-21-1-1-1-1002", name: "bob", domain: "CORP"},
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}},
+  src_endpoint: {ip: 198.51.100.23, port: 50123, hostname: "kali"},
+  auth_protocol: "Negotiate",
+  auth_protocol_id: 99,
+  logon_process: {name: "User32"},
+  session: {uid_alt: "0x9a1b2"},
+}
+{
+  id: "seclogo-logon",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 3002,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4624", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  status_id: 1,
+  logon_type_id: 9,
+  user: {name: "bob", domain: "CORP"},
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}},
+  logon_process: {name: "seclogo"},
+  auth_protocol: "Negotiate",
+}
+{
+  id: "logon-failed",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 3002,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4625", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  status_id: 2,
+  status_code: "0xC000006D",
+  logon_type_id: 3,
+  user: {name: "admin", domain: "CORP"},
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}},
+  src_endpoint: {ip: 198.51.100.23, port: 50124, hostname: "kali"},
+  auth_protocol: "NTLM",
+  auth_protocol_id: 1,
+}
+{
+  id: "explicit-credentials",
+  time: 2024-05-01T12:00:03Z,
+  class_uid: 3002,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4648", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  user: {name: "svc_backup", domain: "CORP"},
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}, process: {pid: 420, path: "C:\\Windows\\System32\\wsmprovhost.exe"}},
+  dst_endpoint: {hostname: "dc01.corp.example"},
+  src_endpoint: {ip: 10.0.0.42, port: 0},
+}
+{
+  id: "process-create",
+  time: 2024-05-01T12:00:04Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4688", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  status_id: 1,
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}},
+  process: {pid: 5000, path: "C:\\Windows\\System32\\whoami.exe", cmd_line: "whoami /priv", integrity_id: 4, file: {path: "C:\\Windows\\System32\\whoami.exe", type_id: 8}, parent_process: {pid: 4000, path: "C:\\Windows\\System32\\cmd.exe"}},
+}
+{
+  id: "handle-request",
+  time: 2024-05-01T12:00:05Z,
+  class_uid: 1001,
+  activity_id: 14,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4656", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  status_id: 2,
+  access_mask: 1180063,
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}, process: {pid: 4212, path: "C:\\Windows\\System32\\notepad.exe"}},
+  file: {path: "C:\\Windows\\NTDS\\ntds.dit", name: "ntds.dit", type_id: 0},
+}
+{
+  id: "service-install",
+  time: 2024-05-01T12:00:06Z,
+  class_uid: 201004,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4697", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}},
+  win_service: {name: "PSEXESVC", service_file: {path: "%SystemRoot%\\PSEXESVC.exe", type_id: 8}, service_start_name: "LocalSystem"},
+}
+{
+  id: "account-create",
+  time: 2024-05-01T12:00:07Z,
+  class_uid: 3001,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4720", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}},
+  user: {uid: "S-1-5-21-1-1-1-1500", name: "support", domain: "WS01"},
+}
+{
+  id: "group-add",
+  time: 2024-05-01T12:00:08Z,
+  class_uid: 3006,
+  activity_id: 3,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4728", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}},
+  group: {uid: "S-1-5-21-1-1-1-512", name: "Domain Admins", domain: "CORP"},
+  user: {uid: "S-1-5-21-1-1-1-1500", name: "CN=support,CN=Users,DC=corp,DC=example"},
+}
+{
+  id: "privileges",
+  time: 2024-05-01T12:00:09Z,
+  class_uid: 3007,
+  activity_id: 14,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4704", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}},
+  user: {uid: "S-1-5-21-1-1-1-1500", name: "support", domain: "CORP"},
+  privileges: ["SeDebugPrivilege", "SeTcbPrivilege"],
+}
+{
+  id: "file-access",
+  time: 2024-05-01T12:00:10Z,
+  class_uid: 1001,
+  activity_id: 99,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4663", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  status_id: 1,
+  access_mask: 2,
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}, process: {pid: 1234, path: "C:\\Windows\\System32\\svchost.exe"}},
+  file: {path: "C:\\Windows\\NTDS\\ntds.dit", name: "ntds.dit", type_id: 0},
+}
+{
+  id: "key-access",
+  time: 2024-05-01T12:00:11Z,
+  class_uid: 201001,
+  activity_id: 99,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4663", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  status_id: 1,
+  access_mask: 2,
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}, process: {pid: 1234, path: "C:\\Windows\\System32\\reg.exe"}},
+  reg_key: {path: "\\REGISTRY\\MACHINE\\SECURITY\\Policy\\Secrets"},
+}
+{
+  id: "share-access",
+  time: 2024-05-01T12:00:12Z,
+  class_uid: 4006,
+  activity_id: 99,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "5145", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  status_id: 1,
+  share: "\\\\*\\ADMIN$",
+  share_type_id: 1,
+  file: {path: "PSEXESVC.exe", type_id: 0},
+  src_endpoint: {ip: 198.51.100.23, port: 445},
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}},
+}
+{
+  id: "directory-change",
+  time: 2024-05-01T12:00:13Z,
+  class_uid: 3004,
+  activity_id: 3,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "5136", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}},
+  entity: {type_id: 99, type: "Directory Object", name: "CN=Domain Admins,CN=Users,DC=corp,DC=example", uid: "{5F8}", data: {object_class: "group", attribute: "member", value: "CN=support,CN=Users,DC=corp,DC=example", operation: "%%14674", object_server: "DS"}},
+}
+{
+  id: "sam-access",
+  time: 2024-05-01T12:00:14Z,
+  class_uid: 3004,
+  activity_id: 2,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4661", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}, process: {pid: 700, path: "C:\\Windows\\System32\\lsass.exe"}},
+  entity: {type_id: 99, type: "Directory or SAM Object", name: "S-1-5-21-1-1-1-500", data: {object_type: "SAM_USER", object_server: "Security Account Manager"}},
+  access_list: ["%%5392", "%%5400"],
+  access_mask: 1,
+}
+{
+  id: "registry-value",
+  time: 2024-05-01T12:00:15Z,
+  class_uid: 201002,
+  activity_id: 3,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4657", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}, process: {pid: 1234, path: "C:\\Windows\\regedit.exe"}},
+  reg_value: {path: "\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", name: "Updater", type: "REG_SZ", data: "powershell.exe -enc AAAA"},
+  prev_reg_value: {path: "\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", name: "Updater", type: "REG_SZ", data: "updater.exe"},
+}
+{
+  id: "task-create",
+  time: 2024-05-01T12:00:16Z,
+  class_uid: 1006,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4698", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}},
+  job: {name: "\\Microsoft\\Windows\\Maintenance\\Updater"},
+}
+{
+  id: "log-clear",
+  time: 2024-05-01T12:00:17Z,
+  class_uid: 1008,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "1102", log_name: "Security", product: {name: "Microsoft-Windows-Eventlog", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  severity_id: 4,
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}},
+}
+{
+  id: "special-privileges",
+  time: 2024-05-01T12:00:18Z,
+  class_uid: 3003,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4672", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"},
+  session: {uid_alt: "0x3e7c1"},
+  privileges: ["SeDebugPrivilege", "SeLoadDriverPrivilege"],
+}
+// Guard must reject the EventID rules: a Sysmon process event is a known
+// other producer. Plain process rules would still match.
+{
+  id: "sysmon-process",
+  time: 2024-05-01T12:00:19Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "1", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  process: {pid: 5000, path: "C:\\Windows\\System32\\whoami.exe", cmd_line: "whoami /priv", parent_process: {path: "C:\\Windows\\System32\\cmd.exe"}},
+}
+// Guard must reject: the System log service installation is excluded by
+// name for Security-log rules.
+{
+  id: "system-service",
+  time: 2024-05-01T12:00:20Z,
+  class_uid: 201004,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "7045", log_name: "System", product: {name: "Service Control Manager", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  win_service: {name: "PSEXESVC", cmd_line: "%SystemRoot%\\PSEXESVC.exe", service_start_name: "LocalSystem"},
+}
+// Guard must reject: a Linux host contradicts the Windows logsource.
+{
+  id: "linux-logon",
+  time: 2024-05-01T12:00:21Z,
+  class_uid: 3002,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4624", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {os: {type_id: 200, name: "Linux"}},
+  logon_type_id: 10,
+  user: {name: "bob", domain: "CORP"},
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}},
+  src_endpoint: {ip: 198.51.100.23},
+}

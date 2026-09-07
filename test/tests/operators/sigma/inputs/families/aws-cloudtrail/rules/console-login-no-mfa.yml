@@ -1,0 +1,9 @@
+title: Console Login Without MFA
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventName: ConsoleLogin
+    additionalEventData.MFAUsed: 'No'
+  condition: selection

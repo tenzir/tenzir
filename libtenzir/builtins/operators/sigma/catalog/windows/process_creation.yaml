@@ -1,0 +1,105 @@
+id: sigma/windows/process_creation
+title: Windows process creation
+logsource:
+  category: process_creation
+  product: windows
+  service: sysmon
+  optional-service: true
+guard:
+  # Provenance-scoped fields such as EventID use the Sysmon namespace.
+  source: sysmon
+  class-uid: 1007
+  activities: [1]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  Image:
+    primitive: fallback
+    primary: process.path
+    fallback: process.file.path
+    kind: string
+  ParentImage:
+    primitive: fallback
+    primary: process.parent_process.path
+    fallback: process.parent_process.file.path
+    kind: string
+    notes: Uses the parent process only.
+  OriginalFileName:
+    primitive: path
+    path: process.file.internal_name
+    kind: string
+    notes: Uses embedded executable identity and never the on-disk file name.
+  CommandLine:
+    primitive: path
+    path: process.cmd_line
+    kind: string
+    notes: Applies every modifier to one projected command line.
+  IntegrityLevel:
+    primitive: path
+    path: process.integrity_id
+    kind: integral
+    rule-value:
+      dictionary:
+        name: Windows integrity level
+        entries:
+          untrusted: 1
+          low: 2
+          medium: 3
+          high: 4
+          system: 5
+          protected: 6
+          other: 99
+          # Stock rules also spell levels as mandatory-label SIDs.
+          s-1-16-0: 1
+          s-1-16-4096: 2
+          s-1-16-8192: 3
+          s-1-16-12288: 4
+          s-1-16-16384: 5
+          s-1-16-20480: 6
+    notes: Accepts level names and mandatory-label SIDs; a rule with another value is skipped.
+  User:
+    primitive: principal
+    domain: process.user.domain
+    name: process.user.name
+    evidence: process.user
+    notes: Uses the process user, not an arbitrary User object.
+  ParentUser:
+    primitive: principal
+    domain: process.parent_process.user.domain
+    name: process.parent_process.user.name
+    evidence: process.parent_process.user
+    notes: Uses the parent process user only.
+  ParentCommandLine:
+    primitive: path
+    path: process.parent_process.cmd_line
+    kind: string
+  CurrentDirectory:
+    primitive: path
+    path: process.working_directory
+    kind: string
+  Description:
+    primitive: path
+    path: process.file.desc
+    kind: string
+    notes: Uses the embedded file description.
+  Product:
+    primitive: path
+    path: process.file.product.name
+    kind: string
+    notes: Uses the embedded product name.
+  Company:
+    primitive: path
+    path: process.file.company_name
+    kind: string
+  FileVersion:
+    primitive: path
+    path: process.file.version
+    kind: string
+  Hashes:
+    primitive: fingerprints
+    path: process.file.hashes
+    notes: Never pairs an algorithm with another fingerprint's value.

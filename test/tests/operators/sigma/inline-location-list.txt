@@ -1,0 +1,29 @@
+warning: sigma operator skips rule '<rules[0]>' for OCSF input
+  --> tests/operators/sigma/inline-location-list.tql:10:14
+   |
+10 | sigma rules=["title: Escaped plain in list\nlogsource:\n  category: process_creation\n  product: windows\ndetection:\n  selection:\n    CallTrace|contains: ntdll.dll\n  condition: selection", r#"
+   |              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+   = note: unresolved Sigma fields: `CallTrace`
+   = note: field `CallTrace` is absent from the OCSF schema
+   = note: use `mapping="direct"` only when the rule fields exist literally
+
+warning: sigma operator skips rule '<rules[1]>' for OCSF input
+  --> tests/operators/sigma/inline-location-list.tql:11:1
+   |
+11 | title: Raw in list
+   | ~~~~~~~~~~~~~~~~~~
+   |
+   = note: unresolved Sigma fields: `CallTrace`
+   = note: field `CallTrace` is absent from the OCSF schema
+   = note: use `mapping="direct"` only when the rule fields exist literally
+
+warning: sigma operator skips rule '<rules[2]>' for OCSF input
+  --> tests/operators/sigma/inline-location-list.tql:19:5
+   |
+19 | "#, "title: Computed in list\nlogsource:\n  category: process_creation\n  product: windows\ndetection:\n  selection:\n    CallTrace|contains: ntdll.dll" + $suffix], format="plain"
+   |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+   = note: unresolved Sigma fields: `CallTrace`
+   = note: field `CallTrace` is absent from the OCSF schema
+   = note: use `mapping="direct"` only when the rule fields exist literally

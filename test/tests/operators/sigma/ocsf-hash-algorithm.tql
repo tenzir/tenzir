@@ -1,0 +1,58 @@
+from {
+  id: "other",
+  class_uid: 1007,
+  metadata: {
+    version: "1.9.0",
+  },
+  process: {
+    file: {
+      hashes: [{
+        algorithm: "IMPHASH",
+        algorithm_id: 99,
+        value: "deadbeef",
+      }],
+    },
+  },
+}
+sigma rules=r#"
+title: Custom fingerprint algorithm
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Hashes|contains: IMPHASH=deadbeef
+  condition: selection
+"#, format="plain"
+select id=event.id
+
+merge {
+from {
+  id: "future",
+  class_uid: 1007,
+  metadata: {
+    version: "1.9.0",
+  },
+  process: {
+    file: {
+      hashes: [{
+        algorithm: "FUTUREHASH",
+        algorithm_id: 31337,
+        value: "cafebabe",
+      }],
+    },
+  },
+}
+sigma rules=r#"
+title: Future fingerprint algorithm
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Hashes|contains: FUTUREHASH=cafebabe
+  condition: selection
+"#, format="plain"
+select id=event.id
+}
+sort id

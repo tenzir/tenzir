@@ -1,0 +1,55 @@
+// OCSF Windows Service Activity (201004) fixture events for the
+// `sigma/windows/system_service` mapping family. Commented events are near-miss
+// negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 201004,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "7045", log_name: "System", product: {name: "Service Control Manager", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  win_service: {name: "evilsvc", cmd_line: "%COMSPEC% /c powershell -nop -w hidden -enc AAAA", service_start_name: "LocalSystem", service_file: {path: "%COMSPEC%", type_id: 8}, service_start_type_id: 3, service_type_id: 3},
+}
+{
+  id: "defender-stopped",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 201004,
+  activity_id: 4,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "7036", log_name: "System", product: {name: "Service Control Manager", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  actor: {},
+  win_service: {name: "Windows Defender Antivirus Service"},
+}
+{
+  id: "log-cleared",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 1008,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "104", log_name: "System", product: {name: "Microsoft-Windows-Eventlog", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  severity_id: 3,
+  log_name: "Microsoft-Windows-PowerShell/Operational",
+  actor: {user: {name: "alice", domain: "CORP"}},
+}
+// Guard must reject: the Security log service installation is excluded by
+// name for System-log rules.
+{
+  id: "security-service",
+  time: 2024-05-01T12:00:03Z,
+  class_uid: 201004,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4697", log_name: "Security", product: {name: "Microsoft-Windows-Security-Auditing", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  actor: {user: {uid: "S-1-5-21-1-1-1-1001", name: "alice", domain: "CORP"}, session: {uid_alt: "0x3e7c1"}},
+  win_service: {name: "evilsvc", service_file: {path: "%COMSPEC%", type_id: 8}, service_start_name: "LocalSystem"},
+}
+// Guard must reject: another provider in the System log.
+{
+  id: "other-provider",
+  time: 2024-05-01T12:00:04Z,
+  class_uid: 201004,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "7045", log_name: "System", product: {name: "Microsoft-Windows-Kernel-General", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  win_service: {name: "evilsvc", cmd_line: "%COMSPEC% /c powershell -nop -w hidden -enc AAAA"},
+}

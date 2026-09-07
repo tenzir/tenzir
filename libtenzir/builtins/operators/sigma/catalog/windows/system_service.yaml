@@ -1,0 +1,73 @@
+id: sigma/windows/system_service
+title: Windows System log service activity
+logsource:
+  product: windows
+  service: system
+guard:
+  # Provenance-scoped fields such as EventID use the System log namespace;
+  # the Security log shares the source kind and is excluded by name.
+  source: windows_security
+  log-name: System
+  conflicting-log-names: [Security]
+  class-uid: 201004
+  # Create, Reconfigure, Start, Stop, and Pause.
+  activities: [1, 2, 3, 4, 5]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  Provider_Name:
+    primitive: path
+    path: metadata.product.name
+    kind: string
+    provenance-scoped: true
+    notes: The event provider becomes the OCSF product name.
+  Channel:
+    primitive: path
+    path: metadata.log_name
+    kind: string
+    provenance-scoped: true
+  ServiceName:
+    primitive: path
+    path: win_service.name
+    kind: string
+  ImagePath:
+    primitive: path
+    path: win_service.cmd_line
+    kind: string
+    notes: The service command line as registered.
+  AccountName:
+    primitive: path
+    path: win_service.service_start_name
+    kind: string
+  param1:
+    primitive: path
+    path: win_service.name
+    kind: string
+    notes: Service state changes (7036) name the service in the first parameter.
+  param2:
+    primitive: path
+    path: activity_id
+    kind: integral
+    rule-value:
+      dictionary:
+        name: service state
+        entries:
+          running: 3
+          stopped: 4
+          paused: 5
+          "en cours d’exécution": 3
+          arrêté: 4
+          wird ausgeführt: 3
+          beendet: 4
+    notes: Translates the localized service state (7036) to the OCSF activity; a rule with another state is skipped.
+unmapped:
+  - field: ServiceType
+    reason: The Windows Service Activity mapping translates the type into enumerations, not the rendered code.
+  - field: StartType
+    reason: The Windows Service Activity mapping translates the start type into enumerations, not the rendered code.
+  - field: Computer
+    reason: The host name lives in device.hostname, which no stock rule targets through this field.

@@ -1,0 +1,50 @@
+from {
+  id: "absent",
+  class_uid: 1007,
+  metadata: {
+    version: "1.9.0",
+  },
+  process: {
+    file: {},
+  },
+}
+sigma rules=r#"
+title: Missing original filename
+logsource:
+  category: process_creation
+  product: windows
+  service: sysmon
+detection:
+  selection:
+    OriginalFileName|exists: false
+  condition: selection
+"#, format="plain"
+select id=event.id
+
+merge {
+from {
+  id: "null",
+  class_uid: 1007,
+  metadata: {
+    version: "1.9.0",
+  },
+  process: {
+    file: {
+      internal_name: null,
+    },
+  },
+}
+sigma rules=r#"
+title: Present null original filename
+logsource:
+  category: process_creation
+  product: windows
+  service: sysmon
+detection:
+  selection:
+    OriginalFileName|exists: true
+  condition: selection
+"#, format="plain"
+select id=event.id
+}
+sort id

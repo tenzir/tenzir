@@ -1,0 +1,13 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/azure-signinlogs/rules/mfa-requirement.yml' for OCSF input
+ --> tests/operators/sigma/families/azure-signinlogs.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/azure-signinlogs/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `AuthenticationRequirement`
+  = note: field `AuthenticationRequirement` is unmapped: The Authentication mapping folds the requirement into the MFA flag.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "Failed Azure Portal Sign-In",
+  id: "match",
+}

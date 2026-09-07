@@ -1,0 +1,12 @@
+{
+  id: "match",
+}
+{
+  id: "missing-log-name",
+}
+{
+  id: "conflicting-log",
+}
+{
+  id: "conflicting-product",
+}

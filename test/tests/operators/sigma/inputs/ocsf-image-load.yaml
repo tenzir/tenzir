@@ -1,0 +1,14 @@
+title: Validly Signed Vault Client Load
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: '\vaultcli.dll'
+    OriginalFileName: 'vaultcli.dll'
+    Signature: 'Microsoft Windows'
+    SignatureStatus: 'Valid'
+    Hashes|contains: 'SHA256=efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef'
+  filter_system:
+    Image|startswith: 'C:\Windows\System32\'
+  condition: selection and not filter_system

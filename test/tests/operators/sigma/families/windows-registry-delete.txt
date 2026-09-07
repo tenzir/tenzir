@@ -1,0 +1,12 @@
+{
+  rule: "Defender Policy Key Deleted",
+  id: "key-delete",
+}
+{
+  rule: "Defender Policy Registry Deletion",
+  id: "key-delete",
+}
+{
+  rule: "Defender Policy Registry Deletion",
+  id: "value-delete",
+}

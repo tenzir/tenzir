@@ -1,0 +1,10 @@
+title: Unmet Signing Level Requirement
+logsource:
+  product: windows
+  service: codeintegrity-operational
+detection:
+  selection:
+    EventID: 3033
+    FileNameBuffer|endswith: '\nvspcap64.dll'
+    ProcessNameBuffer|endswith: '\firefox.exe'
+  condition: selection

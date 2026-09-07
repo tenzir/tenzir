@@ -1,0 +1,9 @@
+{
+  id: "integrity-fieldref",
+}
+{
+  id: "mapped-to-literal",
+}
+{
+  id: "mapped-to-mapped",
+}

@@ -1,0 +1,44 @@
+id: sigma/windows/security_scheduled_job
+title: Windows Security scheduled task change
+logsource:
+  product: windows
+  service: security
+guard:
+  # Provenance-scoped fields such as EventID use the Security log namespace;
+  # the System log shares the source kind and is excluded by name.
+  source: windows_security
+  log-name: Security
+  conflicting-log-names: [System]
+  class-uid: 1006
+  # Create, Update, Delete, Enable, and Disable.
+  activities: [1, 2, 3, 4, 5]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  SubjectUserName:
+    primitive: path
+    path: actor.user.name
+    kind: string
+  SubjectDomainName:
+    primitive: path
+    path: actor.user.domain
+    kind: string
+  SubjectUserSid:
+    primitive: path
+    path: actor.user.uid
+    kind: string
+  SubjectLogonId:
+    primitive: path
+    path: actor.session.uid_alt
+    kind: string
+  TaskName:
+    primitive: path
+    path: job.name
+    kind: string
+unmapped:
+  - field: TaskContent
+    reason: The Scheduled Job Activity mapping does not preserve the task XML.

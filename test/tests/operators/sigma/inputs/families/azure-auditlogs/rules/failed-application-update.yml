@@ -1,0 +1,9 @@
+title: Failed Application Update
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    ActivityDisplayName: 'Update application'
+    Result: failure
+  condition: selection

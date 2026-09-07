@@ -1,0 +1,28 @@
+// OCSF HTTP Activity (4002) fixture events for the `sigma/zeek/http` mapping
+// family. Commented events are near-miss negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 4002,
+  activity_id: 6,
+  metadata: {version: "1.9.0", log_name: "http.log", product: {name: "Zeek"}},
+  status_id: 0,
+  src_endpoint: {ip: 10.0.0.42, port: 51515},
+  dst_endpoint: {ip: 203.0.113.10, port: 80},
+  http_request: {http_method: "Post", url: {hostname: "c2.example.test", path: "/gate.php"}, user_agent: "Mozilla/4.0 (compatible; MSIE 6.0)", version: "1.1"},
+  http_response: {code: 200, status: "OK"},
+  connection_info: {direction_id: 99, protocol_name: "tcp", protocol_num: 6},
+}
+// Projection must not match: a GET to another path.
+{
+  id: "get",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 4002,
+  activity_id: 3,
+  metadata: {version: "1.9.0", log_name: "http.log", product: {name: "Zeek"}},
+  status_id: 0,
+  src_endpoint: {ip: 10.0.0.42, port: 51516},
+  dst_endpoint: {ip: 203.0.113.10, port: 80},
+  http_request: {http_method: "Get", url: {hostname: "c2.example.test", path: "/index.html"}, user_agent: "Mozilla/5.0"},
+  http_response: {code: 200},
+}

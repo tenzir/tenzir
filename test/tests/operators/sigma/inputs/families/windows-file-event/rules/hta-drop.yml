@@ -1,0 +1,9 @@
+title: HTA File Written To Temp
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|contains: '\AppData\Local\Temp\'
+    TargetFilename|endswith: '.hta'
+  condition: selection

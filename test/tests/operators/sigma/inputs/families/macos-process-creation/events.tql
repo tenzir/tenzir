@@ -1,0 +1,21 @@
+// OCSF Process Activity (1007) fixture events for the `sigma/macos/process_creation`
+// mapping family. Commented events are near-miss negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], event_code: "1", log_name: "Linux-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon"}},
+  device: {hostname: "srv01", os: {type_id: 300, name: "macOS"}},
+  process: {pid: 4242, path: "/usr/bin/osascript", cmd_line: "osascript -e 'display dialog'", file: {path: "/usr/bin/osascript", type_id: 8}, user: {name: "root"}, working_directory: "/tmp", parent_process: {path: "/bin/zsh", cmd_line: "/bin/zsh", file: {path: "/bin/zsh"}}},
+}
+// Guard must reject: a Linux host contradicts a macOS logsource.
+{
+  id: "linux",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], event_code: "1", log_name: "Linux-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon"}},
+  device: {hostname: "srv01", os: {type_id: 200, name: "Linux"}},
+  process: {pid: 4242, path: "/usr/bin/osascript", cmd_line: "osascript -e 'display dialog'", file: {path: "/usr/bin/osascript", type_id: 8}, user: {name: "root"}, working_directory: "/tmp", parent_process: {path: "/bin/zsh", cmd_line: "/bin/zsh", file: {path: "/bin/zsh"}}},
+}

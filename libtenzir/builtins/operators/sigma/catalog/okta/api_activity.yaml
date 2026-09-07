@@ -1,0 +1,66 @@
+id: sigma/okta/api_activity
+title: Okta API token and OAuth activity
+logsource:
+  product: okta
+  service: okta
+guard:
+  # Provenance-scoped fields such as eventType use the Okta namespace.
+  source: okta
+  class-uid: 6003
+  # Create, Read, Update, and Delete.
+  activities: [1, 2, 3, 4]
+fields:
+  eventType:
+    primitive: path
+    path: metadata.event_code
+    kind: string
+    provenance-scoped: true
+    notes: The Okta event type is the OCSF event code.
+  displayMessage:
+    primitive: path
+    path: message
+    kind: string
+  outcome.reason:
+    primitive: path
+    path: status_detail
+    kind: string
+  actor.alternateId:
+    primitive: path
+    path: actor.user.email_addr
+    kind: string
+  actor.displayName:
+    primitive: path
+    path: actor.user.full_name
+    kind: string
+  actor.id:
+    primitive: path
+    path: actor.user.uid
+    kind: string
+  client.ipAddress:
+    primitive: path
+    path: src_endpoint.ip
+  client.userAgent.rawUserAgent:
+    primitive: path
+    path: http_request.user_agent
+    kind: string
+  debugContext.debugData.url:
+    primitive: path
+    path: http_request.url.path
+    kind: string
+unmapped:
+  - field: outcome.result
+    reason: The Okta mapping translates the outcome into the OCSF status enumeration.
+  - field: legacyEventType
+    reason: The Okta mapping keeps only the current event type.
+  - field: securityContext.isProxy
+    reason: The Okta mapping does not preserve the proxy flag.
+  - field: debugContext.debugData.requestUri
+    reason: The Okta mapping stores the request URL, not the request URI.
+  - field: debugContext.debugData.behaviors
+    reason: The Okta mapping does not preserve behavior evaluations.
+  - field: debugContext.debugData.logOnlySecurityData
+    reason: The Okta mapping does not preserve the log-only security data.
+  - field: target.displayName
+    reason: Targets become class-specific user, group, or entity objects.
+  - field: target.alternateId
+    reason: Targets become class-specific user, group, or entity objects.

@@ -1,0 +1,99 @@
+// OCSF fixture events for the `sigma/okta/*` mapping alternatives. Okta system log
+// events spread over six classes by event type; each event answers to exactly one
+// alternative. Commented events are near-miss negatives.
+{
+  id: "session-start",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 3002,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["cloud"], event_code: "user.session.start", log_provider: "Okta", product: {name: "Okta", vendor_name: "Okta"}},
+  message: "User login to Okta",
+  actor: {user: {uid: "00u1", name: "alice", domain: "corp.example", full_name: "Alice Admin", email_addr: "alice@corp.example", type_id: 1}},
+  src_endpoint: {ip: 198.51.100.23, uid: "cli1"},
+  http_request: {user_agent: "Mozilla/5.0 (X11; Linux x86_64) python-requests/2.31", url: {path: "/api/v1/authn"}},
+  status_id: 1,
+  cloud: {provider: "Other"},
+  user: {uid: "00u1", name: "alice", domain: "corp.example", full_name: "Alice Admin", email_addr: "alice@corp.example", type_id: 1},
+}
+{
+  id: "mfa-deactivate",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 3001,
+  activity_id: 99,
+  metadata: {version: "1.9.0", profiles: ["cloud"], event_code: "user.mfa.factor.deactivate", log_provider: "Okta", product: {name: "Okta", vendor_name: "Okta"}},
+  message: "Reset factor for user",
+  actor: {user: {uid: "00u1", name: "alice", domain: "corp.example", full_name: "Alice Admin", email_addr: "alice@corp.example", type_id: 1}},
+  src_endpoint: {ip: 198.51.100.23, uid: "cli1"},
+  http_request: {user_agent: "Mozilla/5.0 (X11; Linux x86_64) python-requests/2.31", url: {path: "/api/v1/authn"}},
+  status_id: 1,
+  cloud: {provider: "Other"},
+  status_detail: "User reset FIDO factor",
+  user: {uid: "00u2", name: "bob", email_addr: "bob@corp.example"},
+}
+{
+  id: "group-add",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 3006,
+  activity_id: 3,
+  metadata: {version: "1.9.0", profiles: ["cloud"], event_code: "group.user_membership.add", log_provider: "Okta", product: {name: "Okta", vendor_name: "Okta"}},
+  message: "Add user to group",
+  actor: {user: {uid: "00u1", name: "alice", domain: "corp.example", full_name: "Alice Admin", email_addr: "alice@corp.example", type_id: 1}},
+  src_endpoint: {ip: 198.51.100.23, uid: "cli1"},
+  http_request: {user_agent: "Mozilla/5.0 (X11; Linux x86_64) python-requests/2.31", url: {path: "/api/v1/authn"}},
+  status_id: 1,
+  cloud: {provider: "Other"},
+  group: {uid: "00g1", name: "Okta Administrators"},
+  user: {uid: "00u2", name: "bob", email_addr: "bob@corp.example"},
+}
+{
+  id: "policy-update",
+  time: 2024-05-01T12:00:03Z,
+  class_uid: 3004,
+  activity_id: 3,
+  metadata: {version: "1.9.0", profiles: ["cloud"], event_code: "policy.rule.update", log_provider: "Okta", product: {name: "Okta", vendor_name: "Okta"}},
+  message: "Update rule of sign on policy",
+  actor: {user: {uid: "00u1", name: "alice", domain: "corp.example", full_name: "Alice Admin", email_addr: "alice@corp.example", type_id: 1}},
+  src_endpoint: {ip: 198.51.100.23, uid: "cli1"},
+  http_request: {user_agent: "Mozilla/5.0 (X11; Linux x86_64) python-requests/2.31", url: {path: "/api/v1/authn"}},
+  status_id: 1,
+  cloud: {provider: "Other"},
+  entity: {type_id: 99, type: "Policy Rule", name: "Default Rule"},
+}
+{
+  id: "api-token",
+  time: 2024-05-01T12:00:04Z,
+  class_uid: 6003,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["cloud"], event_code: "system.api_token.create", log_provider: "Okta", product: {name: "Okta", vendor_name: "Okta"}},
+  message: "Create API token",
+  actor: {user: {uid: "00u1", name: "alice", domain: "corp.example", full_name: "Alice Admin", email_addr: "alice@corp.example", type_id: 1}},
+  src_endpoint: {ip: 198.51.100.23, uid: "cli1"},
+  http_request: {user_agent: "Mozilla/5.0 (X11; Linux x86_64) python-requests/2.31", url: {path: "/api/v1/authn"}},
+  status_id: 1,
+  cloud: {provider: "Other"},
+  api: {operation: "PUT"},
+}
+{
+  id: "threat",
+  time: 2024-05-01T12:00:05Z,
+  class_uid: 2004,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["cloud"], event_code: "security.threat.detected", log_provider: "Okta", product: {name: "Okta", vendor_name: "Okta"}},
+  message: "Threat detected",
+  status_id: 1,
+  cloud: {provider: "Other"},
+  is_alert: true,
+  finding_info: {title: "security.threat.detected", uid: "evt1", desc: "Threat detected"},
+  evidences: [{actor: {user: {uid: "00u1", name: "alice", domain: "corp.example", full_name: "Alice Admin", email_addr: "alice@corp.example", type_id: 1}}, src_endpoint: {ip: 198.51.100.23, uid: "cli1"}, http_request: {user_agent: "Mozilla/5.0 (X11; Linux x86_64) python-requests/2.31", url: {path: "/api/v1/authn"}}}],
+}
+// Guard must reject: an Entra ID sign-in is a known other producer for
+// the eventType rules.
+{
+  id: "entra-signin",
+  time: 2024-05-01T12:00:06Z,
+  class_uid: 3002,
+  activity_id: 1,
+  message: "User login to Okta",
+  metadata: {version: "1.9.0", profiles: ["cloud"], event_code: "user.session.start", log_name: "auditLogs/signIns", product: {name: "Microsoft Entra ID"}},
+  user: {email_addr: "alice@corp.example"},
+}

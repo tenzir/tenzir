@@ -1,0 +1,12 @@
+title: Registry Key Renamed
+logsource:
+  category: registry_event
+  product: windows
+  service: sysmon
+detection:
+  selection:
+    EventID: 14
+    EventType: 'RenameKey'
+    TargetObject|endswith: '\Original'
+    NewName|endswith: '\Renamed'
+  condition: selection

@@ -1,0 +1,13 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/windows-create-stream-hash/rules/contents.yml' for OCSF input
+ --> tests/operators/sigma/families/windows-create-stream-hash.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/windows-create-stream-hash/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `Contents`
+  = note: field `Contents` is unmapped: The File System Activity mapping does not preserve stream contents.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "Zone Identifier Stream On Download",
+  id: "match",
+}

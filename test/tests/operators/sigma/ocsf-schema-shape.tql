@@ -1,0 +1,48 @@
+from {
+  id: "lookalike",
+  class_uid: 1007,
+  metadata: {
+    version: "not-ocsf",
+  },
+  Image: r"C:\Windows\System32\cmd.exe",
+  process: {
+    path: r"C:\Windows\System32\powershell.exe",
+  },
+}
+sigma rules=r#"
+title: Structural recognition
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: '\cmd.exe'
+  condition: selection
+"#, format="plain"
+select id=event.id
+
+merge {
+from {
+  id: "direct",
+  class_uid: 1007,
+  metadata: {
+    version: "not-ocsf",
+  },
+  Image: r"C:\Windows\System32\cmd.exe",
+  process: {
+    path: r"C:\Windows\System32\powershell.exe",
+  },
+}
+sigma rules=r#"
+title: Structural recognition opt-out
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: '\cmd.exe'
+  condition: selection
+"#, mapping="direct", format="plain"
+select id=event.id
+}
+sort id

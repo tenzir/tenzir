@@ -1,0 +1,46 @@
+// Direct matching on the Sysmon-shaped record and automatic matching on its
+// OCSF Registry Value Activity translation must agree. The translation mirrors
+// the Sysmon registry normalizer: the event type selects the activity, and the
+// value path splits into key path and value name.
+let $activities = {CreateKey: 1, SetValue: 2, DeleteKey: 4, DeleteValue: 4, RenameKey: 5}
+from {
+  id: "direct",
+  EventID: 13,
+  EventType: "SetValue",
+  TargetObject: r"HKLM\Software\Microsoft\Windows\CurrentVersion\Run\Updater",
+  Details: "powershell.exe -nop -w hidden",
+  Image: r"C:\Windows\System32\reg.exe",
+}
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-registry-event.yaml",
+      mapping="direct", format="plain"
+select id=event.id
+
+merge {
+from {
+  id: "automatic",
+  EventID: 13,
+  EventType: "SetValue",
+  TargetObject: r"HKLM\Software\Microsoft\Windows\CurrentVersion\Run\Updater",
+  Details: "powershell.exe -nop -w hidden",
+  Image: r"C:\Windows\System32\reg.exe",
+}
+parts = TargetObject.split("\\")
+class_uid = 201002
+activity_id = $activities[EventType]?
+metadata = {
+  version: "1.9.0",
+  event_code: string(EventID),
+  log_name: "Microsoft-Windows-Sysmon/Operational",
+  product: {name: "Microsoft-Windows-Sysmon"},
+}
+reg_value = {
+  path: parts.slice(end=-1).join("\\"),
+  name: parts[-1]?,
+  data: Details,
+}
+actor = {process: {path: Image}}
+drop EventID, EventType, TargetObject, Details, Image, parts
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-registry-event.yaml", format="plain"
+select id=event.id
+}
+sort id

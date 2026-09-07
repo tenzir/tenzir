@@ -1,0 +1,23 @@
+// OCSF Script Activity (1009) fixture events for the `sigma/windows/ps_module`
+// mapping family. Commented events are near-miss negatives.
+{
+  id: "module-logging",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 1009,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4103", log_name: "Microsoft-Windows-PowerShell/Operational", product: {name: "Microsoft-Windows-PowerShell", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  script: {type_id: 2, script_content: {value: "CommandInvocation(Set-PSReadlineOption): \"Set-PSReadlineOption\"
+ParameterBinding(Set-PSReadlineOption): name=\"HistorySaveStyle\"; value=\"SaveNothing\""}},
+  actor: {process: {cmd_line: "powershell.exe -nop"}, user: {domain: "CORP", name: "alice"}},
+}
+// Projection must not match: another cmdlet.
+{
+  id: "other-cmdlet",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 1009,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "4103", log_name: "Microsoft-Windows-PowerShell/Operational", product: {name: "Microsoft-Windows-PowerShell", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  script: {type_id: 2, script_content: {value: "CommandInvocation(Get-ChildItem): \"Get-ChildItem\""}},
+}

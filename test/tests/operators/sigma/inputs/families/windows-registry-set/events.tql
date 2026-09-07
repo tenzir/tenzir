@@ -1,0 +1,54 @@
+// OCSF Registry Value Activity (201002) fixture events for the
+// `sigma/windows/registry_set` mapping family. Comments mark near-miss
+// negatives that the logsource guard or a projection must reject.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 201002,
+  activity_id: 2,
+  metadata: {version: "1.9.0", extensions: [{name: "win"}], event_code: "13", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft Sysmon"}},
+  reg_value: {path: "HKLM\\Software\\Acme\\Run", name: "Updater", data: "powershell.exe -nop"},
+  actor: {process: {path: "C:\\Windows\\System32\\reg.exe"}, user: {domain: "CORP", name: "alice"}},
+}
+// Null classifiers are not a provenance conflict; `Image` uses the fallback.
+{
+  id: "missing-classifiers",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 201002,
+  activity_id: 2,
+  metadata: {version: "1.9.0", extensions: [{name: "win"}], event_code: "13", log_name: null, product: null},
+  reg_value: {path: "HKLM\\Software\\Acme\\Run", name: "Updater", data: "powershell.exe -nop"},
+  actor: {process: {path: null, file: {path: "C:\\Windows\\System32\\reg.exe"}}, user: {domain: "CORP", name: "alice"}},
+}
+// Guard must reject: reading a value is not a registry_set.
+{
+  id: "wrong-activity",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 201002,
+  activity_id: 1,
+  metadata: {version: "1.9.0", extensions: [{name: "win"}], event_code: "13", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft Sysmon"}},
+  reg_value: {path: "HKLM\\Software\\Acme\\Run", name: "Updater", data: "powershell.exe -nop"},
+  actor: {process: {path: "C:\\Windows\\System32\\reg.exe"}, user: {domain: "CORP", name: "alice"}},
+}
+// The `User` projection reads the actor, not the affected user.
+{
+  id: "wrong-user-role",
+  time: 2024-05-01T12:00:03Z,
+  class_uid: 201002,
+  activity_id: 2,
+  metadata: {version: "1.9.0", extensions: [{name: "win"}], event_code: "13", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft Sysmon"}},
+  reg_value: {path: "HKLM\\Software\\Acme\\Run", name: "Updater", data: "powershell.exe -nop"},
+  actor: {process: {path: "C:\\Windows\\System32\\reg.exe"}, user: {domain: "CORP", name: "bob"}},
+  user: {domain: "CORP", name: "alice"},
+}
+// Guard must reject: the device OS contradicts a Windows-only logsource.
+{
+  id: "linux",
+  time: 2024-05-01T12:00:04Z,
+  class_uid: 201002,
+  activity_id: 2,
+  metadata: {version: "1.9.0", extensions: [{name: "win"}], event_code: "13", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft Sysmon"}},
+  device: {os: {type_id: 200}},
+  reg_value: {path: "HKLM\\Software\\Acme\\Run", name: "Updater", data: "powershell.exe -nop"},
+  actor: {process: {path: "C:\\Windows\\System32\\reg.exe"}, user: {domain: "CORP", name: "alice"}},
+}

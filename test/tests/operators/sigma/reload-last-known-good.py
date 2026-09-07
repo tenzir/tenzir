@@ -140,6 +140,17 @@ detection:
   condition: selection
 """
 
+OCSF_SCHEMA_RULE = """\
+title: OCSF schema plan
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    EventID: {event_id}
+  condition: selection
+"""
+
 
 def resolve_tenzir_binary() -> tuple[str, ...]:
     if value := os.environ.get("TENZIR_BINARY"):
@@ -522,6 +533,40 @@ def test_broken_filter_retention(root: Path) -> None:
     finish_process(process, diagnostics)
 
 
+def test_ocsf_schema_plan_lifecycle(root: Path) -> None:
+    rule = root / "ocsf-schema-plan.yaml"
+    rule.write_text(OCSF_SCHEMA_RULE.format(event_id=1))
+    process = start_process(rule)
+    diagnostics: list[str] = []
+
+    def event(event_id: str, name: str, schema: int | None = None) -> dict:
+        result = {
+            "id": name,
+            "class_uid": 1007,
+            "metadata": {"version": "unfamiliar", "event_code": event_id},
+        }
+        if schema is not None:
+            result[f"schema_{schema}"] = schema
+        return result
+
+    send_event(process, event("1", "plan-reuse-a"), diagnostics)
+    send_event(process, event("1", "plan-reuse-b"), diagnostics)
+    schema_churn = [
+        event("1", f"schema-churn-{index}", schema=index) for index in range(65)
+    ]
+    for item in schema_churn:
+        write_event(process, item)
+    for item in schema_churn:
+        read_event(process, item["id"], diagnostics)
+    send_event(process, event("1", "after-eviction"), diagnostics)
+
+    rule.write_text(OCSF_SCHEMA_RULE.format(event_id=2))
+    time.sleep(0.05)
+    write_event(process, event("1", "stale-plan-must-not-match"))
+    send_event(process, event("2", "after-rule-refresh"), diagnostics)
+    finish_process(process, diagnostics, expected_warning_count=0)
+
+
 def main() -> None:
     root = Path(os.environ["FILE_ROOT"]) / "sigma-reload"
     root.mkdir()
@@ -544,6 +589,8 @@ def main() -> None:
     print("external filter refresh on retained target: ok")
     test_broken_filter_retention(root)
     print("broken-filter retention: ok")
+    test_ocsf_schema_plan_lifecycle(root)
+    print("OCSF schema plan lifecycle: ok")
     print("failure warning count: 1 per revision")
 
 

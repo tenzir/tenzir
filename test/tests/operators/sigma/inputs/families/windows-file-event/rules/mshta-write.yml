@@ -1,0 +1,11 @@
+title: File Written By Mshta With EventID
+logsource:
+  category: file_event
+  product: windows
+  service: sysmon
+detection:
+  selection:
+    EventID: 11
+    Image|endswith: '\mshta.exe'
+    ParentImage|endswith: '\explorer.exe'
+  condition: selection

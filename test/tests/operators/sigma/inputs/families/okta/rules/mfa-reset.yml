@@ -1,0 +1,11 @@
+title: Okta MFA Factor Reset
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType:
+      - user.mfa.factor.deactivate
+      - user.mfa.factor.reset_all
+    displayMessage|contains: 'factor'
+  condition: selection

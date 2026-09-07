@@ -1,0 +1,46 @@
+// OCSF Module Activity (1005) fixture events for the `sigma/windows/image_load`
+// mapping family. Commented events are near-miss negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 1005,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "7", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  module: {file: {path: "C:\\Windows\\System32\\vaultcli.dll", name: "vaultcli.dll", type_id: 8, version: "10.0.19041.1", desc: "Credential Vault Client Library", company_name: "Microsoft Corporation", internal_name: "vaultcli.dll", product: {name: "Microsoft Windows Operating System"}, hashes: [{algorithm_id: 3, value: "efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef"}], signature: {algorithm_id: 0, state_id: 1, certificate: {issuer: "Microsoft Windows"}}}, load_type_id: 0},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\Temp\\loader.exe", file: {path: "C:\\Windows\\Temp\\loader.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}
+// The signature rule must not match: the state is expired, not valid. The
+// path rule still matches.
+{
+  id: "expired",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 1005,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "7", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  module: {file: {path: "C:\\Windows\\System32\\vaultcli.dll", name: "vaultcli.dll", type_id: 8, version: "10.0.19041.1", desc: "Credential Vault Client Library", company_name: "Microsoft Corporation", internal_name: "vaultcli.dll", product: {name: "Microsoft Windows Operating System"}, hashes: [{algorithm_id: 3, value: "efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef"}], signature: {algorithm_id: 0, state_id: 2, certificate: {issuer: "Microsoft Windows"}}}, load_type_id: 0},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\Temp\\loader.exe", file: {path: "C:\\Windows\\Temp\\loader.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}
+// Guard must reject: unloading is not an image_load.
+{
+  id: "unload",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 1005,
+  activity_id: 2,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "7", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  module: {file: {path: "C:\\Windows\\System32\\vaultcli.dll", name: "vaultcli.dll", type_id: 8, version: "10.0.19041.1", desc: "Credential Vault Client Library", company_name: "Microsoft Corporation", internal_name: "vaultcli.dll", product: {name: "Microsoft Windows Operating System"}, hashes: [{algorithm_id: 3, value: "efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef"}], signature: {algorithm_id: 0, state_id: 1, certificate: {issuer: "Microsoft Windows"}}}, load_type_id: 0},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\Temp\\loader.exe", file: {path: "C:\\Windows\\Temp\\loader.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}
+// Guard must reject: a driver load is another class.
+{
+  id: "wrong-class",
+  time: 2024-05-01T12:00:03Z,
+  class_uid: 1002,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "6", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  driver: {file: {path: "C:\\Windows\\System32\\vaultcli.dll", name: "vaultcli.dll", type_id: 8, version: "10.0.19041.1", desc: "Credential Vault Client Library", company_name: "Microsoft Corporation", internal_name: "vaultcli.dll", product: {name: "Microsoft Windows Operating System"}, hashes: [{algorithm_id: 3, value: "efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef"}], signature: {algorithm_id: 0, state_id: 1, certificate: {issuer: "Microsoft Windows"}}}},
+  actor: {},
+}

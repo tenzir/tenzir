@@ -1,0 +1,17 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/aws-cloudtrail/rules/console-login-no-mfa.yml' for OCSF input
+ --> tests/operators/sigma/families/aws-cloudtrail.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/aws-cloudtrail/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `additionalEventData.MFAUsed`
+  = note: field `additionalEventData.MFAUsed` is unmapped: Console sign-in details land in the Authentication class, not in API Activity.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "CloudTrail Logging Stopped By IAM User",
+  id: "match",
+}
+{
+  rule: "Secrets Manager Access Denied",
+  id: "denied",
+}

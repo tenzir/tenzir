@@ -1,0 +1,12 @@
+title: Remote Thread Via LoadLibrary
+logsource:
+  category: create_remote_thread
+  product: windows
+detection:
+  selection:
+    TargetImage|endswith: '\explorer.exe'
+    StartModule|endswith: 'kernel32.dll'
+    StartFunction: 'LoadLibraryW'
+  filter_source:
+    SourceImage|startswith: 'C:\Windows\System32\'
+  condition: selection and not filter_source

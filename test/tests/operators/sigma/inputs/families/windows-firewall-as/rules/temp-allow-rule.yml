@@ -1,0 +1,12 @@
+title: Firewall Allow Rule For Temp Application
+logsource:
+  product: windows
+  service: firewall-as
+detection:
+  selection:
+    EventID: 2004
+    Action: 3
+    ApplicationPath|contains: '\AppData\Local\Temp\'
+  filter_defender:
+    ModifyingApplication|endswith: '\MsMpEng.exe'
+  condition: selection and not filter_defender

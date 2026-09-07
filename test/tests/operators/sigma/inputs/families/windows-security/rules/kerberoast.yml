@@ -1,0 +1,9 @@
+title: Kerberoasting Ticket Encryption
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4769
+    TicketEncryptionType: '0x17'
+  condition: selection

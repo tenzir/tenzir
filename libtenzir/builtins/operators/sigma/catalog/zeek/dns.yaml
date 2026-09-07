@@ -1,0 +1,76 @@
+id: sigma/zeek/dns
+title: Zeek DNS
+logsource:
+  product: zeek
+  service: dns
+guard:
+  class-uid: 4003
+  # Query, Response, and Traffic.
+  activities: [1, 2, 6]
+fields:
+  query:
+    primitive: path
+    path: query.hostname
+    kind: string
+  answers:
+    primitive: list-member
+    path: answers
+    member: rdata
+    rule-value: stringify
+    notes: A rule value matches when any answer matches.
+  qtype_name:
+    primitive: path
+    path: query.type
+    kind: string
+  id.resp_p:
+    primitive: path
+    path: dst_endpoint.port
+    kind: integral
+  id.orig_h:
+    primitive: path
+    path: src_endpoint.ip
+  id.resp_h:
+    primitive: path
+    path: dst_endpoint.ip
+  rcode_name:
+    primitive: path
+    path: rcode_id
+    kind: integral
+    rule-value:
+      dictionary:
+        name: DNS response code
+        entries:
+          noerror: 0
+          formerr: 1
+          servfail: 2
+          nxdomain: 3
+          notimp: 4
+          refused: 5
+          yxdomain: 6
+          yxrrset: 7
+          nxrrset: 8
+          notauth: 9
+          notzone: 10
+          badvers: 16
+          badsig: 16
+          badkey: 17
+          badtime: 18
+          badmode: 19
+          badname: 20
+          badalg: 21
+          badtrunc: 22
+          badcookie: 23
+    notes: Translates Zeek response code names to OCSF response code IDs; a rule with another name is skipped.
+unmapped:
+  - field: Z
+    reason: The DNS Activity mapping does not preserve the Zeek authoritative flag.
+  - field: rejected
+    reason: The DNS Activity mapping does not preserve the Zeek rejected flag.
+  - field: AA
+    reason: The DNS Activity mapping does not preserve DNS header flags.
+  - field: TC
+    reason: The DNS Activity mapping does not preserve DNS header flags.
+  - field: RD
+    reason: The DNS Activity mapping does not preserve DNS header flags.
+  - field: RA
+    reason: The DNS Activity mapping does not preserve DNS header flags.

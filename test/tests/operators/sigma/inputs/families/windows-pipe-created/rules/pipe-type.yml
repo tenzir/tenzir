@@ -1,0 +1,9 @@
+title: Pipe Created By Temp Binary
+logsource:
+  category: pipe_created
+  product: windows
+detection:
+  selection:
+    EventType: 'CreatePipe'
+    Image|contains: '\Temp\'
+  condition: selection

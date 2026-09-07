@@ -1,0 +1,12 @@
+title: Validly Signed Microsoft Module
+logsource:
+  category: image_load
+  product: windows
+  service: sysmon
+detection:
+  selection:
+    EventID: 7
+    Signature: 'Microsoft Windows'
+    SignatureStatus: 'Valid'
+    Hashes|contains: 'SHA256=efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef'
+  condition: selection

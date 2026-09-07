@@ -1,0 +1,35 @@
+// Direct matching on the GCP audit record and automatic matching on its OCSF
+// API Activity translation must agree. No library normalizer exists yet for
+// Cloud Audit Logs, so this inline translation is the executable definition of
+// the paths the catalog inverts.
+from {
+  id: "direct",
+  gcp: {audit: {method_name: "SetIamPolicy"}},
+  data: {protoPayload: {serviceName: "cloudresourcemanager.googleapis.com", resourceName: "projects/prod-project"}},
+}
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-gcp-audit.yaml",
+      mapping="direct", format="plain"
+select id=event.id
+
+merge {
+from {
+  id: "automatic",
+  gcp: {audit: {method_name: "SetIamPolicy"}},
+  data: {protoPayload: {serviceName: "cloudresourcemanager.googleapis.com", resourceName: "projects/prod-project"}},
+}
+class_uid = 6003
+activity_id = 3
+metadata = {
+  version: "1.9.0",
+  product: {name: "Cloud Audit Logs", vendor_name: "Google Cloud"},
+}
+api = {
+  operation: gcp.audit.method_name,
+  service: {name: data.protoPayload.serviceName},
+}
+resources = [{uid: data.protoPayload.resourceName}]
+drop gcp, data
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-gcp-audit.yaml", format="plain"
+select id=event.id
+}
+sort id

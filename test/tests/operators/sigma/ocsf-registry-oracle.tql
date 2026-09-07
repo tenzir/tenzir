@@ -1,0 +1,49 @@
+from {
+  id: "direct",
+  EventID: 13,
+  TargetObject: r"HKLM\Software\Acme\Run\Updater",
+  Details: "powershell.exe -nop",
+  Image: r"C:\Windows\System32\reg.exe",
+  User: r"CORP\alice",
+}
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-registry-set.yaml",
+      mapping="direct", format="plain"
+select id=event.id
+
+merge {
+from {
+  id: "automatic",
+  EventID: 13,
+  TargetObject: r"HKLM\Software\Acme\Run\Updater",
+  Details: "powershell.exe -nop",
+  Image: r"C:\Windows\System32\reg.exe",
+  User: r"CORP\alice",
+}
+parts = TargetObject.split("\\")
+user_parts = User.split("\\")
+class_uid = 201002
+activity_id = 2
+metadata = {
+  version: "1.9.0",
+  extensions: [{name: "win"}],
+  event_code: string(EventID),
+  log_name: "Microsoft-Windows-Sysmon/Operational",
+  product: {name: "Microsoft Sysmon"},
+}
+reg_value = {
+  path: parts.slice(end=-1).join("\\"),
+  name: parts[-1]?,
+  data: Details,
+}
+actor = {
+  process: {path: Image},
+  user: {
+    domain: user_parts[0]?,
+    name: user_parts[-1]?,
+  },
+}
+drop EventID, TargetObject, Details, Image, User, parts, user_parts
+sigma path=f"{env("TENZIR_INPUTS")}/ocsf-registry-set.yaml", format="plain"
+select id=event.id
+}
+sort id

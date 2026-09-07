@@ -1,0 +1,10 @@
+title: LSASS Access From Desktop Binary
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection:
+    TargetImage|endswith: '\lsass.exe'
+    SourceImage|contains: '\Desktop\'
+    TargetUser|contains: 'SYSTEM'
+  condition: selection

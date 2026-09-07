@@ -1,0 +1,8 @@
+title: SMB File Open
+logsource:
+  product: zeek
+  service: smb_files
+detection:
+  selection:
+    action: SMB::FILE_OPEN
+  condition: selection

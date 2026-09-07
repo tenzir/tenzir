@@ -1,0 +1,10 @@
+title: DNS Query To Paste Site
+logsource:
+  category: dns_query
+  product: windows
+  service: sysmon
+detection:
+  selection:
+    EventID: 22
+    QueryName|contains: 'pastebin'
+  condition: selection

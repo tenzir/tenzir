@@ -1,0 +1,9 @@
+title: LSASS Access From Unknown Module
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection:
+    TargetImage|endswith: '\lsass.exe'
+    CallTrace|contains: 'UNKNOWN'
+  condition: selection

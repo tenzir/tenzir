@@ -1,0 +1,9 @@
+title: Firewall Rule From Group Policy
+logsource:
+  product: windows
+  service: firewall-as
+detection:
+  selection:
+    EventID: 2004
+    Origin: 2
+  condition: selection

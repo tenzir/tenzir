@@ -1,0 +1,38 @@
+id: sigma/windows/ps_script
+title: Windows PowerShell script block
+logsource:
+  category: ps_script
+  product: windows
+  service: powershell
+  optional-service: true
+guard:
+  # Provenance-scoped fields such as EventID use the PowerShell namespace.
+  source: powershell
+  class-uid: 1009
+  # Execute.
+  activities: [1]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  ScriptBlockText:
+    primitive: path
+    path: script.script_content.value
+    kind: string
+    notes: Reads the text of the OCSF long string object.
+  ScriptBlockId:
+    primitive: path
+    path: script.uid
+    kind: string
+  Path:
+    primitive: path
+    path: script.file.path
+    kind: string
+unmapped:
+  - field: MessageNumber
+    reason: Script block fragments are not preserved by the Script Activity mapping.
+  - field: MessageTotal
+    reason: Script block fragments are not preserved by the Script Activity mapping.

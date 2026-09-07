@@ -1,0 +1,17 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/windows-codeintegrity/rules/buffer-length.yml' for OCSF input
+ --> tests/operators/sigma/families/windows-codeintegrity.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/windows-codeintegrity/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `FileNameLength`
+  = note: field `FileNameLength` is unmapped: Buffer lengths describe the event encoding, not the file.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "App Control Blocked Download",
+  id: "blocked",
+}
+{
+  rule: "Unmet Signing Level Requirement",
+  id: "signing-level",
+}

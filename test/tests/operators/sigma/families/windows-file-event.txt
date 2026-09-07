@@ -1,0 +1,25 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/windows-file-event/rules/creation-time.yml' for OCSF input
+ --> tests/operators/sigma/families/windows-file-event.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/windows-file-event/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `CreationUtcTime`
+  = note: field `CreationUtcTime` is unmapped: The File System Activity mapping stores the creation time as a timestamp, not as the Sysmon-rendered string.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "File Written By Mshta With EventID",
+  id: "match",
+}
+{
+  rule: "HTA File Written To Temp",
+  id: "match",
+}
+{
+  rule: "HTA File Written To Temp",
+  id: "missing-classifiers",
+}
+{
+  rule: "HTA File Written To Temp",
+  id: "security-producer",
+}

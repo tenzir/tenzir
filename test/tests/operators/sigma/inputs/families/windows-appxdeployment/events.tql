@@ -1,0 +1,26 @@
+// OCSF Application Lifecycle (6002) fixture events for the
+// `sigma/windows/appxdeployment_server` mapping family. Commented events are
+// near-miss negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 6002,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "400", log_name: "Microsoft-Windows-AppXDeploymentServer/Operational", product: {name: "Microsoft-Windows-AppXDeployment-Server", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  status_id: 1,
+  status_code: "0x0",
+  application: {uid: "Contoso.Tool_1.0.0.0_x64__8wekyb3d8bbwe", name: "Contoso.Tool_1.0.0.0_x64__8wekyb3d8bbwe", url: {url_string: "file:///C:/Users/alice/Downloads/Tool.msix"}, data: {package_full_name: "Contoso.Tool_1.0.0.0_x64__8wekyb3d8bbwe", path: "C:\\Users\\alice\\Downloads\\Tool.msix", deployment_operation: "Register", has_full_trust: true}},
+  actor: {process: {path: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", file: {path: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", type_id: 8}}},
+}
+// Projection must not match: a store package.
+{
+  id: "store-package",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 6002,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "400", log_name: "Microsoft-Windows-AppXDeploymentServer/Operational", product: {name: "Microsoft-Windows-AppXDeployment-Server", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  status_id: 1,
+  application: {uid: "Microsoft.WindowsCalculator_11.0_x64__8wekyb3d8bbwe", data: {package_full_name: "Microsoft.WindowsCalculator_11.0_x64__8wekyb3d8bbwe", path: "C:\\Program Files\\WindowsApps\\Microsoft.WindowsCalculator_11.0_x64__8wekyb3d8bbwe"}},
+}

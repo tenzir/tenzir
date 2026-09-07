@@ -1,0 +1,10 @@
+title: PowerShell Run Key Persistence
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: '\Acme\Run'
+    Details|contains: 'powershell'
+  condition: selection
+level: medium

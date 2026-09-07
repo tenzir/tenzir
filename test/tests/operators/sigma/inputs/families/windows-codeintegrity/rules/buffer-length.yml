@@ -1,0 +1,9 @@
+title: Long File Name Buffer
+logsource:
+  product: windows
+  service: codeintegrity-operational
+detection:
+  selection:
+    EventID: 3077
+    FileNameLength|gt: 200
+  condition: selection

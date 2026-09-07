@@ -1,0 +1,28 @@
+from {
+  class_uid: 1007,
+  metadata: {
+    version: "1.9.0",
+  },
+  process: {
+    path: r"C:\Windows\System32\cmd.exe",
+  },
+}, {
+  class_uid: 1007,
+  metadata: {
+    version: "1.9.0",
+  },
+  process: {
+    path: r"C:\Windows\System32\powershell.exe",
+  },
+}
+sigma rules=r#"
+title: Unsafe residue
+logsource:
+  category: process_creation
+  product: windows
+  service: sysmon
+detection:
+  selection:
+    CallTrace|contains: ntdll.dll
+  condition: selection
+"#, format="plain"

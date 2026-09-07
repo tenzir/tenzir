@@ -1,0 +1,9 @@
+title: Run Key Value Deleted
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection:
+    EventType: 'DeleteValue'
+    TargetObject|contains: '\CurrentVersion\Run\'
+  condition: selection

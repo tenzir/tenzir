@@ -1,0 +1,83 @@
+id: sigma/azure/signinlogs
+title: Entra ID sign-ins
+logsource:
+  product: azure
+  service: signinlogs
+guard:
+  class-uid: 3002
+  # Logon.
+  activities: [1]
+fields:
+  ResultType:
+    primitive: path
+    path: status_code
+    kind: source-identifier
+    rule-value: stringify
+    notes: The sign-in error code, zero for success.
+  ResultDescription:
+    primitive: path
+    path: status_detail
+    kind: string
+  Resultdescription:
+    primitive: path
+    path: status_detail
+    kind: string
+    notes: Stock rules also spell the field in lower case.
+  UserPrincipalName:
+    primitive: path
+    path: user.email_addr
+    kind: string
+  Username:
+    primitive: path
+    path: user.email_addr
+    kind: string
+  UserId:
+    primitive: path
+    path: user.uid
+    kind: string
+  AppDisplayName:
+    primitive: path
+    path: service.name
+    kind: string
+  AppId:
+    primitive: path
+    path: service.uid
+    kind: string
+  ResourceDisplayName:
+    primitive: path
+    path: dst_endpoint.svc_name
+    kind: string
+  IPAddress:
+    primitive: path
+    path: src_endpoint.ip
+  DeviceDetail.deviceId:
+    primitive: path
+    path: src_endpoint.uid
+    kind: string
+  DeviceDetail.operatingSystem:
+    primitive: path
+    path: src_endpoint.os.name
+    kind: string
+unmapped:
+  - field: Status
+    reason: The Authentication mapping splits the status record into status_code and status_detail.
+  - field: AuthenticationRequirement
+    reason: The Authentication mapping folds the requirement into the MFA flag.
+  - field: conditionalAccessStatus
+    reason: The Authentication mapping does not preserve the conditional access outcome.
+  - field: ClientApp
+    reason: The Authentication mapping does not preserve the client application.
+  - field: RiskState
+    reason: The Authentication mapping does not preserve the sign-in risk state.
+  - field: NetworkLocationDetails
+    reason: The Authentication mapping does not preserve network location details.
+  - field: DeviceDetail.trusttype
+    reason: The Authentication mapping does not preserve the device trust type.
+  - field: DeviceDetail.isCompliant
+    reason: The Authentication mapping does not preserve device compliance.
+  - field: userAgent
+    reason: The Entra sign-in mapping does not carry the user agent.
+  - field: ActivityDetails
+    reason: The Authentication mapping does not preserve activity details.
+  - field: properties.message
+    reason: Sign-in events carry no activity message.

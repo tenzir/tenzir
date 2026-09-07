@@ -1,0 +1,7 @@
+title: Regex anchors still bind
+logsource:
+  product: test
+detection:
+  selection:
+    RemoteName|re: '^https?://[0-9.]+/$'
+  condition: selection

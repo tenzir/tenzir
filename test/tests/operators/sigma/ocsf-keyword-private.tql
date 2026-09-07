@@ -1,0 +1,25 @@
+from {
+  class_uid: 1007,
+  metadata: {
+    version: "1.9.0",
+  },
+  process: {
+    path: "cmd.exe",
+  },
+}
+sigma rules=r#"
+title: Plan an image projection
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: '\never.exe'
+  condition: selection
+---
+title: Keyword must ignore private projection columns
+detection:
+  keywords:
+    - process
+  condition: keywords
+"#, format="plain"

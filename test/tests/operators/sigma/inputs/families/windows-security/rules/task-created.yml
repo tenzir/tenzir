@@ -1,0 +1,9 @@
+title: Scheduled Task Created In Maintenance Folder
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4698
+    TaskName|contains: '\Maintenance\'
+  condition: selection

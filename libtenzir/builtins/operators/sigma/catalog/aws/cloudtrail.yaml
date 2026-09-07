@@ -1,0 +1,92 @@
+id: sigma/aws/cloudtrail
+title: AWS CloudTrail
+logsource:
+  product: aws
+  service: cloudtrail
+guard:
+  class-uid: 6003
+  # Create, Read, Update, and Delete.
+  activities: [1, 2, 3, 4]
+fields:
+  eventName:
+    primitive: path
+    path: api.operation
+    kind: string
+  eventSource:
+    primitive: path
+    path: api.service.name
+    kind: string
+  errorCode:
+    primitive: path
+    path: api.response.error
+    kind: string
+  errorMessage:
+    primitive: path
+    path: api.response.error_message
+    kind: string
+  userAgent:
+    primitive: path
+    path: http_request.user_agent
+    kind: string
+  sourceIPAddress:
+    primitive: path
+    path: src_endpoint.ip
+    notes: CloudTrail also renders AWS service principals here; those never compare equal to an address.
+  awsRegion:
+    primitive: path
+    path: cloud.region
+    kind: string
+  recipientAccountId:
+    primitive: path
+    path: cloud.account.uid
+    kind: string
+  userIdentity.type:
+    primitive: path
+    path: actor.user.type
+    kind: string
+  userIdentity.arn:
+    primitive: path
+    path: actor.user.uid
+    kind: string
+  userIdentity.userName:
+    primitive: path
+    path: actor.user.name
+    kind: string
+  userIdentity.accountId:
+    primitive: path
+    path: actor.user.account.uid
+    kind: string
+  userIdentity.sessionContext.sessionIssuer.type:
+    primitive: path
+    path: actor.session.issuer
+    kind: string
+  userIdentity.sessionContext.attributes.mfaAuthenticated:
+    primitive: path
+    path: actor.session.is_mfa
+unmapped:
+  - field: eventType
+    reason: The API Activity mapping does not preserve the CloudTrail event type.
+  - field: eventVersion
+    reason: The API Activity mapping does not preserve the CloudTrail record version.
+  - field: requestParameters
+    reason: Request parameters have no OCSF attribute.
+  - field: requestParameters.enable
+    reason: Request parameters have no OCSF attribute.
+  - field: requestParameters.layers
+    reason: Request parameters have no OCSF attribute.
+  - field: requestParameters.attribute
+    reason: Request parameters have no OCSF attribute.
+  - field: requestParameters.containerDefinitions.command
+    reason: Request parameters have no OCSF attribute.
+  - field: responseElements
+    reason: Response elements have no OCSF attribute.
+  - field: responseElements.publiclyAccessible
+    reason: Response elements have no OCSF attribute.
+  - field: responseElements.ConsoleLogin
+    reason: Response elements have no OCSF attribute.
+  - field: responseElements.pendingModifiedValues.masterUserPassword
+    reason: Response elements have no OCSF attribute.
+  - field: additionalEventData.MFAUsed
+    reason: Console sign-in details land in the Authentication class, not in API Activity.
+  - field: status
+    reason: The API Activity mapping translates the status into the OCSF status enumeration.

@@ -1,0 +1,9 @@
+warning: sigma operator skips rule '<rules[0]>' for OCSF input
+ --> tests/operators/sigma/ocsf-zeek-residue.tql:7:1
+  |
+7 | title: Zeek DNS residue rule
+  | ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `Z`
+  = note: field `Z` is unmapped: The DNS Activity mapping does not preserve the Zeek authoritative flag.
+  = note: use `mapping="direct"` only when the rule fields exist literally

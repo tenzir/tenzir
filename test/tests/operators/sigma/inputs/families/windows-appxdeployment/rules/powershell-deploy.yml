@@ -1,0 +1,9 @@
+title: AppX Package Deployed By PowerShell
+logsource:
+  product: windows
+  service: appxdeployment-server
+detection:
+  selection:
+    EventID: 400
+    CallingProcess|endswith: '\powershell.exe'
+  condition: selection

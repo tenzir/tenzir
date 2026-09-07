@@ -1,0 +1,93 @@
+id: sigma/windows/firewall_as
+title: Windows Firewall rule changes
+logsource:
+  product: windows
+  service: firewall-as
+guard:
+  # Provenance-scoped fields such as EventID use the Windows Firewall
+  # namespace, and so does the free-form `entity.data` payload that carries
+  # the raw rule attributes.
+  source: windows_firewall
+  class-uid: 3004
+  # Create, Update, and Delete.
+  activities: [1, 3, 4]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  ModifyingApplication:
+    primitive: fallback
+    primary: actor.process.path
+    fallback: actor.process.file.path
+    kind: string
+    notes: The application that changed the rule set.
+  ModifyingUser:
+    primitive: path
+    path: actor.user.uid
+    kind: string
+  RuleName:
+    primitive: path
+    path: entity.name
+    kind: string
+  RuleId:
+    primitive: path
+    path: entity.uid
+    kind: string
+  ApplicationPath:
+    primitive: path
+    path: entity.data.application_path
+    kind: string
+    provenance-scoped: true
+  ServiceName:
+    primitive: path
+    path: entity.data.service_name
+    kind: string
+    provenance-scoped: true
+  Action:
+    primitive: path
+    path: entity.data.action_id
+    kind: integral
+    provenance-scoped: true
+    notes: Compares the raw Windows Firewall action code (2 Block, 3 Allow).
+  Direction:
+    primitive: path
+    path: entity.data.direction_id
+    kind: integral
+    provenance-scoped: true
+    notes: Compares the raw Windows Firewall direction code (1 Inbound, 2 Outbound).
+  Protocol:
+    primitive: path
+    path: entity.data.protocol_num
+    kind: integral
+    provenance-scoped: true
+  LocalPorts:
+    primitive: path
+    path: entity.data.local_ports
+    kind: string
+    provenance-scoped: true
+  RemotePorts:
+    primitive: path
+    path: entity.data.remote_ports
+    kind: string
+    provenance-scoped: true
+  RemoteAddresses:
+    primitive: path
+    path: entity.data.remote_addresses
+    kind: string
+    provenance-scoped: true
+  Profiles:
+    primitive: path
+    path: entity.data.profiles
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+unmapped:
+  - field: Active
+    reason: The Entity Management mapping stores the flag as a boolean.
+  - field: EdgeTraversal
+    reason: The Entity Management mapping stores the flag as a boolean.
+  - field: Origin
+    reason: Stock rules never target the rule origin.

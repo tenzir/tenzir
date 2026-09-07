@@ -1,0 +1,9 @@
+title: Defender Policy Key Deleted
+logsource:
+  category: registry_delete
+  product: windows
+detection:
+  selection:
+    EventType: 'DeleteKey'
+    TargetObject|endswith: '\Windows Defender'
+  condition: selection

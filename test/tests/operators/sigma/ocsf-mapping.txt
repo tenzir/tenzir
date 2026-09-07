@@ -1,0 +1,15 @@
+{
+  id: "match",
+}
+{
+  id: "null-classifiers",
+}
+{
+  id: "image-fallback",
+}
+{
+  id: "unknown-classifiers",
+}
+{
+  id: "unknown-version",
+}

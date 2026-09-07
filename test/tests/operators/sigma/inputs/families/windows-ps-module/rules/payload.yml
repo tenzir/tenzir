@@ -1,0 +1,10 @@
+title: PSReadline History Disabled
+logsource:
+  category: ps_module
+  product: windows
+detection:
+  selection:
+    Payload|contains|all:
+      - 'Set-PSReadlineOption'
+      - 'SaveNothing'
+  condition: selection

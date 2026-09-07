@@ -1,0 +1,20 @@
+{
+  rule: "PowerShell Run Key Persistence",
+  id: "match",
+}
+{
+  rule: "PowerShell Run Key Persistence",
+  id: "missing-classifiers",
+}
+{
+  rule: "PowerShell Run Key Persistence",
+  id: "wrong-user-role",
+}
+{
+  rule: "Suspicious Sysmon registry value",
+  id: "match",
+}
+{
+  rule: "Suspicious Sysmon registry value",
+  id: "missing-classifiers",
+}

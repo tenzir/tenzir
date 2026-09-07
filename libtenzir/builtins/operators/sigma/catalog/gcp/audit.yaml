@@ -1,0 +1,53 @@
+id: sigma/gcp/audit
+title: GCP Cloud Audit Logs
+logsource:
+  product: gcp
+  service: gcp.audit
+guard:
+  class-uid: 6003
+  # Create, Read, Update, and Delete.
+  activities: [1, 2, 3, 4]
+fields:
+  gcp.audit.method_name:
+    primitive: path
+    path: api.operation
+    kind: string
+  data.protoPayload.methodName:
+    primitive: path
+    path: api.operation
+    kind: string
+  data.protoPayload.serviceName:
+    primitive: path
+    path: api.service.name
+    kind: string
+  data.protoPayload.status.message:
+    primitive: path
+    path: api.response.message
+    kind: string
+  data.protoPayload.authenticationInfo.principalEmail:
+    primitive: path
+    path: actor.user.email_addr
+    kind: string
+  data.protoPayload.requestMetadata.callerIp:
+    primitive: path
+    path: src_endpoint.ip
+  data.protoPayload.requestMetadata.callerSuppliedUserAgent:
+    primitive: path
+    path: http_request.user_agent
+    kind: string
+  data.protoPayload.resourceName:
+    primitive: list-member
+    path: resources
+    member: uid
+    notes: A rule value matches when any affected resource matches.
+  data.protoPayload.resource.type:
+    primitive: list-member
+    path: resources
+    member: type
+unmapped:
+  - field: data.protoPayload.authorizationInfo.granted
+    reason: Authorization decisions have no OCSF attribute in API Activity.
+  - field: data.protoPayload.authorizationInfo.permission
+    reason: Authorization decisions have no OCSF attribute in API Activity.
+  - field: data.protoPayload.logName
+    reason: The audit log name selects the source, not an OCSF attribute of the event.

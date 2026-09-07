@@ -1,0 +1,16 @@
+// The `re` modifier has no implicit anchors: a pattern matches anywhere in
+// the value, and explicit anchors still restrict the match. Stock rules rely
+// on this, for example to spot direct-IP download URLs.
+from {id: "ip-url", RemoteName: "http://198.51.100.7/updates/backdoor.exe"},
+  {id: "hostname-url", RemoteName: "https://download.windowsupdate.com/update.cab"},
+  {id: "ip-root", RemoteName: "http://198.51.100.7/"}
+sigma path="tests/operators/sigma/inputs/re-partial.yaml", format="plain"
+select rule=rule.title, id=event.id
+
+merge {
+from {id: "ip-url", RemoteName: "http://198.51.100.7/updates/backdoor.exe"},
+  {id: "ip-root", RemoteName: "http://198.51.100.7/"}
+sigma path="tests/operators/sigma/inputs/re-anchored.yaml", format="plain"
+select rule=rule.title, id=event.id
+}
+sort rule, id

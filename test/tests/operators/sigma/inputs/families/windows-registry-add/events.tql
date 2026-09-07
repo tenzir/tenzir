@@ -1,0 +1,24 @@
+// OCSF Registry Key Activity (201001) fixture events for the
+// `sigma/windows/registry_add` mapping family. Commented events are near-miss
+// negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 201001,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "12", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  reg_key: {path: "HKLM\\SYSTEM\\CurrentControlSet\\Services\\EvilSvc"},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\reg.exe", file: {path: "C:\\Windows\\System32\\reg.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}
+// Guard must reject: a deletion is not a registry_add.
+{
+  id: "delete",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 201001,
+  activity_id: 4,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "12", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  reg_key: {path: "HKLM\\SYSTEM\\CurrentControlSet\\Services\\EvilSvc"},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\reg.exe", file: {path: "C:\\Windows\\System32\\reg.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}

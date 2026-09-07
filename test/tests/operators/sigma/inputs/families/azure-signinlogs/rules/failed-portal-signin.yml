@@ -1,0 +1,11 @@
+title: Failed Azure Portal Sign-In
+logsource:
+  product: azure
+  service: signinlogs
+detection:
+  selection:
+    ResultType: 50126
+    AppDisplayName: 'Azure Portal'
+    ResultDescription|contains: 'Invalid'
+    UserPrincipalName|endswith: '@corp.example'
+  condition: selection

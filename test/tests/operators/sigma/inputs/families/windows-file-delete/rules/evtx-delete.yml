@@ -1,0 +1,9 @@
+title: Event Log File Deleted
+logsource:
+  category: file_delete
+  product: windows
+detection:
+  selection:
+    TargetFilename|contains: '\winevt\Logs\'
+    TargetFilename|endswith: '.evtx'
+  condition: selection

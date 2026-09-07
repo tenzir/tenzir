@@ -1,0 +1,44 @@
+from {
+  id: "direct",
+  EventID: 1,
+  Image: r"C:\Windows\System32\cmd.exe",
+}
+sigma rules=r#"
+title: Mixed input
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    EventID: 1
+    Image|endswith: '\cmd.exe'
+  condition: selection
+"#, format="plain"
+select id=event.id
+
+merge {
+from {
+  id: "ocsf",
+  class_uid: 1007,
+  metadata: {
+    version: "unfamiliar",
+    event_code: "1",
+  },
+  process: {
+    path: r"C:\Windows\System32\cmd.exe",
+  },
+}
+sigma rules=r#"
+title: Mixed input
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    EventID: 1
+    Image|endswith: '\cmd.exe'
+  condition: selection
+"#, format="plain"
+select id=event.id
+}
+sort id

@@ -1,0 +1,4 @@
+{
+  rule: "Python Outbound Connection From Web User",
+  id: "match",
+}

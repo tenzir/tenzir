@@ -1,0 +1,18 @@
+// A raw string without hashes has a two-character opening delimiter; the
+// diagnostic still lands on the title line. A plain string with one escape
+// would have the same span, which is why the syntax comes from the AST.
+from {
+  class_uid: 1007,
+  metadata: {version: "1.9.0"},
+  process: {path: r"C:\Windows\System32\cmd.exe"},
+}
+sigma rules=r"
+title: Raw without hashes
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CallTrace|contains: ntdll.dll
+  condition: selection
+", format="plain"

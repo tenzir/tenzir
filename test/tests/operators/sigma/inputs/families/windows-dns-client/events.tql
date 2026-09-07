@@ -1,0 +1,26 @@
+// OCSF DNS Activity (4003) fixture events for the `sigma/windows/dns_client`
+// mapping family. Commented events are near-miss negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 4003,
+  activity_id: 2,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "3008", log_name: "Microsoft-Windows-DNS-Client/Operational", product: {name: "Microsoft-Windows-DNS-Client", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  status_id: 1,
+  status_code: "0",
+  query: {hostname: "files.pastebin-mirror.test", type: "A"},
+  answers: [{type: "CNAME", rdata: "cdn.pastebin-mirror.test"}, {rdata: "198.51.100.7"}],
+  connection_info: {direction_id: 2},
+}
+// Guard must reject: a Sysmon DNS query is a known other producer for the
+// EventID rule.
+{
+  id: "sysmon-query",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 4003,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "22", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  query: {hostname: "files.pastebin-mirror.test"},
+}

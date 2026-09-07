@@ -1,0 +1,69 @@
+id: sigma/zeek/http
+title: Zeek HTTP
+logsource:
+  product: zeek
+  service: http
+guard:
+  class-uid: 4002
+  # Connect through Patch.
+  activities: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+fields:
+  id.orig_h:
+    primitive: path
+    path: src_endpoint.ip
+  id.orig_p:
+    primitive: path
+    path: src_endpoint.port
+    kind: integral
+  id.resp_h:
+    primitive: path
+    path: dst_endpoint.ip
+  id.resp_p:
+    primitive: path
+    path: dst_endpoint.port
+    kind: integral
+  method:
+    primitive: path
+    path: http_request.http_method
+    kind: string
+  host:
+    primitive: path
+    path: http_request.url.hostname
+    kind: string
+  uri:
+    primitive: path
+    path: http_request.url.path
+    kind: string
+  referrer:
+    primitive: path
+    path: http_request.referrer
+    kind: string
+  user_agent:
+    primitive: path
+    path: http_request.user_agent
+    kind: string
+  version:
+    primitive: path
+    path: http_request.version
+    kind: string
+  status_code:
+    primitive: path
+    path: http_response.code
+    kind: integral
+  status_msg:
+    primitive: path
+    path: http_response.status
+    kind: string
+unmapped:
+  - field: resp_mime_types
+    reason: The HTTP Activity mapping does not preserve response MIME types.
+  - field: orig_mime_types
+    reason: The HTTP Activity mapping does not preserve request MIME types.
+  - field: c-uri
+    reason: Web proxy taxonomy fields do not apply to Zeek HTTP records.
+  - field: c-useragent
+    reason: Web proxy taxonomy fields do not apply to Zeek HTTP records.
+  - field: request_body_len
+    reason: The HTTP Activity mapping does not preserve request body lengths.
+  - field: response_body_len
+    reason: The HTTP Activity mapping does not preserve response body lengths.

@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "sigma/ocsf.hpp"
+#include "sigma/plan_cache.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 #include <tenzir/argument_parser.hpp>
@@ -42,6 +44,7 @@
 #include <tenzir/tql2/resolve.hpp>
 #include <tenzir/uuid.hpp>
 
+#include <arrow/compute/api_vector.h>
 #include <arrow/record_batch.h>
 #include <fmt/format.h>
 #include <re2/re2.h>
@@ -54,6 +57,7 @@
 #include <filesystem>
 #include <functional>
 #include <ranges>
+#include <span>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -65,6 +69,7 @@
 namespace tenzir::plugins::sigma {
 
 TENZIR_ENUM(sigma_format, ocsf, plain);
+TENZIR_ENUM(sigma_mapping, automatic, direct);
 
 // TODO: A lot of code in here is directly copied from
 // src/concept/parseable/expression.cpp. We should factor the implementation in
@@ -73,6 +78,20 @@ TENZIR_ENUM(sigma_format, ocsf, plain);
 namespace {
 
 namespace ir = tenzir::sigma;
+
+using FieldSource = ocsf::FieldProjection;
+
+struct FieldBinding {
+  FieldSource source;
+  std::string value_column;
+  std::string presence_column;
+  /// Set when the evidence path is the same for every row; the common case.
+  Option<std::string> constant_evidence_path;
+  /// Non-empty only when the evidence path varies per row, e.g. fallbacks.
+  std::string evidence_path_column;
+};
+
+using FieldBindings = detail::flat_map<std::string, FieldBinding>;
 
 template <class T>
 using ParseResult = Result<T, diagnostic>;
@@ -231,12 +250,24 @@ auto make_function_expr(std::string_view name,
     std::move(args), location::unknown, false};
 }
 
-/// Builds the expression that resolves a Sigma field name. Names without
-/// dots become plain field accesses. Dotted names have deterministic
-/// exact-key precedence: the complete name is first tried as an exact
-/// top-level key, and only if it is absent, dots denote nested traversal.
-/// This runtime decision lives in the internal `_sigma_field` function.
-auto make_field_expr(std::string_view name) -> ast::expression {
+/// Builds a direct reference to a private evaluation column.
+auto make_private_field_expr(std::string_view name) -> ast::expression {
+  return ast::expression{ast::root_field{
+    ast::identifier{std::string{name}, location::unknown}, true}};
+}
+
+/// Builds the expression that resolves a Sigma field name. Planned fields
+/// reference their private evaluation columns. Otherwise, names without dots
+/// become plain field accesses, while dotted names use `_sigma_field` for
+/// deterministic exact-key precedence over nested traversal.
+auto make_field_expr(std::string_view name,
+                     Option<FieldBindings const&> bindings = None{})
+  -> ast::expression {
+  if (bindings) {
+    auto const binding = bindings->find(name);
+    TENZIR_ASSERT(binding != bindings->end());
+    return make_private_field_expr(binding->second.value_column);
+  }
   if (name.find('.') == std::string_view::npos) {
     return ast::expression{ast::root_field{
       ast::identifier{std::string{name}, location::unknown}, true}};
@@ -249,7 +280,14 @@ auto make_field_expr(std::string_view name) -> ast::expression {
 
 /// Builds the expression testing whether a Sigma field exists, following the
 /// same exact-key precedence as `make_field_expr`.
-auto make_field_exists_expr(std::string_view name) -> ast::expression {
+auto make_field_exists_expr(std::string_view name,
+                            Option<FieldBindings const&> bindings = None{})
+  -> ast::expression {
+  if (bindings) {
+    auto const binding = bindings->find(name);
+    TENZIR_ASSERT(binding != bindings->end());
+    return make_private_field_expr(binding->second.presence_column);
+  }
   auto args = std::vector<ast::expression>{};
   args.emplace_back(ast::this_{location::unknown});
   args.emplace_back(ast::constant{std::string{name}, location::unknown});
@@ -272,7 +310,7 @@ auto make_constant(data const& value) -> ast::expression {
 auto make_regex_expr(ast::expression field, std::string regex)
   -> ast::expression {
   return ast::function_call{
-    ast::entity{{ast::identifier{"match_regex", location::unknown}}},
+    ast::entity{{ast::identifier{"_sigma_regex", location::unknown}}},
     {std::move(field), ast::constant{std::move(regex), location::unknown}},
     location::unknown,
     false};
@@ -285,9 +323,8 @@ auto make_binary_expr(ast::expression left, ast::binary_op op,
 
 // -- lowering: Sigma IR -> TQL expressions -------------------------------
 
-/// Lowers one detection item (`field|modifiers: value(s)`) into a TQL
-/// expression. The IR has already validated the modifier chain and value
-/// types; this function only implements the executable semantics.
+/// Encodes one UTF-8 Sigma string as UTF-16 code units in the requested byte
+/// order, optionally with a byte-order mark.
 auto encode_utf16(std::string_view str, bool big_endian, bool bom)
   -> std::string {
   // Interpret the value as UTF-8 and produce UTF-16 code units. Sigma values
@@ -466,10 +503,25 @@ auto parse_semantics(ir::DetectionItem const& item)
   return result;
 }
 
+/// Converts a rule-side value to the representation produced by a semantic
+/// field projection. Literal fields and projections without special value
+/// semantics preserve the original value.
+auto lower_rule_value(FieldSource const& source, data const& value)
+  -> ParseResult<data> {
+  auto projected = ocsf::project_rule_value(source, value);
+  if (projected.is_err()) {
+    return parse_failure("{}", std::move(projected).unwrap_err());
+  }
+  return std::move(projected).unwrap();
+}
+
 /// Lowers one detection item (`field|modifiers: value(s)`) into a TQL
-/// expression. The IR has already validated the modifier chain and value
-/// types; this function only implements the executable semantics.
-auto lower_item(ir::DetectionItem const& item) -> ParseResult<ast::expression> {
+/// predicate. Optional bindings redirect fields to semantic evaluation
+/// columns, and the keyword limit keeps private columns out of keyword scans.
+auto lower_item_predicate(ir::DetectionItem const& item,
+                          Option<FieldBindings const&> bindings,
+                          Option<size_t> keyword_field_count)
+  -> ParseResult<ast::expression> {
   auto const& field = item.field.raw;
   auto key = field;
   for (auto const& modifier : item.modifiers) {
@@ -488,6 +540,10 @@ auto lower_item(ir::DetectionItem const& item) -> ParseResult<ast::expression> {
       auto args = std::vector<ast::expression>{};
       args.emplace_back(ast::this_{location::unknown});
       args.emplace_back(ast::constant{std::move(regex), location::unknown});
+      args.emplace_back(ast::constant{
+        keyword_field_count ? detail::narrow<int64_t>(*keyword_field_count)
+                            : int64_t{-1},
+        location::unknown});
       disjuncts.push_back(
         make_function_expr("_sigma_keywords", std::move(args)));
     }
@@ -496,7 +552,7 @@ auto lower_item(ir::DetectionItem const& item) -> ParseResult<ast::expression> {
   // `exists` is the sole modifier and tests field presence.
   if (semantics.exists) {
     TENZIR_ASSERT(item.values.size() == 1);
-    auto expr = make_field_exists_expr(field);
+    auto expr = make_field_exists_expr(field, bindings);
     if (as<bool>(item.values[0])) {
       return expr;
     }
@@ -519,7 +575,7 @@ auto lower_item(ir::DetectionItem const& item) -> ParseResult<ast::expression> {
   // Builds the field expression, wrapping it in a time-part extraction when
   // a time modifier is present.
   auto make_lhs = [&]() -> ast::expression {
-    auto expr = make_field_expr(field);
+    auto expr = make_field_expr(field, bindings);
     if (not semantics.time_part) {
       return expr;
     }
@@ -548,12 +604,12 @@ auto lower_item(ir::DetectionItem const& item) -> ParseResult<ast::expression> {
       auto predicates = std::vector<ast::expression>{};
       predicates.push_back(make_binary_expr(make_lhs(), ast::binary_op::neq,
                                             make_constant(caf::none)));
-      predicates.push_back(make_binary_expr(make_field_expr(referenced_field),
-                                            ast::binary_op::neq,
-                                            make_constant(caf::none)));
+      predicates.push_back(
+        make_binary_expr(make_field_expr(referenced_field, bindings),
+                         ast::binary_op::neq, make_constant(caf::none)));
       predicates.push_back(make_binary_expr(
         make_lhs(), semantics.negate ? ast::binary_op::neq : ast::binary_op::eq,
-        make_field_expr(referenced_field)));
+        make_field_expr(referenced_field, bindings)));
       return expression_algebra::join<ast::binary_op::and_>(
         std::move(predicates));
     }
@@ -608,7 +664,25 @@ auto lower_item(ir::DetectionItem const& item) -> ParseResult<ast::expression> {
     return expression_algebra::join<ast::binary_op::or_>(std::move(disjuncts));
   };
   auto lower_source_value
-    = [&](data const& value) -> ParseResult<ast::expression> {
+    = [&](data const& source_value) -> ParseResult<ast::expression> {
+    auto value = source_value;
+    if (bindings and not semantics.fieldref) {
+      auto const binding = bindings->find(field);
+      TENZIR_ASSERT(binding != bindings->end());
+      // A stringified projection compares lexicographically, which breaks
+      // ordered predicates; fail closed instead of matching wrongly.
+      auto const ordered = semantics.op == ast::binary_op::lt
+                           or semantics.op == ast::binary_op::leq
+                           or semantics.op == ast::binary_op::gt
+                           or semantics.op == ast::binary_op::geq;
+      if (ordered
+          and is<ocsf::StringifyRuleValue>(binding->second.source.rule_value)) {
+        return parse_failure("ordered comparison on `{}` is not supported: "
+                             "the projected value is a string",
+                             field);
+      }
+      TRY(value, lower_rule_value(binding->second.source, source_value));
+    }
     TRY(auto result, lower_value(value));
     if (semantics.negate and not semantics.fieldref) {
       result = ast::expression{
@@ -635,15 +709,34 @@ auto lower_item(ir::DetectionItem const& item) -> ParseResult<ast::expression> {
   return expression_algebra::join<ast::binary_op::or_>(std::move(connective));
 }
 
+/// Lowers one detection item into a two-valued TQL expression. A predicate
+/// over an absent or null field is null in TQL's three-valued logic, and
+/// `not null` stays null. Sigma is two-valued: an item whose field is absent
+/// does not match, so `selection and not filter` fires when the filter's
+/// field is missing from the event.
+auto lower_item(ir::DetectionItem const& item,
+                Option<FieldBindings const&> bindings = None{},
+                Option<size_t> keyword_field_count = None{})
+  -> ParseResult<ast::expression> {
+  TRY(auto predicate,
+      lower_item_predicate(item, bindings, keyword_field_count));
+  auto args = std::vector<ast::expression>{};
+  args.push_back(std::move(predicate));
+  args.emplace_back(ast::constant{false, location::unknown});
+  return make_function_expr("otherwise", std::move(args));
+}
+
 /// Lowers a named detection: items within a group are AND-linked, groups are
 /// OR-linked (the YAML list-of-maps form).
-auto lower_detection(ir::Detection const& detection)
+auto lower_detection(ir::Detection const& detection,
+                     Option<FieldBindings const&> bindings = None{},
+                     Option<size_t> keyword_field_count = None{})
   -> ParseResult<ast::expression> {
   auto disjuncts = std::vector<ast::expression>{};
   for (auto const& group : detection.groups) {
     auto conjuncts = std::vector<ast::expression>{};
     for (auto const& item : group) {
-      TRY(auto expression, lower_item(item));
+      TRY(auto expression, lower_item(item, bindings, keyword_field_count));
       conjuncts.emplace_back(std::move(expression));
     }
     disjuncts.emplace_back(
@@ -780,7 +873,9 @@ auto matcher_kind(ir::DetectionItem const& item, ItemSemantics const& semantics)
 }
 
 /// Lowers one named detection into its identifier artifact.
-auto lower_identifier_artifact(std::string name, ir::Detection const& detection)
+auto lower_identifier_artifact(std::string name, ir::Detection const& detection,
+                               Option<FieldBindings const&> bindings = None{},
+                               Option<size_t> keyword_field_count = None{})
   -> ParseResult<IdentifierArtifact> {
   auto result = IdentifierArtifact{};
   result.name = std::move(name);
@@ -789,7 +884,7 @@ auto lower_identifier_artifact(std::string name, ir::Detection const& detection)
     auto artifacts = std::vector<ItemArtifact>{};
     auto conjuncts = std::vector<ast::expression>{};
     for (auto const& item : group) {
-      TRY(auto expression, lower_item(item));
+      TRY(auto expression, lower_item(item, bindings, keyword_field_count));
       TRY(auto semantics, parse_semantics(item));
       artifacts.push_back(ItemArtifact{
         expression,
@@ -957,6 +1052,7 @@ auto make_finding_template(ir::DetectionRule const& rule, data const& yaml)
 struct RuleEntry {
   data yaml;
   std::string label;
+  uint64_t revision = 0;
   /// The parsed rule before filter application, used to recombine retained
   /// rules with refreshed filters.
   ir::DetectionRule detection;
@@ -966,6 +1062,9 @@ struct RuleEntry {
   ast::expression rule;
   std::vector<IdentifierArtifact> identifiers;
   FindingTemplate finding;
+  /// The location of the rule's YAML document inside an inline `rules`
+  /// argument, or unknown for rules loaded from files.
+  location source = location::unknown;
 };
 
 /// The collision-free identity of one rule document.
@@ -998,7 +1097,17 @@ struct RuleMap {
   /// Argument order, then file-discovery order, then YAML document order.
   std::vector<std::pair<RuleKey, RuleEntry>> entries;
   std::unordered_map<RuleKey, size_t, RuleKeyHash> index;
+  uint64_t revision = 0;
 };
+
+auto rule_map_revision(RuleMap const& rules) -> uint64_t {
+  auto result = uint64_t{0};
+  for (auto const& [key, entry] : rules.entries) {
+    result = hash(result, key.origin, key.document, entry.revision,
+                  entry.finding.policy);
+  }
+  return result;
+}
 
 /// Tracks failed source and document revisions to avoid repeating the same
 /// warning on every refresh.
@@ -1099,6 +1208,26 @@ struct FilterBank {
   std::unordered_map<std::string, size_t> index;
 };
 
+/// How an inline rule string was written in TQL. Only the literal syntax
+/// decides whether the source span maps one-to-one onto the decoded content:
+/// a raw string always does, a plain string only without escapes, and a
+/// value computed by any other expression never does.
+TENZIR_ENUM(InlineLiteral, unknown, plain, raw);
+
+/// The TQL origin of one inline `rules` entry.
+struct InlineRuleOrigin {
+  /// The location of the entry's expression, or unknown when the entry came
+  /// from a list whose elements have no individual location.
+  location source = location::unknown;
+  InlineLiteral literal = InlineLiteral::unknown;
+
+  friend auto inspect(auto& f, InlineRuleOrigin& x) -> bool {
+    return f.object(x)
+      .pretty_name("InlineRuleOrigin")
+      .fields(f.field("source", x.source), f.field("literal", x.literal));
+  }
+};
+
 /// The normalized rule sources of one operator instance.
 struct SigmaSources {
   /// File and directory paths, in argument order.
@@ -1107,14 +1236,133 @@ struct SigmaSources {
   std::vector<std::string> rules;
   /// The source argument, used to locate runtime diagnostics.
   location source = location::unknown;
+  /// The origin of each inline `rules` entry.
+  std::vector<InlineRuleOrigin> rule_sources;
 
   friend auto inspect(auto& f, SigmaSources& x) -> bool {
     return f.object(x)
       .pretty_name("SigmaSources")
       .fields(f.field("paths", x.paths), f.field("rules", x.rules),
-              f.field("source", x.source));
+              f.field("source", x.source),
+              f.field("rule_sources", x.rule_sources));
   }
 };
+
+/// Locates every YAML document of an inline rule string inside its TQL
+/// string literal, pointing at the document's `title` line or, failing that,
+/// its first line of content. Offsets into the content only locate the
+/// source when the literal's span provably maps one-to-one onto the content;
+/// otherwise every document maps to the complete expression.
+auto inline_document_locations(std::string_view content,
+                               InlineRuleOrigin const& origin)
+  -> std::vector<location> {
+  // Split at YAML document markers: a `---` line starts a new document.
+  auto starts = std::vector<size_t>{};
+  auto ends = std::vector<size_t>{};
+  auto seen_content = false;
+  auto current = size_t{0};
+  auto offset = size_t{0};
+  while (offset <= content.size()) {
+    auto line_end = content.find('\n', offset);
+    if (line_end == std::string_view::npos) {
+      line_end = content.size();
+    }
+    auto line = content.substr(offset, line_end - offset);
+    while (not line.empty() and (line.back() == '\r' or line.back() == ' ')) {
+      line.remove_suffix(1);
+    }
+    if (line == "---") {
+      if (seen_content) {
+        starts.push_back(current);
+        ends.push_back(offset);
+        seen_content = false;
+      }
+      current = line_end + 1;
+    } else if (not seen_content and not line.empty()
+               and not line.starts_with('#')) {
+      seen_content = true;
+    }
+    if (line_end == content.size()) {
+      break;
+    }
+    offset = line_end + 1;
+  }
+  if (seen_content) {
+    starts.push_back(current);
+    ends.push_back(content.size());
+  }
+  auto const source = origin.source;
+  auto result = std::vector<location>(starts.size(), source);
+  if (not source) {
+    return result;
+  }
+  // The opening delimiter offsets every document. The span exceeds the
+  // content by the delimiters alone only when the literal contains its
+  // content verbatim: a raw string `r#"…"#` always does and adds three
+  // characters plus two per hash, and a plain string does only without
+  // escapes, adding exactly the two quotes. Every escape decodes to fewer
+  // characters than it occupies, so a plain string with escapes has a longer
+  // span, and no arithmetic on the decoded content recovers the source
+  // offsets: the whole literal is the honest location. The span alone
+  // cannot tell `r"…"` from `"…"` with one escape, which is why the syntax
+  // comes from the AST rather than being inferred.
+  auto const span = size_t{source.end - source.begin};
+  auto const extra = span > content.size() ? span - content.size() : 0;
+  auto prefix = size_t{0};
+  switch (origin.literal) {
+    case InlineLiteral::unknown:
+      return result;
+    case InlineLiteral::plain:
+      if (extra != 2) {
+        return result;
+      }
+      prefix = 1;
+      break;
+    case InlineLiteral::raw:
+      if (extra < 3 or extra % 2 == 0) {
+        return result;
+      }
+      prefix = (extra - 1) / 2 + 1;
+      break;
+  }
+  for (auto index = size_t{0}; index < starts.size(); ++index) {
+    auto const document
+      = content.substr(starts[index], ends[index] - starts[index]);
+    // Prefer the title line; otherwise the first line with content.
+    auto line_start = size_t{0};
+    auto chosen = Option<std::pair<size_t, size_t>>{};
+    auto first = Option<std::pair<size_t, size_t>>{};
+    while (line_start < document.size()) {
+      auto line_end = document.find('\n', line_start);
+      if (line_end == std::string_view::npos) {
+        line_end = document.size();
+      }
+      auto line = document.substr(line_start, line_end - line_start);
+      auto const trimmed_end = line.find_last_not_of(" \r\t");
+      auto const length
+        = trimmed_end == std::string_view::npos ? 0 : trimmed_end + 1;
+      if (length > 0 and not line.starts_with('#')) {
+        if (not first) {
+          first = std::pair{line_start, length};
+        }
+        if (line.starts_with("title:")) {
+          chosen = std::pair{line_start, length};
+          break;
+        }
+      }
+      line_start = line_end + 1;
+    }
+    if (not chosen) {
+      chosen = first;
+    }
+    if (chosen) {
+      result[index] = source.subloc(
+        detail::narrow<uint32_t>(prefix + starts[index] + chosen->first),
+        detail::narrow<uint32_t>(chosen->second));
+    }
+  }
+  return result;
+}
 
 /// Adds the source argument to diagnostics that do not already have a known
 /// location, including diagnostics produced by nested compilation helpers.
@@ -1175,6 +1423,8 @@ struct ParsedDocument {
   std::string label;
   data yaml;
   ir::Document document;
+  /// The location of the document inside an inline `rules` argument.
+  location source = location::unknown;
 };
 
 /// The parse-phase result of one source.
@@ -1190,7 +1440,11 @@ struct SourceSnapshot {
   RuleMap replacements;
 };
 
-auto lower_rule(ir::DetectionRule const& rule) -> ParseResult<ast::expression>;
+auto lower_rule(ir::DetectionRule const& rule,
+                Option<FieldBindings const&> bindings = None{},
+                Option<std::string_view> guard_column = None{},
+                Option<size_t> keyword_field_count = None{})
+  -> ParseResult<ast::expression>;
 
 /// Lowers a filter independently so that only executable revisions enter the
 /// persistent filter bank.
@@ -1211,7 +1465,8 @@ auto lower_filter(ir::FilterRule const& filter)
 /// failing revision.
 auto parse_source(std::string_view content, std::string const& origin,
                   RuleMap const& previous, FilterBank const& filter_bank,
-                  ReloadState& state, diagnostic_handler& dh)
+                  ReloadState& state, diagnostic_handler& dh,
+                  std::span<location const> document_locations = {})
   -> SourceSnapshot {
   auto snapshot = SourceSnapshot{};
   snapshot.origin = origin;
@@ -1250,6 +1505,9 @@ auto parse_source(std::string_view content, std::string const& origin,
   for (auto index = size_t{0}; index < documents->size(); ++index) {
     auto const key = RuleKey{origin, index};
     auto const label = multiple ? fmt::format("{}#{}", origin, index) : origin;
+    auto const doc_source = index < document_locations.size()
+                              ? document_locations[index]
+                              : location::unknown;
     auto handle_failure = [&](auto&& emit_reason) {
       snapshot.failed = true;
       if (not state.should_emit(key, snapshot.revision)) {
@@ -1261,6 +1519,9 @@ auto parse_source(std::string_view content, std::string const& origin,
                                   "version of source '{}'",
                                   origin)
             : diagnostic::warning("sigma operator ignores rule '{}'", label);
+      if (doc_source) {
+        builder = std::move(builder).primary(doc_source);
+      }
       emit_reason(std::move(builder));
     };
     auto& document = (*documents)[index];
@@ -1305,20 +1566,24 @@ auto parse_source(std::string_view content, std::string const& origin,
       });
       continue;
     }
-    snapshot.documents.push_back(ParsedDocument{key, label, std::move(document),
-                                                std::move(parsed_document)});
+    snapshot.documents.push_back(ParsedDocument{
+      key, label, std::move(document), std::move(parsed_document), doc_source});
   }
   return snapshot;
 }
 
 /// Lowers a detection rule into an executable expression plus the
 /// per-identifier artifacts needed for match provenance.
-auto lower_rule_with_artifacts(ir::DetectionRule const& rule)
+auto lower_rule_with_artifacts(ir::DetectionRule const& rule,
+                               Option<FieldBindings const&> bindings = None{},
+                               Option<std::string_view> guard_column = None{},
+                               Option<size_t> keyword_field_count = None{})
   -> ParseResult<std::pair<ast::expression, std::vector<IdentifierArtifact>>> {
   auto artifacts = std::vector<IdentifierArtifact>{};
   auto expressions = ExpressionMap{};
   for (auto const& [name, detection] : rule.detections) {
-    TRY(auto artifact, lower_identifier_artifact(name, detection));
+    TRY(auto artifact, lower_identifier_artifact(name, detection, bindings,
+                                                 keyword_field_count));
     expressions[name] = artifact.expression;
     artifacts.push_back(std::move(artifact));
   }
@@ -1328,14 +1593,23 @@ auto lower_rule_with_artifacts(ir::DetectionRule const& rule)
     TRY(auto expr, lower_condition(condition, expressions));
     disjuncts.push_back(std::move(expr));
   }
-  return std::pair{
-    expression_algebra::join<ast::binary_op::or_>(std::move(disjuncts)),
-    std::move(artifacts)};
+  auto expression
+    = expression_algebra::join<ast::binary_op::or_>(std::move(disjuncts));
+  if (guard_column) {
+    expression = make_binary_expr(make_private_field_expr(*guard_column),
+                                  ast::binary_op::and_, std::move(expression));
+  }
+  return std::pair{std::move(expression), std::move(artifacts)};
 }
 
 /// Lowers a detection rule into an executable expression.
-auto lower_rule(ir::DetectionRule const& rule) -> ParseResult<ast::expression> {
-  TRY(auto lowered, lower_rule_with_artifacts(rule));
+auto lower_rule(ir::DetectionRule const& rule,
+                Option<FieldBindings const&> bindings,
+                Option<std::string_view> guard_column,
+                Option<size_t> keyword_field_count)
+  -> ParseResult<ast::expression> {
+  TRY(auto lowered, lower_rule_with_artifacts(rule, bindings, guard_column,
+                                              keyword_field_count));
   return std::move(lowered.first);
 }
 
@@ -1359,6 +1633,7 @@ auto assemble_rules(std::vector<SourceSnapshot>& snapshots,
     bool retained = false;
     std::vector<ir::FilterRule const*> filters;
     std::vector<uint64_t> filter_revisions;
+    location source = location::unknown;
   };
   // Resolve identities to a fixed point. An identity conflict can roll a source
   // back to documents with different identities, which can expose another
@@ -1379,6 +1654,7 @@ auto assemble_rules(std::vector<SourceSnapshot>& snapshots,
             detections.push_back(DetectionSlot{&snapshot, key, &entry.label,
                                                &entry.yaml, &entry.detection,
                                                true});
+            detections.back().source = entry.source;
           }
         }
         continue;
@@ -1391,6 +1667,7 @@ auto assemble_rules(std::vector<SourceSnapshot>& snapshots,
             = try_as<ir::DetectionRule>(document.document.content)) {
           detections.push_back(DetectionSlot{
             &snapshot, document.key, &document.label, &document.yaml, rule});
+          detections.back().source = document.source;
         }
       }
     }
@@ -1423,9 +1700,13 @@ auto assemble_rules(std::vector<SourceSnapshot>& snapshots,
         }
         if (state.should_emit(slot.key,
                               slot.snapshot->revision ^ hash(identity))) {
-          diagnostic::warning("sigma operator ignores rule '{}'", *slot.label)
-            .note("duplicate rule identity `{}`", identity)
-            .emit(dh);
+          auto builder = diagnostic::warning("sigma operator ignores rule '{}'",
+                                             *slot.label)
+                           .note("duplicate rule identity `{}`", identity);
+          if (slot.source) {
+            builder = std::move(builder).primary(slot.source);
+          }
+          std::move(builder).emit(dh);
         }
       }
     }
@@ -1536,6 +1817,9 @@ auto assemble_rules(std::vector<SourceSnapshot>& snapshots,
                                   slot.snapshot->origin)
             : diagnostic::warning("sigma operator ignores rule '{}'",
                                   *slot.label);
+      if (slot.source) {
+        builder = std::move(builder).primary(slot.source);
+      }
       emit_reason(std::move(builder));
     };
     auto rule = *slot.rule;
@@ -1575,10 +1859,12 @@ auto assemble_rules(std::vector<SourceSnapshot>& snapshots,
       state.succeeded(slot.key);
     }
     auto finding = make_finding_template(rule, *slot.yaml);
+    auto const effective_revision = hash(finding.policy);
     slot.snapshot->replacements.insert_or_assign(
-      slot.key, RuleEntry{*slot.yaml, *slot.label, *slot.rule, std::move(rule),
-                          std::move(expression), std::move(artifacts),
-                          std::move(finding)});
+      slot.key,
+      RuleEntry{*slot.yaml, *slot.label, effective_revision, *slot.rule,
+                std::move(rule), std::move(expression), std::move(artifacts),
+                std::move(finding), slot.source});
   }
 }
 
@@ -1703,8 +1989,14 @@ auto load_rules(SigmaSources const& sources, RuleMap& next,
   for (auto index = size_t{0}; index < sources.rules.size(); ++index) {
     auto const origin = fmt::format("<rules[{}]>", index);
     origins.insert(origin);
+    auto const rule_source = index < sources.rule_sources.size()
+                               ? sources.rule_sources[index]
+                               : InlineRuleOrigin{};
+    auto const document_locations
+      = inline_document_locations(sources.rules[index], rule_source);
     snapshots.push_back(parse_source(sources.rules[index], origin, previous,
-                                     filter_bank, state, dh));
+                                     filter_bank, state, dh,
+                                     document_locations));
   }
   // Phase 2: resolve identities and filters, then lower.
   assemble_rules(snapshots, previous, filter_bank, state, dh);
@@ -1725,11 +2017,15 @@ auto load_rules(SigmaSources const& sources, RuleMap& next,
 
 auto update_rules(SigmaSources const& sources, RuleMap& rules,
                   FilterBank& filter_bank, ReloadState& state,
-                  diagnostic_handler& dh) -> void {
+                  diagnostic_handler& dh) -> bool {
   auto next = RuleMap{};
-  if (load_rules(sources, next, rules, filter_bank, state, dh)) {
-    rules = std::move(next);
+  if (not load_rules(sources, next, rules, filter_bank, state, dh)) {
+    return false;
   }
+  next.revision = rule_map_revision(next);
+  auto const changed = next.revision != rules.revision;
+  rules = std::move(next);
+  return changed;
 }
 
 const auto sigma_metrics_type = type{
@@ -1926,6 +2222,24 @@ auto eval_boolean(ast::expression const& expression, table_slice const& slice,
   return result;
 }
 
+auto eval_mask(ast::expression const& expression, table_slice const& slice,
+               diagnostic_handler& dh) -> std::shared_ptr<arrow::BooleanArray> {
+  auto builder = arrow::BooleanBuilder{arrow_memory_pool()};
+  check(builder.Reserve(detail::narrow<int64_t>(slice.rows())));
+  for (auto part : eval(expression, slice, dh).parts()) {
+    if (auto const booleans = part.as<bool_type>()) {
+      for (auto const value : booleans->values()) {
+        check(builder.Append(value.has_value() and *value));
+      }
+      continue;
+    }
+    for (auto index = int64_t{0}; index < part.length(); ++index) {
+      check(builder.Append(false));
+    }
+  }
+  return finish(builder);
+}
+
 /// Wraps matching events and the original Sigma rule in `tenzir.sigma`.
 auto build_plain_matches(table_slice matched, data const& rule)
   -> std::vector<table_slice> {
@@ -1952,15 +2266,21 @@ auto build_plain_matches(table_slice matched, data const& rule)
 }
 
 /// Builds one OCSF 1.9.0 Detection Finding per matching row of the input.
-auto build_findings(table_slice const& matched, RuleEntry const& entry,
+auto build_findings(table_slice const& matched_input,
+                    table_slice const& matched_evaluation,
+                    RuleEntry const& entry,
+                    std::vector<IdentifierArtifact> const& identifiers,
+                    Option<FieldBindings const&> bindings,
                     diagnostic_handler& dh) -> std::vector<table_slice> {
-  TENZIR_ASSERT(matched.rows() > 0);
+  TENZIR_ASSERT(matched_input.rows() > 0);
+  TENZIR_ASSERT(matched_input.rows() == matched_evaluation.rows());
   // Evaluate identifier and item expressions per slice, lazily for items.
   auto identifier_values
     = detail::flat_map<std::string_view, std::vector<bool>>{};
-  for (auto const& identifier : entry.identifiers) {
+  for (auto const& identifier : identifiers) {
     identifier_values.emplace(identifier.name,
-                              eval_boolean(identifier.expression, matched, dh));
+                              eval_boolean(identifier.expression,
+                                           matched_evaluation, dh));
   }
   auto value_of_at = [&](std::string_view name, size_t row) {
     auto const entry = identifier_values.find(name);
@@ -1974,34 +2294,68 @@ auto build_findings(table_slice const& matched, RuleEntry const& entry,
     if (entry == item_values.end()) {
       entry = item_values
                 .emplace(&item.expression,
-                         eval_boolean(item.expression, matched, dh))
+                         eval_boolean(item.expression, matched_evaluation, dh))
                 .first;
     }
     return entry->second[row];
   };
-  auto field_values = std::unordered_map<std::string, std::vector<data>>{};
-  auto field_value_at = [&](std::string const& field, size_t row) -> data {
+  struct FieldValues {
+    std::vector<data> values;
+    std::vector<data> paths;
+  };
+  auto field_values = std::unordered_map<std::string, FieldValues>{};
+  auto field_value_at = [&](std::string const& field,
+                            size_t row) -> std::pair<data, std::string> {
     auto entry = field_values.find(field);
     if (entry == field_values.end()) {
-      auto expression = make_field_expr(field);
+      auto expression = make_field_expr(field, bindings);
       auto provider = session_provider::make(dh);
       std::ignore = resolve_entities(expression, provider.as_session());
       auto values = std::vector<data>{};
-      values.reserve(matched.rows());
-      for (auto series : eval(expression, matched, dh).parts()) {
+      values.reserve(matched_evaluation.rows());
+      for (auto series : eval(expression, matched_evaluation, dh).parts()) {
         for (auto value : series.values()) {
           values.push_back(materialize(value));
         }
       }
-      entry = field_values.emplace(field, std::move(values)).first;
+      auto paths = std::vector<data>{};
+      paths.reserve(matched_evaluation.rows());
+      if (bindings) {
+        auto const binding = bindings->find(field);
+        TENZIR_ASSERT(binding != bindings->end());
+        if (auto const& constant = binding->second.constant_evidence_path) {
+          paths.resize(matched_evaluation.rows(), data{*constant});
+        } else {
+          auto path_expression
+            = make_private_field_expr(binding->second.evidence_path_column);
+          std::ignore
+            = resolve_entities(path_expression, provider.as_session());
+          for (auto series :
+               eval(path_expression, matched_evaluation, dh).parts()) {
+            for (auto value : series.values()) {
+              paths.push_back(materialize(value));
+            }
+          }
+        }
+      } else {
+        paths.resize(matched_evaluation.rows(), data{field});
+      }
+      entry
+        = field_values
+            .emplace(field, FieldValues{std::move(values), std::move(paths)})
+            .first;
     }
-    return entry->second[row];
+    auto path = std::string{field};
+    if (auto const* value = try_as<std::string>(&entry->second.paths[row])) {
+      path = *value;
+    }
+    return {entry->second.values[row], std::move(path)};
   };
   // Assemble one finding per matched row.
   auto const now = time::clock::now();
   auto builder = series_builder{};
   auto row = size_t{0};
-  for (auto event : matched.values()) {
+  for (auto event : matched_input.values()) {
     auto const event_data = data{materialize(event)};
     auto value_of = [&](std::string_view name) {
       return value_of_at(name, row);
@@ -2020,6 +2374,7 @@ auto build_findings(table_slice const& matched, RuleEntry const& entry,
     struct FieldMatch {
       ItemArtifact const* item;
       data value;
+      std::string evidence_path;
     };
     auto field_matches = std::vector<FieldMatch>{};
     for (auto const& decision : trace) {
@@ -2027,10 +2382,10 @@ auto build_findings(table_slice const& matched, RuleEntry const& entry,
         continue;
       }
       auto const artifact
-        = std::ranges::find_if(entry.identifiers, [&](auto const& candidate) {
+        = std::ranges::find_if(identifiers, [&](auto const& candidate) {
             return candidate.name == decision.identifier;
           });
-      if (artifact == entry.identifiers.end()) {
+      if (artifact == identifiers.end()) {
         continue;
       }
       for (auto const& group : artifact->groups) {
@@ -2043,10 +2398,12 @@ auto build_findings(table_slice const& matched, RuleEntry const& entry,
         }
         for (auto const& item : group) {
           auto value = data{};
+          auto evidence_path = std::string{};
           if (not item.keyword and not item.negated) {
-            value = field_value_at(item.field, row);
+            std::tie(value, evidence_path) = field_value_at(item.field, row);
           }
-          field_matches.push_back(FieldMatch{&item, std::move(value)});
+          field_matches.push_back(
+            FieldMatch{&item, std::move(value), std::move(evidence_path)});
         }
         break;
       }
@@ -2104,7 +2461,7 @@ auto build_findings(table_slice const& matched, RuleEntry const& entry,
       }
       auto observable = observables.record();
       observable.field("name").data(
-        fmt::format("evidences[0].data.{}", field_match.item->field));
+        fmt::format("evidences[0].data.{}", field_match.evidence_path));
       observable.field("type_id").data(int64_t{0});
       if (auto const* str = try_as<std::string>(&field_match.value)) {
         observable.field("value").data(*str);
@@ -2154,30 +2511,40 @@ auto build_findings(table_slice const& matched, RuleEntry const& entry,
 }
 
 /// Matches one rule and builds the configured output representation.
-auto build_output(table_slice const& input, RuleEntry const& entry,
-                  sigma_format format, diagnostic_handler& dh)
-  -> std::vector<table_slice> {
-  auto matched = filter2(input, entry.rule, dh, false);
-  if (matched.rows() == 0) {
+auto build_output(table_slice const& input, table_slice const& evaluation,
+                  RuleEntry const& entry, ast::expression const& expression,
+                  std::vector<IdentifierArtifact> const& identifiers,
+                  Option<FieldBindings const&> bindings, sigma_format format,
+                  diagnostic_handler& dh) -> std::vector<table_slice> {
+  auto const mask = eval_mask(expression, evaluation, dh);
+  if (mask->true_count() == 0) {
     return {};
   }
+  auto matched_input = filter(input, *mask);
   switch (format) {
     case sigma_format::ocsf:
-      return build_findings(matched, entry, dh);
+      return build_findings(matched_input, filter(evaluation, *mask), entry,
+                            identifiers, bindings, dh);
     case sigma_format::plain:
-      return build_plain_matches(std::move(matched), entry.yaml);
+      return build_plain_matches(std::move(matched_input), entry.yaml);
   }
   TENZIR_UNREACHABLE();
 }
 
 // -- internal runtime functions ------------------------------------------
 
-/// Recursively matches a regular expression against every string-valued leaf
-/// of a series, including strings inside records and lists. Sets `matches[i]`
-/// when any string leaf of row `i` matches. Non-string values are never
-/// coerced.
+// Sigma regular expressions match anywhere in the value: the `re` modifier
+// carries no implicit anchors, and the patterns lowered from plain strings
+// spell their anchors and wildcards out. Every match site therefore uses
+// partial matching.
+
+/// Recursively matches a regular expression against string-valued leaves.
+/// The optional field count limits only the outer record, keeping appended
+/// private columns out while preserving recursive scans of original fields.
+/// Sets `matches[i]` when any selected leaf of row `i` matches.
 auto keyword_match(series const& input, re2::RE2 const& regex,
-                   std::vector<bool>& matches) -> void {
+                   std::vector<bool>& matches,
+                   Option<size_t> top_level_field_count = None{}) -> void {
   TENZIR_ASSERT(std::cmp_equal(input.length(), matches.size()));
   if (auto const strings = input.as<string_type>()) {
     auto const& array = *strings->array;
@@ -2186,17 +2553,24 @@ auto keyword_match(series const& input, re2::RE2 const& regex,
         continue;
       }
       auto const value = array.GetView(i);
-      matches[i] = re2::RE2::FullMatch({value.data(), value.size()}, regex);
+      matches[i] = re2::RE2::PartialMatch({value.data(), value.size()}, regex);
     }
     return;
   }
   if (auto const records = input.as<record_type>()) {
     // Flattening propagates parent-level nulls into each child so that
     // values inside null records can never match.
-    auto index = int{0};
+    auto const field_count
+      = top_level_field_count
+          ? std::min(*top_level_field_count, records->type.num_fields())
+          : records->type.num_fields();
+    auto index = size_t{0};
     for (auto const& field : records->type.fields()) {
-      auto child = check(
-        records->array->GetFlattenedField(index, tenzir::arrow_memory_pool()));
+      if (index == field_count) {
+        break;
+      }
+      auto child = check(records->array->GetFlattenedField(
+        detail::narrow<int>(index), tenzir::arrow_memory_pool()));
       keyword_match({field.type, std::move(child)}, regex, matches);
       ++index;
     }
@@ -2222,100 +2596,734 @@ auto keyword_match(series const& input, re2::RE2 const& regex,
   }
 }
 
-/// Returns the series of the field with the given name, with parent-level
-/// nulls propagated into the child, or `None` if the field does not exist.
-auto get_record_field(series const& input, std::string_view name)
-  -> Option<series> {
-  auto const records = input.as<record_type>();
-  if (not records) {
+/// Matches one Sigma field as a string or as a nested list of strings. Sigma
+/// applies field modifiers to every list element and joins the results with
+/// `or` for one rule value.
+auto field_regex_match(series const& input, re2::RE2 const& regex,
+                       std::vector<bool>& matches) -> void {
+  TENZIR_ASSERT(std::cmp_equal(input.length(), matches.size()));
+  if (auto const strings = input.as<string_type>()) {
+    auto const& array = *strings->array;
+    for (auto i = int64_t{0}; i < array.length(); ++i) {
+      if (matches[i] or array.IsNull(i)) {
+        continue;
+      }
+      auto const value = array.GetView(i);
+      matches[i] = re2::RE2::PartialMatch({value.data(), value.size()}, regex);
+    }
+    return;
+  }
+  auto const lists = input.as<list_type>();
+  if (not lists) {
+    if (input.as<record_type>() or input.as<map_type>()) {
+      return;
+    }
+    auto row = size_t{0};
+    for (auto value : input.values()) {
+      if (not matches[row]) {
+        auto const materialized = materialize(value);
+        if (not is<caf::none_t>(materialized)) {
+          auto const text = to_string(materialized);
+          matches[row] = re2::RE2::PartialMatch(text, regex);
+        }
+      }
+      ++row;
+    }
+    return;
+  }
+  auto const base = lists->array->value_offset(0);
+  auto values = lists->list_values();
+  auto nested = std::vector<bool>(values.length(), false);
+  field_regex_match(values, regex, nested);
+  for (auto i = int64_t{0}; i < lists->length(); ++i) {
+    if (matches[i] or lists->array->IsNull(i)) {
+      continue;
+    }
+    auto const begin = nested.begin() + lists->array->value_offset(i) - base;
+    auto const end = nested.begin() + lists->array->value_offset(i + 1) - base;
+    matches[i] = std::ranges::any_of(begin, end, std::identity{});
+  }
+}
+
+using ProjectionError = ocsf::ProjectionError;
+
+struct EvaluationField {
+  std::string sigma_field;
+  FieldBinding binding;
+  /// Guards of the planned variants that reference this field. The field
+  /// only materializes for a slice when one of these guards passes for at
+  /// least one row, or when an ungated rule uses it.
+  std::vector<size_t> guard_users;
+  bool ungated_user = false;
+};
+
+struct LogsourceGuard {
+  std::string mapping_id;
+  ocsf::EvaluationGuard guard;
+  std::string column;
+};
+
+/// One schema-specific compilation of a rule against one mapping
+/// alternative. Alternatives of one rule target distinct OCSF classes, so at
+/// most one variant matches a given event.
+struct PlannedVariant {
+  ast::expression expression;
+  std::vector<IdentifierArtifact> identifiers;
+  FieldBindings bindings;
+  Option<size_t> guard;
+};
+
+struct PlannedRule {
+  bool supported = false;
+  std::vector<PlannedVariant> variants;
+  std::vector<std::string> unsupported_fields;
+  std::string reason;
+};
+
+struct SchemaEvaluationPlan {
+  bool ocsf = false;
+  std::vector<EvaluationField> fields;
+  std::vector<LogsourceGuard> guards;
+  std::vector<PlannedRule> rules;
+};
+
+/// The namespace of the private columns the evaluation slice appends.
+constexpr auto private_column_prefix = std::string_view{"__sigma_ocsf_"};
+
+auto private_column_name(type const& schema, std::string_view role,
+                         size_t index) -> std::string {
+  auto result = fmt::format("{}{}_{}", private_column_prefix, index, role);
+  auto const& root = as<record_type>(schema);
+  while (root.has_field(result)) {
+    result += '_';
+  }
+  return result;
+}
+
+auto find_or_add_field(SchemaEvaluationPlan& plan, type const& schema,
+                       std::string_view sigma_field, FieldSource source)
+  -> Result<size_t, ProjectionError> {
+  if (auto error = ocsf::validate(schema, sigma_field, source)) {
+    return Err{std::move(*error)};
+  }
+  auto const existing
+    = std::ranges::find_if(plan.fields, [&](EvaluationField const& field) {
+        return field.sigma_field == sigma_field
+               and field.binding.source == source;
+      });
+  if (existing != plan.fields.end()) {
+    return detail::narrow<size_t>(existing - plan.fields.begin());
+  }
+  auto const index = plan.fields.size();
+  auto constant_evidence
+    = ocsf::constant_evidence_path(source.value, sigma_field);
+  auto binding = FieldBinding{
+    std::move(source),
+    private_column_name(schema, "value", index),
+    private_column_name(schema, "present", index),
+    constant_evidence,
+    constant_evidence ? std::string{}
+                      : private_column_name(schema, "path", index),
+  };
+  plan.fields.push_back(
+    EvaluationField{std::string{sigma_field}, std::move(binding)});
+  return index;
+}
+
+auto find_or_add_guard(SchemaEvaluationPlan& plan, type const& schema,
+                       ocsf::Mapping const& mapping, bool provenance)
+  -> size_t {
+  auto guard = LogsourceGuard{
+    .mapping_id = std::string{mapping.id},
+    .guard = ocsf::make_guard(mapping, provenance),
+  };
+  auto const existing
+    = std::ranges::find_if(plan.guards, [&](LogsourceGuard const& candidate) {
+        return candidate.mapping_id == guard.mapping_id
+               and candidate.guard.event == guard.guard.event;
+      });
+  if (existing != plan.guards.end()) {
+    return detail::narrow<size_t>(existing - plan.guards.begin());
+  }
+  guard.column = private_column_name(schema, "guard",
+                                     plan.fields.size() + plan.guards.size());
+  plan.guards.push_back(std::move(guard));
+  return plan.guards.size() - 1;
+}
+
+/// Collects the field names a rule references, in reference order.
+auto rule_fields(ir::DetectionRule const& rule) -> std::vector<std::string> {
+  auto result = std::vector<std::string>{};
+  auto add = [&](std::string_view field) {
+    if (std::ranges::find(result, field) == result.end()) {
+      result.emplace_back(field);
+    }
+  };
+  for (auto const& [name, detection] : rule.detections) {
+    TENZIR_UNUSED(name);
+    for (auto const& group : detection.groups) {
+      for (auto const& item : group) {
+        if (item.kind != ir::DetectionItem::ItemKind::keyword) {
+          add(item.field.raw);
+        }
+        if (std::ranges::find(item.modifiers, "fieldref")
+            == item.modifiers.end()) {
+          continue;
+        }
+        for (auto const& value : item.values) {
+          if (auto const* field = try_as<std::string>(&value)) {
+            add(*field);
+          }
+        }
+      }
+    }
+  }
+  return result;
+}
+
+/// Returns whether a rule scans keywords, whose lowering embeds the root
+/// field count of the schema.
+auto uses_keywords(ir::DetectionRule const& rule) -> bool {
+  for (auto const& [name, detection] : rule.detections) {
+    TENZIR_UNUSED(name);
+    for (auto const& group : detection.groups) {
+      for (auto const& item : group) {
+        if (item.kind == ir::DetectionItem::ItemKind::keyword) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/// The mapping alternatives a rule plans against: one per catalog mapping
+/// that claims its logsource, or a single alternative without a mapping that
+/// resolves every field literally and carries no guard.
+auto mapping_alternatives(ir::DetectionRule const& rule)
+  -> std::vector<ocsf::Mapping const*> {
+  auto result = std::vector<ocsf::Mapping const*>{};
+  for (auto const& mapping : ocsf::find_mappings(rule.log_source)) {
+    result.push_back(&*mapping);
+  }
+  if (result.empty()) {
+    result.push_back(nullptr);
+  }
+  return result;
+}
+
+/// Resolves how a rule field reads the event under one mapping alternative:
+/// through the catalog projection, literally without one, or not at all for
+/// a field the catalog declares unmapped, which the source-to-OCSF conversion
+/// cannot preserve and which therefore never falls back to literal
+/// resolution.
+auto resolve_field_source(ocsf::Mapping const* mapping, std::string_view field)
+  -> Option<FieldSource> {
+  if (not mapping) {
+    return FieldSource{ocsf::LiteralField{}};
+  }
+  auto const unmapped
+    = std::ranges::find(mapping->unmapped, field, &ocsf::UnmappedField::field);
+  if (unmapped != mapping->unmapped.end()) {
     return None{};
   }
-  auto index = int{0};
-  for (auto const& field : records->type.fields()) {
-    if (field.name == name) {
-      auto child = check(
-        records->array->GetFlattenedField(index, tenzir::arrow_memory_pool()));
-      return series{field.type, std::move(child)};
-    }
-    ++index;
+  if (auto projection = ocsf::find_field(*mapping, field)) {
+    return *projection;
   }
-  return None{};
+  return FieldSource{ocsf::LiteralField{}};
 }
 
-/// Resolves a Sigma field name against a record series with deterministic
-/// exact-key precedence: the complete name is first tried as an exact
-/// top-level key; only if it is absent, dots denote nested traversal.
-auto resolve_sigma_field(series const& input, std::string_view name) -> series {
-  if (auto exact = get_record_field(input, name)) {
-    return std::move(*exact);
-  }
-  auto current = input;
-  for (auto const& part : detail::split(name, ".")) {
-    auto next = get_record_field(current, part);
-    if (not next) {
-      return series::null(null_type{}, input.length());
+auto plan_rule(SchemaEvaluationPlan& plan, type const& schema,
+               RuleEntry const& entry, diagnostic_handler& dh) -> PlannedRule {
+  auto result = PlannedRule{};
+  auto const fields = rule_fields(entry.adjusted);
+  auto const keyword_field_count = as<record_type>(schema).num_fields();
+  for (auto const* mapping : mapping_alternatives(entry.adjusted)) {
+    auto const fields_before = plan.fields.size();
+    auto const guards_before = plan.guards.size();
+    auto rollback = [&] {
+      plan.fields.resize(fields_before);
+      plan.guards.resize(guards_before);
+    };
+    auto variant = PlannedVariant{};
+    auto field_indices = std::vector<size_t>{};
+    auto unsupported_fields = std::vector<std::string>{};
+    auto reason = std::string{};
+    auto provenance = false;
+    for (auto const& field : fields) {
+      auto source = resolve_field_source(mapping, field);
+      if (not source) {
+        TENZIR_ASSERT(mapping);
+        auto const unmapped = std::ranges::find(mapping->unmapped, field,
+                                                &ocsf::UnmappedField::field);
+        TENZIR_ASSERT(unmapped != mapping->unmapped.end());
+        unsupported_fields.emplace_back(field);
+        if (reason.empty()) {
+          reason = fmt::format("field `{}` is unmapped: {}", field,
+                               unmapped->reason);
+        }
+        continue;
+      }
+      provenance = provenance or source->provenance_scoped;
+      auto index = find_or_add_field(plan, schema, field, std::move(*source));
+      if (index.is_err()) {
+        unsupported_fields.emplace_back(field);
+        if (reason.empty()) {
+          reason = std::move(index).unwrap_err().message;
+        }
+        continue;
+      }
+      field_indices.push_back(index.unwrap());
+      variant.bindings[field] = plan.fields[index.unwrap()].binding;
     }
-    current = std::move(*next);
+    if (not unsupported_fields.empty()) {
+      rollback();
+      if (result.unsupported_fields.empty()) {
+        result.unsupported_fields = std::move(unsupported_fields);
+        if (result.reason.empty()) {
+          result.reason = std::move(reason);
+        }
+      }
+      continue;
+    }
+    if (mapping) {
+      variant.guard = find_or_add_guard(plan, schema, *mapping, provenance);
+    }
+    auto const guard_column
+      = variant.guard
+          ? Option<std::string_view>{plan.guards[*variant.guard].column}
+          : None{};
+    auto lowered = lower_rule_with_artifacts(entry.adjusted, variant.bindings,
+                                             guard_column, keyword_field_count);
+    if (lowered.is_err()) {
+      if (result.reason.empty()) {
+        result.reason = std::move(lowered).unwrap_err().message;
+      }
+      rollback();
+      continue;
+    }
+    auto [expression, identifiers] = std::move(lowered).unwrap();
+    auto provider = session_provider::make(dh);
+    auto resolved = bool{resolve_entities(expression, provider.as_session())};
+    for (auto& identifier : identifiers) {
+      resolved = resolved
+                 and bool{resolve_entities(identifier.expression,
+                                           provider.as_session())};
+      for (auto& group : identifier.groups) {
+        for (auto& item : group) {
+          resolved = resolved
+                     and bool{resolve_entities(item.expression,
+                                               provider.as_session())};
+        }
+      }
+    }
+    if (not resolved) {
+      if (result.reason.empty()) {
+        result.reason = "failed to resolve the schema-specific Sigma rule";
+      }
+      rollback();
+      continue;
+    }
+    // Record which guard gates each referenced field so that projections
+    // only materialize for slices where the guard can pass.
+    for (auto const index : field_indices) {
+      auto& field = plan.fields[index];
+      if (not variant.guard) {
+        field.ungated_user = true;
+      } else if (std::ranges::find(field.guard_users, *variant.guard)
+                 == field.guard_users.end()) {
+        field.guard_users.push_back(*variant.guard);
+      }
+    }
+    variant.expression = std::move(expression);
+    variant.identifiers = std::move(identifiers);
+    result.variants.push_back(std::move(variant));
   }
-  return current;
+  result.supported = not result.variants.empty();
+  if (result.supported) {
+    result.unsupported_fields.clear();
+    result.reason.clear();
+  }
+  return result;
 }
 
-/// Tests whether a Sigma field exists, following the same precedence as
-/// `resolve_sigma_field`. Presence is defined by the field being part of the
-/// schema with a non-null enclosing record, independent of its value.
-auto resolve_sigma_has(series const& input, std::string_view name) -> series {
-  auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
-  check(builder.Reserve(input.length()));
-  auto emit_present = [&](series const& parent) {
-    // Present wherever the enclosing record is non-null.
-    auto const records = parent.as<record_type>();
-    TENZIR_ASSERT(records);
-    for (auto i = int64_t{0}; i < parent.length(); ++i) {
-      check(builder.Append(not records->array->IsNull(i)));
-    }
+auto make_schema_plan(type const& schema, RuleMap const& rules,
+                      diagnostic_handler& dh) -> SchemaEvaluationPlan {
+  auto result = SchemaEvaluationPlan{};
+  result.ocsf = ocsf::is_schema(schema);
+  if (not result.ocsf) {
+    return result;
+  }
+  result.rules.reserve(rules.entries.size());
+  for (auto const& [key, entry] : rules.entries) {
+    TENZIR_UNUSED(key);
+    result.rules.push_back(plan_rule(result, schema, entry, dh));
+  }
+  return result;
+}
+
+/// Per-slice guard evaluation results with family activity flags. A family
+/// whose guard rejects every row of a slice contributes no projections and
+/// its rule variants skip evaluation entirely, so the per-slice cost scales
+/// with the number of *eligible* mapping families instead of catalog size.
+struct GuardEvaluation {
+  series root;
+  std::vector<series> values;
+  std::vector<bool> active;
+  std::vector<bool> field_active;
+};
+
+auto evaluate_guards(table_slice const& input, SchemaEvaluationPlan const& plan)
+  -> GuardEvaluation {
+  auto [root_type, root_array] = offset{}.get(input);
+  auto result = GuardEvaluation{
+    .root = series{std::move(root_type), std::move(root_array)},
+    .values = {},
+    .active = {},
+    .field_active = {},
   };
-  auto emit_absent = [&] {
-    for (auto i = int64_t{0}; i < input.length(); ++i) {
-      check(builder.Append(false));
+  result.values.reserve(plan.guards.size());
+  result.active.reserve(plan.guards.size());
+  for (auto const& guard : plan.guards) {
+    auto values = ocsf::evaluate_guard(result.root, guard.guard);
+    auto const booleans = values.as<bool_type>();
+    TENZIR_ASSERT(booleans);
+    result.active.push_back(booleans->array->true_count() > 0);
+    result.values.push_back(std::move(values));
+  }
+  result.field_active.reserve(plan.fields.size());
+  for (auto const& field : plan.fields) {
+    auto const active
+      = field.ungated_user
+        or std::ranges::any_of(field.guard_users, [&](size_t guard) {
+             return result.active[guard];
+           });
+    result.field_active.push_back(active);
+  }
+  return result;
+}
+
+auto make_evaluation_slice(table_slice const& input,
+                           SchemaEvaluationPlan const& plan,
+                           GuardEvaluation const& guards) -> table_slice {
+  auto const input_batch = to_record_batch(input);
+  auto arrays = input_batch->columns();
+  auto fields = std::vector<struct record_type::field>{};
+  fields.reserve(arrays.size() + plan.fields.size() * 3 + plan.guards.size());
+  for (auto const& field : as<record_type>(input.schema()).fields()) {
+    fields.emplace_back(std::string{field.name}, field.type);
+  }
+  for (auto index = size_t{0}; index < plan.fields.size(); ++index) {
+    if (not guards.field_active[index]) {
+      continue;
     }
-  };
-  auto has_field = [](series const& s, std::string_view field) {
-    auto const records = s.as<record_type>();
-    if (not records) {
+    auto const& field = plan.fields[index];
+    auto projected
+      = ocsf::project(guards.root, field.sigma_field, field.binding.source);
+    TENZIR_ASSERT(projected.is_ok());
+    auto values = std::move(projected).unwrap();
+    fields.emplace_back(field.binding.value_column, values.value.type);
+    arrays.push_back(std::move(values.value.array));
+    fields.emplace_back(field.binding.presence_column, values.presence.type);
+    arrays.push_back(std::move(values.presence.array));
+    if (not field.binding.constant_evidence_path) {
+      TENZIR_ASSERT(values.evidence_path);
+      fields.emplace_back(field.binding.evidence_path_column,
+                          values.evidence_path->type);
+      arrays.push_back(std::move(values.evidence_path->array));
+    }
+  }
+  for (auto index = size_t{0}; index < plan.guards.size(); ++index) {
+    if (not guards.active[index]) {
+      continue;
+    }
+    fields.emplace_back(plan.guards[index].column, guards.values[index].type);
+    arrays.push_back(guards.values[index].array);
+  }
+  auto schema = type{"tenzir.sigma.evaluation", record_type{fields}};
+  auto batch = arrow::RecordBatch::Make(schema.to_arrow_schema(),
+                                        detail::narrow<int64_t>(input.rows()),
+                                        std::move(arrays));
+  return table_slice{std::move(batch), std::move(schema)};
+}
+
+/// Everything about a schema that planning observes, gathered once per rule
+/// revision. Planning reads a schema only through `ocsf::validate` on the
+/// resolved field sources, through the root field count that keyword scans
+/// embed, and through root fields that collide with the private column
+/// namespace. Two schemas that agree on these compile to identical plans.
+struct PlanInputs {
+  /// Every path whose type decides a projection's validation outcome, sorted
+  /// and unique.
+  std::vector<std::string> paths;
+  bool keywords = false;
+};
+
+auto collect_plan_inputs(RuleMap const& rules) -> PlanInputs {
+  auto result = PlanInputs{};
+  for (auto const& [key, entry] : rules.entries) {
+    TENZIR_UNUSED(key);
+    auto const fields = rule_fields(entry.adjusted);
+    for (auto const* mapping : mapping_alternatives(entry.adjusted)) {
+      for (auto const& field : fields) {
+        auto const source = resolve_field_source(mapping, field);
+        if (not source) {
+          continue;
+        }
+        for (auto& path : ocsf::validated_paths(field, *source)) {
+          result.paths.push_back(std::move(path));
+        }
+      }
+    }
+    result.keywords = result.keywords or uses_keywords(entry.adjusted);
+  }
+  std::ranges::sort(result.paths);
+  auto const duplicates = std::ranges::unique(result.paths);
+  result.paths.erase(duplicates.begin(), duplicates.end());
+  return result;
+}
+
+/// Keys the plan cache by what planning observes instead of by the schema
+/// fingerprint, so that schema-rich input whose records differ only in
+/// fields no rule reads shares one compiled plan. Every non-OCSF schema
+/// shares the empty plan.
+auto schema_plan_key(type const& schema, PlanInputs const& inputs)
+  -> std::string {
+  if (not ocsf::is_schema(schema)) {
+    return {};
+  }
+  auto result = std::string{"ocsf;"};
+  auto const& root = as<record_type>(schema);
+  if (inputs.keywords) {
+    fmt::format_to(std::back_inserter(result), "fields={};", root.num_fields());
+  }
+  for (auto const& field : root.fields()) {
+    if (field.name.starts_with(private_column_prefix)) {
+      fmt::format_to(std::back_inserter(result), "collision={};", field.name);
+    }
+  }
+  result += ocsf::schema_shape(schema, inputs.paths);
+  return result;
+}
+
+/// The plan cache retains at most this many cost units per loaded rule. A
+/// plan costs one unit per rule plus one per compiled variant, so with the
+/// usual one or two variants per rule the cache holds between five and eight
+/// complete compilations of the corpus. Peak memory thus stays proportional
+/// to the corpus the user loaded, however many schema shapes the input has;
+/// a count bound would instead multiply the corpus by the schema variety.
+constexpr auto plan_cache_units_per_rule = uint64_t{16};
+
+/// The smallest plan cache budget, so that a handful of rules over
+/// schema-rich input keeps every shape's plan resident; such plans are tiny.
+constexpr auto plan_cache_min_budget = uint64_t{4096};
+
+auto plan_cache_budget(RuleMap const& rules) -> uint64_t {
+  return std::max(plan_cache_min_budget,
+                  plan_cache_units_per_rule * rules.entries.size());
+}
+
+auto plan_cost(SchemaEvaluationPlan const& plan) -> uint64_t {
+  auto result = uint64_t{plan.rules.size()};
+  for (auto const& rule : plan.rules) {
+    result += rule.variants.size();
+  }
+  return result;
+}
+
+struct MappingState {
+  auto reset(uint64_t revision, RuleMap const& rules) -> void {
+    if (rules_revision == revision) {
+      return;
+    }
+    rules_revision = revision;
+    plans.clear();
+    plans.budget(plan_cache_budget(rules));
+    inputs = collect_plan_inputs(rules);
+    std::erase_if(warned_rules, [&](auto const& warning) {
+      auto const entry = rules.index.find(warning.first);
+      return entry == rules.index.end()
+             or rules.entries[entry->second].second.revision != warning.second;
+    });
+  }
+
+  auto should_warn(RuleKey const& key, uint64_t revision) -> bool {
+    if (auto const entry = warned_rules.find(key);
+        entry != warned_rules.end() and entry->second == revision) {
       return false;
     }
-    return std::ranges::any_of(records->type.fields(), [&](auto const& entry) {
-      return entry.name == field;
-    });
-  };
-  if (has_field(input, name)) {
-    emit_present(input);
-    return series{bool_type{}, finish(builder)};
+    warned_rules.insert_or_assign(key, revision);
+    return true;
   }
-  auto const parts = detail::split(name, ".");
-  auto current = input;
-  for (auto i = size_t{0}; i + 1 < parts.size(); ++i) {
-    auto next = get_record_field(current, parts[i]);
-    if (not next) {
-      emit_absent();
-      return series{bool_type{}, finish(builder)};
+
+  uint64_t rules_revision = 0;
+  PlanInputs inputs;
+  BudgetedLruCache<std::string, SchemaEvaluationPlan> plans{
+    plan_cache_min_budget};
+  std::unordered_map<RuleKey, uint64_t, RuleKeyHash> warned_rules;
+};
+
+struct SliceMatchStats {
+  uint64_t evaluated_rules = 0;
+  uint64_t matches = 0;
+};
+
+auto emit_unsupported_rule(RuleKey const& key, RuleEntry const& entry,
+                           PlannedRule const& plan, MappingState& state,
+                           diagnostic_handler& dh) -> void {
+  if (not state.should_warn(key, entry.revision)) {
+    return;
+  }
+  auto builder = diagnostic::warning(
+    "sigma operator skips rule '{}' for OCSF input", entry.label);
+  if (entry.source) {
+    builder = std::move(builder).primary(entry.source);
+  }
+  if (not plan.unsupported_fields.empty()) {
+    auto fields = std::string{};
+    for (auto const& field : plan.unsupported_fields) {
+      if (not fields.empty()) {
+        fields += ", ";
+      }
+      fields += fmt::format("`{}`", field);
     }
-    current = std::move(*next);
+    builder = std::move(builder).note("unresolved Sigma fields: {}", fields);
   }
-  if (has_field(current, parts.back())) {
-    emit_present(current);
-    return series{bool_type{}, finish(builder)};
+  if (not plan.reason.empty()) {
+    builder = std::move(builder).note("{}", plan.reason);
   }
-  emit_absent();
-  return series{bool_type{}, finish(builder)};
+  std::move(builder)
+    .note("use `mapping=\"direct\"` only when the rule fields exist literally")
+    .emit(dh);
 }
 
-/// Internal function implementing Sigma keyword selections: matches a regex
-/// recursively against every string-valued leaf of the input.
+/// Matches every rule against one slice, yielding each rule's output as soon
+/// as it exists. Streaming per rule bounds peak memory: a broad corpus over
+/// a large slice never retains the complete cross-rule result set. The stats
+/// are complete once the generator is exhausted.
+auto match_slice(table_slice const& input, RuleMap const& rules,
+                 sigma_mapping mapping, sigma_format format,
+                 MappingState& state, SliceMatchStats& stats,
+                 diagnostic_handler& dh) -> generator<table_slice> {
+  state.reset(rules.revision, rules);
+  auto direct = mapping == sigma_mapping::direct;
+  SchemaEvaluationPlan const* plan = nullptr;
+  if (not direct) {
+    auto const plan_key = schema_plan_key(input.schema(), state.inputs);
+    plan = state.plans.get(plan_key);
+    if (not plan) {
+      auto compiled = make_schema_plan(input.schema(), rules, dh);
+      auto const cost = plan_cost(compiled);
+      plan = &state.plans.put(plan_key, std::move(compiled), cost);
+    }
+    direct = not plan->ocsf;
+  }
+  if (direct) {
+    stats.evaluated_rules = rules.entries.size();
+    for (auto const& [key, entry] : rules.entries) {
+      TENZIR_UNUSED(key);
+      auto output = build_output(input, input, entry, entry.rule,
+                                 entry.identifiers, None{}, format, dh);
+      for (auto& slice : output) {
+        stats.matches += slice.rows();
+        co_yield std::move(slice);
+      }
+    }
+    co_return;
+  }
+  TENZIR_ASSERT(plan->rules.size() == rules.entries.size());
+  auto const guards = evaluate_guards(input, *plan);
+  auto const evaluation = make_evaluation_slice(input, *plan, guards);
+  for (auto index = size_t{0}; index < rules.entries.size(); ++index) {
+    auto const& [key, entry] = rules.entries[index];
+    auto const& planned = plan->rules[index];
+    if (not planned.supported) {
+      emit_unsupported_rule(key, entry, planned, state, dh);
+      continue;
+    }
+    ++stats.evaluated_rules;
+    for (auto const& variant : planned.variants) {
+      // A variant whose guard rejects every row cannot match; the guard is
+      // a conjunct of the variant expression.
+      if (variant.guard and not guards.active[*variant.guard]) {
+        continue;
+      }
+      auto output
+        = build_output(input, evaluation, entry, variant.expression,
+                       variant.identifiers, variant.bindings, format, dh);
+      for (auto& slice : output) {
+        stats.matches += slice.rows();
+        co_yield std::move(slice);
+      }
+    }
+  }
+}
+
+/// Internal function implementing Sigma keyword selections. An optional field
+/// count limits the outer record to its original columns during semantic
+/// evaluation.
 class SigmaKeywordsFunction final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "_sigma_keywords";
+  }
+
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(function_invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    auto pattern = located<std::string>{};
+    auto field_count = located<int64_t>{};
+    TRY(argument_parser2::function(name())
+          .positional("input", expr, "any")
+          .positional("regex", pattern)
+          .positional("field_count", field_count)
+          .parse(inv, ctx));
+    auto regex = std::make_shared<re2::RE2>(pattern.inner,
+                                            re2::RE2::CannedOptions::Quiet);
+    if (not regex->ok()) {
+      diagnostic::error("failed to parse regex: {}", regex->error())
+        .primary(pattern)
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (field_count.inner < -1) {
+      diagnostic::error("field count must be `-1` or non-negative")
+        .primary(field_count)
+        .emit(ctx);
+      return failure::promise();
+    }
+    return function_use::make([expr = std::move(expr), regex = std::move(regex),
+                               field_count = field_count.inner](
+                                evaluator eval, session ctx) -> multi_series {
+      TENZIR_UNUSED(ctx);
+      return map_series(eval(expr), [&](series input) -> multi_series {
+        auto matches = std::vector<bool>(input.length(), false);
+        auto const limit
+          = field_count < 0
+              ? Option<size_t>{None{}}
+              : Option<size_t>{detail::narrow<size_t>(field_count)};
+        keyword_match(input, *regex, matches, limit);
+        auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
+        check(builder.Reserve(input.length()));
+        for (auto const value : matches) {
+          check(builder.Append(value));
+        }
+        return series{bool_type{}, finish(builder)};
+      });
+    });
+  }
+};
+
+/// Internal function implementing Sigma string matching for scalar and list
+/// fields.
+class SigmaRegexFunction final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "_sigma_regex";
   }
 
   auto is_deterministic() const -> bool override {
@@ -2344,11 +3352,23 @@ public:
         TENZIR_UNUSED(ctx);
         return map_series(eval(expr), [&](series input) -> multi_series {
           auto matches = std::vector<bool>(input.length(), false);
-          keyword_match(input, *regex, matches);
+          // The outer validity bitmap answers row-level null checks without
+          // materializing nested values.
+          auto present = std::vector<bool>{};
+          present.reserve(detail::narrow<size_t>(input.length()));
+          auto const all_null = is<null_type>(input.type);
+          for (auto row = int64_t{0}; row < input.length(); ++row) {
+            present.push_back(not all_null and not input.array->IsNull(row));
+          }
+          field_regex_match(input, *regex, matches);
           auto builder = arrow::BooleanBuilder{tenzir::arrow_memory_pool()};
           check(builder.Reserve(input.length()));
-          for (auto const value : matches) {
-            check(builder.Append(value));
+          for (auto row = size_t{0}; row < matches.size(); ++row) {
+            if (present[row]) {
+              check(builder.Append(matches[row]));
+            } else {
+              check(builder.AppendNull());
+            }
           }
           return series{bool_type{}, finish(builder)};
         });
@@ -2381,7 +3401,7 @@ public:
        field = std::move(field)](evaluator eval, session ctx) -> multi_series {
         TENZIR_UNUSED(ctx);
         return map_series(eval(expr), [&](series input) -> multi_series {
-          return resolve_sigma_field(input, field.inner);
+          return ocsf::resolve_field(input, field.inner);
         });
       });
   }
@@ -2412,7 +3432,7 @@ public:
        field = std::move(field)](evaluator eval, session ctx) -> multi_series {
         TENZIR_UNUSED(ctx);
         return map_series(eval(expr), [&](series input) -> multi_series {
-          return resolve_sigma_has(input, field.inner);
+          return ocsf::resolve_presence(input, field.inner);
         });
       });
   }
@@ -2436,6 +3456,21 @@ auto normalize_format(Option<located<std::string>> const& format)
                  .done()};
   }
   return *result;
+}
+
+/// Validates how Sigma fields are matched against input events.
+auto normalize_mapping(Option<located<std::string>> const& mapping)
+  -> Result<sigma_mapping, diagnostic> {
+  if (not mapping or mapping->inner == "auto") {
+    return sigma_mapping::automatic;
+  }
+  if (mapping->inner == "direct") {
+    return sigma_mapping::direct;
+  }
+  return Err{diagnostic::error("unsupported mapping")
+               .primary(mapping->source)
+               .note("available mappings: `auto`, `direct`")
+               .done()};
 }
 
 /// Converts a `string | list<string>` argument into a non-empty string list.
@@ -2508,6 +3543,9 @@ auto normalize_sources(Option<located<std::string>> const& legacy_path,
     if (rules->source != location::unknown) {
       result.source = rules->source;
     }
+    // The evaluated argument only carries values and the complete span; the
+    // AST supplies each entry's location and literal syntax afterwards.
+    result.rule_sources.assign(result.rules.size(), InlineRuleOrigin{});
     if (refresh_interval) {
       return Err{
         diagnostic::error("`refresh_interval` cannot be used with `rules`")
@@ -2526,12 +3564,82 @@ auto normalize_sources(Option<located<std::string>> const& legacy_path,
   return result;
 }
 
+/// Recovers the location and literal syntax of every inline rule from the
+/// `rules` argument's AST: one string literal, or a list whose elements are
+/// string literals. The evaluated argument only carries the values and the
+/// complete span, which cannot tell a raw string from a plain one with
+/// escapes. An entry produced by any other expression keeps its location
+/// but no syntax, so diagnostics point at the complete expression.
+auto locate_inline_rules(ast::expression const& rules, SigmaSources& sources)
+  -> void {
+  auto origin_of = [](ast::expression const& expression) {
+    auto result = InlineRuleOrigin{.source = expression.get_location()};
+    auto const* constant = try_as<ast::constant>(expression);
+    if (constant and is<std::string>(constant->value)) {
+      result.literal
+        = constant->raw ? InlineLiteral::raw : InlineLiteral::plain;
+    }
+    return result;
+  };
+  rules.match(
+    [&](ast::constant const&) {
+      if (sources.rule_sources.size() == 1) {
+        sources.rule_sources[0] = origin_of(rules);
+      }
+    },
+    [&](ast::list const& list) {
+      auto origins = std::vector<InlineRuleOrigin>{};
+      for (auto const& item : list.items) {
+        auto const* expression = try_as<ast::expression>(&item);
+        if (not expression) {
+          return;
+        }
+        origins.push_back(origin_of(*expression));
+      }
+      if (origins.size() == sources.rules.size()) {
+        sources.rule_sources = std::move(origins);
+      }
+    },
+    [](auto const&) {});
+}
+
+/// Finds the `rules=` argument expression of an invocation by its location.
+auto find_rules_expression(std::vector<ast::expression> const& args,
+                           location rules_source)
+  -> Option<ast::expression const&> {
+  for (auto const& arg : args) {
+    auto found = arg.match(
+      [&](ast::assignment const& assignment) -> Option<ast::expression const&> {
+        if (assignment.right.get_location() == rules_source) {
+          return assignment.right;
+        }
+        return None{};
+      },
+      [](auto const&) -> Option<ast::expression const&> {
+        return None{};
+      });
+    if (found) {
+      return found;
+    }
+  }
+  return None{};
+}
+
 /// Compiles inline rule content at pipeline-construction time so that
 /// diagnostics anchor at the TQL argument and carry the list element and
 /// YAML document indices.
-auto validate_inline_rules(std::vector<std::string> const& rules,
-                           location source) -> Option<diagnostic> {
+auto validate_inline_rules(SigmaSources const& sources, location source)
+  -> Option<diagnostic> {
+  auto const& rules = sources.rules;
   for (auto index = size_t{0}; index < rules.size(); ++index) {
+    // An entry without its own location falls back to the complete argument
+    // and, lacking a literal to point into, keeps every document there.
+    auto const rule_source = index < sources.rule_sources.size()
+                                 and sources.rule_sources[index].source
+                               ? sources.rule_sources[index]
+                               : InlineRuleOrigin{.source = source};
+    auto const document_locations
+      = inline_document_locations(rules[index], rule_source);
     auto documents = from_yaml_documents(rules[index]);
     if (not documents) {
       return diagnostic::error("invalid YAML in `rules`")
@@ -2547,9 +3655,11 @@ auto validate_inline_rules(std::vector<std::string> const& rules,
     }
     for (auto doc = size_t{0}; doc < documents->size(); ++doc) {
       auto const& document = (*documents)[doc];
+      auto const doc_source
+        = doc < document_locations.size() ? document_locations[doc] : source;
       auto invalid = [&](std::string_view reason) {
         return diagnostic::error("invalid Sigma rule in `rules`")
-          .primary(source)
+          .primary(doc_source)
           .note("list element {}, document {}: {}", index, doc, reason)
           .done();
       };
@@ -2587,10 +3697,11 @@ public:
   sigma_operator() = default;
 
   sigma_operator(duration refresh_interval, SigmaSources sources,
-                 sigma_format format)
+                 sigma_format format, sigma_mapping mapping)
     : refresh_interval_{refresh_interval},
       sources_{std::move(sources)},
-      format_{format} {
+      format_{format},
+      mapping_{mapping} {
   }
 
   auto
@@ -2599,9 +3710,12 @@ public:
     auto rules = RuleMap{};
     auto reload_state = ReloadState{};
     auto filter_bank = FilterBank{};
+    auto mapping_state = MappingState{};
     auto diagnostics
       = make_source_diagnostic_handler(ctrl.diagnostics(), sources_.source);
-    update_rules(sources_, rules, filter_bank, reload_state, diagnostics);
+    std::ignore
+      = update_rules(sources_, rules, filter_bank, reload_state, diagnostics);
+    mapping_state.reset(rules.revision, rules);
     auto metrics = ctrl.metrics(sigma_metrics_type);
     auto last_update = std::chrono::steady_clock::now();
     co_yield {}; // signal that we're done initializing
@@ -2614,19 +3728,20 @@ public:
       auto const now = std::chrono::steady_clock::now();
       if (not sources_.paths.empty()
           and now - last_update > refresh_interval_) {
-        update_rules(sources_, rules, filter_bank, reload_state, diagnostics);
+        if (update_rules(sources_, rules, filter_bank, reload_state,
+                         diagnostics)) {
+          mapping_state.reset(rules.revision, rules);
+        }
         last_update = now;
       }
       auto const events = static_cast<uint64_t>(slice.rows());
-      auto const rule_count = static_cast<uint64_t>(rules.entries.size());
-      auto matches = uint64_t{0};
-      for (auto const& [_, entry] : rules.entries) {
-        for (auto&& result : build_output(slice, entry, format_, diagnostics)) {
-          matches += static_cast<uint64_t>(result.rows());
-          co_yield std::move(result);
-        }
+      auto stats = SliceMatchStats{};
+      for (auto&& result : match_slice(slice, rules, mapping_, format_,
+                                       mapping_state, stats, diagnostics)) {
+        co_yield std::move(result);
       }
-      emit_processing_metrics(metrics, events, rule_count, matches);
+      emit_processing_metrics(metrics, events, stats.evaluated_rules,
+                              stats.matches);
     }
   }
 
@@ -2651,21 +3766,26 @@ public:
     return f.object(x)
       .pretty_name("sigma_operator")
       .fields(f.field("refresh_interval", x.refresh_interval_),
-              f.field("sources", x.sources_), f.field("format", x.format_));
+              f.field("sources", x.sources_), f.field("format", x.format_),
+              f.field("mapping", x.mapping_));
   }
 
 private:
   duration refresh_interval_ = {};
   SigmaSources sources_;
   sigma_format format_ = sigma_format::ocsf;
+  sigma_mapping mapping_ = sigma_mapping::automatic;
 };
 
 struct SigmaArgs {
   Option<located<std::string>> legacy_path;
   Option<located<data>> path;
-  Option<located<data>> rules;
+  /// Kept as an expression so that list elements keep their locations; the
+  /// value is constant and evaluated when the operator resolves its sources.
+  Option<ast::expression> rules;
   Option<located<duration>> refresh_interval;
   Option<located<std::string>> format;
+  Option<located<std::string>> mapping;
   location operator_location = location::unknown;
 };
 
@@ -2675,21 +3795,35 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    auto rules = Option<located<data>>{};
+    if (args_.rules) {
+      auto evaluated = const_eval(*args_.rules, ctx.dh());
+      // Argument validation already ran at pipeline-construction time.
+      TENZIR_ASSERT(evaluated);
+      rules = std::move(*evaluated);
+    }
     auto sources
-      = normalize_sources(args_.legacy_path, args_.path, args_.rules,
+      = normalize_sources(args_.legacy_path, args_.path, rules,
                           args_.refresh_interval, args_.operator_location);
-    // Argument validation already ran at pipeline-construction time.
     TENZIR_ASSERT(sources.is_ok());
     sources_ = std::move(sources).unwrap();
+    if (args_.rules) {
+      locate_inline_rules(*args_.rules, sources_);
+    }
     auto format = normalize_format(args_.format);
     // Argument validation already ran at pipeline-construction time.
     TENZIR_ASSERT(format.is_ok());
     format_ = std::move(format).unwrap();
+    auto mapping = normalize_mapping(args_.mapping);
+    TENZIR_ASSERT(mapping.is_ok());
+    mapping_ = std::move(mapping).unwrap();
     refresh_interval_ = args_.refresh_interval ? args_.refresh_interval->inner
                                                : default_refresh_interval;
     auto diagnostics
       = make_source_diagnostic_handler(ctx.dh(), sources_.source);
-    update_rules(sources_, rules_, filter_bank_, reload_state_, diagnostics);
+    std::ignore = update_rules(sources_, rules_, filter_bank_, reload_state_,
+                               diagnostics);
+    mapping_state_.reset(rules_.revision, rules_);
     metrics_ = make_metric_handler(ctx, sigma_metrics_type);
     last_update_ = std::chrono::steady_clock::now();
     co_return;
@@ -2705,19 +3839,20 @@ public:
       = make_source_diagnostic_handler(ctx.dh(), sources_.source);
     auto const now = std::chrono::steady_clock::now();
     if (not sources_.paths.empty() and now - last_update_ > refresh_interval_) {
-      update_rules(sources_, rules_, filter_bank_, reload_state_, diagnostics);
+      if (update_rules(sources_, rules_, filter_bank_, reload_state_,
+                       diagnostics)) {
+        mapping_state_.reset(rules_.revision, rules_);
+      }
       last_update_ = now;
     }
     auto const events = static_cast<uint64_t>(input.rows());
-    auto const rule_count = static_cast<uint64_t>(rules_.entries.size());
-    auto matches = uint64_t{0};
-    for (auto const& [_, entry] : rules_.entries) {
-      for (auto&& result : build_output(input, entry, format_, diagnostics)) {
-        matches += static_cast<uint64_t>(result.rows());
-        co_await push(std::move(result));
-      }
+    auto stats = SliceMatchStats{};
+    for (auto&& result : match_slice(input, rules_, mapping_, format_,
+                                     mapping_state_, stats, diagnostics)) {
+      co_await push(std::move(result));
     }
-    emit_processing_metrics(metrics_, events, rule_count, matches);
+    emit_processing_metrics(metrics_, events, stats.evaluated_rules,
+                            stats.matches);
   }
 
 private:
@@ -2727,8 +3862,10 @@ private:
   RuleMap rules_;
   FilterBank filter_bank_;
   ReloadState reload_state_;
+  MappingState mapping_state_;
   metric_handler metrics_ = {};
   sigma_format format_ = sigma_format::ocsf;
+  sigma_mapping mapping_ = sigma_mapping::automatic;
   // Rules are reloaded from disk in `start()`, and `last_update_` uses
   // `steady_clock`, so the default no-op snapshot behavior is sufficient.
   std::chrono::steady_clock::time_point last_update_ = {};
@@ -2745,12 +3882,14 @@ public:
     auto rules = Option<located<data>>{};
     auto refresh_interval = Option<located<duration>>{};
     auto format = Option<located<std::string>>{};
+    auto mapping = Option<located<std::string>>{};
     TRY(argument_parser2::operator_("sigma")
           .positional("legacy_path", legacy_path)
           .named("path", path)
           .named("rules", rules)
           .named("refresh_interval", refresh_interval)
           .named("format", format)
+          .named("mapping", mapping)
           .parse(inv, ctx));
     auto sources = normalize_sources(legacy_path, path, rules, refresh_interval,
                                      inv.self.get_location());
@@ -2758,15 +3897,24 @@ public:
       std::move(sources).unwrap_err().modify().emit(ctx);
       return failure::promise();
     }
+    if (rules) {
+      if (auto expression = find_rules_expression(inv.args, rules->source)) {
+        locate_inline_rules(*expression, sources.unwrap());
+      }
+    }
     if (legacy_path) {
       diagnostic::warning("passing the path positionally is deprecated")
         .primary(legacy_path->source)
         .hint("use `path={:?}` instead", legacy_path->inner)
         .emit(ctx);
     }
+    auto normalized_mapping = normalize_mapping(mapping);
+    if (normalized_mapping.is_err()) {
+      std::move(normalized_mapping).unwrap_err().modify().emit(ctx);
+      return failure::promise();
+    }
     if (rules) {
-      if (auto error
-          = validate_inline_rules(sources.unwrap().rules, rules->source)) {
+      if (auto error = validate_inline_rules(sources.unwrap(), rules->source)) {
         std::move(*error).modify().emit(ctx);
         return failure::promise();
       }
@@ -2780,7 +3928,8 @@ public:
       = refresh_interval ? refresh_interval->inner : default_refresh_interval;
     return std::make_unique<sigma_operator>(
       interval, std::move(sources).unwrap(),
-      std::move(normalized_format).unwrap());
+      std::move(normalized_format).unwrap(),
+      std::move(normalized_mapping).unwrap());
   }
 
   auto describe() const -> Description override {
@@ -2788,29 +3937,42 @@ public:
     d.parallelizable();
     auto legacy_path = d.positional("legacy_path", &SigmaArgs::legacy_path);
     auto path = d.named("path", &SigmaArgs::path);
-    auto rules = d.named("rules", &SigmaArgs::rules);
+    auto rules = d.named("rules", &SigmaArgs::rules, "string|list");
     auto refresh_interval
       = d.named("refresh_interval", &SigmaArgs::refresh_interval);
     auto format = d.named("format", &SigmaArgs::format, "ocsf|plain");
+    auto mapping = d.named("mapping", &SigmaArgs::mapping, "auto|direct");
     d.operator_location(&SigmaArgs::operator_location);
-    d.validate([legacy_path, path, rules, refresh_interval,
-                format](DescribeCtx& ctx) -> Empty {
+    d.validate([legacy_path, path, rules, refresh_interval, format,
+                mapping](DescribeCtx& ctx) -> Empty {
       auto const legacy_value = ctx.get(legacy_path);
       auto const path_value = ctx.get(path);
-      auto const rules_value = ctx.get(rules);
+      auto const rules_expression = ctx.get(rules);
       auto const refresh_value = ctx.get(refresh_interval);
       auto to_option = [](auto const& value) {
         using Value = std::remove_cvref_t<decltype(*value)>;
         return value ? Option<Value>{*value} : Option<Value>{};
       };
+      auto rules_value = Option<located<data>>{};
+      if (rules_expression) {
+        auto evaluated = const_eval(*rules_expression,
+                                    static_cast<diagnostic_handler&>(ctx));
+        if (not evaluated) {
+          return {};
+        }
+        rules_value = std::move(*evaluated);
+      }
       auto sources
         = normalize_sources(to_option(legacy_value), to_option(path_value),
-                            to_option(rules_value), to_option(refresh_value),
+                            rules_value, to_option(refresh_value),
                             ctx.operator_location());
       if (sources.is_err()) {
         static_cast<diagnostic_handler&>(ctx).emit(
           std::move(sources).unwrap_err());
         return {};
+      }
+      if (rules_expression) {
+        locate_inline_rules(*rules_expression, sources.unwrap());
       }
       if (legacy_value) {
         diagnostic::warning("passing the path positionally is deprecated")
@@ -2819,13 +3981,23 @@ public:
           .emit(ctx);
       }
       if (rules_value) {
-        if (auto error = validate_inline_rules(sources.unwrap().rules,
-                                               rules_value->source)) {
-          static_cast<diagnostic_handler&>(ctx).emit(std::move(*error));
+        auto const mapping_value = ctx.get(mapping);
+        auto normalized_mapping = normalize_mapping(to_option(mapping_value));
+        if (normalized_mapping.is_ok()) {
+          if (auto error
+              = validate_inline_rules(sources.unwrap(), rules_value->source)) {
+            static_cast<diagnostic_handler&>(ctx).emit(std::move(*error));
+          }
         }
       }
       auto const format_value = ctx.get(format);
       if (auto normalized = normalize_format(to_option(format_value));
+          normalized.is_err()) {
+        static_cast<diagnostic_handler&>(ctx).emit(
+          std::move(normalized).unwrap_err());
+      }
+      auto const mapping_value = ctx.get(mapping);
+      if (auto normalized = normalize_mapping(to_option(mapping_value));
           normalized.is_err()) {
         static_cast<diagnostic_handler&>(ctx).emit(
           std::move(normalized).unwrap_err());
@@ -2842,5 +4014,6 @@ public:
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::sigma::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::sigma::SigmaKeywordsFunction)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::sigma::SigmaRegexFunction)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::sigma::SigmaFieldFunction)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::sigma::SigmaHasFunction)

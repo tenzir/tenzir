@@ -200,6 +200,13 @@ struct constant {
 
   kind value;
   location source;
+  /// Whether a string or blob literal used raw syntax (`r"…"`, `r#"…"#`,
+  /// `br"…"`). A raw literal contains its value verbatim, so its source span
+  /// maps one-to-one onto the value. A plain literal may contain escapes
+  /// that decode to fewer characters than they occupy, so offsets into the
+  /// value do not locate the source. Consumers that point diagnostics into
+  /// literal content depend on this distinction.
+  bool raw = false;
 
   friend auto inspect(auto& f, constant& x) -> bool {
     if (auto dbg = as_debug_writer(f)) {
@@ -211,7 +218,8 @@ struct constant {
                             x.source);
     }
     return f.object(x).fields(f.field("value", x.value),
-                              f.field("source", x.source));
+                              f.field("source", x.source),
+                              f.field("raw", x.raw));
   }
 
   auto as_data() const -> data {

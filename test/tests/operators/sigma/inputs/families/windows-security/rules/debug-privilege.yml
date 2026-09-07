@@ -1,0 +1,11 @@
+title: Debug Privilege Granted
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID:
+      - 4672
+      - 4704
+    PrivilegeList|contains: 'SeDebugPrivilege'
+  condition: selection

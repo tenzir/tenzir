@@ -1,0 +1,44 @@
+id: sigma/windows/system_event_log
+title: Windows System log event log clearing
+logsource:
+  product: windows
+  service: system
+guard:
+  # Provenance-scoped fields such as EventID use the System log namespace;
+  # the Security log shares the source kind and is excluded by name.
+  source: windows_security
+  log-name: System
+  conflicting-log-names: [Security]
+  class-uid: 1008
+  # Clear.
+  activities: [1]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  Provider_Name:
+    primitive: path
+    path: metadata.product.name
+    kind: string
+    provenance-scoped: true
+    notes: The event provider becomes the OCSF product name.
+  Channel:
+    primitive: path
+    path: log_name
+    kind: string
+    notes: For log clearing, Channel names the cleared log, which OCSF stores as the class's log name.
+  SubjectUserName:
+    primitive: path
+    path: actor.user.name
+    kind: string
+  SubjectDomainName:
+    primitive: path
+    path: actor.user.domain
+    kind: string
+  BackupPath:
+    primitive: path
+    path: file.path
+    kind: string

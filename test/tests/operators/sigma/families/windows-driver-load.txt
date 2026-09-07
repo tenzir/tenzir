@@ -1,0 +1,8 @@
+{
+  rule: "Driver Signed By Hardware Vendor",
+  id: "match",
+}
+{
+  rule: "Vulnerable Driver Loaded",
+  id: "match",
+}

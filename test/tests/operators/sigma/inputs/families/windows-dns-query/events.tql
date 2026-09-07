@@ -1,0 +1,38 @@
+// OCSF DNS Activity (4003) fixture events for the `sigma/windows/dns_query`
+// mapping family. Commented events are near-miss negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 4003,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "22", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  connection_info: {direction_id: 2},
+  query: {hostname: "files.pastebin-mirror.test"},
+  answers: [{type: "CNAME", rdata: "cdn.pastebin-mirror.test"}, {rdata: "198.51.100.7"}],
+  status_id: 1,
+  status_code: "0",
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", file: {path: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}
+// Projection must not match: a benign domain.
+{
+  id: "benign",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 4003,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["host"], extensions: [{name: "win"}], event_code: "22", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft-Windows-Sysmon", vendor_name: "Microsoft"}},
+  device: {hostname: "ws01", os: {type_id: 100, name: "Windows"}},
+  connection_info: {direction_id: 2},
+  query: {hostname: "update.microsoft.com"},
+  actor: {process: {uid: "{A1B2}", pid: 4242, path: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", file: {path: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", type_id: 8}}, user: {domain: "CORP", name: "alice"}},
+}
+// Guard must reject: a Zeek DNS record answers to the Zeek family, and the
+// EventID rule needs the Sysmon producer.
+{
+  id: "zeek-producer",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 4003,
+  activity_id: 6,
+  metadata: {version: "1.9.0", profiles: ["host"], log_name: "dns.log", product: {name: "Zeek"}},
+  query: {hostname: "files.pastebin-mirror.test"},
+}

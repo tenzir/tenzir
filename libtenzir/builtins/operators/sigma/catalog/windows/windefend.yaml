@@ -1,0 +1,49 @@
+id: sigma/windows/windefend
+title: Windows Defender detections
+logsource:
+  product: windows
+  service: windefend
+guard:
+  # Provenance-scoped fields such as EventID use the Defender namespace.
+  source: windows_defender
+  class-uid: 2004
+  # Create.
+  activities: [1]
+fields:
+  EventID:
+    primitive: path
+    path: metadata.event_code
+    kind: source-identifier
+    rule-value: stringify
+    provenance-scoped: true
+  ProcessName:
+    primitive: fallback
+    primary: actor.process.path
+    fallback: actor.process.file.path
+    kind: string
+  Threat_Name:
+    primitive: path
+    path: finding_info.title
+    kind: string
+  User:
+    primitive: principal
+    domain: actor.user.domain
+    name: actor.user.name
+    evidence: actor.user
+unmapped:
+  - field: NewValue
+    reason: Defender configuration changes carry the new value only in the finding title.
+  - field: OldValue
+    reason: Defender configuration changes carry the old value only in the finding title.
+  - field: Value
+    reason: Defender configuration changes carry the value only in the finding title.
+  - field: Path
+    reason: The Detection Finding mapping stores the file under evidences.
+  - field: SourceName
+    reason: The Detection Finding mapping does not preserve the detection source.
+  - field: Reason
+    reason: The Detection Finding mapping does not preserve the reason text.
+  - field: Feature_Name
+    reason: The Detection Finding mapping does not preserve the feature name.
+  - field: Action
+    reason: The Detection Finding mapping translates the action into a disposition enumeration.

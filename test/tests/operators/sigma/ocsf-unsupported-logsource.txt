@@ -1,0 +1,12 @@
+warning: sigma operator skips rule '<rules[0]>' for OCSF input
+  --> tests/operators/sigma/ocsf-unsupported-logsource.tql:11:1
+   |
+11 | title: Unsupported logsource with process field
+   | ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+   = note: unresolved Sigma fields: `Image`
+   = note: field `Image` is absent from the OCSF schema
+   = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  id: "literal",
+}

@@ -1,0 +1,9 @@
+title: LSASS Memory Dump Access Mask
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection:
+    TargetImage|endswith: '\lsass.exe'
+    GrantedAccess: '0x1010'
+  condition: selection

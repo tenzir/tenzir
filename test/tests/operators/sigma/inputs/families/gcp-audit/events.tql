@@ -1,0 +1,28 @@
+// OCSF API Activity (6003) fixture events for the `sigma/gcp/audit` mapping
+// family. Commented events are near-miss negatives.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 6003,
+  activity_id: 3,
+  metadata: {version: "1.9.0", profiles: ["cloud"], log_name: "cloudaudit.googleapis.com/activity", product: {name: "Cloud Audit Logs", vendor_name: "Google Cloud"}},
+  status_id: 1,
+  api: {operation: "SetIamPolicy", service: {name: "cloudresourcemanager.googleapis.com"}},
+  actor: {user: {email_addr: "alice@corp.example"}},
+  src_endpoint: {ip: 198.51.100.23},
+  http_request: {user_agent: "google-cloud-sdk gcloud/460.0.0"},
+  resources: [{uid: "projects/prod-project", type: "project"}],
+  cloud: {provider: "Google Cloud"},
+}
+// Projection must not match: a different method.
+{
+  id: "get-policy",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 6003,
+  activity_id: 2,
+  metadata: {version: "1.9.0", profiles: ["cloud"], log_name: "cloudaudit.googleapis.com/activity", product: {name: "Cloud Audit Logs", vendor_name: "Google Cloud"}},
+  status_id: 1,
+  api: {operation: "GetIamPolicy", service: {name: "cloudresourcemanager.googleapis.com"}},
+  resources: [{uid: "projects/prod-project", type: "project"}],
+  cloud: {provider: "Google Cloud"},
+}

@@ -1,0 +1,11 @@
+title: Run Key Modified To Encoded PowerShell
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4657
+    ObjectName|endswith: '\CurrentVersion\Run'
+    ObjectValueName: Updater
+    NewValue|contains: '-enc'
+  condition: selection

@@ -1,0 +1,121 @@
+// OCSF Process Activity (1007) fixture events for the
+// `sigma/windows/process_creation` mapping family. Comments mark near-miss
+// negatives that the logsource guard or a projection must reject.
+{
+  id: "match",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "1.9.0", event_code: "1", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft Sysmon"}},
+  process: {path: "C:\\Windows\\System32\\cmd.exe", cmd_line: "cmd.exe /c whoami", working_directory: "C:\\Users\\alice\\", integrity_id: 4, user: {domain: "CORP", name: "alice"}, file: {desc: "Windows Command Processor", product: {name: "Microsoft Windows Operating System"}, company_name: "Microsoft Corporation", version: "10.0.19041.1", internal_name: "Cmd.Exe", hashes: [{algorithm_id: 3, value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}, parent_process: {path: "C:\\Windows\\System32\\services.exe", cmd_line: "C:\\Windows\\System32\\services.exe", user: {domain: "NT AUTHORITY", name: "SYSTEM"}}},
+}
+// Null classifiers are not a provenance conflict.
+{
+  id: "null-classifiers",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "1.9.0", event_code: "1", log_name: null, product: null},
+  process: {path: "C:\\Windows\\System32\\cmd.exe", cmd_line: "cmd.exe /c whoami", working_directory: "C:\\Users\\alice\\", integrity_id: 4, user: {domain: "CORP", name: "alice"}, file: {desc: "Windows Command Processor", product: {name: "Microsoft Windows Operating System"}, company_name: "Microsoft Corporation", version: "10.0.19041.1", internal_name: "Cmd.Exe", hashes: [{algorithm_id: 3, value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}, parent_process: {path: "C:\\Windows\\System32\\services.exe", cmd_line: "C:\\Windows\\System32\\services.exe", user: {domain: "NT AUTHORITY", name: "SYSTEM"}}},
+}
+// The `Image` projection falls back from process.path to process.file.path.
+{
+  id: "image-fallback",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "1.9.0", event_code: "1", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft Sysmon"}},
+  process: {path: null, cmd_line: "cmd.exe /c whoami", working_directory: "C:\\Users\\alice\\", integrity_id: 4, user: {domain: "CORP", name: "alice"}, file: {desc: "Windows Command Processor", product: {name: "Microsoft Windows Operating System"}, company_name: "Microsoft Corporation", version: "10.0.19041.1", path: "C:\\Windows\\System32\\cmd.exe", internal_name: "Cmd.Exe", hashes: [{algorithm_id: 3, value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}, parent_process: {path: "C:\\Windows\\System32\\services.exe", cmd_line: "C:\\Windows\\System32\\services.exe", user: {domain: "NT AUTHORITY", name: "SYSTEM"}}},
+}
+// Guard must reject: process termination is not an eligible activity.
+{
+  id: "termination",
+  time: 2024-05-01T12:00:03Z,
+  class_uid: 1007,
+  activity_id: 2,
+  metadata: {version: "1.9.0", event_code: "1", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft Sysmon"}},
+  process: {path: "C:\\Windows\\System32\\cmd.exe", cmd_line: "cmd.exe /c whoami", working_directory: "C:\\Users\\alice\\", integrity_id: 4, user: {domain: "CORP", name: "alice"}, file: {desc: "Windows Command Processor", product: {name: "Microsoft Windows Operating System"}, company_name: "Microsoft Corporation", version: "10.0.19041.1", internal_name: "Cmd.Exe", hashes: [{algorithm_id: 3, value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}, parent_process: {path: "C:\\Windows\\System32\\services.exe", cmd_line: "C:\\Windows\\System32\\services.exe", user: {domain: "NT AUTHORITY", name: "SYSTEM"}}},
+}
+// Guard must reject: the device OS contradicts a Windows-only logsource.
+{
+  id: "linux",
+  time: 2024-05-01T12:00:04Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "1.9.0", event_code: "1", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft Sysmon"}},
+  device: {os: {type_id: 200}},
+  process: {path: "C:\\Windows\\System32\\cmd.exe", cmd_line: "cmd.exe /c whoami", working_directory: "C:\\Users\\alice\\", integrity_id: 4, user: {domain: "CORP", name: "alice"}, file: {desc: "Windows Command Processor", product: {name: "Microsoft Windows Operating System"}, company_name: "Microsoft Corporation", version: "10.0.19041.1", internal_name: "Cmd.Exe", hashes: [{algorithm_id: 3, value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}, parent_process: {path: "C:\\Windows\\System32\\services.exe", cmd_line: "C:\\Windows\\System32\\services.exe", user: {domain: "NT AUTHORITY", name: "SYSTEM"}}},
+}
+// Guard must reject: Windows Security Auditing contradicts a Sysmon rule.
+{
+  id: "conflicting-service",
+  time: 2024-05-01T12:00:05Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "1.9.0", event_code: "1", log_name: "Security", product: {name: "Microsoft Windows Security Auditing"}},
+  process: {path: "C:\\Windows\\System32\\cmd.exe", cmd_line: "cmd.exe /c whoami", working_directory: "C:\\Users\\alice\\", integrity_id: 4, user: {domain: "CORP", name: "alice"}, file: {desc: "Windows Command Processor", product: {name: "Microsoft Windows Operating System"}, company_name: "Microsoft Corporation", version: "10.0.19041.1", internal_name: "Cmd.Exe", hashes: [{algorithm_id: 3, value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}, parent_process: {path: "C:\\Windows\\System32\\services.exe", cmd_line: "C:\\Windows\\System32\\services.exe", user: {domain: "NT AUTHORITY", name: "SYSTEM"}}},
+}
+// The `User` projection reconstructs the DOMAIN\name principal.
+{
+  id: "system-user",
+  time: 2024-05-01T12:00:06Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "1.9.0", event_code: "1", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft Sysmon"}},
+  process: {path: "C:\\Windows\\System32\\cmd.exe", cmd_line: "cmd.exe /c whoami", working_directory: "C:\\Users\\alice\\", integrity_id: 4, user: {domain: "NT AUTHORITY", name: "SYSTEM"}, file: {desc: "Windows Command Processor", product: {name: "Microsoft Windows Operating System"}, company_name: "Microsoft Corporation", version: "10.0.19041.1", internal_name: "Cmd.Exe", hashes: [{algorithm_id: 3, value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}, parent_process: {path: "C:\\Windows\\System32\\services.exe", cmd_line: "C:\\Windows\\System32\\services.exe", user: {domain: "NT AUTHORITY", name: "SYSTEM"}}},
+}
+// The `Hashes` projection must not mix values across fingerprint objects.
+{
+  id: "hash-cross-object",
+  time: 2024-05-01T12:00:07Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "1.9.0", event_code: "1", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft Sysmon"}},
+  process: {path: "C:\\Windows\\System32\\cmd.exe", cmd_line: "cmd.exe /c whoami", working_directory: "C:\\Users\\alice\\", integrity_id: 4, user: {domain: "CORP", name: "alice"}, file: {desc: "Windows Command Processor", product: {name: "Microsoft Windows Operating System"}, company_name: "Microsoft Corporation", version: "10.0.19041.1", internal_name: "Cmd.Exe", hashes: [{algorithm_id: 3, value: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}, {algorithm_id: 1, value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}, parent_process: {path: "C:\\Windows\\System32\\services.exe", cmd_line: "C:\\Windows\\System32\\services.exe", user: {domain: "NT AUTHORITY", name: "SYSTEM"}}},
+}
+// The `CommandLine` projection must not join cmd_line with the process name.
+{
+  id: "command-split",
+  time: 2024-05-01T12:00:08Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "1.9.0", event_code: "1", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft Sysmon"}},
+  process: {path: "C:\\Windows\\System32\\cmd.exe", name: "whoami", cmd_line: "cmd.exe /c", working_directory: "C:\\Users\\alice\\", integrity_id: 4, user: {domain: "CORP", name: "alice"}, file: {desc: "Windows Command Processor", product: {name: "Microsoft Windows Operating System"}, company_name: "Microsoft Corporation", version: "10.0.19041.1", internal_name: "Cmd.Exe", hashes: [{algorithm_id: 3, value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}, parent_process: {path: "C:\\Windows\\System32\\services.exe", cmd_line: "C:\\Windows\\System32\\services.exe", user: {domain: "NT AUTHORITY", name: "SYSTEM"}}},
+}
+// `OriginalFileName` projects the PE-internal name, not the on-disk name.
+{
+  id: "disk-name-only",
+  time: 2024-05-01T12:00:09Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "1.9.0", event_code: "1", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft Sysmon"}},
+  process: {path: "C:\\Windows\\System32\\cmd.exe", cmd_line: "cmd.exe /c whoami", working_directory: "C:\\Users\\alice\\", integrity_id: 4, user: {domain: "CORP", name: "alice"}, file: {desc: "Windows Command Processor", product: {name: "Microsoft Windows Operating System"}, company_name: "Microsoft Corporation", version: "10.0.19041.1", name: "Cmd.Exe", internal_name: "different.exe", hashes: [{algorithm_id: 3, value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}, parent_process: {path: "C:\\Windows\\System32\\services.exe", cmd_line: "C:\\Windows\\System32\\services.exe", user: {domain: "NT AUTHORITY", name: "SYSTEM"}}},
+}
+// Guard must reject: wrong OCSF class despite matching field values.
+{
+  id: "dns",
+  time: 2024-05-01T12:00:10Z,
+  class_uid: 4003,
+  activity_id: 1,
+  metadata: {version: "1.9.0", event_code: "1", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft Sysmon"}},
+  process: {path: "C:\\Windows\\System32\\cmd.exe", cmd_line: "cmd.exe /c whoami", working_directory: "C:\\Users\\alice\\", integrity_id: 4, user: {domain: "CORP", name: "alice"}, file: {desc: "Windows Command Processor", product: {name: "Microsoft Windows Operating System"}, company_name: "Microsoft Corporation", version: "10.0.19041.1", internal_name: "Cmd.Exe", hashes: [{algorithm_id: 3, value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}, parent_process: {path: "C:\\Windows\\System32\\services.exe", cmd_line: "C:\\Windows\\System32\\services.exe", user: {domain: "NT AUTHORITY", name: "SYSTEM"}}},
+}
+// Unknown classifiers must stay eligible: only known contradictions reject.
+{
+  id: "unknown-classifiers",
+  time: 2024-05-01T12:00:11Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "1.9.0", event_code: "1", log_name: "Custom Forwarder", product: {name: "Acme Adapter"}},
+  device: {os: {type_id: 0}},
+  process: {path: "C:\\Windows\\System32\\cmd.exe", cmd_line: "cmd.exe /c whoami", working_directory: "C:\\Users\\alice\\", integrity_id: 4, user: {domain: "CORP", name: "alice"}, file: {desc: "Windows Command Processor", product: {name: "Microsoft Windows Operating System"}, company_name: "Microsoft Corporation", version: "10.0.19041.1", internal_name: "Cmd.Exe", hashes: [{algorithm_id: 3, value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}, parent_process: {path: "C:\\Windows\\System32\\services.exe", cmd_line: "C:\\Windows\\System32\\services.exe", user: {domain: "NT AUTHORITY", name: "SYSTEM"}}},
+}
+// Unknown schema versions must stay eligible.
+{
+  id: "unknown-version",
+  time: 2024-05-01T12:00:12Z,
+  class_uid: 1007,
+  activity_id: 1,
+  metadata: {version: "999.0.0", event_code: "1", log_name: "Microsoft-Windows-Sysmon/Operational", product: {name: "Microsoft Sysmon"}},
+  process: {path: "C:\\Windows\\System32\\cmd.exe", cmd_line: "cmd.exe /c whoami", working_directory: "C:\\Users\\alice\\", integrity_id: 4, user: {domain: "CORP", name: "alice"}, file: {desc: "Windows Command Processor", product: {name: "Microsoft Windows Operating System"}, company_name: "Microsoft Corporation", version: "10.0.19041.1", internal_name: "Cmd.Exe", hashes: [{algorithm_id: 3, value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}, parent_process: {path: "C:\\Windows\\System32\\services.exe", cmd_line: "C:\\Windows\\System32\\services.exe", user: {domain: "NT AUTHORITY", name: "SYSTEM"}}},
+}

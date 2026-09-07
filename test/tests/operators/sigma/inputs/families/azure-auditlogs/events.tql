@@ -1,0 +1,39 @@
+// OCSF fixture events for the `sigma/azure/auditlogs_*` mapping alternatives.
+// Entra directory audits spread over account, group, and entity management by
+// category. Commented events are near-miss negatives.
+{
+  id: "add-user",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 3001,
+  activity_id: 1,
+  metadata: {version: "1.9.0", profiles: ["cloud", "security_control"], log_name: "auditLogs/directoryAudits", product: {name: "Microsoft Entra ID", vendor_name: "Microsoft"}},
+  status_id: 1,
+  message: "Add user",
+  actor: {user: {uid: "u1", name: "alice", domain: "corp.example", email_addr: "alice@corp.example", type_id: 1}},
+  user: {uid: "u9", full_name: "Eve Contractor", type_id: 1},
+}
+{
+  id: "add-member",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 3006,
+  activity_id: 3,
+  metadata: {version: "1.9.0", profiles: ["cloud", "security_control"], log_name: "auditLogs/directoryAudits", product: {name: "Microsoft Entra ID", vendor_name: "Microsoft"}},
+  status_id: 1,
+  message: "Add member to group",
+  actor: {user: {uid: "u1", name: "alice", domain: "corp.example", email_addr: "alice@corp.example", type_id: 1}},
+  group: {uid: "g1", name: "Global Administrators"},
+  user: {uid: "u9", full_name: "Eve Contractor", type_id: 1},
+}
+{
+  id: "update-application",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 3004,
+  activity_id: 3,
+  metadata: {version: "1.9.0", profiles: ["cloud", "security_control"], log_name: "auditLogs/directoryAudits", product: {name: "Microsoft Entra ID", vendor_name: "Microsoft"}},
+  status_id: 2,
+  status_detail: "Insufficient privileges",
+  severity_id: 2,
+  message: "Update application",
+  actor: {user: {uid: "u1", name: "alice", domain: "corp.example", email_addr: "alice@corp.example", type_id: 1}},
+  entity: {uid: "app9", name: "Legacy Sync App"},
+}
