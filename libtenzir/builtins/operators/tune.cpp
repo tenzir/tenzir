@@ -43,8 +43,8 @@ public:
     : op_{std::move(op)}, args_{std::move(args)} {
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     return op_->optimize(filter, order);
   }
 

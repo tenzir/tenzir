@@ -38,8 +38,8 @@ public:
     TENZIR_ASSERT(not dynamic_cast<const local_remote_operator*>(op_.get()));
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
     auto result = op_->optimize(filter, order);
     if (not result.replacement) {
       return result;

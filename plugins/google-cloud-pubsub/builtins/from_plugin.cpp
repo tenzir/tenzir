@@ -184,10 +184,10 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const&, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const&, EventOrder order) const
+    -> OptimizeResult override {
     auto args = args_;
-    args.ordered = order == event_order::ordered;
+    args.ordered = order == EventOrder::ordered;
 
     return {
       None{}, order,

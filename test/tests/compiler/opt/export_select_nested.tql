@@ -1,0 +1,2 @@
+export
+select a.b, c

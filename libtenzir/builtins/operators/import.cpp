@@ -259,10 +259,10 @@ public:
     return "import";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
     (void)filter, (void)order;
-    return optimize_result{None{}, event_order::unordered, copy()};
+    return OptimizeResult{None{}, EventOrder::unordered, copy()};
   }
 
   friend auto inspect(auto& f, import_operator& x) -> bool {

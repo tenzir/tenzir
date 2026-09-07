@@ -475,8 +475,8 @@ public:
     return "deduplicate";
   }
 
-  auto optimize(const expression& filter, event_order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder) const
+    -> OptimizeResult override {
     if (cfg_.distance) {
       // When the `distance` option is used, we're not allowed to optimize at
       // all. Here's a simple example that proves this:
@@ -485,7 +485,7 @@ public:
       //   where not connected
       return do_not_optimize(*this);
     }
-    return optimize_result{filter, event_order::ordered, copy()};
+    return OptimizeResult{filter, EventOrder::ordered, copy()};
   }
 
   friend auto inspect(auto& f, deduplicate_operator& x) -> bool {

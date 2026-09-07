@@ -84,12 +84,12 @@ public:
   auto operator()(generator<table_slice> input,
                   operator_control_plane& ctrl) const -> generator<table_slice>;
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     TENZIR_UNUSED(filter);
     auto replacement = std::make_unique<set_operator>(*this);
     replacement->order_ = order;
-    return optimize_result{None{}, order, std::move(replacement)};
+    return OptimizeResult{None{}, order, std::move(replacement)};
   }
 
   friend auto inspect(auto& f, set_operator& x) -> bool {
@@ -101,7 +101,7 @@ public:
 private:
   std::vector<ast::assignment> assignments_;
   std::vector<ast::field_path> moved_fields_;
-  event_order order_ = event_order::ordered;
+  EventOrder order_ = EventOrder::ordered;
 };
 
 } // namespace tenzir

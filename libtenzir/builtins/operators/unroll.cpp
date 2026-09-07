@@ -437,12 +437,12 @@ public:
     return "unroll";
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     (void)filter;
     auto replacement = std::make_unique<unroll_operator>(*this);
-    replacement->unordered_ = order == event_order::unordered;
-    return optimize_result{None{}, order, std::move(replacement)};
+    replacement->unordered_ = order == EventOrder::unordered;
+    return OptimizeResult{None{}, order, std::move(replacement)};
   }
 
   friend auto inspect(auto& f, unroll_operator& x) -> bool {
@@ -457,7 +457,7 @@ private:
 
 struct UnrollArgs {
   ast::field_path field;
-  event_order order = event_order::ordered;
+  EventOrder order = EventOrder::ordered;
 };
 
 class Unroll final : public Operator<table_slice, table_slice> {
@@ -511,7 +511,7 @@ public:
       co_return;
     }
     for (auto unrolled :
-         unroll(input, *off, args_.order == event_order::unordered, ctx)) {
+         unroll(input, *off, args_.order == EventOrder::unordered, ctx)) {
       co_await push(std::move(unrolled));
     }
   }

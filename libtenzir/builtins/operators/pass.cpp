@@ -56,9 +56,9 @@ public:
     return "pass";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    return optimize_result{filter, order, nullptr};
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
+    return OptimizeResult{filter, order, nullptr};
   }
 
   friend auto inspect(auto& f, pass_operator& x) -> bool {
@@ -78,14 +78,16 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<PassArgs, PassTableSlice, PassChunk>{};
-    return d.optimize([](DescribeCtx&, event_order order,
-                         ir::optimize_filter filter) -> Optimization {
-      return {
-        .order = order,
-        .filter_upstream = std::move(filter),
-        .drop = true,
-      };
-    });
+    return d.optimize(
+      [](DescribeCtx&, ir::OptimizeRequest req) -> Optimization {
+        return {
+          .order = req.order,
+          .filter_upstream = std::move(req.filter),
+          .drop = true,
+          .limit_upstream = req.limit,
+          .projection_upstream = std::move(req.projection),
+        };
+      });
   }
 };
 

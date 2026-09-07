@@ -84,10 +84,10 @@ public:
     return "assert_throughput";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
     (void)filter;
-    return optimize_result::order_invariant(*this, order);
+    return OptimizeResult::order_invariant(*this, order);
   }
 
   friend auto inspect(auto& f, assert_throughput_operator& x) -> bool {

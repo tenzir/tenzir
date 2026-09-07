@@ -55,8 +55,7 @@ public:
 
   auto detached() const -> bool override;
 
-  auto optimize(const expression&, event_order) const
-    -> optimize_result override;
+  auto optimize(const expression&, EventOrder) const -> OptimizeResult override;
 
   auto name() const -> std::string override;
 

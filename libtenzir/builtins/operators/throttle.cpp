@@ -217,8 +217,8 @@ public:
     return "throttle";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
     return {filter, order, copy()};
   }
 

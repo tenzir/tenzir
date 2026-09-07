@@ -232,10 +232,10 @@ public:
     return "sort";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    return optimize_result{filter, stable_ ? order : event_order::unordered,
-                           copy()};
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
+    return OptimizeResult{filter, stable_ ? order : EventOrder::unordered,
+                          copy()};
   }
 
   friend auto inspect(auto& f, sort_operator& x) -> bool {
@@ -381,14 +381,14 @@ public:
     }
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     // Our upstream can always be unordered. If our downstream did already not
     // care about ordering, we can skip sorting entirely.
-    return optimize_result{
+    return OptimizeResult{
       filter,
-      event_order::unordered,
-      order == event_order::unordered ? nullptr : copy(),
+      EventOrder::unordered,
+      order == EventOrder::unordered ? nullptr : copy(),
     };
   }
 
@@ -544,14 +544,14 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<SortArgs, Sort>{};
     d.optional_variadic("expr", &SortArgs::exprs, "any");
-    return d.optimize([](DescribeCtx&, event_order order,
-                         ir::optimize_filter filter) -> Optimization {
+    return d.optimize([](DescribeCtx&, EventOrder order,
+                         ir::OptimizeFilter filter) -> Optimization {
       return {
         // invariant to order and filters
-        .order = event_order::unordered,
+        .order = EventOrder::unordered,
         .filter_upstream = std::move(filter),
         // drop if downstream does not care about order
-        .drop = order == event_order::unordered,
+        .drop = order == EventOrder::unordered,
       };
     });
   }

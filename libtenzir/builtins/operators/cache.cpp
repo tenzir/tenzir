@@ -680,8 +680,8 @@ public:
     return "write_cache";
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     TENZIR_UNUSED(filter);
     TENZIR_UNUSED(order);
     return do_not_optimize(*this);
@@ -823,8 +823,8 @@ public:
     return source_ ? duration::zero() : duration::max();
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     TENZIR_UNUSED(filter);
     TENZIR_UNUSED(order);
     return do_not_optimize(*this);

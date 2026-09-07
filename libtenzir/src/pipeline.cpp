@@ -105,14 +105,14 @@ private:
   std::unique_ptr<diagnostic_handler> handler_{};
 };
 
-auto do_not_optimize(const operator_base& op) -> optimize_result {
+auto do_not_optimize(const operator_base& op) -> OptimizeResult {
   // This default implementation is always correct because it effectively
   // promises `op | where filter | sink <=> op | where filter | sink`, which is
   // trivial. Note that forwarding `order` is not always valid. To see this,
   // assume `op == head` and `order == unordered`. We would have to show that
   // `head | where filter | sink <=> shuffle | head | where filter | sink`, but
   // this is clearly not the case.
-  return optimize_result{None{}, event_order::ordered, op.copy()};
+  return OptimizeResult{None{}, EventOrder::ordered, op.copy()};
 }
 
 pipeline::pipeline(std::vector<operator_ptr> operators) {
@@ -189,7 +189,7 @@ auto pipeline::optimize_into_filter() const -> std::pair<expression, pipeline> {
 
 auto pipeline::optimize_into_filter(const expression& filter) const
   -> std::pair<expression, pipeline> {
-  auto opt = optimize(filter, event_order::ordered);
+  auto opt = optimize(filter, EventOrder::ordered);
   auto* pipe = dynamic_cast<pipeline*>(opt.replacement.get());
   // We know that `pipeline::optimize` yields a pipeline and a filter.
   TENZIR_ASSERT(pipe);
@@ -197,8 +197,8 @@ auto pipeline::optimize_into_filter(const expression& filter) const
   return {std::move(*opt.filter), std::move(*pipe)};
 }
 
-auto pipeline::optimize(expression const& filter, event_order order) const
-  -> optimize_result {
+auto pipeline::optimize(expression const& filter, EventOrder order) const
+  -> OptimizeResult {
   auto current_filter = filter;
   auto current_order = order;
   // Collect the optimized pipeline in reversed order.
@@ -218,7 +218,7 @@ auto pipeline::optimize(expression const& filter, event_order order) const
                or op->name() == "subscribe";
       });
       if (not qualifies) {
-        opt = optimize_result::order_invariant(op, current_order);
+        opt = OptimizeResult::order_invariant(op, current_order);
       }
     }
     if (opt.filter) {
@@ -238,8 +238,8 @@ auto pipeline::optimize(expression const& filter, event_order order) const
     current_order = opt.order;
   }
   std::reverse(result.begin(), result.end());
-  return optimize_result{current_filter, current_order,
-                         std::make_unique<pipeline>(std::move(result))};
+  return OptimizeResult{current_filter, current_order,
+                        std::make_unique<pipeline>(std::move(result))};
 }
 
 auto pipeline::copy() const -> operator_ptr {

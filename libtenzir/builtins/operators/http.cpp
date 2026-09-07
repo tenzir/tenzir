@@ -202,8 +202,8 @@ struct internal_source final : public crtp_operator<internal_source> {
     return "internal-http-source";
   }
 
-  auto optimize(const expression&, event_order) const
-    -> optimize_result override {
+  auto optimize(const expression&, EventOrder) const
+    -> OptimizeResult override {
     return do_not_optimize(*this);
   }
 
@@ -269,9 +269,9 @@ struct internal_sink final : public crtp_operator<internal_sink> {
     return "internal-http-sink";
   }
 
-  auto optimize(const expression&, event_order) const
-    -> optimize_result override {
-    return {filter_, event_order::ordered, copy()};
+  auto optimize(const expression&, EventOrder) const
+    -> OptimizeResult override {
+    return {filter_, EventOrder::ordered, copy()};
   }
 
   friend auto inspect(auto& f, internal_sink& x) {
@@ -1419,8 +1419,8 @@ public:
     }
   }
 
-  auto optimize(expression const&, event_order) const
-    -> optimize_result override {
+  auto optimize(expression const&, EventOrder) const
+    -> OptimizeResult override {
     return do_not_optimize(*this);
   }
 
@@ -1755,8 +1755,8 @@ public:
     } while (awaiting != 0);
   }
 
-  auto optimize(expression const& expr, event_order) const
-    -> optimize_result override {
+  auto optimize(expression const& expr, EventOrder) const
+    -> OptimizeResult override {
     const auto make_copy = [&] -> operator_ptr {
       if (args_.paginate) {
         return copy();
@@ -1765,7 +1765,7 @@ public:
       args.filter = expr;
       return std::make_unique<from_http_client_operator>(std::move(args));
     };
-    return {None{}, event_order::ordered, make_copy()};
+    return {None{}, EventOrder::ordered, make_copy()};
   }
 
   auto name() const -> std::string override {
@@ -2623,8 +2623,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& expr, event_order) const
-    -> optimize_result override {
+  auto optimize(expression const& expr, EventOrder) const
+    -> OptimizeResult override {
     const auto make_copy = [&] -> operator_ptr {
       if (not args_.paginate) {
         auto args = args_;
@@ -2635,7 +2635,7 @@ public:
     };
     return {
       None{},
-      args_.parallel.inner == 1 ? event_order::ordered : event_order::unordered,
+      args_.parallel.inner == 1 ? EventOrder::ordered : EventOrder::unordered,
       make_copy(),
     };
   }

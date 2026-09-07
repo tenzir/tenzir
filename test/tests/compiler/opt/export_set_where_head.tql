@@ -1,0 +1,4 @@
+export
+set y = x + 1
+where y > 1
+head 5

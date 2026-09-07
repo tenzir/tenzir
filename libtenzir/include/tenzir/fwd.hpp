@@ -196,7 +196,7 @@ class finalize_ctx;
 namespace ir {
 
 class Operator;
-struct optimize_result;
+struct OptimizeResult;
 struct pipeline;
 
 } // namespace ir

@@ -54,9 +54,9 @@ public:
     return "flatten";
   }
 
-  auto optimize(expression const&, event_order order) const
-    -> optimize_result override {
-    return optimize_result::order_invariant(*this, order);
+  auto optimize(expression const&, EventOrder order) const
+    -> OptimizeResult override {
+    return OptimizeResult::order_invariant(*this, order);
   }
 
   friend auto inspect(auto& f, flatten_operator& x) -> bool {

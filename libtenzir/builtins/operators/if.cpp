@@ -68,12 +68,12 @@ public:
     return "internal-branch-source";
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     TENZIR_UNUSED(filter, order);
     // Branching necessarily throws off the event order, so we can allow the
     // nested pipelines to do ordering optimizations.
-    return optimize_result{None{}, event_order::unordered, this->copy()};
+    return OptimizeResult{None{}, EventOrder::unordered, this->copy()};
   }
 
   auto operator()(operator_control_plane& ctrl) const
@@ -141,12 +141,12 @@ public:
     return "internal-branch-sink";
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     TENZIR_UNUSED(filter, order);
     // Branching necessarily throws off the event order, so we can allow the
     // nested pipelines to do ordering optimizations.
-    return optimize_result{None{}, event_order::unordered, this->copy()};
+    return OptimizeResult{None{}, EventOrder::unordered, this->copy()};
   }
 
   auto
@@ -528,13 +528,13 @@ public:
     return "internal-if";
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     TENZIR_UNUSED(filter, order);
     // Branching necessarily throws off the event order, so we can allow the
     // ested pipelines to do ordering optimizations.
     // TODO: We could push up a disjunction of the two filters.
-    return optimize_result{None{}, event_order::unordered, this->copy()};
+    return OptimizeResult{None{}, EventOrder::unordered, this->copy()};
   }
 
   auto
@@ -608,12 +608,12 @@ public:
     return "internal-endif";
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     TENZIR_UNUSED(filter, order);
     // Branching necessarily throws off the event order, so we can allow the
     // nested pipelines to do ordering optimizations.
-    return optimize_result{None{}, event_order::unordered, this->copy()};
+    return OptimizeResult{None{}, EventOrder::unordered, this->copy()};
   }
 
   auto

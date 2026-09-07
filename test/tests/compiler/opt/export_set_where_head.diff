@@ -1,0 +1,98 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ [1]:0..6 from 0
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `y` @ [1]:11..12 from 0,
+             has_question_mark: false
+           },
+           right: binary_expr {
+             left: root_field {
+               id: `x` @ [1]:15..16 from 0,
+               has_question_mark: false
+             },
+             op: "add",
+             right: constant int64 1 @ [1]:19..20 from 0,
+             location: [1]:15..20 from 0
+           },
+           location: [1]:11..20 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     where_ir {
+-      self: [1]:21..26 from 0,
++      self: [0]:0..0 from 0,
+       predicate: binary_expr {
+         left: root_field {
+           id: `y` @ [1]:27..28 from 0,
+           has_question_mark: false
+         },
+         op: "gt",
+         right: constant int64 1 @ [1]:31..32 from 0,
+         location: [1]:27..32 from 0
+       }
+     },
+     GenericIr {
+       op: {
+         path: [
+           `head` @ [1]:33..37 from 0
+         ],
+         ref: std::head/op
+       },
+       desc: "head",
+       args: [
+         located 5 @ [1]:38..39 from 0
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ [1]:39..39 from 0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }

@@ -1,0 +1,116 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ [1]:0..6 from 0
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `value` @ [1]:38..43 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `value` @ [1]:38..43 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `schema_name` @ [1]:19..30 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `schema_name` @ [1]:19..30 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ],
+       named_args: [
+         
+       ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: meta {
+             kind: "name",
+             source: [1]:11..16 from 0
+           },
+           right: root_field {
+             id: `schema_name` @ [1]:19..30 from 0,
+             has_question_mark: false
+           },
+           location: [1]:11..30 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `value` @ [1]:38..43 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `value` @ [1]:38..43 from 0,
+             has_question_mark: false
+           },
+           location: [1]:38..43 from 0
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ [1]:43..43 from 0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }

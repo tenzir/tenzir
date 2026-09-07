@@ -240,8 +240,8 @@ struct internal_source final : public crtp_operator<internal_source> {
     return "internal-transceiver-source";
   }
 
-  auto optimize(const expression&, event_order) const
-    -> optimize_result override {
+  auto optimize(const expression&, EventOrder) const
+    -> OptimizeResult override {
     return do_not_optimize(*this);
   }
 
@@ -292,8 +292,8 @@ struct internal_sink final : public crtp_operator<internal_sink> {
     return "internal-transceiver-sink";
   }
 
-  auto optimize(const expression&, event_order) const
-    -> optimize_result override {
+  auto optimize(const expression&, EventOrder) const
+    -> OptimizeResult override {
     return do_not_optimize(*this);
   }
 
@@ -705,8 +705,8 @@ struct every_cron_operator final : public operator_base {
       };
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     auto args = args_;
     auto result = args.pipe.inner.optimize(filter, order);
     args.pipe.inner = static_cast<pipeline&&>(*result.replacement);
@@ -799,8 +799,8 @@ public:
     return hdl;
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     return {filter, order, copy()};
   }
 

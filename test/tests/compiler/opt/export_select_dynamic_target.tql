@@ -1,0 +1,2 @@
+export
+select result[key] = value

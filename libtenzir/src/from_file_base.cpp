@@ -195,7 +195,7 @@ auto from_file_source::name() const -> std::string {
 }
 
 from_file_sink::from_file_sink(
-  from_file_actor parent, event_order order,
+  from_file_actor parent, EventOrder order,
   Option<std::pair<ast::field_path, std::string>> path_field)
   : parent_{std::move(parent)},
     order_{order},
@@ -256,7 +256,7 @@ auto from_file_args::handle(session ctx) const -> failure_or<pipeline> {
 
 from_file_state::from_file_state(
   from_file_actor::pointer self, from_file_args args, std::string plaintext_url,
-  event_order order, std::unique_ptr<diagnostic_handler> dh,
+  EventOrder order, std::unique_ptr<diagnostic_handler> dh,
   Arc<const Source> definition, node_actor node, bool is_hidden,
   metrics_receiver_actor metrics_receiver, uint64_t operator_index,
   std::string pipeline_id)
@@ -296,11 +296,10 @@ from_file_state::from_file_state(
 
 from_file_state::from_file_state(
   from_file_actor::pointer self, from_file_args args, std::string expanded,
-  std::string path, std::shared_ptr<arrow::fs::FileSystem> fs,
-  event_order order, std::unique_ptr<diagnostic_handler> dh,
-  Arc<const Source> definition, node_actor node, bool is_hidden,
-  metrics_receiver_actor metrics_receiver, uint64_t operator_index,
-  std::string pipeline_id)
+  std::string path, std::shared_ptr<arrow::fs::FileSystem> fs, EventOrder order,
+  std::unique_ptr<diagnostic_handler> dh, Arc<const Source> definition,
+  node_actor node, bool is_hidden, metrics_receiver_actor metrics_receiver,
+  uint64_t operator_index, std::string pipeline_id)
   : self_{self},
     dh_{std::move(dh)},
     fs_{std::move(fs)},

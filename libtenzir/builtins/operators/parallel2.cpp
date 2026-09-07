@@ -103,16 +103,20 @@ public:
     return args_.pipe.inner.substitute(ctx, instantiate);
   }
 
-  auto optimize(ir::optimize_filter filter, event_order order,
-                const ir::OptimizeCtx&) && -> ir::optimize_result override {
+  auto optimize(ir::OptimizeRequest req,
+                const ir::OptimizeCtx&) && -> ir::OptimizeResult override {
     // Determine whether operators inside this parallel block may reorder.
     auto degree = jobs();
     auto sub_octx = ir::OptimizeCtx{
       .can_any_op_reorder = degree > 1,
     };
     // Apply downstream filter and order into the subpipeline (from_downstream).
-    auto sub
-      = std::move(args_.pipe.inner).optimize(std::move(filter), order, sub_octx);
+    // Limit and projection stay outside: every replica would stop after the
+    // limit on its own, so the shared upstream could not honor it.
+    auto sub = std::move(args_.pipe.inner)
+                 .optimize(ir::OptimizeRequest{.filter = std::move(req.filter),
+                                               .order = req.order},
+                           sub_octx);
     // Reinsert residual filters at the front of the subpipeline so they don't
     // escape past `parallel` (invariant_order: no filter propagation upstream).
     args_.pipe.inner = std::move(sub.replacement);

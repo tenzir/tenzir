@@ -400,9 +400,9 @@ public:
     return "internal-write-buffer";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    return optimize_result{filter, order, copy()};
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
+    return OptimizeResult{filter, order, copy()};
   }
 
   auto infer_type_impl(operator_type input) const
@@ -510,9 +510,9 @@ public:
     return duration::max();
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    return optimize_result{filter, order, copy()};
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
+    return OptimizeResult{filter, order, copy()};
   }
 
   auto infer_type_impl(operator_type input) const

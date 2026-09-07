@@ -1,0 +1,81 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ [1]:0..6 from 0
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: index_expr {
+             expr: root_field {
+               id: `result` @ [1]:14..20 from 0,
+               has_question_mark: false
+             },
+             index: root_field {
+               id: `key` @ [1]:21..24 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             is_get: false,
+             location: [1]:14..25 from 0
+           },
+           right: root_field {
+             id: `value` @ [1]:28..33 from 0,
+             has_question_mark: false
+           },
+           location: [1]:14..33 from 0
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ [1]:33..33 from 0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }

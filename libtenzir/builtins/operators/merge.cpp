@@ -76,11 +76,16 @@ public:
     return args_.pipe.substitute(ctx, instantiate);
   }
 
-  auto
-  optimize(ir::optimize_filter filter, event_order order,
-           const ir::OptimizeCtx& octx) && -> ir::optimize_result override {
-    // Push optimizations into both legs of merge: upstream and subpipeline
-    auto opt = std::move(args_.pipe).optimize(filter, order, octx);
+  auto optimize(ir::OptimizeRequest req,
+                const ir::OptimizeCtx& octx) && -> ir::OptimizeResult override {
+    auto filter = std::move(req.filter);
+    auto order = req.order;
+    // Push filter and order into both legs of merge: upstream and subpipeline.
+    // Limit and projection are not pushed into either leg, because the merged
+    // output needs both legs in full.
+    auto opt = std::move(args_.pipe)
+                 .optimize(
+                   ir::OptimizeRequest{.filter = filter, .order = order}, octx);
     args_.pipe = std::move(opt.replacement);
     args_.pipe.operators.insert_range(args_.pipe.operators.begin(),
                                       opt.filter

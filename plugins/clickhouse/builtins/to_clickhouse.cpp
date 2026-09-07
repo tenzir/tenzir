@@ -77,10 +77,10 @@ public:
     return f.apply(x.args_);
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
     (void)filter, (void)order;
-    return {{}, event_order::unordered, copy()};
+    return {{}, EventOrder::unordered, copy()};
   }
 
   auto name() const -> std::string override {

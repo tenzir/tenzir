@@ -163,17 +163,25 @@ using Validator = std::function<auto(DescribeCtx&)->Empty>;
 
 struct Optimization {
   /// Ordering requirement of the upstream.
-  event_order order = event_order::ordered;
+  EventOrder order = EventOrder::ordered;
   /// Filter that should be pushed into upstream.
-  ir::optimize_filter filter_upstream = {};
+  ir::OptimizeFilter filter_upstream = {};
   /// Filter that remains after this operator.
-  ir::optimize_filter filter_self = {};
+  ir::OptimizeFilter filter_self = {};
   /// Removes the operator.
   bool drop = false;
+  /// Limit that should be pushed into upstream. See `ir::OptimizeRequest::limit`
+  /// for the semantics. An incoming limit may only be forwarded if
+  /// `filter_self` is empty; a fresh limit may always be emitted.
+  Option<uint64_t> limit_upstream = {};
+  /// Projection that should be pushed into upstream. See
+  /// `ir::OptimizeRequest::projection` for the semantics. The references of
+  /// `filter_self` are added automatically.
+  Option<ir::OptimizeProjection> projection_upstream = {};
 };
 
-using Optimizer = std::function<
-  auto(DescribeCtx&, event_order, ir::optimize_filter)->Optimization>;
+using Optimizer
+  = std::function<auto(DescribeCtx&, ir::OptimizeRequest)->Optimization>;
 
 /// Extracts partition-key expressions from a materialized argument bundle.
 /// The returned expressions are evaluated at runtime against each incoming
@@ -193,9 +201,11 @@ struct Description {
   std::vector<Named> named;
   Option<Validator> validator;
   Option<Optimizer> optimizer;
-  Option<Setter<ir::optimize_filter>> set_filter;
+  Option<Setter<ir::OptimizeFilter>> set_filter;
+  Option<Setter<Option<uint64_t>>> set_limit;
+  Option<Setter<Option<ir::OptimizeProjection>>> set_projection;
   Option<Setter<location>> set_operator_location;
-  Option<Setter<event_order>> set_order;
+  Option<Setter<EventOrder>> set_order;
   // FIXME: Document.
   Option<Spawner> spawner;
   std::vector<AnySpawn> spawns;
@@ -1024,33 +1034,79 @@ public:
 
   /// Registers a member of `Args` to be populated with the optimization
   /// order, i.e., the weakest ordering guarantee from downstream.
-  auto optimization_order(event_order Args::* ptr) {
+  auto optimization_order(EventOrder Args::* ptr) {
     TENZIR_ASSERT(not desc_.set_order);
     desc_.set_order = make_setter(ptr);
   }
 
   /// Registers a member of `Args` to be populated with the optimization
   /// filter, instead of keeping it as a separate `where` after the operator.
-  auto optimize_filter(ir::optimize_filter Args::* ptr) -> Description {
+  auto optimize_filter(ir::OptimizeFilter Args::* ptr) -> Description {
     desc_.set_filter = make_setter(ptr);
     return optimize(
-      [](DescribeCtx&, event_order, ir::optimize_filter) -> Optimization {
-        return {.order = event_order::ordered};
+      [](DescribeCtx&, EventOrder, ir::OptimizeFilter) -> Optimization {
+        return {.order = EventOrder::ordered};
       });
+  }
+
+  /// Registers a member of `Args` to be populated with the limit that
+  /// downstream pushed into this operator, if any.
+  ///
+  /// The limit counts events that pass the filter registered with
+  /// `optimize_filter`, so an operator must consume the filter to interpret
+  /// the limit. It is a hint: the operator may stop after that many matching
+  /// events, but the `head` that produced it stays in the pipeline. Repeated
+  /// `optimize()` calls keep the smallest limit.
+  auto optimize_limit(Option<uint64_t> Args::* ptr) {
+    TENZIR_ASSERT(not desc_.set_limit);
+    desc_.set_limit = [ptr](Any& args, Option<uint64_t> value) {
+      (&args.as<Args>())->*ptr = value;
+    };
+  }
+
+  /// Registers a member of `Args` to be populated with the projection that
+  /// downstream pushed into this operator, if any. `None` means that every
+  /// field is needed.
+  ///
+  /// The projection is a hint: the operator may omit all other fields, but the
+  /// `select` that produced it stays in the pipeline. Repeated `optimize()`
+  /// calls take the union.
+  auto optimize_projection(Option<ir::OptimizeProjection> Args::* ptr) {
+    TENZIR_ASSERT(not desc_.set_projection);
+    desc_.set_projection
+      = [ptr](Any& args, Option<ir::OptimizeProjection> value) {
+          (&args.as<Args>())->*ptr = std::move(value);
+        };
   }
 
   /// Overrides the default optimization behavior.
   ///
-  /// The callback receives the current description context, ordering required
-  /// by downstream operators, and incoming downstream filter chain. The
-  /// returned `Optimization` controls the required upstream order, whether the
-  /// operator may be dropped, and how the filter chain is split into a pushed
-  /// and remaining part.
+  /// The callback receives the current description context and the request of
+  /// the downstream operators: the ordering they require, the incoming filter
+  /// chain, and an optional limit and projection. The returned `Optimization`
+  /// controls the required upstream order, whether the operator may be dropped,
+  /// how the filter chain is split into a pushed and remaining part, and which
+  /// limit and projection travel further upstream.
   template <class F>
-    requires concepts::invokable_r<Optimization, F&, DescribeCtx&, event_order,
-                                   ir::optimize_filter>
+    requires concepts::invokable_r<Optimization, F&, DescribeCtx&,
+                                   ir::OptimizeRequest>
   auto optimize(F&& f) -> Description {
     desc_.optimizer = std::forward<F>(f);
+    return std::move(desc_);
+  }
+
+  /// Overrides the default optimization behavior with a callback that only
+  /// sees the required order and the filter chain. Such an operator forwards
+  /// neither limit nor projection.
+  template <class F>
+    requires concepts::invokable_r<Optimization, F&, DescribeCtx&, EventOrder,
+                                   ir::OptimizeFilter>
+  auto optimize(F&& f) -> Description {
+    desc_.optimizer
+      = [f = std::forward<F>(f)](
+          DescribeCtx& ctx, ir::OptimizeRequest req) mutable -> Optimization {
+      return f(ctx, req.order, std::move(req.filter));
+    };
     return std::move(desc_);
   }
 
@@ -1059,13 +1115,13 @@ public:
   /// The filters are not propagated.
   /// Upstream is required to produce ordered events.
   auto without_optimize() -> Description {
-    return optimize([](DescribeCtx&, event_order,
-                       ir::optimize_filter filter) -> Optimization {
-      return {
-        .order = event_order::ordered,
-        .filter_self = std::move(filter),
-      };
-    });
+    return optimize(
+      [](DescribeCtx&, EventOrder, ir::OptimizeFilter filter) -> Optimization {
+        return {
+          .order = EventOrder::ordered,
+          .filter_self = std::move(filter),
+        };
+      });
   }
 
   /// Declares that the operator is invariant to filtering.
@@ -1073,13 +1129,13 @@ public:
   /// Filter from downstream will be pushed upstream.
   /// Upstream is required to produce ordered events.
   auto invariant_filter() -> Description {
-    return optimize([](DescribeCtx& ctx, event_order,
-                       ir::optimize_filter filter) -> Optimization {
+    return optimize([](DescribeCtx& ctx, EventOrder,
+                       ir::OptimizeFilter filter) -> Optimization {
       auto touched = ast::ExprRefs{.let_ids = ctx.pipeline_let_ids()};
       auto [independent, dependent]
         = ir::split_filter_by_dependents(std::move(filter), touched);
       return {
-        .order = event_order::ordered,
+        .order = EventOrder::ordered,
         .filter_upstream = std::move(independent),
         .filter_self = std::move(dependent),
       };
@@ -1088,8 +1144,8 @@ public:
 
   /// Declares that the operator is invariant to ordering and filtering.
   auto invariant_order_filter() -> Description {
-    return optimize([](DescribeCtx& ctx, event_order order,
-                       ir::optimize_filter filter) -> Optimization {
+    return optimize([](DescribeCtx& ctx, EventOrder order,
+                       ir::OptimizeFilter filter) -> Optimization {
       auto touched = ast::ExprRefs{.let_ids = ctx.pipeline_let_ids()};
       auto [independent, dependent]
         = ir::split_filter_by_dependents(std::move(filter), touched);
@@ -1105,8 +1161,8 @@ public:
   ///
   /// Filters are not propagated upstream.
   auto invariant_order() -> Description {
-    return optimize([](DescribeCtx&, event_order order,
-                       ir::optimize_filter filter) -> Optimization {
+    return optimize([](DescribeCtx&, EventOrder order,
+                       ir::OptimizeFilter filter) -> Optimization {
       return {
         .order = order,
         .filter_self = std::move(filter),
@@ -1118,13 +1174,13 @@ public:
   ///
   /// Filters are not propagated upstream.
   auto unordered() -> Description {
-    return optimize([](DescribeCtx&, event_order,
-                       ir::optimize_filter filter) -> Optimization {
-      return {
-        .order = event_order::unordered,
-        .filter_self = std::move(filter),
-      };
-    });
+    return optimize(
+      [](DescribeCtx&, EventOrder, ir::OptimizeFilter filter) -> Optimization {
+        return {
+          .order = EventOrder::unordered,
+          .filter_self = std::move(filter),
+        };
+      });
   }
 
 private:

@@ -1,0 +1,130 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ [1]:0..6 from 0
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `c` @ [1]:19..20 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `c` @ [1]:19..20 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: field_access {
++            left: root_field {
++              id: `a` @ [1]:14..15 from 0,
++              has_question_mark: false
++            },
++            has_question_mark: false,
++            name: `b` @ [1]:16..17 from 0,
++            location: [1]:14..17 from 0
++          },
++          has_this: false,
++          path: [
++            {
++              id: `a` @ [1]:14..15 from 0,
++              has_question_mark: false
++            },
++            {
++              id: `b` @ [1]:16..17 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ],
+       named_args: [
+         
+       ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: field_access {
+             left: root_field {
+               id: `a` @ [1]:14..15 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `b` @ [1]:16..17 from 0,
+             location: [1]:14..17 from 0
+           },
+           right: field_access {
+             left: root_field {
+               id: `a` @ [1]:14..15 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `b` @ [1]:16..17 from 0,
+             location: [1]:14..17 from 0
+           },
+           location: [1]:14..17 from 0
+         },
+         {
+           left: root_field {
+             id: `c` @ [1]:19..20 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `c` @ [1]:19..20 from 0,
+             has_question_mark: false
+           },
+           location: [1]:19..20 from 0
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ [1]:20..20 from 0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }

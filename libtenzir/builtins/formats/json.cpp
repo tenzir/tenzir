@@ -806,9 +806,9 @@ public:
     return "json";
   }
 
-  auto optimize(event_order order) -> std::unique_ptr<plugin_parser> override {
+  auto optimize(EventOrder order) -> std::unique_ptr<plugin_parser> override {
     auto args = args_;
-    args.builder_options.settings.ordered = order == event_order::ordered;
+    args.builder_options.settings.ordered = order == EventOrder::ordered;
     return std::make_unique<json_parser>(std::move(args));
   }
 
@@ -1420,12 +1420,12 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
     TENZIR_UNUSED(filter, order);
     auto replacement = std::make_unique<write_json>(*this);
-    replacement->ordered_ = order == event_order::ordered;
-    return optimize_result{None{}, order, std::move(replacement)};
+    replacement->ordered_ = order == EventOrder::ordered;
+    return OptimizeResult{None{}, order, std::move(replacement)};
   }
 
   friend auto inspect(auto& f, write_json& x) -> bool {
@@ -1445,7 +1445,7 @@ struct ReadJsonArgs {
   bool arrays_of_objects = false;
   split_at split_mode = split_at::none;
   uint64_t jobs = 0;
-  event_order order = event_order::ordered;
+  EventOrder order = EventOrder::ordered;
   multi_series_builder::options msb_options;
 };
 
@@ -1456,7 +1456,7 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await Operator<chunk_ptr, table_slice>::start(ctx);
-    args_.msb_options.settings.ordered = args_.order == event_order::ordered;
+    args_.msb_options.settings.ordered = args_.order == EventOrder::ordered;
     parser_ = std::make_unique<default_parser>(
       args_.parser_name, ctx.dh(), args_.msb_options, args_.arrays_of_objects);
   }
@@ -1510,7 +1510,7 @@ public:
   }
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await Operator<chunk_ptr, table_slice>::start(ctx);
-    if (args_.jobs > 0 and args_.order != event_order::unordered) {
+    if (args_.jobs > 0 and args_.order != EventOrder::unordered) {
       diagnostic::error("`_jobs` requires unordered downstream")
         .hint("wrap this operator in `unordered {{ ... }}`")
         .emit(ctx.dh());
@@ -1531,7 +1531,7 @@ public:
       co_return;
     }
     auto msb_options = args_.msb_options;
-    msb_options.settings.ordered = args_.order == event_order::ordered;
+    msb_options.settings.ordered = args_.order == EventOrder::ordered;
     parser_ = std::make_unique<ndjson_parser>(args_.parser_name, ctx.dh(),
                                               msb_options);
   }

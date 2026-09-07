@@ -76,18 +76,21 @@ public:
     return {};
   }
 
-  auto
-  optimize(ir::optimize_filter filter, event_order order,
-           const ir::OptimizeCtx& octx) && -> ir::optimize_result override {
+  auto optimize(ir::OptimizeRequest req,
+                const ir::OptimizeCtx& octx) && -> ir::OptimizeResult override {
+    auto filter = std::move(req.filter);
+    auto order = req.order;
     // Each branch receives the same input, and their outputs are merged. A
     // downstream filter over the merged output equals the union of that filter
     // applied to each branch, so we can push it into every branch. The residual
     // filter that a branch would push to its upstream is reinserted at the
     // front of that branch, because all branches share a single upstream and
-    // cannot push differing filters into it.
+    // cannot push differing filters into it. Limit and projection are neither
+    // pushed into the branches nor propagated from them.
     auto optimize_branch
-      = [&](ir::pipeline& branch, ir::optimize_filter f) -> event_order {
-      auto opt = std::move(branch).optimize(std::move(f), order, octx);
+      = [&](ir::pipeline& branch, ir::OptimizeFilter f) -> EventOrder {
+      auto opt = std::move(branch).optimize(
+        ir::OptimizeRequest{.filter = std::move(f), .order = order}, octx);
       branch = std::move(opt.replacement);
       branch.prepend(std::move(opt.filter));
       return opt.order;

@@ -47,16 +47,17 @@ public:
   }
 
   auto
-  optimize(ir::optimize_filter filter, event_order /*order*/,
-           const ir::OptimizeCtx& /*octx*/) && -> ir::optimize_result override {
-    // Pin the filters and request the strictest ordering from upstream
+  optimize(ir::OptimizeRequest req,
+           const ir::OptimizeCtx& /*octx*/) && -> ir::OptimizeResult override {
+    // Pin the filters, request the strictest ordering from upstream, and
+    // forward neither limit nor projection.
     auto replacement = std::vector<Box<ir::Operator>>{};
-    for (auto& expr : filter) {
+    for (auto& expr : req.filter) {
       replacement.push_back(make_where_ir(std::move(expr)));
     }
     return {
-      ir::optimize_filter{},
-      event_order::ordered,
+      ir::OptimizeFilter{},
+      EventOrder::ordered,
       ir::pipeline{{}, std::move(replacement)},
     };
   }

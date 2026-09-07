@@ -22,7 +22,7 @@ namespace {
 
 struct DropNullFieldsArgs {
   std::vector<ast::expression> fields;
-  event_order order = event_order::ordered;
+  EventOrder order = EventOrder::ordered;
 };
 
 class DropNullFields final : public Operator<table_slice, table_slice> {
@@ -55,7 +55,7 @@ public:
 
 private:
   std::vector<ast::field_path> selectors_;
-  event_order order_ = event_order::ordered;
+  EventOrder order_ = EventOrder::ordered;
 };
 
 class drop_null_fields_operator final
@@ -64,7 +64,7 @@ public:
   drop_null_fields_operator() = default;
 
   explicit drop_null_fields_operator(std::vector<ast::field_path> selectors,
-                                     event_order order = event_order::ordered)
+                                     EventOrder order = EventOrder::ordered)
     : selectors_{std::move(selectors)}, order_{order} {
   }
 
@@ -84,10 +84,10 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
     TENZIR_UNUSED(filter);
-    return optimize_result{
+    return OptimizeResult{
       None{}, order,
       std::make_unique<drop_null_fields_operator>(selectors_, order)};
   }
@@ -100,7 +100,7 @@ public:
 
 private:
   std::vector<ast::field_path> selectors_;
-  event_order order_ = event_order::ordered;
+  EventOrder order_ = EventOrder::ordered;
 };
 
 } // namespace

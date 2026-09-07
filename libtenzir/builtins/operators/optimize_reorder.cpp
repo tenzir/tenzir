@@ -47,13 +47,16 @@ public:
   }
 
   auto
-  optimize(ir::optimize_filter filter, event_order /*order*/,
-           const ir::OptimizeCtx& /*octx*/) && -> ir::optimize_result override {
-    // Relax the upstream ordering requirement and forward the filters unchanged
+  optimize(ir::OptimizeRequest req,
+           const ir::OptimizeCtx& /*octx*/) && -> ir::OptimizeResult override {
+    // Relax the upstream ordering requirement and forward everything else
+    // unchanged.
     return {
-      std::move(filter),
-      event_order::unordered,
-      ir::pipeline{{}, {}},
+      .filter = std::move(req.filter),
+      .order = EventOrder::unordered,
+      .replacement = ir::pipeline{{}, {}},
+      .limit = req.limit,
+      .projection = std::move(req.projection),
     };
   }
 

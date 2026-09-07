@@ -275,7 +275,7 @@ auto drop_null_fields_unordered(table_slice slice,
 
 auto drop_null_fields(table_slice slice,
                       std::span<const ast::field_path> selectors,
-                      event_order order, diagnostic_handler& dh)
+                      EventOrder order, diagnostic_handler& dh)
   -> std::vector<table_slice> {
   if (slice.rows() == 0) {
     return {table_slice{}};
@@ -289,7 +289,7 @@ auto drop_null_fields(table_slice slice,
   // The bucketed fast path may reorder non-contiguous rows. That is only safe
   // for explicitly unordered pipelines and for slices without offset metadata,
   // because otherwise regrouping rows would invent a dense event-ID range.
-  if (order == event_order::unordered and slice.offset() == invalid_id) {
+  if (order == EventOrder::unordered and slice.offset() == invalid_id) {
     return drop_null_fields_unordered(std::move(slice), fields, accessors, dh);
   }
   return drop_null_fields_ordered(std::move(slice), fields, accessors, dh);

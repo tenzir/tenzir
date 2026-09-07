@@ -57,8 +57,32 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<HeadArgs, Head>{};
-    d.optional_positional("count", &HeadArgs::count);
-    return d.without_optimize();
+    auto count = d.optional_positional("count", &HeadArgs::count);
+    return d.optimize(
+      [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
+        // `head` is a filter barrier that needs ordered input. It stays in the
+        // pipeline and emits its count as a limit hint for upstream. Since all
+        // incoming predicates stay behind `head`, an incoming limit (which
+        // counts events after those predicates) can only be combined with our
+        // count if there are no incoming predicates.
+        auto limit = Option<uint64_t>{};
+        if (ctx.get_location(count)) {
+          // The argument is present. If it cannot be evaluated, we emit no hint
+          // rather than a wrong one.
+          limit = ctx.get(count);
+        } else {
+          limit = HeadArgs{}.count;
+        }
+        if (limit and req.limit and req.filter.empty()) {
+          limit = std::min(*limit, *req.limit);
+        }
+        return {
+          .order = EventOrder::ordered,
+          .filter_self = std::move(req.filter),
+          .limit_upstream = limit,
+          .projection_upstream = std::move(req.projection),
+        };
+      });
   }
 };
 

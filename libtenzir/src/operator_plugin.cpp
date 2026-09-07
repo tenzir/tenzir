@@ -466,6 +466,16 @@ public:
     } else {
       TENZIR_ASSERT(filter_.empty());
     }
+    if (desc_->set_limit) {
+      (*desc_->set_limit)(args, limit_);
+    } else {
+      TENZIR_ASSERT(not limit_);
+    }
+    if (desc_->set_projection) {
+      (*desc_->set_projection)(args, projection_);
+    } else {
+      TENZIR_ASSERT(not projection_);
+    }
     if (desc_->set_operator_location) {
       (*desc_->set_operator_location)(args, main_location());
     }
@@ -669,28 +679,37 @@ public:
     return {};
   }
 
-  auto
-  optimize(ir::optimize_filter filter, event_order order,
-           const ir::OptimizeCtx& octx) && -> ir::optimize_result override {
+  auto optimize(ir::OptimizeRequest req,
+                const ir::OptimizeCtx& octx) && -> ir::OptimizeResult override {
     TENZIR_ASSERT(desc_->optimizer);
+    auto filter = std::move(req.filter);
+    auto order = req.order;
     // subpipeline
     if (pipeline_ and desc_->pipeline) {
       switch (desc_->pipeline->sub_optimize) {
         case SubOptimize::from_downstream: {
           // apply downstream filter and order to the subpipeline directly
-          auto sub = std::move(pipeline_->pipeline.inner)
-                       .optimize(std::move(filter), order, octx);
-          // use sub's filter and order instead of the downstream
+          auto sub
+            = std::move(pipeline_->pipeline.inner)
+                .optimize(ir::OptimizeRequest{.filter = std::move(filter),
+                                              .order = order},
+                          octx);
+          // use sub's request instead of the downstream one
           filter = std::move(sub.filter);
           order = sub.order;
+          req.limit = sub.limit;
+          req.projection = std::move(sub.projection);
           pipeline_->pipeline.inner = std::move(sub.replacement);
           break;
         }
         case SubOptimize::fork: {
-          // independent optimize
+          // independent optimize; the branch's limit and projection describe
+          // the branch input and are discarded
           auto sub
             = std::move(pipeline_->pipeline.inner)
-                .optimize(ir::optimize_filter{}, event_order::ordered, octx);
+                .optimize(ir::OptimizeRequest{.filter = {},
+                                              .order = EventOrder::ordered},
+                          octx);
           // fork is filter barrier
           sub.replacement.prepend(std::move(sub.filter));
           pipeline_->pipeline.inner = std::move(sub.replacement);
@@ -706,13 +725,43 @@ public:
     // extract filters into the operator
     if (desc_->set_filter) {
       filter_.append_range(filter | std::views::as_rvalue);
-      filter = ir::optimize_filter{};
+      filter = ir::OptimizeFilter{};
+    }
+    // extract limit and projection into the operator
+    if (desc_->set_limit) {
+      // The limit counts events that pass the filter, so an operator can only
+      // interpret it if it also consumes the filter.
+      TENZIR_ASSERT(desc_->set_filter);
+      if (req.limit) {
+        limit_ = limit_ ? std::min(*limit_, *req.limit) : *req.limit;
+      }
+      req.limit = None{};
+    }
+    if (desc_->set_projection) {
+      if (has_projection_) {
+        ir::merge_projection(projection_, req.projection);
+      } else {
+        projection_ = std::move(req.projection);
+        has_projection_ = true;
+      }
+      req.projection = None{};
     }
     // run optimizer
     auto noop_dh = null_diagnostic_handler{};
     auto ctx = DescribeCtx{args_,  named_args_,     pipeline_,
                            *desc_, main_location(), noop_dh};
-    auto optimization = (*desc_->optimizer)(ctx, order_, std::move(filter));
+    auto optimization
+      = (*desc_->optimizer)(ctx, ir::OptimizeRequest{
+                                   .filter = std::move(filter),
+                                   .order = order_,
+                                   .limit = req.limit,
+                                   .projection = std::move(req.projection),
+                                 });
+    // A projection pushed upstream must cover the references of the predicates
+    // kept behind this operator, because those run on upstream's fields.
+    for (const auto& expr : optimization.filter_self) {
+      ir::add_refs_to_projection(optimization.projection_upstream, expr);
+    }
     auto replacement = std::vector<Box<Operator>>{};
     // construct replacement
     if (pipeline_ and desc_->pipeline
@@ -727,8 +776,13 @@ public:
     for (auto& expr : optimization.filter_self) {
       replacement.push_back(make_where_ir(expr));
     }
-    return {std::move(optimization.filter_upstream), optimization.order,
-            ir::pipeline{{}, std::move(replacement)}};
+    return {
+      .filter = std::move(optimization.filter_upstream),
+      .order = optimization.order,
+      .replacement = ir::pipeline{{}, std::move(replacement)},
+      .limit = optimization.limit_upstream,
+      .projection = std::move(optimization.projection_upstream),
+    };
   }
 
   auto main_location() const -> location override {
@@ -740,6 +794,7 @@ private:
     return f.object(x).fields(
       f.field("op", x.op_), f.field("desc", x.desc_), f.field("args", x.args_),
       f.field("filter", x.filter_), f.field("order", x.order_),
+      f.field("limit", x.limit_), f.field("projection", x.projection_),
       f.field("named_args", x.named_args_), f.field("pipeline", x.pipeline_));
   }
 
@@ -756,11 +811,25 @@ private:
   Option<PipelineArg> pipeline_;
 
   /// The filter passed to `optimize` (only if the operator wants to consume it).
-  ir::optimize_filter filter_;
+  ir::OptimizeFilter filter_;
 
   /// The weakest ordering guarantee seen across all `optimize()` calls.
   /// Initialized to `ordered` (strongest); each call takes the max.
-  event_order order_ = event_order::ordered;
+  EventOrder order_ = EventOrder::ordered;
+
+  /// The limit passed to `optimize` (only if the operator wants to consume it).
+  /// Across repeated `optimize()` calls, the smallest limit wins.
+  Option<uint64_t> limit_;
+
+  /// The projection passed to `optimize` (only if the operator wants to consume
+  /// it). `None` means that every field is needed.
+  Option<ir::OptimizeProjection> projection_;
+
+  /// Whether an `optimize()` call has set `projection_` yet. This tells a
+  /// pushed-down "every field" apart from "nothing pushed yet" when merging
+  /// repeated calls. Not serialized: a copy starts over, which only matters if
+  /// `optimize()` runs more than once on the same operator.
+  bool has_projection_ = false;
 
   /// The object describing the available parameters.
   SharedDescription desc_;

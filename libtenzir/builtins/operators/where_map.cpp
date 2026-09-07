@@ -100,14 +100,14 @@ public:
     return "where";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
     if (filter == trivially_true_expression()) {
-      return optimize_result{expr_.inner, order, nullptr};
+      return OptimizeResult{expr_.inner, order, nullptr};
     }
     auto combined = normalize_and_validate(conjunction{expr_.inner, filter});
     TENZIR_ASSERT(combined);
-    return optimize_result{std::move(*combined), order, nullptr};
+    return OptimizeResult{std::move(*combined), order, nullptr};
   }
 
   friend auto inspect(auto& f, where_operator& x) -> bool {
@@ -234,10 +234,10 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
     if (warn_) {
-      return optimize_result::order_invariant(*this, order);
+      return OptimizeResult::order_invariant(*this, order);
     }
     auto [legacy, remainder] = split_legacy_expression(expr_);
     auto remainder_op = is_true_literal(remainder)
@@ -245,13 +245,12 @@ public:
                           : std::make_unique<where_assert_operator>(
                               std::move(remainder), msg_, warn_);
     if (filter == trivially_true_expression()) {
-      return optimize_result{std::move(legacy), order, std::move(remainder_op)};
+      return OptimizeResult{std::move(legacy), order, std::move(remainder_op)};
     }
     auto combined
       = normalize_and_validate(conjunction{std::move(legacy), filter});
     TENZIR_ASSERT(combined);
-    return optimize_result{std::move(*combined), order,
-                           std::move(remainder_op)};
+    return OptimizeResult{std::move(*combined), order, std::move(remainder_op)};
   }
 
   friend auto inspect(auto& f, where_assert_operator& x) -> bool {
@@ -883,11 +882,21 @@ public:
   }
 
   auto
-  optimize(ir::optimize_filter filter, event_order order,
-           const ir::OptimizeCtx& /*octx*/) && -> ir::optimize_result override {
+  optimize(ir::OptimizeRequest req,
+           const ir::OptimizeCtx& /*octx*/) && -> ir::OptimizeResult override {
     // TODO: Shall we avoid optimizing if it doesn't make sense?
-    filter.insert(filter.begin(), std::move(predicate_));
-    return ir::optimize_result{std::move(filter), order, {}};
+    // The predicate joins the front of the filter chain, so a limit still
+    // counts events after the whole chain and passes unchanged. The projection
+    // must cover what the predicate references.
+    ir::add_refs_to_projection(req.projection, predicate_);
+    req.filter.insert(req.filter.begin(), std::move(predicate_));
+    return {
+      .filter = std::move(req.filter),
+      .order = req.order,
+      .replacement = {},
+      .limit = req.limit,
+      .projection = std::move(req.projection),
+    };
   }
 
   auto parallelizable() const -> bool override {

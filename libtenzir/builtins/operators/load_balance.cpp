@@ -152,8 +152,8 @@ public:
     }
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -486,10 +486,10 @@ public:
     TENZIR_DEBUG("load_balance terminated");
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
     TENZIR_UNUSED(filter, order);
-    return optimize_result{None{}, event_order::unordered, copy()};
+    return OptimizeResult{None{}, EventOrder::unordered, copy()};
   }
 
   friend auto inspect(auto& f, load_balance& x) -> bool {
@@ -551,13 +551,13 @@ public:
       }
       return {};
     });
-    return d.optimize([](DescribeCtx& ctx, event_order,
-                         ir::optimize_filter filter) -> Optimization {
+    return d.optimize([](DescribeCtx& ctx, EventOrder,
+                         ir::OptimizeFilter filter) -> Optimization {
       auto touched = ast::ExprRefs{.let_ids = ctx.pipeline_let_ids()};
       auto [independent, dependent]
         = ir::split_filter_by_dependents(std::move(filter), touched);
       return {
-        .order = event_order::unordered,
+        .order = EventOrder::unordered,
         .filter_upstream = std::move(independent),
         .filter_self = std::move(dependent),
       };

@@ -333,7 +333,7 @@ auto parse_loop(generator<Option<std::string_view>> lines,
 struct ReadCefArgs {
   multi_series_builder::options msb_options;
   location operator_location = location::unknown;
-  event_order order = event_order::ordered;
+  EventOrder order = EventOrder::ordered;
 };
 
 class ReadCef final : public Operator<chunk_ptr, table_slice> {
@@ -364,7 +364,7 @@ public:
                       fmt::format("line {}", line_counter_));
       return d;
     });
-    args_.msb_options.settings.ordered = args_.order == event_order::ordered;
+    args_.msb_options.settings.ordered = args_.order == EventOrder::ordered;
     msb_ = multi_series_builder{args_.msb_options, *dh_};
     co_return;
   }
@@ -479,9 +479,9 @@ public:
     options_.settings.default_schema_name = "cef.event";
   }
 
-  auto optimize(event_order order) -> std::unique_ptr<plugin_parser> override {
+  auto optimize(EventOrder order) -> std::unique_ptr<plugin_parser> override {
     auto opts = options_;
-    opts.settings.ordered = order == event_order::ordered;
+    opts.settings.ordered = order == EventOrder::ordered;
     return std::make_unique<cef_parser>(std::move(opts));
   }
 

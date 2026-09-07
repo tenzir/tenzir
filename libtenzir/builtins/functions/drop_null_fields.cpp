@@ -133,7 +133,7 @@ public:
           const auto run_length = sub->length();
           auto slice = non_null_run_as_slice(std::move(sub));
           auto parts = tenzir::drop_null_fields(std::move(slice), selectors,
-                                                event_order::ordered, ctx.dh());
+                                                EventOrder::ordered, ctx.dh());
           auto produced = int64_t{0};
           for (const auto& part : parts) {
             auto part_series = slice_as_record_series(part);

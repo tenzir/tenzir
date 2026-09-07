@@ -67,7 +67,14 @@ struct ExportArgs {
   uint64_t parallel = 3;
   bool high_priority = true;
   /// The filter pushed down by `describer.optimize_filter`.
-  ir::optimize_filter filter;
+  ir::OptimizeFilter filter;
+  /// The limit pushed down by `describer.optimize_limit`, counting events that
+  /// pass `filter`. Recorded for the optimizer output; the runtime does not
+  /// honor it yet (TNZ-1030).
+  Option<uint64_t> limit = None{};
+  /// The projection pushed down by `describer.optimize_projection`. Recorded
+  /// for the optimizer output; the runtime does not honor it yet (TNZ-1030).
+  Option<ir::OptimizeProjection> projection = None{};
   /// Setting for a special filter added by the `diagnostics` or `metrics`
   /// operators.
   export_special_filter special_filter;
@@ -446,8 +453,8 @@ public:
     return true;
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
     (void)order;
     auto clauses = std::vector<expression>{};
     if (expr_ != caf::none and expr_ != trivially_true_expression()) {
@@ -460,9 +467,9 @@ public:
                   ? trivially_true_expression()
                   : (clauses.size() == 1 ? std::move(clauses[0])
                                          : conjunction{std::move(clauses)});
-    return optimize_result{trivially_true_expression(), event_order::ordered,
-                           std::make_unique<export_operator>(std::move(expr),
-                                                             mode_)};
+    return OptimizeResult{trivially_true_expression(), EventOrder::ordered,
+                          std::make_unique<export_operator>(std::move(expr),
+                                                            mode_)};
   }
 
   friend auto inspect(auto& f, export_operator& x) -> bool {
@@ -499,6 +506,8 @@ public:
       }
       return {};
     });
+    d.optimize_limit(&ExportArgs::limit);
+    d.optimize_projection(&ExportArgs::projection);
     return d.optimize_filter(&ExportArgs::filter);
   }
 
@@ -564,6 +573,8 @@ public:
       }
       return {};
     });
+    d.optimize_limit(&ExportArgs::limit);
+    d.optimize_projection(&ExportArgs::projection);
     return d.optimize_filter(&ExportArgs::filter);
   }
 
@@ -640,6 +651,8 @@ public:
       }
       return {};
     });
+    d.optimize_limit(&ExportArgs::limit);
+    d.optimize_projection(&ExportArgs::projection);
     return d.optimize_filter(&ExportArgs::filter);
   }
 

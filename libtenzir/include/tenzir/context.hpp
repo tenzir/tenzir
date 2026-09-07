@@ -189,8 +189,8 @@ public:
                        detail::replace_all(std::string{Name.str()}, "-", "_"));
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     (void)filter;
     (void)order;
     return do_not_optimize(*this);

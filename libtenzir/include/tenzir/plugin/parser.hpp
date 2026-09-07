@@ -23,7 +23,7 @@ namespace tenzir {
 
 struct operator_control_plane;
 class parser_interface;
-enum class event_order;
+enum class EventOrder;
 
 // -- parser plugin -----------------------------------------------------------
 
@@ -51,7 +51,7 @@ public:
   /// Implement ordering optimization for parsers. See
   /// `operator_base::optimize(...)` for details. The default implementation
   /// does not optimize.
-  virtual auto optimize(event_order order) -> std::unique_ptr<plugin_parser> {
+  virtual auto optimize(EventOrder order) -> std::unique_ptr<plugin_parser> {
     (void)order;
     return nullptr;
   }

@@ -102,14 +102,14 @@ public:
   static constexpr auto name = "from-file";
 
   from_file_state(from_file_actor::pointer self, from_file_args args,
-                  std::string plaintext_url, event_order order,
+                  std::string plaintext_url, EventOrder order,
                   std::unique_ptr<diagnostic_handler> dh,
                   Arc<const Source> definition, node_actor node, bool is_hidden,
                   metrics_receiver_actor metrics_receiver,
                   uint64_t operator_index, std::string pipeline_id);
   from_file_state(from_file_actor::pointer self, from_file_args args,
                   std::string expanded, std::string path,
-                  std::shared_ptr<arrow::fs::FileSystem> fs, event_order order,
+                  std::shared_ptr<arrow::fs::FileSystem> fs, EventOrder order,
                   std::unique_ptr<diagnostic_handler> dh,
                   Arc<const Source> definition, node_actor node, bool is_hidden,
                   metrics_receiver_actor metrics_receiver,
@@ -153,7 +153,7 @@ private:
 
   // The configuration and things derived from it.
   from_file_args args_;
-  event_order order_;
+  EventOrder order_;
   glob glob_;
   std::string root_path_;
 
@@ -212,8 +212,8 @@ public:
     }
   }
 
-  auto optimize(const expression&, event_order) const
-    -> optimize_result override {
+  auto optimize(const expression&, EventOrder) const
+    -> OptimizeResult override {
     return do_not_optimize(*this);
   }
 
@@ -230,7 +230,7 @@ public:
   from_file_sink() = default;
 
   explicit from_file_sink(
-    from_file_actor parent, event_order order,
+    from_file_actor parent, EventOrder order,
     Option<std::pair<ast::field_path, std::string>> path_field);
 
   auto name() const -> std::string override;
@@ -265,9 +265,9 @@ public:
     }
   }
 
-  auto optimize(const expression&, event_order) const
-    -> optimize_result override {
-    return optimize_result{None{}, order_, copy()};
+  auto optimize(const expression&, EventOrder) const
+    -> OptimizeResult override {
+    return OptimizeResult{None{}, order_, copy()};
   }
 
   friend auto inspect(auto& f, from_file_sink& x) -> bool {
@@ -278,7 +278,7 @@ public:
 
 private:
   from_file_actor parent_;
-  event_order order_{};
+  EventOrder order_{};
   Option<std::pair<ast::field_path, std::string>> path_field_;
 };
 

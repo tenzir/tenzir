@@ -768,8 +768,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const&, event_order) const
-    -> optimize_result override {
+  auto optimize(expression const&, EventOrder) const
+    -> OptimizeResult override {
     return do_not_optimize(*this);
   }
 
@@ -916,8 +916,8 @@ public:
     return true;
   }
 
-  auto optimize(expression const&, event_order) const
-    -> optimize_result override {
+  auto optimize(expression const&, EventOrder) const
+    -> OptimizeResult override {
     return do_not_optimize(*this);
   }
 

@@ -49,24 +49,31 @@ public:
     return pipeline_.infer_type(input, dh);
   }
 
-  auto
-  optimize(ir::optimize_filter filter, event_order /* order */,
-           const ir::OptimizeCtx& octx) && -> ir::optimize_result override {
-    // Optimize each sub-operator individually, always passing unordered.
+  auto optimize(ir::OptimizeRequest req,
+                const ir::OptimizeCtx& octx) && -> ir::OptimizeResult override {
+    // Optimize each sub-operator individually, always passing unordered. Limit
+    // and projection are threaded through like in `ir::pipeline::optimize`.
     auto replacement = ir::pipeline{std::move(pipeline_.lets), {}};
     for (auto& op : std::ranges::reverse_view(pipeline_.operators)) {
-      auto opt = std::move(*op).optimize(std::move(filter),
-                                         event_order::unordered, octx);
-      filter = std::move(opt.filter);
+      req.order = EventOrder::unordered;
+      auto opt = std::move(*op).optimize(std::move(req), octx);
+      req = ir::OptimizeRequest{
+        .filter = std::move(opt.filter),
+        .order = opt.order,
+        .limit = opt.limit,
+        .projection = std::move(opt.projection),
+      };
       replacement.operators.insert(
         replacement.operators.begin(),
         std::move_iterator{opt.replacement.operators.begin()},
         std::move_iterator{opt.replacement.operators.end()});
     }
     return {
-      std::move(filter),
-      event_order::unordered,
-      replacement,
+      .filter = std::move(req.filter),
+      .order = EventOrder::unordered,
+      .replacement = std::move(replacement),
+      .limit = req.limit,
+      .projection = std::move(req.projection),
     };
   }
 
@@ -95,10 +102,10 @@ public:
     TENZIR_ASSERT(not dynamic_cast<const unordered_operator*>(op_.get()));
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     (void)order;
-    return op_->optimize(filter, event_order::unordered);
+    return op_->optimize(filter, EventOrder::unordered);
   }
 
   auto instantiate(operator_input input, operator_control_plane& ctrl) const

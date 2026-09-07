@@ -211,8 +211,8 @@ public:
     return operator_location::anywhere;
   }
 
-  auto optimize(expression const&, event_order) const
-    -> optimize_result override {
+  auto optimize(expression const&, EventOrder) const
+    -> OptimizeResult override {
     // TODO: Consider adding an option that just subslices instead of sampling
     // while respecting the input order. I.e., instead of taking every nth
     // element we could also take all the elements from the front of every batch

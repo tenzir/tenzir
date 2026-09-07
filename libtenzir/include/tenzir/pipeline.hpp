@@ -143,27 +143,27 @@ using deserializer
                  std::reference_wrapper<caf::binary_deserializer>>;
 
 /// See `operator_base::optimize` for a description of this.
-enum class event_order {
+enum class EventOrder {
   ordered,
   schema,
   unordered,
 };
 
 /// Returns the event order that allows for more optimization than the other.
-inline auto weaker_event_order(event_order a, event_order b) -> event_order {
+inline auto weaker_event_order(EventOrder a, EventOrder b) -> EventOrder {
   return std::max(a, b);
 }
 
 /// Returns the event order that imposes the stricter requirement.
-inline auto stronger_event_order(event_order a, event_order b) -> event_order {
+inline auto stronger_event_order(EventOrder a, EventOrder b) -> EventOrder {
   return std::min(a, b);
 }
 
-auto inspect(auto& f, event_order& x) -> bool {
+auto inspect(auto& f, EventOrder& x) -> bool {
   return detail::inspect_enum_str(f, x, {"ordered", "schema", "unordered"});
 }
 
-struct optimize_result;
+struct OptimizeResult;
 
 struct operator_measurement {
   std::string unit = std::string{operator_type_name<void>()};
@@ -360,10 +360,10 @@ public:
   ///
   /// Now, let us assume that operator is not `events -> events`. If the output
   /// type is not events, then the implementation may assume that it receives
-  /// `trivially_true_expression()` and `event_order::ordered`. If we define
+  /// `trivially_true_expression()` and `EventOrder::ordered`. If we define
   /// `where true` to be `pass`, this can be seen as a corollary of the above,
   /// as the pipeline would otherwise be ill-typed. Similarly, if the input type
-  /// is not events, we must return `event_order::ordered` and either
+  /// is not events, we must return `EventOrder::ordered` and either
   /// `None{}` or `trivially_true_expression()`.
   ///
   /// # Example
@@ -374,8 +374,8 @@ public:
   /// which is implied by `sink <=> OPT | sink`. If `order = schema`, this
   /// resolves to `sink <=> interleave | pass | sink`, which follows from what
   /// we may assume about `sink`.
-  virtual auto optimize(expression const& filter, event_order order) const
-    -> optimize_result
+  virtual auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult
     = 0;
 
   /// Returns the location of the operator.
@@ -466,13 +466,13 @@ auto inspect(Inspector& f, const operator_base& x) -> bool {
 /// The result of calling `operator_base::optimize(...)`.
 ///
 /// @see operator_base::optimize
-struct optimize_result {
+struct OptimizeResult {
   Option<expression> filter;
-  event_order order;
+  EventOrder order;
   operator_ptr replacement;
 
-  optimize_result(Option<expression> filter, event_order order,
-                  operator_ptr replacement)
+  OptimizeResult(Option<expression> filter, EventOrder order,
+                 operator_ptr replacement)
     : filter{std::move(filter)},
       order{order},
       replacement{std::move(replacement)} {
@@ -480,14 +480,14 @@ struct optimize_result {
 
   /// Always valid if the transformation performed by the operator does not
   /// change based on the order in which the input events arrive in.
-  static auto order_invariant(const operator_base& op, event_order order)
-    -> optimize_result {
-    return optimize_result{None{}, order, op.copy()};
+  static auto order_invariant(const operator_base& op, EventOrder order)
+    -> OptimizeResult {
+    return OptimizeResult{None{}, order, op.copy()};
   }
 };
 
 /// Returns something that is valid for `op`, but probably not optimal.
-auto do_not_optimize(const operator_base& op) -> optimize_result;
+auto do_not_optimize(const operator_base& op) -> OptimizeResult;
 
 /// A pipeline is a sequence of pipeline operators.
 class pipeline final : public operator_base {
@@ -530,8 +530,8 @@ public:
   [[nodiscard]] auto optimize_into_filter(expression const& filter) const
     -> std::pair<expression, pipeline>;
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override;
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override;
 
   /// Returns whether this is a well-formed `void -> void` pipeline.
   auto is_closed() const -> bool;

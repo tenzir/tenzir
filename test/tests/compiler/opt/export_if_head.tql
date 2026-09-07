@@ -1,0 +1,5 @@
+export
+if x == 1 {
+  head 3
+}
+head 5

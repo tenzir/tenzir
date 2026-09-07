@@ -319,8 +319,8 @@ auto to_kafka_operator::detached() const -> bool {
   return true;
 }
 
-auto to_kafka_operator::optimize(const expression&, event_order) const
-  -> optimize_result {
+auto to_kafka_operator::optimize(const expression&, EventOrder) const
+  -> OptimizeResult {
   return do_not_optimize(*this);
 }
 

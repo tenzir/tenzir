@@ -493,7 +493,7 @@ auto set_operator::operator()(generator<table_slice> input,
     // of the called functions has this requirement, then we should not be
     // making this optimization. This will become relevant in the future once we
     // allow functions to be stateful.
-    if (order_ != event_order::ordered) {
+    if (order_ != EventOrder::ordered) {
       std::ranges::stable_sort(results, std::ranges::less{},
                                &table_slice::schema);
     }

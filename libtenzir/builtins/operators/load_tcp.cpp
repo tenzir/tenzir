@@ -180,8 +180,8 @@ public:
     return "internal-load-tcp-source-bytes";
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -274,8 +274,8 @@ public:
                        operator_type_name<Elements>());
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -1034,8 +1034,8 @@ public:
     return fmt::format("internal-load-tcp-{}", operator_type_name<Elements>());
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     if (not args_.pipeline) {
       return {filter, order, this->copy()};
     }

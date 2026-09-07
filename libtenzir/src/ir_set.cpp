@@ -253,7 +253,7 @@ auto assign_target(AssignmentTarget const& target, series right,
 
 class Set final : public Operator<table_slice, table_slice> {
 public:
-  Set(std::vector<ast::assignment> assignments, event_order order)
+  Set(std::vector<ast::assignment> assignments, EventOrder order)
     : assignments_{std::move(assignments)}, order_{order} {
     if (std::ranges::any_of(assignments_, [](auto const& assignment) {
           return not ast::selector::try_from(assignment.left);
@@ -366,7 +366,7 @@ public:
     // of the called functions has this requirement, then we should not be
     // making this optimization. This will become relevant in the future once we
     // allow functions to be stateful.
-    if (order_ != event_order::ordered) {
+    if (order_ != EventOrder::ordered) {
       std::ranges::stable_sort(results, std::ranges::less{},
                                &table_slice::schema);
     }
@@ -378,7 +378,7 @@ public:
 private:
   std::vector<ast::assignment> assignments_;
   std::vector<ast::selector> lefts_;
-  event_order order_{};
+  EventOrder order_{};
   std::vector<ast::field_path> moved_fields_;
   std::vector<ResolvedAssignment> dynamic_assignments_;
 };
@@ -397,11 +397,11 @@ auto validate_assignment_target(ast::expression const& expression,
   return failure::promise();
 }
 
-ir::SetIr::SetIr() : order_{event_order::ordered} {
+ir::SetIr::SetIr() : order_{EventOrder::ordered} {
 }
 
 ir::SetIr::SetIr(std::vector<ast::assignment> assignments)
-  : assignments_{std::move(assignments)}, order_{event_order::ordered} {
+  : assignments_{std::move(assignments)}, order_{EventOrder::ordered} {
 }
 
 auto ir::SetIr::name() const -> std::string {
@@ -452,12 +452,71 @@ auto touched_fields_for_set(const std::vector<ast::assignment>& assignments)
   return result;
 }
 
+/// Computes the projection to push upstream of a `set` from the projection
+/// that downstream needs. Assignments are walked in reverse: a field that
+/// downstream needs and that an assignment writes is replaced by whatever the
+/// right-hand side references, and `this = ...` discards everything upstream.
+/// This covers `select`, which desugars to `this = {}` followed by `x = x`.
+auto projection_for_set(const std::vector<ast::assignment>& assignments,
+                        Option<ir::OptimizeProjection> downstream,
+                        const ir::OptimizeFilter& filter_self)
+  -> Option<ir::OptimizeProjection> {
+  // Fields of our output that downstream needs, or `None` for all of them.
+  // Predicates kept behind us run on our output, so they count as downstream.
+  auto survivors = std::move(downstream);
+  for (const auto& expr : filter_self) {
+    ir::add_refs_to_projection(survivors, expr);
+  }
+  // Fields of our input that the relevant right-hand sides reference.
+  auto extra = Option<ir::OptimizeProjection>{ir::OptimizeProjection{}};
+  for (const auto& assignment : std::views::reverse(assignments)) {
+    auto left = ast::selector::try_from(assignment.left);
+    if (not left) {
+      // Dynamic targets read index expressions and preserve input structure
+      // that a static field path cannot describe safely.
+      return None{};
+    }
+    const auto* path = try_as<ast::field_path>(&*left);
+    if (path == nullptr) {
+      // Meta selectors such as `@name` do not touch the event's fields.
+      ir::add_refs_to_projection(extra, assignment.right);
+      continue;
+    }
+    if (path->path().empty()) {
+      // `this = ...` replaces the whole event. Nothing of our input survives
+      // except what the right-hand side references.
+      survivors = ir::OptimizeProjection{};
+      ir::add_refs_to_projection(extra, assignment.right);
+      continue;
+    }
+    if (survivors) {
+      const auto needed
+        = std::ranges::any_of(*survivors, [&](const ast::field_path& survivor) {
+            return ir::is_field_path_prefix(*path, survivor)
+                   or ir::is_field_path_prefix(survivor, *path);
+          });
+      if (not needed) {
+        continue;
+      }
+      // Downstream reads the assigned value, not the input. Drop the survivors
+      // that the assignment overwrites, but keep the ancestors it writes into.
+      std::erase_if(*survivors, [&](const ast::field_path& survivor) {
+        return ir::is_field_path_prefix(*path, survivor);
+      });
+    }
+    ir::add_refs_to_projection(extra, assignment.right);
+  }
+  ir::merge_projection(survivors, extra);
+  return survivors;
+}
+
 } // namespace
 
-auto ir::SetIr::optimize(ir::optimize_filter filter, event_order order,
-                         const ir::OptimizeCtx& octx) && -> ir::optimize_result {
+auto ir::SetIr::optimize(ir::OptimizeRequest req,
+                         const ir::OptimizeCtx& octx) && -> ir::OptimizeResult {
   TENZIR_UNUSED(octx);
-  order_ = weaker_event_order(order_, order);
+  auto filter = std::move(req.filter);
+  order_ = weaker_event_order(order_, req.order);
   auto touched_paths = touched_fields_for_set(assignments_);
   auto split = touched_paths
                  ? ir::split_filter_by_dependents(
@@ -465,6 +524,11 @@ auto ir::SetIr::optimize(ir::optimize_filter filter, event_order order,
                      ast::ExprRefs{.field_paths = std::move(*touched_paths)})
                  : ir::split_filter_result{{}, std::move(filter)};
   auto [filter_upstream, filter_self] = std::move(split);
+  // A carried limit counts events after the whole filter chain. If we keep
+  // predicates behind us, upstream can no longer honor it.
+  auto limit = filter_self.empty() ? req.limit : Option<uint64_t>{};
+  auto projection
+    = projection_for_set(assignments_, std::move(req.projection), filter_self);
   auto ops = std::vector<Box<ir::Operator>>{};
   ops.reserve(1 + filter_self.size());
   ops.emplace_back(ir::SetIr{std::move(*this)});
@@ -472,9 +536,11 @@ auto ir::SetIr::optimize(ir::optimize_filter filter, event_order order,
     ops.push_back(make_where_ir(expr));
   }
   return {
-    std::move(filter_upstream),
-    order_,
-    ir::pipeline{{}, std::move(ops)},
+    .filter = std::move(filter_upstream),
+    .order = order_,
+    .replacement = ir::pipeline{{}, std::move(ops)},
+    .limit = limit,
+    .projection = std::move(projection),
   };
 }
 

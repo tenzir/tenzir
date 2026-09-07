@@ -967,9 +967,9 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& /*filter*/, event_order order) const
-    -> optimize_result override {
-    return optimize_result::order_invariant(*this, order);
+  auto optimize(expression const& /*filter*/, EventOrder order) const
+    -> OptimizeResult override {
+    return OptimizeResult::order_invariant(*this, order);
   }
 
   friend auto inspect(auto& f, python_operator& x) -> bool {

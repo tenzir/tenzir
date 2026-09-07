@@ -115,9 +115,9 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order) const
-    -> optimize_result override {
-    return optimize_result{filter, event_order::ordered, copy()};
+  auto optimize(expression const& filter, EventOrder) const
+    -> OptimizeResult override {
+    return OptimizeResult{filter, EventOrder::ordered, copy()};
   }
 
   friend auto inspect(auto& f, delay_operator& x) -> bool {
@@ -208,9 +208,9 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order) const
-    -> optimize_result override {
-    return optimize_result{filter, event_order::ordered, copy()};
+  auto optimize(expression const& filter, EventOrder) const
+    -> OptimizeResult override {
+    return OptimizeResult{filter, EventOrder::ordered, copy()};
   }
 
   friend auto inspect(auto& f, delay_operator2& x) -> bool {

@@ -124,11 +124,11 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const&, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const&, EventOrder order) const
+    -> OptimizeResult override {
     auto copy = std::make_unique<from_abs_operator>(*this);
     copy->order_ = order;
-    return optimize_result{None{}, event_order::ordered, std::move(copy)};
+    return OptimizeResult{None{}, EventOrder::ordered, std::move(copy)};
   }
 
   friend auto inspect(auto& f, from_abs_operator& x) -> bool {
@@ -138,7 +138,7 @@ public:
 
 private:
   from_abs_args args_;
-  event_order order_{event_order::ordered};
+  EventOrder order_{EventOrder::ordered};
 };
 
 struct FromAzureBlobStorageArgs : FromArrowFsArgs {

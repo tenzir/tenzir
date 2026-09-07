@@ -1,0 +1,97 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ [1]:0..6 from 0
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: index_expr {
+             expr: root_field {
+               id: `result` @ [1]:11..17 from 0,
+               has_question_mark: false
+             },
+             index: root_field {
+               id: `key` @ [1]:18..21 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             is_get: false,
+             location: [1]:11..22 from 0
+           },
+           right: root_field {
+             id: `value` @ [1]:25..30 from 0,
+             has_question_mark: false
+           },
+           location: [1]:11..30 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `result` @ [1]:38..44 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `result` @ [1]:38..44 from 0,
+             has_question_mark: false
+           },
+           location: [1]:38..44 from 0
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ [1]:44..44 from 0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }

@@ -234,25 +234,25 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
     TENZIR_UNUSED(filter);
     // TODO: Function should be const.
     auto parser = parser_;
     auto replacement = parser.optimize(order);
     if (not replacement) {
-      return optimize_result{
+      return OptimizeResult{
         None{},
-        event_order::ordered,
+        EventOrder::ordered,
         std::make_unique<parser_adapter>(std::move(parser)),
       };
     }
     // TODO: This is a hack.
     auto cast = dynamic_cast<Parser*>(replacement.get());
     TENZIR_ASSERT(cast);
-    return optimize_result{
+    return OptimizeResult{
       None{},
-      event_order::ordered,
+      EventOrder::ordered,
       std::make_unique<parser_adapter>(std::move(*cast)),
     };
   }
@@ -342,8 +342,8 @@ public:
     }
   }
 
-  auto optimize(expression const&, event_order) const
-    -> optimize_result override {
+  auto optimize(expression const&, EventOrder) const
+    -> OptimizeResult override {
     return do_not_optimize(*this);
   }
 

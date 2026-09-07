@@ -61,8 +61,7 @@ public:
 
   auto detached() const -> bool override;
 
-  auto optimize(const expression&, event_order) const
-    -> optimize_result override;
+  auto optimize(const expression&, EventOrder) const -> OptimizeResult override;
 
   friend auto inspect(auto& f, to_kafka_operator& x) -> bool {
     return f.object(x).fields(f.field("args_", x.args_),

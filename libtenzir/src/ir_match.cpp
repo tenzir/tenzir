@@ -442,9 +442,10 @@ public:
     return {};
   }
 
-  auto
-  optimize(ir::optimize_filter filter, event_order order,
-           const ir::OptimizeCtx& octx) && -> ir::optimize_result override {
+  auto optimize(ir::OptimizeRequest req,
+                const ir::OptimizeCtx& octx) && -> ir::OptimizeResult override {
+    auto filter = std::move(req.filter);
+    auto order = req.order;
     // The planner lowers the arms inline, so this is the only pass that gets to
     // optimize them. Without recursing here, optimizer-only operators such as
     // `unordered` would survive into the plan and panic when spawned.
@@ -465,7 +466,7 @@ public:
     }
     // Pushing into the arms is only complete if we know every arm's output
     // type. Otherwise the filter stays behind `match`.
-    auto pushed = ir::optimize_filter{};
+    auto pushed = ir::OptimizeFilter{};
     if (types_known) {
       pushed = std::move(filter);
       filter.clear();
@@ -475,11 +476,16 @@ public:
       auto& arm = args_.arms[i];
       auto events = outputs_events[i];
       auto opt = std::move(arm.pipeline)
-                   .optimize(events ? pushed : ir::optimize_filter{},
-                             events ? order : event_order::ordered, octx);
+                   .optimize(
+                     ir::OptimizeRequest{
+                       .filter = events ? pushed : ir::OptimizeFilter{},
+                       .order = events ? order : EventOrder::ordered,
+                     },
+                     octx);
       arm.pipeline = std::move(opt.replacement);
       // All arms share `match` as their upstream, so an arm cannot push its
-      // residual filter further up.
+      // residual filter further up. The same holds for its limit and
+      // projection, which describe the arm input and are discarded.
       arm.pipeline.prepend(std::move(opt.filter));
       result_order = stronger_event_order(result_order, opt.order);
     }

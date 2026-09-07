@@ -33,7 +33,7 @@
 
 namespace tenzir {
 
-auto ir::split_filter_by_dependents(ir::optimize_filter filter,
+auto ir::split_filter_by_dependents(ir::OptimizeFilter filter,
                                     const ast::ExprRefs& touched)
   -> ir::split_filter_result {
   auto result = ir::split_filter_result{};
@@ -50,6 +50,69 @@ auto ir::split_filter_by_dependents(ir::optimize_filter filter,
     }
   }
   return result;
+}
+
+auto ir::is_field_path_prefix(const ast::field_path& prefix,
+                              const ast::field_path& path) -> bool {
+  const auto lhs = prefix.path();
+  const auto rhs = path.path();
+  if (lhs.size() > rhs.size()) {
+    return false;
+  }
+  const auto name = [](const ast::field_path::segment& segment) {
+    return std::string_view{segment.id.name};
+  };
+  return std::ranges::equal(lhs, rhs.first(lhs.size()), {}, name, name);
+}
+
+auto ir::add_to_projection(Option<OptimizeProjection>& projection,
+                           const ast::field_path& path) -> void {
+  if (not projection) {
+    return;
+  }
+  if (path.path().empty()) {
+    projection = None{};
+    return;
+  }
+  const auto equal = [&](const ast::field_path& other) {
+    return other.path().size() == path.path().size()
+           and is_field_path_prefix(other, path);
+  };
+  if (std::ranges::none_of(*projection, equal)) {
+    projection->push_back(path);
+  }
+}
+
+auto ir::add_refs_to_projection(Option<OptimizeProjection>& projection,
+                                const ast::expression& expr) -> void {
+  if (not projection) {
+    return;
+  }
+  auto refs = ast::collect_refs(expr);
+  if (not refs) {
+    projection = None{};
+    return;
+  }
+  for (const auto& path : refs->field_paths) {
+    add_to_projection(projection, path);
+    if (not projection) {
+      return;
+    }
+  }
+}
+
+auto ir::merge_projection(Option<OptimizeProjection>& projection,
+                          const Option<OptimizeProjection>& other) -> void {
+  if (not projection) {
+    return;
+  }
+  if (not other) {
+    projection = None{};
+    return;
+  }
+  for (const auto& path : *other) {
+    add_to_projection(projection, path);
+  }
 }
 
 auto make_where_ir(ast::expression filter) -> Box<ir::Operator> {
@@ -282,7 +345,7 @@ auto ir::pipeline::prepend(pipeline other) -> void {
                    std::move_iterator{other.operators.end()});
 }
 
-auto ir::pipeline::prepend(optimize_filter filter) -> void {
+auto ir::pipeline::prepend(OptimizeFilter filter) -> void {
   operators.insert_range(operators.begin(),
                          filter | std::views::as_rvalue
                            | std::views::transform(make_where_ir));
@@ -295,7 +358,7 @@ auto ir::pipeline::append(pipeline other) -> void {
                    std::move_iterator{other.operators.end()});
 }
 
-auto ir::pipeline::append(optimize_filter filter) -> void {
+auto ir::pipeline::append(OptimizeFilter filter) -> void {
   operators.insert_range(operators.end(),
                          filter | std::views::as_rvalue
                            | std::views::transform(make_where_ir));
@@ -351,38 +414,48 @@ auto ir::pipeline::infer_type(element_type_tag input,
   return frontier;
 }
 
-auto ir::pipeline::optimize(optimize_filter filter, event_order order,
-                            const OptimizeCtx& octx) && -> optimize_result {
+auto ir::pipeline::optimize(OptimizeRequest req,
+                            const OptimizeCtx& octx) && -> OptimizeResult {
   auto replacement = pipeline{std::move(lets), {}};
   for (auto& op : std::ranges::reverse_view(operators)) {
     // An operator that runs across multiple parallel instances has its output
     // reordered by the gather that follows it, so its consumer cannot rely on
     // its order anyway.
     if (octx.can_any_op_reorder and op->parallelizable()) {
-      order = event_order::unordered;
+      req.order = EventOrder::unordered;
     }
-    auto opt = std::move(*op).optimize(std::move(filter), order, octx);
-    filter = std::move(opt.filter);
-    order = opt.order;
+    auto opt = std::move(*op).optimize(std::move(req), octx);
+    req = OptimizeRequest{
+      .filter = std::move(opt.filter),
+      .order = opt.order,
+      .limit = opt.limit,
+      .projection = std::move(opt.projection),
+    };
     replacement.operators.insert(
       replacement.operators.begin(),
       std::move_iterator{opt.replacement.operators.begin()},
       std::move_iterator{opt.replacement.operators.end()});
   }
-  return {std::move(filter), order, std::move(replacement)};
+  return {
+    .filter = std::move(req.filter),
+    .order = req.order,
+    .replacement = std::move(replacement),
+    .limit = req.limit,
+    .projection = std::move(req.projection),
+  };
 }
 
-auto ir::Operator::optimize(optimize_filter filter, event_order order,
-                            const OptimizeCtx& octx) && -> optimize_result {
-  TENZIR_UNUSED(order, octx);
+auto ir::Operator::optimize(OptimizeRequest req,
+                            const OptimizeCtx& octx) && -> OptimizeResult {
+  TENZIR_UNUSED(octx);
   auto replacement = std::vector<Box<Operator>>{};
   replacement.push_back(std::move(*this).move());
-  for (auto& expr : filter) {
+  for (auto& expr : req.filter) {
     replacement.push_back(make_where_ir(std::move(expr)));
   }
   return {
-    optimize_filter{},
-    event_order::ordered,
+    OptimizeFilter{},
+    EventOrder::ordered,
     pipeline{{}, std::move(replacement)},
   };
 }

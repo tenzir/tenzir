@@ -558,9 +558,9 @@ public:
     return "dns_lookup";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    return optimize_result{filter, order, copy()};
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
+    return OptimizeResult{filter, order, copy()};
   }
 
   friend auto inspect(auto& f, dns_lookup_operator& x) -> bool {
@@ -595,8 +595,8 @@ public:
     d.positional("field", &DnsLookupArgs::field, "string|ip");
     auto result = d.named_optional("result", &DnsLookupArgs::result);
     d.operator_location(&DnsLookupArgs::operator_location);
-    return d.optimize([=](DescribeCtx& ctx, event_order order,
-                          ir::optimize_filter filter) -> Optimization {
+    return d.optimize([=](DescribeCtx& ctx, EventOrder order,
+                          ir::OptimizeFilter filter) -> Optimization {
       auto touched_fields = std::vector<ast::field_path>{};
       touched_fields.push_back(
         ctx.get(result).value_or(default_result_field()));

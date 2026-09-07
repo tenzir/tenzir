@@ -1,0 +1,86 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       op: {
+         path: [
+           `export` @ [1]:0..6 from 0
+         ],
+         ref: std::export/op
+       },
+       desc: "export",
+       args: [
+         
+       ],
+       filter: [
+-        
++        binary_expr {
++          left: root_field {
++            id: `x` @ [1]:13..14 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:18..19 from 0,
++          location: [1]:13..19 from 0
++        }
+       ],
+       order: "ordered",
++      limit: 5,
+       named_args: [
+         
+       ]
+-    },
+-    where_ir {
+-      self: [1]:7..12 from 0,
+-      predicate: binary_expr {
+-        left: root_field {
+-          id: `x` @ [1]:13..14 from 0,
+-          has_question_mark: false
+-        },
+-        op: "eq",
+-        right: constant int64 1 @ [1]:18..19 from 0,
+-        location: [1]:13..19 from 0
+-      }
+     },
+     GenericIr {
+       op: {
+         path: [
+           `head` @ [1]:20..24 from 0
+         ],
+         ref: std::head/op
+       },
+       desc: "head",
+       args: [
+         located 5 @ [1]:25..26 from 0
+       ],
+       filter: [
+         
+       ],
+       order: "ordered",
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      op: {
++        path: [
++          `to_stdout` @ [1]:26..26 from 0
++        ],
++        ref: std::to_stdout/op
++      },
++      desc: "to_stdout",
++      args: [
++        
++      ],
++      filter: [
++        
++      ],
++      order: "ordered",
++      named_args: [
++        
++      ]
+     }
+   ]
+ }

@@ -27,7 +27,7 @@
 namespace tenzir {
 
 // Forward declaration to avoid including pipeline.hpp.
-enum class event_order;
+enum class EventOrder;
 
 namespace ir {
 
@@ -36,7 +36,47 @@ namespace ir {
 /// The sequence shall be interpreted as a sequence of `where <expr>` operators,
 /// which implies that subsequent expressions are not evaluated if a previous
 /// one already filtered an event out.
-using optimize_filter = std::vector<ast::expression>;
+using OptimizeFilter = std::vector<ast::expression>;
+
+/// The fields that downstream operators need, as field paths. An operator that
+/// produces events may omit all other fields. Nested paths refer to nested
+/// record fields; a consumer that can only project top-level columns must map
+/// each path to its first segment.
+using OptimizeProjection = std::vector<ast::field_path>;
+
+/// What downstream operators need from the operator being optimized.
+///
+/// The optimizer walks a pipeline from its last operator to its first and
+/// threads this request upstream. Every operator receives the request of its
+/// downstream neighbor and returns, as part of `OptimizeResult`, the request
+/// for its upstream neighbor.
+struct OptimizeRequest {
+  /// Predicates that downstream applies to the operator's output, in order.
+  /// An operator may push some or all of them further upstream (see
+  /// `split_filter_by_dependents`); predicates it keeps are reinserted as
+  /// `where` operators behind it.
+  OptimizeFilter filter;
+
+  /// The ordering guarantee that downstream requires from this operator.
+  EventOrder order;
+
+  /// An upper bound on the number of events that downstream needs, counted
+  /// after applying `filter` and before applying `projection`. This is a hint:
+  /// a consumer may stop producing early, but the `head` that produced the
+  /// bound stays in the pipeline, so exactness is not required.
+  ///
+  /// The pair (`filter`, `limit`) reads as "apply the filter chain, then take
+  /// at most `limit` events". An operator that keeps part of `filter` behind
+  /// itself must therefore drop a carried limit, because the kept predicates
+  /// would run after the limit. It may still emit a fresh limit of its own.
+  Option<uint64_t> limit = None{};
+
+  /// The fields that downstream needs, or `None` if it needs all of them.
+  /// This is a hint: a consumer may omit other fields, but the `select` that
+  /// produced the projection stays in the pipeline. At every point, the
+  /// projection covers the references of `filter` at that point.
+  Option<OptimizeProjection> projection = None{};
+};
 
 /// State threaded through the optimize pass.
 struct OptimizeCtx {
@@ -106,9 +146,13 @@ public:
 
   /// Return a potentially optimized version of this operator.
   ///
-  /// TODO: Describe this in more detail.
-  virtual auto optimize(optimize_filter filter, event_order order,
-                        const OptimizeCtx& octx) && -> optimize_result;
+  /// The request describes what downstream needs from this operator. The result
+  /// contains the replacement for this operator and the request for upstream.
+  /// The default implementation is a barrier: it keeps the operator, reinserts
+  /// every predicate of `req.filter` as a `where` behind it, requires ordered
+  /// input, and forwards neither limit nor projection.
+  virtual auto
+  optimize(OptimizeRequest req, const OptimizeCtx& octx) && -> OptimizeResult;
 
   /// Return the executable matching this operator.
   ///
@@ -202,7 +246,7 @@ struct pipeline {
 
   /// Prepend the given filter expressions as leading `where` operators,
   /// preserving their relative order.
-  auto prepend(optimize_filter filter) -> void;
+  auto prepend(OptimizeFilter filter) -> void;
 
   /// Move `other`'s `let` bindings and operators to the back of this pipeline,
   /// preserving their relative order.
@@ -210,7 +254,7 @@ struct pipeline {
 
   /// Append the given filter expressions as trailing `where` operators,
   /// preserving their relative order.
-  auto append(optimize_filter filter) -> void;
+  auto append(OptimizeFilter filter) -> void;
 
   /// @see Operator
   auto substitute(substitute_ctx ctx, bool instantiate) -> failure_or<void>;
@@ -222,8 +266,8 @@ struct pipeline {
   // TODO: How do we take care that we don't propagate $-vars past the point
   // where they will be defined?
   /// @see Operator
-  auto optimize(optimize_filter filter, event_order order,
-                const OptimizeCtx& octx) && -> optimize_result;
+  auto
+  optimize(OptimizeRequest req, const OptimizeCtx& octx) && -> OptimizeResult;
 };
 
 struct CompileResult {
@@ -246,27 +290,53 @@ private:
   ir::pipeline pipeline_;
 };
 
-struct optimize_result {
-  /// The filter to be propageted to the upstream operator.
-  optimize_filter filter;
+struct OptimizeResult {
+  /// The filter to be propagated to the upstream operator.
+  OptimizeFilter filter;
   /// What ordering guarantees the operator needs from its upstream operator.
-  event_order order;
+  EventOrder order;
   /// What the operator shall be replaced with.
   pipeline replacement;
+  /// The limit to be propagated to the upstream operator, if any. See
+  /// `OptimizeRequest::limit`. Defaults to `None`, which is always safe.
+  Option<uint64_t> limit = None{};
+  /// The projection to be propagated to the upstream operator, if any. See
+  /// `OptimizeRequest::projection`. Defaults to `None`, which is always safe.
+  Option<OptimizeProjection> projection = None{};
 };
 
 struct split_filter_result {
-  ir::optimize_filter independent;
-  ir::optimize_filter dependent;
+  ir::OptimizeFilter independent;
+  ir::OptimizeFilter dependent;
 };
 
 /// Splits a filter chain into independent and dependent parts.
 /// A filter expression is dependent if its references overlap with `touched`.
 /// If refs of a filter cannot be determined (ambiguous), it is conservatively
 /// placed into the dependent set.
-auto split_filter_by_dependents(ir::optimize_filter filter,
+auto split_filter_by_dependents(ir::OptimizeFilter filter,
                                 const ast::ExprRefs& touched)
   -> split_filter_result;
+
+/// Returns whether `prefix` is a prefix of `path` (or equal to it), comparing
+/// segment names. An empty `prefix` is a prefix of every path.
+auto is_field_path_prefix(const ast::field_path& prefix,
+                          const ast::field_path& path) -> bool;
+
+/// Adds `path` to `projection` unless an equal path is already present. A path
+/// that refers to `this` turns the projection into `None`, since every field
+/// is needed then. A `None` projection stays `None`.
+auto add_to_projection(Option<OptimizeProjection>& projection,
+                       const ast::field_path& path) -> void;
+
+/// Adds the field references of `expr` to `projection`. Turns it into `None` if
+/// the references are ambiguous or include `this`.
+auto add_refs_to_projection(Option<OptimizeProjection>& projection,
+                            const ast::expression& expr) -> void;
+
+/// Unions `other` into `projection`. `None` absorbs everything.
+auto merge_projection(Option<OptimizeProjection>& projection,
+                      const Option<OptimizeProjection>& other) -> void;
 
 /// Strategies that control how the planner assigns parallelism to
 /// parallelizable operators.
@@ -621,8 +691,8 @@ public:
 
   auto spawn(element_type_tag input) const -> AnyOperator override;
 
-  auto optimize(optimize_filter filter, event_order order,
-                const OptimizeCtx& octx) && -> optimize_result override;
+  auto optimize(OptimizeRequest req,
+                const OptimizeCtx& octx) && -> OptimizeResult override;
 
   auto infer_type(element_type_tag input, diagnostic_handler& dh) const
     -> failure_or<element_type_tag> override;
@@ -636,7 +706,7 @@ public:
 
 private:
   std::vector<ast::assignment> assignments_;
-  event_order order_;
+  EventOrder order_;
 };
 
 } // namespace ir

@@ -114,10 +114,10 @@ public:
     return "drop";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
     (void)filter;
-    return optimize_result::order_invariant(*this, order);
+    return OptimizeResult::order_invariant(*this, order);
   }
 
   friend auto inspect(auto& f, drop_operator& x) -> bool {
@@ -157,8 +157,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -209,8 +209,8 @@ public:
       }
       return {};
     });
-    return d.optimize([=](DescribeCtx& ctx, event_order order,
-                          ir::optimize_filter filter) -> Optimization {
+    return d.optimize([=](DescribeCtx& ctx, EventOrder order,
+                          ir::OptimizeFilter filter) -> Optimization {
       auto touched_fields = std::vector<ast::field_path>{};
       for (auto& field : ctx.get_all(fields)) {
         TENZIR_ASSERT(field);

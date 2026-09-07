@@ -951,11 +951,11 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
     if constexpr (enable_source) {
       auto builder_options = builder_options_;
-      builder_options.settings.ordered = order == event_order::ordered;
+      builder_options.settings.ordered = order == EventOrder::ordered;
       auto replacement = std::make_unique<fluent_bit_operator_impl>(
         this->operator_args_, std::move(builder_options), this->config_);
       return {filter, order, std::move(replacement)};
@@ -987,7 +987,7 @@ struct FluentBitArgs {
   Option<located<data>> tls;
   located<record> args = located{record{}, location::unknown};
   multi_series_builder::options builder_options;
-  event_order order = event_order::ordered;
+  EventOrder order = EventOrder::ordered;
   record config;
 };
 
@@ -1107,8 +1107,7 @@ public:
   explicit FromFluentBit(FluentBitArgs args) : args_{std::move(args)} {
     args_.builder_options.settings.default_schema_name
       = fmt::format("fluent_bit.{}", args_.plugin.inner);
-    args_.builder_options.settings.ordered
-      = args_.order == event_order::ordered;
+    args_.builder_options.settings.ordered = args_.order == EventOrder::ordered;
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {

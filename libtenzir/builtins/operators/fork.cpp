@@ -164,8 +164,8 @@ public:
     return "internal-fork-source";
   }
 
-  auto optimize(const expression&, event_order) const
-    -> optimize_result override {
+  auto optimize(const expression&, EventOrder) const
+    -> OptimizeResult override {
     return do_not_optimize(*this);
   }
 
@@ -264,8 +264,8 @@ public:
     return "tql2.fork";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -348,9 +348,10 @@ public:
     return tag_v<table_slice>;
   }
 
-  auto
-  optimize(ir::optimize_filter filter, event_order order,
-           const ir::OptimizeCtx& octx) && -> ir::optimize_result override {
+  auto optimize(ir::OptimizeRequest req,
+                const ir::OptimizeCtx& octx) && -> ir::OptimizeResult override {
+    auto filter = std::move(req.filter);
+    auto order = req.order;
     // The planner lowers the branch inline, so this is the only pass that gets
     // to optimize it. Without recursing here, optimizer-only operators such as
     // `unordered` would survive into the plan and panic when spawned.
@@ -358,10 +359,14 @@ public:
     // needs, not what the branch's own sink observes. Optimizing the branch
     // with `order` would let an unordered main path strip a `sort` from the
     // branch, so the branch starts from `ordered`.
-    auto opt = std::move(args_.pipe).optimize({}, event_order::ordered, octx);
+    auto opt = std::move(args_.pipe)
+                 .optimize(ir::OptimizeRequest{.filter = {},
+                                               .order = EventOrder::ordered},
+                           octx);
     args_.pipe = std::move(opt.replacement);
     // The branch is a sink and has no other upstream than `fork` itself, so a
-    // filter it wants to push up is reinserted at its front.
+    // filter it wants to push up is reinserted at its front. A limit or
+    // projection it wants to push up describes the branch input and is dropped.
     args_.pipe.prepend(std::move(opt.filter));
     // A downstream filter must not be pushed past `fork`: the branch has to
     // observe every input row. It stays behind the main output port.

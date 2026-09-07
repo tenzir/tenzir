@@ -71,8 +71,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -362,11 +362,11 @@ public:
     }
   }
 
-  auto optimize(expression const&, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const&, EventOrder order) const
+    -> OptimizeResult override {
     auto copy = std::make_unique<from_file>(*this);
     copy->order_ = order;
-    return optimize_result{None{}, event_order::ordered, std::move(copy)};
+    return OptimizeResult{None{}, EventOrder::ordered, std::move(copy)};
   }
 
   friend auto inspect(auto& f, from_file& x) -> bool {
@@ -376,7 +376,7 @@ public:
 
 private:
   from_file_args args_;
-  event_order order_{event_order::ordered};
+  EventOrder order_{EventOrder::ordered};
 };
 
 class from_file_plugin : public operator_plugin2<from_file> {

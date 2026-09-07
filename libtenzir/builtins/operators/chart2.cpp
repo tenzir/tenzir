@@ -274,8 +274,8 @@ public:
     return "tql2.chart";
   }
 
-  auto optimize(const expression& filter, event_order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder) const
+    -> OptimizeResult override {
     const auto expr = [&]() -> Option<expression> {
       if (args_.x_min and args_.x_max) {
         auto combined = normalize_and_validate(conjunction{
@@ -304,7 +304,7 @@ public:
     // aggregations currently are commutative, we can get away with this.
     return {
       expr(),
-      event_order::unordered,
+      EventOrder::unordered,
       std::make_unique<chart_operator2>(std::move(args)),
     };
   }

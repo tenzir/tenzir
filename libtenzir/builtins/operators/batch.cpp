@@ -40,7 +40,7 @@ class batch_operator final : public crtp_operator<batch_operator> {
 public:
   batch_operator() = default;
 
-  batch_operator(uint64_t limit, duration timeout, event_order order)
+  batch_operator(uint64_t limit, duration timeout, EventOrder order)
     : limit_{limit}, timeout_{timeout}, order_{order} {
     // nop
   }
@@ -66,7 +66,7 @@ public:
         continue;
       }
       // For ordered batching, on schema change, yield the current buffer
-      if (order_ == event_order::ordered and not buffers.empty()
+      if (order_ == EventOrder::ordered and not buffers.empty()
           and buffers.begin()->first != slice.schema()) {
         TENZIR_ASSERT(buffers.size() == 1);
         auto& entry = buffers.begin()->second;
@@ -105,9 +105,9 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    return optimize_result{
+  auto optimize(expression const& filter, EventOrder order) const
+    -> OptimizeResult override {
+    return OptimizeResult{
       filter, order, std::make_unique<batch_operator>(limit_, timeout_, order)};
   }
 
@@ -125,13 +125,13 @@ public:
 private:
   uint64_t limit_ = defaults::import::table_slice_size;
   duration timeout_ = {};
-  event_order order_ = event_order::ordered;
+  EventOrder order_ = EventOrder::ordered;
 };
 
 struct BatchArgs {
   uint64_t limit = defaults::import::table_slice_size;
   duration timeout = std::chrono::minutes{1};
-  event_order order = event_order::ordered;
+  EventOrder order = EventOrder::ordered;
 };
 
 class Batch final : public Operator<table_slice, table_slice> {
@@ -144,7 +144,7 @@ public:
     -> Task<void> override {
     TENZIR_UNUSED(ctx);
     // for ordered batching, on schema change, push the current buffer
-    if (order_ == event_order::ordered and not buffers_.empty()
+    if (order_ == EventOrder::ordered and not buffers_.empty()
         and buffers_.begin()->first != input.schema()) {
       TENZIR_ASSERT(buffers_.size() == 1);
       auto& entry = buffers_.begin()->second;
@@ -249,7 +249,7 @@ private:
 
   uint64_t limit_;
   duration timeout_;
-  event_order order_ = event_order::ordered;
+  EventOrder order_ = EventOrder::ordered;
   std::unordered_map<type, buffer_entry> buffers_;
   mutable Option<std::chrono::steady_clock::time_point> next_timeout_;
   mutable std::unique_ptr<Notify> buffer_ready_ = std::make_unique<Notify>();
@@ -286,7 +286,7 @@ public:
     }
     return std::make_unique<batch_operator>(
       limit ? limit->inner : defaults::import::table_slice_size,
-      timeout ? timeout->inner : duration::max(), event_order::ordered);
+      timeout ? timeout->inner : duration::max(), EventOrder::ordered);
   }
 
   auto describe() const -> Description override {

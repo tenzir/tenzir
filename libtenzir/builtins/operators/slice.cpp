@@ -302,24 +302,24 @@ public:
     return "slice";
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, EventOrder order) const
+    -> OptimizeResult override {
     const auto nop_slice = begin_.value_or(0) == 0 and not end_;
     const auto reverse = stride_.value_or(1) == -1;
     const auto nop_stride = stride_.value_or(1) == 1
-                            or (order == event_order::unordered and reverse);
+                            or (order == EventOrder::unordered and reverse);
     if (nop_slice and nop_stride) {
       // If there's neither a begin nor an end, then this operator is a no-op.
       // We optimize it away here.
-      return optimize_result{
+      return OptimizeResult{
         filter,
         order,
         nullptr,
       };
     }
-    return optimize_result{
+    return OptimizeResult{
       None{},
-      event_order::ordered,
+      EventOrder::ordered,
       copy(),
     };
   }
@@ -611,14 +611,14 @@ public:
       .end = None{},
       .stride = int64_t{-1},
     }};
-    return d.optimize([](DescribeCtx&, event_order order,
-                         ir::optimize_filter filter) -> Optimization {
+    return d.optimize([](DescribeCtx&, EventOrder order,
+                         ir::OptimizeFilter filter) -> Optimization {
       return {
         // invariant to order and filters
         .order = order,
         .filter_upstream = std::move(filter),
         // drop if downstream does not care about order
-        .drop = order == event_order::unordered,
+        .drop = order == EventOrder::unordered,
       };
     });
   }
