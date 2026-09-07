@@ -1,0 +1,5 @@
+subscribe "pushdown", "pushdown-unused"
+where value > 0
+where text.length_chars() == 3
+select nested.keep
+head 3

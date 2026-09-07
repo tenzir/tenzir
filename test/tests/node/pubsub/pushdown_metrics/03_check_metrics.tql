@@ -1,0 +1,14 @@
+every 1s {
+  metrics "operator_profile"
+  where pipeline_id == "00000000-0000-0000-0000-000000000001"
+  subscribe_events_out = events_out if name == "subscribe" else 0
+  head_events_out = events_out if name == "head" else 0
+  summarize \
+    subscribe_events_out=sum(subscribe_events_out),
+    head_events_out=sum(head_events_out)
+  where head_events_out == 3
+}
+head 1
+// Without the limit hint, `subscribe` forwards whole batches and `head` trims
+// them. With the hint, `subscribe` itself emits exactly three events.
+select subscribe_events_out, head_events_out

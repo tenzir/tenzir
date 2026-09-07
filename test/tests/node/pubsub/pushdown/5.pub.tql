@@ -1,0 +1,9 @@
+// Repeat batches so every parallel subscriber can attach before publishing ends.
+every 10ms {
+  from {value: 0, text: "yes", nested: {keep: "rejected-value", drop: 1}, unused: true},
+       {value: 1, text: "no", nested: {keep: "rejected-text", drop: 1}, unused: true},
+       {value: 2, text: "yes", nested: {keep: "yes", drop: 1}, unused: true},
+       {value: 3, text: "yes", nested: {keep: "yes", drop: 1}, unused: true}
+}
+head 4000
+publish "pushdown"

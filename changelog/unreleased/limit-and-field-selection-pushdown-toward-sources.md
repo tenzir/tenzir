@@ -29,3 +29,8 @@ hints. `export` also records the field selection, which you can inspect with
 The `export` operator now honors the limit: it stops opening partitions once it
 has enough matching events. Filters that require local evaluation
 conservatively read everything.
+
+The `subscribe` source now acts on these hints: it stops after the requested
+number of matching events and drops unneeded top-level fields before forwarding
+events. Nested field selections retain the containing record until `select`
+applies the exact selection.

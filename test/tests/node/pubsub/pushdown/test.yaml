@@ -1,0 +1,4 @@
+suite:
+  name: subscribe-pushdown
+  mode: parallel
+  min_jobs: 5

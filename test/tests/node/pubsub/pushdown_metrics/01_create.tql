@@ -1,0 +1,8 @@
+// The publisher never stops on its own and emits multi-row batches. Only a
+// subscribe that honors the pushed-down limit ends the subscription after
+// exactly three events; without the hint, it forwards whole batches and
+// leaves the trimming to `head`.
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000001", definition: "subscribe \"pushdown-metrics\"\nhead 3\ndiscard"}
+discard
+api "/pipeline/create", {id: "00000000-0000-0000-0000-000000000002", definition: "every 10ms {\n  from {value: 0}\n  repeat 50\n  batch 50\n}\npublish \"pushdown-metrics\""}
+discard

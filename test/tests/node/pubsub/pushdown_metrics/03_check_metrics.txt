@@ -1,0 +1,4 @@
+{
+  subscribe_events_out: 3,
+  head_events_out: 3,
+}

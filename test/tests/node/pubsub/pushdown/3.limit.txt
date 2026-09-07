@@ -1,0 +1,5 @@
+{
+  nested: {
+    keep: "rejected-value",
+  },
+}
