@@ -10,6 +10,7 @@
 
 #include "tenzir/hash/xxhash.hpp"
 #include "tenzir/si_literals.hpp"
+#include "tenzir/string_synopsis.hpp"
 #include "tenzir/test/synopsis.hpp"
 #include "tenzir/test/test.hpp"
 
@@ -31,6 +32,17 @@ auto make_int64_series(std::vector<int64_t> values) -> series {
   auto result = builder.Finish();
   TENZIR_ASSERT(result.ok());
   return series{type{int64_type{}}, std::move(*result)};
+}
+
+auto make_string_series(std::vector<std::string> values) -> series {
+  auto builder = arrow::StringBuilder{tenzir::arrow_memory_pool()};
+  for (const auto& value : values) {
+    auto status = builder.Append(value);
+    TENZIR_ASSERT(status.ok());
+  }
+  auto result = builder.Finish();
+  TENZIR_ASSERT(result.ok());
+  return series{type{string_type{}}, std::move(*result)};
 }
 
 } // namespace
@@ -71,4 +83,32 @@ TEST("bloom filter synopsis - wrong lookup type") {
   auto r2
     = synopsis.lookup(relational_operator::equal, make_data_view(int64_t{17}));
   CHECK_EQUAL(r2, false);
+}
+
+TEST("buffered synopsis retains unique values") {
+  bloom_filter_parameters params;
+  params.p = 0.01;
+  auto synopsis
+    = make_buffered_string_synopsis<xxh64>(type{string_type{}}, params);
+  REQUIRE_NOT_EQUAL(synopsis, nullptr);
+  auto first_batch = make_string_series({"alpha", "alpha", "beta"});
+  auto array = std::weak_ptr<arrow::Array>{first_batch.array};
+  synopsis->add(first_batch);
+  first_batch.array.reset();
+  CHECK(array.expired());
+  const auto initial_memusage = synopsis->memusage();
+  synopsis->add(make_string_series({"alpha", "beta", "alpha"}));
+  CHECK_EQUAL(synopsis->memusage(), initial_memusage);
+  auto shrunk = synopsis->shrink();
+  REQUIRE_NOT_EQUAL(shrunk, nullptr);
+  const auto evaluated = parse_parameters(shrunk->type());
+  REQUIRE(static_cast<bool>(evaluated));
+  REQUIRE(static_cast<bool>(evaluated->n));
+  CHECK_EQUAL(*evaluated->n, 2u);
+  CHECK_EQUAL(shrunk->lookup(relational_operator::equal,
+                             make_data_view(std::string{"alpha"})),
+              true);
+  CHECK_EQUAL(shrunk->lookup(relational_operator::equal,
+                             make_data_view(std::string{"beta"})),
+              true);
 }

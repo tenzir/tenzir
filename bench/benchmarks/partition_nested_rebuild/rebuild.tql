@@ -1,0 +1,9 @@
+---
+bench:
+  id: rebuild
+  description: Rebuild 2500 small partitions with a unified, deeply nested OCSF schema.
+  tags:
+    operation: rebuild
+---
+shell "$BENCHMARK_TENZIR_CTL rebuild --all"
+discard

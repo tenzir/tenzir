@@ -14,6 +14,7 @@
 #include "tenzir/bloom_filter_synopsis.hpp"
 #include "tenzir/buffered_synopsis.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
 
@@ -58,6 +59,8 @@ public:
 /// @relates buffered_synopsis_traits
 template <>
 struct buffered_synopsis_traits<std::string> {
+  using set_type = detail::heterogeneous_string_hashset;
+
   template <typename HashFunction>
   static synopsis_ptr make(tenzir::type type, bloom_filter_parameters p,
                            std::vector<size_t> seeds = {}) {
@@ -65,18 +68,18 @@ struct buffered_synopsis_traits<std::string> {
                                               std::move(seeds));
   }
 
-  template <typename SeriesType>
-  static size_t memusage(const std::vector<SeriesType>& data) {
-    size_t result = sizeof(data);
-    for (const auto& s : data) {
-      result += sizeof(SeriesType);
-      if (s.array) {
-        for (const auto& buffer : s.array->data()->buffers) {
-          if (buffer) {
-            result += buffer->size();
-          }
-        }
-      }
+  static void insert(set_type& xs, std::string_view x) {
+    if (not xs.contains(x)) {
+      xs.emplace(x);
+    }
+  }
+
+  static size_t memusage(const set_type& xs) {
+    auto result
+      = sizeof(xs)
+        + xs.bucket_count() * (sizeof(set_type::value_type) + sizeof(uint64_t));
+    for (const auto& x : xs) {
+      result += x.capacity() + 1;
     }
     return result;
   }

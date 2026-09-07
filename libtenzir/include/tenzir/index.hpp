@@ -17,6 +17,7 @@
 #include "tenzir/detail/stable_set.hpp"
 #include "tenzir/fbs/index.hpp"
 #include "tenzir/importer.hpp"
+#include "tenzir/partition_transformer.hpp"
 #include "tenzir/plugin_fwd.hpp"
 #include "tenzir/query_context.hpp"
 #include "tenzir/query_queue.hpp"
@@ -27,6 +28,7 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
 
+#include <memory>
 #include <queue>
 #include <unordered_map>
 #include <vector>
@@ -93,6 +95,13 @@ struct active_partition_info {
       .fields(f.field("actor", x.actor), f.field("events", x.events),
               f.field("id", x.id));
   }
+};
+
+struct ActivePartitionTransform {
+  std::shared_ptr<PartitionTransformProgress> progress = {};
+  std::vector<partition_info> input_partitions = {};
+  std::string origin = {};
+  time started_at = time::clock::now();
 };
 
 /// Loads partitions from disk by UUID.
@@ -343,6 +352,10 @@ struct index_state {
   /// remove the actor from the list if it finished on its own. It must be
   /// disposed of before shutdown.
   std::unordered_map<caf::actor_addr, caf::disposable> active_transformers;
+
+  /// Progress for the complete transformation transaction, including the
+  /// filesystem and catalog work performed after the transformer exits.
+  std::unordered_map<uuid, ActivePartitionTransform> active_transformations;
 
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem = {};

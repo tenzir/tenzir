@@ -1,0 +1,26 @@
+name: partition_nested_rebuild
+description: >-
+  Measure importing and rebuilding 25000 events with one unified, deeply
+  nested OCSF schema, seeded as 10-event Feather partitions.
+tags:
+  benchmark: node
+  area: partitions
+  dataset: ocsf-1.8-unified
+inputs:
+  main:
+    path: ocsf-wide.seed.ndjson
+    repetitions: 25000
+    source:
+      num_events: 1
+env:
+  TENZIR_CONSOLE_FORMAT: none
+fixtures:
+  - node_partition:
+      inputs: [main]
+      max_partition_size: 100000
+      seed_partition_size: 10
+      read_pipeline: read_ndjson
+runtime:
+  warmup_runs: 1
+  measurement_runs: 3
+  timeout_seconds: 1800

@@ -1,0 +1,9 @@
+---
+bench:
+  id: rebuild
+  description: Rebuild 1000-event Graylog partitions toward a 100000-event target size.
+  tags:
+    operation: rebuild
+---
+shell "$BENCHMARK_TENZIR_CTL rebuild --all"
+discard

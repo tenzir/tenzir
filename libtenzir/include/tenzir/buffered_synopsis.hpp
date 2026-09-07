@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/bloom_filter_parameters.hpp"
+#include "tenzir/bloom_filter_synopsis.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/synopsis.hpp"
@@ -18,23 +19,12 @@
 
 namespace tenzir {
 
-// TODO: Turn this into a concept when we support C++20.
 template <typename T>
-struct buffered_synopsis_traits {
-  // Create a new bloom filter synopsis from the given parameters
-  template <typename HashFunction>
-  static synopsis_ptr make(tenzir::type type, bloom_filter_parameters p,
-                           std::vector<size_t> seeds = {})
-    = delete;
+struct buffered_synopsis_traits;
 
-  // Estimate the size in bytes for a vector of typed series.
-  template <typename SeriesType>
-  static size_t memusage(const std::vector<SeriesType>&) = delete;
-};
-
-/// A synopsis that stores a full copy of the input in a hash table to be able
-/// to construct a smaller bloom filter synopsis for this data at a later
-/// point in time using the `shrink` function.
+/// A synopsis that stores the unique input values in a hash table to be able to
+/// construct a smaller bloom filter synopsis for this data at a later point in
+/// time using the `shrink` function.
 /// @note This is currently used for the active partition: The input is buffered
 /// and converted to a bloom filter when the partition is converted to a passive
 /// partition and no more entries are expected to be added.
@@ -44,7 +34,7 @@ public:
   using element_type = T;
   using view_type = view<T>;
   using tenzir_type = data_to_type_t<T>;
-  using series_type = basic_series<tenzir_type>;
+  using set_type = typename buffered_synopsis_traits<T>::set_type;
 
   buffered_synopsis(tenzir::type x, double p) : synopsis{std::move(x)}, p_{p} {
     // nop
@@ -52,27 +42,13 @@ public:
 
   [[nodiscard]] synopsis_ptr clone() const override {
     auto copy = std::make_unique<buffered_synopsis>(type(), p_);
-    copy->data_ = data_;
+    copy->unique_values_ = unique_values_;
     return copy;
   }
 
   [[nodiscard]] synopsis_ptr shrink() const override {
-    // Count unique values across all series using views (no materialization)
-    auto number_of_unique_values = std::invoke([&] {
-      auto unique_values = tsl::robin_set<view_type>{};
-      for (const auto& s : data_) {
-        for (int64_t i = 0; i < s.array->length(); ++i) {
-          if (s.array->IsNull(i)) {
-            continue;
-          }
-          auto y = *view_at<tenzir_type>(*s.array, i);
-          unique_values.insert(y);
-        }
-      }
-      return unique_values.size();
-    });
     size_t next_power_of_two = 1ull;
-    while (number_of_unique_values > next_power_of_two) {
+    while (unique_values_.size() > next_power_of_two) {
       next_power_of_two *= 2;
     }
     bloom_filter_parameters params;
@@ -88,9 +64,11 @@ public:
     if (not shrunk_synopsis) {
       return nullptr;
     }
-    // Add all buffered series to the bloom filter synopsis
-    for (const auto& s : data_) {
-      shrunk_synopsis->add(series{s});
+    auto* bloom = dynamic_cast<bloom_filter_synopsis<T, HashFunction>*>(
+      shrunk_synopsis.get());
+    TENZIR_ASSERT(bloom);
+    for (const auto& x : unique_values_) {
+      bloom->add(x);
     }
     return shrunk_synopsis;
   }
@@ -100,22 +78,15 @@ public:
     auto typed = x.as<tenzir_type>();
     TENZIR_ASSERT(typed);
     TENZIR_ASSERT(typed->array);
-    data_.push_back(*typed);
+    for (auto value : typed->values3()) {
+      if (value) {
+        buffered_synopsis_traits<T>::insert(unique_values_, *value);
+      }
+    }
   }
 
   [[nodiscard]] size_t memusage() const override {
-    size_t result = sizeof(p_) + sizeof(data_);
-    // Add memory for each series and its underlying Arrow array
-    for (const auto& s : data_) {
-      result += sizeof(series_type);
-      // Sum the sizes of all buffers in the Arrow array
-      for (const auto& buffer : s.array->data()->buffers) {
-        if (buffer) {
-          result += buffer->size();
-        }
-      }
-    }
-    return result;
+    return sizeof(p_) + buffered_synopsis_traits<T>::memusage(unique_values_);
   }
 
   [[nodiscard]] Option<bool>
@@ -147,7 +118,7 @@ public:
 
 private:
   double p_;
-  std::vector<series_type> data_;
+  set_type unique_values_;
 };
 
 } // namespace tenzir

@@ -132,14 +132,15 @@ struct partition_info {
   partition_info() noexcept = default;
 
   partition_info(class uuid uuid, size_t events, time max_import_time,
-                 type schema, uint64_t version,
-                 uint64_t approx_bytes = 0) noexcept
+                 type schema, uint64_t version, uint64_t approx_bytes = 0,
+                 uint64_t store_bytes = 0) noexcept
     : uuid{uuid},
       events{events},
       max_import_time{max_import_time},
       schema{std::move(schema)},
       version{version},
-      approx_bytes{approx_bytes} {
+      approx_bytes{approx_bytes},
+      store_bytes{store_bytes} {
     // nop
   }
 
@@ -149,7 +150,8 @@ struct partition_info {
                      synopsis.max_import_time,
                      synopsis.schema,
                      synopsis.version,
-                     synopsis.approx_bytes} {
+                     synopsis.approx_bytes,
+                     synopsis.store_file.size} {
     // nop
   }
 
@@ -171,6 +173,9 @@ struct partition_info {
 
   /// Best-effort estimate of the decoded in-memory size of the partition data.
   uint64_t approx_bytes = 0;
+
+  /// Size of the persisted store file in bytes.
+  uint64_t store_bytes = 0;
 
   friend std::strong_ordering
   operator<=>(const partition_info& lhs, const partition_info& rhs) noexcept {
@@ -199,7 +204,8 @@ struct partition_info {
       .fields(f.field("uuid", x.uuid), f.field("events", x.events),
               f.field("max-import-time", x.max_import_time),
               f.field("schema", x.schema), f.field("version", x.version),
-              f.field("approx-bytes", x.approx_bytes));
+              f.field("approx-bytes", x.approx_bytes),
+              f.field("store-bytes", x.store_bytes));
   }
 };
 
@@ -220,6 +226,7 @@ struct partition_transformer_result {
   std::vector<partition_info> input_partitions;
   std::vector<partition_synopsis_pair> output_partitions;
   bool input_complete = true;
+  bool skipped = false;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, partition_transformer_result& x) {
@@ -227,7 +234,8 @@ struct partition_transformer_result {
       .pretty_name("tenzir.partition-transformer-result")
       .fields(f.field("input-partitions", x.input_partitions),
               f.field("output-partitions", x.output_partitions),
-              f.field("input-complete", x.input_complete));
+              f.field("input-complete", x.input_complete),
+              f.field("skipped", x.skipped));
   }
 };
 
@@ -235,6 +243,7 @@ struct partition_apply_result {
   std::vector<partition_info> input_partitions;
   std::vector<partition_info> output_partitions;
   bool input_complete = true;
+  bool skipped = false;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, partition_apply_result& x) {
@@ -242,7 +251,8 @@ struct partition_apply_result {
       .pretty_name("tenzir.partition-apply-result")
       .fields(f.field("input-partitions", x.input_partitions),
               f.field("output-partitions", x.output_partitions),
-              f.field("input-complete", x.input_complete));
+              f.field("input-complete", x.input_complete),
+              f.field("skipped", x.skipped));
   }
 };
 

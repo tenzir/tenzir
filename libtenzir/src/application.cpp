@@ -98,6 +98,17 @@ void add_root_opts(command& cmd) {
   cmd.options.add<duration>("?tenzir", "rebuild-interval",
                             "timespan after which an automatic rebuild is "
                             "triggered (default: 30min)");
+  cmd.options.add<int64_t>(
+    "?tenzir", "rebuild-memory-budget",
+    "total decoded-byte budget for concurrent rebuilds; set to 0 to disable "
+    "the budget (default: estimate from available memory)");
+  cmd.options.add<double>("?tenzir", "rebuild-merge-margin",
+                          "minimum fraction of partitions eliminated when "
+                          "rebuilding a closed "
+                          "time bucket (default: 0.6)");
+  cmd.options.add<std::string>("?tenzir", "rebuild-timezone",
+                               "time zone for rebuild bucket boundaries "
+                               "(default: system time zone)");
   cmd.options.add<bool>("?tenzir", "validate-store-batches",
                         "fully validate persisted batches read by exports and "
                         "rebuilds");

@@ -1,10 +1,11 @@
-"""Node-backed fixtures for catalog lookup benchmarks."""
+"""Node-backed fixtures for catalog and partition benchmarks."""
 
 from __future__ import annotations
 
 import json
 import logging
 import re
+import shutil
 import signal
 import subprocess
 import time
@@ -24,17 +25,15 @@ _LOG = logging.getLogger(__name__)
 _ENDPOINT_RE = re.compile(r"^\d+\.\d+\.\d+\.\d+:\d+$")
 
 
-def _selected_input_name() -> str:
+def _selected_input_name(fixture_name: str) -> str:
     context = current_context()
     if context is None:
-        raise RuntimeError(
-            "node_catalog_lookup fixture requires an active benchmark context"
-        )
+        raise RuntimeError(f"{fixture_name} requires an active benchmark context")
     fixture_spec = next(
         (
             fixture
             for fixture in context.definition.fixtures
-            if fixture.name == "node_catalog_lookup"
+            if fixture.name == fixture_name
         ),
         None,
     )
@@ -45,7 +44,7 @@ def _selected_input_name() -> str:
     )
     if len(selected_names) != 1:
         raise ValueError(
-            "node_catalog_lookup expects exactly one selected input; set fixture.inputs accordingly"
+            f"{fixture_name} expects exactly one selected input; set fixture.inputs accordingly"
         )
     return selected_names[0]
 
@@ -57,6 +56,17 @@ class NodeCatalogLookupOptions:
     max_partition_size: int = 1
     schema: str = "suricata"
     query_hit_index: int = 50_000
+    startup_timeout_seconds: float = 120.0
+    shutdown_timeout_seconds: float = 20.0
+
+
+@dataclass(frozen=True)
+class NodePartitionOptions:
+    """Configuration for the ``node_partition`` benchmark fixture."""
+
+    max_partition_size: int = 100_000
+    seed_partition_size: int = 1_000
+    read_pipeline: str = "read_suricata"
     startup_timeout_seconds: float = 120.0
     shutdown_timeout_seconds: float = 20.0
 
@@ -134,7 +144,7 @@ def _wait_for_endpoint(
         return endpoint
     detail = log_path.read_text(encoding="utf-8").strip() or "no output"
     raise RuntimeError(
-        f"node_catalog_lookup fixture failed to start tenzir-node and emit an endpoint: {detail}",
+        f"node fixture failed to start tenzir-node and emit an endpoint: {detail}",
     )
 
 
@@ -147,9 +157,7 @@ def _start_node(
 ) -> tuple[subprocess.Popen[str], TextIO, str]:
     context = current_context()
     if context is None:
-        raise RuntimeError(
-            "node_catalog_lookup fixture requires an active benchmark context"
-        )
+        raise RuntimeError("node fixture requires an active benchmark context")
     state_dir.mkdir(parents=True, exist_ok=True)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_handle = log_path.open("w", encoding="utf-8")
@@ -178,7 +186,7 @@ def _start_node(
             _stop_node(process, shutdown_timeout_seconds=5.0)
         log_handle.close()
         raise
-    _LOG.info("Started tenzir-node for catalog lookup benchmark at %s", endpoint)
+    _LOG.info("Started benchmark tenzir-node at %s", endpoint)
     return process, log_handle, endpoint
 
 
@@ -187,19 +195,17 @@ def _seed_node(
     endpoint: str,
     state_dir: Path,
     dataset_path: Path,
-    schema: str,
+    read_pipeline: str,
     pipeline_path: Path,
 ) -> None:
     context = current_context()
     if context is None:
-        raise RuntimeError(
-            "node_catalog_lookup fixture requires an active benchmark context"
-        )
+        raise RuntimeError("node fixture requires an active benchmark context")
     pipeline_path.write_text(
         "\n".join(
             [
                 f'from_file "{dataset_path}" {{',
-                f"  read_{schema}",
+                f"  {read_pipeline}",
                 "}",
                 "import",
                 "",
@@ -225,7 +231,7 @@ def _seed_node(
         _LOG.info("Seeded node at %s from %s", endpoint, dataset_path)
         return
     detail = (result.stderr or result.stdout or "").strip() or "no output"
-    raise RuntimeError(f"failed to seed catalog lookup node: {detail}")
+    raise RuntimeError(f"failed to seed benchmark node: {detail}")
 
 
 def _stop_node(
@@ -256,7 +262,7 @@ def node_catalog_lookup() -> FixtureHandle:
     if not isinstance(options, NodeCatalogLookupOptions):
         raise ValueError("invalid options for fixture 'node_catalog_lookup'")
 
-    input_name = _selected_input_name()
+    input_name = _selected_input_name("node_catalog_lookup")
     input_definition = context.definition.inputs[input_name]
     events = input_definition.repetitions
     query_value = f"bench-{options.query_hit_index:06}.example"
@@ -294,7 +300,7 @@ def node_catalog_lookup() -> FixtureHandle:
             endpoint=endpoint,
             state_dir=state_dir,
             dataset_path=input_path,
-            schema=options.schema,
+            read_pipeline=f"read_{options.schema}",
             pipeline_path=import_pipeline_path,
         )
 
@@ -309,6 +315,84 @@ def node_catalog_lookup() -> FixtureHandle:
             shutdown_timeout_seconds=options.shutdown_timeout_seconds,
         ),
         hooks={"seed": _seed},
+    )
+
+
+@fixture(name="node_partition", replace=True, options=NodePartitionOptions)
+def node_partition() -> FixtureHandle:
+    """Prepare a clean node for ingest or a seeded node for rebuild."""
+
+    context = current_context()
+    if context is None:
+        raise RuntimeError("node_partition requires an active benchmark context")
+    options = current_options("node_partition")
+    if not isinstance(options, NodePartitionOptions):
+        raise ValueError("invalid options for fixture 'node_partition'")
+    operation = context.definition.tags.get("operation")
+    if operation not in {"ingest", "rebuild"}:
+        raise ValueError("node_partition requires an ingest or rebuild operation tag")
+    input_name = _selected_input_name("node_partition")
+    dataset_path = context.dataset_inputs[input_name]
+    benchmark_root = context.output_root / "node-partition"
+    state_dir = benchmark_root / "state"
+    import_pipeline_path = benchmark_root / "seed.tql"
+    log_path = benchmark_root / "logs" / "node.log"
+    if state_dir.exists():
+        shutil.rmtree(state_dir)
+    process, log_handle, endpoint = _start_node(
+        state_dir=state_dir,
+        log_path=log_path,
+        max_partition_size=options.max_partition_size,
+        startup_timeout_seconds=options.startup_timeout_seconds,
+    )
+
+    def _restart(max_partition_size: int, *, clear: bool) -> None:
+        nonlocal process, log_handle, endpoint
+        _teardown_node_fixture(
+            process=process,
+            log_handle=log_handle,
+            shutdown_timeout_seconds=options.shutdown_timeout_seconds,
+        )
+        if clear and state_dir.exists():
+            shutil.rmtree(state_dir)
+        process, log_handle, endpoint = _start_node(
+            state_dir=state_dir,
+            log_path=log_path,
+            max_partition_size=max_partition_size,
+            startup_timeout_seconds=options.startup_timeout_seconds,
+        )
+
+    def _prepare(*, env: dict[str, str], **_kwargs: object) -> None:
+        if operation == "rebuild":
+            _restart(options.seed_partition_size, clear=True)
+            _seed_node(
+                endpoint=endpoint,
+                state_dir=state_dir,
+                dataset_path=dataset_path,
+                read_pipeline=options.read_pipeline,
+                pipeline_path=import_pipeline_path,
+            )
+            _restart(options.max_partition_size, clear=False)
+        else:
+            _restart(options.max_partition_size, clear=True)
+        env["TENZIR_ENDPOINT"] = endpoint
+
+    ctl = (
+        "tenzir-ctl"
+        if context.runtime.target == "docker"
+        else str(context.runtime.tenzir_path.with_name("tenzir-ctl"))
+    )
+    return FixtureHandle(
+        env={
+            "TENZIR_ENDPOINT": endpoint,
+            "BENCHMARK_TENZIR_CTL": ctl,
+        },
+        teardown=lambda: _teardown_node_fixture(
+            process=process,
+            log_handle=log_handle,
+            shutdown_timeout_seconds=options.shutdown_timeout_seconds,
+        ),
+        hooks={"before_run": _prepare},
     )
 
 

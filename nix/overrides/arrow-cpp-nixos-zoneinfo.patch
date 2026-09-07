@@ -1,3 +1,16 @@
+diff --git i/src/arrow/vendored/datetime/tz.h w/src/arrow/vendored/datetime/tz.h
+index 7e9f842836..6895528d43 100644
+--- i/src/arrow/vendored/datetime/tz.h
++++ w/src/arrow/vendored/datetime/tz.h
+@@ -44,7 +44,7 @@
+ // Technically any OS may use the mapping process but currently only Windows does use it.
+ 
+ #ifndef USE_OS_TZDB
+-#  define USE_OS_TZDB 0
++#  define USE_OS_TZDB 1
+ #endif
+ 
+ #ifndef HAS_REMOTE_API
 diff --git i/src/arrow/vendored/datetime/tz.cpp w/src/arrow/vendored/datetime/tz.cpp
 index 2cf6c62a84..062739947b 100644
 --- i/src/arrow/vendored/datetime/tz.cpp

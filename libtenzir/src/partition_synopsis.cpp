@@ -143,6 +143,7 @@ void partition_synopsis::add(const table_slice& slice,
   }
   TENZIR_ASSERT_EXPENSIVE(schema == slice.schema());
   approx_bytes += slice.approx_bytes();
+  auto root = check(to_record_batch(slice)->ToStructArray());
   auto each = as<record_type>(schema).leaves();
   auto leaf_it = each.begin();
   caf::settings synopsis_opts;
@@ -156,11 +157,7 @@ void partition_synopsis::add(const table_slice& slice,
     = get_type_fprate(fp_rates, tenzir::type{ip_type{}});
   for (size_t col = 0; col < slice.columns(); ++col, ++leaf_it) {
     auto&& leaf = *leaf_it;
-    auto add_column = [&](const synopsis_ptr& syn) {
-      auto column_offset = as<record_type>(schema).resolve_flat_index(col);
-      auto column_series = series{slice, std::move(column_offset)};
-      syn->add(column_series);
-    };
+    auto column = series{leaf.field.type, leaf.index.get(*root)};
     // Make a field synopsis if it was configured.
     if (auto key = qualified_record_field{schema, leaf.index};
         auto fprate = get_field_fprate(fp_rates, key)) {
@@ -176,7 +173,7 @@ void partition_synopsis::add(const table_slice& slice,
       }
       // If there exists a synopsis for a field, add the entire column.
       if (auto& syn = it->second) {
-        add_column(syn);
+        syn->add(column);
       }
     } else {
       // We still rely on having `field -> nullptr` mappings for all fields
@@ -199,7 +196,7 @@ void partition_synopsis::add(const table_slice& slice,
              .first;
     }
     if (auto& syn = tt->second) {
-      add_column(syn);
+      syn->add(column);
     }
   }
 }
