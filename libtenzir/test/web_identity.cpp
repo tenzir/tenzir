@@ -46,12 +46,12 @@ public:
     ::setsockopt(fd_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
     auto addr = sockaddr_in{};
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = ::htonl(INADDR_LOOPBACK);
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = 0;
     REQUIRE(::bind(fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0);
     auto len = socklen_t{sizeof(addr)};
     REQUIRE(::getsockname(fd_, reinterpret_cast<sockaddr*>(&addr), &len) == 0);
-    port_ = ::ntohs(addr.sin_port);
+    port_ = ntohs(addr.sin_port);
     REQUIRE(::listen(fd_, 8) == 0);
     thread_ = std::thread{[this] {
       serve();
