@@ -433,6 +433,7 @@ index(index_actor::stateful_pointer<index_state> self,
     .synopsis_dir = catalog_dir,
     .markers_dir = dir / "markers",
     .archive_dir = dir / ".." / "archive",
+    .database_dir = {},
   };
   self->state().partition_capacity = partition_capacity;
   self->state().max_buffered_events = max_buffered_events;
