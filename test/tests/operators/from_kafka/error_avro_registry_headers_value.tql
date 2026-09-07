@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from_kafka "unused",
+           schema_registry="http://localhost:8081",
+           schema_registry_headers={Accept: "application/json", Invalid: 42}

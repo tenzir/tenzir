@@ -3,6 +3,10 @@ the same patch (see nix/iceberg-cpp/default.nix).
 
 - IcebergThirdpartyToolchain.cmake: the system-Avro discovery looks for an
   `Avro` CMake package, but avro-cpp installs `avro-cpp-config.cmake`.
+  Reuse an existing avrocpp_s target instead of fetching and defining it again.
+- Fetch CRoaring's checksum-pinned amalgamation files instead
+  of its repository archive containing benchmark data; disable CPM for
+  custom CRoaring source archives. Keep system-package discovery intact.
 - arrow_s3_file_io.cc: EnsureS3Initialized() fails (and caches the failure)
   when the host application already initialized Arrow's S3 subsystem, which
   Tenzir's s3 plugin always does; treat that as already-initialized.
@@ -31,7 +35,20 @@ diff --git a/cmake_modules/IcebergThirdpartyToolchain.cmake b/cmake_modules/Iceb
 index 33a1ee4..fd51a0b 100644
 --- a/cmake_modules/IcebergThirdpartyToolchain.cmake
 +++ b/cmake_modules/IcebergThirdpartyToolchain.cmake
-@@ -320,4 +320,4 @@ macro(build_avro)
+@@ -295,1 +295,11 @@
+-  fetchcontent_makeavailable(avro-cpp)
++  if(TARGET avrocpp_s)
++    get_target_property(avro-cpp_SOURCE_DIR avrocpp_s SOURCE_DIR)
++    get_filename_component(avro-cpp_SOURCE_DIR
++                           "${avro-cpp_SOURCE_DIR}/../.." ABSOLUTE)
++    get_target_property(avro-cpp_BINARY_DIR avrocpp_s BINARY_DIR)
++  else()
++    fetchcontent_makeavailable(avro-cpp)
++  endif()
++
++  # Existing in-tree Avro targets participate in the vendored install/export
++  # path below, just like targets built by FetchContent.
+@@ -320,4 +330,4 @@ macro(build_avro)
    else()
      set(AVRO_VENDORED FALSE)
 -    list(APPEND ICEBERG_SYSTEM_DEPENDENCIES Avro)
@@ -136,3 +153,82 @@ index 6661c50..dfe536b 100644
 +      cpr::Delete(cpr::Url{authenticated.url}, ToCprHeader(authenticated));
  
    ICEBERG_RETURN_UNEXPECTED(HandleFailureResponse(response, error_handler));
+--- a/cmake_modules/IcebergThirdpartyToolchain.cmake
++++ b/cmake_modules/IcebergThirdpartyToolchain.cmake
+@@ -386,29 +386,62 @@
+
+   set(ENABLE_ROARING_TESTS OFF)
+   set(ENABLE_ROARING_MICROBENCHMARKS OFF)
++  set(ROARING_USE_CPM OFF)
+
+-  if(DEFINED ENV{ICEBERG_CROARING_URL})
++  find_package(roaring QUIET CONFIG)
++  if(TARGET roaring::roaring)
++    set(croaring_SOURCE_DIR "")
++  elseif(DEFINED ENV{ICEBERG_CROARING_URL})
+     set(CROARING_URL "$ENV{ICEBERG_CROARING_URL}")
++    fetchcontent_declare(croaring
++                         ${FC_DECLARE_COMMON_OPTIONS}
++                         URL ${CROARING_URL}
++                         FIND_PACKAGE_ARGS NAMES roaring CONFIG)
++    fetchcontent_makeavailable(croaring)
+   else()
+-    set(CROARING_URL
+-        "https://github.com/RoaringBitmap/CRoaring/archive/refs/tags/v4.4.3.tar.gz")
++    # The repository archive includes almost 300 MiB of benchmark data.
++    # The official amalgamation provides the same C and C++ APIs without it.
++    set(CROARING_RELEASE_URL
++        "https://github.com/RoaringBitmap/CRoaring/releases/download/v4.4.3")
++    set(CROARING_SHA256_c
++        "32e9507b80819c50eb0576c19a938f4cfb2d1e8511a66faed56f108a5047bdd7")
++    set(CROARING_SHA256_h
++        "80137988d9b5c32fa043f550377a73e28d3cf4acc0bd05c4da18d6be6e1a1950")
++    set(CROARING_SHA256_hh
++        "6cf08a6fc82312d74216e8c8c42a29bc61827f5f99ccaa240cfcf1b63539df48")
++    foreach(extension IN ITEMS c h hh)
++      fetchcontent_declare(croaring_${extension}
++                           ${FC_DECLARE_COMMON_OPTIONS}
++                           URL "${CROARING_RELEASE_URL}/roaring.${extension}"
++                           URL_HASH "SHA256=${CROARING_SHA256_${extension}}"
++                           DOWNLOAD_NO_EXTRACT TRUE
++                           TIMEOUT 120
++                           INACTIVITY_TIMEOUT 30)
++      fetchcontent_makeavailable(croaring_${extension})
++    endforeach()
++    set(croaring_SOURCE_DIR "${croaring_c_SOURCE_DIR}")
++    set(croaring_BINARY_DIR "${croaring_c_BINARY_DIR}")
++    file(MAKE_DIRECTORY "${croaring_BINARY_DIR}/include/roaring")
++    foreach(extension IN ITEMS h hh)
++      configure_file("${croaring_${extension}_SOURCE_DIR}/roaring.${extension}"
++                     "${croaring_BINARY_DIR}/include/roaring/roaring.${extension}"
++                     COPYONLY)
++    endforeach()
++    add_library(roaring STATIC "${croaring_SOURCE_DIR}/roaring.c")
++    set_target_properties(roaring PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
++    target_include_directories(roaring
++                               PRIVATE "${croaring_BINARY_DIR}/include/roaring"
++                               PUBLIC "$<BUILD_INTERFACE:${croaring_BINARY_DIR}/include>"
++                                      "$<INSTALL_INTERFACE:${ICEBERG_INSTALL_INCLUDEDIR}>")
++    install(FILES "${croaring_BINARY_DIR}/include/roaring/roaring.h"
++                  "${croaring_BINARY_DIR}/include/roaring/roaring.hh"
++            DESTINATION "${ICEBERG_INSTALL_INCLUDEDIR}/roaring")
+   endif()
+
+-  fetchcontent_declare(croaring
+-                       ${FC_DECLARE_COMMON_OPTIONS}
+-                       URL ${CROARING_URL}
+-                           FIND_PACKAGE_ARGS
+-                           NAMES
+-                           roaring
+-                           CONFIG)
+-  fetchcontent_makeavailable(croaring)
+-
+   if(croaring_SOURCE_DIR)
+     if(NOT TARGET roaring::roaring)
+       add_library(roaring::roaring INTERFACE IMPORTED)
+       target_link_libraries(roaring::roaring INTERFACE roaring)
+-      target_include_directories(roaring::roaring INTERFACE ${croaring_BINARY_DIR}
+-                                                            ${croaring_SOURCE_DIR}/cpp)
+     endif()
+
+     set(CROARING_VENDORED TRUE)

@@ -1,0 +1,6 @@
+error: header values must be `string` or `secret`
+ --> tests/operators/from_kafka/error_avro_registry_headers_value.tql:7:36
+  |
+7 |            schema_registry_headers={Accept: "application/json", Invalid: 42}
+  |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

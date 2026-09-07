@@ -308,9 +308,11 @@ public:
   /// Constructs a callback that uses `offset` for uncommitted partitions.
   rebalance_callback(
     int64_t offset, std::shared_ptr<Atomic<uint64_t>> assignment_generation,
+    std::shared_ptr<std::mutex> assignment_mutex,
     std::shared_ptr<committed_partition_set> committed_partitions)
     : offset_{offset},
       assignment_generation_{std::move(assignment_generation)},
+      assignment_mutex_{std::move(assignment_mutex)},
       committed_partitions_{std::move(committed_partitions)} {
   }
 
@@ -318,6 +320,7 @@ public:
   auto rebalance_cb(RdKafka::KafkaConsumer* consumer, RdKafka::ErrorCode err,
                     std::vector<RdKafka::TopicPartition*>& partitions)
     -> void override {
+    auto guard = std::scoped_lock{*assignment_mutex_};
     if (err == RdKafka::ERR__ASSIGN_PARTITIONS) {
       apply_start_offsets(partitions);
       if (consumer->rebalance_protocol() == "COOPERATIVE") {
@@ -389,6 +392,7 @@ private:
 
   int64_t offset_ = RdKafka::Topic::OFFSET_INVALID;
   std::shared_ptr<Atomic<uint64_t>> assignment_generation_;
+  std::shared_ptr<std::mutex> assignment_mutex_;
   std::shared_ptr<committed_partition_set> committed_partitions_;
 };
 
@@ -527,9 +531,12 @@ auto make_consumer_configuration(record const& options,
   }
 
   cfg.assignment_generation = std::make_shared<Atomic<uint64_t>>(0);
+  cfg.assignment_mutex = std::make_shared<std::mutex>();
   cfg.committed_partitions = std::make_shared<committed_partition_set>();
-  cfg.rebalance_callback = std::make_shared<rebalance_callback>(
-    offset, cfg.assignment_generation, cfg.committed_partitions);
+  cfg.rebalance_callback
+    = std::make_shared<rebalance_callback>(offset, cfg.assignment_generation,
+                                           cfg.assignment_mutex,
+                                           cfg.committed_partitions);
   if (auto err = set_conf_callback(*cfg.conf, "rebalance_cb",
                                    cfg.rebalance_callback.get());
       err) {

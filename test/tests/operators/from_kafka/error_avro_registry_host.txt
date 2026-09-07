@@ -1,0 +1,6 @@
+error: `schema_registry` URL must contain a host
+ --> tests/operators/from_kafka/error_avro_registry_host.tql:6:28
+  |
+6 |            schema_registry="http:///registry"
+  |                            ^^^^^^^^^^^^^^^^^^
+  |

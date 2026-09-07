@@ -1,0 +1,6 @@
+error: `schema_registry_headers` must be a record
+ --> tests/operators/from_kafka/error_avro_registry_headers_type.tql:7:36
+  |
+7 |            schema_registry_headers=42
+  |                                    ^^
+  |

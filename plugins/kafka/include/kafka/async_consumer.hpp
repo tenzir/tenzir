@@ -262,6 +262,36 @@ public:
       return std::span<const std::byte>{data, message_->len};
     }
 
+    /// A null Kafka value is a tombstone; a non-null empty value is not.
+    [[nodiscard]] auto is_tombstone() const -> bool {
+      return message_ and not message_->payload and message_->len == 0;
+    }
+
+    /// Borrow the last header value; a null value falls back to payload framing.
+    auto last_header(char const* name)
+      -> Result<Option<std::span<std::byte const>>, std::string> {
+      auto* headers = static_cast<rd_kafka_headers_t*>(nullptr);
+      auto err = rd_kafka_message_headers(message_, &headers);
+      if (err == RD_KAFKA_RESP_ERR__NOENT) {
+        return None{};
+      }
+      if (err != RD_KAFKA_RESP_ERR_NO_ERROR) {
+        return Err{std::string{rd_kafka_err2str(err)}};
+      }
+      auto const* value = static_cast<void const*>(nullptr);
+      auto size = size_t{0};
+      err = rd_kafka_header_get_last(headers, name, &value, &size);
+      if (err == RD_KAFKA_RESP_ERR__NOENT
+          or (err == RD_KAFKA_RESP_ERR_NO_ERROR and not value)) {
+        return None{};
+      }
+      if (err != RD_KAFKA_RESP_ERR_NO_ERROR) {
+        return Err{std::string{rd_kafka_err2str(err)}};
+      }
+      return Option<std::span<std::byte const>>{
+        std::span{static_cast<std::byte const*>(value), size}};
+    }
+
     /// Returns the message payload length in bytes.
     [[nodiscard]] auto len() const -> size_t {
       return message_ ? message_->len : 0;
