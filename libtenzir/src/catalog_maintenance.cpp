@@ -175,6 +175,9 @@ void catalog_state::advance_maintenance(time now) {
     return;
   }
   deciding_maintenance = true;
+  if (now >= next_policy_flush) {
+    static_cast<void>(flush_policy_markers());
+  }
   close_rebuild_collection(now);
   auto const policy_interval
     = policy ? policy->maintenance_interval() : duration::zero();
@@ -265,7 +268,7 @@ void catalog_state::arm_maintenance_wakeup(time now) {
       next_disposal_check = std::min(next_disposal_check, *entry.deadline);
     }
   }
-  auto deadline = next_disposal_check;
+  auto deadline = std::min(next_disposal_check, next_policy_flush);
   for (auto& [id, transform] : active_transformations) {
     if (transform.stall_reported) {
       continue;
@@ -1292,8 +1295,7 @@ void catalog_state::run_policy_action(const uuid& partition,
       }
       if (policy and not result.marker.empty()) {
         // The commit above lives only in policy memory plus this marker;
-        // the marker may go only once the flush *succeeds*. Per-commit
-        // flushes coalesce -- a flush during an in-flight write joins it.
+        // the marker may go only once the shared, batched flush succeeds.
         release_marker_after_flush(std::filesystem::path{result.marker});
       }
       // A committed action can expose follow-up work on the same data: the
@@ -1496,7 +1498,7 @@ void catalog_state::finish_named_run() {
   // The caller is about to hear that the run happened; the state backing that
   // answer -- the watermarks its transforms recorded -- must be durable
   // first, not sitting in a debounce window that a shutdown would discard.
-  deliver(std::move(run), policy->flush());
+  deliver(std::move(run), flush_policy_markers());
 }
 
 void catalog_state::finish_named_rule_batch(caf::error error) {

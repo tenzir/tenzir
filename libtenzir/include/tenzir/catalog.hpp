@@ -565,12 +565,13 @@ public:
   /// durable and the content no longer matters.
   void retry_finalize_marker(std::filesystem::path marker, chunk_ptr content);
 
-  /// Flushes the policy and releases the marker hold once the flush
-  /// *succeeds*. A failed flush keeps the marker -- it is the commit's only
-  /// durable record until the history write lands -- and checks back after
-  /// the policy's background retry has had its chance. Without a policy, a
-  /// durable history invalidation replaces the flush.
+  /// Queues a marker hold for the next batched policy flush. The shared
+  /// maintenance wakeup schedules the flush; a failed write retains all holds.
   void release_marker_after_flush(std::filesystem::path marker);
+
+  /// Flushes policy state and releases all queued holds on success. Startup,
+  /// named-run completion, and shutdown force this durability boundary.
+  auto flush_policy_markers() -> caf::error;
 
   /// Invalidates stale policy history before discarding policy-less lineage.
   auto invalidate_policy_history() -> caf::error;
@@ -911,6 +912,8 @@ public:
   time next_policy_check = {};
   time next_space_scan = {};
   time next_disposal_check = {};
+  time next_policy_flush = time::max();
+  std::vector<std::filesystem::path> markers_waiting_for_flush = {};
   time eviction_retry_at = {};
   arrow_vendored::date::time_zone const* rebuild_zone = nullptr;
 
@@ -947,6 +950,7 @@ public:
     /// The marker file, kept by the replay for a token-carrying transform so
     /// the commit stays replayable until the policy has persisted it.
     std::filesystem::path marker = {};
+    bool erasure = false;
   };
   std::vector<replayed_transform> replayed_transforms = {};
 

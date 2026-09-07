@@ -783,22 +783,35 @@ auto catalog_state::invalidate_policy_history() -> caf::error {
 }
 
 void catalog_state::release_marker_after_flush(std::filesystem::path marker) {
-  auto error = policy ? policy->flush() : invalidate_policy_history();
+  markers_waiting_for_flush.push_back(std::move(marker));
+  if (next_policy_flush == time::max()) {
+    next_policy_flush = time::clock::now() + std::chrono::seconds{10};
+  }
+  if (self and maintenance_ready) {
+    arm_maintenance_wakeup(time::clock::now());
+  }
+}
+
+auto catalog_state::flush_policy_markers() -> caf::error {
+  auto error = policy ? policy->flush()
+               : markers_waiting_for_flush.empty()
+                 ? caf::error{}
+                 : invalidate_policy_history();
   if (error.valid()) {
     if (not policy) {
       TENZIR_WARN("{} retains replacement lineage because policy history "
                   "could not be invalidated: {}",
                   name, error);
     }
-    // The marker remains the commit's only durable record until either the
-    // history or its invalidation is saved. Retry without releasing the hold.
-    detail::weak_run_delayed(self, defaults::disposal_retry_delay,
-                             [this, marker = std::move(marker)] {
-                               release_marker_after_flush(marker);
-                             });
-    return;
+    // One retry covers the entire batch, including commits arriving meanwhile.
+    next_policy_flush = time::clock::now() + defaults::disposal_retry_delay;
+    return error;
   }
-  release_marker_hold(marker);
+  next_policy_flush = time::max();
+  for (const auto& marker : std::exchange(markers_waiting_for_flush, {})) {
+    release_marker_hold(marker);
+  }
+  return {};
 }
 
 void catalog_state::retire_erased(const uuid& partition,
@@ -889,15 +902,6 @@ auto catalog_state::make_policy() -> caf::error {
 }
 
 auto catalog_state::replay_policy_transforms() -> caf::error {
-  auto release_markers
-    = [this](const std::vector<std::filesystem::path>& markers) {
-        for (const auto& marker : markers) {
-          // Drops the flush reference the replay took; the marker file goes
-          // only once the erasure reference -- held while a recorded input
-          // deletion is unfinished -- is gone too.
-          release_marker_hold(marker);
-        }
-      };
   auto held_markers = std::vector<std::filesystem::path>{};
   for (auto& replayed : replayed_transforms) {
     if (not replayed.marker.empty()) {
@@ -910,6 +914,7 @@ auto catalog_state::replay_policy_transforms() -> caf::error {
     for (auto const& marker : held_markers) {
       release_marker_after_flush(marker);
     }
+    static_cast<void>(flush_policy_markers());
     replayed_transforms.clear();
     return {};
   }
@@ -985,7 +990,11 @@ auto catalog_state::replay_policy_transforms() -> caf::error {
     pending.erase(chosen);
   }
   for (auto& replayed : ordered) {
-    if (not replayed.inputs.empty()) {
+    if (replayed.erasure) {
+      for (const auto& input : replayed.inputs) {
+        policy->on_erased(input);
+      }
+    } else if (not replayed.inputs.empty()) {
       policy->on_replaced(replayed.inputs, replayed.outputs);
     }
     if (not replayed.policy_token.empty() and replayed.token_input) {
@@ -996,12 +1005,10 @@ auto catalog_state::replay_policy_transforms() -> caf::error {
   // The replay kept token-carrying markers alive; they may go only once the
   // fed state is durable.
   if (not held_markers.empty()) {
-    if (policy->flush().valid()) {
-      // The persist retry keeps trying in the background; the markers stay
-      // for the next startup to replay, which is idempotent.
-      return {};
+    for (const auto& marker : held_markers) {
+      release_marker_after_flush(marker);
     }
-    release_markers(held_markers);
+    static_cast<void>(flush_policy_markers());
   }
   return {};
 }
@@ -1041,6 +1048,10 @@ auto catalog_state::retire(const uuid& partition,
       return;
     }
     erase(partition);
+    if (policy) {
+      ++markers_in_disposal[erasure.marker];
+      release_marker_after_flush(erasure.marker);
+    }
     retiring.erase(partition);
     // Pins may go away while a tombstone write is in flight; a release then
     // found nothing parked and did nothing, so parking now would wait for a
@@ -1781,12 +1792,10 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
                      msg.source, msg.reason);
       // Pending policy state becomes durable before teardown; the write is
       // synchronous, so nothing can outrun it.
-      if (const auto& policy = self->state().policy) {
-        if (auto error = policy->flush(); error.valid()) {
-          TENZIR_WARN("{} failed to flush its storage policy during "
-                      "shutdown: {}",
-                      *self, error);
-        }
+      if (auto error = self->state().flush_policy_markers(); error.valid()) {
+        TENZIR_WARN("{} failed to flush its storage policy during "
+                    "shutdown: {}",
+                    *self, error);
       }
       auto dependents = std::vector<caf::actor>{};
       dependents.reserve(self->state().active_transformers.size()

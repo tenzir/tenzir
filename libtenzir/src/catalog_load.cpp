@@ -260,7 +260,7 @@ auto catalog_state::replay_markers() -> std::unordered_set<uuid> {
     // fails, at the next startup. Only from this point on must the scan skip
     // the inputs: loading them while their files disappear would leave
     // phantoms in memory next to their finalized replacements.
-    if (not quarantine) {
+    {
       auto replayed = replayed_transform{};
       for (const auto& input : marker_input_ids) {
         replayed_inputs.insert(input);
@@ -272,6 +272,10 @@ auto catalog_state::replay_markers() -> std::unordered_set<uuid> {
       if (const auto* token_input = transform_v0->token_input()) {
         replayed.token_input = uuid::from_flatbuffer(*token_input);
       }
+      replayed.erasure
+        = quarantine
+          or (not finalized and transform_v0->output_partitions()->size() == 0
+              and replayed.policy_token.empty() and not replayed.token_input);
       // This replay may be finishing a transform whose policy callbacks the
       // crash cut off. Hand the replacement -- and the interrupted commit,
       // when the marker carries a token -- to the policy once it exists, so
