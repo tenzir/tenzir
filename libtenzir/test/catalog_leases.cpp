@@ -9,6 +9,7 @@
 #include "tenzir/catalog.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/index_config.hpp"
+#include "tenzir/io/save.hpp"
 #include "tenzir/partition_paths.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/posix_filesystem.hpp"
@@ -46,6 +47,10 @@ struct fixture {
     factory<synopsis>::initialize();
     std::filesystem::create_directories(paths.index_dir);
     std::filesystem::create_directories(paths.archive_dir);
+    start(std::move(maintenance));
+  }
+
+  void start(maintenance_options maintenance = {}) {
     fs = sys.spawn(posix_filesystem, dbdir);
     catalog = sys.spawn(tenzir::catalog, fs, paths, std::string{"feather"},
                         index_config{}, /*partition_capacity=*/size_t{1024},
@@ -279,6 +284,50 @@ TEST("a disk scan exits without its catalog processing the response") {
       return catalog_actor::behavior_type::make_empty_behavior();
     });
   CHECK(f.await_shutdown());
+}
+
+TEST("failed quarantine replay retains its marker across restarts") {
+  auto f = fixture{};
+  const auto input = f.add_partition();
+  REQUIRE(f.await_shutdown());
+  const auto blocker = f.paths.archive_dir / "quarantined";
+  {
+    // A regular file prevents creation of the quarantine destination directory.
+    auto out = std::ofstream{blocker};
+    out << "blocked";
+  }
+  std::filesystem::create_directories(f.paths.markers_dir);
+  const auto marker = f.paths.marker(uuid::random());
+  REQUIRE(
+    not io::save(marker, as_bytes(create_marker(
+                           {input}, {}, keep_original_partition::no, true)))
+          .valid());
+  for (auto attempt = 0; attempt < 2; ++attempt) {
+    f.start();
+    {
+      auto reader = caf::scoped_actor{f.sys};
+      CHECK(f.candidates(reader, uuid::random()).empty());
+    }
+    REQUIRE(f.await_shutdown());
+    CHECK(std::filesystem::exists(marker));
+    CHECK(std::filesystem::exists(f.store_of(input)));
+    CHECK(std::filesystem::exists(f.paths.partition(input)));
+  }
+  REQUIRE(std::filesystem::remove(blocker));
+  f.start();
+  {
+    auto reader = caf::scoped_actor{f.sys};
+    CHECK(f.candidates(reader, uuid::random()).empty());
+  }
+  CHECK(f.await_deletion(input));
+  const auto deadline = std::chrono::steady_clock::now() + timeout;
+  while (std::filesystem::exists(marker)
+         and std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(10ms);
+  }
+  CHECK(not std::filesystem::exists(marker));
+  REQUIRE(f.await_shutdown());
+  CHECK(std::filesystem::exists(blocker / f.store_of(input).filename()));
 }
 
 TEST("a deduplicated candidate keeps only the queued query's pin") {

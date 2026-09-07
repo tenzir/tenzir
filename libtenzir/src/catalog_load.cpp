@@ -353,6 +353,9 @@ auto catalog_state::replay_markers() -> std::unordered_set<uuid> {
         }
       }
       if (move_failed) {
+        // Keep the unfinished move independent of the policy-flush hold. Only
+        // a later startup can confirm that the quarantined store was moved.
+        ++markers_in_disposal[entry.path()];
         TENZIR_WARN("{} keeps the marker at {} because a quarantine move it "
                     "records did not complete",
                     *self, entry.path());
