@@ -571,7 +571,7 @@ auto catalog_state::begin_rebuild(rebuild_options options) -> caf::error {
       fmt::format("{} refuses to start a rebuild while one is still ongoing "
                   "({} partitions transformed); consider 'tenzir-ctl rebuild "
                   "stop'",
-                  *self, rebuild ? rebuild->transformed : 0));
+                  name, rebuild ? rebuild->transformed : 0));
   }
   // A manual run supersedes the automatic one -- but only once its in-flight
   // batches land. Discarding them would leave their inputs claimed by
@@ -582,12 +582,13 @@ auto catalog_state::begin_rebuild(rebuild_options options) -> caf::error {
     if (rebuild->running > 0) {
       TENZIR_VERBOSE("{} queues a manual rebuild behind the automatic run's "
                      "{} in-flight batch(es)",
-                     *self, rebuild->running);
+                     name, rebuild->running);
       rebuild->stopping = true;
       pending_rebuild.emplace(std::move(options));
       return {};
     }
-    TENZIR_VERBOSE("{} stops the automatic rebuild for a manual one", *self);
+    TENZIR_VERBOSE("{} stops the automatic rebuild for a manual one", name);
+    rebuild->stopping = true;
     finish_rebuild();
   }
   // Number every run, so a superseded run's continuations can tell that the
@@ -602,7 +603,7 @@ auto catalog_state::begin_rebuild(rebuild_options options) -> caf::error {
     rebuild->collected_groups = std::exchange(closed_rebuild_groups, {});
   }
   TENZIR_DEBUG("{} starts a{} rebuild of {}{} partitions with {} thread(s)",
-               *self, rebuild->options.automatic ? "n automatic" : " manual",
+               name, rebuild->options.automatic ? "n automatic" : " manual",
                rebuild->options.all ? "all" : "outdated",
                rebuild->options.undersized ? " and undersized" : "",
                rebuild->options.parallel);
@@ -666,13 +667,30 @@ void catalog_state::finish_rebuild() {
   TENZIR_ASSERT(rebuild);
   auto run = *std::exchange(rebuild, None{});
   if (run.transformed == 0) {
-    TENZIR_VERBOSE("{} had nothing to rebuild", *self);
+    TENZIR_VERBOSE("{} had nothing to rebuild", name);
   } else {
-    TENZIR_INFO("{} rebuilt {} into {} partitions", *self, run.transformed,
+    TENZIR_INFO("{} rebuilt {} into {} partitions", name, run.transformed,
                 run.results);
   }
   auto stop_requests = std::exchange(run.stop_requests, {});
   const auto failure = run.failure;
+  if (run.options.automatic and run.stopping and run.collected_groups) {
+    // A filtered manual run need not cover the automatic work it interrupts.
+    // Preserve unfinished groups, but not visited inputs or fresh arrivals.
+    // After an I/O failure, wait for the next hourly collection before retrying.
+    auto& pending_groups
+      = failure ? open_rebuild_groups : closed_rebuild_groups;
+    for (const auto& [schema, partitions] : *synopses_per_type) {
+      for (const auto& [id, synopsis] : *partitions) {
+        auto group = std::pair{schema, rebuild_day(synopsis->max_import_time)};
+        if (run.collected_groups->contains(group)
+            and is_rebuild_candidate(id, *synopsis, run)
+            and not quarantined_partitions.contains(id)) {
+          pending_groups.insert(std::move(group));
+        }
+      }
+    }
+  }
   // Only the statistics and options are ever read back; the run's bookkeeping
   // grows with the number of partitions it touched, so it does not stay
   // resident for the lifetime of the node.

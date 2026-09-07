@@ -219,6 +219,62 @@ TEST("a closed collection does not rebuild untouched schema day groups") {
               (std::vector{first, second}));
 }
 
+TEST("an interrupted automatic run retains unfinished collection groups") {
+  auto f = fixture{};
+  const auto completed = f.add("completed", 10);
+  const auto remaining = f.add("remaining", 10);
+  const auto erased = f.add("erased", 10);
+  const auto quarantined = f.add("quarantined", 10);
+  auto run = f.make_run(automatic_options());
+  run.collected_groups = f.state.open_rebuild_groups;
+  f.state.open_rebuild_groups.clear();
+  run.horizon = f.state.admission_sequence;
+  run.visited.insert(completed);
+  run.stopping = true;
+  f.state.erase(erased);
+  f.state.quarantined_partitions[quarantined] = "corrupt";
+  // A new arrival cannot extend the interrupted run's admission horizon.
+  f.add("completed", 10);
+  const auto expected = RebuildGroups{
+    {f.state.find_synopsis(remaining)->schema, f.state.rebuild_day(f.clock)}};
+  f.state.rebuild = std::move(run);
+  f.state.finish_rebuild();
+  CHECK(not f.state.rebuild);
+  CHECK_EQUAL(f.state.closed_rebuild_groups, expected);
+  REQUIRE(f.state.last_rebuild);
+  CHECK(not f.state.last_rebuild->collected_groups);
+}
+
+TEST("a manual rebuild preserves the automatic collection it supersedes") {
+  auto f = fixture{};
+  const auto remaining = f.add("remaining", 10);
+  f.add("remaining", 10);
+  const auto expected = RebuildGroups{
+    {f.state.find_synopsis(remaining)->schema, f.state.rebuild_day(f.clock)}};
+  f.state.closed_rebuild_groups = expected;
+  f.state.closed_admission = f.state.admission_sequence;
+  REQUIRE(not f.state.begin_rebuild(automatic_options()).valid());
+  CHECK(f.state.closed_rebuild_groups.empty());
+  REQUIRE(not f.state.begin_rebuild(all_options()).valid());
+  REQUIRE(f.state.rebuild);
+  CHECK(not f.state.rebuild->options.automatic);
+  CHECK_EQUAL(f.state.closed_rebuild_groups, expected);
+}
+
+TEST("a failed automatic run defers unfinished groups until the next hour") {
+  auto f = fixture{};
+  f.add("remaining", 10);
+  auto run = f.make_run(automatic_options());
+  const auto expected = f.state.open_rebuild_groups;
+  run.collected_groups = std::exchange(f.state.open_rebuild_groups, {});
+  run.stopping = true;
+  run.failure = caf::make_error(ec::filesystem_error, "injected failure");
+  f.state.rebuild = std::move(run);
+  f.state.finish_rebuild();
+  CHECK(f.state.closed_rebuild_groups.empty());
+  CHECK_EQUAL(f.state.open_rebuild_groups, expected);
+}
+
 TEST("selection skips partitions erased after the run started") {
   auto f = fixture{};
   const auto first = f.add("test", 10);
