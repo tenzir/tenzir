@@ -410,8 +410,8 @@ auto catalog_state::initialize(std::vector<partition_synopsis_pair> partitions)
   return caf::none;
 }
 
-auto catalog_state::merge(std::vector<partition_synopsis_pair> partitions)
-  -> caf::result<atom::ok> {
+auto catalog_state::merge(std::vector<partition_synopsis_pair> partitions,
+                          merge_source source) -> caf::result<atom::ok> {
   if (partitions.empty()) {
     return atom::ok_v;
   }
@@ -419,12 +419,20 @@ auto catalog_state::merge(std::vector<partition_synopsis_pair> partitions)
     // Clone each touched schema exactly once for the whole batch.
     auto cloned = std::unordered_map<type, schema_synopsis_map*>{};
     for (auto& [id, synopsis] : partitions) {
+      const auto footprint = synopsis->store_file.size
+                             + synopsis->indexes_file.size
+                             + synopsis->sketches_file.size;
       if (auto old = find_synopsis(id)) {
         catalog_bytes -= old->store_file.size + old->indexes_file.size
                          + old->sketches_file.size;
+      } else if (source == merge_source::ingest) {
+        // A scan can see persisted ingest files before their admission. Credit
+        // them conservatively so admission cannot count those bytes twice.
+        // This may undercount unrelated overhead until the next scan, but
+        // never evicts data because an ingest file was counted as overhead.
+        external_bytes -= std::min(external_bytes, footprint);
       }
-      catalog_bytes += synopsis->store_file.size + synopsis->indexes_file.size
-                       + synopsis->sketches_file.size;
+      catalog_bytes += footprint;
       admissions[id] = ++admission_sequence;
       ++storage_generation;
       policy_dirty.insert(id);
@@ -1585,7 +1593,8 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
           synopsis->schema,
           self->state().rebuild_day(synopsis->max_import_time));
       }
-      auto result = self->state().merge(std::move(partitions));
+      auto result = self->state().merge(std::move(partitions),
+                                        catalog_state::merge_source::ingest);
       self->state().advance_maintenance(now);
       for (const auto& listener : self->state().partition_creation_listeners) {
         self->mail(atom::update_v, notification).send(listener);

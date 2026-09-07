@@ -103,6 +103,32 @@ TEST("eviction crosses schemas") {
   CHECK_EQUAL(f.state.select_eviction_batch(2), (std::vector{oldest, next}));
 }
 
+TEST("ingest admission does not double count files seen by a directory scan") {
+  auto f = fixture{};
+  const auto existing = f.add();
+  // The scan already sees 1000 bytes of unadmitted ingest and 500 bytes of
+  // unrelated overhead, in addition to the catalog's existing partition.
+  f.state.on_space_measured(2500);
+  CHECK_EQUAL(f.state.external_bytes, uint64_t{1500});
+  auto synopsis = f.state.find_synopsis(existing);
+  const auto ingested = uuid::random();
+  std::ignore = f.state.merge({{ingested, synopsis}},
+                              catalog_state::merge_source::ingest);
+  CHECK_EQUAL(f.state.catalog_bytes, uint64_t{2000});
+  CHECK_EQUAL(f.state.external_bytes, uint64_t{500});
+  // Neither repeated admissions nor replacement outputs take another credit.
+  std::ignore = f.state.merge({{ingested, synopsis}},
+                              catalog_state::merge_source::ingest);
+  CHECK_EQUAL(f.state.catalog_bytes, uint64_t{2000});
+  CHECK_EQUAL(f.state.external_bytes, uint64_t{500});
+  std::ignore = f.state.merge({{uuid::random(), synopsis}});
+  CHECK_EQUAL(f.state.external_bytes, uint64_t{500});
+  // A scan may not have seen all incoming bytes. Never underflow the estimate.
+  std::ignore = f.state.merge({{uuid::random(), synopsis}},
+                              catalog_state::merge_source::ingest);
+  CHECK_EQUAL(f.state.external_bytes, uint64_t{0});
+}
+
 TEST("eviction skips a partition a transform is holding") {
   auto f = fixture{};
   const auto first = f.add();

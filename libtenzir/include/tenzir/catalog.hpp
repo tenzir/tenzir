@@ -486,8 +486,12 @@ public:
   auto initialize(std::vector<partition_synopsis_pair> partitions)
     -> caf::error;
 
-  /// Add a new partition synopsis.
-  auto merge(std::vector<partition_synopsis_pair> partitions)
+  enum class merge_source { ingest, replacement };
+
+  /// Add partition synopses, crediting newly ingested files against the
+  /// directory scan's estimate of bytes not yet assigned to partitions.
+  auto merge(std::vector<partition_synopsis_pair> partitions,
+             merge_source source = merge_source::replacement)
     -> caf::result<atom::ok>;
 
   /// Whether the policy hears about an erasure. The apply handler passes `no`
