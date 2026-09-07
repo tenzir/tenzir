@@ -226,6 +226,31 @@ struct fixture {
 
 } // namespace
 
+TEST("a deduplicated candidate keeps only the queued query's pin") {
+  auto f = fixture{};
+  const auto id = f.add_partition();
+  const auto other = f.add_partition();
+  auto reader = caf::scoped_actor{f.sys};
+  const auto queued = uuid::random();
+  const auto duplicate = uuid::random();
+  REQUIRE_EQUAL(fixture::ids_of(f.candidates(reader, queued)).size(),
+                size_t{2});
+  REQUIRE_EQUAL(fixture::ids_of(f.candidates(reader, duplicate)).size(),
+                size_t{2});
+  // Deduplication releases the new query's pin, not the queued read's pin.
+  f.release(reader, duplicate, id);
+  auto eraser = caf::scoped_actor{f.sys};
+  CHECK_EQUAL(f.erase(eraser, id), caf::error{});
+  CHECK(f.files_exist(id));
+  // Finishing the queued read permits disposal while both queries still
+  // hold other candidates. No global idle point or owner DOWN is needed.
+  f.release(reader, queued, id);
+  CHECK(f.await_deletion(id));
+  CHECK(f.files_exist(other));
+  f.release(reader, queued);
+  f.release(reader, duplicate);
+}
+
 TEST("a pinned partition keeps its files until the pin is released") {
   auto f = fixture{};
   const auto id = f.add_partition();
