@@ -246,7 +246,6 @@ void index_state::decommission_active_partition(
         // down.
         auto apsv = std::vector<partition_synopsis_pair>{{id, ps}};
         self->mail(atom::merge_v, std::move(apsv))
-          .urgent()
           .request(catalog, caf::infinite)
           .then(
             [=, this](atom::ok) {
@@ -389,66 +388,6 @@ std::size_t index_state::memusage() const {
   return usage;
 }
 
-auto active_transformations_status(
-  index_actor::stateful_pointer<index_state> self) -> record {
-  auto transformations = list{};
-  transformations.reserve(self->state().active_transformations.size());
-  for (const auto& [id, status] : self->state().active_transformations) {
-    auto schemas = list{};
-    auto schema_names = std::vector<std::string>{};
-    for (const auto& partition : status.input_partitions) {
-      auto schema = std::string{partition.schema.name()};
-      if (std::ranges::find(schema_names, schema) == schema_names.end()) {
-        schema_names.push_back(schema);
-        schemas.emplace_back(std::move(schema));
-      }
-    }
-    const auto phase = status.progress->phase.load(std::memory_order_relaxed);
-    auto input = record{
-      {"selected", status.input_partitions.size()},
-      {"loaded",
-       status.progress->loaded_inputs.load(std::memory_order_relaxed)},
-    };
-    auto partitions = list{};
-    partitions.reserve(status.input_partitions.size());
-    for (const auto& partition : status.input_partitions) {
-      partitions.emplace_back(fmt::to_string(partition.uuid));
-    }
-    input["partitions"] = std::move(partitions);
-    const auto current
-      = status.progress->current_input.load(std::memory_order_relaxed);
-    if (phase == PartitionTransformPhase::loading_input
-        and current < status.input_partitions.size()) {
-      input["current"] = fmt::to_string(status.input_partitions[current].uuid);
-    }
-    transformations.emplace_back(record{
-      {"id", fmt::to_string(id)},
-      {"origin", status.origin},
-      {"schemas", std::move(schemas)},
-      {"phase", std::string{partition_transform_phase_name(phase)}},
-      {"duration", time::clock::now() - status.started_at},
-      {"input", std::move(input)},
-      {"output-partitions",
-       status.progress->output_partitions.load(std::memory_order_relaxed)},
-      {"stores",
-       record{
-         {"launched",
-          status.progress->stores_launched.load(std::memory_order_relaxed)},
-         {"finished",
-          status.progress->stores_finished.load(std::memory_order_relaxed)},
-       }},
-      {"partition-files",
-       record{
-         {"total", status.progress->partition_files_total.load(
-                     std::memory_order_relaxed)},
-         {"written", status.progress->partition_files_written.load(
-                       std::memory_order_relaxed)},
-       }},
-    });
-  }
-  return record{{"active-transforms", std::move(transformations)}};
-}
-
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       filesystem_actor filesystem, catalog_actor catalog,
@@ -468,24 +407,6 @@ index(index_actor::stateful_pointer<index_state> self,
                  "{} events",
                  *self, dir, partition_capacity);
   self->state().index_opts["cardinality"] = partition_capacity;
-  // The transformer needs both of these to size its share of the memory
-  // budget. Passing them through `index_opts` keeps its spawn signature
-  // unchanged.
-  if (auto budget = caf::get_if<caf::config_value::integer>(
-        &content(self->system().config()), "tenzir.rebuild-memory-budget")) {
-    if (*budget < 0) {
-      auto error
-        = caf::make_error(ec::invalid_configuration,
-                          "tenzir.rebuild-memory-budget must not be negative");
-      TENZIR_ERROR("{}", render(error));
-      self->quit(error);
-      return index_actor::behavior_type::make_empty_behavior();
-    }
-    self->state().index_opts["rebuild-memory-budget"] = *budget;
-  }
-  self->state().index_opts["rebuild-parallelism"]
-    = caf::get_or(content(self->system().config()), "tenzir.automatic-rebuild",
-                  caf::config_value::integer{1});
   self->state().synopsis_opts = std::move(index_config);
   if (dir != catalog_dir) {
     TENZIR_VERBOSE("{} uses {} for catalog data", *self, catalog_dir);
@@ -629,8 +550,8 @@ index(index_actor::stateful_pointer<index_state> self,
       return self->state().flush();
     },
     // -- status_client_actor --------------------------------------------------
-    [self](atom::status, status_verbosity, duration) -> record {
-      return active_transformations_status(self);
+    [](atom::status, status_verbosity, duration) -> record {
+      return {};
     },
     [self](const caf::exit_msg& msg) {
       TENZIR_VERBOSE("{} received EXIT from {} with reason: {}", *self,

@@ -60,6 +60,65 @@
 
 namespace tenzir {
 
+auto catalog_state::active_transformations_status() const -> record {
+  auto transformations = list{};
+  transformations.reserve(active_transformations.size());
+  for (const auto& [id, status] : active_transformations) {
+    auto schemas = list{};
+    auto schema_names = std::vector<std::string>{};
+    for (const auto& partition : status.input_partitions) {
+      auto schema = std::string{partition.schema.name()};
+      if (std::ranges::find(schema_names, schema) == schema_names.end()) {
+        schema_names.push_back(schema);
+        schemas.emplace_back(std::move(schema));
+      }
+    }
+    const auto phase = status.progress->phase.load(std::memory_order_relaxed);
+    auto input = record{
+      {"selected", status.input_partitions.size()},
+      {"loaded",
+       status.progress->loaded_inputs.load(std::memory_order_relaxed)},
+    };
+    auto partitions = list{};
+    partitions.reserve(status.input_partitions.size());
+    for (const auto& partition : status.input_partitions) {
+      partitions.emplace_back(fmt::to_string(partition.uuid));
+    }
+    input["partitions"] = std::move(partitions);
+    const auto current
+      = status.progress->current_input.load(std::memory_order_relaxed);
+    if (phase == PartitionTransformPhase::loading_input
+        and current < status.input_partitions.size()) {
+      input["current"] = fmt::to_string(status.input_partitions[current].uuid);
+    }
+    transformations.emplace_back(record{
+      {"id", fmt::to_string(id)},
+      {"origin", status.origin},
+      {"schemas", std::move(schemas)},
+      {"phase", std::string{partition_transform_phase_name(phase)}},
+      {"duration", time::clock::now() - status.started_at},
+      {"input", std::move(input)},
+      {"output-partitions",
+       status.progress->output_partitions.load(std::memory_order_relaxed)},
+      {"stores",
+       record{
+         {"launched",
+          status.progress->stores_launched.load(std::memory_order_relaxed)},
+         {"finished",
+          status.progress->stores_finished.load(std::memory_order_relaxed)},
+       }},
+      {"partition-files",
+       record{
+         {"total", status.progress->partition_files_total.load(
+                     std::memory_order_relaxed)},
+         {"written", status.progress->partition_files_written.load(
+                       std::memory_order_relaxed)},
+       }},
+    });
+  }
+  return record{{"active-transforms", std::move(transformations)}};
+}
+
 auto create_marker(const std::vector<uuid>& in, const std::vector<uuid>& out,
                    keep_original_partition keep, bool quarantine,
                    std::string_view policy_token, Option<uuid> token_input,
@@ -154,7 +213,7 @@ void catalog_state::transform(
   ast::pipeline pipe, std::vector<partition_info> selected,
   keep_original_partition keep, std::string origin, std::string policy_token,
   std::function<void(partition_apply_result&)> success,
-  std::function<void(caf::error&)> failure) {
+  std::function<void(caf::error&)> failure, TransformOptions options) {
   if (selected.empty()) {
     auto error = caf::make_error(ec::invalid_argument, "no partitions given");
     failure(error);
@@ -195,14 +254,25 @@ void catalog_state::transform(
     success(result);
     return;
   }
-  /// Yummy. Partitioned Foam. :)
-  auto transformer
-    = self->spawn(partition_transformer,
-                  std::string{store_actor_plugin->name()}, synopsis_opts,
-                  index_opts, filesystem, std::move(input_partitions), pipe,
-                  paths.partition_template(), paths.archive_dir,
-                  paths.transformer_partition_template(),
-                  paths.transformer_synopsis_template(), std::move(origin));
+  auto const transformation_id = uuid::random();
+  auto progress = std::make_shared<PartitionTransformProgress>();
+  progress->id = fmt::to_string(transformation_id);
+  active_transformations.emplace(transformation_id,
+                                 ActivePartitionTransform{
+                                   .progress = progress,
+                                   .input_partitions = input_partitions,
+                                   .origin = origin,
+                                 });
+  arm_maintenance_wakeup(time::clock::now());
+  auto transformer = self->spawn(
+    partition_transformer, std::string{store_actor_plugin->name()},
+    synopsis_opts, index_opts, filesystem, std::move(input_partitions), pipe,
+    paths.partition_template(), paths.archive_dir,
+    paths.transformer_partition_template(),
+    paths.transformer_synopsis_template(), std::move(origin),
+    options.minimum_partition_reduction, options.minimum_reduction_ratio,
+    std::move(options.required_inputs), options.input_byte_budget,
+    options.rebuild_batch_size, progress);
   /// Monitor the actor to remove it from the collection of active
   /// transformers.
   auto transformer_addr = transformer->address();
@@ -231,8 +301,11 @@ void catalog_state::transform(
   auto output_claims = std::make_shared<std::vector<uuid>>();
   auto deliver
     = [this, success = std::move(success), failure = std::move(failure),
-       corrected_partitions, marker_path, commit_at_restart,
-       output_claims](caf::expected<partition_apply_result>&& result) mutable {
+       corrected_partitions, marker_path, commit_at_restart, output_claims,
+       transformation_id,
+       progress](caf::expected<partition_apply_result>&& result) mutable {
+        progress->set_phase(PartitionTransformPhase::done);
+        active_transformations.erase(transformation_id);
         if (not *commit_at_restart) {
           // The marker stays if a deferred erasure still needs it as a
           // tombstone.
@@ -265,8 +338,15 @@ void catalog_state::transform(
     .request(transformer, caf::infinite)
     .then(
       [this, deliver, keep, marker_path, commit_at_restart, output_claims,
-       policy_token = std::move(policy_token),
-       transformer](partition_transformer_result& transform_result) mutable {
+       policy_token = std::move(policy_token), transformer,
+       progress](partition_transformer_result& transform_result) mutable {
+        if (transform_result.skipped) {
+          deliver(partition_apply_result{.input_partitions = {},
+                                         .output_partitions = {},
+                                         .input_complete = false,
+                                         .skipped = true});
+          return;
+        }
         auto old_partition_ids = std::vector<uuid>{};
         old_partition_ids.reserve(transform_result.input_partitions.size());
         for (const auto& partition : transform_result.input_partitions) {
@@ -303,6 +383,7 @@ void catalog_state::transform(
         auto transformed_input_partitions
           = std::move(transform_result.input_partitions);
         auto input_complete = transform_result.input_complete;
+        progress->set_phase(PartitionTransformPhase::writing_marker);
         // Record in-progress marker, with the policy token riding along so
         // a crash between the durable marker and the caller's on_committed
         // still lands the commit at the next startup.
@@ -327,11 +408,15 @@ void catalog_state::transform(
                 renames.emplace_back(paths.transformer_synopsis(aps.uuid),
                                      paths.synopsis(aps.uuid));
               }
+              progress->set_phase(
+                PartitionTransformPhase::moving_partition_files);
               self->mail(atom::move_v, std::move(renames))
                 .request(filesystem, caf::infinite)
                 .then(
                   // Delete input partitions if necessary.
                   [=, this, apsv = std::move(apsv)](atom::done) mutable {
+                    progress->set_phase(
+                      PartitionTransformPhase::updating_catalog);
                     // Merging here instead of going through the `atom::merge`
                     // handler keeps the partition creation listeners tied to
                     // ingest; they are not notified about transform outputs.
@@ -418,6 +503,8 @@ void catalog_state::transform(
                           });
                       return;
                     }
+                    progress->set_phase(
+                      PartitionTransformPhase::erasing_input_partitions);
                     auto erased = std::vector<partition_synopsis_pair>{};
                     erased.reserve(old_partition_ids.size());
                     // A replacement is not an erasure to the policy: the data

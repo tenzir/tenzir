@@ -313,8 +313,7 @@ struct partition_apply_result {
       .fields(f.field("input-partitions", x.input_partitions),
               f.field("output-partitions", x.output_partitions),
               f.field("input-complete", x.input_complete),
-              f.field("marker", x.marker),
-              f.field("skipped", x.skipped));
+              f.field("skipped", x.skipped), f.field("marker", x.marker));
   }
 };
 

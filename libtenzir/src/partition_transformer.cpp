@@ -55,6 +55,62 @@
 
 namespace tenzir {
 
+auto partition_transform_phase_name(PartitionTransformPhase phase)
+  -> std::string_view {
+  switch (phase) {
+    case PartitionTransformPhase::loading_input:
+      return "loading and transforming input";
+    case PartitionTransformPhase::finishing_pipeline:
+      return "finishing the transform pipeline";
+    case PartitionTransformPhase::creating_output:
+      return "creating output partitions";
+    case PartitionTransformPhase::persisting_stores:
+      return "persisting output stores";
+    case PartitionTransformPhase::packing_partition_metadata:
+      return "packing partition metadata";
+    case PartitionTransformPhase::writing_partition_files:
+      return "writing partition metadata";
+    case PartitionTransformPhase::writing_marker:
+      return "writing the in-progress marker";
+    case PartitionTransformPhase::moving_partition_files:
+      return "moving output files into place";
+    case PartitionTransformPhase::updating_catalog:
+      return "updating the catalog";
+    case PartitionTransformPhase::erasing_input_partitions:
+      return "erasing input partitions";
+    case PartitionTransformPhase::done:
+      return "done";
+  }
+  TENZIR_UNREACHABLE();
+}
+
+void PartitionTransformProgress::set_phase(PartitionTransformPhase next) {
+  const auto previous = phase.exchange(next, std::memory_order_relaxed);
+  if (previous == next) {
+    return;
+  }
+  if (report_next_phase_transition.exchange(false, std::memory_order_relaxed)) {
+    TENZIR_WARN("partition transform {} transitioned from '{}' to '{}' after "
+                "being reported stalled",
+                id, partition_transform_phase_name(previous),
+                partition_transform_phase_name(next));
+  }
+}
+
+void PartitionTransformProgress::report_next_phase_transition_from(
+  PartitionTransformPhase previous) {
+  report_next_phase_transition.store(true, std::memory_order_relaxed);
+  const auto current = phase.load(std::memory_order_relaxed);
+  if (current != previous
+      and report_next_phase_transition.exchange(false,
+                                                std::memory_order_relaxed)) {
+    TENZIR_WARN("partition transform {} transitioned from '{}' to '{}' after "
+                "being reported stalled",
+                id, partition_transform_phase_name(previous),
+                partition_transform_phase_name(current));
+  }
+}
+
 namespace {
 
 struct memory_budget {
@@ -228,7 +284,8 @@ void quit_or_stall(
   } else {
     TENZIR_ASSERT(std::holds_alternative<stores_are_finished>(shutdown_state),
                   "unexpected variant content");
-    deliver_result(self, std::move(result));
+    result.promise.deliver(std::move(result.result));
+    self->quit();
   }
 }
 
@@ -311,7 +368,8 @@ void quit_or_stall(
   } else {
     auto* finished = std::get_if<transformer_is_finished>(&shutdown_state);
     TENZIR_ASSERT(finished != nullptr, "unexpected variant content");
-    deliver_result(self, std::move(*finished));
+    finished->promise.deliver(std::move(finished->result));
+    self->quit();
   }
 }
 
@@ -781,13 +839,14 @@ void partition_transformer_state::fulfill(
         promise.deliver(std::move(e));
         self->quit();
       });
-  progress->partition_files_total.store(stream_data.partition_chunks->size(),
-                                        std::memory_order_relaxed);  auto synopsis_sizes = std::unordered_map<uuid, uint64_t>{};
+  auto synopsis_sizes = std::unordered_map<uuid, uint64_t>{};
   for (const auto& [id, synopsis_chunk] : *stream_data.synopsis_chunks) {
     if (synopsis_chunk) {
       synopsis_sizes[id] = synopsis_chunk->size();
     }
   }
+  progress->partition_files_total.store(stream_data.partition_chunks->size(),
+                                        std::memory_order_relaxed);
   for (auto& [id, schema, partition_chunk] : *stream_data.partition_chunks) {
     auto rng = self->state().data.equal_range(schema);
     auto it = std::find_if(rng.first, rng.second, [id = id](auto const& kv) {

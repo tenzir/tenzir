@@ -37,7 +37,6 @@
 #include <tenzir/uuid.hpp>
 
 #include <arrow/table.h>
-#include <arrow/vendored/datetime.h>
 #include <caf/actor_registry.hpp>
 #include <caf/expected.hpp>
 #include <caf/policy/select_all.hpp>
@@ -46,10 +45,7 @@
 #include <caf/type_id.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
-namespace date = arrow_vendored::date;
 
-#include <cmath>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>

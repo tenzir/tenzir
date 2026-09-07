@@ -236,6 +236,7 @@ inline constexpr caf::timespan rebuild_interval = std::chrono::minutes{30};
 /// How long the catalog waits before retrying a partition disposal whose file
 /// operations failed.
 inline constexpr caf::timespan disposal_retry_delay = std::chrono::minutes{1};
+
 /// Memory budget for the catalog's on-demand cache of deferred Bloom-filter
 /// sketches (see `tenzir.index.lazy-sketches`). Loaded sketches are evicted
 /// least-recently-used once the total exceeds this many bytes.

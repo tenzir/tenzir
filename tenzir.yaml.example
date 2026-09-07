@@ -302,14 +302,10 @@ tenzir:
   # it to 0 to disable the memory limit.
   #rebuild-memory-budget: 1073741824
 
-  # Minimum fraction of input partitions that a closed rebuild time bucket
-  # must eliminate. The current four-hour bucket instead needs to eliminate at
-  # least five partitions.
+  # Minimum fraction of input partitions that a closed calendar day must
+  # eliminate. Hourly collections in the current day must eliminate at least
+  # one partition.
   rebuild-merge-margin: 0.6
-
-  # IANA time zone used to align four-hour and daily rebuild buckets. Defaults
-  # to the system time zone.
-  #rebuild-timezone: Europe/Berlin
 
   # Zstd compression level applied to the Feather store backend.
   # zstd-compression-level: <default>

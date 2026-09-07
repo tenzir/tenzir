@@ -51,6 +51,7 @@
 #endif
 
 #include <chrono>
+#include <cmath>
 #include <ranges>
 #include <string_view>
 #include <utility>
@@ -300,6 +301,8 @@ auto parse_maintenance_options(const caf::settings& settings)
     = get_or(settings, "tenzir.rebuild-interval", defaults::rebuild_interval),
     .rebuild_timezone
     = get_or(settings, "tenzir.rebuild-timezone", std::string{}),
+    .rebuild_merge_margin
+    = get_or(settings, "tenzir.rebuild-merge-margin", 0.6),
     .space = parse_space_options(settings),
     // The compaction pool is bounded separately from rebuild parallelism, so
     // that a slow user-authored pipeline cannot stall a rebuild. One slot by
@@ -311,6 +314,19 @@ auto parse_maintenance_options(const caf::settings& settings)
     = get_or(settings, "tenzir.compaction-slots",
              get_or(settings, "plugins.compaction.time.step-size", size_t{1})),
   };
+  if (auto budget
+      = caf::get_if<int64_t>(&settings, "tenzir.rebuild-memory-budget")) {
+    if (*budget < 0) {
+      diagnostic::error("tenzir.rebuild-memory-budget must not be negative")
+        .throw_();
+    }
+    result.rebuild_memory_budget = static_cast<uint64_t>(*budget);
+  }
+  if (not std::isfinite(result.rebuild_merge_margin)
+      or result.rebuild_merge_margin < 0 or result.rebuild_merge_margin > 1) {
+    diagnostic::error("tenzir.rebuild-merge-margin must be between 0 and 1")
+      .throw_();
+  }
   if (caf::get_if<duration>(&settings, "tenzir.rebuild-interval")
       and result.rebuild_interval > duration::zero()) {
     TENZIR_WARN("tenzir.rebuild-interval is deprecated: automatic rebuild "

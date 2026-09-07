@@ -15,7 +15,6 @@
 #include "tenzir/catalog.hpp"
 #include "tenzir/importer.hpp"
 #include "tenzir/partition_paths.hpp"
-#include "tenzir/partition_transformer.hpp"
 #include "tenzir/plugin_fwd.hpp"
 #include "tenzir/query_context.hpp"
 #include "tenzir/uuid.hpp"
@@ -25,7 +24,6 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
 
-#include <memory>
 #include <queue>
 #include <unordered_map>
 #include <vector>
@@ -141,13 +139,6 @@ struct index_state {
   partition_paths paths = {};
 
   bool shutting_down = false;
-
-  /// Whether a `flush_to_disk` request arrived that has not been written yet.
-  bool flush_pending = false;
-
-  /// Whether the coalescing timer is armed. While it is, `flush_to_disk` only
-  /// sets `flush_pending` instead of issuing another write.
-  bool flush_scheduled = false;
 
   /// Plugin responsible for spawning new partition-local stores.
   const tenzir::store_actor_plugin* store_actor_plugin = {};

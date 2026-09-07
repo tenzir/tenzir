@@ -1342,36 +1342,6 @@ auto catalog_state::erase_and_extract(const uuid& partition, std::string error)
   }
   return retire(partition, std::move(error));
 }
-
-auto catalog_state::finalize_lookup(catalog_lookup_result&& candidates,
-                                    stopwatch::time_point start) const
-  -> catalog_lookup_result {
-  // Sort each schema's partitions by recency and gather statistics.
-  auto num_candidate_partitions = size_t{0};
-  auto num_candidate_events = size_t{0};
-  for (auto& [type, per_schema] : candidates.candidate_infos) {
-    std::sort(per_schema.partition_infos.begin(),
-              per_schema.partition_infos.end(),
-              [](const partition_info& lhs, const partition_info& rhs) {
-                return lhs.max_import_time > rhs.max_import_time;
-              });
-    num_candidate_partitions += per_schema.partition_infos.size();
-    num_candidate_events
-      += std::transform_reduce(per_schema.partition_infos.begin(),
-                               per_schema.partition_infos.end(), size_t{0},
-                               std::plus<>{}, [](const auto& partition) {
-                                 return partition.events;
-                               });
-  }
-  auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
-    stopwatch::now() - start);
-  TENZIR_INFO("catalog found {} candidate partitions ({} events) in "
-              "{} microseconds",
-              num_candidate_partitions, num_candidate_events, delta.count());
-  TENZIR_TRACEPOINT(catalog_lookup, delta.count(), num_candidate_partitions);
-  return std::move(candidates);
-}
-
 auto catalog_state::lookup(expression expr)
   -> caf::expected<catalog_lookup_result> {
   // The catalog's own engine carries no sketch budget: its internal callers
@@ -1408,6 +1378,24 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
   // For historic reasons, the `tenzir.max-partition-size` is stored as the
   // `cardinality` in the value index options.
   self->state().index_opts["cardinality"] = partition_capacity;
+  // The transformer needs both of these to size its share of the memory
+  // budget. Passing them through `index_opts` keeps its spawn signature
+  // unchanged.
+  if (auto budget = caf::get_if<caf::config_value::integer>(
+        &content(self->system().config()), "tenzir.rebuild-memory-budget")) {
+    if (*budget < 0) {
+      auto error
+        = caf::make_error(ec::invalid_configuration,
+                          "tenzir.rebuild-memory-budget must not be negative");
+      TENZIR_ERROR("{}", render(error));
+      self->quit(error);
+      return catalog_actor::behavior_type::make_empty_behavior();
+    }
+    self->state().index_opts["rebuild-memory-budget"] = *budget;
+  }
+  self->state().index_opts["rebuild-parallelism"]
+    = caf::get_or(content(self->system().config()), "tenzir.automatic-rebuild",
+                  caf::config_value::integer{1});
   self->state().partition_capacity = partition_capacity;
   self->state().desired_batch_size = desired_batch_size;
   self->state().deferred_erase_timeout = deferred_erase_timeout;
@@ -1714,7 +1702,7 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
       return self->state().policy->describe();
     },
     [self](atom::status, status_verbosity, duration) {
-      auto result = record{};
+      auto result = self->state().active_transformations_status();
       if (auto rebuild = self->state().rebuild_status(); not rebuild.empty()) {
         result["rebuild"] = std::move(rebuild);
       }

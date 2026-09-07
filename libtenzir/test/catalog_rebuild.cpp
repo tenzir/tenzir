@@ -35,7 +35,7 @@ struct fixture {
     factory<synopsis>::initialize();
     state.partition_capacity = capacity;
     state.desired_batch_size = capacity;
-    state.rebuild_zone = std::chrono::locate_zone("UTC");
+    state.rebuild_zone = arrow_vendored::date::locate_zone("UTC");
   }
 
   /// Adds a partition and returns its id. Each call advances the clock, so
@@ -69,6 +69,7 @@ struct fixture {
 
   static auto make_run(rebuild_options options) -> rebuild_run {
     auto run = rebuild_run{};
+    run.started_at = tenzir::time{} + std::chrono::hours{1};
     run.options = std::move(options);
     run.options.expression = trivially_true_expression();
     return run;
@@ -126,6 +127,56 @@ TEST("a batch stops at the partition capacity") {
   // No second input fits under the event cap; --all permits a lone rewrite.
   CHECK_EQUAL(fixture::ids_of(f.state.select_rebuild_batch(run)),
               (std::vector{first}));
+}
+
+TEST("closed days can produce multiple outputs with the configured reduction") {
+  auto f = fixture{};
+  for (auto i = 0; i < 5; ++i) {
+    f.add("test", 400);
+  }
+  auto run = f.make_run(automatic_options());
+  run.started_at += std::chrono::days{1};
+  CHECK_EQUAL(f.state.select_rebuild_batch(run).size(), size_t{5});
+  f.state.maintenance.rebuild_merge_margin = 0.7;
+  CHECK(f.state.select_rebuild_batch(run).empty());
+}
+
+TEST("an explicit rebuild memory budget is divided among concurrent batches") {
+  auto f = fixture{};
+  for (auto i = 0; i < 4; ++i) {
+    f.add("test", 10, version::current_partition_version, uint64_t{100});
+  }
+  f.state.maintenance.rebuild_memory_budget = 400;
+  auto run = f.make_run(automatic_options());
+  run.options.parallel = 2;
+  CHECK_EQUAL(f.state.select_rebuild_batch(run).size(), size_t{2});
+  CHECK_EQUAL(run.batch_byte_budget, uint64_t{200});
+  f.state.maintenance.rebuild_memory_budget = 0;
+  CHECK_EQUAL(f.state.select_rebuild_batch(run).size(), size_t{4});
+}
+
+TEST("transform progress is reported by the catalog") {
+  auto f = fixture{};
+  auto const id = f.add("test", 10);
+  auto progress = std::make_shared<PartitionTransformProgress>();
+  progress->set_phase(PartitionTransformPhase::persisting_stores);
+  progress->stores_launched.store(2, std::memory_order_relaxed);
+  progress->stores_finished.store(1, std::memory_order_relaxed);
+  f.state.active_transformations.emplace(
+    uuid::random(),
+    ActivePartitionTransform{
+      .progress = progress,
+      .input_partitions = {partition_info{id, *f.state.find_synopsis(id)}},
+      .origin = "rebuild",
+    });
+  auto status = f.state.active_transformations_status();
+  auto const& active = as<list>(status.at("active-transforms"));
+  REQUIRE_EQUAL(active.size(), size_t{1});
+  auto const& transform = as<record>(active.front());
+  CHECK_EQUAL(as<std::string>(transform.at("phase")),
+              "persisting output stores");
+  CHECK_EQUAL(as<uint64_t>(as<record>(transform.at("stores")).at("finished")),
+              uint64_t{1});
 }
 
 TEST("selection skips partitions that a transform already holds") {
@@ -418,7 +469,7 @@ TEST("late arrivals cannot enter a manual run by carrying old timestamps") {
 TEST("timezone controls day buckets and preserves both autumn hours") {
   using namespace std::chrono;
   auto f = fixture{};
-  f.state.rebuild_zone = locate_zone("Europe/Berlin");
+  f.state.rebuild_zone = arrow_vendored::date::locate_zone("Europe/Berlin");
   auto midnight_utc = tenzir::time{sys_days{2026y / October / 25}};
   CHECK_EQUAL(f.state.rebuild_day(midnight_utc - hours{1}),
               floor<days>(midnight_utc.time_since_epoch()).count());
@@ -431,7 +482,7 @@ TEST("timezone controls day buckets and preserves both autumn hours") {
 TEST("hourly collection skips the nonexistent spring hour") {
   using namespace std::chrono;
   auto f = fixture{};
-  f.state.rebuild_zone = locate_zone("Europe/Berlin");
+  f.state.rebuild_zone = arrow_vendored::date::locate_zone("Europe/Berlin");
   auto midnight_utc = tenzir::time{sys_days{2026y / March / 29}};
   CHECK_EQUAL(f.state.next_rebuild_hour(midnight_utc + minutes{30}),
               midnight_utc + hours{1});
@@ -450,12 +501,13 @@ TEST("rebuild defaults to the system timezone and accepts an explicit "
      "override") {
   auto local = catalog_state{};
   CHECK(not local.initialize_maintenance(tenzir::time{}).valid());
-  CHECK_EQUAL(local.rebuild_zone->name(), std::chrono::current_zone()->name());
+  CHECK_EQUAL(local.rebuild_zone->name(),
+              arrow_vendored::date::current_zone()->name());
   auto explicit_zone = catalog_state{};
   explicit_zone.maintenance.rebuild_timezone = "UTC";
   CHECK(not explicit_zone.initialize_maintenance(tenzir::time{}).valid());
   CHECK_EQUAL(explicit_zone.rebuild_zone->name(),
-              std::chrono::locate_zone("UTC")->name());
+              arrow_vendored::date::locate_zone("UTC")->name());
 }
 
 TEST("arrivals cannot postpone or reopen a collection cutoff") {

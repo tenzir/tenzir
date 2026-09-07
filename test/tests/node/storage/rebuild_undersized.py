@@ -16,9 +16,9 @@ from pathlib import Path
 
 SCHEMA = "rebuild.undersized"
 
-# Import times come from the node's clock. Pick a fixed-offset zone that puts
-# the test in hour two of a four-hour bucket, leaving at least an hour before
-# the next boundary even when the test starts near the end of the hour.
+# Import times come from the node's clock. Pick a fixed-offset zone whose
+# local hour modulo four is two, leaving at least an hour before midnight
+# even when the test starts near the end of the hour.
 FIXED_OFFSET_TIMEZONES = ("Etc/GMT", "Etc/GMT-1", "Etc/GMT-2", "Etc/GMT-3")
 TEST_TIMEZONE = FIXED_OFFSET_TIMEZONES[(2 - datetime.now(UTC).hour) % 4]
 

@@ -477,7 +477,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID((tenzir::rest_handler_actor))
   TENZIR_ADD_TYPE_ID((tenzir::status_client_actor))
-  TENZIR_ADD_TYPE_ID((std::shared_ptr<tenzir::PartitionTransformProgress>))  TENZIR_ADD_TYPE_ID((tenzir::Option<tenzir::duration>))
+  TENZIR_ADD_TYPE_ID((tenzir::Option<tenzir::duration>))
+  TENZIR_ADD_TYPE_ID((std::shared_ptr<tenzir::PartitionTransformProgress>))
 
 CAF_END_TYPE_ID_BLOCK(tenzir_actors)
 

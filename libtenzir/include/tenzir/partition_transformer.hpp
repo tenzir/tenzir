@@ -191,12 +191,6 @@ struct partition_transformer_state {
   /// variables need to be stored in the meantime.
   std::variant<std::monostate, stream_data, path_data> persist;
 
-  /// The store each output partition was persisted to. The transformer only
-  /// learns these once its store builders report back, which is after the
-  /// output synopses have been packed, so they are stamped onto the synopses
-  /// handed back to the catalog rather than into the `.mdx` files.
-  std::unordered_map<uuid, resource> store_resources = {};
-
   /// Number of stores launched and finished.
   size_t stores_launched = 0ull;
   size_t stores_finished = 0ull;

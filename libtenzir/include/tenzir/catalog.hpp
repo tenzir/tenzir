@@ -21,11 +21,13 @@
 #include "tenzir/option.hpp"
 #include "tenzir/partition_paths.hpp"
 #include "tenzir/partition_synopsis.hpp"
+#include "tenzir/partition_transformer.hpp"
 #include "tenzir/plugin_fwd.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/taxonomies.hpp"
 #include "tenzir/uuid.hpp"
 
+#include <arrow/vendored/datetime.h>
 #include <caf/mail_cache.hpp>
 #include <caf/response_type.hpp>
 #include <caf/settings.hpp>
@@ -130,6 +132,10 @@ struct maintenance_options {
 
   /// Empty selects the node's system timezone.
   std::string rebuild_timezone = {};
+
+  /// An explicit zero disables the decoded-byte budget.
+  Option<uint64_t> rebuild_memory_budget = None{};
+  double rebuild_merge_margin = 0.6;
 
   /// The disk budget loop: water marks, step size, scan interval, and the
   /// optional external size command. A zero high water mark disables it, which
@@ -355,6 +361,9 @@ struct rebuild_run {
   /// work, the closed collection boundary for automatic work.
   uint64_t horizon = std::numeric_limits<uint64_t>::max();
 
+  time started_at = time::clock::now();
+  uint64_t batch_byte_budget = 0;
+
   /// Built once per run; batches still revalidate live claims and policy.
   Option<std::vector<std::list<partition_info>>> groups = None{};
   Option<RebuildGroups> collected_groups = None{};
@@ -400,6 +409,22 @@ struct rebuild_run {
 
   /// Answered when the run finishes.
   std::vector<caf::typed_response_promise<void>> stop_requests = {};
+};
+
+struct TransformOptions {
+  size_t minimum_partition_reduction = 0;
+  double minimum_reduction_ratio = 0;
+  std::vector<uuid> required_inputs = {};
+  uint64_t input_byte_budget = 0;
+  size_t rebuild_batch_size = 0;
+};
+
+struct ActivePartitionTransform {
+  std::shared_ptr<PartitionTransformProgress> progress = {};
+  std::vector<partition_info> input_partitions = {};
+  std::string origin = {};
+  time started_at = time::clock::now();
+  bool stall_reported = false;
 };
 
 /// A `compaction run` in progress. The work is queued rather than fired at
@@ -734,7 +759,10 @@ public:
                  keep_original_partition keep, std::string origin,
                  std::string policy_token,
                  std::function<void(partition_apply_result&)> success,
-                 std::function<void(caf::error&)> failure);
+                 std::function<void(caf::error&)> failure,
+                 TransformOptions options = {});
+
+  auto active_transformations_status() const -> record;
 
   /// Adds a new partition creation listener.
   void
@@ -787,6 +815,8 @@ public:
 
   /// Config options for value indices.
   caf::settings index_opts = {};
+
+  std::unordered_map<uuid, ActivePartitionTransform> active_transformations;
 
   /// The partitions that are inputs to a running transform. They must not be
   /// erased underneath it: the transform would write its outputs anyway and
@@ -880,7 +910,7 @@ public:
   time next_space_scan = {};
   time next_disposal_check = {};
   time eviction_retry_at = {};
-  std::chrono::time_zone const* rebuild_zone = nullptr;
+  arrow_vendored::date::time_zone const* rebuild_zone = nullptr;
 
   /// Monotonic catalog admissions, independent of imported timestamps.
   uint64_t admission_sequence = 0;

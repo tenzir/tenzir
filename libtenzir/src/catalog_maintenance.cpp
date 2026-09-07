@@ -42,7 +42,12 @@ namespace {
 /// decoded output slices before persisting the new store, and the store writer
 /// builds further Arrow structures during persist, so we admit substantially
 /// less than the apparent free memory.
-auto rebuild_byte_budget(size_t parallelism) -> uint64_t {
+auto rebuild_byte_budget(Option<uint64_t> configured, size_t parallelism)
+  -> uint64_t {
+  if (configured) {
+    return *configured == 0 ? std::numeric_limits<uint64_t>::max()
+                            : *configured / std::max<size_t>(parallelism, 1);
+  }
   const auto available
     = detail::available_memory().value_or(detail::available_memory_info{
       .bytes = uint64_t{512} * 1024 * 1024,
@@ -96,13 +101,27 @@ auto catalog_state::next_rebuild_hour(time now) const -> time {
 
 auto catalog_state::initialize_maintenance(time now) -> caf::error {
   try {
-    rebuild_zone = maintenance.rebuild_timezone.empty()
-                     ? std::chrono::current_zone()
-                     : std::chrono::locate_zone(maintenance.rebuild_timezone);
+    if (maintenance.rebuild_timezone.empty()) {
+      try {
+        rebuild_zone = arrow_vendored::date::current_zone();
+      } catch (std::runtime_error const&) {
+        // Minimal containers may have no /etc/localtime. UTC is the system
+        // default there; an explicit invalid timezone must still fail.
+        rebuild_zone = arrow_vendored::date::locate_zone("UTC");
+      }
+    } else {
+      rebuild_zone
+        = arrow_vendored::date::locate_zone(maintenance.rebuild_timezone);
+    }
   } catch (std::exception const& error) {
-    return caf::make_error(ec::invalid_configuration,
-                           fmt::format("failed to resolve rebuild timezone: {}",
-                                       error.what()));
+    return caf::make_error(
+      ec::invalid_configuration,
+      fmt::format("failed to resolve {} time zone: {}",
+                  maintenance.rebuild_timezone.empty()
+                    ? std::string{"system"}
+                    : fmt::format("tenzir.rebuild-timezone '{}'",
+                                  maintenance.rebuild_timezone),
+                  error.what()));
   }
   next_collection = next_rebuild_hour(now);
   next_policy_check = now;
@@ -249,6 +268,23 @@ void catalog_state::arm_maintenance_wakeup(time now) {
     }
   }
   auto deadline = next_disposal_check;
+  for (auto& [id, transform] : active_transformations) {
+    if (transform.stall_reported) {
+      continue;
+    }
+    auto const warn_at = transform.started_at + std::chrono::minutes{1};
+    if (now < warn_at) {
+      deadline = std::min(deadline, warn_at);
+      continue;
+    }
+    transform.stall_reported = true;
+    auto const phase
+      = transform.progress->phase.load(std::memory_order_relaxed);
+    TENZIR_WARN("{} transform {} has been in flight for {}: {}",
+                transform.origin, id, data{now - transform.started_at},
+                data{active_transformations_status()});
+    transform.progress->report_next_phase_transition_from(phase);
+  }
   if (automatic_enabled) {
     deadline = std::min(deadline, next_collection);
   }
@@ -378,7 +414,9 @@ auto catalog_state::select_rebuild_batch(rebuild_run& run, time now)
   if (run.selected >= run.options.max_partitions) {
     return {};
   }
-  const auto budget = rebuild_byte_budget(run.options.parallel);
+  const auto budget = rebuild_byte_budget(maintenance.rebuild_memory_budget,
+                                          run.options.parallel);
+  run.batch_byte_budget = budget;
   if (budget == 0) {
     TENZIR_WARN("{} has no memory budget for a rebuild batch", name);
     return {};
@@ -452,6 +490,7 @@ auto catalog_state::select_rebuild_batch(rebuild_run& run, time now)
     auto batch = std::vector<partition_info>{};
     auto events = size_t{0};
     auto bytes = uint64_t{0};
+    auto closed_day = false;
     for (auto it = group.begin(); it != group.end();) {
       auto current = it++;
       auto const& partition = *current;
@@ -472,10 +511,13 @@ auto catalog_state::select_rebuild_batch(rebuild_run& run, time now)
         continue;
       }
       auto const estimate = estimate_approx_bytes(run, partition, budget);
+      closed_day
+        = rebuild_day(partition.max_import_time) < rebuild_day(run.started_at);
       if (not batch.empty()
           and (detail::saturating_add(bytes, estimate) > budget
-               or detail::saturating_add(events, partition.events)
-                    > partition_capacity)) {
+               or (not closed_day
+                   and detail::saturating_add(events, partition.events)
+                         > partition_capacity))) {
         // ponytail: Greedy packing can miss fitting pairs. Use a Pareto
         // frontier only if measured fragmentation warrants the complexity.
         if (batch.size() == 1
@@ -490,13 +532,22 @@ auto catalog_state::select_rebuild_batch(rebuild_run& run, time now)
       batch.push_back(partition);
       bytes = detail::saturating_add(bytes, estimate);
       events = detail::saturating_add(events, partition.events);
-      if (events >= partition_capacity or batch.size() >= remaining) {
+      if ((not closed_day and events >= partition_capacity)
+          or batch.size() >= remaining) {
         break;
       }
     }
-    if (batch.size() > 1
-        or (batch.size() == 1
-            and is_worth_rebuilding_alone(run, batch.front()))) {
+    auto const required
+      = std::ranges::any_of(batch, [&](auto const& partition) {
+          return is_worth_rebuilding_alone(run, partition);
+        });
+    auto const outputs
+      = events / partition_capacity
+        + static_cast<size_t>(events % partition_capacity != 0);
+    if (required
+        or satisfies_partition_reduction(
+          batch.size(), outputs, 1,
+          closed_day ? maintenance.rebuild_merge_margin : 0.0)) {
       return batch;
     }
   }
@@ -676,6 +727,20 @@ void catalog_state::schedule_rebuild(time now) {
     ++rebuild->running;
     rebuild->running_partitions += size;
     auto pipeline = rebuild_pipeline(batch.front().schema, desired_batch_size);
+    auto options = TransformOptions{
+      .minimum_partition_reduction = 1,
+      .minimum_reduction_ratio = rebuild_day(batch.front().max_import_time)
+                                     < rebuild_day(rebuild->started_at)
+                                   ? maintenance.rebuild_merge_margin
+                                   : 0.0,
+      .input_byte_budget = rebuild->batch_byte_budget,
+      .rebuild_batch_size = desired_batch_size,
+    };
+    for (auto const& partition : batch) {
+      if (is_worth_rebuilding_alone(*rebuild, partition)) {
+        options.required_inputs.push_back(partition.uuid);
+      }
+    }
     // Claim and dispatch in the same actor turn as selection.
     transform(
       std::move(pipeline), std::move(batch), keep_original_partition::no,
@@ -689,6 +754,12 @@ void catalog_state::schedule_rebuild(time now) {
         }
         --rebuild->running;
         rebuild->running_partitions -= size;
+        if (result.skipped) {
+          // The loader may accept too few inputs to meet the reduction
+          // constraint. Keep them visited for this run instead of retrying
+          // the same insufficient batch on every completion.
+          return;
+        }
         // A transformer may stop at its memory budget. Return untouched
         // inputs and their allowance to this run.
         if (result.input_partitions.size() < batch_ids.size()) {
@@ -816,7 +887,8 @@ void catalog_state::schedule_rebuild(time now) {
           }
         }
         advance_maintenance(time::clock::now());
-      });
+      },
+      std::move(options));
   }
   if (rebuild->running == 0) {
     if (rebuild->options.automatic and rebuild->deferred > 0
