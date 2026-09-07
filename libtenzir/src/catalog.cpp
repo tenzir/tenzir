@@ -823,7 +823,7 @@ catalog_state::~catalog_state() {
   maintenance_wakeup.dispose();
 }
 
-void catalog_state::make_policy() {
+auto catalog_state::make_policy() -> caf::error {
   for (const auto* plugin : plugins::get<storage_policy_plugin>()) {
     auto candidate = plugin->make_storage_policy(storage_policy_context{
       // The policy has no actor context of its own, so it borrows the
@@ -882,10 +882,10 @@ void catalog_state::make_policy() {
     // question, and there is no sensible way to do that.
     break;
   }
-  replay_policy_transforms();
+  return replay_policy_transforms();
 }
 
-void catalog_state::replay_policy_transforms() {
+auto catalog_state::replay_policy_transforms() -> caf::error {
   auto release_markers
     = [this](const std::vector<std::filesystem::path>& markers) {
         for (const auto& marker : markers) {
@@ -908,7 +908,24 @@ void catalog_state::replay_policy_transforms() {
       release_marker_after_flush(marker);
     }
     replayed_transforms.clear();
-    return;
+    return {};
+  }
+  // Validate the whole replay before changing history. Otherwise an unknown
+  // token could become a generic replacement, lose its rule watermark, and
+  // let a non-idempotent rule run again. Keep every marker and refuse startup
+  // until the recorded commit can be recovered.
+  for (auto const& replayed : replayed_transforms) {
+    if (replayed.policy_token.empty() and not replayed.token_input) {
+      continue;
+    }
+    if (replayed.policy_token.empty() or not replayed.token_input
+        or not policy->deserialize_token(replayed.policy_token).has_value()) {
+      return caf::make_error(
+        ec::format_error,
+        fmt::format("cannot replay storage policy token in {}; the marker "
+                    "is retained and must be repaired before restarting",
+                    replayed.marker));
+    }
   }
   // Transforms whose markers replayed at startup finished without their
   // policy callbacks -- the crash landed between the durable marker and the
@@ -979,10 +996,11 @@ void catalog_state::replay_policy_transforms() {
     if (policy->flush().valid()) {
       // The persist retry keeps trying in the background; the markers stay
       // for the next startup to replay, which is idempotent.
-      return;
+      return {};
     }
     release_markers(held_markers);
   }
+  return {};
 }
 
 auto catalog_state::retire(const uuid& partition,
@@ -1478,7 +1496,12 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
       });
   }
   self->state().maintenance = maintenance;
-  self->state().make_policy();
+  if (auto error = self->state().make_policy(); error.valid()) {
+    TENZIR_ERROR("{} failed to replay storage policy state: {}", *self,
+                 render(error));
+    self->quit(std::move(error));
+    return catalog_actor::behavior_type::make_empty_behavior();
+  }
   if (auto error = self->state().initialize_maintenance(time::clock::now());
       error.valid()) {
     self->quit(std::move(error));

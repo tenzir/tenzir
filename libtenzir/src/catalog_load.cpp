@@ -277,7 +277,8 @@ auto catalog_state::replay_markers() -> std::unordered_set<uuid> {
       // when the marker carries a token -- to the policy once it exists, so
       // its history follows the data to the current ids. A preserve-input
       // transform has no inputs to replace but still commits.
-      if (not replayed.inputs.empty() or not replayed.policy_token.empty()) {
+      if (not replayed.inputs.empty() or not replayed.policy_token.empty()
+          or replayed.token_input) {
         // The marker is the interrupted replacement's -- and, with a token,
         // the interrupted commit's -- only durable record. It may go only
         // after the policy has that state on disk *and* every recorded input

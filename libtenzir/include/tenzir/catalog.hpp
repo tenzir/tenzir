@@ -621,10 +621,12 @@ public:
   ~catalog_state();
 
   /// Builds the storage policy from whichever plugin contributes one.
-  void make_policy();
+  auto make_policy() -> caf::error;
 
   /// Replays completed transforms in dependency order into the policy.
-  void replay_policy_transforms();
+  /// Invalid tokens leave all markers held and abort startup before any
+  /// callbacks can change history.
+  auto replay_policy_transforms() -> caf::error;
 
   /// Measures the database directory off this thread, continuing in
   /// `on_space_measured`.
