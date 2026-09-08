@@ -66,14 +66,8 @@ struct ExportArgs {
   bool internal = false;
   uint64_t parallel = 3;
   bool high_priority = true;
-  /// The filter pushed down by `describer.optimize_filter`.
-  ir::OptimizeFilter filter;
-  /// The limit pushed down by `describer.optimize_limit`, counting events that
-  /// pass `filter`.
-  Option<uint64_t> limit = None{};
-  /// The projection pushed down by `describer.optimize_projection`. Recorded
-  /// for the optimizer output; the runtime does not honor it yet (TNZ-1030).
-  Option<ir::OptimizeProjection> projection = None{};
+  /// Projection is recorded but not honored at runtime yet (TNZ-1030).
+  OptimizationArgs<opt::Filter, opt::Limit, opt::Projection> optimization;
   /// Setting for a special filter added by the `diagnostics` or `metrics`
   /// operators.
   export_special_filter special_filter;
@@ -184,11 +178,11 @@ public:
       },
     });
     if (uses_prometheus_shape_) {
-      for (const auto& filter : args_.filter) {
+      for (const auto& filter : args_.optimization.filter) {
         add_remainder(remainder_, filter);
       }
     } else {
-      for (const auto& filter : args_.filter) {
+      for (const auto& filter : args_.optimization.filter) {
         auto [legacy, remainder] = split_legacy_expression(filter);
         if (legacy != trivially_true_expression()) {
           legacy_clauses.push_back(std::move(legacy));
@@ -235,7 +229,7 @@ public:
     // it still runs here, or Prometheus shaping changes the events, the limit
     // must stay local.
     if (not remainder_ and not uses_prometheus_shape_) {
-      mode.limit = args_.limit;
+      mode.limit = args_.optimization.limit;
     }
     auto result
       = co_await async_mail(atom::spawn_v, std::move(expr), mode).request(*node);
@@ -493,7 +487,7 @@ class export_plugin final : public virtual operator_plugin<export_operator>,
 public:
   auto describe() const -> Description override {
     auto d = Describer<ExportArgs, Export>{ExportArgs{
-      .filter = {},
+      .optimization = {},
       .special_filter = export_special_filter::none,
       .metrics_name = {},
     }};
@@ -511,9 +505,8 @@ public:
       }
       return {};
     });
-    d.optimize_limit(&ExportArgs::limit);
-    d.optimize_projection(&ExportArgs::projection);
-    return d.optimize_filter(&ExportArgs::filter);
+    d.optimization(&ExportArgs::optimization);
+    return d.without_optimize();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -561,7 +554,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ExportArgs, Export>{ExportArgs{
       .internal = true,
-      .filter = {},
+      .optimization = {},
       .special_filter = export_special_filter::diagnostics,
       .metrics_name = {},
     }};
@@ -578,9 +571,8 @@ public:
       }
       return {};
     });
-    d.optimize_limit(&ExportArgs::limit);
-    d.optimize_projection(&ExportArgs::projection);
-    return d.optimize_filter(&ExportArgs::filter);
+    d.optimization(&ExportArgs::optimization);
+    return d.without_optimize();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const
@@ -626,7 +618,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ExportArgs, Export>{ExportArgs{
       .internal = true,
-      .filter = {},
+      .optimization = {},
       .special_filter = export_special_filter::metrics,
       .metrics_name = {},
     }};
@@ -656,9 +648,8 @@ public:
       }
       return {};
     });
-    d.optimize_limit(&ExportArgs::limit);
-    d.optimize_projection(&ExportArgs::projection);
-    return d.optimize_filter(&ExportArgs::filter);
+    d.optimization(&ExportArgs::optimization);
+    return d.without_optimize();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

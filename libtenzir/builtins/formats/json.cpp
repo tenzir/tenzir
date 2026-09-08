@@ -1445,7 +1445,7 @@ struct ReadJsonArgs {
   bool arrays_of_objects = false;
   split_at split_mode = split_at::none;
   uint64_t jobs = 0;
-  EventOrder order = EventOrder::ordered;
+  OptimizationArgs<opt::Order> optimization = {};
   multi_series_builder::options msb_options;
 };
 
@@ -1456,7 +1456,8 @@ public:
 
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await Operator<chunk_ptr, table_slice>::start(ctx);
-    args_.msb_options.settings.ordered = args_.order == EventOrder::ordered;
+    args_.msb_options.settings.ordered
+      = args_.optimization.order == EventOrder::ordered;
     parser_ = std::make_unique<default_parser>(
       args_.parser_name, ctx.dh(), args_.msb_options, args_.arrays_of_objects);
   }
@@ -1510,7 +1511,7 @@ public:
   }
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await Operator<chunk_ptr, table_slice>::start(ctx);
-    if (args_.jobs > 0 and args_.order != EventOrder::unordered) {
+    if (args_.jobs > 0 and args_.optimization.order != EventOrder::unordered) {
       diagnostic::error("`_jobs` requires unordered downstream")
         .hint("wrap this operator in `unordered {{ ... }}`")
         .emit(ctx.dh());
@@ -1531,7 +1532,8 @@ public:
       co_return;
     }
     auto msb_options = args_.msb_options;
-    msb_options.settings.ordered = args_.order == EventOrder::ordered;
+    msb_options.settings.ordered
+      = args_.optimization.order == EventOrder::ordered;
     parser_ = std::make_unique<ndjson_parser>(args_.parser_name, ctx.dh(),
                                               msb_options);
   }
@@ -1873,7 +1875,7 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ReadJsonArgs, ReadJson>{};
     d.named("arrays_of_objects", &ReadJsonArgs::arrays_of_objects);
-    d.optimization_order(&ReadJsonArgs::order);
+    d.optimization(&ReadJsonArgs::optimization);
     d.validate(add_msb_to_describer(d, &ReadJsonArgs::msb_options));
     return d.without_optimize();
   }
@@ -1929,7 +1931,7 @@ public:
                    .msb_options = {}}};
     auto msb = add_msb_to_describer(d, &ReadJsonArgs::msb_options);
     auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
-    d.optimization_order(&ReadJsonArgs::order);
+    d.optimization(&ReadJsonArgs::optimization);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       msb(ctx);
       if (auto j = ctx.get(jobs); j and *j == 0) {
@@ -1988,7 +1990,7 @@ public:
     }};
     auto msb = add_msb_to_describer(d, &ReadJsonArgs::msb_options);
     auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
-    d.optimization_order(&ReadJsonArgs::order);
+    d.optimization(&ReadJsonArgs::optimization);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       msb(ctx);
       if (auto j = ctx.get(jobs); j and *j == 0) {
@@ -2066,7 +2068,7 @@ public:
                                      .schema_only_requires_schema_or_selector
                                      = false});
     auto jobs = d.named_optional("_jobs", &ReadJsonArgs::jobs);
-    d.optimization_order(&ReadJsonArgs::order);
+    d.optimization(&ReadJsonArgs::optimization);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       msb(ctx);
       if (ctx.get(jobs)) {

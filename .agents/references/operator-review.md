@@ -28,15 +28,12 @@ Review TQL operators for correctness, resource handling, and executor behavior.
 
 ## Optimizer hints
 
-- If the operator opts into `optimize_filter`, does it apply every predicate,
-  either pushed or evaluated locally with `filter2`?
-- Is every pushed predicate exact, including for `null` operands and type
-  mismatches where TQL yields `null` but the backend would fail or coerce?
-- Is the limit pushed only when the entire filter chain was pushed?
-- Does a test assert what the operator actually sent to the backend, not only
-  the pipeline output?
-- Does the reference page have an `## Optimizations` section that states the
-  contract? See `operators.md`.
+- Bundle matches runtime capabilities; binding is separate from policy?
+- Every accepted predicate enforced in order, remotely or with `filter2`?
+- Pushed predicates exact for nulls and type mismatches?
+- SQL limit pushed only with the entire filter chain?
+- Tests assert backend requests, not just output?
+- Reference page documents `## Optimizations`? See `operators.md`.
 
 ## Sink operators
 

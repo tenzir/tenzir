@@ -333,7 +333,7 @@ auto parse_loop(generator<Option<std::string_view>> lines,
 struct ReadCefArgs {
   multi_series_builder::options msb_options;
   location operator_location = location::unknown;
-  EventOrder order = EventOrder::ordered;
+  OptimizationArgs<opt::Order> optimization = {};
 };
 
 class ReadCef final : public Operator<chunk_ptr, table_slice> {
@@ -364,7 +364,8 @@ public:
                       fmt::format("line {}", line_counter_));
       return d;
     });
-    args_.msb_options.settings.ordered = args_.order == EventOrder::ordered;
+    args_.msb_options.settings.ordered
+      = args_.optimization.order == EventOrder::ordered;
     msb_ = multi_series_builder{args_.msb_options, *dh_};
     co_return;
   }
@@ -534,7 +535,7 @@ public:
     }};
     d.validate(add_msb_to_describer(d, &ReadCefArgs::msb_options));
     d.operator_location(&ReadCefArgs::operator_location);
-    d.optimization_order(&ReadCefArgs::order);
+    d.optimization(&ReadCefArgs::optimization);
     return d.without_optimize();
   }
 

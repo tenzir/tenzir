@@ -943,9 +943,7 @@ private:
 
 struct ReadFeatherArgs {
   location operator_location = location::unknown;
-  ir::OptimizeFilter filter;
-  Option<uint64_t> limit;
-  Option<ir::OptimizeProjection> projection;
+  OptimizationArgs<opt::Filter, opt::Limit, opt::Projection> optimization;
 };
 
 enum class ReadFeatherMode {
@@ -958,8 +956,10 @@ class ReadFeather final : public Operator<chunk_ptr, table_slice> {
 public:
   explicit ReadFeather(ReadFeatherArgs args)
     : args_{std::move(args)},
-      projection_{read_projection(args_.projection, args_.filter)},
-      done_{args_.limit == uint64_t{0}},
+      projection_{read_projection(args_.optimization.projection,
+                                  args_.optimization.filter)},
+      remaining_{args_.optimization.limit},
+      done_{remaining_ == uint64_t{0}},
       listener_{std::make_shared<callback_listener>()},
       stream_decoder_{std::in_place, listener_, arrow_ipc_read_options()} {
   }
@@ -1151,12 +1151,12 @@ private:
 
   auto emit_slice(table_slice slice, Push<table_slice>& push,
                   diagnostic_handler& dh) -> Task<void> {
-    slice
-      = apply_read_pushdown(std::move(slice), args_.filter, args_.limit, dh);
+    slice = apply_read_pushdown(std::move(slice), args_.optimization.filter,
+                                remaining_, dh);
     if (slice.rows() != 0) {
       co_await push(std::move(slice));
     }
-    done_ = args_.limit == uint64_t{0};
+    done_ = remaining_ == uint64_t{0};
   }
 
   auto parse_file(Push<table_slice>& push, diagnostic_handler& dh)
@@ -1198,6 +1198,7 @@ private:
 
   ReadFeatherArgs args_;
   Option<std::vector<std::string>> projection_;
+  Option<uint64_t> remaining_;
   std::vector<chunk_ptr> schema_chunks_;
   chunk_ptr buffer_ = chunk::make_empty();
   size_t offset_ = 0;
@@ -1496,9 +1497,8 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ReadFeatherArgs, ReadFeather>{};
     d.operator_location(&ReadFeatherArgs::operator_location);
-    d.optimize_limit(&ReadFeatherArgs::limit);
-    d.optimize_projection(&ReadFeatherArgs::projection);
-    return d.optimize_filter(&ReadFeatherArgs::filter);
+    d.optimization(&ReadFeatherArgs::optimization);
+    return d.without_optimize();
   }
 
   auto make(operator_factory_invocation inv, session ctx) const

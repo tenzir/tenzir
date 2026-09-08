@@ -43,20 +43,30 @@ defaults explicitly in validation callbacks.
 Use `d.order_invariant()` only for pure row transforms that can be reordered.
 Use `d.without_optimize()` otherwise.
 
-A source that can act on optimizer hints opts in with `d.optimize_filter(...)`,
-`d.optimize_limit(...)`, and `d.optimize_projection(...)`. Opting into the
-filter moves the entire downstream filter chain into the operator, so the
-operator must apply every predicate: push what it can translate exactly and
-evaluate the rest locally with `filter2`. The limit counts events after the
-whole chain, so push it only when the chain went along. See `from_clickhouse`
-for the pattern and `export` for the storage-engine variant.
+Declare only consumed runtime inputs; bind separately from rewrite policy:
 
-Every source that opts in documents an `## Optimizations` section on its
-reference page in `tenzir/content`, placed after the argument descriptions and
-before the examples. State which hints the operator acts on and in which modes,
-which predicates it pushes and which stay local, and how to verify with
-`tenzir --dump-opt-ir`. Describe the contract, not the mechanism: what a user
-can rely on, never how the operator achieves it.
+```cpp
+// <tenzir/operator/optimization.hpp>
+struct Args {
+  OptimizationArgs<opt::Filter, opt::Limit, opt::Projection> optimization;
+};
+d.optimization(&Args::optimization);
+return d.without_optimize();
+```
+
+- Access `args.optimization.filter`, `.limit`, `.projection`, or `.order`.
+  Order-only: `OptimizationArgs<opt::Order>`. Rewrite-only: no bundle.
+- Binding enables no propagation. Keep user arguments outside the bundle.
+- Filters: enforce every accepted predicate in order; push exact translations,
+  evaluate the rest with `filter2`.
+- Limits: require filter binding; count after filtering. Push into SQL only
+  with the entire chain. Track progress separately from immutable arguments.
+- Projections: `None` means all fields; empty means none. Retain filter and
+  computation dependencies.
+
+Examples: `from_clickhouse`, `export`. Document supported modes, pushed/local
+predicates, and `--dump-opt-ir` verification in the source's `## Optimizations`
+reference section, between arguments and examples.
 
 Use `d.spawner(...)` only when validation or instantiation depends on the input
 type.

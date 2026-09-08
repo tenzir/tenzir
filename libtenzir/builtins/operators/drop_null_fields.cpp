@@ -22,12 +22,13 @@ namespace {
 
 struct DropNullFieldsArgs {
   std::vector<ast::expression> fields;
-  EventOrder order = EventOrder::ordered;
+  OptimizationArgs<opt::Order> optimization;
 };
 
 class DropNullFields final : public Operator<table_slice, table_slice> {
 public:
-  explicit DropNullFields(DropNullFieldsArgs args) : order_{args.order} {
+  explicit DropNullFields(DropNullFieldsArgs args)
+    : order_{args.optimization.order} {
     if (args.fields.size() == 1) {
       auto selector = ast::field_path::try_from(args.fields.front());
       TENZIR_ASSERT(selector);
@@ -113,7 +114,7 @@ public:
     d.parallelizable();
     auto fields
       = d.optional_variadic("fields", &DropNullFieldsArgs::fields, "field");
-    d.optimization_order(&DropNullFieldsArgs::order);
+    d.optimization(&DropNullFieldsArgs::optimization);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       auto values = ctx.get_all(fields);
       auto locations = ctx.get_locations(fields);

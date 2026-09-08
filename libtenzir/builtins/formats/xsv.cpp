@@ -454,7 +454,7 @@ struct ReadXsvArgs {
   Option<uint64_t> batch_size;
   // Internal: used in diagnostic messages; set at Describer construction time.
   std::string name = "xsv";
-  EventOrder order = EventOrder::ordered;
+  OptimizationArgs<opt::Order> optimization;
   location operator_location;
 };
 
@@ -1002,7 +1002,7 @@ public:
       msb_opts.policy = std::move(*parsed);
     }
     // ── Build xsv_parser_options from args_ ───────────────────────────────────
-    msb_opts.settings.ordered = args_.order == EventOrder::ordered;
+    msb_opts.settings.ordered = args_.optimization.order == EventOrder::ordered;
     opts_ = xsv_parser_options{
       .name = args_.name,
       .field_separator = args_.field_separator.inner,
@@ -1432,7 +1432,7 @@ public:
         validate_multi_series_builder_args(ctx, common);
         return {};
       });
-    d.optimization_order(&ReadXsvArgs::order);
+    d.optimization(&ReadXsvArgs::optimization);
     return d.without_optimize();
   }
 };
@@ -1503,7 +1503,7 @@ public:
       validate_multi_series_builder_args(ctx, common);
       return {};
     });
-    d.optimization_order(&ReadXsvArgs::order);
+    d.optimization(&ReadXsvArgs::optimization);
     return d.without_optimize();
   }
 

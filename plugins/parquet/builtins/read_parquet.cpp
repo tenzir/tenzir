@@ -143,9 +143,7 @@ auto inject_tenzir_metadata(std::shared_ptr<arrow::RecordBatch> batch)
 
 struct ReadParquetArgs {
   Option<located<std::string>> decimal_format;
-  ir::OptimizeFilter filter;
-  Option<uint64_t> limit;
-  Option<ir::OptimizeProjection> projection;
+  OptimizationArgs<opt::Filter, opt::Limit, opt::Projection> optimization;
 };
 
 class ReadParquet final : public Operator<chunk_ptr, table_slice> {
@@ -155,9 +153,10 @@ public:
                                               args.decimal_format->inner)
                                               .value_or(decimal_format::string)
                                           : decimal_format::string},
-      filter_{std::move(args.filter)},
-      remaining_{args.limit},
-      projection_{read_projection(std::move(args.projection), filter_)} {
+      filter_{std::move(args.optimization.filter)},
+      remaining_{args.optimization.limit},
+      projection_{
+        read_projection(std::move(args.optimization.projection), filter_)} {
   }
 
   auto process(chunk_ptr input, Push<table_slice>&, OpCtx&)
@@ -329,9 +328,8 @@ public:
       }
       return {};
     });
-    d.optimize_limit(&ReadParquetArgs::limit);
-    d.optimize_projection(&ReadParquetArgs::projection);
-    return d.optimize_filter(&ReadParquetArgs::filter);
+    d.optimization(&ReadParquetArgs::optimization);
+    return d.without_optimize();
   }
 
   auto read_detection_candidates() const

@@ -70,7 +70,7 @@ public:
     auto tls_arg = d.named("tls", &FluentBitArgs::tls, "record");
     auto msb_validator
       = add_msb_to_describer(d, &FluentBitArgs::builder_options);
-    d.optimization_order(&FluentBitArgs::order);
+    d.optimization(&FluentBitArgs::optimization);
     d.validate([tls_arg, msb_validator](DescribeCtx& ctx) -> Empty {
       if (auto tls = ctx.get(tls_arg)) {
         auto tls_opts = tls_options{*tls, {.tls_default = false}};

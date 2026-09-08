@@ -46,14 +46,8 @@ struct FromClickhouseArgs {
   Option<located<std::string>> sql;
   Option<located<data>> tls;
   location operator_location;
-  /// The filter chain that follows the operator, moved into it by the
-  /// optimizer. Every predicate must be applied: in SQL where the translation
-  /// is exact, locally otherwise.
-  ir::OptimizeFilter filter;
-  /// An upper bound on the events needed after `filter`, if any.
-  Option<uint64_t> limit;
-  /// The fields needed downstream, or `None` for all of them.
-  Option<ir::OptimizeProjection> projection;
+  /// Apply every accepted predicate: in SQL where exact, locally otherwise.
+  OptimizationArgs<opt::Filter, opt::Limit, opt::Projection> optimization;
 };
 
 struct QueryPlan {
@@ -62,9 +56,7 @@ struct QueryPlan {
   /// The user-provided SQL; empty when `table` is set.
   std::string sql;
   std::string schema_name;
-  ir::OptimizeFilter filter;
-  Option<uint64_t> limit;
-  Option<ir::OptimizeProjection> projection;
+  OptimizationArgs<opt::Filter, opt::Limit, opt::Projection> optimization;
 };
 
 /// Announces the predicates that the operator evaluates itself. Sent before
@@ -197,9 +189,7 @@ public:
       .table = None{},
       .sql = {},
       .schema_name = "clickhouse.query",
-      .filter = args_.filter,
-      .limit = args_.limit,
-      .projection = args_.projection,
+      .optimization = args_.optimization,
     };
     if (args_.table) {
       plan.table = args_.table->inner;
@@ -256,8 +246,8 @@ public:
         }
         // The limit counts events after the filter chain. When it went into
         // the SQL query this is a no-op; otherwise it ends the query early.
-        if (args_.limit) {
-          auto remaining = *args_.limit - emitted_;
+        if (args_.optimization.limit) {
+          auto remaining = *args_.optimization.limit - emitted_;
           if (slice.rows() > remaining) {
             slice = subslice(slice, 0, remaining);
           }
@@ -266,7 +256,8 @@ public:
         if (slice.rows() > 0) {
           co_await push(std::move(slice));
         }
-        if (args_.limit and emitted_ >= *args_.limit) {
+        if (args_.optimization.limit
+            and emitted_ >= *args_.optimization.limit) {
           runtime_->request_cancellation();
           done_ = true;
         }
@@ -354,26 +345,29 @@ private:
       // TODO: Weaving hints into user-provided SQL requires parsing it. Until
       // then, everything runs locally.
       return {.text = std::move(plan.sql),
-              .local_filter = std::move(plan.filter)};
+              .local_filter = std::move(plan.optimization.filter)};
     }
     // A limit alone needs no schema; only filter and projection do.
-    if (plan.filter.empty() and not plan.projection) {
+    if (plan.optimization.filter.empty() and not plan.optimization.projection) {
       return {
-        .text = make_select_query(*plan.table, nullptr, None{}, {}, plan.limit),
+        .text = make_select_query(*plan.table, nullptr, None{}, {},
+                                  plan.optimization.limit),
         .local_filter = {},
       };
     }
     auto schema = fetch_schema(client, *plan.table);
-    auto split = split_filter_for_sql(std::move(plan.filter), schema);
+    auto split
+      = split_filter_for_sql(std::move(plan.optimization.filter), schema);
     // The limit counts events after the whole filter chain, so it can only go
     // into the query if the chain did.
     auto limit = Option<uint64_t>{};
     if (split.remaining.empty()) {
-      limit = plan.limit;
+      limit = plan.optimization.limit;
     }
     return {
-      .text = make_select_query(*plan.table, &schema, plan.projection,
-                                split.pushed, limit),
+      .text
+      = make_select_query(*plan.table, &schema, plan.optimization.projection,
+                          split.pushed, limit),
       .local_filter = std::move(split.remaining),
     };
   }
@@ -511,9 +505,8 @@ public:
       }
       return {};
     });
-    d.optimize_limit(&FromClickhouseArgs::limit);
-    d.optimize_projection(&FromClickhouseArgs::projection);
-    return d.optimize_filter(&FromClickhouseArgs::filter);
+    d.optimization(&FromClickhouseArgs::optimization);
+    return d.without_optimize();
   }
 };
 

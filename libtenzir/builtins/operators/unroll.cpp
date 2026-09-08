@@ -457,7 +457,7 @@ private:
 
 struct UnrollArgs {
   ast::field_path field;
-  EventOrder order = EventOrder::ordered;
+  OptimizationArgs<opt::Order> optimization;
 };
 
 class Unroll final : public Operator<table_slice, table_slice> {
@@ -511,7 +511,8 @@ public:
       co_return;
     }
     for (auto unrolled :
-         unroll(input, *off, args_.order == EventOrder::unordered, ctx)) {
+         unroll(input, *off, args_.optimization.order == EventOrder::unordered,
+                ctx)) {
       co_await push(std::move(unrolled));
     }
   }
@@ -537,7 +538,7 @@ public:
     auto d = Describer<UnrollArgs, Unroll>{};
     d.parallelizable();
     d.positional("field", &UnrollArgs::field);
-    d.optimization_order(&UnrollArgs::order);
+    d.optimization(&UnrollArgs::optimization);
     return d.without_optimize();
   }
 };

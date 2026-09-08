@@ -987,7 +987,7 @@ struct FluentBitArgs {
   Option<located<data>> tls;
   located<record> args = located{record{}, location::unknown};
   multi_series_builder::options builder_options;
-  EventOrder order = EventOrder::ordered;
+  OptimizationArgs<opt::Order> optimization;
   record config;
 };
 
@@ -1107,7 +1107,8 @@ public:
   explicit FromFluentBit(FluentBitArgs args) : args_{std::move(args)} {
     args_.builder_options.settings.default_schema_name
       = fmt::format("fluent_bit.{}", args_.plugin.inner);
-    args_.builder_options.settings.ordered = args_.order == EventOrder::ordered;
+    args_.builder_options.settings.ordered
+      = args_.optimization.order == EventOrder::ordered;
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {

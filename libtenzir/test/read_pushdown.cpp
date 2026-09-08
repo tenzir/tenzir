@@ -232,6 +232,47 @@ TEST("runtime reader planning preserves pushed hints including after "
   }
 }
 
+TEST("repeated reader optimization accumulates all inputs across "
+     "serialization") {
+  auto dh = collecting_diagnostic_handler{};
+  auto provider = session_provider::make(dh);
+  auto ctx = base_ctx{dh, provider.as_session().reg()};
+  auto first = expression_from("nested.x >= 4");
+  auto second = expression_from("id <= 7");
+  auto expected = compile_reader(ctx).optimize(
+    ir::OptimizeRequest{.filter = {first, second},
+                        .order = EventOrder::unordered,
+                        .limit = uint64_t{2},
+                        .projection = projection_from("id")},
+    {});
+  auto initial = compile_reader(ctx).optimize(
+    ir::OptimizeRequest{.filter = {first},
+                        .order = EventOrder::unordered,
+                        .limit = uint64_t{5},
+                        .projection = projection_from({"id", "unused"})},
+    {});
+  REQUIRE(initial.filter.empty());
+  auto bytes = serialize(initial.replacement);
+  auto restored = ir::pipeline{};
+  auto deserializer = caf::binary_deserializer{bytes};
+  REQUIRE(deserializer.apply(restored));
+  auto refined = std::move(restored).optimize(
+    ir::OptimizeRequest{.filter = {second},
+                        .order = EventOrder::ordered,
+                        .limit = uint64_t{2},
+                        .projection = projection_from("id")},
+    {});
+  REQUIRE(refined.filter.empty());
+  CHECK_EQUAL(serialize(refined.replacement), serialize(expected.replacement));
+  // Neither a larger limit nor an unrestricted projection undoes acceptance.
+  auto final = std::move(refined.replacement)
+                 .optimize(ir::OptimizeRequest{.filter = {},
+                                               .order = EventOrder::ordered,
+                                               .limit = uint64_t{9}},
+                           {});
+  CHECK_EQUAL(serialize(final.replacement), serialize(expected.replacement));
+}
+
 TEST("repeated reader optimization refines an existing projection") {
   auto dh = collecting_diagnostic_handler{};
   auto provider = session_provider::make(dh);

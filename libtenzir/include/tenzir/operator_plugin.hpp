@@ -16,6 +16,7 @@
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/let_id.hpp"
+#include "tenzir/operator/optimization.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
@@ -1032,53 +1033,42 @@ public:
     desc_.set_operator_location = make_setter(ptr);
   }
 
-  /// Registers a member of `Args` to be populated with the optimization
-  /// order, i.e., the weakest ordering guarantee from downstream.
-  auto optimization_order(EventOrder Args::* ptr) {
-    TENZIR_ASSERT(not desc_.set_order);
-    desc_.set_order = make_setter(ptr);
-  }
-
-  /// Registers a member of `Args` to be populated with the optimization
-  /// filter, instead of keeping it as a separate `where` after the operator.
-  auto optimize_filter(ir::OptimizeFilter Args::* ptr) -> Description {
-    desc_.set_filter = make_setter(ptr);
-    return optimize(
-      [](DescribeCtx&, EventOrder, ir::OptimizeFilter) -> Optimization {
-        return {.order = EventOrder::ordered};
-      });
-  }
-
-  /// Registers a member of `Args` to be populated with the limit that
-  /// downstream pushed into this operator, if any.
-  ///
-  /// The limit counts events that pass the filter registered with
-  /// `optimize_filter`, so an operator must consume the filter to interpret
-  /// the limit. It is a hint: the operator may stop after that many matching
-  /// events, but the `head` that produced it stays in the pipeline. Repeated
-  /// `optimize()` calls keep the smallest limit.
-  auto optimize_limit(Option<uint64_t> Args::* ptr) {
-    TENZIR_ASSERT(not desc_.set_limit);
-    desc_.set_limit = [ptr](Any& args, Option<uint64_t> value) {
-      (&args.as<Args>())->*ptr = value;
-    };
-  }
-
-  /// Registers a member of `Args` to be populated with the projection that
-  /// downstream pushed into this operator, if any. `None` means that every
-  /// field is needed.
-  ///
-  /// The projection is a hint: the operator may omit all other fields, but the
-  /// `select` that produced it stays in the pipeline. Repeated `optimize()`
-  /// calls intersect the projections: an unrestricted request preserves an
-  /// earlier restriction, and a narrower request can refine it further.
-  /// Operators must also retain the fields needed by accumulated filters.
-  auto optimize_projection(Option<ir::OptimizeProjection> Args::* ptr) {
-    TENZIR_ASSERT(not desc_.set_projection);
-    desc_.set_projection
-      = [ptr](Any& args, Option<ir::OptimizeProjection> value) {
-          (&args.as<Args>())->*ptr = std::move(value);
-        };
+  /// Binds selected runtime optimization inputs without choosing rewrite
+  /// policy. Accepted filters are removed before the policy callback runs. The
+  /// callback handles only the remaining request; use `without_optimize()` for
+  /// a barrier. A limit requires filter consumption because it counts matching
+  /// events, not raw input rows. Limit-only binding is deliberately
+  /// unsupported.
+  template <OptimizationInput... Inputs>
+    requires(not OptimizationArgs<Inputs...>::template contains<opt::Limit>
+             or OptimizationArgs<Inputs...>::template contains<opt::Filter>)
+  auto optimization(OptimizationArgs<Inputs...> Args::* ptr) -> void {
+    using Bundle = OptimizationArgs<Inputs...>;
+    if constexpr (Bundle::template contains<opt::Order>) {
+      TENZIR_ASSERT(not desc_.set_order);
+      desc_.set_order = [ptr](Any& args, EventOrder value) {
+        (args.as<Args>().*ptr).order = value;
+      };
+    }
+    if constexpr (Bundle::template contains<opt::Filter>) {
+      TENZIR_ASSERT(not desc_.set_filter);
+      desc_.set_filter = [ptr](Any& args, ir::OptimizeFilter value) {
+        (args.as<Args>().*ptr).filter = std::move(value);
+      };
+    }
+    if constexpr (Bundle::template contains<opt::Limit>) {
+      TENZIR_ASSERT(not desc_.set_limit);
+      desc_.set_limit = [ptr](Any& args, Option<uint64_t> value) {
+        (args.as<Args>().*ptr).limit = value;
+      };
+    }
+    if constexpr (Bundle::template contains<opt::Projection>) {
+      TENZIR_ASSERT(not desc_.set_projection);
+      desc_.set_projection
+        = [ptr](Any& args, Option<ir::OptimizeProjection> value) {
+            (args.as<Args>().*ptr).projection = std::move(value);
+          };
+    }
   }
 
   /// Overrides the default optimization behavior.
