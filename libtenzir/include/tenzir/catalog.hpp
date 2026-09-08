@@ -637,6 +637,10 @@ public:
   /// `on_space_measured`.
   void measure_space();
 
+  /// Whether no file-changing maintenance work is pending, including commits
+  /// whose transformer has exited and failed commits awaiting restart.
+  auto space_scan_is_stable() const -> bool;
+
   /// Acts on a completed measurement, evicting while over budget.
   void on_space_measured(uint64_t size);
 

@@ -255,6 +255,9 @@ void catalog_state::transform(
     return;
   }
   auto const transformation_id = uuid::random();
+  // Even a skipped or failed transform can write temporary files without
+  // merging outputs. Invalidate directory scans that precede those writes.
+  ++storage_generation;
   auto progress = std::make_shared<PartitionTransformProgress>();
   progress->id = fmt::to_string(transformation_id);
   active_transformations.emplace(transformation_id,

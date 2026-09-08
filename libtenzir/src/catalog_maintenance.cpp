@@ -1088,12 +1088,17 @@ auto catalog_state::select_eviction_batch(
   return result;
 }
 
+auto catalog_state::space_scan_is_stable() const -> bool {
+  return active_transformations.empty() and active_transformers.empty()
+         and in_transformation.empty() and deleting.empty()
+         and retiring.empty();
+}
+
 void catalog_state::measure_space() {
   TENZIR_ASSERT(not measuring_space);
   measuring_space = true;
   auto const generation = storage_generation;
-  auto const stable
-    = active_transformers.empty() and deleting.empty() and retiring.empty();
+  auto const stable = space_scan_is_stable();
   // `compute_dbdir_size` walks the whole database, or shells out to an
   // external binary. The disk monitor could block on that because nothing
   // else went through it; the catalog answers candidate lookups, so the scan
@@ -1120,8 +1125,7 @@ void catalog_state::measure_space() {
       [this, generation, stable](uint64_t size) {
         measuring_space = false;
         if (stable and generation == storage_generation
-            and active_transformers.empty() and deleting.empty()
-            and retiring.empty()) {
+            and space_scan_is_stable()) {
           on_space_measured(size);
         } else {
           // A directory walk is not a snapshot. Retain the last reconciled

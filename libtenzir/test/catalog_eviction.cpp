@@ -129,6 +129,23 @@ TEST("ingest admission does not double count files seen by a directory scan") {
   CHECK_EQUAL(f.state.external_bytes, uint64_t{0});
 }
 
+TEST("disk scans wait for catalog commits after their transformer exits") {
+  auto f = fixture{};
+  CHECK(f.state.space_scan_is_stable());
+  const auto id = uuid::random();
+  f.state.active_transformations.try_emplace(id);
+  REQUIRE(f.state.active_transformers.empty());
+  CHECK(not f.state.space_scan_is_stable());
+  f.state.active_transformations.erase(id);
+  CHECK(f.state.space_scan_is_stable());
+  // Failed commits can retain claims and staged files until the next startup,
+  // even though neither the transformer nor its continuation is still active.
+  f.state.in_transformation.insert(id);
+  CHECK(not f.state.space_scan_is_stable());
+  f.state.in_transformation.erase(id);
+  CHECK(f.state.space_scan_is_stable());
+}
+
 TEST("eviction skips a partition a transform is holding") {
   auto f = fixture{};
   const auto first = f.add();
