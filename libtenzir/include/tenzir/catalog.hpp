@@ -84,7 +84,7 @@ struct rebuild_options {
   size_t max_partitions = std::numeric_limits<size_t>::max();
 
   /// Restricts the run to the partitions matching this expression.
-  expression expression = {};
+  tenzir::expression expression = {};
 
   /// Return as soon as the run has started rather than when it finishes.
   bool detached = false;
@@ -890,7 +890,7 @@ public:
 
   /// The storage policy, or null when no plugin contributes one. The catalog
   /// keeps its built-in behavior in that case.
-  std::unique_ptr<storage_policy> policy = {};
+  std::unique_ptr<storage_policy> policy;
 
   /// How the catalog runs storage maintenance.
   maintenance_options maintenance = {};
