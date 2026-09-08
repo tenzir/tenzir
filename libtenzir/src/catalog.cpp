@@ -334,6 +334,15 @@ auto sketch_cache::peek(const uuid& id) const -> partition_synopsis_ptr {
   return it->second.synopsis;
 }
 
+auto sketch_cache::get(const uuid& id) -> partition_synopsis_ptr {
+  const auto it = entries_.find(id);
+  if (it == entries_.end()) {
+    return nullptr;
+  }
+  lru_.splice(lru_.begin(), lru_, it->second.pos);
+  return it->second.synopsis;
+}
+
 auto sketch_cache::put(const uuid& id, partition_synopsis_ptr synopsis)
   -> size_t {
   if (budget_ == 0 or not synopsis) {

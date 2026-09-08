@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/catalog.hpp"
+#include "tenzir/defaults.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/index_config.hpp"
 #include "tenzir/io/save.hpp"
@@ -24,6 +25,7 @@
 #include <caf/actor_system_config.hpp>
 #include <caf/make_copy_on_write.hpp>
 #include <caf/scoped_actor.hpp>
+#include <caf/test/fixture/deterministic.hpp>
 
 #include <chrono>
 #include <filesystem>
@@ -284,6 +286,62 @@ TEST("a disk scan exits without its catalog processing the response") {
       return catalog_actor::behavior_type::make_empty_behavior();
     });
   CHECK(f.await_shutdown());
+}
+
+TEST("marker finalization retains claims through failed writes") {
+  auto f = caf::test::fixture::deterministic{};
+  auto writes = size_t{0};
+  auto finalized = false;
+  auto* state = static_cast<catalog_state*>(nullptr);
+  const auto output = uuid::random();
+  const auto marker = std::filesystem::path{"test.marker"};
+  auto fs = f.sys.spawn([&]() -> filesystem_actor::behavior_type {
+    return {caf::partial_behavior_init,
+            [&](atom::write, const std::filesystem::path&,
+                const chunk_ptr&) -> caf::result<atom::ok> {
+              if (++writes < 3) {
+                return caf::make_error(ec::filesystem_error,
+                                       "injected failure");
+              }
+              return atom::ok_v;
+            }};
+  });
+  auto catalog
+    = f.sys.spawn([&](catalog_actor::stateful_pointer<catalog_state> self)
+                    -> catalog_actor::behavior_type {
+        state = &self->state();
+        state->self = self;
+        state->filesystem = fs;
+        state->markers_in_disposal[marker] = 1;
+        state->in_transformation.insert(output);
+        state->finalize_marker(marker, chunk::copy(std::string{"finalized"}),
+                               [&, self] {
+                                 finalized = true;
+                                 self->state().in_transformation.erase(output);
+                               });
+        return {caf::partial_behavior_init,
+                [](atom::status, status_verbosity, duration) {
+                  return record{};
+                }};
+      });
+  f.dispatch_messages();
+  REQUIRE(state);
+  CHECK_EQUAL(writes, size_t{1});
+  CHECK(not finalized);
+  CHECK(state->in_transformation.contains(output));
+  f.advance_time(defaults::disposal_retry_delay);
+  f.dispatch_messages();
+  CHECK_EQUAL(writes, size_t{2});
+  CHECK(not finalized);
+  CHECK(state->in_transformation.contains(output));
+  f.advance_time(defaults::disposal_retry_delay);
+  f.dispatch_messages();
+  CHECK_EQUAL(writes, size_t{3});
+  CHECK(finalized);
+  CHECK(not state->in_transformation.contains(output));
+  CHECK(state->marker_referenced(marker));
+  f.inject_exit(catalog);
+  f.inject_exit(fs);
 }
 
 TEST("failed quarantine replay retains its marker across restarts") {

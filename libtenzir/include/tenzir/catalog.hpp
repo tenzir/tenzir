@@ -202,8 +202,11 @@ public:
   }
 
   /// Returns the cached synopsis for `id` without changing its recency, or
-  /// nullptr on a miss. Used on the read (lookup) path, which must stay const.
+  /// nullptr on a miss. Use for presence checks that do not consume sketches.
   [[nodiscard]] auto peek(const uuid& id) const -> partition_synopsis_ptr;
+
+  /// Returns a cached synopsis and marks it most-recently-used, or nullptr.
+  [[nodiscard]] auto get(const uuid& id) -> partition_synopsis_ptr;
 
   /// Inserts a loaded synopsis and marks it most-recently-used, evicting
   /// least-recently-used entries until the total is within budget. Returns the
@@ -260,7 +263,7 @@ struct catalog_lookup_engine {
   auto lookup_impl(
     const expression& expr, const type& schema,
     const detail::flat_map<uuid, partition_synopsis_ptr>& partition_synopses,
-    std::unordered_set<uuid>& deferred_sketch_partitions) const
+    std::unordered_set<uuid>& deferred_sketch_partitions)
     -> catalog_lookup_result::candidate_info;
 
   /// Loads the deferred Bloom-filter sketches of the given partition into the
@@ -562,12 +565,11 @@ public:
   /// until its commit is flushed.
   void release_marker_hold(const std::filesystem::path& marker);
 
-  /// Retries writing a finalized marker as long as a hold still references
-  /// it. A marker stuck in non-finalized form gates its replay on output
-  /// confirmation, and an output that is legitimately erased in the meantime
-  /// would strand the payload; once the hold is released the commit is
-  /// durable and the content no longer matters.
-  void retry_finalize_marker(std::filesystem::path marker, chunk_ptr content);
+  /// Writes a finalized marker, retrying until durable before completing the
+  /// transform. The caller keeps its claims and marker hold until completion,
+  /// so an output cannot disappear while replay still needs to confirm it.
+  void finalize_marker(std::filesystem::path marker, chunk_ptr content,
+                       std::function<void()> on_finalized);
 
   /// Queues a marker hold for the next batched policy flush. The shared
   /// maintenance wakeup schedules the flush; a failed write retains all holds.

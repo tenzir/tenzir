@@ -374,15 +374,15 @@ TEST("disk eviction enforces known bytes without a scan and respects pause") {
   CHECK_EQUAL(f.state.dbdir_size, uint64_t{2000});
 }
 
-TEST("eviction rewrites consume the disk step allowance") {
+TEST("eviction waits for rewrite results even with spare disk step allowance") {
   auto f = fixture{};
   f.add("test", 2000);
   f.state.maintenance.space.high_water_mark = 1500;
   f.state.maintenance.space.low_water_mark = 1000;
   f.state.maintenance.space.scan_interval = std::chrono::seconds{1};
-  f.state.maintenance.space.step_size = 1;
+  f.state.maintenance.space.step_size = 4;
   f.state.eviction_running = 1;
-  // No direct deletion may start while a rewrite holds the sole allowance.
+  // No direct deletion may start until the rewrite's reclamation is known.
   f.state.enforce_disk_budget();
   CHECK(f.state.evicting);
   CHECK(f.state.retiring.empty());

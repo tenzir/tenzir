@@ -101,7 +101,7 @@ auto catalog_lookup_engine::ensure_sketches_loaded(
   if (sketches.budget() == 0) {
     return 0;
   }
-  if (sketches.peek(id)) {
+  if (sketches.get(id)) {
     return 0; // already loaded
   }
   // The sketches live in the partition's `.mdx`; we can only mmap a local file,
@@ -273,7 +273,7 @@ auto catalog_lookup_engine::lookup(expression expr,
 auto catalog_lookup_engine::lookup_impl(
   const expression& expr, const type& schema,
   const detail::flat_map<uuid, partition_synopsis_ptr>& partition_synopses,
-  std::unordered_set<uuid>& deferred_sketch_partitions) const
+  std::unordered_set<uuid>& deferred_sketch_partitions)
   -> catalog_lookup_result::candidate_info {
   TENZIR_ASSERT(not is<caf::none_t>(expr));
   // The partition UUIDs must be sorted, otherwise the invariants of the
@@ -412,7 +412,7 @@ auto catalog_lookup_engine::lookup_impl(
           // Prefer an on-demand-loaded synopsis (with Bloom-filter sketches)
           // when one is cached; otherwise use the resident synopsis, whose
           // deferred sketches are null.
-          const auto loaded = sketches.peek(part_id);
+          const auto loaded = sketches.get(part_id);
           const auto& effective = loaded ? loaded : part_syn;
           auto may_contain = [&](const qualified_record_field& field,
                                  const synopsis_ptr& syn) {

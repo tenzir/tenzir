@@ -161,33 +161,28 @@ void catalog_state::add_partition_creation_listener(
   partition_creation_listeners.push_back(std::move(listener));
 }
 
-void catalog_state::retry_finalize_marker(std::filesystem::path marker,
-                                          chunk_ptr content) {
-  if (not marker_referenced(marker)) {
-    // Nothing depends on the marker any more -- neither a hold nor a
-    // deferred erasure naming it as its tombstone -- so it is deleted or
-    // about to be; recreating it would only leave a stale file behind. The
-    // deferred check matters for a tokenless replacement without a policy,
-    // whose pinned inputs reference the marker through `deferred` alone.
-    return;
-  }
+void catalog_state::finalize_marker(std::filesystem::path marker,
+                                    chunk_ptr content,
+                                    std::function<void()> on_finalized) {
+  TENZIR_ASSERT(marker_referenced(marker));
   self->mail(atom::write_v, marker, content)
     .request(filesystem, caf::infinite)
     .then(
-      [](atom::ok) {
-        // Finalized; replay no longer gates on output confirmation.
+      [on_finalized](atom::ok) {
+        on_finalized();
       },
-      [this, marker = std::move(marker),
-       content = std::move(content)](const caf::error& e) mutable {
+      [this, marker = std::move(marker), content = std::move(content),
+       on_finalized](const caf::error& e) mutable {
         TENZIR_WARN("{} failed to finalize the transform marker at {} and "
                     "will retry: {}",
                     *self, marker, e);
-        detail::weak_run_delayed(self, defaults::disposal_retry_delay,
-                                 [this, marker = std::move(marker),
-                                  content = std::move(content)]() mutable {
-                                   retry_finalize_marker(std::move(marker),
-                                                         std::move(content));
-                                 });
+        detail::weak_run_delayed(
+          self, defaults::disposal_retry_delay,
+          [this, marker = std::move(marker), content = std::move(content),
+           on_finalized = std::move(on_finalized)]() mutable {
+            finalize_marker(std::move(marker), std::move(content),
+                            std::move(on_finalized));
+          });
       });
 }
 
@@ -462,48 +457,19 @@ void catalog_state::transform(
                       // again must not leave this marker -- and the commit it
                       // carries for the surviving input -- unreplayable
                       // behind an output confirmation that can never succeed.
-                      self
-                        ->mail(atom::write_v, marker_path,
-                               create_marker({}, new_partition_ids, keep, false,
-                                             policy_token, token_input, true))
-                        .request(filesystem, caf::infinite)
-                        .then(
-                          [=](atom::ok) mutable {
-                            deliver(partition_apply_result{
-                              .input_partitions
-                              = std::move(transformed_input_partitions),
-                              .output_partitions = std::move(result),
-                              .input_complete = input_complete,
-                              .marker = held_marker,
-                            });
-                          },
-                          [=, this](const caf::error& e) mutable {
-                            // The transform is committed either way, and the
-                            // original marker still replays -- it merely
-                            // gates on output confirmation until the rewrite
-                            // lands. Retry it for as long as the hold
-                            // depends on it, and report the commit, not the
-                            // bookkeeping hiccup.
-                            TENZIR_WARN("{} failed to finalize the transform "
-                                        "marker at {} and will retry: {}",
-                                        *self, marker_path, e);
-                            detail::weak_run_delayed(
-                              self, defaults::disposal_retry_delay,
-                              [this, marker_path,
-                               content = create_marker(
-                                 {}, new_partition_ids, keep, false,
-                                 policy_token, token_input, true)]() mutable {
-                                retry_finalize_marker(marker_path,
-                                                      std::move(content));
-                              });
-                            deliver(partition_apply_result{
-                              .input_partitions
-                              = std::move(transformed_input_partitions),
-                              .output_partitions = std::move(result),
-                              .input_complete = input_complete,
-                              .marker = held_marker,
-                            });
+                      finalize_marker(
+                        marker_path,
+                        create_marker({}, new_partition_ids, keep, false,
+                                      policy_token, token_input, true),
+                        [=]() mutable {
+                          deliver(partition_apply_result{
+                            .input_partitions
+                            = std::move(transformed_input_partitions),
+                            .output_partitions = std::move(result),
+                            .input_complete = input_complete,
+                            .marker = held_marker,
                           });
+                        });
                       return;
                     }
                     progress->set_phase(
@@ -523,83 +489,35 @@ void catalog_state::transform(
                       erase(id, notify_policy::no);
                     }
                     std::ignore = merge(std::move(apsv));
-                    // Both continuations below need `erased`, so it is
-                    // copied into each rather than moved into one.
                     // Rewrite the marker to tombstone form. The outputs are in
                     // place, so a replay must not try to move them again; the
                     // inputs are gone from the catalog but their files may
                     // outlive this transform if a retriever still holds them,
                     // and only the tombstone keeps a crash in between from
                     // resurrecting them.
-                    self
-                      ->mail(atom::write_v, marker_path,
-                             create_marker(old_partition_ids, new_partition_ids,
-                                           keep_original_partition::no, false,
-                                           policy_token, token_input, true))
-                      .request(filesystem, caf::infinite)
-                      .then(
-                        [=, this](atom::ok) mutable {
-                          for (auto& [id, synopsis] : erased) {
-                            retire_erased(id, std::move(synopsis), marker_path);
-                          }
-                          deliver(partition_apply_result{
-                            .input_partitions
-                            = std::move(transformed_input_partitions),
-                            .output_partitions = std::move(result),
-                            .input_complete = input_complete,
-                            .marker = held_marker,
-                          });
-                          if (self_release) {
-                            release_marker_after_flush(marker_path);
-                          }
-                        },
-                        [=, this](const caf::error& e) mutable {
-                          // The inputs already left the catalog and their
-                          // replacements are in, so their files have to go
-                          // regardless. The rewrite failed, but the original
-                          // transform marker is still on disk and replaying it
-                          // erases the inputs all the same (its output renames
-                          // find the outputs already in place and fail
-                          // harmlessly) -- so keep the deferred erasures
-                          // referencing it rather than parking them with no
-                          // durable record, which a crash would turn into
-                          // resurrected inputs next to their replacements.
-                          TENZIR_WARN("{} failed to record the erasure of the "
-                                      "transformed partitions at {} and will "
-                                      "retry: {}",
-                                      *self, marker_path, e);
-                          detail::weak_run_delayed(
-                            self, defaults::disposal_retry_delay,
-                            [this, marker_path,
-                             content = create_marker(
-                               old_partition_ids, new_partition_ids,
-                               keep_original_partition::no, false, policy_token,
-                               token_input, true)]() mutable {
-                              retry_finalize_marker(marker_path,
-                                                    std::move(content));
-                            });
-                          for (auto& [id, synopsis] : erased) {
-                            retire_erased(id, std::move(synopsis), marker_path);
-                          }
-                          // The transform itself is committed: the outputs are
-                          // merged and the inputs have left the catalog. An
-                          // error here would make the caller record a failure
-                          // -- no watermark on the outputs, the input
-                          // blacklisted -- and a later pass could re-apply a
-                          // non-idempotent pipeline to data it already
-                          // processed. The failed rewrite costs only a
-                          // replayable marker, so report the commit.
-                          deliver(partition_apply_result{
-                            .input_partitions
-                            = std::move(transformed_input_partitions),
-                            .output_partitions = std::move(result),
-                            .input_complete = input_complete,
-                            .marker = held_marker,
-                          });
-                          if (self_release) {
-                            release_marker_after_flush(marker_path);
-                          }
+                    // The original durable marker already protects these
+                    // erasures. Outputs stay claimed until finalization, so
+                    // replay can still confirm them if the write must retry.
+                    for (auto& [id, synopsis] : erased) {
+                      retire_erased(id, std::move(synopsis), marker_path);
+                    }
+                    finalize_marker(
+                      marker_path,
+                      create_marker(old_partition_ids, new_partition_ids,
+                                    keep_original_partition::no, false,
+                                    policy_token, token_input, true),
+                      [=, this]() mutable {
+                        deliver(partition_apply_result{
+                          .input_partitions
+                          = std::move(transformed_input_partitions),
+                          .output_partitions = std::move(result),
+                          .input_complete = input_complete,
+                          .marker = held_marker,
                         });
+                        if (self_release) {
+                          release_marker_after_flush(marker_path);
+                        }
+                      });
                   },
                   [deliver, commit_at_restart, old_partition_ids,
                    this](caf::error& e) mutable {

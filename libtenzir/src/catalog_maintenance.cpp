@@ -1172,6 +1172,11 @@ void catalog_state::enforce_disk_budget(time now) {
     return;
   }
   evicting = true;
+  // A pending eviction rewrite may reclaim all remaining pressure. Wait for
+  // its measured outputs before irreversibly deleting more partitions.
+  if (eviction_running > 0) {
+    return;
+  }
   auto const outstanding = retiring.size() + deleting.size() + eviction_running;
   if (outstanding >= maintenance.space.step_size) {
     return;
@@ -1195,9 +1200,8 @@ void catalog_state::enforce_disk_budget(time now) {
     if (outcome != eviction_outcome::none) {
       eviction_pending.insert(id);
       if (outcome == eviction_outcome::started) {
-        --slots;
+        break;
       }
-      // A rewrite's reclamation is unknown. Do not credit its entire input.
       continue;
     }
     planned += synopsis->store_file.size + synopsis->indexes_file.size
