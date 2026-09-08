@@ -294,6 +294,16 @@ auto parse_space_options(const caf::settings& settings) -> disk_monitor_config {
 
 auto parse_maintenance_options(const caf::settings& settings)
   -> maintenance_options {
+  // The compaction pool is bounded separately from rebuild parallelism. The
+  // legacy setting seeds its default, and the new setting wins when both exist.
+  const auto compaction_slots
+    = get_or(settings, "tenzir.compaction-slots",
+             get_or(settings, "plugins.compaction.time.step-size", int64_t{1}));
+  if (compaction_slots < 1) {
+    // Zero would leave named runs waiting forever; the policy interval is the
+    // off switch. Check the signed value before converting it to a pool size.
+    diagnostic::error("`tenzir.compaction-slots` must be at least 1").throw_();
+  }
   auto result = maintenance_options{
     .automatic_rebuild
     = get_or(settings, "tenzir.automatic-rebuild", size_t{1}),
@@ -304,15 +314,7 @@ auto parse_maintenance_options(const caf::settings& settings)
     .rebuild_merge_margin
     = get_or(settings, "tenzir.rebuild-merge-margin", 0.6),
     .space = parse_space_options(settings),
-    // The compaction pool is bounded separately from rebuild parallelism, so
-    // that a slow user-authored pipeline cannot stall a rebuild. One slot by
-    // default -- the domains are independent, so worst-case memory is their
-    // sum -- but a deployment that sized the old compactor's concurrency via
-    // `plugins.compaction.time.step-size` keeps that concurrency: the legacy
-    // setting seeds the default, and the new setting wins when both are set.
-    .compaction_slots
-    = get_or(settings, "tenzir.compaction-slots",
-             get_or(settings, "plugins.compaction.time.step-size", size_t{1})),
+    .compaction_slots = static_cast<size_t>(compaction_slots),
   };
   if (auto budget
       = caf::get_if<int64_t>(&settings, "tenzir.rebuild-memory-budget")) {
@@ -332,24 +334,14 @@ auto parse_maintenance_options(const caf::settings& settings)
     TENZIR_WARN("tenzir.rebuild-interval is deprecated: automatic rebuild "
                 "now collects arrivals until the next local hour boundary");
   }
-  if (result.compaction_slots == 0) {
-    // With zero slots a named compaction run could never start its work and
-    // would hang its caller forever; the policy pass has its own off switch
-    // (the interval), so zero slots expresses nothing that setting does not.
-    diagnostic::error("`tenzir.compaction-slots` must be at least 1").throw_();
-  }
   return result;
 }
 
 auto spawn_catalog(node_actor::stateful_pointer<node_state> self,
                    const filesystem_actor& filesystem,
-                   const caf::settings& settings) -> catalog_actor {
-  const auto lookup_parallelism
-    = get_or(settings, "tenzir.catalog-lookup-parallelism", size_t{2});
-  if (lookup_parallelism == 0) {
-    diagnostic::error("`tenzir.catalog-lookup-parallelism` must be at least 1")
-      .throw_();
-  }
+                   const caf::settings& settings,
+                   maintenance_options maintenance, size_t lookup_parallelism)
+  -> catalog_actor {
   const auto sketch_cache_bytes = get_or(
     settings, "tenzir.index.sketch-cache-bytes", defaults::sketch_cache_bytes);
   const auto lazy_sketches
@@ -361,7 +353,7 @@ auto spawn_catalog(node_actor::stateful_pointer<node_state> self,
     get_or(settings, "tenzir.max-partition-size", defaults::max_partition_size),
     get_or(settings, "tenzir.import.batch-size",
            defaults::import::table_slice_size),
-    parse_maintenance_options(settings),
+    std::move(maintenance),
     get_or(settings, "tenzir.deferred-erase-timeout",
            defaults::deferred_erase_timeout),
     sketch_cache_bytes, lazy_sketches, lookup_parallelism, node_actor{self});
@@ -417,8 +409,19 @@ auto spawn_importer(node_actor::stateful_pointer<node_state> self,
 auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
   // Before we laod any component plugins, we first load all the core components.
   const auto& settings = content(self->system().config());
+  // Validate before spawning anything: startup failure must not strand a
+  // filesystem actor while the node has no shutdown handler installed yet.
+  auto maintenance = parse_maintenance_options(settings);
+  const auto lookup_parallelism
+    = get_or(settings, "tenzir.catalog-lookup-parallelism", int64_t{2});
+  if (lookup_parallelism < 1) {
+    diagnostic::error("`tenzir.catalog-lookup-parallelism` must be at least 1")
+      .throw_();
+  }
   const auto filesystem = spawn_filesystem(self);
-  const auto catalog = spawn_catalog(self, filesystem, settings);
+  const auto catalog
+    = spawn_catalog(self, filesystem, settings, std::move(maintenance),
+                    static_cast<size_t>(lookup_parallelism));
   const auto index = spawn_index(self, settings, filesystem, catalog);
   [[maybe_unused]] const auto importer = spawn_importer(self, index);
   // 1. Collect all component_plugins into a name -> plugin* map:
